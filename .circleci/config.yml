@@ -1,0 +1,21 @@
+version: 2
+jobs:
+
+  test:
+    machine:
+      image: circleci/classic:201711-01
+
+    steps:
+      - checkout
+      - run:
+          name: Testing
+          command: |
+            make pull
+
+
+workflows:
+  version: 2
+
+  main:
+    jobs:
+      - test
