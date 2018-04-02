@@ -3,7 +3,6 @@ package main
 import (
 	"github.com/neuromation/platform-api/log"
 	"net/http"
-	"crypto/tls"
 	"time"
 	"net"
 	"fmt"
@@ -27,7 +26,6 @@ func main() {
 		log.Fatalf("cannot listen for %q: %s", listenAddr, err)
 	}
 	s := &http.Server{
-		TLSNextProto: make(map[string]func(*http.Server, *tls.Conn, http.Handler)),
 		Handler:      http.HandlerFunc(handler),
 		ReadTimeout:  time.Minute,
 		WriteTimeout: time.Minute,
