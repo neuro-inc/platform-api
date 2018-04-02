@@ -12,3 +12,7 @@ test: build
 
 run: build
 	./platform-api
+
+lint:
+	go vet $(pkgs)
+	go list ./... | grep -v /vendor/ | xargs -L1 golint
