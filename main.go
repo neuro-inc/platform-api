@@ -1,17 +1,15 @@
 package main
 
 import (
-	"github.com/neuromation/platform-api/log"
+	"fmt"
+	"net"
 	"net/http"
 	"time"
-	"net"
-	"fmt"
+
 	"github.com/kelseyhightower/envconfig"
-
 	"github.com/neuromation/platform-api/config"
+	"github.com/neuromation/platform-api/log"
 )
-
-var listenAddr string
 
 func main() {
 	log.Infof("Initing...")
@@ -21,9 +19,9 @@ func main() {
 		log.Fatalf("error while parsing config: %s", err)
 	}
 
-	ln, err := net.Listen("tcp4", listenAddr)
+	ln, err := net.Listen("tcp4", cfg.ListenAddr)
 	if err != nil {
-		log.Fatalf("cannot listen for %q: %s", listenAddr, err)
+		log.Fatalf("cannot listen for %q: %s", cfg.ListenAddr, err)
 	}
 	s := &http.Server{
 		Handler:      http.HandlerFunc(handler),
@@ -31,7 +29,8 @@ func main() {
 		WriteTimeout: time.Minute,
 		IdleTimeout:  time.Minute * 10,
 	}
-	log.Fatalf("HTTP server error on %s: %s", listenAddr, s.Serve(ln))
+	log.Infof("Initing done. Listens on %q", cfg.ListenAddr)
+	log.Fatalf("HTTP server error on %s: %s", cfg.ListenAddr, s.Serve(ln))
 }
 
 func handler(rw http.ResponseWriter, req *http.Request) {
