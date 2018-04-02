@@ -8,3 +8,7 @@ run:
 clean:
 	docker-compose -f tests/docker-compose.yml stop || :
 	docker-compose -f tests/docker-compose.yml rm -f || :
+
+
+build_api_tests:
+	make -C tests/api build
