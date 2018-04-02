@@ -7,12 +7,20 @@ import (
 	"time"
 	"net"
 	"fmt"
+	"github.com/kelseyhightower/envconfig"
+
+	"github.com/neuromation/platform-api/config"
 )
 
 var listenAddr string
 
 func main() {
 	log.Infof("Initing...")
+	var cfg config.Config
+	err := envconfig.Process("neuro", &cfg)
+	if err != nil {
+		log.Fatalf("error while parsing config: %s", err)
+	}
 
 	ln, err := net.Listen("tcp4", listenAddr)
 	if err != nil {
