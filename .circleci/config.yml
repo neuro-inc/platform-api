@@ -8,9 +8,9 @@ jobs:
     steps:
       - checkout
       - run:
-          name: Testing
+          name: Running API tests
           command: |
-            make pull
+            make run_api_tests
 
 
 workflows:

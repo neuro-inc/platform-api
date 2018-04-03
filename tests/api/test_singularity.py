@@ -7,7 +7,7 @@ import requests
 
 @pytest.fixture
 def singularity_api_endpoint():
-    return 'http://localhost:7099/singularity/api'
+    return 'http://tests_singularity_1:7099/singularity/api'
 
 
 @pytest.fixture
