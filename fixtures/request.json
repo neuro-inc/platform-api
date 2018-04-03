@@ -1,0 +1,9 @@
+{
+  "id": "singularity-test-service",
+  "owners": [
+    "you@example.com"
+  ],
+  "requestType": "SERVICE",
+  "rackSensitive": false,
+  "loadBalanced": false
+}

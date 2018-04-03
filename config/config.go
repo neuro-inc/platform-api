@@ -10,7 +10,7 @@ type Config struct {
 	ListenAddr string `default:":8080"`
 
 	// Singularity app addr to proxy requests
-	SingularityAddr string `default:":7099"`
+	SingularityAddr string `default:"http://127.0.0.1:7099"`
 
 	// Singularity timeout before cancelling request
 	SingularityTimeout time.Duration `default:"1m"`
