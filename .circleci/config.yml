@@ -1,0 +1,21 @@
+version: 2
+jobs:
+
+  test:
+    machine:
+      image: circleci/classic:201711-01
+
+    steps:
+      - checkout
+      - run:
+          name: Running API tests
+          command: |
+            make run_api_tests
+
+
+workflows:
+  version: 2
+
+  main:
+    jobs:
+      - test

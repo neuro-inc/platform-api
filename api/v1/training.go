@@ -7,9 +7,9 @@ import (
 
 type Training struct {
 	Code   string            `json:"code"`
-	Model  string            `json:"model"`
-	DataID string            `json:"data_id"`
-	Meta   map[string]string `json:"meta"`
+	Model  string            `json:"model,omitempty"`
+	DataID string            `json:"data_id,omitempty"`
+	Meta   map[string]string `json:"meta,omitempty"`
 }
 
 func (t *Training) UnmarshalJSON(b []byte) error {
@@ -18,6 +18,9 @@ func (t *Training) UnmarshalJSON(b []byte) error {
 		return err
 	}
 
+	if len(t.Model) > 0 {
+
+	}
 	if _, ok := modelRegistry[t.Model]; !ok {
 		return fmt.Errorf("unknown model id %q", t.Model)
 	}
