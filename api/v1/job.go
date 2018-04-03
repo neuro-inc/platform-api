@@ -23,5 +23,6 @@ type deploy struct {
 	Volumes                    []Volume           `json:"volumes"`
 	ContainerInfo              ContainerInfo      `json:"containerInfo"`
 	Resources                  map[string]float64 `json:"resources"`
+	Env                        map[string]string  `json:"env"`
 	DeployHealthTimeoutSeconds int                `json:"deployHealthTimeoutSeconds"`
 }

@@ -7,6 +7,8 @@ type Code struct {
 
 	Volumes []Volume `json:"volumes,omitempty"`
 
+	Env map[string]string `json:"env,omitempty"`
+
 	docker
 }
 

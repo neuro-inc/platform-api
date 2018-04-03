@@ -1,12 +1,12 @@
 {
   "code": {
-    "parameters": {
-      "label": "MODEL_PATH=/models"
+    "env": {
+      "MODEL_PATH": "models"
     },
     "image": "registry.neuromation.io/neuromationorg/platformapi-dummy",
     "volumes": [
       {
-        "hostPath": "/home/",
+        "hostPath": "/Users/romankhavronenko/image_temp",
         "containerPath": "/models",
         "mode": "RW"
       }
@@ -14,6 +14,6 @@
   },
   "resources": {
     "cpus": 2,
-    "memoryMb": 2800
+    "memoryMb": 128
   }
 }

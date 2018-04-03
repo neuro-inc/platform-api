@@ -47,6 +47,7 @@ func RunTraining(tr *Training) (*Job, error) {
 			Volumes:                    tr.Code.Volumes,
 			Resources:                  tr.Resources,
 			DeployHealthTimeoutSeconds: 300,
+			Env: tr.Code.Env,
 		},
 	}
 	if err := client.Deploy(j); err != nil {
