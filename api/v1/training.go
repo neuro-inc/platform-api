@@ -7,6 +7,7 @@ import (
 	"time"
 )
 
+// Training describes Training from API docs
 type Training struct {
 	Code      Code               `json:"code"`
 	Model     string             `json:"model,omitempty"`
@@ -15,6 +16,7 @@ type Training struct {
 	Meta      map[string]string  `json:"meta,omitempty"`
 }
 
+// UnmarshalJSON implements Unmarshaler
 func (t *Training) UnmarshalJSON(b []byte) error {
 	type plain Training
 	if err := json.Unmarshal(b, (*plain)(t)); err != nil {
@@ -33,6 +35,7 @@ func (t *Training) UnmarshalJSON(b []byte) error {
 	return nil
 }
 
+// RunTraining registers new request and deploy in singularity
 func RunTraining(tr *Training) (*Job, error) {
 	j := &Job{
 		Deploy: deploy{
@@ -52,6 +55,7 @@ func RunTraining(tr *Training) (*Job, error) {
 	return j, nil
 }
 
+// ViewTraining proxies response about task from singularity
 func ViewTraining(id string) (*http.Response, error) {
 	return client.c.Get(fmt.Sprintf("%s/singularity/api/tasks/ids/request/%s", client.addr, id))
 }

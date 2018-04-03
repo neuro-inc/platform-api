@@ -17,6 +17,7 @@ type singularityClient struct {
 
 var client *singularityClient
 
+// Init singularity client
 func Init(addr string, timeout time.Duration) {
 	u, err := url.Parse(addr)
 	if err != nil {

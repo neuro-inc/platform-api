@@ -6,6 +6,7 @@ import (
 	"io"
 )
 
+// Model describes Model from API doc
 type Model struct {
 	ID          string            `json:"id"`
 	Name        string            `json:"name"`
@@ -31,6 +32,7 @@ var modelRegistry = map[string]Model{
 	},
 }
 
+// ListModels prints available models
 func ListModels(w io.Writer) {
 	fmt.Fprint(w, "[")
 	var i int

@@ -6,6 +6,7 @@ import (
 	"io"
 )
 
+// Storage descrives Storage from API docs
 type Storage struct {
 	ID   string            `json:"id"`
 	Name string            `json:"name"`
@@ -31,6 +32,7 @@ var storageRegistry = map[string]Storage{
 	},
 }
 
+// ListStorage prints available storage objects
 func ListStorage(w io.Writer) {
 	fmt.Fprint(w, "[")
 	var i int

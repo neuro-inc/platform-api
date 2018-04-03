@@ -1,5 +1,6 @@
 package v1
 
+// Code is kinda docker container
 type Code struct {
 	// TODO: is always `docker` for now
 	Type string `json:"docker"`
@@ -9,6 +10,7 @@ type Code struct {
 	docker
 }
 
+// ContainerInfo wrapper for singularity container
 type ContainerInfo struct {
 	Type   string `json:"type"`
 	Docker docker `json:"docker"`
@@ -28,13 +30,13 @@ type docker struct {
 	Network string `json:"network,omitempty"`
 }
 
-// https://github.com/HubSpot/Singularity/blob/master/Docs/reference/api.md#model-SingularityDockerPortMapping
+// PortMapping https://github.com/HubSpot/Singularity/blob/master/Docs/reference/api.md#model-SingularityDockerPortMapping
 type PortMapping struct {
 	HostPort      int `json:"hostPort"`
 	ContainerPort int `json:"containerPort"`
 }
 
-// https://github.com/HubSpot/Singularity/blob/master/Docs/reference/api.md#-singularityvolume
+// Volume https://github.com/HubSpot/Singularity/blob/master/Docs/reference/api.md#-singularityvolume
 type Volume struct {
 	HostPath      string `json:"hostPath"`
 	ContainerPath string `json:"containerPath"`

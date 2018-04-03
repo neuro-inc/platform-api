@@ -2,6 +2,7 @@ package v1
 
 import "encoding/json"
 
+// Job wraps singularity Deploy
 type Job struct {
 	Deploy deploy `json:"deploy"`
 }
