@@ -78,21 +78,21 @@ func listStorage(rw http.ResponseWriter, _ *http.Request, _ httprouter.Params) {
 	fmt.Fprint(rw, "]")
 }
 
-//
-//func viewTraining(rw http.ResponseWriter, _ *http.Request, params httprouter.Params) {
-//	resp, err := api.ViewTraining(params.ByName("id"))
-//	if err != nil {
-//		respondWithError(rw, err)
-//		return
-//	}
-//	b, err := ioutil.ReadAll(resp.Body)
-//	if err != nil {
-//		respondWithError(rw, err)
-//		return
-//	}
-//	resp.Body.Close()
-//	respondWith(rw, http.StatusOK, string(b))
-//}
+/*
+func viewTraining(rw http.ResponseWriter, _ *http.Request, params httprouter.Params) {
+	resp, err := api.ViewTraining(params.ByName("id"))
+	if err != nil {
+		respondWithError(rw, err)
+		return
+	}
+	b, err := ioutil.ReadAll(resp.Body)
+	if err != nil {
+		respondWithError(rw, err)
+		return
+	}
+	resp.Body.Close()
+	respondWith(rw, http.StatusOK, string(b))
+}*/
 
 func createTraining(rw http.ResponseWriter, req *http.Request, _ httprouter.Params) {
 	decoder := json.NewDecoder(req.Body)

@@ -18,32 +18,6 @@ type Training struct {
 	Meta        map[string]string  `json:"meta,omitempty"`
 }
 
-//Code (container id or name?)
-//Model weight and model `name (data_id)
-//Data_id (dir\list?) -- id of storage object containing training input
-//meta -- parameters to be passed to training container
-//
-
-//{
-//"code": {
-//"env": {
-//"MODEL_PATH": "models"
-//},
-//"image": "registry.neuromation.io/neuromationorg/platformapi-dummy",
-//"volumes": [
-//{
-//"hostPath": "/Users/romankhavronenko/image_temp",
-//"containerPath": "/models",
-//"mode": "RW"
-//}
-//]
-//},
-//"resources": {
-//"cpus": 2,
-//"memoryMb": 128
-//}
-//}
-
 // runTraining starts a new training task accoridng to received req
 func runTraining(tr *Training) (orchestrator.Job, error) {
 	if len(tr.ModelName) > 0 {
