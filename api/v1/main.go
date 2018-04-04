@@ -97,7 +97,7 @@ func viewTraining(rw http.ResponseWriter, _ *http.Request, params httprouter.Par
 
 func createTraining(rw http.ResponseWriter, req *http.Request, _ httprouter.Params) {
 	decoder := json.NewDecoder(req.Body)
-	training := &Training{}
+	training := &training{}
 	err := decoder.Decode(training)
 	if err != nil {
 		respondWithError(rw, err)

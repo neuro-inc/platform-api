@@ -19,6 +19,7 @@ type singularityClient struct {
 	addr *url.URL
 }
 
+// NewClient creates new orchestrator.Client from given config
 func NewClient(addr string, timeout time.Duration) (orchestrator.Client, error) {
 	uri, err := url.Parse(addr)
 	if err != nil {

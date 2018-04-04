@@ -4,8 +4,8 @@ import (
 	"encoding/json"
 )
 
-// Storage descrives Storage from API docs
-type Storage struct {
+// storage descrives Storage from API docs
+type storage struct {
 	ID   string            `json:"id"`
 	Name string            `json:"name"`
 	Type string            `json:"type"`
@@ -13,7 +13,7 @@ type Storage struct {
 }
 
 // String implements the Stringer interface
-func (s Storage) String() string {
+func (s storage) String() string {
 	b, err := json.Marshal(s)
 	if err != nil {
 		panic(err)
@@ -21,7 +21,7 @@ func (s Storage) String() string {
 	return string(b)
 }
 
-var storageRegistry = map[string]Storage{
+var storageRegistry = map[string]storage{
 	"av8475f7-56db-471a-bb15-76c324e2cfaa": {
 		ID:   "av8475f7-56db-471a-bb15-76c324e2cfaa",
 		Name: "data_storage",

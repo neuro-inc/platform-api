@@ -4,8 +4,8 @@ import (
 	"encoding/json"
 )
 
-// Model describes Model from API doc
-type Model struct {
+// model describes Model from API doc
+type model struct {
 	ID          string            `json:"id"`
 	Name        string            `json:"name"`
 	Description string            `json:"type"`
@@ -13,7 +13,7 @@ type Model struct {
 }
 
 // String implements the Stringer interface
-func (m Model) String() string {
+func (m model) String() string {
 	b, err := json.Marshal(m)
 	if err != nil {
 		panic(err)
@@ -21,7 +21,7 @@ func (m Model) String() string {
 	return string(b)
 }
 
-var modelRegistry = map[string]Model{
+var modelRegistry = map[string]model{
 	"fc1834f7-56db-471a-bb15-76c452e2cfdd": {
 		ID:          "fc1834f7-56db-471a-bb15-76c452e2cfdd",
 		Name:        "perfectModel",

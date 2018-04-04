@@ -7,7 +7,7 @@ import (
 	"net/http"
 )
 
-type Training struct {
+type training struct {
 	// TODO: rename `code` in API doc to smthng intuitive
 	Container container.Container `json:"code"`
 	Resources container.Resources `json:"resources"`
@@ -19,7 +19,7 @@ type Training struct {
 }
 
 // runTraining starts a new training task accoridng to received req
-func runTraining(tr *Training) (orchestrator.Job, error) {
+func runTraining(tr *training) (orchestrator.Job, error) {
 	// check modelname here to avoid exploiting registry with invalid requests
 	if len(tr.ModelName) > 0 {
 		if _, ok := modelRegistry[tr.ModelName]; !ok {
