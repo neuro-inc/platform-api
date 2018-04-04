@@ -5,7 +5,7 @@ import uuid
 
 import pytest
 import requests
-import responses
+from responses import RequestsMock
 
 
 class ApiClient:
@@ -57,6 +57,7 @@ class ModelsApiClient:
         response = self._session.post(self._base_url, json=payload)
         assert response.status_code == 202
         assert 'Location' in response.headers
+        return response.json()
 
     def get(self, model_id: str):
         url = f'{self._base_url}/{model_id}'
@@ -127,15 +128,44 @@ def api_client(api_endpoint):
         yield client
 
 
+
 class TestApi:
-    def test_base(self, api_client):
-        pass
-        # status = api_client.models.create()
+    @pytest.mark.usefixtures('responses')
+    def test_base(self, api_client, api_endpoint):
+        model_id = str(uuid.uuid4())
+        status_id = str(uuid.uuid4())
+
+
+@pytest.fixture
+def responses():
+    with RequestsMock() as m:
+        yield m
+
+
+@pytest.fixture
+def model(responses, api_endpoint):
+    model_id = str(uuid.uuid4())
+    status_id = str(uuid.uuid4())
+    url = f'{api_endpoint}/models'
+    headers = {
+        'Location': f'{api_endpoint}/statuses/{status_id}'
+    }
+    payload = {'id': model_id, 'status_id': status_id}
+    responses.add(
+        responses.POST, url=url, status=202, headers=headers,
+        json=payload)
+
+    yield model_id, status_id
+
+
+class TestModelsApi:
+    def test_create(self, api_client, api_endpoint, model):
+        model_id, status_id = model
+        status = api_client.models.create()
 
 
 class TestStatusesApi:
-    @responses.activate
-    def test_get(self, api_client, api_endpoint):
+    def test_get(self, responses, api_client, api_endpoint):
         status_id = str(uuid.uuid4())
         url = f'{api_endpoint}/statuses/{status_id}'
         responses.add(responses.GET, url=url, status=200, json={
@@ -145,8 +175,7 @@ class TestStatusesApi:
         assert status.id == status_id
         assert status.name == StatusName.PENDING
 
-    @responses.activate
-    def test_wait(self, api_client, api_endpoint):
+    def test_wait(self, responses, api_client, api_endpoint):
         status_id = str(uuid.uuid4())
         url = f'{api_endpoint}/statuses/{status_id}'
         responses.add(responses.GET, url=url, status=200, json={
