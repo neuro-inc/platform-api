@@ -47,8 +47,8 @@ func (c *singularityClient) NewJob(container container.Container, res container.
 				Docker: dockerContainer{
 					Image: container.Image,
 				},
+				Volumes:                    container.Volumes,
 			},
-			Volumes:                    container.Volumes,
 			Resources:                  res,
 			DeployHealthTimeoutSeconds: 300,
 			Env: container.Env,

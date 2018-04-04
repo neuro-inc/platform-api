@@ -36,7 +36,7 @@ func runTraining(tr *training) (orchestrator.Job, error) {
 	if err := job.Start(); err != nil {
 		return nil, fmt.Errorf("error while creating training: %s", err)
 	}
-	return job, job.Start()
+	return job, nil
 }
 
 // ViewTraining proxies response about task from singularity
