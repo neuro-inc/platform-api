@@ -1,4 +1,4 @@
-package v1
+package singularity
 
 // Code is kinda docker container
 type Code struct {
