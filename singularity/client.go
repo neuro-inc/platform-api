@@ -1,50 +1,102 @@
-package v1
+package singularity
 
 import (
 	"fmt"
-	"github.com/neuromation/platform-api/log"
 	"io/ioutil"
 	"net/http"
 	"net/url"
 	"strings"
 	"time"
+
+	api "github.com/neuromation/platform-api/api/v1"
+	"github.com/neuromation/platform-api/log"
 )
+
+func NewClient(addr string, timeout time.Duration) (api.OrchestratorClient, error) {
+	uri, err := url.Parse(addr)
+	if err != nil {
+		return nil, err
+	}
+
+	client := &singularityClient{
+		c: http.Client{
+			Timeout: timeout,
+		},
+		addr: uri,
+	}
+	return client, nil
+}
 
 type singularityClient struct {
 	c    http.Client
 	addr *url.URL
 }
 
-var client *singularityClient
-
-// Init singularity client
-func Init(addr string, timeout time.Duration) {
-	u, err := url.Parse(addr)
-	if err != nil {
-		log.Fatalf("cannot parse singularity addr %q: %s", addr, err)
-	}
-
-	client = &singularityClient{
-		c: http.Client{
-			Timeout: timeout,
+func (c *singularityClient) NewJob(req *api.Request) api.OrchestratorJob {
+	volumes := parseVolumesFromReq(req)
+	resources := parseResourcesFromReq(req)
+	env := parseEnvFromReq(req)
+	id := fmt.Sprintf("platform_deploy_%d", time.Now().Nanosecond())
+	return &singularityJob{
+		client: c,
+		Deploy: Deploy{
+			ID: id,
+			ContainerInfo: ContainerInfo{
+				Type: "DOCKER",
+				Docker: docker{
+					Image: req.Image,
+				},
+			},
+			Volumes:                    volumes,
+			Resources:                  resources,
+			DeployHealthTimeoutSeconds: 300,
+			Env: env,
 		},
-		addr: u,
 	}
 }
 
-func (c *singularityClient) Deploy(j *Job) error {
+func (c *singularityClient) GetJob() api.OrchestratorJob {
+	panic("implement me")
+}
+
+func (c *singularityClient) SearchJobs() []api.OrchestratorJob {
+	panic("implement me")
+}
+
+type singularityJob struct {
+	client *singularityClient
+	Deploy Deploy
+}
+
+func (j *singularityJob) Start() error {
 	// TODO: must be replaced with smthng rly unique
 	reqID := fmt.Sprintf("platform_request_%d", time.Now().Nanosecond())
-	if err := c.registerRequest(reqID); err != nil {
+	if err := j.client.registerRequest(reqID); err != nil {
 		return fmt.Errorf("error while registering singularity request: %s", err)
 	}
 
 	j.Deploy.RequestID = reqID
-	if err := c.registerDeploy(reqID, j); err != nil {
+	if err := j.client.registerDeploy(reqID, j); err != nil {
 		return fmt.Errorf("error while registering singularity deploy: %s", err)
 	}
 
 	return nil
+}
+
+func (j *singularityJob) Stop() error {
+	panic("implement me")
+}
+
+func (j *singularityJob) Delete() error {
+	panic("implement me")
+}
+
+func (j *singularityJob) Status() (string, error) {
+	panic("implement me")
+}
+
+func (j *singularityJob) GetID() string {
+	return j.Deploy.ID
 }
 
 var requestTpl = `
@@ -87,8 +139,8 @@ func (c *singularityClient) registerRequest(id string) error {
 	return nil
 }
 
-func (c *singularityClient) registerDeploy(reqID string, j *Job) error {
-	body := fmt.Sprintf("%s", j)
+func (c *singularityClient) registerDeploy(reqID string, job *singularityJob) error {
+	body := fmt.Sprintf("%s", job)
 	log.Infof("%s", body)
 
 	r := strings.NewReader(body)
@@ -115,4 +167,16 @@ func (c *singularityClient) registerDeploy(reqID string, j *Job) error {
 	}
 	log.Infof("deploy response: %s", string(respBody))
 	return nil
+}
+
+func parseVolumesFromReq(req *api.Request) []Volume {
+	panic("implement me")
+}
+
+func parseResourcesFromReq(req *api.Request) map[string]float64 {
+	panic("implement me")
+}
+
+func parseEnvFromReq(req *api.Request) map[string]string {
+	panic("implement me")
 }

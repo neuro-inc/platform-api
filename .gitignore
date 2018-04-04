@@ -1,3 +1,5 @@
+vendor/
+.idea
 tests/logs
 tests/sandbox
 platform-api

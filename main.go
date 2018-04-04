@@ -7,12 +7,14 @@ import (
 
 	"encoding/json"
 	"fmt"
+	"io/ioutil"
+
 	"github.com/julienschmidt/httprouter"
 	"github.com/kelseyhightower/envconfig"
 	api "github.com/neuromation/platform-api/api/v1"
 	"github.com/neuromation/platform-api/config"
 	"github.com/neuromation/platform-api/log"
-	"io/ioutil"
+	"github.com/neuromation/platform-api/singularity"
 )
 
 func main() {
@@ -23,18 +25,21 @@ func main() {
 		log.Fatalf("error while parsing config: %s", err)
 	}
 
-	api.Init(cfg.SingularityAddr, cfg.SingularityTimeout)
+	cli, err := singularity.NewClient(cfg.SingularityAddr, cfg.SingularityTimeout)
+	if err != nil {
+		log.Fatalf("%s", err)
+	}
 
 	log.Infof("Initing done. Listens on %q", cfg.ListenAddr)
-	serve(cfg)
+	serve(cfg, cli)
 }
 
-func serve(cfg *config.Config) {
+func serve(cfg *config.Config, cli api.OrchestratorClient) {
 	router := httprouter.New()
 	router.GET("/", index)
 	router.GET("/models", listModels)
 	router.GET("/storage", listStorage)
-	router.POST("/trainings", createTraining)
+	router.POST("/trainings", createTraining(cli))
 	router.GET("/trainings/:id", viewTraining)
 
 	ln, err := net.Listen("tcp4", cfg.ListenAddr)
@@ -82,20 +87,21 @@ func viewTraining(rw http.ResponseWriter, _ *http.Request, params httprouter.Par
 	respondWith(rw, http.StatusOK, string(b))
 }
 
-func createTraining(rw http.ResponseWriter, req *http.Request, _ httprouter.Params) {
-	decoder := json.NewDecoder(req.Body)
-	tr := &api.Training{}
-	err := decoder.Decode(tr)
-	if err != nil {
-		respondWithError(rw, err)
-		return
+func createTraining(cli api.OrchestratorClient) func(rw http.ResponseWriter, req *http.Request, _ httprouter.Params) {
+	return func(rw http.ResponseWriter, req *http.Request, _ httprouter.Params) {
+		decoder := json.NewDecoder(req.Body)
+		tr := &api.Request{}
+		err := decoder.Decode(tr)
+		if err != nil {
+			respondWithError(rw, err)
+			return
+		}
+		defer req.Body.Close()
+		job, err := api.RunTraining(tr, cli)
+		if err != nil {
+			respondWithError(rw, err)
+			return
+		}
+		respondWith(rw, http.StatusOK, fmt.Sprintf("{\"job_id\": %q}", job.GetID()))
 	}
-	defer req.Body.Close()
-
-	job, err := api.RunTraining(tr)
-	if err != nil {
-		respondWithError(rw, err)
-		return
-	}
-	respondWith(rw, http.StatusOK, fmt.Sprintf("{\"job_id\": %q}", job.Deploy.RequestID))
 }

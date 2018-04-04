@@ -1,28 +1,10 @@
 package v1
 
-import "encoding/json"
-
-// Job wraps singularity Deploy
-type Job struct {
-	Deploy deploy `json:"deploy"`
-}
-
-// String implements the Stringer interface
-func (j Job) String() string {
-	b, err := json.Marshal(j)
-	if err != nil {
-		panic(err)
-	}
-	return string(b)
-}
-
-type deploy struct {
-	RequestID                  string             `json:"requestId"`
-	ID                         string             `json:"id"`
-	Type                       string             `json:"type"`
-	Volumes                    []Volume           `json:"volumes"`
-	ContainerInfo              ContainerInfo      `json:"containerInfo"`
-	Resources                  map[string]float64 `json:"resources"`
-	Env                        map[string]string  `json:"env"`
-	DeployHealthTimeoutSeconds int                `json:"deployHealthTimeoutSeconds"`
+type Request struct {
+	Image       string             `json:"code"`
+	ModelWeight string             `json:"model_weight,omitempty"`
+	ModelName   string             `json:"model_name,omitempty"`
+	DataID      string             `json:"data_id,omitempty"`
+	Resources   map[string]float64 `json:"resources"`
+	Meta        map[string]string  `json:"meta,omitempty"`
 }
