@@ -3,7 +3,7 @@ package orchestrator
 import "github.com/neuromation/platform-api/api/v1/container"
 
 type Client interface {
-	NewJob(container.Container, map[string]float64) Job
+	NewJob(container.Container, container.Resources) Job
 	GetJob() Job
 	SearchJobs() []Job
 }

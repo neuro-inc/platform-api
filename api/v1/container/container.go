@@ -30,3 +30,5 @@ type Volume struct {
 	ContainerPath string `json:"containerPath"`
 	Mode          string `json:"mode,omitempty"`
 }
+
+type Resources map[string]float64

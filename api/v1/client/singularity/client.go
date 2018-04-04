@@ -35,7 +35,7 @@ func NewClient(addr string, timeout time.Duration) (orchestrator.Client, error) 
 
 // TODO: NewJob is the method of singularityClient
 // but actually Job is something different from client.
-func (c *singularityClient) NewJob(container container.Container, res map[string]float64) orchestrator.Job {
+func (c *singularityClient) NewJob(container container.Container, res container.Resources) orchestrator.Job {
 	id := fmt.Sprintf("platform_deploy_%d", time.Now().Nanosecond())
 	j := &singularityJob{
 		client: c,

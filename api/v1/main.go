@@ -3,13 +3,15 @@ package v1
 import (
 	"encoding/json"
 	"fmt"
+	"io/ioutil"
+	"net"
+	"net/http"
+
 	"github.com/julienschmidt/httprouter"
 	"github.com/neuromation/platform-api/api/v1/client/singularity"
 	"github.com/neuromation/platform-api/api/v1/config"
 	"github.com/neuromation/platform-api/api/v1/orchestrator"
 	"github.com/neuromation/platform-api/log"
-	"net"
-	"net/http"
 )
 
 // client - shared instance of orchestrator client
@@ -32,7 +34,7 @@ func Serve(cfg *config.Config) error {
 	router.GET("/models", listModels)
 	router.GET("/storage", listStorage)
 	router.POST("/trainings", createTraining)
-	//router.GET("/trainings/:id", viewTraining)
+	router.GET("/trainings/:id", viewTraining)
 
 	s := &http.Server{
 		Handler:      router,
@@ -78,9 +80,8 @@ func listStorage(rw http.ResponseWriter, _ *http.Request, _ httprouter.Params) {
 	fmt.Fprint(rw, "]")
 }
 
-/*
 func viewTraining(rw http.ResponseWriter, _ *http.Request, params httprouter.Params) {
-	resp, err := api.ViewTraining(params.ByName("id"))
+	resp, err := ViewTraining(params.ByName("id"))
 	if err != nil {
 		respondWithError(rw, err)
 		return
@@ -92,7 +93,7 @@ func viewTraining(rw http.ResponseWriter, _ *http.Request, params httprouter.Par
 	}
 	resp.Body.Close()
 	respondWith(rw, http.StatusOK, string(b))
-}*/
+}
 
 func createTraining(rw http.ResponseWriter, req *http.Request, _ httprouter.Params) {
 	decoder := json.NewDecoder(req.Body)
