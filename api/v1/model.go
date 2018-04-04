@@ -2,8 +2,6 @@ package v1
 
 import (
 	"encoding/json"
-	"fmt"
-	"io"
 )
 
 // Model describes Model from API doc
@@ -30,18 +28,4 @@ var modelRegistry = map[string]Model{
 		Description: "100% accuracy",
 		Meta:        make(map[string]string),
 	},
-}
-
-// ListModels prints available models
-func ListModels(w io.Writer) {
-	fmt.Fprint(w, "[")
-	var i int
-	for _, v := range modelRegistry {
-		i++
-		fmt.Fprint(w, v)
-		if i < len(modelRegistry)-1 {
-			fmt.Fprint(w, ",")
-		}
-	}
-	fmt.Fprint(w, "]")
 }

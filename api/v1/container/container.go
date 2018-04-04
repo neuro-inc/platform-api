@@ -1,24 +1,6 @@
-package singularity
+package container
 
-// Code is kinda docker container
-type Code struct {
-	// TODO: is always `docker` for now
-	Type string `json:"docker"`
-
-	Volumes []Volume `json:"volumes,omitempty"`
-
-	Env map[string]string `json:"env,omitempty"`
-
-	docker
-}
-
-// ContainerInfo wrapper for singularity container
-type ContainerInfo struct {
-	Type   string `json:"type"`
-	Docker docker `json:"docker"`
-}
-
-type docker struct {
+type Container struct {
 	// The docker image that is going to be passed to the registry.
 	Image string `json:"image"`
 	// Allowing arbitrary parameters to be passed to docker CLI.
@@ -27,7 +9,11 @@ type docker struct {
 	// the docker CLI.
 	Parameters map[string]string `json:"parameters,omitempty"`
 
+	Env map[string]string `json:"env,omitempty"`
+
 	PortMappings []PortMapping `json:"portMappings,omitempty"`
+
+	Volumes []Volume `json:"volumes,omitempty"`
 
 	Network string `json:"network,omitempty"`
 }

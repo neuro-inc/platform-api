@@ -8,16 +8,22 @@ import (
 	"strings"
 	"time"
 
-	api "github.com/neuromation/platform-api/api/v1"
+	"encoding/json"
+	"github.com/neuromation/platform-api/api/v1/container"
+	"github.com/neuromation/platform-api/api/v1/orchestrator"
 	"github.com/neuromation/platform-api/log"
 )
 
-func NewClient(addr string, timeout time.Duration) (api.OrchestratorClient, error) {
+type singularityClient struct {
+	c    http.Client
+	addr *url.URL
+}
+
+func NewClient(addr string, timeout time.Duration) (orchestrator.Client, error) {
 	uri, err := url.Parse(addr)
 	if err != nil {
 		return nil, err
 	}
-
 	client := &singularityClient{
 		c: http.Client{
 			Timeout: timeout,
@@ -27,45 +33,49 @@ func NewClient(addr string, timeout time.Duration) (api.OrchestratorClient, erro
 	return client, nil
 }
 
-type singularityClient struct {
-	c    http.Client
-	addr *url.URL
-}
-
-func (c *singularityClient) NewJob(req *api.Request) api.OrchestratorJob {
-	volumes := parseVolumesFromReq(req)
-	resources := parseResourcesFromReq(req)
-	env := parseEnvFromReq(req)
+// TODO: NewJob is the method of singularityClient
+// but actually Job is something different from client.
+func (c *singularityClient) NewJob(container container.Container, res map[string]float64) orchestrator.Job {
 	id := fmt.Sprintf("platform_deploy_%d", time.Now().Nanosecond())
-	return &singularityJob{
+	j := &singularityJob{
 		client: c,
 		Deploy: Deploy{
 			ID: id,
 			ContainerInfo: ContainerInfo{
 				Type: "DOCKER",
-				Docker: docker{
-					Image: req.Image,
+				Docker: dockerContainer{
+					Image: container.Image,
 				},
 			},
-			Volumes:                    volumes,
-			Resources:                  resources,
+			Volumes:                    container.Volumes,
+			Resources:                  res,
 			DeployHealthTimeoutSeconds: 300,
-			Env: env,
+			Env: container.Env,
 		},
 	}
+	return j
 }
 
-func (c *singularityClient) GetJob() api.OrchestratorJob {
+func (c *singularityClient) GetJob() orchestrator.Job {
 	panic("implement me")
 }
 
-func (c *singularityClient) SearchJobs() []api.OrchestratorJob {
+func (c *singularityClient) SearchJobs() []orchestrator.Job {
 	panic("implement me")
 }
 
 type singularityJob struct {
 	client *singularityClient
-	Deploy Deploy
+	Deploy Deploy `json:"deploy"`
+}
+
+// String implements the Stringer interface
+func (sj singularityJob) String() string {
+	b, err := json.Marshal(sj)
+	if err != nil {
+		panic(err)
+	}
+	return string(b)
 }
 
 func (j *singularityJob) Start() error {
@@ -167,16 +177,4 @@ func (c *singularityClient) registerDeploy(reqID string, job *singularityJob) er
 	}
 	log.Infof("deploy response: %s", string(respBody))
 	return nil
-}
-
-func parseVolumesFromReq(req *api.Request) []Volume {
-	panic("implement me")
-}
-
-func parseResourcesFromReq(req *api.Request) map[string]float64 {
-	panic("implement me")
-}
-
-func parseEnvFromReq(req *api.Request) map[string]string {
-	panic("implement me")
 }

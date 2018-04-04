@@ -2,8 +2,6 @@ package v1
 
 import (
 	"encoding/json"
-	"fmt"
-	"io"
 )
 
 // Storage descrives Storage from API docs
@@ -30,18 +28,4 @@ var storageRegistry = map[string]Storage{
 		Type: "DIRECTORY",
 		Meta: make(map[string]string),
 	},
-}
-
-// ListStorage prints available storage objects
-func ListStorage(w io.Writer) {
-	fmt.Fprint(w, "[")
-	var i int
-	for _, v := range storageRegistry {
-		i++
-		fmt.Fprint(w, v)
-		if i < len(storageRegistry)-1 {
-			fmt.Fprint(w, ",")
-		}
-	}
-	fmt.Fprint(w, "]")
 }
