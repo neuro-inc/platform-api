@@ -105,17 +105,15 @@ class StatusesApiClient:
         response = self._session.get(url)
         return Status.from_response(response)
 
-    def wait(self, status_id: str, timeout_s: int):
+    def wait(self, status_id: str, interval_s: int, max_attempts: int):
         # TODO: should be more complicated
-        delay_s = 1
-        max_attempts = timeout_s / delay_s
         for _ in range(max_attempts):
             status = self.get(status_id)
-            time.sleep(delay_s)
-        # TODO: poll
-        # raise an exception if failed
-
-    # def poll
+            if status.name in {StatusName.SUCCEEDED, StatusName.FAILED}:
+                return status
+            time.sleep(interval_s)
+        else:
+            raise RuntimeError('too long')
 
 
 @pytest.fixture
@@ -140,9 +138,25 @@ class TestStatusesApi:
     def test_get(self, api_client, api_endpoint):
         status_id = str(uuid.uuid4())
         url = f'{api_endpoint}/statuses/{status_id}'
-        responses.add(responses.GET, url=url, json={
+        responses.add(responses.GET, url=url, status=200, json={
             'id': status_id, 'status': StatusName.PENDING.value})
 
         status = api_client.statuses.get(status_id)
         assert status.id == status_id
         assert status.name == StatusName.PENDING
+
+    @responses.activate
+    def test_wait(self, api_client, api_endpoint):
+        status_id = str(uuid.uuid4())
+        url = f'{api_endpoint}/statuses/{status_id}'
+        responses.add(responses.GET, url=url, status=200, json={
+            'id': status_id, 'status': StatusName.PENDING.value})
+        responses.add(responses.GET, url=url, status=200, json={
+            'id': status_id, 'status': StatusName.PENDING.value})
+        responses.add(responses.GET, url=url, status=303, json={
+            'id': status_id, 'status': StatusName.SUCCEEDED.value})
+
+        status = api_client.statuses.wait(
+            status_id, interval_s=0, max_attempts=3)
+        assert status.id == status_id
+        assert status.name == StatusName.SUCCEEDED
