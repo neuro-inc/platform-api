@@ -4,21 +4,21 @@ import (
 	"github.com/neuromation/platform-api/api/v1/container"
 )
 
-type Deploy struct {
+type deploy struct {
 	RequestID                  string             `json:"requestId"`
 	ID                         string             `json:"id"`
 	Type                       string             `json:"type"`
-	ContainerInfo              ContainerInfo      `json:"containerInfo"`
+	ContainerInfo              containerInfo      `json:"containerInfo"`
 	Resources                  map[string]float64 `json:"resources"`
 	Env                        map[string]string  `json:"env"`
 	DeployHealthTimeoutSeconds int                `json:"deployHealthTimeoutSeconds"`
 }
 
 // ContainerInfo wrapper for singularity container
-type ContainerInfo struct {
-	Type   string          `json:"type"`
-	Docker dockerContainer `json:"docker"`
-	Volumes                    []container.Volume `json:"volumes"`
+type containerInfo struct {
+	Type    string             `json:"type"`
+	Docker  dockerContainer    `json:"docker"`
+	Volumes []container.Volume `json:"volumes"`
 }
 
 type dockerContainer struct {

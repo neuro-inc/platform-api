@@ -2,9 +2,10 @@ package v1
 
 import (
 	"fmt"
+	"net/http"
+
 	"github.com/neuromation/platform-api/api/v1/container"
 	"github.com/neuromation/platform-api/api/v1/orchestrator"
-	"net/http"
 )
 
 type training struct {

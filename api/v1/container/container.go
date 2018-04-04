@@ -1,5 +1,6 @@
 package container
 
+// Container struct describes abstract container
 type Container struct {
 	// The docker image that is going to be passed to the registry.
 	Image string `json:"image"`
@@ -31,4 +32,5 @@ type Volume struct {
 	Mode          string `json:"mode,omitempty"`
 }
 
+// Resources contains a map where key is the name of resource, and value - amount of resource
 type Resources map[string]float64

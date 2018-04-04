@@ -1,6 +1,7 @@
 package singularity
 
 import (
+	"encoding/json"
 	"fmt"
 	"io/ioutil"
 	"net/http"
@@ -8,7 +9,6 @@ import (
 	"strings"
 	"time"
 
-	"encoding/json"
 	"github.com/neuromation/platform-api/api/v1/container"
 	"github.com/neuromation/platform-api/api/v1/orchestrator"
 	"github.com/neuromation/platform-api/log"
@@ -40,14 +40,14 @@ func (c *singularityClient) NewJob(container container.Container, res container.
 	id := fmt.Sprintf("platform_deploy_%d", time.Now().Nanosecond())
 	j := &singularityJob{
 		client: c,
-		Deploy: Deploy{
+		Deploy: deploy{
 			ID: id,
-			ContainerInfo: ContainerInfo{
+			ContainerInfo: containerInfo{
 				Type: "DOCKER",
 				Docker: dockerContainer{
 					Image: container.Image,
 				},
-				Volumes:                    container.Volumes,
+				Volumes: container.Volumes,
 			},
 			Resources:                  res,
 			DeployHealthTimeoutSeconds: 300,
@@ -67,12 +67,12 @@ func (c *singularityClient) SearchJobs() []orchestrator.Job {
 
 type singularityJob struct {
 	client *singularityClient
-	Deploy Deploy `json:"deploy"`
+	Deploy deploy `json:"deploy"`
 }
 
 // String implements the Stringer interface
-func (sj singularityJob) String() string {
-	b, err := json.Marshal(sj)
+func (j singularityJob) String() string {
+	b, err := json.Marshal(j)
 	if err != nil {
 		panic(err)
 	}
