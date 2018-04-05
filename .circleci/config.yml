@@ -4,14 +4,17 @@ jobs:
   test:
     machine:
       image: circleci/classic:201711-01
-
+    working_directory: /go/src/github.com/neuromation/platform-api
     steps:
       - checkout
       - run:
           name: Running API tests
           command: |
             make run_api_tests
-
+     - run:
+          name: Running backend tests
+          command: |
+            make integration_test
 
 workflows:
   version: 2
