@@ -7,8 +7,11 @@ format:
 build:
 	go build
 
-test-short: build
+test: build
 	go test -race $(pkgs)
+
+integration_test: build
+	go test -v -race $(pkgs) --tags "integration"
 
 run: build
 	./platform-api
@@ -35,6 +38,5 @@ run_api_tests_built:
 	docker run --rm --link tests_singularity_1 \
 	    platformapi-apitests pytest -vv .
 
-run_api_tests: up build_api_tests run_api_tests_built
+run_api_tests: up build_api_tests run_api_tests_built integration_test
 
-test: up build_api_tests run_api_tests_built down

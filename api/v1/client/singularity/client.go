@@ -107,7 +107,7 @@ func (j *singularityJob) Status() (string, error) {
 }
 
 func (j *singularityJob) GetID() string {
-	return j.Deploy.ID
+	return j.Deploy.RequestID
 }
 
 var requestTpl = `
@@ -124,58 +124,51 @@ var requestTpl = `
 
 func (c *singularityClient) registerRequest(id string) error {
 	body := fmt.Sprintf(requestTpl, id)
-	r := strings.NewReader(body)
-	addr := fmt.Sprintf("%s/singularity/api/requests", c.addr.String())
-	req, err := http.NewRequest("POST", addr, r)
-	if err != nil {
-		return fmt.Errorf("err while creating singularity request: %s", err)
-	}
-	req.Header.Set("Content-Type", "application/json")
-	resp, err := c.c.Do(req)
+	_, err := c.post("requests", body)
 	if err != nil {
 		return fmt.Errorf("error while registering request %q at %q: %s", body, c.addr, err)
 	}
-	defer resp.Body.Close()
-	if resp.StatusCode != http.StatusOK {
-		responseBody, _ := ioutil.ReadAll(resp.Body)
-		return fmt.Errorf("unexpected status code returned from %q: %d. Response body: %q",
-			addr, resp.StatusCode, responseBody)
-	}
-
-	respBody, err := ioutil.ReadAll(resp.Body)
-	if err != nil {
-		log.Errorf("cannot read response body: %s", err)
-	}
-	log.Infof("request response: %s", string(respBody))
 	return nil
 }
 
 func (c *singularityClient) registerDeploy(reqID string, job *singularityJob) error {
-	body := fmt.Sprintf("%s", job)
-	log.Infof("%s", body)
-
-	r := strings.NewReader(body)
-	addr := fmt.Sprintf("%s/singularity/api/deploys", c.addr.String())
-	req, err := http.NewRequest("POST", addr, r)
-	if err != nil {
-		return fmt.Errorf("err while creating singularity deploy: %s", err)
-	}
-	req.Header.Set("Content-Type", "application/json")
-	resp, err := c.c.Do(req)
+	body := job.String()
+	_, err := c.post("deploys", body)
 	if err != nil {
 		return fmt.Errorf("error while registering deploy %q at %q: %s", body, c.addr, err)
 	}
+	return nil
+}
+
+func (c *singularityClient) post(addr, body string) (*http.Response, error) {
+	r := strings.NewReader(body)
+	uri := fmt.Sprintf("%s/singularity/api/%s", c.addr.String(), addr)
+	req, err := http.NewRequest("POST", uri, r)
+	if err != nil {
+		return nil, fmt.Errorf("err while creating singularity post request: %s", err)
+	}
+	req.Header.Set("Content-Type", "application/json")
+	resp, err := c.c.Do(req)
 	defer resp.Body.Close()
+
 	if resp.StatusCode != http.StatusOK {
 		responseBody, _ := ioutil.ReadAll(resp.Body)
-		return fmt.Errorf("unexpected status code returned from %q: %d. Response body: %q",
-			addr, resp.StatusCode, responseBody)
+		return resp, fmt.Errorf("unexpected status code returned from %q: %d. Response body: %q",
+			resp.Request.URL, resp.StatusCode, responseBody)
 	}
-
 	respBody, err := ioutil.ReadAll(resp.Body)
 	if err != nil {
-		log.Errorf("cannot read response body: %s", err)
+		return resp, fmt.Errorf("cannot read response body: %s", err)
 	}
-	log.Infof("deploy response: %s", string(respBody))
-	return nil
+	log.Infof("singularityClient response: %s", string(respBody))
+	return resp, nil
+}
+
+func (c *singularityClient) get(addr string) (*http.Response, error) {
+	uri := fmt.Sprintf("%s/singularity/api/%s", c.addr.String(), addr)
+	req, err := http.NewRequest("GET", uri, nil)
+	if err != nil {
+		return nil, fmt.Errorf("err while creating singularity GET request: %s", err)
+	}
+	return c.c.Do(req)
 }

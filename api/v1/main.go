@@ -11,7 +11,6 @@ import (
 	"github.com/neuromation/platform-api/api/v1/client/singularity"
 	"github.com/neuromation/platform-api/api/v1/config"
 	"github.com/neuromation/platform-api/api/v1/orchestrator"
-	"github.com/neuromation/platform-api/log"
 )
 
 // client - shared instance of orchestrator client
@@ -21,21 +20,18 @@ var client orchestrator.Client
 func Serve(cfg *config.Config) error {
 	ln, err := net.Listen("tcp4", cfg.ListenAddr)
 	if err != nil {
-		log.Fatalf("cannot listen for %q: %s", cfg.ListenAddr, err)
+		return fmt.Errorf("cannot listen for %q: %s", cfg.ListenAddr, err)
 	}
-
 	client, err = singularity.NewClient(cfg.SingularityAddr, cfg.WriteTimeout)
 	if err != nil {
 		return fmt.Errorf("error while creating orchestrator client: %s", err)
 	}
-
 	router := httprouter.New()
 	router.GET("/", showHelp)
 	router.GET("/models", listModels)
 	router.GET("/storage", listStorage)
 	router.POST("/trainings", createTraining)
 	router.GET("/trainings/:id", viewTraining)
-
 	s := &http.Server{
 		Handler:      router,
 		ReadTimeout:  cfg.ReadTimeout,
