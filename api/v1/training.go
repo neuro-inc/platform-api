@@ -43,5 +43,4 @@ func runTraining(tr *training) (orchestrator.Job, error) {
 // ViewTraining proxies response about task from singularity
 func ViewTraining(id string) (*http.Response, error) {
 	panic("implement me")
-	//return client.c.Get(fmt.Sprintf("%s/singularity/api/tasks/ids/request/%s", client.addr, id))
 }

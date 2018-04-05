@@ -11,7 +11,6 @@ import (
 
 	"github.com/neuromation/platform-api/api/v1/container"
 	"github.com/neuromation/platform-api/api/v1/orchestrator"
-	"github.com/neuromation/platform-api/log"
 )
 
 type singularityClient struct {
@@ -21,7 +20,7 @@ type singularityClient struct {
 
 // NewClient creates new orchestrator.Client from given config
 func NewClient(addr string, timeout time.Duration) (orchestrator.Client, error) {
-	uri, err := url.Parse(addr)
+	uri, err := url.ParseRequestURI(addr)
 	if err != nil {
 		return nil, err
 	}
@@ -149,18 +148,11 @@ func (c *singularityClient) post(addr, body string) (*http.Response, error) {
 	}
 	req.Header.Set("Content-Type", "application/json")
 	resp, err := c.c.Do(req)
-	defer resp.Body.Close()
-
 	if resp.StatusCode != http.StatusOK {
 		responseBody, _ := ioutil.ReadAll(resp.Body)
 		return resp, fmt.Errorf("unexpected status code returned from %q: %d. Response body: %q",
 			resp.Request.URL, resp.StatusCode, responseBody)
 	}
-	respBody, err := ioutil.ReadAll(resp.Body)
-	if err != nil {
-		return resp, fmt.Errorf("cannot read response body: %s", err)
-	}
-	log.Infof("singularityClient response: %s", string(respBody))
 	return resp, nil
 }
 

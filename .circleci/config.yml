@@ -15,6 +15,10 @@ jobs:
       - run:
           name: Running backend tests
           command: |
+            make test
+      - run:
+          name: Running backend integration tests
+          command: |
             make integration_test
 
 workflows:

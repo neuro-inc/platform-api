@@ -44,7 +44,7 @@ func waitReachable(addr string) error {
 	return fmt.Errorf("cannot connect %v for %v", addr, maxWait)
 }
 
-func TestGet(t *testing.T) {
+func TestGetState(t *testing.T) {
 	c := newClient(t)
 	resp, err := c.get("state")
 	if err != nil {
