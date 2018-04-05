@@ -20,6 +20,7 @@ class ApiClient:
 
         self._models_api = None
         self._statuses_api = None
+        self._inference_api = None
 
     @property
     def endpoint(self):
@@ -49,6 +50,12 @@ class ApiClient:
                 self._endpoint, self._session)
         return self._statuses_api
 
+    @property
+    def inference(self):
+        if not self._inference_api:
+            self._inference_api = InferenceApiClient(self, self._session)
+        return self._inference_api
+
 
 class ModelsApiClient:
     def __init__(self, client, session):
@@ -66,6 +73,7 @@ class ModelsApiClient:
         assert response.status_code == 202
         assert 'Location' in response.headers
 
+        # TODO: handle Location properly
         status_id = response.json()['status_id']
         return StatusProxy(self._client.statuses, status_id)
 
@@ -143,6 +151,32 @@ class StatusesApiClient:
             raise RuntimeError('too long')
 
 
+# TODO: consider renaming
+class InferenceApiClient:
+    def __init__(self, client, session):
+        self._client = client
+        self._session = session
+
+        self._base_url = self._client.endpoint + '/inference'
+
+    def create(self, model_id, **kwargs):
+        payload = {
+        }
+        response = self._session.post(self._base_url, json=payload)
+        assert response.status_code == 202
+        assert 'Location' in response.headers
+
+        # TODO: handle Location properly
+        status_id = response.json()['status_id']
+        return StatusProxy(self._client.statuses, status_id)
+
+    def get(self, inference_id, **kwargs):
+        pass
+
+    def score(self, inference_id, payload):
+        pass
+
+
 @pytest.fixture
 def api_endpoint():
     return 'http://localhost:8080/api/v1'
@@ -194,6 +228,29 @@ def succeeded_model(model_with_statuses):
     yield model_with_statuses
 
 
+@pytest.fixture
+def inference(responses, api_endpoint):
+    inference_id = str(uuid.uuid4())
+    status_id = str(uuid.uuid4())
+    url = f'{api_endpoint}/inference'
+    headers = {
+        'Location': f'{api_endpoint}/statuses/{status_id}'
+    }
+    payload = {'id': inference_id, 'status_id': status_id}
+    responses.add(
+        responses.POST, url=url, status=202, headers=headers,
+        json=payload)
+
+    yield inference_id, status_id
+
+
+@pytest.fixture
+def succeeded_inference(responses, api_endpoint, inference):
+    _, status_id = inference
+    register_successfull_status(responses, api_endpoint, status_id)
+    yield inference
+
+
 def register_pending_status(responses, api_endpoint, status_id, number=2):
     url = f'{api_endpoint}/statuses/{status_id}'
     responses.add(responses.GET, url=url, status=200, json={
@@ -211,11 +268,20 @@ def register_successfull_status(responses, api_endpoint, status_id):
 
 class TestApi:
     def test_flow(self, api_client, succeeded_model):
-        model_id, status_id = succeeded_model
+        model_id, model_status_id = succeeded_model
+
         status_proxy = api_client.models.create()
-        status = status_proxy.wait()
-        assert status.id == status_id
-        assert status.name == StatusName.SUCCEEDED
+        model_status = status_proxy.wait()
+        assert model_status.id == model_status_id
+        assert model_status.name == StatusName.SUCCEEDED
+
+        # TODO: get the model
+
+        # TODO: request inference
+
+        # TODO: wait for inference to get started
+
+        # TODO: try to score
 
 
 class TestModelsApi:
@@ -254,5 +320,15 @@ class TestStatusesApi:
 
         status = api_client.statuses.wait(
             status_id, interval_s=0, max_attempts=3)
+        assert status.id == status_id
+        assert status.name == StatusName.SUCCEEDED
+
+
+class TestInferenceApi:
+    def test_create(
+            self, responses, api_client, api_endpoint, succeeded_inference):
+        inference_id, status_id = succeeded_inference
+        status_proxy = api_client.inference.create(model_id='1')
+        status = status_proxy.wait()
         assert status.id == status_id
         assert status.name == StatusName.SUCCEEDED
