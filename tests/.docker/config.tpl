@@ -1,6 +1,6 @@
 {
   "auths": {
-    "registry.neuromation.io:": {
+    "registry.neuromation.io": {
       "auth": "#PASS#"
     }
   }
