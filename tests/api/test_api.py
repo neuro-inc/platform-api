@@ -17,6 +17,10 @@ class ApiClient:
         self._models_api = None
         self._statuses_api = None
 
+    @property
+    def endpoint(self):
+        return self._endpoint
+
     def close(self):
         if self._session:
             self._session.close()
@@ -31,8 +35,7 @@ class ApiClient:
     @property
     def models(self):
         if not self._models_api:
-            self._models_api = ModelsApiClient(
-                self._endpoint, self._session)
+            self._models_api = ModelsApiClient(self, self._session)
         return self._models_api
 
     @property
@@ -44,10 +47,11 @@ class ApiClient:
 
 
 class ModelsApiClient:
-    def __init__(self, endpoint, session):
+    def __init__(self, client, session):
+        self._client = client
         self._session = session
 
-        self._base_url = endpoint + '/models'
+        self._base_url = self._client.endpoint + '/models'
 
     def create(self, *args):
         payload = {
@@ -57,7 +61,9 @@ class ModelsApiClient:
         response = self._session.post(self._base_url, json=payload)
         assert response.status_code == 202
         assert 'Location' in response.headers
-        return response.json()
+
+        status_id = response.json()['status_id']
+        return StatusProxy(self._client.statuses, status_id)
 
     def get(self, model_id: str):
         url = f'{self._base_url}/{model_id}'
@@ -95,6 +101,19 @@ class Status(NamedTuple):
         return cls(id=id_, name=name)
 
 
+# TODO: rename
+class StatusProxy:
+    def __init__(self, client, status_id):
+        self._client = client
+        self._status_id = status_id
+
+    def get(self):
+        return self._client.get(self._status_id)
+
+    def wait(self):
+        return self._client.wait(self._status_id)
+
+
 class StatusesApiClient:
     def __init__(self, endpoint, session):
         self._session = session
@@ -106,7 +125,8 @@ class StatusesApiClient:
         response = self._session.get(url)
         return Status.from_response(response)
 
-    def wait(self, status_id: str, interval_s: int, max_attempts: int):
+    # TODO: better defaults (as constants)
+    def wait(self, status_id: str, interval_s: int=1, max_attempts: int=5):
         # TODO: should be more complicated
         for _ in range(max_attempts):
             status = self.get(status_id)
@@ -126,14 +146,6 @@ def api_endpoint():
 def api_client(api_endpoint):
     with ApiClient(endpoint=api_endpoint) as client:
         yield client
-
-
-
-class TestApi:
-    @pytest.mark.usefixtures('responses')
-    def test_base(self, api_client, api_endpoint):
-        model_id = str(uuid.uuid4())
-        status_id = str(uuid.uuid4())
 
 
 @pytest.fixture
@@ -158,10 +170,31 @@ def model(responses, api_endpoint):
     yield model_id, status_id
 
 
+@pytest.fixture
+def model_with_statuses(responses, api_endpoint, model):
+    _, status_id = model
+    register_successfull_status(responses, api_endpoint, status_id)
+    yield model
+
+
+def register_successfull_status(responses, api_endpoint, status_id):
+    url = f'{api_endpoint}/statuses/{status_id}'
+    responses.add(responses.GET, url=url, status=200, json={
+        'id': status_id, 'status': StatusName.PENDING.value})
+    responses.add(responses.GET, url=url, status=200, json={
+        'id': status_id, 'status': StatusName.PENDING.value})
+    # TODO: 303 + Location
+    responses.add(responses.GET, url=url, status=303, json={
+        'id': status_id, 'status': StatusName.SUCCEEDED.value})
+
+
 class TestModelsApi:
-    def test_create(self, api_client, api_endpoint, model):
-        model_id, status_id = model
-        status = api_client.models.create()
+    def test_create(self, api_client, model_with_statuses):
+        model_id, status_id = model_with_statuses
+        status_proxy = api_client.models.create()
+        status = status_proxy.wait()
+        assert status.id == status_id
+        assert status.name == StatusName.SUCCEEDED
 
 
 class TestStatusesApi:
