@@ -2,11 +2,14 @@
 
 `Platform API` provides API for Neuromation MLaaS platform.
 
+## Dependencies
+
+* [lint](https://github.com/golang/lint) - linter for Go source code
+* [dep](https://github.com/golang/dep) - dependency manager
+
 ## How to install
 
 * If you don't have Go installed on your system - follow [this guide](https://golang.org/doc/install).
-
-* Install [dep](https://github.com/golang/dep) - dependency manager
 
 * Clone project into your `$GOPATH/src/github.com/neuromation/platform-api` directory.
 

@@ -4,14 +4,24 @@ jobs:
   test:
     machine:
       image: circleci/classic:201711-01
-
+      docker_layer_caching: true
+    working_directory: ~/.go_workspace/src/github.com/neuromation/platform-api
     steps:
       - checkout
       - run:
           name: Running API tests
           command: |
-            make run_api_tests
-
+            make up;
+            make run_api_tests;
+      - run:
+          name: Running backend tests
+          command: |
+            make test
+      - run:
+          name: Running backend integration tests
+          command: |
+            make integration_test ;
+            make down;
 
 workflows:
   version: 2
