@@ -12,4 +12,9 @@
 
 * Run `make run` command to run application
 
+## How to run tests
+
+* You should set environment variable DOCKER_SECRET with value of your docker credentials.
+could be found in `~/.docker/config.json`
+
 * Run `make test` command to test application
