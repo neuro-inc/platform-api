@@ -11,7 +11,7 @@ jobs:
           name: Running API tests
           command: |
             make run_api_tests
-     - run:
+      - run:
           name: Running backend tests
           command: |
             make integration_test
