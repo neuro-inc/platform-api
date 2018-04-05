@@ -74,8 +74,9 @@ class ModelsApiClient:
         assert 'Location' in response.headers
 
         # TODO: handle Location properly
-        status_id = response.json()['status_id']
-        return StatusProxy(self._client.statuses, status_id)
+        payload = response.json()
+        status_id = payload['status_id']
+        return StatusProxy(self._client.statuses, status_id, payload)
 
     def get(self, model_id: str):
         url = f'{self._base_url}/{model_id}'
@@ -117,9 +118,14 @@ class Status(NamedTuple):
 
 # TODO: rename
 class StatusProxy:
-    def __init__(self, client, status_id):
+    def __init__(self, client, status_id, payload=None):
         self._client = client
         self._status_id = status_id
+        self._payload = payload
+
+    @property
+    def payload(self):
+        return self._payload
 
     def get(self):
         return self._client.get(self._status_id)
@@ -214,11 +220,18 @@ def model(responses, api_endpoint):
 def pending_model(responses, api_endpoint, model):
     _, status_id = model
     register_pending_status(responses, api_endpoint, status_id)
+    yield model
 
 
 @pytest.fixture
 def model_with_statuses(responses, api_endpoint, model):
-    _, status_id = model
+    model_id, status_id = model
+
+    # TODO: extract a function
+    url = f'{api_endpoint}/models/{model_id}'
+    payload = {'id': model_id, 'meta': {}}
+    responses.add(responses.GET, url=url, status=200, json=payload)
+
     register_successfull_status(responses, api_endpoint, status_id)
     yield model
 
@@ -267,30 +280,36 @@ def register_successfull_status(responses, api_endpoint, status_id):
 
 
 class TestApi:
-    def test_flow(self, api_client, succeeded_model):
+    def test_flow(self, api_client, succeeded_model, succeeded_inference):
         model_id, model_status_id = succeeded_model
+        inference_id, inference_status_id = succeeded_inference
 
-        status_proxy = api_client.models.create()
-        model_status = status_proxy.wait()
+        model_status_proxy = api_client.models.create()
+        model_status = model_status_proxy.wait()
         assert model_status.id == model_status_id
         assert model_status.name == StatusName.SUCCEEDED
 
-        # TODO: get the model
+        model_id = model_status_proxy.payload['id']
+        model = api_client.models.get(model_id)
+        assert model.id == model_id
 
-        # TODO: request inference
-
-        # TODO: wait for inference to get started
+        inference_status_proxy = api_client.inference.create(model_id)
+        inference_status = inference_status_proxy.wait()
+        assert inference_status.id == inference_status_id
+        assert inference_status.name == StatusName.SUCCEEDED
 
         # TODO: try to score
 
 
 class TestModelsApi:
-    def test_create(self, api_client, succeeded_model):
-        model_id, status_id = succeeded_model
+    def test_create(self, api_client, pending_model):
+        model_id, status_id = pending_model
         status_proxy = api_client.models.create()
-        status = status_proxy.wait()
+
+        status_proxy.get()
+        status = status_proxy.get()
         assert status.id == status_id
-        assert status.name == StatusName.SUCCEEDED
+        assert status.name == StatusName.PENDING
 
     def test_get(self, responses, api_client, api_endpoint):
         model_id = str(uuid.uuid4())
