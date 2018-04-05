@@ -4,7 +4,7 @@ jobs:
   test:
     machine:
       image: circleci/classic:201711-01
-    working_directory: /go/src/github.com/neuromation/platform-api
+    working_directory: ~/go/src/github.com/neuromation/platform-api
     steps:
       - checkout
       - run:
