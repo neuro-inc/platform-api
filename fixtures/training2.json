@@ -1,0 +1,19 @@
+{
+  "code": {
+    "env": {
+      "IMAGE_DIR": "/image_temp"
+    },
+    "image": "hagen1778/gif-generator",
+    "volumes": [
+      {
+        "hostPath": "/Users/romankhavronenko/image_temp",
+        "containerPath": "/image_temp",
+        "mode": "RW"
+      }
+    ]
+  },
+  "resources": {
+    "cpus": 2,
+    "memoryMb": 128
+  }
+}
