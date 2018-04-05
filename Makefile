@@ -38,5 +38,5 @@ run_api_tests_built:
 	docker run --rm --link tests_singularity_1 \
 	    platformapi-apitests pytest -vv .
 
-run_api_tests: up build_api_tests run_api_tests_built integration_test
+run_api_tests: build_api_tests run_api_tests_built
 
