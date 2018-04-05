@@ -1,11 +1,15 @@
 import enum
 import time
-from typing import NamedTuple
+from typing import NamedTuple, Any
 import uuid
 
 import pytest
 import requests
 from responses import RequestsMock
+
+
+class ApiClientException(Exception):
+    pass
 
 
 class ApiClient:
@@ -70,11 +74,13 @@ class ModelsApiClient:
         response = self._session.get(url)
         assert response.status_code == 200
         # TODO: check the schema and wrap into Model
-        return response.json()
+        payload = response.json()
+        return Model(**payload)
 
 
-class ApiClientException(Exception):
-    pass
+class Model(NamedTuple):
+    id: str
+    meta: Any
 
 
 class StatusException(ApiClientException):
@@ -171,30 +177,64 @@ def model(responses, api_endpoint):
 
 
 @pytest.fixture
+def pending_model(responses, api_endpoint, model):
+    _, status_id = model
+    register_pending_status(responses, api_endpoint, status_id)
+
+
+@pytest.fixture
 def model_with_statuses(responses, api_endpoint, model):
     _, status_id = model
     register_successfull_status(responses, api_endpoint, status_id)
     yield model
 
 
-def register_successfull_status(responses, api_endpoint, status_id):
+@pytest.fixture
+def succeeded_model(model_with_statuses):
+    yield model_with_statuses
+
+
+def register_pending_status(responses, api_endpoint, status_id, number=2):
     url = f'{api_endpoint}/statuses/{status_id}'
     responses.add(responses.GET, url=url, status=200, json={
         'id': status_id, 'status': StatusName.PENDING.value})
     responses.add(responses.GET, url=url, status=200, json={
         'id': status_id, 'status': StatusName.PENDING.value})
+
+
+def register_successfull_status(responses, api_endpoint, status_id):
     # TODO: 303 + Location
+    url = f'{api_endpoint}/statuses/{status_id}'
     responses.add(responses.GET, url=url, status=303, json={
         'id': status_id, 'status': StatusName.SUCCEEDED.value})
 
 
-class TestModelsApi:
-    def test_create(self, api_client, model_with_statuses):
-        model_id, status_id = model_with_statuses
+class TestApi:
+    def test_flow(self, api_client, succeeded_model):
+        model_id, status_id = succeeded_model
         status_proxy = api_client.models.create()
         status = status_proxy.wait()
         assert status.id == status_id
         assert status.name == StatusName.SUCCEEDED
+
+
+class TestModelsApi:
+    def test_create(self, api_client, succeeded_model):
+        model_id, status_id = succeeded_model
+        status_proxy = api_client.models.create()
+        status = status_proxy.wait()
+        assert status.id == status_id
+        assert status.name == StatusName.SUCCEEDED
+
+    def test_get(self, responses, api_client, api_endpoint):
+        model_id = str(uuid.uuid4())
+        url = f'{api_endpoint}/models/{model_id}'
+        payload = {'id': model_id, 'meta': {}}
+        responses.add(responses.GET, url=url, status=200, json=payload)
+
+        model = api_client.models.get(model_id)
+        assert model.id == model_id
+        assert model.meta == {}
 
 
 class TestStatusesApi:
@@ -210,13 +250,7 @@ class TestStatusesApi:
 
     def test_wait(self, responses, api_client, api_endpoint):
         status_id = str(uuid.uuid4())
-        url = f'{api_endpoint}/statuses/{status_id}'
-        responses.add(responses.GET, url=url, status=200, json={
-            'id': status_id, 'status': StatusName.PENDING.value})
-        responses.add(responses.GET, url=url, status=200, json={
-            'id': status_id, 'status': StatusName.PENDING.value})
-        responses.add(responses.GET, url=url, status=303, json={
-            'id': status_id, 'status': StatusName.SUCCEEDED.value})
+        register_successfull_status(responses, api_endpoint, status_id)
 
         status = api_client.statuses.wait(
             status_id, interval_s=0, max_attempts=3)
