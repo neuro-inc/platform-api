@@ -1,2 +1,5 @@
+.idea
 tests/logs
 tests/sandbox
+tests/docker.tar.gz
+tests/.docker/config.json
