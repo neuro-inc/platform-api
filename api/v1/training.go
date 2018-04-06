@@ -21,7 +21,7 @@ type training struct {
 
 // runTraining starts a new training task accoridng to received req
 func runTraining(tr *training) (orchestrator.Job, error) {
-	// check modelname here to avoid exploiting registry with invalid requests
+	// check modelName here to avoid exploiting registry with invalid requests
 	if len(tr.ModelName) > 0 {
 		if _, ok := modelRegistry[tr.ModelName]; !ok {
 			return nil, fmt.Errorf("unknown model id %q", tr.ModelName)
