@@ -1,11 +1,11 @@
 package singularity
 
 import (
-	"testing"
-	"time"
+	"io/ioutil"
 	"net/http"
 	"net/http/httptest"
-	"io/ioutil"
+	"testing"
+	"time"
 )
 
 func TestNewClient_Fail(t *testing.T) {
@@ -37,7 +37,6 @@ func TestNewClient_Success(t *testing.T) {
 			"https://127.0.0.1",
 		},
 	}
-
 	for _, tc := range testCases {
 		c, err := NewClient(tc.addr, tc.timeout)
 		if err != nil {
@@ -101,16 +100,23 @@ func TestGet_Fail(t *testing.T) {
 }
 
 func singularityHandler(rw http.ResponseWriter, r *http.Request) {
-	switch r.URL.Path {
-	case "/singularity/api/TestPost_Success":
-		b, _ := ioutil.ReadAll(r.Body)
-		rw.Write(b)
-	case "/singularity/api/TestPost_Fail":
-		rw.WriteHeader(http.StatusInternalServerError)
-	case "/singularity/api/TestGet_Success":
-		rw.WriteHeader(http.StatusOK)
-	case "/singularity/api/TestGet_Fail":
-		rw.WriteHeader(http.StatusInternalServerError)
+	if r.Method == "POST" {
+		switch r.URL.Path {
+		case "/singularity/api/TestPost_Success":
+			b, _ := ioutil.ReadAll(r.Body)
+			rw.Write(b)
+		case "/singularity/api/TestPost_Fail":
+			rw.WriteHeader(http.StatusInternalServerError)
+		}
+		return
+	}
+	if r.Method == "GET" {
+		switch r.URL.Path {
+		case "/singularity/api/TestGet_Success":
+			rw.WriteHeader(http.StatusOK)
+		case "/singularity/api/TestGet_Fail":
+			rw.WriteHeader(http.StatusInternalServerError)
+		}
 	}
 }
 
