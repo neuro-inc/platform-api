@@ -5,10 +5,11 @@ package singularity
 import (
 	"encoding/json"
 	"fmt"
-	"github.com/neuromation/platform-api/api/v1/container"
 	"net/http"
 	"testing"
 	"time"
+
+	"github.com/neuromation/platform-api/api/v1/container"
 )
 
 var (

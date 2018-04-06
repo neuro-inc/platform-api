@@ -15,10 +15,6 @@ jobs:
             make run_api_tests;
             make down;
       - run:
-          name: Running backend tests
-          command: |
-            make test
-      - run:
           name: Running backend integration tests
           command: |
             make up;
