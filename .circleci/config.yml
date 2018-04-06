@@ -13,6 +13,7 @@ jobs:
           command: |
             make up;
             make run_api_tests;
+            make down;
       - run:
           name: Running backend tests
           command: |
@@ -20,7 +21,8 @@ jobs:
       - run:
           name: Running backend integration tests
           command: |
-            make integration_test ;
+            make up;
+            make integration_test;
             make down;
 
 workflows:
