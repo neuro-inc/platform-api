@@ -83,6 +83,7 @@ func createTraining(rw http.ResponseWriter, req *http.Request, _ httprouter.Para
 	tr := &training{}
 	if err := decodeInto(req.Body, tr); err != nil {
 		respondWithError(rw, err)
+		return
 	}
 	job := client.NewJob(tr.Container, tr.Resources)
 	if err := job.Start(); err != nil {
