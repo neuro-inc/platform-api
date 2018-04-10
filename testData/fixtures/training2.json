@@ -2,7 +2,7 @@
   "code": {
     "image": "hagen1778/gif-generator",
     "env": {
-      "IMAGE_DIR": "/var/storage/result"
+      "IMAGE_DIR": "/var/storage"
     },
     "storage": [
       {
