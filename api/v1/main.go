@@ -1,17 +1,16 @@
 package v1
 
 import (
-	"encoding/json"
 	"fmt"
 	"io/ioutil"
 	"net"
 	"net/http"
-	"os"
 
 	"github.com/julienschmidt/httprouter"
 	"github.com/neuromation/platform-api/api/v1/client/singularity"
 	"github.com/neuromation/platform-api/api/v1/config"
 	"github.com/neuromation/platform-api/api/v1/orchestrator"
+	"github.com/neuromation/platform-api/api/v1/storage"
 )
 
 // client - shared instance of orchestrator client
@@ -27,19 +26,17 @@ func Serve(cfg *config.Config) error {
 	if err != nil {
 		return fmt.Errorf("error while creating orchestrator client: %s", err)
 	}
-
-	if err := os.MkdirAll(cfg.StorageBasePath, 0700); err != nil {
-		return fmt.Errorf("cannot create `StorageBasePath` %q: %s", cfg.StorageBasePath, err)
+	if err := storage.Init(cfg.StorageBasePath); err != nil {
+		return fmt.Errorf("storage error: %s", err)
 	}
 
-	router := httprouter.New()
-	router.GET("/", showHelp)
-	router.GET("/models", listModels)
-	router.GET("/storage", listStorage)
-	router.POST("/trainings", createTraining)
-	router.GET("/trainings/:id", viewTraining)
+	r := httprouter.New()
+	r.GET("/", showHelp)
+	r.GET("/models", listModels)
+	r.POST("/trainings", createTraining)
+	r.GET("/trainings/:id", viewTraining)
 	s := &http.Server{
-		Handler:      router,
+		Handler:      r,
 		ReadTimeout:  cfg.ReadTimeout,
 		WriteTimeout: cfg.WriteTimeout,
 		IdleTimeout:  cfg.IdleTimeout,
@@ -50,32 +47,17 @@ func Serve(cfg *config.Config) error {
 func showHelp(rw http.ResponseWriter, _ *http.Request, _ httprouter.Params) {
 	fmt.Fprintln(rw, "Available endpoints:")
 	fmt.Fprintln(rw, "GET /models")
-	fmt.Fprintln(rw, "GET /storage")
 	fmt.Fprintln(rw, "POST /trainings")
 	fmt.Fprintln(rw, "GET /trainings/%id")
 }
 
-// TODO: dry
 func listModels(rw http.ResponseWriter, _ *http.Request, _ httprouter.Params) {
 	fmt.Fprint(rw, "[")
 	var i int
 	for _, v := range modelRegistry {
 		i++
 		fmt.Fprint(rw, v)
-		if i < len(storageRegistry)-1 {
-			fmt.Fprint(rw, ",")
-		}
-	}
-	fmt.Fprint(rw, "]")
-}
-
-func listStorage(rw http.ResponseWriter, _ *http.Request, _ httprouter.Params) {
-	fmt.Fprint(rw, "[")
-	var i int
-	for _, v := range storageRegistry {
-		i++
-		fmt.Fprint(rw, v)
-		if i < len(storageRegistry)-1 {
+		if i < len(modelRegistry)-1 {
 			fmt.Fprint(rw, ",")
 		}
 	}
@@ -98,18 +80,14 @@ func viewTraining(rw http.ResponseWriter, _ *http.Request, params httprouter.Par
 }
 
 func createTraining(rw http.ResponseWriter, req *http.Request, _ httprouter.Params) {
-	decoder := json.NewDecoder(req.Body)
-	training := &training{}
-	err := decoder.Decode(training)
-	if err != nil {
+	tr := &training{}
+	if err := decodeInto(req.Body, tr); err != nil {
 		respondWithError(rw, err)
+	}
+	job := client.NewJob(tr.Container, tr.Resources)
+	if err := job.Start(); err != nil {
+		respondWithError(rw, fmt.Errorf("error while creating training: %s", err))
 		return
 	}
-	defer req.Body.Close()
-	job, err := runTraining(training)
-	if err != nil {
-		respondWithError(rw, err)
-		return
-	}
-	respondWith(rw, http.StatusOK, fmt.Sprintf("{\"job_id\": %q}", job.GetID()))
+	respondWithSuccess(rw, fmt.Sprintf("{\"job_id\": %q}", job.GetID()))
 }

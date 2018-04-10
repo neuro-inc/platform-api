@@ -1,14 +1,17 @@
 {
   "code": {
-    "env": {
-      "IMAGE_DIR": "/image_temp"
-    },
     "image": "hagen1778/gif-generator",
-    "volumes": [
+    "env": {
+      "IMAGE_DIR": "/var/storage/result"
+    },
+    "storage": [
       {
-        "hostPath": "/Users/romankhavronenko/image_temp",
-        "containerPath": "/image_temp",
-        "mode": "RW"
+        "from": "storage://gif-generator/collection",
+        "to": "/var/storage/gifs"
+      },
+      {
+        "from": "storage://png-generator/collection",
+        "to": "/var/storage/pngs"
       }
     ]
   },

@@ -37,6 +37,16 @@ func NewClient(addr string, timeout time.Duration) (orchestrator.Client, error) 
 // but actually Job is something different from client.
 func (c *singularityClient) NewJob(container container.Container, res container.Resources) orchestrator.Job {
 	id := fmt.Sprintf("platform_deploy_%d", time.Now().Nanosecond())
+	var volumes []Volume
+	for _, s := range container.Storage {
+		v := Volume{
+			HostPath:      s.From,
+			ContainerPath: s.To,
+			Mode:          "RO",
+		}
+		volumes = append(volumes, v)
+	}
+
 	j := &singularityJob{
 		client: c,
 		Deploy: deploy{
@@ -46,7 +56,7 @@ func (c *singularityClient) NewJob(container container.Container, res container.
 				Docker: dockerContainer{
 					Image: container.Image,
 				},
-				Volumes: container.Volumes,
+				Volumes: volumes,
 			},
 			Resources:                  res,
 			DeployHealthTimeoutSeconds: 300,
