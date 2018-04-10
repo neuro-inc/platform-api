@@ -5,11 +5,11 @@ package singularity
 import (
 	"encoding/json"
 	"fmt"
-	"github.com/neuromation/platform-api/api/v1/container"
-	"net"
 	"net/http"
 	"testing"
 	"time"
+
+	"github.com/neuromation/platform-api/api/v1/container"
 )
 
 var (
@@ -19,24 +19,23 @@ var (
 
 func newClient(t *testing.T) *singularityClient {
 	t.Helper()
-	if err := waitReachable(addr); err != nil {
-		t.Fatalf("singularity unreachable: %s", err)
-	}
 	c, err := NewClient("http://"+addr, timeout)
 	if err != nil {
 		t.Fatalf("fail to create new client: %s", err)
 	}
-	return c.(*singularityClient)
+
+	sc := c.(*singularityClient)
+	if err := waitReadiness(sc); err != nil {
+		t.Fatalf("singularity unreachable: %s", err)
+	}
+	return sc
 }
 
-// waitReachable waits for hostport to became reachable for the maxWait time.
-func waitReachable(addr string) error {
+func waitReadiness(sc *singularityClient) error {
 	maxWait := time.Second * 10
 	done := time.Now().Add(maxWait)
 	for time.Now().Before(done) {
-		c, err := net.Dial("tcp", addr)
-		if err == nil {
-			c.Close()
+		if singularityReadiness(sc) {
 			return nil
 		}
 		time.Sleep(100 * time.Millisecond)
@@ -44,15 +43,25 @@ func waitReachable(addr string) error {
 	return fmt.Errorf("cannot connect %v for %v", addr, maxWait)
 }
 
-func TestGetState(t *testing.T) {
-	c := newClient(t)
-	resp, err := c.get("state")
+func singularityReadiness(sc *singularityClient) bool {
+	resp, err := sc.get("state")
 	if err != nil {
-		t.Fatalf("fail to get singularity state: %s", err)
+		return false
 	}
 	if resp.StatusCode != http.StatusOK {
-		t.Fatalf("expected sc %d; got %d", http.StatusOK, resp.StatusCode)
+		return false
 	}
+	state := &struct {
+		ActiveSlaves int `json:"activeSlaves"`
+	}{}
+	decoder := json.NewDecoder(resp.Body)
+	if err = decoder.Decode(state); err != nil {
+		return false
+	}
+	if state.ActiveSlaves < 1 {
+		return false
+	}
+	return true
 }
 
 func TestSingularityJob_Start(t *testing.T) {

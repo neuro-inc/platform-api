@@ -6,7 +6,6 @@ import (
 	"net/http"
 	"net/http/httptest"
 	"strings"
-	"sync"
 	"testing"
 	"time"
 
@@ -188,6 +187,8 @@ func fakeClient(t *testing.T) *singularityClient {
 	}
 	return c.(*singularityClient)
 }
+
+
 
 type singularityState struct {
 	sync.Mutex
