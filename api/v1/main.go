@@ -6,6 +6,7 @@ import (
 	"io/ioutil"
 	"net"
 	"net/http"
+	"os"
 
 	"github.com/julienschmidt/httprouter"
 	"github.com/neuromation/platform-api/api/v1/client/singularity"
@@ -26,6 +27,11 @@ func Serve(cfg *config.Config) error {
 	if err != nil {
 		return fmt.Errorf("error while creating orchestrator client: %s", err)
 	}
+
+	if err := os.MkdirAll(cfg.StorageBasePath, 0700); err != nil {
+		return fmt.Errorf("cannot create `StorageBasePath` %q: %s", cfg.StorageBasePath, err)
+	}
+
 	router := httprouter.New()
 	router.GET("/", showHelp)
 	router.GET("/models", listModels)

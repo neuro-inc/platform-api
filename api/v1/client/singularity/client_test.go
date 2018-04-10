@@ -1,11 +1,11 @@
 package singularity
 
 import (
-	"testing"
-	"time"
+	"io/ioutil"
 	"net/http"
 	"net/http/httptest"
-	"io/ioutil"
+	"testing"
+	"time"
 )
 
 func TestNewClient_Fail(t *testing.T) {
