@@ -15,10 +15,10 @@ type (
 	containerInfo struct {
 		Type    string          `json:"type"`
 		Docker  dockerContainer `json:"docker"`
-		Volumes []Volume        `json:"volumes"`
+		Volumes []volume        `json:"volumes"`
 	}
 
-	Volume struct {
+	volume struct {
 		ContainerPath string `json:"containerPath"`
 		HostPath      string `json:"hostPath"`
 		Mode          string `json:"mode"`

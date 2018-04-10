@@ -5,10 +5,12 @@ import (
 	"io/ioutil"
 	"net"
 	"net/http"
+	"path/filepath"
 
 	"github.com/julienschmidt/httprouter"
 	"github.com/neuromation/platform-api/api/v1/client/singularity"
 	"github.com/neuromation/platform-api/api/v1/config"
+	"github.com/neuromation/platform-api/api/v1/container"
 	"github.com/neuromation/platform-api/api/v1/orchestrator"
 	"github.com/neuromation/platform-api/api/v1/storage"
 )
@@ -85,6 +87,19 @@ func createTraining(rw http.ResponseWriter, req *http.Request, _ httprouter.Para
 		respondWithError(rw, err)
 		return
 	}
+
+	// mount userSpace to `/var/storage`
+	userSpacePath, err := filepath.Abs("./testData/userSpace")
+	if err != nil {
+		respondWithError(rw, fmt.Errorf("unable to find abs path %q: %s", userSpacePath, err))
+		return
+	}
+	us := container.Storage{
+		From: userSpacePath,
+		To:   "/var/userSpace",
+	}
+	tr.Container.Storage = append(tr.Container.Storage, us)
+
 	job := client.NewJob(tr.Container, tr.Resources)
 	if err := job.Start(); err != nil {
 		respondWithError(rw, fmt.Errorf("error while creating training: %s", err))

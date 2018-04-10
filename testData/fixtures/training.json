@@ -1,19 +1,19 @@
 {
   "code": {
+    "image": "hagen1778/gif-generator",
     "env": {
-      "MODEL_PATH": "models"
+      "IMAGE_DIR": "/var/userSpace",
+      "IMAGE_NUMBER": "5"
     },
-    "image": "registry.neuromation.io/neuromationorg/platformapi-dummy",
-    "volumes": [
+    "storage": [
       {
-        "hostPath": "/Users/romankhavronenko/image_temp",
-        "containerPath": "/models",
-        "mode": "RW"
+        "from": "storage://collection",
+        "to": "/var/storage/collection"
       }
     ]
   },
   "resources": {
-    "cpus": 2,
-    "memoryMb": 128
+    "cpus": 1,
+    "memoryMb": 64
   }
 }
