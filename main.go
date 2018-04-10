@@ -10,7 +10,7 @@ import (
 func main() {
 	log.Infof("Initing...")
 	cfg := &config.Config{}
-	err := envconfig.Process("neuro", cfg)
+	err := envconfig.Process("platformapi", cfg)
 	if err != nil {
 		log.Fatalf("error while parsing config: %s", err)
 	}
