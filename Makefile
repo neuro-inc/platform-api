@@ -11,7 +11,7 @@ test: build
 	go test -v -race $(pkgs)
 
 integration_test: build
-	go test -v -race $(pkgs) --tags "integration"
+	go test -v -race $(pkgs) -tags=integration
 
 run: build
 	./platform-api

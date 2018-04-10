@@ -1,2 +1,5 @@
 pytest==3.5.0
 requests==2.18.4
+responses==0.8.1
+flake8==3.5.0
+flake8-mypy==17.8.0

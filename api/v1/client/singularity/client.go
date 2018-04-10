@@ -157,13 +157,7 @@ func (c *singularityClient) post(addr, body string) (*http.Response, error) {
 		return nil, fmt.Errorf("err while creating singularity post request: %s", err)
 	}
 	req.Header.Set("Content-Type", "application/json")
-	resp, err := c.c.Do(req)
-	if resp.StatusCode != http.StatusOK {
-		responseBody, _ := ioutil.ReadAll(resp.Body)
-		return resp, fmt.Errorf("unexpected status code returned from %q: %d. Response body: %q",
-			resp.Request.URL, resp.StatusCode, responseBody)
-	}
-	return resp, nil
+	return c.do(req)
 }
 
 func (c *singularityClient) get(addr string) (*http.Response, error) {
@@ -172,5 +166,18 @@ func (c *singularityClient) get(addr string) (*http.Response, error) {
 	if err != nil {
 		return nil, fmt.Errorf("err while creating singularity GET request: %s", err)
 	}
-	return c.c.Do(req)
+	return c.do(req)
+}
+
+func (c *singularityClient) do(req *http.Request) (*http.Response, error) {
+	resp, err := c.c.Do(req)
+	if err != nil {
+		return nil, fmt.Errorf("unexpected error returned: %s", err)
+	}
+	if resp.StatusCode != http.StatusOK {
+		responseBody, _ := ioutil.ReadAll(resp.Body)
+		return resp, fmt.Errorf("unexpected status code returned from %q: %d. Response body: %q",
+			resp.Request.URL, resp.StatusCode, responseBody)
+	}
+	return resp, nil
 }
