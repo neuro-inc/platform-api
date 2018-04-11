@@ -30,33 +30,45 @@ func TestPath_Positive(t *testing.T) {
 	if err := os.MkdirAll(tempDir, 0700); err != nil {
 		t.Fatalf("unable to create dir %q: %s", tempDir, err)
 	}
-	testCases := []string{
-		"storage://path/to/folder",
-		"storage://path/to/folder/",
-		"storage://path/to/folder//",
-		"storage://path/to///folder//",
-		"marketplace://path/to/folder",
-		"marketplace://path/to///folder//",
-	}
 	path, err := filepath.Abs(testDir)
 	if err != nil {
 		t.Fatalf("unexpected err: %s", err)
 	}
-	expectedAbs := path + "/path/to/folder"
-	expectedRelative := "path/to/folder"
-	for _, src := range testCases {
-		pi, err := Path(src)
+	testCases := []struct {
+		src, abs, rel, orig string
+	}{
+		{
+			src:  "storage://path/to/folder",
+			abs:  path + "/path/to/folder",
+			rel:  "/path/to/folder",
+			orig: "storage://path/to/folder",
+		},
+		{
+			src:  "marketplace://path/to/folder",
+			abs:  path + "/path/to/folder",
+			rel:  "/path/to/folder",
+			orig: "marketplace://path/to/folder",
+		},
+		{
+			src:  "marketplace://path",
+			abs:  path + "/path",
+			rel:  "/path",
+			orig: "marketplace://path",
+		},
+	}
+	for _, tc := range testCases {
+		pi, err := Path(tc.src)
 		if err != nil {
 			t.Fatalf("unexpected err: %s", err)
 		}
-		if pi.Origin() != src {
-			t.Fatalf("got origin %q; expected %q", pi.Origin(), src)
+		if pi.Origin() != tc.orig {
+			t.Fatalf("got origin %q; expected %q", pi.Origin(), tc.orig)
 		}
-		if pi.Abs() != expectedAbs {
-			t.Fatalf("got abs %q; expected %q", pi.Abs(), expectedAbs)
+		if pi.Abs() != tc.abs {
+			t.Fatalf("got abs %q; expected %q", pi.Abs(), tc.abs)
 		}
-		if pi.Relative() != expectedRelative {
-			t.Fatalf("got relative %q; expected %q", pi.Relative(), expectedRelative)
+		if pi.Relative() != tc.rel {
+			t.Fatalf("got relative %q; expected %q", pi.Relative(), tc.rel)
 		}
 	}
 }
@@ -67,6 +79,8 @@ func TestPath_Negative(t *testing.T) {
 	}
 	testCases := []string{
 		"storage:/path/to/folder",
+		"storage:/path/to/folder/",
+		"storage://path/to/folder/",
 		"stor://path/to/folder/",
 		"marketPlace://path/to/folder/",
 		"mrktpkace://path/to/folder/",

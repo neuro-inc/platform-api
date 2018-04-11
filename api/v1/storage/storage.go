@@ -5,7 +5,6 @@ import (
 	"os"
 	"path/filepath"
 	"regexp"
-	"strings"
 )
 
 var basePath string
@@ -23,7 +22,7 @@ func Init(path string) error {
 	return nil
 }
 
-var pathRegexp = regexp.MustCompile("^((storage|marketplace)://)(.+)(/[^/ ]*)+/?$")
+var pathRegexp = regexp.MustCompile(`^(storage|marketplace):/((\/[\w]+)+)$`)
 
 // PathInfo contains path data from passed storage binding
 type PathInfo struct {
@@ -51,12 +50,10 @@ func Path(src string) (*PathInfo, error) {
 		return nil, fmt.Errorf("passed path %q has wrong format", src)
 	}
 	// get only sufficient values
-	slice := match[0][3:]
-	path := strings.Join(slice, "/")
-	path = filepath.Clean(path)
+	path := match[0][2]
 	pi := &PathInfo{
-		abs:      fmt.Sprintf("%s/%s", basePath, path),
-		relative: path,
+		abs:      filepath.Clean(fmt.Sprintf("%s/%s", basePath, path)),
+		relative: filepath.Clean(path),
 		origin:   src,
 	}
 	_, err := os.Stat(pi.Abs())
