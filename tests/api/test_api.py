@@ -388,3 +388,8 @@ class TestE2E:
         }
         response = requests.post(url, json=payload)
         assert response.status_code == 200
+
+    def test_status_not_found(self, api_endpoint):
+        url = f'{api_endpoint}/status/unknown'
+        response = requests.post(url)
+        assert response.status_code == 404

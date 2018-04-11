@@ -10,7 +10,6 @@ import (
 	"github.com/julienschmidt/httprouter"
 	"github.com/neuromation/platform-api/api/v1/client/singularity"
 	"github.com/neuromation/platform-api/api/v1/config"
-	"github.com/neuromation/platform-api/api/v1/handlers"
 	"github.com/neuromation/platform-api/api/v1/orchestrator"
 )
 
@@ -27,6 +26,9 @@ func Serve(cfg *config.Config) error {
 	if err != nil {
 		return fmt.Errorf("error while creating orchestrator client: %s", err)
 	}
+
+	statusService := NewStatusService()
+
 	router := httprouter.New()
 	router.GET("/", showHelp)
 	router.GET("/storage", listStorage)
@@ -37,7 +39,7 @@ func Serve(cfg *config.Config) error {
 	router.POST("/models", createTraining)
 	router.GET("/models/:id", viewTraining)
 
-	router.GET("/statuses/:id", handlers.ViewStatus)
+	router.GET("/statuses/:id", ViewStatus(statusService))
 
 
 	s := &http.Server{
