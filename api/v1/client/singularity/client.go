@@ -102,7 +102,39 @@ func (j *singularityJob) Delete() error {
 }
 
 func (j *singularityJob) Status() (string, error) {
-	panic("implement me")
+	path := fmt.Sprintf(
+		"/history/request/%s/deploy/%s",
+		j.Deploy.RequestID, j.Deploy.ID)
+	resp, err := j.client.get(path)
+	if err != nil {
+		return "", err
+	}
+
+	err = checkExpectedStatusCode(resp, http.StatusOK)
+	if err != nil {
+		return "", err
+	}
+
+	payload, err := ioutil.ReadAll(resp.Body)
+	resp.Body.Close()
+	if err != nil {
+		return "", err
+	}
+
+	deployHistory, err := NewDeployHistoryFromJsonPayload(payload)
+	return deployHistory.DeployResult.DeployState, err
+}
+
+type DeployHistory struct {
+	DeployResult struct {
+		DeployState string
+	}
+}
+
+func NewDeployHistoryFromJsonPayload(payload []byte) (DeployHistory, error) {
+	deployHistory := DeployHistory{}
+	err := json.Unmarshal(payload, &deployHistory)
+	return deployHistory, err
 }
 
 func (j *singularityJob) GetID() string {
@@ -148,12 +180,19 @@ func (c *singularityClient) post(addr, body string) (*http.Response, error) {
 	}
 	req.Header.Set("Content-Type", "application/json")
 	resp, err := c.c.Do(req)
+	if err == nil {
+		err = checkExpectedStatusCode(resp, http.StatusOK)
+	}
+	return resp, err
+}
+
+func checkExpectedStatusCode(resp *http.Response, expectedStatusCode int) error {
 	if resp.StatusCode != http.StatusOK {
 		responseBody, _ := ioutil.ReadAll(resp.Body)
-		return resp, fmt.Errorf("unexpected status code returned from %q: %d. Response body: %q",
+		return fmt.Errorf("unexpected status code returned from %q: %d. Response body: %q",
 			resp.Request.URL, resp.StatusCode, responseBody)
 	}
-	return resp, nil
+	return nil
 }
 
 func (c *singularityClient) get(addr string) (*http.Response, error) {

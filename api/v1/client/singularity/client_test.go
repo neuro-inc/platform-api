@@ -123,3 +123,27 @@ func fakeClient(t *testing.T) *singularityClient {
 	}
 	return c.(*singularityClient)
 }
+
+func TestNewDeployHistoryFromEmptyJsonPayload(t *testing.T) {
+	payload := []byte(`{}`)
+	deployHistory, err := NewDeployHistoryFromJsonPayload(payload)
+	if err != nil {
+		t.Fatal()
+	}
+
+	if deployHistory.DeployResult.DeployState != "" {
+		t.Fatalf(deployHistory.DeployResult.DeployState)
+	}
+}
+
+func TestNewDeployHistoryFromJsonPayload(t *testing.T) {
+	payload := []byte(`{"deployResult": {"deployState": "WAITING"}}`)
+	deployHistory, err := NewDeployHistoryFromJsonPayload(payload)
+	if err != nil {
+		t.Fatal()
+	}
+
+	if deployHistory.DeployResult.DeployState != "WAITING" {
+		t.Fatal()
+	}
+}
