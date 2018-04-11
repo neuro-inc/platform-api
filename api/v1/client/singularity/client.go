@@ -11,6 +11,7 @@ import (
 
 	"github.com/neuromation/platform-api/api/v1/container"
 	"github.com/neuromation/platform-api/api/v1/orchestrator"
+	"github.com/neuromation/platform-api/log"
 )
 
 type singularityClient struct {
@@ -33,9 +34,43 @@ func NewClient(addr string, timeout time.Duration) (orchestrator.Client, error) 
 	return client, nil
 }
 
+func (sc *singularityClient) Ping(maxWait time.Duration) error {
+	done := time.Now().Add(maxWait)
+	for time.Now().Before(done) {
+		err := sc.ready()
+		if err == nil {
+			return nil
+		}
+		log.Infof("attempting to connect to %q: %s. Retrying....", sc.addr, err)
+		time.Sleep(time.Second)
+	}
+	return fmt.Errorf("cannot connect to %v for %v", sc.addr, maxWait)
+}
+
+func (sc *singularityClient) ready() error {
+	resp, err := sc.get("state")
+	if err != nil {
+		return fmt.Errorf("singularity /state is unreachable: %s", err)
+	}
+	if resp.StatusCode != http.StatusOK {
+		return fmt.Errorf("singularity /state returns non-200 code: %d", resp.StatusCode)
+	}
+	state := &struct {
+		ActiveSlaves int `json:"activeSlaves"`
+	}{}
+	decoder := json.NewDecoder(resp.Body)
+	if err = decoder.Decode(state); err != nil {
+		return fmt.Errorf("error while decoding singularity /state response: %s", err)
+	}
+	if state.ActiveSlaves < 1 {
+		return fmt.Errorf("singularity has no active slaves")
+	}
+	return nil
+}
+
 // TODO: NewJob is the method of singularityClient
 // but actually Job is something different from client.
-func (c *singularityClient) NewJob(container container.Container, res container.Resources) orchestrator.Job {
+func (sc *singularityClient) NewJob(container container.Container, res container.Resources) orchestrator.Job {
 	id := fmt.Sprintf("platform_deploy_%d", time.Now().Nanosecond())
 	var volumes []volume
 	for _, s := range container.Storage {
@@ -48,7 +83,7 @@ func (c *singularityClient) NewJob(container container.Container, res container.
 	}
 
 	j := &singularityJob{
-		client: c,
+		client: sc,
 		Deploy: deploy{
 			ID: id,
 			ContainerInfo: containerInfo{
@@ -66,11 +101,11 @@ func (c *singularityClient) NewJob(container container.Container, res container.
 	return j
 }
 
-func (c *singularityClient) GetJob() orchestrator.Job {
+func (sc *singularityClient) GetJob() orchestrator.Job {
 	panic("implement me")
 }
 
-func (c *singularityClient) SearchJobs() []orchestrator.Job {
+func (sc *singularityClient) SearchJobs() []orchestrator.Job {
 	panic("implement me")
 }
 
@@ -131,46 +166,46 @@ var requestTpl = `
 }
 `
 
-func (c *singularityClient) registerRequest(id string) error {
+func (sc *singularityClient) registerRequest(id string) error {
 	body := fmt.Sprintf(requestTpl, id)
-	_, err := c.post("requests", body)
+	_, err := sc.post("requests", body)
 	if err != nil {
-		return fmt.Errorf("error while registering request %q at %q: %s", body, c.addr, err)
+		return fmt.Errorf("error while registering request %q at %q: %s", body, sc.addr, err)
 	}
 	return nil
 }
 
-func (c *singularityClient) registerDeploy(reqID string, job *singularityJob) error {
+func (sc *singularityClient) registerDeploy(reqID string, job *singularityJob) error {
 	body := job.String()
-	_, err := c.post("deploys", body)
+	_, err := sc.post("deploys", body)
 	if err != nil {
-		return fmt.Errorf("error while registering deploy %q at %q: %s", body, c.addr, err)
+		return fmt.Errorf("error while registering deploy %q at %q: %s", body, sc.addr, err)
 	}
 	return nil
 }
 
-func (c *singularityClient) post(addr, body string) (*http.Response, error) {
+func (sc *singularityClient) post(addr, body string) (*http.Response, error) {
 	r := strings.NewReader(body)
-	uri := fmt.Sprintf("%s/singularity/api/%s", c.addr.String(), addr)
+	uri := fmt.Sprintf("%s/singularity/api/%s", sc.addr.String(), addr)
 	req, err := http.NewRequest("POST", uri, r)
 	if err != nil {
 		return nil, fmt.Errorf("err while creating singularity post request: %s", err)
 	}
 	req.Header.Set("Content-Type", "application/json")
-	return c.do(req)
+	return sc.do(req)
 }
 
-func (c *singularityClient) get(addr string) (*http.Response, error) {
-	uri := fmt.Sprintf("%s/singularity/api/%s", c.addr.String(), addr)
+func (sc *singularityClient) get(addr string) (*http.Response, error) {
+	uri := fmt.Sprintf("%s/singularity/api/%s", sc.addr.String(), addr)
 	req, err := http.NewRequest("GET", uri, nil)
 	if err != nil {
 		return nil, fmt.Errorf("err while creating singularity GET request: %s", err)
 	}
-	return c.do(req)
+	return sc.do(req)
 }
 
-func (c *singularityClient) do(req *http.Request) (*http.Response, error) {
-	resp, err := c.c.Do(req)
+func (sc *singularityClient) do(req *http.Request) (*http.Response, error) {
+	resp, err := sc.c.Do(req)
 	if err != nil {
 		return nil, fmt.Errorf("unexpected error returned: %s", err)
 	}

@@ -13,6 +13,8 @@ import (
 	"github.com/neuromation/platform-api/api/v1/container"
 	"github.com/neuromation/platform-api/api/v1/orchestrator"
 	"github.com/neuromation/platform-api/api/v1/storage"
+	"github.com/neuromation/platform-api/log"
+	"time"
 )
 
 // client - shared instance of orchestrator client
@@ -20,6 +22,7 @@ var client orchestrator.Client
 
 // Serve starts serving web-server for accepting requests
 func Serve(cfg *config.Config) error {
+	log.Infof("Starting...")
 	ln, err := net.Listen("tcp4", cfg.ListenAddr)
 	if err != nil {
 		return fmt.Errorf("cannot listen for %q: %s", cfg.ListenAddr, err)
@@ -27,6 +30,9 @@ func Serve(cfg *config.Config) error {
 	client, err = singularity.NewClient(cfg.SingularityAddr, cfg.WriteTimeout)
 	if err != nil {
 		return fmt.Errorf("error while creating orchestrator client: %s", err)
+	}
+	if err := client.Ping(time.Second * 10); err != nil {
+		return fmt.Errorf("client unable to establish connection: %s", err)
 	}
 	if err := storage.Init(cfg.StorageBasePath); err != nil {
 		return fmt.Errorf("storage error: %s", err)
@@ -43,6 +49,7 @@ func Serve(cfg *config.Config) error {
 		WriteTimeout: cfg.WriteTimeout,
 		IdleTimeout:  cfg.IdleTimeout,
 	}
+	log.Infof("Started successfully. Listening on %q", cfg.ListenAddr)
 	return s.Serve(ln)
 }
 

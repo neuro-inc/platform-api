@@ -49,7 +49,7 @@ func TestNewClient_Success(t *testing.T) {
 		}
 		sc := c.(*singularityClient)
 		if sc.c.Timeout != tc.timeout {
-			t.Fatalf("expected clinet Timeout to be %v; got %v instead", tc.timeout, sc.c.Timeout)
+			t.Fatalf("expected client Timeout to be %v; got %v instead", tc.timeout, sc.c.Timeout)
 		}
 		if sc.addr.String() != tc.addr {
 			t.Fatalf("expected client addr to be %q; got %q instead", tc.addr, sc.addr)
