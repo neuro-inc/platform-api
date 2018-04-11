@@ -30,6 +30,16 @@ type Status struct {
 }
 
 
+func NewStatus() Status {
+	id := uuid.NewV4().String()
+	status := Status{
+		Id: id,
+		Status: STATUS_PENDING,
+	}
+	return status
+}
+
+
 type StatusService interface {
 	Create() *Status
 	Get(id string) (*Status, error)
@@ -49,13 +59,8 @@ func NewInMemoryStatusService() *InMemoryStatusService {
 }
 
 func (service *InMemoryStatusService) Create() *Status {
-	// TODO: consider extracting into a factory
-	id := uuid.NewV4().String()
-	status := Status{
-		Id: id,
-		Status: STATUS_PENDING,
-	}
-	service.statuses[id] = status
+	status := NewStatus()
+	service.statuses[status.Id] = status
 	return &status
 }
 

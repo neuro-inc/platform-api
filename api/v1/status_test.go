@@ -57,3 +57,20 @@ func TestInMemoryStatusServiceGetFailure(t *testing.T) {
 		t.Fatal()
 	}
 }
+
+func TestInMemoryStatusServiceDelete(t *testing.T) {
+	service := NewInMemoryStatusService()
+	status := service.Create()
+
+	_, err := service.Get(status.Id)
+	if err != nil {
+		t.Fatal()
+	}
+
+	service.Delete(status.Id)
+
+	_, err = service.Get(status.Id)
+	if err == nil {
+		t.Fatal()
+	}
+}
