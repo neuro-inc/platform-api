@@ -29,10 +29,10 @@ func Serve(cfg *config.Config) error {
 	}
 	client, err = singularity.NewClient(cfg.SingularityAddr, cfg.WriteTimeout)
 	if err != nil {
-		return fmt.Errorf("error while creating orchestrator client: %s", err)
+		return fmt.Errorf("error while creating client: %s", err)
 	}
 	if err := client.Ping(time.Second * 10); err != nil {
-		return fmt.Errorf("client unable to establish connection: %s", err)
+		return fmt.Errorf("client is unable to establish connection: %s", err)
 	}
 	if err := storage.Init(cfg.StorageBasePath); err != nil {
 		return fmt.Errorf("storage error: %s", err)

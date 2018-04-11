@@ -28,7 +28,7 @@ func (t *training) UnmarshalJSON(data []byte) error {
 	for _, s := range t.Container.Storage {
 		pi, err := storage.Path(s)
 		if err != nil {
-			return fmt.Errorf("storage error: %s", err)
+			return fmt.Errorf("invalid storage path: %s", err)
 		}
 		v := container.Volume{
 			From: pi.Abs(),

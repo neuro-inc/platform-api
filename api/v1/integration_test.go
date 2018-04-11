@@ -88,8 +88,7 @@ func testTraining(t *testing.T) {
 	job := &struct {
 		ID string `json:"job_id"`
 	}{}
-	decoder := json.NewDecoder(resp.Body)
-	if err = decoder.Decode(job); err != nil {
+	if err := decodeInto(resp.Body, job); err != nil {
 		t.Fatalf("unexpected error while decoding response body: %s", err)
 	}
 
@@ -99,12 +98,11 @@ func testTraining(t *testing.T) {
 		if err != nil {
 			t.Fatalf("fail to get request state: %s", err)
 		}
-		decoder := json.NewDecoder(resp.Body)
 		jobState := &struct {
 			Status string `json:"status"`
 		}{}
-		if err = decoder.Decode(jobState); err != nil {
-			t.Fatalf("unexpected error while decoding state body: %s", err)
+		if err := decodeInto(resp.Body, jobState); err != nil {
+			t.Fatalf("unexpected error while decoding status body: %s", err)
 		}
 		return jobState.Status == "SUCCEEDED"
 	}
