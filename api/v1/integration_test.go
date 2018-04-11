@@ -49,10 +49,7 @@ func runAPI() {
 	maxWait := time.Second * 10
 	done := time.Now().Add(maxWait)
 	for time.Now().Before(done) {
-		resp, err := http.DefaultClient.Get(testAddr)
-		if err != nil {
-			log.Fatalf("%s", err)
-		}
+		resp, _ := http.DefaultClient.Get(testAddr)
 		if resp != nil && resp.StatusCode == http.StatusOK {
 			return
 		}
