@@ -173,8 +173,7 @@ func (j *singularityJob) Status() (string, error) {
 	}
 	decoder := json.NewDecoder(resp.Body)
 	deployHistory := &deployHistory{}
-	err = decoder.Decode(deployHistory)
-	if err != nil {
+	if err = decoder.Decode(deployHistory); err != nil {
 		return "", fmt.Errorf("error while decoding request body: %s", err)
 	}
 	return deployHistory.DeployResult.State, nil
