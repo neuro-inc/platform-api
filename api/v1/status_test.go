@@ -39,3 +39,21 @@ func TestInMemoryStatusServiceCreateGet(t *testing.T) {
 		t.Fatal()
 	}
 }
+
+func TestInMemoryStatusServiceGetFailure(t *testing.T) {
+	service := NewInMemoryStatusService()
+
+	status, err := service.Get("unknown id")
+
+	if status != nil {
+		t.Fatal()
+	}
+
+	if err == nil {
+		t.Fatal()
+	}
+
+	if err.Error() != "Status unknown id was not found" {
+		t.Fatal()
+	}
+}
