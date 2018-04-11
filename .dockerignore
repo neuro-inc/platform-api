@@ -1,0 +1,6 @@
+*
+!api
+!log
+!vendor
+!Gopkg.*
+!**/*.go

@@ -9,16 +9,16 @@ jobs:
     steps:
       - checkout
       - run:
-          name: Running API tests
-          command: |
-            make up;
-            make run_api_tests;
-            make down;
-      - run:
           name: Running backend integration tests
           command: |
             make up;
             make integration_test;
+            make down;
+      - run:
+          name: Running API tests
+          command: |
+            make up;
+            make run_api_tests;
             make down;
 
 workflows:
@@ -26,4 +26,5 @@ workflows:
 
   main:
     jobs:
-      - test
+      - test:
+          context: org-global

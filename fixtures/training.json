@@ -1,12 +1,12 @@
 {
   "code": {
     "env": {
-      "MODEL_PATH": "models"
+      "MODEL_PATH": "/models"
     },
     "image": "registry.neuromation.io/neuromationorg/platformapi-dummy",
     "volumes": [
       {
-        "hostPath": "/Users/romankhavronenko/image_temp",
+        "hostPath": "/Users/aleksandrdanshyn/nio/platform-api/tmp",
         "containerPath": "/models",
         "mode": "RW"
       }

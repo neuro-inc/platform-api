@@ -351,3 +351,45 @@ class TestInferenceApi:
         status = status_proxy.wait()
         assert status.id == status_id
         assert status.name == StatusName.SUCCEEDED
+
+
+@pytest.fixture(scope='session')
+def api_endpoint():
+    return 'http://platformapi:8080'
+
+
+# TODO: consider renaming
+@pytest.mark.usefixtures('singularity')
+class TestE2E:
+    def test_non_existant_docker_image(self):
+        pass
+
+    def test_docker_image(self, api_endpoint):
+        # TODO: api/v1/
+        url = f'{api_endpoint}/trainings'
+        payload = {
+            "code": {
+                "env": {
+                    "MODEL_PATH": "/models"
+                },
+                "image": "registry.neuromation.io/neuromationorg/platformapi-dummy",
+                "volumes": [
+                    {
+                        "hostPath": "/Users/aleksandrdanshyn/nio/platform-api/tmp",
+                        "containerPath": "/models",
+                        "mode": "RW"
+                        }
+                    ]
+                },
+            "resources": {
+                "cpus": 2,
+                "memoryMb": 128
+            }
+        }
+        response = requests.post(url, json=payload)
+        assert response.status_code == 200
+
+    def test_status_not_found(self, api_endpoint):
+        url = f'{api_endpoint}/status/unknown'
+        response = requests.post(url)
+        assert response.status_code == 404

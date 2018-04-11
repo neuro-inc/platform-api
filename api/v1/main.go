@@ -26,12 +26,22 @@ func Serve(cfg *config.Config) error {
 	if err != nil {
 		return fmt.Errorf("error while creating orchestrator client: %s", err)
 	}
+
+	statusService := NewStatusService()
+
 	router := httprouter.New()
 	router.GET("/", showHelp)
-	router.GET("/models", listModels)
 	router.GET("/storage", listStorage)
 	router.POST("/trainings", createTraining)
 	router.GET("/trainings/:id", viewTraining)
+
+	router.GET("/models", listModels)
+	router.POST("/models", createTraining)
+	router.GET("/models/:id", viewTraining)
+
+	router.GET("/statuses/:id", ViewStatus(statusService))
+
+
 	s := &http.Server{
 		Handler:      router,
 		ReadTimeout:  cfg.ReadTimeout,
@@ -42,6 +52,7 @@ func Serve(cfg *config.Config) error {
 }
 
 func showHelp(rw http.ResponseWriter, _ *http.Request, _ httprouter.Params) {
+	// TODO: update
 	fmt.Fprintln(rw, "Available endpoints:")
 	fmt.Fprintln(rw, "GET /models")
 	fmt.Fprintln(rw, "GET /storage")
