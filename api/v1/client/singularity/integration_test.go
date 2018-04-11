@@ -40,9 +40,10 @@ func TestSingularityJob_Start(t *testing.T) {
 	var deployID string
 	maxWait := time.Second * 5
 	done := time.Now().Add(maxWait)
+	job := j.(*singularityJob)
 	for time.Now().Before(done) {
 		time.Sleep(time.Millisecond * 200)
-		addr := fmt.Sprintf("requests/request/%s", j.GetID())
+		addr := fmt.Sprintf("requests/request/%s", job.Deploy.RequestID)
 		resp, err := sc.get(addr)
 		if err != nil {
 			t.Fatalf("fail to get request state: %s", err)
@@ -64,19 +65,11 @@ func TestSingularityJob_Start(t *testing.T) {
 	maxWait = time.Second * 10
 	done = time.Now().Add(maxWait)
 	for time.Now().Before(done) {
-		addr := fmt.Sprintf("history/request/%s/deploy/%s", j.GetID(), deployID)
-		resp, err := sc.get(addr)
+		status, err := j.Status()
 		if err != nil {
-			t.Fatalf("fail to get deploy state: %s", err)
+			t.Fatalf("unexpected status error: %s", err)
 		}
-		decoder := json.NewDecoder(resp.Body)
-		deployHistory := &deployHistory{}
-		err = decoder.Decode(deployHistory)
-		if err != nil {
-			t.Fatalf("unexpected error while decoding request body: %s", err)
-			return
-		}
-		if deployHistory.DeployResult.State == "SUCCEEDED" {
+		if status == "SUCCEEDED" {
 			return
 		}
 	}

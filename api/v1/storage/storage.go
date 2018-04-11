@@ -23,22 +23,45 @@ func Init(path string) error {
 	return nil
 }
 
-var pathRegexp = regexp.MustCompile("^(storage://)(.+)(/[^/ ]*)+/?$")
+var pathRegexp = regexp.MustCompile("^((storage|marketplace)://)(.+)(/[^/ ]*)+/?$")
+
+// PathInfo contains path data from passed storage binding
+type PathInfo struct {
+	// absolute path
+	abs string
+	// relative path
+	relative string
+	// origin path
+	origin string
+}
+
+// Abs return absolute path
+func (pi PathInfo) Abs() string { return pi.abs }
+
+// Relative return relative path
+func (pi PathInfo) Relative() string { return pi.relative }
+
+// Origin return origin path
+func (pi PathInfo) Origin() string { return pi.origin }
 
 // Path check passed addr and returns converted
-func Path(src string) (string, error) {
+func Path(src string) (*PathInfo, error) {
 	match := pathRegexp.FindAllStringSubmatch(src, -1)
 	if match == nil {
-		return "", fmt.Errorf("passed path %q has wrong format", src)
+		return nil, fmt.Errorf("passed path %q has wrong format", src)
 	}
-	slice := match[0]
-	slice[1] = basePath
-	slice = slice[1:]
+	// get only sufficient values
+	slice := match[0][3:]
 	path := strings.Join(slice, "/")
 	path = filepath.Clean(path)
-	_, err := os.Stat(path)
-	if err != nil {
-		return "", fmt.Errorf("unable to access %q: %s", path, err)
+	pi := &PathInfo{
+		abs:      fmt.Sprintf("%s/%s", basePath, path),
+		relative: path,
+		origin:   src,
 	}
-	return filepath.Clean(path), nil
+	_, err := os.Stat(pi.Abs())
+	if err != nil {
+		return nil, fmt.Errorf("unable to access %q: %s", pi.abs, err)
+	}
+	return pi, nil
 }

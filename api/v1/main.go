@@ -6,6 +6,7 @@ import (
 	"net"
 	"net/http"
 	"path/filepath"
+	"time"
 
 	"github.com/julienschmidt/httprouter"
 	"github.com/neuromation/platform-api/api/v1/client/singularity"
@@ -14,7 +15,6 @@ import (
 	"github.com/neuromation/platform-api/api/v1/orchestrator"
 	"github.com/neuromation/platform-api/api/v1/storage"
 	"github.com/neuromation/platform-api/log"
-	"time"
 )
 
 // client - shared instance of orchestrator client
@@ -42,7 +42,8 @@ func Serve(cfg *config.Config) error {
 	r.GET("/", showHelp)
 	r.GET("/models", listModels)
 	r.POST("/trainings", createTraining)
-	r.GET("/trainings/:id", viewTraining)
+	r.GET("/training/:id", viewTraining)
+	r.GET("/status/training/:id", viewTrainingStatus)
 	s := &http.Server{
 		Handler:      r,
 		ReadTimeout:  cfg.ReadTimeout,
@@ -58,6 +59,7 @@ func showHelp(rw http.ResponseWriter, _ *http.Request, _ httprouter.Params) {
 	fmt.Fprintln(rw, "GET /models")
 	fmt.Fprintln(rw, "POST /trainings")
 	fmt.Fprintln(rw, "GET /trainings/%id")
+	fmt.Fprintln(rw, "GET /status/training/:id")
 }
 
 func listModels(rw http.ResponseWriter, _ *http.Request, _ httprouter.Params) {
@@ -71,6 +73,20 @@ func listModels(rw http.ResponseWriter, _ *http.Request, _ httprouter.Params) {
 		}
 	}
 	fmt.Fprint(rw, "]")
+}
+
+func viewTrainingStatus(rw http.ResponseWriter, _ *http.Request, params httprouter.Params) {
+	job := client.GetJob(params.ByName("id"))
+	if job == nil {
+		respondWithError(rw, fmt.Errorf("unable to find job %q", params.ByName("id")))
+		return
+	}
+	status, err := job.Status()
+	if err != nil {
+		respondWithError(rw, fmt.Errorf("error while getting status for job %q: %s", params.ByName("id"), err))
+		return
+	}
+	respondWith(rw, http.StatusOK, fmt.Sprintf(`{"status": %q}`, status))
 }
 
 func viewTraining(rw http.ResponseWriter, _ *http.Request, params httprouter.Params) {
@@ -88,6 +104,8 @@ func viewTraining(rw http.ResponseWriter, _ *http.Request, params httprouter.Par
 	respondWith(rw, http.StatusOK, string(b))
 }
 
+var userSpacePath = "./api/v1/testData/userSpace"
+
 func createTraining(rw http.ResponseWriter, req *http.Request, _ httprouter.Params) {
 	tr := &training{}
 	if err := decodeInto(req.Body, tr); err != nil {
@@ -95,17 +113,19 @@ func createTraining(rw http.ResponseWriter, req *http.Request, _ httprouter.Para
 		return
 	}
 
-	// mount userSpace to `/var/storage`
-	userSpacePath, err := filepath.Abs("./testData/userSpace")
+	// mount userSpace to `/var/user`
+	// must be retrieved from userInfo in future
+	path, err := filepath.Abs(userSpacePath)
 	if err != nil {
-		respondWithError(rw, fmt.Errorf("unable to find abs path %q: %s", userSpacePath, err))
+		respondWithError(rw, fmt.Errorf("unable to find abs path %q: %s", path, err))
 		return
 	}
-	us := container.Storage{
-		From: userSpacePath,
-		To:   "/var/userSpace",
+	us := container.Volume{
+		From: path,
+		To:   "/var/user",
+		Mode: "RW",
 	}
-	tr.Container.Storage = append(tr.Container.Storage, us)
+	tr.Container.Volumes = append(tr.Container.Volumes, us)
 
 	job := client.NewJob(tr.Container, tr.Resources)
 	if err := job.Start(); err != nil {

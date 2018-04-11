@@ -25,12 +25,17 @@ func (t *training) UnmarshalJSON(data []byte) error {
 	if err := json.Unmarshal(data, (*plain)(t)); err != nil {
 		return err
 	}
-	for i, s := range t.Container.Storage {
-		path, err := storage.Path(s.From)
+	for _, s := range t.Container.Storage {
+		pi, err := storage.Path(s)
 		if err != nil {
 			return fmt.Errorf("storage error: %s", err)
 		}
-		t.Container.Storage[i].From = path
+		v := container.Volume{
+			From: pi.Abs(),
+			To:   "/var/marketplace/" + pi.Relative(),
+			Mode: "RO",
+		}
+		t.Container.Volumes = append(t.Container.Volumes, v)
 	}
 	return nil
 }

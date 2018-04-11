@@ -8,7 +8,7 @@ import (
 // Client allows creating, getting and serching for Jobs
 type Client interface {
 	NewJob(container.Container, container.Resources) Job
-	GetJob() Job
+	GetJob(string) Job
 	SearchJobs() []Job
 	Ping(duration time.Duration) error
 }

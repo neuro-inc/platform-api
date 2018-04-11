@@ -7,6 +7,7 @@ import (
 	"net/http"
 	"net/url"
 	"strings"
+	"sync"
 	"time"
 
 	"github.com/neuromation/platform-api/api/v1/container"
@@ -17,6 +18,15 @@ import (
 type singularityClient struct {
 	c    http.Client
 	addr *url.URL
+}
+
+var registry = &jobRegistry{
+	r: make(map[string]*singularityJob),
+}
+
+type jobRegistry struct {
+	sync.RWMutex
+	r map[string]*singularityJob
 }
 
 // NewClient creates new orchestrator.Client from given config
@@ -73,11 +83,11 @@ func (sc *singularityClient) ready() error {
 func (sc *singularityClient) NewJob(container container.Container, res container.Resources) orchestrator.Job {
 	id := fmt.Sprintf("platform_deploy_%d", time.Now().Nanosecond())
 	var volumes []volume
-	for _, s := range container.Storage {
+	for _, v := range container.Volumes {
 		v := volume{
-			HostPath:      s.From,
-			ContainerPath: s.To,
-			Mode:          "RW",
+			HostPath:      v.From,
+			ContainerPath: v.To,
+			Mode:          v.Mode,
 		}
 		volumes = append(volumes, v)
 	}
@@ -98,11 +108,19 @@ func (sc *singularityClient) NewJob(container container.Container, res container
 			Env: container.Env,
 		},
 	}
+
+	registry.Lock()
+	registry.r[id] = j
+	registry.Unlock()
+
 	return j
 }
 
-func (sc *singularityClient) GetJob() orchestrator.Job {
-	panic("implement me")
+func (sc *singularityClient) GetJob(id string) orchestrator.Job {
+	registry.RLock()
+	j := registry.r[id]
+	registry.RUnlock()
+	return j
 }
 
 func (sc *singularityClient) SearchJobs() []orchestrator.Job {
@@ -129,12 +147,10 @@ func (j *singularityJob) Start() error {
 	if err := j.client.registerRequest(reqID); err != nil {
 		return fmt.Errorf("error while registering singularity request: %s", err)
 	}
-
 	j.Deploy.RequestID = reqID
 	if err := j.client.registerDeploy(reqID, j); err != nil {
 		return fmt.Errorf("error while registering singularity deploy: %s", err)
 	}
-
 	return nil
 }
 
@@ -147,11 +163,22 @@ func (j *singularityJob) Delete() error {
 }
 
 func (j *singularityJob) Status() (string, error) {
-	panic("implement me")
+	addr := fmt.Sprintf("history/request/%s/deploy/%s", j.Deploy.RequestID, j.Deploy.ID)
+	resp, err := j.client.get(addr)
+	if err != nil {
+		return "", fmt.Errorf("error while getting job %q state: %s", j.GetID(), err)
+	}
+	decoder := json.NewDecoder(resp.Body)
+	deployHistory := &deployHistory{}
+	err = decoder.Decode(deployHistory)
+	if err != nil {
+		return "", fmt.Errorf("unexpected error while decoding request body: %s", err)
+	}
+	return deployHistory.DeployResult.State, nil
 }
 
 func (j *singularityJob) GetID() string {
-	return j.Deploy.RequestID
+	return j.Deploy.ID
 }
 
 var requestTpl = `

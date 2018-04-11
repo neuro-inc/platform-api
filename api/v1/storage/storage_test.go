@@ -8,10 +8,11 @@ import (
 	"testing"
 )
 
-var testDir = "./testData"
+var testDir = "../testData/storage"
 
 func TestMain(m *testing.M) {
-	if err := os.MkdirAll(testDir, 0700); err != nil {
+	testPath := testDir + "/path/to/folder"
+	if err := os.MkdirAll(testPath, 0700); err != nil {
 		log.Fatalf("unable to create dir %q: %s", testDir, err)
 	}
 	retCode := m.Run()
@@ -22,7 +23,7 @@ func TestMain(m *testing.M) {
 }
 
 func TestPath_Positive(t *testing.T) {
-	if err := Init("./testData"); err != nil {
+	if err := Init(testDir); err != nil {
 		t.Fatalf("unexpected err: %s", err)
 	}
 	tempDir := fmt.Sprintf("%s/path/to/folder", testDir)
@@ -34,30 +35,41 @@ func TestPath_Positive(t *testing.T) {
 		"storage://path/to/folder/",
 		"storage://path/to/folder//",
 		"storage://path/to///folder//",
+		"marketplace://path/to/folder",
+		"marketplace://path/to///folder//",
 	}
 	path, err := filepath.Abs(testDir)
 	if err != nil {
 		t.Fatalf("unexpected err: %s", err)
 	}
-	expected := path + "/path/to/folder"
+	expectedAbs := path + "/path/to/folder"
+	expectedRelative := "path/to/folder"
 	for _, src := range testCases {
-		path, err := Path(src)
+		pi, err := Path(src)
 		if err != nil {
 			t.Fatalf("unexpected err: %s", err)
 		}
-		if path != expected {
-			t.Fatalf("got %q; expected %q", path, expected)
+		if pi.Origin() != src {
+			t.Fatalf("got origin %q; expected %q", pi.Origin(), src)
+		}
+		if pi.Abs() != expectedAbs {
+			t.Fatalf("got abs %q; expected %q", pi.Abs(), expectedAbs)
+		}
+		if pi.Relative() != expectedRelative {
+			t.Fatalf("got relative %q; expected %q", pi.Relative(), expectedRelative)
 		}
 	}
 }
 
 func TestPath_Negative(t *testing.T) {
-	if err := Init("./testData"); err != nil {
+	if err := Init(testDir); err != nil {
 		t.Fatalf("unexpected err: %s", err)
 	}
 	testCases := []string{
 		"storage:/path/to/folder",
 		"stor://path/to/folder/",
+		"marketPlace://path/to/folder/",
+		"mrktpkace://path/to/folder/",
 		"path/to/folder",
 	}
 	for _, src := range testCases {
