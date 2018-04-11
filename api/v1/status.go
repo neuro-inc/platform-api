@@ -1,11 +1,10 @@
 package v1
 
 import (
+	"fmt"
 	"github.com/satori/go.uuid"
 )
 
-
-// TODO: implement status service that stores ID mapping in-memory
 
 type StatusName int
 
@@ -32,10 +31,10 @@ type Status struct {
 
 
 type StatusService interface {
-	Create() Status
-	Get(id string) Status
+	Create() *Status
+	Get(id string) (*Status, error)
 	Update() Status
-	Delete(id string) Status
+	Delete(id string)
 }
 
 
@@ -49,25 +48,31 @@ func NewInMemoryStatusService() *InMemoryStatusService {
 	return service
 }
 
-func (service *InMemoryStatusService) Create() Status {
-	id := uuid.Must(uuid.NewV4()).String()
+func (service *InMemoryStatusService) Create() *Status {
+	// TODO: consider extracting into a factory
+	id := uuid.NewV4().String()
 	status := Status{
 		Id: id,
 		Status: STATUS_PENDING,
 	}
-	return status
+	service.statuses[id] = status
+	return &status
 }
 
-func (service *InMemoryStatusService) Get(id string) Status {
-	return Status{}
+func (service *InMemoryStatusService) Get(id string) (*Status, error) {
+	status, ok := service.statuses[id]
+	if !ok {
+		return nil, fmt.Errorf("Status %s was not found", id)
+	}
+	return &status, nil
 }
 
 func (service *InMemoryStatusService) Update() Status {
 	return Status{}
 }
 
-func (service *InMemoryStatusService) Delete(id string) Status {
-	return Status{}
+func (service *InMemoryStatusService) Delete(id string) {
+	delete(service.statuses, id)
 }
 
 func NewStatusService() StatusService {
