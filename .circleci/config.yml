@@ -30,21 +30,10 @@ jobs:
       - image: circleci/golang:1.10
       - image: mesoscloud/zookeeper:3.4.6-centos-7
       - image: mesosphere/mesos-master:1.4.1
+    working_directory: /go/src/github.com/neuromation/platform-api
     steps:
       - checkout
       - setup_remote_docker
-      - run:
-          name: Running API tests
-          command: |
-            make up;
-            make run_api_tests;
-            make down;
-      - run:
-          name: Running backend integration tests
-          command: |
-            make up;
-            make integration_test;
-            make down;
       - run:
           name: code coverage
           command: |
