@@ -10,7 +10,7 @@ jobs:
       TEST_RESULTS: /tmp/test-results
     steps:
       - checkout
-      - run: mkdir -p $TEST_RESULTS
+      - run: mkdir -p $TEST_RESULTS/junit
       - run: go get github.com/jstemmer/go-junit-report
       - run: make up
       - run:
@@ -19,7 +19,7 @@ jobs:
       - run:
           name: Running backend integration tests
           command: |
-            trap "go-junit-report <${TEST_RESULTS}/go-test.out > ${TEST_RESULTS}/go-test-report.xml" EXIT
+            trap "go-junit-report <${TEST_RESULTS}/go-test.out > ${TEST_RESULTS}/junit/go-test-report.xml" EXIT
             make integration_test | tee ${TEST_RESULTS}/go-test.out;
 
       - store_test_results:
