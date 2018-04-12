@@ -1,11 +1,11 @@
 package v1
 
 import (
+	"encoding/json"
 	"fmt"
-	"net/http"
 
 	"github.com/neuromation/platform-api/api/v1/container"
-	"github.com/neuromation/platform-api/api/v1/orchestrator"
+	"github.com/neuromation/platform-api/api/v1/storage"
 )
 
 type training struct {
@@ -13,34 +13,28 @@ type training struct {
 	Container container.Container `json:"code"`
 	Resources container.Resources `json:"resources"`
 
-	ModelWeight string            `json:"model_weight,omitempty"`
-	ModelName   string            `json:"model_name,omitempty"`
-	DataID      string            `json:"data_id,omitempty"`
-	Meta        map[string]string `json:"meta,omitempty"`
+	//ModelWeight string            `json:"model_weight,omitempty"`
+	//ModelName   string            `json:"model_name,omitempty"`
+	//DataID      string            `json:"data_id,omitempty"`
+	Meta map[string]string `json:"meta,omitempty"`
 }
 
-// runTraining starts a new training task accoridng to received req
-func runTraining(tr *training) (orchestrator.Job, error) {
-	// check modelName here to avoid exploiting registry with invalid requests
-	if len(tr.ModelName) > 0 {
-		if _, ok := modelRegistry[tr.ModelName]; !ok {
-			return nil, fmt.Errorf("unknown model id %q", tr.ModelName)
+func (t *training) UnmarshalJSON(data []byte) error {
+	type plain training
+	if err := json.Unmarshal(data, (*plain)(t)); err != nil {
+		return err
+	}
+	for _, s := range t.Container.Storage {
+		pi, err := storage.Path(s)
+		if err != nil {
+			return fmt.Errorf("invalid storage path: %s", err)
 		}
-	}
-	// check dataID here to avoid exploiting registry with invalid requests
-	if len(tr.DataID) > 0 {
-		if _, ok := storageRegistry[tr.DataID]; !ok {
-			return nil, fmt.Errorf("unknown storage id %q", tr.DataID)
+		v := container.Volume{
+			From: pi.Abs(),
+			To:   "/var/marketplace/" + pi.Relative(),
+			Mode: "RO",
 		}
+		t.Container.Volumes = append(t.Container.Volumes, v)
 	}
-	job := client.NewJob(tr.Container, tr.Resources)
-	if err := job.Start(); err != nil {
-		return nil, fmt.Errorf("error while creating training: %s", err)
-	}
-	return job, nil
-}
-
-// ViewTraining proxies response about task from singularity
-func ViewTraining(id string) (*http.Response, error) {
-	panic("implement me")
+	return nil
 }

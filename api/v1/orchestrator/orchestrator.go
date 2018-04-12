@@ -1,12 +1,16 @@
 package orchestrator
 
-import "github.com/neuromation/platform-api/api/v1/container"
+import (
+	"github.com/neuromation/platform-api/api/v1/container"
+	"time"
+)
 
 // Client allows creating, getting and serching for Jobs
 type Client interface {
 	NewJob(container.Container, container.Resources) Job
-	GetJob() Job
+	GetJob(string) Job
 	SearchJobs() []Job
+	Ping(duration time.Duration) error
 }
 
 // Job describes a common list of actions wtih Job

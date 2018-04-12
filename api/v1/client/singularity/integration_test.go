@@ -5,7 +5,6 @@ package singularity
 import (
 	"encoding/json"
 	"fmt"
-	"net/http"
 	"testing"
 	"time"
 
@@ -17,55 +16,15 @@ var (
 	timeout = time.Second
 )
 
-func newClient(t *testing.T) *singularityClient {
-	t.Helper()
+func TestSingularityJob_Start(t *testing.T) {
 	c, err := NewClient("http://"+addr, timeout)
 	if err != nil {
 		t.Fatalf("fail to create new client: %s", err)
 	}
-
 	sc := c.(*singularityClient)
-	if err := waitReadiness(sc); err != nil {
-		t.Fatalf("singularity unreachable: %s", err)
+	if err := sc.Ping(time.Second * 10); err != nil {
+		t.Fatalf("unable to establish connection: %s", err)
 	}
-	return sc
-}
-
-func waitReadiness(sc *singularityClient) error {
-	maxWait := time.Second * 10
-	done := time.Now().Add(maxWait)
-	for time.Now().Before(done) {
-		if singularityReadiness(sc) {
-			return nil
-		}
-		time.Sleep(100 * time.Millisecond)
-	}
-	return fmt.Errorf("cannot connect %v for %v", addr, maxWait)
-}
-
-func singularityReadiness(sc *singularityClient) bool {
-	resp, err := sc.get("state")
-	if err != nil {
-		return false
-	}
-	if resp.StatusCode != http.StatusOK {
-		return false
-	}
-	state := &struct {
-		ActiveSlaves int `json:"activeSlaves"`
-	}{}
-	decoder := json.NewDecoder(resp.Body)
-	if err = decoder.Decode(state); err != nil {
-		return false
-	}
-	if state.ActiveSlaves < 1 {
-		return false
-	}
-	return true
-}
-
-func TestSingularityJob_Start(t *testing.T) {
-	c := newClient(t)
 	cont := container.Container{
 		Image: "hello-world",
 	}
@@ -81,10 +40,11 @@ func TestSingularityJob_Start(t *testing.T) {
 	var deployID string
 	maxWait := time.Second * 5
 	done := time.Now().Add(maxWait)
+	job := j.(*singularityJob)
 	for time.Now().Before(done) {
 		time.Sleep(time.Millisecond * 200)
-		addr := fmt.Sprintf("requests/request/%s", j.GetID())
-		resp, err := c.get(addr)
+		addr := fmt.Sprintf("requests/request/%s", job.Deploy.RequestID)
+		resp, err := sc.get(addr)
 		if err != nil {
 			t.Fatalf("fail to get request state: %s", err)
 		}
@@ -105,19 +65,11 @@ func TestSingularityJob_Start(t *testing.T) {
 	maxWait = time.Second * 10
 	done = time.Now().Add(maxWait)
 	for time.Now().Before(done) {
-		addr := fmt.Sprintf("history/request/%s/deploy/%s", j.GetID(), deployID)
-		resp, err := c.get(addr)
+		status, err := j.Status()
 		if err != nil {
-			t.Fatalf("fail to get deploy state: %s", err)
+			t.Fatalf("unexpected status error: %s", err)
 		}
-		decoder := json.NewDecoder(resp.Body)
-		deployHistory := &deployHistory{}
-		err = decoder.Decode(deployHistory)
-		if err != nil {
-			t.Fatalf("unexpected error while decoding request body: %s", err)
-			return
-		}
-		if deployHistory.DeployResult.State == "SUCCEEDED" {
+		if status == "SUCCEEDED" {
 			return
 		}
 	}

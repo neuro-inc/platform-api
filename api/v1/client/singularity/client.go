@@ -7,15 +7,20 @@ import (
 	"net/http"
 	"net/url"
 	"strings"
+	"sync"
 	"time"
 
 	"github.com/neuromation/platform-api/api/v1/container"
 	"github.com/neuromation/platform-api/api/v1/orchestrator"
+	"github.com/neuromation/platform-api/log"
 )
 
 type singularityClient struct {
 	c    http.Client
 	addr *url.URL
+
+	sync.RWMutex
+	r map[string]*singularityJob
 }
 
 // NewClient creates new orchestrator.Client from given config
@@ -29,16 +34,64 @@ func NewClient(addr string, timeout time.Duration) (orchestrator.Client, error) 
 			Timeout: timeout,
 		},
 		addr: uri,
+		r:    make(map[string]*singularityJob),
 	}
 	return client, nil
 }
 
+func (sc *singularityClient) Ping(maxWait time.Duration) error {
+	done := time.Now().Add(maxWait)
+	retryTimeout := time.Second
+	var err error
+	for time.Now().Before(done) {
+		err = sc.ready()
+		if err == nil {
+			return nil
+		}
+		log.Errorf("%s. Retrying after %v...", err, retryTimeout)
+		time.Sleep(retryTimeout)
+	}
+	return err
+}
+
+func (sc *singularityClient) ready() error {
+	resp, err := sc.get("state")
+	if err != nil {
+		return err
+	}
+	if resp.StatusCode != http.StatusOK {
+		return fmt.Errorf("unexpected status code returned from %q: %d", resp.Request.URL, resp.StatusCode)
+	}
+
+	state := &struct {
+		ActiveSlaves int `json:"activeSlaves"`
+	}{}
+	decoder := json.NewDecoder(resp.Body)
+	if err = decoder.Decode(state); err != nil {
+		return fmt.Errorf("response parse error: %s", err)
+	}
+	if state.ActiveSlaves < 1 {
+		return fmt.Errorf("singularity has no active slaves")
+	}
+	return nil
+}
+
 // TODO: NewJob is the method of singularityClient
 // but actually Job is something different from client.
-func (c *singularityClient) NewJob(container container.Container, res container.Resources) orchestrator.Job {
+func (sc *singularityClient) NewJob(container container.Container, res container.Resources) orchestrator.Job {
 	id := fmt.Sprintf("platform_deploy_%d", time.Now().Nanosecond())
+	var volumes []volume
+	for _, v := range container.Volumes {
+		v := volume{
+			HostPath:      v.From,
+			ContainerPath: v.To,
+			Mode:          v.Mode,
+		}
+		volumes = append(volumes, v)
+	}
+
 	j := &singularityJob{
-		client: c,
+		client: sc,
 		Deploy: deploy{
 			ID: id,
 			ContainerInfo: containerInfo{
@@ -46,21 +99,29 @@ func (c *singularityClient) NewJob(container container.Container, res container.
 				Docker: dockerContainer{
 					Image: container.Image,
 				},
-				Volumes: container.Volumes,
+				Volumes: volumes,
 			},
 			Resources:                  res,
 			DeployHealthTimeoutSeconds: 300,
 			Env: container.Env,
 		},
 	}
+
+	sc.Lock()
+	sc.r[id] = j
+	sc.Unlock()
+
 	return j
 }
 
-func (c *singularityClient) GetJob() orchestrator.Job {
-	panic("implement me")
+func (sc *singularityClient) GetJob(id string) orchestrator.Job {
+	sc.RLock()
+	j := sc.r[id]
+	sc.RUnlock()
+	return j
 }
 
-func (c *singularityClient) SearchJobs() []orchestrator.Job {
+func (sc *singularityClient) SearchJobs() []orchestrator.Job {
 	panic("implement me")
 }
 
@@ -82,14 +143,12 @@ func (j *singularityJob) Start() error {
 	// TODO: must be replaced with smthng rly unique
 	reqID := fmt.Sprintf("platform_request_%d", time.Now().Nanosecond())
 	if err := j.client.registerRequest(reqID); err != nil {
-		return fmt.Errorf("error while registering singularity request: %s", err)
+		return err
 	}
-
 	j.Deploy.RequestID = reqID
 	if err := j.client.registerDeploy(reqID, j); err != nil {
-		return fmt.Errorf("error while registering singularity deploy: %s", err)
+		return err
 	}
-
 	return nil
 }
 
@@ -102,11 +161,21 @@ func (j *singularityJob) Delete() error {
 }
 
 func (j *singularityJob) Status() (string, error) {
-	panic("implement me")
+	addr := fmt.Sprintf("history/request/%s/deploy/%s", j.Deploy.RequestID, j.Deploy.ID)
+	resp, err := j.client.get(addr)
+	if err != nil {
+		return "", fmt.Errorf("error while getting job %q state: %s", j.GetID(), err)
+	}
+	decoder := json.NewDecoder(resp.Body)
+	deployHistory := &deployHistory{}
+	if err = decoder.Decode(deployHistory); err != nil {
+		return "", fmt.Errorf("error while decoding request body: %s", err)
+	}
+	return deployHistory.DeployResult.State, nil
 }
 
 func (j *singularityJob) GetID() string {
-	return j.Deploy.RequestID
+	return j.Deploy.ID
 }
 
 var requestTpl = `
@@ -121,48 +190,48 @@ var requestTpl = `
 }
 `
 
-func (c *singularityClient) registerRequest(id string) error {
+func (sc *singularityClient) registerRequest(id string) error {
 	body := fmt.Sprintf(requestTpl, id)
-	_, err := c.post("requests", body)
+	_, err := sc.post("requests", body)
 	if err != nil {
-		return fmt.Errorf("error while registering request %q at %q: %s", body, c.addr, err)
+		return fmt.Errorf("error while registering request %q at %q: %s", body, sc.addr, err)
 	}
 	return nil
 }
 
-func (c *singularityClient) registerDeploy(reqID string, job *singularityJob) error {
+func (sc *singularityClient) registerDeploy(reqID string, job *singularityJob) error {
 	body := job.String()
-	_, err := c.post("deploys", body)
+	_, err := sc.post("deploys", body)
 	if err != nil {
-		return fmt.Errorf("error while registering deploy %q at %q: %s", body, c.addr, err)
+		return fmt.Errorf("error while registering deploy %q at %q: %s", body, sc.addr, err)
 	}
 	return nil
 }
 
-func (c *singularityClient) post(addr, body string) (*http.Response, error) {
+func (sc *singularityClient) post(addr, body string) (*http.Response, error) {
 	r := strings.NewReader(body)
-	uri := fmt.Sprintf("%s/singularity/api/%s", c.addr.String(), addr)
+	uri := fmt.Sprintf("%s/singularity/api/%s", sc.addr.String(), addr)
 	req, err := http.NewRequest("POST", uri, r)
 	if err != nil {
-		return nil, fmt.Errorf("err while creating singularity post request: %s", err)
+		return nil, err
 	}
 	req.Header.Set("Content-Type", "application/json")
-	return c.do(req)
+	return sc.do(req)
 }
 
-func (c *singularityClient) get(addr string) (*http.Response, error) {
-	uri := fmt.Sprintf("%s/singularity/api/%s", c.addr.String(), addr)
+func (sc *singularityClient) get(addr string) (*http.Response, error) {
+	uri := fmt.Sprintf("%s/singularity/api/%s", sc.addr.String(), addr)
 	req, err := http.NewRequest("GET", uri, nil)
 	if err != nil {
-		return nil, fmt.Errorf("err while creating singularity GET request: %s", err)
+		return nil, err
 	}
-	return c.do(req)
+	return sc.do(req)
 }
 
-func (c *singularityClient) do(req *http.Request) (*http.Response, error) {
-	resp, err := c.c.Do(req)
+func (sc *singularityClient) do(req *http.Request) (*http.Response, error) {
+	resp, err := sc.c.Do(req)
 	if err != nil {
-		return nil, fmt.Errorf("unexpected error returned: %s", err)
+		return nil, err
 	}
 	if resp.StatusCode != http.StatusOK {
 		responseBody, _ := ioutil.ReadAll(resp.Body)

@@ -8,12 +8,10 @@ import (
 )
 
 func main() {
-	log.Infof("Initing...")
 	cfg := &config.Config{}
 	err := envconfig.Process("neuro", cfg)
 	if err != nil {
 		log.Fatalf("error while parsing config: %s", err)
 	}
-	log.Infof("Initing done. Listening on %q", cfg.ListenAddr)
-	log.Fatalf("HTTP server error on %s: %s", cfg.ListenAddr, api.Serve(cfg))
+	log.Fatalf("API serving error: %s", api.Serve(cfg))
 }

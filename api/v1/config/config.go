@@ -16,4 +16,7 @@ type Config struct {
 	ReadTimeout  time.Duration `default:"1m"`
 	WriteTimeout time.Duration `default:"1m"`
 	IdleTimeout  time.Duration `default:"10m"`
+
+	// StorageBasePath is the parent path for all `storage` mounts
+	StorageBasePath string `default:"./api/v1/testData/marketPlace"`
 }
