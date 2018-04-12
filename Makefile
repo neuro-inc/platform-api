@@ -1,5 +1,6 @@
 pkgs = $(shell go list ./...)
 
+
 format:
 	go fmt $(pkgs)
 	gofmt -w -s .
@@ -15,13 +16,13 @@ integration_test: build
 
 test_coverage: build
 	echo "" > coverage.txt
-	for d in $(pkgs); do
-		go test -v -race -coverprofile=profile.out -covermode=atomic $d
-		if [ -f profile.out ]; then
-			cat profile.out >> coverage.txt
-			rm profile.out
-		fi
-	done
+	for d in $(pkgs); do \
+		go test -v -race -coverprofile=profile.out -covermode=atomic $$d ;\
+		if [ -f profile.out ]; then \
+			cat profile.out >> coverage.txt; \
+			rm profile.out; \
+		fi; \
+	done;
 
 run: build
 	./platform-api
