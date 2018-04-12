@@ -20,7 +20,11 @@ jobs:
             make up;
             make integration_test;
             make down;
-
+      - run:
+          name: code coverage
+          command: |
+            make test_coverage;
+            bash <(curl -s https://codecov.io/bash);
 workflows:
   version: 2
 
