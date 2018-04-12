@@ -26,7 +26,7 @@ jobs:
             make down;
 
       - store_test_results:
-        path: /tmp/test-results
+          path: /tmp/test-results
 
 workflows:
   version: 2
