@@ -1,10 +1,9 @@
 package v1
 
 import (
-	"net/http"
-
 	"encoding/json"
 	"fmt"
+
 	"github.com/neuromation/platform-api/api/v1/container"
 	"github.com/neuromation/platform-api/api/v1/storage"
 )
@@ -38,9 +37,4 @@ func (t *training) UnmarshalJSON(data []byte) error {
 		t.Container.Volumes = append(t.Container.Volumes, v)
 	}
 	return nil
-}
-
-// ViewTraining proxies response about task from singularity
-func ViewTraining(id string) (*http.Response, error) {
-	panic("implement me")
 }

@@ -13,5 +13,5 @@ func main() {
 	if err != nil {
 		log.Fatalf("error while parsing config: %s", err)
 	}
-	log.Fatalf("HTTP server error on %s: %s", cfg.ListenAddr, api.Serve(cfg))
+	log.Fatalf("API serving error: %s", api.Serve(cfg))
 }

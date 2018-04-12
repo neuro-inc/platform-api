@@ -2,7 +2,6 @@ package v1
 
 import (
 	"fmt"
-	"io/ioutil"
 	"net"
 	"net/http"
 	"path/filepath"
@@ -32,10 +31,10 @@ func Serve(cfg *config.Config) error {
 		return fmt.Errorf("error while creating client: %s", err)
 	}
 	if err := client.Ping(time.Second * 10); err != nil {
-		return fmt.Errorf("client is unable to establish connection: %s", err)
+		return fmt.Errorf("error while establishing connection: %s", err)
 	}
 	if err := storage.Init(cfg.StorageBasePath); err != nil {
-		return fmt.Errorf("storage error: %s", err)
+		return fmt.Errorf("error while initing storage: %s", err)
 	}
 
 	r := httprouter.New()
@@ -90,18 +89,7 @@ func viewTrainingStatus(rw http.ResponseWriter, _ *http.Request, params httprout
 }
 
 func viewTraining(rw http.ResponseWriter, _ *http.Request, params httprouter.Params) {
-	resp, err := ViewTraining(params.ByName("id"))
-	if err != nil {
-		respondWithError(rw, err)
-		return
-	}
-	b, err := ioutil.ReadAll(resp.Body)
-	if err != nil {
-		respondWithError(rw, err)
-		return
-	}
-	resp.Body.Close()
-	respondWith(rw, http.StatusOK, string(b))
+	panic("implement me")
 }
 
 var userSpacePath = "./api/v1/testData/userSpace"
