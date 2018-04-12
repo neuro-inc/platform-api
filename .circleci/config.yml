@@ -25,9 +25,35 @@ jobs:
           command: |
             make test_coverage;
             bash <(curl -s https://codecov.io/bash);
+  test-docker:
+    docker:
+      - image: circleci/golang:1.10
+      - image: mesoscloud/zookeeper:3.4.6-centos-7
+      - image: mesosphere/mesos-master:1.4.1
+    steps:
+      - checkout
+      - setup_remote_docker
+      - run:
+          name: Running API tests
+          command: |
+            make up;
+            make run_api_tests;
+            make down;
+      - run:
+          name: Running backend integration tests
+          command: |
+            make up;
+            make integration_test;
+            make down;
+      - run:
+          name: code coverage
+          command: |
+            make test_coverage;
+            bash <(curl -s https://codecov.io/bash);
 workflows:
   version: 2
 
   main:
     jobs:
       - test
+      - test-docker
