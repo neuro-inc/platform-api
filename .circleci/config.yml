@@ -11,6 +11,7 @@ jobs:
     steps:
       - checkout
       - run: mkdir -p $TEST_RESULTS
+      - run: go get github.com/jstemmer/go-junit-report
       - run:
           name: Running API tests
           command: |
