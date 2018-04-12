@@ -6,8 +6,11 @@ jobs:
       image: circleci/classic:201711-01
       docker_layer_caching: true
     working_directory: ~/.go_workspace/src/github.com/neuromation/platform-api
+    environment:
+      TEST_RESULTS: /tmp/test-results
     steps:
       - checkout
+      - run: mkdir -p $TEST_RESULTS
       - run:
           name: Running API tests
           command: |
@@ -18,8 +21,12 @@ jobs:
           name: Running backend integration tests
           command: |
             make up;
-            make integration_test;
+            trap "go-junit-report <${TEST_RESULTS}/go-test.out > ${TEST_RESULTS}/go-test-report.xml" EXIT
+            make integration_test | tee ${TEST_RESULTS}/go-test.out;
             make down;
+
+      - store_test_results:
+        path: /tmp/test-results
 
 workflows:
   version: 2
