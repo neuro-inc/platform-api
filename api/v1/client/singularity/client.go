@@ -18,13 +18,7 @@ import (
 type singularityClient struct {
 	c    http.Client
 	addr *url.URL
-}
 
-var registry = &jobRegistry{
-	r: make(map[string]*singularityJob),
-}
-
-type jobRegistry struct {
 	sync.RWMutex
 	r map[string]*singularityJob
 }
@@ -40,6 +34,7 @@ func NewClient(addr string, timeout time.Duration) (orchestrator.Client, error) 
 			Timeout: timeout,
 		},
 		addr: uri,
+		r:    make(map[string]*singularityJob),
 	}
 	return client, nil
 }
@@ -112,17 +107,17 @@ func (sc *singularityClient) NewJob(container container.Container, res container
 		},
 	}
 
-	registry.Lock()
-	registry.r[id] = j
-	registry.Unlock()
+	sc.Lock()
+	sc.r[id] = j
+	sc.Unlock()
 
 	return j
 }
 
 func (sc *singularityClient) GetJob(id string) orchestrator.Job {
-	registry.RLock()
-	j := registry.r[id]
-	registry.RUnlock()
+	sc.RLock()
+	j := sc.r[id]
+	sc.RUnlock()
 	return j
 }
 
