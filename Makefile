@@ -38,5 +38,15 @@ run_api_tests_built:
 	docker run --rm --link tests_singularity_1 \
 	    platformapi-apitests pytest -vv .
 
+run_api_tests_built:
+	docker run --rm --link tests_singularity_1 \
+	    platformapi-apitests pytest -vv .
+
+ci_run_api_tests_built:
+	docker run --rm --link tests_singularity_1 \
+	    -v ${TEST_RESULTS}:/tmp/test-results platformapi-apitests pytest \
+	    --junitxml=/tmp/test-results/api-tests.xml -vv .
+
 run_api_tests: build_api_tests run_api_tests_built
 
+ci_run_api_tests: build_api_tests ci_run_api_tests_built
