@@ -1,31 +1,24 @@
 package v1
 
-import (
-	"encoding/json"
-)
-
-// model describes Model from API doc
 type model struct {
-	ID          string            `json:"id"`
-	Name        string            `json:"name"`
-	Description string            `json:"type"`
-	Meta        map[string]string `json:"meta"`
+	// Image points to the docker image name
+	Image string `json:"image"`
+	// Storage describes RO bindings from some FS to container
+	Storage []string `json:"storage,omitempty"`
+	// Meta contains various configuration options
+	Meta meta `json:"meta,omitempty"`
 }
 
-// String implements the Stringer interface
-func (m model) String() string {
-	b, err := json.Marshal(m)
-	if err != nil {
-		panic(err)
-	}
-	return string(b)
+type meta struct {
+	// Env contains map of environment variables passing to container
+	Env map[string]string `json:"env"`
+	// Resources contains list resources needed to run container
+	Resources resources `json:"resources"`
 }
 
-var modelRegistry = map[string]model{
-	"fc1834f7-56db-471a-bb15-76c452e2cfdd": {
-		ID:          "fc1834f7-56db-471a-bb15-76c452e2cfdd",
-		Name:        "perfectModel",
-		Description: "100% accuracy",
-		Meta:        make(map[string]string),
-	},
+type resources struct {
+	// Cpus contains amount of requested cpus for container
+	Cpus int `json:"cpus"`
+	// MemoryMB contains amount of requested memory for container
+	MemoryMB int `json:"memoryMb"`
 }

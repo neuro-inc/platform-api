@@ -80,16 +80,6 @@ func (sc *singularityClient) ready() error {
 // but actually Job is something different from client.
 func (sc *singularityClient) NewJob(container container.Container, res container.Resources) orchestrator.Job {
 	id := fmt.Sprintf("platform_deploy_%d", time.Now().Nanosecond())
-	var volumes []volume
-	for _, v := range container.Volumes {
-		v := volume{
-			HostPath:      v.From,
-			ContainerPath: v.To,
-			Mode:          v.Mode,
-		}
-		volumes = append(volumes, v)
-	}
-
 	j := &singularityJob{
 		client: sc,
 		Deploy: deploy{
@@ -99,7 +89,7 @@ func (sc *singularityClient) NewJob(container container.Container, res container
 				Docker: dockerContainer{
 					Image: container.Image,
 				},
-				Volumes: volumes,
+				Volumes: container.Volumes,
 			},
 			Resources:                  res,
 			DeployHealthTimeoutSeconds: 300,
@@ -146,10 +136,7 @@ func (j *singularityJob) Start() error {
 		return err
 	}
 	j.Deploy.RequestID = reqID
-	if err := j.client.registerDeploy(reqID, j); err != nil {
-		return err
-	}
-	return nil
+	return j.client.registerDeploy(reqID, j)
 }
 
 func (j *singularityJob) Stop() error {

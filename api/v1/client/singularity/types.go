@@ -1,5 +1,7 @@
 package singularity
 
+import "github.com/neuromation/platform-api/api/v1/container"
+
 type (
 	requestResponse struct {
 		Request            request            `json:"request"`
@@ -45,15 +47,9 @@ type (
 
 	// ContainerInfo wrapper for singularity container
 	containerInfo struct {
-		Type    string          `json:"type"`
-		Docker  dockerContainer `json:"docker"`
-		Volumes []volume        `json:"volumes"`
-	}
-
-	volume struct {
-		ContainerPath string `json:"containerPath"`
-		HostPath      string `json:"hostPath"`
-		Mode          string `json:"mode"`
+		Type    string              `json:"type"`
+		Docker  dockerContainer     `json:"docker"`
+		Volumes []*container.Volume `json:"volumes"`
 	}
 
 	dockerContainer struct {

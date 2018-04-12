@@ -1,0 +1,17 @@
+{
+  "image": "hagen1778/gif-generator",
+  "storage": [
+     "storage://people/dataset"
+  ],
+  "meta": {
+    "env": {
+      "IMAGE_DIR": "/var/user",
+      "IMAGE_NUMBER": "5",
+      "COLLECTION_DIR": "/var/marketplace/people"
+    },
+    "resources": {
+      "cpus": 1,
+      "memoryMb": 64
+    }
+  }
+}
