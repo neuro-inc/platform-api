@@ -46,8 +46,6 @@ run_api_tests_built:
 	docker run --rm --link tests_singularity_1 --link platformapi \
 	    platformapi-apitests pytest -vv .
 
-run_api_tests: build_api_tests run_api_tests_built
-
 DOCKER_REGISTRY ?= registry.neuromation.io
 
 _docker_login:
