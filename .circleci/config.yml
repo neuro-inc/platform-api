@@ -10,9 +10,10 @@ jobs:
       TEST_RESULTS: /tmp/test-results
     steps:
       - checkout
-      - run: mkdir -p $TEST_RESULTS/junit
-      - run: go get github.com/jstemmer/go-junit-report
-      - run: make up
+      - run: |
+          mkdir -p $TEST_RESULTS/junit
+          go get github.com/jstemmer/go-junit-report
+          make up
       - run:
           name: Running API tests
           command: make ci_run_api_tests
