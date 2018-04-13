@@ -31,12 +31,32 @@ up:
 down:
 	-docker-compose -f tests/docker-compose.yml down
 
+build_api:
+	docker build -t platformapi:latest .
+
+run_api_built:
+	docker run -d --rm --link tests_singularity_1 --name platformapi \
+	    -e PLATFORMAPI_SINGULARITYADDR=http://tests_singularity_1:7099 \
+	    -e PLATFORMAPI_STORAGEBASEPATH=/go/storage \
+	    -v /tmp/platformapi:/go/storage \
+	    platformapi:latest
+
 build_api_tests:
 	make -C tests/api build
 
 run_api_tests_built:
-	docker run --rm --link tests_singularity_1 \
+	docker run --rm --link tests_singularity_1 --link platformapi \
 	    platformapi-apitests pytest -vv .
 
-run_api_tests: build_api_tests run_api_tests_built
+DOCKER_REGISTRY ?= registry.neuromation.io
 
+_docker_login:
+	@docker login -u "$(DOCKER_USER)" -p "$(DOCKER_PASS)" $(DOCKER_REGISTRY)
+
+pull_api_test_fixtures: _docker_login
+	docker pull $(DOCKER_REGISTRY)/neuromationorg/platformapi-dummy
+
+
+run_api_tests: pull_api_test_fixtures \
+    build_api run_api_built \
+    build_api_tests run_api_tests_built

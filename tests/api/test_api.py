@@ -351,3 +351,32 @@ class TestInferenceApi:
         status = status_proxy.wait()
         assert status.id == status_id
         assert status.name == StatusName.SUCCEEDED
+
+
+@pytest.fixture(scope='session')
+def real_api_endpoint():
+    return 'http://platformapi:8080'
+
+
+@pytest.mark.usefixtures('singularity')
+class TestTrainingApi:
+    def test_docker_image(self, real_api_endpoint):
+        api_endpoint = real_api_endpoint
+        # TODO: should we have the /api/v1 path prefix?
+        url = f'{api_endpoint}/trainings'
+        payload = {
+            "code": {
+                "env": {
+                    "MODEL_PATH": "/var/user"
+                },
+                "image": (
+                    "registry.neuromation.io/neuromationorg/platformapi-dummy"
+                ),
+            },
+            "resources": {
+                "cpus": 1,
+                "memoryMb": 128
+            }
+        }
+        response = requests.post(url, json=payload)
+        assert response.status_code == 200
