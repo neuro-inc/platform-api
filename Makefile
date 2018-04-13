@@ -10,7 +10,7 @@ build:
 test: build
 	go test -v -race $(pkgs)
 
-integration_test: build
+go_integration_test: build
 	go test -v -race $(pkgs) -tags=integration
 
 run: build
