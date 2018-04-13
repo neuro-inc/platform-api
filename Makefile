@@ -37,6 +37,8 @@ build_api:
 run_api_built:
 	docker run -d --rm --link tests_singularity_1 --name platformapi \
 	    -e PLATFORMAPI_SINGULARITYADDR=http://tests_singularity_1:7099 \
+	    -e PLATFORMAPI_STORAGEBASEPATH=/go/storage \
+	    -v /tmp/platformapi:/go/storage \
 	    platformapi:latest
 
 build_api_tests:
