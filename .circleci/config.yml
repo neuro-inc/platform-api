@@ -18,6 +18,11 @@ jobs:
           name: Running API tests
           command: make ci_run_api_tests
       - run:
+          name: cleanup
+          command: |
+            make down
+            make up
+      - run:
           name: Running backend integration tests
           command: |
             trap "go-junit-report <${TEST_RESULTS}/go-test.out > ${TEST_RESULTS}/junit/go-test-report.xml" EXIT
