@@ -42,7 +42,7 @@ class TestSingularity:
 
     def _poll_deploy(self, singularity_api_endpoint, request_id, deploy_id):
         delay_s = 1
-        max_attempts = 30
+        max_attempts = 60
 
         for _ in range(max_attempts):
             payload = self._get_deploy(
