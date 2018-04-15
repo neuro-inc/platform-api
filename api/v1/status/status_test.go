@@ -120,9 +120,10 @@ func TestMarshaledModelStatus(t *testing.T) {
 	}
 }
 
-func TestInMemoryStatusServiceCreateGet(t *testing.T) {
+func TestInMemoryStatusServiceSetGet(t *testing.T) {
 	service := NewInMemoryStatusService()
-	status := service.Create()
+	var status Status = NewGenericStatus()
+	service.Set(status)
 
 	statusId := status.Id()
 
@@ -169,7 +170,8 @@ func TestInMemoryStatusServiceGetFailure(t *testing.T) {
 
 func TestInMemoryStatusServiceDelete(t *testing.T) {
 	service := NewInMemoryStatusService()
-	status := service.Create()
+	var status Status = NewGenericStatus()
+	service.Set(status)
 
 	_, err := service.Get(status.Id())
 	if err != nil {

@@ -1,6 +1,7 @@
 package status
 
 import (
+	"encoding/json"
 	"fmt"
 
 	"github.com/satori/go.uuid"
@@ -145,7 +146,6 @@ func UpdateModelStatus(client orchestrator.Client, modelStatus *ModelStatus) err
 
 
 type StatusService interface {
-	Create() Status
 	Set(Status) error
 	Get(id string) (Status, error)
 	Update() Status
@@ -161,12 +161,6 @@ func NewInMemoryStatusService() *InMemoryStatusService {
 	service := new(InMemoryStatusService)
 	service.statuses = make(map[string]Status)
 	return service
-}
-
-func (service *InMemoryStatusService) Create() Status {
-	status := NewGenericStatus()
-	service.Set(status)
-	return &status
 }
 
 func (service *InMemoryStatusService) Set(status Status) error {
