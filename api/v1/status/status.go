@@ -33,49 +33,88 @@ func (name StatusName) MarshalJSON() ([]byte, error) {
 	return []byte(fmt.Sprintf(`"%s"`, name.String())), nil
 }
 
-type Status struct {
-	Id string `json:"status_id"`
-	StatusName StatusName `json:"status"`
+type Status interface {
+	Id() string
+	StatusName() StatusName
+	IsRedirectionSupported() bool
+	IsSucceeded() bool
+	IsFailed() bool
+	IsFinished() bool
 }
 
+type GenericStatus struct {
+	id string
+	statusName StatusName
+}
 
-func NewStatus() Status {
+func NewGenericStatus() GenericStatus {
 	id := uuid.NewV4().String()
-	status := Status{
-		Id: id,
-		StatusName: STATUS_PENDING,
+	status := GenericStatus{
+		id: id,
+		statusName: STATUS_PENDING,
 	}
 	return status
 }
 
-func (status Status) IsRedirectionSupported() bool {
+func (status GenericStatus) Id() string {
+	return status.id
+}
+
+func (status GenericStatus) StatusName() StatusName {
+	return status.statusName
+}
+
+func (status GenericStatus) IsRedirectionSupported() bool {
 	return false
 }
 
-func (status Status) IsSucceeded() bool {
-	return status.StatusName == STATUS_SUCCEEDED
+func (status GenericStatus) IsSucceeded() bool {
+	return status.StatusName() == STATUS_SUCCEEDED
 }
 
-func (status Status) IsFailed() bool {
-	return status.StatusName == STATUS_FAILED
+func (status GenericStatus) IsFailed() bool {
+	return status.StatusName() == STATUS_FAILED
 }
 
-func (status Status) IsFinished() bool {
+func (status GenericStatus) IsFinished() bool {
 	return status.IsSucceeded() || status.IsFailed()
 }
 
+type publicStatusSchema struct {
+	Id string `json:"status_id"`
+	StatusName StatusName `json:"status"`
+	ModelId string `json:"model_id,omitempty"`
+}
+
+func (status GenericStatus) MarshalJSON() ([]byte, error) {
+	return json.Marshal(publicStatusSchema{
+		Id: status.Id(),
+		StatusName: status.StatusName(),
+	})
+}
 
 type ModelStatus struct {
-	Status
-	ModelId string `json:"model_id"`
+	GenericStatus
+	ModelId string
 }
 
 func NewModelStatus(modelId string) ModelStatus {
-	return ModelStatus{Status: NewStatus(), ModelId: modelId}
+	return ModelStatus{
+		GenericStatus: NewGenericStatus(),
+		ModelId: modelId,
+	}
 }
 
 func (status ModelStatus) IsRedirectionSupported() bool {
 	return true
+}
+
+func (status ModelStatus) MarshalJSON() ([]byte, error) {
+	return json.Marshal(publicStatusSchema{
+		Id: status.Id(),
+		StatusName: status.StatusName(),
+		ModelId: status.ModelId,
+	})
 }
 
 func UpdateModelStatus(client orchestrator.Client, modelStatus *ModelStatus) error {
@@ -99,15 +138,16 @@ func UpdateModelStatus(client orchestrator.Client, modelStatus *ModelStatus) err
 	}
 
 	// TODO: check presence first
-	modelStatus.StatusName = knownStatuses[status]
+	modelStatus.statusName = knownStatuses[status]
 
 	return nil
 }
 
 
 type StatusService interface {
-	Create() *Status
-	Get(id string) (*Status, error)
+	Create() Status
+	Set(Status) error
+	Get(id string) (Status, error)
 	Update() Status
 	Delete(id string)
 }
@@ -123,22 +163,27 @@ func NewInMemoryStatusService() *InMemoryStatusService {
 	return service
 }
 
-func (service *InMemoryStatusService) Create() *Status {
-	status := NewStatus()
-	service.statuses[status.Id] = status
+func (service *InMemoryStatusService) Create() Status {
+	status := NewGenericStatus()
+	service.Set(status)
 	return &status
 }
 
-func (service *InMemoryStatusService) Get(id string) (*Status, error) {
+func (service *InMemoryStatusService) Set(status Status) error {
+	service.statuses[status.Id()] = status
+	return nil
+}
+
+func (service *InMemoryStatusService) Get(id string) (Status, error) {
 	status, ok := service.statuses[id]
 	if !ok {
 		return nil, fmt.Errorf("Status %s was not found", id)
 	}
-	return &status, nil
+	return status, nil
 }
 
 func (service *InMemoryStatusService) Update() Status {
-	return Status{}
+	return GenericStatus{}
 }
 
 func (service *InMemoryStatusService) Delete(id string) {

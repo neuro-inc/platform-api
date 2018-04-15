@@ -25,13 +25,13 @@ func TestStatusNameMarshalJSON(t *testing.T) {
 	}
 }
 
-func TestNewStatus(t *testing.T) {
-	status := NewStatus()
+func TestNewGenericStatus(t *testing.T) {
+	status := NewGenericStatus()
 	// TODO: normal assertions in go?
-	if len(status.Id) != 36 {
+	if len(status.Id()) != 36 {
 		t.Fatal()
 	}
-	if status.StatusName != STATUS_PENDING {
+	if status.StatusName() != STATUS_PENDING {
 		t.Fatal()
 	}
 	if status.IsRedirectionSupported() {
@@ -48,9 +48,9 @@ func TestNewStatus(t *testing.T) {
 	}
 }
 
-func TestStatusIsFinished(t *testing.T) {
-	status := NewStatus()
-	status.StatusName = STATUS_SUCCEEDED
+func TestGenericStatusIsFinished(t *testing.T) {
+	status := NewGenericStatus()
+	status.statusName = STATUS_SUCCEEDED
 
 	if !status.IsSucceeded() {
 		t.Fatal()
@@ -62,7 +62,7 @@ func TestStatusIsFinished(t *testing.T) {
 }
 
 func TestMarshaledStatus(t *testing.T) {
-	status := NewStatus()
+	status := NewGenericStatus()
 	status_json, err := json.Marshal(&status)
 	if err != nil {
 		t.Fatal(err)
@@ -70,7 +70,7 @@ func TestMarshaledStatus(t *testing.T) {
 
 	status_json_str := string(status_json[:])
 	expected_status_json_str := fmt.Sprintf(
-		`{"status_id":"%s","status":"PENDING"}`, status.Id) 
+		`{"status_id":"%s","status":"PENDING"}`, status.Id()) 
 	if status_json_str != expected_status_json_str {
 		t.Fatal(status_json_str)
 	}
@@ -80,10 +80,10 @@ func TestNewModelStatus(t *testing.T) {
 	modelId := "someModelId"
 	status := NewModelStatus(modelId)
 	// TODO: normal assertions in go?
-	if len(status.Id) != 36 {
+	if len(status.Id()) != 36 {
 		t.Fatal()
 	}
-	if status.StatusName != STATUS_PENDING {
+	if status.StatusName() != STATUS_PENDING {
 		t.Fatal()
 	}
 	if status.ModelId != modelId {
@@ -114,7 +114,7 @@ func TestMarshaledModelStatus(t *testing.T) {
 	status_json_str := string(status_json[:])
 	expected_status_json_str := fmt.Sprintf(
 		`{"status_id":"%s","status":"PENDING","model_id":"%s"}`,
-		status.Id, modelId) 
+		status.Id(), modelId) 
 	if status_json_str != expected_status_json_str {
 		t.Fatal(status_json_str)
 	}
@@ -124,26 +124,27 @@ func TestInMemoryStatusServiceCreateGet(t *testing.T) {
 	service := NewInMemoryStatusService()
 	status := service.Create()
 
-	if len(status.Id) != 36 {
+	statusId := status.Id()
+
+	if len(statusId) != 36 {
 		t.Fatal()
 	}
 
-	if status.StatusName != STATUS_PENDING {
+	if status.StatusName() != STATUS_PENDING {
 		t.Fatal()
 	}
 
-	statusId := status.Id
 	status, err := service.Get(statusId)
 
 	if err != nil {
 		t.Fatal(err)
 	}
 	
-	if status.Id != statusId {
+	if status.Id() != statusId {
 		t.Fatal()
 	}
 
-	if status.StatusName != STATUS_PENDING {
+	if status.StatusName() != STATUS_PENDING {
 		t.Fatal()
 	}
 }
@@ -170,14 +171,14 @@ func TestInMemoryStatusServiceDelete(t *testing.T) {
 	service := NewInMemoryStatusService()
 	status := service.Create()
 
-	_, err := service.Get(status.Id)
+	_, err := service.Get(status.Id())
 	if err != nil {
 		t.Fatal()
 	}
 
-	service.Delete(status.Id)
+	service.Delete(status.Id())
 
-	_, err = service.Get(status.Id)
+	_, err = service.Get(status.Id())
 	if err == nil {
 		t.Fatal()
 	}
