@@ -20,7 +20,7 @@ func TestInMemoryStatusServiceCreateGet(t *testing.T) {
 		t.Fatal()
 	}
 
-	if status.Status != STATUS_PENDING {
+	if status.StatusName != STATUS_PENDING {
 		t.Fatal()
 	}
 
@@ -35,7 +35,7 @@ func TestInMemoryStatusServiceCreateGet(t *testing.T) {
 		t.Fatal()
 	}
 
-	if status.Status != STATUS_PENDING {
+	if status.StatusName != STATUS_PENDING {
 		t.Fatal()
 	}
 }

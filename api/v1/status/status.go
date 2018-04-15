@@ -4,6 +4,8 @@ import (
 	"fmt"
 
 	"github.com/satori/go.uuid"
+
+	"github.com/neuromation/platform-api/api/v1/orchestrator"
 )
 
 
@@ -16,6 +18,8 @@ const (
 )
 
 func (name StatusName) String() string {
+	// TODO: move outside
+	// TODO: what happens if there is no such name
 	names := [...]string {
 		"PENDING",
 		"SUCCEEDED",
@@ -27,7 +31,7 @@ func (name StatusName) String() string {
 
 type Status struct {
 	Id string
-	Status StatusName
+	StatusName StatusName
 }
 
 
@@ -35,9 +39,53 @@ func NewStatus() Status {
 	id := uuid.NewV4().String()
 	status := Status{
 		Id: id,
-		Status: STATUS_PENDING,
+		StatusName: STATUS_PENDING,
 	}
 	return status
+}
+
+func (status Status) IsRedirectionSupported() bool {
+	return false
+}
+
+func (status Status) IsSucceeded() bool {
+	return status.StatusName == STATUS_SUCCEEDED
+}
+
+
+type ModelStatus struct {
+	*Status
+	ModelId string
+}
+
+func (status ModelStatus) IsRedirectionSupported() bool {
+	return true
+}
+
+func UpdateModelStatus(client orchestrator.Client, modelStatus *ModelStatus) error {
+	// TODO: what if the expected job does not exist?
+	jobId := modelStatus.ModelId
+	job := client.GetJob(jobId)
+	status, err := job.Status()
+	if err != nil {
+		return err
+	}
+
+	// TODO: must be moved
+	knownStatuses := map[string]StatusName{
+		"SUCCEEDED": STATUS_SUCCEEDED,
+		"WAITING": STATUS_PENDING,
+		"OVERDUE": STATUS_FAILED,
+		"FAILED": STATUS_FAILED,
+		"FAILED_INTERNAL_STATE": STATUS_FAILED,
+		"CANCELING": STATUS_PENDING,
+		"CANCELED": STATUS_FAILED,
+	}
+
+	// TODO: check presence first
+	modelStatus.StatusName = knownStatuses[status]
+
+	return nil
 }
 
 
