@@ -29,9 +29,13 @@ func (name StatusName) String() string {
 	return names[name]
 }
 
+func (name StatusName) MarshalJSON() ([]byte, error) {
+	return []byte(fmt.Sprintf(`"%s"`, name.String())), nil
+}
+
 type Status struct {
-	Id string
-	StatusName StatusName
+	Id string `json:"status_id"`
+	StatusName StatusName `json:"status"`
 }
 
 
@@ -52,10 +56,22 @@ func (status Status) IsSucceeded() bool {
 	return status.StatusName == STATUS_SUCCEEDED
 }
 
+func (status Status) IsFailed() bool {
+	return status.StatusName == STATUS_FAILED
+}
+
+func (status Status) IsFinished() bool {
+	return status.IsSucceeded() || status.IsFailed()
+}
+
 
 type ModelStatus struct {
-	*Status
-	ModelId string
+	Status
+	ModelId string `json:"model_id"`
+}
+
+func NewModelStatus(modelId string) ModelStatus {
+	return ModelStatus{Status: NewStatus(), ModelId: modelId}
 }
 
 func (status ModelStatus) IsRedirectionSupported() bool {
