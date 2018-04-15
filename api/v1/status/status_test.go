@@ -14,6 +14,17 @@ func TestStatusNameString(t *testing.T) {
 	}
 }
 
+func TestStatusNameMarshalJSON(t *testing.T) {
+	name := STATUS_SUCCEEDED
+	name_json, err := json.Marshal(name)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if string(name_json) != `"SUCCEEDED"` {
+		t.Fatal()
+	}
+}
+
 func TestNewStatus(t *testing.T) {
 	status := NewStatus()
 	// TODO: normal assertions in go?
@@ -33,6 +44,19 @@ func TestNewStatus(t *testing.T) {
 		t.Fatal()
 	}
 	if status.IsFinished() {
+		t.Fatal()
+	}
+}
+
+func TestStatusIsFinished(t *testing.T) {
+	status := NewStatus()
+	status.StatusName = STATUS_SUCCEEDED
+
+	if !status.IsSucceeded() {
+		t.Fatal()
+	}
+
+	if !status.IsFinished() {
 		t.Fatal()
 	}
 }
