@@ -78,7 +78,7 @@ func TestMarshaledStatus(t *testing.T) {
 
 func TestNewModelStatus(t *testing.T) {
 	modelId := "someModelId"
-	status := NewModelStatus(modelId)
+	status := NewModelStatus(modelId, nil)
 	// TODO: normal assertions in go?
 	if len(status.Id()) != 36 {
 		t.Fatal()
@@ -105,7 +105,7 @@ func TestNewModelStatus(t *testing.T) {
 
 func TestMarshaledModelStatus(t *testing.T) {
 	modelId := "someModelId"
-	status := NewModelStatus(modelId)
+	status := NewModelStatus(modelId, nil)
 	status_json, err := json.Marshal(&status)
 	if err != nil {
 		t.Fatal(err)

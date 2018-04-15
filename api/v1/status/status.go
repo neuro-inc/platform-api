@@ -97,12 +97,15 @@ func (status GenericStatus) MarshalJSON() ([]byte, error) {
 type ModelStatus struct {
 	GenericStatus
 	ModelId string
+
+	client orchestrator.Client
 }
 
-func NewModelStatus(modelId string) ModelStatus {
+func NewModelStatus(modelId string, client orchestrator.Client) ModelStatus {
 	return ModelStatus{
 		GenericStatus: NewGenericStatus(),
 		ModelId: modelId,
+		client: client,
 	}
 }
 
@@ -118,11 +121,10 @@ func (status ModelStatus) MarshalJSON() ([]byte, error) {
 	})
 }
 
-func UpdateModelStatus(client orchestrator.Client, modelStatus *ModelStatus) error {
-	// TODO: what if the expected job does not exist?
-	jobId := modelStatus.ModelId
-	job := client.GetJob(jobId)
-	status, err := job.Status()
+func (status ModelStatus) update() error {
+	jobId := status.ModelId
+	job := status.client.GetJob(jobId)
+	title, err := job.Status()
 	if err != nil {
 		return err
 	}
@@ -139,21 +141,20 @@ func UpdateModelStatus(client orchestrator.Client, modelStatus *ModelStatus) err
 	}
 
 	// TODO: check presence first
-	modelStatus.statusName = knownStatuses[status]
+	status.statusName = knownStatuses[title]
 
 	return nil
 }
 
-
 type StatusService interface {
 	Set(Status) error
 	Get(id string) (Status, error)
-	Update() Status
 	Delete(id string)
 }
 
 
 type InMemoryStatusService struct {
+	// TODO: lock
 	statuses map[string]Status
 }
 
@@ -173,11 +174,18 @@ func (service *InMemoryStatusService) Get(id string) (Status, error) {
 	if !ok {
 		return nil, fmt.Errorf("Status %s was not found", id)
 	}
-	return status, nil
-}
+	
+	if status.IsFinished() {
+		return status, nil
+	}
 
-func (service *InMemoryStatusService) Update() Status {
-	return GenericStatus{}
+	switch statusCast := status.(type) {
+	case ModelStatus:
+		statusCast.update()
+		status = statusCast
+		service.Set(status)
+	}
+	return status, nil
 }
 
 func (service *InMemoryStatusService) Delete(id string) {
