@@ -8,6 +8,7 @@ import (
 	"github.com/satori/go.uuid"
 
 	"github.com/neuromation/platform-api/api/v1/orchestrator"
+	"github.com/neuromation/platform-api/log"
 )
 
 
@@ -130,6 +131,9 @@ func (status *ModelStatus) update() error {
 
 	// TODO (A Danshyn 04/16/18): must be moved, extract a function
 	knownStatuses := map[string]StatusName{
+		// NOTE: in case the resulting status is an empty or unknown
+		// string, we assume that the status is PENDING
+		"": STATUS_PENDING,
 		"SUCCEEDED": STATUS_SUCCEEDED,
 		"WAITING": STATUS_PENDING,
 		"OVERDUE": STATUS_FAILED,
@@ -139,8 +143,12 @@ func (status *ModelStatus) update() error {
 		"CANCELED": STATUS_FAILED,
 	}
 
-	// TODO (A Danshyn 04/16/18): check presence first
-	status.statusName = knownStatuses[title]
+	newStatusName := knownStatuses[title]
+	log.Infof(
+		"Updating status %s from %s to %s(%s).",
+		status.Id(), status.StatusName(), newStatusName, title)
+
+	status.statusName = newStatusName
 
 	return nil
 }
@@ -165,6 +173,16 @@ func NewInMemoryStatusService() *InMemoryStatusService {
 
 func (service *InMemoryStatusService) Set(status Status) error {
 	service.Lock()
+	if oldStatus, ok := service.statuses[status.Id()]; ok {
+		log.Infof(
+			"Updating status %s from %s to %s",
+			status.Id(), oldStatus.StatusName(),
+			status.StatusName())
+	} else {
+		log.Infof(
+			"Adding new status %s %s",
+			status.Id(), status.StatusName())
+	}
 	service.statuses[status.Id()] = status
 	service.Unlock()
 	return nil
