@@ -23,7 +23,7 @@ jobs:
             make down
             make up
       - run:
-          name: Running backend integration tests
+          name: Running unit and integration tests
           command: |
             trap "go-junit-report <${TEST_RESULTS}/go-test.out > ${TEST_RESULTS}/junit/go-test-report.xml" EXIT
             make go_integration_test | tee ${TEST_RESULTS}/go-test.out;
@@ -36,4 +36,5 @@ workflows:
 
   main:
     jobs:
-      - test
+      - test:
+          context: org-global
