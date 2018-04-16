@@ -47,6 +47,8 @@ func Serve(cfg *config.Config) error {
 	r.GET("/models", listModels)
 	r.POST("/trainings", createTraining(client, statusService))
 	r.GET("/training/:id", viewTraining)
+	r.POST("/models", createTraining(client, statusService))
+	r.GET("/models/:id", viewTraining)
 	r.GET("/status/training/:id", viewTrainingStatus)
 	r.GET("/statuses/:id", handlers.ViewStatus(client, statusService))
 	s := &http.Server{
@@ -95,7 +97,18 @@ func viewTrainingStatus(rw http.ResponseWriter, _ *http.Request, params httprout
 }
 
 func viewTraining(rw http.ResponseWriter, _ *http.Request, params httprouter.Params) {
-	panic("implement me")
+	model := &struct {
+		ModelId string `json:"model_id"`
+	}{
+		ModelId: params.ByName("id"),
+	}
+	payload, err := json.Marshal(model)
+	if err != nil {
+		rw.WriteHeader(http.StatusInternalServerError)
+		return
+	}
+	rw.WriteHeader(http.StatusOK)
+	rw.Write(payload)
 }
 
 var userSpacePath = "./api/v1/testData/userSpace"
@@ -128,7 +141,9 @@ func createTraining(jobClient orchestrator.Client, statusService status.StatusSe
 			return
 		}
 
-		status := status.NewModelStatus(job.GetID(), client)
+		modelId := job.GetID()
+		modelUrl := handlers.GenerateModelURLFromRequest(req, modelId)
+		status := status.NewModelStatus(modelId, modelUrl.String(), client)
 		if err = statusService.Set(status); err != nil {
 			rw.WriteHeader(http.StatusInternalServerError)
 			return

@@ -13,7 +13,7 @@ import (
 )
 
 func ViewStatus(jobClient orchestrator.Client, statusService status.StatusService) httprouter.Handle {
-	return func(rw http.ResponseWriter, _ *http.Request, params httprouter.Params) {
+	return func(rw http.ResponseWriter, req *http.Request, params httprouter.Params) {
 		status, err := statusService.Get(params.ByName("id"))
 		if err != nil {
 			rw.WriteHeader(http.StatusNotFound)
@@ -26,14 +26,13 @@ func ViewStatus(jobClient orchestrator.Client, statusService status.StatusServic
 			return
 		}
 
-		if status.IsSucceeded() && status.IsRedirectionSupported() {
+		if status.IsSucceeded() && status.IsHttpRedirectSupported() {
+			rw.Header().Set("Location", status.HttpRedirectUrl())
 			rw.WriteHeader(http.StatusSeeOther)
-			// TODO: generate a correct URL
-			rw.Header().Set("Location", "http://domain.com")
 		} else {
 			rw.WriteHeader(http.StatusOK)
 		}
-		fmt.Fprint(rw, payload)
+		rw.Write(payload)
 	}
 }
 
