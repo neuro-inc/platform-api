@@ -11,9 +11,7 @@ import (
 	"github.com/neuromation/platform-api/api/v1/client/singularity"
 	"github.com/neuromation/platform-api/api/v1/config"
 	"github.com/neuromation/platform-api/api/v1/container"
-	"github.com/neuromation/platform-api/api/v1/handlers"
 	"github.com/neuromation/platform-api/api/v1/orchestrator"
-	"github.com/neuromation/platform-api/api/v1/status"
 	"github.com/neuromation/platform-api/api/v1/storage"
 	"github.com/neuromation/platform-api/log"
 )
@@ -39,15 +37,12 @@ func Serve(cfg *config.Config) error {
 		return fmt.Errorf("error while initing storage: %s", err)
 	}
 
-	statusService := status.NewStatusService()
-
 	r := httprouter.New()
 	r.GET("/", showHelp)
 	r.GET("/models", listModels)
 	r.POST("/trainings", createTraining)
 	r.GET("/training/:id", viewTraining)
 	r.GET("/status/training/:id", viewTrainingStatus)
-	r.GET("/statuses/:id", handlers.ViewStatus(client, statusService))
 	s := &http.Server{
 		Handler:      r,
 		ReadTimeout:  cfg.ReadTimeout,
