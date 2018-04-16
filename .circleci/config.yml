@@ -15,16 +15,13 @@ jobs:
             make run_api_tests;
             make down;
       - run:
-          name: Running backend integration tests
+          name: Running backend integration tests with coverage
           command: |
             make up;
-            make integration_test;
-            make down;
-      - run:
-          name: code coverage
-          command: |
-            make test_coverage;
+            make test_with_coverage;
             bash <(curl -s https://codecov.io/bash);
+            make down;
+
 workflows:
   version: 2
 
