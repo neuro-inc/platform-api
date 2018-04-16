@@ -200,6 +200,10 @@ func (service *InMemoryStatusService) Get(id string) (Status, error) {
 		return status, nil
 	}
 
+	// NOTE (A Danshyn 04/16/18): the fact that ModelStatus updates itself
+	// during its retrieval is rather an exception which will hold until
+	// the Platform API starts tracking and polling job statuses itself
+	// instead of proxying HTTP requests
 	switch statusCast := status.(type) {
 	case ModelStatus:
 		statusCast.update()
