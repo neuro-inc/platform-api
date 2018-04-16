@@ -18,16 +18,14 @@ const (
 	STATUS_FAILED StatusName = 2
 )
 
-func (name StatusName) String() string {
-	// TODO: move outside
-	// TODO: what happens if there is no such name
-	names := [...]string {
-		"PENDING",
-		"SUCCEEDED",
-		"FAILED",
-	}
+var status_names = map[StatusName]string{
+	STATUS_PENDING: "PENDING",
+	STATUS_SUCCEEDED: "SUCCEEDED",
+	STATUS_FAILED: "FAILED",
+}
 
-	return names[name]
+func (name StatusName) String() string {
+	return status_names[name]
 }
 
 func (name StatusName) MarshalJSON() ([]byte, error) {
@@ -129,7 +127,7 @@ func (status *ModelStatus) update() error {
 		return err
 	}
 
-	// TODO: must be moved
+	// TODO (A Danshyn 04/16/18): must be moved, extract a function
 	knownStatuses := map[string]StatusName{
 		"SUCCEEDED": STATUS_SUCCEEDED,
 		"WAITING": STATUS_PENDING,
@@ -140,7 +138,7 @@ func (status *ModelStatus) update() error {
 		"CANCELED": STATUS_FAILED,
 	}
 
-	// TODO: check presence first
+	// TODO (A Danshyn 04/16/18): check presence first
 	status.statusName = knownStatuses[title]
 
 	return nil
