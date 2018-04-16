@@ -1,0 +1,222 @@
+#%RAML 1.0
+title: platform api
+version: v1
+mediaType: application/json
+protocols:
+  - HTTP
+baseUri: 'api.neuromation.space/docs/{version}'
+types:
+  data_id:
+    example: /some/data
+    description: It is a path for data in a user namespace
+    type: string
+  model_id:
+    example: 938ce093-3e65-467b-ba87-a25cb6c2f30d
+    description: It is an uniq ID of model.
+    type: string
+  inference_id:
+    example: 938ce093-3e65-467b-ba87-a25cb6c2f30d
+    description: It is an uniq ID for inference.
+    type: string
+  container_name:
+    example: 'neuromationorg/pig-generator:v1'
+    description: This is a name of the container you want to run.
+    type: string
+  job_id:
+    description: This is an id of the job. You can use it in different steps.
+    type: string
+  instance_type:
+    type: object
+    properties:
+      cpu:
+        required: false
+        example: 1
+        description: How many CPU to use
+        type: integer
+      ram:
+        required: false
+        example: 6000
+        description: How many RAM to use (in megabytes)
+        type: integer
+      gpu:
+        required: false
+        example: 1
+        description: How many GPU to use.
+        type: integer
+  resources:
+    type: object
+    properties:
+      instances:
+        required: true
+        example: 1
+        description: How many instances we should use
+        type: integer
+      instance_type:
+        required: false
+        description: 'Detailed info about the instance (if not specified, full instance will be used)'
+        type: instance_type
+  logs:
+    example: api.neuromation.io/{type}/938ce093-3e65-467b-ba87-a25cb6c2f30d/logs
+    description: link to the endpoint where you can get logs from your process
+    type: string
+  status:
+    type: object
+    properties:
+      status:
+        required: true
+        example: FINISHED
+        description: 'Default statuses: FINISHED, NOT_EXIST, CANCELED, IN_PROGRESS'
+        type: string
+      logs:
+        required: true
+        type: logs
+        example: api.neuromation.io/models/938ce093-3e65-467b-ba87-a25cb6c2f30d/logs
+      output_path:
+        required: true
+        type: data_id
+/models:
+  post:
+    responses:
+      202:
+        body:
+          application/json:
+            type: object
+            properties:
+              model_id:
+                required: true
+                type: model_id
+    body:
+      application/json:
+        type: object
+        properties:
+          container_name:
+            required: true
+            type: container_name
+          dataset:
+            required: true
+            type: data_id
+          meta:
+            required: false
+            type: object
+            properties:
+              resources:
+                required: false
+                type: resources
+  /{model_id}:
+    get:
+      responses:
+        200:
+          body:
+            application/json:
+              type: object
+              properties:
+                status:
+                  type: status
+    put:
+      responses:
+        200:
+      body:
+        meta:
+          required: true
+          properties:
+            resources:
+              required: true
+              type: resources
+    /status:
+      get:
+        100:
+        303:
+          headers:
+            location:
+              description: link to the model with all info
+              example: /models/{model_id}
+    /logs:
+      get:
+        200:
+          body:
+            application/json:
+              type: object
+              properties:
+                timestamp:
+                  type: string
+                message:
+                  type: string
+/infer:
+  post:
+    responses:
+      202:
+        body:
+          application/json:
+            type: object
+            properties:
+              inference_id:
+                required: true
+                type: inference_id
+    body:
+      application/json:
+        type: object
+        properties:
+          container_name:
+            required: true
+            type: container_name
+          model_id:
+            required: true
+            type: model_id
+          meta:
+            required: false
+            type: object
+            properties:
+              resources:
+                required: false
+                type: resources
+  /{inference_id}:
+    get:
+      responses:
+        200:
+          body:
+            application/json:
+              type: object
+              properties:
+                status:
+                  type: status
+                url:
+                  type: string
+                  description: URL to the inference http service
+    put:
+      responses:
+        200:
+      body:
+        meta:
+          required: true
+          properties:
+            resources:
+              required: true
+              type: resources
+    /status:
+      get:
+        100:
+        303:
+          headers:
+            location:
+              description: link to the current inference
+              example: /infer/{inference_id}
+    /logs:
+      get:
+        responses:
+          200:
+            body:
+              application/json:
+                type: object
+                properties:
+                  timestamp:
+                    type: string
+                  message:
+                    type: string
+          404:
+
+/storage:
+  post:
+  get:
+    responses:
+      200:
+      404:
