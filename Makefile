@@ -53,8 +53,6 @@ ci_run_api_tests_built:
 	    -v ${TEST_RESULTS}:/tmp/test-results platformapi-apitests pytest \
 	    --junitxml=/tmp/test-results/junit/api-tests.xml -vv .
 
-ci_run_api_tests: build_api_tests ci_run_api_tests_built
-
 DOCKER_REGISTRY ?= registry.neuromation.io
 
 _docker_login:
@@ -63,7 +61,10 @@ _docker_login:
 pull_api_test_fixtures: _docker_login
 	docker pull $(DOCKER_REGISTRY)/neuromationorg/platformapi-dummy
 
+prepare_api_tests: pull_api_test_fixtures \
+	build_api run_api_built \
+	build_api_tests
 
-run_api_tests: pull_api_test_fixtures \
-    build_api run_api_built \
-    build_api_tests run_api_tests_built
+run_api_tests: prepare_api_tests run_api_tests_built
+
+ci_run_api_tests: prepare_api_tests ci_run_api_tests_built
