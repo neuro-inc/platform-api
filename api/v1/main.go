@@ -44,13 +44,13 @@ func Serve(cfg *config.Config) error {
 
 	r := httprouter.New()
 	r.GET("/", showHelp)
+
 	r.GET("/models", listModels)
-	r.POST("/trainings", createTraining(client, statusService))
-	r.GET("/training/:id", viewTraining)
 	r.POST("/models", createTraining(client, statusService))
 	r.GET("/models/:id", viewTraining)
-	r.GET("/status/training/:id", viewTrainingStatus)
+
 	r.GET("/statuses/:id", handlers.ViewStatus(client, statusService))
+
 	s := &http.Server{
 		Handler:      r,
 		ReadTimeout:  cfg.ReadTimeout,
@@ -80,20 +80,6 @@ func listModels(rw http.ResponseWriter, _ *http.Request, _ httprouter.Params) {
 		}
 	}
 	fmt.Fprint(rw, "]")
-}
-
-func viewTrainingStatus(rw http.ResponseWriter, _ *http.Request, params httprouter.Params) {
-	job := client.GetJob(params.ByName("id"))
-	if job == nil {
-		respondWithError(rw, fmt.Errorf("unable to find job %q", params.ByName("id")))
-		return
-	}
-	status, err := job.Status()
-	if err != nil {
-		respondWithError(rw, fmt.Errorf("error while getting status for job %q: %s", params.ByName("id"), err))
-		return
-	}
-	respondWith(rw, http.StatusOK, fmt.Sprintf(`{"status": %q}`, status))
 }
 
 func viewTraining(rw http.ResponseWriter, _ *http.Request, params httprouter.Params) {

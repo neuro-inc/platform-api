@@ -364,7 +364,7 @@ class TestTrainingApi:
     def test_docker_image(self, real_api_endpoint):
         api_endpoint = real_api_endpoint
         # TODO: should we have the /api/v1 path prefix?
-        url = f'{api_endpoint}/trainings'
+        url = f'{api_endpoint}/models'
         payload = {
             "code": {
                 "env": {

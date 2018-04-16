@@ -85,7 +85,7 @@ func testTraining(t *testing.T) {
 		t.Fatalf("unable to read fixture: %s", err)
 	}
 	r := bytes.NewReader(reqBody)
-	resp, err := httpClient.Post(testAddr+"/trainings", "application/json", r)
+	resp, err := httpClient.Post(testAddr+"/models", "application/json", r)
 	if err != nil {
 		t.Fatalf("unexpected err: %s", err)
 	}
