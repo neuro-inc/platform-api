@@ -16,3 +16,18 @@
 * Run `make run` command to run application
 
 * Run `make test` command to test application
+
+## build RAML file for api
+
+install api-console
+
+```
+npm install -g api-console-cli
+```
+
+run api-console service
+
+```
+api-console build raml/platform-api.raml
+api-console server build
+```
