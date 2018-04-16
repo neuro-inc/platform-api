@@ -121,7 +121,7 @@ func (status ModelStatus) MarshalJSON() ([]byte, error) {
 	})
 }
 
-func (status ModelStatus) update() error {
+func (status *ModelStatus) update() error {
 	jobId := status.ModelId
 	job := status.client.GetJob(jobId)
 	title, err := job.Status()
