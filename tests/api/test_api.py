@@ -1,6 +1,7 @@
 import enum
 import time
 from typing import NamedTuple, Any
+import unittest.mock
 import uuid
 
 import pytest
@@ -379,4 +380,13 @@ class TestTrainingApi:
             }
         }
         response = requests.post(url, json=payload)
-        assert response.status_code == 200
+        assert response.status_code == 202
+        status_payload = response.json()
+        assert status_payload == {
+            'model_id': unittest.mock.ANY,
+            'status_id': unittest.mock.ANY,
+            'status': 'PENDING',
+        }
+        status_id = status_payload['status_id']
+        expected_location = f'{api_endpoint}/statuses/{status_id}'
+        assert response.headers['Location'] == expected_location
