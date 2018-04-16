@@ -98,9 +98,9 @@ class StatusException(ApiClientException):
 
 
 class StatusName(str, enum.Enum):
-    PENDING = 'pending'
-    SUCCEEDED = 'succeeded'
-    FAILED = 'failed'
+    PENDING = 'PENDING'
+    SUCCEEDED = 'SUCCEEDED'
+    FAILED = 'FAILED'
 
 
 class Status(NamedTuple):
@@ -112,7 +112,7 @@ class Status(NamedTuple):
         assert response.status_code in {200, 303}
         payload = response.json()
         # TODO: check schema
-        id_ = payload['id']
+        id_ = payload['status_id']
         name = StatusName(payload['status'])
         return cls(id=id_, name=name)
 
@@ -143,7 +143,7 @@ class StatusesApiClient:
 
     def get(self, status_id: str):
         url = f'{self._base_url}/{status_id}'
-        response = self._session.get(url)
+        response = self._session.get(url, allow_redirects=False)
         return Status.from_response(response)
 
     # TODO: better defaults (as constants)
@@ -268,16 +268,16 @@ def succeeded_inference(responses, api_endpoint, inference):
 def register_pending_status(responses, api_endpoint, status_id, number=2):
     url = f'{api_endpoint}/statuses/{status_id}'
     responses.add(responses.GET, url=url, status=200, json={
-        'id': status_id, 'status': StatusName.PENDING.value})
+        'status_id': status_id, 'status': StatusName.PENDING.value})
     responses.add(responses.GET, url=url, status=200, json={
-        'id': status_id, 'status': StatusName.PENDING.value})
+        'status_id': status_id, 'status': StatusName.PENDING.value})
 
 
 def register_successfull_status(responses, api_endpoint, status_id):
     # TODO: 303 + Location
     url = f'{api_endpoint}/statuses/{status_id}'
     responses.add(responses.GET, url=url, status=303, json={
-        'id': status_id, 'status': StatusName.SUCCEEDED.value})
+        'status_id': status_id, 'status': StatusName.SUCCEEDED.value})
 
 
 class TestApi:
@@ -328,7 +328,7 @@ class TestStatusesApi:
         status_id = str(uuid.uuid4())
         url = f'{api_endpoint}/statuses/{status_id}'
         responses.add(responses.GET, url=url, status=200, json={
-            'id': status_id, 'status': StatusName.PENDING.value})
+            'status_id': status_id, 'status': StatusName.PENDING.value})
 
         status = api_client.statuses.get(status_id)
         assert status.id == status_id
@@ -390,3 +390,7 @@ class TestTrainingApi:
         status_id = status_payload['status_id']
         expected_location = f'{api_endpoint}/statuses/{status_id}'
         assert response.headers['Location'] == expected_location
+
+        api_client = ApiClient(endpoint=api_endpoint)
+        status = api_client.statuses.wait(status_id, max_attempts=10)
+        assert status.name == StatusName.SUCCEEDED
