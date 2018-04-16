@@ -3,6 +3,7 @@ package status
 import (
 	"encoding/json"
 	"fmt"
+	"sync"
 
 	"github.com/satori/go.uuid"
 
@@ -152,7 +153,7 @@ type StatusService interface {
 
 
 type InMemoryStatusService struct {
-	// TODO: lock
+	sync.RWMutex
 	statuses map[string]Status
 }
 
@@ -163,12 +164,16 @@ func NewInMemoryStatusService() *InMemoryStatusService {
 }
 
 func (service *InMemoryStatusService) Set(status Status) error {
+	service.Lock()
 	service.statuses[status.Id()] = status
+	service.Unlock()
 	return nil
 }
 
 func (service *InMemoryStatusService) Get(id string) (Status, error) {
+	service.RLock()
 	status, ok := service.statuses[id]
+	service.RUnlock()
 	if !ok {
 		return nil, fmt.Errorf("Status %s was not found", id)
 	}
@@ -187,7 +192,9 @@ func (service *InMemoryStatusService) Get(id string) (Status, error) {
 }
 
 func (service *InMemoryStatusService) Delete(id string) {
+	service.Lock()
 	delete(service.statuses, id)
+	service.Unlock()
 }
 
 func NewStatusService() StatusService {
