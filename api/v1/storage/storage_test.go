@@ -8,7 +8,7 @@ import (
 	"testing"
 )
 
-var testDir = "../testData/storage"
+var testDir = "../testdata/storage"
 
 func TestMain(m *testing.M) {
 	testPath := testDir + "/path/to/folder"

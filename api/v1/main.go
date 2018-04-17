@@ -92,7 +92,7 @@ func viewTraining(rw http.ResponseWriter, _ *http.Request, params httprouter.Par
 	panic("implement me")
 }
 
-var userSpacePath = "./api/v1/testData/userSpace"
+var userSpacePath = "./api/v1/testdata/userSpace"
 
 func createTraining(rw http.ResponseWriter, req *http.Request, _ httprouter.Params) {
 	tr := &training{}
