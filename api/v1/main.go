@@ -100,7 +100,7 @@ func viewTraining(rw http.ResponseWriter, _ *http.Request, params httprouter.Par
 var userSpacePath = "./api/v1/testdata/userSpace"
 
 func createTraining(jobClient orchestrator.Client, statusService status.StatusService) httprouter.Handle {
-	return func (rw http.ResponseWriter, req *http.Request, _ httprouter.Params) {
+	return func(rw http.ResponseWriter, req *http.Request, _ httprouter.Params) {
 		tr := &training{}
 		if err := decodeInto(req.Body, tr); err != nil {
 			respondWithError(rw, err)

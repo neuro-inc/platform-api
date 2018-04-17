@@ -28,7 +28,7 @@ func (t *training) UnmarshalJSON(data []byte) error {
 		}
 		v := container.Volume{
 			From: pi.Abs(),
-			To:   "/var/marketplace/" + pi.Relative(),
+			To:   "/var/storage/" + pi.Relative(),
 			Mode: "RO",
 		}
 		t.Container.Volumes = append(t.Container.Volumes, v)

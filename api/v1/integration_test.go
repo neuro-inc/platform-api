@@ -23,7 +23,7 @@ func TestMain(m *testing.M) {
 	if err := os.MkdirAll(testDir+"/userSpace", 0700); err != nil {
 		log.Fatalf("unable to create dir %q: %s", testDir, err)
 	}
-	if err := os.MkdirAll(testDir+"/marketPlace/people/dataset", 0700); err != nil {
+	if err := os.MkdirAll(testDir+"/storage/people/dataset", 0700); err != nil {
 		log.Fatalf("unable to create dir %q: %s", testDir, err)
 	}
 	runAPI()
@@ -42,7 +42,7 @@ func runAPI() {
 	if err != nil {
 		log.Fatalf("error while parsing config: %s", err)
 	}
-	cfg.StorageBasePath = testDir + "/marketPlace"
+	cfg.StorageBasePath = testDir + "/storage"
 	go Serve(cfg)
 
 	maxWait := time.Second * 10

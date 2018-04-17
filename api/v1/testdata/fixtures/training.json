@@ -4,7 +4,7 @@
     "env": {
       "IMAGE_DIR": "/var/user",
       "IMAGE_NUMBER": "5",
-      "COLLECTION_DIR": "/var/marketplace/people"
+      "COLLECTION_DIR": "/var/storage/people"
     },
     "storage": [
        "storage://people/dataset"
