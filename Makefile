@@ -17,7 +17,7 @@ go_integration_test: build
 go_test_coverage: build
 	echo > coverage.txt
 	for d in $(pkgs); do \
-		go test -race -coverprofile=profile.out -covermode=atomic $$d ;\
+		go test -v -race -coverprofile=profile.out -covermode=atomic $$d -tags=integration;\
 		if [ -f profile.out ]; then \
 			cat profile.out >> coverage.txt; \
 			rm profile.out; \
