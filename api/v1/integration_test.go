@@ -16,7 +16,7 @@ import (
 	"github.com/neuromation/platform-api/api/v1/config"
 )
 
-var testDir = "./testData/integrationTest"
+var testDir = "./testdata/integrationTest"
 
 func TestMain(m *testing.M) {
 	userSpacePath = testDir + "/userSpace"
@@ -71,7 +71,7 @@ func testTraining(t *testing.T) {
 		t.Fatalf("userSpace must be empty; got %d files instead", len(files))
 	}
 
-	reqBody, err := ioutil.ReadFile("./testData/fixtures/training.json")
+	reqBody, err := ioutil.ReadFile("./testdata/fixtures/training.json")
 	if err != nil {
 		t.Fatalf("unable to read fixture: %s", err)
 	}
