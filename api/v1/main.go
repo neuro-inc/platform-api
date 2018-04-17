@@ -5,13 +5,11 @@ import (
 	"fmt"
 	"net"
 	"net/http"
-	"path/filepath"
 	"time"
 
 	"github.com/julienschmidt/httprouter"
 	"github.com/neuromation/platform-api/api/v1/client/singularity"
 	"github.com/neuromation/platform-api/api/v1/config"
-	"github.com/neuromation/platform-api/api/v1/container"
 	"github.com/neuromation/platform-api/api/v1/handlers"
 	"github.com/neuromation/platform-api/api/v1/orchestrator"
 	"github.com/neuromation/platform-api/api/v1/status"
@@ -99,6 +97,11 @@ func viewTraining(rw http.ResponseWriter, _ *http.Request, params httprouter.Par
 
 var userSpacePath = "./api/v1/testdata/userSpace"
 
+const (
+	containerUserSpacePath = "/var/user"
+	containerStoragePath   = "/var/storage"
+)
+
 func createTraining(jobClient orchestrator.Client, statusService status.StatusService) httprouter.Handle {
 	return func(rw http.ResponseWriter, req *http.Request, _ httprouter.Params) {
 		tr := &training{}
@@ -109,17 +112,32 @@ func createTraining(jobClient orchestrator.Client, statusService status.StatusSe
 
 		// mount userSpace to `/var/user`
 		// must be retrieved from userInfo in future
-		path, err := filepath.Abs(userSpacePath)
+		us, err := newRWVolume(userSpacePath, containerUserSpacePath)
 		if err != nil {
-			respondWithError(rw, fmt.Errorf("unable to find abs path %q: %s", path, err))
+			respondWithError(rw, err)
 			return
 		}
-		us := container.Volume{
-			From: path,
-			To:   "/var/user",
-			Mode: "RW",
-		}
 		tr.Container.Volumes = append(tr.Container.Volumes, us)
+
+		if len(tr.DatasetStorageURI) > 0 {
+			ds, err := newROVolume(tr.DatasetStorageURI, containerStoragePath)
+			if err != nil {
+				respondWithError(rw, fmt.Errorf("dataset_storage_uri: %s", err))
+				return
+			}
+			tr.Container.Volumes = append(tr.Container.Volumes, ds)
+			tr.Container.Env["PATH_DATASET"] = ds.To
+		}
+
+		if len(tr.ModelStorageURI) > 0 {
+			ms, err := newROVolume(tr.ModelStorageURI, containerStoragePath)
+			if err != nil {
+				respondWithError(rw, fmt.Errorf("model_storage_uri: %s", err))
+				return
+			}
+			tr.Container.Volumes = append(tr.Container.Volumes, ms)
+			tr.Container.Env["PATH_MODEL"] = ms.To
+		}
 
 		job := client.NewJob(tr.Container, tr.Resources)
 		if err := job.Start(); err != nil {

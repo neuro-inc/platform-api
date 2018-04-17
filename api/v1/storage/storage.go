@@ -45,20 +45,36 @@ func (pi PathInfo) Origin() string { return pi.origin }
 
 // Path check passed addr and returns converted
 func Path(src string) (*PathInfo, error) {
+	var (
+		abs  string
+		path string
+		err  error
+	)
+
 	match := pathRegexp.FindAllStringSubmatch(src, -1)
-	if match == nil {
-		return nil, fmt.Errorf("passed path %q has wrong format", src)
+	if match != nil {
+		path = match[0][2]
+		// skip first slash
+		path = path[1:]
+		abs = filepath.Clean(fmt.Sprintf("%s/%s", basePath, path))
+	} else {
+		abs, err = filepath.Abs(src)
+		if err != nil {
+			return nil, err
+		}
+		path, err = filepath.Rel(basePath, abs)
+		if err != nil {
+			return nil, err
+		}
 	}
-	// get only sufficient values
-	path := match[0][2]
-	pi := &PathInfo{
-		abs:      filepath.Clean(fmt.Sprintf("%s/%s", basePath, path)),
+
+	if _, err = os.Stat(abs); err != nil {
+		return nil, fmt.Errorf("unable to access %q: %s", abs, err)
+	}
+
+	return &PathInfo{
+		abs:      abs,
 		relative: filepath.Clean(path),
 		origin:   src,
-	}
-	_, err := os.Stat(pi.Abs())
-	if err != nil {
-		return nil, fmt.Errorf("unable to access %q: %s", pi.abs, err)
-	}
-	return pi, nil
+	}, nil
 }

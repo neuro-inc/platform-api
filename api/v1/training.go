@@ -1,11 +1,7 @@
 package v1
 
 import (
-	"encoding/json"
-	"fmt"
-
 	"github.com/neuromation/platform-api/api/v1/container"
-	"github.com/neuromation/platform-api/api/v1/storage"
 )
 
 type training struct {
@@ -13,25 +9,11 @@ type training struct {
 	Container container.Container `json:"code"`
 	Resources container.Resources `json:"resources"`
 
-	Meta map[string]string `json:"meta,omitempty"`
-}
+	// Storage URI where dataset sits
+	DatasetStorageURI string `json:"dataset_storage_uri,omitempty"`
 
-func (t *training) UnmarshalJSON(data []byte) error {
-	type plain training
-	if err := json.Unmarshal(data, (*plain)(t)); err != nil {
-		return err
-	}
-	for _, s := range t.Container.Storage {
-		pi, err := storage.Path(s)
-		if err != nil {
-			return fmt.Errorf("invalid storage path: %s", err)
-		}
-		v := container.Volume{
-			From: pi.Abs(),
-			To:   "/var/storage/" + pi.Relative(),
-			Mode: "RO",
-		}
-		t.Container.Volumes = append(t.Container.Volumes, v)
-	}
-	return nil
+	// Storage URI where model artifacts should be saved
+	ModelStorageURI string `json:"model_storage_uri,omitempty"`
+
+	Meta map[string]string `json:"meta,omitempty"`
 }

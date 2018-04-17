@@ -40,13 +40,19 @@ func TestPath_Positive(t *testing.T) {
 		{
 			src:  "storage://path/to/folder",
 			abs:  path + "/path/to/folder",
-			rel:  "/path/to/folder",
+			rel:  "path/to/folder",
 			orig: "storage://path/to/folder",
+		},
+		{
+			src:  testDir + "/path/to/folder",
+			abs:  path + "/path/to/folder",
+			rel:  "path/to/folder",
+			orig: testDir + "/path/to/folder",
 		},
 		{
 			src:  "storage://path",
 			abs:  path + "/path",
-			rel:  "/path",
+			rel:  "path",
 			orig: "storage://path",
 		},
 	}
