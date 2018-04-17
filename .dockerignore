@@ -1,0 +1,9 @@
+*
+!api
+# TODO (A Danshyn 04/13/18):
+# we must stop storing test fixtures in the codebase
+api/v1/testData
+!log
+!vendor
+!Gopkg.*
+!**/*.go
