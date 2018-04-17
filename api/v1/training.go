@@ -13,9 +13,6 @@ type training struct {
 	Container container.Container `json:"code"`
 	Resources container.Resources `json:"resources"`
 
-	//ModelWeight string            `json:"model_weight,omitempty"`
-	//ModelName   string            `json:"model_name,omitempty"`
-	//DataID      string            `json:"data_id,omitempty"`
 	Meta map[string]string `json:"meta,omitempty"`
 }
 

@@ -7,10 +7,6 @@ import (
 	"net/http"
 )
 
-func respondWithSuccess(rw http.ResponseWriter, msg string) {
-	respondWith(rw, http.StatusOK, msg)
-}
-
 func respondWithError(rw http.ResponseWriter, err error) {
 	respondWith(rw, http.StatusBadRequest, fmt.Sprintf("error occured: %s", err))
 }
