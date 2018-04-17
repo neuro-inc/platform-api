@@ -49,7 +49,7 @@ run_api_tests_built:
 	    platformapi-apitests pytest -vv .
 
 ci_run_api_tests_built:
-	docker run --rm --link tests_singularity_1 \
+	docker run --rm --link tests_singularity_1 --link platformapi \
 	    -v ${TEST_RESULTS}:/tmp/test-results platformapi-apitests pytest \
 	    --junitxml=/tmp/test-results/junit/api-tests.xml -vv .
 
