@@ -26,8 +26,12 @@ jobs:
           name: Running unit and integration tests
           command: |
             trap "go-junit-report <${TEST_RESULTS}/go-test.out > ${TEST_RESULTS}/junit/go-test-report.xml" EXIT
-            make go_test_with_coverage | tee ${TEST_RESULTS}/go-test.out;
-
+            make go_integration_test | tee ${TEST_RESULTS}/go-test.out;
+      - run:
+          name: tests coverage
+          command: |
+            make go_test_coverage;
+            bash <(curl -s https://codecov.io/bash);
       - store_test_results:
           path: /tmp/test-results
 
