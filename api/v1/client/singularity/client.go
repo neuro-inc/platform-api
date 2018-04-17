@@ -8,6 +8,7 @@ import (
 	"net/url"
 	"strings"
 	"sync"
+	"sync/atomic"
 	"time"
 
 	"github.com/neuromation/platform-api/api/v1/container"
@@ -76,20 +77,23 @@ func (sc *singularityClient) ready() error {
 	return nil
 }
 
+type uniqID uint64
+
+func (uid uniqID) String() string {
+	return fmt.Sprintf("%08X", uint64(uid))
+}
+
+func newUniqID() uniqID {
+	uid := atomic.AddUint64(&nextUniqID, 1)
+	return uniqID(uid)
+}
+
+var nextUniqID = uint64(time.Now().UnixNano())
+
 // TODO: NewJob is the method of singularityClient
 // but actually Job is something different from client.
 func (sc *singularityClient) NewJob(container container.Container, res container.Resources) orchestrator.Job {
-	id := fmt.Sprintf("platform_deploy_%d", time.Now().Nanosecond())
-	var volumes []volume
-	for _, v := range container.Volumes {
-		v := volume{
-			HostPath:      v.From,
-			ContainerPath: v.To,
-			Mode:          v.Mode,
-		}
-		volumes = append(volumes, v)
-	}
-
+	id := fmt.Sprintf("platform_deploy_%d", newUniqID())
 	j := &singularityJob{
 		client: sc,
 		Deploy: deploy{
@@ -99,7 +103,7 @@ func (sc *singularityClient) NewJob(container container.Container, res container
 				Docker: dockerContainer{
 					Image: container.Image,
 				},
-				Volumes: volumes,
+				Volumes: container.Volumes,
 			},
 			Resources:                  res,
 			DeployHealthTimeoutSeconds: 300,
@@ -141,15 +145,12 @@ func (j singularityJob) String() string {
 
 func (j *singularityJob) Start() error {
 	// TODO: must be replaced with smthng rly unique
-	reqID := fmt.Sprintf("platform_request_%d", time.Now().Nanosecond())
+	reqID := fmt.Sprintf("platform_request_%d", newUniqID())
 	if err := j.client.registerRequest(reqID); err != nil {
 		return err
 	}
 	j.Deploy.RequestID = reqID
-	if err := j.client.registerDeploy(reqID, j); err != nil {
-		return err
-	}
-	return nil
+	return j.client.registerDeploy(reqID, j)
 }
 
 func (j *singularityJob) Stop() error {

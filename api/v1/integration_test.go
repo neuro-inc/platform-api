@@ -58,10 +58,10 @@ func runAPI() {
 }
 
 func TestServe(t *testing.T) {
-	testTraining(t)
+	testCreateModel(t)
 }
 
-func testTraining(t *testing.T) {
+func testCreateModel(t *testing.T) {
 	taskResultsDir := testDir + "/userSpace"
 	files, err := ioutil.ReadDir(taskResultsDir)
 	if err != nil {
@@ -71,28 +71,28 @@ func testTraining(t *testing.T) {
 		t.Fatalf("userSpace must be empty; got %d files instead", len(files))
 	}
 
-	reqBody, err := ioutil.ReadFile("./testData/fixtures/training.json")
+	reqBody, err := ioutil.ReadFile("./testData/fixtures/model.json")
 	if err != nil {
 		t.Fatalf("unable to read fixture: %s", err)
 	}
 	r := bytes.NewReader(reqBody)
-	resp, err := http.Post(testAddr+"/trainings", "application/json", r)
+	resp, err := http.Post(testAddr+"/models", "application/json", r)
 	if err != nil {
 		t.Fatalf("unexpected err: %s", err)
 	}
-	if resp.StatusCode > 299 {
+	if resp.StatusCode != http.StatusAccepted {
 		responseBody, _ := ioutil.ReadAll(resp.Body)
 		t.Fatalf("unexpceted status code received: %d; Response body: %s", resp.StatusCode, string(responseBody))
 	}
 	job := &struct {
-		ID string `json:"job_id"`
+		ID string `json:"model_id"`
 	}{}
 	if err := decodeInto(resp.Body, job); err != nil {
 		t.Fatalf("unexpected error while decoding response body: %s", err)
 	}
 
 	checkState := func() bool {
-		addr := fmt.Sprintf(testAddr+"/status/training/%s", job.ID)
+		addr := fmt.Sprintf(testAddr+"/status/model/%s", job.ID)
 		resp, err := http.Get(addr)
 		if err != nil {
 			t.Fatalf("fail to get request state: %s", err)
@@ -120,5 +120,5 @@ func testTraining(t *testing.T) {
 			return
 		}
 	}
-	t.Fatalf("train job doesn't finished for %v", maxWait)
+	t.Fatalf("model job doesn't finished for %v", maxWait)
 }

@@ -39,10 +39,8 @@ func Serve(cfg *config.Config) error {
 
 	r := httprouter.New()
 	r.GET("/", showHelp)
-	r.GET("/models", listModels)
-	r.POST("/trainings", createTraining)
-	r.GET("/training/:id", viewTraining)
-	r.GET("/status/training/:id", viewTrainingStatus)
+	r.POST("/models", createModel)
+	r.GET("/status/model/:id", viewModelStatus)
 	s := &http.Server{
 		Handler:      r,
 		ReadTimeout:  cfg.ReadTimeout,
@@ -55,70 +53,80 @@ func Serve(cfg *config.Config) error {
 
 func showHelp(rw http.ResponseWriter, _ *http.Request, _ httprouter.Params) {
 	fmt.Fprintln(rw, "Available endpoints:")
-	fmt.Fprintln(rw, "GET /models")
-	fmt.Fprintln(rw, "POST /trainings")
-	fmt.Fprintln(rw, "GET /trainings/%id")
-	fmt.Fprintln(rw, "GET /status/training/:id")
+	fmt.Fprintln(rw, "POST /models")
+	fmt.Fprintln(rw, "GET /status/model/:id")
 }
 
-func listModels(rw http.ResponseWriter, _ *http.Request, _ httprouter.Params) {
-	fmt.Fprint(rw, "[")
-	var i int
-	for _, v := range modelRegistry {
-		i++
-		fmt.Fprint(rw, v)
-		if i < len(modelRegistry)-1 {
-			fmt.Fprint(rw, ",")
-		}
-	}
-	fmt.Fprint(rw, "]")
-}
-
-func viewTrainingStatus(rw http.ResponseWriter, _ *http.Request, params httprouter.Params) {
+func viewModelStatus(rw http.ResponseWriter, _ *http.Request, params httprouter.Params) {
 	job := client.GetJob(params.ByName("id"))
 	if job == nil {
-		respondWithError(rw, fmt.Errorf("unable to find job %q", params.ByName("id")))
+		respondWithError(rw, fmt.Errorf("unable to find model %q", params.ByName("id")))
 		return
 	}
 	status, err := job.Status()
 	if err != nil {
-		respondWithError(rw, fmt.Errorf("error while getting status for job %q: %s", params.ByName("id"), err))
+		respondWithError(rw, fmt.Errorf("error while getting status for model %q: %s", params.ByName("id"), err))
 		return
 	}
 	respondWith(rw, http.StatusOK, fmt.Sprintf(`{"status": %q}`, status))
 }
 
-func viewTraining(rw http.ResponseWriter, _ *http.Request, params httprouter.Params) {
-	panic("implement me")
-}
-
-var userSpacePath = "./api/v1/testData/userSpace"
-
-func createTraining(rw http.ResponseWriter, req *http.Request, _ httprouter.Params) {
-	tr := &training{}
-	if err := decodeInto(req.Body, tr); err != nil {
+func createModel(rw http.ResponseWriter, req *http.Request, _ httprouter.Params) {
+	m := &model{}
+	if err := decodeInto(req.Body, m); err != nil {
 		respondWithError(rw, err)
 		return
 	}
 
-	// mount userSpace to `/var/user`
-	// must be retrieved from userInfo in future
-	path, err := filepath.Abs(userSpacePath)
+	c := container.Container{
+		Image: m.Image,
+		Env:   m.Meta.Env,
+	}
+	// mount user default volume
+	v, err := getUserVolume()
 	if err != nil {
-		respondWithError(rw, fmt.Errorf("unable to find abs path %q: %s", path, err))
+		respondWithError(rw, fmt.Errorf("error while getting user volume: %s", err))
 		return
 	}
-	us := container.Volume{
-		From: path,
-		To:   "/var/user",
-		Mode: "RW",
-	}
-	tr.Container.Volumes = append(tr.Container.Volumes, us)
+	c.Volumes = append(c.Volumes, v)
 
-	job := client.NewJob(tr.Container, tr.Resources)
+	for _, s := range m.Storage {
+		pi, err := storage.Path(s)
+		if err != nil {
+			respondWithError(rw, fmt.Errorf("invalid storage path: %s", err))
+			return
+		}
+		v := &container.Volume{
+			HostPath:      pi.Abs(),
+			ContainerPath: "/var/marketplace/" + pi.Relative(),
+			Mode:          "RO",
+		}
+		c.Volumes = append(c.Volumes, v)
+	}
+
+	r := make(container.Resources)
+	r["cpus"] = float64(m.Meta.Resources.Cpus)
+	r["memoryMb"] = float64(m.Meta.Resources.MemoryMB)
+
+	job := client.NewJob(c, r)
 	if err := job.Start(); err != nil {
 		respondWithError(rw, fmt.Errorf("error while creating training: %s", err))
 		return
 	}
-	respondWithSuccess(rw, fmt.Sprintf("{\"job_id\": %q}", job.GetID()))
+	respondWith(rw, http.StatusAccepted, fmt.Sprintf("{\"model_id\": %q}", job.GetID()))
+}
+
+// TODO: must be retrieved from user's prfoile in future
+var userSpacePath = "./api/v1/testData/userSpace"
+
+func getUserVolume() (*container.Volume, error) {
+	path, err := filepath.Abs(userSpacePath)
+	if err != nil {
+		return nil, err
+	}
+	return &container.Volume{
+		HostPath:      path,
+		ContainerPath: "/var/user",
+		Mode:          "RW",
+	}, nil
 }
