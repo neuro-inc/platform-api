@@ -49,7 +49,7 @@ func Serve(cfg *config.Config) error {
 	r.POST("/models", createTraining(client, statusService))
 	r.GET("/models/:id", viewTraining)
 
-	r.GET("/statuses/:id", handlers.ViewStatus(client, statusService))
+	r.GET("/statuses/:id", handlers.ViewStatus(statusService))
 
 	s := &http.Server{
 		Handler:      r,

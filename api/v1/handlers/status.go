@@ -8,11 +8,10 @@ import (
 
 	"github.com/julienschmidt/httprouter"
 
-	"github.com/neuromation/platform-api/api/v1/orchestrator"
 	"github.com/neuromation/platform-api/api/v1/status"
 )
 
-func ViewStatus(jobClient orchestrator.Client, statusService status.StatusService) httprouter.Handle {
+func ViewStatus(statusService status.StatusService) httprouter.Handle {
 	return func(rw http.ResponseWriter, req *http.Request, params httprouter.Params) {
 		status, err := statusService.Get(params.ByName("id"))
 		if err != nil {
