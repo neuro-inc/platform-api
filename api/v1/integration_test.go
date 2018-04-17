@@ -16,7 +16,7 @@ import (
 	"github.com/neuromation/platform-api/api/v1/config"
 )
 
-var testDir = "./testdata/integrationTest"
+const testDir = "./testdata/integrationTest"
 
 func TestMain(m *testing.M) {
 	userSpacePath = testDir + "/userSpace"
