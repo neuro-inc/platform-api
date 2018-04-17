@@ -1,6 +1,7 @@
 package v1
 
 import (
+	"encoding/json"
 	"fmt"
 	"net"
 	"net/http"
@@ -11,7 +12,9 @@ import (
 	"github.com/neuromation/platform-api/api/v1/client/singularity"
 	"github.com/neuromation/platform-api/api/v1/config"
 	"github.com/neuromation/platform-api/api/v1/container"
+	"github.com/neuromation/platform-api/api/v1/handlers"
 	"github.com/neuromation/platform-api/api/v1/orchestrator"
+	"github.com/neuromation/platform-api/api/v1/status"
 	"github.com/neuromation/platform-api/api/v1/storage"
 	"github.com/neuromation/platform-api/log"
 )
@@ -37,12 +40,17 @@ func Serve(cfg *config.Config) error {
 		return fmt.Errorf("error while initing storage: %s", err)
 	}
 
+	statusService := status.NewStatusService()
+
 	r := httprouter.New()
 	r.GET("/", showHelp)
+
 	r.GET("/models", listModels)
-	r.POST("/trainings", createTraining)
-	r.GET("/training/:id", viewTraining)
-	r.GET("/status/training/:id", viewTrainingStatus)
+	r.POST("/models", createTraining(client, statusService))
+	r.GET("/models/:id", viewTraining)
+
+	r.GET("/statuses/:id", handlers.ViewStatus(statusService))
+
 	s := &http.Server{
 		Handler:      r,
 		ReadTimeout:  cfg.ReadTimeout,
@@ -74,51 +82,69 @@ func listModels(rw http.ResponseWriter, _ *http.Request, _ httprouter.Params) {
 	fmt.Fprint(rw, "]")
 }
 
-func viewTrainingStatus(rw http.ResponseWriter, _ *http.Request, params httprouter.Params) {
-	job := client.GetJob(params.ByName("id"))
-	if job == nil {
-		respondWithError(rw, fmt.Errorf("unable to find job %q", params.ByName("id")))
-		return
-	}
-	status, err := job.Status()
-	if err != nil {
-		respondWithError(rw, fmt.Errorf("error while getting status for job %q: %s", params.ByName("id"), err))
-		return
-	}
-	respondWith(rw, http.StatusOK, fmt.Sprintf(`{"status": %q}`, status))
-}
-
 func viewTraining(rw http.ResponseWriter, _ *http.Request, params httprouter.Params) {
-	panic("implement me")
+	model := &struct {
+		ModelId string `json:"model_id"`
+	}{
+		ModelId: params.ByName("id"),
+	}
+	payload, err := json.Marshal(model)
+	if err != nil {
+		rw.WriteHeader(http.StatusInternalServerError)
+		return
+	}
+	rw.WriteHeader(http.StatusOK)
+	rw.Write(payload)
 }
 
 var userSpacePath = "./api/v1/testData/userSpace"
 
-func createTraining(rw http.ResponseWriter, req *http.Request, _ httprouter.Params) {
-	tr := &training{}
-	if err := decodeInto(req.Body, tr); err != nil {
-		respondWithError(rw, err)
-		return
-	}
+func createTraining(jobClient orchestrator.Client, statusService status.StatusService) httprouter.Handle {
+	return func (rw http.ResponseWriter, req *http.Request, _ httprouter.Params) {
+		tr := &training{}
+		if err := decodeInto(req.Body, tr); err != nil {
+			respondWithError(rw, err)
+			return
+		}
 
-	// mount userSpace to `/var/user`
-	// must be retrieved from userInfo in future
-	path, err := filepath.Abs(userSpacePath)
-	if err != nil {
-		respondWithError(rw, fmt.Errorf("unable to find abs path %q: %s", path, err))
-		return
-	}
-	us := container.Volume{
-		From: path,
-		To:   "/var/user",
-		Mode: "RW",
-	}
-	tr.Container.Volumes = append(tr.Container.Volumes, us)
+		// mount userSpace to `/var/user`
+		// must be retrieved from userInfo in future
+		path, err := filepath.Abs(userSpacePath)
+		if err != nil {
+			respondWithError(rw, fmt.Errorf("unable to find abs path %q: %s", path, err))
+			return
+		}
+		us := container.Volume{
+			From: path,
+			To:   "/var/user",
+			Mode: "RW",
+		}
+		tr.Container.Volumes = append(tr.Container.Volumes, us)
 
-	job := client.NewJob(tr.Container, tr.Resources)
-	if err := job.Start(); err != nil {
-		respondWithError(rw, fmt.Errorf("error while creating training: %s", err))
-		return
+		job := client.NewJob(tr.Container, tr.Resources)
+		if err := job.Start(); err != nil {
+			respondWithError(rw, fmt.Errorf("error while creating training: %s", err))
+			return
+		}
+
+		modelId := job.GetID()
+		modelUrl := handlers.GenerateModelURLFromRequest(req, modelId)
+		status := status.NewModelStatus(modelId, modelUrl.String(), client)
+		if err = statusService.Set(status); err != nil {
+			rw.WriteHeader(http.StatusInternalServerError)
+			return
+		}
+
+		payload, err := json.Marshal(status)
+		if err != nil {
+			rw.WriteHeader(http.StatusInternalServerError)
+			return
+		}
+
+		location := handlers.GenerateStatusURLFromRequest(req, status.Id())
+		rw.Header().Set("Location", location.String())
+		rw.Header().Set("Content-Type", "application/json")
+		rw.WriteHeader(http.StatusAccepted)
+		rw.Write(payload)
 	}
-	respondWithSuccess(rw, fmt.Sprintf("{\"job_id\": %q}", job.GetID()))
 }

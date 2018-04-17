@@ -35,7 +35,7 @@ func TestModelStatusUpdate(t *testing.T) {
 		t.Fatalf("error while starting job: %s", err)
 	}
 
-	status := NewModelStatus(j.GetID(), c)
+	status := NewModelStatus(j.GetID(), "", c)
 	maxWait := time.Second * 5
 	done := time.Now().Add(maxWait)
 	for time.Now().Before(done) {

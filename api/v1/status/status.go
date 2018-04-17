@@ -37,7 +37,8 @@ func (name StatusName) MarshalJSON() ([]byte, error) {
 type Status interface {
 	Id() string
 	StatusName() StatusName
-	IsRedirectionSupported() bool
+	IsHttpRedirectSupported() bool
+	HttpRedirectUrl() string
 	IsSucceeded() bool
 	IsFailed() bool
 	IsFinished() bool
@@ -46,13 +47,19 @@ type Status interface {
 type GenericStatus struct {
 	id string
 	statusName StatusName
+	httpRedirectUrl string
 }
 
 func NewGenericStatus() GenericStatus {
+	return NewGenericStatusWithHttpRedirectUrl("")
+}
+
+func NewGenericStatusWithHttpRedirectUrl(url string) GenericStatus {
 	id := uuid.NewV4().String()
 	status := GenericStatus{
 		id: id,
 		statusName: STATUS_PENDING,
+		httpRedirectUrl: url,
 	}
 	return status
 }
@@ -65,8 +72,12 @@ func (status GenericStatus) StatusName() StatusName {
 	return status.statusName
 }
 
-func (status GenericStatus) IsRedirectionSupported() bool {
+func (status GenericStatus) IsHttpRedirectSupported() bool {
 	return false
+}
+
+func (status GenericStatus) HttpRedirectUrl() string {
+	return status.httpRedirectUrl
 }
 
 func (status GenericStatus) IsSucceeded() bool {
@@ -101,15 +112,15 @@ type ModelStatus struct {
 	client orchestrator.Client
 }
 
-func NewModelStatus(modelId string, client orchestrator.Client) ModelStatus {
+func NewModelStatus(modelId string, modelUrl string, client orchestrator.Client) ModelStatus {
 	return ModelStatus{
-		GenericStatus: NewGenericStatus(),
+		GenericStatus: NewGenericStatusWithHttpRedirectUrl(modelUrl),
 		ModelId: modelId,
 		client: client,
 	}
 }
 
-func (status ModelStatus) IsRedirectionSupported() bool {
+func (status ModelStatus) IsHttpRedirectSupported() bool {
 	return true
 }
 

@@ -61,7 +61,16 @@ func TestServe(t *testing.T) {
 	testTraining(t)
 }
 
+func NewHttpClient() *http.Client {
+	return &http.Client{
+		CheckRedirect: func(_ *http.Request, _ []*http.Request) error {
+			return http.ErrUseLastResponse
+		},
+	}
+}
+
 func testTraining(t *testing.T) {
+	httpClient := NewHttpClient()
 	taskResultsDir := testDir + "/userSpace"
 	files, err := ioutil.ReadDir(taskResultsDir)
 	if err != nil {
@@ -76,7 +85,7 @@ func testTraining(t *testing.T) {
 		t.Fatalf("unable to read fixture: %s", err)
 	}
 	r := bytes.NewReader(reqBody)
-	resp, err := http.Post(testAddr+"/trainings", "application/json", r)
+	resp, err := httpClient.Post(testAddr+"/models", "application/json", r)
 	if err != nil {
 		t.Fatalf("unexpected err: %s", err)
 	}
@@ -85,15 +94,15 @@ func testTraining(t *testing.T) {
 		t.Fatalf("unexpceted status code received: %d; Response body: %s", resp.StatusCode, string(responseBody))
 	}
 	job := &struct {
-		ID string `json:"job_id"`
+		ID string `json:"status_id"`
 	}{}
 	if err := decodeInto(resp.Body, job); err != nil {
 		t.Fatalf("unexpected error while decoding response body: %s", err)
 	}
 
 	checkState := func() bool {
-		addr := fmt.Sprintf(testAddr+"/status/training/%s", job.ID)
-		resp, err := http.Get(addr)
+		addr := fmt.Sprintf(testAddr+"/statuses/%s", job.ID)
+		resp, err := httpClient.Get(addr)
 		if err != nil {
 			t.Fatalf("fail to get request state: %s", err)
 		}
