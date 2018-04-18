@@ -33,6 +33,11 @@ func TestModel_UnmarshalJSON_Negative(t *testing.T) {
 			"./testdata/fixtures/bad.model.result.json",
 			"invalid path",
 		},
+		{
+			"no cpus resource",
+			"./testdata/fixtures/bad.model.resource.json",
+			"cpus param must be set",
+		},
 	}
 
 	for _, tc := range testCases {

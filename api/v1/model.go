@@ -27,6 +27,23 @@ func (m *model) UnmarshalJSON(data []byte) error {
 	if err := json.Unmarshal(data, (*plain)(m)); err != nil {
 		return err
 	}
+
+	if len(m.Resources) == 0 {
+		return fmt.Errorf("resources must be set")
+	}
+
+	if _, ok := m.Resources["cpus"]; !ok {
+		return fmt.Errorf("resources.cpus param must be set")
+	}
+
+	if _, ok := m.Resources["memoryMb"]; !ok {
+		return fmt.Errorf("resources.memoryMb param must be set")
+	}
+
+	if len(m.Container.Env) == 0 {
+		m.Container.Env = make(map[string]string)
+	}
+
 	if len(m.DatasetStorageURI.From) > 0 {
 		v := container.Volume(m.DatasetStorageURI)
 		m.Container.Volumes = append(m.Container.Volumes, &v)
