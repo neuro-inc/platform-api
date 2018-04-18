@@ -18,5 +18,5 @@ type Config struct {
 	IdleTimeout  time.Duration `default:"10m"`
 
 	// StorageBasePath is the parent path for all `storage` mounts
-	StorageBasePath string `default:"./api/v1/testdata/storage"`
+	StorageBasePath string
 }
