@@ -8,7 +8,7 @@ build:
 	go build
 
 test: build
-	go test -v -race $(pkgs)
+	go test -v -race -cover $(pkgs)
 
 go_integration_test: build
 	go test -v -race $(pkgs) -tags=integration

@@ -2,6 +2,7 @@ package storage
 
 import (
 	"fmt"
+	"github.com/neuromation/platform-api/log"
 	"os"
 	"path/filepath"
 	"regexp"
@@ -45,6 +46,10 @@ func (pi PathInfo) Origin() string { return pi.origin }
 
 // Path check passed addr and returns converted
 func Path(src string) (*PathInfo, error) {
+	if len(basePath) == 0 {
+		log.Fatalf("BUG: forgot to call Init ?")
+	}
+
 	var (
 		abs  string
 		path string

@@ -42,11 +42,8 @@ func Serve(cfg *config.Config) error {
 
 	r := httprouter.New()
 	r.GET("/", showHelp)
-
-	r.GET("/models", listModels)
-	r.POST("/models", createTraining(client, statusService))
+	r.POST("/models", createModel(client, statusService))
 	r.GET("/models/:id", viewTraining)
-
 	r.GET("/statuses/:id", handlers.ViewStatus(statusService))
 
 	s := &http.Server{
@@ -61,23 +58,9 @@ func Serve(cfg *config.Config) error {
 
 func showHelp(rw http.ResponseWriter, _ *http.Request, _ httprouter.Params) {
 	fmt.Fprintln(rw, "Available endpoints:")
-	fmt.Fprintln(rw, "GET /models")
-	fmt.Fprintln(rw, "POST /trainings")
-	fmt.Fprintln(rw, "GET /trainings/%id")
-	fmt.Fprintln(rw, "GET /status/training/:id")
-}
-
-func listModels(rw http.ResponseWriter, _ *http.Request, _ httprouter.Params) {
-	fmt.Fprint(rw, "[")
-	var i int
-	for _, v := range modelRegistry {
-		i++
-		fmt.Fprint(rw, v)
-		if i < len(modelRegistry)-1 {
-			fmt.Fprint(rw, ",")
-		}
-	}
-	fmt.Fprint(rw, "]")
+	fmt.Fprintln(rw, "POST /models")
+	fmt.Fprintln(rw, "GET /models/%id")
+	fmt.Fprintln(rw, "GET /statuses/:id")
 }
 
 func viewTraining(rw http.ResponseWriter, _ *http.Request, params httprouter.Params) {
@@ -95,51 +78,15 @@ func viewTraining(rw http.ResponseWriter, _ *http.Request, params httprouter.Par
 	rw.Write(payload)
 }
 
-var userSpacePath = "./api/v1/testdata/userSpace"
-
-const (
-	containerUserSpacePath = "/var/user"
-	containerStoragePath   = "/var/storage"
-)
-
-func createTraining(jobClient orchestrator.Client, statusService status.StatusService) httprouter.Handle {
+func createModel(jobClient orchestrator.Client, statusService status.StatusService) httprouter.Handle {
 	return func(rw http.ResponseWriter, req *http.Request, _ httprouter.Params) {
-		tr := &training{}
-		if err := decodeInto(req.Body, tr); err != nil {
+		m := &model{}
+		if err := decodeInto(req.Body, m); err != nil {
 			respondWithError(rw, err)
 			return
 		}
 
-		// mount userSpace to `/var/user`
-		// must be retrieved from userInfo in future
-		us, err := newRWVolume(userSpacePath, containerUserSpacePath)
-		if err != nil {
-			respondWithError(rw, err)
-			return
-		}
-		tr.Container.Volumes = append(tr.Container.Volumes, us)
-
-		if len(tr.DatasetStorageURI) > 0 {
-			ds, err := newROVolume(tr.DatasetStorageURI, containerStoragePath)
-			if err != nil {
-				respondWithError(rw, fmt.Errorf("dataset_storage_uri: %s", err))
-				return
-			}
-			tr.Container.Volumes = append(tr.Container.Volumes, ds)
-			tr.Container.Env["PATH_DATASET"] = ds.To
-		}
-
-		if len(tr.ModelStorageURI) > 0 {
-			ms, err := newROVolume(tr.ModelStorageURI, containerStoragePath)
-			if err != nil {
-				respondWithError(rw, fmt.Errorf("model_storage_uri: %s", err))
-				return
-			}
-			tr.Container.Volumes = append(tr.Container.Volumes, ms)
-			tr.Container.Env["PATH_MODEL"] = ms.To
-		}
-
-		job := client.NewJob(tr.Container, tr.Resources)
+		job := client.NewJob(m.Container, m.Resources)
 		if err := job.Start(); err != nil {
 			respondWithError(rw, fmt.Errorf("error while creating training: %s", err))
 			return
@@ -148,7 +95,7 @@ func createTraining(jobClient orchestrator.Client, statusService status.StatusSe
 		modelId := job.GetID()
 		modelUrl := handlers.GenerateModelURLFromRequest(req, modelId)
 		status := status.NewModelStatus(modelId, modelUrl.String(), client)
-		if err = statusService.Set(status); err != nil {
+		if err := statusService.Set(status); err != nil {
 			rw.WriteHeader(http.StatusInternalServerError)
 			return
 		}

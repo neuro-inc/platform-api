@@ -5,9 +5,6 @@ import (
 	"fmt"
 	"io"
 	"net/http"
-
-	"github.com/neuromation/platform-api/api/v1/container"
-	"github.com/neuromation/platform-api/api/v1/storage"
 )
 
 func respondWithError(rw http.ResponseWriter, err error) {
@@ -27,22 +24,4 @@ func decodeInto(rc io.ReadCloser, v interface{}) error {
 	}
 	rc.Close()
 	return nil
-}
-
-func newROVolume(from, to string) (*container.Volume, error) {
-	return newVolume(from, to, "RO")
-}
-func newRWVolume(from, to string) (*container.Volume, error) {
-	return newVolume(from, to, "RW")
-}
-func newVolume(from, to, mode string) (*container.Volume, error) {
-	pi, err := storage.Path(from)
-	if err != nil {
-		return nil, fmt.Errorf("invalid path %q: %s", from, err)
-	}
-	return &container.Volume{
-		From: pi.Abs(),
-		To:   to + pi.Relative(),
-		Mode: mode,
-	}, nil
 }

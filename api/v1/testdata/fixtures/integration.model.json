@@ -7,7 +7,7 @@
     }
   },
   "dataset_storage_uri": "storage://people/dataset",
-  "model_storage_uri":"./testdata/userSpace/dummy",
+  "result_storage_uri":"./testdata/temp/userSpace",
   "resources": {
     "cpus": 1,
     "memoryMb": 64
