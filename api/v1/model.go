@@ -16,7 +16,7 @@ type model struct {
 	// Storage URI where dataset sits
 	DatasetStorageURI volumeRO `json:"dataset_storage_uri,omitempty"`
 
-	// Storage URI where  artifacts should be saved
+	// Storage URI where artifacts should be saved
 	ResultStorageURI volumeRW `json:"result_storage_uri,omitempty"`
 
 	Meta map[string]string `json:"meta,omitempty"`
@@ -47,18 +47,17 @@ func (m *model) UnmarshalJSON(data []byte) error {
 	if len(m.DatasetStorageURI.From) > 0 {
 		v := container.Volume(m.DatasetStorageURI)
 		m.Container.Volumes = append(m.Container.Volumes, &v)
-		m.Container.Env["PATH_DATASET"] = m.DatasetStorageURI.To
+		env := envName("PATH_DATASET")
+		m.Container.Env[env] = m.DatasetStorageURI.To
 	}
 	if len(m.ResultStorageURI.From) > 0 {
 		v := container.Volume(m.ResultStorageURI)
 		m.Container.Volumes = append(m.Container.Volumes, &v)
-		m.Container.Env["PATH_RESULT"] = m.ResultStorageURI.To
+		env := envName("PATH_RESULT")
+		m.Container.Env[env] = m.ResultStorageURI.To
 	}
 	return nil
 }
-
-// default path in container where to mount external data
-const containerStoragePath = "/var/storage"
 
 type volumeRO container.Volume
 

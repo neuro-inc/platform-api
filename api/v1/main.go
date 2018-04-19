@@ -17,8 +17,14 @@ import (
 	"github.com/neuromation/platform-api/log"
 )
 
-// client - shared instance of orchestrator client
-var client orchestrator.Client
+var (
+	// client - shared instance of orchestrator client
+	client orchestrator.Client
+
+	envPrefix string
+
+	containerStoragePath string
+)
 
 // Serve starts serving web-server for accepting requests
 func Serve(cfg *config.Config) error {
@@ -37,6 +43,9 @@ func Serve(cfg *config.Config) error {
 	if err := storage.Init(cfg.StorageBasePath); err != nil {
 		return fmt.Errorf("error while initing storage: %s", err)
 	}
+
+	envPrefix = cfg.EnvPrefix
+	containerStoragePath = cfg.ContainerStoragePath
 
 	statusService := status.NewStatusService()
 
@@ -112,4 +121,11 @@ func createModel(jobClient orchestrator.Client, statusService status.StatusServi
 		rw.WriteHeader(http.StatusAccepted)
 		rw.Write(payload)
 	}
+}
+
+func envName(name string) string {
+	if len(envPrefix) == 0 {
+		return name
+	}
+	return fmt.Sprintf("%s_%s", envPrefix, name)
 }

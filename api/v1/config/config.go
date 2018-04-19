@@ -19,4 +19,10 @@ type Config struct {
 
 	// StorageBasePath is the parent path for all `storage` mounts
 	StorageBasePath string
+
+	// ContainerStoragePath is a path in the container where to mount external storage links
+	ContainerStoragePath string `default:"/var/storage"`
+
+	// EnvPrefix contains a prefix for environment variable names
+	EnvPrefix string
 }

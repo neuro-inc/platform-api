@@ -63,6 +63,10 @@ func TestModel_UnmarshalJSON_Positive(t *testing.T) {
 		t.Fatalf("error while initing storage: %s", err)
 	}
 
+	// override envPrefix for testing purpose
+	envPrefix = "NP"
+	containerStoragePath = "/var/storage"
+
 	goodSrc := "./testdata/fixtures/good.model.json"
 	raw, err := ioutil.ReadFile(goodSrc)
 	if err != nil {
@@ -77,11 +81,10 @@ func TestModel_UnmarshalJSON_Positive(t *testing.T) {
 	if model.Container.Image != "hello-world" {
 		t.Fatalf("wrong image %q; expected to have %q", model.Container.Image, "hello-world")
 	}
-
 	expectedEnv := map[string]string{
-		"FOO":          "BAR",
-		"PATH_DATASET": "/var/storage/fixtures",
-		"PATH_RESULT":  "/var/storage/fixtures",
+		"FOO":             "BAR",
+		"NP_PATH_DATASET": "/var/storage/fixtures",
+		"NP_PATH_RESULT":  "/var/storage/fixtures",
 	}
 	for expK, expV := range expectedEnv {
 		v, ok := model.Container.Env[expK]
