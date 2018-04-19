@@ -168,7 +168,11 @@ func (ss *InMemoryStatusService) Get(id string) (Status, error) {
 	// the Platform API starts tracking and polling job statuses itself
 	// instead of proxying HTTP requests
 	switch statusCast := status.(type) {
-	case ModelStatus:
+	case *ModelStatus:
+		statusCast.update()
+		status = statusCast
+		ss.Set(status)
+	case *BatchInferenceStatus:
 		statusCast.update()
 		status = statusCast
 		ss.Set(status)

@@ -27,7 +27,6 @@ func TestMain(m *testing.M) {
 	if err := os.MkdirAll(testDir+"/storage/people/dataset", 0700); err != nil {
 		log.Fatalf("unable to create dir %q: %s", testDir, err)
 	}
-	runAPI()
 	retCode := m.Run()
 	if err := os.RemoveAll(testDir); err != nil {
 		log.Fatalf("cannot remove %q: %s", testDir, err)
@@ -59,6 +58,7 @@ func runAPI() {
 }
 
 func TestServe_Integration(t *testing.T) {
+	runAPI()
 	httpClient := newHttpClient()
 	taskResultsDir := testDir + "/userSpace"
 	files, err := ioutil.ReadDir(taskResultsDir)
@@ -82,15 +82,15 @@ func TestServe_Integration(t *testing.T) {
 		responseBody, _ := ioutil.ReadAll(resp.Body)
 		t.Fatalf("unexpceted status code received: %d; Response body: %s", resp.StatusCode, string(responseBody))
 	}
-	job := &struct {
+	status := &struct {
 		ID string `json:"status_id"`
 	}{}
-	if err := decodeInto(resp.Body, job); err != nil {
+	if err := decodeInto(resp.Body, status); err != nil {
 		t.Fatalf("unexpected error while decoding response body: %s", err)
 	}
 
 	checkState := func() bool {
-		addr := fmt.Sprintf(testAddr+"/statuses/%s", job.ID)
+		addr := fmt.Sprintf(testAddr+"/statuses/%s", status.ID)
 		resp, err := httpClient.Get(addr)
 		if err != nil {
 			t.Fatalf("fail to get request state: %s", err)

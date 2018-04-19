@@ -35,12 +35,12 @@ func (m *model) UnmarshalJSON(data []byte) error {
 		return errorRequired("result_storage_uri")
 	}
 
-	v := container.Volume(m.DatasetStorageURI)
-	m.Container.Volumes = append(m.Container.Volumes, &v)
+	ds := container.Volume(m.DatasetStorageURI)
+	m.Container.Volumes = append(m.Container.Volumes, &ds)
 	m.Container.Env[envName("PATH_DATASET")] = m.DatasetStorageURI.To
 
-	v = container.Volume(m.ResultStorageURI)
-	m.Container.Volumes = append(m.Container.Volumes, &v)
+	rs := container.Volume(m.ResultStorageURI)
+	m.Container.Volumes = append(m.Container.Volumes, &rs)
 	m.Container.Env[envName("PATH_RESULT")] = m.ResultStorageURI.To
 
 	return nil

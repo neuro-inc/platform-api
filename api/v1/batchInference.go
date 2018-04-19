@@ -39,16 +39,16 @@ func (bi *batchInference) UnmarshalJSON(data []byte) error {
 		return errorRequired("model_storage_uri")
 	}
 
-	v := container.Volume(bi.DatasetStorageURI)
-	bi.Container.Volumes = append(bi.Container.Volumes, &v)
+	ds := container.Volume(bi.DatasetStorageURI)
+	bi.Container.Volumes = append(bi.Container.Volumes, &ds)
 	bi.Container.Env[envName("PATH_DATASET")] = bi.DatasetStorageURI.To
 
-	v = container.Volume(bi.ResultStorageURI)
-	bi.Container.Volumes = append(bi.Container.Volumes, &v)
+	rs := container.Volume(bi.ResultStorageURI)
+	bi.Container.Volumes = append(bi.Container.Volumes, &rs)
 	bi.Container.Env[envName("PATH_RESULT")] = bi.ResultStorageURI.To
 
-	v = container.Volume(bi.ModelStorageURI)
-	bi.Container.Volumes = append(bi.Container.Volumes, &v)
+	ms := container.Volume(bi.ModelStorageURI)
+	bi.Container.Volumes = append(bi.Container.Volumes, &ms)
 	bi.Container.Env[envName("PATH_MODEL")] = bi.ModelStorageURI.To
 
 	return nil
