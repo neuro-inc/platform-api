@@ -146,10 +146,7 @@ func (j *singularityJob) Start() error {
 		return err
 	}
 	j.Deploy.RequestID = reqID
-	if err := j.client.registerDeploy(reqID, j); err != nil {
-		return err
-	}
-	return nil
+	return j.client.registerDeploy(reqID, j)
 }
 
 func (j *singularityJob) Stop() error {

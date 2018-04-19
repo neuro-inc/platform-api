@@ -6,7 +6,6 @@ import (
 	"bytes"
 	"fmt"
 	"io/ioutil"
-	"log"
 	"net/http"
 	"os"
 	"testing"
@@ -14,16 +13,18 @@ import (
 
 	"github.com/kelseyhightower/envconfig"
 	"github.com/neuromation/platform-api/api/v1/config"
+	"github.com/neuromation/platform-api/log"
 )
 
-var testDir = "./testData/integrationTest"
+const testDir = "./testdata/temp"
 
 func TestMain(m *testing.M) {
-	userSpacePath = testDir + "/userSpace"
+	// create userSpace dir according to fixture /testdata/fixtures/good.model.json
 	if err := os.MkdirAll(testDir+"/userSpace", 0700); err != nil {
 		log.Fatalf("unable to create dir %q: %s", testDir, err)
 	}
-	if err := os.MkdirAll(testDir+"/marketPlace/people/dataset", 0700); err != nil {
+	// create dir with dataset according to fixture /testdata/fixtures/good.model.json
+	if err := os.MkdirAll(testDir+"/storage/people/dataset", 0700); err != nil {
 		log.Fatalf("unable to create dir %q: %s", testDir, err)
 	}
 	runAPI()
@@ -42,7 +43,7 @@ func runAPI() {
 	if err != nil {
 		log.Fatalf("error while parsing config: %s", err)
 	}
-	cfg.StorageBasePath = testDir + "/marketPlace"
+	cfg.StorageBasePath = testDir + "/storage"
 	go Serve(cfg)
 
 	maxWait := time.Second * 10
@@ -57,20 +58,8 @@ func runAPI() {
 	log.Fatalf("Unable to run API")
 }
 
-func TestServe(t *testing.T) {
-	testTraining(t)
-}
-
-func NewHttpClient() *http.Client {
-	return &http.Client{
-		CheckRedirect: func(_ *http.Request, _ []*http.Request) error {
-			return http.ErrUseLastResponse
-		},
-	}
-}
-
-func testTraining(t *testing.T) {
-	httpClient := NewHttpClient()
+func TestServe_Integration(t *testing.T) {
+	httpClient := newHttpClient()
 	taskResultsDir := testDir + "/userSpace"
 	files, err := ioutil.ReadDir(taskResultsDir)
 	if err != nil {
@@ -80,7 +69,7 @@ func testTraining(t *testing.T) {
 		t.Fatalf("userSpace must be empty; got %d files instead", len(files))
 	}
 
-	reqBody, err := ioutil.ReadFile("./testData/fixtures/training.json")
+	reqBody, err := ioutil.ReadFile("./testdata/fixtures/integration.model.json")
 	if err != nil {
 		t.Fatalf("unable to read fixture: %s", err)
 	}
@@ -123,11 +112,18 @@ func testTraining(t *testing.T) {
 			if err != nil {
 				t.Fatalf("unable to read dir: %s", err)
 			}
-			if len(files) > 5 {
-				t.Fatalf("userSpace bust contain 5 images; got %d files instead", len(files))
+			if len(files) == 5 {
+				return
 			}
-			return
 		}
 	}
-	t.Fatalf("train job doesn't finished for %v", maxWait)
+	t.Fatalf("job doesn't finished for %v", maxWait)
+}
+
+func newHttpClient() *http.Client {
+	return &http.Client{
+		CheckRedirect: func(_ *http.Request, _ []*http.Request) error {
+			return http.ErrUseLastResponse
+		},
+	}
 }

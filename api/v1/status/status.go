@@ -11,19 +11,18 @@ import (
 	"github.com/neuromation/platform-api/log"
 )
 
-
 type StatusName int
 
 const (
-	STATUS_PENDING StatusName = 0
+	STATUS_PENDING   StatusName = 0
 	STATUS_SUCCEEDED StatusName = 1
-	STATUS_FAILED StatusName = 2
+	STATUS_FAILED    StatusName = 2
 )
 
 var status_names = map[StatusName]string{
-	STATUS_PENDING: "PENDING",
+	STATUS_PENDING:   "PENDING",
 	STATUS_SUCCEEDED: "SUCCEEDED",
-	STATUS_FAILED: "FAILED",
+	STATUS_FAILED:    "FAILED",
 }
 
 func (name StatusName) String() string {
@@ -45,8 +44,8 @@ type Status interface {
 }
 
 type GenericStatus struct {
-	id string
-	statusName StatusName
+	id              string
+	statusName      StatusName
 	httpRedirectUrl string
 }
 
@@ -57,8 +56,8 @@ func NewGenericStatus() GenericStatus {
 func NewGenericStatusWithHttpRedirectUrl(url string) GenericStatus {
 	id := uuid.NewV4().String()
 	status := GenericStatus{
-		id: id,
-		statusName: STATUS_PENDING,
+		id:              id,
+		statusName:      STATUS_PENDING,
 		httpRedirectUrl: url,
 	}
 	return status
@@ -93,14 +92,14 @@ func (status GenericStatus) IsFinished() bool {
 }
 
 type publicStatusSchema struct {
-	Id string `json:"status_id"`
+	Id         string     `json:"status_id"`
 	StatusName StatusName `json:"status"`
-	ModelId string `json:"model_id,omitempty"`
+	ModelId    string     `json:"model_id,omitempty"`
 }
 
 func (status GenericStatus) MarshalJSON() ([]byte, error) {
 	return json.Marshal(publicStatusSchema{
-		Id: status.Id(),
+		Id:         status.Id(),
 		StatusName: status.StatusName(),
 	})
 }
@@ -115,8 +114,8 @@ type ModelStatus struct {
 func NewModelStatus(modelId string, modelUrl string, client orchestrator.Client) ModelStatus {
 	return ModelStatus{
 		GenericStatus: NewGenericStatusWithHttpRedirectUrl(modelUrl),
-		ModelId: modelId,
-		client: client,
+		ModelId:       modelId,
+		client:        client,
 	}
 }
 
@@ -126,9 +125,9 @@ func (status ModelStatus) IsHttpRedirectSupported() bool {
 
 func (status ModelStatus) MarshalJSON() ([]byte, error) {
 	return json.Marshal(publicStatusSchema{
-		Id: status.Id(),
+		Id:         status.Id(),
 		StatusName: status.StatusName(),
-		ModelId: status.ModelId,
+		ModelId:    status.ModelId,
 	})
 }
 
@@ -144,14 +143,14 @@ func (status *ModelStatus) update() error {
 	knownStatuses := map[string]StatusName{
 		// NOTE: in case the resulting status is an empty or unknown
 		// string, we assume that the status is PENDING
-		"": STATUS_PENDING,
-		"SUCCEEDED": STATUS_SUCCEEDED,
-		"WAITING": STATUS_PENDING,
-		"OVERDUE": STATUS_FAILED,
-		"FAILED": STATUS_FAILED,
+		"":                      STATUS_PENDING,
+		"SUCCEEDED":             STATUS_SUCCEEDED,
+		"WAITING":               STATUS_PENDING,
+		"OVERDUE":               STATUS_FAILED,
+		"FAILED":                STATUS_FAILED,
 		"FAILED_INTERNAL_STATE": STATUS_FAILED,
-		"CANCELING": STATUS_PENDING,
-		"CANCELED": STATUS_FAILED,
+		"CANCELING":             STATUS_PENDING,
+		"CANCELED":              STATUS_FAILED,
 	}
 
 	newStatusName := knownStatuses[title]
@@ -169,7 +168,6 @@ type StatusService interface {
 	Get(id string) (Status, error)
 	Delete(id string)
 }
-
 
 type InMemoryStatusService struct {
 	sync.RWMutex
@@ -206,7 +204,7 @@ func (service *InMemoryStatusService) Get(id string) (Status, error) {
 	if !ok {
 		return nil, fmt.Errorf("Status %s was not found", id)
 	}
-	
+
 	if status.IsFinished() {
 		return status, nil
 	}

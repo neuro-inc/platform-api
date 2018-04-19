@@ -8,7 +8,7 @@ import (
 	"testing"
 )
 
-var testDir = "../testData/storage"
+var testDir = "../testdata/storage"
 
 func TestMain(m *testing.M) {
 	testPath := testDir + "/path/to/folder"
@@ -40,20 +40,20 @@ func TestPath_Positive(t *testing.T) {
 		{
 			src:  "storage://path/to/folder",
 			abs:  path + "/path/to/folder",
-			rel:  "/path/to/folder",
+			rel:  "path/to/folder",
 			orig: "storage://path/to/folder",
 		},
 		{
-			src:  "marketplace://path/to/folder",
+			src:  testDir + "/path/to/folder",
 			abs:  path + "/path/to/folder",
-			rel:  "/path/to/folder",
-			orig: "marketplace://path/to/folder",
+			rel:  "path/to/folder",
+			orig: testDir + "/path/to/folder",
 		},
 		{
-			src:  "marketplace://path",
+			src:  "storage://path",
 			abs:  path + "/path",
-			rel:  "/path",
-			orig: "marketplace://path",
+			rel:  "path",
+			orig: "storage://path",
 		},
 	}
 	for _, tc := range testCases {
@@ -82,8 +82,6 @@ func TestPath_Negative(t *testing.T) {
 		"storage:/path/to/folder/",
 		"storage://path/to/folder/",
 		"stor://path/to/folder/",
-		"marketPlace://path/to/folder/",
-		"mrktpkace://path/to/folder/",
 		"path/to/folder",
 	}
 	for _, src := range testCases {

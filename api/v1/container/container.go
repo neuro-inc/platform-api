@@ -12,7 +12,7 @@ type (
 		// Storage describes RO bindings from some FS to container
 		Storage []string `json:"storage,omitempty"`
 
-		Volumes []Volume
+		Volumes []*Volume
 	}
 
 	// Volume describes docker Volume object

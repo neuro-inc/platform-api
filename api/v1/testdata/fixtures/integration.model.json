@@ -3,13 +3,11 @@
     "image": "hagen1778/gif-generator",
     "env": {
       "IMAGE_DIR": "/var/user",
-      "IMAGE_NUMBER": "5",
-      "COLLECTION_DIR": "/var/marketplace/people"
-    },
-    "storage": [
-       "storage://people/dataset"
-    ]
+      "IMAGE_NUMBER": "5"
+    }
   },
+  "dataset_storage_uri": "storage://people/dataset",
+  "result_storage_uri":"./testdata/temp/userSpace",
   "resources": {
     "cpus": 1,
     "memoryMb": 64

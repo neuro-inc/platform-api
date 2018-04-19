@@ -6,7 +6,6 @@ import (
 	"testing"
 )
 
-
 func TestStatusNameString(t *testing.T) {
 	name := STATUS_SUCCEEDED
 	if name.String() != "SUCCEEDED" {
@@ -70,7 +69,7 @@ func TestMarshaledStatus(t *testing.T) {
 
 	status_json_str := string(status_json[:])
 	expected_status_json_str := fmt.Sprintf(
-		`{"status_id":"%s","status":"PENDING"}`, status.Id()) 
+		`{"status_id":"%s","status":"PENDING"}`, status.Id())
 	if status_json_str != expected_status_json_str {
 		t.Fatal(status_json_str)
 	}
@@ -118,7 +117,7 @@ func TestMarshaledModelStatus(t *testing.T) {
 	status_json_str := string(status_json[:])
 	expected_status_json_str := fmt.Sprintf(
 		`{"status_id":"%s","status":"PENDING","model_id":"%s"}`,
-		status.Id(), modelId) 
+		status.Id(), modelId)
 	if status_json_str != expected_status_json_str {
 		t.Fatal(status_json_str)
 	}
@@ -144,7 +143,7 @@ func TestInMemoryStatusServiceSetGet(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	
+
 	if status.Id() != statusId {
 		t.Fatal()
 	}

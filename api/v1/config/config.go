@@ -18,5 +18,11 @@ type Config struct {
 	IdleTimeout  time.Duration `default:"10m"`
 
 	// StorageBasePath is the parent path for all `storage` mounts
-	StorageBasePath string `default:"./api/v1/testData/marketPlace"`
+	StorageBasePath string
+
+	// ContainerStoragePath is a path in the container where to mount external storage links
+	ContainerStoragePath string `default:"/var/storage"`
+
+	// EnvPrefix contains a prefix for environment variable names
+	EnvPrefix string
 }

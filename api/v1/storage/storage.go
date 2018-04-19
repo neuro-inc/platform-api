@@ -2,6 +2,7 @@ package storage
 
 import (
 	"fmt"
+	"github.com/neuromation/platform-api/log"
 	"os"
 	"path/filepath"
 	"regexp"
@@ -22,7 +23,7 @@ func Init(path string) error {
 	return nil
 }
 
-var pathRegexp = regexp.MustCompile(`^(storage|marketplace):/((\/[\w]+)+)$`)
+var pathRegexp = regexp.MustCompile(`^(storage):/((\/[\w]+)+)$`)
 
 // PathInfo contains path data from passed storage binding
 type PathInfo struct {
@@ -45,20 +46,40 @@ func (pi PathInfo) Origin() string { return pi.origin }
 
 // Path check passed addr and returns converted
 func Path(src string) (*PathInfo, error) {
-	match := pathRegexp.FindAllStringSubmatch(src, -1)
-	if match == nil {
-		return nil, fmt.Errorf("passed path %q has wrong format", src)
+	if len(basePath) == 0 {
+		log.Fatalf("BUG: forgot to call Init ?")
 	}
-	// get only sufficient values
-	path := match[0][2]
-	pi := &PathInfo{
-		abs:      filepath.Clean(fmt.Sprintf("%s/%s", basePath, path)),
+
+	var (
+		abs  string
+		path string
+		err  error
+	)
+
+	match := pathRegexp.FindAllStringSubmatch(src, -1)
+	if match != nil {
+		path = match[0][2]
+		// skip first slash
+		path = path[1:]
+		abs = filepath.Clean(fmt.Sprintf("%s/%s", basePath, path))
+	} else {
+		abs, err = filepath.Abs(src)
+		if err != nil {
+			return nil, err
+		}
+		path, err = filepath.Rel(basePath, abs)
+		if err != nil {
+			return nil, err
+		}
+	}
+
+	if _, err = os.Stat(abs); err != nil {
+		return nil, fmt.Errorf("unable to access %q: %s", abs, err)
+	}
+
+	return &PathInfo{
+		abs:      abs,
 		relative: filepath.Clean(path),
 		origin:   src,
-	}
-	_, err := os.Stat(pi.Abs())
-	if err != nil {
-		return nil, fmt.Errorf("unable to access %q: %s", pi.abs, err)
-	}
-	return pi, nil
+	}, nil
 }
