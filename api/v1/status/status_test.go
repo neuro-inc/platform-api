@@ -75,54 +75,6 @@ func TestMarshaledStatus(t *testing.T) {
 	}
 }
 
-func TestNewModelStatus(t *testing.T) {
-	modelId := "someModelId"
-	modelUrl := "http://host/path"
-	status := NewModelStatus(modelId, modelUrl, nil)
-	// TODO: normal assertions in go?
-	if len(status.Id()) != 36 {
-		t.Fatal()
-	}
-	if status.StatusName() != STATUS_PENDING {
-		t.Fatal()
-	}
-	if status.ModelId != modelId {
-		t.Fatal()
-	}
-	if !status.IsHttpRedirectSupported() {
-		t.Fatal()
-	}
-	if status.HttpRedirectUrl() != modelUrl {
-		t.Fatal()
-	}
-	if status.IsSucceeded() {
-		t.Fatal()
-	}
-	if status.IsFailed() {
-		t.Fatal()
-	}
-	if status.IsFinished() {
-		t.Fatal()
-	}
-}
-
-func TestMarshaledModelStatus(t *testing.T) {
-	modelId := "someModelId"
-	status := NewModelStatus(modelId, "", nil)
-	status_json, err := json.Marshal(&status)
-	if err != nil {
-		t.Fatal(err)
-	}
-
-	status_json_str := string(status_json[:])
-	expected_status_json_str := fmt.Sprintf(
-		`{"status_id":"%s","status":"PENDING","model_id":"%s"}`,
-		status.Id(), modelId)
-	if status_json_str != expected_status_json_str {
-		t.Fatal(status_json_str)
-	}
-}
-
 func TestInMemoryStatusServiceSetGet(t *testing.T) {
 	service := NewInMemoryStatusService()
 	var status Status = NewGenericStatus()
@@ -187,4 +139,14 @@ func TestInMemoryStatusServiceDelete(t *testing.T) {
 	if err == nil {
 		t.Fatal()
 	}
+}
+
+func assertEqual(t *testing.T, a interface{}, b interface{}, message string) {
+	if a == b {
+		return
+	}
+	if len(message) == 0 {
+		message = fmt.Sprintf("%v != %v", a, b)
+	}
+	t.Fatal(message)
 }

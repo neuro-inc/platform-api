@@ -14,8 +14,8 @@ type ModelStatus struct {
 	client orchestrator.Client
 }
 
-func NewModelStatus(modelId string, modelUrl string, client orchestrator.Client) ModelStatus {
-	return ModelStatus{
+func NewModelStatus(modelId string, modelUrl string, client orchestrator.Client) *ModelStatus {
+	return &ModelStatus{
 		GenericStatus: NewGenericStatusWithHttpRedirectUrl(modelUrl),
 		ModelId:       modelId,
 		client:        client,
