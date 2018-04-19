@@ -22,46 +22,32 @@ func NewModelStatus(modelId string, modelUrl string, client orchestrator.Client)
 	}
 }
 
-func (status ModelStatus) IsHttpRedirectSupported() bool {
+func (ModelStatus) IsHttpRedirectSupported() bool {
 	return true
 }
 
-func (status ModelStatus) MarshalJSON() ([]byte, error) {
+func (ms ModelStatus) MarshalJSON() ([]byte, error) {
 	return json.Marshal(publicStatusSchema{
-		Id:         status.Id(),
-		StatusName: status.StatusName(),
-		ModelId:    status.ModelId,
+		Id:         ms.Id(),
+		StatusName: ms.StatusName(),
+		ModelId:    ms.ModelId,
 	})
 }
 
-func (status *ModelStatus) update() error {
-	jobId := status.ModelId
-	job := status.client.GetJob(jobId)
+func (ms *ModelStatus) update() error {
+	jobId := ms.ModelId
+	job := ms.client.GetJob(jobId)
 	title, err := job.Status()
 	if err != nil {
 		return err
 	}
 
-	// TODO (A Danshyn 04/16/18): must be moved, extract a function
-	knownStatuses := map[string]StatusName{
-		// NOTE: in case the resulting status is an empty or unknown
-		// string, we assume that the status is PENDING
-		"":                      STATUS_PENDING,
-		"SUCCEEDED":             STATUS_SUCCEEDED,
-		"WAITING":               STATUS_PENDING,
-		"OVERDUE":               STATUS_FAILED,
-		"FAILED":                STATUS_FAILED,
-		"FAILED_INTERNAL_STATE": STATUS_FAILED,
-		"CANCELING":             STATUS_PENDING,
-		"CANCELED":              STATUS_FAILED,
-	}
-
 	newStatusName := knownStatuses[title]
 	log.Infof(
 		"Updating status %s from %s to %s(%s).",
-		status.Id(), status.StatusName(), newStatusName, title)
+		ms.Id(), ms.StatusName(), newStatusName, title)
 
-	status.statusName = newStatusName
+	ms.statusName = newStatusName
 
 	return nil
 }

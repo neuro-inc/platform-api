@@ -2,10 +2,8 @@ package v1
 
 import (
 	"encoding/json"
-	"fmt"
 
 	"github.com/neuromation/platform-api/api/v1/container"
-	"github.com/neuromation/platform-api/api/v1/storage"
 )
 
 type model struct {

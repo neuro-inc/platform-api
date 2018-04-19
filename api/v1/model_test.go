@@ -65,7 +65,6 @@ func TestModel_UnmarshalJSON_Positive(t *testing.T) {
 
 	// override envPrefix for testing purpose
 	envPrefix = "NP"
-	containerStoragePath = "/var/storage"
 
 	goodSrc := "./testdata/fixtures/good.model.json"
 	raw, err := ioutil.ReadFile(goodSrc)

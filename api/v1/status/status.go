@@ -7,7 +7,6 @@ import (
 
 	"github.com/satori/go.uuid"
 
-	"github.com/neuromation/platform-api/api/v1/orchestrator"
 	"github.com/neuromation/platform-api/log"
 )
 
@@ -31,6 +30,19 @@ func (name StatusName) String() string {
 
 func (name StatusName) MarshalJSON() ([]byte, error) {
 	return []byte(fmt.Sprintf(`"%s"`, name.String())), nil
+}
+
+var knownStatuses = map[string]StatusName{
+	// NOTE: in case the resulting status is an empty or unknown
+	// string, we assume that the status is PENDING
+	"":                      STATUS_PENDING,
+	"SUCCEEDED":             STATUS_SUCCEEDED,
+	"WAITING":               STATUS_PENDING,
+	"OVERDUE":               STATUS_FAILED,
+	"FAILED":                STATUS_FAILED,
+	"FAILED_INTERNAL_STATE": STATUS_FAILED,
+	"CANCELING":             STATUS_PENDING,
+	"CANCELED":              STATUS_FAILED,
 }
 
 type Status interface {
@@ -63,44 +75,45 @@ func NewGenericStatusWithHttpRedirectUrl(url string) GenericStatus {
 	return status
 }
 
-func (status GenericStatus) Id() string {
-	return status.id
+func (gs GenericStatus) Id() string {
+	return gs.id
 }
 
-func (status GenericStatus) StatusName() StatusName {
-	return status.statusName
+func (gs GenericStatus) StatusName() StatusName {
+	return gs.statusName
 }
 
-func (status GenericStatus) IsHttpRedirectSupported() bool {
+func (GenericStatus) IsHttpRedirectSupported() bool {
 	return false
 }
 
-func (status GenericStatus) HttpRedirectUrl() string {
-	return status.httpRedirectUrl
+func (gs GenericStatus) HttpRedirectUrl() string {
+	return gs.httpRedirectUrl
 }
 
-func (status GenericStatus) IsSucceeded() bool {
-	return status.StatusName() == STATUS_SUCCEEDED
+func (gs GenericStatus) IsSucceeded() bool {
+	return gs.StatusName() == STATUS_SUCCEEDED
 }
 
-func (status GenericStatus) IsFailed() bool {
-	return status.StatusName() == STATUS_FAILED
+func (gs GenericStatus) IsFailed() bool {
+	return gs.StatusName() == STATUS_FAILED
 }
 
-func (status GenericStatus) IsFinished() bool {
-	return status.IsSucceeded() || status.IsFailed()
+func (gs GenericStatus) IsFinished() bool {
+	return gs.IsSucceeded() || gs.IsFailed()
 }
 
 type publicStatusSchema struct {
-	Id         string     `json:"status_id"`
-	StatusName StatusName `json:"status"`
-	ModelId    string     `json:"model_id,omitempty"`
+	Id               string     `json:"status_id"`
+	StatusName       StatusName `json:"status"`
+	ModelId          string     `json:"model_id,omitempty"`
+	BatchInferenceID string     `json:"batch_inference_id,omitempty"`
 }
 
-func (status GenericStatus) MarshalJSON() ([]byte, error) {
+func (gs GenericStatus) MarshalJSON() ([]byte, error) {
 	return json.Marshal(publicStatusSchema{
-		Id:         status.Id(),
-		StatusName: status.StatusName(),
+		Id:         gs.Id(),
+		StatusName: gs.StatusName(),
 	})
 }
 
@@ -121,9 +134,9 @@ func NewInMemoryStatusService() *InMemoryStatusService {
 	return service
 }
 
-func (service *InMemoryStatusService) Set(status Status) error {
-	service.Lock()
-	if oldStatus, ok := service.statuses[status.Id()]; ok {
+func (ss *InMemoryStatusService) Set(status Status) error {
+	ss.Lock()
+	if oldStatus, ok := ss.statuses[status.Id()]; ok {
 		log.Infof(
 			"Updating status %s from %s to %s",
 			status.Id(), oldStatus.StatusName(),
@@ -133,15 +146,15 @@ func (service *InMemoryStatusService) Set(status Status) error {
 			"Adding new status %s %s",
 			status.Id(), status.StatusName())
 	}
-	service.statuses[status.Id()] = status
-	service.Unlock()
+	ss.statuses[status.Id()] = status
+	ss.Unlock()
 	return nil
 }
 
-func (service *InMemoryStatusService) Get(id string) (Status, error) {
-	service.RLock()
-	status, ok := service.statuses[id]
-	service.RUnlock()
+func (ss *InMemoryStatusService) Get(id string) (Status, error) {
+	ss.RLock()
+	status, ok := ss.statuses[id]
+	ss.RUnlock()
 	if !ok {
 		return nil, fmt.Errorf("Status %s was not found", id)
 	}
@@ -158,18 +171,17 @@ func (service *InMemoryStatusService) Get(id string) (Status, error) {
 	case ModelStatus:
 		statusCast.update()
 		status = statusCast
-		service.Set(status)
+		ss.Set(status)
 	}
 	return status, nil
 }
 
-func (service *InMemoryStatusService) Delete(id string) {
-	service.Lock()
-	delete(service.statuses, id)
-	service.Unlock()
+func (ss *InMemoryStatusService) Delete(id string) {
+	ss.Lock()
+	delete(ss.statuses, id)
+	ss.Unlock()
 }
 
 func NewStatusService() StatusService {
-	service := NewInMemoryStatusService()
-	return service
+	return NewInMemoryStatusService()
 }
