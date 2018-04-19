@@ -1,6 +1,7 @@
 package v1
 
 import (
+	"bytes"
 	"encoding/json"
 	"fmt"
 	"io"
@@ -24,4 +25,8 @@ func decodeInto(rc io.ReadCloser, v interface{}) error {
 	}
 	rc.Close()
 	return nil
+}
+
+func errorRequired(field string) error {
+	return fmt.Errorf("field %q required to be set", field)
 }
