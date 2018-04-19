@@ -20,6 +20,7 @@ type model struct {
 	Meta map[string]string `json:"meta,omitempty"`
 }
 
+// UnmarshalJSON implements the json.Unmarshaler interface.
 func (m *model) UnmarshalJSON(data []byte) error {
 	type plain model
 	if err := json.Unmarshal(data, (*plain)(m)); err != nil {

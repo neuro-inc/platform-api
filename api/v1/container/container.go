@@ -9,6 +9,7 @@ import (
 // path in the container where to mount external storage links
 var containerStoragePath = "/var/storage"
 
+// SetPath sets default mount path for volumes
 func SetPath(path string) {
 	containerStoragePath = path
 }
@@ -24,6 +25,7 @@ type Container struct {
 	Volumes []*Volume
 }
 
+// UnmarshalJSON implements the json.Unmarshaler interface.
 func (c *Container) UnmarshalJSON(data []byte) error {
 	type plain Container
 	if err := json.Unmarshal(data, (*plain)(c)); err != nil {
@@ -47,8 +49,10 @@ type Volume struct {
 	Mode string
 }
 
+// VolumeRO describes Read-Only volume
 type VolumeRO Volume
 
+// UnmarshalJSON implements the json.Unmarshaler interface.
 func (vro *VolumeRO) UnmarshalJSON(data []byte) error {
 	var s string
 	if err := json.Unmarshal(data, &s); err != nil {
@@ -62,8 +66,10 @@ func (vro *VolumeRO) UnmarshalJSON(data []byte) error {
 	return nil
 }
 
+// VolumeRW describes Read-Write volume
 type VolumeRW Volume
 
+// UnmarshalJSON implements the json.Unmarshaler interface.
 func (vrw *VolumeRW) UnmarshalJSON(data []byte) error {
 	var s string
 	if err := json.Unmarshal(data, &s); err != nil {
@@ -100,6 +106,7 @@ func newVolume(from, to, mode string) (*Volume, error) {
 // Resources contains a map where key is the name of resource, and value - amount of resource
 type Resources map[string]float64
 
+// UnmarshalJSON implements the json.Unmarshaler interface.
 func (r *Resources) UnmarshalJSON(data []byte) error {
 	var m map[string]float64
 	if err := json.Unmarshal(data, &m); err != nil {

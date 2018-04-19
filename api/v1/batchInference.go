@@ -20,6 +20,7 @@ type batchInference struct {
 	ResultStorageURI container.VolumeRW `json:"result_storage_uri"`
 }
 
+// UnmarshalJSON implements the json.Unmarshaler interface.
 func (bi *batchInference) UnmarshalJSON(data []byte) error {
 	type plain batchInference
 	if err := json.Unmarshal(data, (*plain)(bi)); err != nil {
