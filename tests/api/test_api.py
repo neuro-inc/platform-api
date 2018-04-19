@@ -374,8 +374,8 @@ class TestTrainingApi:
                     "registry.neuromation.io/neuromationorg/platformapi-dummy"
                 ),
             },
-            "dataset_storage_uri": "storage://platformapi",
-            "result_storage_uri": "storage://platformapi",
+            "dataset_storage_uri": "storage://data",
+            "result_storage_uri": "storage://data",
             "resources": {
                 "cpus": 1,
                 "memoryMb": 128
