@@ -2,5 +2,5 @@
   "code": {
     "image": "image"
   },
-  "result_storage_uri":"./unknown/path"
+  "volumeRW":"./unknown/path"
 }
