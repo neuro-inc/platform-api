@@ -130,7 +130,7 @@ func TestServe_Integration(t *testing.T) {
 				}
 
 				id := getStatusIDFromResponse(t, resp)
-				maxWait := time.Second * 20
+				maxWait := time.Second * 30
 				done := time.Now().Add(maxWait)
 				for time.Now().Before(done) {
 					time.Sleep(time.Second)
@@ -139,7 +139,7 @@ func TestServe_Integration(t *testing.T) {
 						if err != nil {
 							t.Fatalf("unable to read dir: %s", err)
 						}
-						if len(files) == 5 {
+						if len(files) == 1 {
 							return
 						}
 					}
@@ -162,7 +162,7 @@ func TestServe_Integration(t *testing.T) {
 				}
 
 				id := getStatusIDFromResponse(t, resp)
-				maxWait := time.Second * 20
+				maxWait := time.Second * 30
 				done := time.Now().Add(maxWait)
 				for time.Now().Before(done) {
 					time.Sleep(time.Second)
@@ -171,7 +171,7 @@ func TestServe_Integration(t *testing.T) {
 						if err != nil {
 							t.Fatalf("unable to read dir: %s", err)
 						}
-						if len(files) == 5 {
+						if len(files) == 1 {
 							return
 						}
 					}
