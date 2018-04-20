@@ -42,7 +42,6 @@ func Serve(cfg *config.Config) error {
 	if err := storage.Init(cfg.StorageBasePath); err != nil {
 		return fmt.Errorf("error while initing storage: %s", err)
 	}
-
 	// set default path for container volumes
 	container.SetPath(cfg.ContainerStoragePath)
 
@@ -53,7 +52,7 @@ func Serve(cfg *config.Config) error {
 	r.GET("/", showHelp)
 	r.POST("/models", createModel(client, statusService))
 	r.POST("/batch-inference", createBatchInference(client, statusService))
-	r.GET("/models/:id", viewTraining)
+	r.GET("/models/:id", viewModel)
 	r.GET("/statuses/:id", handlers.ViewStatus(statusService))
 
 	s := &http.Server{
@@ -73,7 +72,7 @@ func showHelp(rw http.ResponseWriter, _ *http.Request, _ httprouter.Params) {
 	fmt.Fprintln(rw, "GET /statuses/:id")
 }
 
-func viewTraining(rw http.ResponseWriter, _ *http.Request, params httprouter.Params) {
+func viewModel(rw http.ResponseWriter, _ *http.Request, params httprouter.Params) {
 	model := &struct {
 		ModelId string `json:"model_id"`
 	}{

@@ -23,7 +23,7 @@ func Init(path string) error {
 	return nil
 }
 
-var pathRegexp = regexp.MustCompile(`^(storage):/((\/[\w]+)+)$`)
+var pathRegexp = regexp.MustCompile(`^(storage):/((\/[\w-]+)+)$`)
 
 // PathInfo contains path data from passed storage binding
 type PathInfo struct {

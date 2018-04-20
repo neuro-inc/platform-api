@@ -20,12 +20,12 @@ func decodeInto(rc io.ReadCloser, v interface{}) error {
 	decoder := json.NewDecoder(rc)
 	err := decoder.Decode(v)
 	if err != nil {
-		return fmt.Errorf("error while decoding into struct: %s", err)
+		return err
 	}
 	rc.Close()
 	return nil
 }
 
-func errorRequired(field string) error {
+func requiredError(field string) error {
 	return fmt.Errorf("field %q required to be set", field)
 }

@@ -28,11 +28,11 @@ func (m *model) UnmarshalJSON(data []byte) error {
 	}
 
 	if len(m.DatasetStorageURI.From) == 0 {
-		return errorRequired("dataset_storage_uri")
+		return requiredError("dataset_storage_uri")
 	}
 
 	if len(m.ResultStorageURI.From) == 0 {
-		return errorRequired("result_storage_uri")
+		return requiredError("result_storage_uri")
 	}
 
 	ds := container.Volume(m.DatasetStorageURI)

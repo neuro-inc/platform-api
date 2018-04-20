@@ -28,15 +28,15 @@ func (bi *batchInference) UnmarshalJSON(data []byte) error {
 	}
 
 	if len(bi.DatasetStorageURI.From) == 0 {
-		return errorRequired("dataset_storage_uri")
+		return requiredError("dataset_storage_uri")
 	}
 
 	if len(bi.ResultStorageURI.From) == 0 {
-		return errorRequired("result_storage_uri")
+		return requiredError("result_storage_uri")
 	}
 
 	if len(bi.ModelStorageURI.From) == 0 {
-		return errorRequired("model_storage_uri")
+		return requiredError("model_storage_uri")
 	}
 
 	ds := container.Volume(bi.DatasetStorageURI)
