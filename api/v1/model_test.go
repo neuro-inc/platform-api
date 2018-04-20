@@ -2,12 +2,52 @@ package v1
 
 import (
 	"io/ioutil"
+	"strings"
 	"testing"
 
 	"github.com/neuromation/platform-api/api/v1/storage"
 )
 
-func TestModel_UnmarshalJSON(t *testing.T) {
+func TestModel_UnmarshalJSON_Negative(t *testing.T) {
+	if err := storage.Init("./testdata"); err != nil {
+		t.Fatalf("error while initing storage: %s", err)
+	}
+
+	testCases := []struct {
+		name, file, err string
+	}{
+		{
+			"non-empty dataset",
+			"bad.model.dataset.json",
+			"field \"dataset_storage_uri\" required to be set",
+		},
+		{
+			"non-empty result",
+			"bad.model.result.json",
+			"field \"result_storage_uri\" required to be set",
+		},
+	}
+
+	for _, tc := range testCases {
+		t.Run(tc.name, func(t *testing.T) {
+			src := "./testdata/fixtures/" + tc.file
+			raw, err := ioutil.ReadFile(src)
+			if err != nil {
+				t.Fatalf("unable to read file %q: %s", src, err)
+			}
+			model := model{}
+			err = model.UnmarshalJSON(raw)
+			if err == nil {
+				t.Fatalf("expected to get err")
+			}
+			if !strings.Contains(err.Error(), tc.err) {
+				t.Fatalf("expected to get err: %s; got instead: %q", tc.err, err)
+			}
+		})
+	}
+}
+
+func TestModel_UnmarshalJSON_Positive(t *testing.T) {
 	if err := storage.Init("./testdata"); err != nil {
 		t.Fatalf("error while initing storage: %s", err)
 	}

@@ -1,0 +1,11 @@
+{
+  "code": {
+    "image": "hello-world"
+  },
+  "result_storage_uri":"./testdata/fixtures",
+  "model_storage_uri":"storage://fixtures",
+  "resources": {
+    "cpus": 1,
+    "memoryMb": 64
+  }
+}

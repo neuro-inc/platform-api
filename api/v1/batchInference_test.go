@@ -2,12 +2,57 @@ package v1
 
 import (
 	"io/ioutil"
+	"strings"
 	"testing"
 
 	"github.com/neuromation/platform-api/api/v1/storage"
 )
 
-func TestBatchInference_UnmarshalJSON(t *testing.T) {
+func TestBatchInference_UnmarshalJSON_Negative(t *testing.T) {
+	if err := storage.Init("./testdata"); err != nil {
+		t.Fatalf("error while initing storage: %s", err)
+	}
+
+	testCases := []struct {
+		name, file, err string
+	}{
+		{
+			"non-empty dataset",
+			"bad.batch.inference.dataset.json",
+			"field \"dataset_storage_uri\" required to be set",
+		},
+		{
+			"non-empty result",
+			"bad.batch.inference.result.json",
+			"field \"result_storage_uri\" required to be set",
+		},
+		{
+			"non-empty model",
+			"bad.batch.inference.model.json",
+			"field \"model_storage_uri\" required to be set",
+		},
+	}
+
+	for _, tc := range testCases {
+		t.Run(tc.name, func(t *testing.T) {
+			src := "./testdata/fixtures/" + tc.file
+			raw, err := ioutil.ReadFile(src)
+			if err != nil {
+				t.Fatalf("unable to read file %q: %s", src, err)
+			}
+			bi := batchInference{}
+			err = bi.UnmarshalJSON(raw)
+			if err == nil {
+				t.Fatalf("expected to get err")
+			}
+			if !strings.Contains(err.Error(), tc.err) {
+				t.Fatalf("expected to get err: %s; got instead: %q", tc.err, err)
+			}
+		})
+	}
+}
+
+func TestBatchInference_UnmarshalJSON_Positive(t *testing.T) {
 	if err := storage.Init("./testdata"); err != nil {
 		t.Fatalf("error while initing storage: %s", err)
 	}
