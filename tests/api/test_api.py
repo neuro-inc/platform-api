@@ -382,7 +382,7 @@ class TestTrainingApi:
             }
         }
         response = requests.post(url, json=payload)
-        # assert response.status_code == 202
+        assert response.status_code == 202
         status_payload = response.json()
         assert status_payload == {
             'model_id': unittest.mock.ANY,
