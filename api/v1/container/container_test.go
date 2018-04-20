@@ -30,12 +30,12 @@ func TestUnmarshalJSON_Negative(t *testing.T) {
 			"invalid path",
 		},
 		{
-			"bad result path",
+			"bad volume RO path",
 			"./testdata/fixtures/bad.volume.ro.json",
 			"invalid path",
 		},
 		{
-			"bad result path",
+			"bad volume RW path",
 			"./testdata/fixtures/bad.volume.rw.json",
 			"invalid path",
 		},
