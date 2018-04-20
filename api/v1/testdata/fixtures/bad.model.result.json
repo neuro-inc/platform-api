@@ -1,6 +1,10 @@
 {
   "code": {
-    "image": "image"
+    "image": "hello-world"
   },
-  "result_storage_uri":"./unknown/path"
+  "dataset_storage_uri": "storage://fixtures",
+  "resources": {
+    "cpus": 1,
+    "memoryMb": 64
+  }
 }

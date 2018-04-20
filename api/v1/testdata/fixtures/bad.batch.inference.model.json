@@ -2,6 +2,7 @@
   "code": {
     "image": "hello-world"
   },
+  "dataset_storage_uri": "storage://fixtures",
   "result_storage_uri":"./testdata/fixtures",
   "resources": {
     "cpus": 1,

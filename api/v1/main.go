@@ -10,6 +10,7 @@ import (
 	"github.com/julienschmidt/httprouter"
 	"github.com/neuromation/platform-api/api/v1/client/singularity"
 	"github.com/neuromation/platform-api/api/v1/config"
+	"github.com/neuromation/platform-api/api/v1/container"
 	"github.com/neuromation/platform-api/api/v1/handlers"
 	"github.com/neuromation/platform-api/api/v1/orchestrator"
 	"github.com/neuromation/platform-api/api/v1/status"
@@ -22,8 +23,6 @@ var (
 	client orchestrator.Client
 
 	envPrefix string
-
-	containerStoragePath string
 )
 
 // Serve starts serving web-server for accepting requests
@@ -43,16 +42,17 @@ func Serve(cfg *config.Config) error {
 	if err := storage.Init(cfg.StorageBasePath); err != nil {
 		return fmt.Errorf("error while initing storage: %s", err)
 	}
+	// set default path for container volumes
+	container.SetPath(cfg.ContainerStoragePath)
 
 	envPrefix = cfg.EnvPrefix
-	containerStoragePath = cfg.ContainerStoragePath
-
 	statusService := status.NewStatusService()
 
 	r := httprouter.New()
 	r.GET("/", showHelp)
 	r.POST("/models", createModel(client, statusService))
-	r.GET("/models/:id", viewTraining)
+	r.POST("/batch-inference", createBatchInference(client, statusService))
+	r.GET("/models/:id", viewModel)
 	r.GET("/statuses/:id", handlers.ViewStatus(statusService))
 
 	s := &http.Server{
@@ -72,7 +72,7 @@ func showHelp(rw http.ResponseWriter, _ *http.Request, _ httprouter.Params) {
 	fmt.Fprintln(rw, "GET /statuses/:id")
 }
 
-func viewTraining(rw http.ResponseWriter, _ *http.Request, params httprouter.Params) {
+func viewModel(rw http.ResponseWriter, _ *http.Request, params httprouter.Params) {
 	model := &struct {
 		ModelId string `json:"model_id"`
 	}{
@@ -85,6 +85,42 @@ func viewTraining(rw http.ResponseWriter, _ *http.Request, params httprouter.Par
 	}
 	rw.WriteHeader(http.StatusOK)
 	rw.Write(payload)
+}
+
+func createBatchInference(jobClient orchestrator.Client, statusService status.StatusService) httprouter.Handle {
+	return func(rw http.ResponseWriter, req *http.Request, _ httprouter.Params) {
+		bi := &batchInference{}
+		if err := decodeInto(req.Body, bi); err != nil {
+			respondWithError(rw, err)
+			return
+		}
+
+		job := client.NewJob(bi.Container, bi.Resources)
+		if err := job.Start(); err != nil {
+			respondWithError(rw, fmt.Errorf("error while creating training: %s", err))
+			return
+		}
+
+		bID := job.GetID()
+		url := handlers.GenerateBatchInferenceURLFromRequest(req, bID)
+		s := status.NewBatchInferenceStatus(bID, url.String(), client)
+		if err := statusService.Set(s); err != nil {
+			rw.WriteHeader(http.StatusInternalServerError)
+			return
+		}
+
+		payload, err := json.Marshal(s)
+		if err != nil {
+			rw.WriteHeader(http.StatusInternalServerError)
+			return
+		}
+
+		location := handlers.GenerateStatusURLFromRequest(req, s.Id())
+		rw.Header().Set("Location", location.String())
+		rw.Header().Set("Content-Type", "application/json")
+		rw.WriteHeader(http.StatusAccepted)
+		rw.Write(payload)
+	}
 }
 
 func createModel(jobClient orchestrator.Client, statusService status.StatusService) httprouter.Handle {

@@ -12,8 +12,8 @@ var basePath string
 
 // Init checks passed path and set it as base
 func Init(path string) error {
-	_, err := os.Stat(path)
-	if err != nil {
+	var err error
+	if _, err = os.Stat(path); err != nil {
 		return fmt.Errorf("unable to access %q: %s", path, err)
 	}
 	basePath, err = filepath.Abs(path)
@@ -23,7 +23,7 @@ func Init(path string) error {
 	return nil
 }
 
-var pathRegexp = regexp.MustCompile(`^(storage):/((\/[\w]+)+)$`)
+var pathRegexp = regexp.MustCompile(`^(storage):/((\/[\w-]+)+)$`)
 
 // PathInfo contains path data from passed storage binding
 type PathInfo struct {
