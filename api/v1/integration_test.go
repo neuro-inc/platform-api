@@ -202,7 +202,7 @@ func TestServe_Integration(t *testing.T) {
 						output := fmt.Sprintf("%s/output.txt", taskResultsDir)
 						fi, err := os.Stat(output)
 						if err != nil {
-							t.Fatalf("unable to read file %q: %s", output, err)
+							continue
 						}
 						if fi.Size() > 0 {
 							return
