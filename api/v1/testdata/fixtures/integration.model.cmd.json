@@ -1,5 +1,5 @@
 {
-  "code": {
+  "container": {
     "image": "ubuntu",
     "CMD": "ls -la >> $PATH_RESULT/output.txt"
   },

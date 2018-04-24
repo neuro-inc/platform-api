@@ -1,5 +1,5 @@
 {
-  "code": {
+  "container": {
     "image": "hello-world",
     "env": {
       "FOO": "BAR"

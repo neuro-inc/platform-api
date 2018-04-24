@@ -1,5 +1,5 @@
 {
-  "code": {
+  "container": {
     "image": "hello-world"
   },
   "dataset_storage_uri": "storage://fixtures",

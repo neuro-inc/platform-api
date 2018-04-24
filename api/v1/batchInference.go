@@ -6,8 +6,7 @@ import (
 )
 
 type batchInference struct {
-	// TODO: rename `code` in API doc to smthng intuitive
-	Container container.Container `json:"code"`
+	Container container.Container `json:"container"`
 	Resources container.Resources `json:"resources"`
 
 	// Storage URI where dataset sits
