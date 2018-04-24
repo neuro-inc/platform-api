@@ -25,11 +25,12 @@ type (
 	}
 
 	deployHistory struct {
-		DeployStatistics deployStatistics `json:"deployStatistics"`
+		DeployResult deployResult `json:"deployResult"`
 	}
 
-	deployStatistics struct {
-		LastTaskState   string `json:"lastTaskState"`
+	deployResult struct {
+		State   string `json:"deployState"`
+		Message string `json:"message"`
 	}
 
 	deploy struct {

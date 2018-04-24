@@ -199,7 +199,14 @@ func TestServe_Integration(t *testing.T) {
 				for time.Now().Before(done) {
 					time.Sleep(time.Second)
 					if checkStatus(id) {
-						return
+						output := fmt.Sprintf("%s/output.txt", taskResultsDir)
+						fi, err := os.Stat(output)
+						if err != nil {
+							t.Fatalf("unable to read file %q: %s", output, err)
+						}
+						if fi.Size() > 0 {
+							return
+						}
 					}
 				}
 				t.Fatalf("job doesn't finished for %v", maxWait)
