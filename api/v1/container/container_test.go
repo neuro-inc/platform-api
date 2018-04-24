@@ -47,7 +47,7 @@ func TestUnmarshalJSON_Negative(t *testing.T) {
 	}
 
 	type job struct {
-		Container Container `json:"code"`
+		Container Container `json:"container"`
 		Resources Resources `json:"resources"`
 		RO        VolumeRO  `json:"volumeRO"`
 		RW        VolumeRW  `json:"volumeRW"`

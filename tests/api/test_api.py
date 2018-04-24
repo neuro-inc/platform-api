@@ -366,7 +366,7 @@ class TestTrainingApi:
         # TODO: should we have the /api/v1 path prefix?
         url = f'{api_endpoint}/models'
         payload = {
-            "code": {
+            "container": {
                 "env": {
                     "MODEL_PATH": "/var/user"
                 },

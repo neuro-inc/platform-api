@@ -1,5 +1,5 @@
 {
-  "code": {
+  "container": {
     "image": "hello-world"
   },
   "result_storage_uri":"./testdata/fixtures",
