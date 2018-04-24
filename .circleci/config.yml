@@ -53,5 +53,6 @@ workflows:
       - test:
           context: org-global
       - deploy:
+          context: org-global
           requires:
             - test
