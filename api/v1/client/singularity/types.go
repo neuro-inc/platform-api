@@ -25,17 +25,18 @@ type (
 	}
 
 	deployHistory struct {
-		DeployResult deployResult `json:"deployResult"`
+		DeployStatistics deployStatistics `json:"deployStatistics"`
 	}
 
-	deployResult struct {
-		State   string `json:"deployState"`
-		Message string `json:"message"`
+	deployStatistics struct {
+		LastTaskState   string `json:"lastTaskState"`
 	}
 
 	deploy struct {
 		RequestID                  string             `json:"requestId"`
 		ID                         string             `json:"id"`
+		Command                    string             `json:"command,omitempty"`
+		Shell                      bool               `json:"shell,omitempty"`
 		Type                       string             `json:"type"`
 		ContainerInfo              containerInfo      `json:"containerInfo"`
 		Resources                  map[string]float64 `json:"resources"`

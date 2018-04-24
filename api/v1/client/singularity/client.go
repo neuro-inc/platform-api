@@ -107,6 +107,11 @@ func (sc *singularityClient) NewJob(container container.Container, res container
 		},
 	}
 
+	if len(container.CMD) > 0 {
+		j.Deploy.Command = container.CMD
+		j.Deploy.Shell = true
+	}
+
 	sc.Lock()
 	sc.r[id] = j
 	sc.Unlock()
