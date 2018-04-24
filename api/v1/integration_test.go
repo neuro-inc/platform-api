@@ -179,6 +179,39 @@ func TestServe_Integration(t *testing.T) {
 				t.Fatalf("job doesn't finished for %v", maxWait)
 			},
 		},
+		{
+			"CMD ubuntu",
+			func(t *testing.T) {
+				taskResultsDir := testDir + "/storage/userSpace/model/cmd"
+				if err := os.MkdirAll(taskResultsDir, 0700); err != nil {
+					log.Fatalf("unable to create dir %q: %s", testDir, err)
+				}
+
+				body := fileReader(t, "integration.model.cmd.json")
+				resp, err := httpClient.Post(testAddr+"/models", "application/json", body)
+				if err != nil {
+					t.Fatalf("unexpected err: %s", err)
+				}
+
+				id := getStatusIDFromResponse(t, resp)
+				maxWait := 5 * time.Minute
+				done := time.Now().Add(maxWait)
+				for time.Now().Before(done) {
+					time.Sleep(time.Second)
+					if checkStatus(id) {
+						output := fmt.Sprintf("%s/output.txt", taskResultsDir)
+						fi, err := os.Stat(output)
+						if err != nil {
+							continue
+						}
+						if fi.Size() > 0 {
+							return
+						}
+					}
+				}
+				t.Fatalf("job doesn't finished for %v", maxWait)
+			},
+		},
 	}
 
 	for _, tc := range testCases {

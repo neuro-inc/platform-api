@@ -74,6 +74,12 @@ func TestBatchInference_UnmarshalJSON_Positive(t *testing.T) {
 	if bi.Container.Image != "hello-world" {
 		t.Fatalf("wrong image %q; expected to have %q", bi.Container.Image, "hello-world")
 	}
+
+	expCMD := "ls -la"
+	if bi.Container.CMD != expCMD {
+		t.Fatalf("wrong CMD %q; expected to have %q", bi.Container.CMD, expCMD)
+	}
+
 	expectedEnv := map[string]string{
 		"FOO":             "BAR",
 		"NP_PATH_DATASET": "/var/storage/fixtures",

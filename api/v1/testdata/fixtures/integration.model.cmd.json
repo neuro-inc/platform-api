@@ -1,0 +1,12 @@
+{
+  "code": {
+    "image": "ubuntu",
+    "CMD": "ls -la >> $PATH_RESULT/output.txt"
+  },
+  "dataset_storage_uri": "storage://people/dataset",
+  "result_storage_uri":"storage://userSpace/model/cmd",
+  "resources": {
+    "cpus": 1,
+    "memoryMb": 64
+  }
+}

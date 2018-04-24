@@ -3,6 +3,7 @@ package container
 import (
 	"encoding/json"
 	"fmt"
+
 	"github.com/neuromation/platform-api/api/v1/storage"
 )
 
@@ -18,6 +19,9 @@ func SetPath(path string) {
 type Container struct {
 	// The docker image that is going to be passed to the registry.
 	Image string `json:"image"`
+
+	// CMD contains a shell command to execute inside of container
+	CMD string `json:"CMD,omitempty"`
 
 	// Environment variables passed into container
 	Env map[string]string `json:"env,omitempty"`
