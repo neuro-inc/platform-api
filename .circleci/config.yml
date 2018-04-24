@@ -1,11 +1,15 @@
+defaults: &defaults
+  machine:
+    image: circleci/classic:201711-01
+    docker_layer_caching: true
+  working_directory: ~/.go_workspace/src/github.com/neuromation/platform-api
+
+
 version: 2
 jobs:
 
   test:
-    machine:
-      image: circleci/classic:201711-01
-      docker_layer_caching: true
-    working_directory: ~/.go_workspace/src/github.com/neuromation/platform-api
+    <<: *defaults
     environment:
       TEST_RESULTS: /tmp/test-results
     steps:
@@ -32,6 +36,15 @@ jobs:
       - store_test_results:
           path: /tmp/test-results
 
+  deploy:
+    <<: *defaults
+    steps:
+      - checkout
+      - run:
+          name: Building and pushing docker images
+          command: |
+            make build_api push_api
+
 workflows:
   version: 2
 
@@ -39,3 +52,11 @@ workflows:
     jobs:
       - test:
           context: org-global
+      - deploy:
+          context: org-global
+          requires:
+            - test
+          filters:
+            branches:
+              only:
+                - master
