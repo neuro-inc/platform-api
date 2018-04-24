@@ -102,6 +102,46 @@ func TestGetPost(t *testing.T) {
 	}
 }
 
+func TestSingularityClient_NewJob(t *testing.T) {
+	c := container.Container{
+		Image: "hello-world",
+		CMD:   "ls -la",
+		Volumes: []*container.Volume{
+			{
+				From: "path/from",
+				To:   "path/to",
+				Mode: "RO",
+			},
+		},
+		Env: map[string]string{
+			"ENV": "value",
+		},
+	}
+	res := container.Resources{
+		"cpus":     1,
+		"memoryMb": 64,
+	}
+
+	sc := fakeClient(t)
+	job := sc.NewJob(c, res)
+	sj := job.(*singularityJob)
+
+	assertEqual(t, sj.Deploy.ContainerInfo.Docker.Image, c.Image, "")
+	assertEqual(t, sj.Deploy.ContainerInfo.Type, "DOCKER", "")
+	expVolume := volume{
+		HostPath:      "path/from",
+		ContainerPath: "path/to",
+		Mode:          "RO",
+	}
+	assertEqual(t, sj.Deploy.ContainerInfo.Volumes[0], expVolume, "")
+	assertEqual(t, sj.Deploy.Env["ENV"], c.Env["ENV"], "")
+	assertEqual(t, sj.Deploy.Resources["cpus"], res["cpus"], "")
+	assertEqual(t, sj.Deploy.Resources["memoryMb"], res["memoryMb"], "")
+	assertEqual(t, sj.Deploy.Command, c.CMD, "")
+	assertEqual(t, sj.Deploy.Shell, true, "")
+	assertEqual(t, sj.Deploy.DeployHealthTimeoutSeconds, 300, "")
+}
+
 func TestSingularityJob_Start2(t *testing.T) {
 	sc := fakeClient(t)
 	job := sc.NewJob(container.Container{}, container.Resources{})
@@ -206,4 +246,14 @@ func (r *singularityState) get(key string) bool {
 	defer r.Unlock()
 	_, ok := r.r[key]
 	return ok
+}
+
+func assertEqual(t *testing.T, a interface{}, b interface{}, message string) {
+	if a == b {
+		return
+	}
+	if len(message) == 0 {
+		message = fmt.Sprintf("%v != %v", a, b)
+	}
+	t.Fatal(message)
 }
