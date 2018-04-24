@@ -38,8 +38,19 @@ up:
 down:
 	-docker-compose -f tests/docker-compose.yml down
 
+
+DOCKER_REGISTRY ?= registry.neuromation.io
+DOCKER_REPO ?= $(DOCKER_REGISTRY)/neuromationorg
+IMAGE_NAME ?= platformapi
+IMAGE_TAG ?= latest
+IMAGE ?= $(DOCKER_REPO)/$(IMAGE_NAME):$(IMAGE_TAG)
+
+
 build_api:
-	docker build -t platformapi:latest .
+	docker build -t $(IMAGE) .
+
+push_api: _docker_login
+	docker push $(IMAGE)
 
 create_storage_dir:
 	mkdir -p /tmp/platformapi/data
@@ -49,7 +60,7 @@ run_api_built: create_storage_dir
 	    -e PLATFORMAPI_SINGULARITYADDR=http://tests_singularity_1:7099 \
 	    -e PLATFORMAPI_STORAGEBASEPATH=/go/storage \
 	    -v /tmp/platformapi:/go/storage \
-	    platformapi:latest
+	    $(IMAGE)
 
 build_api_tests:
 	make -C tests/api build
@@ -63,13 +74,11 @@ ci_run_api_tests_built:
 	    -v ${TEST_RESULTS}:/tmp/test-results platformapi-apitests pytest \
 	    --junitxml=/tmp/test-results/junit/api-tests.xml -vv .
 
-DOCKER_REGISTRY ?= registry.neuromation.io
-
 _docker_login:
 	@docker login -u "$(DOCKER_USER)" -p "$(DOCKER_PASS)" $(DOCKER_REGISTRY)
 
 pull_api_test_fixtures: _docker_login
-	docker pull $(DOCKER_REGISTRY)/neuromationorg/platformapi-dummy
+	docker pull $(DOCKER_REPO)/platformapi-dummy
 
 prepare_api_tests: pull_api_test_fixtures \
 	build_api run_api_built \
