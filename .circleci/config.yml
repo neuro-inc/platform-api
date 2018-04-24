@@ -56,3 +56,7 @@ workflows:
           context: org-global
           requires:
             - test
+          filters:
+            branches:
+              only:
+                - master
