@@ -28,11 +28,12 @@ var (
 // Serve starts serving web-server for accepting requests
 func Serve(cfg *config.Config) error {
 	log.Infof("Starting...")
+	log.Infof("Configuration: \n %s", cfg)
 	ln, err := net.Listen("tcp4", cfg.ListenAddr)
 	if err != nil {
 		return fmt.Errorf("cannot listen for %q: %s", cfg.ListenAddr, err)
 	}
-	client, err = singularity.NewClient(cfg.SingularityAddr, cfg.WriteTimeout)
+	client, err = singularity.NewClient(cfg.SingularityAddr, cfg.PrivateDockerRegistryPath, cfg.WriteTimeout)
 	if err != nil {
 		return fmt.Errorf("error while creating client: %s", err)
 	}
