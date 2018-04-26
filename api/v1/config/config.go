@@ -34,7 +34,7 @@ type Config struct {
 	// to access private docker registry
 	//
 	// @see http://mesosphere.github.io/marathon/docs/native-docker-private-registry.html
-	PrivateDockerRegistryPath string `default:"file:///etc/docker.tar.gz"`
+	PrivateDockerRegistryPath string
 }
 
 func (c Config) String() string {
