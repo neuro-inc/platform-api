@@ -11,9 +11,6 @@ endif
 ansible.docker.env:
 	@env | grep AWS_ > $(ANSIBLE_DOCKER_ENV_PATH)
 
-# in order to get SSH-forwarding working on macOS, follow the
-# instructions here:
-# https://github.com/uber-common/docker-ssh-agent-forward
 ANSIBLE_DOCKER_OPTS := \
     -v ssh-agent:/ssh-agent -e SSH_AUTH_SOCK=/ssh-agent/ssh-agent.sock \
     --env-file $(ANSIBLE_DOCKER_ENV_PATH) \
