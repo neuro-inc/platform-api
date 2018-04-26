@@ -22,8 +22,7 @@ ANSIBLE_DOCKER_OPTS := \
 
 _run_docker_ssh_agent_forward:
 	git clone git://github.com/uber-common/docker-ssh-agent-forward
-	cd docker-ssh-agent-forward; make; make install
-	pinata-ssh-forward
+	cd docker-ssh-agent-forward; make; bash pinata-ssh-forward.sh
 
 deploy_platformapi_dev: _run_docker_ssh_agent_forward _docker_login ansible.docker.env .vault_pass
 	# TODO: pass tag
