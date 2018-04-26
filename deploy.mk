@@ -20,7 +20,12 @@ ANSIBLE_DOCKER_OPTS := \
     -v $(ANSIBLE_VAULT_PASSWORD_PATH):/root/.vault_pass \
     registry.neuromation.io/neuromationorg/ansible:latest
 
-deploy_platformapi_dev: _docker_login ansible.docker.env .vault_pass
+_run_docker_ssh_agent_forward:
+	git clone git://github.com/uber-common/docker-ssh-agent-forward
+	cd docker-ssh-agent-forward; make; make install
+	pinata-ssh-forward
+
+deploy_platformapi_dev: _run_docker_ssh_agent_forward _docker_login ansible.docker.env .vault_pass
 	# TODO: pass tag
 	docker run --rm $(ANSIBLE_DOCKER_OPTS) \
 	    ansible-playbook -l 'tag_env_dev:&tag_role_master' platformapi_deploy.yml
