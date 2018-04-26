@@ -14,11 +14,11 @@ import (
 )
 
 func TestNewClient_Fail(t *testing.T) {
-	_, err := NewClient("localhost", time.Second)
+	_, err := NewClient("localhost", "", time.Second)
 	if err == nil {
 		t.Fatalf("expected to get error")
 	}
-	_, err = NewClient("", time.Second)
+	_, err = NewClient("", "", time.Second)
 	if err == nil {
 		t.Fatalf("expected to get error")
 	}
@@ -26,24 +26,28 @@ func TestNewClient_Fail(t *testing.T) {
 
 func TestNewClient_Success(t *testing.T) {
 	testCases := []struct {
-		timeout time.Duration
-		addr    string
+		timeout  time.Duration
+		addr     string
+		artifact string
 	}{
 		{
 			time.Second,
 			"http://localhost",
+			"file:///etc/docker.tar.gz",
 		},
 		{
 			time.Second * 10,
 			"http://localhost:8080",
+			"https:///foo/registry/docker.tar.gz",
 		},
 		{
 			time.Minute,
 			"https://127.0.0.1",
+			"http:///foo/registry/docker.tar.gz",
 		},
 	}
 	for _, tc := range testCases {
-		c, err := NewClient(tc.addr, tc.timeout)
+		c, err := NewClient(tc.addr, tc.artifact, tc.timeout)
 		if err != nil {
 			t.Fatalf("expected client create successfully; got err: %s", err)
 		}
@@ -53,6 +57,15 @@ func TestNewClient_Success(t *testing.T) {
 		}
 		if sc.addr.String() != tc.addr {
 			t.Fatalf("expected client addr to be %q; got %q instead", tc.addr, sc.addr)
+		}
+		if sc.dockerRegistry == nil {
+			t.Fatalf("dockerRegistry expected to be non-nil")
+		}
+		if sc.dockerRegistry.URI != tc.artifact {
+			t.Fatalf("expected client dockerRegistry.URI to be %q; got %q instead", tc.artifact, sc.dockerRegistry.URI)
+		}
+		if !sc.dockerRegistry.Extract {
+			t.Fatalf("dockerRegistry artifact expected to have Extract=true")
 		}
 	}
 
@@ -222,7 +235,7 @@ func respondWith(rw http.ResponseWriter, msg string, sc int) {
 func fakeClient(t *testing.T) *singularityClient {
 	t.Helper()
 	s := httptest.NewServer(http.HandlerFunc(singularityHandler))
-	c, err := NewClient(s.URL, time.Second)
+	c, err := NewClient(s.URL, "", time.Second)
 	if err != nil {
 		t.Fatalf("expected to create client successfully; got err: %s", err)
 	}

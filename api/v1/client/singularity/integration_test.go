@@ -17,7 +17,7 @@ var (
 )
 
 func TestSingularityJob_Start(t *testing.T) {
-	c, err := NewClient("http://"+addr, timeout)
+	c, err := NewClient("http://"+addr, "", timeout)
 	if err != nil {
 		t.Fatalf("fail to create new client: %s", err)
 	}

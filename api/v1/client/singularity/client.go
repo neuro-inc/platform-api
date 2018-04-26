@@ -16,15 +16,16 @@ import (
 )
 
 type singularityClient struct {
-	c    http.Client
-	addr *url.URL
+	c              http.Client
+	addr           *url.URL
+	dockerRegistry *artifact
 
 	sync.RWMutex
 	r map[string]*singularityJob
 }
 
 // NewClient creates new orchestrator.Client from given config
-func NewClient(addr string, timeout time.Duration) (orchestrator.Client, error) {
+func NewClient(addr, dockerRegistry string, timeout time.Duration) (orchestrator.Client, error) {
 	uri, err := url.ParseRequestURI(addr)
 	if err != nil {
 		return nil, err
@@ -35,6 +36,13 @@ func NewClient(addr string, timeout time.Duration) (orchestrator.Client, error) 
 		},
 		addr: uri,
 		r:    make(map[string]*singularityJob),
+	}
+	if len(dockerRegistry) > 0 {
+		client.dockerRegistry = &artifact{
+			URI: dockerRegistry,
+			// we assume that docker registry config will be archived
+			Extract: true,
+		}
 	}
 	return client, nil
 }
@@ -110,6 +118,9 @@ func (sc *singularityClient) NewJob(container container.Container, res container
 	if len(container.CMD) > 0 {
 		j.Deploy.Command = container.CMD
 		j.Deploy.Shell = true
+	}
+	if sc.dockerRegistry != nil {
+		j.Deploy.URIs = append(j.Deploy.URIs, sc.dockerRegistry)
 	}
 
 	sc.Lock()

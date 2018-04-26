@@ -1,6 +1,10 @@
 package config
 
-import "time"
+import (
+	"fmt"
+	"reflect"
+	"time"
+)
 
 // Config contains description of app configured variables
 // TODO: frankly, it's too excess way to describe configuration
@@ -25,4 +29,21 @@ type Config struct {
 
 	// EnvPrefix contains a prefix for environment variable names
 	EnvPrefix string
+
+	// PrivateDockerRegistryPath contains a path to archived docker config
+	// to access private docker registry
+	//
+	// @see http://mesosphere.github.io/marathon/docs/native-docker-private-registry.html
+	PrivateDockerRegistryPath string `default:"file:///etc/docker.tar.gz"`
+}
+
+func (c Config) String() string {
+	var res string
+	v := reflect.ValueOf(c)
+	for i := 0; i < v.NumField(); i++ {
+		value := v.Field(i)
+		typeField := v.Type().Field(i)
+		res += fmt.Sprintf("    %s: %s\n", typeField.Name, value.Interface())
+	}
+	return res
 }

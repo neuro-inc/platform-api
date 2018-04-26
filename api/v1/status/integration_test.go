@@ -88,7 +88,7 @@ const (
 
 func getClient(t *testing.T) orchestrator.Client {
 	t.Helper()
-	c, err := singularity.NewClient("http://"+testAddr, testTimeout)
+	c, err := singularity.NewClient("http://"+testAddr, "", testTimeout)
 	if err != nil {
 		t.Fatalf("fail to create new client: %s", err)
 	}

@@ -43,6 +43,14 @@ type (
 		Resources                  map[string]float64 `json:"resources"`
 		Env                        map[string]string  `json:"env"`
 		DeployHealthTimeoutSeconds int                `json:"deployHealthTimeoutSeconds"`
+		URIs                       []*artifact        `json:"uris"`
+	}
+
+	artifact struct {
+		URI        string `json:"uri"`
+		Cache      bool   `json:"cache"`
+		Executable bool   `json:"executable"`
+		Extract    bool   `json:"extract"`
 	}
 
 	// ContainerInfo wrapper for singularity container
