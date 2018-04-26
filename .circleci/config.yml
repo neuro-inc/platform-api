@@ -55,13 +55,13 @@ workflows:
 
   main:
     jobs:
-#     - test:
-#         context: org-global
+      - test:
+          context: org-global
       - deploy:
           context: org-global
-#         requires:
-#           - test
-#         filters:
-#           branches:
-#             only:
-#               - master
+          requires:
+            - test
+          filters:
+            branches:
+              only:
+                - master
