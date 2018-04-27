@@ -20,10 +20,10 @@
 
 ## Configuring
 
-The platform can be configured with environment variable. To avoid possible conflicts variables must be prefixed with `PLATFORMAPI_`.
+The platform can be configured with environment variables. To avoid possible conflicts variables must be prefixed with `PLATFORMAPI_`.
 Possible params:
 * PLATFORMAPI_STORAGEBASEPATH - The parent path for all `storage` mounts (`required`)
-* PLATFORMAPI_PRIVATEDOCKERREGISTRYPATH - PrivateDockerRegistryPath contains a path to archived docker config to access private docker registry (required for private docker registry)
+* PLATFORMAPI_PRIVATEDOCKERREGISTRYPATH - Contains a path to archived docker config to access private docker registry (required for private docker registry)
 * PLATFORMAPI_LISTENADDR - Addr to listen for incoming requests (default:":8080")
 * PLATFORMAPI_SINGULARITYADDR - Singularity app addr to proxy requests (default:"http://127.0.0.1:7099")
 * PLATFORMAPI_READTIMEOUT - Platform read timeout (default:"1m")
@@ -34,17 +34,17 @@ Possible params:
 
 Required variables example:
 ```
-PLATFORMAPI_SINGULARITYADDR=http://singularity:7099"
 PLATFORMAPI_STORAGEBASEPATH=/fileStorage/dev/storage
+PLATFORMAPI_PRIVATEDOCKERREGISTRYPATH=file:///etc/docker.tar.gz
 ```
 
 ## Environment varialbes inside of task containers
 
-The platform expose env variables with path to mounted volumes inside of containers with tasks:
+The platform expose mounted volumes path as env variables inside of containers:
 * PATH_RESULT - Storage URI where artifacts should be saved (ReadWrite volume)
 * PATH_DATASET - Storage URI where dataset sits (ReadOnly volume)
 * PATH_MODEL - Storage URI where model sits (ReadOnly volume)
 
 ## Exmaples
 
-Examples of jobs could be found in [fixtures](https://github.com/neuromation/platform-api/tree/master/api/v1/testdata/fixtures) with prefix `integration.```
+Examples of jobs could be found in [fixtures](https://github.com/neuromation/platform-api/tree/master/api/v1/testdata/fixtures) with prefix `integration.`
