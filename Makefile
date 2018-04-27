@@ -87,3 +87,5 @@ prepare_api_tests: pull_api_test_fixtures \
 run_api_tests: prepare_api_tests run_api_tests_built
 
 ci_run_api_tests: prepare_api_tests ci_run_api_tests_built
+
+include deploy.mk

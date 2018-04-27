@@ -45,6 +45,11 @@ jobs:
           command: |
             make build_api push_api
 
+      - run:
+          name: Deploying on dev environment
+          command: |
+              make deploy_platformapi_dev
+
 workflows:
   version: 2
 
