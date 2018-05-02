@@ -75,6 +75,24 @@ func TestMarshaledStatus(t *testing.T) {
 	}
 }
 
+type TestPoller struct{}
+
+func (tp *TestPoller) Update(js *JobStatus) error {
+	js.SetStatusName(STATUS_SUCCEEDED)
+	return nil
+}
+
+func TestJobStatusUpdate(t *testing.T) {
+	status := NewJobStatus(NewGenericStatus(), &TestPoller{})
+	if status.StatusName() != STATUS_PENDING {
+		t.Fatal()
+	}
+	status.update()
+	if status.StatusName() != STATUS_SUCCEEDED {
+		t.Fatal()
+	}
+}
+
 func TestInMemoryStatusServiceSetGet(t *testing.T) {
 	service := NewInMemoryStatusService()
 	var status Status = NewGenericStatus()
@@ -137,6 +155,38 @@ func TestInMemoryStatusServiceDelete(t *testing.T) {
 
 	_, err = service.Get(status.Id())
 	if err == nil {
+		t.Fatal()
+	}
+}
+
+func TestInMemoryStatusServiceGetModelStatus(t *testing.T) {
+	service := NewInMemoryStatusService()
+	modelId := "someId"
+	modelUrl := "http://host/path"
+	var status Status = NewModelStatus(modelId, modelUrl, &TestPoller{})
+	service.Set(status)
+
+	status, err := service.Get(status.Id())
+	if err != nil {
+		t.Fatal()
+	}
+	if !status.IsSucceeded() {
+		t.Fatal()
+	}
+}
+
+func TestInMemoryStatusServiceGetBatchInferenceStatus(t *testing.T) {
+	service := NewInMemoryStatusService()
+	biId := "someId"
+	biUrl := "http://host/path"
+	var status Status = NewModelStatus(biId, biUrl, &TestPoller{})
+	service.Set(status)
+
+	status, err := service.Get(status.Id())
+	if err != nil {
+		t.Fatal()
+	}
+	if !status.IsSucceeded() {
 		t.Fatal()
 	}
 }

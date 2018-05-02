@@ -118,7 +118,7 @@ func TestServe_Integration(t *testing.T) {
 		{
 			"model gif-generator",
 			func(t *testing.T) {
-				taskResultsDir := testDir + "/userSpace/model/gif-generator"
+				taskResultsDir := testDir + "/storage/userSpace/model/gif-generator"
 				if err := os.MkdirAll(taskResultsDir, 0700); err != nil {
 					log.Fatalf("unable to create dir %q: %s", testDir, err)
 				}
@@ -135,13 +135,8 @@ func TestServe_Integration(t *testing.T) {
 				for time.Now().Before(done) {
 					time.Sleep(time.Second)
 					if checkStatus(id) {
-						files, err := ioutil.ReadDir(taskResultsDir)
-						if err != nil {
-							t.Fatalf("unable to read dir: %s", err)
-						}
-						if len(files) == 1 {
-							return
-						}
+						assertFilesNumber(t, taskResultsDir, 1)
+						return
 					}
 				}
 				t.Fatalf("job doesn't finished for %v", maxWait)
@@ -167,13 +162,8 @@ func TestServe_Integration(t *testing.T) {
 				for time.Now().Before(done) {
 					time.Sleep(time.Second)
 					if checkStatus(id) {
-						files, err := ioutil.ReadDir(taskResultsDir)
-						if err != nil {
-							t.Fatalf("unable to read dir: %s", err)
-						}
-						if len(files) == 1 {
-							return
-						}
+						assertFilesNumber(t, taskResultsDir, 1)
+						return
 					}
 				}
 				t.Fatalf("job doesn't finished for %v", maxWait)
@@ -255,6 +245,18 @@ func fileReader(t *testing.T, src string) io.Reader {
 
 func checkErr(t *testing.T, err error) {
 	if err != nil {
-		t.Fatalf("unexpected erorr: %s", err)
+		t.Fatalf("unexpected error: %s", err)
+	}
+}
+
+func assertFilesNumber(t *testing.T, path string, expFilesNumber int) {
+	files, err := ioutil.ReadDir(path)
+	if err != nil {
+		t.Fatalf("unable to read dir: %s", err)
+	}
+	filesNumber := len(files)
+	if filesNumber != expFilesNumber {
+		t.Fatalf("found %d of %d expected files in %s",
+			filesNumber, expFilesNumber, path)
 	}
 }

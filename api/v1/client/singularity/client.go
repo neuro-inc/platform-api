@@ -12,6 +12,7 @@ import (
 
 	"github.com/neuromation/platform-api/api/v1/container"
 	"github.com/neuromation/platform-api/api/v1/orchestrator"
+	"github.com/neuromation/platform-api/api/v1/status"
 	"github.com/neuromation/platform-api/log"
 )
 
@@ -173,18 +174,62 @@ func (j *singularityJob) Delete() error {
 	panic("implement me")
 }
 
-func (j *singularityJob) Status() (string, error) {
-	addr := fmt.Sprintf("history/request/%s/deploy/%s", j.Deploy.RequestID, j.Deploy.ID)
+var knownStates = map[string]status.StatusName{
+	// NOTE: in case the resulting status is an empty or unknown
+	// string, we assume that the status is PENDING
+	"": status.STATUS_PENDING,
+
+	"SUCCEEDED":             status.STATUS_SUCCEEDED,
+	"WAITING":               status.STATUS_PENDING,
+	"OVERDUE":               status.STATUS_FAILED,
+	"FAILED":                status.STATUS_FAILED,
+	"FAILED_INTERNAL_STATE": status.STATUS_FAILED,
+	"CANCELING":             status.STATUS_PENDING,
+	"CANCELED":              status.STATUS_FAILED,
+
+	"TASK_LAUNCHED":         status.STATUS_PENDING,
+	"TASK_STAGING":          status.STATUS_PENDING,
+	"TASK_STARTING":         status.STATUS_PENDING,
+	"TASK_RUNNING":          status.STATUS_PENDING,
+	"TASK_CLEANING":         status.STATUS_PENDING,
+	"TASK_KILLING":          status.STATUS_PENDING,
+	"TASK_FINISHED":         status.STATUS_SUCCEEDED,
+	"TASK_FAILED":           status.STATUS_FAILED,
+	"TASK_KILLED":           status.STATUS_FAILED,
+	"TASK_LOST":             status.STATUS_FAILED,
+	"TASK_LOST_WHILE_DOWN":  status.STATUS_FAILED,
+	"TASK_ERROR":            status.STATUS_FAILED,
+	"TASK_DROPPED":          status.STATUS_FAILED,
+	"TASK_GONE":             status.STATUS_FAILED,
+	"TASK_UNREACHABLE":      status.STATUS_FAILED,
+	"TASK_GONE_BY_OPERATOR": status.STATUS_FAILED,
+	"TASK_UNKNOWN":          status.STATUS_FAILED,
+}
+
+func (j *singularityJob) Status() (status.StatusName, error) {
+	addr := fmt.Sprintf("history/request/%s/deploy/%s",
+		j.Deploy.RequestID, j.Deploy.ID)
 	resp, err := j.client.get(addr)
 	if err != nil {
-		return "", fmt.Errorf("error while getting job %q state: %s", j.GetID(), err)
+		return status.STATUS_PENDING, fmt.Errorf(
+			"error while getting job %q state: %s", j.GetID(), err)
 	}
 	decoder := json.NewDecoder(resp.Body)
 	deployHistory := &deployHistory{}
 	if err = decoder.Decode(deployHistory); err != nil {
-		return "", fmt.Errorf("error while decoding request body: %s", err)
+		return status.STATUS_PENDING, fmt.Errorf(
+			"error while decoding request body: %s", err)
 	}
-	return deployHistory.DeployResult.State, nil
+
+	state := deployHistory.DeployResult.State
+	statusName := knownStates[state]
+	if statusName == status.STATUS_SUCCEEDED {
+		state = deployHistory.DeployStatistics.LastTaskState
+		statusName = knownStates[state]
+	}
+	log.Infof("Got request %s deploy %s task state: '%s' -> %s",
+		j.Deploy.RequestID, j.Deploy.ID, state, statusName)
+	return statusName, nil
 }
 
 func (j *singularityJob) GetID() string {

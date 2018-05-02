@@ -17,21 +17,21 @@ jobs:
       - run: |
           mkdir -p $TEST_RESULTS/junit
           go get github.com/jstemmer/go-junit-report
-          make up
       - run:
-          name: Running API tests
-          command: make ci_run_api_tests
+          name: Running unit and integration tests
+          command: |
+            make up
+            trap "go-junit-report <${TEST_RESULTS}/go-test.out > ${TEST_RESULTS}/junit/go-test-report.xml" EXIT
+            make go_integration_test | tee ${TEST_RESULTS}/go-test.out;
+            bash <(curl -s https://codecov.io/bash);
       - run:
           name: cleanup
           command: |
             make down
             make up
       - run:
-          name: Running unit and integration tests
-          command: |
-            trap "go-junit-report <${TEST_RESULTS}/go-test.out > ${TEST_RESULTS}/junit/go-test-report.xml" EXIT
-            make go_integration_test | tee ${TEST_RESULTS}/go-test.out;
-            bash <(curl -s https://codecov.io/bash);
+          name: Running API tests
+          command: make ci_run_api_tests
 
       - store_test_results:
           path: /tmp/test-results

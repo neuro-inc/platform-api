@@ -53,7 +53,7 @@ push_api: _docker_login
 	docker push $(IMAGE)
 
 create_storage_dir:
-	mkdir -p /tmp/platformapi/data
+	mkdir -p /tmp/platformapi/data/result
 
 run_api_built: create_storage_dir
 	docker run -d --rm --link tests_singularity_1 --name platformapi \

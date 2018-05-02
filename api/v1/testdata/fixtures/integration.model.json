@@ -7,7 +7,7 @@
     }
   },
   "dataset_storage_uri": "storage://people/dataset",
-  "result_storage_uri":"./testdata/temp/userSpace/model/gif-generator",
+  "result_storage_uri":"./testdata/temp/storage/userSpace/model/gif-generator",
   "resources": {
     "cpus": 1,
     "memoryMb": 64
