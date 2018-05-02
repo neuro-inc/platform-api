@@ -75,6 +75,23 @@ func TestMarshaledStatus(t *testing.T) {
 	}
 }
 
+type TestPoller struct {}
+func (tp *TestPoller) Update(js *JobStatus) error {
+	js.SetStatusName(STATUS_SUCCEEDED)
+	return nil
+}
+
+func TestJobStatusUpdate(t *testing.T) {
+	status := NewJobStatus(NewGenericStatus(), &TestPoller{})
+	if status.StatusName() != STATUS_PENDING {
+		t.Fatal()
+	}
+	status.update()
+	if status.StatusName() != STATUS_SUCCEEDED {
+		t.Fatal()
+	}
+}
+
 func TestInMemoryStatusServiceSetGet(t *testing.T) {
 	service := NewInMemoryStatusService()
 	var status Status = NewGenericStatus()
