@@ -119,7 +119,7 @@ func TestJobStatusPoller(t *testing.T) {
 	done = time.Now().Add(maxWait)
 	for time.Now().Before(done) {
 		time.Sleep(time.Millisecond * 200)
-		err := jobStatusPoller.Update(jobStatus)
+		err := jobStatusPoller.Update(&jobStatus)
 		if err != nil {
 			t.Fatalf("unexpected status error: %s", err)
 		}
