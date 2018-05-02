@@ -158,6 +158,38 @@ func TestInMemoryStatusServiceDelete(t *testing.T) {
 	}
 }
 
+func TestInMemoryStatusServiceGetModelStatus(t *testing.T) {
+	service := NewInMemoryStatusService()
+	modelId := "someId"
+	modelUrl := "http://host/path"
+	var status Status = NewModelStatus(modelId, modelUrl, &TestPoller{})
+	service.Set(status)
+
+	status, err := service.Get(status.Id())
+	if err != nil {
+		t.Fatal()
+	}
+	if !status.IsSucceeded() {
+		t.Fatal()
+	}
+}
+
+func TestInMemoryStatusServiceGetBatchInferenceStatus(t *testing.T) {
+	service := NewInMemoryStatusService()
+	biId := "someId"
+	biUrl := "http://host/path"
+	var status Status = NewModelStatus(biId, biUrl, &TestPoller{})
+	service.Set(status)
+
+	status, err := service.Get(status.Id())
+	if err != nil {
+		t.Fatal()
+	}
+	if !status.IsSucceeded() {
+		t.Fatal()
+	}
+}
+
 func assertEqual(t *testing.T, a interface{}, b interface{}, message string) {
 	if a == b {
 		return
