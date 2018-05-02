@@ -57,7 +57,6 @@ create_storage_dir:
 
 run_api_built: create_storage_dir
 	docker run -d --rm --link tests_singularity_1 --name platformapi \
-	    -p 8080:8080 \
 	    -e PLATFORMAPI_SINGULARITYADDR=http://tests_singularity_1:7099 \
 	    -e PLATFORMAPI_STORAGEBASEPATH=/go/storage \
 	    -v /tmp/platformapi:/go/storage \
