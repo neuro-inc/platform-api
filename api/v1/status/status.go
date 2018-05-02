@@ -32,19 +32,6 @@ func (name StatusName) MarshalJSON() ([]byte, error) {
 	return []byte(fmt.Sprintf(`"%s"`, name.String())), nil
 }
 
-var knownStatuses = map[string]StatusName{
-	// NOTE: in case the resulting status is an empty or unknown
-	// string, we assume that the status is PENDING
-	"":                      STATUS_PENDING,
-	"SUCCEEDED":             STATUS_SUCCEEDED,
-	"WAITING":               STATUS_PENDING,
-	"OVERDUE":               STATUS_FAILED,
-	"FAILED":                STATUS_FAILED,
-	"FAILED_INTERNAL_STATE": STATUS_FAILED,
-	"CANCELING":             STATUS_PENDING,
-	"CANCELED":              STATUS_FAILED,
-}
-
 type Status interface {
 	Id() string
 	StatusName() StatusName
@@ -83,6 +70,10 @@ func (gs GenericStatus) StatusName() StatusName {
 	return gs.statusName
 }
 
+func (gs *GenericStatus) SetStatusName(name StatusName) {
+	gs.statusName = name
+}
+
 func (GenericStatus) IsHttpRedirectSupported() bool {
 	return false
 }
@@ -115,6 +106,26 @@ func (gs GenericStatus) MarshalJSON() ([]byte, error) {
 		Id:         gs.Id(),
 		StatusName: gs.StatusName(),
 	})
+}
+
+type JobStatus struct {
+	GenericStatus
+	poller JobStatusPoller
+}
+
+func NewJobStatus(gs GenericStatus, poller JobStatusPoller) JobStatus {
+	return JobStatus{
+		GenericStatus: gs,
+		poller: poller,
+	}
+}
+
+func (js *JobStatus) update() error {
+	return js.poller.Update(js)
+}
+
+type JobStatusPoller interface {
+	Update(*JobStatus) error
 }
 
 type StatusService interface {

@@ -9,6 +9,7 @@ import (
 	"time"
 
 	"github.com/neuromation/platform-api/api/v1/container"
+	statuses "github.com/neuromation/platform-api/api/v1/status"
 )
 
 var (
@@ -69,7 +70,7 @@ func TestSingularityJob_Start(t *testing.T) {
 		if err != nil {
 			t.Fatalf("unexpected status error: %s", err)
 		}
-		if status == "SUCCEEDED" {
+		if status == statuses.STATUS_SUCCEEDED {
 			return
 		}
 	}
