@@ -178,6 +178,7 @@ var knownStates = map[string]status.StatusName{
 	// NOTE: in case the resulting status is an empty or unknown
 	// string, we assume that the status is PENDING
 	"":                      status.STATUS_PENDING,
+
 	"SUCCEEDED":             status.STATUS_SUCCEEDED,
 	"WAITING":               status.STATUS_PENDING,
 	"OVERDUE":               status.STATUS_FAILED,
@@ -185,6 +186,24 @@ var knownStates = map[string]status.StatusName{
 	"FAILED_INTERNAL_STATE": status.STATUS_FAILED,
 	"CANCELING":             status.STATUS_PENDING,
 	"CANCELED":              status.STATUS_FAILED,
+
+	"TASK_LAUNCHED": status.STATUS_PENDING,
+	"TASK_STAGING": status.STATUS_PENDING,
+	"TASK_STARTING": status.STATUS_PENDING,
+	"TASK_RUNNING":  status.STATUS_PENDING,
+	"TASK_CLEANING": status.STATUS_PENDING,
+	"TASK_KILLING": status.STATUS_PENDING,
+	"TASK_FINISHED": status.STATUS_SUCCEEDED,
+	"TASK_FAILED": status.STATUS_FAILED,
+	"TASK_KILLED": status.STATUS_FAILED,
+	"TASK_LOST": status.STATUS_FAILED,
+	"TASK_LOST_WHILE_DOWN": status.STATUS_FAILED,
+	"TASK_ERROR": status.STATUS_FAILED,
+	"TASK_DROPPED": status.STATUS_FAILED,
+	"TASK_GONE": status.STATUS_FAILED,
+	"TASK_UNREACHABLE": status.STATUS_FAILED,
+	"TASK_GONE_BY_OPERATOR": status.STATUS_FAILED,
+	"TASK_UNKNOWN": status.STATUS_FAILED,
 }
 
 func (j *singularityJob) Status() (status.StatusName, error) {
@@ -204,7 +223,11 @@ func (j *singularityJob) Status() (status.StatusName, error) {
 
 	state := deployHistory.DeployResult.State
 	statusName := knownStates[state]
-	log.Infof("Got request %s deploy %s state: '%s'(%s)",
+	if statusName == status.STATUS_SUCCEEDED {
+		state = deployHistory.DeployStatistics.LastTaskState
+		statusName = knownStates[state]
+	}
+	log.Infof("Got request %s deploy %s task state: '%s' -> %s",
 		j.Deploy.RequestID, j.Deploy.ID, state, statusName)
 	return statusName, nil
 }

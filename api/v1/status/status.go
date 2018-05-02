@@ -180,12 +180,10 @@ func (ss *InMemoryStatusService) Get(id string) (Status, error) {
 	// instead of proxying HTTP requests
 	switch statusCast := status.(type) {
 	case ModelStatus:
-		log.Infof("cast to ModelStatus")
 		statusCast.update()
 		status = statusCast
 		ss.Set(status)
 	case BatchInferenceStatus:
-		log.Infof("cast to BIStatus")
 		statusCast.update()
 		status = statusCast
 		ss.Set(status)
