@@ -368,14 +368,14 @@ class TestTrainingApi:
         payload = {
             "container": {
                 "env": {
-                    "MODEL_PATH": "/var/user"
+                    "MODEL_PATH": "/var/storage"
                 },
                 "image": (
                     "registry.neuromation.io/neuromationorg/platformapi-dummy"
                 ),
             },
             "dataset_storage_uri": "storage://data",
-            "result_storage_uri": "storage://data",
+            "result_storage_uri": "storage://data/result",
             "resources": {
                 "cpus": 1,
                 "memoryMb": 128
