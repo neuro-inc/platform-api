@@ -2,23 +2,18 @@ package status
 
 import (
 	"encoding/json"
-
-	"github.com/neuromation/platform-api/api/v1/orchestrator"
-	"github.com/neuromation/platform-api/log"
 )
 
 type BatchInferenceStatus struct {
-	GenericStatus
+	JobStatus
 	BatchInferenceID string
-
-	client orchestrator.Client
 }
 
-func NewBatchInferenceStatus(bID string, url string, client orchestrator.Client) *BatchInferenceStatus {
-	return &BatchInferenceStatus{
-		GenericStatus:    NewGenericStatusWithHttpRedirectUrl(url),
+func NewBatchInferenceStatus(bID string, url string, poller JobStatusPoller) BatchInferenceStatus {
+	return BatchInferenceStatus{
+		JobStatus: NewJobStatus(
+			NewGenericStatusWithHttpRedirectUrl(url), poller),
 		BatchInferenceID: bID,
-		client:           client,
 	}
 }
 
@@ -32,22 +27,4 @@ func (bis BatchInferenceStatus) MarshalJSON() ([]byte, error) {
 		StatusName:       bis.StatusName(),
 		BatchInferenceID: bis.BatchInferenceID,
 	})
-}
-
-func (bis *BatchInferenceStatus) update() error {
-	jobId := bis.BatchInferenceID
-	job := bis.client.GetJob(jobId)
-	title, err := job.Status()
-	if err != nil {
-		return err
-	}
-
-	newStatusName := knownStatuses[title]
-	log.Infof(
-		"Updating status %s from %s to %s(%s).",
-		bis.Id(), bis.StatusName(), newStatusName, title)
-
-	bis.statusName = newStatusName
-
-	return nil
 }
