@@ -13,7 +13,7 @@ func NewModelStatus(modelId string, modelUrl string, poller JobStatusPoller) Mod
 	return ModelStatus{
 		JobStatus: NewJobStatus(
 			NewGenericStatusWithHttpRedirectUrl(modelUrl), poller),
-		ModelId:       modelId,
+		ModelId: modelId,
 	}
 }
 

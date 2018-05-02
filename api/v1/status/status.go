@@ -116,7 +116,7 @@ type JobStatus struct {
 func NewJobStatus(gs GenericStatus, poller JobStatusPoller) JobStatus {
 	return JobStatus{
 		GenericStatus: gs,
-		poller: poller,
+		poller:        poller,
 	}
 }
 

@@ -75,7 +75,8 @@ func TestMarshaledStatus(t *testing.T) {
 	}
 }
 
-type TestPoller struct {}
+type TestPoller struct{}
+
 func (tp *TestPoller) Update(js *JobStatus) error {
 	js.SetStatusName(STATUS_SUCCEEDED)
 	return nil

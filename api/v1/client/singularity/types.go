@@ -25,7 +25,7 @@ type (
 	}
 
 	deployHistory struct {
-		DeployResult deployResult `json:"deployResult"`
+		DeployResult     deployResult     `json:"deployResult"`
 		DeployStatistics deployStatistics `json:"deployStatistics"`
 	}
 
