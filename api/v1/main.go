@@ -104,7 +104,9 @@ func createBatchInference(jobClient orchestrator.Client, statusService status.St
 
 		bID := job.GetID()
 		url := handlers.GenerateBatchInferenceURLFromRequest(req, bID)
-		s := status.NewBatchInferenceStatus(bID, url.String(), client)
+		jobStatusPoller := orchestrator.NewJobStatusPoller(job)
+		s := status.NewBatchInferenceStatus(
+			bID, url.String(), jobStatusPoller)
 		if err := statusService.Set(s); err != nil {
 			rw.WriteHeader(http.StatusInternalServerError)
 			return
@@ -140,7 +142,9 @@ func createModel(jobClient orchestrator.Client, statusService status.StatusServi
 
 		modelId := job.GetID()
 		modelUrl := handlers.GenerateModelURLFromRequest(req, modelId)
-		status := status.NewModelStatus(modelId, modelUrl.String(), client)
+		jobStatusPoller := orchestrator.NewJobStatusPoller(job)
+		status := status.NewModelStatus(
+			modelId, modelUrl.String(), jobStatusPoller)
 		if err := statusService.Set(status); err != nil {
 			rw.WriteHeader(http.StatusInternalServerError)
 			return
