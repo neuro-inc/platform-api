@@ -6,8 +6,8 @@ import (
 )
 
 type batchInference struct {
-	Container container.Container `json:"container"`
-	Resources container.Resources `json:"resources"`
+	Container *container.Container `json:"container"`
+	Resources container.Resources  `json:"resources"`
 
 	// Storage URI where dataset sits
 	DatasetStorageURI container.VolumeRO `json:"dataset_storage_uri"`
@@ -24,6 +24,14 @@ func (bi *batchInference) UnmarshalJSON(data []byte) error {
 	type plain batchInference
 	if err := json.Unmarshal(data, (*plain)(bi)); err != nil {
 		return err
+	}
+
+	if bi.Container == nil {
+		return requiredError("container")
+	}
+
+	if len(bi.Resources) == 0 {
+		return requiredError("resources")
 	}
 
 	if len(bi.DatasetStorageURI.From) == 0 {

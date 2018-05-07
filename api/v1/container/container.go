@@ -36,6 +36,10 @@ func (c *Container) UnmarshalJSON(data []byte) error {
 		return err
 	}
 
+	if len(c.Image) == 0 {
+		return requiredError("image")
+	}
+
 	if len(c.Env) == 0 {
 		c.Env = make(map[string]string)
 	}
@@ -118,17 +122,21 @@ func (r *Resources) UnmarshalJSON(data []byte) error {
 	}
 
 	if len(m) == 0 {
-		return fmt.Errorf("resources must be set")
+		return requiredError("resources")
 	}
 
 	if _, ok := m["cpus"]; !ok {
-		return fmt.Errorf("resources.cpus param must be set")
+		return requiredError("resources.cpus")
 	}
 
 	if _, ok := m["memoryMb"]; !ok {
-		return fmt.Errorf("resources.memoryMb param must be set")
+		return requiredError("resources.memoryMb")
 	}
 
 	*r = m
 	return nil
+}
+
+func requiredError(field string) error {
+	return fmt.Errorf("field %q required to be set", field)
 }

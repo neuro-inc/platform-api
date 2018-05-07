@@ -20,7 +20,7 @@ var (
 
 func TestSingularityJob_Start(t *testing.T) {
 	sc := getClient(t)
-	cont := container.Container{
+	cont := &container.Container{
 		Image: "hello-world",
 	}
 	res := container.Resources{
@@ -81,7 +81,7 @@ func TestJobStatusPoller(t *testing.T) {
 		"cpus":     1,
 		"memoryMb": 50,
 	}
-	j := sc.NewJob(cont, res)
+	j := sc.NewJob(&cont, res)
 	if err := j.Start(); err != nil {
 		t.Fatalf("error while starting job: %s", err)
 	}

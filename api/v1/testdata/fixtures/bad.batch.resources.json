@@ -1,0 +1,12 @@
+{
+  "container": {
+    "image": "hello-world",
+    "env": {
+      "FOO": "BAR"
+    },
+    "CMD": "ls -la"
+  },
+  "dataset_storage_uri": "storage://fixtures",
+  "result_storage_uri":"./testdata/fixtures",
+  "model_storage_uri":"storage://fixtures"
+}

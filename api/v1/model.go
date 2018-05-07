@@ -7,16 +7,14 @@ import (
 )
 
 type model struct {
-	Container container.Container `json:"container"`
-	Resources container.Resources `json:"resources"`
+	Container *container.Container `json:"container"`
+	Resources container.Resources  `json:"resources"`
 
 	// Storage URI where dataset sits
 	DatasetStorageURI container.VolumeRO `json:"dataset_storage_uri"`
 
 	// Storage URI where artifacts should be saved
 	ResultStorageURI container.VolumeRW `json:"result_storage_uri"`
-
-	Meta map[string]string `json:"meta,omitempty"`
 }
 
 // UnmarshalJSON implements the json.Unmarshaler interface.
@@ -24,6 +22,14 @@ func (m *model) UnmarshalJSON(data []byte) error {
 	type plain model
 	if err := json.Unmarshal(data, (*plain)(m)); err != nil {
 		return err
+	}
+
+	if m.Container == nil {
+		return requiredError("container")
+	}
+
+	if len(m.Resources) == 0 {
+		return requiredError("resources")
 	}
 
 	if len(m.DatasetStorageURI.From) == 0 {

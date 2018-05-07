@@ -116,7 +116,7 @@ func TestGetPost(t *testing.T) {
 }
 
 func TestSingularityClient_NewJob(t *testing.T) {
-	c := container.Container{
+	c := &container.Container{
 		Image: "hello-world",
 		CMD:   "ls -la",
 		Volumes: []*container.Volume{
@@ -157,7 +157,7 @@ func TestSingularityClient_NewJob(t *testing.T) {
 
 func TestSingularityJob_Start2(t *testing.T) {
 	sc := fakeClient(t)
-	job := sc.NewJob(container.Container{}, container.Resources{})
+	job := sc.NewJob(&container.Container{}, container.Resources{})
 	if err := job.Start(); err != nil {
 		t.Fatalf("unexpected job.Start() error: %s", err)
 	}
