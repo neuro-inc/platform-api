@@ -9,6 +9,7 @@ import (
 	"io/ioutil"
 	"net/http"
 	"os"
+	"strings"
 	"testing"
 	"time"
 
@@ -116,6 +117,44 @@ func TestServe_Integration(t *testing.T) {
 			},
 		},
 		{
+			"corrupted model",
+			func(t *testing.T) {
+				body := fileReader(t, "integration.corrupted.json")
+				resp, err := httpClient.Post(testAddr+"/models", "application/json", body)
+				checkErr(t, err)
+
+				if resp.StatusCode != http.StatusBadRequest {
+					t.Fatalf("unexpected sc: %d; expected: %d", resp.StatusCode, http.StatusBadRequest)
+				}
+				b, err := ioutil.ReadAll(resp.Body)
+				checkErr(t, err)
+				got := string(b)
+				exp := "Bad model request"
+				if !strings.Contains(got, exp) {
+					t.Fatalf("expected %q; got %q", exp, got)
+				}
+			},
+		},
+		{
+			"corrupted batch-inference",
+			func(t *testing.T) {
+				body := fileReader(t, "integration.corrupted.json")
+				resp, err := httpClient.Post(testAddr+"/batch-inference", "application/json", body)
+				checkErr(t, err)
+
+				if resp.StatusCode != http.StatusBadRequest {
+					t.Fatalf("unexpected sc: %d; expected: %d", resp.StatusCode, http.StatusBadRequest)
+				}
+				b, err := ioutil.ReadAll(resp.Body)
+				checkErr(t, err)
+				got := string(b)
+				exp := "Bad batch-inference request"
+				if !strings.Contains(got, exp) {
+					t.Fatalf("expected %q; got %q", exp, got)
+				}
+			},
+		},
+		{
 			"model gif-generator",
 			func(t *testing.T) {
 				taskResultsDir := testDir + "/storage/userSpace/model/gif-generator"
@@ -125,9 +164,7 @@ func TestServe_Integration(t *testing.T) {
 
 				body := fileReader(t, "integration.model.json")
 				resp, err := httpClient.Post(testAddr+"/models", "application/json", body)
-				if err != nil {
-					t.Fatalf("unexpected err: %s", err)
-				}
+				checkErr(t, err)
 
 				id := getStatusIDFromResponse(t, resp)
 				maxWait := time.Minute
@@ -152,9 +189,7 @@ func TestServe_Integration(t *testing.T) {
 
 				body := fileReader(t, "integration.batch-inference.json")
 				resp, err := httpClient.Post(testAddr+"/batch-inference", "application/json", body)
-				if err != nil {
-					t.Fatalf("unexpected err: %s", err)
-				}
+				checkErr(t, err)
 
 				id := getStatusIDFromResponse(t, resp)
 				maxWait := time.Minute
@@ -179,9 +214,7 @@ func TestServe_Integration(t *testing.T) {
 
 				body := fileReader(t, "integration.model.cmd.json")
 				resp, err := httpClient.Post(testAddr+"/models", "application/json", body)
-				if err != nil {
-					t.Fatalf("unexpected err: %s", err)
-				}
+				checkErr(t, err)
 
 				id := getStatusIDFromResponse(t, resp)
 				maxWait := 5 * time.Minute
