@@ -15,8 +15,6 @@ type model struct {
 
 	// Storage URI where artifacts should be saved
 	ResultStorageURI container.VolumeRW `json:"result_storage_uri"`
-
-	Meta map[string]string `json:"meta,omitempty"`
 }
 
 // UnmarshalJSON implements the json.Unmarshaler interface.
