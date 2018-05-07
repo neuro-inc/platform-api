@@ -9,6 +9,7 @@ import (
 
 const errResponse = `{"error": %q}`
 
+// Respond populates responseWriter with error message and statusCode
 func Respond(rw http.ResponseWriter, sc int, message string, err error) {
 	rw.WriteHeader(sc)
 	rw.Header().Set("Content-Type", "application/json")

@@ -76,9 +76,9 @@ func showHelp(rw http.ResponseWriter, _ *http.Request, _ httprouter.Params) {
 
 func viewModel(rw http.ResponseWriter, _ *http.Request, params httprouter.Params) {
 	model := &struct {
-		ModelId string `json:"model_id"`
+		ModelID string `json:"model_id"`
 	}{
-		ModelId: params.ByName("id"),
+		ModelID: params.ByName("id"),
 	}
 	payload, err := json.Marshal(model)
 	if err != nil {
@@ -141,11 +141,11 @@ func createModel(jobClient orchestrator.Client, statusService status.StatusServi
 			return
 		}
 
-		modelId := job.GetID()
-		modelUrl := handlers.GenerateModelURLFromRequest(req, modelId)
+		modelID := job.GetID()
+		modelURL := handlers.GenerateModelURLFromRequest(req, modelID)
 		jobStatusPoller := orchestrator.NewJobStatusPoller(job)
 		status := status.NewModelStatus(
-			modelId, modelUrl.String(), jobStatusPoller)
+			modelID, modelURL.String(), jobStatusPoller)
 		if err := statusService.Set(status); err != nil {
 			errors.Respond(rw, http.StatusInternalServerError, "Unable to update model's status", err)
 			return
