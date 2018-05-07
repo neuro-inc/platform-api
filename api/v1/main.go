@@ -11,6 +11,7 @@ import (
 	"github.com/neuromation/platform-api/api/v1/client/singularity"
 	"github.com/neuromation/platform-api/api/v1/config"
 	"github.com/neuromation/platform-api/api/v1/container"
+	"github.com/neuromation/platform-api/api/v1/errors"
 	"github.com/neuromation/platform-api/api/v1/handlers"
 	"github.com/neuromation/platform-api/api/v1/orchestrator"
 	"github.com/neuromation/platform-api/api/v1/status"
@@ -81,7 +82,7 @@ func viewModel(rw http.ResponseWriter, _ *http.Request, params httprouter.Params
 	}
 	payload, err := json.Marshal(model)
 	if err != nil {
-		rw.WriteHeader(http.StatusInternalServerError)
+		errors.Respond(rw, http.StatusInternalServerError, "Model processing error", err)
 		return
 	}
 	rw.WriteHeader(http.StatusOK)
@@ -92,13 +93,13 @@ func createBatchInference(jobClient orchestrator.Client, statusService status.St
 	return func(rw http.ResponseWriter, req *http.Request, _ httprouter.Params) {
 		bi := &batchInference{}
 		if err := decodeInto(req.Body, bi); err != nil {
-			respondWithError(rw, err)
+			errors.Respond(rw, http.StatusBadRequest, "Bad batch-inference request", err)
 			return
 		}
 
 		job := client.NewJob(bi.Container, bi.Resources)
 		if err := job.Start(); err != nil {
-			respondWithError(rw, fmt.Errorf("error while creating training: %s", err))
+			errors.Respond(rw, http.StatusInternalServerError, "Unable to run batch-inference", err)
 			return
 		}
 
@@ -108,13 +109,13 @@ func createBatchInference(jobClient orchestrator.Client, statusService status.St
 		s := status.NewBatchInferenceStatus(
 			bID, url.String(), jobStatusPoller)
 		if err := statusService.Set(s); err != nil {
-			rw.WriteHeader(http.StatusInternalServerError)
+			errors.Respond(rw, http.StatusInternalServerError, "Unable to update batch-inference's status", err)
 			return
 		}
 
 		payload, err := json.Marshal(s)
 		if err != nil {
-			rw.WriteHeader(http.StatusInternalServerError)
+			errors.Respond(rw, http.StatusInternalServerError, "Batch-inference processing error", err)
 			return
 		}
 
@@ -130,13 +131,13 @@ func createModel(jobClient orchestrator.Client, statusService status.StatusServi
 	return func(rw http.ResponseWriter, req *http.Request, _ httprouter.Params) {
 		m := &model{}
 		if err := decodeInto(req.Body, m); err != nil {
-			respondWithError(rw, err)
+			errors.Respond(rw, http.StatusBadRequest, "Bad model request", err)
 			return
 		}
 
 		job := client.NewJob(m.Container, m.Resources)
 		if err := job.Start(); err != nil {
-			respondWithError(rw, fmt.Errorf("error while creating training: %s", err))
+			errors.Respond(rw, http.StatusInternalServerError, "Unable to run model", err)
 			return
 		}
 
@@ -146,13 +147,13 @@ func createModel(jobClient orchestrator.Client, statusService status.StatusServi
 		status := status.NewModelStatus(
 			modelId, modelUrl.String(), jobStatusPoller)
 		if err := statusService.Set(status); err != nil {
-			rw.WriteHeader(http.StatusInternalServerError)
+			errors.Respond(rw, http.StatusInternalServerError, "Unable to update model's status", err)
 			return
 		}
 
 		payload, err := json.Marshal(status)
 		if err != nil {
-			rw.WriteHeader(http.StatusInternalServerError)
+			errors.Respond(rw, http.StatusInternalServerError, "Model processing error", err)
 			return
 		}
 
@@ -162,11 +163,4 @@ func createModel(jobClient orchestrator.Client, statusService status.StatusServi
 		rw.WriteHeader(http.StatusAccepted)
 		rw.Write(payload)
 	}
-}
-
-func envName(name string) string {
-	if len(envPrefix) == 0 {
-		return name
-	}
-	return fmt.Sprintf("%s_%s", envPrefix, name)
 }

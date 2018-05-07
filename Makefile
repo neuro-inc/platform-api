@@ -22,7 +22,7 @@ go_integration_test: build
 	done;
 
 run: build
-	./platform-api
+	PLATFORMAPI_STORAGEBASEPATH=/var/storage ./platform-api
 
 lint:
 	go vet $(pkgs)
