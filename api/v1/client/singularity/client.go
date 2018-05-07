@@ -87,7 +87,7 @@ func (sc *singularityClient) ready() error {
 
 // TODO: NewJob is the method of singularityClient
 // but actually Job is something different from client.
-func (sc *singularityClient) NewJob(container container.Container, res container.Resources) orchestrator.Job {
+func (sc *singularityClient) NewJob(container *container.Container, res container.Resources) orchestrator.Job {
 	id := fmt.Sprintf("platform_deploy_%d", time.Now().Nanosecond())
 	var volumes []volume
 	for _, v := range container.Volumes {

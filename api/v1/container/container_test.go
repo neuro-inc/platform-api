@@ -42,7 +42,7 @@ func TestUnmarshalJSON_Negative(t *testing.T) {
 		{
 			"no cpus resource",
 			"./testdata/fixtures/bad.resource.json",
-			"cpus param must be set",
+			"field \"resources.cpus\" required to be set",
 		},
 	}
 
