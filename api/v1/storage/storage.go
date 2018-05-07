@@ -12,14 +12,14 @@ var basePath string
 
 // Init checks passed path and set it as base
 func Init(path string) error {
-	var err error
-	if _, err = os.Stat(path); err != nil {
+	if _, err := os.Stat(path); err != nil {
 		return err
 	}
-	basePath, err = filepath.Abs(path)
+	bp, err := filepath.Abs(path)
 	if err != nil {
 		return err
 	}
+	basePath = bp
 	return nil
 }
 
