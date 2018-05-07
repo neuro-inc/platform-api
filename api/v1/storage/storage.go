@@ -14,11 +14,11 @@ var basePath string
 func Init(path string) error {
 	var err error
 	if _, err = os.Stat(path); err != nil {
-		return fmt.Errorf("unable to access %q: %s", path, err)
+		return err
 	}
 	basePath, err = filepath.Abs(path)
 	if err != nil {
-		return fmt.Errorf("unable to find abs path %q: %s", path, err)
+		return err
 	}
 	return nil
 }
@@ -74,7 +74,7 @@ func Path(src string) (*PathInfo, error) {
 	}
 
 	if _, err = os.Stat(abs); err != nil {
-		return nil, fmt.Errorf("unable to access %q: %s", abs, err)
+		return nil, err
 	}
 
 	return &PathInfo{

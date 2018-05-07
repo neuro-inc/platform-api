@@ -8,8 +8,7 @@ import (
 
 func decodeInto(rc io.ReadCloser, v interface{}) error {
 	decoder := json.NewDecoder(rc)
-	err := decoder.Decode(v)
-	if err != nil {
+	if err := decoder.Decode(v); err != nil {
 		return fmt.Errorf("decoding error: %s", err)
 	}
 	rc.Close()
