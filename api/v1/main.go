@@ -164,3 +164,10 @@ func createModel(jobClient orchestrator.Client, statusService status.StatusServi
 		rw.Write(payload)
 	}
 }
+
+func envName(name string) string {
+	if len(envPrefix) == 0 {
+		return name
+	}
+	return fmt.Sprintf("%s_%s", envPrefix, name)
+}

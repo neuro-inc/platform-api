@@ -18,10 +18,3 @@ func decodeInto(rc io.ReadCloser, v interface{}) error {
 func requiredError(field string) error {
 	return fmt.Errorf("field %q required to be set", field)
 }
-
-func envName(name string) string {
-	if len(envPrefix) == 0 {
-		return name
-	}
-	return fmt.Sprintf("%s_%s", envPrefix, name)
-}

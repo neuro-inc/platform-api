@@ -121,10 +121,6 @@ func (r *Resources) UnmarshalJSON(data []byte) error {
 		return err
 	}
 
-	if len(m) == 0 {
-		return requiredError("resources")
-	}
-
 	if _, ok := m["cpus"]; !ok {
 		return requiredError("resources.cpus")
 	}
