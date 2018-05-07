@@ -1,8 +1,8 @@
 package v1
 
 import (
+	"fmt"
 	"io/ioutil"
-	"strings"
 	"testing"
 
 	"github.com/neuromation/platform-api/api/v1/storage"
@@ -14,22 +14,32 @@ func TestBatchInference_UnmarshalJSON_Negative(t *testing.T) {
 	}
 
 	testCases := []struct {
-		name, file, err string
+		name, file, field string
 	}{
+		{
+			"non-empty container",
+			"bad.batch.container.json",
+			"container",
+		},
+		{
+			"non-empty resources",
+			"bad.batch.resources.json",
+			"resources",
+		},
 		{
 			"non-empty dataset",
 			"bad.batch.inference.dataset.json",
-			"field \"dataset_storage_uri\" required to be set",
+			"dataset_storage_uri",
 		},
 		{
 			"non-empty result",
 			"bad.batch.inference.result.json",
-			"field \"result_storage_uri\" required to be set",
+			"result_storage_uri",
 		},
 		{
 			"non-empty model",
 			"bad.batch.inference.model.json",
-			"field \"model_storage_uri\" required to be set",
+			"model_storage_uri",
 		},
 	}
 
@@ -45,8 +55,9 @@ func TestBatchInference_UnmarshalJSON_Negative(t *testing.T) {
 			if err == nil {
 				t.Fatalf("expected to get err")
 			}
-			if !strings.Contains(err.Error(), tc.err) {
-				t.Fatalf("expected to get err: %s; got instead: %q", tc.err, err)
+			expErr := fmt.Sprintf("field %q required to be set", tc.field)
+			if err.Error() != expErr {
+				t.Fatalf("expected to get err: %q; got instead: %q", expErr, err)
 			}
 		})
 	}
