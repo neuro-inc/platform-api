@@ -5,13 +5,22 @@ import (
 	"fmt"
 	"net/http"
 	"net/http/httptest"
+	"os"
 	"strings"
 	"sync"
 	"testing"
 	"time"
 
 	"github.com/neuromation/platform-api/api/v1/container"
+	"github.com/neuromation/platform-api/log"
 )
+
+func TestMain(m *testing.M) {
+	log.SuppressOutput(true)
+	retCode := m.Run()
+	log.SuppressOutput(false)
+	os.Exit(retCode)
+}
 
 func TestNewClient_Fail(t *testing.T) {
 	_, err := NewClient("localhost", "", time.Second)
