@@ -40,7 +40,7 @@ func TestServe_Negative(t *testing.T) {
 			"bad storage path",
 			"error while initing storage",
 			&config.Config{
-				ListenAddr: ":8080",
+				ListenAddr: ":8081",
 			},
 		},
 		{
