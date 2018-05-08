@@ -40,7 +40,7 @@ func Serve(cfg *config.Config) error {
 	if err != nil {
 		return fmt.Errorf("error while creating client: %s", err)
 	}
-	if err := client.Ping(cfg.ClientConnectTimeout); err != nil {
+	if err := client.Ping(cfg.ClientPingTimeout); err != nil {
 		return fmt.Errorf("error while establishing connection: %s", err)
 	}
 
