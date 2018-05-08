@@ -38,7 +38,7 @@ func Serve(cfg *config.Config) error {
 	if err != nil {
 		return fmt.Errorf("error while creating client: %s", err)
 	}
-	if err := client.Ping(time.Second * 10); err != nil {
+	if err := client.Ping(cfg.ClientConnectTimeout); err != nil {
 		return fmt.Errorf("error while establishing connection: %s", err)
 	}
 	if err := storage.Init(cfg.StorageBasePath); err != nil {

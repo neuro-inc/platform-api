@@ -16,6 +16,9 @@ type Config struct {
 	// Singularity app addr to proxy requests
 	SingularityAddr string `default:"http://127.0.0.1:7099"`
 
+	// ClientConnectTimeout how long to wait for connection establishment
+	ClientConnectTimeout time.Duration `default:"10s"`
+
 	// Server timeouts
 	ReadTimeout  time.Duration `default:"1m"`
 	WriteTimeout time.Duration `default:"1m"`
