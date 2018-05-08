@@ -4,12 +4,12 @@ package v1
 
 import (
 	"bytes"
+	"encoding/json"
 	"fmt"
 	"io"
 	"io/ioutil"
 	"net/http"
 	"os"
-	"strings"
 	"testing"
 	"time"
 
@@ -116,12 +116,18 @@ func TestServe_Integration(t *testing.T) {
 				if resp.StatusCode != http.StatusBadRequest {
 					t.Fatalf("unexpected sc: %d; expected: %d", resp.StatusCode, http.StatusBadRequest)
 				}
-				b, err := ioutil.ReadAll(resp.Body)
+
+				decoder := json.NewDecoder(resp.Body)
+				r := &struct {
+					Error string `json:"error"`
+				}{}
+				err = decoder.Decode(r)
 				checkErr(t, err)
-				got := string(b)
+				resp.Body.Close()
+
 				exp := "Bad model request"
-				if !strings.Contains(got, exp) {
-					t.Fatalf("expected %q; got %q", exp, got)
+				if exp != r.Error {
+					t.Fatalf("expected %q; got %q", exp, r.Error)
 				}
 			},
 		},
@@ -135,12 +141,18 @@ func TestServe_Integration(t *testing.T) {
 				if resp.StatusCode != http.StatusBadRequest {
 					t.Fatalf("unexpected sc: %d; expected: %d", resp.StatusCode, http.StatusBadRequest)
 				}
-				b, err := ioutil.ReadAll(resp.Body)
+
+				decoder := json.NewDecoder(resp.Body)
+				r := &struct {
+					Error string `json:"error"`
+				}{}
+				err = decoder.Decode(r)
 				checkErr(t, err)
-				got := string(b)
+				resp.Body.Close()
+
 				exp := "Bad batch-inference request"
-				if !strings.Contains(got, exp) {
-					t.Fatalf("expected %q; got %q", exp, got)
+				if exp != r.Error {
+					t.Fatalf("expected %q; got %q", exp, r.Error)
 				}
 			},
 		},
