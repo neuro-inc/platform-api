@@ -3,8 +3,18 @@ package status
 import (
 	"encoding/json"
 	"fmt"
+	"os"
 	"testing"
+
+	"github.com/neuromation/platform-api/log"
 )
+
+func TestMain(m *testing.M) {
+	log.SuppressOutput(true)
+	retCode := m.Run()
+	log.SuppressOutput(false)
+	os.Exit(retCode)
+}
 
 func TestStatusNameString(t *testing.T) {
 	name := STATUS_SUCCEEDED

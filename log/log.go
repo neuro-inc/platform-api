@@ -2,6 +2,7 @@ package log
 
 import (
 	"fmt"
+	"io/ioutil"
 	"log"
 	"os"
 )
@@ -14,6 +15,18 @@ var (
 	errorLogger = log.New(os.Stderr, "ERROR: ", stdLogFlags)
 	fatalLogger = log.New(os.Stderr, "FATAL: ", stdLogFlags)
 )
+
+// SuppressOutput suppresses all output from logs if `suppress` is true
+// used while testing
+func SuppressOutput(suppress bool) {
+	if suppress {
+		infoLogger.SetOutput(ioutil.Discard)
+		errorLogger.SetOutput(ioutil.Discard)
+	} else {
+		infoLogger.SetOutput(os.Stderr)
+		errorLogger.SetOutput(os.Stderr)
+	}
+}
 
 // Infof prints info message according to a format
 func Infof(format string, args ...interface{}) {

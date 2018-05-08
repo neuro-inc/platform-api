@@ -22,6 +22,15 @@ func TestMain(m *testing.M) {
 	os.Exit(retCode)
 }
 
+func TestInit(t *testing.T) {
+	if err := Init("foo/bar"); err == nil {
+		t.Fatalf("expected to have err; got nil")
+	}
+	if err := Init("/"); err != nil {
+		t.Fatalf("unexpected err: %s", err)
+	}
+}
+
 func TestPath_Positive(t *testing.T) {
 	if err := Init(testDir); err != nil {
 		t.Fatalf("unexpected err: %s", err)

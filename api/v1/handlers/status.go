@@ -8,6 +8,7 @@ import (
 
 	"github.com/julienschmidt/httprouter"
 
+	"github.com/neuromation/platform-api/api/v1/errors"
 	"github.com/neuromation/platform-api/api/v1/status"
 )
 
@@ -15,13 +16,13 @@ func ViewStatus(statusService status.StatusService) httprouter.Handle {
 	return func(rw http.ResponseWriter, req *http.Request, params httprouter.Params) {
 		status, err := statusService.Get(params.ByName("id"))
 		if err != nil {
-			rw.WriteHeader(http.StatusNotFound)
+			errors.Respond(rw, http.StatusNotFound, "Not found", err)
 			return
 		}
 
 		payload, err := json.Marshal(status)
 		if err != nil {
-			rw.WriteHeader(http.StatusInternalServerError)
+			errors.Respond(rw, http.StatusInternalServerError, "Status processing error", err)
 			return
 		}
 

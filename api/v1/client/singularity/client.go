@@ -51,7 +51,7 @@ func NewClient(addr, dockerRegistry string, timeout time.Duration) (orchestrator
 func (sc *singularityClient) Ping(maxWait time.Duration) error {
 	done := time.Now().Add(maxWait)
 	retryTimeout := time.Second
-	var err error
+	err := fmt.Errorf("%q is unreachable for %v", sc.addr, maxWait)
 	for time.Now().Before(done) {
 		err = sc.ready()
 		if err == nil {

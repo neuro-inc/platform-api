@@ -4,6 +4,7 @@ package v1
 
 import (
 	"bytes"
+	"encoding/json"
 	"fmt"
 	"io"
 	"io/ioutil"
@@ -16,16 +17,6 @@ import (
 	"github.com/neuromation/platform-api/api/v1/config"
 	"github.com/neuromation/platform-api/log"
 )
-
-const testDir = "./testdata/temp"
-
-func TestMain(m *testing.M) {
-	retCode := m.Run()
-	if err := os.RemoveAll(testDir); err != nil {
-		log.Fatalf("cannot remove %q: %s", testDir, err)
-	}
-	os.Exit(retCode)
-}
 
 const testAddr = "http://127.0.0.1:8080"
 
@@ -116,6 +107,56 @@ func TestServe_Integration(t *testing.T) {
 			},
 		},
 		{
+			"corrupted model",
+			func(t *testing.T) {
+				body := fileReader(t, "integration.corrupted.json")
+				resp, err := httpClient.Post(testAddr+"/models", "application/json", body)
+				checkErr(t, err)
+
+				if resp.StatusCode != http.StatusBadRequest {
+					t.Fatalf("unexpected sc: %d; expected: %d", resp.StatusCode, http.StatusBadRequest)
+				}
+
+				decoder := json.NewDecoder(resp.Body)
+				r := &struct {
+					Error string `json:"error"`
+				}{}
+				err = decoder.Decode(r)
+				checkErr(t, err)
+				resp.Body.Close()
+
+				exp := "Bad model request"
+				if exp != r.Error {
+					t.Fatalf("expected %q; got %q", exp, r.Error)
+				}
+			},
+		},
+		{
+			"corrupted batch-inference",
+			func(t *testing.T) {
+				body := fileReader(t, "integration.corrupted.json")
+				resp, err := httpClient.Post(testAddr+"/batch-inference", "application/json", body)
+				checkErr(t, err)
+
+				if resp.StatusCode != http.StatusBadRequest {
+					t.Fatalf("unexpected sc: %d; expected: %d", resp.StatusCode, http.StatusBadRequest)
+				}
+
+				decoder := json.NewDecoder(resp.Body)
+				r := &struct {
+					Error string `json:"error"`
+				}{}
+				err = decoder.Decode(r)
+				checkErr(t, err)
+				resp.Body.Close()
+
+				exp := "Bad batch-inference request"
+				if exp != r.Error {
+					t.Fatalf("expected %q; got %q", exp, r.Error)
+				}
+			},
+		},
+		{
 			"model gif-generator",
 			func(t *testing.T) {
 				taskResultsDir := testDir + "/storage/userSpace/model/gif-generator"
@@ -125,9 +166,7 @@ func TestServe_Integration(t *testing.T) {
 
 				body := fileReader(t, "integration.model.json")
 				resp, err := httpClient.Post(testAddr+"/models", "application/json", body)
-				if err != nil {
-					t.Fatalf("unexpected err: %s", err)
-				}
+				checkErr(t, err)
 
 				id := getStatusIDFromResponse(t, resp)
 				maxWait := time.Minute
@@ -152,9 +191,7 @@ func TestServe_Integration(t *testing.T) {
 
 				body := fileReader(t, "integration.batch-inference.json")
 				resp, err := httpClient.Post(testAddr+"/batch-inference", "application/json", body)
-				if err != nil {
-					t.Fatalf("unexpected err: %s", err)
-				}
+				checkErr(t, err)
 
 				id := getStatusIDFromResponse(t, resp)
 				maxWait := time.Minute
@@ -179,9 +216,7 @@ func TestServe_Integration(t *testing.T) {
 
 				body := fileReader(t, "integration.model.cmd.json")
 				resp, err := httpClient.Post(testAddr+"/models", "application/json", body)
-				if err != nil {
-					t.Fatalf("unexpected err: %s", err)
-				}
+				checkErr(t, err)
 
 				id := getStatusIDFromResponse(t, resp)
 				maxWait := 5 * time.Minute
