@@ -18,16 +18,6 @@ import (
 	"github.com/neuromation/platform-api/log"
 )
 
-const testDir = "./testdata/temp"
-
-func TestMain(m *testing.M) {
-	retCode := m.Run()
-	if err := os.RemoveAll(testDir); err != nil {
-		log.Fatalf("cannot remove %q: %s", testDir, err)
-	}
-	os.Exit(retCode)
-}
-
 const testAddr = "http://127.0.0.1:8080"
 
 func runAPI() {

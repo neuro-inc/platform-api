@@ -33,6 +33,9 @@ func Serve(cfg *config.Config) error {
 	if err != nil {
 		return fmt.Errorf("cannot listen for %q: %s", cfg.ListenAddr, err)
 	}
+	if err := storage.Init(cfg.StorageBasePath); err != nil {
+		return fmt.Errorf("error while initing storage: %s", err)
+	}
 	client, err = singularity.NewClient(cfg.SingularityAddr, cfg.PrivateDockerRegistryPath, cfg.WriteTimeout)
 	if err != nil {
 		return fmt.Errorf("error while creating client: %s", err)
@@ -40,9 +43,7 @@ func Serve(cfg *config.Config) error {
 	if err := client.Ping(cfg.ClientConnectTimeout); err != nil {
 		return fmt.Errorf("error while establishing connection: %s", err)
 	}
-	if err := storage.Init(cfg.StorageBasePath); err != nil {
-		return fmt.Errorf("error while initing storage: %s", err)
-	}
+
 	// set default path for container volumes
 	container.SetPath(cfg.ContainerStoragePath)
 
