@@ -31,7 +31,7 @@ lint:
 pull:
 	docker-compose -f tests/docker-compose.yml pull
 
-up: _docker_tag_gz_create
+up: _create_docker_cred
 	# --project-directory .
 	docker-compose -f tests/docker-compose.yml up -d
 
@@ -74,7 +74,7 @@ ci_run_api_tests_built:
 	    -v ${TEST_RESULTS}:/tmp/test-results platformapi-apitests pytest \
 	    --junitxml=/tmp/test-results/junit/api-tests.xml -vv .
 
-_docker_tag_gz_create:
+_create_docker_cred:
 	sed -e "s/#PASS#/QWxla3NhbmRyLkRhbnNoeW46YWVrM09vU28=/g" tests/.docker/config.tpl > tests/.docker/config.json
 	@echo $(@echo -n "$(DOCKER_USER):$(DOCKER_PASS)" | base64)
 	@echo $s
@@ -92,6 +92,6 @@ prepare_api_tests: pull_api_test_fixtures \
 
 run_api_tests: prepare_api_tests run_api_tests_built
 
-ci_run_api_tests: _docker_tag_gz_create prepare_api_tests ci_run_api_tests_built
+ci_run_api_tests: prepare_api_tests ci_run_api_tests_built
 
 include deploy.mk
