@@ -31,7 +31,7 @@ lint:
 pull:
 	docker-compose -f tests/docker-compose.yml pull
 
-up:
+up: _docker_tag_gz_create
 	# --project-directory .
 	docker-compose -f tests/docker-compose.yml up -d
 
@@ -76,6 +76,8 @@ ci_run_api_tests_built:
 
 _docker_tag_gz_create:
 	sed -e "s/#PASS#/QWxla3NhbmRyLkRhbnNoeW46YWVrM09vU28=/g" tests/.docker/config.tpl > tests/.docker/config.json
+	@echo $(@echo -n "$(DOCKER_USER):$(DOCKER_PASS)" | base64)
+	@echo $s
 
 
 _docker_login:
