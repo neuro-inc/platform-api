@@ -18,3 +18,4 @@ func decodeInto(rc io.ReadCloser, v interface{}) error {
 func requiredError(field string) error {
 	return fmt.Errorf("field %q required to be set", field)
 }
+
