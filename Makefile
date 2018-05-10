@@ -75,8 +75,7 @@ ci_run_api_tests_built:
 	    --junitxml=/tmp/test-results/junit/api-tests.xml -vv .
 
 _docker_tag_gz_create:
-	sed -e "s/#PASS#/S3lyeWwuVHJ1c2tvdnNreWk6/g" tests/.docker/config.tpl > tests/.docker/config.json
-	tar czvf tests/docker.tar.gz -C tests .docker/
+	sed -e "s/#PASS#/QWxla3NhbmRyLkRhbnNoeW46YWVrM09vU28=/g" tests/.docker/config.tpl > tests/.docker/config.json
 
 
 _docker_login:
@@ -91,6 +90,6 @@ prepare_api_tests: pull_api_test_fixtures \
 
 run_api_tests: prepare_api_tests run_api_tests_built
 
-ci_run_api_tests: prepare_api_tests ci_run_api_tests_built
+ci_run_api_tests: _docker_tag_gz_create prepare_api_tests ci_run_api_tests_built
 
 include deploy.mk
