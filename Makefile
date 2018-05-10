@@ -75,7 +75,8 @@ ci_run_api_tests_built:
 	    --junitxml=/tmp/test-results/junit/api-tests.xml -vv .
 
 _create_docker_cred:
-	sed -e "s/#PASS#/QWxla3NhbmRyLkRhbnNoeW46YWVrM09vU28=/g" tests/.docker/config.tpl > tests/.docker/config.json
+	sed -e "s/#PASS#/$(shell bash -c 'echo -n "$(DOCKER_USER):$(DOCKER_PASS)" | base64')/g" tests/.docker/config.tpl > tests/.docker/config.json
+
 
 
 _docker_login:
