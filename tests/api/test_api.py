@@ -394,5 +394,5 @@ class TestTrainingApi:
         assert response.headers['Location'] == expected_location
 
         api_client = ApiClient(endpoint=api_endpoint)
-        status = api_client.statuses.wait(status_id, max_attempts=10)
+        status = api_client.statuses.wait(status_id, max_attempts=10, interval_s=2)
         assert status.name == StatusName.SUCCEEDED
