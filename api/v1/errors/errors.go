@@ -17,3 +17,4 @@ func Respond(rw http.ResponseWriter, sc int, message string, err error) {
 	msg := fmt.Sprintf(errResponse, message)
 	fmt.Fprint(rw, msg)
 }
+
