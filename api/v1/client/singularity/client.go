@@ -270,7 +270,6 @@ func (sc *singularityClient) registerDeploy(reqID string, job *singularityJob) e
 func (sc *singularityClient) post(addr, body string) (*http.Response, error) {
 	r := strings.NewReader(body)
 	uri := fmt.Sprintf("%s/singularity/api/%s", sc.addr.String(), addr)
-	fmt.Println("sc post", uri)
 	req, err := http.NewRequest("POST", uri, r)
 	if err != nil {
 		return nil, err
