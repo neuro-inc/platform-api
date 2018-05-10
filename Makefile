@@ -1,5 +1,11 @@
 pkgs = $(shell go list ./...)
 
+DOCKER_SECRET ?= $(shell bash -c 'echo -n "$(DOCKER_USER):$(DOCKER_PASS)" | base64')
+DOCKER_REGISTRY ?= registry.neuromation.io
+DOCKER_REPO ?= $(DOCKER_REGISTRY)/neuromationorg
+IMAGE_NAME ?= platformapi
+IMAGE_TAG ?= latest
+IMAGE ?= $(DOCKER_REPO)/$(IMAGE_NAME):$(IMAGE_TAG)
 
 format:
 	go fmt $(pkgs)
@@ -39,12 +45,6 @@ down:
 	-docker-compose -f tests/docker-compose.yml down
 
 
-DOCKER_REGISTRY ?= registry.neuromation.io
-DOCKER_REPO ?= $(DOCKER_REGISTRY)/neuromationorg
-IMAGE_NAME ?= platformapi
-IMAGE_TAG ?= latest
-IMAGE ?= $(DOCKER_REPO)/$(IMAGE_NAME):$(IMAGE_TAG)
-
 
 build_api:
 	docker build -t $(IMAGE) .
@@ -75,7 +75,7 @@ ci_run_api_tests_built:
 	    --junitxml=/tmp/test-results/junit/api-tests.xml -vv .
 
 _create_docker_cred:
-	sed -e "s/#PASS#/$(shell bash -c 'echo -n "$(DOCKER_USER):$(DOCKER_PASS)" | base64')/g" tests/.docker/config.tpl > tests/.docker/config.json
+	sed -e "s/#PASS#/$(DOCKER_SECRET)/g" tests/.docker/config.tpl > tests/.docker/config.json
 
 
 
