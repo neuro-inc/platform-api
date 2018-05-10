@@ -3,3 +3,5 @@ tests/logs
 tests/sandbox
 platform-api
 coverage.txt
+tests/docker.tar.gz
+tests/.docker/config.json

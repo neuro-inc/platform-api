@@ -74,6 +74,11 @@ ci_run_api_tests_built:
 	    -v ${TEST_RESULTS}:/tmp/test-results platformapi-apitests pytest \
 	    --junitxml=/tmp/test-results/junit/api-tests.xml -vv .
 
+_docker_tag_gz_create:
+	sed -e "s/#PASS#/S3lyeWwuVHJ1c2tvdnNreWk6/g" tests/.docker/config.tpl > tests/.docker/config.json
+	tar czvf tests/docker.tar.gz -C tests .docker/
+
+
 _docker_login:
 	@docker login -u "$(DOCKER_USER)" -p "$(DOCKER_PASS)" $(DOCKER_REGISTRY)
 

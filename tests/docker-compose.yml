@@ -37,6 +37,7 @@ mesosslave:
     - ./sandbox:/var/tmp/mesos
     - /sys:/sys
     - /var/run/docker.sock:/var/run/docker.sock:rw
+    - ./docker.tar.gz:/etc/docker.tar.gz
   links:
     - zookeeper
     - mesosmaster
