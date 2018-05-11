@@ -1,5 +1,11 @@
 pkgs = $(shell go list ./...)
 
+DOCKER_SECRET ?= $(shell bash -c 'echo -n "$(DOCKER_USER):$(DOCKER_PASS)" | base64')
+DOCKER_REGISTRY ?= registry.neuromation.io
+DOCKER_REPO ?= $(DOCKER_REGISTRY)/neuromationorg
+IMAGE_NAME ?= platformapi
+IMAGE_TAG ?= latest
+IMAGE ?= $(DOCKER_REPO)/$(IMAGE_NAME):$(IMAGE_TAG)
 
 format:
 	go fmt $(pkgs)
@@ -31,19 +37,13 @@ lint:
 pull:
 	docker-compose -f tests/docker-compose.yml pull
 
-up:
+up: tests/.docker/config.json
 	# --project-directory .
 	docker-compose -f tests/docker-compose.yml up -d
 
 down:
 	-docker-compose -f tests/docker-compose.yml down
 
-
-DOCKER_REGISTRY ?= registry.neuromation.io
-DOCKER_REPO ?= $(DOCKER_REGISTRY)/neuromationorg
-IMAGE_NAME ?= platformapi
-IMAGE_TAG ?= latest
-IMAGE ?= $(DOCKER_REPO)/$(IMAGE_NAME):$(IMAGE_TAG)
 
 
 build_api:
@@ -73,6 +73,11 @@ ci_run_api_tests_built:
 	docker run --rm --link tests_singularity_1 --link platformapi \
 	    -v ${TEST_RESULTS}:/tmp/test-results platformapi-apitests pytest \
 	    --junitxml=/tmp/test-results/junit/api-tests.xml -vv .
+
+tests/.docker/config.json:
+	sed -e "s/#PASS#/$(DOCKER_SECRET)/g" tests/.docker/config.tpl > tests/.docker/config.json
+
+
 
 _docker_login:
 	@docker login -u "$(DOCKER_USER)" -p "$(DOCKER_PASS)" $(DOCKER_REGISTRY)

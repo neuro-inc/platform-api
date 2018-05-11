@@ -37,11 +37,13 @@ mesosslave:
     - ./sandbox:/var/tmp/mesos
     - /sys:/sys
     - /var/run/docker.sock:/var/run/docker.sock:rw
+    - ./.docker/config.json:/root/.docker/config.json:ro
   links:
     - zookeeper
     - mesosmaster
   environment:
     MESOS_MASTER: 'zk://zookeeper:2181/mesos'
+    MESOS_DOCKER_CONFIG: 'file:///root/.docker/config.json'
     MESOS_PORT: '5051'
     MESOS_HOSTNAME: 'mesosslave'
     MESOS_LOG_DIR: '/var/log/mesos'

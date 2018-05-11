@@ -107,6 +107,7 @@ func (sc *singularityClient) NewJob(container *container.Container, res containe
 				Type: "DOCKER",
 				Docker: dockerContainer{
 					Image: container.Image,
+					ForcePullImage: true,
 				},
 				Volumes: volumes,
 			},

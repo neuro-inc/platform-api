@@ -73,5 +73,6 @@ type (
 
 	dockerContainer struct {
 		Image string `json:"image"`
+		ForcePullImage bool `json:"forcePullImage"`
 	}
 )
