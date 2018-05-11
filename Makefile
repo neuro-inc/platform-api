@@ -37,7 +37,7 @@ lint:
 pull:
 	docker-compose -f tests/docker-compose.yml pull
 
-up: _create_docker_cred
+up: tests/.docker/config.json
 	# --project-directory .
 	docker-compose -f tests/docker-compose.yml up -d
 
@@ -74,7 +74,7 @@ ci_run_api_tests_built:
 	    -v ${TEST_RESULTS}:/tmp/test-results platformapi-apitests pytest \
 	    --junitxml=/tmp/test-results/junit/api-tests.xml -vv .
 
-_create_docker_cred:
+tests/.docker/config.json:
 	sed -e "s/#PASS#/$(DOCKER_SECRET)/g" tests/.docker/config.tpl > tests/.docker/config.json
 
 
