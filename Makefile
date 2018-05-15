@@ -93,16 +93,19 @@ run_api_tests: prepare_api_tests run_api_tests_built
 
 ci_run_api_tests: prepare_api_tests ci_run_api_tests_built
 
-tests/dind-cluster-v1.10.sh:
-	curl -Lo dind-cluster-v1.10.sh https://cdn.rawgit.com/Mirantis/kubeadm-dind-cluster/master/fixed/dind-cluster-v1.10.sh
+K8S_DIND_CLUSTER_CMD := tests/dind-cluster-v1.10.sh
 
-start_k8s: tests/dind-cluster-v1.10.sh
-	tests/dind-cluster-v1.10.sh up
+$(K8S_DIND_CLUSTER_CMD):
+	curl -Lo $@ https://cdn.rawgit.com/Mirantis/kubeadm-dind-cluster/master/fixed/dind-cluster-v1.10.sh
+	chmod u+x $@
+
+start_k8s: $(K8S_DIND_CLUSTER_CMD)
+	$(K8S_DIND_CLUSTER_CMD) up
 
 stop_k8s:
-	tests/dind-cluster-v1.10.sh down
+	$(K8S_DIND_CLUSTER_CMD) down
 
 clean_k8s: stop_k8s
-	tests/dind-cluster-v1.10.sh clean
+	$(K8S_DIND_CLUSTER_CMD) clean
 
 include deploy.mk
