@@ -93,4 +93,16 @@ run_api_tests: prepare_api_tests run_api_tests_built
 
 ci_run_api_tests: prepare_api_tests ci_run_api_tests_built
 
+tests/dind-cluster-v1.10.sh:
+	curl -Lo dind-cluster-v1.10.sh https://cdn.rawgit.com/Mirantis/kubeadm-dind-cluster/master/fixed/dind-cluster-v1.10.sh
+
+start_k8s: tests/dind-cluster-v1.10.sh
+	tests/dind-cluster-v1.10.sh up
+
+stop_k8s:
+	tests/dind-cluster-v1.10.sh down
+
+clean_k8s: stop_k8s
+	tests/dind-cluster-v1.10.sh clean
+
 include deploy.mk
