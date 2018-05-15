@@ -50,18 +50,41 @@ jobs:
           command: |
               make deploy_platformapi_dev
 
+  k8s:
+    <<: *defaults
+    steps:
+      - checkout
+      - run:
+          name: Running Kubernetes
+          command: |
+            make start_k8s
+
+      - run:
+          name: Testing Kubernetes
+          command: |
+            export PATH="$HOME/.kubeadm-dind-cluster:$PATH"
+            kubectl get all
+
+      - run:
+          name: Stopping Kubernetes
+          command: |
+            make clean_k8s
+
+
 workflows:
   version: 2
 
   main:
     jobs:
-      - test:
+      - k8s:
           context: org-global
-      - deploy:
-          context: org-global
-          requires:
-            - test
-          filters:
-            branches:
-              only:
-                - master
+#     - test:
+#         context: org-global
+#     - deploy:
+#         context: org-global
+#         requires:
+#           - test
+#         filters:
+#           branches:
+#             only:
+#               - master
