@@ -1368,6 +1368,7 @@ function dind::custom-docker-opts {
   if [[ ${jq} ]] ; then
     local json=$(IFS="+"; echo "${jq[*]}")
     docker exec -i ${container_id} /bin/sh -c "mkdir -p /etc/docker && jq -n '${json}' > /etc/docker/daemon.json"
+    docker exec ${container_id} journalctl --no-pager
     docker exec ${container_id} systemctl daemon-reload
     docker exec ${container_id} systemctl restart docker
   fi
