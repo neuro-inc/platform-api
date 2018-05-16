@@ -645,6 +645,7 @@ function dind::run {
          --hostname "${container_name}" \
          -l mirantis.kubeadm_dind_cluster \
          -v ${volume_name}:/dind \
+         --security-opt seccomp:unconfined --cap-add=SYS_ADMIN \
          -v /sys/fs/cgroup:/sys/fs/cgroup:ro \
          ${opts[@]+"${opts[@]}"} \
          "${DIND_IMAGE}" \
