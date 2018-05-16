@@ -111,3 +111,4 @@ ENV/
 .pyre/
 .pytest_cache/
 .tox/
+platform_api_test_app/
