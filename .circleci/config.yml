@@ -69,6 +69,7 @@ jobs:
           name: Stopping Kubernetes
           command: |
             make clean_k8s
+          when: always
 
 
 workflows:
