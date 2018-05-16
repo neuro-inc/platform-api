@@ -102,6 +102,9 @@ $(K8S_DIND_CLUSTER_CMD):
 start_k8s: $(K8S_DIND_CLUSTER_CMD)
 	$(K8S_DIND_CLUSTER_CMD) up
 
+k8s_env:
+	@echo -n 'export PATH="$$HOME/.kubeadm-dind-cluster:$$PATH"'
+
 stop_k8s:
 	$(K8S_DIND_CLUSTER_CMD) down
 

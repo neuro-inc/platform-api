@@ -62,7 +62,7 @@ jobs:
       - run:
           name: Testing Kubernetes
           command: |
-            export PATH="$HOME/.kubeadm-dind-cluster:$PATH"
+            eval "$(make k8s_env)"
             kubectl get all
 
       - run:
