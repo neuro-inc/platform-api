@@ -96,6 +96,7 @@ ci_run_api_tests: prepare_api_tests ci_run_api_tests_built
 K8S_DIND_CLUSTER_CMD := tests/k8s/dind-cluster-v1.10.sh
 
 $(K8S_DIND_CLUSTER_CMD):
+	mkdir -p $(@D)
 	curl -Lo $@ https://cdn.rawgit.com/Mirantis/kubeadm-dind-cluster/master/fixed/dind-cluster-v1.10.sh
 	chmod u+x $@
 
