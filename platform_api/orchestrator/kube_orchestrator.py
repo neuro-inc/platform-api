@@ -4,8 +4,8 @@ from typing import Optional
 from kubernetes import client, config
 
 
-from .orchestrator import Orchestrator
-from platform_api.job import JobRequest, Job
+from .base import Orchestrator
+from platform_api.job import JobRequest
 
 
 class KubeOrchestrator(Orchestrator):
@@ -19,29 +19,34 @@ class KubeOrchestrator(Orchestrator):
         v1 = client.CoreV1Api()
         return cls(v1, loop)
 
-    def __init__(self, v1, loop: AbstractEventLoop):
+    def __init__(self, v1: client.CoreV1Api, loop: AbstractEventLoop):
         self.v1 = v1
         self.loop = loop
 
-    def _new_job(self, job_request: JobRequest) -> Job:
+    async def start_job(self, job_request: JobRequest):
+        # TODO blocking. make async
         pod = client.V1Pod()
-        pod.metadata = client.V1ObjectMeta(name=job_request.job_name)
-
-        container = client.V1Container(name=job_request.job_name)
+        pod.metadata = client.V1ObjectMeta(name=job_request.job_id)
+        container = client.V1Container(name=job_request.container_name)
         container.image = job_request.docker_image
         container.args = job_request.args
-
         spec = client.V1PodSpec(containers=[container])
         pod.spec = spec
-
         # TODO handle namespace
         namespace = "default"
-        self.v1.create_namespaced_pod(namespace=namespace, body=pod)
-        print("done")
+        kuber_response = self.v1.create_namespaced_pod(namespace=namespace, body=pod)
+        status = kuber_response['status']['phase']
+        return status
 
-    async def new_job(self, job_request: JobRequest) -> Job:
-        self.loop.run_in_executor(None, self._new_job, job_request)
-        pass
+    async def status_job(self, job_id: str):
+        # TODO blocking. make async
+        namespace = "default"
+        v1_pod = self.v1.read_namespaced_pod(name=job_id, namespace=namespace)
+        return v1_pod.status.phase
 
-    async def get_job(self):
-        pass
+    async def delete_job(self, job_id: str):
+        # TODO blocking. make async
+        namespace = "default"
+        res = self.v1.delete_namespaced_pod(name=job_id, namespace=namespace, body=client.V1DeleteOptions())
+        return res.status
+
