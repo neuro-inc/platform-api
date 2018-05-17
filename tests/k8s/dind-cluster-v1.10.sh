@@ -1368,11 +1368,25 @@ function dind::custom-docker-opts {
   if [[ ${jq} ]] ; then
     local json=$(IFS="+"; echo "${jq[*]}")
     docker exec -i ${container_id} /bin/sh -c "mkdir -p /etc/docker && jq -n '${json}' > /etc/docker/daemon.json"
-    date
-    docker exec ${container_id} journalctl --no-pager
+    dind::wait-for-container-systemd $container_id
     docker exec ${container_id} systemctl daemon-reload
     docker exec ${container_id} systemctl restart docker
   fi
+}
+
+function dind::wait-for-container-systemd {
+  local container_id="$1"
+  local max_attempts=5
+  local attempt=1
+  local interval_s=1
+  until docker exec ${container_id} systemctl daemon-reload; do
+    if [ $attempt == $max_attempts ]; then
+      echo "${container_id} systemd is not ready"
+      exit 1
+    fi
+    ((attempt++))
+    sleep $interval_s
+  done
 }
 
 case "${1:-}" in
