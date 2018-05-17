@@ -1,0 +1,17 @@
+---
+apiVersion: batch/v1
+kind: Job
+
+metadata:
+  name: testjob1
+
+spec:
+  template:
+    spec:
+      containers:
+      - name: testjob1
+        image: registry.neuromation.io/neuromationorg/platformapi-dummy:latest
+      restartPolicy: Never
+      imagePullSecrets:
+      - name: np-docker-reg-secret
+  backoffLimit: 1
