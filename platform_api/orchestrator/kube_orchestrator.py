@@ -1,17 +1,17 @@
 import asyncio
 from asyncio import AbstractEventLoop
 from typing import Optional
+
 from kubernetes import client, config
 
-
 from .base import Orchestrator
-from platform_api.job import JobRequest
+from platform_api.job_request import JobRequest, JobStatus
 
 
 class KubeOrchestrator(Orchestrator):
 
     @classmethod
-    async def from_env(cls, loop: Optional[AbstractEventLoop]=None):
+    async def from_env(cls, loop: Optional[AbstractEventLoop] = None):
         if loop is None:
             loop = asyncio.get_event_loop()
         config_file = './platform_api_test_app/config'
@@ -23,8 +23,23 @@ class KubeOrchestrator(Orchestrator):
         self.v1 = v1
         self.loop = loop
 
-    async def start_job(self, job_request: JobRequest):
+    def _pod_status_to_job_status(self, pod: client.V1Pod) -> JobStatus:
+        if pod.status.phase == 'Pending':
+            return JobStatus.PENDING
+        elif pod.status.phase == 'Running':
+            # TODO for now only one container per pod
+            container_statuse = pod.status.container_statuses[0]
+            if container_statuse.ready:
+                return JobStatus.SUCCEEDED
+            else:
+                return JobStatus.FAILED
+        else:
+            # TODO replace custom exception
+            raise ValueError('JobStatus')
+
+    async def job_start(self, job_request: JobRequest) -> JobStatus:
         # TODO blocking. make async
+        # TODO for now out job is kuber pod
         pod = client.V1Pod()
         pod.metadata = client.V1ObjectMeta(name=job_request.job_id)
         container = client.V1Container(name=job_request.container_name)
@@ -34,19 +49,18 @@ class KubeOrchestrator(Orchestrator):
         pod.spec = spec
         # TODO handle namespace
         namespace = "default"
-        kuber_response = self.v1.create_namespaced_pod(namespace=namespace, body=pod)
-        status = kuber_response['status']['phase']
-        return status
+        create_pod = self.v1.create_namespaced_pod(namespace=namespace, body=pod)
+        return self._pod_status_to_job_status(create_pod)
 
-    async def status_job(self, job_id: str):
+    async def job_status(self, job_id: str) -> JobStatus:
         # TODO blocking. make async
         namespace = "default"
-        v1_pod = self.v1.read_namespaced_pod(name=job_id, namespace=namespace)
-        return v1_pod.status.phase
+        pod = self.v1.read_namespaced_pod(name=job_id, namespace=namespace)
+        return self._pod_status_to_job_status(pod)
 
-    async def delete_job(self, job_id: str):
+    async def job_delete(self, job_id: str) -> JobStatus:
         # TODO blocking. make async
         namespace = "default"
-        res = self.v1.delete_namespaced_pod(name=job_id, namespace=namespace, body=client.V1DeleteOptions())
-        return res.status
-
+        pod_status = self.v1.delete_namespaced_pod(name=job_id, namespace=namespace, body=client.V1DeleteOptions())
+        assert pod_status.reason is None
+        return JobStatus.DELETED
