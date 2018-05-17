@@ -110,13 +110,14 @@ k8s_env:
 	@echo -n 'export PATH="$(PATH)"'
 
 test_k8s:
-	kubectl get all
-	kubectl create secret docker-registry np-docker-reg-secret \
+	docker exec kube-node-2 docker login -u "$(DOCKER_USER)" -p "$(DOCKER_PASS)" $(DOCKER_REGISTRY)
+	PATH=$(PATH) kubectl get all
+	PATH=$(PATH) kubectl create secret docker-registry np-docker-reg-secret \
 	    --docker-server $(DOCKER_REGISTRY) \
 	    --docker-username $$DOCKER_USER \
 	    --docker-password $$DOCKER_PASS \
 	    --docker-email $$DOCKER_EMAIL
-	kubectl create -f tests/k8s/pod.yml
+	PATH=$(PATH) kubectl create -f tests/k8s/pod.yml
 
 stop_k8s:
 	$(K8S_DIND_CLUSTER_CMD) down
