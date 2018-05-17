@@ -1379,7 +1379,7 @@ function dind::wait-for-container-systemd {
   local max_attempts=5
   local attempt=1
   local interval_s=1
-  until docker exec ${container_id} systemctl daemon-reload; do
+  until docker exec ${container_id} systemctl is-system-running; do
     if [ $attempt == $max_attempts ]; then
       echo "${container_id} systemd is not ready"
       exit 1
