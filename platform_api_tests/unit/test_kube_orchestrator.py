@@ -95,3 +95,12 @@ class TestKubeOrchestrator:
     async def test_delete_job_not_exist(self, job_nginx):
         with pytest.raises(JobError):
             await job_nginx.delete()
+
+    @pytest.mark.asyncio
+    async def test_broken_job_id(self, kube_orchestrator):
+        job_id = "some_BROCKEN_JOB-123@#$%^&*(______------ID"
+        job_request = JobRequest(job_id=job_id, docker_image='python', container_name=job_id)
+        job = Job(orchestrator=kube_orchestrator, job_request=job_request)
+
+        with pytest.raises(JobError):
+            await job.start()
