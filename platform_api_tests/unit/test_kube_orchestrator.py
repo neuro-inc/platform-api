@@ -51,7 +51,7 @@ class TestKubeOrchestrator:
         assert status == JobStatus.SUCCEEDED
 
         status = await job_nginx.delete()
-        assert status == JobStatus.DELETED
+        assert status == JobStatus.SUCCEEDED
 
     @pytest.mark.asyncio
     async def test_start_job_broken_image(self, kube_orchestrator):
@@ -66,7 +66,7 @@ class TestKubeOrchestrator:
         assert status == JobStatus.FAILED
 
         status = await job.delete()
-        assert status == JobStatus.DELETED
+        assert status == JobStatus.FAILED
 
     @pytest.mark.asyncio
     async def test_start_job_with_not_unique_id(self, kube_orchestrator, job_nginx):
@@ -84,7 +84,7 @@ class TestKubeOrchestrator:
             await job_second.start()
 
         status = await job_nginx.delete()
-        assert status == JobStatus.DELETED
+        assert status == JobStatus.SUCCEEDED
 
     @pytest.mark.asyncio
     async def test_status_job_not_exist(self, job_nginx):
