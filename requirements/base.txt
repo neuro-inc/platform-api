@@ -1,1 +1,3 @@
 kubernetes==6.0.0
+aiohttp==3.2.1
+python-decouple==3.1

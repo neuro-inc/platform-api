@@ -2,6 +2,8 @@ import asyncio
 from asyncio import AbstractEventLoop
 from typing import Optional
 
+import aiohttp
+from decouple import config as decouple_config
 from kubernetes import client, config
 
 from .base import Orchestrator
@@ -49,11 +51,10 @@ def _raise_job_exception(exception: client.rest.ApiException, job_id: str):
 class KubeOrchestrator(Orchestrator):
 
     @classmethod
-    async def from_env(cls, loop: Optional[AbstractEventLoop] = None):
+    async def from_env(cls, loop: Optional[AbstractEventLoop] = None) -> 'KubeOrchestrator':
         if loop is None:
             loop = asyncio.get_event_loop()
-        config_file = './platform_api_test_app/config'
-        config.load_kube_config(config_file=config_file)
+        config.load_kube_config(config_file=decouple_config('KUBE_CONFIG_FILE'))
         v1 = client.CoreV1Api()
         return cls(v1, loop)
 

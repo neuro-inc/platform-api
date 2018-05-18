@@ -112,3 +112,4 @@ ENV/
 .pytest_cache/
 .tox/
 platform_api_test_app/
+test_kube_config
