@@ -1,6 +1,8 @@
 import asyncio
 from asyncio import AbstractEventLoop
 from typing import Optional
+from pprint import pprint
+
 
 import aiohttp
 from decouple import config as decouple_config
@@ -10,31 +12,30 @@ from .base import Orchestrator
 from platform_api.job_request import JobRequest, JobStatus, JobError
 
 
-def _find_pending_pod_status(pod: client.V1Pod) -> JobStatus:
-
-    if pod.status.container_statuses is None:
+def _find_pending_pod_status(status: client.V1PodStatus) -> JobStatus:
+    if status.container_statuses is None:
         return JobStatus.PENDING
     else:
-        container_status = pod.status.container_statuses[0]
+        container_status = status.container_statuses[0]
         if container_status.state.waiting.reason == 'ContainerCreating':
             return JobStatus.PENDING
         else:
             return JobStatus.FAILED
 
 
-def _find_running_pod_status(pod: client.V1Pod) -> JobStatus:
-    container_status = pod.status.container_statuses[0]
+def _find_running_pod_status(status: client.V1PodStatus) -> JobStatus:
+    container_status = status.container_statuses[0]
     if container_status.ready:
         return JobStatus.SUCCEEDED
     else:
         return JobStatus.FAILED
 
 
-def _pod_status_to_job_status(pod: client.V1Pod) -> JobStatus:
-    if pod.status.phase == 'Pending':
-        return _find_pending_pod_status(pod)
-    elif pod.status.phase == 'Running':
-        return _find_running_pod_status(pod)
+def _pod_status_to_job_status(status: client.V1PodStatus) -> JobStatus:
+    if status.phase == 'Pending':
+        return _find_pending_pod_status(status)
+    elif status.phase == 'Running':
+        return _find_running_pod_status(status)
     else:
         return JobStatus.FAILED
 
@@ -48,6 +49,46 @@ def _raise_job_exception(exception: client.rest.ApiException, job_id: str):
         raise JobError(f"cant create job with id {job_id}")
     else:
         raise Exception()
+
+def _raise_status_job_exception(pod: dict, job_id: str):
+    if pod['code'] == 409:
+        raise JobError(f"job with {job_id} already exist")
+    elif pod['code'] == 404:
+        raise JobError(f"job with {job_id} not exist")
+    elif pod['code'] == 422:
+        raise JobError(f"cant create job with id {job_id}")
+    else:
+        raise Exception()
+
+def _status_for_pending_pod(pod_status: dict) -> JobStatus:
+    container_statuses = pod_status.get('containerStatuses')
+    if container_statuses is None:
+        return JobStatus.PENDING
+    else:
+        container_status = container_statuses[0]
+        if container_status['state']['waiting']['reason'] == 'ContainerCreating':
+            return JobStatus.PENDING
+        else:
+            return JobStatus.FAILED
+
+
+def _status_for_running_pod(pod_status: dict) -> JobStatus:
+    container_statuses = pod_status.get('containerStatuses')
+    # TODO for now only one container for one pod
+    if container_statuses is not None and container_statuses[0]['ready']:
+        return JobStatus.SUCCEEDED
+    else:
+        return JobStatus.FAILED
+
+
+def _status_pod_from_dict(pod_status: dict) -> JobStatus:
+    phase = pod_status['phase']
+    if phase == 'Pending':
+        return _status_for_pending_pod(pod_status)
+    elif phase == 'Running':
+        return _status_for_running_pod(pod_status)
+    else:
+        return JobStatus.FAILED
 
 
 class KubeOrchestrator(Orchestrator):
@@ -85,28 +126,32 @@ class KubeOrchestrator(Orchestrator):
         try:
             # TODO for now out job is k8s pod
             created_pod = await self._create_pod(job_request)
-            return _pod_status_to_job_status(created_pod)
+            return _pod_status_to_job_status(created_pod.status)
         except client.rest.ApiException as ex:
             _raise_job_exception(ex, job_id=job_request.job_id)
 
-    async def job_status(self, job_id: str) -> JobStatus:
-        # namespaces = "default"
-        # url = f"{self._kube_proxy_url}/api/v1/namespaces/{namespaces}/pods/14fb2ac3-e7a3-4c9c-9a11-21aa88aa40ec"
-        try:
+    async def _request(self, method: str, url: str) -> dict:
+        async with aiohttp.ClientSession() as session:
+            async with session.request(method, url) as resp:
+                data = await resp.json()
+                return data
 
-            # TODO blocking. make async
-            namespace = "default"
-            pod = self._v1.read_namespaced_pod(name=job_id, namespace=namespace)
-            return _pod_status_to_job_status(pod)
-        except client.rest.ApiException as ex:
-            _raise_job_exception(ex, job_id=job_id)
+    async def job_status(self, job_id: str) -> JobStatus:
+        namespaces = "default"
+        url = f"{self._kube_proxy_url}/api/v1/namespaces/{namespaces}/pods/{job_id}"
+        # TODO too nested dict with REST API. Try use async kuber client with classes like client.V1Pod ect.
+        pod = await self._request(method="GET", url=url)
+        if pod['kind'] == 'Status':
+            _raise_status_job_exception(pod, job_id=job_id)
+        else:
+            status = _status_pod_from_dict(pod['status'])
+            return status
 
     async def job_delete(self, job_id: str) -> JobStatus:
-        try:
-            # TODO blocking. make async
-            namespace = "default"
-            pod_status = self._v1.delete_namespaced_pod(name=job_id, namespace=namespace, body=client.V1DeleteOptions())
-            assert pod_status.reason is None
+        namespaces = "default"
+        url = f"{self._kube_proxy_url}/api/v1/namespaces/{namespaces}/pods/{job_id}"
+        pod = await self._request(method="DELETE", url=url)
+        if pod['kind'] == 'Status':
+            _raise_status_job_exception(pod, job_id=job_id)
+        else:
             return JobStatus.DELETED
-        except client.rest.ApiException as ex:
-            _raise_job_exception(ex, job_id=job_id)
