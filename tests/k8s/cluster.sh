@@ -55,6 +55,27 @@ function k8s::stop {
     sudo -E minikube stop || :
 }
 
+function k8s::test {
+    kubectl delete secret np-docker-reg-secret || :
+    kubectl create secret docker-registry np-docker-reg-secret \
+        --docker-server $DOCKER_REGISTRY \
+        --docker-username $DOCKER_USER \
+        --docker-password $DOCKER_PASS \
+        --docker-email $DOCKER_EMAIL
+    kubectl delete jobs testjob1 || :
+    kubectl create -f tests/k8s/pod.yml
+    for _ in {1..300}; do
+        if [ "$(kubectl get job testjob1 --template {{.status.succeeded}})" == "1" ]; then
+            exit 0
+        fi
+        if [ "$(kubectl get job testjob1 --template {{.status.failed}})" == "1" ]; then
+            exit 1
+        fi
+        sleep 1
+    done
+    exit 1
+}
+
 
 case "${1:-}" in
     install)
@@ -68,6 +89,9 @@ case "${1:-}" in
         ;;
     clean)
         k8s::stop
+        ;;
+    test)
+        k8s::test
         ;;
     *)
         exit 1

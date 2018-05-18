@@ -2,6 +2,7 @@ pkgs = $(shell go list ./...)
 
 DOCKER_SECRET ?= $(shell bash -c 'echo -n "$(DOCKER_USER):$(DOCKER_PASS)" | base64')
 DOCKER_REGISTRY ?= registry.neuromation.io
+export DOCKER_REGISTRY
 DOCKER_REPO ?= $(DOCKER_REGISTRY)/neuromationorg
 IMAGE_NAME ?= platformapi
 IMAGE_TAG ?= latest
