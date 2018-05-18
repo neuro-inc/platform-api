@@ -6,7 +6,11 @@ $(K8S_DIND_CLUSTER_CMD):
 	curl -Lo $@ https://cdn.rawgit.com/Mirantis/kubeadm-dind-cluster/master/fixed/dind-cluster-v1.10.sh
 	chmod u+x $@
 
-start_k8s: $(K8S_DIND_CLUSTER_CMD) clean_k8s
+
+install_k8s:
+	$(K8S_DIND_CLUSTER_CMD) install
+
+start_k8s: $(K8S_DIND_CLUSTER_CMD) install_k8s clean_k8s
 	$(K8S_DIND_CLUSTER_CMD) up
 
 # K8S_PATH := $(HOME)/.kubeadm-dind-cluster

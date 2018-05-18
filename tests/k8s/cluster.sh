@@ -1,13 +1,15 @@
 #!/usr/bin/env bash
 
-function k8s::start {
+function k8s::install {
     curl -Lo minikube https://storage.googleapis.com/minikube/releases/latest/minikube-linux-amd64
     chmod +x minikube
 
     local kubectl_version=$(curl -s https://storage.googleapis.com/kubernetes-release/release/stable.txt)
     curl -Lo kubectl https://storage.googleapis.com/kubernetes-release/release/${kubectl_version}/bin/linux/amd64/kubectl
     chmod +x kubectl
+}
 
+function k8s::start {
     export KUBECONFIG=$HOME/.kube/config
     export MINIKUBE_WANTUPDATENOTIFICATION=false
     export MINIKUBE_WANTREPORTERRORPROMPT=false
@@ -34,6 +36,9 @@ function k8s::stop {
 
 
 case "${1:-}" in
+    install)
+        k8s::install
+        ;;
     up)
         k8s::start
         ;;
