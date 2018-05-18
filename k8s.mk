@@ -30,7 +30,7 @@ test_k8s:
 	PATH=$(PATH) kubectl create -f tests/k8s/pod.yml
 
 stop_k8s:
-	$(K8S_DIND_CLUSTER_CMD) down
+	# $(K8S_DIND_CLUSTER_CMD) down
 
 clean_k8s: stop_k8s
-	$(K8S_DIND_CLUSTER_CMD) clean
+	# $(K8S_DIND_CLUSTER_CMD) clean
