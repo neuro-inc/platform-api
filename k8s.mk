@@ -14,23 +14,23 @@ start_k8s: $(K8S_DIND_CLUSTER_CMD) install_k8s clean_k8s
 	$(K8S_DIND_CLUSTER_CMD) up
 
 # K8S_PATH := $(HOME)/.kubeadm-dind-cluster
-K8S_PATH := $(shell pwd)
-export PATH := $(K8S_PATH):$(PATH)
+# K8S_PATH := $(shell pwd)
+# export PATH := $(K8S_PATH):$(PATH)
 
 k8s_env:
 	@echo -n 'export PATH="$(PATH)"'
 
 test_k8s:
-	PATH=$(PATH) kubectl get all
-	PATH=$(PATH) kubectl create secret docker-registry np-docker-reg-secret \
+	kubectl get all
+	kubectl create secret docker-registry np-docker-reg-secret \
 	    --docker-server $(DOCKER_REGISTRY) \
 	    --docker-username $$DOCKER_USER \
 	    --docker-password $$DOCKER_PASS \
 	    --docker-email $$DOCKER_EMAIL
-	PATH=$(PATH) kubectl create -f tests/k8s/pod.yml
+	kubectl create -f tests/k8s/pod.yml
 
 stop_k8s:
-	# $(K8S_DIND_CLUSTER_CMD) down
+	$(K8S_DIND_CLUSTER_CMD) down
 
 clean_k8s: stop_k8s
-	# $(K8S_DIND_CLUSTER_CMD) clean
+	$(K8S_DIND_CLUSTER_CMD) clean
