@@ -44,6 +44,8 @@ def _raise_job_exception(exception: client.rest.ApiException, job_id: str):
         raise JobError(f"job with {job_id} already exist")
     elif exception.status == 404:
         raise JobError(f"job with {job_id} not exist")
+    elif exception.status == 422:
+        raise JobError(f"cant create job with id {job_id}")
     else:
         raise Exception()
 
@@ -56,11 +58,13 @@ class KubeOrchestrator(Orchestrator):
             loop = asyncio.get_event_loop()
         config.load_kube_config(config_file=decouple_config('KUBE_CONFIG_FILE'))
         v1 = client.CoreV1Api()
-        return cls(v1, loop)
+        kube_proxy_url = decouple_config('KUBE_PROXY_URL')
+        return cls(v1, kube_proxy_url, loop)
 
-    def __init__(self, v1: client.CoreV1Api, loop: AbstractEventLoop):
-        self.v1 = v1
-        self.loop = loop
+    def __init__(self, v1: client.CoreV1Api, kube_proxy_url: str, loop: AbstractEventLoop):
+        self._v1 = v1
+        self._loop = loop
+        self._kube_proxy_url = kube_proxy_url
 
     async def _create_pod(self, job_request: JobRequest) -> client.V1Pod:
         # TODO blocking. make async
@@ -74,7 +78,7 @@ class KubeOrchestrator(Orchestrator):
         pod.spec = spec
         # TODO handle namespace
         namespace = "default"
-        created_pod = self.v1.create_namespaced_pod(namespace=namespace, body=pod)
+        created_pod = self._v1.create_namespaced_pod(namespace=namespace, body=pod)
         return created_pod
 
     async def job_start(self, job_request: JobRequest) -> JobStatus:
@@ -86,10 +90,13 @@ class KubeOrchestrator(Orchestrator):
             _raise_job_exception(ex, job_id=job_request.job_id)
 
     async def job_status(self, job_id: str) -> JobStatus:
+        # namespaces = "default"
+        # url = f"{self._kube_proxy_url}/api/v1/namespaces/{namespaces}/pods/14fb2ac3-e7a3-4c9c-9a11-21aa88aa40ec"
         try:
+
             # TODO blocking. make async
             namespace = "default"
-            pod = self.v1.read_namespaced_pod(name=job_id, namespace=namespace)
+            pod = self._v1.read_namespaced_pod(name=job_id, namespace=namespace)
             return _pod_status_to_job_status(pod)
         except client.rest.ApiException as ex:
             _raise_job_exception(ex, job_id=job_id)
@@ -98,7 +105,7 @@ class KubeOrchestrator(Orchestrator):
         try:
             # TODO blocking. make async
             namespace = "default"
-            pod_status = self.v1.delete_namespaced_pod(name=job_id, namespace=namespace, body=client.V1DeleteOptions())
+            pod_status = self._v1.delete_namespaced_pod(name=job_id, namespace=namespace, body=client.V1DeleteOptions())
             assert pod_status.reason is None
             return JobStatus.DELETED
         except client.rest.ApiException as ex:
