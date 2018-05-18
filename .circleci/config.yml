@@ -57,7 +57,7 @@ jobs:
       - run:
           name: Running Kubernetes
           command: |
-            set -x; export SHELLOPTS; make start_k8s
+            make start_k8s
 
       - run:
           name: Testing Kubernetes
