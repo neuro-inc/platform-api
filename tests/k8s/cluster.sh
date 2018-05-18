@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 
-func k8s::start {
+function k8s::start {
     curl -Lo minikube https://storage.googleapis.com/minikube/releases/latest/minikube-linux-amd64
     chmod +x minikube
 
@@ -28,7 +28,7 @@ func k8s::start {
     done
 }
 
-func k8s::stop {
+function k8s::stop {
     sudo -E ./minikube stop
 }
 

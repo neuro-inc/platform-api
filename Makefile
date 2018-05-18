@@ -93,36 +93,5 @@ run_api_tests: prepare_api_tests run_api_tests_built
 
 ci_run_api_tests: prepare_api_tests ci_run_api_tests_built
 
-K8S_DIND_CLUSTER_CMD := tests/k8s/dind-cluster-v1.10.sh
-
-$(K8S_DIND_CLUSTER_CMD):
-	mkdir -p $(@D)
-	curl -Lo $@ https://cdn.rawgit.com/Mirantis/kubeadm-dind-cluster/master/fixed/dind-cluster-v1.10.sh
-	chmod u+x $@
-
-start_k8s: $(K8S_DIND_CLUSTER_CMD) clean_k8s
-	$(K8S_DIND_CLUSTER_CMD) up
-
-K8S_PATH := $(HOME)/.kubeadm-dind-cluster
-export PATH := $(K8S_PATH):$(PATH)
-
-k8s_env:
-	@echo -n 'export PATH="$(PATH)"'
-
-test_k8s:
-	docker exec kube-node-2 docker login -u "$(DOCKER_USER)" -p "$(DOCKER_PASS)" $(DOCKER_REGISTRY)
-	PATH=$(PATH) kubectl get all
-	PATH=$(PATH) kubectl create secret docker-registry np-docker-reg-secret \
-	    --docker-server $(DOCKER_REGISTRY) \
-	    --docker-username $$DOCKER_USER \
-	    --docker-password $$DOCKER_PASS \
-	    --docker-email $$DOCKER_EMAIL
-	PATH=$(PATH) kubectl create -f tests/k8s/pod.yml
-
-stop_k8s:
-	$(K8S_DIND_CLUSTER_CMD) down
-
-clean_k8s: stop_k8s
-	$(K8S_DIND_CLUSTER_CMD) clean
-
+include k8s.mk
 include deploy.mk
