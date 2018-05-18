@@ -50,11 +50,34 @@ jobs:
           command: |
               make deploy_platformapi_dev
 
+  k8s:
+    <<: *defaults
+    steps:
+      - checkout
+      - run:
+          name: Running Kubernetes
+          command: |
+            make start_k8s
+
+      - run:
+          name: Testing Kubernetes
+          command: |
+            make test_k8s
+
+      - run:
+          name: Stopping Kubernetes
+          command: |
+            make clean_k8s
+          when: always
+
+
 workflows:
   version: 2
 
   main:
     jobs:
+      - k8s:
+          context: org-global
       - test:
           context: org-global
       - deploy:
