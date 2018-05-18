@@ -78,13 +78,13 @@ workflows:
     jobs:
       - k8s:
           context: org-global
-#     - test:
-#         context: org-global
-#     - deploy:
-#         context: org-global
-#         requires:
-#           - test
-#         filters:
-#           branches:
-#             only:
-#               - master
+      - test:
+          context: org-global
+      - deploy:
+          context: org-global
+          requires:
+            - test
+          filters:
+            branches:
+              only:
+                - master

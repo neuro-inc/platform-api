@@ -5,7 +5,7 @@ $(K8S_DIND_CLUSTER_CMD):
 	curl -Lo $@ https://cdn.rawgit.com/Mirantis/kubeadm-dind-cluster/master/fixed/dind-cluster-v1.10.sh
 	chmod u+x $@
 
-K8S_CLUSTER_CMD := $(K8S_DIND_CLUSTER_CMD)
+# K8S_CLUSTER_CMD := $(K8S_DIND_CLUSTER_CMD)
 K8S_CLUSTER_CMD := tests/k8s/cluster.sh
 
 install_k8s:
