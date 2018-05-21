@@ -158,13 +158,12 @@ class KubeOrchestrator(Orchestrator):
             self, *, kube_proxy_url: str, namespace: str='default',
             loop: Optional[AbstractEventLoop]=None) -> None:
         self._loop = loop
-        self._kube_proxy_url = kube_proxy_url
-
-        self._client = KubeClient(base_url=kube_proxy_url)
 
         # TODO (A Danshyn 05/21/18): think of the namespace life-time;
         # should we ensure it does exist before continuing
-        self._namespace = namespace or 'default'
+
+        self._client = KubeClient(
+            base_url=kube_proxy_url, namespace=namespace)
 
     async def __aenter__(self) -> 'KubeOrchestrator':
         await self._client.init()
@@ -174,51 +173,18 @@ class KubeOrchestrator(Orchestrator):
         if self._client:
             await self._client.close()
 
-    @property
-    def _namespace_url(self) -> str:
-        return f'{self._kube_proxy_url}/api/v1/namespaces/{self._namespace}'
-
-    @property
-    def _pods_url(self) -> str:
-        return f'{self._namespace_url}/pods'
-
-    def _generate_pod_url(self, pod_id: str) -> str:
-        return f'{self._pods_url}/{pod_id}'
-
     async def start_job(self, job_request: JobRequest) -> JobStatus:
-        data = self._create_json_pod_request(job_request)
-        pod = await self._request(method='POST', url=self._pods_url, json=data)
-        return self._get_status_from_pod(pod, job_id=job_request.job_id)
+        descriptor = PodDescriptor(
+            name=job_request.job_id, image=job_request.docker_image)
+        status = await self._client.create_pod(descriptor)
+        return status.status
 
     async def status_job(self, job_id: str) -> JobStatus:
-        url = self._generate_pod_url(job_id)
-        pod = await self._request(method='GET', url=url)
-        return self._get_status_from_pod(pod, job_id=job_id)
+        pod_id = job_id
+        status = await self._client.get_pod_status(pod_id)
+        return status.status
 
     async def delete_job(self, job_id: str) -> JobStatus:
-        url = self._generate_pod_url(job_id)
-        pod = await self._request(method='DELETE', url=url)
-        return self._get_status_from_pod(pod, job_id=job_id)
-
-    async def _request(self, method: str, url: str, **kwargs) -> dict:
-        return await self._client.request(method, url, **kwargs)
-
-    def _get_status_from_pod(self, pod: dict, job_id: str):
-        if pod['kind'] == 'Pod':
-            return _status_pod_from_dict(pod['status'])
-        elif pod['kind'] == 'Status':
-            _raise_status_job_exception(pod, job_id=job_id)
-
-    def _create_json_pod_request(self, job_request: JobRequest) -> dict:
-        data = {
-            "kind": "Pod",
-            "apiVersion": "v1",
-            "metadata": {
-                "name": f"{job_request.job_id}",
-            },
-            "spec": {
-                "containers": [{"name": f"{job_request.container_name}",
-                                "image": f"{job_request.docker_image}"}]
-            }
-        }
-        return data
+        pod_id = job_id
+        status = await self._client.delete_pod(pod_id)
+        return status.status
