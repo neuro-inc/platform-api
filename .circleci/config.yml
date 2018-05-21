@@ -2,12 +2,9 @@ defaults: &defaults
   machine:
     image: circleci/classic:201711-01
     docker_layer_caching: true
+    pre:
+      - sudo bash -c "yes | add-apt-repository ppa:jonathonf/python-3.6 && apt-get update && apt-get install -y python3.6"
   working_directory: ~/.go_workspace/src/github.com/neuromation/platform-api
-
-defaultspython: &defaultspython
-  docker:
-    - image: circleci/python:3.6.4-stretch
-  working_directory: ~/platform-api
 
 
 version: 2
@@ -56,7 +53,7 @@ jobs:
               make deploy_platformapi_dev
 
   k8s:
-    <<: *defaultspython
+    <<: *defaults
     steps:
       - checkout
       - run:
@@ -64,21 +61,30 @@ jobs:
           command: |
             make start_k8s
 
-#      - run:
-#          name: Testing Kubernetes
-#          command: |
-#            make test_k8s
+      - run:
+          name: Testing Kubernetes
+          command: |
+            make test_k8s
 #
+#      - run:
+#          name: Install Python3.6
+#          command: |
+#            sudo bash -c "yes | add-apt-repository ppa:jonathonf/python-3.6 && apt-get update && apt-get install -y python3.6"
+
       - run:
           name: Install tox
           command: |
             pip install tox
 
       - run:
+          name: Run Kubernetes Proxy
+          command: |
+            kubectl proxy --port=8000 &
+
+      - run:
           name: Run tests
           command: |
             kubectl proxy --port=8000 &
-            tox
 
       - run:
           name: Stopping Kubernetes
@@ -86,31 +92,21 @@ jobs:
             make clean_k8s
           when: always
 
-  testpython:
-    <<: *defaultspython
-    steps:
-      - run:
-          name: Building and pushing docker images
-          command: |
-            python3.6
-
 
 workflows:
   version: 2
 
   main:
     jobs:
-      - testpython:
-          context: org-global
       - k8s:
           context: org-global
-#      - test:
-#          context: org-global
-#      - deploy:
-#          context: org-global
-#          requires:
-#            - test
-#          filters:
-#            branches:
-#              only:
-#                - master
+      - test:
+          context: org-global
+      - deploy:
+          context: org-global
+          requires:
+            - test
+          filters:
+            branches:
+              only:
+                - master
