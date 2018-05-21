@@ -1,7 +1,6 @@
 defaults: &defaults
   machine:
-    python:
-      version: 3.6.0
+    image: circleci/classic:201711-01
     docker_layer_caching: true
   working_directory: ~/.go_workspace/src/github.com/neuromation/platform-api
 
@@ -64,6 +63,11 @@ jobs:
           name: Testing Kubernetes
           command: |
             make test_k8s
+
+      - run:
+          name: Install Python3.6
+          command: |
+            sudo bash -c "yes | add-apt-repository ppa:jonathonf/python-3.6 && apt-get update && apt-get install -y python3.6"
 
       - run:
           name: Install tox
