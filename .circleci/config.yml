@@ -1,7 +1,5 @@
 defaults: &defaults
   machine:
-    pre:
-      - cd /opt/circleci/.pyenv; git pull
     python:
       version: 3.6.0
     docker_layer_caching: true
