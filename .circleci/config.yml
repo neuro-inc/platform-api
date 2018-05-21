@@ -70,11 +70,6 @@ jobs:
             make test_k8s
 
       - run:
-          name: Install Python3.6
-          command: |
-            sudo bash -c "yes | add-apt-repository ppa:jonathonf/python-3.6 && apt-get update && apt-get install -y python3.6"
-
-      - run:
           name: Install tox
           command: |
             pip install tox
