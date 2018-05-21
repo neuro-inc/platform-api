@@ -63,20 +63,20 @@ class KubeOrchestrator(Orchestrator):
         self._loop = loop
         self._kube_proxy_url = kube_proxy_url
 
-    async def job_start(self, job_request: JobRequest) -> JobStatus:
+    async def start_job(self, job_request: JobRequest) -> JobStatus:
         namespaces = "default"
         data = self._create_json_pod_request(job_request)
         url = f"{self._kube_proxy_url}/api/v1/namespaces/{namespaces}/pods"
         pod = await self._request(method="POST", url=url, json=data)
         return self._get_status_from_pod(pod, job_id=job_request.job_id)
 
-    async def job_status(self, job_id: str) -> JobStatus:
+    async def status_job(self, job_id: str) -> JobStatus:
         namespaces = "default"
         url = f"{self._kube_proxy_url}/api/v1/namespaces/{namespaces}/pods/{job_id}"
         pod = await self._request(method="GET", url=url)
         return self._get_status_from_pod(pod, job_id=job_id)
 
-    async def job_delete(self, job_id: str) -> JobStatus:
+    async def delete_job(self, job_id: str) -> JobStatus:
         namespaces = "default"
         url = f"{self._kube_proxy_url}/api/v1/namespaces/{namespaces}/pods/{job_id}"
         pod = await self._request(method="DELETE", url=url)
