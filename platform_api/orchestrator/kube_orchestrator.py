@@ -6,7 +6,7 @@ import aiohttp
 from decouple import config as decouple_config
 
 from .base import Orchestrator
-from platform_api.job_request import JobRequest, JobStatus, JobError
+from .job_request import JobRequest, JobStatus, JobError
 
 
 def _raise_status_job_exception(pod: dict, job_id: str):

@@ -3,9 +3,7 @@ import uuid
 
 import pytest
 
-from platform_api.orchestrator import KubeOrchestrator
-from platform_api.job_request import JobRequest, JobStatus, JobError
-from platform_api.job import Job
+from platform_api.orchestrator import KubeOrchestrator, JobRequest, JobStatus, JobError, Job
 
 
 @pytest.fixture(scope='session')

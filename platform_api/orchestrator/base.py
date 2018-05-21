@@ -1,5 +1,5 @@
 from abc import ABC, abstractmethod
-from platform_api.job_request import JobRequest, JobStatus
+from .job_request import JobRequest, JobStatus
 
 
 class Orchestrator(ABC):

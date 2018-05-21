@@ -1,5 +1,5 @@
 from .job_request import JobRequest
-from .orchestrator import Orchestrator
+from .base import Orchestrator
 
 
 class Job:
