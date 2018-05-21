@@ -88,42 +88,54 @@ class KubeClient:
 
 
 class KubeOrchestrator(Orchestrator):
-
-    @classmethod
-    async def from_env(cls, loop: Optional[AbstractEventLoop] = None) -> 'KubeOrchestrator':
-        if loop is None:
-            loop = asyncio.get_event_loop()
-        kube_proxy_url = decouple_config('KUBE_PROXY_URL')
-        return cls(kube_proxy_url, loop)
-
-    def __init__(self, kube_proxy_url: str, loop: AbstractEventLoop):
+    def __init__(
+            self, *, kube_proxy_url: str, namespace: str='default',
+            loop: Optional[AbstractEventLoop]=None) -> None:
         self._loop = loop
         self._kube_proxy_url = kube_proxy_url
 
+        self._client = KubeClient(base_url=kube_proxy_url)
+
+        # TODO (A Danshyn 05/21/18): think of the namespace life-time;
+        # should we ensure it does exist before continuing
+        self._namespace = namespace or 'default'
+
+    async def __aenter__(self) -> 'KubeOrchestrator':
+        await self._client.init()
+        return self
+
+    async def __aexit__(self, *args) -> None:
+        if self._client:
+            await self._client.close()
+
+    @property
+    def _namespace_url(self) -> str:
+        return f'{self._kube_proxy_url}/api/v1/namespaces/{self._namespace}'
+
+    @property
+    def _pods_url(self) -> str:
+        return f'{self._namespace_url}/pods'
+
+    def _generate_pod_url(self, pod_id: str) -> str:
+        return f'{self._pods_url}/{pod_id}'
+
     async def start_job(self, job_request: JobRequest) -> JobStatus:
-        namespaces = "default"
         data = self._create_json_pod_request(job_request)
-        url = f"{self._kube_proxy_url}/api/v1/namespaces/{namespaces}/pods"
-        pod = await self._request(method="POST", url=url, json=data)
+        pod = await self._request(method='POST', url=self._pods_url, json=data)
         return self._get_status_from_pod(pod, job_id=job_request.job_id)
 
     async def status_job(self, job_id: str) -> JobStatus:
-        namespaces = "default"
-        url = f"{self._kube_proxy_url}/api/v1/namespaces/{namespaces}/pods/{job_id}"
-        pod = await self._request(method="GET", url=url)
+        url = self._generate_pod_url(job_id)
+        pod = await self._request(method='GET', url=url)
         return self._get_status_from_pod(pod, job_id=job_id)
 
     async def delete_job(self, job_id: str) -> JobStatus:
-        namespaces = "default"
-        url = f"{self._kube_proxy_url}/api/v1/namespaces/{namespaces}/pods/{job_id}"
-        pod = await self._request(method="DELETE", url=url)
+        url = self._generate_pod_url(job_id)
+        pod = await self._request(method='DELETE', url=url)
         return self._get_status_from_pod(pod, job_id=job_id)
 
     async def _request(self, method: str, url: str, **kwargs) -> dict:
-        async with aiohttp.ClientSession() as session:
-            async with session.request(method, url, **kwargs) as resp:
-                data = await resp.json()
-                return data
+        return await self._client.request(method, url, **kwargs)
 
     def _get_status_from_pod(self, pod: dict, job_id: str):
         if pod['kind'] == 'Pod':
