@@ -30,7 +30,7 @@ async def job_nginx(kube_orchestrator):
 
 class TestKubeOrchestrator:
 
-    async def wait_status(self, job: Job, job_status: JobStatus, interval_s: int=1, max_attempts: int=10):
+    async def wait_status(self, job: Job, job_status: JobStatus, interval_s: int=4, max_attempts: int=10):
         for _ in range(max_attempts):
             real_status = await job.status()
             if real_status == job_status:

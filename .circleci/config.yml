@@ -55,6 +55,10 @@ jobs:
     steps:
       - checkout
       - run:
+          name: Install Python
+          command: |
+            sudo bash -c "yes | add-apt-repository ppa:jonathonf/python-3.6 && apt-get update && apt-get install -y python3.6"
+      - run:
           name: Running Kubernetes
           command: |
             make start_k8s
@@ -63,6 +67,11 @@ jobs:
           name: Testing Kubernetes
           command: |
             make test_k8s
+
+      - run:
+          name: Run Platform Tests
+          command: |
+            make test_k8s_platform_api
 
       - run:
           name: Stopping Kubernetes
