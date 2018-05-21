@@ -1,10 +1,9 @@
 defaults: &defaults
   machine:
-    pre:
-      - cd /opt/circleci/.pyenv; git pull
     python:
       version: 3.6.0
-    image: circleci/classic:201711-01
+    pre:
+      - cd /opt/circleci/.pyenv; git pull
     docker_layer_caching: true
   working_directory: ~/.go_workspace/src/github.com/neuromation/platform-api
 
