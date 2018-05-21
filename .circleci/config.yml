@@ -86,21 +86,31 @@ jobs:
             make clean_k8s
           when: always
 
+  testpython:
+    <<: *defaults
+    steps:
+      - run:
+          name: Building and pushing docker images
+          command: |
+            python3.6
+
 
 workflows:
   version: 2
 
   main:
     jobs:
-      - k8s:
+      - testpython:
           context: org-global
-      - test:
-          context: org-global
-      - deploy:
-          context: org-global
-          requires:
-            - test
-          filters:
-            branches:
-              only:
-                - master
+#      - k8s:
+#          context: org-global
+#      - test:
+#          context: org-global
+#      - deploy:
+#          context: org-global
+#          requires:
+#            - test
+#          filters:
+#            branches:
+#              only:
+#                - master
