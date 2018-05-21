@@ -56,7 +56,7 @@ jobs:
               make deploy_platformapi_dev
 
   k8s:
-    <<: *defaults
+    <<: *defaultspython
     steps:
       - checkout
       - run:
