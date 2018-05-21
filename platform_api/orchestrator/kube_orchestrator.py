@@ -50,6 +50,41 @@ def _status_pod_from_dict(pod_status: dict) -> JobStatus:
         return JobStatus.FAILED
 
 
+class KubeClient:
+    def __init__(
+            self, *, base_url: str,
+            conn_timeout_s: int, read_timeout_s: int,
+            conn_pool_size: int=100) -> None:
+        self._base_url = base_url
+        self._conn_timeout_s = conn_timeout_s
+        self._read_timeout_s = read_timeout_s
+        self._conn_pool_size = conn_pool_size
+        self._client: Optional[aiohttp.ClientSession] = None
+
+    async def init(self) -> None:
+        connector = aiohttp.TCPConnector(limit=self._conn_pool_size)
+        self._client = aiohttp.ClientSession(
+            connector=connector,
+            conn_timeout=self._conn_timeout_s,
+            read_timeout=self._read_timeout_s
+        )
+
+    async def close(self) -> None:
+        if self._client:
+            await self._client.close()
+            self._client = None
+
+    async def __aenter__(self) -> 'KubeClient':
+        await self.init()
+        return self
+
+    async def __aexit__(self) -> None:
+        await self.close()
+
+    async def create(self):
+        pass
+
+
 class KubeOrchestrator(Orchestrator):
 
     @classmethod
