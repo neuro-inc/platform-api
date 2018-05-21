@@ -3,7 +3,6 @@ from dataclasses import dataclass
 from typing import Optional
 
 import aiohttp
-from decouple import config as decouple_config
 
 from .base import Orchestrator
 from .job_request import JobRequest, JobStatus, JobError
@@ -174,7 +173,7 @@ class KubeOrchestrator(Orchestrator):
             await self._client.close()
 
     async def start_job(self, job_request: JobRequest) -> JobStatus:
-        descriptor = PodDescriptor(
+        descriptor = PodDescriptor(  # type: ignore
             name=job_request.job_id, image=job_request.docker_image)
         status = await self._client.create_pod(descriptor)
         return status.status

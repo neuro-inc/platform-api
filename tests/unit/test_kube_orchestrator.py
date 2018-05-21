@@ -1,6 +1,7 @@
-import pytest
-
-from platform_api.orchestrator.kube_orchestrator import PodDescriptor
+from platform_api.orchestrator.job_request import JobStatus
+from platform_api.orchestrator.kube_orchestrator import (
+    PodDescriptor, PodStatus,
+)
 
 
 class TestPodDescriptor:
@@ -9,7 +10,7 @@ class TestPodDescriptor:
         assert pod.name == 'testname'
         assert pod.image == 'testimage'
         assert pod.to_primitive() == {
-            'kind': 'Pod1',
+            'kind': 'Pod',
             'apiVersion': 'v1',
             'metadata': {
                 'name': 'testname',
@@ -21,3 +22,18 @@ class TestPodDescriptor:
                 }]
             }
         }
+
+
+class TestPodStatus:
+    def test_from_primitive(self):
+        payload = {
+            'kind': 'Pod',
+            'status': {
+                'phase': 'Running',
+                'containerStatuses': [{
+                    'ready': True,
+                }]
+            },
+        }
+        status = PodStatus.from_primitive(payload)
+        assert status.status == JobStatus.SUCCEEDED
