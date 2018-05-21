@@ -5,12 +5,8 @@ defaults: &defaults
   working_directory: ~/.go_workspace/src/github.com/neuromation/platform-api
 
 defaultspython: &defaultspython
-  machine:
-    pre:
-      - cd /opt/circleci/.pyenv; git pull
-    python:
-      version: 3.6.0
-    docker_layer_caching: true
+  docker:
+    - image: circleci/python:3.6.4-stretch
   working_directory: ~/platform-api
 
 
