@@ -80,12 +80,13 @@ class PodStatus:
 
     @classmethod
     def from_primitive(cls, payload):
-        if payload['kind'] == 'Pod':
+        kind = payload['kind']
+        if kind == 'Pod':
             return cls(payload['status'])
-        elif payload['kind'] == 'Status':
+        elif kind == 'Status':
             _raise_status_job_exception(payload, job_id=None)
         else:
-            raise ValueError('unknown kind')
+            raise ValueError(f'unknown kind: {kind}')
 
 
 class KubeClient:
