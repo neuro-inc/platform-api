@@ -75,13 +75,9 @@ jobs:
             pip install tox
 
       - run:
-          name: Run Kubernetes Proxy
-          command: |
-            kubectl proxy --port=8000 &
-
-      - run:
           name: Run tests
           command: |
+            kubectl proxy --port=8000 &
             tox
 
       - run:
