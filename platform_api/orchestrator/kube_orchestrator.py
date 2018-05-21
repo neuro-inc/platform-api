@@ -53,7 +53,7 @@ def _status_pod_from_dict(pod_status: dict) -> JobStatus:
 class KubeClient:
     def __init__(
             self, *, base_url: str,
-            conn_timeout_s: int, read_timeout_s: int,
+            conn_timeout_s: int=300, read_timeout_s: int=300,
             conn_pool_size: int=100) -> None:
         self._base_url = base_url
         self._conn_timeout_s = conn_timeout_s
@@ -78,11 +78,13 @@ class KubeClient:
         await self.init()
         return self
 
-    async def __aexit__(self) -> None:
+    async def __aexit__(self, *args) -> None:
         await self.close()
 
-    async def create(self):
-        pass
+    async def request(self, *args, **kwargs):
+        async with self._client.request(*args, **kwargs) as response:
+            # TODO (A Danshyn 05/21/18): check status code etc
+            return await response.json()
 
 
 class KubeOrchestrator(Orchestrator):
