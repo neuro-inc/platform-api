@@ -1,5 +1,5 @@
-import asyncio
 from asyncio import AbstractEventLoop
+from dataclasses import dataclass
 from typing import Optional
 
 import aiohttp
@@ -48,6 +48,45 @@ def _status_pod_from_dict(pod_status: dict) -> JobStatus:
         return _status_for_running_pod(pod_status)
     else:
         return JobStatus.FAILED
+
+
+@dataclass(frozen=True)
+class PodDescriptor:
+    name: str
+    image: str
+
+    def to_primitive(self):
+        return {
+            'kind': 'Pod',
+            'apiVersion': 'v1',
+            'metadata': {
+                'name': f'{self.name}',
+            },
+            'spec': {
+                'containers': [{
+                    'name': f'{self.name}',
+                    'image': f'{self.image}'
+                }]
+            }
+        }
+
+
+class PodStatus:
+    def __init__(self, payload):
+        self._payload = payload
+
+    @property
+    def status(self) -> JobStatus:
+        return _status_pod_from_dict(self._payload)
+
+    @classmethod
+    def from_primitive(cls, payload):
+        if payload['kind'] == 'Pod':
+            return cls(payload['status'])
+        elif payload['kind'] == 'Status':
+            _raise_status_job_exception(payload, job_id=None)
+        else:
+            raise ValueError('unknown kind')
 
 
 class KubeClient:
