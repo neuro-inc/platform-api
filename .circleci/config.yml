@@ -64,11 +64,11 @@ jobs:
           command: |
             make start_k8s
 
-      - run:
-          name: Testing Kubernetes
-          command: |
-            make test_k8s
-
+#      - run:
+#          name: Testing Kubernetes
+#          command: |
+#            make test_k8s
+#
       - run:
           name: Install tox
           command: |
