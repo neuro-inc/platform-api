@@ -91,10 +91,11 @@ class PodStatus:
 
 class KubeClient:
     def __init__(
-            self, *, base_url: str,
+            self, *, base_url: str, namespace: str,
             conn_timeout_s: int=300, read_timeout_s: int=300,
             conn_pool_size: int=100) -> None:
         self._base_url = base_url
+        self._namespace = namespace
         self._conn_timeout_s = conn_timeout_s
         self._read_timeout_s = read_timeout_s
         self._conn_pool_size = conn_pool_size
@@ -120,10 +121,36 @@ class KubeClient:
     async def __aexit__(self, *args) -> None:
         await self.close()
 
-    async def request(self, *args, **kwargs):
+    @property
+    def _namespace_url(self) -> str:
+        return f'{self._base_url}/api/v1/namespaces/{self._namespace}'
+
+    @property
+    def _pods_url(self) -> str:
+        return f'{self._namespace_url}/pods'
+
+    def _generate_pod_url(self, pod_id: str) -> str:
+        return f'{self._pods_url}/{pod_id}'
+
+    async def _request(self, *args, **kwargs):
         async with self._client.request(*args, **kwargs) as response:
             # TODO (A Danshyn 05/21/18): check status code etc
             return await response.json()
+
+    async def create_pod(self, descriptor: PodDescriptor) -> PodStatus:
+        payload = await self._request(
+            method='POST', url=self._pods_url, json=descriptor.to_primitive())
+        return PodStatus.from_primitive(payload)
+
+    async def get_pod_status(self, pod_id: str) -> PodStatus:
+        url = self._generate_pod_url(pod_id)
+        payload = await self._request(method='GET', url=url)
+        return PodStatus.from_primitive(payload)
+
+    async def delete_pod(self, pod_id: str) -> PodStatus:
+        url = self._generate_pod_url(pod_id)
+        payload = await self._request(method='DELETE', url=url)
+        return PodStatus.from_primitive(payload)
 
 
 class KubeOrchestrator(Orchestrator):
