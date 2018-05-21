@@ -17,20 +17,26 @@ def event_loop():
 
 @pytest.fixture
 async def kube_orchestrator(event_loop):
-    yield await KubeOrchestrator.from_env(event_loop)
+    kube_proxy_url = 'http://localhost:8000'
+    orchestrator = KubeOrchestrator(kube_proxy_url=kube_proxy_url)
+    async with orchestrator:
+        yield orchestrator
 
 
-@pytest.fixture(scope="function")
+@pytest.fixture
 async def job_nginx(kube_orchestrator):
     job_id = str(uuid.uuid4())
-    job_request = JobRequest(job_id=job_id, docker_image='nginx', container_name=job_id)
+    job_request = JobRequest(
+        job_id=job_id, docker_image='nginx', container_name=job_id)
     job = Job(orchestrator=kube_orchestrator, job_request=job_request)
     return job
 
 
 class TestKubeOrchestrator:
 
-    async def wait_status(self, job: Job, job_status: JobStatus, interval_s: int=4, max_attempts: int=10):
+    async def wait_status(
+            self, job: Job, job_status: JobStatus,
+            interval_s: int=1, max_attempts: int=30):
         for _ in range(max_attempts):
             real_status = await job.status()
             if real_status == job_status:
