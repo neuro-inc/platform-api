@@ -107,8 +107,8 @@ workflows:
     jobs:
       - testpython:
           context: org-global
-#      - k8s:
-#          context: org-global
+      - k8s:
+          context: org-global
 #      - test:
 #          context: org-global
 #      - deploy:
