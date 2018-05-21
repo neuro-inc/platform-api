@@ -67,15 +67,9 @@ jobs:
             make test_k8s
 
       - run:
-          name: Install tox
+          name: Run Platform Tests
           command: |
-            pip install tox
-
-      - run:
-          name: Run Kubernetes Proxy
-          command: |
-            kubectl proxy --port=8000 &
-            tox
+            make test_k8s_platform_api
 
       - run:
           name: Stopping Kubernetes

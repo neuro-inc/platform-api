@@ -22,3 +22,8 @@ stop_k8s:
 
 clean_k8s: stop_k8s
 	$(K8S_CLUSTER_CMD) clean
+
+test_k8s_platform_api:
+	pip install tox
+	kubectl proxy --port=8000 &
+	tox
