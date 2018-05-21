@@ -4,13 +4,13 @@ from .job_request import JobRequest, JobStatus
 
 class Orchestrator(ABC):
     @abstractmethod
-    async def job_start(self, job_request: JobRequest) -> JobStatus:
+    async def start_job(self, job_request: JobRequest) -> JobStatus:
         pass
 
     @abstractmethod
-    async def job_status(self, job_id: str) -> JobStatus:
+    async def status_job(self, job_id: str) -> JobStatus:
         pass
 
     @abstractmethod
-    async def job_delete(self, job_id: str) -> JobStatus:
+    async def delete_job(self, job_id: str) -> JobStatus:
         pass
