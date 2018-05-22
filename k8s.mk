@@ -25,6 +25,5 @@ clean_k8s: stop_k8s
 
 test_k8s_platform_api:
 	pip install tox
-	cat ~/.kube/config
 	kubectl config view
 	tox
