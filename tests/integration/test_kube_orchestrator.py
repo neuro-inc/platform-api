@@ -1,4 +1,5 @@
 import asyncio
+from pathlib import Path
 import uuid
 
 import pytest
@@ -23,9 +24,24 @@ def event_loop():
     loop.close()
 
 
-@pytest.fixture
-def kube_config():
-    return KubeConfig(endpoint_url='http://localhost:8000')
+@pytest.fixture(scope='session')
+async def kube_endpoint_url():
+    process = await asyncio.create_subprocess_exec(
+        'minikube', 'ip', stdout=asyncio.subprocess.PIPE)
+    output, _ = await process.communicate()
+    ip = output.decode().strip()
+    return f'https://{ip}:8443'
+
+
+@pytest.fixture(scope='session')
+async def kube_config(kube_endpoint_url):
+    return KubeConfig(
+        endpoint_url=kube_endpoint_url,
+        cert_authority_path=Path('~/.minikube/ca.crt').expanduser(),
+        auth_cert_path=Path('~/.minikube/client.crt').expanduser(),
+        auth_cert_key_path=Path('~/.minikube/client.key').expanduser()
+    )
+    return KubeConfig(endpoint_url='http://localhost:8080')
 
 
 @pytest.fixture
