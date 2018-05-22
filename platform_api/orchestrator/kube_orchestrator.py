@@ -1,5 +1,6 @@
 from asyncio import AbstractEventLoop
 from dataclasses import dataclass
+import ssl
 from typing import Optional
 
 import aiohttp
@@ -93,6 +94,11 @@ class PodStatus:
 @dataclass(frozen=True)
 class KubeConfig:
     endpoint_url: str
+    cert_authority_path: Optional[str] = None
+
+    auth_cert_path: Optional[str] = None
+    auth_cert_key_path: Optional[str] = None
+
     namespace: str = 'default'
 
     client_conn_timeout_s: int = 300
@@ -103,19 +109,34 @@ class KubeConfig:
 class KubeClient:
     def __init__(
             self, *, base_url: str, namespace: str,
+            cert_authority_path: Optional[str]=None,
+            auth_cert_path: Optional[str]=None,
+            auth_cert_key_path: Optional[str]=None,
             conn_timeout_s: int=KubeConfig.client_conn_timeout_s,
             read_timeout_s: int=KubeConfig.client_read_timeout_s,
             conn_pool_size: int=KubeConfig.client_conn_pool_size) -> None:
         self._base_url = base_url
         self._namespace = namespace
 
+        self._cert_authority_path = cert_authority_path
+        self._auth_cert_path = auth_cert_path
+        self._auth_cert_key_path = auth_cert_key_path
+
         self._conn_timeout_s = conn_timeout_s
         self._read_timeout_s = read_timeout_s
         self._conn_pool_size = conn_pool_size
         self._client: Optional[aiohttp.ClientSession] = None
 
+    def _create_ssl_context(self) -> ssl.SSLContext:
+        ssl_context = ssl.create_default_context(
+            cafile=self._cert_authority_path)
+        ssl_context.load_cert_chain(
+            self._auth_cert_path, self._auth_cert_key_path)
+        return ssl_context
+
     async def init(self) -> None:
-        connector = aiohttp.TCPConnector(limit=self._conn_pool_size)
+        connector = aiohttp.TCPConnector(
+            limit=self._conn_pool_size, ssl=self._create_ssl_context())
         self._client = aiohttp.ClientSession(
             connector=connector,
             conn_timeout=self._conn_timeout_s,
@@ -179,6 +200,11 @@ class KubeOrchestrator(Orchestrator):
 
         self._client = KubeClient(
             base_url=config.endpoint_url,
+
+            cert_authority_path=config.cert_authority_path,
+            auth_cert_path=config.auth_cert_path,
+            auth_cert_key_path=config.auth_cert_key_path,
+
             namespace=config.namespace,
             conn_timeout_s=config.client_conn_timeout_s,
             read_timeout_s=config.client_read_timeout_s,
