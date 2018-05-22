@@ -5,6 +5,7 @@ import aiohttp.web
 
 
 from .config import Config
+from .models import ModelsHandler
 
 
 class ApiHandler:
@@ -48,6 +49,12 @@ async def create_app(config: Config):
     api_v1_app = aiohttp.web.Application()
     api_v1_handler = ApiHandler()
     api_v1_handler.register(api_v1_app)
+
+    models_app = aiohttp.web.Application()
+    models_handler = ModelsHandler()
+    models_handler.register(models_app)
+    api_v1_app.add_subapp('/models', models_app)
+
     app.add_subapp('/api/v1', api_v1_app)
     return app
 

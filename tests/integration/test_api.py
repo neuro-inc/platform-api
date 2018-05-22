@@ -17,6 +17,10 @@ class ApiConfig(NamedTuple):
         return f'http://{self.host}:{self.port}/api/v1'
 
     @property
+    def model_base_url(self):
+        return self.endpoint + '/models/'
+
+    @property
     def ping_url(self):
         return self.endpoint + '/ping'
 
@@ -49,4 +53,24 @@ class TestApi:
     @pytest.mark.asyncio
     async def test_ping(self, api, client):
         async with client.get(api.ping_url) as response:
+            assert response.status == 200
+
+
+@pytest.fixture
+async def model_train():
+    r = {"container":  {"image": "truskovskyi/test"}}
+    return r
+
+
+class TestModels:
+    @pytest.mark.asyncio
+    async def test_post(self, api, client, model_train):
+        url = api.model_base_url
+        async with client.post(url, json=model_train) as response:
+            assert response.status == 200
+
+    @pytest.mark.asyncio
+    async def test_get(self, api, client):
+        url = api.model_base_url
+        async with client.get(url) as response:
             assert response.status == 200
