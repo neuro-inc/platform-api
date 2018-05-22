@@ -1,5 +1,5 @@
 import asyncio
-from pathlib import Path
+import json
 import uuid
 
 import pytest
@@ -25,23 +25,43 @@ def event_loop():
 
 
 @pytest.fixture(scope='session')
-async def kube_endpoint_url():
+async def kube_config_payload():
     process = await asyncio.create_subprocess_exec(
-        'minikube', 'ip', stdout=asyncio.subprocess.PIPE)
+        'kubectl', 'config', 'view', '-o', 'json',
+        stdout=asyncio.subprocess.PIPE)
     output, _ = await process.communicate()
-    ip = output.decode().strip()
-    return f'https://{ip}:8443'
+    payload_str = output.decode().rstrip()
+    return json.loads(payload_str)
 
 
 @pytest.fixture(scope='session')
-async def kube_config(kube_endpoint_url):
+async def kube_config_cluster_payload(kube_config_payload):
+    cluster_name = 'minikube'
+    clusters = {
+        cluster['name']: cluster['cluster']
+        for cluster in kube_config_payload['clusters']}
+    return clusters[cluster_name]
+
+
+@pytest.fixture(scope='session')
+async def kube_config_user_payload(kube_config_payload):
+    user_name = 'minikube'
+    users = {
+        user['name']: user['user']
+        for user in kube_config_payload['users']}
+    return users[user_name]
+
+
+@pytest.fixture(scope='session')
+async def kube_config(kube_config_cluster_payload, kube_config_user_payload):
+    cluster = kube_config_cluster_payload
+    user = kube_config_user_payload
     return KubeConfig(
-        endpoint_url=kube_endpoint_url,
-        cert_authority_path=Path('~/.minikube/ca.crt').expanduser(),
-        auth_cert_path=Path('~/.minikube/client.crt').expanduser(),
-        auth_cert_key_path=Path('~/.minikube/client.key').expanduser()
+        endpoint_url=cluster['server'],
+        cert_authority_path=cluster['certificate-authority'],
+        auth_cert_path=user['client-certificate'],
+        auth_cert_key_path=user['client-key']
     )
-    return KubeConfig(endpoint_url='http://localhost:8080')
 
 
 @pytest.fixture
