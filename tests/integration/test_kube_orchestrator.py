@@ -3,7 +3,10 @@ import uuid
 
 import pytest
 
-from platform_api.orchestrator import KubeOrchestrator, JobRequest, JobStatus, JobError, Job
+from platform_api.orchestrator import (
+    KubeOrchestrator, JobRequest, JobStatus, JobError, Job
+)
+from platform_api.orchestrator.kube_orchestrator import KubeConfig
 
 
 @pytest.fixture(scope='session')
@@ -16,9 +19,13 @@ def event_loop():
 
 
 @pytest.fixture
-async def kube_orchestrator(event_loop):
-    kube_proxy_url = 'http://localhost:8000'
-    orchestrator = KubeOrchestrator(kube_proxy_url=kube_proxy_url)
+def kube_config():
+    return KubeConfig(endpoint_url='http://localhost:8000')
+
+
+@pytest.fixture
+async def kube_orchestrator(kube_config, event_loop):
+    orchestrator = KubeOrchestrator(config=kube_config)
     async with orchestrator:
         yield orchestrator
 

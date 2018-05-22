@@ -89,13 +89,25 @@ class PodStatus:
             raise ValueError(f'unknown kind: {kind}')
 
 
+@dataclass
+class KubeConfig:
+    endpoint_url: str
+    namespace: str = 'default'
+
+    client_conn_timeout_s: int = 300
+    client_read_timeout_s: int = 300
+    client_conn_pool_size: int = 100
+
+
 class KubeClient:
     def __init__(
             self, *, base_url: str, namespace: str,
-            conn_timeout_s: int=300, read_timeout_s: int=300,
-            conn_pool_size: int=100) -> None:
+            conn_timeout_s: int=KubeConfig.client_conn_timeout_s,
+            read_timeout_s: int=KubeConfig.client_read_timeout_s,
+            conn_pool_size: int=KubeConfig.client_conn_pool_size) -> None:
         self._base_url = base_url
         self._namespace = namespace
+
         self._conn_timeout_s = conn_timeout_s
         self._read_timeout_s = read_timeout_s
         self._conn_pool_size = conn_pool_size
@@ -155,15 +167,22 @@ class KubeClient:
 
 class KubeOrchestrator(Orchestrator):
     def __init__(
-            self, *, kube_proxy_url: str, namespace: str='default',
+            self, *, config: KubeConfig,
             loop: Optional[AbstractEventLoop]=None) -> None:
         self._loop = loop
+
+        self._config = config
 
         # TODO (A Danshyn 05/21/18): think of the namespace life-time;
         # should we ensure it does exist before continuing
 
         self._client = KubeClient(
-            base_url=kube_proxy_url, namespace=namespace)
+            base_url=config.endpoint_url,
+            namespace=config.namespace,
+            conn_timeout_s=config.client_conn_timeout_s,
+            read_timeout_s=config.client_read_timeout_s,
+            conn_pool_size=config.client_conn_pool_size
+        )
 
     async def __aenter__(self) -> 'KubeOrchestrator':
         await self._client.init()
