@@ -18,7 +18,7 @@ class ApiConfig(NamedTuple):
 
     @property
     def model_base_url(self):
-        return self.endpoint + '/models/'
+        return self.endpoint + '/models'
 
     @property
     def ping_url(self):
@@ -65,12 +65,13 @@ async def model_train():
 class TestModels:
     @pytest.mark.asyncio
     async def test_post(self, api, client, model_train):
-        url = api.model_base_url
+        url = api.model_base_url + '/test1'
+        print(url)
         async with client.post(url, json=model_train) as response:
             assert response.status == 200
 
     @pytest.mark.asyncio
     async def test_get(self, api, client):
-        url = api.model_base_url
+        url = api.model_base_url + '/test2'
         async with client.get(url) as response:
             assert response.status == 200
