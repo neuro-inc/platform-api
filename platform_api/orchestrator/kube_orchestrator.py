@@ -1,9 +1,8 @@
-import asyncio
 from asyncio import AbstractEventLoop
+from dataclasses import dataclass
 from typing import Optional
 
 import aiohttp
-from decouple import config as decouple_config
 
 from .base import Orchestrator
 from .job_request import JobRequest, JobStatus, JobError
@@ -50,60 +49,162 @@ def _status_pod_from_dict(pod_status: dict) -> JobStatus:
         return JobStatus.FAILED
 
 
-class KubeOrchestrator(Orchestrator):
+@dataclass(frozen=True)
+class PodDescriptor:
+    name: str
+    image: str
 
-    @classmethod
-    async def from_env(cls, loop: Optional[AbstractEventLoop] = None) -> 'KubeOrchestrator':
-        if loop is None:
-            loop = asyncio.get_event_loop()
-        kube_proxy_url = decouple_config('KUBE_PROXY_URL')
-        return cls(kube_proxy_url, loop)
-
-    def __init__(self, kube_proxy_url: str, loop: AbstractEventLoop):
-        self._loop = loop
-        self._kube_proxy_url = kube_proxy_url
-
-    async def start_job(self, job_request: JobRequest) -> JobStatus:
-        namespaces = "default"
-        data = self._create_json_pod_request(job_request)
-        url = f"{self._kube_proxy_url}/api/v1/namespaces/{namespaces}/pods"
-        pod = await self._request(method="POST", url=url, json=data)
-        return self._get_status_from_pod(pod, job_id=job_request.job_id)
-
-    async def status_job(self, job_id: str) -> JobStatus:
-        namespaces = "default"
-        url = f"{self._kube_proxy_url}/api/v1/namespaces/{namespaces}/pods/{job_id}"
-        pod = await self._request(method="GET", url=url)
-        return self._get_status_from_pod(pod, job_id=job_id)
-
-    async def delete_job(self, job_id: str) -> JobStatus:
-        namespaces = "default"
-        url = f"{self._kube_proxy_url}/api/v1/namespaces/{namespaces}/pods/{job_id}"
-        pod = await self._request(method="DELETE", url=url)
-        return self._get_status_from_pod(pod, job_id=job_id)
-
-    async def _request(self, method: str, url: str, **kwargs) -> dict:
-        async with aiohttp.ClientSession() as session:
-            async with session.request(method, url, **kwargs) as resp:
-                data = await resp.json()
-                return data
-
-    def _get_status_from_pod(self, pod: dict, job_id: str):
-        if pod['kind'] == 'Pod':
-            return _status_pod_from_dict(pod['status'])
-        elif pod['kind'] == 'Status':
-            _raise_status_job_exception(pod, job_id=job_id)
-
-    def _create_json_pod_request(self, job_request: JobRequest) -> dict:
-        data = {
-            "kind": "Pod",
-            "apiVersion": "v1",
-            "metadata": {
-                "name": f"{job_request.job_id}",
+    def to_primitive(self):
+        return {
+            'kind': 'Pod',
+            'apiVersion': 'v1',
+            'metadata': {
+                'name': f'{self.name}',
             },
-            "spec": {
-                "containers": [{"name": f"{job_request.container_name}",
-                                "image": f"{job_request.docker_image}"}]
+            'spec': {
+                'containers': [{
+                    'name': f'{self.name}',
+                    'image': f'{self.image}'
+                }]
             }
         }
-        return data
+
+
+class PodStatus:
+    def __init__(self, payload):
+        self._payload = payload
+
+    @property
+    def status(self) -> JobStatus:
+        return _status_pod_from_dict(self._payload)
+
+    @classmethod
+    def from_primitive(cls, payload):
+        # TODO (A Danshyn 05/22/18): should be refactored further
+        kind = payload['kind']
+        if kind == 'Pod':
+            return cls(payload['status'])
+        elif kind == 'Status':
+            _raise_status_job_exception(payload, job_id=None)
+        else:
+            raise ValueError(f'unknown kind: {kind}')
+
+
+@dataclass(frozen=True)
+class KubeConfig:
+    endpoint_url: str
+    namespace: str = 'default'
+
+    client_conn_timeout_s: int = 300
+    client_read_timeout_s: int = 300
+    client_conn_pool_size: int = 100
+
+
+class KubeClient:
+    def __init__(
+            self, *, base_url: str, namespace: str,
+            conn_timeout_s: int=KubeConfig.client_conn_timeout_s,
+            read_timeout_s: int=KubeConfig.client_read_timeout_s,
+            conn_pool_size: int=KubeConfig.client_conn_pool_size) -> None:
+        self._base_url = base_url
+        self._namespace = namespace
+
+        self._conn_timeout_s = conn_timeout_s
+        self._read_timeout_s = read_timeout_s
+        self._conn_pool_size = conn_pool_size
+        self._client: Optional[aiohttp.ClientSession] = None
+
+    async def init(self) -> None:
+        connector = aiohttp.TCPConnector(limit=self._conn_pool_size)
+        self._client = aiohttp.ClientSession(
+            connector=connector,
+            conn_timeout=self._conn_timeout_s,
+            read_timeout=self._read_timeout_s
+        )
+
+    async def close(self) -> None:
+        if self._client:
+            await self._client.close()
+            self._client = None
+
+    async def __aenter__(self) -> 'KubeClient':
+        await self.init()
+        return self
+
+    async def __aexit__(self, *args) -> None:
+        await self.close()
+
+    @property
+    def _namespace_url(self) -> str:
+        return f'{self._base_url}/api/v1/namespaces/{self._namespace}'
+
+    @property
+    def _pods_url(self) -> str:
+        return f'{self._namespace_url}/pods'
+
+    def _generate_pod_url(self, pod_id: str) -> str:
+        return f'{self._pods_url}/{pod_id}'
+
+    async def _request(self, *args, **kwargs):
+        async with self._client.request(*args, **kwargs) as response:
+            # TODO (A Danshyn 05/21/18): check status code etc
+            return await response.json()
+
+    async def create_pod(self, descriptor: PodDescriptor) -> PodStatus:
+        payload = await self._request(
+            method='POST', url=self._pods_url, json=descriptor.to_primitive())
+        return PodStatus.from_primitive(payload)
+
+    async def get_pod_status(self, pod_id: str) -> PodStatus:
+        url = self._generate_pod_url(pod_id)
+        payload = await self._request(method='GET', url=url)
+        return PodStatus.from_primitive(payload)
+
+    async def delete_pod(self, pod_id: str) -> PodStatus:
+        url = self._generate_pod_url(pod_id)
+        payload = await self._request(method='DELETE', url=url)
+        return PodStatus.from_primitive(payload)
+
+
+class KubeOrchestrator(Orchestrator):
+    def __init__(
+            self, *, config: KubeConfig,
+            loop: Optional[AbstractEventLoop]=None) -> None:
+        self._loop = loop
+
+        self._config = config
+
+        # TODO (A Danshyn 05/21/18): think of the namespace life-time;
+        # should we ensure it does exist before continuing
+
+        self._client = KubeClient(
+            base_url=config.endpoint_url,
+            namespace=config.namespace,
+            conn_timeout_s=config.client_conn_timeout_s,
+            read_timeout_s=config.client_read_timeout_s,
+            conn_pool_size=config.client_conn_pool_size
+        )
+
+    async def __aenter__(self) -> 'KubeOrchestrator':
+        await self._client.init()
+        return self
+
+    async def __aexit__(self, *args) -> None:
+        if self._client:
+            await self._client.close()
+
+    async def start_job(self, job_request: JobRequest) -> JobStatus:
+        descriptor = PodDescriptor(  # type: ignore
+            name=job_request.job_id, image=job_request.docker_image)
+        status = await self._client.create_pod(descriptor)
+        return status.status
+
+    async def status_job(self, job_id: str) -> JobStatus:
+        pod_id = job_id
+        status = await self._client.get_pod_status(pod_id)
+        return status.status
+
+    async def delete_job(self, job_id: str) -> JobStatus:
+        pod_id = job_id
+        status = await self._client.delete_pod(pod_id)
+        return status.status
