@@ -80,6 +80,7 @@ class PodStatus:
 
     @classmethod
     def from_primitive(cls, payload):
+        # TODO (A Danshyn 05/22/18): should be refactored further
         kind = payload['kind']
         if kind == 'Pod':
             return cls(payload['status'])
@@ -89,7 +90,7 @@ class PodStatus:
             raise ValueError(f'unknown kind: {kind}')
 
 
-@dataclass
+@dataclass(frozen=True)
 class KubeConfig:
     endpoint_url: str
     namespace: str = 'default'
