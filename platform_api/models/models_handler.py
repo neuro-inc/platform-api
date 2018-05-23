@@ -31,7 +31,8 @@ class ModelsHandler:
     def register(self, app):
         app.add_routes((
             aiohttp.web.post('/train', self.handle_post),
-            aiohttp.web.get('/train/{job_id}', self.handle_get),
+            aiohttp.web.post('/evaluation', self.handle_post),
+            aiohttp.web.get('/{job_id}', self.handle_get),
         ))
 
     def _validation_request(self, data: dict) -> dict:

@@ -72,18 +72,9 @@ class TestModels:
             assert result['status'] in ['pending']
             job_id = result['job_id']
 
-        url = api.model_base_url + f'/train/{job_id}'
+        url = api.model_base_url + f'/{job_id}'
 
         async with client.get(url) as response:
             assert response.status == 200
             result = await response.json()
             print(result)
-
-
-    #
-    # async def test_get_model_status(self, api, client, model_train):
-    #     url = api.model_base_url + '/test1'
-    #     async with client.post(url, json=model_train) as response:
-    #         assert response.status == 201
-    #         result = await response.json()
-    #         assert result['status'] in ['pending']
