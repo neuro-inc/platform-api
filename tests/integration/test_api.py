@@ -79,7 +79,7 @@ class TestModels:
 
     @pytest.mark.asyncio
     async def test_create_model(self, api, client, model_train):
-        url = api.model_base_url + '/train'
+        url = api.model_base_url + '/'
         async with client.post(url, json=model_train) as response:
             assert response.status == 201
             result = await response.json()
@@ -91,7 +91,7 @@ class TestModels:
     @pytest.mark.asyncio
     async def test_incorrect_request(self, api, client):
         json_model_train = {"wrong_key": "wrong_value"}
-        url = api.model_base_url + '/train'
+        url = api.model_base_url + '/'
         async with client.post(url, json=json_model_train) as response:
             assert response.status == 400
             data = await response.json()
@@ -101,7 +101,7 @@ class TestModels:
     @pytest.mark.asyncio
     async def test_broken_docker_image(self, api, client):
         model = {"container": {"image": "some_broken_image"}}
-        url = api.model_base_url + '/train'
+        url = api.model_base_url + '/'
         async with client.post(url, json=model) as response:
             assert response.status == 201
             data = await response.json()
