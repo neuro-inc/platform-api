@@ -52,9 +52,11 @@ async def create_models_app(config: Config):
     models_app = aiohttp.web.Application()
 
     orchestrator = await create_orchestrator(models_app.loop, kube_config=config.orchestrator_config)
-    models_app.on_startup.append(lambda _: orchestrator.__aenter__())
-    models_app.on_cleanup.append(lambda _: orchestrator.__aexit__())
-    models_app.on_shutdown.append(lambda _: orchestrator.__aexit__())
+
+    async def _init_orchestrator(_):
+        async with orchestrator:
+            yield orchestrator
+    models_app.cleanup_ctx.append(_init_orchestrator)
 
     models_handler = ModelsHandler(orchestrator=orchestrator)
     models_handler.register(models_app)
