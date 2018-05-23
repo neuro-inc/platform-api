@@ -92,7 +92,7 @@ async def create_app(config: Config):
     api_v1_handler = ApiHandler()
     api_v1_handler.register(api_v1_app)
 
-    models_app = create_models_app(config)
+    models_app = await create_models_app(config)
     api_v1_app.add_subapp('/models', models_app)
 
     app.add_subapp('/api/v1', api_v1_app)
