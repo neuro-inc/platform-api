@@ -159,6 +159,11 @@ class PodStatus:
 
 @dataclass(frozen=True)
 class KubeConfig:
+    # for now it is assumed that each pod will be configured with
+    # a hostPath volume where the storage root is mounted
+    # this attribute may probably be moved at some point
+    storage_mount_path: str
+
     endpoint_url: str
     cert_authority_path: Optional[str] = None
 
@@ -277,6 +282,9 @@ class KubeOrchestrator(Orchestrator):
             conn_pool_size=config.client_conn_pool_size
         )
 
+        self._storage_volume = Volume(  # type: ignore
+            name='storage', host_path=config.storage_mount_path)
+
     async def __aenter__(self) -> 'KubeOrchestrator':
         await self._client.init()
         return self
@@ -286,9 +294,8 @@ class KubeOrchestrator(Orchestrator):
             await self._client.close()
 
     async def start_job(self, job_request: JobRequest) -> JobStatus:
-        # TODO (A Danshyn 05/23/18): drop hardcode
-        volume = Volume(name='storage', host_path='/tmp')
-        descriptor = PodDescriptor.from_job_request(volume, job_request)
+        descriptor = PodDescriptor.from_job_request(
+            self._storage_volume, job_request)
         status = await self._client.create_pod(descriptor)
         return status.status
 

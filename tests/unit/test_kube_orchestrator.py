@@ -66,6 +66,8 @@ class TestPodDescriptor:
             }
         }
 
+    # TODO (A Danshyn 05/23/18): test_from_job_request
+
 
 class TestPodStatus:
     def test_from_primitive(self):
