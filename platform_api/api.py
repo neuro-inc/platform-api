@@ -43,7 +43,7 @@ async def handle_exceptions(request, handler):
         return aiohttp.web.json_response(
             payload, status=aiohttp.web.HTTPInternalServerError.status_code)
 
-async def create_kube_orchestrator(loop: asyncio.AbstractEventLoop)
+async def create_kube_orchestrator(loop: asyncio.AbstractEventLoop):
     # TODO remove it
     process = await asyncio.create_subprocess_exec(
         'kubectl', 'config', 'view', '-o', 'json',
