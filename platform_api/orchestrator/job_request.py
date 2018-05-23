@@ -1,5 +1,6 @@
 import enum
 from dataclasses import dataclass, field
+import shlex
 from typing import Dict, Optional, List
 
 
@@ -21,6 +22,12 @@ class Container:
     command: Optional[str] = None
     env: Dict[str, str] = field(default_factory=dict)
     volumes: List[ContainerVolume] = field(default_factory=list)
+
+    @property
+    def command_list(self) -> List[str]:
+        if self.command:
+            return shlex.split(self.command)
+        return []
 
 
 @dataclass(frozen=True)

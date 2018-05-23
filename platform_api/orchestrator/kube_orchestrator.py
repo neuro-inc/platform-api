@@ -1,6 +1,5 @@
 from asyncio import AbstractEventLoop
 from dataclasses import dataclass, field
-import shlex
 import ssl
 from typing import List, Optional
 
@@ -100,21 +99,14 @@ class VolumeMount:
 class PodDescriptor:
     name: str
     image: str
-    command: List[str] = field(default_factory=list)
+    args: List[str] = field(default_factory=list)
     volume_mounts: List[Volume] = field(default_factory=list)
     volumes: List[Volume] = field(default_factory=list)
-
-    @classmethod
-    def _parse_command(cls, command: Optional[str] = None) -> List[str]:
-        if command:
-            return shlex.split(command)
-        return []
 
     @classmethod
     def from_job_request(
             cls, volume: Volume, job_request: JobRequest) -> 'PodDescriptor':
         container = job_request.container
-        command = cls._parse_command(container.command)
         volume_mounts = [
             VolumeMount.from_container_volume(volume, container_volume)
             for container_volume in container.volumes]
@@ -122,7 +114,7 @@ class PodDescriptor:
         return cls(  # type: ignore
             name=job_request.job_id,
             image=container.image,
-            command=command,
+            args=container.command_list,
             volume_mounts=volume_mounts,
             volumes=volumes
         )
@@ -135,8 +127,8 @@ class PodDescriptor:
             'image': f'{self.image}',
             'volumeMounts': volume_mounts,
         }
-        if self.command:
-            container_payload['command'] = self.command
+        if self.args:
+            container_payload['args'] = self.args
         return {
             'kind': 'Pod',
             'apiVersion': 'v1',
