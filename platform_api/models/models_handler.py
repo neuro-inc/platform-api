@@ -1,4 +1,5 @@
 import uuid
+import asyncio
 
 import aiohttp.web
 from decouple import config as decouple_config
@@ -61,4 +62,4 @@ class ModelsHandler:
     async def handle_delete(self, request):
         job_id = request.match_info['job_id']
         status = await self._models.delete_model(job_id)
-        return aiohttp.web.json_response(data={'status': status}, status=204)
+        return aiohttp.web.json_response(data={'status': status}, status=200)

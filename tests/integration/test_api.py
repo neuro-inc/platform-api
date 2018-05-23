@@ -73,7 +73,6 @@ class TestModels:
                 result = await response.json()
                 if result['status'] == status:
                     return
-                print(result)
                 await asyncio.sleep(interval_s)
         else:
             raise RuntimeError('too long')
@@ -90,5 +89,30 @@ class TestModels:
         await self.long_pooling(api=api, client=client, job_id=job_id, status='succeeded')
 
         url = api.model_base_url + f'/{job_id}'
-        async with client.delete(url, json=model_train) as response:
+        async with client.delete(url) as response:
+            assert response.status == 200
+
+    @pytest.mark.asyncio
+    async def test_incorrect_request(self, api, client):
+        json_model_train = {"wrong_key": "wrong_value"}
+        url = api.model_base_url + '/train'
+        async with client.post(url, json=json_model_train) as response:
+            assert response.status == 400
+            data = await response.json()
+            assert data['error'] == "{'container': DataError(is required), " \
+                                    "'wrong_key': DataError(wrong_key is not allowed key)}"
+
+    @pytest.mark.asyncio
+    async def test_broken_docker_image(self, api, client):
+        model = {"container": {"image": "some_broken_image"}}
+        url = api.model_base_url + '/train'
+        async with client.post(url, json=model) as response:
+            assert response.status == 201
+            data = await response.json()
+            job_id = data['job_id']
+
+        await self.long_pooling(api=api, client=client, job_id=job_id, status='failed')
+
+        url = api.model_base_url + f'/{job_id}'
+        async with client.delete(url) as response:
             assert response.status == 200
