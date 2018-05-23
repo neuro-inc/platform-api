@@ -6,7 +6,10 @@ from typing import List, Optional
 import aiohttp
 
 from .base import Orchestrator
-from .job_request import JobRequest, JobStatus, JobError
+from .job_request import (
+    Container, ContainerVolume,
+    JobRequest, JobStatus, JobError
+)
 
 
 def _raise_status_job_exception(pod: dict, job_id: str):
@@ -58,7 +61,10 @@ class Volume:
     def to_primitive(self):
         return {
             'name': self.name,
-            'hostPath': self.host_path,
+            'hostPath': {
+                'path': self.host_path,
+                'type': 'Directory',
+            },
         }
 
 
@@ -68,6 +74,17 @@ class VolumeMount:
     mount_path: str
     sub_path: str = ''
     read_only: bool = False
+
+    @classmethod
+    def from_container_volume(
+            cls, volume: Volume, container_volume: ContainerVolume
+            ) -> 'VolumeMount':
+        return cls(  # type: ignore
+            volume=volume,
+            mount_path=container_volume.dst_path,
+            sub_path=container_volume.src_path,
+            read_only=container_volume.read_only
+        )
 
     def to_primitive(self):
         return {
@@ -84,6 +101,21 @@ class PodDescriptor:
     image: str
     volume_mounts: List[Volume] = field(default_factory=list)
     volumes: List[Volume] = field(default_factory=list)
+
+    @classmethod
+    def from_job_request(
+            cls, volume: Volume, job_request: JobRequest) -> 'PodDescriptor':
+        container = job_request.container
+        volume_mounts = [
+            VolumeMount.from_container_volume(volume, container_volume)
+            for container_volume in container.volumes]
+        volumes = [volume]
+        return cls(  # type: ignore
+            name=job_request.job_id,
+            image=container.image,
+            volume_mounts=volume_mounts,
+            volumes=volumes
+        )
 
     def to_primitive(self):
         volume_mounts = [mount.to_primitive() for mount in self.volume_mounts]
@@ -254,8 +286,9 @@ class KubeOrchestrator(Orchestrator):
             await self._client.close()
 
     async def start_job(self, job_request: JobRequest) -> JobStatus:
-        descriptor = PodDescriptor(  # type: ignore
-            name=job_request.job_id, image=job_request.docker_image)
+        # TODO (A Danshyn 05/23/18): drop hardcode
+        volume = Volume(name='storage', host_path='/tmp')
+        descriptor = PodDescriptor.from_job_request(volume, job_request)
         status = await self._client.create_pod(descriptor)
         return status.status
 
