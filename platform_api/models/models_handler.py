@@ -23,6 +23,11 @@ class Models:
             status = await orchestrator.status_job(job_id)
             return status
 
+    async def delete_model(self, job_id: str):
+        async with self._orchestrator as orchestrator:
+            status = await orchestrator.delete_job(job_id)
+            return status
+
 
 class ModelsHandler:
     def __init__(self):
@@ -31,8 +36,10 @@ class ModelsHandler:
     def register(self, app):
         app.add_routes((
             aiohttp.web.post('/train', self.handle_post),
+            # TODO this is alias for train. do same like train. just run container
             aiohttp.web.post('/evaluation', self.handle_post),
             aiohttp.web.get('/{job_id}', self.handle_get),
+            aiohttp.web.delete('/{job_id}', self.handle_delete),
         ))
 
     def _validation_request(self, data: dict) -> dict:
@@ -49,3 +56,9 @@ class ModelsHandler:
         job_id = request.match_info['job_id']
         status = await self._models.get_status(job_id)
         return aiohttp.web.json_response(data={'status': status}, status=200)
+
+    async def handle_delete(self, request):
+        job_id = request.match_info['job_id']
+        status = await self._models.delete_model(job_id)
+        return aiohttp.web.json_response(data={'status': status}, status=204)
+

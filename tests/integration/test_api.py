@@ -1,3 +1,4 @@
+import asyncio
 from typing import NamedTuple
 
 import aiohttp
@@ -63,6 +64,18 @@ async def model_train():
 
 
 class TestModels:
+
+    async def long_pooling(self, api, client, job_id, interval_s: int=2, max_attempts: int=30):
+        url = api.model_base_url + f'/{job_id}'
+        for _ in range(max_attempts):
+            async with client.get(url) as response:
+                assert response.status == 200
+                result = await response.json()
+                print(result)
+                await asyncio.sleep(interval_s)
+        else:
+            raise RuntimeError('too long')
+
     @pytest.mark.asyncio
     async def test_create_model(self, api, client, model_train):
         url = api.model_base_url + '/train'
@@ -72,9 +85,4 @@ class TestModels:
             assert result['status'] in ['pending']
             job_id = result['job_id']
 
-        url = api.model_base_url + f'/{job_id}'
-
-        async with client.get(url) as response:
-            assert response.status == 200
-            result = await response.json()
-            print(result)
+        await self.long_pooling(api, client, job_id)

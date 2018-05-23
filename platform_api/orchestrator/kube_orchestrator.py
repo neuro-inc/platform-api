@@ -127,16 +127,18 @@ class KubeClient:
         self._conn_pool_size = conn_pool_size
         self._client: Optional[aiohttp.ClientSession] = None
 
-    def _create_ssl_context(self) -> ssl.SSLContext:
-        ssl_context = ssl.create_default_context(
-            cafile=self._cert_authority_path)
-        ssl_context.load_cert_chain(
-            self._auth_cert_path, self._auth_cert_key_path)
-        return ssl_context
+    # def _create_ssl_context(self) -> ssl.SSLContext:
+    #     ssl_context = ssl.create_default_context(
+    #         cafile=self._cert_authority_path)
+    #     ssl_context.load_cert_chain(
+    #         self._auth_cert_path, self._auth_cert_key_path)
+    #     return ssl_context
 
     async def init(self) -> None:
+        # connector = aiohttp.TCPConnector(
+        #     limit=self._conn_pool_size, ssl=self._create_ssl_context())
         connector = aiohttp.TCPConnector(
-            limit=self._conn_pool_size, ssl=self._create_ssl_context())
+            limit=self._conn_pool_size)
         self._client = aiohttp.ClientSession(
             connector=connector,
             conn_timeout=self._conn_timeout_s,
