@@ -25,5 +25,5 @@ clean_k8s: stop_k8s
 
 test_k8s_platform_api:
 	pip install tox
-	kubectl proxy --port=8000 &
+	kubectl config view
 	tox
