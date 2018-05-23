@@ -1,5 +1,6 @@
 from asyncio import AbstractEventLoop
 from dataclasses import dataclass, field
+import shlex
 import ssl
 from typing import List, Optional
 
@@ -99,13 +100,21 @@ class VolumeMount:
 class PodDescriptor:
     name: str
     image: str
+    command: List[str] = field(default_factory=list)
     volume_mounts: List[Volume] = field(default_factory=list)
     volumes: List[Volume] = field(default_factory=list)
+
+    @classmethod
+    def _parse_command(cls, command: Optional[str] = None) -> List[str]:
+        if command:
+            return shlex.split(command)
+        return []
 
     @classmethod
     def from_job_request(
             cls, volume: Volume, job_request: JobRequest) -> 'PodDescriptor':
         container = job_request.container
+        command = cls._parse_command(container.command)
         volume_mounts = [
             VolumeMount.from_container_volume(volume, container_volume)
             for container_volume in container.volumes]
@@ -113,6 +122,7 @@ class PodDescriptor:
         return cls(  # type: ignore
             name=job_request.job_id,
             image=container.image,
+            command=command,
             volume_mounts=volume_mounts,
             volumes=volumes
         )
@@ -120,6 +130,13 @@ class PodDescriptor:
     def to_primitive(self):
         volume_mounts = [mount.to_primitive() for mount in self.volume_mounts]
         volumes = [volume.to_primitive() for volume in self.volumes]
+        container_payload = {
+            'name': f'{self.name}',
+            'image': f'{self.image}',
+            'volumeMounts': volume_mounts,
+        }
+        if self.command:
+            container_payload['command'] = self.command
         return {
             'kind': 'Pod',
             'apiVersion': 'v1',
@@ -127,11 +144,7 @@ class PodDescriptor:
                 'name': f'{self.name}',
             },
             'spec': {
-                'containers': [{
-                    'name': f'{self.name}',
-                    'image': f'{self.image}',
-                    'volumeMounts': volume_mounts,
-                }],
+                'containers': [container_payload],
                 'volumes': volumes,
             }
         }
