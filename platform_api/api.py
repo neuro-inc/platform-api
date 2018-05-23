@@ -43,6 +43,7 @@ async def handle_exceptions(request, handler):
         return aiohttp.web.json_response(
             payload, status=aiohttp.web.HTTPInternalServerError.status_code)
 
+
 async def create_kube_orchestrator(loop: asyncio.AbstractEventLoop):
     # TODO remove it
     process = await asyncio.create_subprocess_exec(
@@ -77,7 +78,7 @@ async def create_kube_orchestrator(loop: asyncio.AbstractEventLoop):
 
 async def create_models_app(config: Config):
     models_app = aiohttp.web.Application()
-    kube_orchestrator = create_kube_orchestrator(models_app.loop)
+    kube_orchestrator = await create_kube_orchestrator(models_app.loop)
     models_handler = ModelsHandler(orchestrator=kube_orchestrator)
     models_handler.register(models_app)
     return models_app
