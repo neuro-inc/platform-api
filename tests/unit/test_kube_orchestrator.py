@@ -20,8 +20,10 @@ class TestPodDescriptor:
             'spec': {
                 'containers': [{
                     'name': 'testname',
-                    'image': 'testimage'
-                }]
+                    'image': 'testimage',
+                    'volumeMounts': [],
+                }],
+                'volumes': [],
             }
         }
 

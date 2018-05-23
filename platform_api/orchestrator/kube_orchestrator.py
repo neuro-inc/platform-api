@@ -1,7 +1,7 @@
 from asyncio import AbstractEventLoop
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 import ssl
-from typing import Optional
+from typing import List, Optional
 
 import aiohttp
 
@@ -51,11 +51,43 @@ def _status_pod_from_dict(pod_status: dict) -> JobStatus:
 
 
 @dataclass(frozen=True)
+class Volume:
+    name: str
+    host_path: str
+
+    def to_primitive(self):
+        return {
+            'name': self.name,
+            'hostPath': self.host_path,
+        }
+
+
+@dataclass(frozen=True)
+class VolumeMount:
+    volume: Volume
+    mount_path: str
+    sub_path: str = ''
+    read_only: bool = False
+
+    def to_primitive(self):
+        return {
+            'name': self.volume.name,
+            'mountPath': self.mount_path,
+            'readOnly': self.read_only,
+            'subPath': self.sub_path
+        }
+
+
+@dataclass(frozen=True)
 class PodDescriptor:
     name: str
     image: str
+    volume_mounts: List[Volume] = field(default_factory=list)
+    volumes: List[Volume] = field(default_factory=list)
 
     def to_primitive(self):
+        volume_mounts = [mount.to_primitive() for mount in self.volume_mounts]
+        volumes = [volume.to_primitive() for volume in self.volumes]
         return {
             'kind': 'Pod',
             'apiVersion': 'v1',
@@ -65,8 +97,10 @@ class PodDescriptor:
             'spec': {
                 'containers': [{
                     'name': f'{self.name}',
-                    'image': f'{self.image}'
-                }]
+                    'image': f'{self.image}',
+                    'volumeMounts': volume_mounts,
+                }],
+                'volumes': volumes,
             }
         }
 
