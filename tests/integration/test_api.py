@@ -27,9 +27,9 @@ class ApiConfig(NamedTuple):
 
 
 @pytest.fixture
-def config():
+def config(kube_config):
     server_config = ServerConfig()
-    return Config(server=server_config)
+    return Config(server=server_config, orchestrator_config=kube_config)
 
 
 @pytest.fixture
@@ -88,10 +88,6 @@ class TestModels:
 
         await self.long_pooling(api=api, client=client, job_id=job_id, status='succeeded')
 
-        url = api.model_base_url + f'/{job_id}'
-        async with client.delete(url) as response:
-            assert response.status == 200
-
     @pytest.mark.asyncio
     async def test_incorrect_request(self, api, client):
         json_model_train = {"wrong_key": "wrong_value"}
@@ -112,7 +108,3 @@ class TestModels:
             job_id = data['job_id']
 
         await self.long_pooling(api=api, client=client, job_id=job_id, status='failed')
-
-        url = api.model_base_url + f'/{job_id}'
-        async with client.delete(url) as response:
-            assert response.status == 200

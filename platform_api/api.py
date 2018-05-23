@@ -1,12 +1,11 @@
 import asyncio
 import logging
-import json
 
 import aiohttp.web
 
 
 from .config import Config
-from .models import ModelsHandler
+from .handlers import ModelsHandler
 from .orchestrator import KubeOrchestrator, KubeConfig
 
 
@@ -44,41 +43,19 @@ async def handle_exceptions(request, handler):
             payload, status=aiohttp.web.HTTPInternalServerError.status_code)
 
 
-async def create_orchestrator(loop: asyncio.AbstractEventLoop):
-    # TODO remove it
-    process = await asyncio.create_subprocess_exec(
-        'kubectl', 'config', 'view', '-o', 'json',
-        stdout=asyncio.subprocess.PIPE)
-    output, _ = await process.communicate()
-    payload_str = output.decode().rstrip()
-    kube_config_payload = json.loads(payload_str)
-
-    cluster_name = 'minikube'
-    clusters = {
-        cluster['name']: cluster['cluster']
-        for cluster in kube_config_payload['clusters']}
-    cluster = clusters[cluster_name]
-
-    user_name = 'minikube'
-    users = {
-        user['name']: user['user']
-        for user in kube_config_payload['users']}
-    user = users[user_name]
-
-    kube_config = KubeConfig(
-        endpoint_url=cluster['server'],
-        cert_authority_path=cluster['certificate-authority'],
-        auth_cert_path=user['client-certificate'],
-        auth_cert_key_path=user['client-key']
-    )
-
+async def create_orchestrator(loop: asyncio.AbstractEventLoop, kube_config: KubeConfig):
     kube_orchestrator = KubeOrchestrator(config=kube_config, loop=loop)
     return kube_orchestrator
 
 
 async def create_models_app(config: Config):
     models_app = aiohttp.web.Application()
-    orchestrator = await create_orchestrator(models_app.loop)
+
+    orchestrator = await create_orchestrator(models_app.loop, kube_config=config.orchestrator_config)
+    models_app.on_startup.append(lambda _: orchestrator.__aenter__())
+    models_app.on_cleanup.append(lambda _: orchestrator.__aexit__())
+    models_app.on_shutdown.append(lambda _: orchestrator.__aexit__())
+
     models_handler = ModelsHandler(orchestrator=orchestrator)
     models_handler.register(models_app)
     return models_app
@@ -97,13 +74,3 @@ async def create_app(config: Config):
 
     app.add_subapp('/api/v1', api_v1_app)
     return app
-
-
-def main():
-    init_logging()
-    config = Config.from_environ()
-    logging.info('Loaded config: %r', config)
-
-    loop = asyncio.get_event_loop()
-    app = loop.run_until_complete(create_app(config))
-    aiohttp.web.run_app(app, host=config.server.host, port=config.server.port)
