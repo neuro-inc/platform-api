@@ -18,8 +18,9 @@ async def kube_orchestrator(kube_config, event_loop):
 @pytest.fixture
 async def job_nginx(kube_orchestrator):
     job_id = str(uuid.uuid4())
+    container = Container(image='nginx')
     job_request = JobRequest(
-        job_id=job_id, docker_image='nginx', container_name=job_id)
+        job_id=job_id, container=container)
     job = Job(orchestrator=kube_orchestrator, job_request=job_request)
     return job
 
@@ -52,7 +53,8 @@ class TestKubeOrchestrator:
     @pytest.mark.asyncio
     async def test_start_job_broken_image(self, kube_orchestrator):
         job_id = str(uuid.uuid4())
-        job_request = JobRequest(job_id=job_id, docker_image='notsuchdockerimage', container_name=job_id)
+        container = Container(image='notsuchdockerimage')
+        job_request = JobRequest(job_id=job_id, container=container)
         job = Job(orchestrator=kube_orchestrator, job_request=job_request)
         status = await job.start()
         assert status == JobStatus.PENDING
@@ -74,7 +76,8 @@ class TestKubeOrchestrator:
         assert status == JobStatus.SUCCEEDED
 
         job_id = await job_nginx.get_id()
-        job_request_second = JobRequest(job_id=job_id, docker_image='python', container_name=job_id)
+        container = Container(image='python')
+        job_request_second = JobRequest(job_id=job_id, container=container)
         job_second = Job(orchestrator=kube_orchestrator, job_request=job_request_second)
         with pytest.raises(JobError):
             await job_second.start()
@@ -95,7 +98,8 @@ class TestKubeOrchestrator:
     @pytest.mark.asyncio
     async def test_broken_job_id(self, kube_orchestrator):
         job_id = "some_BROCKEN_JOB-123@#$%^&*(______------ID"
-        job_request = JobRequest(job_id=job_id, docker_image='python', container_name=job_id)
+        container = Container(image='python')
+        job_request = JobRequest(job_id=job_id, container=container)
         job = Job(orchestrator=kube_orchestrator, job_request=job_request)
 
         with pytest.raises(JobError):
