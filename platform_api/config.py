@@ -1,7 +1,5 @@
 from dataclasses import dataclass
 
-from decouple import config as decouple_config
-
 from .orchestrator import KubeConfig
 
 
