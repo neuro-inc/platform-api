@@ -1,16 +1,14 @@
 import uuid
-import asyncio
 
 import aiohttp.web
-from decouple import config as decouple_config
 from trafaret.constructor import construct
 
-from platform_api.orchestrator import Job, JobRequest, KubeOrchestrator, KubeConfig
+from platform_api.orchestrator import Job, JobRequest, Orchestrator
 
 
 class Models:
-    def __init__(self):
-        self._orchestrator = KubeOrchestrator(config=KubeConfig(decouple_config('KUBE_PROXY_URL')))
+    def __init__(self, *, orchestrator: Orchestrator):
+        self._orchestrator = orchestrator
 
     async def create_job(self, data: dict):
         async with self._orchestrator as orchestrator:
@@ -32,8 +30,8 @@ class Models:
 
 
 class ModelsHandler:
-    def __init__(self):
-        self._models = Models()
+    def __init__(self, *, orchestrator: Orchestrator):
+        self._models = Models(orchestrator=orchestrator)
         self.validator = construct({"container": {"image": str}})
 
     def register(self, app):
