@@ -1,1 +1,1 @@
-from .models.models_handler import ModelsHandler
+from .models_handler import ModelsHandler
