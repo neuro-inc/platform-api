@@ -59,18 +59,20 @@ class TestApi:
 
 @pytest.fixture
 async def model_train():
-    r = {"container":  {"image": "truskovskyi/test", "fgsdf": 14}}
+    r = {"container":  {"image": "truskovskyi/test"}}
     return r
 
 
 class TestModels:
 
-    async def long_pooling(self, api, client, job_id, interval_s: int=2, max_attempts: int=30):
+    async def long_pooling(self, api, client, job_id: str, status: str, interval_s: int=2, max_attempts: int=30):
         url = api.model_base_url + f'/{job_id}'
         for _ in range(max_attempts):
             async with client.get(url) as response:
                 assert response.status == 200
                 result = await response.json()
+                if result['status'] == status:
+                    return
                 print(result)
                 await asyncio.sleep(interval_s)
         else:
@@ -85,4 +87,8 @@ class TestModels:
             assert result['status'] in ['pending']
             job_id = result['job_id']
 
-        await self.long_pooling(api, client, job_id)
+        await self.long_pooling(api=api, client=client, job_id=job_id, status='succeeded')
+
+        url = api.model_base_url + f'/{job_id}'
+        async with client.delete(url, json=model_train) as response:
+            assert response.status == 200
