@@ -2,6 +2,7 @@ import uuid
 
 import aiohttp.web
 from decouple import config as decouple_config
+from trafaret.constructor import construct
 
 from platform_api.orchestrator import Job, JobRequest, KubeOrchestrator, KubeConfig
 
@@ -32,6 +33,7 @@ class Models:
 class ModelsHandler:
     def __init__(self):
         self._models = Models()
+        self.validator = construct({"container": {"image": str}})
 
     def register(self, app):
         app.add_routes((
@@ -42,13 +44,12 @@ class ModelsHandler:
             aiohttp.web.delete('/{job_id}', self.handle_delete),
         ))
 
-    def _validation_request(self, data: dict) -> dict:
-        # TODO validation for request
-        return data
+    def _validation_request(self, data: dict):
+        self.validator(data)
 
     async def handle_post(self, request):
         data = await request.json()
-        data = self._validation_request(data)
+        self._validation_request(data)
         status, job_id = await self._models.create_job(data)
         return aiohttp.web.json_response(data={'status': status, 'job_id': job_id}, status=201)
 
@@ -61,4 +62,3 @@ class ModelsHandler:
         job_id = request.match_info['job_id']
         status = await self._models.delete_model(job_id)
         return aiohttp.web.json_response(data={'status': status}, status=204)
-

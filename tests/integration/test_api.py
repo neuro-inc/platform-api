@@ -59,7 +59,7 @@ class TestApi:
 
 @pytest.fixture
 async def model_train():
-    r = {"container":  {"image": "truskovskyi/test"}}
+    r = {"container":  {"image": "truskovskyi/test", "fgsdf": 14}}
     return r
 
 
