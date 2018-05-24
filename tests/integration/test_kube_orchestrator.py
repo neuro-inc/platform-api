@@ -79,9 +79,8 @@ class TestKubeOrchestrator:
 
         await self.wait_for_success(job_nginx)
 
-        job_id = await job_nginx.get_id()
         container = Container(image='python')
-        job_request_second = JobRequest(job_id=job_id, container=container)
+        job_request_second = JobRequest(job_id=job_nginx.id, container=container)
         job_second = Job(orchestrator=kube_orchestrator, job_request=job_request_second)
         with pytest.raises(JobError):
             await job_second.start()
