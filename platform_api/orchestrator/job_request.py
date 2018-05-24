@@ -76,7 +76,10 @@ class ContainerVolumeFactory:
             raise ValueError(f'Invalid scheme: {self._uri}')
         if not url.path:
             raise ValueError(f'Empty path: {self._uri}')
-        self._path = PurePath(url.netloc + url.path)
+        path = PurePath(url.netloc + url.path)
+        if path.is_absolute():
+            path = path.relative_to('/')
+        self._path = path
 
     def create(self):
         src_path = self._src_mount_path / self._path

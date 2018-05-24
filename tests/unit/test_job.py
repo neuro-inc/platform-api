@@ -31,8 +31,10 @@ class TestContainerVolumeFactory:
                 uri, src_mount_path=PurePath('/'),
                 dst_mount_path=PurePath('/'))
 
-    def test_create(self):
-        uri = 'storage://path/to/dir'
+    @pytest.mark.parametrize('uri', (
+        'storage:///path/to/dir',
+        'storage://path/to/dir',))
+    def test_create(self, uri):
         volume = ContainerVolumeFactory(
             uri,
             src_mount_path=PurePath('/host'),
