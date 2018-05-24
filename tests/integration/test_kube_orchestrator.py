@@ -3,6 +3,7 @@ import uuid
 
 import pytest
 
+from platform_api.orchestrator.job_request import Container, ContainerVolume
 from platform_api.orchestrator import (
     KubeOrchestrator, JobRequest, JobStatus, JobError, Job
 )
