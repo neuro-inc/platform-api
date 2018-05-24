@@ -1,12 +1,19 @@
 from asyncio import AbstractEventLoop
-from dataclasses import dataclass
+from dataclasses import dataclass, field
+import logging
 import ssl
-from typing import Optional
+from typing import List, Optional
 
 import aiohttp
 
 from .base import Orchestrator
-from .job_request import JobRequest, JobStatus, JobError
+from .job_request import (
+    Container, ContainerVolume,
+    JobRequest, JobStatus, JobError
+)
+
+
+logger = logging.getLogger(__name__)
 
 
 def _raise_status_job_exception(pod: dict, job_id: str):
@@ -35,6 +42,9 @@ def _status_for_pending_pod(pod_status: dict) -> JobStatus:
 def _status_for_running_pod(pod_status: dict) -> JobStatus:
     container_statuses = pod_status.get('containerStatuses')
     if container_statuses is not None and container_statuses[0]['ready']:
+        # TODO (A Danshyn 05/24/18): how come a running pod is succeeded?
+        # it seems we need to differenciate between the batch jobs and
+        # services.
         return JobStatus.SUCCEEDED
     else:
         return JobStatus.FAILED
@@ -46,16 +56,90 @@ def _status_pod_from_dict(pod_status: dict) -> JobStatus:
         return _status_for_pending_pod(pod_status)
     elif phase == 'Running':
         return _status_for_running_pod(pod_status)
+    elif phase == 'Succeeded':
+        return JobStatus.SUCCEEDED
+    elif phase == 'Failed':
+        return JobStatus.FAILED
     else:
         return JobStatus.FAILED
+
+
+@dataclass(frozen=True)
+class Volume:
+    name: str
+    host_path: str
+
+    def to_primitive(self):
+        return {
+            'name': self.name,
+            'hostPath': {
+                'path': self.host_path,
+                'type': 'Directory',
+            },
+        }
+
+
+@dataclass(frozen=True)
+class VolumeMount:
+    volume: Volume
+    mount_path: str
+    sub_path: str = ''
+    read_only: bool = False
+
+    @classmethod
+    def from_container_volume(
+            cls, volume: Volume, container_volume: ContainerVolume
+            ) -> 'VolumeMount':
+        return cls(  # type: ignore
+            volume=volume,
+            mount_path=container_volume.dst_path,
+            sub_path=container_volume.src_path,
+            read_only=container_volume.read_only
+        )
+
+    def to_primitive(self):
+        return {
+            'name': self.volume.name,
+            'mountPath': self.mount_path,
+            'readOnly': self.read_only,
+            'subPath': self.sub_path
+        }
 
 
 @dataclass(frozen=True)
 class PodDescriptor:
     name: str
     image: str
+    args: List[str] = field(default_factory=list)
+    volume_mounts: List[Volume] = field(default_factory=list)
+    volumes: List[Volume] = field(default_factory=list)
+
+    @classmethod
+    def from_job_request(
+            cls, volume: Volume, job_request: JobRequest) -> 'PodDescriptor':
+        container = job_request.container
+        volume_mounts = [
+            VolumeMount.from_container_volume(volume, container_volume)
+            for container_volume in container.volumes]
+        volumes = [volume]
+        return cls(  # type: ignore
+            name=job_request.job_id,
+            image=container.image,
+            args=container.command_list,
+            volume_mounts=volume_mounts,
+            volumes=volumes
+        )
 
     def to_primitive(self):
+        volume_mounts = [mount.to_primitive() for mount in self.volume_mounts]
+        volumes = [volume.to_primitive() for volume in self.volumes]
+        container_payload = {
+            'name': f'{self.name}',
+            'image': f'{self.image}',
+            'volumeMounts': volume_mounts,
+        }
+        if self.args:
+            container_payload['args'] = self.args
         return {
             'kind': 'Pod',
             'apiVersion': 'v1',
@@ -63,10 +147,9 @@ class PodDescriptor:
                 'name': f'{self.name}',
             },
             'spec': {
-                'containers': [{
-                    'name': f'{self.name}',
-                    'image': f'{self.image}'
-                }]
+                'containers': [container_payload],
+                'volumes': volumes,
+                'restartPolicy': 'Never',
             }
         }
 
@@ -93,6 +176,11 @@ class PodStatus:
 
 @dataclass(frozen=True)
 class KubeConfig:
+    # for now it is assumed that each pod will be configured with
+    # a hostPath volume where the storage root is mounted
+    # this attribute may probably be moved at some point
+    storage_mount_path: str
+
     endpoint_url: str
     cert_authority_path: Optional[str] = None
 
@@ -169,7 +257,9 @@ class KubeClient:
     async def _request(self, *args, **kwargs):
         async with self._client.request(*args, **kwargs) as response:
             # TODO (A Danshyn 05/21/18): check status code etc
-            return await response.json()
+            payload = await response.json()
+            logging.debug('k8s response payload: %s', payload)
+            return payload
 
     async def create_pod(self, descriptor: PodDescriptor) -> PodStatus:
         payload = await self._request(
@@ -211,6 +301,9 @@ class KubeOrchestrator(Orchestrator):
             conn_pool_size=config.client_conn_pool_size
         )
 
+        self._storage_volume = Volume(  # type: ignore
+            name='storage', host_path=config.storage_mount_path)
+
     async def __aenter__(self) -> 'KubeOrchestrator':
         await self._client.init()
         return self
@@ -220,8 +313,8 @@ class KubeOrchestrator(Orchestrator):
             await self._client.close()
 
     async def start_job(self, job_request: JobRequest) -> JobStatus:
-        descriptor = PodDescriptor(  # type: ignore
-            name=job_request.job_id, image=job_request.docker_image)
+        descriptor = PodDescriptor.from_job_request(
+            self._storage_volume, job_request)
         status = await self._client.create_pod(descriptor)
         return status.status
 
