@@ -63,6 +63,7 @@ class TestPodDescriptor:
                     'volumeMounts': [],
                 }],
                 'volumes': [],
+                'restartPolicy': 'Never',
             }
         }
 

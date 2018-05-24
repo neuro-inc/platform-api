@@ -53,8 +53,6 @@ class TestKubeOrchestrator:
         assert status == JobStatus.PENDING
 
         await self.wait_for_success(job_nginx)
-        status = await job_nginx.status()
-        assert status == JobStatus.SUCCEEDED
 
         status = await job_nginx.delete()
         assert status == JobStatus.SUCCEEDED
@@ -69,8 +67,6 @@ class TestKubeOrchestrator:
         assert status == JobStatus.PENDING
 
         await self.wait_for_failure(job)
-        status = await job.status()
-        assert status == JobStatus.FAILED
 
         status = await job.delete()
         assert status == JobStatus.FAILED
@@ -81,8 +77,6 @@ class TestKubeOrchestrator:
         assert status == JobStatus.PENDING
 
         await self.wait_for_success(job_nginx)
-        status = await job_nginx.status()
-        assert status == JobStatus.SUCCEEDED
 
         job_id = await job_nginx.get_id()
         container = Container(image='python')
