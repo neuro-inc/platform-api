@@ -27,23 +27,32 @@ async def job_nginx(kube_orchestrator):
 
 class TestKubeOrchestrator:
 
-    async def wait_status(
-            self, job: Job, job_status: JobStatus,
+    async def wait_for_completion(
+            self, job: Job,
             interval_s: int=1, max_attempts: int=30):
         for _ in range(max_attempts):
-            real_status = await job.status()
-            if real_status == job_status:
-                return real_status
+            status = await job.status()
+            if status != JobStatus.PENDING:
+                return status
             else:
                 await asyncio.sleep(interval_s)
-        raise RuntimeError("too long")
+        else:
+            pytest.fail('too long')
+
+    async def wait_for_failure(self, *args, **kwargs):
+        status = await self.wait_for_completion(*args, **kwargs)
+        assert status == JobStatus.FAILED
+
+    async def wait_for_success(self, *args, **kwargs):
+        status = await self.wait_for_completion(*args, **kwargs)
+        assert status == JobStatus.SUCCEEDED
 
     @pytest.mark.asyncio
     async def test_start_job_happy_path(self, job_nginx):
         status = await job_nginx.start()
         assert status == JobStatus.PENDING
 
-        await self.wait_status(job_nginx, JobStatus.SUCCEEDED)
+        await self.wait_for_success(job_nginx)
         status = await job_nginx.status()
         assert status == JobStatus.SUCCEEDED
 
@@ -59,7 +68,7 @@ class TestKubeOrchestrator:
         status = await job.start()
         assert status == JobStatus.PENDING
 
-        await self.wait_status(job, JobStatus.FAILED)
+        await self.wait_for_failure(job)
         status = await job.status()
         assert status == JobStatus.FAILED
 
@@ -71,7 +80,7 @@ class TestKubeOrchestrator:
         status = await job_nginx.start()
         assert status == JobStatus.PENDING
 
-        await self.wait_status(job_nginx, JobStatus.SUCCEEDED)
+        await self.wait_for_success(job_nginx)
         status = await job_nginx.status()
         assert status == JobStatus.SUCCEEDED
 
