@@ -138,6 +138,7 @@ class PodDescriptor:
             'spec': {
                 'containers': [container_payload],
                 'volumes': volumes,
+                'restartPolicy': 'Never',
             }
         }
 
