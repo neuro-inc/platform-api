@@ -13,8 +13,8 @@ class JobError(Exception):
 
 @dataclass(frozen=True)
 class ContainerVolume:
-    src_path: str
-    dst_path: str
+    src_path: PurePath
+    dst_path: PurePath
     read_only: bool = False
 
     @staticmethod
@@ -55,10 +55,13 @@ class JobStatus(str, enum.Enum):
 
 
 class ContainerVolumeFactory:
+    """A factory class responsible for parsing a storage URI and making sure
+    that the resulting path is valid. Creates an instance of ContainerVolume.
+    """
     def __init__(
             self, uri: str, *,
             src_mount_path: PurePath, dst_mount_path: PurePath,
-            read_only: bool = False, scheme: str='storage'
+            read_only: bool=False, scheme: str='storage'
             ) -> None:
         self._uri = uri
         self._scheme = scheme
@@ -87,9 +90,9 @@ class ContainerVolumeFactory:
 
         self._path = path
 
-    def create(self):
+    def create(self) -> ContainerVolume:
         src_path = self._src_mount_path / self._path
         dst_path = self._dst_mount_path / self._path
-        return ContainerVolume(
-            src_path=str(src_path), dst_path=str(dst_path),
+        return ContainerVolume(  # type: ignore
+            src_path=src_path, dst_path=dst_path,
             read_only=self._read_only)

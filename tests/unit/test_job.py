@@ -33,8 +33,8 @@ class TestContainerVolumeFactory:
             src_mount_path=PurePath('/host'),
             dst_mount_path=PurePath('/container')
         ).create()
-        assert volume.src_path == '/host'
-        assert volume.dst_path == '/container'
+        assert volume.src_path == PurePath('/host')
+        assert volume.dst_path == PurePath('/container')
         assert not volume.read_only
 
     @pytest.mark.parametrize('uri', (
@@ -49,8 +49,8 @@ class TestContainerVolumeFactory:
             dst_mount_path=PurePath('/container'),
             read_only=True,
         )
-        assert volume.src_path == '/host/path/to/dir'
-        assert volume.dst_path == '/container/path/to/dir'
+        assert volume.src_path == PurePath('/host/path/to/dir')
+        assert volume.dst_path == PurePath('/container/path/to/dir')
         assert volume.read_only
 
     @pytest.mark.parametrize('uri', (
