@@ -73,11 +73,14 @@ class ContainerVolumeFactory:
     def _parse_uri(self):
         url = urlsplit(self._uri)
         if url.scheme != self._scheme:
-            raise ValueError(f'Invalid scheme: {self._uri}')
+            raise ValueError(f'Invalid URI scheme: {self._uri}')
 
         path = PurePath(url.netloc + url.path)
         if path.is_absolute():
             path = path.relative_to('/')
+        if '..' in path.parts:
+            raise ValueError('Invalid URI path: {self._uri}')
+
         self._path = path
 
     def create(self):
