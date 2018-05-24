@@ -17,6 +17,10 @@ class ContainerVolume:
     dst_path: str
     read_only: bool = False
 
+    @staticmethod
+    def create(*args, **kwargs) -> 'ContainerVolume':
+        return ContainerVolumeFactory(*args, **kwargs).create()
+
 
 @dataclass(frozen=True)
 class Container:
