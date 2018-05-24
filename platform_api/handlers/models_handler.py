@@ -1,13 +1,12 @@
-import uuid
-
 import aiohttp.web
 from trafaret.constructor import construct
 
 from platform_api.orchestrator import Job, JobRequest, Orchestrator
+from platform_api.orchestrator.job_request import Container
 
 
 class ModelsHandler:
-    def __init__(self, *, orchestrator: Orchestrator):
+    def __init__(self, *, orchestrator: Orchestrator) -> None:
         self._orchestrator = orchestrator
         self.validator = construct({"container": {"image": str}})
 
@@ -18,11 +17,11 @@ class ModelsHandler:
         ))
 
     async def _create_job(self, data: dict):
-        job_id = str(uuid.uuid4())
-        job_request = JobRequest(job_id=job_id, container_name=job_id, docker_image=data['container']['image'])
+        container = Container(image=data['container']['image'])  # type: ignore
+        job_request = JobRequest.create(container)
         job = Job(orchestrator=self._orchestrator, job_request=job_request)
         start_status = await job.start()
-        return start_status, job_id
+        return start_status, job.id
 
     def _validation_request(self, data: dict):
         self.validator(data)
