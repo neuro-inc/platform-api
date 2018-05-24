@@ -20,3 +20,7 @@ class Job:
 
     async def get_id(self):
         return self._job_request.job_id
+
+    @property
+    def id(self):
+        return self._job_request.job_id

@@ -1,5 +1,6 @@
 from asyncio import AbstractEventLoop
 from dataclasses import dataclass, field
+import logging
 import ssl
 from typing import List, Optional
 
@@ -10,6 +11,9 @@ from .job_request import (
     Container, ContainerVolume,
     JobRequest, JobStatus, JobError
 )
+
+
+logger = logging.getLogger(__name__)
 
 
 def _raise_status_job_exception(pod: dict, job_id: str):
@@ -38,6 +42,9 @@ def _status_for_pending_pod(pod_status: dict) -> JobStatus:
 def _status_for_running_pod(pod_status: dict) -> JobStatus:
     container_statuses = pod_status.get('containerStatuses')
     if container_statuses is not None and container_statuses[0]['ready']:
+        # TODO (A Danshyn 05/24/18): how come a running pod is succeeded?
+        # it seems we need to differenciate between the batch jobs and
+        # services.
         return JobStatus.SUCCEEDED
     else:
         return JobStatus.FAILED
@@ -49,6 +56,10 @@ def _status_pod_from_dict(pod_status: dict) -> JobStatus:
         return _status_for_pending_pod(pod_status)
     elif phase == 'Running':
         return _status_for_running_pod(pod_status)
+    elif phase == 'Succeeded':
+        return JobStatus.SUCCEEDED
+    elif phase == 'Failed':
+        return JobStatus.FAILED
     else:
         return JobStatus.FAILED
 
@@ -246,7 +257,9 @@ class KubeClient:
     async def _request(self, *args, **kwargs):
         async with self._client.request(*args, **kwargs) as response:
             # TODO (A Danshyn 05/21/18): check status code etc
-            return await response.json()
+            payload = await response.json()
+            logging.debug('k8s response payload: %s', payload)
+            return payload
 
     async def create_pod(self, descriptor: PodDescriptor) -> PodStatus:
         payload = await self._request(

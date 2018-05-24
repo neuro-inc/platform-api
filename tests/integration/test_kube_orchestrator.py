@@ -113,3 +113,34 @@ class TestKubeOrchestrator:
 
         with pytest.raises(JobError):
             await job.start()
+
+    @pytest.mark.asyncio
+    async def test_volumes(self, kube_orchestrator):
+        volumes = [ContainerVolume(src_path='', dst_path='/storage')]
+        file_path = '/storage/' + str(uuid.uuid4())
+
+        write_container = Container(
+            image='ubuntu',
+            command=f"""bash -c 'echo "test" > {file_path}'""",
+            volumes=volumes)
+        write_job = Job(
+            orchestrator=kube_orchestrator,
+            job_request=JobRequest.create(write_container))
+
+        read_container = Container(
+            image='ubuntu',
+            command=f"""bash -c '[ "$(cat {file_path})" == "test" ]'""",
+            volumes=volumes)
+        read_job = Job(
+            orchestrator=kube_orchestrator,
+            job_request=JobRequest.create(read_container))
+
+        status = await write_job.start()
+        assert status == JobStatus.PENDING
+
+        await self.wait_for_success(write_job, max_attempts=120)
+
+        status = await read_job.start()
+        assert status == JobStatus.PENDING
+
+        await self.wait_for_success(read_job, max_attempts=120)
