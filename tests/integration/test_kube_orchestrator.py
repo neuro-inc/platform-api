@@ -115,6 +115,28 @@ class TestKubeOrchestrator:
             await job.start()
 
     @pytest.mark.asyncio
+    async def test_job_succeeded(self, kube_orchestrator):
+        container = Container(image='ubuntu', command='true')
+        job = Job(
+            orchestrator=kube_orchestrator,
+            job_request=JobRequest.create(container))
+        status = await job.start()
+        assert status == JobStatus.PENDING
+
+        await self.wait_for_success(job, max_attempts=120)
+
+    @pytest.mark.asyncio
+    async def test_job_failed(self, kube_orchestrator):
+        container = Container(image='ubuntu', command='false')
+        job = Job(
+            orchestrator=kube_orchestrator,
+            job_request=JobRequest.create(container))
+        status = await job.start()
+        assert status == JobStatus.PENDING
+
+        await self.wait_for_failure(job, max_attempts=120)
+
+    @pytest.mark.asyncio
     async def test_volumes(self, kube_orchestrator):
         volumes = [ContainerVolume(src_path='', dst_path='/storage')]
         file_path = '/storage/' + str(uuid.uuid4())
