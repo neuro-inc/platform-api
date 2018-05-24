@@ -1,5 +1,6 @@
 import asyncio
 import json
+from pathlib import PurePath
 
 import pytest
 
@@ -53,7 +54,7 @@ async def kube_config(kube_config_cluster_payload, kube_config_user_payload):
     cluster = kube_config_cluster_payload
     user = kube_config_user_payload
     return KubeConfig(
-        storage_mount_path='/tmp',
+        storage_mount_path=PurePath('/tmp'),
 
         endpoint_url=cluster['server'],
         cert_authority_path=cluster['certificate-authority'],
