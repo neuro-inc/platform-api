@@ -114,10 +114,13 @@ class TestKubeOrchestrator:
         job = Job(
             orchestrator=kube_orchestrator,
             job_request=JobRequest.create(container))
-        status = await job.start()
-        assert status == JobStatus.PENDING
+        try:
+            status = await job.start()
+            assert status == JobStatus.PENDING
 
-        await self.wait_for_success(job, max_attempts=120)
+            await self.wait_for_success(job, max_attempts=120)
+        finally:
+            await job.delete()
 
     @pytest.mark.asyncio
     async def test_job_failed(self, kube_orchestrator):
@@ -125,10 +128,13 @@ class TestKubeOrchestrator:
         job = Job(
             orchestrator=kube_orchestrator,
             job_request=JobRequest.create(container))
-        status = await job.start()
-        assert status == JobStatus.PENDING
+        try:
+            status = await job.start()
+            assert status == JobStatus.PENDING
 
-        await self.wait_for_failure(job, max_attempts=120)
+            await self.wait_for_failure(job, max_attempts=120)
+        finally:
+            await job.delete()
 
     @pytest.mark.asyncio
     async def test_volumes(self, kube_orchestrator):
@@ -151,12 +157,18 @@ class TestKubeOrchestrator:
             orchestrator=kube_orchestrator,
             job_request=JobRequest.create(read_container))
 
-        status = await write_job.start()
-        assert status == JobStatus.PENDING
+        try:
+            status = await write_job.start()
+            assert status == JobStatus.PENDING
 
-        await self.wait_for_success(write_job, max_attempts=120)
+            await self.wait_for_success(write_job, max_attempts=120)
+        finally:
+            await write_job.delete()
 
-        status = await read_job.start()
-        assert status == JobStatus.PENDING
+        try:
+            status = await read_job.start()
+            assert status == JobStatus.PENDING
 
-        await self.wait_for_success(read_job, max_attempts=120)
+            await self.wait_for_success(read_job, max_attempts=120)
+        finally:
+            await read_job.delete()

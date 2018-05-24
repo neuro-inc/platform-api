@@ -2,7 +2,7 @@ import pytest
 
 from platform_api.orchestrator.job_request import (
     Container, ContainerVolume,
-    JobStatus, JobError,
+    JobRequest, JobStatus, JobError,
 )
 from platform_api.orchestrator.kube_orchestrator import (
     Volume, VolumeMount,
@@ -67,7 +67,20 @@ class TestPodDescriptor:
             }
         }
 
-    # TODO (A Danshyn 05/23/18): test_from_job_request
+    def test_from_job_request(self):
+        container = Container(
+            image='testimage', command='testcommand 123',
+            volumes=[ContainerVolume(src_path='/src', dst_path='/dst')])
+        volume = Volume(name='testvolume', host_path='/tmp')
+        job_request = JobRequest.create(container)
+        pod = PodDescriptor.from_job_request(volume, job_request)
+        assert pod.name == job_request.job_id
+        assert pod.image == 'testimage'
+        assert pod.args == ['testcommand', '123']
+        assert pod.volume_mounts == [
+            VolumeMount(volume=volume, mount_path='/dst', sub_path='/src')
+        ]
+        assert pod.volumes == [volume]
 
 
 class TestPodStatus:
