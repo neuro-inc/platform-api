@@ -65,7 +65,9 @@ async def model_train():
 
 class TestModels:
 
-    async def long_pooling(self, api, client, job_id: str, status: str, interval_s: int=2, max_attempts: int=30):
+    async def long_pooling(
+            self, api, client, job_id: str, status: str,
+            interval_s: int=2, max_attempts: int=60):
         url = api.model_base_url + f'/{job_id}'
         for _ in range(max_attempts):
             async with client.get(url) as response:
@@ -81,7 +83,7 @@ class TestModels:
     async def test_create_model(self, api, client, model_train):
         url = api.model_base_url + '/'
         async with client.post(url, json=model_train) as response:
-            assert response.status == 201
+            assert response.status == 202
             result = await response.json()
             assert result['status'] in ['pending']
             job_id = result['job_id']
@@ -103,7 +105,7 @@ class TestModels:
         model = {"container": {"image": "some_broken_image"}}
         url = api.model_base_url + '/'
         async with client.post(url, json=model) as response:
-            assert response.status == 201
+            assert response.status == 202
             data = await response.json()
             job_id = data['job_id']
 
