@@ -79,6 +79,17 @@ class Volume:
             },
         }
 
+    def create_mount(
+            self, container_volume: ContainerVolume
+            ) -> 'VolumeMount':
+        sub_path = container_volume.src_path.relative_to(self.host_path)
+        return VolumeMount(  # type: ignore
+            volume=self,
+            mount_path=container_volume.dst_path,
+            sub_path=sub_path,
+            read_only=container_volume.read_only
+        )
+
 
 @dataclass(frozen=True)
 class VolumeMount:
@@ -86,17 +97,6 @@ class VolumeMount:
     mount_path: PurePath
     sub_path: PurePath = PurePath('')
     read_only: bool = False
-
-    @classmethod
-    def from_container_volume(
-            cls, volume: Volume, container_volume: ContainerVolume
-            ) -> 'VolumeMount':
-        return cls(  # type: ignore
-            volume=volume,
-            mount_path=container_volume.dst_path,
-            sub_path=container_volume.src_path,
-            read_only=container_volume.read_only
-        )
 
     def to_primitive(self):
         return {
@@ -120,7 +120,7 @@ class PodDescriptor:
             cls, volume: Volume, job_request: JobRequest) -> 'PodDescriptor':
         container = job_request.container
         volume_mounts = [
-            VolumeMount.from_container_volume(volume, container_volume)
+            volume.create_mount(container_volume)
             for container_volume in container.volumes]
         volumes = [volume]
         return cls(  # type: ignore
