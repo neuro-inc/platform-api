@@ -1,4 +1,5 @@
 import asyncio
+from pathlib import PurePath
 import uuid
 
 import pytest
@@ -137,8 +138,10 @@ class TestKubeOrchestrator:
             await job.delete()
 
     @pytest.mark.asyncio
-    async def test_volumes(self, kube_orchestrator):
-        volumes = [ContainerVolume(src_path='', dst_path='/storage')]
+    async def test_volumes(self, kube_config, kube_orchestrator):
+        volumes = [ContainerVolume(
+            src_path=PurePath(kube_config.storage_mount_path),
+            dst_path=PurePath('/storage'))]
         file_path = '/storage/' + str(uuid.uuid4())
 
         write_container = Container(
