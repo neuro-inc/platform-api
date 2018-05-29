@@ -81,9 +81,9 @@ async def model_train():
 class TestModels:
 
     async def long_pooling(
-            self, api, client, job_id: str, status: str,
+            self, api, client, status_id: str, status: str,
             interval_s: int=2, max_attempts: int=60):
-        url = api.model_base_url + f'/{job_id}'
+        url = api.statuses_base_url + f'/{status_id}'
         for _ in range(max_attempts):
             async with client.get(url) as response:
                 assert response.status == 200
@@ -101,10 +101,8 @@ class TestModels:
             assert response.status == 202
             result = await response.json()
             assert result['status'] in ['pending']
-            job_id = result['job_id']
             status_id = result['status_id']
-        print(f"status_id = {status_id}")
-        await self.long_pooling(api=api, client=client, job_id=job_id, status='succeeded')
+        await self.long_pooling(api=api, client=client, status_id=status_id, status='succeeded')
 
     @pytest.mark.asyncio
     async def test_incorrect_request(self, api, client):
@@ -130,12 +128,16 @@ class TestModels:
         async with client.post(url, json=payload) as response:
             assert response.status == 202
             data = await response.json()
-            job_id = data['job_id']
+            status_id = data['status_id']
+        await self.long_pooling(api=api, client=client, status_id=status_id, status='failed')
 
-        await self.long_pooling(api=api, client=client, job_id=job_id, status='failed')
 
-
-class StatusHandler:
+class TestStatuses:
     @pytest.mark.asyncio
-    async def test_test123(self, api, client):
-        assert 1 == 1
+    async def test_test_not_exist_status(self, api, client):
+        status_id = 'not-such-status_id'
+        url = api.statuses_base_url + f'/{status_id}'
+        async with client.get(url) as response:
+            assert response.status == 404
+            error_msg_text = await response.text()
+            assert f'not such status_id {status_id}' == error_msg_text

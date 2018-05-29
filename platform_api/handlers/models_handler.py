@@ -81,17 +81,14 @@ class ModelsHandler:
     def register(self, app):
         app.add_routes((
             aiohttp.web.post('', self.handle_post),
-            aiohttp.web.get('/{job_id}', self.handle_get),
+            # TODO add here get method for model not for job
         ))
 
     async def _create_job(self, model_request: ModelRequest):
         job_request = JobRequest.create(model_request.to_container())
         job = Job(orchestrator=self._orchestrator, job_request=job_request)
         start_status = await job.start()
-        import uuid
-        status_id = str(uuid.uuid4())
-        await self._status_service.set(status_id=status_id)
-
+        status_id = await self._status_service.create(job=job)
         return start_status, job.id, status_id
 
     async def handle_post(self, request):
@@ -104,8 +101,3 @@ class ModelsHandler:
             data={'status': status, 'job_id': job_id, 'status_id': status_id},
             status=aiohttp.web.HTTPAccepted.status_code)
 
-    async def handle_get(self, request):
-        job_id = request.match_info['job_id']
-        status = await self._orchestrator.status_job(job_id)
-        return aiohttp.web.json_response(
-            data={'status': status}, status=aiohttp.web.HTTPOk.status_code)
