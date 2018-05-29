@@ -2,6 +2,8 @@ from pathlib import PurePath
 
 import pytest
 
+from platform_api.config import StorageConfig
+from platform_api.handlers.models_handler import ModelRequest
 from platform_api.orchestrator.job_request import (
     Container, ContainerVolume, ContainerVolumeFactory)
 
@@ -64,3 +66,33 @@ class TestContainerVolumeFactory:
                 src_mount_path=PurePath('/host'),
                 dst_mount_path=PurePath('/container')
             ).create()
+
+
+class TestModelRequest:
+    def test_to_container(self):
+        storage_config = StorageConfig(  # type: ignore
+            host_mount_path=PurePath('/tmp'),
+        )
+        payload = {
+            'container': {
+                'image': 'testimage',
+                'command': 'testcommand'
+            },
+            'dataset_storage_uri': 'storage://path/to/dir',
+            'result_storage_uri': 'storage://path/to/another/dir',
+        }
+        request = ModelRequest(payload, storage_config=storage_config)
+        assert request.to_container() == Container(
+            image='testimage',
+            command='testcommand',
+            volumes=[
+                ContainerVolume(
+                    src_path=PurePath('/tmp/path/to/dir'),
+                    dst_path=PurePath('/var/storage/path/to/dir'),
+                    read_only=True),
+                ContainerVolume(
+                    src_path=PurePath('/tmp/path/to/another/dir'),
+                    dst_path=PurePath('/var/storage/path/to/another/dir'),
+                    read_only=False)
+            ]
+        )
