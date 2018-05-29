@@ -59,8 +59,14 @@ class TestApi:
 
 @pytest.fixture
 async def model_train():
-    r = {"container":  {"image": "truskovskyi/test"}}
-    return r
+    return {
+        'container':  {
+            'image': 'ubuntu',
+            'command': 'true',
+        },
+        'dataset_storage_uri': 'storage://',
+        'result_storage_uri': 'storage://result',
+    }
 
 
 class TestModels:
@@ -81,7 +87,7 @@ class TestModels:
 
     @pytest.mark.asyncio
     async def test_create_model(self, api, client, model_train):
-        url = api.model_base_url + '/'
+        url = api.model_base_url
         async with client.post(url, json=model_train) as response:
             assert response.status == 202
             result = await response.json()
@@ -93,18 +99,25 @@ class TestModels:
     @pytest.mark.asyncio
     async def test_incorrect_request(self, api, client):
         json_model_train = {"wrong_key": "wrong_value"}
-        url = api.model_base_url + '/'
+        url = api.model_base_url
         async with client.post(url, json=json_model_train) as response:
             assert response.status == 400
             data = await response.json()
-            assert data['error'] == "{'container': DataError(is required), " \
-                                    "'wrong_key': DataError(wrong_key is not allowed key)}"
+            assert ''''container': DataError(is required)''' in data['error']
 
     @pytest.mark.asyncio
     async def test_broken_docker_image(self, api, client):
-        model = {"container": {"image": "some_broken_image"}}
-        url = api.model_base_url + '/'
-        async with client.post(url, json=model) as response:
+        payload = {
+            'container':  {
+                'image': 'some_broken_image',
+                'command': 'true',
+            },
+            'dataset_storage_uri': 'storage://',
+            'result_storage_uri': 'storage://result',
+        }
+
+        url = api.model_base_url
+        async with client.post(url, json=payload) as response:
             assert response.status == 202
             data = await response.json()
             job_id = data['job_id']
