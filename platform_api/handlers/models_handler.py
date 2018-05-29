@@ -3,7 +3,7 @@ import trafaret as t
 from typing import Dict, List, Optional
 
 from platform_api.config import StorageConfig
-from platform_api.orchestrator import Job, JobRequest, Orchestrator
+from platform_api.orchestrator import Job, JobRequest, Orchestrator, StatusService, Status
 from platform_api.orchestrator.job_request import Container, ContainerVolume
 
 
@@ -61,10 +61,12 @@ class ModelRequest:
 
 class ModelsHandler:
     def __init__(
-            self, *, storage_config: StorageConfig, orchestrator: Orchestrator
+            self, *, storage_config: StorageConfig, orchestrator: Orchestrator,
+            status_service: StatusService
             ) -> None:
         self._orchestrator = orchestrator
         self._storage_config = storage_config
+        self._status_service = status_service
 
         self._model_request_validator = self._create_model_request_validator()
 
@@ -86,27 +88,25 @@ class ModelsHandler:
     def register(self, app):
         app.add_routes((
             aiohttp.web.post('', self.handle_post),
-            aiohttp.web.get('/{job_id}', self.handle_get),
+            # TODO add here get method for model not for job
         ))
 
-    async def _create_job(self, model_request: ModelRequest):
+    async def _create_job(self, model_request: ModelRequest) -> (Job, Status):
         job_request = JobRequest.create(model_request.to_container())
         job = Job(orchestrator=self._orchestrator, job_request=job_request)
-        start_status = await job.start()
-        return start_status, job.id
+        _ = await job.start()
+        status = await self._status_service.create(job=job)
+        return job, status
 
     async def handle_post(self, request):
         data = await request.json()
         self._model_request_validator.check(data)
         model_request = ModelRequest(
             data, storage_config=self._storage_config)
-        status, job_id = await self._create_job(model_request)
+        job, status = await self._create_job(model_request)
+        status_value = await status.value()
+
         return aiohttp.web.json_response(
-            data={'status': status, 'job_id': job_id},
+            data={'status': status_value, 'job_id': job.id, 'status_id': status.id},
             status=aiohttp.web.HTTPAccepted.status_code)
 
-    async def handle_get(self, request):
-        job_id = request.match_info['job_id']
-        status = await self._orchestrator.status_job(job_id)
-        return aiohttp.web.json_response(
-            data={'status': status}, status=aiohttp.web.HTTPOk.status_code)

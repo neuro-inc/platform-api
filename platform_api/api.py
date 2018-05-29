@@ -5,8 +5,8 @@ import aiohttp.web
 
 
 from .config import Config
-from .handlers import ModelsHandler
-from .orchestrator import KubeOrchestrator, KubeConfig
+from .handlers import ModelsHandler, StatusesHandler
+from .orchestrator import KubeOrchestrator, KubeConfig, InMemoryStatusService, StatusService
 
 
 class ApiHandler:
@@ -48,7 +48,7 @@ async def create_orchestrator(loop: asyncio.AbstractEventLoop, kube_config: Kube
     return kube_orchestrator
 
 
-async def create_models_app(config: Config):
+async def create_models_app(config: Config, status_service: StatusService):
     models_app = aiohttp.web.Application()
 
     orchestrator = await create_orchestrator(models_app.loop, kube_config=config.orchestrator_config)
@@ -59,9 +59,16 @@ async def create_models_app(config: Config):
     models_app.cleanup_ctx.append(_init_orchestrator)
 
     models_handler = ModelsHandler(
-        storage_config=config.storage, orchestrator=orchestrator)
+        storage_config=config.storage, orchestrator=orchestrator, status_service=status_service)
     models_handler.register(models_app)
     return models_app
+
+
+async def create_statuses_app(status_service: StatusService):
+    statuses_app = aiohttp.web.Application()
+    statuses_handler = StatusesHandler(status_service=status_service)
+    statuses_handler.register(statuses_app)
+    return statuses_app
 
 
 async def create_app(config: Config):
@@ -72,8 +79,11 @@ async def create_app(config: Config):
     api_v1_handler = ApiHandler()
     api_v1_handler.register(api_v1_app)
 
-    models_app = await create_models_app(config)
+    status_service = InMemoryStatusService()
+    models_app = await create_models_app(config=config, status_service=status_service)
     api_v1_app.add_subapp('/models', models_app)
+    statuses_app = await create_statuses_app(status_service=status_service)
+    api_v1_app.add_subapp('/statuses', statuses_app)
 
     app.add_subapp('/api/v1', api_v1_app)
     return app
