@@ -1,5 +1,5 @@
 import pytest
-from platform_api.orchestrator import InMemoryStatusService, Status, JobStatus
+from platform_api.orchestrator import InMemoryStatusService, JobStatus
 
 
 class MockJob:
@@ -57,4 +57,3 @@ class TestInMemoryStatusService:
 
         status_value = await new_status.value()
         assert status_value == JobStatus.FAILED
-
