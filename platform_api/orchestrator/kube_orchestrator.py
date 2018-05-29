@@ -1,6 +1,7 @@
 from asyncio import AbstractEventLoop
 from dataclasses import dataclass, field
 import logging
+from pathlib import PurePath
 import ssl
 from typing import List, Optional
 
@@ -67,13 +68,13 @@ def _status_pod_from_dict(pod_status: dict) -> JobStatus:
 @dataclass(frozen=True)
 class Volume:
     name: str
-    host_path: str
+    host_path: PurePath
 
     def to_primitive(self):
         return {
             'name': self.name,
             'hostPath': {
-                'path': self.host_path,
+                'path': str(self.host_path),
                 'type': 'Directory',
             },
         }
@@ -82,8 +83,8 @@ class Volume:
 @dataclass(frozen=True)
 class VolumeMount:
     volume: Volume
-    mount_path: str
-    sub_path: str = ''
+    mount_path: PurePath
+    sub_path: PurePath = PurePath('')
     read_only: bool = False
 
     @classmethod
@@ -100,9 +101,9 @@ class VolumeMount:
     def to_primitive(self):
         return {
             'name': self.volume.name,
-            'mountPath': self.mount_path,
+            'mountPath': str(self.mount_path),
             'readOnly': self.read_only,
-            'subPath': self.sub_path
+            'subPath': str(self.sub_path),
         }
 
 
@@ -179,7 +180,7 @@ class KubeConfig:
     # for now it is assumed that each pod will be configured with
     # a hostPath volume where the storage root is mounted
     # this attribute may probably be moved at some point
-    storage_mount_path: str
+    storage_mount_path: PurePath
 
     endpoint_url: str
     cert_authority_path: Optional[str] = None
