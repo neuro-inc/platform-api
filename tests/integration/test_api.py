@@ -108,3 +108,9 @@ class TestModels:
             job_id = data['job_id']
 
         await self.long_pooling(api=api, client=client, job_id=job_id, status='failed')
+
+
+class StatusHandler:
+    @pytest.mark.asyncio
+    async def test_test123(self, api, client):
+        assert 1 == 1

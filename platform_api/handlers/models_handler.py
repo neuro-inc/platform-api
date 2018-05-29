@@ -1,13 +1,16 @@
+import uuid
 import aiohttp.web
 from trafaret.constructor import construct
 
 from platform_api.orchestrator import Job, JobRequest, Orchestrator
 from platform_api.orchestrator.job_request import Container
+from platform_api.orchestrator import StatusService
 
 
 class ModelsHandler:
-    def __init__(self, *, orchestrator: Orchestrator) -> None:
+    def __init__(self, *, orchestrator: Orchestrator, status_service: StatusService) -> None:
         self._orchestrator = orchestrator
+        self._status_service = status_service
         self.validator = construct({"container": {"image": str}})
 
     def register(self, app):
@@ -21,7 +24,9 @@ class ModelsHandler:
         job_request = JobRequest.create(container)
         job = Job(orchestrator=self._orchestrator, job_request=job_request)
         start_status = await job.start()
-        return start_status, job.id
+        status_id = str(uuid.uuid4())
+        await self._status_service.set(status_id)
+        return start_status, job.id, status_id
 
     def _validation_request(self, data: dict):
         self.validator(data)
@@ -29,8 +34,8 @@ class ModelsHandler:
     async def handle_post(self, request):
         data = await request.json()
         self._validation_request(data)
-        status, job_id = await self._create_job(data)
-        return aiohttp.web.json_response(data={'status': status, 'job_id': job_id}, status=201)
+        status, job_id, status_id = await self._create_job(data)
+        return aiohttp.web.json_response(data={'status': status, 'job_id': job_id, 'status_id': status_id}, status=201)
 
     async def handle_get(self, request):
         job_id = request.match_info['job_id']

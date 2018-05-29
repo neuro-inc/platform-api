@@ -7,6 +7,7 @@ import aiohttp.web
 from .config import Config
 from .handlers import ModelsHandler
 from .orchestrator import KubeOrchestrator, KubeConfig
+from .orchestrator import InMemoryStatusService
 
 
 class ApiHandler:
@@ -52,13 +53,14 @@ async def create_models_app(config: Config):
     models_app = aiohttp.web.Application()
 
     orchestrator = await create_orchestrator(models_app.loop, kube_config=config.orchestrator_config)
+    status_service = InMemoryStatusService()
 
     async def _init_orchestrator(_):
         async with orchestrator:
             yield orchestrator
     models_app.cleanup_ctx.append(_init_orchestrator)
 
-    models_handler = ModelsHandler(orchestrator=orchestrator)
+    models_handler = ModelsHandler(orchestrator=orchestrator, status_service=status_service)
     models_handler.register(models_app)
     return models_app
 
