@@ -11,7 +11,7 @@ from .job_request import JobStatus
 logger = logging.getLogger(__file__)
 
 
-@dataclass()
+@dataclass(frozen=True)
 class Status:
     status_id: str
     job: Job
