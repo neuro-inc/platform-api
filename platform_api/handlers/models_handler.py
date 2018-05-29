@@ -55,8 +55,11 @@ class ModelRequest:
 
 
 class ModelsHandler:
-    def __init__(self, *, orchestrator: Orchestrator) -> None:
+    def __init__(
+            self, *, storage_config: StorageConfig, orchestrator: Orchestrator
+            ) -> None:
         self._orchestrator = orchestrator
+        self._storage_config = storage_config
 
         self._model_request_validator = self._create_model_request_validator()
 

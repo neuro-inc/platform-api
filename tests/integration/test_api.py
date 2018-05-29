@@ -1,4 +1,5 @@
 import asyncio
+from pathlib import PurePath
 from typing import NamedTuple
 
 import aiohttp
@@ -6,7 +7,7 @@ import aiohttp.web
 import pytest
 
 from platform_api.api import create_app
-from platform_api.config import Config, ServerConfig
+from platform_api.config import Config, ServerConfig, StorageConfig
 
 
 class ApiConfig(NamedTuple):
@@ -29,7 +30,11 @@ class ApiConfig(NamedTuple):
 @pytest.fixture
 def config(kube_config):
     server_config = ServerConfig()
-    return Config(server=server_config, orchestrator_config=kube_config)
+    storage_config = StorageConfig(host_mount_path=PurePath('/tmp'))  # type: ignore
+    return Config(
+        server=server_config,
+        storage=storage_config,
+        orchestrator_config=kube_config)
 
 
 @pytest.fixture
