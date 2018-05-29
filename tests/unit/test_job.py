@@ -82,14 +82,15 @@ class TestModelRequest:
             'dataset_storage_uri': 'storage://path/to/dir',
             'result_storage_uri': 'storage://path/to/another/dir',
         }
-        request = ModelRequest(payload, storage_config=storage_config)
+        request = ModelRequest(
+            payload, storage_config=storage_config, env_prefix='NP')
         assert request.to_container() == Container(
             image='testimage',
             command='testcommand',
             env={
                 'TESTVAR': 'testvalue',
-                'DATASET_PATH': '/var/storage/path/to/dir',
-                'RESULT_PATH': '/var/storage/path/to/another/dir',
+                'NP_DATASET_PATH': '/var/storage/path/to/dir',
+                'NP_RESULT_PATH': '/var/storage/path/to/another/dir',
             },
             volumes=[
                 ContainerVolume(

@@ -2,16 +2,22 @@ import aiohttp.web
 import trafaret as t
 from typing import Dict, List, Optional
 
-from platform_api.config import StorageConfig
+from platform_api.config import Config, StorageConfig
 from platform_api.orchestrator import Job, JobRequest, Orchestrator, StatusService, Status
 from platform_api.orchestrator.job_request import Container, ContainerVolume
 
 
 class ModelRequest:
-    def __init__(self, payload, *, storage_config: StorageConfig) -> None:
+    def __init__(
+            self, payload, *, storage_config: StorageConfig,
+            env_prefix: str = '') -> None:
         self._payload = payload
 
+        self._env_prefix = env_prefix
         self._storage_config = storage_config
+
+        self._dataset_env_var_name = self._create_env_var_name('DATASET_PATH')
+        self._result_env_var_name = self._create_env_var_name('RESULT_PATH')
 
         self._dataset_volume = self._create_dataset_volume()
         self._result_volume = self._create_result_volume()
@@ -47,11 +53,15 @@ class ModelRequest:
     def _create_volumes(self) -> List[ContainerVolume]:
         return [self._dataset_volume, self._result_volume]
 
+    def _create_env_var_name(self, name):
+        if self._env_prefix:
+            return f'{self._env_prefix}_{name}'
+        return name
+
     def _create_env(self) -> Dict[str, str]:
         env = self._payload['container'].get('env', {})
-        # TODO (A Danshyn 05/29/18): implement prefixes
-        env['DATASET_PATH'] = str(self._dataset_volume.dst_path)
-        env['RESULT_PATH'] = str(self._result_volume.dst_path)
+        env[self._dataset_env_var_name] = str(self._dataset_volume.dst_path)
+        env[self._result_env_var_name] = str(self._result_volume.dst_path)
         return env
 
     def to_container(self) -> Container:
@@ -65,11 +75,12 @@ class ModelRequest:
 
 class ModelsHandler:
     def __init__(
-            self, *, storage_config: StorageConfig, orchestrator: Orchestrator,
+            self, *, config: Config, orchestrator: Orchestrator,
             status_service: StatusService
             ) -> None:
         self._orchestrator = orchestrator
-        self._storage_config = storage_config
+        self._config = config
+        self._storage_config = config.storage
         self._status_service = status_service
 
         self._model_request_validator = self._create_model_request_validator()
@@ -106,10 +117,10 @@ class ModelsHandler:
         data = await request.json()
         self._model_request_validator.check(data)
         model_request = ModelRequest(
-            data, storage_config=self._storage_config)
+            data, storage_config=self._storage_config,
+            env_prefix=self._config.env_prefix)
         job, status = await self._create_job(model_request)
         status_value = await status.value()
-
         return aiohttp.web.json_response(
             data={'status': status_value, 'job_id': job.id, 'status_id': status.id},
             status=aiohttp.web.HTTPAccepted.status_code)

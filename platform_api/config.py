@@ -22,4 +22,6 @@ class StorageConfig:
 class Config:
     server: ServerConfig
     storage: StorageConfig
-    orchestrator_config: KubeConfig
+    orchestrator: KubeConfig
+
+    env_prefix: str = 'NP'  # stands for Neuromation Platform
