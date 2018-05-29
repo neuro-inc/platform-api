@@ -23,6 +23,10 @@ class ApiConfig(NamedTuple):
         return self.endpoint + '/models'
 
     @property
+    def statuses_base_url(self):
+        return self.endpoint + '/statuses'
+
+    @property
     def ping_url(self):
         return self.endpoint + '/ping'
 
@@ -98,7 +102,8 @@ class TestModels:
             result = await response.json()
             assert result['status'] in ['pending']
             job_id = result['job_id']
-
+            status_id = result['status_id']
+        print(f"status_id = {status_id}")
         await self.long_pooling(api=api, client=client, job_id=job_id, status='succeeded')
 
     @pytest.mark.asyncio

@@ -1,2 +1,2 @@
 from .models_handler import ModelsHandler
-from .statuses_handler import StatusHandler
+from .statuses_handler import StatusesHandler

@@ -4,7 +4,7 @@ from platform_api.orchestrator.status_service import StatusService
 import aiohttp.web
 
 
-class StatusHandler:
+class StatusesHandler:
     def __init__(self, *, status_service: StatusService) -> None:
         self._status_service = status_service
 
