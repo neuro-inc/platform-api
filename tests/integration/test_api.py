@@ -139,5 +139,5 @@ class TestStatuses:
         url = api.statuses_base_url + f'/{status_id}'
         async with client.get(url) as response:
             assert response.status == 404
-            error_msg_text = await response.json()
-            assert f'not such status_id {status_id}' == error_msg_text
+            data = await response.json()
+            assert f'not such status_id {status_id}' == data['error']

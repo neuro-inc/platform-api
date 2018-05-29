@@ -17,7 +17,7 @@ class StatusesHandler:
         status_id = request.match_info['status_id']
         status = await self._status_service.get(status_id)
         if status is None:
-            return aiohttp.web.json_response(data=f"not such status_id {status_id}", status=404)
+            return aiohttp.web.json_response(data={"error": f"not such status_id {status_id}"}, status=404)
         else:
             status_value = await status.value()
             return aiohttp.web.json_response(data={'status': status_value}, status=200)

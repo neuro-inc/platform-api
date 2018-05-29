@@ -49,8 +49,4 @@ class InMemoryStatusService(StatusService):
         return status
 
     async def get(self, status_id: str) -> Optional[Status]:
-        status = self._statuses.get(status_id)
-        if status is None:
-            return None
-        else:
-            return status
+        return self._statuses.get(status_id)
