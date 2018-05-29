@@ -1,6 +1,6 @@
 import aiohttp.web
 import trafaret as t
-from typing import List, Optional
+from typing import Dict, List, Optional
 
 from platform_api.config import StorageConfig
 from platform_api.orchestrator import Job, JobRequest, Orchestrator
@@ -46,10 +46,15 @@ class ModelRequest:
         # TODO (A Danshyn 05/25/18): address the issue of duplicate dst_paths
         return [self._dataset_volume, self._result_volume]
 
+    @property
+    def _env(self) -> Dict[str, str]:
+        return self._payload['container'].get('env', {})
+
     def to_container(self) -> Container:
         return Container(  # type: ignore
             image=self._container_image,
             command=self._container_command,
+            env=self._env,
             volumes=self._volumes,
         )
 
@@ -67,7 +72,9 @@ class ModelsHandler:
         return t.Dict({
             'container': t.Dict({
                 'image': t.String,
-                t.Key('command', optional=True): t.String
+                t.Key('command', optional=True): t.String,
+                t.Key('env', optional=True): t.Mapping(
+                    t.String, t.String(allow_blank=True))
             }),
             # TODO (A Danshyn 05/25/18): resources
             # TODO (A Danshyn 05/25/18): we may move the storage URI parsing
