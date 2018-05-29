@@ -120,9 +120,10 @@ class TestModels:
             assert response.status == 202
             result = await response.json()
             assert result['status'] in ['pending']
-            job_id = result['job_id']
+            status_id = result['status_id']
 
-        await self.long_pooling(api=api, client=client, job_id=job_id, status='succeeded')
+        await self.long_pooling(
+            api=api, client=client, status_id=status_id, status='succeeded')
 
     @pytest.mark.asyncio
     async def test_incorrect_request(self, api, client):
