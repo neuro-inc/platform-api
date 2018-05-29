@@ -51,7 +51,9 @@ class TestVolumeMount:
 
 class TestPodDescriptor:
     def test_to_primitive(self):
-        pod = PodDescriptor(name='testname', image='testimage')
+        pod = PodDescriptor(
+            name='testname', image='testimage', env={'TESTVAR': 'testvalue'}
+        )
         assert pod.name == 'testname'
         assert pod.image == 'testimage'
         assert pod.to_primitive() == {
@@ -64,6 +66,7 @@ class TestPodDescriptor:
                 'containers': [{
                     'name': 'testname',
                     'image': 'testimage',
+                    'env': [{'name': 'TESTVAR', 'value': 'testvalue'}],
                     'volumeMounts': [],
                 }],
                 'volumes': [],
@@ -74,6 +77,7 @@ class TestPodDescriptor:
     def test_from_job_request(self):
         container = Container(
             image='testimage', command='testcommand 123',
+            env={'TESTVAR': 'testvalue'},
             volumes=[ContainerVolume(
                 src_path=PurePath('/tmp/src'), dst_path=PurePath('/dst'))])
         volume = Volume(name='testvolume', host_path='/tmp')
@@ -82,6 +86,8 @@ class TestPodDescriptor:
         assert pod.name == job_request.job_id
         assert pod.image == 'testimage'
         assert pod.args == ['testcommand', '123']
+        assert pod.env == {'TESTVAR': 'testvalue'}
+        assert pod.env_list == [{'name': 'TESTVAR', 'value': 'testvalue'}]
         assert pod.volume_mounts == [
             VolumeMount(
                 volume=volume, mount_path=PurePath('/dst'),
