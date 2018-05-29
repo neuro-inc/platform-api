@@ -3,7 +3,7 @@ from dataclasses import dataclass, field
 import logging
 from pathlib import PurePath
 import ssl
-from typing import List, Optional
+from typing import Dict, List, Optional
 
 import aiohttp
 
@@ -112,6 +112,7 @@ class PodDescriptor:
     name: str
     image: str
     args: List[str] = field(default_factory=list)
+    env: Dict[str, str] = field(default_factory=dict)
     volume_mounts: List[Volume] = field(default_factory=list)
     volumes: List[Volume] = field(default_factory=list)
 
@@ -127,9 +128,15 @@ class PodDescriptor:
             name=job_request.job_id,
             image=container.image,
             args=container.command_list,
+            env=container.env.copy(),
             volume_mounts=volume_mounts,
             volumes=volumes
         )
+
+    @property
+    def env_list(self):
+        return [
+            dict(name=name, value=value) for name, value in self.env.items()]
 
     def to_primitive(self):
         volume_mounts = [mount.to_primitive() for mount in self.volume_mounts]
@@ -137,6 +144,7 @@ class PodDescriptor:
         container_payload = {
             'name': f'{self.name}',
             'image': f'{self.image}',
+            'env': self.env_list,
             'volumeMounts': volume_mounts,
         }
         if self.args:
