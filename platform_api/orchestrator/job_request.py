@@ -25,7 +25,6 @@ class ContainerVolume:
 @dataclass(frozen=True)
 class Container:
     image: str
-    # TODO (A Danshyn 05/23/18): env is not integrated yet
     command: Optional[str] = None
     env: Dict[str, str] = field(default_factory=dict)
     volumes: List[ContainerVolume] = field(default_factory=list)

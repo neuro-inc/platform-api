@@ -76,7 +76,8 @@ class TestModelRequest:
         payload = {
             'container': {
                 'image': 'testimage',
-                'command': 'testcommand'
+                'command': 'testcommand',
+                'env': {'TESTVAR': 'testvalue'},
             },
             'dataset_storage_uri': 'storage://path/to/dir',
             'result_storage_uri': 'storage://path/to/another/dir',
@@ -85,6 +86,7 @@ class TestModelRequest:
         assert request.to_container() == Container(
             image='testimage',
             command='testcommand',
+            env={'TESTVAR': 'testvalue'},
             volumes=[
                 ContainerVolume(
                     src_path=PurePath('/tmp/path/to/dir'),

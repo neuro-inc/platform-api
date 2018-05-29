@@ -175,3 +175,30 @@ class TestKubeOrchestrator:
             await self.wait_for_success(read_job, max_attempts=120)
         finally:
             await read_job.delete()
+
+    @pytest.mark.asyncio
+    @pytest.mark.parametrize(
+        'expected_result,expected_status', (
+            ('6', JobStatus.SUCCEEDED),
+            ('7', JobStatus.FAILED),
+        )
+    )
+    async def test_env(
+            self, kube_orchestrator, expected_result, expected_status):
+        product = expected_result
+        container = Container(
+            image='ubuntu',
+            env={'A': '2', 'B': '3'},
+            command=f"""bash -c '[ "$(expr $A \* $B)" == "{product}" ]'""")
+        job = Job(
+            orchestrator=kube_orchestrator,
+            job_request=JobRequest.create(container))
+
+        try:
+            status = await job.start()
+            assert status == JobStatus.PENDING
+
+            status = await self.wait_for_completion(job, max_attempts=120)
+            assert status == expected_status
+        finally:
+            await job.delete()
