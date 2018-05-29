@@ -13,6 +13,11 @@ class ModelRequest:
 
         self._storage_config = storage_config
 
+        self._dataset_volume = self._create_dataset_volume()
+        self._result_volume = self._create_result_volume()
+        self._volumes = self._create_volumes()
+        self._env = self._create_env()
+
     @property
     def _container_image(self) -> str:
         return self._payload['container']['image']
@@ -21,8 +26,7 @@ class ModelRequest:
     def _container_command(self) -> Optional[str]:
         return self._payload['container'].get('command')
 
-    @property
-    def _dataset_volume(self) -> ContainerVolume:
+    def _create_dataset_volume(self) -> ContainerVolume:
         return ContainerVolume.create(
             self._payload['dataset_storage_uri'],
             src_mount_path=self._storage_config.host_mount_path,
@@ -31,8 +35,7 @@ class ModelRequest:
             scheme=self._storage_config.uri_scheme,
         )
 
-    @property
-    def _result_volume(self) -> ContainerVolume:
+    def _create_result_volume(self) -> ContainerVolume:
         return ContainerVolume.create(
             self._payload['result_storage_uri'],
             src_mount_path=self._storage_config.host_mount_path,
@@ -41,14 +44,15 @@ class ModelRequest:
             scheme=self._storage_config.uri_scheme,
         )
 
-    @property
-    def _volumes(self) -> List[ContainerVolume]:
-        # TODO (A Danshyn 05/25/18): address the issue of duplicate dst_paths
+    def _create_volumes(self) -> List[ContainerVolume]:
         return [self._dataset_volume, self._result_volume]
 
-    @property
-    def _env(self) -> Dict[str, str]:
-        return self._payload['container'].get('env', {})
+    def _create_env(self) -> Dict[str, str]:
+        env = self._payload['container'].get('env', {})
+        # TODO (A Danshyn 05/29/18): implement prefixes
+        env['DATASET_PATH'] = str(self._dataset_volume.dst_path)
+        env['RESULT_PATH'] = str(self._result_volume.dst_path)
+        return env
 
     def to_container(self) -> Container:
         return Container(  # type: ignore

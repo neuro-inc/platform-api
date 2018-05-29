@@ -86,7 +86,11 @@ class TestModelRequest:
         assert request.to_container() == Container(
             image='testimage',
             command='testcommand',
-            env={'TESTVAR': 'testvalue'},
+            env={
+                'TESTVAR': 'testvalue',
+                'DATASET_PATH': '/var/storage/path/to/dir',
+                'RESULT_PATH': '/var/storage/path/to/another/dir',
+            },
             volumes=[
                 ContainerVolume(
                     src_path=PurePath('/tmp/path/to/dir'),
