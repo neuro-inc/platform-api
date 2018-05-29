@@ -57,6 +57,7 @@ async def create_models_app(config: Config, status_service: StatusService):
         async with orchestrator:
             yield orchestrator
     models_app.cleanup_ctx.append(_init_orchestrator)
+
     models_handler = ModelsHandler(
         storage_config=config.storage, orchestrator=orchestrator, status_service=status_service)
     models_handler.register(models_app)

@@ -56,7 +56,8 @@ class ModelRequest:
 
 class ModelsHandler:
     def __init__(
-            self, *, storage_config: StorageConfig, orchestrator: Orchestrator, status_service: StatusService
+            self, *, storage_config: StorageConfig, orchestrator: Orchestrator,
+            status_service: StatusService
             ) -> None:
         self._orchestrator = orchestrator
         self._storage_config = storage_config
@@ -90,6 +91,7 @@ class ModelsHandler:
         import uuid
         status_id = str(uuid.uuid4())
         await self._status_service.set(status_id=status_id)
+
         return start_status, job.id, status_id
 
     async def handle_post(self, request):
@@ -98,7 +100,6 @@ class ModelsHandler:
         model_request = ModelRequest(
             data, storage_config=self._storage_config)
         status, job_id, status_id = await self._create_job(model_request)
-        print(self._status_service._statuses)
         return aiohttp.web.json_response(
             data={'status': status, 'job_id': job_id, 'status_id': status_id},
             status=aiohttp.web.HTTPAccepted.status_code)
