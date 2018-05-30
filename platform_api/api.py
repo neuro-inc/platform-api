@@ -3,10 +3,10 @@ import logging
 
 import aiohttp.web
 
-
 from .config import Config
 from .handlers import ModelsHandler, StatusesHandler
-from .orchestrator import KubeOrchestrator, KubeConfig, InMemoryStatusService, StatusService
+from .orchestrator import (
+    KubeOrchestrator, KubeConfig, InMemoryStatusService, StatusService)
 
 
 class ApiHandler:
@@ -51,7 +51,8 @@ async def create_orchestrator(loop: asyncio.AbstractEventLoop, kube_config: Kube
 async def create_models_app(config: Config, status_service: StatusService):
     models_app = aiohttp.web.Application()
 
-    orchestrator = await create_orchestrator(models_app.loop, kube_config=config.orchestrator_config)
+    orchestrator = await create_orchestrator(
+        models_app.loop, kube_config=config.orchestrator)
 
     async def _init_orchestrator(_):
         async with orchestrator:
@@ -59,7 +60,7 @@ async def create_models_app(config: Config, status_service: StatusService):
     models_app.cleanup_ctx.append(_init_orchestrator)
 
     models_handler = ModelsHandler(
-        storage_config=config.storage, orchestrator=orchestrator, status_service=status_service)
+        config=config, orchestrator=orchestrator, status_service=status_service)
     models_handler.register(models_app)
     return models_app
 
