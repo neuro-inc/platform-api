@@ -38,7 +38,7 @@ def config(kube_config):
     return Config(
         server=server_config,
         storage=storage_config,
-        orchestrator_config=kube_config)
+        orchestrator=kube_config)
 
 
 @pytest.fixture
@@ -103,6 +103,27 @@ class TestModels:
             assert result['status'] in ['pending']
             status_id = result['status_id']
         await self.long_pooling(api=api, client=client, status_id=status_id, status='succeeded')
+
+    @pytest.mark.asyncio
+    async def test_env_var_sourcing(self, api, client):
+        cmd = 'bash -c \'[ "$NP_RESULT_PATH" == "/var/storage/result" ]\''
+        payload = {
+            'container':  {
+                'image': 'ubuntu',
+                'command': cmd,
+            },
+            'dataset_storage_uri': 'storage://',
+            'result_storage_uri': 'storage://result',
+        }
+        url = api.model_base_url
+        async with client.post(url, json=payload) as response:
+            assert response.status == 202
+            result = await response.json()
+            assert result['status'] in ['pending']
+            status_id = result['status_id']
+
+        await self.long_pooling(
+            api=api, client=client, status_id=status_id, status='succeeded')
 
     @pytest.mark.asyncio
     async def test_incorrect_request(self, api, client):
