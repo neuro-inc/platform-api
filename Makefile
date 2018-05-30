@@ -96,3 +96,25 @@ ci_run_api_tests: prepare_api_tests ci_run_api_tests_built
 
 include k8s.mk
 include deploy.mk
+
+build_api_python:
+	docker build -f Dockerfile.python -t $(IMAGE) .
+
+run_api:
+	NP_STORAGE_HOST_MOUNT_PATH=/tmp \
+	NP_K8S_API_URL=https://$$(minikube ip):8443 \
+	NP_K8S_CA_PATH=$$HOME/.minikube/ca.crt \
+	NP_K8S_AUTH_CERT_PATH=$$HOME/.minikube/client.crt \
+	NP_K8S_AUTH_CERT_KEY_PATH=$$HOME/.minikube/client.key \
+	platform-api
+
+run_api_container:
+	docker run --rm -it --name platformapi \
+	    -p 8080:8080 \
+	    -v $$HOME/.minikube:$$HOME/.minikube \
+	    -e NP_STORAGE_HOST_MOUNT_PATH=/tmp \
+	    -e NP_K8S_API_URL=https://$$(minikube ip):8443 \
+	    -e NP_K8S_CA_PATH=$$HOME/.minikube/ca.crt \
+	    -e NP_K8S_AUTH_CERT_PATH=$$HOME/.minikube/client.crt \
+	    -e NP_K8S_AUTH_CERT_KEY_PATH=$$HOME/.minikube/client.key \
+	    $(IMAGE)
