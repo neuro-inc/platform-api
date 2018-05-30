@@ -95,7 +95,7 @@ workflows:
           requires:
             - k8s
             - test
-#         filters:
-#           branches:
-#             only:
-#               - master
+          filters:
+            branches:
+              only:
+                - master
