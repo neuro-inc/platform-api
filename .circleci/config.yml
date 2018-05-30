@@ -44,6 +44,7 @@ jobs:
           name: Building and pushing docker images
           command: |
             make build_api push_api
+            make build_api_k8s push_api_k8s
 
       - run:
           name: Deploying on dev environment
@@ -92,8 +93,9 @@ workflows:
       - deploy:
           context: org-global
           requires:
+            - k8s
             - test
-          filters:
-            branches:
-              only:
-                - master
+#         filters:
+#           branches:
+#             only:
+#               - master
