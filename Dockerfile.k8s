@@ -1,0 +1,18 @@
+FROM python:3.6.5-stretch
+
+WORKDIR /neuromation
+
+# installing dependencies ONLY
+COPY setup.py ./
+RUN \
+    pip install -e . && \
+    pip uninstall -y platform-api
+
+# installing platform-api
+COPY platform_api platform_api
+RUN pip install -e .
+
+ENV NP_API_PORT=8080
+EXPOSE $NP_API_PORT
+
+CMD platform-api

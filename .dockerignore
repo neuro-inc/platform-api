@@ -7,3 +7,7 @@ api/v1/testData
 !vendor
 !Gopkg.*
 !**/*.go
+# python
+!setup.py
+!platform_api
+**/*.pyc

@@ -7,6 +7,7 @@ DOCKER_REPO ?= $(DOCKER_REGISTRY)/neuromationorg
 IMAGE_NAME ?= platformapi
 IMAGE_TAG ?= latest
 IMAGE ?= $(DOCKER_REPO)/$(IMAGE_NAME):$(IMAGE_TAG)
+IMAGE_K8S ?= $(DOCKER_REPO)/$(IMAGE_NAME)-k8s:$(IMAGE_TAG)
 
 format:
 	go fmt $(pkgs)
@@ -96,3 +97,28 @@ ci_run_api_tests: prepare_api_tests ci_run_api_tests_built
 
 include k8s.mk
 include deploy.mk
+
+build_api_k8s:
+	docker build -f Dockerfile.k8s -t $(IMAGE_K8S) .
+
+run_api_k8s:
+	NP_STORAGE_HOST_MOUNT_PATH=/tmp \
+	NP_K8S_API_URL=https://$$(minikube ip):8443 \
+	NP_K8S_CA_PATH=$$HOME/.minikube/ca.crt \
+	NP_K8S_AUTH_CERT_PATH=$$HOME/.minikube/client.crt \
+	NP_K8S_AUTH_CERT_KEY_PATH=$$HOME/.minikube/client.key \
+	platform-api
+
+push_api_k8s: _docker_login
+	docker push $(IMAGE_K8S)
+
+run_api_k8s_container:
+	docker run --rm -it --name platformapi \
+	    -p 8080:8080 \
+	    -v $$HOME/.minikube:$$HOME/.minikube \
+	    -e NP_STORAGE_HOST_MOUNT_PATH=/tmp \
+	    -e NP_K8S_API_URL=https://$$(minikube ip):8443 \
+	    -e NP_K8S_CA_PATH=$$HOME/.minikube/ca.crt \
+	    -e NP_K8S_AUTH_CERT_PATH=$$HOME/.minikube/client.crt \
+	    -e NP_K8S_AUTH_CERT_KEY_PATH=$$HOME/.minikube/client.key \
+	    $(IMAGE_K8S)
