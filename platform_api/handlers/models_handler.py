@@ -4,7 +4,7 @@ from typing import Dict, List, Optional
 
 from platform_api.config import Config, StorageConfig
 from platform_api.orchestrator import (
-    Job, JobRequest, Orchestrator, StatusService,
+    Job, JobRequest, StatusService,
     Status, JobsService)
 from platform_api.orchestrator.job_request import (
     Container, ContainerResources, ContainerVolume)
@@ -126,7 +126,6 @@ class ModelsHandler:
         job_request = JobRequest.create(model_request.to_container())
         job = await self._jobs_service.create_job(job_request)
         status = await self._status_service.create(job=job)
-        await self._jobs_service.set(job)
         return job, status
 
     async def handle_post(self, request):
