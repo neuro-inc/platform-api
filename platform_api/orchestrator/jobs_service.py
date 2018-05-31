@@ -36,12 +36,13 @@ class JobsService(ABC):
 class InMemoryJobsService(JobsService):
     def __init__(self, orchestrator: Orchestrator):
         self._jobs = {}
+        self._status_id_to_jobs = {}
         self._orchestrator = orchestrator
 
     async def create_job(self, job_request: JobRequest) -> Job:
         job = Job(orchestrator=self._orchestrator, job_request=job_request)
-        _ = await job.start()
         await self.set(job)
+        _ = await job.start()
         return job
 
     async def delete(self, job_id: str):
@@ -55,10 +56,10 @@ class InMemoryJobsService(JobsService):
     async def set(self, job: Job):
         self._jobs[job.id] = job
 
-    async def get_all(self) -> List[tuple]:
+    async def get_all(self) -> List[dict]:
         jobs_result = []
         for job in self._jobs.values():
             # TODO replace with background
             status = await job.status()
-            jobs_result.append((job.id, status))
+            jobs_result.append(({'job_id': job.id, 'status': status}))
         return jobs_result
