@@ -3,7 +3,7 @@ import logging
 
 import aiohttp.web
 
-from .config import Config
+from .config import Config, EnvironConfigFactory
 from .handlers import ModelsHandler, StatusesHandler
 from .orchestrator import (
     KubeOrchestrator, KubeConfig, InMemoryStatusService, StatusService)
@@ -88,3 +88,14 @@ async def create_app(config: Config):
 
     app.add_subapp('/api/v1', api_v1_app)
     return app
+
+
+def main():
+    init_logging()
+    config = EnvironConfigFactory().create()
+    logging.info('Loaded config: %r', config)
+
+    loop = asyncio.get_event_loop()
+
+    app = loop.run_until_complete(create_app(config))
+    aiohttp.web.run_app(app, host=config.server.host, port=config.server.port)
