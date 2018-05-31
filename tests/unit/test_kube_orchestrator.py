@@ -3,12 +3,12 @@ from pathlib import PurePath
 import pytest
 
 from platform_api.orchestrator.job_request import (
-    Container, ContainerVolume,
+    Container, ContainerResources, ContainerVolume,
     JobRequest, JobStatus, JobError,
 )
 from platform_api.orchestrator.kube_orchestrator import (
     Volume, VolumeMount,
-    PodDescriptor, PodStatus,
+    PodDescriptor, PodStatus, Resources,
 )
 
 
@@ -52,7 +52,8 @@ class TestVolumeMount:
 class TestPodDescriptor:
     def test_to_primitive(self):
         pod = PodDescriptor(
-            name='testname', image='testimage', env={'TESTVAR': 'testvalue'}
+            name='testname', image='testimage', env={'TESTVAR': 'testvalue'},
+            resources=Resources(cpu=0.5, memory=1024, gpu=1),
         )
         assert pod.name == 'testname'
         assert pod.image == 'testimage'
@@ -68,6 +69,13 @@ class TestPodDescriptor:
                     'image': 'testimage',
                     'env': [{'name': 'TESTVAR', 'value': 'testvalue'}],
                     'volumeMounts': [],
+                    'resources': {
+                        'limits': {
+                            'cpu': '500m',
+                            'memory': '1024Mi',
+                            'nvidia.com/gpu': 1,
+                        },
+                    },
                 }],
                 'volumes': [],
                 'restartPolicy': 'Never',
@@ -79,7 +87,8 @@ class TestPodDescriptor:
             image='testimage', command='testcommand 123',
             env={'TESTVAR': 'testvalue'},
             volumes=[ContainerVolume(
-                src_path=PurePath('/tmp/src'), dst_path=PurePath('/dst'))])
+                src_path=PurePath('/tmp/src'), dst_path=PurePath('/dst'))],
+            resources=ContainerResources(cpu=1, memory_mb=128, gpu=1))
         volume = Volume(name='testvolume', host_path='/tmp')
         job_request = JobRequest.create(container)
         pod = PodDescriptor.from_job_request(volume, job_request)
@@ -94,6 +103,7 @@ class TestPodDescriptor:
                 sub_path=PurePath('src'))
         ]
         assert pod.volumes == [volume]
+        assert pod.resources == Resources(cpu=1, memory=128, gpu=1)
 
 
 class TestPodStatus:
@@ -124,3 +134,30 @@ class TestPodStatus:
         }
         with pytest.raises(ValueError, match='unknown kind: Unknown'):
             PodStatus.from_primitive(payload)
+
+
+class TestResources:
+    def test_to_primitive(self):
+        resources = Resources(cpu=0.5, memory=1024)  # type: ignore
+        assert resources.to_primitive() == {
+            'limits': {
+                'cpu': '500m',
+                'memory': '1024Mi',
+            },
+        }
+
+    def test_to_primitive_gpu(self):
+        resources = Resources(cpu=0.5, memory=1024, gpu=2)  # type: ignore
+        assert resources.to_primitive() == {
+            'limits': {
+                'cpu': '500m',
+                'memory': '1024Mi',
+                'nvidia.com/gpu': 2,
+            },
+        }
+
+    def test_from_container_resources(self):
+        container_resources = ContainerResources(  # type: ignore
+            cpu=1, memory_mb=128, gpu=1)
+        resources = Resources.from_container_resources(container_resources)
+        assert resources == Resources(cpu=1, memory=128, gpu=1)

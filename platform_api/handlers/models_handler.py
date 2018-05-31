@@ -4,7 +4,8 @@ from typing import Dict, List, Optional
 
 from platform_api.config import Config, StorageConfig
 from platform_api.orchestrator import Job, JobRequest, Orchestrator, StatusService, Status
-from platform_api.orchestrator.job_request import Container, ContainerVolume
+from platform_api.orchestrator.job_request import (
+    Container, ContainerResources, ContainerVolume)
 
 
 class ModelRequest:
@@ -23,6 +24,7 @@ class ModelRequest:
         self._result_volume = self._create_result_volume()
         self._volumes = self._create_volumes()
         self._env = self._create_env()
+        self._resources = self._create_resources()
 
     @property
     def _container_image(self) -> str:
@@ -64,12 +66,20 @@ class ModelRequest:
         env[self._result_env_var_name] = str(self._result_volume.dst_path)
         return env
 
+    def _create_resources(self) -> ContainerResources:
+        return ContainerResources(  # type: ignore
+            cpu=self._payload['container']['resources']['cpu'],
+            memory_mb=self._payload['container']['resources']['memory_mb'],
+            gpu=self._payload['container']['resources'].get('gpu'),
+        )
+
     def to_container(self) -> Container:
         return Container(  # type: ignore
             image=self._container_image,
             command=self._container_command,
             env=self._env,
             volumes=self._volumes,
+            resources=self._resources,
         )
 
 
@@ -91,9 +101,13 @@ class ModelsHandler:
                 'image': t.String,
                 t.Key('command', optional=True): t.String,
                 t.Key('env', optional=True): t.Mapping(
-                    t.String, t.String(allow_blank=True))
+                    t.String, t.String(allow_blank=True)),
+                'resources': t.Dict({
+                    'cpu': t.Float(gte=0.1),
+                    'memory_mb': t.Int(gte=16),
+                    t.Key('gpu', optional=True): t.Int(gte=1),
+                }),
             }),
-            # TODO (A Danshyn 05/25/18): resources
             # TODO (A Danshyn 05/25/18): we may move the storage URI parsing
             # and validation here at some point
             'dataset_storage_uri': t.String,

@@ -17,7 +17,12 @@ class Status:
     job: Job
 
     async def value(self) -> JobStatus:
-        return await self.job.status()
+        status = await self.job.status()
+        # NOTE: this is a temporary workaround
+        # until the job tracker is implemented
+        if status.is_finished:
+            await self.job.delete()
+        return status
 
     @classmethod
     def create(cls, job) -> 'Status':

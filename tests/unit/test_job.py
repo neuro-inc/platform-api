@@ -5,16 +5,29 @@ import pytest
 from platform_api.config import StorageConfig
 from platform_api.handlers.models_handler import ModelRequest
 from platform_api.orchestrator.job_request import (
-    Container, ContainerVolume, ContainerVolumeFactory)
+    Container, ContainerVolume, ContainerVolumeFactory, ContainerResources,
+    JobStatus,
+)
+
+
+class TestJobStatus:
+    def test_is_finished(self):
+        assert not JobStatus.PENDING.is_finished
+        assert JobStatus.FAILED.is_finished
+        assert JobStatus.SUCCEEDED.is_finished
 
 
 class TestContainer:
     def test_command_list_empty(self):
-        container = Container(image='testimage')
+        container = Container(
+            image='testimage',
+            resources=ContainerResources(cpu=1, memory_mb=128))
         assert container.command_list == []
 
     def test_command_list(self):
-        container = Container(image='testimage', command='bash -c date')
+        container = Container(
+            image='testimage', command='bash -c date',
+            resources=ContainerResources(cpu=1, memory_mb=128))
         assert container.command_list == ['bash', '-c', 'date']
 
 
@@ -78,6 +91,11 @@ class TestModelRequest:
                 'image': 'testimage',
                 'command': 'testcommand',
                 'env': {'TESTVAR': 'testvalue'},
+                'resources': {
+                    'cpu': 0.1,
+                    'memory_mb': 128,
+                    'gpu': 1,
+                },
             },
             'dataset_storage_uri': 'storage://path/to/dir',
             'result_storage_uri': 'storage://path/to/another/dir',
@@ -101,5 +119,6 @@ class TestModelRequest:
                     src_path=PurePath('/tmp/path/to/another/dir'),
                     dst_path=PurePath('/var/storage/path/to/another/dir'),
                     read_only=False)
-            ]
+            ],
+            resources=ContainerResources(cpu=0.1, memory_mb=128, gpu=1),
         )
