@@ -23,8 +23,16 @@ class ContainerVolume:
 
 
 @dataclass(frozen=True)
+class ContainerResources:
+    cpu: float
+    memory_mb: int
+    gpu: Optional[int] = None
+
+
+@dataclass(frozen=True)
 class Container:
     image: str
+    resources: ContainerResources
     command: Optional[str] = None
     env: Dict[str, str] = field(default_factory=dict)
     volumes: List[ContainerVolume] = field(default_factory=list)
@@ -51,6 +59,10 @@ class JobStatus(str, enum.Enum):
     PENDING = 'pending'
     SUCCEEDED = 'succeeded'
     FAILED = 'failed'
+
+    @property
+    def is_finished(self) -> bool:
+        return self in (self.SUCCEEDED, self.FAILED)
 
 
 class ContainerVolumeFactory:
