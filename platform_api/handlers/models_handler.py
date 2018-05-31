@@ -4,7 +4,8 @@ from typing import Dict, List, Optional
 
 from platform_api.config import Config, StorageConfig
 from platform_api.orchestrator import Job, JobRequest, Orchestrator, StatusService, Status
-from platform_api.orchestrator.job_request import Container, ContainerVolume
+from platform_api.orchestrator.job_request import (
+    Container, ContainerResources, ContainerVolume)
 
 
 class ModelRequest:
@@ -70,6 +71,7 @@ class ModelRequest:
             command=self._container_command,
             env=self._env,
             volumes=self._volumes,
+            resources=ContainerResources(cpu=1, memory_mb=128),  # type: ignore
         )
 
 
