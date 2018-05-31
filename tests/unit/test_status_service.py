@@ -14,6 +14,9 @@ class MockJob:
     async def status(self):
         return self.job_status
 
+    async def delete(self):
+        return self.job_status
+
 
 @pytest.fixture(scope="function")
 def mock_job():
