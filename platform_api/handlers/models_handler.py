@@ -24,6 +24,7 @@ class ModelRequest:
         self._result_volume = self._create_result_volume()
         self._volumes = self._create_volumes()
         self._env = self._create_env()
+        self._resources = self._create_resources()
 
     @property
     def _container_image(self) -> str:
@@ -65,13 +66,20 @@ class ModelRequest:
         env[self._result_env_var_name] = str(self._result_volume.dst_path)
         return env
 
+    def _create_resources(self) -> ContainerResources:
+        return ContainerResources(  # type: ignore
+            cpu=self._payload['container']['resources']['cpu'],
+            memory_mb=self._payload['container']['resources']['memory_mb'],
+            gpu=self._payload['container']['resources'].get('gpu'),
+        )
+
     def to_container(self) -> Container:
         return Container(  # type: ignore
             image=self._container_image,
             command=self._container_command,
             env=self._env,
             volumes=self._volumes,
-            resources=ContainerResources(cpu=1, memory_mb=128),  # type: ignore
+            resources=self._resources,
         )
 
 
