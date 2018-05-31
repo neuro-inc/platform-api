@@ -6,12 +6,17 @@ class MockJob:
 
     def __init__(self):
         self.job_status = JobStatus.SUCCEEDED
+        self.is_deleted = False
 
     @property
     def id(self):
         return 1
 
     async def status(self):
+        return self.job_status
+
+    async def delete(self):
+        self.is_deleted = True
         return self.job_status
 
 
@@ -46,8 +51,10 @@ class TestInMemoryStatusService:
     async def test_get_status_and_value(self, mock_job):
         status_service = InMemoryStatusService()
         status = await status_service.create(mock_job)
+        assert not mock_job.is_deleted
         status_value = await status.value()
         assert status_value == JobStatus.SUCCEEDED
+        assert mock_job.is_deleted
 
         new_status = await status_service.get(status_id=status.status_id)
         status_value = await new_status.value()

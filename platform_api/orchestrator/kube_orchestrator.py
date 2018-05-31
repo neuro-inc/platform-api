@@ -9,7 +9,7 @@ import aiohttp
 
 from .base import Orchestrator
 from .job_request import (
-    Container, ContainerVolume,
+    Container, ContainerResources, ContainerVolume,
     JobRequest, JobStatus, JobError
 )
 
@@ -108,6 +108,39 @@ class VolumeMount:
 
 
 @dataclass(frozen=True)
+class Resources:
+    cpu: float
+    memory: int
+    gpu: Optional[int] = None
+
+    @property
+    def cpu_mcores(self) -> str:
+        mcores = int(self.cpu * 1000)
+        return f'{mcores}m'
+
+    @property
+    def memory_mib(self) -> str:
+        return f'{self.memory}Mi'
+
+    def to_primitive(self):
+        payload = {
+            'limits': {
+                'cpu': self.cpu_mcores,
+                'memory': self.memory_mib,
+            },
+        }
+        if self.gpu:
+            payload['limits']['nvidia.com/gpu'] = self.gpu
+        return payload
+
+    @classmethod
+    def from_container_resources(
+            cls, resources: ContainerResources) -> 'Resources':
+        return cls(  # type: ignore
+            cpu=resources.cpu, memory=resources.memory_mb, gpu=resources.gpu)
+
+
+@dataclass(frozen=True)
 class PodDescriptor:
     name: str
     image: str
@@ -115,6 +148,7 @@ class PodDescriptor:
     env: Dict[str, str] = field(default_factory=dict)
     volume_mounts: List[Volume] = field(default_factory=list)
     volumes: List[Volume] = field(default_factory=list)
+    resources: Optional[Resources] = None
 
     @classmethod
     def from_job_request(
@@ -124,13 +158,15 @@ class PodDescriptor:
             volume.create_mount(container_volume)
             for container_volume in container.volumes]
         volumes = [volume]
+        resources = Resources.from_container_resources(container.resources)
         return cls(  # type: ignore
             name=job_request.job_id,
             image=container.image,
             args=container.command_list,
             env=container.env.copy(),
             volume_mounts=volume_mounts,
-            volumes=volumes
+            volumes=volumes,
+            resources=resources,
         )
 
     @property
@@ -149,6 +185,8 @@ class PodDescriptor:
         }
         if self.args:
             container_payload['args'] = self.args
+        if self.resources:
+            container_payload['resources'] = self.resources.to_primitive()
         return {
             'kind': 'Pod',
             'apiVersion': 'v1',
