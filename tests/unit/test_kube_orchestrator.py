@@ -52,7 +52,8 @@ class TestVolumeMount:
 class TestPodDescriptor:
     def test_to_primitive(self):
         pod = PodDescriptor(
-            name='testname', image='testimage', env={'TESTVAR': 'testvalue'}
+            name='testname', image='testimage', env={'TESTVAR': 'testvalue'},
+            resources=Resources(cpu=0.5, memory=1024, gpu=1),
         )
         assert pod.name == 'testname'
         assert pod.image == 'testimage'
@@ -68,6 +69,13 @@ class TestPodDescriptor:
                     'image': 'testimage',
                     'env': [{'name': 'TESTVAR', 'value': 'testvalue'}],
                     'volumeMounts': [],
+                    'resources': {
+                        'limits': {
+                            'cpu': '500m',
+                            'memory': '1024Mi',
+                            'nvidia.com/gpu': 1,
+                        },
+                    },
                 }],
                 'volumes': [],
                 'restartPolicy': 'Never',

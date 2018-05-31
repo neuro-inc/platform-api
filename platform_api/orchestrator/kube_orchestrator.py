@@ -142,6 +142,7 @@ class PodDescriptor:
     env: Dict[str, str] = field(default_factory=dict)
     volume_mounts: List[Volume] = field(default_factory=list)
     volumes: List[Volume] = field(default_factory=list)
+    resources: Optional[Resources] = None
 
     @classmethod
     def from_job_request(
@@ -176,6 +177,8 @@ class PodDescriptor:
         }
         if self.args:
             container_payload['args'] = self.args
+        if self.resources:
+            container_payload['resources'] = self.resources.to_primitive()
         return {
             'kind': 'Pod',
             'apiVersion': 'v1',
