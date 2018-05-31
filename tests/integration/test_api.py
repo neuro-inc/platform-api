@@ -72,6 +72,10 @@ async def model_train():
         'container':  {
             'image': 'ubuntu',
             'command': 'true',
+            'resources': {
+                'cpu': 0.1,
+                'memory_mb': 16,
+            },
         },
         'dataset_storage_uri': 'storage://',
         'result_storage_uri': 'storage://result',
@@ -111,6 +115,10 @@ class TestModels:
             'container':  {
                 'image': 'ubuntu',
                 'command': cmd,
+                'resources': {
+                    'cpu': 0.1,
+                    'memory_mb': 16,
+                },
             },
             'dataset_storage_uri': 'storage://',
             'result_storage_uri': 'storage://result',
@@ -140,6 +148,10 @@ class TestModels:
             'container':  {
                 'image': 'some_broken_image',
                 'command': 'true',
+                'resources': {
+                    'cpu': 0.1,
+                    'memory_mb': 16,
+                },
             },
             'dataset_storage_uri': 'storage://',
             'result_storage_uri': 'storage://result',

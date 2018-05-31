@@ -93,9 +93,13 @@ class ModelsHandler:
                 'image': t.String,
                 t.Key('command', optional=True): t.String,
                 t.Key('env', optional=True): t.Mapping(
-                    t.String, t.String(allow_blank=True))
+                    t.String, t.String(allow_blank=True)),
+                'resources': t.Dict({
+                    'cpu': t.Float(gte=0.1),
+                    'memory_mb': t.Int(gte=16),
+                    t.Key('gpu', optional=True): t.Int(gte=1),
+                }),
             }),
-            # TODO (A Danshyn 05/25/18): resources
             # TODO (A Danshyn 05/25/18): we may move the storage URI parsing
             # and validation here at some point
             'dataset_storage_uri': t.String,
