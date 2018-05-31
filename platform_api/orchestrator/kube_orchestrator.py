@@ -108,6 +108,33 @@ class VolumeMount:
 
 
 @dataclass(frozen=True)
+class Resources:
+    cpu: float
+    memory: int
+    gpu: Optional[int] = None
+
+    @property
+    def cpu_mcores(self) -> str:
+        mcores = int(self.cpu * 1000)
+        return f'{mcores}m'
+
+    @property
+    def memory_mib(self) -> str:
+        return f'{self.memory}Mi'
+
+    def to_primitive(self):
+        payload = {
+            'limits': {
+                'cpu': self.cpu_mcores,
+                'memory': self.memory_mib,
+            },
+        }
+        if self.gpu:
+            payload['limits']['nvidia.com/gpu'] = self.gpu
+        return payload
+
+
+@dataclass(frozen=True)
 class PodDescriptor:
     name: str
     image: str

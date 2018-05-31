@@ -8,7 +8,7 @@ from platform_api.orchestrator.job_request import (
 )
 from platform_api.orchestrator.kube_orchestrator import (
     Volume, VolumeMount,
-    PodDescriptor, PodStatus,
+    PodDescriptor, PodStatus, Resources,
 )
 
 
@@ -124,3 +124,24 @@ class TestPodStatus:
         }
         with pytest.raises(ValueError, match='unknown kind: Unknown'):
             PodStatus.from_primitive(payload)
+
+
+class TestResources:
+    def test_to_primitive(self):
+        resources = Resources(cpu=0.5, memory=1024)  # type: ignore
+        assert resources.to_primitive() == {
+            'limits': {
+                'cpu': '500m',
+                'memory': '1024Mi',
+            },
+        }
+
+    def test_to_primitive_gpu(self):
+        resources = Resources(cpu=0.5, memory=1024, gpu=2)  # type: ignore
+        assert resources.to_primitive() == {
+            'limits': {
+                'cpu': '500m',
+                'memory': '1024Mi',
+                'nvidia.com/gpu': 2,
+            },
+        }
