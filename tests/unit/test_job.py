@@ -91,6 +91,11 @@ class TestModelRequest:
                 'image': 'testimage',
                 'command': 'testcommand',
                 'env': {'TESTVAR': 'testvalue'},
+                'resources': {
+                    'cpu': 0.1,
+                    'memory_mb': 128,
+                    'gpu': 1,
+                },
             },
             'dataset_storage_uri': 'storage://path/to/dir',
             'result_storage_uri': 'storage://path/to/another/dir',
@@ -115,5 +120,5 @@ class TestModelRequest:
                     dst_path=PurePath('/var/storage/path/to/another/dir'),
                     read_only=False)
             ],
-            resources=ContainerResources(cpu=1, memory_mb=128),
+            resources=ContainerResources(cpu=0.1, memory_mb=128, gpu=1),
         )
