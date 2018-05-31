@@ -9,7 +9,7 @@ import aiohttp
 
 from .base import Orchestrator
 from .job_request import (
-    Container, ContainerVolume,
+    Container, ContainerResources, ContainerVolume,
     JobRequest, JobStatus, JobError
 )
 
@@ -133,6 +133,12 @@ class Resources:
             payload['limits']['nvidia.com/gpu'] = self.gpu
         return payload
 
+    @classmethod
+    def from_container_resources(
+            cls, resources: ContainerResources) -> 'Resources':
+        return cls(  # type: ignore
+            cpu=resources.cpu, memory=resources.memory_mb, gpu=resources.gpu)
+
 
 @dataclass(frozen=True)
 class PodDescriptor:
@@ -152,13 +158,15 @@ class PodDescriptor:
             volume.create_mount(container_volume)
             for container_volume in container.volumes]
         volumes = [volume]
+        resources = Resources.from_container_resources(container.resources)
         return cls(  # type: ignore
             name=job_request.job_id,
             image=container.image,
             args=container.command_list,
             env=container.env.copy(),
             volume_mounts=volume_mounts,
-            volumes=volumes
+            volumes=volumes,
+            resources=resources,
         )
 
     @property
