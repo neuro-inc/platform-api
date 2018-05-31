@@ -3,7 +3,7 @@ from pathlib import PurePath
 import pytest
 
 from platform_api.orchestrator.job_request import (
-    Container, ContainerVolume,
+    Container, ContainerResources, ContainerVolume,
     JobRequest, JobStatus, JobError,
 )
 from platform_api.orchestrator.kube_orchestrator import (
@@ -87,7 +87,8 @@ class TestPodDescriptor:
             image='testimage', command='testcommand 123',
             env={'TESTVAR': 'testvalue'},
             volumes=[ContainerVolume(
-                src_path=PurePath('/tmp/src'), dst_path=PurePath('/dst'))])
+                src_path=PurePath('/tmp/src'), dst_path=PurePath('/dst'))],
+            resources=ContainerResources(cpu=1, memory_mb=128, gpu=1))
         volume = Volume(name='testvolume', host_path='/tmp')
         job_request = JobRequest.create(container)
         pod = PodDescriptor.from_job_request(volume, job_request)
@@ -102,6 +103,7 @@ class TestPodDescriptor:
                 sub_path=PurePath('src'))
         ]
         assert pod.volumes == [volume]
+        assert pod.resources == Resources(cpu=1, memory=128, gpu=1)
 
 
 class TestPodStatus:
