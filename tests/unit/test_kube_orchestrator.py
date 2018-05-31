@@ -155,3 +155,9 @@ class TestResources:
                 'nvidia.com/gpu': 2,
             },
         }
+
+    def test_from_container_resources(self):
+        container_resources = ContainerResources(  # type: ignore
+            cpu=1, memory_mb=128, gpu=1)
+        resources = Resources.from_container_resources(container_resources)
+        assert resources == Resources(cpu=1, memory=128, gpu=1)
