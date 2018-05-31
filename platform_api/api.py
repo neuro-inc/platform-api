@@ -4,9 +4,9 @@ import logging
 import aiohttp.web
 
 from .config import Config, EnvironConfigFactory
-from .handlers import ModelsHandler, StatusesHandler
+from .handlers import ModelsHandler, StatusesHandler, JobsHandler
 from .orchestrator import (
-    KubeOrchestrator, KubeConfig, InMemoryStatusService, StatusService)
+    KubeOrchestrator, KubeConfig, InMemoryStatusService, StatusService, JobsService, InMemoryJobsService)
 
 
 class ApiHandler:
@@ -48,19 +48,11 @@ async def create_orchestrator(loop: asyncio.AbstractEventLoop, kube_config: Kube
     return kube_orchestrator
 
 
-async def create_models_app(config: Config, status_service: StatusService):
+async def create_models_app(config: Config, status_service: StatusService, jobs_service: JobsService):
     models_app = aiohttp.web.Application()
 
-    orchestrator = await create_orchestrator(
-        models_app.loop, kube_config=config.orchestrator)
-
-    async def _init_orchestrator(_):
-        async with orchestrator:
-            yield orchestrator
-    models_app.cleanup_ctx.append(_init_orchestrator)
-
     models_handler = ModelsHandler(
-        config=config, orchestrator=orchestrator, status_service=status_service)
+        config=config, status_service=status_service, jobs_service=jobs_service)
     models_handler.register(models_app)
     return models_app
 
@@ -72,6 +64,13 @@ async def create_statuses_app(status_service: StatusService):
     return statuses_app
 
 
+async def create_jobs_app(jobs_service: JobsService):
+    jobs_app = aiohttp.web.Application()
+    jobs_handler = JobsHandler(jobs_service=jobs_service)
+    jobs_handler.register(jobs_app)
+    return jobs_app
+
+
 async def create_app(config: Config):
     app = aiohttp.web.Application(middlewares=[handle_exceptions])
     app['config'] = config
@@ -81,10 +80,22 @@ async def create_app(config: Config):
     api_v1_handler.register(api_v1_app)
 
     status_service = InMemoryStatusService()
-    models_app = await create_models_app(config=config, status_service=status_service)
+
+    orchestrator = await create_orchestrator(
+        app.loop, kube_config=config.orchestrator)
+
+    async def _init_orchestrator(_):
+        async with orchestrator:
+            yield orchestrator
+    app.cleanup_ctx.append(_init_orchestrator)
+    jobs_service = InMemoryJobsService(orchestrator=orchestrator)
+
+    models_app = await create_models_app(config=config, status_service=status_service, jobs_service=jobs_service)
     api_v1_app.add_subapp('/models', models_app)
     statuses_app = await create_statuses_app(status_service=status_service)
     api_v1_app.add_subapp('/statuses', statuses_app)
+    jobs_app = await create_jobs_app(jobs_service=jobs_service)
+    api_v1_app.add_subapp('/jobs', jobs_app)
 
     app.add_subapp('/api/v1', api_v1_app)
     return app

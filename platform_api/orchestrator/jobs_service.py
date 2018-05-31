@@ -1,36 +1,54 @@
 from abc import ABC, abstractmethod
+from typing import List
 import logging
 
 
 from .job import Job
+from .job_request import JobRequest
+from .base import Orchestrator
 
 
 logger = logging.getLogger(__file__)
 
 
-class JobService(ABC):
+class JobsService(ABC):
     @abstractmethod
-    def get(self, job_id: str) -> Job:
+    async def create_job(self, job_request: JobRequest) -> Job:
+        pass
+    
+    @abstractmethod
+    async def get(self, job_id: str) -> Job:
         pass
 
     @abstractmethod
-    def set(self, job: Job):
+    async def set(self, job: Job):
         pass
 
     @abstractmethod
-    def get_all(self):
+    async def get_all(self):
         pass
 
 
-class InMemoryJobService(JobService):
-    def __init__(self):
+class InMemoryJobsService(JobsService):
+    def __init__(self, orchestrator: Orchestrator):
         self._jobs = {}
+        self._orchestrator = orchestrator
 
-    def get(self, job_id: str) -> Job:
+    async def create_job(self, job_request: JobRequest) -> Job:
+        job = Job(orchestrator=self._orchestrator, job_request=job_request)
+        _ = await job.start()
+        return job
+
+    async def get(self, job_id: str) -> Job:
         return self._jobs.get(job_id)
 
-    def set(self, job: Job):
+    async def set(self, job: Job):
         self._jobs[job.id] = job
 
-    def get_all(self):
-        pass
+    async def get_all(self) -> List[tuple]:
+        jobs_result = []
+        for job in self._jobs.values():
+            # TODO replace with background
+            status = await job.status()
+            jobs_result.append((job.id, status))
+        return jobs_result

@@ -27,6 +27,10 @@ class ApiConfig(NamedTuple):
         return self.endpoint + '/statuses'
 
     @property
+    def jobs_base_url(self):
+        return self.endpoint + '/jobs'
+
+    @property
     def ping_url(self):
         return self.endpoint + '/ping'
 
@@ -174,3 +178,40 @@ class TestStatuses:
             assert response.status == 404
             data = await response.json()
             assert f'not such status_id {status_id}' == data['error']
+
+
+class TestJobs:
+    @pytest.mark.asyncio
+    async def test_get_jobs(self, api, client, model_train):
+        url = api.model_base_url
+        async with client.post(url, json=model_train) as response:
+            assert response.status == 202
+            result = await response.json()
+            assert result['status'] in ['pending']
+
+        url = api.model_base_url
+        async with client.post(url, json=model_train) as response:
+            assert response.status == 202
+            result = await response.json()
+            assert result['status'] in ['pending']
+
+        url = api.model_base_url
+        async with client.post(url, json=model_train) as response:
+            assert response.status == 202
+            result = await response.json()
+            assert result['status'] in ['pending']
+
+        url = api.jobs_base_url
+        async with client.get(url) as response:
+            assert response.status == 200
+            result = await response.json()
+            print(result)
+             #assert result['status'] in ['pending']
+
+        # jobs =
+        # status_id = 'not-such-status_id'
+        # url = api.statuses_base_url + f'/{status_id}'
+        # async with client.get(url) as response:
+        #     assert response.status == 404
+        #     data = await response.json()
+        #     assert f'not such status_id {status_id}' == data['error']
