@@ -63,6 +63,59 @@ async def client():
         yield session
 
 
+class JobsClient:
+    def __init__(self):
+        pass
+
+    async def get_all_jobs(self):
+        url = api.jobs_base_url
+        async with client.get(url) as response:
+            assert response.status == 200
+            result = await response.json()
+        return result['jobs']
+
+    async def long_pooling_by_status_id(
+            self, api, client, status_id: str, status: str,
+            interval_s: int=2, max_attempts: int=60):
+        url = api.statuses_base_url + f'/{status_id}'
+        for _ in range(max_attempts):
+            async with client.get(url) as response:
+                assert response.status == 200
+                result = await response.json()
+                if result['status'] == status:
+                    return
+                await asyncio.sleep(interval_s)
+        else:
+            raise RuntimeError('too long')
+
+    async def long_pooling_by_job_id(
+            self, api, client, job_id: str, status: str,
+            interval_s: int=2, max_attempts: int=60):
+        url = api.jobs_base_url + f'/{job_id}/status'
+        for _ in range(max_attempts):
+            async with client.get(url) as response:
+                assert response.status == 200
+                result = await response.json()
+                if result['status'] == status:
+                    return
+                await asyncio.sleep(interval_s)
+        else:
+            raise RuntimeError('too long')
+
+    async def delete_job(
+            self, api, client, job_id: str):
+        url = api.jobs_base_url + f'/delete/{job_id}'
+        async with client.delete(url) as response:
+            assert response.status == 200
+            result = await response.json()
+            print(f"delete result {result}")
+
+
+@pytest.fixture
+async def jobs_client():
+    return JobsClient()
+
+
 class TestApi:
     @pytest.mark.asyncio
     async def test_ping(self, api, client):
@@ -88,32 +141,21 @@ async def model_train():
 
 class TestModels:
 
-    async def long_pooling(
-            self, api, client, status_id: str, status: str,
-            interval_s: int=2, max_attempts: int=60):
-        url = api.statuses_base_url + f'/{status_id}'
-        for _ in range(max_attempts):
-            async with client.get(url) as response:
-                assert response.status == 200
-                result = await response.json()
-                if result['status'] == status:
-                    return
-                await asyncio.sleep(interval_s)
-        else:
-            raise RuntimeError('too long')
-
     @pytest.mark.asyncio
-    async def test_create_model(self, api, client, model_train):
+    async def test_create_model(self, api, client, model_train, jobs_client):
         url = api.model_base_url
         async with client.post(url, json=model_train) as response:
             assert response.status == 202
             result = await response.json()
             assert result['status'] in ['pending']
             status_id = result['status_id']
-        await self.long_pooling(api=api, client=client, status_id=status_id, status='succeeded')
+            job_id = result['job_id']
+        await jobs_client.long_pooling_by_status_id(
+            api=api, client=client, status_id=status_id, status='succeeded')
+        await jobs_client.delete_job(api=api, client=client, job_id=job_id)
 
     @pytest.mark.asyncio
-    async def test_env_var_sourcing(self, api, client):
+    async def test_env_var_sourcing(self, api, client, jobs_client):
         cmd = 'bash -c \'[ "$NP_RESULT_PATH" == "/var/storage/result" ]\''
         payload = {
             'container':  {
@@ -133,9 +175,10 @@ class TestModels:
             result = await response.json()
             assert result['status'] in ['pending']
             status_id = result['status_id']
-
-        await self.long_pooling(
+            job_id = result['job_id']
+        await jobs_client.long_pooling_by_status_id(
             api=api, client=client, status_id=status_id, status='succeeded')
+        await jobs_client.delete_job(api=api, client=client, job_id=job_id)
 
     @pytest.mark.asyncio
     async def test_incorrect_request(self, api, client):
@@ -147,7 +190,7 @@ class TestModels:
             assert ''''container': DataError(is required)''' in data['error']
 
     @pytest.mark.asyncio
-    async def test_broken_docker_image(self, api, client):
+    async def test_broken_docker_image(self, api, client, jobs_client):
         payload = {
             'container':  {
                 'image': 'some_broken_image',
@@ -166,7 +209,9 @@ class TestModels:
             assert response.status == 202
             data = await response.json()
             status_id = data['status_id']
-        await self.long_pooling(api=api, client=client, status_id=status_id, status='failed')
+
+        await jobs_client.long_pooling_by_status_id(
+            api=api, client=client, status_id=status_id, status='failed')
 
 
 class TestStatuses:
@@ -182,19 +227,63 @@ class TestStatuses:
 
 class TestJobs:
     @pytest.mark.asyncio
-    async def test_get_jobs_return_corrects_id(self, api, client, model_train):
-        jobs_ids = []
-        n_jobs = 3
-        for _ in range(n_jobs):
-            url = api.model_base_url
-            async with client.post(url, json=model_train) as response:
-                assert response.status == 202
-                result = await response.json()
-                assert result['status'] in ['pending']
-                jobs_ids.append(result['job_id'])
+    async def get_all_jobs(self):
+        pass
 
+    @pytest.mark.asyncio
+    async def test_delete_job(self, api, client, model_train, jobs_client):
+        url = api.model_base_url
+        async with client.post(url, json=model_train) as response:
+            assert response.status == 202
+            result = await response.json()
+            assert result['status'] in ['pending']
+            job_id = result['job_id']
+
+        await jobs_client.long_pooling_by_job_id(api=api, client=client, job_id=job_id, status='succeeded')
         url = api.jobs_base_url
         async with client.get(url) as response:
             assert response.status == 200
             result = await response.json()
-        assert set(jobs_ids) <= {x['job_id'] for x in result['jobs']}
+            print(result)
+
+        url = api.jobs_base_url + f'/{job_id}/status'
+        async with client.get(url) as response:
+            assert response.status == 200
+            result = await response.json()
+            print(result)
+
+    # @pytest.mark.asyncio
+    # async def test_get_jobs_return_corrects_id(self, api, client, model_train):
+    #     jobs_ids = []
+    #     n_jobs = 3
+    #     for _ in range(n_jobs):
+    #         url = api.model_base_url
+    #         async with client.post(url, json=model_train) as response:
+    #             assert response.status == 202
+    #             result = await response.json()
+    #             assert result['status'] in ['pending']
+    #             jobs_ids.append(result['job_id'])
+    #
+    #     url = api.jobs_base_url
+    #     async with client.get(url) as response:
+    #         assert response.status == 200
+    #         result = await response.json()
+    #     assert set(jobs_ids) <= {x['job_id'] for x in result['jobs']}
+
+        # for job_id in jobs_ids:
+        #     url = api.jobs_base_url + f'/delete/{job_id}'
+        #     async with client.delete(url) as response:
+        #         assert response.status == 200
+        #         result = await response.json()
+        #         assert result['status'] == 'pending'
+
+
+    #
+    # @pytest.mark.asyncio
+    # async def test_delete_not_exist(self, api, client):
+    #     job_id = 'kdfghlksjd-jhsdbljh-3456789!@'
+    #     url = api.jobs_base_url + f'/delete/{job_id}'
+    #     async with client.delete(url) as response:
+    #         assert response.status == 400
+    #         result = await response.json()
+    #         assert result['error'] == f'not such job_id {job_id}'

@@ -1,12 +1,12 @@
-from platform_api.orchestrator.status_service import StatusService
+from platform_api.orchestrator.jobs_service import JobsService, JobError
 
 
 import aiohttp.web
 
 
 class StatusesHandler:
-    def __init__(self, *, status_service: StatusService) -> None:
-        self._status_service = status_service
+    def __init__(self, *, jobs_service: JobsService) -> None:
+        self._jobs_service = jobs_service
 
     def register(self, app):
         app.add_routes((
@@ -15,9 +15,8 @@ class StatusesHandler:
 
     async def handle_get(self, request):
         status_id = request.match_info['status_id']
-        status = await self._status_service.get(status_id)
-        if status is None:
-            return aiohttp.web.json_response(data={"error": f"not such status_id {status_id}"}, status=404)
-        else:
-            status_value = await status.value()
-            return aiohttp.web.json_response(data={'status': status_value}, status=200)
+        try:
+            status = await self._jobs_service.get_status_by_status_id(status_id)
+            return aiohttp.web.json_response(data={'status': status}, status=200)
+        except JobError as ex:
+            return aiohttp.web.json_response(data={'error': str(ex)}, status=404)

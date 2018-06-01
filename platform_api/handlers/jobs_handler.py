@@ -1,4 +1,4 @@
-from platform_api.orchestrator import JobsService
+from platform_api.orchestrator import JobsService, JobError
 
 
 import aiohttp.web
@@ -17,9 +17,11 @@ class JobsHandler:
 
     async def handle_get_status(self, request):
         job_id = request.match_info['job_id']
-        job = await self._jobs_service.get(job_id)
-        status = await job.status()
-        return aiohttp.web.json_response(data={'status': status}, status=200)
+        try:
+            status = await self._jobs_service.get_job_status(job_id)
+            return aiohttp.web.json_response(data={'status': status}, status=200)
+        except JobError as ex:
+            return aiohttp.web.json_response(data={'error': str(ex)}, status=404)
 
     async def handle_get_jobs(self, request):
         jobs = await self._jobs_service.get_all()
@@ -27,6 +29,9 @@ class JobsHandler:
 
     async def handle_delete(self, request):
         job_id = request.match_info['job_id']
-        status = await self._jobs_service.delete(job_id)
-        return aiohttp.web.json_response(data={'status': status}, status=200)
+        try:
+            status = await self._jobs_service.delete(job_id)
+            return aiohttp.web.json_response(data={'status': status}, status=20)
+        except JobError as ex:
+            return aiohttp.web.json_response(data={'error': str(ex)}, status=404)
 
