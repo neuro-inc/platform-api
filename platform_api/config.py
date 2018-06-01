@@ -3,6 +3,7 @@ from pathlib import PurePath
 import os
 
 from .orchestrator import KubeConfig
+from .orchestrator.kube_orchestrator import KubeClientAuthType
 
 
 @dataclass(frozen=True)
@@ -68,11 +69,14 @@ class EnvironConfigFactory:
     def create_orchestrator(self) -> KubeConfig:
         host_mount_path = self._storage_host_mount_path
         endpoint_url = self._environ['NP_K8S_API_URL']
+        auth_type = KubeClientAuthType(self._environ.get(
+            'NP_K8S_AUTH_TYPE', KubeConfig.auth_type.value))
         return KubeConfig(  # type: ignore
             storage_mount_path=host_mount_path,
             endpoint_url=endpoint_url,
             cert_authority_path=self._environ.get('NP_K8S_CA_PATH'),
 
+            auth_type=auth_type,
             auth_cert_path=self._environ.get('NP_K8S_AUTH_CERT_PATH'),
             auth_cert_key_path=self._environ.get('NP_K8S_AUTH_CERT_KEY_PATH'),
 
