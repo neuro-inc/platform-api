@@ -1,5 +1,6 @@
 from asyncio import AbstractEventLoop
 from dataclasses import dataclass, field
+import enum
 import logging
 from pathlib import PurePath
 import ssl
@@ -221,6 +222,12 @@ class PodStatus:
             raise ValueError(f'unknown kind: {kind}')
 
 
+class KubeClientAuthType(str, enum.Enum):
+    NONE = 'none'
+    # TODO: TOKEN = 'token'
+    CERTIFICATE = 'certificate'
+
+
 @dataclass(frozen=True)
 class KubeConfig:
     # for now it is assumed that each pod will be configured with
@@ -231,6 +238,7 @@ class KubeConfig:
     endpoint_url: str
     cert_authority_path: Optional[str] = None
 
+    auth_type: KubeClientAuthType = KubeClientAuthType.CERTIFICATE
     auth_cert_path: Optional[str] = None
     auth_cert_key_path: Optional[str] = None
 
@@ -245,6 +253,7 @@ class KubeClient:
     def __init__(
             self, *, base_url: str, namespace: str,
             cert_authority_path: Optional[str]=None,
+            auth_type: KubeClientAuthType=KubeClientAuthType.CERTIFICATE,
             auth_cert_path: Optional[str]=None,
             auth_cert_key_path: Optional[str]=None,
             conn_timeout_s: int=KubeConfig.client_conn_timeout_s,
@@ -254,6 +263,8 @@ class KubeClient:
         self._namespace = namespace
 
         self._cert_authority_path = cert_authority_path
+
+        self._auth_type = auth_type
         self._auth_cert_path = auth_cert_path
         self._auth_cert_key_path = auth_cert_key_path
 
@@ -262,11 +273,19 @@ class KubeClient:
         self._conn_pool_size = conn_pool_size
         self._client: Optional[aiohttp.ClientSession] = None
 
-    def _create_ssl_context(self) -> ssl.SSLContext:
+    @property
+    def _is_ssl(self) -> bool:
+        from urllib.parse import urlsplit
+        return urlsplit(self._base_url).scheme == 'https'
+
+    def _create_ssl_context(self) -> Optional[ssl.SSLContext]:
+        if not self._is_ssl:
+            return None
         ssl_context = ssl.create_default_context(
             cafile=self._cert_authority_path)
-        ssl_context.load_cert_chain(
-            self._auth_cert_path, self._auth_cert_key_path)
+        if self._auth_type == KubeClientAuthType.CERTIFICATE:
+            ssl_context.load_cert_chain(
+                self._auth_cert_path, self._auth_cert_key_path)
         return ssl_context
 
     async def init(self) -> None:
@@ -339,6 +358,8 @@ class KubeOrchestrator(Orchestrator):
             base_url=config.endpoint_url,
 
             cert_authority_path=config.cert_authority_path,
+
+            auth_type=config.auth_type,
             auth_cert_path=config.auth_cert_path,
             auth_cert_key_path=config.auth_cert_key_path,
 
