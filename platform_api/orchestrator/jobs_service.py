@@ -2,12 +2,11 @@ from abc import ABC, abstractmethod
 from dataclasses import dataclass
 from typing import List, Tuple, Dict
 import logging
-import uuid
 
 from .job import Job
 from .job_request import JobRequest, JobError, JobStatus
 from .base import Orchestrator
-
+from .status import Status
 
 logger = logging.getLogger(__file__)
 
@@ -40,28 +39,6 @@ class JobsService(ABC):
     @abstractmethod
     async def get_all(self):
         pass
-
-
-@dataclass
-class Status:
-    status_id: str
-    _value: JobStatus
-
-    @property
-    def value(self) -> JobStatus:
-        return self._value
-
-    def set(self, value: JobStatus):
-        self._value = value
-
-    @classmethod
-    def create(cls, value: JobStatus) -> 'Status':
-        status_id = str(uuid.uuid4())
-        return cls(status_id, value)  # type: ignore
-
-    @property
-    def id(self):
-        return self.status_id
 
 
 @dataclass
@@ -130,7 +107,7 @@ class InMemoryJobsService(JobsService):
         if status != JobStatus.SUCCEEDED:
             raise JobError(f'can not delete job with job_id {job_id}')
         # Status deleted not pooled
-        job_records.status.create(JobStatus.DELETED)
+        job_records.status.set(JobStatus.DELETED)
         return JobStatus.DELETED
 
     async def get_all(self) -> List[dict]:
