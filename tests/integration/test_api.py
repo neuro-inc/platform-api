@@ -108,7 +108,7 @@ class JobsClient:
         async with client.delete(url) as response:
             assert response.status == 200
             result = await response.json()
-            print(f"delete result {result}")
+            assert result['status'] == 'deleted'
 
 
 @pytest.fixture
@@ -237,7 +237,7 @@ class TestJobs:
             assert response.status == 202
             result = await response.json()
             assert result['status'] in ['pending']
-            job_id = result['job_id']
+            # job_id = result['job_id']
 
         # await jobs_client.long_pooling_by_job_id(api=api, client=client, job_id=job_id, status='succeeded')
         # url = api.jobs_base_url
@@ -251,7 +251,6 @@ class TestJobs:
         #     assert response.status == 200
         #     result = await response.json()
         #     print(result)
-
 
     # @pytest.mark.asyncio
     # async def test_get_jobs_return_corrects_id(self, api, client, model_train):
@@ -278,8 +277,6 @@ class TestJobs:
         #         result = await response.json()
         #         assert result['status'] == 'pending'
 
-
-    #
     # @pytest.mark.asyncio
     # async def test_delete_not_exist(self, api, client):
     #     job_id = 'kdfghlksjd-jhsdbljh-3456789!@'

@@ -22,6 +22,10 @@ class JobsService(ABC):
         pass
 
     @abstractmethod
+    async def get_status_by_status_id(self, status_id: str):
+        pass
+
+    @abstractmethod
     async def get(self, job_id: str) -> Job:
         pass
 
@@ -94,12 +98,16 @@ class InMemoryJobsService(JobsService):
         await self.set(job_record)
         return job, status
 
+    async def get_job_status(self, job_id: str) -> JobStatus:
+        job_record = await self.get(job_id)
+        return await job_record.job_status()
+
     async def get_status_by_status_id(self, status_id: str):
         for job_record in self._job_records.values():
             if job_record.status.id == status_id:
                 # TODO this one is need with background
                 # return job_record.status.value
-                status = job_record.job.status()
+                status = await job_record.job_status()
                 return status
         raise JobError(f"not such status_id {status_id}")
 
@@ -112,10 +120,6 @@ class InMemoryJobsService(JobsService):
             raise JobError(f"not such job_id {job_id}")
         return job_record
 
-    async def get_job_status(self, job_id: str) -> JobStatus:
-        job_record = await self.get(job_id)
-        return await job_record.job_status()
-
     async def background_pooling(self):
         # TODO pool all time status from orchestrator
         pass
@@ -123,9 +127,11 @@ class InMemoryJobsService(JobsService):
     async def delete(self, job_id: str):
         job_records = await self.get(job_id)
         status = await job_records.job.delete()
+        if status != JobStatus.SUCCEEDED:
+            raise JobError(f'can not delete job with job_id {job_id}')
         # Status deleted not pooled
         job_records.status.create(JobStatus.DELETED)
-        return status
+        return JobStatus.DELETED
 
     async def get_all(self) -> List[dict]:
         jobs_result = []

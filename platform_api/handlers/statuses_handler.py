@@ -1,4 +1,4 @@
-from platform_api.orchestrator.jobs_service import JobsService, JobError
+from platform_api.orchestrator.jobs_service import JobsService
 
 
 import aiohttp.web

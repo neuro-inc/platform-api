@@ -6,7 +6,6 @@ from platform_api.config import StorageConfig
 from platform_api.handlers.models_handler import ModelRequest
 from platform_api.orchestrator.job_request import (
     Container, ContainerVolume, ContainerVolumeFactory, ContainerResources,
-    JobStatus,
 )
 
 

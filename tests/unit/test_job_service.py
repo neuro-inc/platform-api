@@ -1,5 +1,5 @@
 import pytest
-from platform_api.orchestrator import InMemoryJobsService, JobStatus
+from platform_api.orchestrator import JobStatus
 
 
 class MockJob:
@@ -53,5 +53,4 @@ class TestInMemoryJobsService:
         pass
 
     async def get_all(self, mock_job):
-
         pass

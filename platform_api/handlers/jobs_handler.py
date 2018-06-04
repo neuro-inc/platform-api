@@ -1,4 +1,4 @@
-from platform_api.orchestrator import JobsService, JobError
+from platform_api.orchestrator import JobsService
 
 
 import aiohttp.web
@@ -27,5 +27,5 @@ class JobsHandler:
     async def handle_delete(self, request):
         job_id = request.match_info['job_id']
         status = await self._jobs_service.delete(job_id)
-        return aiohttp.web.json_response(data={'status': status}, status=20)
+        return aiohttp.web.json_response(data={'status': status}, status=200)
 
