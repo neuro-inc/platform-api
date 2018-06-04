@@ -59,10 +59,7 @@ class JobStatus(str, enum.Enum):
     PENDING = 'pending'
     SUCCEEDED = 'succeeded'
     FAILED = 'failed'
-
-    @property
-    def is_finished(self) -> bool:
-        return self in (self.SUCCEEDED, self.FAILED)
+    DELETED = 'deleted'
 
 
 class ContainerVolumeFactory:

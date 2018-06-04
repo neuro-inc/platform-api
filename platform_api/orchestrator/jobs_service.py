@@ -47,6 +47,9 @@ class Status:
     def value(self) -> JobStatus:
         return self._value
 
+    def set(self, value: JobStatus):
+        self._value = value
+
     @classmethod
     def create(cls, value: JobStatus) -> 'Status':
         status_id = str(uuid.uuid4())
@@ -67,9 +70,12 @@ class JobRecord:
         return self.job.id
 
     async def job_status(self):
+        if self.status.value == JobStatus.DELETED:
+            return self.status.value
         # TODO this one is need with background
-        # return self.status.value
-        return await self.job.status()
+        status = await self.job.status()
+        self.status.set(status)
+        return self.status.value
 
 
 class InMemoryJobsService(JobsService):

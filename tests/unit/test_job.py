@@ -10,13 +10,6 @@ from platform_api.orchestrator.job_request import (
 )
 
 
-class TestJobStatus:
-    def test_is_finished(self):
-        assert not JobStatus.PENDING.is_finished
-        assert JobStatus.FAILED.is_finished
-        assert JobStatus.SUCCEEDED.is_finished
-
-
 class TestContainer:
     def test_command_list_empty(self):
         container = Container(
