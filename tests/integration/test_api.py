@@ -239,18 +239,19 @@ class TestJobs:
             assert result['status'] in ['pending']
             job_id = result['job_id']
 
-        await jobs_client.long_pooling_by_job_id(api=api, client=client, job_id=job_id, status='succeeded')
-        url = api.jobs_base_url
-        async with client.get(url) as response:
-            assert response.status == 200
-            result = await response.json()
-            print(result)
+        # await jobs_client.long_pooling_by_job_id(api=api, client=client, job_id=job_id, status='succeeded')
+        # url = api.jobs_base_url
+        # async with client.get(url) as response:
+        #     assert response.status == 200
+        #     result = await response.json()
+        #     print(result)
+        #
+        # url = api.jobs_base_url + f'/{job_id}/status'
+        # async with client.get(url) as response:
+        #     assert response.status == 200
+        #     result = await response.json()
+        #     print(result)
 
-        url = api.jobs_base_url + f'/{job_id}/status'
-        async with client.get(url) as response:
-            assert response.status == 200
-            result = await response.json()
-            print(result)
 
     # @pytest.mark.asyncio
     # async def test_get_jobs_return_corrects_id(self, api, client, model_train):

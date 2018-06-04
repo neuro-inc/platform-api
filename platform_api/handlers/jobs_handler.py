@@ -17,11 +17,8 @@ class JobsHandler:
 
     async def handle_get_status(self, request):
         job_id = request.match_info['job_id']
-        try:
-            status = await self._jobs_service.get_job_status(job_id)
-            return aiohttp.web.json_response(data={'status': status}, status=200)
-        except JobError as ex:
-            return aiohttp.web.json_response(data={'error': str(ex)}, status=404)
+        status = await self._jobs_service.get_job_status(job_id)
+        return aiohttp.web.json_response(data={'status': status}, status=200)
 
     async def handle_get_jobs(self, request):
         jobs = await self._jobs_service.get_all()
@@ -29,9 +26,6 @@ class JobsHandler:
 
     async def handle_delete(self, request):
         job_id = request.match_info['job_id']
-        try:
-            status = await self._jobs_service.delete(job_id)
-            return aiohttp.web.json_response(data={'status': status}, status=20)
-        except JobError as ex:
-            return aiohttp.web.json_response(data={'error': str(ex)}, status=404)
+        status = await self._jobs_service.delete(job_id)
+        return aiohttp.web.json_response(data={'status': status}, status=20)
 

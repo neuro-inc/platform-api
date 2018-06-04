@@ -6,7 +6,7 @@ import aiohttp.web
 from .config import Config, EnvironConfigFactory
 from .handlers import ModelsHandler, StatusesHandler, JobsHandler
 from .orchestrator import (
-    KubeOrchestrator, KubeConfig, JobsService, InMemoryJobsService)
+    KubeOrchestrator, KubeConfig, JobsService, InMemoryJobsService, JobError)
 
 
 class ApiHandler:
@@ -29,6 +29,8 @@ def init_logging():
 async def handle_exceptions(request, handler):
     try:
         return await handler(request)
+    except JobError as ex:
+        return aiohttp.web.json_response(data={'error': str(ex)}, status=404)
     except ValueError as e:
         payload = {'error': str(e)}
         return aiohttp.web.json_response(

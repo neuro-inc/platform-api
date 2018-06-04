@@ -15,8 +15,5 @@ class StatusesHandler:
 
     async def handle_get(self, request):
         status_id = request.match_info['status_id']
-        try:
-            status = await self._jobs_service.get_status_by_status_id(status_id)
-            return aiohttp.web.json_response(data={'status': status}, status=200)
-        except JobError as ex:
-            return aiohttp.web.json_response(data={'error': str(ex)}, status=404)
+        status = await self._jobs_service.get_status_by_status_id(status_id)
+        return aiohttp.web.json_response(data={'status': status}, status=200)

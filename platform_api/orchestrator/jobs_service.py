@@ -123,6 +123,8 @@ class InMemoryJobsService(JobsService):
     async def delete(self, job_id: str):
         job_records = await self.get(job_id)
         status = await job_records.job.delete()
+        # Status deleted not pooled
+        job_records.status.create(JobStatus.DELETED)
         return status
 
     async def get_all(self) -> List[dict]:
