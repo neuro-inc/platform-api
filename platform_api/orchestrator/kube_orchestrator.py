@@ -93,6 +93,21 @@ class Volume:
 
 
 @dataclass(frozen=True)
+class NfsVolume(Volume):
+    server: str
+    export_path: PurePath
+
+    def to_primitive(self):
+        return {
+            'name': self.name,
+            'nfs': {
+                'server': self.server,
+                'path': str(self.export_path),
+            },
+        }
+
+
+@dataclass(frozen=True)
 class VolumeMount:
     volume: Volume
     mount_path: PurePath
@@ -222,6 +237,11 @@ class PodStatus:
             raise ValueError(f'unknown kind: {kind}')
 
 
+class VolumeType(str, enum.Enum):
+    HOST = 'host'
+    NFS = 'nfs'
+
+
 class KubeClientAuthType(str, enum.Enum):
     NONE = 'none'
     # TODO: TOKEN = 'token'
@@ -247,6 +267,10 @@ class KubeConfig:
     client_conn_timeout_s: int = 300
     client_read_timeout_s: int = 300
     client_conn_pool_size: int = 100
+
+    storage_type: VolumeType = VolumeType.HOST
+    nfs_volume_server: Optional[str] = None
+    nfs_volume_export_path: Optional[PurePath] = None
 
 
 class KubeClient:
@@ -369,8 +393,19 @@ class KubeOrchestrator(Orchestrator):
             conn_pool_size=config.client_conn_pool_size
         )
 
-        self._storage_volume = Volume(  # type: ignore
-            name='storage', host_path=config.storage_mount_path)
+        self._storage_volume = self._create_storage_volume()
+
+    def _create_storage_volume(self) -> Volume:
+        name = 'storage'
+        if self._config.storage_type == VolumeType.NFS:
+            return NfsVolume(  # type: ignore
+                name=name,
+                host_path=self._config.storage_mount_path,
+                server=self._config.nfs_volume_server,
+                export_path=self._config.nfs_volume_export_path,
+            )
+        return Volume(  # type: ignore
+            name=name, host_path=self._config.storage_mount_path)
 
     async def __aenter__(self) -> 'KubeOrchestrator':
         await self._client.init()
