@@ -29,6 +29,8 @@ spec:
         hostPath:
           path: /tmp
           type: Directory
+      imagePullSecrets:
+      - name: np-docker-reg-secret
 ---
 apiVersion: v1
 kind: Service
