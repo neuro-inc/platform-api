@@ -67,23 +67,14 @@ def _status_pod_from_dict(pod_status: dict) -> JobStatus:
 
 
 @dataclass(frozen=True)
-class Volume:
+class Volume(metaclass=abc.ABCMeta):
     name: str
-    host_path: PurePath
-
-    def to_primitive(self):
-        return {
-            'name': self.name,
-            'hostPath': {
-                'path': str(self.host_path),
-                'type': 'Directory',
-            },
-        }
+    path: PurePath
 
     def create_mount(
             self, container_volume: ContainerVolume
             ) -> 'VolumeMount':
-        sub_path = container_volume.src_path.relative_to(self.host_path)
+        sub_path = container_volume.src_path.relative_to(self.path)
         return VolumeMount(  # type: ignore
             volume=self,
             mount_path=container_volume.dst_path,
@@ -93,16 +84,28 @@ class Volume:
 
 
 @dataclass(frozen=True)
+class HostVolume(Volume):
+
+    def to_primitive(self):
+        return {
+            'name': self.name,
+            'hostPath': {
+                'path': str(self.path),
+                'type': 'Directory',
+            },
+        }
+
+
+@dataclass(frozen=True)
 class NfsVolume(Volume):
     server: str
-    export_path: PurePath
 
     def to_primitive(self):
         return {
             'name': self.name,
             'nfs': {
                 'server': self.server,
-                'path': str(self.export_path),
+                'path': str(self.path),
             },
         }
 
