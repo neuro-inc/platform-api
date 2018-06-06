@@ -129,14 +129,14 @@ gke_login:
 	echo $GKE_ACCT_AUTH | base64 --decode > ${HOME}//gcloud-service-key.json
 	sudo /opt/google-cloud-sdk/bin/gcloud auth activate-service-account --key-file ${HOME}/gcloud-service-key.json
 	sudo /opt/google-cloud-sdk/bin/gcloud config set project $GKE_PROJECT_ID
-        sudo /opt/google-cloud-sdk/bin/gcloud --quiet config set container/cluster $GKE_CLUSTER_NAME
-        sudo /opt/google-cloud-sdk/bin/gcloud config set compute/zone ${GKE_COMPUTE_ZONE}
+	sudo /opt/google-cloud-sdk/bin/gcloud --quiet config set container/cluster $GKE_CLUSTER_NAME
+	sudo /opt/google-cloud-sdk/bin/gcloud config set compute/zone ${GKE_COMPUTE_ZONE}
 	sudo /opt/google-cloud-sdk/bin/gcloud --quiet container clusters get-credentials $GKE_CLUSTER_NAME
 	sudo chown -R ubuntu:ubuntu /home/ubuntu/.kube
 
 gke_docker_push:
-        docker tag $(IMAGE_K8S) ${GKE_DOCKER_REGISTRY}/${PROJECT_NAME}/$(IMAGE_NAME):$CIRCLE_SHA1
-        docker tag ${GKE_DOCKER_REGISTRY}/${PROJECT_NAME}/$(IMAGE_NAME):$CIRCLE_SHA1 $(IMAGE_TAG)
-        sudo /opt/google-cloud-sdk/bin/gcloud docker -- push ${GKE_DOCKER_REGISTRY}/${PROJECT_NAME}/$(IMAGE_NAME)
+	docker tag $(IMAGE_K8S) ${GKE_DOCKER_REGISTRY}/${PROJECT_NAME}/$(IMAGE_NAME):$CIRCLE_SHA1
+	docker tag ${GKE_DOCKER_REGISTRY}/${PROJECT_NAME}/$(IMAGE_NAME):$CIRCLE_SHA1 $(IMAGE_TAG)
+	sudo /opt/google-cloud-sdk/bin/gcloud docker -- push ${GKE_DOCKER_REGISTRY}/${PROJECT_NAME}/$(IMAGE_NAME)
 
         
