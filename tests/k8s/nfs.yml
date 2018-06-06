@@ -11,6 +11,8 @@ spec:
     metadata:
       labels:
         service: platformstoragenfs
+      annotations:
+        container.apparmor.security.beta.kubernetes.io/platformstoragenfs: unconfined
     spec:
       containers:
       - name: platformstoragenfs
