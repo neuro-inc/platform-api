@@ -1,3 +1,4 @@
+import abc
 from asyncio import AbstractEventLoop
 from dataclasses import dataclass, field
 import enum
@@ -403,12 +404,11 @@ class KubeOrchestrator(Orchestrator):
         if self._config.storage_type == VolumeType.NFS:
             return NfsVolume(  # type: ignore
                 name=name,
-                host_path=self._config.storage_mount_path,
                 server=self._config.nfs_volume_server,
-                export_path=self._config.nfs_volume_export_path,
+                path=self._config.nfs_volume_export_path,
             )
-        return Volume(  # type: ignore
-            name=name, host_path=self._config.storage_mount_path)
+        return HostVolume(  # type: ignore
+            name=name, path=self._config.storage_mount_path)
 
     async def __aenter__(self) -> 'KubeOrchestrator':
         await self._client.init()
