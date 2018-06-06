@@ -128,10 +128,10 @@ gke_login:
 	sudo /opt/google-cloud-sdk/bin/gcloud --quiet components update --version 204.0.0 kubectl
 	echo ${GKE_ACCT_AUTH} | base64 --decode > ${HOME}//gcloud-service-key.json
 	sudo /opt/google-cloud-sdk/bin/gcloud auth activate-service-account --key-file ${HOME}/gcloud-service-key.json
-	sudo /opt/google-cloud-sdk/bin/gcloud config set project $GKE_PROJECT_ID
-	sudo /opt/google-cloud-sdk/bin/gcloud --quiet config set container/cluster $GKE_CLUSTER_NAME
+	sudo /opt/google-cloud-sdk/bin/gcloud config set project ${GKE_PROJECT_ID}
+	sudo /opt/google-cloud-sdk/bin/gcloud --quiet config set container/cluster ${GKE_CLUSTER_NAME}
 	sudo /opt/google-cloud-sdk/bin/gcloud config set compute/zone ${GKE_COMPUTE_ZONE}
-	sudo /opt/google-cloud-sdk/bin/gcloud --quiet container clusters get-credentials $GKE_CLUSTER_NAME
+	sudo /opt/google-cloud-sdk/bin/gcloud --quiet container clusters get-credentials ${GKE_CLUSTER_NAME}
 	sudo chown -R ubuntu:ubuntu /home/ubuntu/.kube
 
 gke_docker_push:
