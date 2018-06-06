@@ -116,8 +116,7 @@ workflows:
       - gke_deploy:
           context: org-global
           requires:
-            - k8s
-            - test
+            - deploy
           filters:
             branches:
               only:
