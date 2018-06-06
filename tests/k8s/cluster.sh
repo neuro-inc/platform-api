@@ -36,6 +36,7 @@ function k8s::start {
     sudo -E minikube start --vm-driver=none
 
     k8s::wait
+    k8s::start_nfs
 }
 
 function k8s::wait {
@@ -76,6 +77,14 @@ function k8s::test {
     exit 1
 }
 
+function k8s::start_nfs {
+    kubectl apply -f tests/k8s/nfs.yml
+}
+
+function k8s::stop_nfs {
+    kubectl delete -f tests/k8s/nfs.yml
+}
+
 
 case "${1:-}" in
     install)
@@ -92,6 +101,12 @@ case "${1:-}" in
         ;;
     test)
         k8s::test
+        ;;
+    start-nfs)
+        k8s::start_nfs
+        ;;
+    stop-nfs)
+        k8s::stop_nfs
         ;;
     *)
         exit 1

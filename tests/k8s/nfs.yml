@@ -15,7 +15,6 @@ spec:
       containers:
       - name: platformstoragenfs
         image: registry.neuromation.io/neuromationorg/nfs-server:latest
-        imagePullPolicy: Never
         securityContext:
           capabilities:
             add: ["SYS_ADMIN"]
