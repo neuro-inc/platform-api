@@ -135,8 +135,8 @@ gke_login:
 
 gke_docker_push:
 	docker build -f Dockerfile.k8s -t $(IMAGE_K8S) .
-	docker tag $(IMAGE_K8S) ${GKE_DOCKER_REGISTRY}/${PROJECT_NAME}/$(IMAGE_NAME):$CIRCLE_SHA1
-	docker tag ${GKE_DOCKER_REGISTRY}/${PROJECT_NAME}/$(IMAGE_NAME):$CIRCLE_SHA1 $(IMAGE_TAG)
-	sudo /opt/google-cloud-sdk/bin/gcloud docker -- push ${GKE_DOCKER_REGISTRY}/${PROJECT_NAME}/$(IMAGE_NAME)
+	docker tag $(IMAGE_K8S) ${GKE_DOCKER_REGISTRY}/${GKE_PROJECT_NAME}/$(IMAGE_NAME):${CIRCLE_SHA1}
+	docker tag ${GKE_DOCKER_REGISTRY}/${GKE_PROJECT_NAME}/$(IMAGE_NAME):${CIRCLE_SHA1} $(IMAGE_TAG)
+	sudo /opt/google-cloud-sdk/bin/gcloud docker -- push ${GKE_DOCKER_REGISTRY}/${GKE_PROJECT_NAME}/$(IMAGE_NAME)
 
         
