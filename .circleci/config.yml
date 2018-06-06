@@ -51,6 +51,20 @@ jobs:
           command: |
               make deploy_platformapi_dev
 
+  gke_deploy:
+    <<: *defaults
+    steps:
+      - checkout
+      - run:
+          name: GKE Auth
+          command: |
+            make gke_login
+
+      - run:
+          name: GKE Docker Push
+          command: |
+            make gke_docker_push
+
   k8s:
     <<: *defaults
     steps:
@@ -99,3 +113,12 @@ workflows:
             branches:
               only:
                 - master
+      - gke_deploy:
+          context: org-global
+          requires:
+            - k8s
+            - test
+          filters:
+            branches:
+              only:
+                - P20-143/setup_GCR_GKE
