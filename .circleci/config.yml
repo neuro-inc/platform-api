@@ -58,7 +58,7 @@ jobs:
       - run:
           name: GKE Auth
           command: |
-            make gke_login
+            make -s gke_login
 
       - run:
           name: GKE Docker Push

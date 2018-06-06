@@ -124,6 +124,7 @@ run_api_k8s_container:
 	    $(IMAGE_K8S)
 
 gke_login:
+	echo ${GKE_ACCT_AUTH} | base64 --decode > ${HOME}//gcloud-service-key.json
 	sudo /opt/google-cloud-sdk/bin/gcloud --quiet components update --version 204.0.0
 	sudo /opt/google-cloud-sdk/bin/gcloud --quiet components update --version 204.0.0 kubectl
 	echo ${GKE_ACCT_AUTH} | base64 --decode > ${HOME}//gcloud-service-key.json
@@ -132,7 +133,6 @@ gke_login:
 	sudo /opt/google-cloud-sdk/bin/gcloud --quiet config set container/cluster ${GKE_CLUSTER_NAME}
 	sudo /opt/google-cloud-sdk/bin/gcloud config set compute/zone ${GKE_COMPUTE_ZONE}
 	sudo /opt/google-cloud-sdk/bin/gcloud --quiet container clusters get-credentials ${GKE_CLUSTER_NAME}
-	sudo chown -R ubuntu:ubuntu /home/ubuntu/.kube
 
 gke_docker_push:
 	docker build -f Dockerfile.k8s -t $(IMAGE_K8S) .
