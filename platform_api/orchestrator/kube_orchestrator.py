@@ -6,6 +6,7 @@ import logging
 from pathlib import PurePath
 import ssl
 from typing import Dict, List, Optional
+from urllib.parse import urlsplit
 
 import aiohttp
 
@@ -303,7 +304,6 @@ class KubeClient:
 
     @property
     def _is_ssl(self) -> bool:
-        from urllib.parse import urlsplit
         return urlsplit(self._base_url).scheme == 'https'
 
     def _create_ssl_context(self) -> Optional[ssl.SSLContext]:
