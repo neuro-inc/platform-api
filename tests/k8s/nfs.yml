@@ -16,7 +16,7 @@ spec:
     spec:
       containers:
       - name: platformstoragenfs
-        image: registry.neuromation.io/neuromationorg/nfs-server:latest
+        image: erichough/nfs-server:latest
         securityContext:
           capabilities:
             add: ["SYS_ADMIN"]
