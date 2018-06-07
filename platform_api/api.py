@@ -21,7 +21,8 @@ class ApiHandler:
 
 def init_logging():
     logging.basicConfig(
-        level=logging.INFO,
+        # TODO (A Danshyn 06/01/18): expose in the Config
+        level=logging.DEBUG,
         format='%(asctime)s - %(name)s - %(levelname)s - %(message)s')
 
 

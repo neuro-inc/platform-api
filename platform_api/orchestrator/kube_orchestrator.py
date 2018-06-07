@@ -1,9 +1,12 @@
+import abc
 from asyncio import AbstractEventLoop
 from dataclasses import dataclass, field
+import enum
 import logging
 from pathlib import PurePath
 import ssl
 from typing import Dict, List, Optional
+from urllib.parse import urlsplit
 
 import aiohttp
 
@@ -66,29 +69,47 @@ def _status_pod_from_dict(pod_status: dict) -> JobStatus:
 
 
 @dataclass(frozen=True)
-class Volume:
+class Volume(metaclass=abc.ABCMeta):
     name: str
-    host_path: PurePath
-
-    def to_primitive(self):
-        return {
-            'name': self.name,
-            'hostPath': {
-                'path': str(self.host_path),
-                'type': 'Directory',
-            },
-        }
+    path: PurePath
 
     def create_mount(
             self, container_volume: ContainerVolume
             ) -> 'VolumeMount':
-        sub_path = container_volume.src_path.relative_to(self.host_path)
+        sub_path = container_volume.src_path.relative_to(self.path)
         return VolumeMount(  # type: ignore
             volume=self,
             mount_path=container_volume.dst_path,
             sub_path=sub_path,
             read_only=container_volume.read_only
         )
+
+
+@dataclass(frozen=True)
+class HostVolume(Volume):
+
+    def to_primitive(self):
+        return {
+            'name': self.name,
+            'hostPath': {
+                'path': str(self.path),
+                'type': 'Directory',
+            },
+        }
+
+
+@dataclass(frozen=True)
+class NfsVolume(Volume):
+    server: str
+
+    def to_primitive(self):
+        return {
+            'name': self.name,
+            'nfs': {
+                'server': self.server,
+                'path': str(self.path),
+            },
+        }
 
 
 @dataclass(frozen=True)
@@ -221,6 +242,17 @@ class PodStatus:
             raise ValueError(f'unknown kind: {kind}')
 
 
+class VolumeType(str, enum.Enum):
+    HOST = 'host'
+    NFS = 'nfs'
+
+
+class KubeClientAuthType(str, enum.Enum):
+    NONE = 'none'
+    # TODO: TOKEN = 'token'
+    CERTIFICATE = 'certificate'
+
+
 @dataclass(frozen=True)
 class KubeConfig:
     # for now it is assumed that each pod will be configured with
@@ -231,6 +263,7 @@ class KubeConfig:
     endpoint_url: str
     cert_authority_path: Optional[str] = None
 
+    auth_type: KubeClientAuthType = KubeClientAuthType.CERTIFICATE
     auth_cert_path: Optional[str] = None
     auth_cert_key_path: Optional[str] = None
 
@@ -240,11 +273,16 @@ class KubeConfig:
     client_read_timeout_s: int = 300
     client_conn_pool_size: int = 100
 
+    storage_type: VolumeType = VolumeType.HOST
+    nfs_volume_server: Optional[str] = None
+    nfs_volume_export_path: Optional[PurePath] = None
+
 
 class KubeClient:
     def __init__(
             self, *, base_url: str, namespace: str,
             cert_authority_path: Optional[str]=None,
+            auth_type: KubeClientAuthType=KubeClientAuthType.CERTIFICATE,
             auth_cert_path: Optional[str]=None,
             auth_cert_key_path: Optional[str]=None,
             conn_timeout_s: int=KubeConfig.client_conn_timeout_s,
@@ -254,6 +292,8 @@ class KubeClient:
         self._namespace = namespace
 
         self._cert_authority_path = cert_authority_path
+
+        self._auth_type = auth_type
         self._auth_cert_path = auth_cert_path
         self._auth_cert_key_path = auth_cert_key_path
 
@@ -262,11 +302,18 @@ class KubeClient:
         self._conn_pool_size = conn_pool_size
         self._client: Optional[aiohttp.ClientSession] = None
 
-    def _create_ssl_context(self) -> ssl.SSLContext:
+    @property
+    def _is_ssl(self) -> bool:
+        return urlsplit(self._base_url).scheme == 'https'
+
+    def _create_ssl_context(self) -> Optional[ssl.SSLContext]:
+        if not self._is_ssl:
+            return None
         ssl_context = ssl.create_default_context(
             cafile=self._cert_authority_path)
-        ssl_context.load_cert_chain(
-            self._auth_cert_path, self._auth_cert_key_path)
+        if self._auth_type == KubeClientAuthType.CERTIFICATE:
+            ssl_context.load_cert_chain(
+                self._auth_cert_path, self._auth_cert_key_path)
         return ssl_context
 
     async def init(self) -> None:
@@ -339,6 +386,8 @@ class KubeOrchestrator(Orchestrator):
             base_url=config.endpoint_url,
 
             cert_authority_path=config.cert_authority_path,
+
+            auth_type=config.auth_type,
             auth_cert_path=config.auth_cert_path,
             auth_cert_key_path=config.auth_cert_key_path,
 
@@ -348,8 +397,18 @@ class KubeOrchestrator(Orchestrator):
             conn_pool_size=config.client_conn_pool_size
         )
 
-        self._storage_volume = Volume(  # type: ignore
-            name='storage', host_path=config.storage_mount_path)
+        self._storage_volume = self._create_storage_volume()
+
+    def _create_storage_volume(self) -> Volume:
+        name = 'storage'
+        if self._config.storage_type == VolumeType.NFS:
+            return NfsVolume(  # type: ignore
+                name=name,
+                server=self._config.nfs_volume_server,
+                path=self._config.nfs_volume_export_path,
+            )
+        return HostVolume(  # type: ignore
+            name=name, path=self._config.storage_mount_path)
 
     async def __aenter__(self) -> 'KubeOrchestrator':
         await self._client.init()

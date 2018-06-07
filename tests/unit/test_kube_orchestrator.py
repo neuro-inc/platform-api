@@ -7,24 +7,17 @@ from platform_api.orchestrator.job_request import (
     JobRequest, JobStatus, JobError,
 )
 from platform_api.orchestrator.kube_orchestrator import (
-    Volume, VolumeMount,
+    HostVolume, NfsVolume, VolumeMount,
     PodDescriptor, PodStatus, Resources,
 )
 
 
 class TestVolume:
-    def test_to_primitive(self):
-        volume = Volume('testvolume', host_path='/tmp')
-        assert volume.to_primitive() == {
-            'name': 'testvolume',
-            'hostPath': {
-                'path': '/tmp',
-                'type': 'Directory',
-            },
-        }
-
-    def test_create_mount(self):
-        volume = Volume('testvolume', host_path='/host')
+    @pytest.mark.parametrize('volume', (
+        HostVolume('testvolume', path='/host'),  # type: ignore
+        NfsVolume('testvolume', server='1.2.3.4', path='/host'),  # type: ignore
+    ))
+    def test_create_mount(self, volume):
         container_volume = ContainerVolume(
             src_path=PurePath('/host/path/to/dir'),
             dst_path=PurePath('/container/path/to/dir'))
@@ -35,9 +28,34 @@ class TestVolume:
         assert not mount.read_only
 
 
+class TestHostVolume:
+    def test_to_primitive(self):
+        volume = HostVolume('testvolume', path='/tmp')
+        assert volume.to_primitive() == {
+            'name': 'testvolume',
+            'hostPath': {
+                'path': '/tmp',
+                'type': 'Directory',
+            },
+        }
+
+
+class TestNfsVolume:
+    def test_to_primitive(self):
+        volume = NfsVolume(
+            'testvolume', server='1.2.3.4', path=PurePath('/tmp'))
+        assert volume.to_primitive() == {
+            'name': 'testvolume',
+            'nfs': {
+                'server': '1.2.3.4',
+                'path': '/tmp',
+            },
+        }
+
+
 class TestVolumeMount:
     def test_to_primitive(self):
-        volume = Volume(name='testvolume', host_path=PurePath('/tmp'))
+        volume = HostVolume(name='testvolume', path=PurePath('/tmp'))
         mount = VolumeMount(
             volume=volume, mount_path=PurePath('/dst'),
             sub_path=PurePath('/src'), read_only=True)
@@ -89,7 +107,7 @@ class TestPodDescriptor:
             volumes=[ContainerVolume(
                 src_path=PurePath('/tmp/src'), dst_path=PurePath('/dst'))],
             resources=ContainerResources(cpu=1, memory_mb=128, gpu=1))
-        volume = Volume(name='testvolume', host_path='/tmp')
+        volume = HostVolume(name='testvolume', path='/tmp')
         job_request = JobRequest.create(container)
         pod = PodDescriptor.from_job_request(volume, job_request)
         assert pod.name == job_request.job_id

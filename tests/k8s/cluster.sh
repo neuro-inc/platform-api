@@ -36,6 +36,8 @@ function k8s::start {
     sudo -E minikube start --vm-driver=none
 
     k8s::wait
+    k8s::setup_registry
+    k8s::start_nfs
 }
 
 function k8s::wait {
@@ -55,13 +57,16 @@ function k8s::stop {
     sudo -E minikube stop || :
 }
 
-function k8s::test {
+function k8s::setup_registry {
     kubectl delete secret np-docker-reg-secret || :
     kubectl create secret docker-registry np-docker-reg-secret \
         --docker-server $DOCKER_REGISTRY \
         --docker-username $DOCKER_USER \
         --docker-password $DOCKER_PASS \
         --docker-email $DOCKER_EMAIL
+}
+
+function k8s::test {
     kubectl delete jobs testjob1 || :
     kubectl create -f tests/k8s/pod.yml
     for _ in {1..300}; do
@@ -74,6 +79,14 @@ function k8s::test {
         sleep 1
     done
     exit 1
+}
+
+function k8s::start_nfs {
+    kubectl apply -f tests/k8s/nfs.yml
+}
+
+function k8s::stop_nfs {
+    kubectl delete -f tests/k8s/nfs.yml
 }
 
 
@@ -92,6 +105,15 @@ case "${1:-}" in
         ;;
     test)
         k8s::test
+        ;;
+    start-nfs)
+        k8s::start_nfs
+        ;;
+    stop-nfs)
+        k8s::stop_nfs
+        ;;
+    setup-registry)
+        k8s::setup_registry
         ;;
     *)
         exit 1
