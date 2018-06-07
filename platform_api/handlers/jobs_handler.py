@@ -1,7 +1,6 @@
-from platform_api.orchestrator import JobsService
-
-
 import aiohttp.web
+
+from platform_api.orchestrator import JobsService
 
 
 class JobsHandler:
@@ -21,6 +20,7 @@ class JobsHandler:
         return aiohttp.web.json_response(data={'status': status}, status=200)
 
     async def handle_get_jobs(self, request):
+        # TODO use pagination. may eventually explode with OOM.
         jobs = await self._jobs_service.get_all()
         return aiohttp.web.json_response(data={'jobs': jobs}, status=200)
 
@@ -28,4 +28,3 @@ class JobsHandler:
         job_id = request.match_info['job_id']
         status = await self._jobs_service.delete(job_id)
         return aiohttp.web.json_response(data={'status': status}, status=200)
-

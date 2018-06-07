@@ -30,7 +30,7 @@ async def handle_exceptions(request, handler):
     try:
         return await handler(request)
     except JobError as ex:
-        return aiohttp.web.json_response(data={'error': str(ex)}, status=400)
+        return aiohttp.web.json_response(data={'error': str(ex)}, status=aiohttp.web.HTTPBadRequest.status_code)
     except ValueError as e:
         payload = {'error': str(e)}
         return aiohttp.web.json_response(

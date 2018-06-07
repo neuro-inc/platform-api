@@ -1,8 +1,8 @@
 import pytest
-from platform_api.orchestrator import JobStatus, InMemoryJobsService, JobRequest
+from platform_api.orchestrator import JobStatus, InMemoryJobsService, JobRequest, Orchestrator
 
 
-class MockOrchestrator:
+class MockOrchestrator(Orchestrator):
     async def start_job(self, *args, **kwargs):
         return JobStatus.SUCCEEDED
 
