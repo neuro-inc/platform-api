@@ -1,0 +1,42 @@
+apiVersion: apps/v1
+kind: ReplicaSet
+metadata:
+  name: platformstorageapi
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      service: platformstorageapi
+  template:
+    metadata:
+      labels:
+        service: platformstorageapi
+    spec:
+      containers:
+      - name: platformstorageapi
+        image: gcr.io/light-reality-205619/platformstorageapi:latest
+        imagePullPolicy: Always
+        env:
+        - name: NP_STORAGE_LOCAL_BASE_PATH
+          value: /var/storage
+        volumeMounts:
+        - name: storage
+          mountPath: /var/storage
+
+      volumes:
+        - name: storage
+          nfs:
+            server: 10.128.0.5
+            path: /nfs
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: platformstorageapi
+spec:
+  type: LoadBalancer
+  ports:
+  - port: 8080
+    targetPort: 8080
+  selector:
+    service: platformstorageapi
