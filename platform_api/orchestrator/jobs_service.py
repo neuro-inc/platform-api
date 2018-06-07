@@ -21,10 +21,6 @@ class JobsService(ABC):
         pass
 
     @abstractmethod
-    async def get_status_by_status_id(self, status_id: str):
-        pass
-
-    @abstractmethod
     async def get(self, job_id: str) -> Job:
         pass
 
@@ -78,15 +74,6 @@ class InMemoryJobsService(JobsService):
     async def get_job_status(self, job_id: str) -> JobStatus:
         job_record = await self.get(job_id)
         return await job_record.job_status()
-
-    async def get_status_by_status_id(self, status_id: str):
-        for job_record in self._job_records.values():
-            if job_record.status.id == status_id:
-                # TODO this one is need with background
-                # return job_record.status.value
-                status = await job_record.job_status()
-                return status
-        raise JobError(f"not such status_id {status_id}")
 
     async def set(self, job_record: JobRecord):
         self._job_records[job_record.id] = job_record

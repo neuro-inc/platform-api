@@ -46,12 +46,6 @@ class TestInMemoryJobsService:
         assert job_status == status.value
 
     @pytest.mark.asyncio
-    async def test_get_status_by_status_id(self, jobs_service, mock_job_request):
-        job, status = await jobs_service.create_job(job_request=mock_job_request)
-        job_status = await jobs_service.get_status_by_status_id(status_id=status.id)
-        assert job_status == status.value
-
-    @pytest.mark.asyncio
     async def test_get_all(self, jobs_service):
         job_ids = []
         num_jobs = 1000

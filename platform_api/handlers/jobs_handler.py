@@ -10,8 +10,8 @@ class JobsHandler:
     def register(self, app):
         app.add_routes((
             aiohttp.web.get('', self.handle_get_jobs),
-            aiohttp.web.delete('/delete/{job_id}', self.handle_delete),
-            aiohttp.web.get('/{job_id}/status', self.handle_get_status),
+            aiohttp.web.delete('/{job_id}', self.handle_delete),
+            aiohttp.web.get('/{job_id}', self.handle_get_status),
         ))
 
     async def handle_get_status(self, request):

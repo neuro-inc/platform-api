@@ -4,7 +4,8 @@ import logging
 import aiohttp.web
 
 from .config import Config, EnvironConfigFactory
-from .handlers import ModelsHandler, StatusesHandler, JobsHandler
+from .handlers import (
+    ModelsHandler, JobsHandler)
 from .orchestrator import (
     KubeOrchestrator, KubeConfig, JobsService, InMemoryJobsService, JobError, Orchestrator)
 
@@ -68,12 +69,6 @@ async def create_models_app(config: Config, jobs_service: JobsService):
     return models_app
 
 
-async def create_statuses_app(jobs_service: JobsService):
-    statuses_app = aiohttp.web.Application()
-    statuses_handler = StatusesHandler(jobs_service=jobs_service)
-    statuses_handler.register(statuses_app)
-    return statuses_app
-
 
 async def create_jobs_app(jobs_service: JobsService):
     jobs_app = aiohttp.web.Application()
@@ -95,8 +90,6 @@ async def create_app(config: Config):
 
     models_app = await create_models_app(config=config, jobs_service=jobs_service)
     api_v1_app.add_subapp('/models', models_app)
-    statuses_app = await create_statuses_app(jobs_service=jobs_service)
-    api_v1_app.add_subapp('/statuses', statuses_app)
     jobs_app = await create_jobs_app(jobs_service=jobs_service)
     api_v1_app.add_subapp('/jobs', jobs_app)
 

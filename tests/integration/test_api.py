@@ -23,10 +23,6 @@ class ApiConfig(NamedTuple):
         return self.endpoint + '/models'
 
     @property
-    def statuses_base_url(self):
-        return self.endpoint + '/statuses'
-
-    @property
     def jobs_base_url(self):
         return self.endpoint + '/jobs'
 
@@ -74,24 +70,10 @@ class JobsClient:
             result = await response.json()
         return result['jobs']
 
-    async def long_pooling_by_status_id(
-            self, api, client, status_id: str, status: str,
-            interval_s: int=2, max_attempts: int=60):
-        url = api.statuses_base_url + f'/{status_id}'
-        for _ in range(max_attempts):
-            async with client.get(url) as response:
-                assert response.status == 200
-                result = await response.json()
-                if result['status'] == status:
-                    return
-                await asyncio.sleep(interval_s)
-        else:
-            raise RuntimeError('too long')
-
     async def long_pooling_by_job_id(
             self, api, client, job_id: str, status: str,
             interval_s: int=2, max_attempts: int=60):
-        url = api.jobs_base_url + f'/{job_id}/status'
+        url = api.jobs_base_url + f'/{job_id}'
         for _ in range(max_attempts):
             async with client.get(url) as response:
                 assert response.status == 200
@@ -104,7 +86,7 @@ class JobsClient:
 
     async def delete_job(
             self, api, client, job_id: str):
-        url = api.jobs_base_url + f'/delete/{job_id}'
+        url = api.jobs_base_url + f'/{job_id}'
         async with client.delete(url) as response:
             assert response.status == 200
             result = await response.json()
@@ -148,10 +130,8 @@ class TestModels:
             assert response.status == 202
             result = await response.json()
             assert result['status'] in ['pending']
-            status_id = result['status_id']
             job_id = result['job_id']
-        await jobs_client.long_pooling_by_status_id(
-            api=api, client=client, status_id=status_id, status='succeeded')
+        await jobs_client.long_pooling_by_job_id(api=api, client=client, job_id=job_id, status='succeeded')
         await jobs_client.delete_job(api=api, client=client, job_id=job_id)
 
     @pytest.mark.asyncio
@@ -174,10 +154,8 @@ class TestModels:
             assert response.status == 202
             result = await response.json()
             assert result['status'] in ['pending']
-            status_id = result['status_id']
             job_id = result['job_id']
-        await jobs_client.long_pooling_by_status_id(
-            api=api, client=client, status_id=status_id, status='succeeded')
+        await jobs_client.long_pooling_by_job_id(api=api, client=client, job_id=job_id, status='succeeded')
         await jobs_client.delete_job(api=api, client=client, job_id=job_id)
 
     @pytest.mark.asyncio
@@ -208,21 +186,8 @@ class TestModels:
         async with client.post(url, json=payload) as response:
             assert response.status == 202
             data = await response.json()
-            status_id = data['status_id']
-
-        await jobs_client.long_pooling_by_status_id(
-            api=api, client=client, status_id=status_id, status='failed')
-
-
-class TestStatuses:
-    @pytest.mark.asyncio
-    async def test_test_not_exist_status(self, api, client):
-        status_id = 'not-such-status_id'
-        url = api.statuses_base_url + f'/{status_id}'
-        async with client.get(url) as response:
-            assert response.status == 400
-            data = await response.json()
-            assert f'not such status_id {status_id}' == data['error']
+            job_id = data['job_id']
+        await jobs_client.long_pooling_by_job_id(api=api, client=client, job_id=job_id, status='failed')
 
 
 class TestJobs:
@@ -269,7 +234,7 @@ class TestJobs:
     @pytest.mark.asyncio
     async def test_delete_not_exist(self, api, client):
         job_id = 'kdfghlksjd-jhsdbljh-3456789!@'
-        url = api.jobs_base_url + f'/delete/{job_id}'
+        url = api.jobs_base_url + f'/{job_id}'
         async with client.delete(url) as response:
             assert response.status == 400
             result = await response.json()
