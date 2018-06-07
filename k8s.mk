@@ -27,3 +27,8 @@ test_k8s_platform_api:
 	pip install tox
 	kubectl config view
 	tox
+
+test_k8s_platform_api_e2e: build_api_k8s
+	kubectl create -f deploy/rb.default.gke.yml
+	kubectl create -f tests/k8s/platformapi.yml
+	PLATFORM_API_URL=$(minikube service platformapi --url)/api/v1 tox e2e
