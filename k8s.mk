@@ -29,7 +29,4 @@ test_k8s_platform_api:
 	tox
 
 test_k8s_platform_api_e2e: build_api_k8s
-	kubectl create -f deploy/rb.default.gke.yml
-	kubectl create -f tests/k8s/platformapi.yml
-	PLATFORM_API_URL=$(shell minikube service platformapi --url --wait 30)/api/v1 \
-		tox -e py36-e2e
+	./run_e2e_tests.sh
