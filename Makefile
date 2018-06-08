@@ -132,7 +132,6 @@ gke_login:
 	sudo /opt/google-cloud-sdk/bin/gcloud --quiet config set container/cluster $(GKE_CLUSTER_NAME)
 	sudo /opt/google-cloud-sdk/bin/gcloud config set compute/zone $(GKE_COMPUTE_ZONE)
 	sudo /opt/google-cloud-sdk/bin/gcloud --quiet container clusters get-credentials $(GKE_CLUSTER_NAME)
-	id
 	sudo chown -R circleci: $(HOME)/.kube
 
 gke_docker_push:
@@ -141,5 +140,5 @@ gke_docker_push:
 	sudo /opt/google-cloud-sdk/bin/gcloud docker -- push $(IMAGE_K8S)
 
 gke_k8s_deploy:
-	kubectl patch replicaset platformapi -p '{"spec":{"template":{"spec":{"containers":[{"name":"platformapi","image":'"$(IMAGE_K8S):$(CIRCLE_SHA1)"'"}]}}}}'	        
+	kubectl patch replicaset platformapi -p '{"spec":{"template":{"spec":{"containers":[{"name":"platformapi","image":"$(IMAGE_K8S):$(CIRCLE_SHA1)"}]}}}}'	        
 	
