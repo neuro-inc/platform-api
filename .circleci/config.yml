@@ -76,6 +76,11 @@ jobs:
             make test_k8s_platform_api
 
       - run:
+          name: Running E2E Test Suite
+          command: |
+            make test_k8s_platform_api_e2e
+
+      - run:
           name: Stopping Kubernetes
           command: |
             make clean_k8s

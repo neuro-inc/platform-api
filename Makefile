@@ -7,7 +7,9 @@ DOCKER_REPO ?= $(DOCKER_REGISTRY)/neuromationorg
 IMAGE_NAME ?= platformapi
 IMAGE_TAG ?= latest
 IMAGE ?= $(DOCKER_REPO)/$(IMAGE_NAME):$(IMAGE_TAG)
-IMAGE_K8S ?= $(DOCKER_REPO)/$(IMAGE_NAME)-k8s:$(IMAGE_TAG)
+
+IMAGE_NAME_K8S ?= $(IMAGE_NAME)-k8s
+IMAGE_K8S ?= $(DOCKER_REPO)/$(IMAGE_NAME_K8S):$(IMAGE_TAG)
 
 format:
 	go fmt $(pkgs)
@@ -99,7 +101,7 @@ include k8s.mk
 include deploy.mk
 
 build_api_k8s:
-	docker build -f Dockerfile.k8s -t $(IMAGE_K8S) .
+	docker build -f Dockerfile.k8s -t $(IMAGE_K8S) -t $(IMAGE_NAME_K8S):$(IMAGE_TAG) .
 
 run_api_k8s:
 	NP_STORAGE_HOST_MOUNT_PATH=/tmp \
