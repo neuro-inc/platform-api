@@ -71,4 +71,4 @@ class TestInMemoryJobsService:
         jobs = await jobs_service.get_all()
         assert len(jobs) == 10
         for job in jobs:
-            assert job['status'] == JobStatus.DELETED
+            assert job['status'] == JobStatus.SUCCEEDED

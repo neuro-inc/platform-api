@@ -9,5 +9,5 @@ class TestStatus:
     def test_set_value(self):
         status = Status.create(JobStatus.SUCCEEDED)
         assert status.value == JobStatus.SUCCEEDED
-        status.set(JobStatus.DELETED)
-        assert status.value == JobStatus.DELETED
+        status.set(JobStatus.FAILED)
+        assert status.value == JobStatus.FAILED

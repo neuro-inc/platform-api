@@ -90,7 +90,7 @@ class JobsClient:
         async with client.delete(url) as response:
             assert response.status == 200
             result = await response.json()
-            assert result['status'] == 'deleted'
+            assert result['status'] == 'succeeded'
 
 
 @pytest.fixture
@@ -226,9 +226,10 @@ class TestJobs:
             job_id = result['job_id']
             await jobs_client.long_pooling_by_job_id(api=api, client=client, job_id=job_id, status='succeeded')
         await jobs_client.delete_job(api=api, client=client, job_id=job_id)
+
         jobs = await jobs_client.get_all_jobs(api=api, client=client)
         assert len(jobs) == 1
-        assert jobs[0]['status'] == 'deleted'
+        assert jobs[0]['status'] == 'succeeded'
         assert jobs[0]['job_id'] == job_id
 
     @pytest.mark.asyncio
