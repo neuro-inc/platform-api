@@ -7,8 +7,8 @@ DOCKER_REPO ?= $(DOCKER_REGISTRY)/neuromationorg
 IMAGE_NAME ?= platformapi
 IMAGE_TAG ?= latest
 IMAGE ?= $(DOCKER_REPO)/$(IMAGE_NAME):$(IMAGE_TAG)
-IMAGE_K8S ?= $(DOCKER_REPO)/$(IMAGE_NAME)-k8s:$(IMAGE_TAG)
-
+#IMAGE_K8S ?= $(DOCKER_REPO)/$(IMAGE_NAME)-k8s:$(IMAGE_TAG)
+IMAGE_K8S ?= $(GKE_DOCKER_REGISTRY)/$(GKE_PROJECT_ID)/$(IMAGE_NAME)-k8s
 format:
 	go fmt $(pkgs)
 	gofmt -w -s .
@@ -99,7 +99,7 @@ include k8s.mk
 include deploy.mk
 
 build_api_k8s:
-	docker build -f Dockerfile.k8s -t $(IMAGE_K8S) .
+	docker build -f Dockerfile.k8s -t $(IMAGE_K8S):latest .
 
 run_api_k8s:
 	NP_STORAGE_HOST_MOUNT_PATH=/tmp \
@@ -110,7 +110,7 @@ run_api_k8s:
 	platform-api
 
 push_api_k8s: _docker_login
-	docker push $(IMAGE_K8S)
+	docker push $(IMAGE_K8S):latest
 
 run_api_k8s_container:
 	docker run --rm -it --name platformapi \
@@ -121,7 +121,7 @@ run_api_k8s_container:
 	    -e NP_K8S_CA_PATH=$$HOME/.minikube/ca.crt \
 	    -e NP_K8S_AUTH_CERT_PATH=$$HOME/.minikube/client.crt \
 	    -e NP_K8S_AUTH_CERT_KEY_PATH=$$HOME/.minikube/client.key \
-	    $(IMAGE_K8S)
+	    $(IMAGE_K8S):latest
 
 gke_login:
 	sudo /opt/google-cloud-sdk/bin/gcloud --quiet components update --version 204.0.0
@@ -134,9 +134,10 @@ gke_login:
 	sudo /opt/google-cloud-sdk/bin/gcloud --quiet container clusters get-credentials ${GKE_CLUSTER_NAME}
 
 gke_docker_push:
-	docker build -f Dockerfile.k8s -t $(IMAGE_K8S) .
-	docker tag $(IMAGE_K8S) ${GKE_DOCKER_REGISTRY}/${GKE_PROJECT_ID}/$(IMAGE_NAME):${CIRCLE_SHA1}
-	docker tag ${GKE_DOCKER_REGISTRY}/${GKE_PROJECT_ID}/$(IMAGE_NAME):${CIRCLE_SHA1} ${GKE_DOCKER_REGISTRY}/${GKE_PROJECT_ID}/$(IMAGE_NAME):$(IMAGE_TAG)
-	sudo /opt/google-cloud-sdk/bin/gcloud docker -- push ${GKE_DOCKER_REGISTRY}/${GKE_PROJECT_ID}/$(IMAGE_NAME)
+	docker build -f Dockerfile.k8s -t $(IMAGE_K8S):latest .
+	docker tag $(IMAGE_K8S):latest $(IMAGE_K8S):${CIRCLE_SHA1}
+	sudo /opt/google-cloud-sdk/bin/gcloud docker -- push $(IMAGE_K8S)
 
-        
+gke_k8s_deploy:
+	echo "Deploy"
+	        
