@@ -1,8 +1,10 @@
 from dataclasses import dataclass
 from pathlib import PurePath
 import os
+from typing import Any, Dict
 
 from .orchestrator import KubeConfig
+from .orchestrator.kube_orchestrator import KubeClientAuthType, VolumeType
 
 
 @dataclass(frozen=True)
@@ -65,14 +67,36 @@ class EnvironConfigFactory:
             uri_scheme=uri_scheme,
         )
 
-    def create_orchestrator(self) -> KubeConfig:
+    def _create_storage_kwargs(self) -> Dict[str, Any]:
+        storage_type = VolumeType(
+            self._environ.get('NP_STORAGE_TYPE', KubeConfig.storage_type))
         host_mount_path = self._storage_host_mount_path
-        endpoint_url = self._environ['NP_K8S_API_URL']
-        return KubeConfig(  # type: ignore
+
+        kwargs = dict(
             storage_mount_path=host_mount_path,
+            storage_type=storage_type,
+        )
+        if storage_type == VolumeType.NFS:
+            kwargs.update(dict(
+                nfs_volume_server=self._environ['NP_STORAGE_NFS_SERVER'],
+                nfs_volume_export_path=PurePath(
+                    self._environ['NP_STORAGE_NFS_PATH']),
+            ))
+        return kwargs
+
+    def create_orchestrator(self) -> KubeConfig:
+        endpoint_url = self._environ['NP_K8S_API_URL']
+        auth_type = KubeClientAuthType(self._environ.get(
+            'NP_K8S_AUTH_TYPE', KubeConfig.auth_type.value))
+
+        kwargs = {}
+        kwargs.update(self._create_storage_kwargs())
+
+        return KubeConfig(  # type: ignore
             endpoint_url=endpoint_url,
             cert_authority_path=self._environ.get('NP_K8S_CA_PATH'),
 
+            auth_type=auth_type,
             auth_cert_path=self._environ.get('NP_K8S_AUTH_CERT_PATH'),
             auth_cert_key_path=self._environ.get('NP_K8S_AUTH_CERT_KEY_PATH'),
 
@@ -87,4 +111,6 @@ class EnvironConfigFactory:
             client_conn_pool_size=int(self._environ.get(
                 'NP_K8S_CLIENT_CONN_POOL_SIZE',
                 KubeConfig.client_conn_pool_size)),
+
+            **kwargs
         )

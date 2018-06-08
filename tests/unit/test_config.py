@@ -84,3 +84,15 @@ class TestEnvironConfigFactory:
         assert config.orchestrator.client_conn_pool_size == 333
 
         assert config.env_prefix == 'TEST'
+
+    def test_create_nfs(self):
+        environ = {
+            'NP_STORAGE_TYPE': 'nfs',
+            'NP_STORAGE_NFS_SERVER': '1.2.3.4',
+            'NP_STORAGE_NFS_PATH': '/tmp',
+            'NP_STORAGE_HOST_MOUNT_PATH': '/tmp',
+            'NP_K8S_API_URL': 'https://localhost:8443',
+        }
+        config = EnvironConfigFactory(environ=environ).create()
+        assert config.orchestrator.nfs_volume_server == '1.2.3.4'
+        assert config.orchestrator.nfs_volume_export_path == PurePath('/tmp')
