@@ -126,18 +126,18 @@ run_api_k8s_container:
 gke_login:
 	sudo /opt/google-cloud-sdk/bin/gcloud --quiet components update --version 204.0.0
 	sudo /opt/google-cloud-sdk/bin/gcloud --quiet components update --version 204.0.0 kubectl
-	@echo ${GKE_ACCT_AUTH} | base64 --decode > ${HOME}//gcloud-service-key.json
-	sudo /opt/google-cloud-sdk/bin/gcloud auth activate-service-account --key-file ${HOME}/gcloud-service-key.json
-	sudo /opt/google-cloud-sdk/bin/gcloud config set project ${GKE_PROJECT_ID}
-	sudo /opt/google-cloud-sdk/bin/gcloud --quiet config set container/cluster ${GKE_CLUSTER_NAME}
-	sudo /opt/google-cloud-sdk/bin/gcloud config set compute/zone ${GKE_COMPUTE_ZONE}
-	sudo /opt/google-cloud-sdk/bin/gcloud --quiet container clusters get-credentials ${GKE_CLUSTER_NAME}
+	@echo $(GKE_ACCT_AUTH( | base64 --decode > $(HOME)//gcloud-service-key.json
+	sudo /opt/google-cloud-sdk/bin/gcloud auth activate-service-account --key-file $(HOME)/gcloud-service-key.json
+	sudo /opt/google-cloud-sdk/bin/gcloud config set project $(GKE_PROJECT_ID)
+	sudo /opt/google-cloud-sdk/bin/gcloud --quiet config set container/cluster $(GKE_CLUSTER_NAME)
+	sudo /opt/google-cloud-sdk/bin/gcloud config set compute/zone $(GKE_COMPUTE_ZONE)
+	sudo /opt/google-cloud-sdk/bin/gcloud --quiet container clusters get-credentials $(GKE_CLUSTER_NAME)
 
 gke_docker_push:
 	docker build -f Dockerfile.k8s -t $(IMAGE_K8S):latest .
-	docker tag $(IMAGE_K8S):latest $(IMAGE_K8S):${CIRCLE_SHA1}
+	docker tag $(IMAGE_K8S):latest $(IMAGE_K8S):$(CIRCLE_SHA1)
 	sudo /opt/google-cloud-sdk/bin/gcloud docker -- push $(IMAGE_K8S)
 
 gke_k8s_deploy:
-	echo "Deploy"
-	        
+	kubectl patch replicaset platformapi -p '{"spec":{"template":{"spec":{"containers":[{"name":"platformapi","image":'"$(IMAGE_K8S):$(CIRCLE_SHA1)"'"}]}}}}'	        
+	
