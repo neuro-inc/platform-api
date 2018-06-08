@@ -141,4 +141,7 @@ gke_docker_push:
 
 gke_k8s_deploy:
 	kubectl patch replicaset platformapi -p '{"spec":{"template":{"spec":{"containers":[{"name":"platformapi","image":"$(IMAGE_K8S):$(CIRCLE_SHA1)"}]}}}}'	        
+	kubectl scale --replicas=0 replicaset/platformapi
+	sleep 2s;
+	kubectl scale --replicas=1 replicaset/platformapi
 	

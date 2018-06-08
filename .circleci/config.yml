@@ -126,4 +126,4 @@ workflows:
           filters:
             branches:
               only:
-                - master
+                - P20-143/setup_GCR_GKE
