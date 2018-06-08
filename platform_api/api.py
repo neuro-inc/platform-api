@@ -70,7 +70,6 @@ async def create_models_app(config: Config, jobs_service: JobsService):
     return models_app
 
 
-
 async def create_jobs_app(jobs_service: JobsService):
     jobs_app = aiohttp.web.Application()
     jobs_handler = JobsHandler(jobs_service=jobs_service)

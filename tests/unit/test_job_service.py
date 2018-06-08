@@ -34,7 +34,7 @@ class TestInMemoryJobsService:
     async def test_create_job(self, jobs_service, mock_job_request):
         job, status = await jobs_service.create_job(job_request=mock_job_request)
 
-        job_record = await jobs_service.get(job_id=job.id)
+        job_record = await jobs_service.get_job(job_id=job.id)
         assert job_record.job.id == job.id
         assert job_record.status.id == status.id
         assert job_record.status.value == status.value
@@ -54,7 +54,7 @@ class TestInMemoryJobsService:
             job, _ = await jobs_service.create_job(job_request=job_request)
             job_ids.append(job.id)
 
-        jobs = await jobs_service.get_all()
+        jobs = await jobs_service.get_all_jobs()
         assert job_ids == [x['job_id'] for x in jobs]
 
     @pytest.mark.asyncio
@@ -64,11 +64,11 @@ class TestInMemoryJobsService:
             job_request = JobRequest.create(container=None)
             await jobs_service.create_job(job_request=job_request)
 
-        jobs = await jobs_service.get_all()
+        jobs = await jobs_service.get_all_jobs()
         for job in jobs:
-            await jobs_service.delete(job_id=job['job_id'])
+            await jobs_service.delete_job(job_id=job['job_id'])
 
-        jobs = await jobs_service.get_all()
+        jobs = await jobs_service.get_all_jobs()
         assert len(jobs) == 10
         for job in jobs:
             assert job['status'] == JobStatus.SUCCEEDED

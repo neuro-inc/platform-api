@@ -21,19 +21,19 @@ class JobsService(ABC):
         pass
 
     @abstractmethod
-    async def get(self, job_id: str) -> Job:
+    async def get_job(self, job_id: str) -> Job:
         pass
 
     @abstractmethod
-    async def set(self, job: Job):
+    async def set_job(self, job: Job):
         pass
 
     @abstractmethod
-    async def delete(self, job_id: str):
+    async def delete_job(self, job_id: str):
         pass
 
     @abstractmethod
-    async def get_all(self):
+    async def get_all_jobs(self):
         pass
 
 
@@ -69,30 +69,30 @@ class InMemoryJobsService(JobsService):
         job_status = await job.start()
         status = Status.create(job_status)
         job_record = JobRecord(job=job, status=status)
-        await self.set(job_record)
+        await self.set_job(job_record)
         return job, status
 
     async def get_job_status(self, job_id: str) -> JobStatus:
-        job_record = await self.get(job_id)
+        job_record = await self.get_job(job_id)
         return await job_record.job_status()
 
-    async def set(self, job_record: JobRecord):
+    async def set_job(self, job_record: JobRecord):
         self._job_records[job_record.id] = job_record
 
-    async def get(self, job_id: str) -> JobRecord:
+    async def get_job(self, job_id: str) -> JobRecord:
         job_record = self._job_records.get(job_id)
         if job_record is None:
             raise JobError(f"not such job_id {job_id}")
         return job_record
 
-    async def delete(self, job_id: str):
-        job_records = await self.get(job_id)
+    async def delete_job(self, job_id: str):
+        job_records = await self.get_job(job_id)
         status = await job_records.job.delete()
         if status != JobStatus.SUCCEEDED:
-            raise JobError(f'can not delete job with job_id {job_id}')
+            raise JobError(f'can not delete_job job with job_id {job_id}')
         return status
 
-    async def get_all(self) -> List[dict]:
+    async def get_all_jobs(self) -> List[dict]:
         jobs_result = []
         for job_record in self._job_records.values():
             status = await job_record.job_status()
