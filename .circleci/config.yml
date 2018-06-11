@@ -55,6 +55,25 @@ jobs:
           command: |
             make gke_k8s_deploy
 
+  gke_deploy:
+    <<: *defaults
+    steps:
+      - checkout
+      - run:
+          name: GKE Auth
+          command: |
+            make -s gke_login
+
+      - run:
+          name: GKE Docker Push
+          command: |
+            make gke_docker_push
+
+      - run:
+          name: GKE K8s Deploy
+          command: |
+            make gke_k8s_deploy
+
   k8s:
     <<: *defaults
     steps:
@@ -100,6 +119,15 @@ workflows:
           context: org-global
       - test:
           context: org-global
+      - gke_deploy:
+          context: org-global
+          requires:
+            - k8s          
+            - test
+          filters:
+            branches:
+              only:
+                - master
       - gke_deploy:
           context: org-global
           requires:
