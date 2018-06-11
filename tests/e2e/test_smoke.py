@@ -21,8 +21,8 @@ def api_models_url(api_endpoint_url):
 
 
 @pytest.fixture(scope='session')
-def api_statuses_url(api_endpoint_url):
-    return f'{api_endpoint_url}/statuses'
+def api_jobs_url(api_endpoint_url):
+    return f'{api_endpoint_url}/jobs'
 
 
 @pytest.fixture(scope='session')
@@ -43,7 +43,7 @@ def api(api_ping_url):
 
 
 @pytest.mark.usefixtures('api')
-def test_basic_command(api_models_url, api_statuses_url):
+def test_basic_command(api_models_url, api_jobs_url):
     model_request_payload = {
         'container': {
             'image': 'ubuntu',
@@ -59,16 +59,16 @@ def test_basic_command(api_models_url, api_statuses_url):
     response = requests.post(api_models_url, json=model_request_payload)
     assert response.status_code == 202
     model_payload = response.json()
-    status_id = model_payload['status_id']
-    status_url = f'{api_statuses_url}/{status_id}'
+    job_id = model_payload['job_id']
+    jobs_url = f'{api_jobs_url}/{job_id}'
 
     for _ in range(30):
-        response = requests.get(status_url)
+        response = requests.get(jobs_url)
         assert response.status_code == 200
-        status_payload = response.json()
-        status_name = status_payload['status']
+        jobs_payload = response.json()
+        status_name = jobs_payload['status']
         if status_name == 'succeeded':
             break
         if status_name == 'failed':
-            pytest.fail(f'Job failed: {status_payload}')
+            pytest.fail(f'Job failed: {jobs_payload}')
         time.sleep(1)
