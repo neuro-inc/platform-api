@@ -7,9 +7,8 @@ DOCKER_REPO ?= $(DOCKER_REGISTRY)/neuromationorg
 IMAGE_NAME ?= platformapi
 IMAGE_TAG ?= latest
 IMAGE ?= $(DOCKER_REPO)/$(IMAGE_NAME):$(IMAGE_TAG)
-
 IMAGE_NAME_K8S ?= $(IMAGE_NAME)-k8s
-IMAGE_K8S ?= $(DOCKER_REPO)/$(IMAGE_NAME_K8S):$(IMAGE_TAG)
+IMAGE_K8S ?= $(GKE_DOCKER_REGISTRY)/$(GKE_PROJECT_ID)/$(IMAGE_NAME_K8S)
 
 format:
 	go fmt $(pkgs)
@@ -101,7 +100,7 @@ include k8s.mk
 include deploy.mk
 
 build_api_k8s:
-	docker build -f Dockerfile.k8s -t $(IMAGE_K8S) -t $(IMAGE_NAME_K8S):$(IMAGE_TAG) .
+	docker build -f Dockerfile.k8s -t $(IMAGE_K8S):latest -t $(IMAGE_NAME_K8S):$(IMAGE_TAG) .
 
 run_api_k8s:
 	NP_STORAGE_HOST_MOUNT_PATH=/tmp \
@@ -112,7 +111,7 @@ run_api_k8s:
 	platform-api
 
 push_api_k8s: _docker_login
-	docker push $(IMAGE_K8S)
+	docker push $(IMAGE_K8S):latest
 
 run_api_k8s_container:
 	docker run --rm -it --name platformapi \
@@ -123,4 +122,26 @@ run_api_k8s_container:
 	    -e NP_K8S_CA_PATH=$$HOME/.minikube/ca.crt \
 	    -e NP_K8S_AUTH_CERT_PATH=$$HOME/.minikube/client.crt \
 	    -e NP_K8S_AUTH_CERT_KEY_PATH=$$HOME/.minikube/client.key \
-	    $(IMAGE_K8S)
+	    $(IMAGE_K8S):latest
+
+gke_login:
+	sudo /opt/google-cloud-sdk/bin/gcloud --quiet components update --version 204.0.0
+	sudo /opt/google-cloud-sdk/bin/gcloud --quiet components update --version 204.0.0 kubectl
+	@echo $(GKE_ACCT_AUTH) | base64 --decode > $(HOME)//gcloud-service-key.json
+	sudo /opt/google-cloud-sdk/bin/gcloud auth activate-service-account --key-file $(HOME)/gcloud-service-key.json
+	sudo /opt/google-cloud-sdk/bin/gcloud config set project $(GKE_PROJECT_ID)
+	sudo /opt/google-cloud-sdk/bin/gcloud --quiet config set container/cluster $(GKE_CLUSTER_NAME)
+	sudo /opt/google-cloud-sdk/bin/gcloud config set compute/zone $(GKE_COMPUTE_ZONE)
+	sudo /opt/google-cloud-sdk/bin/gcloud --quiet container clusters get-credentials $(GKE_CLUSTER_NAME)
+	sudo chown -R circleci: $(HOME)/.kube
+
+gke_docker_push: build_api_k8s
+	docker tag $(IMAGE_K8S):latest $(IMAGE_K8S):$(CIRCLE_SHA1)
+	sudo /opt/google-cloud-sdk/bin/gcloud docker -- push $(IMAGE_K8S)
+
+gke_k8s_deploy:
+	kubectl patch replicaset platformapi -p '{"spec":{"template":{"spec":{"containers":[{"name":"platformapi","image":"$(IMAGE_K8S):$(CIRCLE_SHA1)"}]}}}}'	        
+	kubectl scale --replicas=0 replicaset/platformapi
+	sleep 2s;
+	kubectl scale --replicas=1 replicaset/platformapi
+	
