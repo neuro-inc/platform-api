@@ -1,4 +1,4 @@
-from .job_request import JobRequest
+from .job_request import JobRequest, JobStatus
 from .base import Orchestrator
 
 
@@ -9,13 +9,13 @@ class Job:
         self._orchestrator = orchestrator
         self._job_request = job_request
 
-    async def start(self):
+    async def start(self) -> JobStatus:
         return await self._orchestrator.start_job(self._job_request)
 
-    async def delete(self):
+    async def delete(self) -> JobStatus:
         return await self._orchestrator.delete_job(job_id=self.id)
 
-    async def status(self):
+    async def status(self) -> JobStatus:
         return await self._orchestrator.status_job(job_id=self.id)
 
     @property
