@@ -19,6 +19,13 @@ async def kube_orchestrator(kube_config, event_loop):
 
 
 @pytest.fixture
+async def kube_orchestrator_nfs(kube_config_nfs, event_loop):
+    orchestrator = KubeOrchestrator(config=kube_config_nfs)
+    async with orchestrator:
+        yield orchestrator
+
+
+@pytest.fixture
 async def job_nginx(kube_orchestrator):
     job_id = str(uuid.uuid4())
     container = Container(
@@ -152,6 +159,13 @@ class TestKubeOrchestrator:
 
     @pytest.mark.asyncio
     async def test_volumes(self, kube_config, kube_orchestrator):
+        await self._test_volumes(kube_config, kube_orchestrator)
+
+    @pytest.mark.asyncio
+    async def test_volumes_nfs(self, kube_config_nfs, kube_orchestrator_nfs):
+        await self._test_volumes(kube_config_nfs, kube_orchestrator_nfs)
+
+    async def _test_volumes(self, kube_config, kube_orchestrator):
         volumes = [ContainerVolume(
             src_path=PurePath(kube_config.storage_mount_path),
             dst_path=PurePath('/storage'))]

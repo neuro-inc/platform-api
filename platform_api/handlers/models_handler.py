@@ -3,7 +3,9 @@ import trafaret as t
 from typing import Dict, List, Optional
 
 from platform_api.config import Config, StorageConfig
-from platform_api.orchestrator import Job, JobRequest, Orchestrator, StatusService, Status
+from platform_api.orchestrator import (
+    Job, JobRequest,
+    JobsService, Status)
 from platform_api.orchestrator.job_request import (
     Container, ContainerResources, ContainerVolume)
 
@@ -85,13 +87,12 @@ class ModelRequest:
 
 class ModelsHandler:
     def __init__(
-            self, *, config: Config, orchestrator: Orchestrator,
-            status_service: StatusService
+            self, *, config: Config,
+            jobs_service: JobsService
             ) -> None:
-        self._orchestrator = orchestrator
         self._config = config
         self._storage_config = config.storage
-        self._status_service = status_service
+        self._jobs_service = jobs_service
 
         self._model_request_validator = self._create_model_request_validator()
 
@@ -122,9 +123,7 @@ class ModelsHandler:
 
     async def _create_job(self, model_request: ModelRequest) -> (Job, Status):
         job_request = JobRequest.create(model_request.to_container())
-        job = Job(orchestrator=self._orchestrator, job_request=job_request)
-        _ = await job.start()
-        status = await self._status_service.create(job=job)
+        job, status = await self._jobs_service.create_job(job_request)
         return job, status
 
     async def handle_post(self, request):
@@ -134,8 +133,7 @@ class ModelsHandler:
             data, storage_config=self._storage_config,
             env_prefix=self._config.env_prefix)
         job, status = await self._create_job(model_request)
-        status_value = await status.value()
         return aiohttp.web.json_response(
-            data={'status': status_value, 'job_id': job.id, 'status_id': status.id},
+            data={'status': status.value, 'job_id': job.id, 'status_id': status.id},
             status=aiohttp.web.HTTPAccepted.status_code)
 

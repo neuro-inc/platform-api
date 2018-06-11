@@ -75,9 +75,10 @@ jobs:
     steps:
       - checkout
       - run:
-          name: Install Python
+          name: Install Dependencies
           command: |
             sudo bash -c "yes | add-apt-repository ppa:jonathonf/python-3.6 && apt-get update && apt-get install -y python3.6"
+            sudo apt-get install nfs-common
       - run:
           name: Running Kubernetes
           command: |
@@ -92,6 +93,11 @@ jobs:
           name: Run Platform Tests
           command: |
             make test_k8s_platform_api
+
+      - run:
+          name: Running E2E Test Suite
+          command: |
+            make test_k8s_platform_api_e2e
 
       - run:
           name: Stopping Kubernetes
