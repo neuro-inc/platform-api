@@ -36,21 +36,6 @@ jobs:
       - store_test_results:
           path: /tmp/test-results
 
-  deploy:
-    <<: *defaults
-    steps:
-      - checkout
-      - run:
-          name: Building and pushing docker images
-          command: |
-            make build_api push_api
-            make build_api_k8s push_api_k8s
-
-      - run:
-          name: Deploying on dev environment
-          command: |
-              make deploy_platformapi_dev
-
   gke_deploy:
     <<: *defaults
     steps:
@@ -115,15 +100,6 @@ workflows:
           context: org-global
       - test:
           context: org-global
-      - deploy:
-          context: org-global
-          requires:
-            - k8s
-            - test
-          filters:
-            branches:
-              only:
-                - master
       - gke_deploy:
           context: org-global
           requires:
