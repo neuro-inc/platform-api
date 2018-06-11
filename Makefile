@@ -7,7 +7,6 @@ DOCKER_REPO ?= $(DOCKER_REGISTRY)/neuromationorg
 IMAGE_NAME ?= platformapi
 IMAGE_TAG ?= latest
 IMAGE ?= $(DOCKER_REPO)/$(IMAGE_NAME):$(IMAGE_TAG)
-#IMAGE_K8S ?= $(DOCKER_REPO)/$(IMAGE_NAME)-k8s:$(IMAGE_TAG)
 IMAGE_K8S ?= $(GKE_DOCKER_REGISTRY)/$(GKE_PROJECT_ID)/$(IMAGE_NAME)-k8s
 format:
 	go fmt $(pkgs)
@@ -134,8 +133,7 @@ gke_login:
 	sudo /opt/google-cloud-sdk/bin/gcloud --quiet container clusters get-credentials $(GKE_CLUSTER_NAME)
 	sudo chown -R circleci: $(HOME)/.kube
 
-gke_docker_push:
-	docker build -f Dockerfile.k8s -t $(IMAGE_K8S):latest .
+gke_docker_push: build_api_k8s
 	docker tag $(IMAGE_K8S):latest $(IMAGE_K8S):$(CIRCLE_SHA1)
 	sudo /opt/google-cloud-sdk/bin/gcloud docker -- push $(IMAGE_K8S)
 
