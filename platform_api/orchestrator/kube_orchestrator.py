@@ -206,6 +206,12 @@ class Ingress:
             for rule in payload['spec']['rules']]
         return cls(rules=rules)
 
+    def find_rule_index_by_host(self, host: str) -> int:
+        for idx, rule in enumerate(self.rules):
+            if rule.host == host:
+                return idx
+        return -1
+
 
 @dataclass(frozen=True)
 class PodDescriptor:
