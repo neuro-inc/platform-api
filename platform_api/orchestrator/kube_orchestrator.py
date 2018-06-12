@@ -162,6 +162,13 @@ class Resources:
 
 
 @dataclass(frozen=True)
+class IngressRule:
+    host: str
+    service_name: str
+    service_port: int
+
+
+@dataclass(frozen=True)
 class PodDescriptor:
     name: str
     image: str
@@ -255,10 +262,9 @@ class KubeClientAuthType(str, enum.Enum):
 
 @dataclass(frozen=True)
 class KubeConfig:
-    # for now it is assumed that each pod will be configured with
-    # a hostPath volume where the storage root is mounted
-    # this attribute may probably be moved at some point
     storage_mount_path: PurePath
+
+    jobs_ingress_domain_name: str
 
     endpoint_url: str
     cert_authority_path: Optional[str] = None
@@ -348,6 +354,20 @@ class KubeClient:
     def _generate_pod_url(self, pod_id: str) -> str:
         return f'{self._pods_url}/{pod_id}'
 
+    @property
+    def _v1beta1_namespace_url(self) -> str:
+        return (
+            f'{self._base_url}/apis/extensions/v1beta1'
+            f'/namespaces/{self._namespace}'
+        )
+
+    @property
+    def _ingresses_url(self) -> str:
+        return f'{self._v1beta1_namespace_url}/ingresses'
+
+    def _generate_ingress_url(self, ingress_name: str) -> str:
+        return f'{self._ingresses_url}/{ingress_name}'
+
     async def _request(self, *args, **kwargs):
         async with self._client.request(*args, **kwargs) as response:
             # TODO (A Danshyn 05/21/18): check status code etc
@@ -369,6 +389,65 @@ class KubeClient:
         url = self._generate_pod_url(pod_id)
         payload = await self._request(method='DELETE', url=url)
         return PodStatus.from_primitive(payload)
+
+    async def create_ingress(self, name):
+        primitive = {
+            'metadata': {'name': name},
+            'spec': {'rules': [None]}
+        }
+        payload = await self._request(
+            method='POST', url=self._ingresses_url, json=primitive)
+        return payload
+
+    async def get_ingress(self, name):
+        url = self._generate_ingress_url(name)
+        payload = await self._request(method='GET', url=url)
+        return payload
+
+    async def delete_ingress(self, name):
+        url = self._generate_ingress_url(name)
+        await self._request(method='DELETE', url=url)
+
+    def _find_rule_index_by_host(self, ingress, host):
+        for idx, rule in enumerate(ingress['spec']['rules']):
+            if rule.get('host') == host:
+                return idx
+        return -1
+
+    async def add_ingress_rule(self, name, host):
+        # TODO: test if does not exist already
+        url = self._generate_ingress_url(name)
+        headers = {
+            'Content-Type': 'application/json-patch+json',
+        }
+        rule = [{
+            'op': 'add',
+            'path': '/spec/rules/-',
+            'value': {
+                'host': host,
+            },
+        }]
+        await self._request(
+            method='PATCH', url=url, headers=headers, json=rule)
+
+    async def remove_ingress_rule(self, name, host):
+        # TODO: this one should have a retry in case of a race condition
+        ingress = await self.get_ingress(name)
+        rule_index = self._find_rule_index_by_host(ingress, host)
+        url = self._generate_ingress_url(name)
+        rule = [{
+            'op': 'test',
+            'path': f'/spec/rules/{rule_index}/host',
+            'value': host,
+        }, {
+            'op': 'remove',
+            'path': f'/spec/rules/{rule_index}',
+        }]
+        headers = {
+            'Content-Type': 'application/json-patch+json',
+        }
+        await self._request(
+            method='PATCH', url=url, headers=headers, json=rule)
 
 
 class KubeOrchestrator(Orchestrator):
