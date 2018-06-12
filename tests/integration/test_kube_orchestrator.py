@@ -232,3 +232,21 @@ class TestKubeOrchestrator:
             assert status == expected_status
         finally:
             await job.delete()
+
+    @pytest.fixture
+    async def ingress(self, kube_client):
+        ingress_name = str(uuid.uuid4())
+        await kube_client.create_ingress(ingress_name)
+        yield ingress_name
+        await kube_client.delete_ingress(ingress_name)
+
+    @pytest.mark.asyncio
+    async def test_ingress(self, kube_client, ingress):
+        payload = await kube_client.get_ingress(ingress)
+        await kube_client.add_ingress_rule(ingress, 'host1')
+        await kube_client.add_ingress_rule(ingress, 'host2')
+        await kube_client.add_ingress_rule(ingress, 'host3')
+        payload = await kube_client.get_ingress(ingress)
+
+        await kube_client.remove_ingress_rule(ingress, 'host2')
+        payload = await kube_client.get_ingress(ingress)
