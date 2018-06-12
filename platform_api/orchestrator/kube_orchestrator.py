@@ -163,9 +163,36 @@ class Resources:
 
 @dataclass(frozen=True)
 class IngressRule:
-    host: str
-    service_name: str
-    service_port: int
+    host: Optional[str] = None
+    service_name: Optional[str] = None
+    service_port: Optional[int] = None
+
+    @classmethod
+    def from_primitive(cls, payload):
+        http_paths = payload.get('http', {}).get('paths', [])
+        http_path = http_paths[0] if http_paths else {}
+        backend = http_path.get('backend', {})
+        service_name = backend.get('serviceName')
+        service_port = backend.get('servicePort')
+        return cls(
+            host=payload.get('host'),
+            service_name=service_name,
+            service_port=service_port,
+        )
+
+    def to_primitive(self):
+        return {
+            'host': self.host,
+            'http': {
+                'paths': [{
+                    'path': '/',
+                    'backend': {
+                        'serviceName': self.service_name,
+                        'servicePort': self.service_port,
+                    },
+                }],
+            }
+        }
 
 
 @dataclass(frozen=True)
