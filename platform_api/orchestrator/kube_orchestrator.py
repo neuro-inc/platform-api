@@ -197,6 +197,7 @@ class IngressRule:
 
 @dataclass(frozen=True)
 class Ingress:
+    name: str
     rules: List[IngressRule]
 
     @classmethod
@@ -204,7 +205,7 @@ class Ingress:
         rules = [
             IngressRule.from_primitive(rule)
             for rule in payload['spec']['rules']]
-        return cls(rules=rules)
+        return cls(name=payload['metadata']['name'], rules=rules)
 
     def find_rule_index_by_host(self, host: str) -> int:
         for idx, rule in enumerate(self.rules):

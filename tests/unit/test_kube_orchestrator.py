@@ -229,20 +229,23 @@ class TestIngressRule:
 class TestIngress:
     def test_from_primitive_no_rules(self):
         ingress = Ingress.from_primitive({
+            'metadata': {'name': 'testingress'},
             'spec': {'rules': []}
         })
-        assert ingress == Ingress(rules=[])
+        assert ingress == Ingress(name='testingress', rules=[])
 
     def test_from_primitive(self):
         ingress = Ingress.from_primitive({
+            'metadata': {'name': 'testingress'},
             'spec': {'rules': [{
                 'host': 'testhost',
             }]}
         })
-        assert ingress == Ingress(rules=[IngressRule(host='testhost')])
+        assert ingress == Ingress(
+            name='testingress', rules=[IngressRule(host='testhost')])
 
     def test_find_rule_index_by_host(self):
-        ingress = Ingress(rules=[
+        ingress = Ingress(name='testingress', rules=[
             IngressRule(host='host1'),
             IngressRule(host='host2'),
             IngressRule(host='host3')])
