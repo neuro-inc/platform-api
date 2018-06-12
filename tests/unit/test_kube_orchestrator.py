@@ -224,3 +224,19 @@ class TestIngressRule:
         })
         assert rule == IngressRule(
             host='testhost', service_name='testname', service_port=1234)
+
+
+class TestIngress:
+    def test_from_primitive_no_rules(self):
+        ingress = Ingress.from_primitive({
+            'spec': {'rules': []}
+        })
+        assert ingress == Ingress(rules=[])
+
+    def test_from_primitive_no_rules(self):
+        ingress = Ingress.from_primitive({
+            'spec': {'rules': [{
+                'host': 'testhost',
+            }]}
+        })
+        assert ingress == Ingress(rules=[IngressRule(host='testhost')])

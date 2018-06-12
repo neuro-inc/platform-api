@@ -196,6 +196,18 @@ class IngressRule:
 
 
 @dataclass(frozen=True)
+class Ingress:
+    rules: List[IngressRule]
+
+    @classmethod
+    def from_primitive(cls, payload):
+        rules = [
+            IngressRule.from_primitive(rule)
+            for rule in payload['spec']['rules']]
+        return cls(rules=rules)
+
+
+@dataclass(frozen=True)
 class PodDescriptor:
     name: str
     image: str
