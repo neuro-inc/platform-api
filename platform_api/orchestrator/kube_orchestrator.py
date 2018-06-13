@@ -170,6 +170,40 @@ class Resources:
 
 
 @dataclass(frozen=True)
+class Service:
+    name: str
+    target_port: int
+    port: int = 80
+
+    def to_primitive(self):
+        return {
+            'metadata': {'name': self.name},
+            'spec': {
+                'ports': [{
+                    'port': self.port,
+                    'targetPort': self.target_port,
+                }],
+                'selector': {
+                    'job': self.name
+                }
+            },
+        }
+
+    @classmethod
+    def create_for_pod(cls, pod: 'PodDescriptor') -> 'Service':
+        return cls(pod.name, target_port=pod.port)  # type: ignore
+
+    @classmethod
+    def from_primitive(cls, payload) -> 'Service':
+        port_payload = payload['spec']['ports'][0]
+        return cls(  # type: ignore
+            name=payload['metadata']['name'],
+            target_port=port_payload['targetPort'],
+            port=port_payload['port'],
+        )
+
+
+@dataclass(frozen=True)
 class IngressRule:
     host: Optional[str] = None
     service_name: Optional[str] = None
@@ -245,6 +279,7 @@ class PodDescriptor:
     volume_mounts: List[Volume] = field(default_factory=list)
     volumes: List[Volume] = field(default_factory=list)
     resources: Optional[Resources] = None
+    port: Optional[int] = None
 
     @classmethod
     def from_job_request(
@@ -283,11 +318,16 @@ class PodDescriptor:
             container_payload['args'] = self.args
         if self.resources:
             container_payload['resources'] = self.resources.to_primitive()
+        # TODO: ports
         return {
             'kind': 'Pod',
             'apiVersion': 'v1',
             'metadata': {
-                'name': f'{self.name}',
+                'name': self.name,
+                'labels': {
+                    # TODO (A Danshyn 06/13/18): revisit the naming etc
+                    'job': self.name
+                },
             },
             'spec': {
                 'containers': [container_payload],
@@ -434,6 +474,13 @@ class KubeClient:
     def _generate_ingress_url(self, ingress_name: str) -> str:
         return f'{self._ingresses_url}/{ingress_name}'
 
+    @property
+    def _services_url(self) -> str:
+        return f'{self._namespace_url}/services'
+
+    def _generate_service_url(self, service_name: str) -> str:
+        return f'{self._services_url}/{service_name}'
+
     async def _request(self, *args, **kwargs):
         async with self._client.request(*args, **kwargs) as response:
             # TODO (A Danshyn 05/21/18): check status code etc
@@ -515,6 +562,17 @@ class KubeClient:
         payload = await self._request(
             method='PATCH', url=url, headers=headers, json=rule)
         return Ingress.from_primitive(payload)
+
+    async def create_service(self, service: Service) -> Service:
+        url = self._services_url
+        payload = await self._request(
+            method='POST', url=url, json=service.to_primitive())
+        return Service.from_primitive(payload)
+
+    async def delete_service(self, service_name) -> None:
+        url = self._generate_service_url(service_name)
+        payload = await self._request(method='DELETE', url=url)
+        self._check_status_payload(payload)
 
 
 class KubeOrchestrator(Orchestrator):
