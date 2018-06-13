@@ -443,22 +443,18 @@ class KubeClient:
         }
         payload = await self._request(
             method='POST', url=self._ingresses_url, json=primitive)
-        return payload
+        # TODO: handle failures (Kind=Status)
+        return Ingress.from_primitive(payload)
 
     async def get_ingress(self, name):
         url = self._generate_ingress_url(name)
         payload = await self._request(method='GET', url=url)
-        return payload
+        # TODO: handle failures (Kind=Status)
+        return Ingress.from_primitive(payload)
 
     async def delete_ingress(self, name):
         url = self._generate_ingress_url(name)
         await self._request(method='DELETE', url=url)
-
-    def _find_rule_index_by_host(self, ingress, host):
-        for idx, rule in enumerate(ingress['spec']['rules']):
-            if rule.get('host') == host:
-                return idx
-        return -1
 
     async def add_ingress_rule(self, name, host):
         # TODO: test if does not exist already
@@ -479,7 +475,7 @@ class KubeClient:
     async def remove_ingress_rule(self, name, host):
         # TODO: this one should have a retry in case of a race condition
         ingress = await self.get_ingress(name)
-        rule_index = self._find_rule_index_by_host(ingress, host)
+        rule_index = ingress.find_rule_index_by_host(host)
         url = self._generate_ingress_url(name)
         rule = [{
             'op': 'test',

@@ -9,6 +9,8 @@ from platform_api.orchestrator.job_request import (
 from platform_api.orchestrator import (
     KubeOrchestrator, JobRequest, JobStatus, JobError, Job
 )
+from platform_api.orchestrator.kube_orchestrator import (
+    Ingress, IngressRule,)
 
 
 @pytest.fixture
@@ -236,17 +238,24 @@ class TestKubeOrchestrator:
     @pytest.fixture
     async def ingress(self, kube_client):
         ingress_name = str(uuid.uuid4())
-        await kube_client.create_ingress(ingress_name)
-        yield ingress_name
-        await kube_client.delete_ingress(ingress_name)
+        ingress = await kube_client.create_ingress(ingress_name)
+        yield ingress
+        await kube_client.delete_ingress(ingress.name)
 
     @pytest.mark.asyncio
     async def test_ingress(self, kube_client, ingress):
-        payload = await kube_client.get_ingress(ingress)
-        await kube_client.add_ingress_rule(ingress, 'host1')
-        await kube_client.add_ingress_rule(ingress, 'host2')
-        await kube_client.add_ingress_rule(ingress, 'host3')
-        payload = await kube_client.get_ingress(ingress)
+        await kube_client.add_ingress_rule(ingress.name, 'host1')
+        await kube_client.add_ingress_rule(ingress.name, 'host2')
+        await kube_client.add_ingress_rule(ingress.name, 'host3')
+        result_ingress = await kube_client.get_ingress(ingress.name)
+        assert result_ingress == Ingress(name=ingress.name, rules=[
+            IngressRule(), IngressRule(host='host1'),
+            IngressRule(host='host2'), IngressRule(host='host3'),
+        ])
 
-        await kube_client.remove_ingress_rule(ingress, 'host2')
-        payload = await kube_client.get_ingress(ingress)
+        await kube_client.remove_ingress_rule(ingress.name, 'host2')
+        result_ingress = await kube_client.get_ingress(ingress.name)
+        assert result_ingress == Ingress(name=ingress.name, rules=[
+            IngressRule(), IngressRule(host='host1'),
+            IngressRule(host='host3'),
+        ])
