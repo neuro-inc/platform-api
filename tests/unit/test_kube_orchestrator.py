@@ -252,3 +252,29 @@ class TestIngress:
         assert ingress.find_rule_index_by_host('host1') == 0
         assert ingress.find_rule_index_by_host('host2') == 1
         assert ingress.find_rule_index_by_host('host4') == -1
+
+    def test_to_primitive_no_rules(self):
+        ingress = Ingress(name='testingress')
+        assert ingress.to_primitive() == {
+            'metadata': {'name': 'testingress'},
+            'spec': {'rules': [None]},
+        }
+
+    def test_to_primitive(self):
+        ingress = Ingress(name='testingress', rules=[
+            IngressRule(
+                host='host1', service_name='testservice', service_port=1234)
+        ])
+        assert ingress.to_primitive() == {
+            'metadata': {'name': 'testingress'},
+            'spec': {'rules': [{
+                'host': 'host1',
+                'http': {'paths': [{
+                    'path': '/',
+                    'backend': {
+                        'serviceName': 'testservice',
+                        'servicePort': 1234
+                    }
+                }]},
+            }]}
+        }

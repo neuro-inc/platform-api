@@ -198,7 +198,14 @@ class IngressRule:
 @dataclass(frozen=True)
 class Ingress:
     name: str
-    rules: List[IngressRule]
+    rules: List[IngressRule] = field(default_factory=list)
+
+    def to_primitive(self):
+        rules = [rule.to_primitive() for rule in self.rules] or [None]
+        return {
+            'metadata': {'name': self.name},
+            'spec': {'rules': rules}
+        }
 
     @classmethod
     def from_primitive(cls, payload):
@@ -437,12 +444,10 @@ class KubeClient:
         return PodStatus.from_primitive(payload)
 
     async def create_ingress(self, name):
-        primitive = {
-            'metadata': {'name': name},
-            'spec': {'rules': [None]}
-        }
+        ingress = Ingress(name=name)
         payload = await self._request(
-            method='POST', url=self._ingresses_url, json=primitive)
+            method='POST', url=self._ingresses_url,
+            json=ingress.to_primitive())
         # TODO: handle failures (Kind=Status)
         return Ingress.from_primitive(payload)
 
