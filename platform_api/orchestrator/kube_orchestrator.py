@@ -20,6 +20,14 @@ from .job_request import (
 logger = logging.getLogger(__name__)
 
 
+class KubeClientException(Exception):
+    pass
+
+
+class StatusException(KubeClientException):
+    pass
+
+
 def _raise_status_job_exception(pod: dict, job_id: str):
     if pod['code'] == 409:
         raise JobError(f"job with {job_id} already exist")
@@ -28,7 +36,7 @@ def _raise_status_job_exception(pod: dict, job_id: str):
     elif pod['code'] == 422:
         raise JobError(f"cant create job with id {job_id}")
     else:
-        raise Exception()
+        raise JobError('unexpected')
 
 
 def _status_for_pending_pod(pod_status: dict) -> JobStatus:
@@ -209,10 +217,17 @@ class Ingress:
 
     @classmethod
     def from_primitive(cls, payload):
-        rules = [
-            IngressRule.from_primitive(rule)
-            for rule in payload['spec']['rules']]
-        return cls(name=payload['metadata']['name'], rules=rules)
+        # TODO (A Danshyn 06/13/18): should be refactored along with PodStatus
+        kind = payload['kind']
+        if kind == 'Ingress':
+            rules = [
+                IngressRule.from_primitive(rule)
+                for rule in payload['spec']['rules']]
+            return cls(name=payload['metadata']['name'], rules=rules)
+        elif kind == 'Status':
+            _raise_status_job_exception(payload, job_id=None)
+        else:
+            raise ValueError(f'unknown kind: {kind}')
 
     def find_rule_index_by_host(self, host: str) -> int:
         for idx, rule in enumerate(self.rules):
@@ -443,26 +458,30 @@ class KubeClient:
         payload = await self._request(method='DELETE', url=url)
         return PodStatus.from_primitive(payload)
 
-    async def create_ingress(self, name):
-        ingress = Ingress(name=name)
+    async def create_ingress(self, name) -> Ingress:
+        ingress = Ingress(name=name)  # type: ignore
         payload = await self._request(
             method='POST', url=self._ingresses_url,
             json=ingress.to_primitive())
-        # TODO: handle failures (Kind=Status)
         return Ingress.from_primitive(payload)
 
-    async def get_ingress(self, name):
+    async def get_ingress(self, name) -> Ingress:
         url = self._generate_ingress_url(name)
         payload = await self._request(method='GET', url=url)
-        # TODO: handle failures (Kind=Status)
         return Ingress.from_primitive(payload)
 
-    async def delete_ingress(self, name):
+    async def delete_ingress(self, name) -> None:
         url = self._generate_ingress_url(name)
-        await self._request(method='DELETE', url=url)
+        payload = await self._request(method='DELETE', url=url)
+        self._check_status_payload(payload)
 
-    async def add_ingress_rule(self, name, host):
-        # TODO: test if does not exist already
+    def _check_status_payload(self, payload):
+        assert payload['kind'] == 'Status'
+        if payload['status'] == 'Failure':
+            raise StatusException('Failure')
+
+    async def add_ingress_rule(self, name, host) -> Ingress:
+        # TODO (A Danshyn 06/13/18): test if does not exist already
         url = self._generate_ingress_url(name)
         headers = {
             'Content-Type': 'application/json-patch+json',
@@ -474,11 +493,13 @@ class KubeClient:
                 'host': host,
             },
         }]
-        await self._request(
+        payload = await self._request(
             method='PATCH', url=url, headers=headers, json=rule)
+        return Ingress.from_primitive(payload)
 
-    async def remove_ingress_rule(self, name, host):
-        # TODO: this one should have a retry in case of a race condition
+    async def remove_ingress_rule(self, name, host) -> Ingress:
+        # TODO (A Danshyn 06/13/18): this one should have a retry in case of
+        # a race condition
         ingress = await self.get_ingress(name)
         rule_index = ingress.find_rule_index_by_host(host)
         url = self._generate_ingress_url(name)
@@ -493,8 +514,9 @@ class KubeClient:
         headers = {
             'Content-Type': 'application/json-patch+json',
         }
-        await self._request(
+        payload = await self._request(
             method='PATCH', url=url, headers=headers, json=rule)
+        return Ingress.from_primitive(payload)
 
 
 class KubeOrchestrator(Orchestrator):

@@ -229,6 +229,7 @@ class TestIngressRule:
 class TestIngress:
     def test_from_primitive_no_rules(self):
         ingress = Ingress.from_primitive({
+            'kind': 'Ingress',
             'metadata': {'name': 'testingress'},
             'spec': {'rules': []}
         })
@@ -236,6 +237,7 @@ class TestIngress:
 
     def test_from_primitive(self):
         ingress = Ingress.from_primitive({
+            'kind': 'Ingress',
             'metadata': {'name': 'testingress'},
             'spec': {'rules': [{
                 'host': 'testhost',

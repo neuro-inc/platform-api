@@ -10,6 +10,7 @@ from platform_api.orchestrator import (
     KubeOrchestrator, JobRequest, JobStatus, JobError, Job
 )
 from platform_api.orchestrator.kube_orchestrator import (
+    StatusException,
     Ingress, IngressRule,)
 
 
@@ -259,3 +260,8 @@ class TestKubeOrchestrator:
             IngressRule(), IngressRule(host='host1'),
             IngressRule(host='host3'),
         ])
+
+    @pytest.mark.asyncio
+    async def test_delete_ingress_failure(self, kube_client):
+        with pytest.raises(StatusException, match='Failure'):
+            await kube_client.delete_ingress('unknown')
