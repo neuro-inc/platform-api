@@ -332,8 +332,6 @@ class KubeClientAuthType(str, enum.Enum):
 class KubeConfig:
     storage_mount_path: PurePath
 
-    jobs_ingress_domain_name: str
-
     endpoint_url: str
     cert_authority_path: Optional[str] = None
 
