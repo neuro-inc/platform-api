@@ -9,6 +9,7 @@ from platform_api.orchestrator.job_request import (
 from platform_api.orchestrator.kube_orchestrator import (
     HostVolume, NfsVolume, VolumeMount,
     PodDescriptor, PodStatus, Resources,
+    Ingress, IngressRule,
 )
 
 
@@ -179,3 +180,103 @@ class TestResources:
             cpu=1, memory_mb=128, gpu=1)
         resources = Resources.from_container_resources(container_resources)
         assert resources == Resources(cpu=1, memory=128, gpu=1)
+
+
+class TestIngressRule:
+    def test_from_primitive_empty(self):
+        rule = IngressRule.from_primitive({})
+        assert rule == IngressRule()
+
+    def test_from_primitive_host(self):
+        rule = IngressRule.from_primitive({
+            'host': 'testhost',
+        })
+        assert rule == IngressRule(host='testhost')
+
+    def test_from_primitive_no_paths(self):
+        rule = IngressRule.from_primitive({
+            'host': 'testhost',
+            'http': {'paths': []},
+        })
+        assert rule == IngressRule(host='testhost')
+
+    def test_from_primitive_no_backend(self):
+        rule = IngressRule.from_primitive({
+            'host': 'testhost',
+            'http': {'paths': [{}]},
+        })
+        assert rule == IngressRule(host='testhost')
+
+    def test_from_primitive_no_service(self):
+        rule = IngressRule.from_primitive({
+            'host': 'testhost',
+            'http': {'paths': [{'backend': {}}]},
+        })
+        assert rule == IngressRule(host='testhost')
+
+    def test_from_primitive(self):
+        rule = IngressRule.from_primitive({
+            'host': 'testhost',
+            'http': {'paths': [{'backend': {
+                'serviceName': 'testname',
+                'servicePort': 1234,
+            }}]},
+        })
+        assert rule == IngressRule(
+            host='testhost', service_name='testname', service_port=1234)
+
+
+class TestIngress:
+    def test_from_primitive_no_rules(self):
+        ingress = Ingress.from_primitive({
+            'kind': 'Ingress',
+            'metadata': {'name': 'testingress'},
+            'spec': {'rules': []}
+        })
+        assert ingress == Ingress(name='testingress', rules=[])
+
+    def test_from_primitive(self):
+        ingress = Ingress.from_primitive({
+            'kind': 'Ingress',
+            'metadata': {'name': 'testingress'},
+            'spec': {'rules': [{
+                'host': 'testhost',
+            }]}
+        })
+        assert ingress == Ingress(
+            name='testingress', rules=[IngressRule(host='testhost')])
+
+    def test_find_rule_index_by_host(self):
+        ingress = Ingress(name='testingress', rules=[
+            IngressRule(host='host1'),
+            IngressRule(host='host2'),
+            IngressRule(host='host3')])
+        assert ingress.find_rule_index_by_host('host1') == 0
+        assert ingress.find_rule_index_by_host('host2') == 1
+        assert ingress.find_rule_index_by_host('host4') == -1
+
+    def test_to_primitive_no_rules(self):
+        ingress = Ingress(name='testingress')
+        assert ingress.to_primitive() == {
+            'metadata': {'name': 'testingress'},
+            'spec': {'rules': [None]},
+        }
+
+    def test_to_primitive(self):
+        ingress = Ingress(name='testingress', rules=[
+            IngressRule(
+                host='host1', service_name='testservice', service_port=1234)
+        ])
+        assert ingress.to_primitive() == {
+            'metadata': {'name': 'testingress'},
+            'spec': {'rules': [{
+                'host': 'host1',
+                'http': {'paths': [{
+                    'path': '/',
+                    'backend': {
+                        'serviceName': 'testservice',
+                        'servicePort': 1234
+                    }
+                }]},
+            }]}
+        }

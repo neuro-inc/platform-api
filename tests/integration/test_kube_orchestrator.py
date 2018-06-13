@@ -9,6 +9,9 @@ from platform_api.orchestrator.job_request import (
 from platform_api.orchestrator import (
     KubeOrchestrator, JobRequest, JobStatus, JobError, Job
 )
+from platform_api.orchestrator.kube_orchestrator import (
+    StatusException,
+    Ingress, IngressRule,)
 
 
 @pytest.fixture
@@ -232,3 +235,33 @@ class TestKubeOrchestrator:
             assert status == expected_status
         finally:
             await job.delete()
+
+    @pytest.fixture
+    async def ingress(self, kube_client):
+        ingress_name = str(uuid.uuid4())
+        ingress = await kube_client.create_ingress(ingress_name)
+        yield ingress
+        await kube_client.delete_ingress(ingress.name)
+
+    @pytest.mark.asyncio
+    async def test_ingress(self, kube_client, ingress):
+        await kube_client.add_ingress_rule(ingress.name, 'host1')
+        await kube_client.add_ingress_rule(ingress.name, 'host2')
+        await kube_client.add_ingress_rule(ingress.name, 'host3')
+        result_ingress = await kube_client.get_ingress(ingress.name)
+        assert result_ingress == Ingress(name=ingress.name, rules=[
+            IngressRule(), IngressRule(host='host1'),
+            IngressRule(host='host2'), IngressRule(host='host3'),
+        ])
+
+        await kube_client.remove_ingress_rule(ingress.name, 'host2')
+        result_ingress = await kube_client.get_ingress(ingress.name)
+        assert result_ingress == Ingress(name=ingress.name, rules=[
+            IngressRule(), IngressRule(host='host1'),
+            IngressRule(host='host3'),
+        ])
+
+    @pytest.mark.asyncio
+    async def test_delete_ingress_failure(self, kube_client):
+        with pytest.raises(StatusException, match='Failure'):
+            await kube_client.delete_ingress('unknown')
