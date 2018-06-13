@@ -10,8 +10,7 @@ from platform_api.orchestrator import (
     KubeOrchestrator, JobRequest, JobStatus, JobError, Job
 )
 from platform_api.orchestrator.kube_orchestrator import (
-    StatusException,
-    Ingress, IngressRule,)
+    StatusException, Service, Ingress, IngressRule,)
 
 
 @pytest.fixture
@@ -265,3 +264,15 @@ class TestKubeOrchestrator:
     async def test_delete_ingress_failure(self, kube_client):
         with pytest.raises(StatusException, match='Failure'):
             await kube_client.delete_ingress('unknown')
+
+    @pytest.mark.asyncio
+    async def test_service(self, kube_client):
+        service_name = f'job-{uuid.uuid4()}'
+        service = Service(name=service_name, target_port=8080)
+        try:
+            result_service = await kube_client.create_service(service)
+            assert result_service.name == service_name
+            assert result_service.target_port == 8080
+            assert result_service.port == 80
+        finally:
+            await kube_client.delete_service(service_name)
