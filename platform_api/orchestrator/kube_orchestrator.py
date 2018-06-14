@@ -533,21 +533,19 @@ class KubeClient:
         if payload['status'] == 'Failure':
             raise StatusException('Failure')
 
-    async def add_ingress_rule(self, name, host) -> Ingress:
+    async def add_ingress_rule(self, name: str, rule: IngressRule) -> Ingress:
         # TODO (A Danshyn 06/13/18): test if does not exist already
         url = self._generate_ingress_url(name)
         headers = {
             'Content-Type': 'application/json-patch+json',
         }
-        rule = [{
+        patches = [{
             'op': 'add',
             'path': '/spec/rules/-',
-            'value': {
-                'host': host,
-            },
+            'value': rule.to_primitive(),
         }]
         payload = await self._request(
-            method='PATCH', url=url, headers=headers, json=rule)
+            method='PATCH', url=url, headers=headers, json=patches)
         return Ingress.from_primitive(payload)
 
     async def remove_ingress_rule(self, name, host) -> Ingress:
@@ -555,6 +553,8 @@ class KubeClient:
         # a race condition
         ingress = await self.get_ingress(name)
         rule_index = ingress.find_rule_index_by_host(host)
+        if rule_index < 0:
+            raise StatusException('Not found')
         url = self._generate_ingress_url(name)
         rule = [{
             'op': 'test',
