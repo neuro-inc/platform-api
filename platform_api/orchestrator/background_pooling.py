@@ -55,10 +55,8 @@ class JobsStatusPooling:
     async def _run_once(self):
         try:
             await self._jobs_service.update_jobs_status()
-        except JobError as ex:
-            print(ex)
         except Exception as ex:
-            print(ex)
+            logger.exception(ex)
 
     async def _wait(self):
         await asyncio.wait((self._is_active,), loop=self._loop, timeout=self._interval_s)
