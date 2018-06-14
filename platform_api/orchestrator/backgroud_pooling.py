@@ -3,7 +3,7 @@ import logging
 from typing import Optional
 
 
-from .jobs_service import JobsService
+from .jobs_service import JobsService, JobError
 
 logger = logging.getLogger(__name__)
 
@@ -55,6 +55,8 @@ class JobsStatusPooling:
     async def _run_once(self):
         try:
             await self._jobs_service.update_jobs_status()
+        except JobError as ex:
+            print(ex)
         except Exception as ex:
             print(ex)
 
