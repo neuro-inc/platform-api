@@ -306,6 +306,7 @@ class PodDescriptor:
             volume_mounts=volume_mounts,
             volumes=volumes,
             resources=resources,
+            port=container.port,
         )
 
     @property

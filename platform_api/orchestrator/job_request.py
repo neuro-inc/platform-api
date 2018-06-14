@@ -36,6 +36,7 @@ class Container:
     command: Optional[str] = None
     env: Dict[str, str] = field(default_factory=dict)
     volumes: List[ContainerVolume] = field(default_factory=list)
+    port: Optional[int] = None
 
     @property
     def command_list(self) -> List[str]:
@@ -51,7 +52,7 @@ class JobRequest:
 
     @classmethod
     def create(cls, container) -> 'JobRequest':
-        job_id = str(uuid.uuid4())
+        job_id = f'job-{uuid.uuid4()}'
         return cls(job_id, container)  # type: ignore
 
 
