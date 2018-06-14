@@ -42,7 +42,6 @@ class JobsStatusPooling:
 
         assert self._task
         await self._task
-        await self._run_once()
 
         self._task = None
         self._is_active = None
@@ -55,8 +54,8 @@ class JobsStatusPooling:
     async def _run_once(self):
         try:
             await self._jobs_service.update_jobs_status()
-        except Exception as ex:
-            logger.exception(ex)
+        except Exception:
+            logger.exception("exception when trying update jobs status")
 
     async def _wait(self):
         await asyncio.wait((self._is_active,), loop=self._loop, timeout=self._interval_s)
