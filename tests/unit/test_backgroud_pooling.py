@@ -19,6 +19,7 @@ async def test_pooling(mock_orchestrator, event_loop):
 
     mock_orchestrator.update_status_to_return(JobStatus.SUCCEEDED)
     for _ in range(10):
+        all_jobs = await jobs_service.get_all_jobs()
         if not all(x['status'].value == JobStatus.SUCCEEDED for x in all_jobs):
             await asyncio.sleep(1)
 

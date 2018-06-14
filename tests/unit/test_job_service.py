@@ -1,5 +1,6 @@
+import asyncio
 import pytest
-from platform_api.orchestrator import JobStatus, JobRequest
+from platform_api.orchestrator import JobStatus, JobRequest, InMemoryJobsService, JobsStatusPooling
 
 
 class TestInMemoryJobsService:
@@ -32,7 +33,12 @@ class TestInMemoryJobsService:
         assert job_ids == [x['job_id'] for x in jobs]
 
     @pytest.mark.asyncio
-    async def test_delete(self, jobs_service):
+    async def test_delete(self, mock_orchestrator, event_loop):
+        mock_orchestrator.update_status_to_return(JobStatus.SUCCEEDED)
+        jobs_service = InMemoryJobsService(orchestrator=mock_orchestrator)
+        jobs_status_pooling = JobsStatusPooling(jobs_service=jobs_service, loop=event_loop, interval_s=1)
+        await jobs_status_pooling.start()
+
         num_jobs = 10
         for _ in range(num_jobs):
             job_request = JobRequest.create(container=None)
@@ -42,7 +48,9 @@ class TestInMemoryJobsService:
         for job in jobs:
             await jobs_service.delete_job(job_id=job['job_id'])
 
-        jobs = await jobs_service.get_all_jobs()
-        assert len(jobs) == 10
-        for job in jobs:
-            assert job['status'] == JobStatus.SUCCEEDED
+        mock_orchestrator.update_status_to_return(JobStatus.SUCCEEDED)
+        for _ in range(10):
+            jobs = await jobs_service.get_all_jobs()
+            if not all(x['status'].value == JobStatus.SUCCEEDED for x in jobs):
+                await asyncio.sleep(1)
+        await jobs_status_pooling.stop()
