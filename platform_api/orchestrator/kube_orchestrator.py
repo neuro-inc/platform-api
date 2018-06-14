@@ -641,19 +641,22 @@ class KubeOrchestrator(Orchestrator):
         status = await self._client.create_pod(descriptor)
         # TODO: have a properly named property
         if descriptor.port:
-            service = await self._client.create_service(
-                Service.create_for_pod(descriptor))
-            await self._client.add_ingress_rule(
-                name=self._config.jobs_ingress_name,
-                rule=IngressRule.from_service(
-                    domain_name=self._config.jobs_ingress_domain_name,
-                    service=service))
+            await self._create_service(descriptor)
         return status.status
 
     async def status_job(self, job_id: str) -> JobStatus:
         pod_id = job_id
         status = await self._client.get_pod_status(pod_id)
         return status.status
+
+    async def _create_service(self, pod: PodDescriptor) -> None:
+        service = await self._client.create_service(
+            Service.create_for_pod(pod))
+        await self._client.add_ingress_rule(
+            name=self._config.jobs_ingress_name,
+            rule=IngressRule.from_service(
+                domain_name=self._config.jobs_ingress_domain_name,
+                service=service))
 
     def _get_ingress_rule_host_for_pod(self, pod_id) -> str:
         ingress_rule = IngressRule.from_service(
@@ -676,6 +679,7 @@ class KubeOrchestrator(Orchestrator):
 
     async def delete_job(self, job_id: str) -> JobStatus:
         pod_id = job_id
+        # TODO: make this call conditional
         await self._delete_service(pod_id)
         status = await self._client.delete_pod(pod_id)
         return status.status
