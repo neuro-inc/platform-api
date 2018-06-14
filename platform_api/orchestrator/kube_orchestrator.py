@@ -397,6 +397,10 @@ class KubeConfig:
     nfs_volume_server: Optional[str] = None
     nfs_volume_export_path: Optional[PurePath] = None
 
+    # TODO: these two should not have default values assigned
+    jobs_ingress_name: str = 'platformjobsingress'
+    jobs_ingress_domain_name: str = 'jobs.platform.neuromation.io'
+
 
 class KubeClient:
     def __init__(
@@ -548,7 +552,7 @@ class KubeClient:
             method='PATCH', url=url, headers=headers, json=patches)
         return Ingress.from_primitive(payload)
 
-    async def remove_ingress_rule(self, name, host) -> Ingress:
+    async def remove_ingress_rule(self, name: str, host: str) -> Ingress:
         # TODO (A Danshyn 06/13/18): this one should have a retry in case of
         # a race condition
         ingress = await self.get_ingress(name)
@@ -577,8 +581,8 @@ class KubeClient:
             method='POST', url=url, json=service.to_primitive())
         return Service.from_primitive(payload)
 
-    async def delete_service(self, service_name) -> None:
-        url = self._generate_service_url(service_name)
+    async def delete_service(self, name: str) -> None:
+        url = self._generate_service_url(name)
         payload = await self._request(method='DELETE', url=url)
         self._check_status_payload(payload)
 
@@ -634,6 +638,15 @@ class KubeOrchestrator(Orchestrator):
         descriptor = PodDescriptor.from_job_request(
             self._storage_volume, job_request)
         status = await self._client.create_pod(descriptor)
+        # TODO: have a properly named property
+        if descriptor.port:
+            service = await self._client.create_service(
+                Service.create_for_pod(descriptor))
+            await self._client.add_ingress_rule(
+                name=self._config.jobs_ingress_name,
+                rule=IngressRule.from_service(
+                    domain_name=self._config.jobs_ingress_domain_name,
+                    service=service))
         return status.status
 
     async def status_job(self, job_id: str) -> JobStatus:
@@ -641,7 +654,27 @@ class KubeOrchestrator(Orchestrator):
         status = await self._client.get_pod_status(pod_id)
         return status.status
 
+    def _get_ingress_rule_host_for_pod(self, pod_id) -> str:
+        ingress_rule = IngressRule.from_service(
+            domain_name=self._config.jobs_ingress_domain_name,
+            service=Service(name=pod_id, target_port=0)  # type: ignore
+        )
+        return ingress_rule.host
+
+    async def _delete_service(self, pod_id: str) -> None:
+        host = self._get_ingress_rule_host_for_pod(pod_id)
+        try:
+            await self._client.remove_ingress_rule(
+                name=self._config.jobs_ingress_name, host=host)
+        except Exception:
+            logger.exception(f'Failed to remove ingress rule {host}')
+        try:
+            await self._client.delete_service(name=pod_id)
+        except Exception:
+            logger.exception(f'Failed to remove service {pod_id}')
+
     async def delete_job(self, job_id: str) -> JobStatus:
         pod_id = job_id
+        await self._delete_service(pod_id)
         status = await self._client.delete_pod(pod_id)
         return status.status
