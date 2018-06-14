@@ -228,6 +228,34 @@ class TestIngressRule:
         assert rule == IngressRule(
             host='testhost', service_name='testname', service_port=1234)
 
+    def test_to_primitive_no_service(self):
+        rule = IngressRule(host='testhost')
+        assert rule.to_primitive() == {
+            'host': 'testhost',
+        }
+
+    def test_to_primitive(self):
+        rule = IngressRule(
+            host='testhost', service_name='testname', service_port=1234)
+        assert rule.to_primitive() == {
+            'host': 'testhost',
+            'http': {'paths': [{
+                'path': '/',
+                'backend': {
+                    'serviceName': 'testname',
+                    'servicePort': 1234,
+                }
+            }]},
+        }
+
+    def test_from_service(self):
+        service = Service(name='testname', target_port=1234)
+        rule = IngressRule.from_service(
+            domain_name='testdomain', service=service)
+        assert rule == IngressRule(
+            host='testname.testdomain', service_name='testname',
+            service_port=80)
+
 
 class TestIngress:
     def test_from_primitive_no_rules(self):
