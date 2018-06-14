@@ -132,6 +132,9 @@ async def kube_config_nfs(
         auth_cert_path=user['client-certificate'],
         auth_cert_key_path=user['client-key'],
 
+        jobs_ingress_name='platformjobsingress',
+        jobs_ingress_domain_name='jobs.platform.neuromation.io',
+
         storage_type=VolumeType.NFS,
         nfs_volume_server=nfs_volume_server,
         nfs_volume_export_path=PurePath('/var/storage'),
