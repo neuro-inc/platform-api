@@ -381,6 +381,9 @@ class KubeClientAuthType(str, enum.Enum):
 class KubeConfig:
     storage_mount_path: PurePath
 
+    jobs_ingress_name: str
+    jobs_ingress_domain_name: str
+
     endpoint_url: str
     cert_authority_path: Optional[str] = None
 
@@ -397,10 +400,6 @@ class KubeConfig:
     storage_type: VolumeType = VolumeType.HOST
     nfs_volume_server: Optional[str] = None
     nfs_volume_export_path: Optional[PurePath] = None
-
-    # TODO: these two should not have default values assigned
-    jobs_ingress_name: str = 'platformjobsingress'
-    jobs_ingress_domain_name: str = 'jobs.platform.neuromation.io'
 
 
 class KubeClient:

@@ -15,6 +15,8 @@ class TestEnvironConfigFactory:
         environ = {
             'NP_STORAGE_HOST_MOUNT_PATH': '/tmp',
             'NP_K8S_API_URL': 'https://localhost:8443',
+            'NP_K8S_JOBS_INGRESS_NAME': 'testingress',
+            'NP_K8S_JOBS_INGRESS_DOMAIN_NAME': 'jobs.domain',
         }
         config = EnvironConfigFactory(environ=environ).create()
 
@@ -34,6 +36,8 @@ class TestEnvironConfigFactory:
         assert config.orchestrator.client_conn_timeout_s == 300
         assert config.orchestrator.client_read_timeout_s == 300
         assert config.orchestrator.client_conn_pool_size == 100
+        assert config.orchestrator.jobs_ingress_name == 'testingress'
+        assert config.orchestrator.jobs_ingress_domain_name == 'jobs.domain'
 
         assert config.env_prefix == 'NP'
 
@@ -63,6 +67,9 @@ class TestEnvironConfigFactory:
             'NP_K8S_CLIENT_CONN_TIMEOUT': 111,
             'NP_K8S_CLIENT_READ_TIMEOUT': 222,
             'NP_K8S_CLIENT_CONN_POOL_SIZE': 333,
+
+            'NP_K8S_JOBS_INGRESS_NAME': 'testingress',
+            'NP_K8S_JOBS_INGRESS_DOMAIN_NAME': 'jobs.domain',
         }
         config = EnvironConfigFactory(environ=environ).create()
 
@@ -82,6 +89,8 @@ class TestEnvironConfigFactory:
         assert config.orchestrator.client_conn_timeout_s == 111
         assert config.orchestrator.client_read_timeout_s == 222
         assert config.orchestrator.client_conn_pool_size == 333
+        assert config.orchestrator.jobs_ingress_name == 'testingress'
+        assert config.orchestrator.jobs_ingress_domain_name == 'jobs.domain'
 
         assert config.env_prefix == 'TEST'
 
@@ -92,6 +101,8 @@ class TestEnvironConfigFactory:
             'NP_STORAGE_NFS_PATH': '/tmp',
             'NP_STORAGE_HOST_MOUNT_PATH': '/tmp',
             'NP_K8S_API_URL': 'https://localhost:8443',
+            'NP_K8S_JOBS_INGRESS_NAME': 'testingress',
+            'NP_K8S_JOBS_INGRESS_DOMAIN_NAME': 'jobs.domain',
         }
         config = EnvironConfigFactory(environ=environ).create()
         assert config.orchestrator.nfs_volume_server == '1.2.3.4'
