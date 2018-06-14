@@ -283,3 +283,15 @@ class TestIngress:
                 }]},
             }]}
         }
+
+
+class TestService:
+    def test_to_primitive(self):
+        service = Service(name='testservice', target_port=8080)
+        assert service.to_primitive() == {
+            'metadata': {'name': 'testservice'},
+            'spec': {
+                'ports': [{'port': 80, 'targetPort': 8080}],
+                'selector': {'job': 'testservice'},
+            },
+        }
