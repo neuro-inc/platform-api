@@ -9,7 +9,7 @@ from platform_api.orchestrator.job_request import (
 from platform_api.orchestrator.kube_orchestrator import (
     HostVolume, NfsVolume, VolumeMount,
     PodDescriptor, PodStatus, Resources,
-    Ingress, IngressRule,
+    Ingress, IngressRule, Service,
 )
 
 
@@ -286,12 +286,25 @@ class TestIngress:
 
 
 class TestService:
-    def test_to_primitive(self):
-        service = Service(name='testservice', target_port=8080)
-        assert service.to_primitive() == {
+    @pytest.fixture
+    def service_payload(self):
+        return {
             'metadata': {'name': 'testservice'},
             'spec': {
                 'ports': [{'port': 80, 'targetPort': 8080}],
                 'selector': {'job': 'testservice'},
             },
         }
+
+    def test_to_primitive(self, service_payload):
+        service = Service(name='testservice', target_port=8080)
+        assert service.to_primitive() == service_payload
+
+    def test_from_primitive(self, service_payload):
+        service = Service.from_primitive(service_payload)
+        assert service == Service(name='testservice', target_port=8080)
+
+    def test_create_for_pod(self):
+        pod = PodDescriptor(name='testpod', image='testimage', port=1234)
+        service = Service.create_for_pod(pod)
+        assert service == Service(name='testpod', target_port=1234)
