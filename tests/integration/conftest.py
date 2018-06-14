@@ -64,6 +64,13 @@ async def kube_config(kube_config_cluster_payload, kube_config_user_payload):
     )
 
 
+@pytest.fixture(scope='session')
+async def kube_ingress_ip(kube_config_cluster_payload):
+    cluster = kube_config_cluster_payload
+    from urllib.parse import urlsplit
+    return urlsplit(cluster['server']).hostname
+
+
 class TestKubeClient(KubeClient):
     @property
     def _endpoints_url(self):
