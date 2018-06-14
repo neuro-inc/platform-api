@@ -81,6 +81,9 @@ class TestPodDescriptor:
             'apiVersion': 'v1',
             'metadata': {
                 'name': 'testname',
+                'labels': {
+                    'job': 'testname',
+                },
             },
             'spec': {
                 'containers': [{
