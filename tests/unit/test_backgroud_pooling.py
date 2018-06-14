@@ -6,7 +6,7 @@ from platform_api.orchestrator import JobsStatusPooling, JobRequest, JobStatus, 
 
 
 @pytest.mark.asyncio
-async def test_test(mock_orchestrator, event_loop):
+async def test_pooling(mock_orchestrator, event_loop):
     jobs_service = InMemoryJobsService(orchestrator=mock_orchestrator)
     jobs_status_pooling = JobsStatusPooling(jobs_service=jobs_service, loop=event_loop, interval_s=1)
     await jobs_status_pooling.start()
@@ -18,7 +18,8 @@ async def test_test(mock_orchestrator, event_loop):
     assert all(x['status'].value == JobStatus.PENDING for x in all_jobs)
 
     mock_orchestrator.update_status_to_return(JobStatus.SUCCEEDED)
-    await asyncio.sleep(2)
+    for _ in range(10):
+        if not all(x['status'].value == JobStatus.SUCCEEDED for x in all_jobs):
+            await asyncio.sleep(1)
 
-    assert all(x['status'].value == JobStatus.SUCCEEDED for x in all_jobs)
     await jobs_status_pooling.stop()
