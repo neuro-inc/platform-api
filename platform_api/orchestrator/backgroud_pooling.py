@@ -22,6 +22,13 @@ class JobsStatusPooling:
         logger.info('Start jobs status pooling')
         await self._init_task()
 
+    async def __aenter__(self) -> 'JobsStatusPooling':
+        await self.start()
+        return self
+
+    async def __aexit__(self, *args) -> None:
+        await self.stop()
+
     async def _init_task(self):
         assert not self._is_active
         assert not self._task
@@ -47,9 +54,9 @@ class JobsStatusPooling:
 
     async def _run_once(self):
         try:
-            print("run")
-        except Exception:
-            pass
+            await self._jobs_service.update_jobs_status()
+        except Exception as ex:
+            print(ex)
 
     async def _wait(self):
         await asyncio.wait((self._is_active,), loop=self._loop, timeout=self._interval_s)

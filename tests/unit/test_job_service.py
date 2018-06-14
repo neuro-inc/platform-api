@@ -1,31 +1,5 @@
 import pytest
-from platform_api.orchestrator import JobStatus, InMemoryJobsService, JobRequest, Orchestrator
-
-
-class MockOrchestrator(Orchestrator):
-    async def start_job(self, *args, **kwargs):
-        return JobStatus.SUCCEEDED
-
-    async def status_job(self, *args, **kwargs):
-        return JobStatus.SUCCEEDED
-
-    async def delete_job(self, *args, **kwargs):
-        return JobStatus.SUCCEEDED
-
-
-@pytest.fixture(scope="function")
-def mock_job_request():
-    return JobRequest.create(container=None)
-
-
-@pytest.fixture(scope="function")
-def mock_orchestrator():
-    return MockOrchestrator()
-
-
-@pytest.fixture(scope="function")
-def jobs_service(mock_orchestrator):
-    return InMemoryJobsService(orchestrator=mock_orchestrator)
+from platform_api.orchestrator import JobStatus, JobRequest
 
 
 class TestInMemoryJobsService:

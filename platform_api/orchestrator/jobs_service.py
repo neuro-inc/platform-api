@@ -36,6 +36,10 @@ class JobsService(ABC):
     async def get_all_jobs(self):
         pass
 
+    @abstractmethod
+    async def update_jobs_status(self):
+        pass
+
 
 @dataclass
 class JobRecord:
@@ -46,14 +50,9 @@ class JobRecord:
     def id(self):
         return self.job.id
 
-    async def job_status(self):
-        # TODO this one is need with background
-        if self.status.value.is_finished:
-            return self.status.value
-        else:
-            status = await self.job.status()
-            self.status.set(status)
-            return self.status.value
+    @property
+    def job_status(self):
+        return self.status.value
 
 
 class InMemoryJobsService(JobsService):
@@ -63,6 +62,12 @@ class InMemoryJobsService(JobsService):
         self._job_records = {}
         self._status_id_to_jobs = {}
         self._orchestrator = orchestrator
+
+    async def update_jobs_status(self):
+        for job_record in self._job_records.values():
+            if not job_record.status.value.is_finished:
+                job_status = await job_record.job.status()
+                job_record.status.set(job_status)
 
     async def create_job(self, job_request: JobRequest) -> Tuple[Job, Status]:
         job = Job(orchestrator=self._orchestrator, job_request=job_request)
@@ -74,7 +79,7 @@ class InMemoryJobsService(JobsService):
 
     async def get_job_status(self, job_id: str) -> JobStatus:
         job_record = await self.get_job(job_id)
-        return await job_record.job_status()
+        return job_record.job_status
 
     async def set_job(self, job_record: JobRecord):
         self._job_records[job_record.id] = job_record
@@ -95,6 +100,5 @@ class InMemoryJobsService(JobsService):
     async def get_all_jobs(self) -> List[dict]:
         jobs_result = []
         for job_record in self._job_records.values():
-            status = await job_record.job_status()
-            jobs_result.append(({'job_id': job_record.job.id, 'status': status}))
+            jobs_result.append(({'job_id': job_record.id, 'status': job_record.status}))
         return jobs_result
