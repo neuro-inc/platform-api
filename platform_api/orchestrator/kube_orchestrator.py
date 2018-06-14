@@ -223,9 +223,11 @@ class IngressRule:
         )
 
     def to_primitive(self):
-        return {
+        payload = {
             'host': self.host,
-            'http': {
+        }
+        if self.service_name:
+            payload['http'] = {
                 'paths': [{
                     'path': '/',
                     'backend': {
@@ -234,7 +236,13 @@ class IngressRule:
                     },
                 }],
             }
-        }
+        return payload
+
+    @classmethod
+    def from_service(cls, domain_name: str, service: Service) -> 'IngressRule':
+        host = f'{service.name}.{domain_name}'
+        return cls(  # type: ignore
+            host=host, service_name=service.name, service_port=service.port)
 
 
 @dataclass(frozen=True)
