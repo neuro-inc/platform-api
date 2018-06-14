@@ -253,14 +253,14 @@ class TestKubeOrchestrator:
             ingress.name, IngressRule(host='host3'))
         result_ingress = await kube_client.get_ingress(ingress.name)
         assert result_ingress == Ingress(name=ingress.name, rules=[
-            IngressRule(), IngressRule(host='host1'),
+            IngressRule(host=''), IngressRule(host='host1'),
             IngressRule(host='host2'), IngressRule(host='host3'),
         ])
 
         await kube_client.remove_ingress_rule(ingress.name, 'host2')
         result_ingress = await kube_client.get_ingress(ingress.name)
         assert result_ingress == Ingress(name=ingress.name, rules=[
-            IngressRule(), IngressRule(host='host1'),
+            IngressRule(host=''), IngressRule(host='host1'),
             IngressRule(host='host3'),
         ])
 
