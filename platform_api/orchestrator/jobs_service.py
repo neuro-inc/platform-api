@@ -100,5 +100,5 @@ class InMemoryJobsService(JobsService):
     async def get_all_jobs(self) -> List[dict]:
         jobs_result = []
         for job_record in self._job_records.values():
-            jobs_result.append(({'job_id': job_record.id, 'status': job_record.status}))
+            jobs_result.append(({'job_id': job_record.id, 'status': job_record.job_status}))
         return jobs_result
