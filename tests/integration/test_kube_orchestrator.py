@@ -244,9 +244,12 @@ class TestKubeOrchestrator:
 
     @pytest.mark.asyncio
     async def test_ingress(self, kube_client, ingress):
-        await kube_client.add_ingress_rule(ingress.name, 'host1')
-        await kube_client.add_ingress_rule(ingress.name, 'host2')
-        await kube_client.add_ingress_rule(ingress.name, 'host3')
+        await kube_client.add_ingress_rule(
+            ingress.name, IngressRule(host='host1'))
+        await kube_client.add_ingress_rule(
+            ingress.name, IngressRule(host='host2'))
+        await kube_client.add_ingress_rule(
+            ingress.name, IngressRule(host='host3'))
         result_ingress = await kube_client.get_ingress(ingress.name)
         assert result_ingress == Ingress(name=ingress.name, rules=[
             IngressRule(), IngressRule(host='host1'),
@@ -259,6 +262,11 @@ class TestKubeOrchestrator:
             IngressRule(), IngressRule(host='host1'),
             IngressRule(host='host3'),
         ])
+
+    @pytest.mark.asyncio
+    async def test_remove_ingress_rule(self, kube_client, ingress):
+        with pytest.raises(StatusException, match='Not found'):
+            await kube_client.remove_ingress_rule(ingress.name, 'unknown')
 
     @pytest.mark.asyncio
     async def test_delete_ingress_failure(self, kube_client):
