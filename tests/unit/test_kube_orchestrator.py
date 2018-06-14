@@ -186,10 +186,6 @@ class TestResources:
 
 
 class TestIngressRule:
-    def test_from_primitive_empty(self):
-        rule = IngressRule.from_primitive({})
-        assert rule == IngressRule()
-
     def test_from_primitive_host(self):
         rule = IngressRule.from_primitive({
             'host': 'testhost',

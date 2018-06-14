@@ -205,7 +205,7 @@ class Service:
 
 @dataclass(frozen=True)
 class IngressRule:
-    host: Optional[str] = None
+    host: str
     service_name: Optional[str] = None
     service_port: Optional[int] = None
 
@@ -217,7 +217,7 @@ class IngressRule:
         service_name = backend.get('serviceName')
         service_port = backend.get('servicePort')
         return cls(
-            host=payload.get('host'),
+            host=payload.get('host', ''),
             service_name=service_name,
             service_port=service_port,
         )
