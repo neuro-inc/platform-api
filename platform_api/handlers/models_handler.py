@@ -1,6 +1,7 @@
+from typing import Dict, List, Optional
+
 import aiohttp.web
 import trafaret as t
-from typing import Dict, List, Optional
 
 from platform_api.config import Config, StorageConfig
 from platform_api.orchestrator import (
@@ -35,6 +36,10 @@ class ModelRequest:
     @property
     def _container_command(self) -> Optional[str]:
         return self._payload['container'].get('command')
+
+    @property
+    def _container_port(self) -> Optional[int]:
+        return self._payload['container'].get('port')
 
     def _create_dataset_volume(self) -> ContainerVolume:
         return ContainerVolume.create(
@@ -82,6 +87,7 @@ class ModelRequest:
             env=self._env,
             volumes=self._volumes,
             resources=self._resources,
+            port=self._container_port,
         )
 
 
@@ -108,6 +114,7 @@ class ModelsHandler:
                     'memory_mb': t.Int(gte=16),
                     t.Key('gpu', optional=True): t.Int(gte=1),
                 }),
+                t.Key('port', optional=True): t.Int(gte=0, lte=65535)
             }),
             # TODO (A Danshyn 05/25/18): we may move the storage URI parsing
             # and validation here at some point
