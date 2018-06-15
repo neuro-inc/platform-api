@@ -230,7 +230,6 @@ class IngressRule:
         if self.service_name:
             payload['http'] = {
                 'paths': [{
-                    'path': '/*',
                     'backend': {
                         'serviceName': self.service_name,
                         'servicePort': self.service_port,
