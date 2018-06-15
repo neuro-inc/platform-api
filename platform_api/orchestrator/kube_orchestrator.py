@@ -328,7 +328,11 @@ class PodDescriptor:
             container_payload['args'] = self.args
         if self.resources:
             container_payload['resources'] = self.resources.to_primitive()
-        # TODO: ports
+        if self.port:
+            container_payload['ports'] = [{'containerPort': self.port}]
+            container_payload['readinessProbe'] = {
+                'tcpSocket': {'port': self.port},
+            }
         return {
             'kind': 'Pod',
             'apiVersion': 'v1',

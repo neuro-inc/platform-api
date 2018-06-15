@@ -73,6 +73,7 @@ class TestPodDescriptor:
         pod = PodDescriptor(
             name='testname', image='testimage', env={'TESTVAR': 'testvalue'},
             resources=Resources(cpu=0.5, memory=1024, gpu=1),
+            port=1234,
         )
         assert pod.name == 'testname'
         assert pod.image == 'testimage'
@@ -98,6 +99,8 @@ class TestPodDescriptor:
                             'nvidia.com/gpu': 1,
                         },
                     },
+                    'ports': [{'containerPort': 1234}],
+                    'readinessProbe': {'tcpSocket': {'port': 1234}},
                 }],
                 'volumes': [],
                 'restartPolicy': 'Never',
