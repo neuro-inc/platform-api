@@ -126,7 +126,7 @@ class ModelsHandler:
                 }),
                 t.Key('http', optional=True): t.Dict({
                     'port': t.Int(gte=0, lte=65535),
-                    t.Keys('health_check_path', optional=True): t.String,
+                    t.Key('health_check_path', optional=True): t.String,
                 }),
             }),
             # TODO (A Danshyn 05/25/18): we may move the storage URI parsing
