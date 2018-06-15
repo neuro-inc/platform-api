@@ -2,6 +2,8 @@ apiVersion: extensions/v1beta1
 kind: Ingress
 metadata:
   name: platformjobsingress
+  annotations:
+    kubernetes.io/ingress.global-static-ip-name: dev-platform-jobs-ip
 spec:
   rules:
   - host: unknown

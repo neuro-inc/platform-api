@@ -140,6 +140,8 @@ gke_docker_push: build_api_k8s
 	sudo /opt/google-cloud-sdk/bin/gcloud docker -- push $(IMAGE_K8S)
 
 gke_k8s_deploy:
+	kubectl apply -f deploy/platformapi.gke.yml
+	kubectl apply -f deploy/platformingress.gke.yml
 	kubectl patch replicaset platformapi -p '{"spec":{"template":{"spec":{"containers":[{"name":"platformapi","image":"$(IMAGE_K8S):$(CIRCLE_SHA1)"}]}}}}'	        
 	kubectl scale --replicas=0 replicaset/platformapi
 	sleep 2s;
