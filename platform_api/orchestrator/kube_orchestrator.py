@@ -179,6 +179,7 @@ class Service:
         return {
             'metadata': {'name': self.name},
             'spec': {
+                'type': 'NodePort',
                 'ports': [{
                     'port': self.port,
                     'targetPort': self.target_port,

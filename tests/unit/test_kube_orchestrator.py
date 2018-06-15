@@ -315,6 +315,7 @@ class TestService:
         return {
             'metadata': {'name': 'testservice'},
             'spec': {
+                'type': 'NodePort',
                 'ports': [{'port': 80, 'targetPort': 8080}],
                 'selector': {'job': 'testservice'},
             },
