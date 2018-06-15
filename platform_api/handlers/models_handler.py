@@ -38,8 +38,17 @@ class ModelRequest:
         return self._payload['container'].get('command')
 
     @property
+    def _container_http(self) -> Dict:
+        return self._payload['container'].get('http', {})
+
+    @property
     def _container_port(self) -> Optional[int]:
-        return self._payload['container'].get('port')
+        return self._container_http.get('port')
+
+    @property
+    def _container_health_check_path(self) -> str:
+        return self._container_http.get(
+            'health_check_path', Container.health_check_path)
 
     def _create_dataset_volume(self) -> ContainerVolume:
         return ContainerVolume.create(
@@ -88,6 +97,7 @@ class ModelRequest:
             volumes=self._volumes,
             resources=self._resources,
             port=self._container_port,
+            health_check_path=self._container_health_check_path,
         )
 
 
@@ -114,7 +124,10 @@ class ModelsHandler:
                     'memory_mb': t.Int(gte=16),
                     t.Key('gpu', optional=True): t.Int(gte=1),
                 }),
-                t.Key('port', optional=True): t.Int(gte=0, lte=65535)
+                t.Key('http', optional=True): t.Dict({
+                    'port': t.Int(gte=0, lte=65535),
+                    t.Keys('health_check_path', optional=True): t.String,
+                }),
             }),
             # TODO (A Danshyn 05/25/18): we may move the storage URI parsing
             # and validation here at some point

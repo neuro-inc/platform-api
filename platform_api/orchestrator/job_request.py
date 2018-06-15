@@ -37,6 +37,7 @@ class Container:
     env: Dict[str, str] = field(default_factory=dict)
     volumes: List[ContainerVolume] = field(default_factory=list)
     port: Optional[int] = None
+    health_check_path: str = '/'
 
     @property
     def command_list(self) -> List[str]:

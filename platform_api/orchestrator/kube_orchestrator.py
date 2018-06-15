@@ -288,7 +288,9 @@ class PodDescriptor:
     volume_mounts: List[Volume] = field(default_factory=list)
     volumes: List[Volume] = field(default_factory=list)
     resources: Optional[Resources] = None
+
     port: Optional[int] = None
+    health_check_path: str = '/'
 
     @classmethod
     def from_job_request(
@@ -331,7 +333,10 @@ class PodDescriptor:
         if self.port:
             container_payload['ports'] = [{'containerPort': self.port}]
             container_payload['readinessProbe'] = {
-                'tcpSocket': {'port': self.port},
+                'httpGet': {
+                    'port': self.port,
+                    'path': self.health_check_path,
+                },
             }
         return {
             'kind': 'Pod',
