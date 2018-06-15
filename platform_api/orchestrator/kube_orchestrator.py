@@ -310,6 +310,7 @@ class PodDescriptor:
             volumes=volumes,
             resources=resources,
             port=container.port,
+            health_check_path=container.health_check_path,
         )
 
     @property
