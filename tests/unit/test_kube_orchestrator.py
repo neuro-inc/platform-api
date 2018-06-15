@@ -239,7 +239,7 @@ class TestIngressRule:
         assert rule.to_primitive() == {
             'host': 'testhost',
             'http': {'paths': [{
-                'path': '/',
+                'path': '/*',
                 'backend': {
                     'serviceName': 'testname',
                     'servicePort': 1234,
@@ -302,7 +302,7 @@ class TestIngress:
             'spec': {'rules': [{
                 'host': 'host1',
                 'http': {'paths': [{
-                    'path': '/',
+                    'path': '/*',
                     'backend': {
                         'serviceName': 'testservice',
                         'servicePort': 1234
