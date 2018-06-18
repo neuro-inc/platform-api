@@ -132,4 +132,4 @@ workflows:
           filters:
             branches:
               only:
-                - P20-155/services
+                - master
