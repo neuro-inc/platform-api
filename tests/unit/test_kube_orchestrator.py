@@ -100,7 +100,11 @@ class TestPodDescriptor:
                         },
                     },
                     'ports': [{'containerPort': 1234}],
-                    'readinessProbe': {'httpGet': {'port': 1234, 'path': '/'}},
+                    'readinessProbe': {
+                        'httpGet': {'port': 1234, 'path': '/'},
+                        'initialDelaySeconds': 1,
+                        'periodSeconds': 1,
+                    },
                 }],
                 'volumes': [],
                 'restartPolicy': 'Never',

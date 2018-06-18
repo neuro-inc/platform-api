@@ -337,6 +337,8 @@ class PodDescriptor:
                     'port': self.port,
                     'path': self.health_check_path,
                 },
+                'initialDelaySeconds': 1,
+                'periodSeconds': 1,
             }
         return {
             'kind': 'Pod',
