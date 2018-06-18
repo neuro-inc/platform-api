@@ -170,8 +170,43 @@ class Resources:
 
 
 @dataclass(frozen=True)
+class Service:
+    name: str
+    target_port: int
+    port: int = 80
+
+    def to_primitive(self):
+        return {
+            'metadata': {'name': self.name},
+            'spec': {
+                'type': 'NodePort',
+                'ports': [{
+                    'port': self.port,
+                    'targetPort': self.target_port,
+                }],
+                'selector': {
+                    'job': self.name
+                }
+            },
+        }
+
+    @classmethod
+    def create_for_pod(cls, pod: 'PodDescriptor') -> 'Service':
+        return cls(pod.name, target_port=pod.port)  # type: ignore
+
+    @classmethod
+    def from_primitive(cls, payload) -> 'Service':
+        port_payload = payload['spec']['ports'][0]
+        return cls(  # type: ignore
+            name=payload['metadata']['name'],
+            target_port=port_payload['targetPort'],
+            port=port_payload['port'],
+        )
+
+
+@dataclass(frozen=True)
 class IngressRule:
-    host: Optional[str] = None
+    host: str
     service_name: Optional[str] = None
     service_port: Optional[int] = None
 
@@ -183,24 +218,31 @@ class IngressRule:
         service_name = backend.get('serviceName')
         service_port = backend.get('servicePort')
         return cls(
-            host=payload.get('host'),
+            host=payload.get('host', ''),
             service_name=service_name,
             service_port=service_port,
         )
 
     def to_primitive(self):
-        return {
+        payload = {
             'host': self.host,
-            'http': {
+        }
+        if self.service_name:
+            payload['http'] = {
                 'paths': [{
-                    'path': '/',
                     'backend': {
                         'serviceName': self.service_name,
                         'servicePort': self.service_port,
                     },
                 }],
             }
-        }
+        return payload
+
+    @classmethod
+    def from_service(cls, domain_name: str, service: Service) -> 'IngressRule':
+        host = f'{service.name}.{domain_name}'
+        return cls(  # type: ignore
+            host=host, service_name=service.name, service_port=service.port)
 
 
 @dataclass(frozen=True)
@@ -246,6 +288,9 @@ class PodDescriptor:
     volumes: List[Volume] = field(default_factory=list)
     resources: Optional[Resources] = None
 
+    port: Optional[int] = None
+    health_check_path: str = '/'
+
     @classmethod
     def from_job_request(
             cls, volume: Volume, job_request: JobRequest) -> 'PodDescriptor':
@@ -263,6 +308,8 @@ class PodDescriptor:
             volume_mounts=volume_mounts,
             volumes=volumes,
             resources=resources,
+            port=container.port,
+            health_check_path=container.health_check_path,
         )
 
     @property
@@ -283,11 +330,25 @@ class PodDescriptor:
             container_payload['args'] = self.args
         if self.resources:
             container_payload['resources'] = self.resources.to_primitive()
+        if self.port:
+            container_payload['ports'] = [{'containerPort': self.port}]
+            container_payload['readinessProbe'] = {
+                'httpGet': {
+                    'port': self.port,
+                    'path': self.health_check_path,
+                },
+                'initialDelaySeconds': 1,
+                'periodSeconds': 1,
+            }
         return {
             'kind': 'Pod',
             'apiVersion': 'v1',
             'metadata': {
-                'name': f'{self.name}',
+                'name': self.name,
+                'labels': {
+                    # TODO (A Danshyn 06/13/18): revisit the naming etc
+                    'job': self.name
+                },
             },
             'spec': {
                 'containers': [container_payload],
@@ -331,6 +392,9 @@ class KubeClientAuthType(str, enum.Enum):
 @dataclass(frozen=True)
 class KubeConfig:
     storage_mount_path: PurePath
+
+    jobs_ingress_name: str
+    jobs_ingress_domain_name: str
 
     endpoint_url: str
     cert_authority_path: Optional[str] = None
@@ -434,6 +498,13 @@ class KubeClient:
     def _generate_ingress_url(self, ingress_name: str) -> str:
         return f'{self._ingresses_url}/{ingress_name}'
 
+    @property
+    def _services_url(self) -> str:
+        return f'{self._namespace_url}/services'
+
+    def _generate_service_url(self, service_name: str) -> str:
+        return f'{self._services_url}/{service_name}'
+
     async def _request(self, *args, **kwargs):
         async with self._client.request(*args, **kwargs) as response:
             # TODO (A Danshyn 05/21/18): check status code etc
@@ -478,28 +549,28 @@ class KubeClient:
         if payload['status'] == 'Failure':
             raise StatusException('Failure')
 
-    async def add_ingress_rule(self, name, host) -> Ingress:
+    async def add_ingress_rule(self, name: str, rule: IngressRule) -> Ingress:
         # TODO (A Danshyn 06/13/18): test if does not exist already
         url = self._generate_ingress_url(name)
         headers = {
             'Content-Type': 'application/json-patch+json',
         }
-        rule = [{
+        patches = [{
             'op': 'add',
             'path': '/spec/rules/-',
-            'value': {
-                'host': host,
-            },
+            'value': rule.to_primitive(),
         }]
         payload = await self._request(
-            method='PATCH', url=url, headers=headers, json=rule)
+            method='PATCH', url=url, headers=headers, json=patches)
         return Ingress.from_primitive(payload)
 
-    async def remove_ingress_rule(self, name, host) -> Ingress:
+    async def remove_ingress_rule(self, name: str, host: str) -> Ingress:
         # TODO (A Danshyn 06/13/18): this one should have a retry in case of
         # a race condition
         ingress = await self.get_ingress(name)
         rule_index = ingress.find_rule_index_by_host(host)
+        if rule_index < 0:
+            raise StatusException('Not found')
         url = self._generate_ingress_url(name)
         rule = [{
             'op': 'test',
@@ -515,6 +586,17 @@ class KubeClient:
         payload = await self._request(
             method='PATCH', url=url, headers=headers, json=rule)
         return Ingress.from_primitive(payload)
+
+    async def create_service(self, service: Service) -> Service:
+        url = self._services_url
+        payload = await self._request(
+            method='POST', url=url, json=service.to_primitive())
+        return Service.from_primitive(payload)
+
+    async def delete_service(self, name: str) -> None:
+        url = self._generate_service_url(name)
+        payload = await self._request(method='DELETE', url=url)
+        self._check_status_payload(payload)
 
 
 class KubeOrchestrator(Orchestrator):
@@ -568,6 +650,9 @@ class KubeOrchestrator(Orchestrator):
         descriptor = PodDescriptor.from_job_request(
             self._storage_volume, job_request)
         status = await self._client.create_pod(descriptor)
+        # TODO: have a properly named property
+        if descriptor.port:
+            await self._create_service(descriptor)
         return status.status
 
     async def status_job(self, job_id: str) -> JobStatus:
@@ -575,7 +660,37 @@ class KubeOrchestrator(Orchestrator):
         status = await self._client.get_pod_status(pod_id)
         return status.status
 
+    async def _create_service(self, pod: PodDescriptor) -> None:
+        service = await self._client.create_service(
+            Service.create_for_pod(pod))
+        await self._client.add_ingress_rule(
+            name=self._config.jobs_ingress_name,
+            rule=IngressRule.from_service(
+                domain_name=self._config.jobs_ingress_domain_name,
+                service=service))
+
+    def _get_ingress_rule_host_for_pod(self, pod_id) -> str:
+        ingress_rule = IngressRule.from_service(
+            domain_name=self._config.jobs_ingress_domain_name,
+            service=Service(name=pod_id, target_port=0)  # type: ignore
+        )
+        return ingress_rule.host
+
+    async def _delete_service(self, pod_id: str) -> None:
+        host = self._get_ingress_rule_host_for_pod(pod_id)
+        try:
+            await self._client.remove_ingress_rule(
+                name=self._config.jobs_ingress_name, host=host)
+        except Exception:
+            logger.exception(f'Failed to remove ingress rule {host}')
+        try:
+            await self._client.delete_service(name=pod_id)
+        except Exception:
+            logger.exception(f'Failed to remove service {pod_id}')
+
     async def delete_job(self, job_id: str) -> JobStatus:
         pod_id = job_id
+        # TODO: make this call conditional
+        await self._delete_service(pod_id)
         status = await self._client.delete_pod(pod_id)
         return status.status

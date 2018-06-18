@@ -88,6 +88,9 @@ class TestModelRequest:
                     'memory_mb': 128,
                     'gpu': 1,
                 },
+                'http': {
+                    'port': 80,
+                },
             },
             'dataset_storage_uri': 'storage://path/to/dir',
             'result_storage_uri': 'storage://path/to/another/dir',
@@ -113,4 +116,6 @@ class TestModelRequest:
                     read_only=False)
             ],
             resources=ContainerResources(cpu=0.1, memory_mb=128, gpu=1),
+            port=80,
+            health_check_path='/',
         )

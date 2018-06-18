@@ -9,7 +9,7 @@ from platform_api.orchestrator.job_request import (
 from platform_api.orchestrator.kube_orchestrator import (
     HostVolume, NfsVolume, VolumeMount,
     PodDescriptor, PodStatus, Resources,
-    Ingress, IngressRule,
+    Ingress, IngressRule, Service,
 )
 
 
@@ -73,6 +73,7 @@ class TestPodDescriptor:
         pod = PodDescriptor(
             name='testname', image='testimage', env={'TESTVAR': 'testvalue'},
             resources=Resources(cpu=0.5, memory=1024, gpu=1),
+            port=1234,
         )
         assert pod.name == 'testname'
         assert pod.image == 'testimage'
@@ -81,6 +82,9 @@ class TestPodDescriptor:
             'apiVersion': 'v1',
             'metadata': {
                 'name': 'testname',
+                'labels': {
+                    'job': 'testname',
+                },
             },
             'spec': {
                 'containers': [{
@@ -94,6 +98,12 @@ class TestPodDescriptor:
                             'memory': '1024Mi',
                             'nvidia.com/gpu': 1,
                         },
+                    },
+                    'ports': [{'containerPort': 1234}],
+                    'readinessProbe': {
+                        'httpGet': {'port': 1234, 'path': '/'},
+                        'initialDelaySeconds': 1,
+                        'periodSeconds': 1,
                     },
                 }],
                 'volumes': [],
@@ -183,10 +193,6 @@ class TestResources:
 
 
 class TestIngressRule:
-    def test_from_primitive_empty(self):
-        rule = IngressRule.from_primitive({})
-        assert rule == IngressRule()
-
     def test_from_primitive_host(self):
         rule = IngressRule.from_primitive({
             'host': 'testhost',
@@ -224,6 +230,33 @@ class TestIngressRule:
         })
         assert rule == IngressRule(
             host='testhost', service_name='testname', service_port=1234)
+
+    def test_to_primitive_no_service(self):
+        rule = IngressRule(host='testhost')
+        assert rule.to_primitive() == {
+            'host': 'testhost',
+        }
+
+    def test_to_primitive(self):
+        rule = IngressRule(
+            host='testhost', service_name='testname', service_port=1234)
+        assert rule.to_primitive() == {
+            'host': 'testhost',
+            'http': {'paths': [{
+                'backend': {
+                    'serviceName': 'testname',
+                    'servicePort': 1234,
+                }
+            }]},
+        }
+
+    def test_from_service(self):
+        service = Service(name='testname', target_port=1234)
+        rule = IngressRule.from_service(
+            domain_name='testdomain', service=service)
+        assert rule == IngressRule(
+            host='testname.testdomain', service_name='testname',
+            service_port=80)
 
 
 class TestIngress:
@@ -272,7 +305,6 @@ class TestIngress:
             'spec': {'rules': [{
                 'host': 'host1',
                 'http': {'paths': [{
-                    'path': '/',
                     'backend': {
                         'serviceName': 'testservice',
                         'servicePort': 1234
@@ -280,3 +312,29 @@ class TestIngress:
                 }]},
             }]}
         }
+
+
+class TestService:
+    @pytest.fixture
+    def service_payload(self):
+        return {
+            'metadata': {'name': 'testservice'},
+            'spec': {
+                'type': 'NodePort',
+                'ports': [{'port': 80, 'targetPort': 8080}],
+                'selector': {'job': 'testservice'},
+            },
+        }
+
+    def test_to_primitive(self, service_payload):
+        service = Service(name='testservice', target_port=8080)
+        assert service.to_primitive() == service_payload
+
+    def test_from_primitive(self, service_payload):
+        service = Service.from_primitive(service_payload)
+        assert service == Service(name='testservice', target_port=8080)
+
+    def test_create_for_pod(self):
+        pod = PodDescriptor(name='testpod', image='testimage', port=1234)
+        service = Service.create_for_pod(pod)
+        assert service == Service(name='testpod', target_port=1234)

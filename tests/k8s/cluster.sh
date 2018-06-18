@@ -38,6 +38,7 @@ function k8s::start {
     k8s::wait
     k8s::setup_registry
     k8s::start_nfs
+    k8s::setup_ingress
 }
 
 function k8s::wait {
@@ -64,6 +65,11 @@ function k8s::setup_registry {
         --docker-username $DOCKER_USER \
         --docker-password $DOCKER_PASS \
         --docker-email $DOCKER_EMAIL
+}
+
+function k8s::setup_ingress {
+    sudo -E minikube addons enable ingress
+    kubectl create -f deploy/platformingress.gke.yml
 }
 
 function k8s::test {

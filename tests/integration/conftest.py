@@ -1,6 +1,7 @@
 import asyncio
 import json
 from pathlib import PurePath
+from urllib.parse import urlsplit
 
 import pytest
 
@@ -57,11 +58,20 @@ async def kube_config(kube_config_cluster_payload, kube_config_user_payload):
     return KubeConfig(
         storage_mount_path=PurePath('/tmp'),
 
+        jobs_ingress_name='platformjobsingress',
+        jobs_ingress_domain_name='jobs.platform.neuromation.io',
+
         endpoint_url=cluster['server'],
         cert_authority_path=cluster['certificate-authority'],
         auth_cert_path=user['client-certificate'],
         auth_cert_key_path=user['client-key']
     )
+
+
+@pytest.fixture(scope='session')
+async def kube_ingress_ip(kube_config_cluster_payload):
+    cluster = kube_config_cluster_payload
+    return urlsplit(cluster['server']).hostname
 
 
 class TestKubeClient(KubeClient):
@@ -121,6 +131,9 @@ async def kube_config_nfs(
         cert_authority_path=cluster['certificate-authority'],
         auth_cert_path=user['client-certificate'],
         auth_cert_key_path=user['client-key'],
+
+        jobs_ingress_name='platformjobsingress',
+        jobs_ingress_domain_name='jobs.platform.neuromation.io',
 
         storage_type=VolumeType.NFS,
         nfs_volume_server=nfs_volume_server,

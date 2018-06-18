@@ -2,6 +2,7 @@ import asyncio
 from pathlib import PurePath
 import uuid
 
+import aiohttp
 import pytest
 
 from platform_api.orchestrator.job_request import (
@@ -10,8 +11,7 @@ from platform_api.orchestrator import (
     KubeOrchestrator, JobRequest, JobStatus, JobError, Job
 )
 from platform_api.orchestrator.kube_orchestrator import (
-    StatusException,
-    Ingress, IngressRule,)
+    StatusException, Service, Ingress, IngressRule,)
 
 
 @pytest.fixture
@@ -32,7 +32,7 @@ async def kube_orchestrator_nfs(kube_config_nfs, event_loop):
 async def job_nginx(kube_orchestrator):
     job_id = str(uuid.uuid4())
     container = Container(
-        image='nginx', resources=ContainerResources(cpu=1, memory_mb=256))
+        image='nginx', resources=ContainerResources(cpu=0.1, memory_mb=256))
     job_request = JobRequest(
         job_id=job_id, container=container)
     job = Job(orchestrator=kube_orchestrator, job_request=job_request)
@@ -245,23 +245,80 @@ class TestKubeOrchestrator:
 
     @pytest.mark.asyncio
     async def test_ingress(self, kube_client, ingress):
-        await kube_client.add_ingress_rule(ingress.name, 'host1')
-        await kube_client.add_ingress_rule(ingress.name, 'host2')
-        await kube_client.add_ingress_rule(ingress.name, 'host3')
+        await kube_client.add_ingress_rule(
+            ingress.name, IngressRule(host='host1'))
+        await kube_client.add_ingress_rule(
+            ingress.name, IngressRule(host='host2'))
+        await kube_client.add_ingress_rule(
+            ingress.name, IngressRule(host='host3'))
         result_ingress = await kube_client.get_ingress(ingress.name)
         assert result_ingress == Ingress(name=ingress.name, rules=[
-            IngressRule(), IngressRule(host='host1'),
+            IngressRule(host=''), IngressRule(host='host1'),
             IngressRule(host='host2'), IngressRule(host='host3'),
         ])
 
         await kube_client.remove_ingress_rule(ingress.name, 'host2')
         result_ingress = await kube_client.get_ingress(ingress.name)
         assert result_ingress == Ingress(name=ingress.name, rules=[
-            IngressRule(), IngressRule(host='host1'),
+            IngressRule(host=''), IngressRule(host='host1'),
             IngressRule(host='host3'),
         ])
+
+    @pytest.mark.asyncio
+    async def test_remove_ingress_rule(self, kube_client, ingress):
+        with pytest.raises(StatusException, match='Not found'):
+            await kube_client.remove_ingress_rule(ingress.name, 'unknown')
 
     @pytest.mark.asyncio
     async def test_delete_ingress_failure(self, kube_client):
         with pytest.raises(StatusException, match='Failure'):
             await kube_client.delete_ingress('unknown')
+
+    @pytest.mark.asyncio
+    async def test_service(self, kube_client):
+        service_name = f'job-{uuid.uuid4()}'
+        service = Service(name=service_name, target_port=8080)
+        try:
+            result_service = await kube_client.create_service(service)
+            assert result_service.name == service_name
+            assert result_service.target_port == 8080
+            assert result_service.port == 80
+        finally:
+            await kube_client.delete_service(service_name)
+
+    async def _wait_for_job_service(
+            self, kube_ingress_ip: str, jobs_ingress_domain_name: str,
+            job_id: str, interval_s: int=1, max_attempts: int=120):
+        url = f'http://{kube_ingress_ip}'
+        headers = {'Host': f'{job_id}.{jobs_ingress_domain_name}'}
+        async with aiohttp.ClientSession() as client:
+            for _ in range(max_attempts):
+                try:
+                    async with client.get(url, headers=headers) as response:
+                        if response.status == 200:
+                            break
+                except OSError:
+                    pass
+                await asyncio.sleep(interval_s)
+            else:
+                pytest.fail(f'Failed to connect to job service {job_id}')
+
+    @pytest.mark.asyncio
+    async def test_job_with_exposed_port(
+            self, kube_config, kube_orchestrator, kube_ingress_ip):
+        container = Container(
+            image='python', command='python -m http.server 80',
+            resources=ContainerResources(cpu=0.1, memory_mb=128),
+            port=80)
+        job = Job(
+            orchestrator=kube_orchestrator,
+            job_request=JobRequest.create(container))
+        try:
+            status = await job.start()
+            assert status == JobStatus.PENDING
+
+            await self._wait_for_job_service(
+                kube_ingress_ip, kube_config.jobs_ingress_domain_name,
+                job.id)
+        finally:
+            await job.delete()

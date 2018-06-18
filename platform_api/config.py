@@ -112,5 +112,9 @@ class EnvironConfigFactory:
                 'NP_K8S_CLIENT_CONN_POOL_SIZE',
                 KubeConfig.client_conn_pool_size)),
 
+            jobs_ingress_name=self._environ['NP_K8S_JOBS_INGRESS_NAME'],
+            jobs_ingress_domain_name=(
+                self._environ['NP_K8S_JOBS_INGRESS_DOMAIN_NAME']),
+
             **kwargs
         )
