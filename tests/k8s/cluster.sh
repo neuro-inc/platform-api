@@ -69,7 +69,7 @@ function k8s::setup_registry {
 
 function k8s::setup_ingress {
     sudo -E minikube addons enable ingress
-    kubectl create -f deploy/platformingress.gke.yml
+    kubectl create -f tests/k8s/platformjobsingress.yml
 }
 
 function k8s::test {
