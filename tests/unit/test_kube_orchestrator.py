@@ -207,6 +207,7 @@ class TestPodStatus:
         }
         assert PodStatus(payload).status == JobStatus.FAILED
 
+
 class TestResources:
     def test_to_primitive(self):
         resources = Resources(cpu=0.5, memory=1024)  # type: ignore
