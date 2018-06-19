@@ -3,7 +3,7 @@ kind: Ingress
 metadata:
   name: platformjobsingress
   annotations:
-    kubernetes.io/ingress.global-static-ip-name: dev-platform-jobs-ip
+    kubernetes.io/ingress.class: traefik
 spec:
   rules:
   - host: unknown
