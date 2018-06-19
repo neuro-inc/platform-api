@@ -247,12 +247,14 @@ class PodDescriptor:
     image: str
     args: List[str] = field(default_factory=list)
     env: Dict[str, str] = field(default_factory=dict)
-    volume_mounts: List[Volume] = field(default_factory=list)
+    volume_mounts: List[VolumeMount] = field(default_factory=list)
     volumes: List[Volume] = field(default_factory=list)
     resources: Optional[Resources] = None
 
     port: Optional[int] = None
     health_check_path: str = '/'
+
+    status: Optional['PodStatus'] = None
 
     @classmethod
     def from_job_request(
@@ -320,6 +322,30 @@ class PodDescriptor:
             }
         }
 
+    @classmethod
+    def _assert_resource_kind(cls, expected_kind: str, payload: Dict):
+        kind = payload['kind']
+        if kind == 'Status':
+            _raise_status_job_exception(payload, job_id=None)
+        elif kind != expected_kind:
+            raise ValueError(f'unknown kind: {kind}')
+
+    @classmethod
+    def from_primitive(cls, payload):
+        cls._assert_resource_kind(expected_kind='Pod', payload=payload)
+
+        metadata = payload['metadata']
+        container_payload = payload['spec']['containers'][0]
+        # TODO (A Danshyn 06/19/18): set rest of attributes
+        status = None
+        if 'status' in payload:
+            status = PodStatus.from_primitive(payload['status'])
+        return cls(
+            name=metadata['name'],
+            image=container_payload['image'],
+            status=status,
+        )
+
 
 class PodStatus:
     def __init__(self, payload):
@@ -330,23 +356,33 @@ class PodStatus:
         return self._payload['phase']
 
     @property
+    def container_status(self):
+        if 'containerStatuses' in self._payload:
+            return self._payload['containerStatuses'][0]
+
+    @property
+    def _is_container_creating(self) -> bool:
+        return (
+            not self.container_status or
+            self.container_status['state']['waiting']['reason'] ==
+            'ContainerCreating')
+
+    @property
     def status(self) -> JobStatus:
         if self.phase == 'Succeeded':
             return JobStatus.SUCCEEDED
         elif self.phase == 'Failed':
             return JobStatus.FAILED
+        elif self.phase == 'Pending':
+            if self._is_container_creating:
+                return JobStatus.PENDING
+            else:
+                return JobStatus.FAILED
         return JobStatus.PENDING
 
     @classmethod
     def from_primitive(cls, payload):
-        # TODO (A Danshyn 05/22/18): should be refactored further
-        kind = payload['kind']
-        if kind == 'Pod':
-            return cls(payload['status'])
-        elif kind == 'Status':
-            _raise_status_job_exception(payload, job_id=None)
-        else:
-            raise ValueError(f'unknown kind: {kind}')
+        return cls(payload)
 
 
 class VolumeType(str, enum.Enum):
@@ -486,17 +522,17 @@ class KubeClient:
     async def create_pod(self, descriptor: PodDescriptor) -> PodStatus:
         payload = await self._request(
             method='POST', url=self._pods_url, json=descriptor.to_primitive())
-        return PodStatus.from_primitive(payload)
+        return PodDescriptor.from_primitive(payload).status
 
     async def get_pod_status(self, pod_id: str) -> PodStatus:
         url = self._generate_pod_url(pod_id)
         payload = await self._request(method='GET', url=url)
-        return PodStatus.from_primitive(payload)
+        return PodDescriptor.from_primitive(payload).status
 
     async def delete_pod(self, pod_id: str) -> PodStatus:
         url = self._generate_pod_url(pod_id)
         payload = await self._request(method='DELETE', url=url)
-        return PodStatus.from_primitive(payload)
+        return PodDescriptor.from_primitive(payload).status
 
     async def create_ingress(self, name) -> Ingress:
         ingress = Ingress(name=name)  # type: ignore
