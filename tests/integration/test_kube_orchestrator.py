@@ -32,7 +32,8 @@ async def kube_orchestrator_nfs(kube_config_nfs, event_loop):
 async def job_nginx(kube_orchestrator):
     job_id = str(uuid.uuid4())
     container = Container(
-        image='nginx', resources=ContainerResources(cpu=0.1, memory_mb=256))
+        image='ubuntu', command='sleep 5',
+        resources=ContainerResources(cpu=0.1, memory_mb=256))
     job_request = JobRequest(
         job_id=job_id, container=container)
     job = Job(orchestrator=kube_orchestrator, job_request=job_request)

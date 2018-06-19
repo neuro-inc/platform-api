@@ -134,17 +134,46 @@ class TestPodDescriptor:
         assert pod.volumes == [volume]
         assert pod.resources == Resources(cpu=1, memory=128, gpu=1)
 
+    def test_from_primitive(self):
+        payload = {
+            'kind': 'Pod',
+            'metadata': {'name': 'testname'},
+            'spec': {'containers': [{
+                'name': 'testname',
+                'image': 'testimage',
+            }]},
+            'status': {
+                'phase': 'Running',
+            },
+        }
+        pod = PodDescriptor.from_primitive(payload)
+        assert pod.name == 'testname'
+        assert pod.image == 'testimage'
+        assert pod.status.status == JobStatus.PENDING
+
+    def test_from_primitive_failure(self):
+        payload = {
+            'kind': 'Status',
+            'code': 409,
+        }
+        with pytest.raises(JobError, match='already exist'):
+            PodDescriptor.from_primitive(payload)
+
+    def test_from_primitive_unknown_kind(self):
+        payload = {
+            'kind': 'Unknown',
+        }
+        with pytest.raises(ValueError, match='unknown kind: Unknown'):
+            PodDescriptor.from_primitive(payload)
+
 
 class TestPodStatus:
     def test_from_primitive(self):
         payload = {
-            'kind': 'Pod',
-            'status': {
-                'phase': 'Running',
-                'containerStatuses': [{
-                    'ready': True,
-                }]
-            },
+            'phase': 'Running',
+            'containerStatuses': [{
+                'ready': True,
+            }]
         }
         status = PodStatus.from_primitive(payload)
         assert status.status == JobStatus.PENDING
@@ -157,22 +186,6 @@ class TestPodStatus:
     def test_status(self, phase, expected_status):
         payload = {'phase': phase}
         assert PodStatus(payload).status == expected_status
-
-    def test_from_primitive_failure(self):
-        payload = {
-            'kind': 'Status',
-            'code': 409,
-        }
-        with pytest.raises(JobError, match='already exist'):
-            PodStatus.from_primitive(payload)
-
-    def test_from_primitive_unknown_kind(self):
-        payload = {
-            'kind': 'Unknown',
-        }
-        with pytest.raises(ValueError, match='unknown kind: Unknown'):
-            PodStatus.from_primitive(payload)
-
 
 class TestResources:
     def test_to_primitive(self):
