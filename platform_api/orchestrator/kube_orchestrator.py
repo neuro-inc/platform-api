@@ -39,43 +39,6 @@ def _raise_status_job_exception(pod: dict, job_id: str):
         raise JobError('unexpected')
 
 
-def _status_for_pending_pod(pod_status: dict) -> JobStatus:
-    container_statuses = pod_status.get('containerStatuses')
-    if container_statuses is None:
-        return JobStatus.PENDING
-    else:
-        container_status = container_statuses[0]
-        if container_status['state']['waiting']['reason'] == 'ContainerCreating':
-            return JobStatus.PENDING
-        else:
-            return JobStatus.FAILED
-
-
-def _status_for_running_pod(pod_status: dict) -> JobStatus:
-    container_statuses = pod_status.get('containerStatuses')
-    if container_statuses is not None and container_statuses[0]['ready']:
-        # TODO (A Danshyn 05/24/18): how come a running pod is succeeded?
-        # it seems we need to differenciate between the batch jobs and
-        # services.
-        return JobStatus.SUCCEEDED
-    else:
-        return JobStatus.FAILED
-
-
-def _status_pod_from_dict(pod_status: dict) -> JobStatus:
-    phase = pod_status['phase']
-    if phase == 'Pending':
-        return _status_for_pending_pod(pod_status)
-    elif phase == 'Running':
-        return _status_for_running_pod(pod_status)
-    elif phase == 'Succeeded':
-        return JobStatus.SUCCEEDED
-    elif phase == 'Failed':
-        return JobStatus.FAILED
-    else:
-        return JobStatus.FAILED
-
-
 @dataclass(frozen=True)
 class Volume(metaclass=abc.ABCMeta):
     name: str
@@ -363,8 +326,16 @@ class PodStatus:
         self._payload = payload
 
     @property
+    def phase(self):
+        return self._payload['phase']
+
+    @property
     def status(self) -> JobStatus:
-        return _status_pod_from_dict(self._payload)
+        if self.phase == 'Succeeded':
+            return JobStatus.SUCCEEDED
+        elif self.phase == 'Failed':
+            return JobStatus.FAILED
+        return JobStatus.PENDING
 
     @classmethod
     def from_primitive(cls, payload):
