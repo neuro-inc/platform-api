@@ -47,7 +47,7 @@ kind: Service
 metadata:
   name: platformapi
 spec:
-  type: LoadBalancer
+  type: ClusterIp
   ports:
   - port: 8080
     targetPort: 8080
