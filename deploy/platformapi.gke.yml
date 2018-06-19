@@ -53,3 +53,24 @@ spec:
     targetPort: 8080
   selector:
     service: platformapi
+---
+apiVersion: extensions/v1beta1
+kind: Ingress
+metadata:
+  name: platformapi-ingress
+  annotations:
+    kubernetes.io/ingress.class: traefik
+    traefik.frontend.rule.type: PathPrefixStrip
+spec:
+  rules:
+  - host: platform.dev.neuromation.io
+    http:
+      paths:
+      - path: /api/v1/storage
+        backend:
+          serviceName: platformstorageapi
+          servicePort: 8080
+      - path: /api/v1
+        backend:
+          serviceName: platformapi
+          servicePort: 8080
