@@ -187,6 +187,26 @@ class TestPodStatus:
         payload = {'phase': phase}
         assert PodStatus(payload).status == expected_status
 
+    def test_status_pending(self):
+        payload = {'phase': 'Pending'}
+        assert PodStatus(payload).status == JobStatus.PENDING
+
+    def test_status_pending_creating(self):
+        payload = {
+            'phase': 'Pending', 'containerStatuses': [{
+                'state': {'waiting': {'reason': 'ContainerCreating'}},
+            }]
+        }
+        assert PodStatus(payload).status == JobStatus.PENDING
+
+    def test_status_pending_failure(self):
+        payload = {
+            'phase': 'Pending', 'containerStatuses': [{
+                'state': {'waiting': {'reason': 'SomeWeirdReason'}},
+            }]
+        }
+        assert PodStatus(payload).status == JobStatus.FAILED
+
 class TestResources:
     def test_to_primitive(self):
         resources = Resources(cpu=0.5, memory=1024)  # type: ignore
