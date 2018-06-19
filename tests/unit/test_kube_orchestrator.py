@@ -147,7 +147,16 @@ class TestPodStatus:
             },
         }
         status = PodStatus.from_primitive(payload)
-        assert status.status == JobStatus.SUCCEEDED
+        assert status.status == JobStatus.PENDING
+
+    @pytest.mark.parametrize('phase, expected_status', (
+        ('Succeeded', JobStatus.SUCCEEDED),
+        ('Failed', JobStatus.FAILED),
+        ('Running', JobStatus.PENDING),
+    ))
+    def test_status(self, phase, expected_status):
+        payload = {'phase': phase}
+        assert PodStatus(payload).status == expected_status
 
     def test_from_primitive_failure(self):
         payload = {
