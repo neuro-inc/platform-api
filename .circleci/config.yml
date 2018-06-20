@@ -102,9 +102,9 @@ workflows:
       - gke_deploy:
           context: org-global
           requires:
-            - k8s          
+            - k8s
             - test
           filters:
             branches:
               only:
-                - master
+                - k8s_yml_typo_fix
