@@ -107,4 +107,4 @@ workflows:
           filters:
             branches:
               only:
-                - k8s_yml_typo_fix
+                - master
