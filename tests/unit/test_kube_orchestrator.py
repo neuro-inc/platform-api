@@ -134,20 +134,22 @@ class TestPodDescriptor:
         assert pod.volumes == [volume]
         assert pod.resources == Resources(cpu=1, memory=128, gpu=1)
 
-
-class TestPodStatus:
     def test_from_primitive(self):
         payload = {
             'kind': 'Pod',
+            'metadata': {'name': 'testname'},
+            'spec': {'containers': [{
+                'name': 'testname',
+                'image': 'testimage',
+            }]},
             'status': {
                 'phase': 'Running',
-                'containerStatuses': [{
-                    'ready': True,
-                }]
             },
         }
-        status = PodStatus.from_primitive(payload)
-        assert status.status == JobStatus.SUCCEEDED
+        pod = PodDescriptor.from_primitive(payload)
+        assert pod.name == 'testname'
+        assert pod.image == 'testimage'
+        assert pod.status.status == JobStatus.PENDING
 
     def test_from_primitive_failure(self):
         payload = {
@@ -155,14 +157,55 @@ class TestPodStatus:
             'code': 409,
         }
         with pytest.raises(JobError, match='already exist'):
-            PodStatus.from_primitive(payload)
+            PodDescriptor.from_primitive(payload)
 
     def test_from_primitive_unknown_kind(self):
         payload = {
             'kind': 'Unknown',
         }
         with pytest.raises(ValueError, match='unknown kind: Unknown'):
-            PodStatus.from_primitive(payload)
+            PodDescriptor.from_primitive(payload)
+
+
+class TestPodStatus:
+    def test_from_primitive(self):
+        payload = {
+            'phase': 'Running',
+            'containerStatuses': [{
+                'ready': True,
+            }]
+        }
+        status = PodStatus.from_primitive(payload)
+        assert status.status == JobStatus.PENDING
+
+    @pytest.mark.parametrize('phase, expected_status', (
+        ('Succeeded', JobStatus.SUCCEEDED),
+        ('Failed', JobStatus.FAILED),
+        ('Running', JobStatus.PENDING),
+    ))
+    def test_status(self, phase, expected_status):
+        payload = {'phase': phase}
+        assert PodStatus(payload).status == expected_status
+
+    def test_status_pending(self):
+        payload = {'phase': 'Pending'}
+        assert PodStatus(payload).status == JobStatus.PENDING
+
+    def test_status_pending_creating(self):
+        payload = {
+            'phase': 'Pending', 'containerStatuses': [{
+                'state': {'waiting': {'reason': 'ContainerCreating'}},
+            }]
+        }
+        assert PodStatus(payload).status == JobStatus.PENDING
+
+    def test_status_pending_failure(self):
+        payload = {
+            'phase': 'Pending', 'containerStatuses': [{
+                'state': {'waiting': {'reason': 'SomeWeirdReason'}},
+            }]
+        }
+        assert PodStatus(payload).status == JobStatus.FAILED
 
 
 class TestResources:
