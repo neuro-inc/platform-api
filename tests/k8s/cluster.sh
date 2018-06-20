@@ -56,6 +56,9 @@ function k8s::wait {
 
 function k8s::stop {
     sudo -E minikube stop || :
+    sudo -E minikube delete || :
+    sudo rm -rf ~/.minikube
+    sudo rm -rf /root/.minikube
 }
 
 function k8s::setup_registry {
