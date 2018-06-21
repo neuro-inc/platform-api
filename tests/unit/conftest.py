@@ -1,13 +1,20 @@
 import asyncio
+from pathlib import PurePath
 
 import pytest
 
+from platform_api.config import KubeConfig
 from platform_api.orchestrator import JobStatus, InMemoryJobsService, JobRequest, Orchestrator
 
 
 class MockOrchestrator(Orchestrator):
-    def __init__(self):
+    def __init__(self, config):
+        self._config = config
         self._mock_status_to_return = JobStatus.PENDING
+
+    @property
+    def config(self):
+        return self._config
 
     async def start_job(self, *args, **kwargs):
         return JobStatus.PENDING
@@ -29,7 +36,13 @@ def mock_job_request():
 
 @pytest.fixture(scope="function")
 def mock_orchestrator():
-    return MockOrchestrator()
+    config = KubeConfig(
+        storage_mount_path=PurePath('/tmp'),
+        jobs_ingress_name='platformjobsingress',
+        jobs_ingress_domain_name='jobs',
+        endpoint_url='http://k8s:1234'
+    )
+    return MockOrchestrator(config=config)
 
 
 @pytest.fixture(scope="function")
