@@ -159,7 +159,7 @@ class ModelsHandler:
             'status': status.value,
         }
         if container.has_http_server_exposed:
-            payload['http_url'] = ''
+            payload['http_url'] = job.http_url
         return payload
 
     async def handle_post(self, request):
