@@ -8,7 +8,7 @@ from platform_api.orchestrator import (
     Job, JobRequest,
     JobsService, Status)
 from platform_api.orchestrator.job_request import (
-    Container, ContainerResources, ContainerVolume)
+    Container, ContainerResources, ContainerVolume, JobStatus,)
 
 
 class ModelRequest:
@@ -99,6 +99,14 @@ class ModelRequest:
             port=self._container_port,
             health_check_path=self._container_health_check_path,
         )
+
+
+def create_model_response_validator() -> t.Trafaret:
+    return t.Dict({
+        'job_id': t.String,
+        'status': t.Enum(*JobStatus.values()),
+        t.Key('http_url', optional=True): t.String,
+    })
 
 
 class ModelsHandler:
