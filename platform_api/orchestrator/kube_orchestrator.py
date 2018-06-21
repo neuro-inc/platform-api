@@ -634,6 +634,10 @@ class KubeOrchestrator(Orchestrator):
 
         self._storage_volume = self._create_storage_volume()
 
+    @property
+    def config(self) -> KubeConfig:
+        return self._config
+
     def _create_storage_volume(self) -> Volume:
         name = 'storage'
         if self._config.storage_type == VolumeType.NFS:
