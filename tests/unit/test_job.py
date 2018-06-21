@@ -6,7 +6,9 @@ from platform_api.config import StorageConfig
 from platform_api.handlers.models_handler import ModelRequest
 from platform_api.orchestrator.job_request import (
     Container, ContainerVolume, ContainerVolumeFactory, ContainerResources,
+    JobRequest,
 )
+from platform_api.orchestrator.job import Job
 
 
 class TestContainer:
@@ -119,3 +121,15 @@ class TestModelRequest:
             port=80,
             health_check_path='/',
         )
+
+
+class TestJob:
+    def test_http_url(self, mock_orchestrator):
+        container = Container(
+            image='testimage',
+            resources=ContainerResources(cpu=1, memory_mb=128),
+            port=1234,
+        )
+        job_request = JobRequest(job_id='testjob', container=container)
+        job = Job(orchestrator=mock_orchestrator, job_request=job_request)
+        assert job.http_url == 'http://testjob.jobs'
