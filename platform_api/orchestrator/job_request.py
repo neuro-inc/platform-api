@@ -66,6 +66,10 @@ class JobStatus(str, enum.Enum):
     def is_finished(self) -> bool:
         return self in (self.SUCCEEDED, self.FAILED)
 
+    @classmethod
+    def values(cls) -> List[str]:
+        return [item.value for item in cls]
+
 
 class ContainerVolumeFactory:
     """A factory class responsible for parsing a storage URI and making sure
