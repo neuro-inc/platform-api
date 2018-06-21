@@ -115,6 +115,7 @@ async def model_train():
                 'cpu': 0.1,
                 'memory_mb': 16,
             },
+            'http': {'port': 1234},
         },
         'dataset_storage_uri': 'storage://',
         'result_storage_uri': 'storage://result',
@@ -131,6 +132,9 @@ class TestModels:
             result = await response.json()
             assert result['status'] in ['pending']
             job_id = result['job_id']
+            expected_url = f'http://{job_id}.jobs.platform.neuromation.io'
+            assert result['http_url'] == expected_url
+
         await jobs_client.long_pooling_by_job_id(api=api, client=client, job_id=job_id, status='succeeded')
         await jobs_client.delete_job(api=api, client=client, job_id=job_id)
 

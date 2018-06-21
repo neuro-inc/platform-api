@@ -11,3 +11,6 @@ class TestStatus:
         assert status.value == JobStatus.SUCCEEDED
         status.set(JobStatus.FAILED)
         assert status.value == JobStatus.FAILED
+
+    def test_values(self):
+        assert JobStatus.values() == ['pending', 'succeeded', 'failed']

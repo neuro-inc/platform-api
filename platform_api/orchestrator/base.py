@@ -3,6 +3,11 @@ from .job_request import JobRequest, JobStatus
 
 
 class Orchestrator(ABC):
+    @property
+    @abstractmethod
+    def config(self):
+        pass
+
     @abstractmethod
     async def start_job(self, job_request: JobRequest) -> JobStatus:
         pass

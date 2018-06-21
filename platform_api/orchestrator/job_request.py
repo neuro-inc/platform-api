@@ -45,6 +45,10 @@ class Container:
             return shlex.split(self.command)
         return []
 
+    @property
+    def has_http_server_exposed(self) -> bool:
+        return bool(self.port)
+
 
 @dataclass(frozen=True)
 class JobRequest:
@@ -65,6 +69,10 @@ class JobStatus(str, enum.Enum):
     @property
     def is_finished(self) -> bool:
         return self in (self.SUCCEEDED, self.FAILED)
+
+    @classmethod
+    def values(cls) -> List[str]:
+        return [item.value for item in cls]
 
 
 class ContainerVolumeFactory:

@@ -21,3 +21,13 @@ class Job:
     @property
     def id(self):
         return self._job_request.job_id
+
+    @property
+    def has_http_server_exposed(self) -> bool:
+        return self._job_request.container.has_http_server_exposed
+
+    @property
+    def http_url(self) -> str:
+        assert self.has_http_server_exposed
+        jobs_domain_name = self._orchestrator.config.jobs_ingress_domain_name
+        return f'http://{self.id}.{jobs_domain_name}'
