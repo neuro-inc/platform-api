@@ -119,6 +119,7 @@ class ModelsHandler:
         self._jobs_service = jobs_service
 
         self._model_request_validator = self._create_model_request_validator()
+        self._model_response_validator = create_model_response_validator()
 
     def _create_model_request_validator(self) -> t.Trafaret:
         return t.Dict({
@@ -149,19 +150,29 @@ class ModelsHandler:
             # TODO add here get method for model not for job
         ))
 
-    async def _create_job(self, model_request: ModelRequest) -> (Job, Status):
-        job_request = JobRequest.create(model_request.to_container())
+    async def _create_job(self, model_request: ModelRequest) -> Dict:
+        container = model_request.to_container()
+        job_request = JobRequest.create(container)
         job, status = await self._jobs_service.create_job(job_request)
-        return job, status
+        payload = {
+            'job_id': job.id,
+            'status': status.value,
+        }
+        if container.has_http_server_exposed:
+            payload['http_url'] = ''
+        return payload
 
     async def handle_post(self, request):
-        data = await request.json()
-        self._model_request_validator.check(data)
-        model_request = ModelRequest(
-            data, storage_config=self._storage_config,
-            env_prefix=self._config.env_prefix)
-        job, status = await self._create_job(model_request)
-        return aiohttp.web.json_response(
-            data={'status': status.value, 'job_id': job.id, 'status_id': status.id},
-            status=aiohttp.web.HTTPAccepted.status_code)
+        request_payload = await request.json()
+        self._model_request_validator.check(request_payload)
 
+        model_request = ModelRequest(
+            request_payload, storage_config=self._storage_config,
+            env_prefix=self._config.env_prefix)
+
+        response_payload = await self._create_job(model_request)
+        self._model_response_validator.check(response_payload)
+
+        return aiohttp.web.json_response(
+            data=response_payload,
+            status=aiohttp.web.HTTPAccepted.status_code)

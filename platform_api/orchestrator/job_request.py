@@ -45,6 +45,10 @@ class Container:
             return shlex.split(self.command)
         return []
 
+    @property
+    def has_http_server_exposed(self) -> bool:
+        return bool(self.port)
+
 
 @dataclass(frozen=True)
 class JobRequest:
