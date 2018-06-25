@@ -7,7 +7,8 @@ from .config import Config, EnvironConfigFactory
 from .handlers import (
     ModelsHandler, JobsHandler)
 from .orchestrator import (
-    KubeOrchestrator, KubeConfig, JobsService, InMemoryJobsService, JobError, Orchestrator, JobsStatusPooling)
+    KubeOrchestrator, KubeConfig, JobsService, JobsService,
+    JobError, Orchestrator, JobsStatusPooling,)
 
 
 class ApiHandler:
@@ -58,7 +59,7 @@ async def create_orchestrator(app: aiohttp.web.Application, kube_config: KubeCon
 
 
 async def create_job_service(app: aiohttp.web.Application, orchestrator: Orchestrator) -> JobsService:
-    jobs_service = InMemoryJobsService(orchestrator=orchestrator)
+    jobs_service = JobsService(orchestrator=orchestrator)
     jobs_status_pooling = JobsStatusPooling(jobs_service=jobs_service, loop=app.loop)
 
     async def _init_background_pooling(_):

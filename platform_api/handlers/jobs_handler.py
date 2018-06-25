@@ -9,22 +9,24 @@ class JobsHandler:
 
     def register(self, app):
         app.add_routes((
-            aiohttp.web.get('', self.handle_get_jobs),
+            aiohttp.web.get('', self.handle_get_all),
             aiohttp.web.delete('/{job_id}', self.handle_delete),
-            aiohttp.web.get('/{job_id}', self.handle_get_status),
+            aiohttp.web.get('/{job_id}', self.handle_get),
         ))
 
-    async def handle_get_status(self, request):
+    async def handle_get(self, request):
         job_id = request.match_info['job_id']
-        status = await self._jobs_service.get_job_status(job_id)
-        return aiohttp.web.json_response(data={'status': status}, status=200)
+        job = await self._jobs_service.get_job(job_id)
+        return aiohttp.web.json_response(data=job.to_primitive(), status=200)
 
-    async def handle_get_jobs(self, request):
+    async def handle_get_all(self, request):
         # TODO use pagination. may eventually explode with OOM.
         jobs = await self._jobs_service.get_all_jobs()
-        return aiohttp.web.json_response(data={'jobs': jobs}, status=200)
+        primitive_jobs = [job.to_primitive() for job in jobs]
+        return aiohttp.web.json_response(
+            data={'jobs': primitive_jobs}, status=200)
 
     async def handle_delete(self, request):
         job_id = request.match_info['job_id']
-        status = await self._jobs_service.delete_job(job_id)
-        return aiohttp.web.json_response(data={'status': status}, status=200)
+        await self._jobs_service.delete_job(job_id)
+        return aiohttp.web.HTTPNoContent()
