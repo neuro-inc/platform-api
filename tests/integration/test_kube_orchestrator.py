@@ -46,7 +46,7 @@ class TestKubeOrchestrator:
             self, job: Job,
             interval_s: int=1, max_attempts: int=30):
         for _ in range(max_attempts):
-            status = await job.status()
+            status = await job.query_status()
             if status != JobStatus.PENDING:
                 return status
             else:
@@ -110,7 +110,7 @@ class TestKubeOrchestrator:
     @pytest.mark.asyncio
     async def test_status_job_not_exist(self, job_nginx):
         with pytest.raises(JobError):
-            await job_nginx.status()
+            await job_nginx.query_status()
 
     @pytest.mark.asyncio
     async def test_delete_job_not_exist(self, job_nginx):

@@ -14,6 +14,16 @@ class Job:
         # TODO: introduce JobStatus object with diagnostic info
         self._status = status
 
+    # WARNING: these three methods to be deleted soon
+    async def start(self) -> JobStatus:
+        return await self._orchestrator.start_job(self._job_request)
+
+    async def delete(self) -> JobStatus:
+        return await self._orchestrator.delete_job(job_id=self.id)
+
+    async def query_status(self) -> JobStatus:
+        return await self._orchestrator.status_job(job_id=self.id)
+
     @property
     def id(self):
         return self._job_request.job_id
