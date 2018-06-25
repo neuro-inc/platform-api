@@ -61,5 +61,3 @@ class JobsStatusPooling:
 
     async def _wait(self):
         await asyncio.wait((self._is_active,), loop=self._loop, timeout=self._interval_s)
-
-
