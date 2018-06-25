@@ -4,7 +4,10 @@ from pathlib import PurePath
 import pytest
 
 from platform_api.config import KubeConfig
-from platform_api.orchestrator import JobStatus, InMemoryJobsService, JobRequest, Orchestrator
+from platform_api.orchestrator import (
+    JobStatus, JobsService, JobRequest, Orchestrator)
+from platform_api.orchestrator.job_request import (
+    Container, ContainerResources,)
 
 
 class MockOrchestrator(Orchestrator):
@@ -29,9 +32,19 @@ class MockOrchestrator(Orchestrator):
         self._mock_status_to_return = new_status
 
 
+@pytest.fixture
+def job_request_factory():
+    def factory():
+        return JobRequest.create(Container(
+            image='testimage',
+            resources=ContainerResources(cpu=1, memory_mb=128),
+        ))
+    return factory
+
+
 @pytest.fixture(scope="function")
-def mock_job_request():
-    return JobRequest.create(container=None)
+def mock_job_request(job_request_factory):
+    return job_request_factory()
 
 
 @pytest.fixture(scope="function")
@@ -47,7 +60,7 @@ def mock_orchestrator():
 
 @pytest.fixture(scope="function")
 def jobs_service(mock_orchestrator):
-    return InMemoryJobsService(orchestrator=mock_orchestrator)
+    return JobsService(orchestrator=mock_orchestrator)
 
 
 @pytest.fixture(scope='session')
