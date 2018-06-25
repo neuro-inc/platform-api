@@ -35,6 +35,8 @@ class JobsStatusPooling:
 
         self._is_active = self._loop.create_future()
         self._task = asyncio.ensure_future(self._run(), loop=self._loop)
+        # forcing execution of the newly created task
+        await asyncio.sleep(0, loop=self._loop)
 
     async def stop(self):
         logger.info('Stopping jobs status pooling')
@@ -53,7 +55,7 @@ class JobsStatusPooling:
 
     async def _run_once(self):
         try:
-            await self._jobs_service.update_jobs_status()
+            await self._jobs_service.update_jobs_statuses()
         except Exception:
             logger.exception("exception when trying update jobs status")
 

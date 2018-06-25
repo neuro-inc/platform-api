@@ -1,5 +1,6 @@
 from abc import ABC, abstractmethod
 from dataclasses import dataclass
+import json
 from typing import List, Tuple, Dict
 import logging
 
@@ -11,13 +12,9 @@ from .status import Status
 logger = logging.getLogger(__file__)
 
 
-class JobsService(ABC):
+class JobsStorage(ABC):
     @abstractmethod
-    async def create_job(self, job_request: JobRequest) -> Job:
-        pass
-
-    @abstractmethod
-    async def get_job_status(self, job_id: str) -> JobStatus:
+    async def set_job(self, job: Job) -> None:
         pass
 
     @abstractmethod
@@ -25,80 +22,76 @@ class JobsService(ABC):
         pass
 
     @abstractmethod
-    async def set_job(self, job: Job):
+    async def get_all_jobs(self) -> List[Job]:
         pass
 
-    @abstractmethod
-    async def delete_job(self, job_id: str):
-        pass
-
-    @abstractmethod
-    async def get_all_jobs(self):
-        pass
-
-    @abstractmethod
-    async def update_jobs_status(self):
-        pass
+    async def get_running_jobs(self) -> List[Job]:
+        jobs = []
+        for job in await self.get_all_jobs():
+            if not job.is_finished:
+                jobs.append(job)
+        return jobs
 
 
-@dataclass
-class JobRecord:
-    job: Job
-    status: Status
-
-    @property
-    def id(self):
-        return self.job.id
-
-    @property
-    def job_status(self):
-        return self.status.value
-
-
-class InMemoryJobsService(JobsService):
-    _job_records: Dict[str, JobRecord]
-
-    def __init__(self, orchestrator: Orchestrator):
-        self._job_records = {}
-        self._status_id_to_jobs = {}
+class InMemoryJobsStorage(JobsStorage):
+    def __init__(self, orchestrator: Orchestrator) -> None:
         self._orchestrator = orchestrator
 
-    async def update_jobs_status(self):
-        for job_record in self._job_records.values():
-            if not job_record.status.value.is_finished:
-                job_status = await job_record.job.status()
-                job_record.status.set(job_status)
+        self._job_records: Dict[str, str] = {}
+
+    async def set_job(self, job: Job) -> None:
+        payload = json.dumps(job.to_primitive())
+        self._job_records[job.id] = payload
+
+    def _parse_job_payload(self, payload: str) -> Job:
+        job_record = json.loads(payload)
+        return Job.from_primitive(self._orchestrator, job_record)
+
+    async def get_job(self, job_id: str) -> Job:
+        payload = self._job_records.get(job_id)
+        if payload is None:
+            raise JobError(f'no such job {job_id}')
+        return self._parse_job_payload(payload)
+
+    async def get_all_jobs(self) -> List[Job]:
+        jobs = []
+        for payload in self._job_records.values():
+            jobs.append(self._parse_job_payload(payload))
+        return jobs
+
+
+class JobsService:
+    def __init__(self, orchestrator: Orchestrator) -> None:
+        self._jobs_storage = InMemoryJobsStorage(orchestrator=orchestrator)
+        self._orchestrator = orchestrator
+
+    async def update_jobs_statuses(self):
+        for job in await self._jobs_storage.get_running_jobs():
+            await self._update_job_status(job)
+
+    async def _update_job_status(self, job: Job) -> None:
+        assert not job.is_finished
+        job.status = await self._orchestrator.status_job(job_id=job.id)
+        await self._jobs_storage.set_job(job)
 
     async def create_job(self, job_request: JobRequest) -> Tuple[Job, Status]:
         job = Job(orchestrator=self._orchestrator, job_request=job_request)
-        job_status = await job.start()
-        status = Status.create(job_status)
-        job_record = JobRecord(job=job, status=status)
-        await self.set_job(job_record)
+        job.status = await self._orchestrator.start_job(job.request)
+        status = Status.create(job.status)
+        await self._jobs_storage.set_job(job=job)
         return job, status
 
     async def get_job_status(self, job_id: str) -> JobStatus:
-        job_record = await self.get_job(job_id)
-        return job_record.job_status
+        job = await self._jobs_storage.get_job(job_id)
+        return job.status
 
-    async def set_job(self, job_record: JobRecord):
-        self._job_records[job_record.id] = job_record
+    async def get_job(self, job_id: str) -> Job:
+        return await self._jobs_storage.get_job(job_id)
 
-    async def get_job(self, job_id: str) -> JobRecord:
-        job_record = self._job_records.get(job_id)
-        if job_record is None:
-            raise JobError(f"not such job_id {job_id}")
-        return job_record
+    async def delete_job(self, job_id: str) -> None:
+        job = await self._jobs_storage.get_job(job_id)
+        if not job.is_finished:
+            await self._orchestrator.delete_job(job.id)
 
-    async def delete_job(self, job_id: str):
-        job_records = await self.get_job(job_id)
-        status = await job_records.job.delete()
-        if status != JobStatus.SUCCEEDED:
-            raise JobError(f'can not delete_job job with job_id {job_id}')
-        return status
-
-    async def get_all_jobs(self) -> List[dict]:
-        jobs_result = []
-        for job_record in self._job_records.values():
-            jobs_result.append(({'job_id': job_record.id, 'status': job_record.job_status}))
-        return jobs_result
+    async def get_all_jobs(self) -> List[Job]:
+        return await self._jobs_storage.get_all_jobs()
