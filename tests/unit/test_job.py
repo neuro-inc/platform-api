@@ -133,3 +133,47 @@ class TestJob:
         job_request = JobRequest(job_id='testjob', container=container)
         job = Job(orchestrator=mock_orchestrator, job_request=job_request)
         assert job.http_url == 'http://testjob.jobs'
+
+
+class TestJobRequest:
+    @pytest.fixture
+    def job_request_payload(self):
+        return {
+            'job_id': 'testjob',
+            'container': {
+                'image': 'testimage',
+                'resources': {'cpu': 1, 'memory_mb': 128, 'gpu': None},
+                'command': None,
+                'env': {'testvar': 'testval'},
+                'volumes': [{
+                    'src_path': '/src/path',
+                    'dst_path': '/dst/path',
+                    'read_only': False,
+                }],
+                'port': None,
+                'health_check_path': '/',
+            },
+        }
+
+    def test_to_primitive(self, job_request_payload):
+        container = Container(
+            image='testimage',
+            env={'testvar': 'testval'},
+            resources=ContainerResources(cpu=1, memory_mb=128),
+            volumes=[ContainerVolume(
+                src_path=PurePath('/src/path'),
+                dst_path=PurePath('/dst/path'))])
+        request = JobRequest(job_id='testjob', container=container)
+        assert request.to_primitive() == job_request_payload
+
+    def test_from_primitive(self, job_request_payload):
+        request = JobRequest.from_primitive(job_request_payload)
+        assert request.job_id == 'testjob'
+        expected_container = Container(
+            image='testimage',
+            env={'testvar': 'testval'},
+            resources=ContainerResources(cpu=1, memory_mb=128),
+            volumes=[ContainerVolume(
+                src_path=PurePath('/src/path'),
+                dst_path=PurePath('/dst/path'))])
+        assert request.container == expected_container

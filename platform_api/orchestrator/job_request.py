@@ -1,5 +1,5 @@
 import enum
-from dataclasses import dataclass, field
+from dataclasses import dataclass, field, asdict
 from pathlib import PurePath
 import shlex
 from typing import Dict, Optional, List
@@ -21,12 +21,32 @@ class ContainerVolume:
     def create(*args, **kwargs) -> 'ContainerVolume':
         return ContainerVolumeFactory(*args, **kwargs).create()
 
+    @classmethod
+    def from_primitive(cls, payload: Dict) -> 'ContainerVolume':
+        kwargs = payload.copy()
+        kwargs['src_path'] = PurePath(kwargs['src_path'])
+        kwargs['dst_path'] = PurePath(kwargs['dst_path'])
+        return cls(**kwargs)  # type: ignore
+
+    def to_primitive(self) -> Dict:
+        payload = asdict(self)
+        payload['src_path'] = str(payload['src_path'])
+        payload['dst_path'] = str(payload['dst_path'])
+        return payload
+
 
 @dataclass(frozen=True)
 class ContainerResources:
     cpu: float
     memory_mb: int
     gpu: Optional[int] = None
+
+    @classmethod
+    def from_primitive(cls, payload: Dict) -> 'ContainerResources':
+        return cls(**payload)  # type: ignore
+
+    def to_primitive(self) -> Dict:
+        return asdict(self)
 
 
 @dataclass(frozen=True)
@@ -49,6 +69,23 @@ class Container:
     def has_http_server_exposed(self) -> bool:
         return bool(self.port)
 
+    @classmethod
+    def from_primitive(cls, payload) -> 'Container':
+        kwargs = payload.copy()
+        kwargs['resources'] = ContainerResources.from_primitive(
+            kwargs['resources'])
+        kwargs['volumes'] = [
+            ContainerVolume.from_primitive(item)
+            for item in kwargs['volumes']]
+        return cls(**kwargs)  # type: ignore
+
+    def to_primitive(self) -> Dict:
+        payload = asdict(self)
+        payload['resources'] = self.resources.to_primitive()
+        payload['volumes'] = [
+            volume.to_primitive() for volume in self.volumes]
+        return payload
+
 
 @dataclass(frozen=True)
 class JobRequest:
@@ -59,6 +96,18 @@ class JobRequest:
     def create(cls, container) -> 'JobRequest':
         job_id = f'job-{uuid.uuid4()}'
         return cls(job_id, container)  # type: ignore
+
+    @classmethod
+    def from_primitive(cls, payload: Dict) -> 'JobRequest':
+        kwargs = payload.copy()
+        kwargs['container'] = Container.from_primitive(kwargs['container'])
+        return cls(**kwargs)  # type: ignore
+
+    def to_primitive(self) -> Dict:
+        return {
+            'job_id': self.job_id,
+            'container': self.container.to_primitive(),
+        }
 
 
 class JobStatus(str, enum.Enum):
