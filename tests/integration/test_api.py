@@ -88,9 +88,7 @@ class JobsClient:
             self, api, client, job_id: str):
         url = api.jobs_base_url + f'/{job_id}'
         async with client.delete(url) as response:
-            assert response.status == 200
-            result = await response.json()
-            assert result['status'] == 'succeeded'
+            assert response.status == 204
 
 
 @pytest.fixture
@@ -215,10 +213,10 @@ class TestJobs:
                 jobs_ids.append(job_id)
 
         jobs = await jobs_client.get_all_jobs(api=api, client=client)
-        assert set(jobs_ids) <= {x['job_id'] for x in jobs}
+        assert set(jobs_ids) <= {x['id'] for x in jobs}
         # clean
         for job in jobs:
-            await jobs_client.delete_job(api=api, client=client, job_id=job['job_id'])
+            await jobs_client.delete_job(api=api, client=client, job_id=job['id'])
 
     @pytest.mark.asyncio
     async def test_delete_job(self, api, client, model_train, jobs_client):
@@ -234,7 +232,7 @@ class TestJobs:
         jobs = await jobs_client.get_all_jobs(api=api, client=client)
         assert len(jobs) == 1
         assert jobs[0]['status'] == 'succeeded'
-        assert jobs[0]['job_id'] == job_id
+        assert jobs[0]['id'] == job_id
 
     @pytest.mark.asyncio
     async def test_delete_not_exist(self, api, client):
@@ -243,4 +241,4 @@ class TestJobs:
         async with client.delete(url) as response:
             assert response.status == 400
             result = await response.json()
-            assert result['error'] == f'not such job_id {job_id}'
+            assert result['error'] == f'no such job {job_id}'
