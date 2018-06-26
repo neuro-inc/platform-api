@@ -51,14 +51,9 @@ jobs:
             make gke_docker_push
 
       - run:
-          name: GKE Set Cluster
-          command: |
-            make gke_cluster_dev
-
-      - run:
           name: GKE K8s Deploy
           command: |
-            make gke_k8s_deploy
+            make gke_k8s_deploy_dev
 
   gke_stage_deploy:
     <<: *defaults
@@ -73,16 +68,11 @@ jobs:
           name: GKE Docker Push
           command: |
             make gke_docker_push
-
-      - run:
-          name: GKE Set Cluster
-          command: |
-            make gke_cluster_stage
-
+            
       - run:
           name: GKE K8s Deploy
           command: |
-            make gke_k8s_deploy
+            make gke_k8s_deploy_staging
 
   k8s:
     <<: *defaults

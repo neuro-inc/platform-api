@@ -19,7 +19,7 @@ spec:
     spec:
       containers:
       - name: platformapi
-        image: gcr.io/light-reality-205619/platformapi-k8s:latest
+        image: {{ printf "%s" (pluck .Values.global.env .Values.IMAGE | first | default .Values.IMAGE._default) }}
         imagePullPolicy: Always
         env:
         - name: NP_K8S_API_URL
@@ -29,7 +29,7 @@ spec:
         - name: NP_STORAGE_TYPE
           value: nfs
         - name: NP_STORAGE_NFS_SERVER
-          value: "{{ printf "%s" (pluck .Values.global.env .Values.platformapi.NP_STORAGE_NFS_SERVER | first | default .Values.platformapi.NP_STORAGE_NFS_SERVER._default) }}"
+          value: "{{ printf "%s" (pluck .Values.global.env .Values.NP_STORAGE_NFS_SERVER | first | default .Values.NP_STORAGE_NFS_SERVER._default) }}"
         - name: NP_STORAGE_NFS_PATH
           value: /nfs
         - name: NP_STORAGE_HOST_MOUNT_PATH
@@ -37,7 +37,7 @@ spec:
         - name: NP_K8S_JOBS_INGRESS_NAME
           value: platformjobsingress
         - name: NP_K8S_JOBS_INGRESS_DOMAIN_NAME
-          value: "{{ printf "%s" (pluck .Values.global.env .Values.platformapi.NP_K8S_JOBS_INGRESS_DOMAIN_NAME | first | default .Values.platformapi.NP_K8S_JOBS_INGRESS_DOMAIN_NAME._default) }}"
+          value: "{{ printf "%s" (pluck .Values.global.env .Values.NP_K8S_JOBS_INGRESS_DOMAIN_NAME | first | default .Values.NP_K8S_JOBS_INGRESS_DOMAIN_NAME._default) }}"
       - name: kubeproxy
         image: lachlanevenson/k8s-kubectl:v1.10.3
         args: [proxy]
@@ -63,7 +63,7 @@ metadata:
     traefik.frontend.rule.type: PathPrefix
 spec:
   rules:
-  - host: {{ printf "%s" (pluck .Values.global.env .Values.platformapi.INGRESS_HOST | first | default .Values.platformapi.INGRESS_HOST._default) }}
+  - host: {{ printf "%s" (pluck .Values.global.env .Values.INGRESS_HOST | first | default .Values.INGRESS_HOST._default) }}
     http:
       paths:
       - path: /api/v1/storage

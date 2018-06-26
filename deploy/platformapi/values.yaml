@@ -1,14 +1,16 @@
-platformapi:
-  NP_STORAGE_NFS_SERVER:
-    a: test
-    _default: '10.128.0.5'
-    dev: '10.128.0.5'
-    staging: '10.128.0.14'
-  NP_K8S_JOBS_INGRESS_DOMAIN_NAME:
-    _default: jobs.platform.dev.neuromation.io
-    dev: jobs.platform.dev.neuromation.io
-    staging: jobs.platform.staging.neuromation.io
-  INGRESS_HOST:
-    _default: platform.dev.neuromation.io
-    dev: platform.dev.neuromation.io
-    staging: platform.staging.neuromation.io
+IMAGE:
+  _default: gcr.io/light-reality-205619/platformapi-k8s:latest
+  dev: gcr.io/light-reality-205619/platformapi-k8s:latest
+  staging: gcr.io/light-reality-205619/platformapi-k8s:latest
+NP_STORAGE_NFS_SERVER:
+  _default: '10.128.0.5'
+  dev: '10.128.0.5'
+  staging: '10.128.0.14'
+NP_K8S_JOBS_INGRESS_DOMAIN_NAME:
+  _default: jobs.platform.dev.neuromation.io
+  dev: jobs.platform.dev.neuromation.io
+  staging: jobs.platform.staging.neuromation.io
+INGRESS_HOST:
+  _default: platform.dev.neuromation.io
+  dev: platform.dev.neuromation.io
+  staging: platform.staging.neuromation.io

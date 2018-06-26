@@ -133,21 +133,25 @@ gke_login:
 	sudo /opt/google-cloud-sdk/bin/gcloud --quiet config set container/cluster $(GKE_CLUSTER_NAME)
 	sudo /opt/google-cloud-sdk/bin/gcloud config set compute/zone $(GKE_COMPUTE_ZONE)
 
-gke_cluster_dev:
-	sudo /opt/google-cloud-sdk/bin/gcloud --quiet container clusters get-credentials $(GKE_CLUSTER_NAME)
-	sudo chown -R circleci: $(HOME)/.kube
-
-gke_cluster_stage:
-	sudo /opt/google-cloud-sdk/bin/gcloud --quiet container clusters get-credentials $(GKE_STAGE_CLUSTER_NAME)
-	sudo chown -R circleci: $(HOME)/.kube
-
 gke_docker_push: build_api_k8s
 	docker tag $(IMAGE_K8S):latest $(IMAGE_K8S):$(CIRCLE_SHA1)
 	sudo /opt/google-cloud-sdk/bin/gcloud docker -- push $(IMAGE_K8S)
 
-gke_k8s_deploy:
-	kubectl apply -f deploy/platformapi.gke.yml
-	kubectl apply -f deploy/platformjobsingress.gke.yml
-	kubectl patch deployment platformapi -p '{"spec":{"template":{"spec":{"containers":[{"name":"platformapi","image":"$(IMAGE_K8S):$(CIRCLE_SHA1)"}]}}}}'	        
-	kubectl rollout status deployment/platformapi
+gke_k8s_deploy_dev:
+	sudo /opt/google-cloud-sdk/bin/gcloud --quiet container clusters get-credentials $(GKE_CLUSTER_NAME)
+	sudo chown -R circleci: $(HOME)/.kube
+	helm --set "global.env=dev" --set "IMAGE=$(IMAGE_K8S):$(CIRCLE_SHA1)" --wait --timeout 600 upgrade platformapi deploy/platformapi/
+	#kubectl apply -f deploy/platformapi.gke.yml
+	#kubectl apply -f deploy/platformjobsingress.gke.yml
+	#kubectl patch deployment platformapi -p '{"spec":{"template":{"spec":{"containers":[{"name":"platformapi","image":"$(IMAGE_K8S):$(CIRCLE_SHA1)"}]}}}}'	        
+	#kubectl rollout status deployment/platformapi
+	
+gke_k8s_deploy_staging:
+	sudo /opt/google-cloud-sdk/bin/gcloud --quiet container clusters get-credentials $(GKE_STAGE_CLUSTER_NAME)
+	sudo chown -R circleci: $(HOME)/.kube
+	helm --set "global.env=staging" --set "IMAGE=$(IMAGE_K8S):$(CIRCLE_SHA1)" --wait --timeout 600 upgrade platformapi deploy/platformapi/
+	#kubectl apply -f deploy/platformapi.gke.yml
+	#kubectl apply -f deploy/platformjobsingress.gke.yml
+	#kubectl patch deployment platformapi -p '{"spec":{"template":{"spec":{"containers":[{"name":"platformapi","image":"$(IMAGE_K8S):$(CIRCLE_SHA1)"}]}}}}'	        
+	#kubectl rollout status deployment/platformapi
 	
