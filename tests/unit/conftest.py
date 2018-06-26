@@ -5,7 +5,7 @@ import pytest
 
 from platform_api.config import KubeConfig
 from platform_api.orchestrator import (
-    JobStatus, JobsService, JobRequest, Orchestrator)
+    Job, JobStatus, JobsService, JobRequest, Orchestrator)
 from platform_api.orchestrator.job_request import (
     Container, ContainerResources,)
 
@@ -19,11 +19,15 @@ class MockOrchestrator(Orchestrator):
     def config(self):
         return self._config
 
-    async def start_job(self, *args, **kwargs):
+    async def start_job(self, job: Job):
+        job.status = JobStatus.PENDING
         return JobStatus.PENDING
 
     async def status_job(self, *args, **kwargs):
         return self._mock_status_to_return
+
+    async def update_job_status(self, job: Job) -> None:
+        job.status = await self.status_job(job.id)
 
     async def delete_job(self, *args, **kwargs):
         return JobStatus.SUCCEEDED

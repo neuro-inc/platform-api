@@ -1,12 +1,11 @@
 from typing import Dict
 
-from .job_request import Container, JobRequest, JobStatus
-from .base import Orchestrator
+from .job_request import JobRequest, JobStatus
 
 
 class Job:
     def __init__(
-            self, orchestrator: Orchestrator, job_request: JobRequest,
+            self, orchestrator: 'Orchestrator', job_request: JobRequest,
             status: JobStatus=JobStatus.PENDING) -> None:
         # TODO: replace Orchestrator with OrchestratorConfig/KubeConfig
         self._orchestrator = orchestrator
@@ -16,10 +15,10 @@ class Job:
 
     # WARNING: these three methods to be deleted soon
     async def start(self) -> JobStatus:
-        return await self._orchestrator.start_job(self._job_request)
+        return await self._orchestrator.start_job(self)
 
     async def delete(self) -> JobStatus:
-        return await self._orchestrator.delete_job(job_id=self.id)
+        return await self._orchestrator.delete_job(self)
 
     async def query_status(self) -> JobStatus:
         return await self._orchestrator.status_job(job_id=self.id)
@@ -62,7 +61,7 @@ class Job:
         }
 
     @classmethod
-    def from_primitive(cls, orchestrator: Orchestrator, payload: Dict) -> 'Job':
+    def from_primitive(cls, orchestrator: 'Orchestrator', payload: Dict) -> 'Job':
         job_request = JobRequest.from_primitive(payload['request'])
         status = JobStatus(payload['status'])
         return cls(
