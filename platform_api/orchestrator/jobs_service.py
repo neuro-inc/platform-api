@@ -71,12 +71,12 @@ class JobsService:
 
     async def _update_job_status(self, job: Job) -> None:
         assert not job.is_finished
-        job.status = await self._orchestrator.status_job(job_id=job.id)
+        await self._orchestrator.update_job_status(job)
         await self._jobs_storage.set_job(job)
 
     async def create_job(self, job_request: JobRequest) -> Tuple[Job, Status]:
         job = Job(orchestrator=self._orchestrator, job_request=job_request)
-        job.status = await self._orchestrator.start_job(job.request)
+        await self._orchestrator.start_job(job)
         status = Status.create(job.status)
         await self._jobs_storage.set_job(job=job)
         return job, status
