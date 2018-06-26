@@ -141,19 +141,11 @@ gke_docker_push: build_api_k8s
 gke_k8s_deploy_dev:
 	sudo /opt/google-cloud-sdk/bin/gcloud --quiet container clusters get-credentials $(GKE_CLUSTER_NAME)
 	sudo chown -R circleci: $(HOME)/.kube
-	helm --set "global.env=dev" --set "IMAGE=$(IMAGE_K8S):$(CIRCLE_SHA1)" --wait --timeout 600 upgrade platformapi deploy/platformapi/
-	#kubectl apply -f deploy/platformapi.gke.yml
-	#kubectl apply -f deploy/platformjobsingress.gke.yml
-	#kubectl patch deployment platformapi -p '{"spec":{"template":{"spec":{"containers":[{"name":"platformapi","image":"$(IMAGE_K8S):$(CIRCLE_SHA1)"}]}}}}'	        
-	#kubectl rollout status deployment/platformapi
+	helm --set "global.env=dev" --set "values.IMAGE=$(IMAGE_K8S):$(CIRCLE_SHA1)" --wait --timeout 600 upgrade platformapi deploy/platformapi/
 	
 gke_k8s_deploy_staging:
 	sudo /opt/google-cloud-sdk/bin/gcloud --quiet container clusters get-credentials $(GKE_STAGE_CLUSTER_NAME)
 	sudo chown -R circleci: $(HOME)/.kube
-	helm --set "global.env=staging" --set "IMAGE=$(IMAGE_K8S):$(CIRCLE_SHA1)" --wait --timeout 600 upgrade platformapi deploy/platformapi/
-	#kubectl apply -f deploy/platformapi.gke.yml
-	#kubectl apply -f deploy/platformjobsingress.gke.yml
-	#kubectl patch deployment platformapi -p '{"spec":{"template":{"spec":{"containers":[{"name":"platformapi","image":"$(IMAGE_K8S):$(CIRCLE_SHA1)"}]}}}}'	        
-	#kubectl rollout status deployment/platformapi
+	helm --set "global.env=staging" --set "values.IMAGE=$(IMAGE_K8S):$(CIRCLE_SHA1)" --wait --timeout 600 upgrade platformapi deploy/platformapi/
 
 	
