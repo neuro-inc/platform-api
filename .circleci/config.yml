@@ -136,4 +136,4 @@ workflows:
           filters:
             branches:
               only:
-                - gke_stage_deploy
+                - /release.*/
