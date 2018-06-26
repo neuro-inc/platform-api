@@ -155,4 +155,5 @@ gke_k8s_deploy_staging:
 	#kubectl apply -f deploy/platformjobsingress.gke.yml
 	#kubectl patch deployment platformapi -p '{"spec":{"template":{"spec":{"containers":[{"name":"platformapi","image":"$(IMAGE_K8S):$(CIRCLE_SHA1)"}]}}}}'	        
 	#kubectl rollout status deployment/platformapi
+
 	
