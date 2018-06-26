@@ -2,6 +2,7 @@ import asyncio
 from pathlib import PurePath
 import uuid
 
+from async_timeout import timeout
 import aiohttp
 import pytest
 
@@ -323,3 +324,59 @@ class TestKubeOrchestrator:
                 job.id)
         finally:
             await job.delete()
+
+    @pytest.fixture
+    async def delete_job_later(self, kube_orchestrator):
+        jobs = []
+
+        async def _add_job(job):
+            jobs.append(job)
+
+        yield _add_job
+
+        for job in jobs:
+            try:
+                await kube_orchestrator.delete_job(job)
+            except Exception:
+                pass
+
+    async def _assert_no_such_ingress_rule(
+            self, kube_client, ingress_name, host,
+            timeout_s: int=1, interval_s: int=1):
+        try:
+            async with timeout(timeout_s):
+                while True:
+                    ingress = await kube_client.get_ingress(ingress_name)
+                    rule_idx = ingress.find_rule_index_by_host(host)
+                    if rule_idx == -1:
+                        break
+                    await asyncio.sleep(interval_s)
+        except asyncio.TimeoutError:
+            pytest.fail('Ingress still exists')
+
+    @pytest.mark.asyncio
+    async def test_update_job_status(
+            self, kube_config, kube_client, kube_orchestrator,
+            delete_job_later):
+        container = Container(
+            image='ubuntu', command='sleep 5',
+            resources=ContainerResources(cpu=0.1, memory_mb=128),
+            port=80)
+        job = Job(
+            orchestrator=kube_orchestrator,
+            job_request=JobRequest.create(container))
+        await delete_job_later(job)
+        assert not job.is_finished
+
+        await kube_orchestrator.start_job(job)
+        assert not job.is_finished
+
+        await self.wait_for_success(job)
+        assert not job.is_finished
+
+        await kube_orchestrator.update_job_status(job)
+        assert job.is_finished
+
+        await self._assert_no_such_ingress_rule(
+            kube_client, ingress_name=kube_config.jobs_ingress_name,
+            host=kube_config.jobs_ingress_domain_name)
