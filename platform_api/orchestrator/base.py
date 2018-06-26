@@ -1,5 +1,7 @@
 from abc import ABC, abstractmethod
-from .job_request import JobRequest, JobStatus
+
+from .job import Job
+from .job_request import JobStatus
 
 
 class Orchestrator(ABC):
@@ -9,7 +11,7 @@ class Orchestrator(ABC):
         pass
 
     @abstractmethod
-    async def start_job(self, job_request: JobRequest) -> JobStatus:
+    async def start_job(self, job: Job) -> JobStatus:
         pass
 
     @abstractmethod
@@ -17,5 +19,9 @@ class Orchestrator(ABC):
         pass
 
     @abstractmethod
-    async def delete_job(self, job_id: str) -> JobStatus:
+    async def update_job_status(self, job: Job) -> None:
+        pass
+
+    @abstractmethod
+    async def delete_job(self, job: Job) -> JobStatus:
         pass
