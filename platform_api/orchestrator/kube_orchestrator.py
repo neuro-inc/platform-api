@@ -11,6 +11,7 @@ from urllib.parse import urlsplit
 import aiohttp
 
 from .base import Orchestrator
+from .job import Job
 from .job_request import (
     Container, ContainerResources, ContainerVolume,
     JobRequest, JobStatus, JobError
@@ -657,19 +658,28 @@ class KubeOrchestrator(Orchestrator):
         if self._client:
             await self._client.close()
 
-    async def start_job(self, job_request: JobRequest) -> JobStatus:
+    async def start_job(self, job: Job) -> JobStatus:
         descriptor = PodDescriptor.from_job_request(
-            self._storage_volume, job_request)
+            self._storage_volume, job.request)
         status = await self._client.create_pod(descriptor)
-        # TODO: have a properly named property
-        if descriptor.port:
+        if job.has_http_server_exposed:
             await self._create_service(descriptor)
+        job.status = status.status
         return status.status
 
     async def status_job(self, job_id: str) -> JobStatus:
         pod_id = job_id
         status = await self._client.get_pod_status(pod_id)
         return status.status
+
+    async def update_job_status(self, job: Job) -> None:
+        if job.is_finished:
+            return
+
+        job.status = await self.status_job(job.id)
+
+        if job.is_finished:
+            await self.delete_job(job)
 
     async def _create_service(self, pod: PodDescriptor) -> None:
         service = await self._client.create_service(
@@ -699,9 +709,9 @@ class KubeOrchestrator(Orchestrator):
         except Exception:
             logger.exception(f'Failed to remove service {pod_id}')
 
-    async def delete_job(self, job_id: str) -> JobStatus:
-        pod_id = job_id
-        # TODO: make this call conditional
-        await self._delete_service(pod_id)
+    async def delete_job(self, job: Job) -> JobStatus:
+        pod_id = job.id
+        if job.has_http_server_exposed:
+            await self._delete_service(pod_id)
         status = await self._client.delete_pod(pod_id)
         return status.status
