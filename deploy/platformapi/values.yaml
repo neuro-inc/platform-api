@@ -1,0 +1,14 @@
+platformapi:
+  NP_STORAGE_NFS_SERVER:
+    a: test
+    _default: '10.128.0.5'
+    dev: '10.128.0.5'
+    staging: '10.128.0.14'
+  NP_K8S_JOBS_INGRESS_DOMAIN_NAME:
+    _default: jobs.platform.dev.neuromation.io
+    dev: jobs.platform.dev.neuromation.io
+    staging: jobs.platform.staging.neuromation.io
+  INGRESS_HOST:
+    _default: platform.dev.neuromation.io
+    dev: platform.dev.neuromation.io
+    staging: platform.staging.neuromation.io

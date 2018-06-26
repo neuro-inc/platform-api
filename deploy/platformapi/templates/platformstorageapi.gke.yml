@@ -31,7 +31,7 @@ spec:
       volumes:
         - name: storage
           nfs:
-            server: 10.128.0.5
+            server: {{ printf "%s" (pluck .Values.global.env .Values.platformapi.NP_STORAGE_NFS_SERVER | first | default .Values.platformapi.NP_STORAGE_NFS_SERVER._default) }}
             path: /nfs
 ---
 apiVersion: v1
