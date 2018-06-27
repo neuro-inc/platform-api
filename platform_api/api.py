@@ -3,11 +3,12 @@ import logging
 
 import aiohttp.web
 
-from .config import Config, EnvironConfigFactory
+from .config import Config
+from .config_factory import EnvironConfigFactory
 from .handlers import (
     ModelsHandler, JobsHandler)
 from .orchestrator import (
-    KubeOrchestrator, KubeConfig, JobsService, JobsService,
+    KubeOrchestrator, KubeConfig, JobsService,
     JobError, Orchestrator, JobsStatusPooling,)
 
 
