@@ -379,8 +379,8 @@ class TestKubeOrchestrator:
             image='ubuntu', command='sleep 5',
             resources=ContainerResources(cpu=0.1, memory_mb=128),
             port=80)
-        job = Job(
-            orchestrator_config=kube_orchestrator.config,
+        job = TestJob(
+            orchestrator=kube_orchestrator,
             job_request=JobRequest.create(container))
         await delete_job_later(job)
         assert not job.is_finished
