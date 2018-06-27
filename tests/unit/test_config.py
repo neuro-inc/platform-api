@@ -2,7 +2,35 @@ from pathlib import PurePath
 
 import pytest
 
-from platform_api.config import EnvironConfigFactory
+from platform_api.config import (
+    StorageConfig, StorageType,)
+from platform_api.config_factory import EnvironConfigFactory
+
+
+class TestStorageConfig:
+    def test_missing_nfs_settings(self):
+        with pytest.raises(ValueError, match='Missing NFS settings'):
+            StorageConfig(
+                host_mount_path=PurePath('/tmp'),
+                type=StorageType.NFS,
+            )
+
+    def test_redundant_nfs_settings(self):
+        with pytest.raises(ValueError, match='Redundant NFS settings'):
+            StorageConfig(
+                host_mount_path=PurePath('/tmp'),
+                type=StorageType.HOST,
+                nfs_server='1.2.3.4',
+            )
+
+    def test_is_nfs(self):
+        config = StorageConfig(
+            host_mount_path=PurePath('/tmp'),
+            type=StorageType.NFS,
+            nfs_server='1.2.3.4',
+            nfs_export_path=PurePath('/tmp'),
+        )
+        assert config.is_nfs
 
 
 class TestEnvironConfigFactory:
