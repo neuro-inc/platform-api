@@ -44,6 +44,14 @@ class StorageConfig:
     def is_nfs(self) -> bool:
         return self.type == StorageType.NFS
 
+    @classmethod
+    def create_nfs(cls, *args, **kwargs) -> 'StorageConfig':
+        return cls(*args, type=StorageType.NFS, **kwargs)  # type: ignore
+
+    @classmethod
+    def create_host(cls, *args, **kwargs) -> 'StorageConfig':
+        return cls(*args, **kwargs)  # type: ignore
+
 
 @dataclass(frozen=True)
 class OrchestratorConfig:
