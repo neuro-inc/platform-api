@@ -131,7 +131,9 @@ class TestJob:
             port=1234,
         )
         job_request = JobRequest(job_id='testjob', container=container)
-        job = Job(orchestrator=mock_orchestrator, job_request=job_request)
+        job = Job(
+            orchestrator_config=mock_orchestrator.config,
+            job_request=job_request)
         assert job.http_url == 'http://testjob.jobs'
 
 

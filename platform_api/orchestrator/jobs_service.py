@@ -75,7 +75,9 @@ class JobsService:
         await self._jobs_storage.set_job(job)
 
     async def create_job(self, job_request: JobRequest) -> Tuple[Job, Status]:
-        job = Job(orchestrator=self._orchestrator, job_request=job_request)
+        job = Job(
+            orchestrator_config=self._orchestrator.config,
+            job_request=job_request)
         await self._orchestrator.start_job(job)
         status = Status.create(job.status)
         await self._jobs_storage.set_job(job=job)

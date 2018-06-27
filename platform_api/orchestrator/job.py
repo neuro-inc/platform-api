@@ -1,27 +1,18 @@
 from typing import Dict
 
+from ..config import OrchestratorConfig
 from .job_request import JobRequest, JobStatus
 
 
 class Job:
     def __init__(
-            self, orchestrator: 'Orchestrator', job_request: JobRequest,
+            self, orchestrator_config: OrchestratorConfig,
+            job_request: JobRequest,
             status: JobStatus=JobStatus.PENDING) -> None:
-        # TODO: replace Orchestrator with OrchestratorConfig/KubeConfig
-        self._orchestrator = orchestrator
+        self._orchestrator_config = orchestrator_config
         self._job_request = job_request
         # TODO: introduce JobStatus object with diagnostic info
         self._status = status
-
-    # WARNING: these three methods to be deleted soon
-    async def start(self) -> JobStatus:
-        return await self._orchestrator.start_job(self)
-
-    async def delete(self) -> JobStatus:
-        return await self._orchestrator.delete_job(self)
-
-    async def query_status(self) -> JobStatus:
-        return await self._orchestrator.status_job(job_id=self.id)
 
     @property
     def id(self):
@@ -50,7 +41,7 @@ class Job:
     @property
     def http_url(self) -> str:
         assert self.has_http_server_exposed
-        jobs_domain_name = self._orchestrator.config.jobs_ingress_domain_name
+        jobs_domain_name = self._orchestrator_config.jobs_domain_name
         return f'http://{self.id}.{jobs_domain_name}'
 
     def to_primitive(self) -> Dict:
@@ -61,8 +52,11 @@ class Job:
         }
 
     @classmethod
-    def from_primitive(cls, orchestrator: 'Orchestrator', payload: Dict) -> 'Job':
+    def from_primitive(
+            cls, orchestrator_config: OrchestratorConfig,
+            payload: Dict) -> 'Job':
         job_request = JobRequest.from_primitive(payload['request'])
         status = JobStatus(payload['status'])
         return cls(
-            orchestrator=orchestrator, job_request=job_request, status=status)
+            orchestrator_config=orchestrator_config,
+            job_request=job_request, status=status)
