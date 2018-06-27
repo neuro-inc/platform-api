@@ -1,6 +1,6 @@
 from abc import ABC, abstractmethod
 
-from .config import OrchestratorConfig
+from ..config import OrchestratorConfig
 from .job import Job
 from .job_request import JobStatus
 
