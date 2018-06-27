@@ -1,0 +1,8 @@
+
+Dev : 
+	- helm --set "global.env=dev" install platformapi --name=platformapi
+        - helm install traefik --name=traefik
+
+Stage : 
+	- helm --set "global.env=stage" install platformapi --name=platformapi
+        - helm install traefik --name=traefik

@@ -36,7 +36,7 @@ jobs:
       - store_test_results:
           path: /tmp/test-results
 
-  gke_deploy:
+  gke_dev_deploy:
     <<: *defaults
     steps:
       - checkout
@@ -53,7 +53,27 @@ jobs:
       - run:
           name: GKE K8s Deploy
           command: |
-            make gke_k8s_deploy
+            make gke_k8s_deploy_dev
+
+  gke_stage_deploy:
+    <<: *defaults
+    steps:
+      - checkout
+      - run:
+          name: GKE Auth
+          command: |
+            make -s gke_login
+
+      - run:
+          name: GKE Docker Push
+          command: |
+            make gke_docker_push
+            
+      - run:
+          name: GKE K8s Deploy
+          command: |
+            make gke_k8s_deploy_staging
+
   k8s:
     <<: *defaults
     steps:
@@ -99,7 +119,7 @@ workflows:
           context: org-global
       - test:
           context: org-global
-      - gke_deploy:
+      - gke_dev_deploy:
           context: org-global
           requires:
             - k8s
@@ -107,4 +127,13 @@ workflows:
           filters:
             branches:
               only:
-                - master
+                - master                
+      - gke_stage_deploy:
+          context: org-global
+          requires:
+            - k8s
+            - test
+          filters:
+            branches:
+              only:
+                - /release.*/
