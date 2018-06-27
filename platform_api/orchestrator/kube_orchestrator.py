@@ -11,6 +11,7 @@ from urllib.parse import urlsplit
 import aiohttp
 
 from .base import Orchestrator
+from ..config import OrchestratorConfig
 from .job import Job
 from .job_request import (
     Container, ContainerResources, ContainerVolume,
@@ -386,11 +387,6 @@ class PodStatus:
         return cls(payload)
 
 
-class VolumeType(str, enum.Enum):
-    HOST = 'host'
-    NFS = 'nfs'
-
-
 class KubeClientAuthType(str, enum.Enum):
     NONE = 'none'
     # TODO: TOKEN = 'token'
@@ -398,11 +394,8 @@ class KubeClientAuthType(str, enum.Enum):
 
 
 @dataclass(frozen=True)
-class KubeConfig:
-    storage_mount_path: PurePath
-
+class KubeConfig(OrchestratorConfig):
     jobs_ingress_name: str
-    jobs_ingress_domain_name: str
 
     endpoint_url: str
     cert_authority_path: Optional[str] = None
@@ -417,9 +410,27 @@ class KubeConfig:
     client_read_timeout_s: int = 300
     client_conn_pool_size: int = 100
 
-    storage_type: VolumeType = VolumeType.HOST
-    nfs_volume_server: Optional[str] = None
-    nfs_volume_export_path: Optional[PurePath] = None
+    storage_volume_name: str = 'storage'
+
+    @property
+    def storage_mount_path(self) -> PurePath:
+        return self.storage.host_mount_path
+
+    @property
+    def jobs_ingress_domain_name(self) -> str:
+        return self.jobs_domain_name
+
+    def create_storage_volume(self) -> Volume:
+        if self.storage.is_nfs:
+            return NfsVolume(  # type: ignore
+                name=self.storage_volume_name,
+                server=self.storage.nfs_server,
+                path=self.storage.nfs_export_path,
+            )
+        return HostVolume(  # type: ignore
+            name=self.storage_volume_name,
+            path=self.storage_mount_path,
+        )
 
 
 class KubeClient:
@@ -633,22 +644,11 @@ class KubeOrchestrator(Orchestrator):
             conn_pool_size=config.client_conn_pool_size
         )
 
-        self._storage_volume = self._create_storage_volume()
+        self._storage_volume = self._config.create_storage_volume()
 
     @property
     def config(self) -> KubeConfig:
         return self._config
-
-    def _create_storage_volume(self) -> Volume:
-        name = 'storage'
-        if self._config.storage_type == VolumeType.NFS:
-            return NfsVolume(  # type: ignore
-                name=name,
-                server=self._config.nfs_volume_server,
-                path=self._config.nfs_volume_export_path,
-            )
-        return HostVolume(  # type: ignore
-            name=name, path=self._config.storage_mount_path)
 
     async def __aenter__(self) -> 'KubeOrchestrator':
         await self._client.init()
