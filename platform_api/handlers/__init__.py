@@ -1,2 +1,2 @@
-from .models_handler import ModelsHandler
-from .jobs_handler import JobsHandler
+from .models_handler import ModelsHandler  # noqa
+from .jobs_handler import JobsHandler  # noqa
