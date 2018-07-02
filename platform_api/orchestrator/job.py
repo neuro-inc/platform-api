@@ -1,6 +1,6 @@
 from typing import Dict
 
-from ..config import OrchestratorConfig
+from ..config import OrchestratorConfig  # noqa
 from .job_request import JobRequest, JobStatus
 
 
