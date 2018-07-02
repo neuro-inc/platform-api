@@ -16,7 +16,8 @@ from platform_api.orchestrator.kube_orchestrator import (
 class TestVolume:
     @pytest.mark.parametrize('volume', (
         HostVolume('testvolume', path='/host'),  # type: ignore
-        NfsVolume('testvolume', server='1.2.3.4', path='/host'),  # type: ignore
+        NfsVolume(
+            'testvolume', server='1.2.3.4', path='/host'),  # type: ignore
     ))
     def test_create_mount(self, volume):
         container_volume = ContainerVolume(

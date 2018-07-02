@@ -467,7 +467,7 @@ class KubeClient:
         ssl_context = ssl.create_default_context(
             cafile=self._cert_authority_path)
         if self._auth_type == KubeClientAuthType.CERTIFICATE:
-            ssl_context.load_cert_chain(
+            ssl_context.load_cert_chain(  # noqa
                 self._auth_cert_path, self._auth_cert_key_path)
         return ssl_context
 

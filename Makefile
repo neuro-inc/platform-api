@@ -147,5 +147,3 @@ gke_k8s_deploy_staging:
 	sudo /opt/google-cloud-sdk/bin/gcloud --quiet container clusters get-credentials $(GKE_STAGE_CLUSTER_NAME)
 	sudo chown -R circleci: $(HOME)/.kube
 	helm --set "global.env=staging" --set "values.IMAGE=$(IMAGE_K8S):$(CIRCLE_SHA1)" --wait --timeout 600 upgrade platformapi deploy/platformapi/
-
-	
