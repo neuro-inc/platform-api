@@ -11,10 +11,10 @@ from urllib.parse import urlsplit
 import aiohttp
 
 from .base import Orchestrator
-from ..config import OrchestratorConfig
+from ..config import OrchestratorConfig  # noqa
 from .job import Job
 from .job_request import (
-    Container, ContainerResources, ContainerVolume,
+    ContainerResources, ContainerVolume,
     JobRequest, JobStatus, JobError
 )
 
@@ -32,11 +32,11 @@ class StatusException(KubeClientException):
 
 def _raise_status_job_exception(pod: dict, job_id: str):
     if pod['code'] == 409:
-        raise JobError(f"job with {job_id} already exist")
+        raise JobError(f'job with {job_id} already exist')
     elif pod['code'] == 404:
-        raise JobError(f"job with {job_id} not exist")
+        raise JobError(f'job with {job_id} not exist')
     elif pod['code'] == 422:
-        raise JobError(f"cant create job with id {job_id}")
+        raise JobError(f'cant create job with id {job_id}')
     else:
         raise JobError('unexpected')
 
@@ -328,7 +328,7 @@ class PodDescriptor:
     def _assert_resource_kind(cls, expected_kind: str, payload: Dict):
         kind = payload['kind']
         if kind == 'Status':
-            _raise_status_job_exception(payload, job_id=None)
+            _raise_status_job_exception(payload, job_id='')
         elif kind != expected_kind:
             raise ValueError(f'unknown kind: {kind}')
 
