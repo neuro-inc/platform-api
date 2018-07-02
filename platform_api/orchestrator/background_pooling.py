@@ -2,14 +2,16 @@ import asyncio
 import logging
 from typing import Optional
 
+from .jobs_service import JobsService
 
-from .jobs_service import JobsService, JobError
 
 logger = logging.getLogger(__name__)
 
 
 class JobsStatusPooling:
-    def __init__(self, *, jobs_service: JobsService, interval_s: int = 1, loop: Optional[asyncio.AbstractEventLoop] = None):
+    def __init__(
+            self, *, jobs_service: JobsService, interval_s: int = 1,
+            loop: Optional[asyncio.AbstractEventLoop] = None) -> None:
         self._loop = loop or asyncio.get_event_loop()
 
         self._jobs_service = jobs_service
@@ -57,7 +59,8 @@ class JobsStatusPooling:
         try:
             await self._jobs_service.update_jobs_statuses()
         except Exception:
-            logger.exception("exception when trying update jobs status")
+            logger.exception('exception when trying update jobs status')
 
     async def _wait(self):
-        await asyncio.wait((self._is_active,), loop=self._loop, timeout=self._interval_s)
+        await asyncio.wait(
+            (self._is_active,), loop=self._loop, timeout=self._interval_s)

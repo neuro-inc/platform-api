@@ -1,5 +1,4 @@
 from abc import ABC, abstractmethod
-from dataclasses import dataclass
 import json
 from typing import List, Tuple, Dict
 import logging
@@ -45,7 +44,7 @@ class InMemoryJobsStorage(JobsStorage):
 
     def _parse_job_payload(self, payload: str) -> Job:
         job_record = json.loads(payload)
-        return Job.from_primitive(self._orchestrator, job_record)
+        return Job.from_primitive(self._orchestrator.config, job_record)
 
     async def get_job(self, job_id: str) -> Job:
         payload = self._job_records.get(job_id)

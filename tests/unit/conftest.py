@@ -46,12 +46,12 @@ def job_request_factory():
     return factory
 
 
-@pytest.fixture(scope="function")
+@pytest.fixture(scope='function')
 def mock_job_request(job_request_factory):
     return job_request_factory()
 
 
-@pytest.fixture(scope="function")
+@pytest.fixture(scope='function')
 def mock_orchestrator():
     storage_config = StorageConfig(host_mount_path=PurePath('/tmp'))
     config = KubeConfig(
@@ -63,7 +63,7 @@ def mock_orchestrator():
     return MockOrchestrator(config=config)
 
 
-@pytest.fixture(scope="function")
+@pytest.fixture(scope='function')
 def jobs_service(mock_orchestrator):
     return JobsService(orchestrator=mock_orchestrator)
 

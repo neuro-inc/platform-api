@@ -107,7 +107,8 @@ class TestKubeOrchestrator:
             assert status == JobStatus.FAILED
 
     @pytest.mark.asyncio
-    async def test_start_job_with_not_unique_id(self, kube_orchestrator, job_nginx):
+    async def test_start_job_with_not_unique_id(
+            self, kube_orchestrator, job_nginx):
         status = await job_nginx.start()
         assert status == JobStatus.PENDING
 
@@ -116,7 +117,8 @@ class TestKubeOrchestrator:
         container = Container(
             image='python',
             resources=ContainerResources(cpu=0.1, memory_mb=128))
-        job_request_second = JobRequest(job_id=job_nginx.id, container=container)
+        job_request_second = JobRequest(
+            job_id=job_nginx.id, container=container)
         job_second = TestJob(
             orchestrator=kube_orchestrator, job_request=job_request_second)
         with pytest.raises(JobError):
@@ -137,7 +139,7 @@ class TestKubeOrchestrator:
 
     @pytest.mark.asyncio
     async def test_broken_job_id(self, kube_orchestrator):
-        job_id = "some_BROCKEN_JOB-123@#$%^&*(______------ID"
+        job_id = 'some_BROCKEN_JOB-123@#$%^&*(______------ID'
         container = Container(
             image='python',
             resources=ContainerResources(cpu=0.1, memory_mb=128))
