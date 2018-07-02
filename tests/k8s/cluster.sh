@@ -34,6 +34,7 @@ function k8s::start {
     export MINIKUBE_HOME=$HOME
     export CHANGE_MINIKUBE_NONE_USER=true
 
+    sudo -E minikube config set WantReportErrorPrompt false
     sudo -E minikube start --vm-driver=none
 
     k8s::wait
