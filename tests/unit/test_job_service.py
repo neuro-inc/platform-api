@@ -24,12 +24,12 @@ class TestInMemoryJobsStorage:
         jobs_storage = InMemoryJobsStorage(orchestrator=mock_orchestrator)
 
         pending_job = Job(
-            orchestrator=mock_orchestrator,
+            orchestrator_config=mock_orchestrator.config,
             job_request=self._create_job_request())
         await jobs_storage.set_job(pending_job)
 
         succeeded_job = Job(
-            orchestrator=mock_orchestrator,
+            orchestrator_config=mock_orchestrator.config,
             job_request=self._create_job_request(),
             status=JobStatus.SUCCEEDED)
         await jobs_storage.set_job(succeeded_job)

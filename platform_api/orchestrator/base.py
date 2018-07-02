@@ -1,5 +1,6 @@
 from abc import ABC, abstractmethod
 
+from ..config import OrchestratorConfig
 from .job import Job
 from .job_request import JobStatus
 
@@ -7,7 +8,7 @@ from .job_request import JobStatus
 class Orchestrator(ABC):
     @property
     @abstractmethod
-    def config(self):
+    def config(self) -> OrchestratorConfig:
         pass
 
     @abstractmethod
