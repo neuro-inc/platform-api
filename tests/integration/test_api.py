@@ -34,7 +34,8 @@ class ApiConfig(NamedTuple):
 @pytest.fixture
 def config(kube_config):
     server_config = ServerConfig()
-    storage_config = StorageConfig(host_mount_path=PurePath('/tmp'))  # type: ignore
+    storage_config = StorageConfig(
+        host_mount_path=PurePath('/tmp'))  # type: ignore
     return Config(
         server=server_config,
         storage=storage_config,
@@ -133,7 +134,8 @@ class TestModels:
             expected_url = f'http://{job_id}.jobs.platform.neuromation.io'
             assert result['http_url'] == expected_url
 
-        await jobs_client.long_pooling_by_job_id(api=api, client=client, job_id=job_id, status='succeeded')
+        await jobs_client.long_pooling_by_job_id(
+            api=api, client=client, job_id=job_id, status='succeeded')
         await jobs_client.delete_job(api=api, client=client, job_id=job_id)
 
     @pytest.mark.asyncio
@@ -157,17 +159,18 @@ class TestModels:
             result = await response.json()
             assert result['status'] in ['pending']
             job_id = result['job_id']
-        await jobs_client.long_pooling_by_job_id(api=api, client=client, job_id=job_id, status='succeeded')
+        await jobs_client.long_pooling_by_job_id(
+            api=api, client=client, job_id=job_id, status='succeeded')
         await jobs_client.delete_job(api=api, client=client, job_id=job_id)
 
     @pytest.mark.asyncio
     async def test_incorrect_request(self, api, client):
-        json_model_train = {"wrong_key": "wrong_value"}
+        json_model_train = {'wrong_key': 'wrong_value'}
         url = api.model_base_url
         async with client.post(url, json=json_model_train) as response:
             assert response.status == 400
             data = await response.json()
-            assert ''''container': DataError(is required)''' in data['error']
+            assert """'container': DataError(is required)""" in data['error']
 
     @pytest.mark.asyncio
     async def test_broken_docker_image(self, api, client, jobs_client):
@@ -189,7 +192,8 @@ class TestModels:
             assert response.status == 202
             data = await response.json()
             job_id = data['job_id']
-        await jobs_client.long_pooling_by_job_id(api=api, client=client, job_id=job_id, status='failed')
+        await jobs_client.long_pooling_by_job_id(
+            api=api, client=client, job_id=job_id, status='failed')
 
 
 class TestJobs:
@@ -199,7 +203,8 @@ class TestJobs:
         assert jobs == []
 
     @pytest.mark.asyncio
-    async def test_get_jobs_return_corrects_id(self, jobs_client, api, client, model_train):
+    async def test_get_jobs_return_corrects_id(
+            self, jobs_client, api, client, model_train):
         jobs_ids = []
         n_jobs = 2
         for _ in range(n_jobs):
@@ -209,14 +214,16 @@ class TestJobs:
                 result = await response.json()
                 assert result['status'] in ['pending']
                 job_id = result['job_id']
-                await jobs_client.long_pooling_by_job_id(api=api, client=client, job_id=job_id, status='succeeded')
+                await jobs_client.long_pooling_by_job_id(
+                    api=api, client=client, job_id=job_id, status='succeeded')
                 jobs_ids.append(job_id)
 
         jobs = await jobs_client.get_all_jobs(api=api, client=client)
         assert set(jobs_ids) <= {x['id'] for x in jobs}
         # clean
         for job in jobs:
-            await jobs_client.delete_job(api=api, client=client, job_id=job['id'])
+            await jobs_client.delete_job(
+                api=api, client=client, job_id=job['id'])
 
     @pytest.mark.asyncio
     async def test_delete_job(self, api, client, model_train, jobs_client):
@@ -226,7 +233,8 @@ class TestJobs:
             result = await response.json()
             assert result['status'] in ['pending']
             job_id = result['job_id']
-            await jobs_client.long_pooling_by_job_id(api=api, client=client, job_id=job_id, status='succeeded')
+            await jobs_client.long_pooling_by_job_id(
+                api=api, client=client, job_id=job_id, status='succeeded')
         await jobs_client.delete_job(api=api, client=client, job_id=job_id)
 
         jobs = await jobs_client.get_all_jobs(api=api, client=client)

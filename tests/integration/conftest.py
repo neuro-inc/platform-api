@@ -5,8 +5,9 @@ from urllib.parse import urlsplit
 
 import pytest
 
+from platform_api.config import StorageConfig
 from platform_api.orchestrator.kube_orchestrator import (
-    KubeClient, KubeConfig, VolumeType,)
+    KubeClient, KubeConfig,)
 
 
 @pytest.fixture(scope='session')
@@ -55,11 +56,13 @@ async def kube_config_user_payload(kube_config_payload):
 async def kube_config(kube_config_cluster_payload, kube_config_user_payload):
     cluster = kube_config_cluster_payload
     user = kube_config_user_payload
+    storage_config = StorageConfig.create_host(
+        host_mount_path=PurePath('/tmp'))
     return KubeConfig(
-        storage_mount_path=PurePath('/tmp'),
+        storage=storage_config,
 
         jobs_ingress_name='platformjobsingress',
-        jobs_ingress_domain_name='jobs.platform.neuromation.io',
+        jobs_domain_name='jobs.platform.neuromation.io',
 
         endpoint_url=cluster['server'],
         cert_authority_path=cluster['certificate-authority'],
@@ -124,8 +127,12 @@ async def kube_config_nfs(
         nfs_volume_server):
     cluster = kube_config_cluster_payload
     user = kube_config_user_payload
+    storage_config = StorageConfig.create_nfs(
+        host_mount_path=PurePath('/var/storage'),
+        nfs_server=nfs_volume_server,
+        nfs_export_path=PurePath('/var/storage'))
     return KubeConfig(
-        storage_mount_path=PurePath('/var/storage'),
+        storage=storage_config,
 
         endpoint_url=cluster['server'],
         cert_authority_path=cluster['certificate-authority'],
@@ -133,9 +140,5 @@ async def kube_config_nfs(
         auth_cert_key_path=user['client-key'],
 
         jobs_ingress_name='platformjobsingress',
-        jobs_ingress_domain_name='jobs.platform.neuromation.io',
-
-        storage_type=VolumeType.NFS,
-        nfs_volume_server=nfs_volume_server,
-        nfs_volume_export_path=PurePath('/var/storage'),
+        jobs_domain_name='jobs.platform.neuromation.io',
     )
