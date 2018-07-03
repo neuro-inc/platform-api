@@ -388,10 +388,19 @@ class TestService:
 class TestContainerStatus:
     @pytest.mark.parametrize('payload', (
         None, {}, {'state': {}}, {'state': {'waiting': {}}},
+        {'state': {'waiting': {'reason': 'ContainerCreating'}}},
     ))
-    def test_is_waiting(self, payload):
+    def test_is_waiting_creating(self, payload):
         status = ContainerStatus(payload)
         assert status.is_waiting
+        assert status.is_creating
+
+    @pytest.mark.parametrize('payload', (
+        {'state': {'waiting': {'reason': 'NOT CREATING'}}},
+    ))
+    def test_is_waiting_not_creating(self, payload):
+        status = ContainerStatus(payload)
+        assert not status.is_creating
 
     @pytest.mark.parametrize('payload', (
         {'state': {'running': {}}},
@@ -400,3 +409,4 @@ class TestContainerStatus:
     def test_is_not_waiting(self, payload):
         status = ContainerStatus(payload)
         assert not status.is_waiting
+        assert not status.is_creating
