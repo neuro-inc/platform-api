@@ -349,6 +349,18 @@ class PodDescriptor:
         )
 
 
+class ContainerStatus:
+    def __init__(self, payload):
+        self._payload = payload
+
+    @property
+    def is_waiting(self) -> bool:
+        return (
+            not self._payload or
+            not self._payload['state'] or
+            'waiting' in self._payload['state'])
+
+
 class PodStatus:
     def __init__(self, payload):
         self._payload = payload
