@@ -350,7 +350,7 @@ class PodDescriptor:
 
 
 class ContainerStatus:
-    def __init__(self, payload):
+    def __init__(self, payload=None):
         self._payload = payload or {}
 
     @property
@@ -383,16 +383,15 @@ class PodStatus:
         return self._payload['phase']
 
     @property
-    def container_status(self):
+    def container_status(self) -> ContainerStatus:
+        payload = None
         if 'containerStatuses' in self._payload:
-            return self._payload['containerStatuses'][0]
+            payload = self._payload['containerStatuses'][0]
+        return ContainerStatus(payload=payload)
 
     @property
     def _is_container_creating(self) -> bool:
-        return (
-            not self.container_status or
-            self.container_status['state']['waiting']['reason'] ==
-            'ContainerCreating')
+        return self.container_status.is_creating
 
     @property
     def status(self) -> JobStatus:
