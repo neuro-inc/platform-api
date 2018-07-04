@@ -560,10 +560,14 @@ class KubeClient:
             method='POST', url=self._pods_url, json=descriptor.to_primitive())
         return PodDescriptor.from_primitive(payload).status
 
-    async def get_pod_status(self, pod_id: str) -> PodStatus:
-        url = self._generate_pod_url(pod_id)
+    async def get_pod(self, pod_name: str) -> PodDescriptor:
+        url = self._generate_pod_url(pod_name)
         payload = await self._request(method='GET', url=url)
-        return PodDescriptor.from_primitive(payload).status
+        return PodDescriptor.from_primitive(payload)
+
+    async def get_pod_status(self, pod_id: str) -> PodStatus:
+        pod = await self.get_pod(pod_id)
+        return pod.status
 
     async def delete_pod(self, pod_id: str) -> PodStatus:
         url = self._generate_pod_url(pod_id)
