@@ -322,7 +322,7 @@ class TestKubeOrchestrator:
                     async with client.get(url, headers=headers) as response:
                         if response.status == 200:
                             break
-                except OSError:
+                except (OSError, aiohttp.ClientError):
                     pass
                 await asyncio.sleep(interval_s)
             else:
