@@ -483,13 +483,16 @@ class TestPodContainerLogReader:
     async def _consume_log_reader(
             self, log_reader: LogReader, chunk_size: int=-1) -> bytes:
         istream = io.BytesIO()
-        async with log_reader:
-            while True:
-                chunk = await log_reader.read(chunk_size)
-                if not chunk:
-                    break
-                assert chunk_size < 0 or len(chunk) <= chunk_size
-                istream.write(chunk)
+        try:
+            async with log_reader:
+                while True:
+                    chunk = await log_reader.read(chunk_size)
+                    if not chunk:
+                        break
+                    assert chunk_size < 0 or len(chunk) <= chunk_size
+                    istream.write(chunk)
+        except asyncio.CancelledError:
+            pass
         istream.flush()
         istream.seek(0)
         return istream.read()
@@ -544,7 +547,7 @@ class TestPodContainerLogReader:
 
     @pytest.mark.asyncio
     async def test_read_succeeded(self, kube_config, kube_client):
-        command = 'bash -c "for i in {1..5}; do echo -n $i$i; sleep 1; done"'
+        command = 'bash -c "for i in {1..5}; do echo $i; sleep 1; done"'
         container = Container(
             image='ubuntu', command=command,
             resources=ContainerResources(cpu=0.1, memory_mb=128))
@@ -556,6 +559,28 @@ class TestPodContainerLogReader:
             client=kube_client,
             pod_name=pod.name, container_name=pod.name)
         payload = await self._consume_log_reader(log_reader, chunk_size=1)
-        assert payload == b'1122334455'
+        expected_payload = '\n'.join(str(i) for i in range(1, 6)) + '\n'
+        assert payload == expected_payload.encode()
 
-    # TODO: test with CancelationError
+    @pytest.mark.asyncio
+    async def test_read_cancelled(self, kube_config, kube_client):
+        command = 'bash -c "for i in {1..60}; do echo $i; sleep 1; done"'
+        container = Container(
+            image='ubuntu', command=command,
+            resources=ContainerResources(cpu=0.1, memory_mb=128))
+        job_request = JobRequest.create(container)
+        pod = PodDescriptor.from_job_request(
+            kube_config.create_storage_volume(), job_request)
+        await kube_client.create_pod(pod)
+        await kube_client.wait_pod_is_running(
+            pod_name=pod.name, timeout_s=60.)
+        log_reader = PodContainerLogReader(
+            client=kube_client,
+            pod_name=pod.name, container_name=pod.name)
+        task = asyncio.ensure_future(
+            self._consume_log_reader(log_reader, chunk_size=1))
+        await asyncio.sleep(10)
+        task.cancel()
+        payload = await task
+        expected_payload = '\n'.join(str(i) for i in range(1, 6))
+        assert payload.startswith(expected_payload.encode())
