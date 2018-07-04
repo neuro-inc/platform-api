@@ -480,13 +480,15 @@ class TestKubeClient:
 
 
 class TestPodContainerLogReader:
-    async def _consume_log_reader(self, log_reader: LogReader) -> bytes:
+    async def _consume_log_reader(
+            self, log_reader: LogReader, chunk_size: int=-1) -> bytes:
         istream = io.BytesIO()
         async with log_reader:
             while True:
-                chunk = await log_reader.read()
+                chunk = await log_reader.read(chunk_size)
                 if not chunk:
                     break
+                assert chunk_size < 0 or len(chunk) <= chunk_size
                 istream.write(chunk)
         istream.flush()
         istream.seek(0)
@@ -523,5 +525,37 @@ class TestPodContainerLogReader:
         payload = await self._consume_log_reader(log_reader)
         assert payload == b'Failure!'
 
-    # TODO: test timeouts
+    @pytest.mark.asyncio
+    async def test_read_timed_out(self, kube_config, kube_client):
+        command = 'bash -c "sleep 5; echo -n Success!"'
+        container = Container(
+            image='ubuntu', command=command,
+            resources=ContainerResources(cpu=0.1, memory_mb=128))
+        job_request = JobRequest.create(container)
+        pod = PodDescriptor.from_job_request(
+            kube_config.create_storage_volume(), job_request)
+        await kube_client.create_pod(pod)
+        log_reader = PodContainerLogReader(
+            client=kube_client,
+            pod_name=pod.name, container_name=pod.name,
+            client_read_timeout_s=1)
+        with pytest.raises(asyncio.TimeoutError):
+            await self._consume_log_reader(log_reader)
+
+    @pytest.mark.asyncio
+    async def test_read_succeeded(self, kube_config, kube_client):
+        command = 'bash -c "for i in {1..5}; do echo -n $i$i; sleep 1; done"'
+        container = Container(
+            image='ubuntu', command=command,
+            resources=ContainerResources(cpu=0.1, memory_mb=128))
+        job_request = JobRequest.create(container)
+        pod = PodDescriptor.from_job_request(
+            kube_config.create_storage_volume(), job_request)
+        await kube_client.create_pod(pod)
+        log_reader = PodContainerLogReader(
+            client=kube_client,
+            pod_name=pod.name, container_name=pod.name)
+        payload = await self._consume_log_reader(log_reader, chunk_size=1)
+        assert payload == b'1122334455'
+
     # TODO: test with CancelationError
