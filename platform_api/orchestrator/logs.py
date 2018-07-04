@@ -43,14 +43,14 @@ class PodContainerLogReader(LogReader):
         self._stream_cm = self._client.create_pod_container_logs_stream(
             pod_name=self._pod_name, container_name=self._container_name,
             **kwargs)
-        self._stream = await self._stream_cm.__aenter__()
+        self._stream = await self._stream_cm.__aenter__()  # type: ignore
         return self
 
     async def __aexit__(self, *args) -> None:
         stream_cm = self._stream_cm
         self._stream = None
         self._stream_cm = None
-        await stream_cm.__aexit__(*args)
+        await stream_cm.__aexit__(*args)  # type: ignore
 
     async def read(self, size: int=-1) -> bytes:
         assert self._stream

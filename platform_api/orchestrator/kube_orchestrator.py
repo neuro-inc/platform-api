@@ -576,7 +576,7 @@ class KubeClient:
 
     async def get_pod_status(self, pod_id: str) -> PodStatus:
         pod = await self.get_pod(pod_id)
-        return pod.status
+        return pod.status  # type: ignore
 
     async def delete_pod(self, pod_id: str) -> PodStatus:
         url = self._generate_pod_url(pod_id)
@@ -675,11 +675,10 @@ class KubeClient:
             conn_timeout_s: float=60 * 5,
             read_timeout_s: float=60 * 30) -> aiohttp.StreamReader:
         url = self._generate_pod_log_url(pod_name, container_name)
-        # TODO: set proper timeouts and cover with tests
-        # TODO: expose constants
         client_timeout = aiohttp.ClientTimeout(
             connect=conn_timeout_s, sock_read=read_timeout_s)
-        async with self._client.get(url, timeout=client_timeout) as response:
+        async with self._client.get(  # type: ignore
+                url, timeout=client_timeout) as response:
             await self._check_response_status(response)
             yield response.content
 
