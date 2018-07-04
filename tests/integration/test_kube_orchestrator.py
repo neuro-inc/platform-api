@@ -1,4 +1,5 @@
 import asyncio
+import io
 from pathlib import PurePath
 import uuid
 
@@ -15,6 +16,7 @@ from platform_api.orchestrator.kube_orchestrator import (
     KubeClientException, StatusException, Service, Ingress, IngressRule,
     PodDescriptor,
 )
+from platform_api.orchestrator.logs import LogReader, PodContainerLogReader
 
 
 @pytest.fixture
@@ -443,3 +445,83 @@ class TestKubeClient:
             async with kube_client.create_pod_container_logs_stream(
                     pod_name='unknown', container_name='unknown'):
                 pass
+
+    @pytest.mark.asyncio
+    async def test_create_log_stream_creating(self, kube_config, kube_client):
+        container = Container(
+            image='ubuntu', command='true',
+            resources=ContainerResources(cpu=0.1, memory_mb=128))
+        job_request = JobRequest.create(container)
+        pod = PodDescriptor.from_job_request(
+            kube_config.create_storage_volume(), job_request)
+        await kube_client.create_pod(pod)
+        stream_cm = kube_client.create_pod_container_logs_stream(
+            pod_name=pod.name, container_name=pod.name)
+        with pytest.raises(KubeClientException, match='ContainerCreating'):
+            async with stream_cm:
+                pass
+
+    @pytest.mark.asyncio
+    async def test_create_log_stream(self, kube_config, kube_client):
+        container = Container(
+            image='ubuntu', command='true',
+            resources=ContainerResources(cpu=0.1, memory_mb=128))
+        job_request = JobRequest.create(container)
+        pod = PodDescriptor.from_job_request(
+            kube_config.create_storage_volume(), job_request)
+        await kube_client.create_pod(pod)
+        await kube_client.wait_pod_is_running(
+            pod_name=pod.name, timeout_s=60.)
+        stream_cm = kube_client.create_pod_container_logs_stream(
+            pod_name=pod.name, container_name=pod.name)
+        async with stream_cm as stream:
+            payload = await stream.read()
+            assert payload == b''
+
+
+class TestPodContainerLogReader:
+    async def _consume_log_reader(self, log_reader: LogReader) -> bytes:
+        istream = io.BytesIO()
+        async with log_reader:
+            while True:
+                chunk = await log_reader.read()
+                if not chunk:
+                    break
+                istream.write(chunk)
+        istream.flush()
+        istream.seek(0)
+        return istream.read()
+
+    @pytest.mark.asyncio
+    async def test_read_instantly_succeeded(self, kube_config, kube_client):
+        container = Container(
+            image='ubuntu', command='true',
+            resources=ContainerResources(cpu=0.1, memory_mb=128))
+        job_request = JobRequest.create(container)
+        pod = PodDescriptor.from_job_request(
+            kube_config.create_storage_volume(), job_request)
+        await kube_client.create_pod(pod)
+        log_reader = PodContainerLogReader(
+            client=kube_client,
+            pod_name=pod.name, container_name=pod.name)
+        payload = await self._consume_log_reader(log_reader)
+        assert payload == b''
+
+    @pytest.mark.asyncio
+    async def test_read_instantly_failed(self, kube_config, kube_client):
+        command = 'bash -c "echo -n Failure!; false"'
+        container = Container(
+            image='ubuntu', command=command,
+            resources=ContainerResources(cpu=0.1, memory_mb=128))
+        job_request = JobRequest.create(container)
+        pod = PodDescriptor.from_job_request(
+            kube_config.create_storage_volume(), job_request)
+        await kube_client.create_pod(pod)
+        log_reader = PodContainerLogReader(
+            client=kube_client,
+            pod_name=pod.name, container_name=pod.name)
+        payload = await self._consume_log_reader(log_reader)
+        assert payload == b'Failure!'
+
+    # TODO: test timeouts
+    # TODO: test with CancelationError
