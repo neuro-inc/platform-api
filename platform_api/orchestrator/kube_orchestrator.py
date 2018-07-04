@@ -10,6 +10,7 @@ from typing import Dict, List, Optional
 from urllib.parse import urlsplit
 
 import aiohttp
+from async_generator import asynccontextmanager
 from async_timeout import timeout
 
 from .base import Orchestrator
@@ -667,6 +668,25 @@ class KubeClient:
                 if not pod_status.container_status.is_waiting:
                     return
                 await asyncio.sleep(interval_s)
+
+    @asynccontextmanager
+    async def create_pod_container_logs_stream(
+            self, pod_name: str, container_name: str,
+            conn_timeout_s: float=60 * 5,
+            read_timeout_s: float=60 * 30) -> aiohttp.StreamReader:
+        url = self._generate_pod_log_url(pod_name, container_name)
+        # TODO: set proper timeouts and cover with tests
+        # TODO: expose constants
+        client_timeout = aiohttp.ClientTimeout(
+            connect=conn_timeout_s, sock_read=read_timeout_s)
+        async with self._client.get(url, timeout=client_timeout) as response:
+            await self._check_response_status(response)
+            yield response.content
+
+    async def _check_response_status(self, response) -> None:
+        if response.status != 200:
+            payload = await response.text()
+            raise KubeClientException(payload)
 
 
 class KubeOrchestrator(Orchestrator):
