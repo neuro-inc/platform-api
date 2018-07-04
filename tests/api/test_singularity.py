@@ -9,8 +9,8 @@ class TestSingularity:
     def _send_request(self, singularity_api_endpoint, request_id):
         url = singularity_api_endpoint + '/requests'
         payload = {
-            "id": request_id,
-            "requestType": "RUN_ONCE",
+            'id': request_id,
+            'requestType': 'RUN_ONCE',
         }
         response = requests.post(url, json=payload)
         assert response.status_code == 200
@@ -18,14 +18,14 @@ class TestSingularity:
     def _send_deploy(self, singularity_api_endpoint, request_id, deploy_id):
         url = singularity_api_endpoint + '/deploys'
         payload = {
-            "deploy": {
-                "requestId": request_id,
-                "id": deploy_id,
-                "containerInfo": {
-                    "type": "MESOS",
+            'deploy': {
+                'requestId': request_id,
+                'id': deploy_id,
+                'containerInfo': {
+                    'type': 'MESOS',
                 },
-                "command": "echo 'YAY!'",
-                "shell": True,
+                'command': "echo 'YAY!'",
+                'shell': True,
             }
         }
         response = requests.post(url, json=payload)

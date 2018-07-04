@@ -366,19 +366,19 @@ class TestTrainingApi:
         # TODO: should we have the /api/v1 path prefix?
         url = f'{api_endpoint}/models'
         payload = {
-            "container": {
-                "env": {
-                    "MODEL_PATH": "/var/storage"
+            'container': {
+                'env': {
+                    'MODEL_PATH': '/var/storage'
                 },
-                "image": (
-                    "registry.neuromation.io/neuromationorg/platformapi-dummy"
+                'image': (
+                    'registry.neuromation.io/neuromationorg/platformapi-dummy'
                 ),
             },
-            "dataset_storage_uri": "storage://data",
-            "result_storage_uri": "storage://data/result",
-            "resources": {
-                "cpus": 1,
-                "memoryMb": 128
+            'dataset_storage_uri': 'storage://data',
+            'result_storage_uri': 'storage://data/result',
+            'resources': {
+                'cpus': 1,
+                'memoryMb': 128
             }
         }
         response = requests.post(url, json=payload)
@@ -394,5 +394,6 @@ class TestTrainingApi:
         assert response.headers['Location'] == expected_location
 
         api_client = ApiClient(endpoint=api_endpoint)
-        status = api_client.statuses.wait(status_id, max_attempts=10, interval_s=2)
+        status = api_client.statuses.wait(
+            status_id, max_attempts=10, interval_s=2)
         assert status.name == StatusName.SUCCEEDED

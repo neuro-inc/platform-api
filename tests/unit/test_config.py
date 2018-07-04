@@ -2,7 +2,70 @@ from pathlib import PurePath
 
 import pytest
 
-from platform_api.config import EnvironConfigFactory
+from platform_api.config import (
+    StorageConfig, StorageType,)
+from platform_api.config_factory import EnvironConfigFactory
+from platform_api.orchestrator.kube_orchestrator import (
+    KubeConfig, HostVolume, NfsVolume,)
+
+
+class TestStorageConfig:
+    def test_missing_nfs_settings(self):
+        with pytest.raises(ValueError, match='Missing NFS settings'):
+            StorageConfig(
+                host_mount_path=PurePath('/tmp'),
+                type=StorageType.NFS,
+            )
+
+    def test_redundant_nfs_settings(self):
+        with pytest.raises(ValueError, match='Redundant NFS settings'):
+            StorageConfig(
+                host_mount_path=PurePath('/tmp'),
+                type=StorageType.HOST,
+                nfs_server='1.2.3.4',
+            )
+
+    def test_is_nfs(self):
+        config = StorageConfig(
+            host_mount_path=PurePath('/tmp'),
+            type=StorageType.NFS,
+            nfs_server='1.2.3.4',
+            nfs_export_path=PurePath('/tmp'),
+        )
+        assert config.is_nfs
+
+
+class TestKubeConfig:
+    def test_create_storage_volume_nfs(self):
+        storage_config = StorageConfig(
+            host_mount_path=PurePath('/tmp'),
+            type=StorageType.NFS,
+            nfs_server='4.3.2.1',
+            nfs_export_path=PurePath('/tmp'),
+        )
+        kube_config = KubeConfig(
+            storage=storage_config,
+            jobs_domain_name='testdomain',
+            jobs_ingress_name='testingress',
+            endpoint_url='http://1.2.3.4',
+        )
+        volume = kube_config.create_storage_volume()
+        assert volume == NfsVolume(
+            name='storage', path=PurePath('/tmp'), server='4.3.2.1')
+
+    def test_create_storage_volume_host(self):
+        storage_config = StorageConfig(
+            host_mount_path=PurePath('/tmp'),
+            type=StorageType.HOST,
+        )
+        kube_config = KubeConfig(
+            storage=storage_config,
+            jobs_domain_name='testdomain',
+            jobs_ingress_name='testingress',
+            endpoint_url='http://1.2.3.4',
+        )
+        volume = kube_config.create_storage_volume()
+        assert volume == HostVolume(name='storage', path=PurePath('/tmp'))
 
 
 class TestEnvironConfigFactory:
@@ -105,5 +168,5 @@ class TestEnvironConfigFactory:
             'NP_K8S_JOBS_INGRESS_DOMAIN_NAME': 'jobs.domain',
         }
         config = EnvironConfigFactory(environ=environ).create()
-        assert config.orchestrator.nfs_volume_server == '1.2.3.4'
-        assert config.orchestrator.nfs_volume_export_path == PurePath('/tmp')
+        assert config.storage.nfs_server == '1.2.3.4'
+        assert config.storage.nfs_export_path == PurePath('/tmp')
