@@ -1,4 +1,5 @@
 import abc
+import asyncio
 from asyncio import AbstractEventLoop
 from dataclasses import dataclass, field
 import enum
@@ -9,6 +10,7 @@ from typing import Dict, List, Optional
 from urllib.parse import urlsplit
 
 import aiohttp
+from async_timeout import timeout
 
 from .base import Orchestrator
 from ..config import OrchestratorConfig  # noqa
@@ -548,6 +550,12 @@ class KubeClient:
     def _generate_service_url(self, service_name: str) -> str:
         return f'{self._services_url}/{service_name}'
 
+    def _generate_pod_log_url(self, pod_name: str, container_name: str) -> str:
+        return (
+            f'{self._generate_pod_url(pod_name)}/log'
+            f'?container={pod_name}&follow=true'
+        )
+
     async def _request(self, *args, **kwargs):
         async with self._client.request(*args, **kwargs) as response:
             # TODO (A Danshyn 05/21/18): check status code etc
@@ -644,6 +652,21 @@ class KubeClient:
         url = self._generate_service_url(name)
         payload = await self._request(method='DELETE', url=url)
         self._check_status_payload(payload)
+
+    async def wait_pod_is_running(
+            self, pod_name: str,
+            timeout_s: float=10. * 60, interval_s: float=1.) -> None:
+        """Wait until the pod transitions from the waiting state.
+
+        Raise JobError if there is no such pod.
+        Raise asyncio.TimeoutError if it takes too long for the pod.
+        """
+        async with timeout(timeout_s):
+            while True:
+                pod_status = await self.get_pod_status(pod_name)
+                if not pod_status.container_status.is_waiting:
+                    return
+                await asyncio.sleep(interval_s)
 
 
 class KubeOrchestrator(Orchestrator):

@@ -12,7 +12,9 @@ from platform_api.orchestrator import (
     Orchestrator, KubeOrchestrator, JobRequest, JobStatus, JobError, Job
 )
 from platform_api.orchestrator.kube_orchestrator import (
-    StatusException, Service, Ingress, IngressRule,)
+    KubeClientException, StatusException, Service, Ingress, IngressRule,
+    PodDescriptor,
+)
 
 
 @pytest.fixture
@@ -399,3 +401,38 @@ class TestKubeOrchestrator:
         await self._assert_no_such_ingress_rule(
             kube_client, ingress_name=kube_config.jobs_ingress_name,
             host=kube_config.jobs_ingress_domain_name)
+
+
+class TestKubeClient:
+    @pytest.mark.asyncio
+    async def test_wait_pod_is_running_not_found(self, kube_client):
+        with pytest.raises(JobError):
+            await kube_client.wait_pod_is_running(pod_name='unknown')
+
+    @pytest.mark.asyncio
+    async def test_wait_pod_is_running_timed_out(
+            self, kube_config, kube_client):
+        container = Container(
+            image='ubuntu', command='true',
+            resources=ContainerResources(cpu=0.1, memory_mb=128))
+        job_request = JobRequest.create(container)
+        pod = PodDescriptor.from_job_request(
+            kube_config.create_storage_volume(), job_request)
+        await kube_client.create_pod(pod)
+        with pytest.raises(asyncio.TimeoutError):
+            await kube_client.wait_pod_is_running(
+                pod_name=pod.name, timeout_s=0.1)
+
+    @pytest.mark.asyncio
+    async def test_wait_pod_is_running(self, kube_config, kube_client):
+        container = Container(
+            image='ubuntu', command='true',
+            resources=ContainerResources(cpu=0.1, memory_mb=128))
+        job_request = JobRequest.create(container)
+        pod = PodDescriptor.from_job_request(
+            kube_config.create_storage_volume(), job_request)
+        await kube_client.create_pod(pod)
+        await kube_client.wait_pod_is_running(
+            pod_name=pod.name, timeout_s=60.)
+        pod_status = await kube_client.get_pod_status(pod.name)
+        assert pod_status.status == JobStatus.SUCCEEDED
