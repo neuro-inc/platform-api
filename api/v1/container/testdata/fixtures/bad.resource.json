@@ -1,8 +1,0 @@
-{
-  "container": {
-    "image": "image"
-  },
-  "resources": {
-    "memoryMb": 64
-  }
-}
