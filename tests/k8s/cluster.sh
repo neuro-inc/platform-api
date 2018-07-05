@@ -38,7 +38,7 @@ function k8s::start {
     sudo -E minikube start --vm-driver=none
 
     k8s::wait
-    k8s::setup_registry
+    # k8s::setup_registry
     k8s::start_nfs
     k8s::setup_ingress
 }
