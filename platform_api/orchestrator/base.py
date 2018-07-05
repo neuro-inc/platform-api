@@ -5,7 +5,7 @@ from .job import Job
 from .job_request import JobStatus
 
 
-class LogReader:
+class LogReader(ABC):
     async def __aenter__(self) -> 'LogReader':
         return self
 
