@@ -10,13 +10,14 @@ import pytest
 from platform_api.orchestrator.job_request import (
     Container, ContainerResources, ContainerVolume,)
 from platform_api.orchestrator import (
-    Orchestrator, KubeOrchestrator, JobRequest, JobStatus, JobError, Job
+    LogReader, Orchestrator, KubeOrchestrator,
+    JobRequest, JobStatus, JobError, Job
 )
 from platform_api.orchestrator.kube_orchestrator import (
     KubeClientException, StatusException, Service, Ingress, IngressRule,
     PodDescriptor,
 )
-from platform_api.orchestrator.logs import LogReader, PodContainerLogReader
+from platform_api.orchestrator.logs import PodContainerLogReader
 
 
 @pytest.fixture

@@ -250,3 +250,31 @@ class TestJobs:
             assert response.status == 400
             result = await response.json()
             assert result['error'] == f'no such job {job_id}'
+
+    @pytest.mark.asyncio
+    async def test_job_log(self, api, client):
+        command = 'bash -c "for i in {1..5}; do echo $i; sleep 1; done"'
+        payload = {
+            'container':  {
+                'image': 'ubuntu',
+                'command': command,
+                'resources': {
+                    'cpu': 0.1,
+                    'memory_mb': 16,
+                },
+            },
+            'dataset_storage_uri': 'storage://',
+            'result_storage_uri': 'storage://result',
+        }
+        url = api.model_base_url
+        async with client.post(url, json=payload) as response:
+            assert response.status == 202
+            result = await response.json()
+            assert result['status'] in ['pending']
+            job_id = result['job_id']
+
+        job_log_url = api.jobs_base_url + f'/{job_id}/log'
+        async with client.get(job_log_url) as response:
+            payload = await response.read()
+            expected_payload = '\n'.join(str(i) for i in range(1, 6)) + '\n'
+            assert payload == expected_payload.encode()
