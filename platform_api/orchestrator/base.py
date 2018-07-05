@@ -3,6 +3,7 @@ from abc import ABC, abstractmethod
 from ..config import OrchestratorConfig  # noqa
 from .job import Job
 from .job_request import JobStatus
+from .logs import LogReader
 
 
 class Orchestrator(ABC):
@@ -21,6 +22,10 @@ class Orchestrator(ABC):
 
     @abstractmethod
     async def update_job_status(self, job: Job) -> None:
+        pass
+
+    @abstractmethod
+    async def get_job_log_reader(self, job: Job) -> LogReader:
         pass
 
     @abstractmethod

@@ -20,6 +20,7 @@ from .job_request import (
     ContainerResources, ContainerVolume,
     JobRequest, JobStatus, JobError
 )
+from .logs import PodContainerLogReader, LogReader
 
 
 logger = logging.getLogger(__name__)
@@ -750,6 +751,10 @@ class KubeOrchestrator(Orchestrator):
 
         if job.is_finished:
             await self.delete_job(job)
+
+    async def get_job_log_reader(self, job: Job) -> LogReader:
+        return PodContainerLogReader(
+            client=self._client, pod_name=job.id, container_name=job.id)
 
     async def _create_service(self, pod: PodDescriptor) -> None:
         service = await self._client.create_service(
