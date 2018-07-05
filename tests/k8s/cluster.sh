@@ -64,6 +64,7 @@ function k8s::stop {
 }
 
 function k8s::setup_registry {
+    local DOCKER_REGISTRY=registry.neuromation.io
     kubectl delete secret np-docker-reg-secret || :
     kubectl create secret docker-registry np-docker-reg-secret \
         --docker-server $DOCKER_REGISTRY \

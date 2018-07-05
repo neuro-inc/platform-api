@@ -1,6 +1,0 @@
-{
-  "container": {
-    "image": "image"
-  },
-  "volumeRO": "storage://unknown/dataset"
-}
