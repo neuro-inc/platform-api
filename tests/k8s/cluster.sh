@@ -38,7 +38,7 @@ function k8s::start {
     sudo -E minikube start --vm-driver=none
 
     k8s::wait
-    # k8s::setup_registry
+    k8s::setup_registry
     k8s::start_nfs
     k8s::setup_ingress
 }
@@ -64,6 +64,7 @@ function k8s::stop {
 }
 
 function k8s::setup_registry {
+    local DOCKER_REGISTRY=registry.neuromation.io
     kubectl delete secret np-docker-reg-secret || :
     kubectl create secret docker-registry np-docker-reg-secret \
         --docker-server $DOCKER_REGISTRY \
