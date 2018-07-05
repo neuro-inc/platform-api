@@ -752,6 +752,8 @@ class KubeOrchestrator(Orchestrator):
             await self.delete_job(job)
 
     async def get_job_log_reader(self, job: Job) -> LogReader:
+        # TODO: this import will be gone once we extract KubeClient into a
+        # separate module
         from .logs import PodContainerLogReader
         return PodContainerLogReader(
             client=self._client, pod_name=job.id, container_name=job.id)

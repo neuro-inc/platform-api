@@ -35,6 +35,7 @@ class JobsHandler:
     async def stream_log(self, request):
         job_id = request.match_info['job_id']
         log_reader = await self._jobs_service.get_job_log_reader(job_id)
+        # TODO: expose. make configurable
         chunk_size = 1024
 
         response = aiohttp.web.StreamResponse(status=200)
