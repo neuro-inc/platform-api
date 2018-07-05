@@ -87,7 +87,7 @@ workflows:
 
   main:
     jobs:
-      - k8s:
+      - test:
           context: org-global
       - gke_dev_deploy:
           context: org-global
