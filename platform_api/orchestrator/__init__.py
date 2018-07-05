@@ -1,4 +1,4 @@
-from .base import Orchestrator  # noqa
+from .base import LogReader, Orchestrator  # noqa
 from .kube_orchestrator import KubeOrchestrator, KubeConfig  # noqa
 from .job_request import JobStatus, JobError, JobRequest  # noqa
 from .job import Job  # noqa

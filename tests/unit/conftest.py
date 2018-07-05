@@ -5,7 +5,8 @@ import pytest
 
 from platform_api.config import StorageConfig
 from platform_api.orchestrator import (
-    Job, JobStatus, JobsService, JobRequest, Orchestrator, KubeConfig)
+    Job, JobStatus, JobsService, JobRequest,
+    LogReader, Orchestrator, KubeConfig)
 from platform_api.orchestrator.job_request import (
     Container, ContainerResources,)
 
@@ -34,6 +35,9 @@ class MockOrchestrator(Orchestrator):
 
     def update_status_to_return(self, new_status: JobStatus):
         self._mock_status_to_return = new_status
+
+    async def get_job_log_reader(self, job: Job) -> LogReader:
+        pass
 
 
 @pytest.fixture
