@@ -1,21 +1,9 @@
-import abc
 from typing import Optional
 
 import aiohttp
 
+from .base import LogReader
 from .kube_orchestrator import KubeClient
-
-
-class LogReader:
-    async def __aenter__(self) -> 'LogReader':
-        return self
-
-    async def __aexit__(self, *args) -> None:
-        pass
-
-    @abc.abstractmethod
-    async def read(self, size: int=-1) -> bytes:
-        pass
 
 
 class PodContainerLogReader(LogReader):
