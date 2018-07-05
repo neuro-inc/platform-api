@@ -13,14 +13,13 @@ import aiohttp
 from async_generator import asynccontextmanager
 from async_timeout import timeout
 
-from .base import Orchestrator
+from .base import LogReader, Orchestrator
 from ..config import OrchestratorConfig  # noqa
 from .job import Job
 from .job_request import (
     ContainerResources, ContainerVolume,
     JobRequest, JobStatus, JobError
 )
-from .logs import PodContainerLogReader, LogReader
 
 
 logger = logging.getLogger(__name__)
@@ -753,6 +752,7 @@ class KubeOrchestrator(Orchestrator):
             await self.delete_job(job)
 
     async def get_job_log_reader(self, job: Job) -> LogReader:
+        from .logs import PodContainerLogReader
         return PodContainerLogReader(
             client=self._client, pod_name=job.id, container_name=job.id)
 

@@ -3,7 +3,18 @@ from abc import ABC, abstractmethod
 from ..config import OrchestratorConfig  # noqa
 from .job import Job
 from .job_request import JobStatus
-from .logs import LogReader
+
+
+class LogReader:
+    async def __aenter__(self) -> 'LogReader':
+        return self
+
+    async def __aexit__(self, *args) -> None:
+        pass
+
+    @abstractmethod
+    async def read(self, size: int=-1) -> bytes:
+        pass
 
 
 class Orchestrator(ABC):
