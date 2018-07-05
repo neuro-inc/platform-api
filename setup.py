@@ -2,8 +2,9 @@ from setuptools import setup, find_packages
 
 
 install_requires = (
+    'aiohttp==3.3.2',
+    'async-generator==1.9',
     'dataclasses==0.5',  # backport from 3.7 stdlib
-    'aiohttp==3.2.1',
     'trafaret==1.1.1'
 )
 

@@ -1,4 +1,5 @@
 import abc
+import asyncio
 from asyncio import AbstractEventLoop
 from dataclasses import dataclass, field
 import enum
@@ -9,6 +10,8 @@ from typing import Dict, List, Optional
 from urllib.parse import urlsplit
 
 import aiohttp
+from async_generator import asynccontextmanager
+from async_timeout import timeout
 
 from .base import Orchestrator
 from ..config import OrchestratorConfig  # noqa
@@ -349,6 +352,31 @@ class PodDescriptor:
         )
 
 
+class ContainerStatus:
+    def __init__(self, payload=None):
+        self._payload = payload or {}
+
+    @property
+    def _state(self) -> Dict:
+        return self._payload.get('state', {})
+
+    @property
+    def is_waiting(self) -> bool:
+        return not self._state or 'waiting' in self._state
+
+    @property
+    def _waiting_reason(self) -> Optional[str]:
+        assert self.is_waiting
+        return self._state.get('waiting', {}).get('reason')
+
+    @property
+    def is_creating(self) -> bool:
+        return (
+            self.is_waiting and
+            self._waiting_reason in (None, 'ContainerCreating')
+        )
+
+
 class PodStatus:
     def __init__(self, payload):
         self._payload = payload
@@ -358,16 +386,15 @@ class PodStatus:
         return self._payload['phase']
 
     @property
-    def container_status(self):
+    def container_status(self) -> ContainerStatus:
+        payload = None
         if 'containerStatuses' in self._payload:
-            return self._payload['containerStatuses'][0]
+            payload = self._payload['containerStatuses'][0]
+        return ContainerStatus(payload=payload)
 
     @property
     def _is_container_creating(self) -> bool:
-        return (
-            not self.container_status or
-            self.container_status['state']['waiting']['reason'] ==
-            'ContainerCreating')
+        return self.container_status.is_creating
 
     @property
     def status(self) -> JobStatus:
@@ -524,6 +551,12 @@ class KubeClient:
     def _generate_service_url(self, service_name: str) -> str:
         return f'{self._services_url}/{service_name}'
 
+    def _generate_pod_log_url(self, pod_name: str, container_name: str) -> str:
+        return (
+            f'{self._generate_pod_url(pod_name)}/log'
+            f'?container={pod_name}&follow=true'
+        )
+
     async def _request(self, *args, **kwargs):
         async with self._client.request(*args, **kwargs) as response:
             # TODO (A Danshyn 05/21/18): check status code etc
@@ -536,10 +569,14 @@ class KubeClient:
             method='POST', url=self._pods_url, json=descriptor.to_primitive())
         return PodDescriptor.from_primitive(payload).status
 
-    async def get_pod_status(self, pod_id: str) -> PodStatus:
-        url = self._generate_pod_url(pod_id)
+    async def get_pod(self, pod_name: str) -> PodDescriptor:
+        url = self._generate_pod_url(pod_name)
         payload = await self._request(method='GET', url=url)
-        return PodDescriptor.from_primitive(payload).status
+        return PodDescriptor.from_primitive(payload)
+
+    async def get_pod_status(self, pod_id: str) -> PodStatus:
+        pod = await self.get_pod(pod_id)
+        return pod.status  # type: ignore
 
     async def delete_pod(self, pod_id: str) -> PodStatus:
         url = self._generate_pod_url(pod_id)
@@ -616,6 +653,39 @@ class KubeClient:
         url = self._generate_service_url(name)
         payload = await self._request(method='DELETE', url=url)
         self._check_status_payload(payload)
+
+    async def wait_pod_is_running(
+            self, pod_name: str,
+            timeout_s: float=10. * 60, interval_s: float=1.) -> None:
+        """Wait until the pod transitions from the waiting state.
+
+        Raise JobError if there is no such pod.
+        Raise asyncio.TimeoutError if it takes too long for the pod.
+        """
+        async with timeout(timeout_s):
+            while True:
+                pod_status = await self.get_pod_status(pod_name)
+                if not pod_status.container_status.is_waiting:
+                    return
+                await asyncio.sleep(interval_s)
+
+    @asynccontextmanager
+    async def create_pod_container_logs_stream(
+            self, pod_name: str, container_name: str,
+            conn_timeout_s: float=60 * 5,
+            read_timeout_s: float=60 * 30) -> aiohttp.StreamReader:
+        url = self._generate_pod_log_url(pod_name, container_name)
+        client_timeout = aiohttp.ClientTimeout(
+            connect=conn_timeout_s, sock_read=read_timeout_s)
+        async with self._client.get(  # type: ignore
+                url, timeout=client_timeout) as response:
+            await self._check_response_status(response)
+            yield response.content
+
+    async def _check_response_status(self, response) -> None:
+        if response.status != 200:
+            payload = await response.text()
+            raise KubeClientException(payload)
 
 
 class KubeOrchestrator(Orchestrator):

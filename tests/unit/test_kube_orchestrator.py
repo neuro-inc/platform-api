@@ -7,6 +7,7 @@ from platform_api.orchestrator.job_request import (
     JobRequest, JobStatus, JobError,
 )
 from platform_api.orchestrator.kube_orchestrator import (
+    ContainerStatus,
     HostVolume, NfsVolume, VolumeMount,
     PodDescriptor, PodStatus, Resources,
     Ingress, IngressRule, Service,
@@ -382,3 +383,30 @@ class TestService:
         pod = PodDescriptor(name='testpod', image='testimage', port=1234)
         service = Service.create_for_pod(pod)
         assert service == Service(name='testpod', target_port=1234)
+
+
+class TestContainerStatus:
+    @pytest.mark.parametrize('payload', (
+        None, {}, {'state': {}}, {'state': {'waiting': {}}},
+        {'state': {'waiting': {'reason': 'ContainerCreating'}}},
+    ))
+    def test_is_waiting_creating(self, payload):
+        status = ContainerStatus(payload)
+        assert status.is_waiting
+        assert status.is_creating
+
+    @pytest.mark.parametrize('payload', (
+        {'state': {'waiting': {'reason': 'NOT CREATING'}}},
+    ))
+    def test_is_waiting_not_creating(self, payload):
+        status = ContainerStatus(payload)
+        assert not status.is_creating
+
+    @pytest.mark.parametrize('payload', (
+        {'state': {'running': {}}},
+        {'state': {'terminated': {}}},
+    ))
+    def test_is_not_waiting(self, payload):
+        status = ContainerStatus(payload)
+        assert not status.is_waiting
+        assert not status.is_creating
