@@ -1,9 +1,0 @@
-{
-  "container": {
-    "image": "hagen1778/gif-generator",
-    "env": {
-      "IMAGE_DIR": "/var/user",
-      "IMAGE_NUMBER": "1"
-    }
-  },
-  "dataset_storage_u

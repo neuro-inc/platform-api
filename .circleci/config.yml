@@ -2,39 +2,11 @@ defaults: &defaults
   machine:
     image: circleci/classic:201711-01
     docker_layer_caching: true
-  working_directory: ~/.go_workspace/src/github.com/neuromation/platform-api
+  working_directory: ~/platform-api
 
 
 version: 2
 jobs:
-
-  test:
-    <<: *defaults
-    environment:
-      TEST_RESULTS: /tmp/test-results
-    steps:
-      - checkout
-      - run: |
-          mkdir -p $TEST_RESULTS/junit
-          go get github.com/jstemmer/go-junit-report
-      - run:
-          name: Running unit and integration tests
-          command: |
-            make up
-            trap "go-junit-report <${TEST_RESULTS}/go-test.out > ${TEST_RESULTS}/junit/go-test-report.xml" EXIT
-            make go_integration_test | tee ${TEST_RESULTS}/go-test.out;
-            bash <(curl -s https://codecov.io/bash);
-      - run:
-          name: cleanup
-          command: |
-            make down
-            make up
-      - run:
-          name: Running API tests
-          command: make ci_run_api_tests
-
-      - store_test_results:
-          path: /tmp/test-results
 
   gke_dev_deploy:
     <<: *defaults
@@ -74,7 +46,7 @@ jobs:
           command: |
             make gke_k8s_deploy_staging
 
-  k8s:
+  test:
     <<: *defaults
     steps:
       - checkout
@@ -115,23 +87,19 @@ workflows:
 
   main:
     jobs:
-      - k8s:
-          context: org-global
       - test:
           context: org-global
       - gke_dev_deploy:
           context: org-global
           requires:
-            - k8s
             - test
           filters:
             branches:
               only:
-                - master                
+                - master
       - gke_stage_deploy:
           context: org-global
           requires:
-            - k8s
             - test
           filters:
             branches:

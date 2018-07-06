@@ -1,6 +1,0 @@
-{
-  "container": {
-    "image": "image"
-  },
-  "volumeRW":"./unknown/path"
-}

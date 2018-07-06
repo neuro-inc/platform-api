@@ -5,7 +5,7 @@ import logging
 
 from .job import Job
 from .job_request import JobRequest, JobError, JobStatus
-from .base import Orchestrator
+from .base import LogReader, Orchestrator
 from .status import Status
 
 logger = logging.getLogger(__file__)
@@ -88,6 +88,10 @@ class JobsService:
 
     async def get_job(self, job_id: str) -> Job:
         return await self._jobs_storage.get_job(job_id)
+
+    async def get_job_log_reader(self, job_id: str) -> LogReader:
+        job = await self.get_job(job_id)
+        return await self._orchestrator.get_job_log_reader(job)
 
     async def delete_job(self, job_id: str) -> None:
         job = await self._jobs_storage.get_job(job_id)
