@@ -3,7 +3,7 @@ from typing import Optional
 import aiohttp
 
 from .base import LogReader
-from .kube_orchestrator import KubeClient
+from .kube_client import KubeClient
 
 
 class PodContainerLogReader(LogReader):
