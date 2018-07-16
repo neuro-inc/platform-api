@@ -1,4 +1,5 @@
-from dataclasses import dataclass
+from dataclasses import dataclass, field
+from datetime import timedelta
 from enum import Enum
 from pathlib import PurePath
 from typing import Optional
@@ -58,6 +59,11 @@ class OrchestratorConfig:
     storage: StorageConfig
 
     jobs_domain_name: str
+    job_deletion_delay_s: int = 0
+
+    @property
+    def job_deletion_delay(self) -> timedelta:
+        return timedelta(seconds=self.job_deletion_delay_s)
 
 
 @dataclass(frozen=True)
