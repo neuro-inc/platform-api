@@ -1,14 +1,15 @@
+import dataclasses
 from pathlib import PurePath
 
 import pytest
 
 from platform_api.config import StorageConfig
 from platform_api.handlers.models_handler import ModelRequest
-from platform_api.orchestrator.job_request import (
-    Container, ContainerVolume, ContainerVolumeFactory, ContainerResources,
-    JobRequest,
-)
 from platform_api.orchestrator.job import Job
+from platform_api.orchestrator.job_request import (
+    Container, ContainerResources, ContainerVolume, ContainerVolumeFactory,
+    JobRequest, JobStatus
+)
 
 
 class TestContainer:
@@ -135,6 +136,31 @@ class TestJob:
             orchestrator_config=mock_orchestrator.config,
             job_request=job_request)
         assert job.http_url == 'http://testjob.jobs'
+
+    def test_should_be_deleted_pending(self, mock_orchestrator):
+        container = Container(
+            image='testimage',
+            resources=ContainerResources(cpu=1, memory_mb=128),
+        )
+        job_request = JobRequest(job_id='testjob', container=container)
+        job = Job(
+            orchestrator_config=mock_orchestrator.config,
+            job_request=job_request)
+        assert not job.finished_at
+        assert not job.should_be_deleted
+
+    def test_should_be_deleted_finished(self, mock_orchestrator):
+        config = dataclasses.replace(
+            mock_orchestrator.config, job_deletion_delay_s=0)
+        container = Container(
+            image='testimage',
+            resources=ContainerResources(cpu=1, memory_mb=128),
+        )
+        job_request = JobRequest(job_id='testjob', container=container)
+        job = Job(orchestrator_config=config, job_request=job_request)
+        job.status = JobStatus.FAILED
+        assert job.finished_at
+        assert job.should_be_deleted
 
 
 class TestJobRequest:
