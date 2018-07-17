@@ -1,5 +1,7 @@
 import dataclasses
+from datetime import datetime, timezone
 from pathlib import PurePath
+from unittest import mock
 
 import pytest
 
@@ -124,65 +126,87 @@ class TestModelRequest:
         )
 
 
+@pytest.fixture
+def job_request_payload():
+    return {
+        'job_id': 'testjob',
+        'container': {
+            'image': 'testimage',
+            'resources': {'cpu': 1, 'memory_mb': 128, 'gpu': None},
+            'command': None,
+            'env': {'testvar': 'testval'},
+            'volumes': [{
+                'src_path': '/src/path',
+                'dst_path': '/dst/path',
+                'read_only': False,
+            }],
+            'port': None,
+            'health_check_path': '/',
+        },
+    }
+
+
 class TestJob:
-    def test_http_url(self, mock_orchestrator):
+    @pytest.fixture
+    def job_request(self):
         container = Container(
             image='testimage',
             resources=ContainerResources(cpu=1, memory_mb=128),
             port=1234,
         )
-        job_request = JobRequest(job_id='testjob', container=container)
+        return JobRequest(job_id='testjob', container=container)
+
+    def test_http_url(self, mock_orchestrator, job_request):
         job = Job(
             orchestrator_config=mock_orchestrator.config,
             job_request=job_request)
         assert job.http_url == 'http://testjob.jobs'
 
-    def test_should_be_deleted_pending(self, mock_orchestrator):
-        container = Container(
-            image='testimage',
-            resources=ContainerResources(cpu=1, memory_mb=128),
-        )
-        job_request = JobRequest(job_id='testjob', container=container)
+    def test_should_be_deleted_pending(self, mock_orchestrator, job_request):
         job = Job(
             orchestrator_config=mock_orchestrator.config,
             job_request=job_request)
         assert not job.finished_at
         assert not job.should_be_deleted
 
-    def test_should_be_deleted_finished(self, mock_orchestrator):
+    def test_should_be_deleted_finished(self, mock_orchestrator, job_request):
         config = dataclasses.replace(
             mock_orchestrator.config, job_deletion_delay_s=0)
-        container = Container(
-            image='testimage',
-            resources=ContainerResources(cpu=1, memory_mb=128),
-        )
-        job_request = JobRequest(job_id='testjob', container=container)
         job = Job(orchestrator_config=config, job_request=job_request)
         job.status = JobStatus.FAILED
         assert job.finished_at
         assert job.should_be_deleted
 
-
-class TestJobRequest:
-    @pytest.fixture
-    def job_request_payload(self):
-        return {
-            'job_id': 'testjob',
-            'container': {
-                'image': 'testimage',
-                'resources': {'cpu': 1, 'memory_mb': 128, 'gpu': None},
-                'command': None,
-                'env': {'testvar': 'testval'},
-                'volumes': [{
-                    'src_path': '/src/path',
-                    'dst_path': '/dst/path',
-                    'read_only': False,
-                }],
-                'port': None,
-                'health_check_path': '/',
-            },
+    def test_to_primitive(self, mock_orchestrator, job_request):
+        job = Job(
+            orchestrator_config=mock_orchestrator.config,
+            job_request=job_request)
+        job.status = JobStatus.FAILED
+        job.is_deleted = True
+        assert job.to_primitive() == {
+            'id': job.id,
+            'request': mock.ANY,
+            'status': 'failed',
+            'is_deleted': True,
+            'finished_at': job.finished_at.isoformat(),
         }
 
+    def test_from_primitive(self, mock_orchestrator, job_request_payload):
+        payload = {
+            'id': 'testjob',
+            'request': job_request_payload,
+            'status': 'succeeded',
+            'is_deleted': True,
+            'finished_at': datetime.now(timezone.utc).isoformat(),
+        }
+        job = Job.from_primitive(mock_orchestrator, payload)
+        assert job.id == 'testjob'
+        assert job.status == JobStatus.SUCCEEDED
+        assert job.is_deleted
+        assert job.finished_at
+
+
+class TestJobRequest:
     def test_to_primitive(self, job_request_payload):
         container = Container(
             image='testimage',
