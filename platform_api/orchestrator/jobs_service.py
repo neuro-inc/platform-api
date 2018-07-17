@@ -31,6 +31,13 @@ class JobsStorage(ABC):
                 jobs.append(job)
         return jobs
 
+    async def get_jobs_for_deletion(self) -> List[Job]:
+        jobs = []
+        for job in await self.get_all_jobs():
+            if job.should_be_deleted:
+                jobs.append(job)
+        return jobs
+
 
 class InMemoryJobsStorage(JobsStorage):
     def __init__(self, orchestrator: Orchestrator) -> None:
@@ -66,10 +73,18 @@ class JobsService:
 
     async def update_jobs_statuses(self):
         for job in await self._jobs_storage.get_running_jobs():
+            logger.info('Updating job %s', job.id)
             await self._update_job_status(job)
+
+        for job in await self._jobs_storage.get_jobs_for_deletion():
+            logger.info('Deleting job %s', job.id)
+            await self._orchestrator.delete_job(job)
+            await self._jobs_storage.set_job(job)
 
     async def _update_job_status(self, job: Job) -> None:
         assert not job.is_finished
+        # TODO (A Danshyn 07/17/18): here we rely on side effect in
+        # update_job_status which is not great. should be refactored.
         await self._orchestrator.update_job_status(job)
         await self._jobs_storage.set_job(job)
 
@@ -96,7 +111,8 @@ class JobsService:
     async def delete_job(self, job_id: str) -> None:
         job = await self._jobs_storage.get_job(job_id)
         if not job.is_finished:
-            await self._orchestrator.delete_job(job.id)
+            await self._orchestrator.delete_job(job)
+            await self._jobs_storage.set_job(job)
 
     async def get_all_jobs(self) -> List[Job]:
         return await self._jobs_storage.get_all_jobs()
