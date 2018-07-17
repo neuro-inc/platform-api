@@ -1,8 +1,11 @@
+import dataclasses
+
 import pytest
+
 from platform_api.orchestrator import (
-    Job, JobStatus, JobsService, JobRequest, JobsStatusPooling)
-from platform_api.orchestrator.job_request import (
-    Container, ContainerResources,)
+    Job, JobRequest, JobsService, JobsStatusPooling, JobStatus
+)
+from platform_api.orchestrator.job_request import Container, ContainerResources
 from platform_api.orchestrator.jobs_service import InMemoryJobsStorage
 
 
@@ -21,15 +24,18 @@ class TestInMemoryJobsStorage:
 
     @pytest.mark.asyncio
     async def test_set_get_job(self, mock_orchestrator):
+        config = dataclasses.replace(
+            mock_orchestrator.config, job_deletion_delay_s=0)
+        mock_orchestrator.config = config
         jobs_storage = InMemoryJobsStorage(orchestrator=mock_orchestrator)
 
         pending_job = Job(
-            orchestrator_config=mock_orchestrator.config,
+            orchestrator_config=config,
             job_request=self._create_job_request())
         await jobs_storage.set_job(pending_job)
 
         succeeded_job = Job(
-            orchestrator_config=mock_orchestrator.config,
+            orchestrator_config=config,
             job_request=self._create_job_request(),
             status=JobStatus.SUCCEEDED)
         await jobs_storage.set_job(succeeded_job)
@@ -43,6 +49,9 @@ class TestInMemoryJobsStorage:
 
         jobs = await jobs_storage.get_running_jobs()
         assert {job.id for job in jobs} == {pending_job.id}
+
+        jobs = await jobs_storage.get_jobs_for_deletion()
+        assert {job.id for job in jobs} == {succeeded_job.id}
 
 
 class TestInMemoryJobsService:
