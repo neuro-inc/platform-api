@@ -1,21 +1,21 @@
 import asyncio
 import io
-from pathlib import PurePath
 import uuid
+from pathlib import PurePath
 
-from async_timeout import timeout
 import aiohttp
 import pytest
+from async_timeout import timeout
 
-from platform_api.orchestrator.job_request import (
-    Container, ContainerResources, ContainerVolume,)
 from platform_api.orchestrator import (
-    LogReader, Orchestrator, KubeOrchestrator,
-    JobRequest, JobStatus, JobError, Job
+    Job, JobError, JobRequest, JobStatus, LogReader, Orchestrator
+)
+from platform_api.orchestrator.job_request import (
+    Container, ContainerResources, ContainerVolume
 )
 from platform_api.orchestrator.kube_orchestrator import (
-    KubeClientException, StatusException, Service, Ingress, IngressRule,
-    PodDescriptor,
+    Ingress, IngressRule, KubeClientException, KubeOrchestrator, PodDescriptor,
+    Service, StatusException
 )
 from platform_api.orchestrator.logs import PodContainerLogReader
 
@@ -377,33 +377,6 @@ class TestKubeOrchestrator:
                     await asyncio.sleep(interval_s)
         except asyncio.TimeoutError:
             pytest.fail('Ingress still exists')
-
-    @pytest.mark.asyncio
-    async def test_update_job_status(
-            self, kube_config, kube_client, kube_orchestrator,
-            delete_job_later):
-        container = Container(
-            image='ubuntu', command='sleep 5',
-            resources=ContainerResources(cpu=0.1, memory_mb=128),
-            port=80)
-        job = TestJob(
-            orchestrator=kube_orchestrator,
-            job_request=JobRequest.create(container))
-        await delete_job_later(job)
-        assert not job.is_finished
-
-        await kube_orchestrator.start_job(job)
-        assert not job.is_finished
-
-        await self.wait_for_success(job)
-        assert not job.is_finished
-
-        await kube_orchestrator.update_job_status(job)
-        assert job.is_finished
-
-        await self._assert_no_such_ingress_rule(
-            kube_client, ingress_name=kube_config.jobs_ingress_name,
-            host=kube_config.jobs_ingress_domain_name)
 
 
 @pytest.fixture

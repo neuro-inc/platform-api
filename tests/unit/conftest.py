@@ -20,15 +20,16 @@ class MockOrchestrator(Orchestrator):
     def config(self):
         return self._config
 
+    @config.setter
+    def config(self, config):
+        self._config = config
+
     async def start_job(self, job: Job):
         job.status = JobStatus.PENDING
         return JobStatus.PENDING
 
     async def status_job(self, *args, **kwargs):
         return self._mock_status_to_return
-
-    async def update_job_status(self, job: Job) -> None:
-        job.status = await self.status_job(job.id)
 
     async def delete_job(self, *args, **kwargs):
         return JobStatus.SUCCEEDED

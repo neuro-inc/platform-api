@@ -1,8 +1,9 @@
+import dataclasses
+
 import pytest
-from platform_api.orchestrator import (
-    Job, JobStatus, JobsService, JobRequest, JobsStatusPooling)
-from platform_api.orchestrator.job_request import (
-    Container, ContainerResources,)
+
+from platform_api.orchestrator import Job, JobRequest, JobsService, JobStatus
+from platform_api.orchestrator.job_request import Container, ContainerResources
 from platform_api.orchestrator.jobs_service import InMemoryJobsStorage
 
 
@@ -21,15 +22,18 @@ class TestInMemoryJobsStorage:
 
     @pytest.mark.asyncio
     async def test_set_get_job(self, mock_orchestrator):
+        config = dataclasses.replace(
+            mock_orchestrator.config, job_deletion_delay_s=0)
+        mock_orchestrator.config = config
         jobs_storage = InMemoryJobsStorage(orchestrator=mock_orchestrator)
 
         pending_job = Job(
-            orchestrator_config=mock_orchestrator.config,
+            orchestrator_config=config,
             job_request=self._create_job_request())
         await jobs_storage.set_job(pending_job)
 
         succeeded_job = Job(
-            orchestrator_config=mock_orchestrator.config,
+            orchestrator_config=config,
             job_request=self._create_job_request(),
             status=JobStatus.SUCCEEDED)
         await jobs_storage.set_job(succeeded_job)
@@ -43,6 +47,9 @@ class TestInMemoryJobsStorage:
 
         jobs = await jobs_storage.get_running_jobs()
         assert {job.id for job in jobs} == {pending_job.id}
+
+        jobs = await jobs_storage.get_jobs_for_deletion()
+        assert {job.id for job in jobs} == {succeeded_job.id}
 
 
 class TestInMemoryJobsService:
@@ -77,7 +84,7 @@ class TestInMemoryJobsService:
         assert job_ids == [job.id for job in jobs]
 
     @pytest.mark.asyncio
-    async def test_update_jobs_statuses(
+    async def test_update_jobs_statuses_running(
             self, mock_orchestrator, job_request_factory):
         service = JobsService(orchestrator=mock_orchestrator)
 
@@ -90,34 +97,43 @@ class TestInMemoryJobsService:
 
         job = await service.get_job(job_id=original_job.id)
         assert job.status == JobStatus.SUCCEEDED
+        assert job.is_finished
+        assert job.finished_at
+        assert not job.is_deleted
 
     @pytest.mark.asyncio
-    async def test_delete(
-            self, mock_orchestrator, event_loop, job_request_factory):
-        jobs_service = JobsService(orchestrator=mock_orchestrator)
+    async def test_update_jobs_statuses_for_deletion(
+            self, mock_orchestrator, job_request_factory):
+        config = dataclasses.replace(
+            mock_orchestrator.config, job_deletion_delay_s=0)
+        mock_orchestrator.config = config
+        service = JobsService(orchestrator=mock_orchestrator)
 
-        num_jobs = 10
-        for _ in range(num_jobs):
-            job_request = job_request_factory()
-            await jobs_service.create_job(job_request=job_request)
-
-        jobs = await jobs_service.get_all_jobs()
-        assert len(jobs) == num_jobs
-        for job in jobs:
-            await jobs_service.delete_job(job_id=job.id)
-
-        jobs = await jobs_service.get_all_jobs()
-        assert len(jobs) == num_jobs
-        assert all(job.status == JobStatus.PENDING for job in jobs)
+        original_job, _ = await service.create_job(
+            job_request=job_request_factory())
 
         mock_orchestrator.update_status_to_return(JobStatus.SUCCEEDED)
+        await service.update_jobs_statuses()
 
-        # making sure job statuses get updated at least once
-        jobs_status_pooling = JobsStatusPooling(
-            jobs_service=jobs_service, loop=event_loop, interval_s=1)
-        await jobs_status_pooling.start()
-        await jobs_status_pooling.stop()
+        job = await service.get_job(job_id=original_job.id)
+        assert job.status == JobStatus.SUCCEEDED
+        assert job.is_finished
+        assert job.finished_at
+        assert job.is_deleted
 
-        jobs = await jobs_service.get_all_jobs()
-        assert len(jobs) == num_jobs
-        assert all(job.status == JobStatus.SUCCEEDED for job in jobs)
+    @pytest.mark.asyncio
+    async def test_delete_running(
+            self, mock_orchestrator, job_request_factory):
+        service = JobsService(orchestrator=mock_orchestrator)
+
+        original_job, _ = await service.create_job(
+            job_request=job_request_factory())
+        assert original_job.status == JobStatus.PENDING
+
+        await service.delete_job(original_job.id)
+
+        job = await service.get_job(original_job.id)
+        assert job.status == JobStatus.SUCCEEDED
+        assert job.is_finished
+        assert job.finished_at
+        assert job.is_deleted

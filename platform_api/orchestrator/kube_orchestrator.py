@@ -20,9 +20,9 @@ logger = logging.getLogger(__name__)
 
 @dataclass(frozen=True)
 class KubeConfig(OrchestratorConfig):
-    jobs_ingress_name: str
+    jobs_ingress_name: str = ''
 
-    endpoint_url: str
+    endpoint_url: str = ''
     cert_authority_path: Optional[str] = None
 
     auth_type: KubeClientAuthType = KubeClientAuthType.CERTIFICATE
@@ -36,6 +36,12 @@ class KubeConfig(OrchestratorConfig):
     client_conn_pool_size: int = 100
 
     storage_volume_name: str = 'storage'
+
+    job_deletion_delay_s: int = 60 * 60 * 24
+
+    def __post_init__(self):
+        if not all((self.jobs_ingress_name, self.endpoint_url)):
+            raise ValueError('Missing required settings')
 
     @property
     def storage_mount_path(self) -> PurePath:
@@ -111,15 +117,6 @@ class KubeOrchestrator(Orchestrator):
         pod_id = job_id
         status = await self._client.get_pod_status(pod_id)
         return status.status
-
-    async def update_job_status(self, job: Job) -> None:
-        if job.is_finished:
-            return
-
-        job.status = await self.status_job(job.id)
-
-        if job.is_finished:
-            await self.delete_job(job)
 
     async def get_job_log_reader(self, job: Job) -> LogReader:
         return PodContainerLogReader(

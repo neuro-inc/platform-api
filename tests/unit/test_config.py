@@ -1,3 +1,4 @@
+from datetime import timedelta
 from pathlib import PurePath
 
 import pytest
@@ -102,6 +103,9 @@ class TestEnvironConfigFactory:
         assert config.orchestrator.jobs_ingress_name == 'testingress'
         assert config.orchestrator.jobs_ingress_domain_name == 'jobs.domain'
 
+        assert config.orchestrator.job_deletion_delay_s == 86400
+        assert config.orchestrator.job_deletion_delay == timedelta(days=1)
+
         assert config.env_prefix == 'NP'
 
     def test_create_value_error(self):
@@ -127,12 +131,14 @@ class TestEnvironConfigFactory:
             'NP_K8S_AUTH_CERT_PATH': '/cert_path',
             'NP_K8S_AUTH_CERT_KEY_PATH': '/cert_key_path',
             'NP_K8S_NS': 'other',
-            'NP_K8S_CLIENT_CONN_TIMEOUT': 111,
-            'NP_K8S_CLIENT_READ_TIMEOUT': 222,
-            'NP_K8S_CLIENT_CONN_POOL_SIZE': 333,
+            'NP_K8S_CLIENT_CONN_TIMEOUT': '111',
+            'NP_K8S_CLIENT_READ_TIMEOUT': '222',
+            'NP_K8S_CLIENT_CONN_POOL_SIZE': '333',
 
             'NP_K8S_JOBS_INGRESS_NAME': 'testingress',
             'NP_K8S_JOBS_INGRESS_DOMAIN_NAME': 'jobs.domain',
+
+            'NP_K8S_JOB_DELETION_DELAY': '3600'
         }
         config = EnvironConfigFactory(environ=environ).create()
 
@@ -154,6 +160,10 @@ class TestEnvironConfigFactory:
         assert config.orchestrator.client_conn_pool_size == 333
         assert config.orchestrator.jobs_ingress_name == 'testingress'
         assert config.orchestrator.jobs_ingress_domain_name == 'jobs.domain'
+
+        assert config.orchestrator.job_deletion_delay_s == 3600
+        assert config.orchestrator.job_deletion_delay == timedelta(
+            seconds=3600)
 
         assert config.env_prefix == 'TEST'
 

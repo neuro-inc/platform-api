@@ -5,6 +5,7 @@ install_requires = (
     'aiohttp==3.3.2',
     'async-generator==1.9',
     'dataclasses==0.5',  # backport from 3.7 stdlib
+    'iso8601==0.1.12',
     'trafaret==1.1.1'
 )
 
