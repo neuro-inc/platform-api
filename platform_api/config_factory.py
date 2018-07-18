@@ -81,4 +81,8 @@ class EnvironConfigFactory:
             jobs_ingress_name=self._environ['NP_K8S_JOBS_INGRESS_NAME'],
             jobs_domain_name=(
                 self._environ['NP_K8S_JOBS_INGRESS_DOMAIN_NAME']),
+
+            job_deletion_delay_s=int(self._environ.get(
+                'NP_K8S_JOB_DELETION_DELAY',
+                KubeConfig.job_deletion_delay_s)),
         )
