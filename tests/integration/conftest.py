@@ -6,8 +6,7 @@ from urllib.parse import urlsplit
 import pytest
 
 from platform_api.config import StorageConfig
-from platform_api.orchestrator.kube_orchestrator import (
-    KubeClient, KubeConfig,)
+from platform_api.orchestrator.kube_orchestrator import KubeClient, KubeConfig
 
 
 @pytest.fixture(scope='session')
@@ -67,7 +66,9 @@ async def kube_config(kube_config_cluster_payload, kube_config_user_payload):
         endpoint_url=cluster['server'],
         cert_authority_path=cluster['certificate-authority'],
         auth_cert_path=user['client-certificate'],
-        auth_cert_key_path=user['client-key']
+        auth_cert_key_path=user['client-key'],
+
+        job_deletion_delay_s=0,
     )
 
 

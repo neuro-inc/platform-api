@@ -31,9 +31,6 @@ class MockOrchestrator(Orchestrator):
     async def status_job(self, *args, **kwargs):
         return self._mock_status_to_return
 
-    async def update_job_status(self, job: Job) -> None:
-        job.status = await self.status_job(job.id)
-
     async def delete_job(self, *args, **kwargs):
         return JobStatus.SUCCEEDED
 

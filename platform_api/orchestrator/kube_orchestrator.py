@@ -118,15 +118,6 @@ class KubeOrchestrator(Orchestrator):
         status = await self._client.get_pod_status(pod_id)
         return status.status
 
-    async def update_job_status(self, job: Job) -> None:
-        if not job.is_finished:
-            old_status = job.status
-            job.status = await self.status_job(job.id)
-            if old_status != job.status:
-                logger.info(
-                    'Job %s transitioned from %s to %s', job.id,
-                    old_status, job.status)
-
     async def get_job_log_reader(self, job: Job) -> LogReader:
         return PodContainerLogReader(
             client=self._client, pod_name=job.id, container_name=job.id)
@@ -164,9 +155,4 @@ class KubeOrchestrator(Orchestrator):
         if job.has_http_server_exposed:
             await self._delete_service(pod_id)
         status = await self._client.delete_pod(pod_id)
-        if not job.is_finished:
-            # explicitly setting the job status as succeeded due to manual
-            # deletion of a still running job
-            job.status = JobStatus.SUCCEEDED
-        job.is_deleted = True
         return status.status

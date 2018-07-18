@@ -29,6 +29,8 @@ class Job:
 
         self._current_datetime_factory = current_datetime_factory
 
+        self._check_status()
+
     @property
     def id(self):
         return self._job_request.job_id
@@ -44,6 +46,9 @@ class Job:
     @status.setter
     def status(self, value: JobStatus) -> None:
         self._status = value
+        self._check_status()
+
+    def _check_status(self):
         if self.is_finished and not self._finished_at:
             self._finished_at = self._current_datetime_factory()
 

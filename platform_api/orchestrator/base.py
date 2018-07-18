@@ -32,10 +32,6 @@ class Orchestrator(ABC):
         pass
 
     @abstractmethod
-    async def update_job_status(self, job: Job) -> None:
-        pass
-
-    @abstractmethod
     async def get_job_log_reader(self, job: Job) -> LogReader:
         pass
 

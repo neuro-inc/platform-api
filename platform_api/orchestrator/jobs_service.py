@@ -1,11 +1,11 @@
-from abc import ABC, abstractmethod
 import json
-from typing import List, Tuple, Dict
 import logging
+from abc import ABC, abstractmethod
+from typing import Dict, List, Tuple
 
-from .job import Job
-from .job_request import JobRequest, JobError, JobStatus
 from .base import LogReader, Orchestrator
+from .job import Job
+from .job_request import JobError, JobRequest, JobStatus
 from .status import Status
 
 logger = logging.getLogger(__file__)
@@ -73,19 +73,22 @@ class JobsService:
 
     async def update_jobs_statuses(self):
         for job in await self._jobs_storage.get_running_jobs():
-            logger.info('Updating job %s', job.id)
             await self._update_job_status(job)
 
         for job in await self._jobs_storage.get_jobs_for_deletion():
-            logger.info('Deleting job %s', job.id)
-            await self._orchestrator.delete_job(job)
-            await self._jobs_storage.set_job(job)
+            await self._delete_job(job)
 
     async def _update_job_status(self, job: Job) -> None:
+        logger.info('Updating job %s', job.id)
         assert not job.is_finished
-        # TODO (A Danshyn 07/17/18): here we rely on side effect in
-        # update_job_status which is not great. should be refactored.
-        await self._orchestrator.update_job_status(job)
+
+        old_status = job.status
+        job.status = await self._orchestrator.status_job(job.id)
+        if old_status != job.status:
+            logger.info(
+                'Job %s transitioned from %s to %s', job.id,
+                old_status.name, job.status.name)
+
         await self._jobs_storage.set_job(job)
 
     async def create_job(self, job_request: JobRequest) -> Tuple[Job, Status]:
@@ -108,11 +111,20 @@ class JobsService:
         job = await self.get_job(job_id)
         return await self._orchestrator.get_job_log_reader(job)
 
+    async def _delete_job(self, job: Job) -> None:
+        logger.info('Deleting job %s', job.id)
+        await self._orchestrator.delete_job(job)
+        if not job.is_finished:
+            # explicitly setting the job status as succeeded due to manual
+            # deletion of a still running job
+            job.status = JobStatus.SUCCEEDED
+        job.is_deleted = True
+        await self._jobs_storage.set_job(job)
+
     async def delete_job(self, job_id: str) -> None:
         job = await self._jobs_storage.get_job(job_id)
         if not job.is_finished:
-            await self._orchestrator.delete_job(job)
-            await self._jobs_storage.set_job(job)
+            await self._delete_job(job)
 
     async def get_all_jobs(self) -> List[Job]:
         return await self._jobs_storage.get_all_jobs()
