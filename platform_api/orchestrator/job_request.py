@@ -111,9 +111,28 @@ class JobRequest:
 
 
 class JobStatus(str, enum.Enum):
+    """An Enum subclass that represents job statuses.
+
+    PENDING: a job is being created and scheduled. This includes finding (and
+    possibly waiting for) sufficient amount of resources, pulling an image
+    from a registry etc.
+    RUNNING: a job is being run.
+    SUCCEEDED: a job terminated with the 0 exit code or a running job was
+    manually terminated/deleted.
+    FAILED: a job terminated with a non-0 exit code.
+    """
     PENDING = 'pending'
+    RUNNING = 'running'
     SUCCEEDED = 'succeeded'
     FAILED = 'failed'
+
+    @property
+    def is_pending(self) -> bool:
+        return self == self.PENDING
+
+    @property
+    def is_running(self) -> bool:
+        return self == self.RUNNING
 
     @property
     def is_finished(self) -> bool:
