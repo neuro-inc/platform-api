@@ -365,6 +365,9 @@ class ContainerStatus:
 
     @property
     def is_creating(self) -> bool:
+        # TODO (A Danshyn 07/20/18): handle PodInitializing
+        # TODO (A Danshyn 07/20/18): consider handling other reasons
+        # https://github.com/kubernetes/kubernetes/blob/886e04f1fffbb04faf8a9f9ee141143b2684ae68/pkg/kubelet/images/types.go#L25-L43
         return (
             self.is_waiting and
             self._waiting_reason in (None, 'ContainerCreating')
@@ -392,10 +395,17 @@ class PodStatus:
 
     @property
     def status(self) -> JobStatus:
+        """Map a pod phase and its container statuses to a job status.
+
+        See
+        https://kubernetes.io/docs/concepts/workloads/pods/pod-lifecycle#pod-phase
+        """
         if self.phase == 'Succeeded':
             return JobStatus.SUCCEEDED
-        elif self.phase == 'Failed':
+        elif self.phase in ('Failed', 'Unknown'):
             return JobStatus.FAILED
+        elif self.phase == 'Running':
+            return JobStatus.RUNNING
         elif self.phase == 'Pending':
             if self._is_container_creating:
                 return JobStatus.PENDING

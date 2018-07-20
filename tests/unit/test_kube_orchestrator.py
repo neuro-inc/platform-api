@@ -151,7 +151,7 @@ class TestPodDescriptor:
         pod = PodDescriptor.from_primitive(payload)
         assert pod.name == 'testname'
         assert pod.image == 'testimage'
-        assert pod.status.status == JobStatus.PENDING
+        assert pod.status.status == JobStatus.RUNNING
 
     def test_from_primitive_failure(self):
         payload = {
@@ -178,12 +178,13 @@ class TestPodStatus:
             }]
         }
         status = PodStatus.from_primitive(payload)
-        assert status.status == JobStatus.PENDING
+        assert status.status == JobStatus.RUNNING
 
     @pytest.mark.parametrize('phase, expected_status', (
         ('Succeeded', JobStatus.SUCCEEDED),
         ('Failed', JobStatus.FAILED),
-        ('Running', JobStatus.PENDING),
+        ('Unknown', JobStatus.FAILED),
+        ('Running', JobStatus.RUNNING),
     ))
     def test_status(self, phase, expected_status):
         payload = {'phase': phase}
