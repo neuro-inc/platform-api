@@ -69,7 +69,7 @@ class TestKubeOrchestrator:
             interval_s: int=1, max_attempts: int=30):
         for _ in range(max_attempts):
             status = await job.query_status()
-            if status != JobStatus.PENDING:
+            if status.is_finished:
                 return status
             else:
                 await asyncio.sleep(interval_s)
