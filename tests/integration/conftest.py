@@ -9,6 +9,15 @@ from platform_api.config import StorageConfig
 from platform_api.orchestrator.kube_orchestrator import KubeClient, KubeConfig
 
 
+PYTEST_REUSE_DOCKER_OPT = '--reuse-docker'
+
+
+def pytest_addoption(parser):
+    parser.addoption(
+        PYTEST_REUSE_DOCKER_OPT, action='store_true',
+        help='Reuse existing docker containers')
+
+
 @pytest.fixture(scope='session')
 def event_loop():
     asyncio.set_event_loop_policy(asyncio.DefaultEventLoopPolicy())
