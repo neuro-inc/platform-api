@@ -1,6 +1,7 @@
 import asyncio
 
 import aiodocker
+import aioredis
 import pytest
 from async_timeout import timeout
 
@@ -67,7 +68,7 @@ async def wait_for_redis_server(
                     response = await redis_client.ping()
                     if response == b'PONG':
                         break
-            except OSError:
+            except (OSError, aioredis.errors.RedisError):
                 pass
             await asyncio.sleep(interval_s)
 
