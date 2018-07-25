@@ -40,7 +40,7 @@ jobs:
           name: GKE Docker Push
           command: |
             make gke_docker_push
-            
+
       - run:
           name: GKE K8s Deploy
           command: |

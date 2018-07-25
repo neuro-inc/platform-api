@@ -1,4 +1,5 @@
 import json
+import itertools
 from abc import ABC, abstractmethod
 from typing import Any, Dict, List
 
@@ -76,6 +77,9 @@ class RedisJobsStorage(JobsStorage):
     def _generate_jobs_status_index_key(self, status: JobStatus) -> str:
         return f'jobs.status.{status}'
 
+    def _generate_jobs_deleted_index_key(self) -> str:
+        return 'jobs.deleted'
+
     def _generate_jobs_index_key(self) -> str:
         return 'jobs'
 
@@ -84,10 +88,12 @@ class RedisJobsStorage(JobsStorage):
 
         tr = self._client.multi_exec()
         tr.set(self._generate_job_key(job.id), payload)
-        tr.zadd('jobs', 0, job.id)
+        tr.sadd('jobs', job.id)
         for status in JobStatus:
-            tr.zrem(self._generate_jobs_status_index_key(status), job.id)
-        tr.zadd(self._generate_jobs_status_index_key(job.status), 0, job.id)
+            tr.srem(self._generate_jobs_status_index_key(status), job.id)
+        tr.sadd(self._generate_jobs_status_index_key(job.status), job.id)
+        if job.is_deleted:
+            tr.sadd(self._generate_jobs_deleted_index_key(), job.id)
         await tr.execute()
 
     def _parse_job_payload(self, payload: str) -> Job:
@@ -111,17 +117,28 @@ class RedisJobsStorage(JobsStorage):
 
     async def _get_all_job_ids(self) -> List[str]:
         job_ids = []
-        async for job_id, _ in self._client.izscan(
+        async for job_id in self._client.isscan(
                 self._generate_jobs_index_key()):
             job_ids.append(job_id.decode())
         return job_ids
 
     async def _get_running_job_ids(self) -> List[str]:
         job_ids = []
-        async for job_id, _ in self._client.izscan(
+        async for job_id in self._client.isscan(
                 self._generate_jobs_status_index_key(JobStatus.RUNNING)):
             job_ids.append(job_id.decode())
         return job_ids
+
+    async def _get_job_ids_for_deletion(self) -> List[str]:
+        tr = self._client.multi_exec()
+        tr.sdiff(
+            self._generate_jobs_status_index_key(JobStatus.FAILED),
+            self._generate_jobs_deleted_index_key())
+        tr.sdiff(
+            self._generate_jobs_status_index_key(JobStatus.SUCCEEDED),
+            self._generate_jobs_deleted_index_key())
+        failed, succeeded = await tr.execute()
+        return [id_.decode() for id_ in itertools.chain(failed, succeeded)]
 
     async def get_all_jobs(self) -> List[Job]:
         job_ids = await self._get_all_job_ids()
@@ -129,4 +146,8 @@ class RedisJobsStorage(JobsStorage):
 
     async def get_running_jobs(self) -> List[Job]:
         job_ids = await self._get_running_job_ids()
+        return await self._get_jobs(job_ids)
+
+    async def get_jobs_for_deletion(self) -> List[Job]:
+        job_ids = await self._get_job_ids_for_deletion()
         return await self._get_jobs(job_ids)

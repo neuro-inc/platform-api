@@ -2,7 +2,7 @@ import pytest
 
 from platform_api.orchestrator.job import Job
 from platform_api.orchestrator.job_request import (
-    Container, ContainerResources, JobError, JobRequest
+    Container, ContainerResources, JobError, JobRequest, JobStatus
 )
 from platform_api.orchestrator.jobs_storage import RedisJobsStorage
 
@@ -21,12 +21,28 @@ class TestRedisJobsStorage:
             resources=ContainerResources(cpu=0.1, memory_mb=256))
         return JobRequest.create(container)
 
+    def _create_pending_job(self, kube_orchestrator):
+        return Job(
+            kube_orchestrator.config,
+            job_request=self._create_job_request())
+
+    def _create_running_job(self, kube_orchestrator):
+        return Job(
+            kube_orchestrator.config,
+            job_request=self._create_job_request(),
+            status=JobStatus.RUNNING)
+
+    def _create_succeeded_job(self, kube_orchestrator, is_deleted=False):
+        return Job(
+            kube_orchestrator.config,
+            job_request=self._create_job_request(),
+            status=JobStatus.SUCCEEDED,
+            is_deleted=is_deleted)
+
     @pytest.mark.usefixtures('clear_redis')
     @pytest.mark.asyncio
     async def test_set_get(self, redis_client, kube_orchestrator):
-        original_job = Job(
-            kube_orchestrator.config,
-            job_request=self._create_job_request())
+        original_job = self._create_pending_job(kube_orchestrator)
         storage = RedisJobsStorage(
             redis_client, orchestrator=kube_orchestrator)
         await storage.set_job(original_job)
@@ -55,9 +71,7 @@ class TestRedisJobsStorage:
     @pytest.mark.usefixtures('clear_redis')
     @pytest.mark.asyncio
     async def test_get_all(self, redis_client, kube_orchestrator):
-        original_job = Job(
-            kube_orchestrator.config,
-            job_request=self._create_job_request())
+        original_job = self._create_pending_job(kube_orchestrator)
         storage = RedisJobsStorage(
             redis_client, orchestrator=kube_orchestrator)
         await storage.set_job(original_job)
@@ -70,18 +84,19 @@ class TestRedisJobsStorage:
 
     @pytest.mark.usefixtures('clear_redis')
     @pytest.mark.asyncio
+    async def test_get_running_empty(self, redis_client, kube_orchestrator):
+        storage = RedisJobsStorage(
+            redis_client, orchestrator=kube_orchestrator)
+
+        jobs = await storage.get_running_jobs()
+        assert not jobs
+
+    @pytest.mark.usefixtures('clear_redis')
+    @pytest.mark.asyncio
     async def test_get_running(self, redis_client, kube_orchestrator):
-        pending_job = Job(
-            kube_orchestrator.config,
-            job_request=self._create_job_request())
-        running_job = Job(
-            kube_orchestrator.config,
-            job_request=self._create_job_request(),
-            status=JobStatus.RUNNING)
-        succeeded_job = Job(
-            kube_orchestrator.config,
-            job_request=self._create_job_request(),
-            status=JobStatus.SUCCEEDED)
+        pending_job = self._create_pending_job(kube_orchestrator)
+        running_job = self._create_running_job(kube_orchestrator)
+        succeeded_job = self._create_succeeded_job(kube_orchestrator)
         storage = RedisJobsStorage(
             redis_client, orchestrator=kube_orchestrator)
         await storage.set_job(pending_job)
@@ -93,3 +108,35 @@ class TestRedisJobsStorage:
         job = jobs[0]
         assert job.id == running_job.id
         assert job.status == JobStatus.RUNNING
+
+    @pytest.mark.usefixtures('clear_redis')
+    @pytest.mark.asyncio
+    async def test_get_for_deletion_empty(
+            self, redis_client, kube_orchestrator):
+        storage = RedisJobsStorage(
+            redis_client, orchestrator=kube_orchestrator)
+
+        jobs = await storage.get_jobs_for_deletion()
+        assert not jobs
+
+    @pytest.mark.usefixtures('clear_redis')
+    @pytest.mark.asyncio
+    async def test_get_for_deletion(self, redis_client, kube_orchestrator):
+        pending_job = self._create_pending_job(kube_orchestrator)
+        running_job = self._create_running_job(kube_orchestrator)
+        succeeded_job = self._create_succeeded_job(kube_orchestrator)
+        deleted_job = self._create_succeeded_job(
+            kube_orchestrator, is_deleted=True)
+        storage = RedisJobsStorage(
+            redis_client, orchestrator=kube_orchestrator)
+        await storage.set_job(pending_job)
+        await storage.set_job(running_job)
+        await storage.set_job(succeeded_job)
+        await storage.set_job(deleted_job)
+
+        jobs = await storage.get_jobs_for_deletion()
+        assert len(jobs) == 1
+        job = jobs[0]
+        assert job.id == succeeded_job.id
+        assert job.status == JobStatus.SUCCEEDED
+        assert not job.is_deleted
