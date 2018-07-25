@@ -81,3 +81,10 @@ def redis_config(redis_server):
 async def redis_client(redis_config):
     async with create_redis_client(redis_config) as client:
         yield client
+
+
+@pytest.fixture
+async def clear_redis(redis_client):
+    await redis_client.flushdb()
+    yield
+    await redis_client.flushdb()
