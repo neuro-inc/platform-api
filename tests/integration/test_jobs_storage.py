@@ -67,3 +67,29 @@ class TestRedisJobsStorage:
         job = jobs[0]
         assert job.id == original_job.id
         assert job.status == original_job.status
+
+    @pytest.mark.usefixtures('clear_redis')
+    @pytest.mark.asyncio
+    async def test_get_running(self, redis_client, kube_orchestrator):
+        pending_job = Job(
+            kube_orchestrator.config,
+            job_request=self._create_job_request())
+        running_job = Job(
+            kube_orchestrator.config,
+            job_request=self._create_job_request(),
+            status=JobStatus.RUNNING)
+        succeeded_job = Job(
+            kube_orchestrator.config,
+            job_request=self._create_job_request(),
+            status=JobStatus.SUCCEEDED)
+        storage = RedisJobsStorage(
+            redis_client, orchestrator=kube_orchestrator)
+        await storage.set_job(pending_job)
+        await storage.set_job(running_job)
+        await storage.set_job(succeeded_job)
+
+        jobs = await storage.get_running_jobs()
+        assert len(jobs) == 1
+        job = jobs[0]
+        assert job.id == running_job.id
+        assert job.status == JobStatus.RUNNING
