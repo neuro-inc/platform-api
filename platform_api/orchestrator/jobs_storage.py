@@ -101,8 +101,10 @@ class RedisJobsStorage(JobsStorage):
         return self._parse_job_payload(payload)
 
     async def _get_jobs(self, ids: List[str]) -> List[Job]:
+        jobs: List[Job] = []
+        if not ids:
+            return jobs
         keys = [self._generate_job_key(id_) for id_ in ids]
-        jobs = []
         for payload in await self._client.mget(*keys):
             jobs.append(self._parse_job_payload(payload))
         return jobs
