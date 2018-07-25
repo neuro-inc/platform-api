@@ -10,7 +10,7 @@ spec:
     spec:
       containers:
       - name: testjob1
-        image: registry.neuromation.io/neuromationorg/platformapi-dummy:latest
+        image: gcr.io/light-reality-205619/platformapi-dummy:latest
         env:
         - name: MODEL_PATH
           value: /
