@@ -4,7 +4,7 @@ from typing import List, Tuple
 from .base import LogReader, Orchestrator
 from .job import Job
 from .job_request import JobRequest, JobStatus
-from .jobs_storage import InMemoryJobsStorage, JobsStorage
+from .jobs_storage import InMemoryJobsStorage
 from .status import Status
 
 logger = logging.getLogger(__file__)

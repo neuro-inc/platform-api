@@ -1,7 +1,7 @@
 import json
 import itertools
 from abc import ABC, abstractmethod
-from typing import Any, Dict, List
+from typing import Dict, List
 
 import aioredis
 
