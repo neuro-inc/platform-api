@@ -140,3 +140,67 @@ class TestRedisJobsStorage:
         assert job.id == succeeded_job.id
         assert job.status == JobStatus.SUCCEEDED
         assert not job.is_deleted
+
+    @pytest.mark.usefixtures('clear_redis')
+    @pytest.mark.asyncio
+    async def test_job_lifecycle(self, redis_client, kube_orchestrator):
+        job = self._create_pending_job(kube_orchestrator)
+        job_id = job.id
+        storage = RedisJobsStorage(
+            redis_client, orchestrator=kube_orchestrator)
+        await storage.set_job(job)
+
+        jobs = await storage.get_all_jobs()
+        assert len(jobs) == 1
+        job = jobs[0]
+        assert job.id == job_id
+        assert job.status == JobStatus.PENDING
+
+        jobs = await storage.get_running_jobs()
+        assert not jobs
+
+        jobs = await storage.get_jobs_for_deletion()
+        assert not jobs
+
+        job.status = JobStatus.RUNNING
+        await storage.set_job(job)
+
+        jobs = await storage.get_all_jobs()
+        assert len(jobs) == 1
+
+        jobs = await storage.get_running_jobs()
+        assert len(jobs) == 1
+        job = jobs[0]
+        assert job.id == job_id
+        assert job.status == JobStatus.RUNNING
+
+        jobs = await storage.get_jobs_for_deletion()
+        assert not jobs
+
+        job.status = JobStatus.FAILED
+        await storage.set_job(job)
+
+        jobs = await storage.get_all_jobs()
+        assert len(jobs) == 1
+
+        jobs = await storage.get_running_jobs()
+        assert not jobs
+
+        jobs = await storage.get_jobs_for_deletion()
+        assert len(jobs) == 1
+        job = jobs[0]
+        assert job.id == job_id
+        assert job.status == JobStatus.FAILED
+        assert not job.is_deleted
+
+        job.is_deleted = True
+        await storage.set_job(job)
+
+        jobs = await storage.get_all_jobs()
+        assert len(jobs) == 1
+
+        jobs = await storage.get_running_jobs()
+        assert not jobs
+
+        jobs = await storage.get_jobs_for_deletion()
+        assert not jobs
