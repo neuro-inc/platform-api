@@ -3,11 +3,12 @@ from pathlib import PurePath
 
 import pytest
 
-from platform_api.config import (
-    StorageConfig, StorageType,)
+from platform_api.config import StorageConfig, StorageType
 from platform_api.config_factory import EnvironConfigFactory
 from platform_api.orchestrator.kube_orchestrator import (
-    KubeConfig, HostVolume, NfsVolume,)
+    HostVolume, KubeConfig, NfsVolume
+)
+from platform_api.redis import RedisConfig
 
 
 class TestStorageConfig:
@@ -106,6 +107,8 @@ class TestEnvironConfigFactory:
         assert config.orchestrator.job_deletion_delay_s == 86400
         assert config.orchestrator.job_deletion_delay == timedelta(days=1)
 
+        assert config.database.redis is None
+
         assert config.env_prefix == 'NP'
 
     def test_create_value_error(self):
@@ -138,7 +141,11 @@ class TestEnvironConfigFactory:
             'NP_K8S_JOBS_INGRESS_NAME': 'testingress',
             'NP_K8S_JOBS_INGRESS_DOMAIN_NAME': 'jobs.domain',
 
-            'NP_K8S_JOB_DELETION_DELAY': '3600'
+            'NP_K8S_JOB_DELETION_DELAY': '3600',
+
+            'NP_DB_REDIS_URI': 'redis://localhost:6379/0',
+            'NP_DB_REDIS_CONN_POOL_SIZE': '444',
+            'NP_DB_REDIS_CONN_TIMEOUT': '555',
         }
         config = EnvironConfigFactory(environ=environ).create()
 
@@ -164,6 +171,10 @@ class TestEnvironConfigFactory:
         assert config.orchestrator.job_deletion_delay_s == 3600
         assert config.orchestrator.job_deletion_delay == timedelta(
             seconds=3600)
+
+        assert config.database.redis.uri == 'redis://localhost:6379/0'
+        assert config.database.redis.conn_pool_size == 444
+        assert config.database.redis.conn_timeout_s == 555.
 
         assert config.env_prefix == 'TEST'
 
