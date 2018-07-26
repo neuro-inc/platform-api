@@ -4,6 +4,8 @@ from enum import Enum
 from pathlib import PurePath
 from typing import Optional
 
+from .redis import RedisConfig
+
 
 @dataclass(frozen=True)
 class ServerConfig:
@@ -67,10 +69,16 @@ class OrchestratorConfig:
 
 
 @dataclass(frozen=True)
+class DatabaseConfig:
+    redis: Optional[RedisConfig] = None
+
+
+@dataclass(frozen=True)
 class Config:
     server: ServerConfig
     storage: StorageConfig
     orchestrator: OrchestratorConfig
+    database: DatabaseConfig
 
     # used for generating environment variable names and
     # sourcing them inside containers.
