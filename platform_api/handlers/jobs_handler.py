@@ -4,8 +4,12 @@ from platform_api.orchestrator import JobsService
 
 
 class JobsHandler:
-    def __init__(self, *, jobs_service: JobsService) -> None:
-        self._jobs_service = jobs_service
+    def __init__(self, *, app: aiohttp.web.Application) -> None:
+        self._app = app
+
+    @property
+    def _jobs_service(self) -> JobsService:
+        return self._app['jobs_service']
 
     def register(self, app):
         app.add_routes((

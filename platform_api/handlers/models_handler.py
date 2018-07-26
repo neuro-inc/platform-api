@@ -110,15 +110,17 @@ def create_model_response_validator() -> t.Trafaret:
 
 class ModelsHandler:
     def __init__(
-            self, *, config: Config,
-            jobs_service: JobsService
-            ) -> None:
+            self, *, app: aiohttp.web.Application, config: Config) -> None:
+        self._app = app
         self._config = config
         self._storage_config = config.storage
-        self._jobs_service = jobs_service
 
         self._model_request_validator = self._create_model_request_validator()
         self._model_response_validator = create_model_response_validator()
+
+    @property
+    def _jobs_service(self) -> JobsService:
+        return self._app['jobs_service']
 
     def _create_model_request_validator(self) -> t.Trafaret:
         return t.Dict({
