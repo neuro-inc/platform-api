@@ -7,7 +7,6 @@ from platform_api.orchestrator.job_request import (
 from platform_api.orchestrator.jobs_storage import RedisJobsStorage
 
 
-@pytest.mark.usefixtures('clear_redis')
 class TestRedisJobsStorage:
 
     def _create_job_request(self):

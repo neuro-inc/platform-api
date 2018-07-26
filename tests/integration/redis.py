@@ -9,7 +9,7 @@ from platform_api.redis import RedisConfig, create_redis_client
 
 
 @pytest.fixture(scope='session')
-async def redis_server(docker, reuse_docker):
+async def _redis_server(docker, reuse_docker):
     image_name = 'redis:4'
     container_name = 'redis'
     container_config = {
@@ -50,6 +50,14 @@ async def redis_server(docker, reuse_docker):
         await container.delete(force=True)
 
 
+@pytest.fixture
+async def redis_server(_redis_server):
+    async with create_redis_client(_redis_server) as client:
+        await client.flushall()
+        yield _redis_server
+        await client.flushall()
+
+
 async def create_redis_config(container) -> RedisConfig:
     host = 'localhost'
     port = int((await container.port(6379))[0]['HostPort'])
@@ -73,7 +81,7 @@ async def wait_for_redis_server(
             await asyncio.sleep(interval_s)
 
 
-@pytest.fixture(scope='session')
+@pytest.fixture
 def redis_config(redis_server):
     return redis_server
 
@@ -82,10 +90,3 @@ def redis_config(redis_server):
 async def redis_client(redis_config):
     async with create_redis_client(redis_config) as client:
         yield client
-
-
-@pytest.fixture
-async def clear_redis(redis_client):
-    await redis_client.flushdb()
-    yield
-    await redis_client.flushdb()
