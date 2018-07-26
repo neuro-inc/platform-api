@@ -24,18 +24,12 @@ class JobsStorage(ABC):
         pass
 
     async def get_running_jobs(self) -> List[Job]:
-        jobs = []
-        for job in await self.get_all_jobs():
-            if not job.is_finished:
-                jobs.append(job)
-        return jobs
+        return [
+            job for job in await self.get_all_jobs() if not job.is_finished]
 
     async def get_jobs_for_deletion(self) -> List[Job]:
-        jobs = []
-        for job in await self.get_all_jobs():
-            if job.should_be_deleted:
-                jobs.append(job)
-        return jobs
+        return [
+            job for job in await self.get_all_jobs() if job.should_be_deleted]
 
 
 class InMemoryJobsStorage(JobsStorage):
