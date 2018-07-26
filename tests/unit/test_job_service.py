@@ -32,6 +32,12 @@ class TestInMemoryJobsStorage:
             job_request=self._create_job_request())
         await jobs_storage.set_job(pending_job)
 
+        running_job = Job(
+            orchestrator_config=config,
+            job_request=self._create_job_request(),
+            status=JobStatus.RUNNING)
+        await jobs_storage.set_job(running_job)
+
         succeeded_job = Job(
             orchestrator_config=config,
             job_request=self._create_job_request(),
@@ -43,10 +49,14 @@ class TestInMemoryJobsStorage:
         assert job.request == pending_job.request
 
         jobs = await jobs_storage.get_all_jobs()
-        assert {job.id for job in jobs} == {pending_job.id, succeeded_job.id}
+        assert {job.id for job in jobs} == {
+            pending_job.id, running_job.id, succeeded_job.id}
 
         jobs = await jobs_storage.get_running_jobs()
-        assert {job.id for job in jobs} == {pending_job.id}
+        assert {job.id for job in jobs} == {running_job.id}
+
+        jobs = await jobs_storage.get_unfinished_jobs()
+        assert {job.id for job in jobs} == {pending_job.id, running_job.id}
 
         jobs = await jobs_storage.get_jobs_for_deletion()
         assert {job.id for job in jobs} == {succeeded_job.id}
