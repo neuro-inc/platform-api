@@ -19,7 +19,7 @@ class JobsService:
         self._orchestrator = orchestrator
 
     async def update_jobs_statuses(self):
-        for job in await self._jobs_storage.get_running_jobs():
+        for job in await self._jobs_storage.get_unfinished_jobs():
             await self._update_job_status(job)
 
         for job in await self._jobs_storage.get_jobs_for_deletion():
