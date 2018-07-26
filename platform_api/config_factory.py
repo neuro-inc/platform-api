@@ -1,9 +1,13 @@
-from pathlib import PurePath
 import os
+from pathlib import PurePath
+from typing import Optional
 
-from .config import Config, ServerConfig, StorageConfig, StorageType
+from .config import (
+    Config, DatabaseConfig, ServerConfig, StorageConfig, StorageType
+)
 from .orchestrator import KubeConfig
 from .orchestrator.kube_orchestrator import KubeClientAuthType
+from .redis import RedisConfig
 
 
 class EnvironConfigFactory:
@@ -13,10 +17,12 @@ class EnvironConfigFactory:
     def create(self):
         env_prefix = self._environ.get('NP_ENV_PREFIX', Config.env_prefix)
         storage = self.create_storage()
+        database = self.create_database()
         return Config(
             server=self.create_server(),
             storage=storage,
             orchestrator=self.create_orchestrator(storage),
+            database=database,
             env_prefix=env_prefix,
         )
 
@@ -86,3 +92,21 @@ class EnvironConfigFactory:
                 'NP_K8S_JOB_DELETION_DELAY',
                 KubeConfig.job_deletion_delay_s)),
         )
+
+    def create_database(self) -> DatabaseConfig:
+        redis = self.create_redis()
+        return DatabaseConfig(redis=redis)  # type: ignore
+
+    def create_redis(self) -> Optional[RedisConfig]:
+        uri = self._environ.get('NP_DB_REDIS_URI')
+        if not uri:
+            return None
+        conn_pool_size = int(self._environ.get(
+            'NP_DB_REDIS_CONN_POOL_SIZE',
+            RedisConfig.conn_pool_size))
+        conn_timeout_s = float(self._environ.get(
+            'NP_DB_REDIS_CONN_TIMEOUT',
+            RedisConfig.conn_timeout_s))
+        return RedisConfig(  # type: ignore
+            uri=uri, conn_pool_size=conn_pool_size,
+            conn_timeout_s=conn_timeout_s)
