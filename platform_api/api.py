@@ -2,14 +2,17 @@ import asyncio
 import logging
 
 import aiohttp.web
+from async_exit_stack import AsyncExitStack
 
 from .config import Config
 from .config_factory import EnvironConfigFactory
-from .handlers import (
-    ModelsHandler, JobsHandler)
+from .handlers import JobsHandler, ModelsHandler
 from .orchestrator import (
-    KubeOrchestrator, KubeConfig, JobsService,
-    JobError, Orchestrator, JobsStatusPooling,)
+    JobError, JobsService, JobsStatusPooling, KubeConfig, KubeOrchestrator,
+    Orchestrator
+)
+from .orchestrator.jobs_storage import InMemoryJobsStorage, RedisJobsStorage
+from .redis import create_redis_client
 
 
 class ApiHandler:
@@ -51,31 +54,11 @@ async def handle_exceptions(request, handler):
             payload, status=aiohttp.web.HTTPInternalServerError.status_code)
 
 
-async def create_orchestrator(
-        app: aiohttp.web.Application, kube_config: KubeConfig
-        ) -> Orchestrator:
-    orchestrator = KubeOrchestrator(config=kube_config, loop=app.loop)
-
-    async def _init_orchestrator(_):
-        async with orchestrator:
-            yield orchestrator
-    app.cleanup_ctx.append(_init_orchestrator)
-    return orchestrator
-
-
-async def create_job_service(
-        app: aiohttp.web.Application, orchestrator: Orchestrator
-        ) -> JobsService:
-    jobs_service = JobsService(orchestrator=orchestrator)
-    jobs_status_pooling = JobsStatusPooling(
-        jobs_service=jobs_service, loop=app.loop)
-
-    async def _init_background_pooling(_):
-        async with jobs_status_pooling:
-            yield jobs_status_pooling
-
-    app.cleanup_ctx.append(_init_background_pooling)
-    return jobs_service
+async def create_api_v1_app():
+    api_v1_app = aiohttp.web.Application()
+    api_v1_handler = ApiHandler()
+    api_v1_handler.register(api_v1_app)
+    return api_v1_app
 
 
 async def create_models_app(config: Config, jobs_service: JobsService):
@@ -93,23 +76,41 @@ async def create_jobs_app(jobs_service: JobsService):
     return jobs_app
 
 
-async def create_app(config: Config):
+async def create_app(config: Config) -> aiohttp.web.Application:
     app = aiohttp.web.Application(middlewares=[handle_exceptions])
     app['config'] = config
 
-    api_v1_app = aiohttp.web.Application()
-    api_v1_handler = ApiHandler()
-    api_v1_handler.register(api_v1_app)
+    async def _init_app(app: aiohttp.web.Application):
+        async with AsyncExitStack() as exit_stack:
 
-    orchestrator = await create_orchestrator(
-        app=app, kube_config=config.orchestrator)
-    jobs_service = await create_job_service(
-        app=app, orchestrator=orchestrator)
+            redis_client = await exit_stack.enter_async_context(
+                create_redis_client(config.database.redis))
 
-    models_app = await create_models_app(
-        config=config, jobs_service=jobs_service)
+            orchestrator = KubeOrchestrator(
+                config=config.orchestrator, loop=app.loop)
+            await exit_stack.enter_async_context(orchestrator)
+
+            jobs_storage = RedisJobsStorage(
+                redis_client, orchestrator=orchestrator)
+
+            jobs_service = JobsService(
+                orchestrator=orchestrator, jobs_storage=jobs_storage)
+
+            jobs_status_pooling = JobsStatusPooling(
+                jobs_service=jobs_service, loop=app.loop)
+            await exit_stack.enter_async_context(jobs_status_pooling)
+
+            app['jobs_service'] = jobs_service
+            yield
+
+    app.cleanup_ctx.append(_init_app)
+
+    api_v1_app = await create_api_v1_app()
+
+    models_app = await create_models_app(config=config)
     api_v1_app.add_subapp('/models', models_app)
-    jobs_app = await create_jobs_app(jobs_service=jobs_service)
+
+    jobs_app = await create_jobs_app()
     api_v1_app.add_subapp('/jobs', jobs_app)
 
     app.add_subapp('/api/v1', api_v1_app)
