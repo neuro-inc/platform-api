@@ -5,16 +5,18 @@ import pytest
 
 from platform_api.config import StorageConfig
 from platform_api.orchestrator import (
-    Job, JobStatus, JobsService, JobRequest,
-    LogReader, Orchestrator, KubeConfig)
-from platform_api.orchestrator.job_request import (
-    Container, ContainerResources,)
+    Job, JobError, JobRequest, JobsService, JobStatus, KubeConfig, LogReader,
+    Orchestrator
+)
+from platform_api.orchestrator.job_request import Container, ContainerResources
 
 
 class MockOrchestrator(Orchestrator):
     def __init__(self, config):
         self._config = config
         self._mock_status_to_return = JobStatus.PENDING
+
+        self.raise_on_delete = False
 
     @property
     def config(self):
@@ -32,6 +34,8 @@ class MockOrchestrator(Orchestrator):
         return self._mock_status_to_return
 
     async def delete_job(self, *args, **kwargs):
+        if self.raise_on_delete:
+            raise JobError()
         return JobStatus.SUCCEEDED
 
     def update_status_to_return(self, new_status: JobStatus):
