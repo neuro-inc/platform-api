@@ -53,6 +53,10 @@ class Job:
             self._finished_at = self._current_datetime_factory()
 
     @property
+    def is_running(self) -> bool:
+        return self._status == JobStatus.RUNNING
+
+    @property
     def is_finished(self) -> bool:
         return self._status.is_finished
 

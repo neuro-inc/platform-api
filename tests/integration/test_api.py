@@ -7,7 +7,9 @@ import aiohttp.web
 import pytest
 
 from platform_api.api import create_app
-from platform_api.config import Config, ServerConfig, StorageConfig
+from platform_api.config import (
+    Config, DatabaseConfig, ServerConfig, StorageConfig
+)
 
 
 class ApiConfig(NamedTuple):
@@ -32,14 +34,16 @@ class ApiConfig(NamedTuple):
 
 
 @pytest.fixture
-def config(kube_config):
+def config(kube_config, redis_config):
     server_config = ServerConfig()
     storage_config = StorageConfig(
         host_mount_path=PurePath('/tmp'))  # type: ignore
+    database_config = DatabaseConfig(redis=redis_config)  # type: ignore
     return Config(
         server=server_config,
         storage=storage_config,
-        orchestrator=kube_config)
+        orchestrator=kube_config,
+        database=database_config)
 
 
 @pytest.fixture

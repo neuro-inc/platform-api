@@ -9,7 +9,7 @@ class RedisConfig:
     uri: str
 
     conn_pool_size: int = 10
-    conn_timeout_s: float = 10
+    conn_timeout_s: float = 10.
 
 
 @asynccontextmanager

@@ -98,6 +98,30 @@ class TestRedisJobsStorage:
         assert job.status == JobStatus.RUNNING
 
     @pytest.mark.asyncio
+    async def test_get_unfinished_empty(
+            self, redis_client, kube_orchestrator):
+        storage = RedisJobsStorage(
+            redis_client, orchestrator=kube_orchestrator)
+        jobs = await storage.get_unfinished_jobs()
+        assert not jobs
+
+    @pytest.mark.asyncio
+    async def test_get_unfinished(self, redis_client, kube_orchestrator):
+        pending_job = self._create_pending_job(kube_orchestrator)
+        running_job = self._create_running_job(kube_orchestrator)
+        succeeded_job = self._create_succeeded_job(kube_orchestrator)
+        storage = RedisJobsStorage(
+            redis_client, orchestrator=kube_orchestrator)
+        await storage.set_job(pending_job)
+        await storage.set_job(running_job)
+        await storage.set_job(succeeded_job)
+
+        jobs = await storage.get_unfinished_jobs()
+        assert len(jobs) == 2
+        assert {job.id for job in jobs} == {pending_job.id, running_job.id}
+        assert all([not job.is_finished for job in jobs])
+
+    @pytest.mark.asyncio
     async def test_get_for_deletion_empty(
             self, redis_client, kube_orchestrator):
         storage = RedisJobsStorage(

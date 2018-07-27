@@ -24,12 +24,15 @@ class JobsStorage(ABC):
         pass
 
     async def get_running_jobs(self) -> List[Job]:
-        return [
-            job for job in await self.get_all_jobs() if not job.is_finished]
+        return [job for job in await self.get_all_jobs() if job.is_running]
 
     async def get_jobs_for_deletion(self) -> List[Job]:
         return [
             job for job in await self.get_all_jobs() if job.should_be_deleted]
+
+    async def get_unfinished_jobs(self) -> List[Job]:
+        return [
+            job for job in await self.get_all_jobs() if not job.is_finished]
 
 
 class InMemoryJobsStorage(JobsStorage):
@@ -117,11 +120,20 @@ class RedisJobsStorage(JobsStorage):
         return job_ids
 
     async def _get_running_job_ids(self) -> List[str]:
+        return await self._get_job_ids_by_status(JobStatus.RUNNING)
+
+    async def _get_job_ids_by_status(self, status: JobStatus) -> List[str]:
         job_ids = []
         async for job_id in self._client.isscan(
-                self._generate_jobs_status_index_key(JobStatus.RUNNING)):
+                self._generate_jobs_status_index_key(status)):
             job_ids.append(job_id.decode())
         return job_ids
+
+    async def _get_unfinished_job_ids(self) -> List[str]:
+        job_ids = await self._client.sunion(
+            self._generate_jobs_status_index_key(JobStatus.PENDING),
+            self._generate_jobs_status_index_key(JobStatus.RUNNING))
+        return [id_.decode() for id_ in job_ids]
 
     async def _get_job_ids_for_deletion(self) -> List[str]:
         tr = self._client.multi_exec()
@@ -144,4 +156,8 @@ class RedisJobsStorage(JobsStorage):
 
     async def get_jobs_for_deletion(self) -> List[Job]:
         job_ids = await self._get_job_ids_for_deletion()
+        return await self._get_jobs(job_ids)
+
+    async def get_unfinished_jobs(self) -> List[Job]:
+        job_ids = await self._get_unfinished_job_ids()
         return await self._get_jobs(job_ids)

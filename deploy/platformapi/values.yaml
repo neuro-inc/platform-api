@@ -14,3 +14,7 @@ INGRESS_HOST:
   _default: platform.dev.neuromation.io
   dev: platform.dev.neuromation.io
   staging: platform.staging.neuromation.io
+NP_DB_REDIS_URI:
+  _default: redis://10.0.0.3:6379/0
+  dev: redis://10.0.0.3:6379/0
+  staging: redis://10.0.0.3:6379/1
