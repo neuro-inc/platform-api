@@ -8,7 +8,6 @@ from platform_api.config_factory import EnvironConfigFactory
 from platform_api.orchestrator.kube_orchestrator import (
     HostVolume, KubeConfig, NfsVolume
 )
-from platform_api.redis import RedisConfig
 
 
 class TestStorageConfig:

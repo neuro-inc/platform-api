@@ -7,11 +7,9 @@ from async_exit_stack import AsyncExitStack
 from .config import Config
 from .config_factory import EnvironConfigFactory
 from .handlers import JobsHandler, ModelsHandler
-from .orchestrator import (
-    JobError, JobsService, JobsStatusPooling, KubeConfig, KubeOrchestrator,
-    Orchestrator
-)
-from .orchestrator.jobs_storage import InMemoryJobsStorage, RedisJobsStorage
+from .orchestrator import (JobError, JobsService, JobsStatusPooling,
+                           KubeOrchestrator)
+from .orchestrator.jobs_storage import RedisJobsStorage
 from .redis import create_redis_client
 
 logger = logging.getLogger(__name__)
