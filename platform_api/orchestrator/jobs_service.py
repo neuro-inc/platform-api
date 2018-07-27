@@ -3,7 +3,7 @@ from typing import List, Optional, Tuple
 
 from .base import LogReader, Orchestrator
 from .job import Job
-from .job_request import JobRequest, JobStatus
+from .job_request import JobError, JobRequest, JobStatus
 from .jobs_storage import InMemoryJobsStorage, JobsStorage
 from .status import Status
 
@@ -60,7 +60,11 @@ class JobsService:
 
     async def _delete_job(self, job: Job) -> None:
         logger.info('Deleting job %s', job.id)
-        await self._orchestrator.delete_job(job)
+        try:
+            await self._orchestrator.delete_job(job)
+        except JobError as exc:
+            # if the job is missing, we still want to mark it as deleted
+            logger.warn('Could not delete job %s. Reason: %s', job.id, exc)
         if not job.is_finished:
             # explicitly setting the job status as succeeded due to manual
             # deletion of a still running job
