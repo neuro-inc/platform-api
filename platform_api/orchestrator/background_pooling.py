@@ -4,7 +4,6 @@ from typing import Optional
 
 from .jobs_service import JobsService
 
-
 logger = logging.getLogger(__name__)
 
 

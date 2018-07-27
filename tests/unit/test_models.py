@@ -1,7 +1,8 @@
 import pytest
 
 from platform_api.handlers.models_handler import (
-    create_model_response_validator,)
+    create_model_response_validator
+)
 
 
 class TestModelResponseValidator:
