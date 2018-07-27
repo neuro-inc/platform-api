@@ -17,4 +17,4 @@ INGRESS_HOST:
 NP_DB_REDIS_URI:
   _default: redis://10.0.0.3:6379/0
   dev: redis://10.0.0.3:6379/0
-  staging: redis://10.0.0.3:6379/0
+  staging: redis://10.0.0.3:6379/1
