@@ -97,7 +97,7 @@ workflows:
           filters:
             branches:
               only:
-                - redis_integration
+                - master
       - gke_stage_deploy:
           context: org-global
           requires:
