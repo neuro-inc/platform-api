@@ -14,24 +14,10 @@ from platform_api.orchestrator.job_request import (
     Container, ContainerResources, ContainerVolume
 )
 from platform_api.orchestrator.kube_orchestrator import (
-    Ingress, IngressRule, KubeClientException, KubeOrchestrator, PodDescriptor,
-    Service, StatusException
+    Ingress, IngressRule, KubeClientException, PodDescriptor, Service,
+    StatusException
 )
 from platform_api.orchestrator.logs import PodContainerLogReader
-
-
-@pytest.fixture
-async def kube_orchestrator(kube_config, event_loop):
-    orchestrator = KubeOrchestrator(config=kube_config)
-    async with orchestrator:
-        yield orchestrator
-
-
-@pytest.fixture
-async def kube_orchestrator_nfs(kube_config_nfs, event_loop):
-    orchestrator = KubeOrchestrator(config=kube_config_nfs)
-    async with orchestrator:
-        yield orchestrator
 
 
 class TestJob(Job):

@@ -14,7 +14,7 @@ install_k8s:
 start_k8s: $(K8S_CLUSTER_CMD) install_k8s clean_k8s
 	$(K8S_CLUSTER_CMD) up
 
-test_k8s:
+test_k8s: gke_login
 	$(K8S_CLUSTER_CMD) test
 
 stop_k8s:

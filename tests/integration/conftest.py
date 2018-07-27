@@ -6,7 +6,14 @@ from urllib.parse import urlsplit
 import pytest
 
 from platform_api.config import StorageConfig
-from platform_api.orchestrator.kube_orchestrator import KubeClient, KubeConfig
+from platform_api.orchestrator.kube_orchestrator import (
+    KubeClient, KubeConfig, KubeOrchestrator
+)
+
+pytest_plugins = [
+    'tests.integration.docker',
+    'tests.integration.redis',
+]
 
 
 @pytest.fixture(scope='session')
@@ -143,3 +150,17 @@ async def kube_config_nfs(
         jobs_ingress_name='platformjobsingress',
         jobs_domain_name='jobs.platform.neuromation.io',
     )
+
+
+@pytest.fixture
+async def kube_orchestrator(kube_config, event_loop):
+    orchestrator = KubeOrchestrator(config=kube_config)
+    async with orchestrator:
+        yield orchestrator
+
+
+@pytest.fixture
+async def kube_orchestrator_nfs(kube_config_nfs, event_loop):
+    orchestrator = KubeOrchestrator(config=kube_config_nfs)
+    async with orchestrator:
+        yield orchestrator

@@ -16,9 +16,6 @@ run_api_k8s:
 	NP_K8S_AUTH_CERT_KEY_PATH=$$HOME/.minikube/client.key \
 	platform-api
 
-push_api_k8s: _docker_login
-	docker push $(IMAGE_K8S):latest
-
 run_api_k8s_container:
 	docker run --rm -it --name platformapi \
 	    -p 8080:8080 \
@@ -39,6 +36,7 @@ gke_login:
 	sudo /opt/google-cloud-sdk/bin/gcloud --quiet config set container/cluster $(GKE_CLUSTER_NAME)
 	sudo /opt/google-cloud-sdk/bin/gcloud config set compute/zone $(GKE_COMPUTE_ZONE)
 	curl https://raw.githubusercontent.com/kubernetes/helm/master/scripts/get | bash
+	sudo /opt/google-cloud-sdk/bin/gcloud docker --authorize-only
 
 gke_docker_push: build_api_k8s
 	docker tag $(IMAGE_K8S):latest $(IMAGE_K8S):$(CIRCLE_SHA1)
