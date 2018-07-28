@@ -62,7 +62,7 @@ class TestInMemoryJobsStorage:
         assert {job.id for job in jobs} == {succeeded_job.id}
 
 
-class TestInMemoryJobsService:
+class TestJobsService:
 
     @pytest.mark.asyncio
     async def test_create_job(self, jobs_service, mock_job_request):
@@ -117,6 +117,27 @@ class TestInMemoryJobsService:
         config = dataclasses.replace(
             mock_orchestrator.config, job_deletion_delay_s=0)
         mock_orchestrator.config = config
+        service = JobsService(orchestrator=mock_orchestrator)
+
+        original_job, _ = await service.create_job(
+            job_request=job_request_factory())
+
+        mock_orchestrator.update_status_to_return(JobStatus.SUCCEEDED)
+        await service.update_jobs_statuses()
+
+        job = await service.get_job(job_id=original_job.id)
+        assert job.status == JobStatus.SUCCEEDED
+        assert job.is_finished
+        assert job.finished_at
+        assert job.is_deleted
+
+    @pytest.mark.asyncio
+    async def test_update_jobs_statuses_missing(
+            self, mock_orchestrator, job_request_factory):
+        config = dataclasses.replace(
+            mock_orchestrator.config, job_deletion_delay_s=0)
+        mock_orchestrator.config = config
+        mock_orchestrator.raise_on_delete = True
         service = JobsService(orchestrator=mock_orchestrator)
 
         original_job, _ = await service.create_job(
