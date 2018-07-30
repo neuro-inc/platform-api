@@ -9,6 +9,8 @@ from platform_api.orchestrator.job_request import (
     Container, ContainerResources, ContainerVolume, JobStatus
 )
 
+from .validators import create_container_request_validator
+
 
 class ModelRequest:
     def __init__(
@@ -124,21 +126,7 @@ class ModelsHandler:
 
     def _create_model_request_validator(self) -> t.Trafaret:
         return t.Dict({
-            'container': t.Dict({
-                'image': t.String,
-                t.Key('command', optional=True): t.String,
-                t.Key('env', optional=True): t.Mapping(
-                    t.String, t.String(allow_blank=True)),
-                'resources': t.Dict({
-                    'cpu': t.Float(gte=0.1),
-                    'memory_mb': t.Int(gte=16),
-                    t.Key('gpu', optional=True): t.Int(gte=1),
-                }),
-                t.Key('http', optional=True): t.Dict({
-                    'port': t.Int(gte=0, lte=65535),
-                    t.Key('health_check_path', optional=True): t.String,
-                }),
-            }),
+            'container': create_container_request_validator(),
             # TODO (A Danshyn 05/25/18): we may move the storage URI parsing
             # and validation here at some point
             'dataset_storage_uri': t.String,
