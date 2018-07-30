@@ -1,16 +1,24 @@
-from typing import Dict, List, Optional
+from typing import Dict
 
 import aiohttp.web
 import trafaret as t
 
-from platform_api.config import Config, StorageConfig
+from platform_api.config import Config
 from platform_api.orchestrator import JobRequest, JobsService
-from platform_api.orchestrator.job_request import (
-    Container, ContainerResources, ContainerVolume, JobStatus
-)
+from platform_api.orchestrator.job_request import JobStatus
 
 from .job_request_builder import ModelRequest
 from .validators import create_container_request_validator
+
+
+def create_model_request_validator() -> t.Trafaret:
+    return t.Dict({
+        'container': create_container_request_validator(),
+        # TODO (A Danshyn 05/25/18): we may move the storage URI parsing
+        # and validation here at some point
+        'dataset_storage_uri': t.String,
+        'result_storage_uri': t.String,
+    })
 
 
 def create_model_response_validator() -> t.Trafaret:
@@ -28,21 +36,12 @@ class ModelsHandler:
         self._config = config
         self._storage_config = config.storage
 
-        self._model_request_validator = self._create_model_request_validator()
+        self._model_request_validator = create_model_request_validator()
         self._model_response_validator = create_model_response_validator()
 
     @property
     def _jobs_service(self) -> JobsService:
         return self._app['jobs_service']
-
-    def _create_model_request_validator(self) -> t.Trafaret:
-        return t.Dict({
-            'container': create_container_request_validator(),
-            # TODO (A Danshyn 05/25/18): we may move the storage URI parsing
-            # and validation here at some point
-            'dataset_storage_uri': t.String,
-            'result_storage_uri': t.String,
-        })
 
     def register(self, app):
         app.add_routes((
