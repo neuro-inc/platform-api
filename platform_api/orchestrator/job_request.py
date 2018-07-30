@@ -1,9 +1,9 @@
 import enum
-from dataclasses import dataclass, field, asdict
-from pathlib import PurePath
 import shlex
-from typing import Dict, Optional, List
 import uuid
+from dataclasses import asdict, dataclass, field
+from pathlib import PurePath
+from typing import Dict, List, Optional
 from urllib.parse import urlsplit
 
 

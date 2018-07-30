@@ -4,10 +4,10 @@ import aiohttp.web
 import trafaret as t
 
 from platform_api.config import Config, StorageConfig
-from platform_api.orchestrator import (
-    JobRequest, JobsService,)
+from platform_api.orchestrator import JobRequest, JobsService
 from platform_api.orchestrator.job_request import (
-    Container, ContainerResources, ContainerVolume, JobStatus,)
+    Container, ContainerResources, ContainerVolume, JobStatus
+)
 
 
 class ModelRequest:

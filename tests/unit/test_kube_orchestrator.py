@@ -3,14 +3,12 @@ from pathlib import PurePath
 import pytest
 
 from platform_api.orchestrator.job_request import (
-    Container, ContainerResources, ContainerVolume,
-    JobRequest, JobStatus, JobError,
+    Container, ContainerResources, ContainerVolume, JobError, JobRequest,
+    JobStatus
 )
 from platform_api.orchestrator.kube_orchestrator import (
-    ContainerStatus,
-    HostVolume, NfsVolume, VolumeMount,
-    PodDescriptor, PodStatus, Resources,
-    Ingress, IngressRule, Service,
+    ContainerStatus, HostVolume, Ingress, IngressRule, NfsVolume,
+    PodDescriptor, PodStatus, Resources, Service, VolumeMount
 )
 
 

@@ -1,8 +1,8 @@
 import asyncio
+
 import pytest
 
-from platform_api.orchestrator import (
-    JobsStatusPooling, JobStatus, JobsService,)
+from platform_api.orchestrator import JobsService, JobsStatusPooling, JobStatus
 
 
 class TestJobsStatusPooling:

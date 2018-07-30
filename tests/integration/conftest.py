@@ -10,6 +10,7 @@ from platform_api.orchestrator.kube_orchestrator import (
     KubeClient, KubeConfig, KubeOrchestrator
 )
 
+
 pytest_plugins = [
     'tests.integration.docker',
     'tests.integration.redis',
