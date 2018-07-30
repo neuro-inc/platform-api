@@ -7,6 +7,7 @@ from .job_request import JobError, JobRequest, JobStatus
 from .jobs_storage import InMemoryJobsStorage, JobsStorage
 from .status import Status
 
+
 logger = logging.getLogger(__file__)
 
 
