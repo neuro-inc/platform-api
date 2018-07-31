@@ -1,5 +1,11 @@
 import trafaret as t
 
+from platform_api.orchestrator.job_request import JobStatus
+
+
+def create_job_status_validator() -> t.Trafaret:
+    return t.Enum(*JobStatus.values())
+
 
 def create_volume_request_validator() -> t.Trafaret:
     return t.Dict({
@@ -10,7 +16,7 @@ def create_volume_request_validator() -> t.Trafaret:
 
 
 def create_container_request_validator(
-        allow_volumes: bool = False) -> t.Trafaret:
+        *, allow_volumes: bool = False) -> t.Trafaret:
     """Create a validator for primitive container objects.
 
     Meant to be used in high-level resources such as jobs, models, batch
