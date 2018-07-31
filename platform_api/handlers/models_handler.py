@@ -62,8 +62,8 @@ class ModelsHandler:
         return payload
 
     async def handle_post(self, request):
-        request_payload = await request.json()
-        self._model_request_validator.check(request_payload)
+        orig_payload = await request.json()
+        request_payload = self._model_request_validator.check(orig_payload)
 
         model_request = ModelRequest(
             request_payload, storage_config=self._storage_config,

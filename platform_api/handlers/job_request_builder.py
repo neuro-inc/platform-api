@@ -7,9 +7,6 @@ from platform_api.orchestrator.job_request import (
 )
 
 
-# TODO: ContainerHTTPServer
-
-
 class ContainerBuilder:
     def __init__(self, *, storage_config: StorageConfig) -> None:
         self._storage_config = storage_config
@@ -103,8 +100,6 @@ class ContainerBuilder:
         )
 
     def build(self) -> Container:
-        # TODO: validate attrs
-        # TODO: make sure all the attrs are immutable
         return Container(  # type: ignore
             image=self._image,
             command=self._command,

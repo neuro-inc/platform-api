@@ -5,7 +5,7 @@ def create_volume_request_validator() -> t.Trafaret:
     return t.Dict({
         'src_storage_uri': t.String,
         'dst_path': t.String,
-        t.Key('read_only', optional=True): t.Bool(default=False),
+        t.Key('read_only', optional=True, default=True): t.Bool(),
     })
 
 
