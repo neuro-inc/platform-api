@@ -121,6 +121,7 @@ class JobStatus(str, enum.Enum):
     manually terminated/deleted.
     FAILED: a job terminated with a non-0 exit code.
     """
+
     PENDING = 'pending'
     RUNNING = 'running'
     SUCCEEDED = 'succeeded'
@@ -144,14 +145,24 @@ class JobStatus(str, enum.Enum):
 
 
 class ContainerVolumeFactory:
-    """A factory class responsible for parsing a storage URI and making sure
-    that the resulting path is valid. Creates an instance of ContainerVolume.
+    """A factory class for :class:`ContainerVolume`.
+
+    Responsible for parsing the specified storage URI and making sure
+    that the resulting path is valid.
     """
+
     def __init__(
             self, uri: str, *,
             src_mount_path: PurePath, dst_mount_path: PurePath,
-            read_only: bool=False, scheme: str='storage'
+            extend_dst_mount_path: bool = True,
+            read_only: bool = False, scheme: str = 'storage',
             ) -> None:
+        """Check constructor parameters and initialize the factory instance.
+
+        :param bool extend_dst_mount_path:
+            If True, append the parsed path from the URI to `dst_mount_path`,
+            otherwise use `dst_mount_path` as is. Defaults to True.
+        """
         self._uri = uri
         self._scheme = scheme
         self._path: PurePath = PurePath('')
@@ -165,6 +176,7 @@ class ContainerVolumeFactory:
 
         self._src_mount_path: PurePath = src_mount_path
         self._dst_mount_path: PurePath = dst_mount_path
+        self._extend_dst_mount_path = extend_dst_mount_path
 
     def _parse_uri(self):
         url = urlsplit(self._uri)
@@ -181,7 +193,9 @@ class ContainerVolumeFactory:
 
     def create(self) -> ContainerVolume:
         src_path = self._src_mount_path / self._path
-        dst_path = self._dst_mount_path / self._path
+        dst_path = self._dst_mount_path
+        if self._extend_dst_mount_path:
+            dst_path /= self._path
         return ContainerVolume(  # type: ignore
             src_path=src_path, dst_path=dst_path,
             read_only=self._read_only)

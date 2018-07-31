@@ -77,6 +77,19 @@ class TestContainerVolumeFactory:
                 dst_mount_path=PurePath('/container')
             ).create()
 
+    def test_create_without_extending_dst_mount_path(self):
+        uri = 'storage:///path/to/dir'
+        volume = ContainerVolume.create(
+            uri,
+            src_mount_path=PurePath('/host'),
+            dst_mount_path=PurePath('/container'),
+            read_only=True,
+            extend_dst_mount_path=False,
+        )
+        assert volume.src_path == PurePath('/host/path/to/dir')
+        assert volume.dst_path == PurePath('/container')
+        assert volume.read_only
+
 
 class TestModelRequest:
     def test_to_container(self):
