@@ -6,6 +6,7 @@ from unittest import mock
 import pytest
 
 from platform_api.config import StorageConfig
+from platform_api.handlers.job_request_builder import ContainerBuilder
 from platform_api.handlers.models_handler import ModelRequest
 from platform_api.orchestrator.job import Job
 from platform_api.orchestrator.job_request import (
@@ -69,13 +70,86 @@ class TestContainerVolumeFactory:
         'storage:///../to/dir',
         'storage://path/../dir',))
     def test_create_invalid_path(self, uri):
-        uri = 'storage:///../outside/file'
-        with pytest.raises(ValueError, match='Invalid URI path'):
+        with pytest.raises(ValueError, match='Invalid path'):
             ContainerVolumeFactory(
                 uri,
                 src_mount_path=PurePath('/host'),
                 dst_mount_path=PurePath('/container')
             ).create()
+
+    def test_create_without_extending_dst_mount_path(self):
+        uri = 'storage:///path/to/dir'
+        volume = ContainerVolume.create(
+            uri,
+            src_mount_path=PurePath('/host'),
+            dst_mount_path=PurePath('/container'),
+            read_only=True,
+            extend_dst_mount_path=False,
+        )
+        assert volume.src_path == PurePath('/host/path/to/dir')
+        assert volume.dst_path == PurePath('/container')
+        assert volume.read_only
+
+    def test_relative_dst_mount_path(self):
+        uri = 'storage:///path/to/dir'
+        with pytest.raises(ValueError, match='Mount path must be absolute'):
+            ContainerVolumeFactory(
+                uri,
+                src_mount_path=PurePath('/host'),
+                dst_mount_path=PurePath('container')
+            )
+
+    def test_dots_dst_mount_path(self):
+        uri = 'storage:///path/to/dir'
+        with pytest.raises(ValueError, match='Invalid path'):
+            ContainerVolumeFactory(
+                uri,
+                src_mount_path=PurePath('/host'),
+                dst_mount_path=PurePath('/container/../path')
+            )
+
+
+class TestContainerBuilder:
+    def test_from_payload_build(self):
+        storage_config = StorageConfig(  # type: ignore
+            host_mount_path=PurePath('/tmp'),
+        )
+        payload = {
+            'image': 'testimage',
+            'command': 'testcommand',
+            'env': {'TESTVAR': 'testvalue'},
+            'resources': {
+                'cpu': 0.1,
+                'memory_mb': 128,
+                'gpu': 1,
+            },
+            'http': {
+                'port': 80,
+            },
+            'volumes': [{
+                'src_storage_uri': 'storage://path/to/dir',
+                'dst_path': '/container/path',
+                'read_only': True,
+            }],
+        }
+        container = ContainerBuilder.from_container_payload(
+            payload, storage_config=storage_config).build()
+        assert container == Container(
+            image='testimage',
+            command='testcommand',
+            env={
+                'TESTVAR': 'testvalue',
+            },
+            volumes=[
+                ContainerVolume(
+                    src_path=PurePath('/tmp/path/to/dir'),
+                    dst_path=PurePath('/container/path'),
+                    read_only=True),
+            ],
+            resources=ContainerResources(cpu=0.1, memory_mb=128, gpu=1),
+            port=80,
+            health_check_path='/',
+        )
 
 
 class TestModelRequest:
