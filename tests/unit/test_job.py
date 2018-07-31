@@ -70,7 +70,6 @@ class TestContainerVolumeFactory:
         'storage:///../to/dir',
         'storage://path/../dir',))
     def test_create_invalid_path(self, uri):
-        uri = 'storage:///../outside/file'
         with pytest.raises(ValueError, match='Invalid path'):
             ContainerVolumeFactory(
                 uri,
