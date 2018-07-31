@@ -1,11 +1,54 @@
+from typing import Any, Dict
+
 import aiohttp.web
+import trafaret as t
 
 from platform_api.orchestrator import JobsService
+from platform_api.orchestrator.job import Job
+from platform_api.orchestrator.job_request import JobRequest
+
+from .job_request_builder import ContainerBuilder
+from .validators import (
+    create_container_request_validator, create_job_status_validator
+)
+
+
+def create_job_request_validator() -> t.Trafaret:
+    return t.Dict({
+        'container': create_container_request_validator(allow_volumes=True),
+    })
+
+
+def create_job_response_validator() -> t.Trafaret:
+    return t.Dict({
+        'id': t.String,
+        'status': create_job_status_validator(),
+        t.Key('http_url', optional=True): t.String,
+        t.Key('finished_at', optional=True): t.String,
+    })
+
+
+def convert_job_to_job_response(job: Job) -> Dict[str, Any]:
+    response_payload = {
+        'id': job.id,
+        'status': job.status,
+    }
+    if job.has_http_server_exposed:
+        response_payload['http_url'] = job.http_url
+    if job.is_finished:
+        response_payload['finished_at'] = job.finished_at
+    return response_payload
 
 
 class JobsHandler:
     def __init__(self, *, app: aiohttp.web.Application) -> None:
         self._app = app
+
+        self._job_request_validator = create_job_request_validator()
+        self._job_response_validator = create_job_response_validator()
+        self._bulk_jobs_response_validator = t.Dict({
+            'jobs': t.List(self._job_response_validator),
+        })
 
     @property
     def _jobs_service(self) -> JobsService:
@@ -14,10 +57,23 @@ class JobsHandler:
     def register(self, app):
         app.add_routes((
             aiohttp.web.get('', self.handle_get_all),
+            aiohttp.web.post('', self.create_job),
             aiohttp.web.delete('/{job_id}', self.handle_delete),
             aiohttp.web.get('/{job_id}', self.handle_get),
             aiohttp.web.get('/{job_id}/log', self.stream_log),
         ))
+
+    async def create_job(self, request):
+        orig_payload = await request.json()
+        request_payload = self._job_request_validator.check(orig_payload)
+        container = ContainerBuilder.from_container_payload(
+            request_payload['container']).build()
+        job_request = JobRequest.create(container)
+        job, _ = await self._jobs_service.create_job(job_request)
+        response_payload = convert_job_to_job_response(job)
+        self._job_response_validator.check(response_payload)
+        return aiohttp.web.json_response(
+            data=response_payload, status=aiohttp.web.HTTPAccepted.status)
 
     async def handle_get(self, request):
         job_id = request.match_info['job_id']
@@ -27,9 +83,12 @@ class JobsHandler:
     async def handle_get_all(self, request):
         # TODO use pagination. may eventually explode with OOM.
         jobs = await self._jobs_service.get_all_jobs()
-        primitive_jobs = [job.to_primitive() for job in jobs]
+        response_payload = {'jobs': [
+            self._convert_job_to_job_response(job) for job in jobs]
+        }
+        self._bulk_jobs_response_validator.check(response_payload)
         return aiohttp.web.json_response(
-            data={'jobs': primitive_jobs}, status=200)
+            data=response_payload, status=aiohttp.web.HTTPOk.status)
 
     async def handle_delete(self, request):
         job_id = request.match_info['job_id']
