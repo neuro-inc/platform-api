@@ -70,7 +70,7 @@ class TestContainerVolumeFactory:
         'storage://path/../dir',))
     def test_create_invalid_path(self, uri):
         uri = 'storage:///../outside/file'
-        with pytest.raises(ValueError, match='Invalid URI path'):
+        with pytest.raises(ValueError, match='Invalid path'):
             ContainerVolumeFactory(
                 uri,
                 src_mount_path=PurePath('/host'),
@@ -89,6 +89,24 @@ class TestContainerVolumeFactory:
         assert volume.src_path == PurePath('/host/path/to/dir')
         assert volume.dst_path == PurePath('/container')
         assert volume.read_only
+
+    def test_relative_dst_mount_path(self):
+        uri = 'storage:///path/to/dir'
+        with pytest.raises(ValueError, match='Mount path must be absolute'):
+            ContainerVolumeFactory(
+                uri,
+                src_mount_path=PurePath('/host'),
+                dst_mount_path=PurePath('container')
+            )
+
+    def test_dots_dst_mount_path(self):
+        uri = 'storage:///path/to/dir'
+        with pytest.raises(ValueError, match='Invalid path'):
+            ContainerVolumeFactory(
+                uri,
+                src_mount_path=PurePath('/host'),
+                dst_mount_path=PurePath('/container/../path')
+            )
 
 
 class TestModelRequest:

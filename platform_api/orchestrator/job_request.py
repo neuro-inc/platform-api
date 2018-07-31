@@ -171,8 +171,8 @@ class ContainerVolumeFactory:
 
         self._read_only = read_only
 
-        assert src_mount_path.is_absolute()
-        assert dst_mount_path.is_absolute()
+        self._check_mount_path(src_mount_path)
+        self._check_mount_path(dst_mount_path)
 
         self._src_mount_path: PurePath = src_mount_path
         self._dst_mount_path: PurePath = dst_mount_path
@@ -186,10 +186,18 @@ class ContainerVolumeFactory:
         path = PurePath(url.netloc + url.path)
         if path.is_absolute():
             path = path.relative_to('/')
-        if '..' in path.parts:
-            raise ValueError('Invalid URI path: {self._uri}')
+        self._check_dots_in_path(path)
 
         self._path = path
+
+    def _check_dots_in_path(self, path: PurePath) -> None:
+        if '..' in path.parts:
+            raise ValueError(f'Invalid path: {path}')
+
+    def _check_mount_path(self, path: PurePath) -> None:
+        if not path.is_absolute():
+            raise ValueError(f'Mount path must be absolute: {path}')
+        self._check_dots_in_path(path)
 
     def create(self) -> ContainerVolume:
         src_path = self._src_mount_path / self._path
