@@ -1,3 +1,4 @@
+from pathlib import PurePath
 from typing import Any, Dict, List, Optional
 
 from platform_api.config import StorageConfig
@@ -71,6 +72,11 @@ class ContainerBuilder:
                 path=http.get('health_check_path', Container.health_check_path)
             )
 
+        for volume_payload in payload.get('volumes', []):
+            volume = cls.create_volume_from_payload(
+                volume_payload, storage_config=storage_config)
+            builder.add_volume(volume)
+
         return builder
 
     @classmethod
@@ -80,6 +86,20 @@ class ContainerBuilder:
             cpu=payload['cpu'],
             memory_mb=payload['memory_mb'],
             gpu=payload.get('gpu'),
+        )
+
+    @classmethod
+    def create_volume_from_payload(
+            cls, payload: Dict[str, Any], *, storage_config: StorageConfig
+            ) -> ContainerVolume:
+        dst_path = PurePath(payload['dst_path'])
+        return ContainerVolume.create(
+            payload['src_storage_uri'],
+            src_mount_path=storage_config.host_mount_path,
+            dst_mount_path=dst_path,
+            extend_dst_mount_path=False,
+            read_only=bool(payload.get('read_only')),
+            scheme=storage_config.uri_scheme,
         )
 
     def build(self) -> Container:
