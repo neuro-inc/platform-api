@@ -6,6 +6,7 @@ from unittest import mock
 import pytest
 
 from platform_api.config import StorageConfig
+from platform_api.handlers.job_request_builder import ContainerBuilder
 from platform_api.handlers.models_handler import ModelRequest
 from platform_api.orchestrator.job import Job
 from platform_api.orchestrator.job_request import (
@@ -107,6 +108,49 @@ class TestContainerVolumeFactory:
                 src_mount_path=PurePath('/host'),
                 dst_mount_path=PurePath('/container/../path')
             )
+
+
+class TestContainerBuilder:
+    def test_from_payload_build(self):
+        storage_config = StorageConfig(  # type: ignore
+            host_mount_path=PurePath('/tmp'),
+        )
+        payload = {
+            'image': 'testimage',
+            'command': 'testcommand',
+            'env': {'TESTVAR': 'testvalue'},
+            'resources': {
+                'cpu': 0.1,
+                'memory_mb': 128,
+                'gpu': 1,
+            },
+            'http': {
+                'port': 80,
+            },
+            'volumes': [{
+                'src_storage_uri': 'storage://path/to/dir',
+                'dst_path': '/container/path',
+                'read_only': True,
+            }],
+        }
+        container = ContainerBuilder.from_container_payload(
+            payload, storage_config=storage_config).build()
+        assert container == Container(
+            image='testimage',
+            command='testcommand',
+            env={
+                'TESTVAR': 'testvalue',
+            },
+            volumes=[
+                ContainerVolume(
+                    src_path=PurePath('/tmp/path/to/dir'),
+                    dst_path=PurePath('/container/path'),
+                    read_only=True),
+            ],
+            resources=ContainerResources(cpu=0.1, memory_mb=128, gpu=1),
+            port=80,
+            health_check_path='/',
+        )
 
 
 class TestModelRequest:
