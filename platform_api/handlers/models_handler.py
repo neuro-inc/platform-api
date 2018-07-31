@@ -8,7 +8,9 @@ from platform_api.orchestrator import JobRequest, JobsService
 from platform_api.orchestrator.job_request import JobStatus
 
 from .job_request_builder import ModelRequest
-from .validators import create_container_request_validator
+from .validators import (
+    create_container_request_validator, create_job_status_validator
+)
 
 
 def create_model_request_validator() -> t.Trafaret:
@@ -24,7 +26,7 @@ def create_model_request_validator() -> t.Trafaret:
 def create_model_response_validator() -> t.Trafaret:
     return t.Dict({
         'job_id': t.String,
-        'status': t.Enum(*JobStatus.values()),
+        'status': create_job_status_validator(),
         t.Key('http_url', optional=True): t.String,
     })
 
