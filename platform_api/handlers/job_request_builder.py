@@ -10,7 +10,9 @@ from platform_api.orchestrator.job_request import (
 
 
 class ContainerBuilder:
-    def __init__(self) -> None:
+    def __init__(self, *, storage_config: StorageConfig) -> None:
+        self._storage_config = storage_config
+
         self._image: str = ''
         self._command: Optional[str] = None
         self._env: Dict[str, str] = {}
@@ -51,15 +53,16 @@ class ContainerBuilder:
 
     @classmethod
     def from_container_payload(
-            cls, payload: Dict[str, Any]) -> 'ContainerBuilder':
-        builder = cls()
+            cls, payload: Dict[str, Any], *, storage_config: StorageConfig
+            ) -> 'ContainerBuilder':
+        builder = cls(storage_config=storage_config)
         builder.set_image(payload['image'])
         if 'command' in payload:
             builder.set_command(payload['command'])
         builder.update_env(payload.get('env', {}))
 
         builder.set_resources(
-            cls.create_volume_from_payload(payload['resources']))
+            cls.create_resources_from_payload(payload['resources']))
 
         http = payload.get('http', {})
         if 'port' in http:
@@ -71,8 +74,8 @@ class ContainerBuilder:
         return builder
 
     @classmethod
-    def create_volume_from_payload(
-            cls, payload: Dict[str, Any]) -> ContainerVolume:
+    def create_resources_from_payload(
+            cls, payload: Dict[str, Any]) -> ContainerResources:
         return ContainerResources(  # type: ignore
             cpu=payload['cpu'],
             memory_mb=payload['memory_mb'],
@@ -133,7 +136,7 @@ class ModelRequest:
 
     def to_container(self) -> Container:
         builder = ContainerBuilder.from_container_payload(
-            self._payload['container'])
+            self._payload['container'], storage_config=self._storage_config)
         builder.add_volume(self._dataset_volume)
         builder.add_env(
             self._dataset_env_var_name, str(self._dataset_volume.dst_path))
