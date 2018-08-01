@@ -50,6 +50,23 @@ class ContainerResources:
 
 
 @dataclass(frozen=True)
+class ContainerHTTPServer:
+    port: int
+    health_check_path: str = '/'
+
+    @classmethod
+    def from_primitive(cls, payload) -> 'ContainerHTTPServer':
+        return cls(  # type: ignore
+            port=payload['port'],
+            health_check_path=payload.get(
+                'health_check_path', cls.health_check_path)
+        )
+
+    def to_primitive(self) -> Dict:
+        return asdict(self)
+
+
+@dataclass(frozen=True)
 class Container:
     image: str
     resources: ContainerResources

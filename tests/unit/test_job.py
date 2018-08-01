@@ -10,8 +10,8 @@ from platform_api.handlers.job_request_builder import ContainerBuilder
 from platform_api.handlers.models_handler import ModelRequest
 from platform_api.orchestrator.job import Job
 from platform_api.orchestrator.job_request import (
-    Container, ContainerResources, ContainerVolume, ContainerVolumeFactory,
-    JobRequest, JobStatus
+    Container, ContainerHTTPServer, ContainerResources, ContainerVolume,
+    ContainerVolumeFactory, JobRequest, JobStatus
 )
 
 
@@ -303,3 +303,35 @@ class TestJobRequest:
                 src_path=PurePath('/src/path'),
                 dst_path=PurePath('/dst/path'))])
         assert request.container == expected_container
+
+
+class TestContainerHTTPServer:
+    def test_from_primitive(self):
+        payload = {
+            'port': 1234,
+        }
+        server = ContainerHTTPServer.from_primitive(payload)
+        assert server == ContainerHTTPServer(port=1234)
+
+    def test_from_primitive_health_check_path(self):
+        payload = {
+            'port': 1234,
+            'health_check_path': '/path',
+        }
+        server = ContainerHTTPServer.from_primitive(payload)
+        assert server == ContainerHTTPServer(
+            port=1234, health_check_path='/path')
+
+    def test_to_primitive(self):
+        server = ContainerHTTPServer(port=1234)
+        assert server.to_primitive() == {
+            'port': 1234,
+            'health_check_path': '/',
+        }
+
+    def test_to_primitive_health_check_path(self):
+        server = ContainerHTTPServer(port=1234, health_check_path='/path')
+        assert server.to_primitive() == {
+            'port': 1234,
+            'health_check_path': '/path',
+        }
