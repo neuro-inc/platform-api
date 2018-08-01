@@ -87,7 +87,7 @@ class JobsHandler:
         return aiohttp.web.json_response(
             data=response_payload, status=aiohttp.web.HTTPOk.status_code)
 
-    async def handle_get_all(self, request):
+    async def handle_get_all(self, _):
         # TODO use pagination. may eventually explode with OOM.
         jobs = await self._jobs_service.get_all_jobs()
         response_payload = {'jobs': [

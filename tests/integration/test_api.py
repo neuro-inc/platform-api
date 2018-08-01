@@ -6,6 +6,7 @@ from unittest import mock
 import aiohttp
 import aiohttp.web
 import pytest
+from aiohttp.web import HTTPAccepted, HTTPBadRequest, HTTPNoContent, HTTPOk
 
 from platform_api.api import create_app
 from platform_api.config import (
@@ -76,7 +77,7 @@ class JobsClient:
         url = api.jobs_base_url
         async with client.get(url) as response:
             response_text = await response.text()
-            assert response.status == 200, response_text
+            assert response.status == HTTPOk.status_code, response_text
             result = await response.json()
         return result['jobs']
 
@@ -87,7 +88,7 @@ class JobsClient:
         for _ in range(max_attempts):
             async with client.get(url) as response:
                 response_text = await response.text()
-                assert response.status == 200, response_text
+                assert response.status == HTTPOk.status_code, response_text
                 result = await response.json()
                 if result['status'] == status:
                     return
@@ -99,7 +100,7 @@ class JobsClient:
             self, api, client, job_id: str):
         url = api.generate_job_url(job_id)
         async with client.delete(url) as response:
-            assert response.status == 204
+            assert response.status == HTTPNoContent.status_code
 
 
 @pytest.fixture
@@ -111,7 +112,7 @@ class TestApi:
     @pytest.mark.asyncio
     async def test_ping(self, api, client):
         async with client.get(api.ping_url) as response:
-            assert response.status == 200
+            assert response.status == HTTPOk.status_code
 
 
 @pytest.fixture
@@ -137,7 +138,7 @@ class TestModels:
     async def test_create_model(self, api, client, model_train, jobs_client):
         url = api.model_base_url
         async with client.post(url, json=model_train) as response:
-            assert response.status == 202
+            assert response.status == HTTPAccepted.status_code
             result = await response.json()
             assert result['status'] in ['pending']
             job_id = result['job_id']
@@ -165,7 +166,7 @@ class TestModels:
         }
         url = api.model_base_url
         async with client.post(url, json=payload) as response:
-            assert response.status == 202
+            assert response.status == HTTPAccepted.status_code
             result = await response.json()
             assert result['status'] in ['pending']
             job_id = result['job_id']
@@ -178,7 +179,7 @@ class TestModels:
         json_model_train = {'wrong_key': 'wrong_value'}
         url = api.model_base_url
         async with client.post(url, json=json_model_train) as response:
-            assert response.status == 400
+            assert response.status == HTTPBadRequest.status_code
             data = await response.json()
             assert """'container': DataError(is required)""" in data['error']
 
@@ -199,7 +200,7 @@ class TestModels:
 
         url = api.model_base_url
         async with client.post(url, json=payload) as response:
-            assert response.status == 202
+            assert response.status == HTTPAccepted.status_code
             data = await response.json()
             job_id = data['job_id']
         await jobs_client.long_pooling_by_job_id(
@@ -220,7 +221,7 @@ class TestJobs:
         for _ in range(n_jobs):
             url = api.model_base_url
             async with client.post(url, json=model_train) as response:
-                assert response.status == 202
+                assert response.status == HTTPAccepted.status_code
                 result = await response.json()
                 assert result['status'] in ['pending']
                 job_id = result['job_id']
@@ -239,7 +240,7 @@ class TestJobs:
     async def test_delete_job(self, api, client, model_train, jobs_client):
         url = api.model_base_url
         async with client.post(url, json=model_train) as response:
-            assert response.status == 202
+            assert response.status == HTTPAccepted.status_code
             result = await response.json()
             assert result['status'] in ['pending']
             job_id = result['job_id']
@@ -257,7 +258,7 @@ class TestJobs:
         job_id = 'kdfghlksjd-jhsdbljh-3456789!@'
         url = api.jobs_base_url + f'/{job_id}'
         async with client.delete(url) as response:
-            assert response.status == 400
+            assert response.status == HTTPBadRequest.status_code
             result = await response.json()
             assert result['error'] == f'no such job {job_id}'
 
@@ -278,7 +279,7 @@ class TestJobs:
         }
         url = api.model_base_url
         async with client.post(url, json=payload) as response:
-            assert response.status == 202
+            assert response.status == HTTPAccepted.status_code
             result = await response.json()
             assert result['status'] in ['pending']
             job_id = result['job_id']
@@ -294,7 +295,7 @@ class TestJobs:
         request_payload = {}
         async with client.post(
                 api.jobs_base_url, json=request_payload) as response:
-            assert response.status == 400
+            assert response.status == HTTPBadRequest.status_code
             response_payload = await response.json()
             assert response_payload == {'error': mock.ANY}
             assert 'is required' in response_payload['error']
@@ -320,7 +321,7 @@ class TestJobs:
         async with client.post(
                 api.jobs_base_url, json=request_payload) as response:
             response_text = await response.text()
-            assert response.status == 202, response_text
+            assert response.status == HTTPAccepted.status_code, response_text
             response_payload = await response.json()
             assert response_payload == {
                 'id': mock.ANY,
@@ -333,7 +334,7 @@ class TestJobs:
 
         async with client.get(api.generate_job_url(job_id)) as response:
             response_text = await response.text()
-            assert response.status == 200, response_text
+            assert response.status == HTTPOk.status_code, response_text
             response_payload = await response.json()
             assert response_payload == {
                 'id': job_id,
