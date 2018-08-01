@@ -282,3 +282,13 @@ class TestJobs:
             payload = await response.read()
             expected_payload = '\n'.join(str(i) for i in range(1, 6)) + '\n'
             assert payload == expected_payload.encode()
+
+    @pytest.mark.asyncio
+    async def test_create_validation_failure(self, api, client):
+        request_payload = {}
+        async with client.post(
+                api.jobs_base_url, json=request_payload) as response:
+            assert response.status == 400
+            response_payload = await response.json()
+            assert response_payload == {'error': mock.ANY}
+            assert 'is required' in response_payload['error']
