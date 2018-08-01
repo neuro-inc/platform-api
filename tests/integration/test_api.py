@@ -1,6 +1,7 @@
 import asyncio
 from pathlib import PurePath
 from typing import NamedTuple
+from unittest import mock
 
 import aiohttp
 import aiohttp.web
@@ -71,7 +72,8 @@ class JobsClient:
     async def get_all_jobs(self, api, client):
         url = api.jobs_base_url
         async with client.get(url) as response:
-            assert response.status == 200
+            response_text = await response.text()
+            assert response.status == 200, response_text
             result = await response.json()
         return result['jobs']
 

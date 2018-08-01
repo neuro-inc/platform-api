@@ -36,7 +36,7 @@ def convert_job_to_job_response(job: Job) -> Dict[str, Any]:
     if job.has_http_server_exposed:
         response_payload['http_url'] = job.http_url
     if job.is_finished:
-        response_payload['finished_at'] = job.finished_at
+        response_payload['finished_at'] = job.finished_at_str
     return response_payload
 
 
@@ -84,7 +84,7 @@ class JobsHandler:
         # TODO use pagination. may eventually explode with OOM.
         jobs = await self._jobs_service.get_all_jobs()
         response_payload = {'jobs': [
-            self._convert_job_to_job_response(job) for job in jobs]
+            convert_job_to_job_response(job) for job in jobs]
         }
         self._bulk_jobs_response_validator.check(response_payload)
         return aiohttp.web.json_response(
