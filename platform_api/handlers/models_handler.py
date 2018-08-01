@@ -5,7 +5,6 @@ import trafaret as t
 
 from platform_api.config import Config
 from platform_api.orchestrator import JobRequest, JobsService
-from platform_api.orchestrator.job_request import JobStatus
 
 from .job_request_builder import ModelRequest
 from .validators import (
