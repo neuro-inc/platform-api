@@ -56,15 +56,11 @@ jobs:
             # NOTE: python3.6-dev is required to compile Hiredis
             sudo bash -c "yes | add-apt-repository ppa:jonathonf/python-3.6 && apt-get update && apt-get install -y python3.6-dev"
             sudo apt-get install nfs-common
+
       - run:
           name: Running Kubernetes
           command: |
             make start_k8s
-
-      - run:
-          name: Testing Kubernetes
-          command: |
-            make test_k8s
 
       - run:
           name: Run Platform Tests
