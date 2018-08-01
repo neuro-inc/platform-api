@@ -73,7 +73,7 @@ class JobsHandler:
         response_payload = convert_job_to_job_response(job)
         self._job_response_validator.check(response_payload)
         return aiohttp.web.json_response(
-            data=response_payload, status=aiohttp.web.HTTPAccepted.status)
+            data=response_payload, status=aiohttp.web.HTTPAccepted.status_code)
 
     async def handle_get(self, request):
         job_id = request.match_info['job_id']
@@ -88,7 +88,7 @@ class JobsHandler:
         }
         self._bulk_jobs_response_validator.check(response_payload)
         return aiohttp.web.json_response(
-            data=response_payload, status=aiohttp.web.HTTPOk.status)
+            data=response_payload, status=aiohttp.web.HTTPOk.status_code)
 
     async def handle_delete(self, request):
         job_id = request.match_info['job_id']
