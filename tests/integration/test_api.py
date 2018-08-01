@@ -86,7 +86,8 @@ class JobsClient:
         url = api.generate_job_url(job_id)
         for _ in range(max_attempts):
             async with client.get(url) as response:
-                assert response.status == 200
+                response_text = await response.text()
+                assert response.status == 200, response_text
                 result = await response.json()
                 if result['status'] == status:
                     return
@@ -329,3 +330,13 @@ class TestJobs:
 
         await jobs_client.long_pooling_by_job_id(
             api=api, client=client, job_id=job_id, status='succeeded')
+
+        async with client.get(api.generate_job_url(job_id)) as response:
+            response_text = await response.text()
+            assert response.status == 200, response_text
+            response_payload = await response.json()
+            assert response_payload == {
+                'id': job_id,
+                'status': 'succeeded',
+                'finished_at': mock.ANY
+            }

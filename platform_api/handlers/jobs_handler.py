@@ -83,7 +83,9 @@ class JobsHandler:
     async def handle_get(self, request):
         job_id = request.match_info['job_id']
         job = await self._jobs_service.get_job(job_id)
-        return aiohttp.web.json_response(data=job.to_primitive(), status=200)
+        response_payload = convert_job_to_job_response(job)
+        return aiohttp.web.json_response(
+            data=response_payload, status=aiohttp.web.HTTPOk.status_code)
 
     async def handle_get_all(self, request):
         # TODO use pagination. may eventually explode with OOM.
