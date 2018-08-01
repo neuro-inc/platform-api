@@ -3,6 +3,7 @@ from typing import Any, Dict
 import aiohttp.web
 import trafaret as t
 
+from platform_api.config import Config
 from platform_api.orchestrator import JobsService
 from platform_api.orchestrator.job import Job
 from platform_api.orchestrator.job_request import JobRequest
@@ -41,8 +42,11 @@ def convert_job_to_job_response(job: Job) -> Dict[str, Any]:
 
 
 class JobsHandler:
-    def __init__(self, *, app: aiohttp.web.Application) -> None:
+    def __init__(
+            self, *, app: aiohttp.web.Application, config: Config) -> None:
         self._app = app
+        self._config = config
+        self._storage_config = config.storage
 
         self._job_request_validator = create_job_request_validator()
         self._job_response_validator = create_job_response_validator()
@@ -67,7 +71,8 @@ class JobsHandler:
         orig_payload = await request.json()
         request_payload = self._job_request_validator.check(orig_payload)
         container = ContainerBuilder.from_container_payload(
-            request_payload['container']).build()
+            request_payload['container'], storage_config=self._storage_config
+        ).build()
         job_request = JobRequest.create(container)
         job, _ = await self._jobs_service.create_job(job_request)
         response_payload = convert_job_to_job_response(job)

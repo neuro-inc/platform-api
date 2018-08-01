@@ -29,6 +29,9 @@ class ApiConfig(NamedTuple):
     def jobs_base_url(self):
         return self.endpoint + '/jobs'
 
+    def generate_job_url(self, job_id: str) -> str:
+        return f'{self.jobs_base_url}/{job_id}'
+
     @property
     def ping_url(self):
         return self.endpoint + '/ping'
@@ -80,7 +83,7 @@ class JobsClient:
     async def long_pooling_by_job_id(
             self, api, client, job_id: str, status: str,
             interval_s: int=2, max_attempts: int=60):
-        url = api.jobs_base_url + f'/{job_id}'
+        url = api.generate_job_url(job_id)
         for _ in range(max_attempts):
             async with client.get(url) as response:
                 assert response.status == 200
@@ -93,7 +96,7 @@ class JobsClient:
 
     async def delete_job(
             self, api, client, job_id: str):
-        url = api.jobs_base_url + f'/{job_id}'
+        url = api.generate_job_url(job_id)
         async with client.delete(url) as response:
             assert response.status == 204
 
@@ -294,3 +297,35 @@ class TestJobs:
             response_payload = await response.json()
             assert response_payload == {'error': mock.ANY}
             assert 'is required' in response_payload['error']
+
+    @pytest.mark.asyncio
+    async def test_create_with_custom_volumes(self, jobs_client, api, client):
+        request_payload = {
+            'container':  {
+                'image': 'ubuntu',
+                'command': 'true',
+                'resources': {
+                    'cpu': 0.1,
+                    'memory_mb': 16,
+                },
+                'volumes': [{
+                    'src_storage_uri': 'storage://',
+                    'dst_path': '/var/storage',
+                    'read_only': False,
+                }],
+            },
+        }
+
+        async with client.post(
+                api.jobs_base_url, json=request_payload) as response:
+            response_text = await response.text()
+            assert response.status == 202, response_text
+            response_payload = await response.json()
+            assert response_payload == {
+                'id': mock.ANY,
+                'status': 'pending'
+            }
+            job_id = response_payload['id']
+
+        await jobs_client.long_pooling_by_job_id(
+            api=api, client=client, job_id=job_id, status='succeeded')
