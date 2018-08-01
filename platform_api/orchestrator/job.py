@@ -102,7 +102,7 @@ class Job:
         return f'http://{self.id}.{jobs_domain_name}'
 
     @property
-    def _finished_at_str(self) -> Optional[str]:
+    def finished_at_str(self) -> Optional[str]:
         if self.finished_at:
             return self.finished_at.isoformat()
         return None
@@ -114,7 +114,7 @@ class Job:
             'status': self._status.value,
 
             'is_deleted': self.is_deleted,
-            'finished_at': self._finished_at_str,
+            'finished_at': self.finished_at_str,
         }
 
     @classmethod

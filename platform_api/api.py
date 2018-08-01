@@ -70,9 +70,9 @@ async def create_models_app(config: Config):
     return models_app
 
 
-async def create_jobs_app():
+async def create_jobs_app(config: Config):
     jobs_app = aiohttp.web.Application()
-    jobs_handler = JobsHandler(app=jobs_app)
+    jobs_handler = JobsHandler(app=jobs_app, config=config)
     jobs_handler.register(jobs_app)
     return jobs_app
 
@@ -118,7 +118,7 @@ async def create_app(config: Config) -> aiohttp.web.Application:
     app['models_app'] = models_app
     api_v1_app.add_subapp('/models', models_app)
 
-    jobs_app = await create_jobs_app()
+    jobs_app = await create_jobs_app(config=config)
     app['jobs_app'] = jobs_app
     api_v1_app.add_subapp('/jobs', jobs_app)
 
