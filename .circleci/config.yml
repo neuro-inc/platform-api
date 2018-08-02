@@ -102,3 +102,6 @@ workflows:
             branches:
               only:
                 - /release.*/
+            tags:  # TODO: eventually should be moved to a separate job
+              only:
+                - /release.*/
