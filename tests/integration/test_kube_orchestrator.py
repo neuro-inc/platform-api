@@ -11,7 +11,7 @@ from platform_api.orchestrator import (
     Job, JobError, JobRequest, JobStatus, LogReader, Orchestrator
 )
 from platform_api.orchestrator.job_request import (
-    Container, ContainerResources, ContainerVolume
+    Container, ContainerHTTPServer, ContainerResources, ContainerVolume
 )
 from platform_api.orchestrator.kube_orchestrator import (
     Ingress, IngressRule, KubeClientException, PodDescriptor, Service,
@@ -321,7 +321,7 @@ class TestKubeOrchestrator:
         container = Container(
             image='python', command='python -m http.server 80',
             resources=ContainerResources(cpu=0.1, memory_mb=128),
-            port=80)
+            http_server=ContainerHTTPServer(port=80))
         job = TestJob(
             orchestrator=kube_orchestrator,
             job_request=JobRequest.create(container))
