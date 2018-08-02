@@ -147,8 +147,10 @@ class TestContainerBuilder:
                     read_only=True),
             ],
             resources=ContainerResources(cpu=0.1, memory_mb=128, gpu=1),
-            port=80,
-            health_check_path='/',
+            http_server=ContainerHTTPServer(
+                port=80,
+                health_check_path='/',
+            ),
         )
 
 
@@ -195,8 +197,9 @@ class TestModelRequest:
                     read_only=False)
             ],
             resources=ContainerResources(cpu=0.1, memory_mb=128, gpu=1),
-            port=80,
-            health_check_path='/',
+            http_server=ContainerHTTPServer(
+                port=80,
+                health_check_path='/'),
         )
 
 
@@ -226,7 +229,7 @@ class TestJob:
         container = Container(
             image='testimage',
             resources=ContainerResources(cpu=1, memory_mb=128),
-            port=1234,
+            http_server=ContainerHTTPServer(port=1234),
         )
         return JobRequest(job_id='testjob', container=container)
 

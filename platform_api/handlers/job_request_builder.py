@@ -65,7 +65,8 @@ class ContainerBuilder:
             http_server = ContainerHTTPServer(
                 port=http['port'],
                 health_check_path=http.get(
-                    'health_check_path', Container.health_check_path))
+                    'health_check_path',
+                    ContainerHTTPServer.health_check_path))
             builder.set_http_server(http_server)
 
         for volume_payload in payload.get('volumes', []):
