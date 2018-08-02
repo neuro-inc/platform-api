@@ -50,14 +50,42 @@ class ContainerResources:
 
 
 @dataclass(frozen=True)
+class ContainerHTTPServer:
+    port: int
+    health_check_path: str = '/'
+
+    @classmethod
+    def from_primitive(cls, payload) -> 'ContainerHTTPServer':
+        return cls(  # type: ignore
+            port=payload['port'],
+            health_check_path=payload.get(
+                'health_check_path') or cls.health_check_path,
+        )
+
+    def to_primitive(self) -> Dict:
+        return asdict(self)
+
+
+@dataclass(frozen=True)
 class Container:
     image: str
     resources: ContainerResources
     command: Optional[str] = None
     env: Dict[str, str] = field(default_factory=dict)
     volumes: List[ContainerVolume] = field(default_factory=list)
-    port: Optional[int] = None
-    health_check_path: str = '/'
+    http_server: Optional[ContainerHTTPServer] = None
+
+    @property
+    def port(self) -> Optional[int]:
+        if self.http_server:
+            return self.http_server.port
+        return None
+
+    @property
+    def health_check_path(self) -> str:
+        if self.http_server:
+            return self.http_server.health_check_path
+        return ContainerHTTPServer.health_check_path
 
     @property
     def command_list(self) -> List[str]:
@@ -67,7 +95,7 @@ class Container:
 
     @property
     def has_http_server_exposed(self) -> bool:
-        return bool(self.port)
+        return bool(self.http_server)
 
     @classmethod
     def from_primitive(cls, payload) -> 'Container':
@@ -77,6 +105,15 @@ class Container:
         kwargs['volumes'] = [
             ContainerVolume.from_primitive(item)
             for item in kwargs['volumes']]
+
+        if kwargs.get('http_server'):
+            kwargs['http_server'] = ContainerHTTPServer.from_primitive(
+                kwargs['http_server'])
+        elif kwargs.get('port') is not None:
+            kwargs['http_server'] = ContainerHTTPServer.from_primitive(kwargs)
+        kwargs.pop('port', None)
+        kwargs.pop('health_check_path', None)
+
         return cls(**kwargs)  # type: ignore
 
     def to_primitive(self) -> Dict:
@@ -84,6 +121,8 @@ class Container:
         payload['resources'] = self.resources.to_primitive()
         payload['volumes'] = [
             volume.to_primitive() for volume in self.volumes]
+        if self.http_server:
+            payload['http_server'] = self.http_server.to_primitive()
         return payload
 
 

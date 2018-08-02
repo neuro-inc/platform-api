@@ -3,7 +3,7 @@ from typing import Any, Dict, List, Optional
 
 from platform_api.config import StorageConfig
 from platform_api.orchestrator.job_request import (
-    Container, ContainerResources, ContainerVolume
+    Container, ContainerHTTPServer, ContainerResources, ContainerVolume
 )
 
 
@@ -16,8 +16,7 @@ class ContainerBuilder:
         self._env: Dict[str, str] = {}
         self._resources: Optional[ContainerResources] = None
         self._volumes: List[ContainerVolume] = []
-        self._port: Optional[int] = None
-        self._health_check_path: Optional[str] = None
+        self._http_server: Optional[ContainerHTTPServer] = None
 
     def set_image(self, image: str) -> 'ContainerBuilder':
         self._image = image
@@ -43,10 +42,9 @@ class ContainerBuilder:
         self._resources = resources
         return self
 
-    def set_port_and_health_check(
-            self, port: int, path: str) -> 'ContainerBuilder':
-        self._port = port
-        self._health_check_path = path
+    def set_http_server(
+            self, http_server: ContainerHTTPServer) -> 'ContainerBuilder':
+        self._http_server = http_server
         return self
 
     @classmethod
@@ -64,10 +62,12 @@ class ContainerBuilder:
 
         http = payload.get('http', {})
         if 'port' in http:
-            builder.set_port_and_health_check(
+            http_server = ContainerHTTPServer(
                 port=http['port'],
-                path=http.get('health_check_path', Container.health_check_path)
-            )
+                health_check_path=http.get(
+                    'health_check_path',
+                    ContainerHTTPServer.health_check_path))
+            builder.set_http_server(http_server)
 
         for volume_payload in payload.get('volumes', []):
             volume = cls.create_volume_from_payload(
@@ -106,8 +106,7 @@ class ContainerBuilder:
             env=self._env,
             volumes=self._volumes,
             resources=self._resources,
-            port=self._port,
-            health_check_path=self._health_check_path,
+            http_server=self._http_server
         )
 
 

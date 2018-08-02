@@ -10,8 +10,8 @@ from platform_api.handlers.job_request_builder import ContainerBuilder
 from platform_api.handlers.models_handler import ModelRequest
 from platform_api.orchestrator.job import Job
 from platform_api.orchestrator.job_request import (
-    Container, ContainerResources, ContainerVolume, ContainerVolumeFactory,
-    JobRequest, JobStatus
+    Container, ContainerHTTPServer, ContainerResources, ContainerVolume,
+    ContainerVolumeFactory, JobRequest, JobStatus
 )
 
 
@@ -147,8 +147,10 @@ class TestContainerBuilder:
                     read_only=True),
             ],
             resources=ContainerResources(cpu=0.1, memory_mb=128, gpu=1),
-            port=80,
-            health_check_path='/',
+            http_server=ContainerHTTPServer(
+                port=80,
+                health_check_path='/',
+            ),
         )
 
 
@@ -195,8 +197,9 @@ class TestModelRequest:
                     read_only=False)
             ],
             resources=ContainerResources(cpu=0.1, memory_mb=128, gpu=1),
-            port=80,
-            health_check_path='/',
+            http_server=ContainerHTTPServer(
+                port=80,
+                health_check_path='/'),
         )
 
 
@@ -214,8 +217,7 @@ def job_request_payload():
                 'dst_path': '/dst/path',
                 'read_only': False,
             }],
-            'port': None,
-            'health_check_path': '/',
+            'http_server': None,
         },
     }
 
@@ -226,7 +228,7 @@ class TestJob:
         container = Container(
             image='testimage',
             resources=ContainerResources(cpu=1, memory_mb=128),
-            port=1234,
+            http_server=ContainerHTTPServer(port=1234),
         )
         return JobRequest(job_id='testjob', container=container)
 
@@ -303,3 +305,35 @@ class TestJobRequest:
                 src_path=PurePath('/src/path'),
                 dst_path=PurePath('/dst/path'))])
         assert request.container == expected_container
+
+
+class TestContainerHTTPServer:
+    def test_from_primitive(self):
+        payload = {
+            'port': 1234,
+        }
+        server = ContainerHTTPServer.from_primitive(payload)
+        assert server == ContainerHTTPServer(port=1234)
+
+    def test_from_primitive_health_check_path(self):
+        payload = {
+            'port': 1234,
+            'health_check_path': '/path',
+        }
+        server = ContainerHTTPServer.from_primitive(payload)
+        assert server == ContainerHTTPServer(
+            port=1234, health_check_path='/path')
+
+    def test_to_primitive(self):
+        server = ContainerHTTPServer(port=1234)
+        assert server.to_primitive() == {
+            'port': 1234,
+            'health_check_path': '/',
+        }
+
+    def test_to_primitive_health_check_path(self):
+        server = ContainerHTTPServer(port=1234, health_check_path='/path')
+        assert server.to_primitive() == {
+            'port': 1234,
+            'health_check_path': '/path',
+        }
