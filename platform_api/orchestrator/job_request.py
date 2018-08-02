@@ -59,7 +59,7 @@ class ContainerHTTPServer:
         return cls(  # type: ignore
             port=payload['port'],
             health_check_path=payload.get(
-                'health_check_path', cls.health_check_path)
+                'health_check_path') or cls.health_check_path,
         )
 
     def to_primitive(self) -> Dict:
@@ -106,12 +106,14 @@ class Container:
             ContainerVolume.from_primitive(item)
             for item in kwargs['volumes']]
 
-        if payload.get('http_server'):
+        if kwargs.get('http_server'):
             kwargs['http_server'] = ContainerHTTPServer.from_primitive(
-                payload['http_server'])
-        elif payload.get('port') is not None:
-            kwargs['http_server'] = ContainerHTTPServer.from_primitive(
-                payload)
+                kwargs['http_server'])
+        elif kwargs.get('port') is not None:
+            kwargs['http_server'] = ContainerHTTPServer.from_primitive(kwargs)
+        kwargs.pop('port', None)
+        kwargs.pop('health_check_path', None)
+
         return cls(**kwargs)  # type: ignore
 
     def to_primitive(self) -> Dict:

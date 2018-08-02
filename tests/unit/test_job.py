@@ -217,8 +217,7 @@ def job_request_payload():
                 'dst_path': '/dst/path',
                 'read_only': False,
             }],
-            'port': None,
-            'health_check_path': '/',
+            'http_server': None,
         },
     }
 
