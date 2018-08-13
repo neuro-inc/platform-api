@@ -1,6 +1,7 @@
+from dataclasses import dataclass
 from datetime import datetime, timezone
 from functools import partial
-from typing import Dict, Optional
+from typing import Any, Dict, Iterable, List, Optional, Sequence
 
 import iso8601
 
@@ -9,6 +10,115 @@ from .job_request import JobRequest, JobStatus
 
 
 current_datetime_factory = partial(datetime.now, timezone.utc)
+
+
+# TODO: consider adding JobStatusReason Enum
+
+
+@dataclass(frozen=True)
+class JobStatusItem:
+    status: JobStatus
+    transition_time: datetime
+    reason: Optional[str] = None
+    description: Optional[str] = None
+
+    @property
+    def transitioned_at(self) -> datetime:
+        return self.transition_time
+
+    @property
+    def is_finished(self) -> bool:
+        return self.status.is_finished
+
+    @classmethod
+    def create(
+            cls, status: JobStatus, *,
+            transition_time: Optional[datetime] = None,
+            current_datetime_factory=current_datetime_factory,
+            **kwargs) -> 'JobStatusItem':
+        transition_time = transition_time or current_datetime_factory()
+        return cls(  # type: ignore
+            status=status,
+            transition_time=transition_time,
+            **kwargs
+        )
+
+    @classmethod
+    def from_primitive(cls, payload: Dict[str, Any]) -> 'JobStatusItem':
+        status = JobStatus(payload['status'])
+        transition_time = iso8601.parse_date(payload['transition_time'])
+        return cls(  # type: ignore
+            status=status,
+            transition_time=transition_time,
+            reason=payload.get('reason'),
+            description=payload.get('description'),
+        )
+
+    def to_primitive(self) -> Dict[str, Any]:
+        return {
+            'status': str(self.status.value),
+            'transition_time': self.transition_time.isoformat(),
+            'reason': self.reason,
+            'description': self.description,
+        }
+
+
+class JobStatusHistory:
+    def __init__(self, items: List[JobStatusItem]) -> None:
+        assert items, 'JobStatusHistory should contain at least one entry'
+        self._items = items
+        assert self.first == self._first_pending, (
+            'The first JobStatusHistory entry should be pending')
+
+    @staticmethod
+    def _find_with_status(
+            items: Iterable[JobStatusItem], statuses: Sequence[JobStatus]
+            ) -> Optional[JobStatusItem]:
+        for item in items:
+            if item.status in statuses:
+                return item
+        return None
+
+    @property
+    def _first_pending(self) -> Optional[JobStatusItem]:
+        return self._find_with_status(self._items, (JobStatus.PENDING,))
+
+    @property
+    def _first_running(self) -> Optional[JobStatusItem]:
+        return self._find_with_status(self._items, (JobStatus.RUNNING,))
+
+    @property
+    def first(self) -> JobStatusItem:
+        return self._items[0]
+
+    @property
+    def last(self) -> JobStatusItem:
+        return self._items[-1]
+
+    @property
+    def current(self) -> JobStatusItem:
+        return self.last
+
+    @property
+    def created_at(self) -> datetime:
+        return self.first.transitioned_at
+
+    @property
+    def started_at(self) -> Optional[datetime]:
+        item = self._first_running
+        if item:
+            return item.transition_time
+        return None
+
+    @property
+    def is_finished(self) -> bool:
+        return self.last.is_finished
+
+    @property
+    def finished_at(self) -> Optional[datetime]:
+        if self.is_finished:
+            return self.last.transitioned_at
+        return None
 
 
 class Job:

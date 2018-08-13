@@ -8,7 +8,7 @@ import pytest
 from platform_api.config import StorageConfig
 from platform_api.handlers.job_request_builder import ContainerBuilder
 from platform_api.handlers.models_handler import ModelRequest
-from platform_api.orchestrator.job import Job
+from platform_api.orchestrator.job import Job, JobStatusHistory, JobStatusItem
 from platform_api.orchestrator.job_request import (
     Container, ContainerHTTPServer, ContainerResources, ContainerVolume,
     ContainerVolumeFactory, JobRequest, JobStatus
@@ -337,3 +337,44 @@ class TestContainerHTTPServer:
             'port': 1234,
             'health_check_path': '/path',
         }
+
+
+class TestJobStatusItem:
+    def test_from_primitive(self):
+        transition_time = datetime.now(timezone.utc)
+        payload = {
+            'status': 'succeeded',
+            'transition_time': transition_time.isoformat(),
+            'reason': 'test reason',
+            'description': 'test description',
+        }
+        item = JobStatusItem.from_primitive(payload)
+        assert item.status == JobStatus.SUCCEEDED
+        assert item.is_finished
+        assert item.transition_time == transition_time
+        assert item.reason == 'test reason'
+        assert item.description == 'test description'
+
+    def test_to_primitive(self):
+        item = JobStatusItem(
+            status=JobStatus.SUCCEEDED,
+            transition_time=datetime.now(timezone.utc))
+        assert item.to_primitive() == {
+            'status': 'succeeded',
+            'transition_time': item.transition_time.isoformat(),
+            'reason': None,
+            'description': None,
+        }
+
+
+class TestJobStatusHistory:
+    def test_single_pending(self):
+        first_item = JobStatusItem.create(JobStatus.PENDING)
+        items = [first_item]
+        history = JobStatusHistory(items=items)
+        assert history.first == first_item
+        assert history.last == first_item
+        assert history.current == first_item
+        assert history.created_at == first_item.transition_time
+        assert not history.started_at
+        assert not history.is_finished
