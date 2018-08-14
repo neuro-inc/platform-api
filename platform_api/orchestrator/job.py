@@ -18,13 +18,17 @@ current_datetime_factory = partial(datetime.now, timezone.utc)
 @dataclass(frozen=True)
 class JobStatusItem:
     status: JobStatus
-    transition_time: datetime
+    transition_time: datetime = field(compare=False)
     reason: Optional[str] = None
     description: Optional[str] = None
 
     @property
     def transitioned_at(self) -> datetime:
         return self.transition_time
+
+    @property
+    def is_running(self) -> bool:
+        return self.status.is_running
 
     @property
     def is_finished(self) -> bool:
@@ -109,6 +113,10 @@ class JobStatusHistory:
         if item:
             return item.transition_time
         return None
+
+    @property
+    def is_running(self) -> bool:
+        return self.last.is_running
 
     @property
     def is_finished(self) -> bool:

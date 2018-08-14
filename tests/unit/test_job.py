@@ -1,5 +1,5 @@
 import dataclasses
-from datetime import datetime, timezone
+from datetime import datetime, timedelta, timezone
 from pathlib import PurePath
 from unittest import mock
 
@@ -365,6 +365,24 @@ class TestJobStatusItem:
             'reason': None,
             'description': None,
         }
+
+    def test_eq_defaults(self):
+        old_item = JobStatusItem.create(JobStatus.RUNNING)
+        new_item = JobStatusItem.create(JobStatus.RUNNING)
+        assert old_item == new_item
+
+    def test_eq_different_times(self):
+        old_item = JobStatusItem.create(
+            JobStatus.RUNNING, transition_time=datetime.now(timezone.utc))
+        new_item = JobStatusItem.create(
+            JobStatus.RUNNING,
+            transition_time=datetime.now(timezone.utc) + timedelta(days=1))
+        assert old_item == new_item
+
+    def test_not_eq(self):
+        old_item = JobStatusItem.create(JobStatus.RUNNING)
+        new_item = JobStatusItem.create(JobStatus.RUNNING, reason='Whatever')
+        assert old_item != new_item
 
 
 class TestJobStatusHistory:
