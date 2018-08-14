@@ -428,3 +428,58 @@ class TestJobStatusHistory:
         assert history.created_at == first_item.transition_time
         assert not history.started_at
         assert not history.is_finished
+        assert not history.finished_at
+
+    def test_single_failed(self):
+        first_item = JobStatusItem.create(JobStatus.FAILED)
+        items = [first_item]
+        history = JobStatusHistory(items=items)
+        assert history.first == first_item
+        assert history.last == first_item
+        assert history.current == first_item
+        assert history.created_at == first_item.transition_time
+        assert not history.started_at
+        assert history.is_finished
+        assert history.finished_at == first_item.transition_time
+
+    def test_full_cycle(self):
+        pending_item = JobStatusItem.create(JobStatus.PENDING)
+        running_item = JobStatusItem.create(JobStatus.RUNNING)
+        finished_item = JobStatusItem.create(JobStatus.SUCCEEDED)
+        items = [pending_item, running_item, finished_item]
+        history = JobStatusHistory(items=items)
+        assert history.first == pending_item
+        assert history.last == finished_item
+        assert history.current == finished_item
+        assert history.created_at == pending_item.transition_time
+        assert history.started_at == running_item.transition_time
+        assert history.is_finished
+        assert not history.is_running
+        assert history.finished_at == finished_item.transition_time
+
+    def test_current_update(self):
+        pending_item = JobStatusItem.create(JobStatus.PENDING)
+        running_item = JobStatusItem.create(JobStatus.RUNNING)
+
+        items = [pending_item]
+        history = JobStatusHistory(items=items)
+        assert history.current == pending_item
+        assert not history.is_running
+
+        history.current = running_item
+        assert history.current == running_item
+        assert history.is_running
+
+    def test_current_discard_update(self):
+        pending_item = JobStatusItem.create(JobStatus.PENDING)
+        new_pending_item = JobStatusItem.create(
+            JobStatus.PENDING,
+            transition_time=pending_item.transition_time + timedelta(days=1))
+
+        items = [pending_item]
+        history = JobStatusHistory(items=items)
+        assert history.current == pending_item
+
+        history.current = new_pending_item
+        assert history.current == pending_item
+        assert history.current.transition_time == pending_item.transition_time

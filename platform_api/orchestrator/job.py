@@ -25,10 +25,6 @@ class JobStatusItem:
     description: Optional[str] = None
 
     @property
-    def transitioned_at(self) -> datetime:
-        return self.transition_time
-
-    @property
     def is_running(self) -> bool:
         return self.status.is_running
 
@@ -96,6 +92,11 @@ class JobStatusHistory:
         return self._find_with_status(self._items, (JobStatus.RUNNING,))
 
     @property
+    def _first_finished(self) -> Optional[JobStatusItem]:
+        return self._find_with_status(
+            self._items, (JobStatus.SUCCEEDED, JobStatus.FAILED))
+
+    @property
     def first(self) -> JobStatusItem:
         return self._items[0]
 
@@ -114,7 +115,7 @@ class JobStatusHistory:
 
     @property
     def created_at(self) -> datetime:
-        return self.first.transitioned_at
+        return self.first.transition_time
 
     @property
     def started_at(self) -> Optional[datetime]:
@@ -129,12 +130,12 @@ class JobStatusHistory:
 
     @property
     def is_finished(self) -> bool:
-        return self.last.is_finished
+        return bool(self._first_finished)
 
     @property
     def finished_at(self) -> Optional[datetime]:
-        if self.is_finished:
-            return self.last.transitioned_at
+        if self._first_finished:
+            return self._first_finished.transition_time
         return None
 
 
