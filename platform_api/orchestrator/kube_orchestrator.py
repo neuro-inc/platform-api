@@ -6,12 +6,12 @@ from typing import Optional
 
 from ..config import OrchestratorConfig  # noqa
 from .base import LogReader, Orchestrator
-from .job import Job
+from .job import Job, JobStatusItem
 from .job_request import JobStatus
 from .kube_client import *  # noqa
 from .kube_client import (
     HostVolume, IngressRule, KubeClient, KubeClientAuthType, NfsVolume,
-    PodDescriptor, Service, Volume
+    PodDescriptor, PodStatus, Service, Volume
 )
 from .logs import PodContainerLogReader
 
@@ -65,6 +65,10 @@ class KubeConfig(OrchestratorConfig):
         )
 
 
+def convert_pod_status_to_job_status(pod_status: PodStatus) -> JobStatusItem:
+    return JobStatusItem.create(pod_status.status)
+
+
 class KubeOrchestrator(Orchestrator):
     def __init__(
             self, *, config: KubeConfig,
@@ -115,9 +119,12 @@ class KubeOrchestrator(Orchestrator):
         return status.status
 
     async def status_job(self, job_id: str) -> JobStatus:
+        return (await self.get_job_status(job_id)).status
+
+    async def get_job_status(self, job_id: str) -> JobStatusItem:
         pod_id = job_id
         status = await self._client.get_pod_status(pod_id)
-        return status.status
+        return convert_pod_status_to_job_status(status)
 
     async def get_job_log_reader(self, job: Job) -> LogReader:
         return PodContainerLogReader(

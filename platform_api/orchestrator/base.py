@@ -1,7 +1,7 @@
 from abc import ABC, abstractmethod
 
 from ..config import OrchestratorConfig  # noqa
-from .job import Job
+from .job import Job, JobStatusItem
 from .job_request import JobStatus
 
 
@@ -29,6 +29,10 @@ class Orchestrator(ABC):
 
     @abstractmethod
     async def status_job(self, job_id: str) -> JobStatus:
+        pass
+
+    @abstractmethod
+    async def get_job_status(self, job_id: str) -> JobStatusItem:
         pass
 
     @abstractmethod
