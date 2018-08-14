@@ -259,12 +259,24 @@ class TestJob:
             job_request=job_request)
         job.status = JobStatus.FAILED
         job.is_deleted = True
+        expected_finished_at = job.finished_at.isoformat()
         assert job.to_primitive() == {
             'id': job.id,
             'request': mock.ANY,
             'status': 'failed',
             'is_deleted': True,
-            'finished_at': job.finished_at.isoformat(),
+            'finished_at': expected_finished_at,
+            'statuses': [{
+                'status': 'pending',
+                'transition_time': mock.ANY,
+                'reason': None,
+                'description': None,
+            }, {
+                'status': 'failed',
+                'transition_time': expected_finished_at,
+                'reason': None,
+                'description': None,
+            }],
         }
 
     def test_from_primitive(self, mock_orchestrator, job_request_payload):
@@ -278,6 +290,26 @@ class TestJob:
         job = Job.from_primitive(mock_orchestrator, payload)
         assert job.id == 'testjob'
         assert job.status == JobStatus.SUCCEEDED
+        assert job.is_deleted
+        assert job.finished_at
+
+    def test_from_primitive_with_statuses(
+            self, mock_orchestrator, job_request_payload):
+        finished_at_str = datetime.now(timezone.utc).isoformat()
+        payload = {
+            'id': 'testjob',
+            'request': job_request_payload,
+            'status': 'succeeded',
+            'is_deleted': True,
+            'finished_at': finished_at_str,
+            'statuses': [{
+                'status': 'failed',
+                'transition_time': finished_at_str,
+            }],
+        }
+        job = Job.from_primitive(mock_orchestrator, payload)
+        assert job.id == 'testjob'
+        assert job.status == JobStatus.FAILED
         assert job.is_deleted
         assert job.finished_at
 
