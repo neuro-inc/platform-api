@@ -118,9 +118,6 @@ class KubeOrchestrator(Orchestrator):
         job.status = status.status
         return status.status
 
-    async def status_job(self, job_id: str) -> JobStatus:
-        return (await self.get_job_status(job_id)).status
-
     async def get_job_status(self, job_id: str) -> JobStatusItem:
         pod_id = job_id
         status = await self._client.get_pod_status(pod_id)
