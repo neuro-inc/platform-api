@@ -29,7 +29,7 @@ class Orchestrator(ABC):
 
     @abstractmethod
     async def status_job(self, job_id: str) -> JobStatus:
-        pass
+        return (await self.get_job_status(job_id)).status
 
     @abstractmethod
     async def get_job_status(self, job_id: str) -> JobStatusItem:

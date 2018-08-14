@@ -31,9 +31,6 @@ class MockOrchestrator(Orchestrator):
         job.status = JobStatus.PENDING
         return JobStatus.PENDING
 
-    async def status_job(self, *args, **kwargs) -> JobStatus:
-        return (await self.get_job_status(*args, **kwargs)).status
-
     async def get_job_status(self, job_id: str) -> JobStatusItem:
         return JobStatusItem.create(self._mock_status_to_return)
 
