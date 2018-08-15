@@ -118,10 +118,26 @@ class JobStatusHistory:
         return self.first.transition_time
 
     @property
+    def created_at_str(self) -> str:
+        return self.created_at.isoformat()
+
+    @property
     def started_at(self) -> Optional[datetime]:
-        item = self._first_running
+        """Return a `datetime` when a job became RUNNING.
+
+        In case the job terminated instantly without an explicit transition to
+        the RUNNING state, it is assumed that `started_at` gets its value from
+        the transition time of the next state (either SUCCEEDED or FINISHED).
+        """
+        item = self._first_running or self._first_finished
         if item:
             return item.transition_time
+        return None
+
+    @property
+    def started_at_str(self) -> Optional[str]:
+        if self.started_at:
+            return self.started_at.isoformat()
         return None
 
     @property
@@ -136,6 +152,12 @@ class JobStatusHistory:
     def finished_at(self) -> Optional[datetime]:
         if self._first_finished:
             return self._first_finished.transition_time
+        return None
+
+    @property
+    def finished_at_str(self) -> Optional[str]:
+        if self.finished_at:
+            return self.finished_at.isoformat()
         return None
 
 
@@ -180,6 +202,10 @@ class Job:
         item = JobStatusItem.create(
             value, current_datetime_factory=self._current_datetime_factory)
         self._status_history.current = item
+
+    @property
+    def status_history(self) -> JobStatusHistory:
+        return self._status_history
 
     @property
     def is_running(self) -> bool:
@@ -231,9 +257,7 @@ class Job:
 
     @property
     def finished_at_str(self) -> Optional[str]:
-        if self.finished_at:
-            return self.finished_at.isoformat()
-        return None
+        return self._status_history.finished_at_str
 
     def to_primitive(self) -> Dict:
         statuses = [item.to_primitive() for item in self._status_history.all]

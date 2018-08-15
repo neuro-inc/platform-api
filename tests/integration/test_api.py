@@ -325,7 +325,13 @@ class TestJobs:
             response_payload = await response.json()
             assert response_payload == {
                 'id': mock.ANY,
-                'status': 'pending'
+                'status': 'pending',
+                'history': {
+                    'status': 'pending',
+                    'reason': None,
+                    'description': None,
+                    'created_at': mock.ANY,
+                },
             }
             job_id = response_payload['id']
 
@@ -339,5 +345,12 @@ class TestJobs:
             assert response_payload == {
                 'id': job_id,
                 'status': 'succeeded',
-                'finished_at': mock.ANY
+                'history': {
+                    'status': 'succeeded',
+                    'reason': None,
+                    'description': None,
+                    'created_at': mock.ANY,
+                    'started_at': mock.ANY,
+                    'finished_at': mock.ANY,
+                },
             }
