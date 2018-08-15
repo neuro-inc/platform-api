@@ -24,9 +24,10 @@ def create_job_request_validator() -> t.Trafaret:
 def create_job_response_validator() -> t.Trafaret:
     return t.Dict({
         'id': t.String,
+        # `status` is left for backward compat. the python client/cli still
+        # relies on it.
         'status': create_job_status_validator(),
         t.Key('http_url', optional=True): t.String,
-        t.Key('finished_at', optional=True): t.String,
         'history': create_job_history_validator(),
     })
 
@@ -49,7 +50,6 @@ def convert_job_to_job_response(job: Job) -> Dict[str, Any]:
     if history.started_at:
         response_payload['history']['started_at'] = history.started_at_str
     if history.is_finished:
-        response_payload['finished_at'] = history.finished_at_str
         response_payload['history']['finished_at'] = history.finished_at_str
     return response_payload
 

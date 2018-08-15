@@ -339,7 +339,6 @@ class TestJobs:
             assert response_payload == {
                 'id': job_id,
                 'status': 'succeeded',
-                'finished_at': mock.ANY,
                 'history': {
                     'status': 'succeeded',
                     'reason': None,
