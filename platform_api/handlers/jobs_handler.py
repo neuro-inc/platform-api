@@ -41,16 +41,16 @@ def convert_job_to_job_response(job: Job) -> Dict[str, Any]:
             'status': current_status.status,
             'reason': current_status.reason,
             'description': current_status.description,
-            'created_at': history.created_at,
+            'created_at': history.created_at_str,
         },
     }
     if job.has_http_server_exposed:
         response_payload['http_url'] = job.http_url
     if history.started_at:
-        response_payload['history']['started_at'] = history.started_at
+        response_payload['history']['started_at'] = history.started_at_str
     if history.is_finished:
-        response_payload['finished_at'] = history.finished_at
-        response_payload['history']['finished_at'] = history.finished_at
+        response_payload['finished_at'] = history.finished_at_str
+        response_payload['history']['finished_at'] = history.finished_at_str
     return response_payload
 
 
@@ -97,6 +97,7 @@ class JobsHandler:
         job_id = request.match_info['job_id']
         job = await self._jobs_service.get_job(job_id)
         response_payload = convert_job_to_job_response(job)
+        self._job_response_validator.check(response_payload)
         return aiohttp.web.json_response(
             data=response_payload, status=aiohttp.web.HTTPOk.status_code)
 
