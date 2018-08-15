@@ -8,6 +8,7 @@ from platform_api.orchestrator import (
     Job, JobError, JobRequest, JobsService, JobStatus, KubeConfig, LogReader,
     Orchestrator
 )
+from platform_api.orchestrator.job import JobStatusItem
 from platform_api.orchestrator.job_request import Container, ContainerResources
 
 
@@ -30,8 +31,8 @@ class MockOrchestrator(Orchestrator):
         job.status = JobStatus.PENDING
         return JobStatus.PENDING
 
-    async def status_job(self, *args, **kwargs):
-        return self._mock_status_to_return
+    async def get_job_status(self, job_id: str) -> JobStatusItem:
+        return JobStatusItem.create(self._mock_status_to_return)
 
     async def delete_job(self, *args, **kwargs):
         if self.raise_on_delete:

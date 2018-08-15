@@ -1,5 +1,5 @@
 import dataclasses
-from datetime import datetime, timezone
+from datetime import datetime, timedelta, timezone
 from pathlib import PurePath
 from unittest import mock
 
@@ -8,7 +8,7 @@ import pytest
 from platform_api.config import StorageConfig
 from platform_api.handlers.job_request_builder import ContainerBuilder
 from platform_api.handlers.models_handler import ModelRequest
-from platform_api.orchestrator.job import Job
+from platform_api.orchestrator.job import Job, JobStatusHistory, JobStatusItem
 from platform_api.orchestrator.job_request import (
     Container, ContainerHTTPServer, ContainerResources, ContainerVolume,
     ContainerVolumeFactory, JobRequest, JobStatus
@@ -259,12 +259,24 @@ class TestJob:
             job_request=job_request)
         job.status = JobStatus.FAILED
         job.is_deleted = True
+        expected_finished_at = job.finished_at.isoformat()
         assert job.to_primitive() == {
             'id': job.id,
             'request': mock.ANY,
             'status': 'failed',
             'is_deleted': True,
-            'finished_at': job.finished_at.isoformat(),
+            'finished_at': expected_finished_at,
+            'statuses': [{
+                'status': 'pending',
+                'transition_time': mock.ANY,
+                'reason': None,
+                'description': None,
+            }, {
+                'status': 'failed',
+                'transition_time': expected_finished_at,
+                'reason': None,
+                'description': None,
+            }],
         }
 
     def test_from_primitive(self, mock_orchestrator, job_request_payload):
@@ -278,6 +290,26 @@ class TestJob:
         job = Job.from_primitive(mock_orchestrator, payload)
         assert job.id == 'testjob'
         assert job.status == JobStatus.SUCCEEDED
+        assert job.is_deleted
+        assert job.finished_at
+
+    def test_from_primitive_with_statuses(
+            self, mock_orchestrator, job_request_payload):
+        finished_at_str = datetime.now(timezone.utc).isoformat()
+        payload = {
+            'id': 'testjob',
+            'request': job_request_payload,
+            'status': 'succeeded',
+            'is_deleted': True,
+            'finished_at': finished_at_str,
+            'statuses': [{
+                'status': 'failed',
+                'transition_time': finished_at_str,
+            }],
+        }
+        job = Job.from_primitive(mock_orchestrator, payload)
+        assert job.id == 'testjob'
+        assert job.status == JobStatus.FAILED
         assert job.is_deleted
         assert job.finished_at
 
@@ -337,3 +369,117 @@ class TestContainerHTTPServer:
             'port': 1234,
             'health_check_path': '/path',
         }
+
+
+class TestJobStatusItem:
+    def test_from_primitive(self):
+        transition_time = datetime.now(timezone.utc)
+        payload = {
+            'status': 'succeeded',
+            'transition_time': transition_time.isoformat(),
+            'reason': 'test reason',
+            'description': 'test description',
+        }
+        item = JobStatusItem.from_primitive(payload)
+        assert item.status == JobStatus.SUCCEEDED
+        assert item.is_finished
+        assert item.transition_time == transition_time
+        assert item.reason == 'test reason'
+        assert item.description == 'test description'
+
+    def test_to_primitive(self):
+        item = JobStatusItem(
+            status=JobStatus.SUCCEEDED,
+            transition_time=datetime.now(timezone.utc))
+        assert item.to_primitive() == {
+            'status': 'succeeded',
+            'transition_time': item.transition_time.isoformat(),
+            'reason': None,
+            'description': None,
+        }
+
+    def test_eq_defaults(self):
+        old_item = JobStatusItem.create(JobStatus.RUNNING)
+        new_item = JobStatusItem.create(JobStatus.RUNNING)
+        assert old_item == new_item
+
+    def test_eq_different_times(self):
+        old_item = JobStatusItem.create(
+            JobStatus.RUNNING, transition_time=datetime.now(timezone.utc))
+        new_item = JobStatusItem.create(
+            JobStatus.RUNNING,
+            transition_time=datetime.now(timezone.utc) + timedelta(days=1))
+        assert old_item == new_item
+
+    def test_not_eq(self):
+        old_item = JobStatusItem.create(JobStatus.RUNNING)
+        new_item = JobStatusItem.create(JobStatus.RUNNING, reason='Whatever')
+        assert old_item != new_item
+
+
+class TestJobStatusHistory:
+    def test_single_pending(self):
+        first_item = JobStatusItem.create(JobStatus.PENDING)
+        items = [first_item]
+        history = JobStatusHistory(items=items)
+        assert history.first == first_item
+        assert history.last == first_item
+        assert history.current == first_item
+        assert history.created_at == first_item.transition_time
+        assert not history.started_at
+        assert not history.is_finished
+        assert not history.finished_at
+
+    def test_single_failed(self):
+        first_item = JobStatusItem.create(JobStatus.FAILED)
+        items = [first_item]
+        history = JobStatusHistory(items=items)
+        assert history.first == first_item
+        assert history.last == first_item
+        assert history.current == first_item
+        assert history.created_at == first_item.transition_time
+        assert not history.started_at
+        assert history.is_finished
+        assert history.finished_at == first_item.transition_time
+
+    def test_full_cycle(self):
+        pending_item = JobStatusItem.create(JobStatus.PENDING)
+        running_item = JobStatusItem.create(JobStatus.RUNNING)
+        finished_item = JobStatusItem.create(JobStatus.SUCCEEDED)
+        items = [pending_item, running_item, finished_item]
+        history = JobStatusHistory(items=items)
+        assert history.first == pending_item
+        assert history.last == finished_item
+        assert history.current == finished_item
+        assert history.created_at == pending_item.transition_time
+        assert history.started_at == running_item.transition_time
+        assert history.is_finished
+        assert not history.is_running
+        assert history.finished_at == finished_item.transition_time
+
+    def test_current_update(self):
+        pending_item = JobStatusItem.create(JobStatus.PENDING)
+        running_item = JobStatusItem.create(JobStatus.RUNNING)
+
+        items = [pending_item]
+        history = JobStatusHistory(items=items)
+        assert history.current == pending_item
+        assert not history.is_running
+
+        history.current = running_item
+        assert history.current == running_item
+        assert history.is_running
+
+    def test_current_discard_update(self):
+        pending_item = JobStatusItem.create(JobStatus.PENDING)
+        new_pending_item = JobStatusItem.create(
+            JobStatus.PENDING,
+            transition_time=pending_item.transition_time + timedelta(days=1))
+
+        items = [pending_item]
+        history = JobStatusHistory(items=items)
+        assert history.current == pending_item
+
+        history.current = new_pending_item
+        assert history.current == pending_item
+        assert history.current.transition_time == pending_item.transition_time
