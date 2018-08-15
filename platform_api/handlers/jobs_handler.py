@@ -10,7 +10,8 @@ from platform_api.orchestrator.job_request import JobRequest
 
 from .job_request_builder import ContainerBuilder
 from .validators import (
-    create_container_request_validator, create_job_status_validator
+    create_container_request_validator, create_job_history_validator,
+    create_job_status_validator
 )
 
 
@@ -26,18 +27,30 @@ def create_job_response_validator() -> t.Trafaret:
         'status': create_job_status_validator(),
         t.Key('http_url', optional=True): t.String,
         t.Key('finished_at', optional=True): t.String,
+        'history': create_job_history_validator(),
     })
 
 
 def convert_job_to_job_response(job: Job) -> Dict[str, Any]:
+    history = job.status_history
+    current_status = history.current
     response_payload = {
         'id': job.id,
-        'status': job.status,
+        'status': current_status.status,
+        'history': {
+            'status': current_status.status,
+            'reason': current_status.reason,
+            'description': current_status.description,
+            'created_at': history.created_at,
+        },
     }
     if job.has_http_server_exposed:
         response_payload['http_url'] = job.http_url
-    if job.is_finished:
-        response_payload['finished_at'] = job.finished_at_str
+    if history.started_at:
+        response_payload['history']['started_at'] = history.started_at
+    if history.is_finished:
+        response_payload['finished_at'] = history.finished_at
+        response_payload['history']['finished_at'] = history.finished_at
     return response_payload
 
 
