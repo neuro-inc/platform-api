@@ -426,9 +426,12 @@ class TestJobStatusHistory:
         assert history.last == first_item
         assert history.current == first_item
         assert history.created_at == first_item.transition_time
+        assert history.created_at_str == first_item.transition_time.isoformat()
         assert not history.started_at
+        assert not history.started_at_str
         assert not history.is_finished
         assert not history.finished_at
+        assert not history.finished_at_str
 
     def test_single_failed(self):
         first_item = JobStatusItem.create(JobStatus.FAILED)
@@ -452,10 +455,16 @@ class TestJobStatusHistory:
         assert history.last == finished_item
         assert history.current == finished_item
         assert history.created_at == pending_item.transition_time
+        assert history.created_at_str == (
+            pending_item.transition_time.isoformat())
         assert history.started_at == running_item.transition_time
+        assert history.started_at_str == (
+            running_item.transition_time.isoformat())
         assert history.is_finished
         assert not history.is_running
         assert history.finished_at == finished_item.transition_time
+        assert history.finished_at_str == (
+            finished_item.transition_time.isoformat())
 
     def test_current_update(self):
         pending_item = JobStatusItem.create(JobStatus.PENDING)
