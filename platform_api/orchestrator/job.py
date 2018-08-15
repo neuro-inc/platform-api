@@ -123,7 +123,13 @@ class JobStatusHistory:
 
     @property
     def started_at(self) -> Optional[datetime]:
-        item = self._first_running
+        """Return a `datetime` when a job became RUNNING.
+
+        In case the job terminated instantly without an explicit transition to
+        the RUNNING state, it is assumed that `started_at` gets its value from
+        the transition time of the next state (either SUCCEEDED or FINISHED).
+        """
+        item = self._first_running or self._first_finished
         if item:
             return item.transition_time
         return None
