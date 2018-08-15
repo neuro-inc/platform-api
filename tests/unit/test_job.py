@@ -438,7 +438,7 @@ class TestJobStatusHistory:
         assert history.last == first_item
         assert history.current == first_item
         assert history.created_at == first_item.transition_time
-        assert not history.started_at
+        assert history.started_at == first_item.transition_time
         assert history.is_finished
         assert history.finished_at == first_item.transition_time
 
