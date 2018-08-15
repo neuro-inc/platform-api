@@ -3,6 +3,9 @@ import trafaret as t
 from platform_api.orchestrator.job_request import JobStatus
 
 
+OptionalString = t.String | t.Null
+
+
 def create_job_status_validator() -> t.Trafaret:
     return t.Enum(*JobStatus.values())
 
