@@ -144,6 +144,8 @@ class Job:
             self, orchestrator_config: OrchestratorConfig,
             job_request: JobRequest,
             status_history: Optional[JobStatusHistory] = None,
+            # leaving `status` for backward compat with tests
+            status: JobStatus = JobStatus.PENDING,
             is_deleted: bool=False,
             current_datetime_factory=current_datetime_factory) -> None:
         self._orchestrator_config = orchestrator_config
@@ -154,7 +156,7 @@ class Job:
         else:
             self._status_history = JobStatusHistory([
                 JobStatusItem.create(
-                    JobStatus.PENDING,
+                    status,
                     current_datetime_factory=current_datetime_factory)])
 
         self._is_deleted = is_deleted
