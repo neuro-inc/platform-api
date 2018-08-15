@@ -10,6 +10,17 @@ def create_job_status_validator() -> t.Trafaret:
     return t.Enum(*JobStatus.values())
 
 
+def create_job_history_validator() -> t.Trafaret:
+    return t.Dict({
+        'status': create_job_status_validator(),
+        'reason': OptionalString,
+        'description': OptionalString,
+        'created_at': t.String,
+        t.Key('started_at', optional=True): t.String,
+        t.Key('finished_at', optional=True): t.String,
+    })
+
+
 def create_volume_request_validator() -> t.Trafaret:
     return t.Dict({
         'src_storage_uri': t.String,
