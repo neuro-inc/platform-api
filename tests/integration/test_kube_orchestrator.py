@@ -157,9 +157,10 @@ class TestKubeOrchestrator:
             await job.delete()
 
     @pytest.mark.asyncio
-    async def test_job_failed(self, kube_orchestrator):
+    async def test_job_failed_error(self, kube_orchestrator):
+        command = 'bash -c "for i in {100..1}; do echo $i; done; false"'
         container = Container(
-            image='ubuntu', command='false',
+            image='ubuntu', command=command,
             resources=ContainerResources(cpu=0.1, memory_mb=128))
         job = TestJob(
             orchestrator=kube_orchestrator,
@@ -169,6 +170,13 @@ class TestKubeOrchestrator:
             assert status == JobStatus.PENDING
 
             await self.wait_for_failure(job, max_attempts=120)
+
+            status_item = await kube_orchestrator.get_job_status(job.id)
+            expected_description = ''.join(
+                f'{i}\n' for i in reversed(range(1, 81)))
+            assert status_item == JobStatusItem.create(
+                JobStatus.FAILED, reason='Error',
+                description=expected_description)
         finally:
             await job.delete()
 
