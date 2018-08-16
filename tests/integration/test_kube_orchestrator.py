@@ -10,6 +10,7 @@ from async_timeout import timeout
 from platform_api.orchestrator import (
     Job, JobError, JobRequest, JobStatus, LogReader, Orchestrator
 )
+from platform_api.orchestrator.job import JobStatusItem
 from platform_api.orchestrator.job_request import (
     Container, ContainerHTTPServer, ContainerResources, ContainerVolume
 )
@@ -52,7 +53,7 @@ class TestKubeOrchestrator:
 
     async def wait_for_completion(
             self, job: Job,
-            interval_s: int=1, max_attempts: int=30):
+            interval_s: float=1., max_attempts: int=30):
         for _ in range(max_attempts):
             status = await job.query_status()
             if status.is_finished:

@@ -201,6 +201,5 @@ class KubeOrchestrator(Orchestrator):
         pod_id = job.id
         if job.has_http_server_exposed:
             await self._delete_service(pod_id)
-        await self._client.delete_pod(pod_id)
-        # WARN: temporary stab
-        return JobStatus.SUCCEEDED
+        status = await self._client.delete_pod(pod_id)
+        return convert_pod_status_to_job_status(status).status
