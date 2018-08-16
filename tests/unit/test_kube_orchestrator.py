@@ -106,6 +106,7 @@ class TestPodDescriptor:
                         'initialDelaySeconds': 1,
                         'periodSeconds': 1,
                     },
+                    'terminationMessagePolicy': 'FallbackToLogsOnError',
                 }],
                 'volumes': [],
                 'restartPolicy': 'Never',

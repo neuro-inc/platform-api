@@ -290,6 +290,7 @@ class PodDescriptor:
             'image': f'{self.image}',
             'env': self.env_list,
             'volumeMounts': volume_mounts,
+            'terminationMessagePolicy': 'FallbackToLogsOnError',
         }
         if self.args:
             container_payload['args'] = self.args
