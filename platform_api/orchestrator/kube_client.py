@@ -428,26 +428,6 @@ class PodStatus:
     def is_container_creating(self) -> bool:
         return self.container_status.is_creating
 
-    @property
-    def status(self) -> JobStatus:
-        """Map a pod phase and its container statuses to a job status.
-
-        See
-        https://kubernetes.io/docs/concepts/workloads/pods/pod-lifecycle#pod-phase
-        """
-        if self.phase == 'Succeeded':
-            return JobStatus.SUCCEEDED
-        elif self.phase in ('Failed', 'Unknown'):
-            return JobStatus.FAILED
-        elif self.phase == 'Running':
-            return JobStatus.RUNNING
-        elif self.phase == 'Pending':
-            if self.is_container_creating:
-                return JobStatus.PENDING
-            else:
-                return JobStatus.FAILED
-        return JobStatus.PENDING
-
     @classmethod
     def from_primitive(cls, payload):
         return cls(payload)

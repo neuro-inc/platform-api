@@ -149,7 +149,7 @@ class TestPodDescriptor:
         pod = PodDescriptor.from_primitive(payload)
         assert pod.name == 'testname'
         assert pod.image == 'testimage'
-        assert pod.status.status == JobStatus.RUNNING
+        assert pod.status.phase == 'Running'
 
     def test_from_primitive_failure(self):
         payload = {
@@ -393,13 +393,21 @@ class TestContainerStatus:
         status = ContainerStatus(payload)
         assert status.is_waiting
         assert status.is_creating
+        assert not status.is_terminated
+
+        with pytest.raises(AssertionError):
+            status.exit_code
 
     @pytest.mark.parametrize('payload', (
         {'state': {'waiting': {'reason': 'NOT CREATING'}}},
     ))
     def test_is_waiting_not_creating(self, payload):
         status = ContainerStatus(payload)
+        assert status.is_waiting
         assert not status.is_creating
+        assert not status.is_terminated
+        assert status.reason == 'NOT CREATING'
+        assert status.message is None
 
     @pytest.mark.parametrize('payload', (
         {'state': {'running': {}}},
@@ -409,3 +417,15 @@ class TestContainerStatus:
         status = ContainerStatus(payload)
         assert not status.is_waiting
         assert not status.is_creating
+
+    def test_is_terminated(self):
+        payload = {'state': {'terminated': {
+            'reason': 'Error',
+            'message': 'Failed!',
+            'exitCode': 123,
+        }}}
+        status = ContainerStatus(payload)
+        assert status.is_terminated
+        assert status.reason == 'Error'
+        assert status.message == 'Failed!'
+        assert status.exit_code == 123
