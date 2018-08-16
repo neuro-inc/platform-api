@@ -2,13 +2,14 @@ from pathlib import PurePath
 
 import pytest
 
+from platform_api.orchestrator.job import JobStatusItem
 from platform_api.orchestrator.job_request import (
     Container, ContainerResources, ContainerVolume, JobError, JobRequest,
     JobStatus
 )
 from platform_api.orchestrator.kube_orchestrator import (
-    ContainerStatus, HostVolume, Ingress, IngressRule, NfsVolume,
-    PodDescriptor, PodStatus, Resources, Service, VolumeMount
+    ContainerStatus, HostVolume, Ingress, IngressRule, JobStatusItemFactory,
+    NfsVolume, PodDescriptor, PodStatus, Resources, Service, VolumeMount
 )
 
 
@@ -167,6 +168,47 @@ class TestPodDescriptor:
             PodDescriptor.from_primitive(payload)
 
 
+class TestJobStatusItemFactory:
+    @pytest.mark.parametrize('phase, expected_status', (
+        ('Succeeded', JobStatus.SUCCEEDED),
+        ('Failed', JobStatus.FAILED),
+        ('Unknown', JobStatus.FAILED),
+        ('Running', JobStatus.RUNNING),
+    ))
+    def test_status(self, phase, expected_status):
+        payload = {'phase': phase}
+        pod_status = PodStatus.from_primitive(payload)
+        job_status_item = JobStatusItemFactory(pod_status).create()
+        assert job_status_item == JobStatusItem.create(expected_status)
+
+    def test_status_pending(self):
+        payload = {'phase': 'Pending'}
+        pod_status = PodStatus.from_primitive(payload)
+        job_status_item = JobStatusItemFactory(pod_status).create()
+        assert job_status_item == JobStatusItem.create(JobStatus.PENDING)
+
+    def test_status_pending_creating(self):
+        payload = {
+            'phase': 'Pending', 'containerStatuses': [{
+                'state': {'waiting': {'reason': 'ContainerCreating'}},
+            }]
+        }
+        pod_status = PodStatus.from_primitive(payload)
+        job_status_item = JobStatusItemFactory(pod_status).create()
+        assert job_status_item == JobStatusItem.create(JobStatus.PENDING)
+
+    def test_status_pending_failure(self):
+        payload = {
+            'phase': 'Pending', 'containerStatuses': [{
+                'state': {'waiting': {'reason': 'SomeWeirdReason'}},
+            }]
+        }
+        pod_status = PodStatus.from_primitive(payload)
+        job_status_item = JobStatusItemFactory(pod_status).create()
+        assert job_status_item == JobStatusItem.create(
+            JobStatus.FAILED, reason='SomeWeirdReason')
+
+
 class TestPodStatus:
     def test_from_primitive(self):
         payload = {
@@ -176,37 +218,7 @@ class TestPodStatus:
             }]
         }
         status = PodStatus.from_primitive(payload)
-        assert status.status == JobStatus.RUNNING
-
-    @pytest.mark.parametrize('phase, expected_status', (
-        ('Succeeded', JobStatus.SUCCEEDED),
-        ('Failed', JobStatus.FAILED),
-        ('Unknown', JobStatus.FAILED),
-        ('Running', JobStatus.RUNNING),
-    ))
-    def test_status(self, phase, expected_status):
-        payload = {'phase': phase}
-        assert PodStatus(payload).status == expected_status
-
-    def test_status_pending(self):
-        payload = {'phase': 'Pending'}
-        assert PodStatus(payload).status == JobStatus.PENDING
-
-    def test_status_pending_creating(self):
-        payload = {
-            'phase': 'Pending', 'containerStatuses': [{
-                'state': {'waiting': {'reason': 'ContainerCreating'}},
-            }]
-        }
-        assert PodStatus(payload).status == JobStatus.PENDING
-
-    def test_status_pending_failure(self):
-        payload = {
-            'phase': 'Pending', 'containerStatuses': [{
-                'state': {'waiting': {'reason': 'SomeWeirdReason'}},
-            }]
-        }
-        assert PodStatus(payload).status == JobStatus.FAILED
+        assert status.phase == 'Running'
 
 
 class TestResources:
