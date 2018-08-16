@@ -391,7 +391,7 @@ class PodStatus:
         return ContainerStatus(payload=payload)
 
     @property
-    def _is_container_creating(self) -> bool:
+    def is_container_creating(self) -> bool:
         return self.container_status.is_creating
 
     @property
@@ -408,7 +408,7 @@ class PodStatus:
         elif self.phase == 'Running':
             return JobStatus.RUNNING
         elif self.phase == 'Pending':
-            if self._is_container_creating:
+            if self.is_container_creating:
                 return JobStatus.PENDING
             else:
                 return JobStatus.FAILED

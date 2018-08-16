@@ -19,6 +19,43 @@ from .logs import PodContainerLogReader
 logger = logging.getLogger(__name__)
 
 
+class JobStatusItemFactory:
+    def __init__(self, pod_status: PodStatus) -> None:
+        self._pod_status = pod_status
+
+    def _parse_status(self) -> JobStatus:
+        """Map a pod phase and its container statuses to a job status.
+
+        See
+        https://kubernetes.io/docs/concepts/workloads/pods/pod-lifecycle#pod-phase
+        """
+        phase = self._pod_status.phase
+        if phase == 'Succeeded':
+            return JobStatus.SUCCEEDED
+        elif phase in ('Failed', 'Unknown'):
+            return JobStatus.FAILED
+        elif phase == 'Running':
+            return JobStatus.RUNNING
+        elif phase == 'Pending':
+            if not self._pod_status.is_container_creating:
+                return JobStatus.PENDING
+            else:
+                return JobStatus.FAILED
+        return JobStatus.PENDING
+
+    def _parse_reason(self) -> Optional[str]:
+        return None
+
+    def _compose_description(self) -> Optional[str]:
+        return None
+
+    def create(self) -> JobStatusItem:
+        return JobStatusItem.create(
+            self._parse_status(),
+            reason=self._parse_reason(),
+            description=self._compose_description())
+
+
 @dataclass(frozen=True)
 class KubeConfig(OrchestratorConfig):
     jobs_ingress_name: str = ''
@@ -66,7 +103,7 @@ class KubeConfig(OrchestratorConfig):
 
 
 def convert_pod_status_to_job_status(pod_status: PodStatus) -> JobStatusItem:
-    return JobStatusItem.create(pod_status.status)
+    return JobStatusItemFactory(pod_status).create()
 
 
 class KubeOrchestrator(Orchestrator):
