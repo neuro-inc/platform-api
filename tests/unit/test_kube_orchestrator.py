@@ -175,6 +175,7 @@ class TestJobStatusItemFactory:
         ('Failed', JobStatus.FAILED),
         ('Unknown', JobStatus.FAILED),
         ('Running', JobStatus.RUNNING),
+        ('NewPhase', JobStatus.PENDING),
     ))
     def test_status(self, phase, expected_status):
         payload = {'phase': phase}
@@ -412,6 +413,13 @@ class TestService:
 
 
 class TestContainerStatus:
+    def test_no_state(self):
+        payload = {'state': {}}
+        status = ContainerStatus(payload)
+        assert status.is_waiting
+        assert status.reason is None
+        assert status.message is None
+
     @pytest.mark.parametrize('payload', (
         None, {}, {'state': {}}, {'state': {'waiting': {}}},
         {'state': {'waiting': {'reason': 'ContainerCreating'}}},
