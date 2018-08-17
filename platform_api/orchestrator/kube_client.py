@@ -381,7 +381,7 @@ class ContainerStatus:
             'Completed'
             'Error'
             'ContainerCannotRun'
-        see 
+        see
         https://github.com/kubernetes/kubernetes/blob/c65f65cf6aea0f73115a2858a9d63fc2c21e5e3b/pkg/kubelet/dockershim/docker_container.go#L306-L409
         """
         for state in self._state.values():

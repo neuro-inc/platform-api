@@ -91,7 +91,7 @@ class JobsClient:
                 assert response.status == HTTPOk.status_code, response_text
                 result = await response.json()
                 if result['status'] == status:
-                    return
+                    return result
                 await asyncio.sleep(interval_s)
         else:
             raise RuntimeError('too long')
@@ -335,22 +335,56 @@ class TestJobs:
             }
             job_id = response_payload['id']
 
-        await jobs_client.long_pooling_by_job_id(
+        response_payload = await jobs_client.long_pooling_by_job_id(
             api=api, client=client, job_id=job_id, status='succeeded')
 
-        async with client.get(api.generate_job_url(job_id)) as response:
-            response_text = await response.text()
-            assert response.status == HTTPOk.status_code, response_text
-            response_payload = await response.json()
-            assert response_payload == {
-                'id': job_id,
+        assert response_payload == {
+            'id': job_id,
+            'status': 'succeeded',
+            'history': {
                 'status': 'succeeded',
-                'history': {
-                    'status': 'succeeded',
-                    'reason': None,
-                    'description': None,
-                    'created_at': mock.ANY,
-                    'started_at': mock.ANY,
-                    'finished_at': mock.ANY,
+                'reason': None,
+                'description': None,
+                'created_at': mock.ANY,
+                'started_at': mock.ANY,
+                'finished_at': mock.ANY,
+            },
+        }
+
+    @pytest.mark.asyncio
+    async def test_job_failed(self, jobs_client, api, client):
+        command = 'bash -c "echo Failed!; false"'
+        payload = {
+            'container':  {
+                'image': 'ubuntu',
+                'command': command,
+                'resources': {
+                    'cpu': 0.1,
+                    'memory_mb': 16,
                 },
-            }
+            },
+            'dataset_storage_uri': 'storage://',
+            'result_storage_uri': 'storage://result',
+        }
+        url = api.model_base_url
+        async with client.post(url, json=payload) as response:
+            assert response.status == HTTPAccepted.status_code
+            result = await response.json()
+            assert result['status'] == 'pending'
+            job_id = result['job_id']
+
+        response_payload = await jobs_client.long_pooling_by_job_id(
+            api=api, client=client, job_id=job_id, status='failed')
+
+        assert response_payload == {
+            'id': job_id,
+            'status': 'failed',
+            'history': {
+                'status': 'failed',
+                'reason': 'Error',
+                'description': 'Failed!\n\nExit code: 1',
+                'created_at': mock.ANY,
+                'started_at': mock.ANY,
+                'finished_at': mock.ANY,
+            },
+        }
