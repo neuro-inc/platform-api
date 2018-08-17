@@ -209,6 +209,20 @@ class TestJobStatusItemFactory:
         assert job_status_item == JobStatusItem.create(
             JobStatus.FAILED, reason='SomeWeirdReason')
 
+    def test_status_failure(self):
+        payload = {
+            'phase': 'Failed', 'containerStatuses': [{
+                'state': {'terminated': {
+                    'reason': 'Error', 'message': 'Failed!\n', 'exitCode': 123,
+                }},
+            }]
+        }
+        pod_status = PodStatus.from_primitive(payload)
+        job_status_item = JobStatusItemFactory(pod_status).create()
+        assert job_status_item == JobStatusItem.create(
+            JobStatus.FAILED, reason='Error',
+            description='Failed!\n\nExit code: 123')
+
 
 class TestPodStatus:
     def test_from_primitive(self):
