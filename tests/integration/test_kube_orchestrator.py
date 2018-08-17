@@ -175,6 +175,7 @@ class TestKubeOrchestrator:
             status_item = await kube_orchestrator.get_job_status(job.id)
             expected_description = ''.join(
                 f'{i}\n' for i in reversed(range(1, 81)))
+            expected_description += '\nExit code: 1'
             assert status_item == JobStatusItem.create(
                 JobStatus.FAILED, reason='Error',
                 description=expected_description)

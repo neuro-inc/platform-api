@@ -51,7 +51,12 @@ class JobStatusItemFactory:
 
     def _compose_description(self) -> Optional[str]:
         if self._status == JobStatus.FAILED:
-            return self._container_status.message
+            description = self._container_status.message or ''
+            if (self._container_status.is_terminated and
+                    self._container_status.exit_code):
+                description += (
+                    f'\nExit code: {self._container_status.exit_code}')
+            return description
         return None
 
     def create(self) -> JobStatusItem:
