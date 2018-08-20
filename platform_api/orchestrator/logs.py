@@ -1,10 +1,14 @@
-from io import StringIO
+import io
+import logging
 from typing import Optional
 
 import aiohttp
 
 from .base import LogReader
 from .kube_client import KubeClient
+
+
+logger = logging.getLogger(__name__)
 
 
 class PodContainerLogReader(LogReader):
@@ -22,7 +26,7 @@ class PodContainerLogReader(LogReader):
         self._stream_cm = None
         self._stream: Optional[aiohttp.StreamReader] = None
 
-        self._buffer = StringIO()
+        self._buffer = io.BytesIO()
 
     async def __aenter__(self) -> LogReader:
         await self._client.wait_pod_is_running(self._pod_name)
@@ -45,33 +49,43 @@ class PodContainerLogReader(LogReader):
         self._buffer.close()
 
     async def read(self, size: int = -1) -> bytes:
-        assert self._stream
-        line = await self.readline(size)
-        return line.encode()
+        chunk = self._read_from_buffer(size)
+        if chunk:
+            return chunk
 
-    def _readline_from_buffer(self, size: int = -1) -> str:
-        line = self._buffer.readline(size)
-        if not line and self._buffer.tell():
+        chunk = await self._readline()
+
+        self._append_to_buffer(chunk)
+        return self._read_from_buffer(size)
+
+    def _read_from_buffer(self, size: int = -1) -> bytes:
+        chunk = self._buffer.read(size)
+        if not chunk and self._buffer.tell():
             self._buffer.seek(0)
             self._buffer.truncate()
-        return line
+        return chunk
 
-    async def readline(self, size: int = -1) -> str:
-        line = self._readline_from_buffer(size)
-        if line:
-            return line
+    def _append_to_buffer(self, chunk: bytes) -> None:
+        pos = self._buffer.tell()
+        self._buffer.seek(0, io.SEEK_END)
+        self._buffer.write(chunk)
+        self._buffer.seek(pos)
 
+    async def _readline(self) -> bytes:
         assert self._stream
-        line = await self._stream.readline(size)
+        line = await self._stream.readline()
         # https://github.com/neuromation/platform-api/issues/131
         # k8s API (and the underlying docker API) sometimes returns an rpc
         # error as the last log line. it says that the corresponding container
         # does not exist. we should try to not expose such internals, but only
         # if it is the last line indeed.
-        if line.startswith('rpc error: code ='):
-            next_line = await self._stream.readline(size)
+        if line.startswith(b'rpc error: code ='):
+            next_line = await self._stream.readline()
             if next_line:
-                self._buffer.write(next_line)
+                logging.warn('An rpc error line was not at the end of the log')
+                self._stream.unread_data(next_line)
             else:
+                logging.info(
+                    'Skipping an rpc error line at the end of the log')
                 line = ''
         return line
