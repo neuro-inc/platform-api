@@ -46,7 +46,8 @@ class PodContainerLogReader(LogReader):
 
     async def read(self, size: int=-1) -> bytes:
         assert self._stream
-        return await self._stream.read(size)
+        line = await self.readline(size)
+        return line.encode()
 
     def _readline_from_buffer(self, size: int = -1) -> str:
         line = self._buffer.readline(size)
