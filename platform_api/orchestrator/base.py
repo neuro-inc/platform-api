@@ -13,11 +13,11 @@ class LogReader(ABC):
         pass
 
     @abstractmethod
-    async def read(self, size: int=-1) -> bytes:
+    async def read(self, size: int = -1) -> bytes:
         pass
 
     @abstractmethod
-    async def readline(self) -> str:
+    async def readline(self, size: int = -1) -> str:
         pass
 
 

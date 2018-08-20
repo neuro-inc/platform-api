@@ -44,7 +44,7 @@ class PodContainerLogReader(LogReader):
         await stream_cm.__aexit__(*args)  # type: ignore
         self._buffer.close()
 
-    async def read(self, size: int=-1) -> bytes:
+    async def read(self, size: int = -1) -> bytes:
         assert self._stream
         line = await self.readline(size)
         return line.encode()
@@ -56,7 +56,7 @@ class PodContainerLogReader(LogReader):
             self._buffer.truncate()
         return line
 
-    async def readline(self, size: int=-1) -> str:
+    async def readline(self, size: int = -1) -> str:
         line = self._readline_from_buffer(size)
         if line:
             return line
