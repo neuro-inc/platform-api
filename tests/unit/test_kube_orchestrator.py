@@ -1,5 +1,7 @@
 from pathlib import PurePath
+from unittest import mock
 
+import aiohttp
 import pytest
 
 from platform_api.orchestrator.job import JobStatusItem
@@ -11,6 +13,7 @@ from platform_api.orchestrator.kube_orchestrator import (
     ContainerStatus, HostVolume, Ingress, IngressRule, JobStatusItemFactory,
     NfsVolume, PodDescriptor, PodStatus, Resources, Service, VolumeMount
 )
+from platform_api.orchestrator.logs import FilteredStreamWrapper
 
 
 class TestVolume:
@@ -464,3 +467,73 @@ class TestContainerStatus:
         assert status.reason == 'Error'
         assert status.message == 'Failed!'
         assert status.exit_code == 123
+
+
+class TestFilteredStreamWrapper:
+    @pytest.mark.asyncio
+    async def test_read_eof(self):
+        reader = aiohttp.StreamReader(mock.Mock(_reading_paused=False))
+        reader.feed_eof()
+        stream = FilteredStreamWrapper(reader)
+        chunk = await stream.read()
+        assert not chunk
+
+    @pytest.mark.asyncio
+    async def test_read_two_lines_eof(self):
+        reader = aiohttp.StreamReader(mock.Mock(_reading_paused=False))
+        reader.feed_data(b'line1\n')
+        reader.feed_data(b'line2')
+        reader.feed_eof()
+        stream = FilteredStreamWrapper(reader)
+        chunk = await stream.read()
+        assert chunk == b'line1\n'
+        chunk = await stream.read()
+        assert chunk == b'line2'
+
+    @pytest.mark.asyncio
+    async def test_half_line(self):
+        reader = aiohttp.StreamReader(mock.Mock(_reading_paused=False))
+        reader.feed_data(b'line1\n')
+        reader.feed_data(b'line2\n')
+        stream = FilteredStreamWrapper(reader)
+        chunk = await stream.read(size=2)
+        assert chunk == b'li'
+        chunk = await stream.read(size=2)
+        assert chunk == b'ne'
+
+        reader.feed_data(b'line3')
+        reader.feed_eof()
+
+        chunk = await stream.read(size=2)
+        assert chunk == b'1\n'
+        chunk = await stream.read()
+        assert chunk == b'line2\n'
+        chunk = await stream.read()
+        assert chunk == b'line3'
+
+    @pytest.mark.asyncio
+    async def test_filtered_single_rpc_error(self):
+        reader = aiohttp.StreamReader(mock.Mock(_reading_paused=False))
+        reader.feed_data(b'line1\n')
+        reader.feed_data(b'rpc error: code = whatever')
+        reader.feed_eof()
+        stream = FilteredStreamWrapper(reader)
+        chunk = await stream.read()
+        assert chunk == b'line1\n'
+        chunk = await stream.read()
+        assert not chunk
+
+    @pytest.mark.asyncio
+    async def test_filtered_two_rpc_errors(self):
+        reader = aiohttp.StreamReader(mock.Mock(_reading_paused=False))
+        reader.feed_data(b'line1\n')
+        reader.feed_data(b'rpc error: code = whatever\n')
+        reader.feed_data(b'rpc error: code = again\n')
+        reader.feed_eof()
+        stream = FilteredStreamWrapper(reader)
+        chunk = await stream.read()
+        assert chunk == b'line1\n'
+        chunk = await stream.read()
+        assert chunk == b'rpc error: code = whatever\n'
+        chunk = await stream.read()
+        assert not chunk
