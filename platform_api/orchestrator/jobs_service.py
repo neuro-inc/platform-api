@@ -30,12 +30,13 @@ class JobsService:
         logger.info('Updating job %s', job.id)
         assert not job.is_finished
 
-        old_status = job.status
-        job.status = await self._orchestrator.status_job(job.id)
-        if old_status != job.status:
+        old_status_item = job.status_history.current
+        status_item = await self._orchestrator.get_job_status(job.id)
+        if old_status_item != status_item:
+            job.status_history.current = status_item
             logger.info(
                 'Job %s transitioned from %s to %s', job.id,
-                old_status.name, job.status.name)
+                old_status_item.status.name, status_item.status.name)
 
         await self._jobs_storage.set_job(job)
 

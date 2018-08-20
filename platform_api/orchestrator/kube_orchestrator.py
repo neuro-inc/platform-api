@@ -19,6 +19,52 @@ from .logs import PodContainerLogReader
 logger = logging.getLogger(__name__)
 
 
+class JobStatusItemFactory:
+    def __init__(self, pod_status: PodStatus) -> None:
+        self._pod_status = pod_status
+        self._container_status = pod_status.container_status
+
+        self._status = self._parse_status()
+
+    def _parse_status(self) -> JobStatus:
+        """Map a pod phase and its container statuses to a job status.
+
+        See
+        https://kubernetes.io/docs/concepts/workloads/pods/pod-lifecycle#pod-phase
+        """
+        phase = self._pod_status.phase
+        if phase == 'Succeeded':
+            return JobStatus.SUCCEEDED
+        elif phase in ('Failed', 'Unknown'):
+            return JobStatus.FAILED
+        elif phase == 'Running':
+            return JobStatus.RUNNING
+        elif phase == 'Pending':
+            if not self._pod_status.is_container_creating:
+                return JobStatus.FAILED
+        return JobStatus.PENDING
+
+    def _parse_reason(self) -> Optional[str]:
+        if self._status == JobStatus.FAILED:
+            return self._container_status.reason
+        return None
+
+    def _compose_description(self) -> Optional[str]:
+        if self._status == JobStatus.FAILED:
+            if (self._container_status.is_terminated and
+                    self._container_status.exit_code):
+                description = self._container_status.message or ''
+                return description + (
+                    f'\nExit code: {self._container_status.exit_code}')
+        return None
+
+    def create(self) -> JobStatusItem:
+        return JobStatusItem.create(
+            self._status,
+            reason=self._parse_reason(),
+            description=self._compose_description())
+
+
 @dataclass(frozen=True)
 class KubeConfig(OrchestratorConfig):
     jobs_ingress_name: str = ''
@@ -66,7 +112,7 @@ class KubeConfig(OrchestratorConfig):
 
 
 def convert_pod_status_to_job_status(pod_status: PodStatus) -> JobStatusItem:
-    return JobStatusItem.create(pod_status.status)
+    return JobStatusItemFactory(pod_status).create()
 
 
 class KubeOrchestrator(Orchestrator):
@@ -115,8 +161,8 @@ class KubeOrchestrator(Orchestrator):
         status = await self._client.create_pod(descriptor)
         if job.has_http_server_exposed:
             await self._create_service(descriptor)
-        job.status = status.status
-        return status.status
+        job.status = convert_pod_status_to_job_status(status).status
+        return job.status
 
     async def get_job_status(self, job_id: str) -> JobStatusItem:
         pod_id = job_id
@@ -160,4 +206,4 @@ class KubeOrchestrator(Orchestrator):
         if job.has_http_server_exposed:
             await self._delete_service(pod_id)
         status = await self._client.delete_pod(pod_id)
-        return status.status
+        return convert_pod_status_to_job_status(status).status

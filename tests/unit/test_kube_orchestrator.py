@@ -2,13 +2,14 @@ from pathlib import PurePath
 
 import pytest
 
+from platform_api.orchestrator.job import JobStatusItem
 from platform_api.orchestrator.job_request import (
     Container, ContainerResources, ContainerVolume, JobError, JobRequest,
     JobStatus
 )
 from platform_api.orchestrator.kube_orchestrator import (
-    ContainerStatus, HostVolume, Ingress, IngressRule, NfsVolume,
-    PodDescriptor, PodStatus, Resources, Service, VolumeMount
+    ContainerStatus, HostVolume, Ingress, IngressRule, JobStatusItemFactory,
+    NfsVolume, PodDescriptor, PodStatus, Resources, Service, VolumeMount
 )
 
 
@@ -105,6 +106,7 @@ class TestPodDescriptor:
                         'initialDelaySeconds': 1,
                         'periodSeconds': 1,
                     },
+                    'terminationMessagePolicy': 'FallbackToLogsOnError',
                 }],
                 'volumes': [],
                 'restartPolicy': 'Never',
@@ -149,7 +151,7 @@ class TestPodDescriptor:
         pod = PodDescriptor.from_primitive(payload)
         assert pod.name == 'testname'
         assert pod.image == 'testimage'
-        assert pod.status.status == JobStatus.RUNNING
+        assert pod.status.phase == 'Running'
 
     def test_from_primitive_failure(self):
         payload = {
@@ -167,6 +169,62 @@ class TestPodDescriptor:
             PodDescriptor.from_primitive(payload)
 
 
+class TestJobStatusItemFactory:
+    @pytest.mark.parametrize('phase, expected_status', (
+        ('Succeeded', JobStatus.SUCCEEDED),
+        ('Failed', JobStatus.FAILED),
+        ('Unknown', JobStatus.FAILED),
+        ('Running', JobStatus.RUNNING),
+        ('NewPhase', JobStatus.PENDING),
+    ))
+    def test_status(self, phase, expected_status):
+        payload = {'phase': phase}
+        pod_status = PodStatus.from_primitive(payload)
+        job_status_item = JobStatusItemFactory(pod_status).create()
+        assert job_status_item == JobStatusItem.create(expected_status)
+
+    def test_status_pending(self):
+        payload = {'phase': 'Pending'}
+        pod_status = PodStatus.from_primitive(payload)
+        job_status_item = JobStatusItemFactory(pod_status).create()
+        assert job_status_item == JobStatusItem.create(JobStatus.PENDING)
+
+    def test_status_pending_creating(self):
+        payload = {
+            'phase': 'Pending', 'containerStatuses': [{
+                'state': {'waiting': {'reason': 'ContainerCreating'}},
+            }]
+        }
+        pod_status = PodStatus.from_primitive(payload)
+        job_status_item = JobStatusItemFactory(pod_status).create()
+        assert job_status_item == JobStatusItem.create(JobStatus.PENDING)
+
+    def test_status_pending_failure(self):
+        payload = {
+            'phase': 'Pending', 'containerStatuses': [{
+                'state': {'waiting': {'reason': 'SomeWeirdReason'}},
+            }]
+        }
+        pod_status = PodStatus.from_primitive(payload)
+        job_status_item = JobStatusItemFactory(pod_status).create()
+        assert job_status_item == JobStatusItem.create(
+            JobStatus.FAILED, reason='SomeWeirdReason')
+
+    def test_status_failure(self):
+        payload = {
+            'phase': 'Failed', 'containerStatuses': [{
+                'state': {'terminated': {
+                    'reason': 'Error', 'message': 'Failed!\n', 'exitCode': 123,
+                }},
+            }]
+        }
+        pod_status = PodStatus.from_primitive(payload)
+        job_status_item = JobStatusItemFactory(pod_status).create()
+        assert job_status_item == JobStatusItem.create(
+            JobStatus.FAILED, reason='Error',
+            description='Failed!\n\nExit code: 123')
+
+
 class TestPodStatus:
     def test_from_primitive(self):
         payload = {
@@ -176,37 +234,7 @@ class TestPodStatus:
             }]
         }
         status = PodStatus.from_primitive(payload)
-        assert status.status == JobStatus.RUNNING
-
-    @pytest.mark.parametrize('phase, expected_status', (
-        ('Succeeded', JobStatus.SUCCEEDED),
-        ('Failed', JobStatus.FAILED),
-        ('Unknown', JobStatus.FAILED),
-        ('Running', JobStatus.RUNNING),
-    ))
-    def test_status(self, phase, expected_status):
-        payload = {'phase': phase}
-        assert PodStatus(payload).status == expected_status
-
-    def test_status_pending(self):
-        payload = {'phase': 'Pending'}
-        assert PodStatus(payload).status == JobStatus.PENDING
-
-    def test_status_pending_creating(self):
-        payload = {
-            'phase': 'Pending', 'containerStatuses': [{
-                'state': {'waiting': {'reason': 'ContainerCreating'}},
-            }]
-        }
-        assert PodStatus(payload).status == JobStatus.PENDING
-
-    def test_status_pending_failure(self):
-        payload = {
-            'phase': 'Pending', 'containerStatuses': [{
-                'state': {'waiting': {'reason': 'SomeWeirdReason'}},
-            }]
-        }
-        assert PodStatus(payload).status == JobStatus.FAILED
+        assert status.phase == 'Running'
 
 
 class TestResources:
@@ -385,6 +413,13 @@ class TestService:
 
 
 class TestContainerStatus:
+    def test_no_state(self):
+        payload = {'state': {}}
+        status = ContainerStatus(payload)
+        assert status.is_waiting
+        assert status.reason is None
+        assert status.message is None
+
     @pytest.mark.parametrize('payload', (
         None, {}, {'state': {}}, {'state': {'waiting': {}}},
         {'state': {'waiting': {'reason': 'ContainerCreating'}}},
@@ -393,13 +428,21 @@ class TestContainerStatus:
         status = ContainerStatus(payload)
         assert status.is_waiting
         assert status.is_creating
+        assert not status.is_terminated
+
+        with pytest.raises(AssertionError):
+            status.exit_code
 
     @pytest.mark.parametrize('payload', (
         {'state': {'waiting': {'reason': 'NOT CREATING'}}},
     ))
     def test_is_waiting_not_creating(self, payload):
         status = ContainerStatus(payload)
+        assert status.is_waiting
         assert not status.is_creating
+        assert not status.is_terminated
+        assert status.reason == 'NOT CREATING'
+        assert status.message is None
 
     @pytest.mark.parametrize('payload', (
         {'state': {'running': {}}},
@@ -409,3 +452,15 @@ class TestContainerStatus:
         status = ContainerStatus(payload)
         assert not status.is_waiting
         assert not status.is_creating
+
+    def test_is_terminated(self):
+        payload = {'state': {'terminated': {
+            'reason': 'Error',
+            'message': 'Failed!',
+            'exitCode': 123,
+        }}}
+        status = ContainerStatus(payload)
+        assert status.is_terminated
+        assert status.reason == 'Error'
+        assert status.message == 'Failed!'
+        assert status.exit_code == 123

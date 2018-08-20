@@ -10,6 +10,7 @@ from async_timeout import timeout
 from platform_api.orchestrator import (
     Job, JobError, JobRequest, JobStatus, LogReader, Orchestrator
 )
+from platform_api.orchestrator.job import JobStatusItem
 from platform_api.orchestrator.job_request import (
     Container, ContainerHTTPServer, ContainerResources, ContainerVolume
 )
@@ -52,7 +53,7 @@ class TestKubeOrchestrator:
 
     async def wait_for_completion(
             self, job: Job,
-            interval_s: int=1, max_attempts: int=30):
+            interval_s: float=1., max_attempts: int=30):
         for _ in range(max_attempts):
             status = await job.query_status()
             if status.is_finished:
@@ -157,9 +158,10 @@ class TestKubeOrchestrator:
             await job.delete()
 
     @pytest.mark.asyncio
-    async def test_job_failed(self, kube_orchestrator):
+    async def test_job_failed_error(self, kube_orchestrator):
+        command = 'bash -c "for i in {100..1}; do echo $i; done; false"'
         container = Container(
-            image='ubuntu', command='false',
+            image='ubuntu', command=command,
             resources=ContainerResources(cpu=0.1, memory_mb=128))
         job = TestJob(
             orchestrator=kube_orchestrator,
@@ -169,6 +171,14 @@ class TestKubeOrchestrator:
             assert status == JobStatus.PENDING
 
             await self.wait_for_failure(job, max_attempts=120)
+
+            status_item = await kube_orchestrator.get_job_status(job.id)
+            expected_description = ''.join(
+                f'{i}\n' for i in reversed(range(1, 81)))
+            expected_description += '\nExit code: 1'
+            assert status_item == JobStatusItem.create(
+                JobStatus.FAILED, reason='Error',
+                description=expected_description)
         finally:
             await job.delete()
 
@@ -416,7 +426,7 @@ class TestKubeClient:
         await kube_client.wait_pod_is_running(
             pod_name=pod.name, timeout_s=60.)
         pod_status = await kube_client.get_pod_status(pod.name)
-        assert pod_status.status == JobStatus.SUCCEEDED
+        assert pod_status.phase == 'Succeeded'
 
     @pytest.mark.asyncio
     async def test_create_log_stream_not_found(self, kube_client):

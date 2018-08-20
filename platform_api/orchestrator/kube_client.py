@@ -13,7 +13,7 @@ from async_generator import asynccontextmanager
 from async_timeout import timeout
 
 from .job_request import (
-    ContainerResources, ContainerVolume, JobError, JobRequest, JobStatus
+    ContainerResources, ContainerVolume, JobError, JobRequest
 )
 
 
@@ -290,6 +290,7 @@ class PodDescriptor:
             'image': f'{self.image}',
             'env': self.env_list,
             'volumeMounts': volume_mounts,
+            'terminationMessagePolicy': 'FallbackToLogsOnError',
         }
         if self.args:
             container_payload['args'] = self.args
@@ -360,9 +361,43 @@ class ContainerStatus:
         return not self._state or 'waiting' in self._state
 
     @property
-    def _waiting_reason(self) -> Optional[str]:
-        assert self.is_waiting
-        return self._state.get('waiting', {}).get('reason')
+    def is_terminated(self) -> bool:
+        return bool(self._state) and 'terminated' in self._state
+
+    @property
+    def reason(self) -> Optional[str]:
+        """Return the reason of the current state.
+
+        'waiting' reasons:
+            'PodInitializing'
+            'ContainerCreating'
+            'ErrImagePull'
+        see
+        https://github.com/kubernetes/kubernetes/blob/29232e3edc4202bb5e34c8c107bae4e8250cd883/pkg/kubelet/kubelet_pods.go#L1463-L1468
+        https://github.com/kubernetes/kubernetes/blob/886e04f1fffbb04faf8a9f9ee141143b2684ae68/pkg/kubelet/images/types.go#L25-L43
+
+        'terminated' reasons:
+            'OOMKilled'
+            'Completed'
+            'Error'
+            'ContainerCannotRun'
+        see
+        https://github.com/kubernetes/kubernetes/blob/c65f65cf6aea0f73115a2858a9d63fc2c21e5e3b/pkg/kubelet/dockershim/docker_container.go#L306-L409
+        """
+        for state in self._state.values():
+            return state.get('reason')
+        return None
+
+    @property
+    def message(self) -> Optional[str]:
+        for state in self._state.values():
+            return state.get('message')
+        return None
+
+    @property
+    def exit_code(self) -> Optional[int]:
+        assert self.is_terminated
+        return self._state['terminated']['exitCode']
 
     @property
     def is_creating(self) -> bool:
@@ -371,7 +406,7 @@ class ContainerStatus:
         # https://github.com/kubernetes/kubernetes/blob/886e04f1fffbb04faf8a9f9ee141143b2684ae68/pkg/kubelet/images/types.go#L25-L43
         return (
             self.is_waiting and
-            self._waiting_reason in (None, 'ContainerCreating')
+            self.reason in (None, 'ContainerCreating')
         )
 
 
@@ -391,28 +426,8 @@ class PodStatus:
         return ContainerStatus(payload=payload)
 
     @property
-    def _is_container_creating(self) -> bool:
+    def is_container_creating(self) -> bool:
         return self.container_status.is_creating
-
-    @property
-    def status(self) -> JobStatus:
-        """Map a pod phase and its container statuses to a job status.
-
-        See
-        https://kubernetes.io/docs/concepts/workloads/pods/pod-lifecycle#pod-phase
-        """
-        if self.phase == 'Succeeded':
-            return JobStatus.SUCCEEDED
-        elif self.phase in ('Failed', 'Unknown'):
-            return JobStatus.FAILED
-        elif self.phase == 'Running':
-            return JobStatus.RUNNING
-        elif self.phase == 'Pending':
-            if self._is_container_creating:
-                return JobStatus.PENDING
-            else:
-                return JobStatus.FAILED
-        return JobStatus.PENDING
 
     @classmethod
     def from_primitive(cls, payload):
