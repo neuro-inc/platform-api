@@ -286,6 +286,8 @@ class TestJobs:
 
         job_log_url = api.jobs_base_url + f'/{job_id}/log'
         async with client.get(job_log_url) as response:
+            assert response.content_type == 'text/plain'
+            assert response.charset == 'utf-8'
             payload = await response.read()
             expected_payload = '\n'.join(str(i) for i in range(1, 6)) + '\n'
             assert payload == expected_payload.encode()
