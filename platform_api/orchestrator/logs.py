@@ -86,17 +86,19 @@ class PodContainerLogReader(LogReader):
         self._stream_cm = self._client.create_pod_container_logs_stream(
             pod_name=self._pod_name, container_name=self._container_name,
             **kwargs)
-        stream = await self._stream_cm.__aenter__()  # type: ignore
+        assert self._stream_cm
+        stream = await self._stream_cm.__aenter__()
         self._stream = FilteredStreamWrapper(stream)
         return self
 
     async def __aexit__(self, *args) -> None:
+        assert self._stream
+        assert self._stream_cm
         stream_cm = self._stream_cm
-        if self._stream:
-            self._stream.close()
-            self._stream = None
+        self._stream.close()
+        self._stream = None
         self._stream_cm = None
-        await stream_cm.__aexit__(*args)  # type: ignore
+        await stream_cm.__aexit__(*args)
 
     async def read(self, size: int = -1) -> bytes:
         assert self._stream
