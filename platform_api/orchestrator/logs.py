@@ -1,3 +1,4 @@
+from io import StringIO
 from typing import Optional
 
 import aiohttp
@@ -21,6 +22,8 @@ class PodContainerLogReader(LogReader):
         self._stream_cm = None
         self._stream: Optional[aiohttp.StreamReader] = None
 
+        self._buffer = StringIO()
+
     async def __aenter__(self) -> LogReader:
         await self._client.wait_pod_is_running(self._pod_name)
         kwargs = {}
@@ -39,7 +42,35 @@ class PodContainerLogReader(LogReader):
         self._stream = None
         self._stream_cm = None
         await stream_cm.__aexit__(*args)  # type: ignore
+        self._buffer.close()
 
     async def read(self, size: int=-1) -> bytes:
         assert self._stream
         return await self._stream.read(size)
+
+    def _readline_from_buffer(self, size: int = -1) -> str:
+        line = self._buffer.readline(size)
+        if not line and self._buffer.tell():
+            self._buffer.seek(0)
+            self._buffer.truncate()
+        return line
+
+    async def readline(self, size: int=-1) -> str:
+        line = self._readline_from_buffer(size)
+        if line:
+            return line
+
+        assert self._stream
+        line = await self._stream.readline(size)
+        # https://github.com/neuromation/platform-api/issues/131
+        # k8s API (and the underlying docker API) sometimes returns an rpc
+        # error as the last log line. it says that the corresponding container
+        # does not exist. we should try to not expose such internals, but only
+        # if it is the last line indeed.
+        if line.startswith('rpc error: code ='):
+            next_line = await self._stream.readline(size)
+            if next_line:
+                self._buffer.write(next_line)
+            else:
+                line = ''
+        return line

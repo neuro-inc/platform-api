@@ -16,6 +16,10 @@ class LogReader(ABC):
     async def read(self, size: int=-1) -> bytes:
         pass
 
+    @abstractmethod
+    async def readline(self) -> str:
+        pass
+
 
 class Orchestrator(ABC):
     @property
