@@ -33,7 +33,6 @@ pip install -r requirements/test.txt
 ```shell
 pytest -vv tests/unit
 ```
-```
 8. Run the integration test suite:
 ```shell
 pytest -vv tests/integration
