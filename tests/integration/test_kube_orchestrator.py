@@ -21,7 +21,7 @@ from platform_api.orchestrator.kube_orchestrator import (
 from platform_api.orchestrator.logs import PodContainerLogReader
 
 
-class TestJob(Job):
+class MyJob(Job):
     def __init__(self, orchestrator: Orchestrator, *args, **kwargs) -> None:
         self._orchestrator = orchestrator
         super().__init__(
@@ -45,7 +45,7 @@ async def job_nginx(kube_orchestrator):
         resources=ContainerResources(cpu=0.1, memory_mb=256))
     job_request = JobRequest(
         job_id=job_id, container=container)
-    job = TestJob(orchestrator=kube_orchestrator, job_request=job_request)
+    job = MyJob(orchestrator=kube_orchestrator, job_request=job_request)
     return job
 
 
@@ -88,7 +88,7 @@ class TestKubeOrchestrator:
             image='notsuchdockerimage',
             resources=ContainerResources(cpu=0.1, memory_mb=128))
         job_request = JobRequest(job_id=job_id, container=container)
-        job = TestJob(orchestrator=kube_orchestrator, job_request=job_request)
+        job = MyJob(orchestrator=kube_orchestrator, job_request=job_request)
         try:
             status = await job.start()
             assert status == JobStatus.PENDING
@@ -111,7 +111,7 @@ class TestKubeOrchestrator:
             resources=ContainerResources(cpu=0.1, memory_mb=128))
         job_request_second = JobRequest(
             job_id=job_nginx.id, container=container)
-        job_second = TestJob(
+        job_second = MyJob(
             orchestrator=kube_orchestrator, job_request=job_request_second)
         with pytest.raises(JobError):
             await job_second.start()
@@ -136,7 +136,7 @@ class TestKubeOrchestrator:
             image='python',
             resources=ContainerResources(cpu=0.1, memory_mb=128))
         job_request = JobRequest(job_id=job_id, container=container)
-        job = TestJob(orchestrator=kube_orchestrator, job_request=job_request)
+        job = MyJob(orchestrator=kube_orchestrator, job_request=job_request)
 
         with pytest.raises(JobError):
             await job.start()
@@ -146,7 +146,7 @@ class TestKubeOrchestrator:
         container = Container(
             image='ubuntu', command='true',
             resources=ContainerResources(cpu=0.1, memory_mb=128))
-        job = TestJob(
+        job = MyJob(
             orchestrator=kube_orchestrator,
             job_request=JobRequest.create(container))
         try:
@@ -163,7 +163,7 @@ class TestKubeOrchestrator:
         container = Container(
             image='ubuntu', command=command,
             resources=ContainerResources(cpu=0.1, memory_mb=128))
-        job = TestJob(
+        job = MyJob(
             orchestrator=kube_orchestrator,
             job_request=JobRequest.create(container))
         try:
@@ -201,7 +201,7 @@ class TestKubeOrchestrator:
             command=f"""bash -c 'echo "test" > {file_path}'""",
             volumes=volumes,
             resources=ContainerResources(cpu=0.1, memory_mb=128))
-        write_job = TestJob(
+        write_job = MyJob(
             orchestrator=kube_orchestrator,
             job_request=JobRequest.create(write_container))
 
@@ -210,7 +210,7 @@ class TestKubeOrchestrator:
             command=f"""bash -c '[ "$(cat {file_path})" == "test" ]'""",
             volumes=volumes,
             resources=ContainerResources(cpu=0.1, memory_mb=128))
-        read_job = TestJob(
+        read_job = MyJob(
             orchestrator=kube_orchestrator,
             job_request=JobRequest.create(read_container))
 
@@ -245,7 +245,7 @@ class TestKubeOrchestrator:
             env={'A': '2', 'B': '3'},
             command=f"""bash -c '[ "$(expr $A \* $B)" == "{product}" ]'""",
             resources=ContainerResources(cpu=0.1, memory_mb=128))
-        job = TestJob(
+        job = MyJob(
             orchestrator=kube_orchestrator,
             job_request=JobRequest.create(container))
 
@@ -332,7 +332,7 @@ class TestKubeOrchestrator:
             image='python', command='python -m http.server 80',
             resources=ContainerResources(cpu=0.1, memory_mb=128),
             http_server=ContainerHTTPServer(port=80))
-        job = TestJob(
+        job = MyJob(
             orchestrator=kube_orchestrator,
             job_request=JobRequest.create(container))
         try:
