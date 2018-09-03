@@ -20,3 +20,21 @@ kubectl config use-context minikube
 kubectl apply -f tests/k8s/nfs.yml
 kubectl apply -f tests/k8s/platformjobsingress.yml
 ```
+6. Create a new virtual environment with Python 3.6:
+```shell
+python -m venv venv
+source venv/bin/activate
+```
+7. Install testing dependencies:
+```shell
+pip install -r requirements/test.txt
+```
+8. Run the unit test suite:
+```shell
+pytest -vv tests/unit
+```
+```
+8. Run the integration test suite:
+```shell
+pytest -vv tests/integration
+```
