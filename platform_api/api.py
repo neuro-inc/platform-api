@@ -46,7 +46,7 @@ async def handle_exceptions(request, handler):
         payload = {'error': str(e)}
         return aiohttp.web.json_response(
             payload, status=aiohttp.web.HTTPBadRequest.status_code)
-    except aiohttp.web.HTTPException as ex:
+    except aiohttp.web.HTTPException:
         raise
     except Exception as e:
         msg_str = (
