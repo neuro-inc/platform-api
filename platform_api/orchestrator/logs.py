@@ -52,7 +52,8 @@ class FilteredStreamWrapper:
         if line.startswith(b'rpc error: code ='):
             next_line = await self._stream.readline()
             if next_line:
-                logging.warn('An rpc error line was not at the end of the log')
+                logging.warning(
+                    'An rpc error line was not at the end of the log')
                 self._stream.unread_data(next_line)
             else:
                 logging.info(

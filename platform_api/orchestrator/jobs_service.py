@@ -66,7 +66,7 @@ class JobsService:
             await self._orchestrator.delete_job(job)
         except JobError as exc:
             # if the job is missing, we still want to mark it as deleted
-            logger.warn('Could not delete job %s. Reason: %s', job.id, exc)
+            logger.warning('Could not delete job %s. Reason: %s', job.id, exc)
         if not job.is_finished:
             # explicitly setting the job status as succeeded due to manual
             # deletion of a still running job
