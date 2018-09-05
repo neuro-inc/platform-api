@@ -114,7 +114,7 @@ class JobsHandler:
     async def handle_delete(self, request):
         job_id = request.match_info['job_id']
         await self._jobs_service.delete_job(job_id)
-        return aiohttp.web.HTTPNoContent()
+        raise aiohttp.web.HTTPNoContent()
 
     async def stream_log(self, request):
         job_id = request.match_info['job_id']
