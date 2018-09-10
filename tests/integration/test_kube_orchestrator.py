@@ -122,12 +122,12 @@ class TestKubeOrchestrator:
 
     @pytest.mark.asyncio
     async def test_status_job_not_exist(self, job_nginx):
-        with pytest.raises(JobError):
+        with pytest.raises(JobNotFoundException):
             await job_nginx.query_status()
 
     @pytest.mark.asyncio
     async def test_delete_job_not_exist(self, job_nginx):
-        with pytest.raises(JobError):
+        with pytest.raises(JobNotFoundException):
             await job_nginx.delete()
 
     @pytest.mark.asyncio
