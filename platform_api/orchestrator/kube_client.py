@@ -13,7 +13,8 @@ from async_generator import asynccontextmanager
 from async_timeout import timeout
 
 from .job_request import (
-    ContainerResources, ContainerVolume, JobError, JobRequest
+    ContainerResources, ContainerVolume, JobError, JobNotFoundException,
+    JobRequest
 )
 
 
@@ -32,7 +33,7 @@ def _raise_status_job_exception(pod: dict, job_id: str):
     if pod['code'] == 409:
         raise JobError(f'job with {job_id} already exist')
     elif pod['code'] == 404:
-        raise JobError(f'job with {job_id} not exist')
+        raise JobNotFoundException(f'job {job_id} was not found')
     elif pod['code'] == 422:
         raise JobError(f'cant create job with id {job_id}')
     else:
