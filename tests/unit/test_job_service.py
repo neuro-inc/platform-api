@@ -3,6 +3,7 @@ import dataclasses
 import pytest
 
 from platform_api.orchestrator import Job, JobRequest, JobsService, JobStatus
+from platform_api.orchestrator.job import JobStatusItem
 from platform_api.orchestrator.job_request import Container, ContainerResources
 from platform_api.orchestrator.jobs_service import InMemoryJobsStorage
 
@@ -132,7 +133,30 @@ class TestJobsService:
         assert job.is_deleted
 
     @pytest.mark.asyncio
-    async def test_update_jobs_statuses_missing(
+    async def test_update_jobs_statuses_pending_missing(
+            self, mock_orchestrator, job_request_factory):
+        config = dataclasses.replace(
+            mock_orchestrator.config, job_deletion_delay_s=0)
+        mock_orchestrator.config = config
+        mock_orchestrator.raise_on_get_job_status = True
+        service = JobsService(orchestrator=mock_orchestrator)
+
+        original_job, _ = await service.create_job(
+            job_request=job_request_factory())
+
+        await service.update_jobs_statuses()
+
+        job = await service.get_job(job_id=original_job.id)
+        assert job.status == JobStatus.FAILED
+        assert job.is_finished
+        assert job.finished_at
+        assert job.is_deleted
+        assert job.status_history.current == JobStatusItem.create(
+            JobStatus.FAILED, reason='Missing',
+            description='The job could not be scheduled or was preempted.')
+
+    @pytest.mark.asyncio
+    async def test_update_jobs_statuses_succeeded_missing(
             self, mock_orchestrator, job_request_factory):
         config = dataclasses.replace(
             mock_orchestrator.config, job_deletion_delay_s=0)

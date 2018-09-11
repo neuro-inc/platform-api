@@ -8,7 +8,8 @@ import pytest
 from async_timeout import timeout
 
 from platform_api.orchestrator import (
-    Job, JobError, JobRequest, JobStatus, LogReader, Orchestrator
+    Job, JobError, JobNotFoundException, JobRequest, JobStatus, LogReader,
+    Orchestrator
 )
 from platform_api.orchestrator.job import JobStatusItem
 from platform_api.orchestrator.job_request import (
@@ -121,12 +122,12 @@ class TestKubeOrchestrator:
 
     @pytest.mark.asyncio
     async def test_status_job_not_exist(self, job_nginx):
-        with pytest.raises(JobError):
+        with pytest.raises(JobNotFoundException):
             await job_nginx.query_status()
 
     @pytest.mark.asyncio
     async def test_delete_job_not_exist(self, job_nginx):
-        with pytest.raises(JobError):
+        with pytest.raises(JobNotFoundException):
             await job_nginx.delete()
 
     @pytest.mark.asyncio
@@ -394,7 +395,7 @@ async def delete_pod_later(kube_client):
 class TestKubeClient:
     @pytest.mark.asyncio
     async def test_wait_pod_is_running_not_found(self, kube_client):
-        with pytest.raises(JobError):
+        with pytest.raises(JobNotFoundException):
             await kube_client.wait_pod_is_running(pod_name='unknown')
 
     @pytest.mark.asyncio

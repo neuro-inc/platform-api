@@ -7,7 +7,15 @@ from typing import Dict, List, Optional
 from urllib.parse import urlsplit
 
 
-class JobError(Exception):
+class JobException(Exception):
+    pass
+
+
+class JobError(JobException):
+    pass
+
+
+class JobNotFoundException(JobException):
     pass
 
 

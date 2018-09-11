@@ -8,7 +8,7 @@ from .config import Config
 from .config_factory import EnvironConfigFactory
 from .handlers import JobsHandler, ModelsHandler
 from .orchestrator import (
-    JobError, JobsService, JobsStatusPooling, KubeOrchestrator
+    JobException, JobsService, JobsStatusPooling, KubeOrchestrator
 )
 from .orchestrator.jobs_storage import RedisJobsStorage
 from .redis import create_redis_client
@@ -38,7 +38,7 @@ def init_logging():
 async def handle_exceptions(request, handler):
     try:
         return await handler(request)
-    except JobError as e:
+    except JobException as e:
         payload = {'error': str(e)}
         return aiohttp.web.json_response(
             payload, status=aiohttp.web.HTTPBadRequest.status_code)

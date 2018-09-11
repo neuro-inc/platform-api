@@ -2,8 +2,10 @@ import logging
 from typing import List, Optional, Tuple
 
 from .base import LogReader, Orchestrator
-from .job import Job
-from .job_request import JobError, JobRequest, JobStatus
+from .job import Job, JobStatusItem
+from .job_request import (
+    JobException, JobNotFoundException, JobRequest, JobStatus
+)
 from .jobs_storage import InMemoryJobsStorage, JobsStorage
 from .status import Status
 
@@ -31,7 +33,18 @@ class JobsService:
         assert not job.is_finished
 
         old_status_item = job.status_history.current
-        status_item = await self._orchestrator.get_job_status(job.id)
+
+        try:
+            status_item = await self._orchestrator.get_job_status(job.id)
+        except JobNotFoundException as exc:
+            logger.warning(
+                'Failed to get job %s status. Reason: %s', job.id, exc)
+            status_item = JobStatusItem.create(
+                JobStatus.FAILED, reason='Missing',
+                description=(
+                    'The job could not be scheduled or was preempted.'))
+            job.is_deleted = True
+
         if old_status_item != status_item:
             job.status_history.current = status_item
             logger.info(
@@ -64,7 +77,7 @@ class JobsService:
         logger.info('Deleting job %s', job.id)
         try:
             await self._orchestrator.delete_job(job)
-        except JobError as exc:
+        except JobException as exc:
             # if the job is missing, we still want to mark it as deleted
             logger.warning('Could not delete job %s. Reason: %s', job.id, exc)
         if not job.is_finished:
