@@ -44,14 +44,12 @@ def _raise_status_job_exception(pod: dict, job_id: str):
 class Volume(metaclass=abc.ABCMeta):
     name: str
 
+    @abc.abstractmethod
     def create_mount(
             self, container_volume: ContainerVolume
             ) -> 'VolumeMount':
-        return VolumeMount(  # type: ignore
-            volume=self,
-            mount_path=container_volume.dst_path,
-            sub_path=PurePath(''),
-            read_only=container_volume.read_only
+        raise NotImplementedError(
+            'Create specific implementation of Volume class.'
         )
 
 
