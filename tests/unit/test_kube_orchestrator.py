@@ -12,7 +12,7 @@ from platform_api.orchestrator.job_request import (
 from platform_api.orchestrator.kube_orchestrator import (
     ContainerStatus, HostVolume, Ingress, IngressRule, JobStatusItemFactory,
     NfsVolume, PodDescriptor, PodStatus, Resources, Service,
-    SharedMemoryVolume, VolumeMount
+    SharedMemoryVolume, Volume, VolumeMount
 )
 from platform_api.orchestrator.logs import FilteredStreamWrapper
 
@@ -32,6 +32,12 @@ class TestVolume:
         assert mount.mount_path == PurePath('/container/path/to/dir')
         assert mount.sub_path == PurePath('path/to/dir')
         assert not mount.read_only
+
+
+class TestAbstractVolume:
+    @pytest.mark.xfail(raises=TypeError)
+    def test_create_mount(self):
+        Volume('testvolume')
 
 
 class TestHostVolume:

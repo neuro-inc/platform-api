@@ -48,9 +48,7 @@ class Volume(metaclass=abc.ABCMeta):
     def create_mount(
             self, container_volume: ContainerVolume
             ) -> 'VolumeMount':
-        raise NotImplementedError(
-            'Create specific implementation of Volume class.'
-        )
+        pass
 
 
 @dataclass(frozen=True)
