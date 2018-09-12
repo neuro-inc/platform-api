@@ -21,6 +21,21 @@ class TestContainerRequestValidator:
             }],
         }
 
+    @pytest.fixture
+    def payload_with_dev_shm(self):
+        return {
+            'image': 'testimage',
+            ''
+            'resources': {
+                'cpu': 0.1,
+                'memory_mb': 16,
+            },
+            'volumes': [{
+                'src_storage_uri': 'storage:///',
+                'dst_path': '/var/storage',
+            }],
+        }
+
     def test_allowed_volumes(self, payload):
         validator = create_container_request_validator(allow_volumes=True)
         result = validator.check(payload)

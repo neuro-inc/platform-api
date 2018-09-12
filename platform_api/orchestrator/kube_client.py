@@ -292,8 +292,9 @@ class PodDescriptor:
         volumes = [volume]
 
         if job_request.container.resources.shm:
-            dev_shm_volume = SharedMemoryVolume(name='dshm',path=None)
-            container_volume = ContainerVolume(dst_path='/dev/shm',src_path=None)
+            dev_shm_volume = SharedMemoryVolume(name='dshm', path=None)
+            container_volume = ContainerVolume(dst_path='/dev/shm',
+                                               src_path=None)
             volume_mounts.append(dev_shm_volume.create_mount(
                 container_volume))
             volumes.append(dev_shm_volume)
@@ -372,7 +373,7 @@ class PodDescriptor:
 
         metadata = payload['metadata']
         container_payload = payload['spec']['containers'][0]
-        # TODO (R Zubairov 09/13/18): here while parsing the payload we should properly set flag extended bla bla bla
+        # TODO (R Zubairov 09/13/18): remove medium emptyDir
         # TODO (A Danshyn 06/19/18): set rest of attributes
         status = None
         if 'status' in payload:

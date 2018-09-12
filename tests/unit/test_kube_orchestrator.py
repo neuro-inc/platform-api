@@ -118,8 +118,9 @@ class TestPodDescriptor:
         }
 
     def test_to_primitive_with_dev_shm(self):
-        dev_shm = SharedMemoryVolume(name='dshm',path=None)
-        container_volume = ContainerVolume(dst_path=PurePath('/dev/shm'), src_path=None)
+        dev_shm = SharedMemoryVolume(name='dshm', path=None)
+        container_volume = ContainerVolume(dst_path=PurePath('/dev/shm'),
+                                           src_path=None)
         pod = PodDescriptor(
             name='testname', image='testimage', env={'TESTVAR': 'testvalue'},
             resources=Resources(cpu=0.5, memory=1024, gpu=1),
