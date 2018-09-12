@@ -43,6 +43,20 @@ def _raise_status_job_exception(pod: dict, job_id: str):
 @dataclass(frozen=True)
 class Volume(metaclass=abc.ABCMeta):
     name: str
+
+    def create_mount(
+            self, container_volume: ContainerVolume
+            ) -> 'VolumeMount':
+        return VolumeMount(  # type: ignore
+            volume=self,
+            mount_path=container_volume.dst_path,
+            sub_path=PurePath(''),
+            read_only=container_volume.read_only
+        )
+
+
+@dataclass(frozen=True)
+class PathVolume(Volume):
     path: PurePath
 
     def create_mount(
@@ -58,7 +72,7 @@ class Volume(metaclass=abc.ABCMeta):
 
 
 @dataclass(frozen=True)
-class HostVolume(Volume):
+class HostVolume(PathVolume):
 
     def to_primitive(self):
         return {
@@ -93,7 +107,7 @@ class SharedMemoryVolume(Volume):
 
 
 @dataclass(frozen=True)
-class NfsVolume(Volume):
+class NfsVolume(PathVolume):
     server: str
 
     def to_primitive(self):
@@ -292,7 +306,9 @@ class PodDescriptor:
         volumes = [volume]
 
         if job_request.container.resources.shm:
-            dev_shm_volume = SharedMemoryVolume(name='dshm', path=PurePath(''))
+            dev_shm_volume = SharedMemoryVolume(   # type: ignore
+                name='dshm'
+            )
             container_volume = ContainerVolume(dst_path=PurePath('/dev/shm'),
                                                src_path=PurePath(''))
             volume_mounts.append(dev_shm_volume.create_mount(
