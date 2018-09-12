@@ -116,6 +116,59 @@ class TestPodDescriptor:
             }
         }
 
+    def test_to_primitive_with_dev_shm(self):
+        pod = PodDescriptor(
+            name='testname', image='testimage', env={'TESTVAR': 'testvalue'},
+            resources=Resources(cpu=0.5, memory=1024, gpu=1),
+            port=1234,
+            extended_dev_shm=True,
+        )
+        assert pod.name == 'testname'
+        assert pod.image == 'testimage'
+        assert pod.to_primitive() == {
+            'kind': 'Pod',
+            'apiVersion': 'v1',
+            'metadata': {
+                'name': 'testname',
+                'labels': {
+                    'job': 'testname',
+                },
+            },
+            'spec': {
+                'containers': [{
+                    'name': 'testname',
+                    'image': 'testimage',
+                    'env': [{'name': 'TESTVAR', 'value': 'testvalue'}],
+                    'volumeMounts': [{
+                        'name': 'dshm',
+                        'mountPath': '/dev/shm',
+                        'readOnly': False,
+                    }],
+                    'resources': {
+                        'limits': {
+                            'cpu': '500m',
+                            'memory': '1024Mi',
+                            'nvidia.com/gpu': 1,
+                        },
+                    },
+                    'ports': [{'containerPort': 1234}],
+                    'readinessProbe': {
+                        'httpGet': {'port': 1234, 'path': '/'},
+                        'initialDelaySeconds': 1,
+                        'periodSeconds': 1,
+                    },
+                    'terminationMessagePolicy': 'FallbackToLogsOnError',
+                }],
+                'volumes': [{
+                    'name': 'dshm',
+                    'emptyDir': {
+                        'medium': 'Memory',
+                    }
+                }],
+                'restartPolicy': 'Never',
+            }
+        }
+
     def test_from_job_request(self):
         container = Container(
             image='testimage', command='testcommand 123',

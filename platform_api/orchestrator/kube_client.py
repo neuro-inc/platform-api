@@ -70,6 +70,28 @@ class HostVolume(Volume):
         }
 
 
+""" Structure to represent the /dev/shm volume mount point.
+"""
+@dataclass(frozen=True)
+class SharedMemoryVolume(Volume):
+
+    def to_primitive(self):
+        return {
+            'name': self.name,
+            'emptyDir': {
+                'medium': 'Memory',
+            },
+        }
+
+    def create_mount(
+            self, container_volume: ContainerVolume
+            ) -> 'VolumeMount':
+        return SharedMemoryVolumeMount(  # type: ignore
+            volume=self,
+            mount_path=container_volume.dst_path
+        )
+
+
 @dataclass(frozen=True)
 class NfsVolume(Volume):
     server: str
@@ -97,6 +119,18 @@ class VolumeMount:
             'mountPath': str(self.mount_path),
             'readOnly': self.read_only,
             'subPath': str(self.sub_path),
+        }
+
+@dataclass(frozen=True)
+class SharedMemoryVolumeMount(VolumeMount):
+    volume: Volume
+    mount_path: PurePath
+
+    def to_primitive(self):
+        return {
+            'name': self.volume.name,
+            'mountPath': str(self.mount_path),
+            'readOnly': False,
         }
 
 
@@ -246,6 +280,7 @@ class Ingress:
 class PodDescriptor:
     name: str
     image: str
+    extended_dev_shm: bool = False
     args: List[str] = field(default_factory=list)
     env: Dict[str, str] = field(default_factory=dict)
     volume_mounts: List[VolumeMount] = field(default_factory=list)
@@ -286,6 +321,15 @@ class PodDescriptor:
     def to_primitive(self):
         volume_mounts = [mount.to_primitive() for mount in self.volume_mounts]
         volumes = [volume.to_primitive() for volume in self.volumes]
+
+        if self.extended_dev_shm:
+            # TODO (R Zubairov 09/12/18): we should make process of mounting /dev/shm optional, and enforce size constraints
+            dev_shm_volume = SharedMemoryVolume(name='dshm',path=None)
+            container_volume = ContainerVolume(dst_path='/dev/shm',src_path=None)
+            volume_mounts.append(dev_shm_volume.create_mount(
+                container_volume).to_primitive())
+            volumes.append(dev_shm_volume.to_primitive())
+
         container_payload = {
             'name': f'{self.name}',
             'image': f'{self.image}',
@@ -338,6 +382,7 @@ class PodDescriptor:
 
         metadata = payload['metadata']
         container_payload = payload['spec']['containers'][0]
+        # TODO (R Zubairov 09/13/18): here while parsing the payload we should properly set flag extended bla bla bla
         # TODO (A Danshyn 06/19/18): set rest of attributes
         status = None
         if 'status' in payload:
