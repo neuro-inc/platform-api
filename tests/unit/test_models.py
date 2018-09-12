@@ -25,10 +25,10 @@ class TestContainerRequestValidator:
     def payload_with_dev_shm(self):
         return {
             'image': 'testimage',
-            ''
             'resources': {
                 'cpu': 0.1,
                 'memory_mb': 16,
+                'shm': True,
             },
             'volumes': [{
                 'src_storage_uri': 'storage:///',
@@ -40,6 +40,13 @@ class TestContainerRequestValidator:
         validator = create_container_request_validator(allow_volumes=True)
         result = validator.check(payload)
         assert result['volumes'][0]['read_only']
+        assert 'shm' not in result['resources']
+
+    def test_allowed_volumes_with_shm(self, payload_with_dev_shm):
+        validator = create_container_request_validator(allow_volumes=True)
+        result = validator.check(payload_with_dev_shm)
+        assert result['volumes'][0]['read_only']
+        assert result['resources']['shm']
 
     def test_disallowed_volumes(self, payload):
         validator = create_container_request_validator()
