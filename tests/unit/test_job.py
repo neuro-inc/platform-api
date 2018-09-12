@@ -209,7 +209,7 @@ def job_request_payload():
         'job_id': 'testjob',
         'container': {
             'image': 'testimage',
-            'resources': {'cpu': 1, 'memory_mb': 128, 'gpu': None},
+            'resources': {'cpu': 1, 'memory_mb': 128, 'gpu': None, 'shm': None},
             'command': None,
             'env': {'testvar': 'testval'},
             'volumes': [{
@@ -221,6 +221,11 @@ def job_request_payload():
         },
     }
 
+@pytest.fixture
+def job_request_payload_with_shm():
+    data = job_request_payload()
+    data['container']['resources']['shm'] = True
+    return data
 
 class TestJob:
     @pytest.fixture
@@ -338,6 +343,17 @@ class TestJobRequest:
                 dst_path=PurePath('/dst/path'))])
         assert request.container == expected_container
 
+    def test_from_primitive_with_shm(self, job_request_payload_with_shm):
+        request = JobRequest.from_primitive(job_request_payload_with_shm)
+        assert request.job_id == 'testjob'
+        expected_container = Container(
+            image='testimage',
+            env={'testvar': 'testval'},
+            resources=ContainerResources(cpu=1, memory_mb=128, shm=True),
+            volumes=[ContainerVolume(
+                src_path=PurePath('/src/path'),
+                dst_path=PurePath('/dst/path'))])
+        assert request.container == expected_container
 
 class TestContainerHTTPServer:
     def test_from_primitive(self):

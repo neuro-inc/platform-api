@@ -588,3 +588,69 @@ class TestPodContainerLogReader:
         payload = await task
         expected_payload = '\n'.join(str(i) for i in range(1, 6))
         assert payload.startswith(expected_payload.encode())
+
+    @pytest.mark.asyncio
+    async def test_shm_extended(
+            self, kube_config, kube_client, delete_pod_later):
+        command = '/bin/df --block-size M --output=avail /dev/shm'
+        container = Container(
+            image='ubuntu', command=command,
+            resources=ContainerResources(cpu=0.1, memory_mb=128))
+        job_request = JobRequest.create(container)
+        pod = PodDescriptor.from_job_request(
+            kube_config.create_storage_volume(), job_request)
+        await delete_pod_later(pod)
+        await kube_client.create_pod(pod)
+        await kube_client.wait_pod_is_running(
+            pod_name=pod.name, timeout_s=60.)
+        log_reader = PodContainerLogReader(
+            client=kube_client,
+            pod_name=pod.name, container_name=pod.name)
+        task = asyncio.ensure_future(
+            self._consume_log_reader(log_reader, chunk_size=1))
+        await asyncio.sleep(10)
+        task.cancel()
+        payloadNoShmSpecified = await task
+
+        command = '/bin/df --block-size M --output=avail /dev/shm'
+        container = Container(
+            image='ubuntu', command=command,
+            resources=ContainerResources(cpu=0.1, memory_mb=128, shm=True))
+        job_request = JobRequest.create(container)
+        pod = PodDescriptor.from_job_request(
+            kube_config.create_storage_volume(), job_request)
+        await delete_pod_later(pod)
+        await kube_client.create_pod(pod)
+        await kube_client.wait_pod_is_running(
+            pod_name=pod.name, timeout_s=60.)
+        log_reader = PodContainerLogReader(
+            client=kube_client,
+            pod_name=pod.name, container_name=pod.name)
+        task = asyncio.ensure_future(
+            self._consume_log_reader(log_reader, chunk_size=1))
+        await asyncio.sleep(10)
+        task.cancel()
+        payloadShmRequested = await task
+        assert payloadNoShmSpecified != payloadShmRequested
+
+        command = '/bin/df --block-size M --output=avail /dev/shm'
+        container = Container(
+            image='ubuntu', command=command,
+            resources=ContainerResources(cpu=0.1, memory_mb=128, shm=False))
+        job_request = JobRequest.create(container)
+        pod = PodDescriptor.from_job_request(
+            kube_config.create_storage_volume(), job_request)
+        await delete_pod_later(pod)
+        await kube_client.create_pod(pod)
+        await kube_client.wait_pod_is_running(
+            pod_name=pod.name, timeout_s=60.)
+        log_reader = PodContainerLogReader(
+            client=kube_client,
+            pod_name=pod.name, container_name=pod.name)
+        task = asyncio.ensure_future(
+            self._consume_log_reader(log_reader, chunk_size=1))
+        await asyncio.sleep(10)
+        task.cancel()
+        payloadShmNotRequested = await task
+        assert payloadNoShmSpecified == payloadShmNotRequested
+        assert payloadShmRequested != payloadShmNotRequested

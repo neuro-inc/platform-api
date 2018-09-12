@@ -70,8 +70,6 @@ class HostVolume(Volume):
         }
 
 
-""" Structure to represent the /dev/shm volume mount point.
-"""
 @dataclass(frozen=True)
 class SharedMemoryVolume(Volume):
 
@@ -86,9 +84,11 @@ class SharedMemoryVolume(Volume):
     def create_mount(
             self, container_volume: ContainerVolume
             ) -> 'VolumeMount':
-        return SharedMemoryVolumeMount(  # type: ignore
+        return VolumeMount(  # type: ignore
             volume=self,
-            mount_path=container_volume.dst_path
+            mount_path=PurePath('/dev/shm'),
+            sub_path=PurePath(''),
+            read_only=False
         )
 
 
@@ -121,24 +121,13 @@ class VolumeMount:
             'subPath': str(self.sub_path),
         }
 
-@dataclass(frozen=True)
-class SharedMemoryVolumeMount(VolumeMount):
-    volume: Volume
-    mount_path: PurePath
-
-    def to_primitive(self):
-        return {
-            'name': self.volume.name,
-            'mountPath': str(self.mount_path),
-            'readOnly': False,
-        }
-
 
 @dataclass(frozen=True)
 class Resources:
     cpu: float
     memory: int
     gpu: Optional[int] = None
+    shm: Optional[bool] = None
 
     @property
     def cpu_mcores(self) -> str:
@@ -164,7 +153,9 @@ class Resources:
     def from_container_resources(
             cls, resources: ContainerResources) -> 'Resources':
         return cls(  # type: ignore
-            cpu=resources.cpu, memory=resources.memory_mb, gpu=resources.gpu)
+            cpu=resources.cpu, memory=resources.memory_mb, gpu=resources.gpu,
+            shm=resources.shm
+        )
 
 
 @dataclass(frozen=True)
@@ -280,7 +271,6 @@ class Ingress:
 class PodDescriptor:
     name: str
     image: str
-    extended_dev_shm: bool = False
     args: List[str] = field(default_factory=list)
     env: Dict[str, str] = field(default_factory=dict)
     volume_mounts: List[VolumeMount] = field(default_factory=list)
@@ -300,6 +290,14 @@ class PodDescriptor:
             volume.create_mount(container_volume)
             for container_volume in container.volumes]
         volumes = [volume]
+
+        if job_request.container.resources.shm:
+            dev_shm_volume = SharedMemoryVolume(name='dshm',path=None)
+            container_volume = ContainerVolume(dst_path='/dev/shm',src_path=None)
+            volume_mounts.append(dev_shm_volume.create_mount(
+                container_volume))
+            volumes.append(dev_shm_volume)
+
         resources = Resources.from_container_resources(container.resources)
         return cls(  # type: ignore
             name=job_request.job_id,
@@ -321,14 +319,6 @@ class PodDescriptor:
     def to_primitive(self):
         volume_mounts = [mount.to_primitive() for mount in self.volume_mounts]
         volumes = [volume.to_primitive() for volume in self.volumes]
-
-        if self.extended_dev_shm:
-            # TODO (R Zubairov 09/12/18): we should make process of mounting /dev/shm optional, and enforce size constraints
-            dev_shm_volume = SharedMemoryVolume(name='dshm',path=None)
-            container_volume = ContainerVolume(dst_path='/dev/shm',src_path=None)
-            volume_mounts.append(dev_shm_volume.create_mount(
-                container_volume).to_primitive())
-            volumes.append(dev_shm_volume.to_primitive())
 
         container_payload = {
             'name': f'{self.name}',
