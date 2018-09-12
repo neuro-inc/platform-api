@@ -292,9 +292,9 @@ class PodDescriptor:
         volumes = [volume]
 
         if job_request.container.resources.shm:
-            dev_shm_volume = SharedMemoryVolume(name='dshm', path=None)
+            dev_shm_volume = SharedMemoryVolume(name='dshm', path=PurePath(''))
             container_volume = ContainerVolume(dst_path='/dev/shm',
-                                               src_path=None)
+                                               src_path=PurePath(''))
             volume_mounts.append(dev_shm_volume.create_mount(
                 container_volume))
             volumes.append(dev_shm_volume)
