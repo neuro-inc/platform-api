@@ -11,8 +11,8 @@ from platform_api.orchestrator.job_request import (
 )
 from platform_api.orchestrator.kube_orchestrator import (
     ContainerStatus, HostVolume, Ingress, IngressRule, JobStatusItemFactory,
-    NfsVolume, PodDescriptor, PodStatus, Resources, Service, VolumeMount,
-    SharedMemoryVolume
+    NfsVolume, PodDescriptor, PodStatus, Resources, Service,
+    SharedMemoryVolume, VolumeMount
 )
 from platform_api.orchestrator.logs import FilteredStreamWrapper
 
