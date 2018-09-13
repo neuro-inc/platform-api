@@ -624,10 +624,7 @@ class TestPodContainerDevShmSettings:
         log_reader = PodContainerLogReader(
             client=kube_client,
             pod_name=pod.name, container_name=pod.name)
-        task = asyncio.ensure_future(
-            self._consume_log_reader(log_reader, chunk_size=1))
-        await asyncio.sleep(10)
-        return await task
+        return await self._consume_log_reader(log_reader, chunk_size=1)
 
     async def run_command_get_status(self, kube_config, kube_client,
                                      delete_pod_later, resources, command):
@@ -644,10 +641,8 @@ class TestPodContainerDevShmSettings:
         log_reader = PodContainerLogReader(
             client=kube_client,
             pod_name=pod.name, container_name=pod.name)
-        task = asyncio.ensure_future(
-            self._consume_log_reader(log_reader, chunk_size=1))
+        await self._consume_log_reader(log_reader, chunk_size=1)
         await asyncio.sleep(10)
-        await task
         pod_status = await kube_client.get_pod_status(pod.name)
         return JobStatusItemFactory(pod_status).create()
 
@@ -691,6 +686,17 @@ class TestPodContainerDevShmSettings:
                                           reason='OOMKilled',
                                           description='\nExit code: 137')
         assert job_status == run_output
+
+    @pytest.mark.asyncio
+    async def test_shm_extended_requested_try_create_huge_file(
+            self, kube_config, kube_client, delete_pod_later):
+        command = 'dd if=/dev/zero of=/dev/shm/test bs=256M  count=1'
+        resources = ContainerResources(cpu=0.1, memory_mb=1024, shm=True)
+        run_output = await self.run_command_get_status(kube_config,
+                                                       kube_client,
+                                                       delete_pod_later,
+                                                       resources, command)
+        assert JobStatusItem.create(status=JobStatus.SUCCEEDED) == run_output
 
     @pytest.mark.asyncio
     async def test_shm_extended_not_requested_try_create_small_file(
