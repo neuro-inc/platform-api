@@ -48,6 +48,7 @@ class ContainerResources:
     cpu: float
     memory_mb: int
     gpu: Optional[int] = None
+    shm: Optional[bool] = None
 
     @classmethod
     def from_primitive(cls, payload: Dict) -> 'ContainerResources':

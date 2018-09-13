@@ -11,7 +11,8 @@ from platform_api.orchestrator.job_request import (
 )
 from platform_api.orchestrator.kube_orchestrator import (
     ContainerStatus, HostVolume, Ingress, IngressRule, JobStatusItemFactory,
-    NfsVolume, PodDescriptor, PodStatus, Resources, Service, VolumeMount
+    NfsVolume, PodDescriptor, PodStatus, Resources, Service,
+    SharedMemoryVolume, Volume, VolumeMount
 )
 from platform_api.orchestrator.logs import FilteredStreamWrapper
 
@@ -31,6 +32,15 @@ class TestVolume:
         assert mount.mount_path == PurePath('/container/path/to/dir')
         assert mount.sub_path == PurePath('path/to/dir')
         assert not mount.read_only
+
+
+class TestAbstractVolume:
+    def test_create_mount_for_abstract_volume_should_fail(self):
+        with pytest.raises(NotImplementedError, match=''):
+            container_volume = ContainerVolume(
+                src_path=PurePath('/host/path/to/dir'),
+                dst_path=PurePath('/container/path/to/dir'))
+            Volume('testvolume').create_mount(container_volume)
 
 
 class TestHostVolume:
@@ -112,6 +122,64 @@ class TestPodDescriptor:
                     'terminationMessagePolicy': 'FallbackToLogsOnError',
                 }],
                 'volumes': [],
+                'restartPolicy': 'Never',
+            }
+        }
+
+    def test_to_primitive_with_dev_shm(self):
+        dev_shm = SharedMemoryVolume(name='dshm')
+        container_volume = ContainerVolume(dst_path=PurePath('/dev/shm'),
+                                           src_path=None)
+        pod = PodDescriptor(
+            name='testname', image='testimage', env={'TESTVAR': 'testvalue'},
+            resources=Resources(cpu=0.5, memory=1024, gpu=1),
+            port=1234,
+            volumes=[dev_shm],
+            volume_mounts=[dev_shm.create_mount(container_volume)]
+        )
+        assert pod.name == 'testname'
+        assert pod.image == 'testimage'
+        assert pod.to_primitive() == {
+            'kind': 'Pod',
+            'apiVersion': 'v1',
+            'metadata': {
+                'name': 'testname',
+                'labels': {
+                    'job': 'testname',
+                },
+            },
+            'spec': {
+                'containers': [{
+                    'name': 'testname',
+                    'image': 'testimage',
+                    'env': [{'name': 'TESTVAR', 'value': 'testvalue'}],
+                    'volumeMounts': [{
+                        'name': 'dshm',
+                        'mountPath': '/dev/shm',
+                        'readOnly': False,
+                        'subPath': '.',
+                    }],
+                    'resources': {
+                        'limits': {
+                            'cpu': '500m',
+                            'memory': '1024Mi',
+                            'nvidia.com/gpu': 1,
+                        },
+                    },
+                    'ports': [{'containerPort': 1234}],
+                    'readinessProbe': {
+                        'httpGet': {'port': 1234, 'path': '/'},
+                        'initialDelaySeconds': 1,
+                        'periodSeconds': 1,
+                    },
+                    'terminationMessagePolicy': 'FallbackToLogsOnError',
+                }],
+                'volumes': [{
+                    'name': 'dshm',
+                    'emptyDir': {
+                        'medium': 'Memory',
+                    }
+                }],
                 'restartPolicy': 'Never',
             }
         }

@@ -43,6 +43,17 @@ def _raise_status_job_exception(pod: dict, job_id: str):
 @dataclass(frozen=True)
 class Volume(metaclass=abc.ABCMeta):
     name: str
+
+    def create_mount(
+            self, container_volume: ContainerVolume
+            ) -> 'VolumeMount':
+        raise NotImplementedError(
+            'Cannot create mount for abstract Volume type.'
+        )
+
+
+@dataclass(frozen=True)
+class PathVolume(Volume):
     path: PurePath
 
     def create_mount(
@@ -58,7 +69,7 @@ class Volume(metaclass=abc.ABCMeta):
 
 
 @dataclass(frozen=True)
-class HostVolume(Volume):
+class HostVolume(PathVolume):
 
     def to_primitive(self):
         return {
@@ -71,7 +82,29 @@ class HostVolume(Volume):
 
 
 @dataclass(frozen=True)
-class NfsVolume(Volume):
+class SharedMemoryVolume(Volume):
+
+    def to_primitive(self):
+        return {
+            'name': self.name,
+            'emptyDir': {
+                'medium': 'Memory',
+            },
+        }
+
+    def create_mount(
+            self, container_volume: ContainerVolume
+            ) -> 'VolumeMount':
+        return VolumeMount(  # type: ignore
+            volume=self,
+            mount_path=container_volume.dst_path,
+            sub_path=PurePath(''),
+            read_only=container_volume.read_only
+        )
+
+
+@dataclass(frozen=True)
+class NfsVolume(PathVolume):
     server: str
 
     def to_primitive(self):
@@ -105,6 +138,7 @@ class Resources:
     cpu: float
     memory: int
     gpu: Optional[int] = None
+    shm: Optional[bool] = None
 
     @property
     def cpu_mcores(self) -> str:
@@ -130,7 +164,9 @@ class Resources:
     def from_container_resources(
             cls, resources: ContainerResources) -> 'Resources':
         return cls(  # type: ignore
-            cpu=resources.cpu, memory=resources.memory_mb, gpu=resources.gpu)
+            cpu=resources.cpu, memory=resources.memory_mb, gpu=resources.gpu,
+            shm=resources.shm
+        )
 
 
 @dataclass(frozen=True)
@@ -265,6 +301,18 @@ class PodDescriptor:
             volume.create_mount(container_volume)
             for container_volume in container.volumes]
         volumes = [volume]
+
+        if job_request.container.resources.shm:
+            dev_shm_volume = SharedMemoryVolume(   # type: ignore
+                name='dshm'
+            )
+            container_volume = ContainerVolume(dst_path=PurePath('/dev/shm'),
+                                               src_path=PurePath(''),
+                                               read_only=False)
+            volume_mounts.append(dev_shm_volume.create_mount(
+                container_volume))
+            volumes.append(dev_shm_volume)
+
         resources = Resources.from_container_resources(container.resources)
         return cls(  # type: ignore
             name=job_request.job_id,
@@ -286,6 +334,7 @@ class PodDescriptor:
     def to_primitive(self):
         volume_mounts = [mount.to_primitive() for mount in self.volume_mounts]
         volumes = [volume.to_primitive() for volume in self.volumes]
+
         container_payload = {
             'name': f'{self.name}',
             'image': f'{self.image}',
@@ -338,6 +387,7 @@ class PodDescriptor:
 
         metadata = payload['metadata']
         container_payload = payload['spec']['containers'][0]
+        # TODO (R Zubairov 09/13/18): remove medium emptyDir
         # TODO (A Danshyn 06/19/18): set rest of attributes
         status = None
         if 'status' in payload:

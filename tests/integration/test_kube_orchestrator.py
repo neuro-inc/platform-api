@@ -16,8 +16,8 @@ from platform_api.orchestrator.job_request import (
     Container, ContainerHTTPServer, ContainerResources, ContainerVolume
 )
 from platform_api.orchestrator.kube_orchestrator import (
-    Ingress, IngressRule, KubeClientException, PodDescriptor, Service,
-    StatusException
+    Ingress, IngressRule, JobStatusItemFactory, KubeClientException,
+    PodDescriptor, Service, StatusException
 )
 from platform_api.orchestrator.logs import PodContainerLogReader
 
@@ -588,3 +588,122 @@ class TestPodContainerLogReader:
         payload = await task
         expected_payload = '\n'.join(str(i) for i in range(1, 6))
         assert payload.startswith(expected_payload.encode())
+
+
+class TestPodContainerDevShmSettings:
+    async def _consume_log_reader(
+            self, log_reader: LogReader, chunk_size: int = -1) -> bytes:
+        istream = io.BytesIO()
+        try:
+            async with log_reader:
+                while True:
+                    chunk = await log_reader.read(chunk_size)
+                    if not chunk:
+                        break
+                    assert chunk_size < 0 or len(chunk) <= chunk_size
+                    istream.write(chunk)
+        except asyncio.CancelledError:
+            pass
+        istream.flush()
+        istream.seek(0)
+        return istream.read()
+
+    async def run_command_get_logs(self, kube_config, kube_client,
+                                   delete_pod_later, resources) -> bytes:
+        command = '/bin/df --block-size M --output=avail /dev/shm'
+        container = Container(
+            image='ubuntu', command=command,
+            resources=resources)
+        job_request = JobRequest.create(container)
+        pod = PodDescriptor.from_job_request(
+            kube_config.create_storage_volume(), job_request)
+        await delete_pod_later(pod)
+        await kube_client.create_pod(pod)
+        await kube_client.wait_pod_is_running(
+            pod_name=pod.name, timeout_s=60.)
+        log_reader = PodContainerLogReader(
+            client=kube_client,
+            pod_name=pod.name, container_name=pod.name)
+        return await self._consume_log_reader(log_reader, chunk_size=1)
+
+    async def run_command_get_status(self, kube_config, kube_client,
+                                     delete_pod_later, resources, command):
+        container = Container(
+            image='ubuntu', command=command,
+            resources=resources)
+        job_request = JobRequest.create(container)
+        pod = PodDescriptor.from_job_request(
+            kube_config.create_storage_volume(), job_request)
+        await delete_pod_later(pod)
+        await kube_client.create_pod(pod)
+        await kube_client.wait_pod_is_running(
+            pod_name=pod.name, timeout_s=60.)
+        log_reader = PodContainerLogReader(
+            client=kube_client,
+            pod_name=pod.name, container_name=pod.name)
+        await self._consume_log_reader(log_reader)
+        pod_status = await kube_client.get_pod_status(pod.name)
+        return JobStatusItemFactory(pod_status).create()
+
+    @pytest.mark.asyncio
+    async def test_shm_extended_request_parameter_omitted(
+            self, kube_config, kube_client, delete_pod_later):
+        resources = ContainerResources(cpu=0.1, memory_mb=128)
+        run_output = await self.run_command_get_logs(kube_config, kube_client,
+                                                     delete_pod_later,
+                                                     resources)
+        assert b'64M' in run_output
+
+    @pytest.mark.asyncio
+    async def test_shm_extended_request_parameter_not_requested(
+            self, kube_config, kube_client, delete_pod_later):
+        resources = ContainerResources(cpu=0.1, memory_mb=128, shm=False)
+        run_output = await self.run_command_get_logs(kube_config, kube_client,
+                                                     delete_pod_later,
+                                                     resources)
+        assert b'64M' in run_output
+
+    @pytest.mark.asyncio
+    async def test_shm_extended_request_parameter_requested(
+            self, kube_config, kube_client, delete_pod_later):
+        resources = ContainerResources(cpu=0.1, memory_mb=128, shm=True)
+        run_output = await self.run_command_get_logs(kube_config, kube_client,
+                                                     delete_pod_later,
+                                                     resources)
+        assert b'64M' not in run_output
+
+    @pytest.mark.asyncio
+    async def test_shm_extended_not_requested_try_create_huge_file(
+            self, kube_config, kube_client, delete_pod_later):
+        command = 'dd if=/dev/zero of=/dev/shm/test  bs=128M  count=1'
+        resources = ContainerResources(cpu=0.1, memory_mb=128, shm=False)
+        run_output = await self.run_command_get_status(kube_config,
+                                                       kube_client,
+                                                       delete_pod_later,
+                                                       resources, command)
+        job_status = JobStatusItem.create(status=JobStatus.FAILED,
+                                          reason='OOMKilled',
+                                          description='\nExit code: 137')
+        assert job_status == run_output
+
+    @pytest.mark.asyncio
+    async def test_shm_extended_requested_try_create_huge_file(
+            self, kube_config, kube_client, delete_pod_later):
+        command = 'dd if=/dev/zero of=/dev/shm/test bs=256M  count=1'
+        resources = ContainerResources(cpu=0.1, memory_mb=1024, shm=True)
+        run_output = await self.run_command_get_status(kube_config,
+                                                       kube_client,
+                                                       delete_pod_later,
+                                                       resources, command)
+        assert JobStatusItem.create(status=JobStatus.SUCCEEDED) == run_output
+
+    @pytest.mark.asyncio
+    async def test_shm_extended_not_requested_try_create_small_file(
+            self, kube_config, kube_client, delete_pod_later):
+        command = 'dd if=/dev/zero of=/dev/shm/test  bs=32M  count=1'
+        resources = ContainerResources(cpu=0.1, memory_mb=128, shm=False)
+        run_output = await self.run_command_get_status(kube_config,
+                                                       kube_client,
+                                                       delete_pod_later,
+                                                       resources, command)
+        assert JobStatusItem.create(status=JobStatus.SUCCEEDED) == run_output
