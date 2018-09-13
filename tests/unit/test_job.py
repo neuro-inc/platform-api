@@ -146,13 +146,58 @@ class TestContainerBuilder:
                     dst_path=PurePath('/container/path'),
                     read_only=True),
             ],
-            resources=ContainerResources(cpu=0.1, memory_mb=128, gpu=1),
+            resources=ContainerResources(cpu=0.1, memory_mb=128, gpu=1,
+                                         shm=None),
             http_server=ContainerHTTPServer(
                 port=80,
                 health_check_path='/',
             ),
         )
 
+    def test_from_payload_build_with_shm_false(self):
+        storage_config = StorageConfig(  # type: ignore
+            host_mount_path=PurePath('/tmp'),
+        )
+        payload = {
+            'image': 'testimage',
+            'command': 'testcommand',
+            'env': {'TESTVAR': 'testvalue'},
+            'resources': {
+                'cpu': 0.1,
+                'memory_mb': 128,
+                'gpu': 1,
+                'shm': True,
+            },
+            'http': {
+                'port': 80,
+            },
+            'volumes': [{
+                'src_storage_uri': 'storage://path/to/dir',
+                'dst_path': '/container/path',
+                'read_only': True,
+            }],
+        }
+        container = ContainerBuilder.from_container_payload(
+            payload, storage_config=storage_config).build()
+        assert container == Container(
+            image='testimage',
+            command='testcommand',
+            env={
+                'TESTVAR': 'testvalue',
+            },
+            volumes=[
+                ContainerVolume(
+                    src_path=PurePath('/tmp/path/to/dir'),
+                    dst_path=PurePath('/container/path'),
+                    read_only=True),
+            ],
+            resources=ContainerResources(cpu=0.1, memory_mb=128, gpu=1,
+                                         shm=True),
+            http_server=ContainerHTTPServer(
+                port=80,
+                health_check_path='/',
+            ),
+        )
 
 class TestModelRequest:
     def test_to_container(self):
