@@ -44,11 +44,12 @@ def _raise_status_job_exception(pod: dict, job_id: str):
 class Volume(metaclass=abc.ABCMeta):
     name: str
 
-    @abc.abstractmethod
     def create_mount(
             self, container_volume: ContainerVolume
             ) -> 'VolumeMount':
-        pass
+        raise NotImplementedError(
+            'Cannot create mount for abstract Volume type.'
+        )
 
 
 @dataclass(frozen=True)

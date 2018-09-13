@@ -35,9 +35,12 @@ class TestVolume:
 
 
 class TestAbstractVolume:
-    @pytest.mark.xfail(raises=TypeError)
+    @pytest.mark.xfail(raises=NotImplementedError)
     def test_create_mount(self):
-        Volume('testvolume')
+        container_volume = ContainerVolume(
+            src_path=PurePath('/host/path/to/dir'),
+            dst_path=PurePath('/container/path/to/dir'))
+        Volume('testvolume').create_mount(container_volume)
 
 
 class TestHostVolume:
