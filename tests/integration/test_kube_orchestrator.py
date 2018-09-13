@@ -641,8 +641,7 @@ class TestPodContainerDevShmSettings:
         log_reader = PodContainerLogReader(
             client=kube_client,
             pod_name=pod.name, container_name=pod.name)
-        await self._consume_log_reader(log_reader, chunk_size=1)
-        await asyncio.sleep(10)
+        await self._consume_log_reader(log_reader)
         pod_status = await kube_client.get_pod_status(pod.name)
         return JobStatusItemFactory(pod_status).create()
 
