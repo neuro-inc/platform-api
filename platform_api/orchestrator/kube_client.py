@@ -97,9 +97,9 @@ class SharedMemoryVolume(Volume):
             ) -> 'VolumeMount':
         return VolumeMount(  # type: ignore
             volume=self,
-            mount_path=PurePath('/dev/shm'),
+            mount_path=container_volume.dst_path,
             sub_path=PurePath(''),
-            read_only=False
+            read_only=container_volume.read_only
         )
 
 
@@ -307,7 +307,8 @@ class PodDescriptor:
                 name='dshm'
             )
             container_volume = ContainerVolume(dst_path=PurePath('/dev/shm'),
-                                               src_path=PurePath(''))
+                                               src_path=PurePath(''),
+                                               read_only=False)
             volume_mounts.append(dev_shm_volume.create_mount(
                 container_volume))
             volumes.append(dev_shm_volume)

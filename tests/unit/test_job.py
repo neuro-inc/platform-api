@@ -224,8 +224,8 @@ def job_request_payload():
 
 
 @pytest.fixture
-def job_request_payload_with_shm():
-    data = job_request_payload()
+def job_request_payload_with_shm(job_request_payload):
+    data = job_request_payload
     data['container']['resources']['shm'] = True
     return data
 
