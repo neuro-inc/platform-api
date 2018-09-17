@@ -44,7 +44,7 @@ def create_container_request_validator(
         'resources': t.Dict({
             'cpu': t.Float(gte=0.1),
             'memory_mb': t.Int(gte=16),
-            t.Key('gpu', optional=True): t.Int(gte=1),
+            t.Key('gpu', optional=True): t.Int(gte=0, lte=128),
             t.Key('shm', optional=True): t.Bool,
         }),
         t.Key('http', optional=True): t.Dict({
