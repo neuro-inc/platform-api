@@ -36,15 +36,19 @@ def create_container_request_validator(
     Meant to be used in high-level resources such as jobs, models, batch
     inference etc.
     """
+
+    MAX_GPU_COUNT = 128
+    MAX_CPU_COUNT = 128.0
+
     validator = t.Dict({
         'image': t.String,
         t.Key('command', optional=True): t.String,
         t.Key('env', optional=True): t.Mapping(
             t.String, t.String(allow_blank=True)),
         'resources': t.Dict({
-            'cpu': t.Float(gte=0.1),
+            'cpu': t.Float(gte=0.1, lte=MAX_CPU_COUNT),
             'memory_mb': t.Int(gte=16),
-            t.Key('gpu', optional=True): t.Int(gte=1),
+            t.Key('gpu', optional=True): t.Int(gte=0, lte=MAX_GPU_COUNT),
             t.Key('shm', optional=True): t.Bool,
         }),
         t.Key('http', optional=True): t.Dict({

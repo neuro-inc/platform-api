@@ -22,6 +22,66 @@ class TestContainerRequestValidator:
         }
 
     @pytest.fixture
+    def payload_with_zero_gpu(self):
+        return {
+            'image': 'testimage',
+            'resources': {
+                'cpu': 0.1,
+                'memory_mb': 16,
+                'gpu': 0,
+            },
+            'volumes': [{
+                'src_storage_uri': 'storage:///',
+                'dst_path': '/var/storage',
+            }],
+        }
+
+    @pytest.fixture
+    def payload_with_negative_gpu(self):
+        return {
+            'image': 'testimage',
+            'resources': {
+                'cpu': 0.1,
+                'memory_mb': 16,
+                'gpu': -1,
+            },
+            'volumes': [{
+                'src_storage_uri': 'storage:///',
+                'dst_path': '/var/storage',
+            }],
+        }
+
+    @pytest.fixture
+    def payload_with_one_gpu(self):
+        return {
+            'image': 'testimage',
+            'resources': {
+                'cpu': 0.1,
+                'memory_mb': 16,
+                'gpu': 1,
+            },
+            'volumes': [{
+                'src_storage_uri': 'storage:///',
+                'dst_path': '/var/storage',
+            }],
+        }
+
+    @pytest.fixture
+    def payload_with_too_many_gpu(self):
+        return {
+            'image': 'testimage',
+            'resources': {
+                'cpu': 0.1,
+                'memory_mb': 16,
+                'gpu': 130,
+            },
+            'volumes': [{
+                'src_storage_uri': 'storage:///',
+                'dst_path': '/var/storage',
+            }],
+        }
+
+    @pytest.fixture
     def payload_with_dev_shm(self):
         return {
             'image': 'testimage',
@@ -52,6 +112,27 @@ class TestContainerRequestValidator:
         validator = create_container_request_validator()
         with pytest.raises(ValueError, match='volumes is not allowed key'):
             validator.check(payload)
+
+    def test_with_zero_gpu(self, payload_with_zero_gpu):
+        validator = create_container_request_validator(allow_volumes=True)
+        result = validator.check(payload_with_zero_gpu)
+        assert result['resources']['gpu'] == 0
+
+    def test_with_one_gpu(self, payload_with_one_gpu):
+        validator = create_container_request_validator(allow_volumes=True)
+        result = validator.check(payload_with_one_gpu)
+        assert result['resources']['gpu']
+        assert result['resources']['gpu'] == 1
+
+    def test_with_too_many_gpu(self, payload_with_too_many_gpu):
+        validator = create_container_request_validator(allow_volumes=True)
+        with pytest.raises(ValueError, match='gpu'):
+            validator.check(payload_with_too_many_gpu)
+
+    def test_with_negative_gpu(self, payload_with_negative_gpu):
+        validator = create_container_request_validator(allow_volumes=True)
+        with pytest.raises(ValueError, match='gpu'):
+            validator.check(payload_with_negative_gpu)
 
 
 class TestModelResponseValidator:
