@@ -37,7 +37,7 @@ class ContainerVolume:
         return cls(**kwargs)  # type: ignore
 
     def to_primitive(self) -> Dict:
-        payload = asdict(self)
+        payload: Dict = asdict(self)
         payload['src_path'] = str(payload['src_path'])
         payload['dst_path'] = str(payload['dst_path'])
         return payload
@@ -126,7 +126,7 @@ class Container:
         return cls(**kwargs)  # type: ignore
 
     def to_primitive(self) -> Dict:
-        payload = asdict(self)
+        payload: Dict = asdict(self)
         payload['resources'] = self.resources.to_primitive()
         payload['volumes'] = [
             volume.to_primitive() for volume in self.volumes]
