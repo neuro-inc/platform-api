@@ -72,6 +72,10 @@ spec:
         backend:
           serviceName: platformstorageapi
           servicePort: 8080
+      - path: /api/v1/users
+        backend:
+          serviceName: platformauthapi
+          servicePort: 8080
       - path: /api/v1
         backend:
           serviceName: platformapi
