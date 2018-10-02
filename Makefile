@@ -13,7 +13,7 @@ lint:
 	flake8
 
 format:
-	isort -rc platform_api tests
+	isort -rc platform_api tests setup.py
 	black .
 
 test_unit:
