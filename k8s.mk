@@ -26,9 +26,13 @@ clean_k8s: stop_k8s
 	-docker rm $$(docker ps -a -q)
 
 test_k8s_platform_api:
-	pip install tox
 	kubectl config view
-	tox
+	make test_unit
+	mv .coverage .coverage.unit
+	make test_integration
+	mv .coverage .coverage.integration
+	coverage combine
+	codecov
 
 test_k8s_platform_api_e2e: build_api_k8s
 	./run_e2e_tests.sh

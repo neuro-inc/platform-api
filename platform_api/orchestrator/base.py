@@ -6,7 +6,7 @@ from .job_request import JobStatus
 
 
 class LogReader(ABC):
-    async def __aenter__(self) -> 'LogReader':
+    async def __aenter__(self) -> "LogReader":
         return self
 
     async def __aexit__(self, *args) -> None:

@@ -49,25 +49,26 @@ class FilteredStreamWrapper:
         # error as the last log line. it says that the corresponding container
         # does not exist. we should try to not expose such internals, but only
         # if it is the last line indeed.
-        if line.startswith(b'rpc error: code ='):
+        if line.startswith(b"rpc error: code ="):
             next_line = await self._stream.readline()
             if next_line:
-                logging.warning(
-                    'An rpc error line was not at the end of the log')
+                logging.warning("An rpc error line was not at the end of the log")
                 self._stream.unread_data(next_line)
             else:
-                logging.info(
-                    'Skipping an rpc error line at the end of the log')
+                logging.info("Skipping an rpc error line at the end of the log")
                 line = next_line
         return line
 
 
 class PodContainerLogReader(LogReader):
-
     def __init__(
-            self, client: KubeClient, pod_name: str, container_name: str,
-            client_conn_timeout_s: Optional[float]=None,
-            client_read_timeout_s: Optional[float]=None,) -> None:
+        self,
+        client: KubeClient,
+        pod_name: str,
+        container_name: str,
+        client_conn_timeout_s: Optional[float] = None,
+        client_read_timeout_s: Optional[float] = None,
+    ) -> None:
         self._client = client
         self._pod_name = pod_name
         self._container_name = container_name
@@ -81,12 +82,12 @@ class PodContainerLogReader(LogReader):
         await self._client.wait_pod_is_running(self._pod_name)
         kwargs = {}
         if self._client_conn_timeout_s is not None:
-            kwargs['conn_timeout_s'] = self._client_conn_timeout_s
+            kwargs["conn_timeout_s"] = self._client_conn_timeout_s
         if self._client_read_timeout_s is not None:
-            kwargs['read_timeout_s'] = self._client_read_timeout_s
+            kwargs["read_timeout_s"] = self._client_read_timeout_s
         self._stream_cm = self._client.create_pod_container_logs_stream(
-            pod_name=self._pod_name, container_name=self._container_name,
-            **kwargs)
+            pod_name=self._pod_name, container_name=self._container_name, **kwargs
+        )
         assert self._stream_cm
         stream = await self._stream_cm.__aenter__()
         self._stream = FilteredStreamWrapper(stream)
