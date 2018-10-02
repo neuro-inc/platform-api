@@ -23,7 +23,7 @@ test_integration:
 	pytest -vv --cov-config=setup.cfg --cov platform_api tests/integration
 
 test_e2e:
-	pytest -vv tests/2e2
+	pytest -vv tests/e2e
 
 build_api_k8s:
 	docker build -f Dockerfile.k8s -t $(IMAGE_NAME_K8S):$(IMAGE_TAG) .
