@@ -56,10 +56,6 @@ jobs:
           command: |
             pyenv install --debug 3.6.3
             pyenv local 3.6.3-debug
-
-      - run:
-          name: Install Dependencies
-          command: |
             sudo apt-get update
             sudo apt-get install nfs-common
 
