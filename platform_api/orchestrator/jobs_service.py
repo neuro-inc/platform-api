@@ -3,9 +3,7 @@ from typing import List, Optional, Tuple
 
 from .base import LogReader, Orchestrator
 from .job import Job, JobStatusItem
-from .job_request import (
-    JobException, JobNotFoundException, JobRequest, JobStatus
-)
+from .job_request import JobException, JobNotFoundException, JobRequest, JobStatus
 from .jobs_storage import InMemoryJobsStorage, JobsStorage
 from .status import Status
 
@@ -15,10 +13,11 @@ logger = logging.getLogger(__file__)
 
 class JobsService:
     def __init__(
-            self, orchestrator: Orchestrator,
-            jobs_storage: Optional[JobsStorage] = None) -> None:
+        self, orchestrator: Orchestrator, jobs_storage: Optional[JobsStorage] = None
+    ) -> None:
         self._jobs_storage = jobs_storage or InMemoryJobsStorage(
-            orchestrator=orchestrator)
+            orchestrator=orchestrator
+        )
         self._orchestrator = orchestrator
 
     async def update_jobs_statuses(self):
@@ -29,7 +28,7 @@ class JobsService:
             await self._delete_job(job)
 
     async def _update_job_status(self, job: Job) -> None:
-        logger.info('Updating job %s', job.id)
+        logger.info("Updating job %s", job.id)
         assert not job.is_finished
 
         old_status_item = job.status_history.current
@@ -37,26 +36,29 @@ class JobsService:
         try:
             status_item = await self._orchestrator.get_job_status(job.id)
         except JobNotFoundException as exc:
-            logger.warning(
-                'Failed to get job %s status. Reason: %s', job.id, exc)
+            logger.warning("Failed to get job %s status. Reason: %s", job.id, exc)
             status_item = JobStatusItem.create(
-                JobStatus.FAILED, reason='Missing',
-                description=(
-                    'The job could not be scheduled or was preempted.'))
+                JobStatus.FAILED,
+                reason="Missing",
+                description=("The job could not be scheduled or was preempted."),
+            )
             job.is_deleted = True
 
         if old_status_item != status_item:
             job.status_history.current = status_item
             logger.info(
-                'Job %s transitioned from %s to %s', job.id,
-                old_status_item.status.name, status_item.status.name)
+                "Job %s transitioned from %s to %s",
+                job.id,
+                old_status_item.status.name,
+                status_item.status.name,
+            )
 
         await self._jobs_storage.set_job(job)
 
     async def create_job(self, job_request: JobRequest) -> Tuple[Job, Status]:
         job = Job(
-            orchestrator_config=self._orchestrator.config,
-            job_request=job_request)
+            orchestrator_config=self._orchestrator.config, job_request=job_request
+        )
         await self._orchestrator.start_job(job)
         status = Status.create(job.status)
         await self._jobs_storage.set_job(job=job)
@@ -74,12 +76,12 @@ class JobsService:
         return await self._orchestrator.get_job_log_reader(job)
 
     async def _delete_job(self, job: Job) -> None:
-        logger.info('Deleting job %s', job.id)
+        logger.info("Deleting job %s", job.id)
         try:
             await self._orchestrator.delete_job(job)
         except JobException as exc:
             # if the job is missing, we still want to mark it as deleted
-            logger.warning('Could not delete job %s. Reason: %s', job.id, exc)
+            logger.warning("Could not delete job %s. Reason: %s", job.id, exc)
         if not job.is_finished:
             # explicitly setting the job status as succeeded due to manual
             # deletion of a still running job

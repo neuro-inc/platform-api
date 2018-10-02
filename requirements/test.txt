@@ -1,4 +1,5 @@
 -e .
+-r syntax.txt
 aiodocker==0.13.0
 tox==3.0.0
 pytest==3.6.4

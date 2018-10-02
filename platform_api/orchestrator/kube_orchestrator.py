@@ -10,8 +10,15 @@ from .job import Job, JobStatusItem
 from .job_request import JobStatus
 from .kube_client import *  # noqa
 from .kube_client import (
-    HostVolume, IngressRule, KubeClient, KubeClientAuthType, NfsVolume,
-    PodDescriptor, PodStatus, Service, Volume
+    HostVolume,
+    IngressRule,
+    KubeClient,
+    KubeClientAuthType,
+    NfsVolume,
+    PodDescriptor,
+    PodStatus,
+    Service,
+    Volume,
 )
 from .logs import PodContainerLogReader
 
@@ -33,13 +40,13 @@ class JobStatusItemFactory:
         https://kubernetes.io/docs/concepts/workloads/pods/pod-lifecycle#pod-phase
         """
         phase = self._pod_status.phase
-        if phase == 'Succeeded':
+        if phase == "Succeeded":
             return JobStatus.SUCCEEDED
-        elif phase in ('Failed', 'Unknown'):
+        elif phase in ("Failed", "Unknown"):
             return JobStatus.FAILED
-        elif phase == 'Running':
+        elif phase == "Running":
             return JobStatus.RUNNING
-        elif phase == 'Pending':
+        elif phase == "Pending":
             if not self._pod_status.is_container_creating:
                 return JobStatus.FAILED
         return JobStatus.PENDING
@@ -51,44 +58,48 @@ class JobStatusItemFactory:
 
     def _compose_description(self) -> Optional[str]:
         if self._status == JobStatus.FAILED:
-            if (self._container_status.is_terminated and
-                    self._container_status.exit_code):
-                description = self._container_status.message or ''
+            if (
+                self._container_status.is_terminated
+                and self._container_status.exit_code
+            ):
+                description = self._container_status.message or ""
                 return description + (
-                    f'\nExit code: {self._container_status.exit_code}')
+                    f"\nExit code: {self._container_status.exit_code}"
+                )
         return None
 
     def create(self) -> JobStatusItem:
         return JobStatusItem.create(
             self._status,
             reason=self._parse_reason(),
-            description=self._compose_description())
+            description=self._compose_description(),
+        )
 
 
 @dataclass(frozen=True)
 class KubeConfig(OrchestratorConfig):
-    jobs_ingress_name: str = ''
+    jobs_ingress_name: str = ""
 
-    endpoint_url: str = ''
+    endpoint_url: str = ""
     cert_authority_path: Optional[str] = None
 
     auth_type: KubeClientAuthType = KubeClientAuthType.CERTIFICATE
     auth_cert_path: Optional[str] = None
     auth_cert_key_path: Optional[str] = None
 
-    namespace: str = 'default'
+    namespace: str = "default"
 
     client_conn_timeout_s: int = 300
     client_read_timeout_s: int = 300
     client_conn_pool_size: int = 100
 
-    storage_volume_name: str = 'storage'
+    storage_volume_name: str = "storage"
 
     job_deletion_delay_s: int = 60 * 60 * 24
 
     def __post_init__(self):
         if not all((self.jobs_ingress_name, self.endpoint_url)):
-            raise ValueError('Missing required settings')
+            raise ValueError("Missing required settings")
 
     @property
     def storage_mount_path(self) -> PurePath:
@@ -106,8 +117,7 @@ class KubeConfig(OrchestratorConfig):
                 path=self.storage.nfs_export_path,
             )
         return HostVolume(  # type: ignore
-            name=self.storage_volume_name,
-            path=self.storage_mount_path,
+            name=self.storage_volume_name, path=self.storage_mount_path
         )
 
 
@@ -117,8 +127,8 @@ def convert_pod_status_to_job_status(pod_status: PodStatus) -> JobStatusItem:
 
 class KubeOrchestrator(Orchestrator):
     def __init__(
-            self, *, config: KubeConfig,
-            loop: Optional[AbstractEventLoop]=None) -> None:
+        self, *, config: KubeConfig, loop: Optional[AbstractEventLoop] = None
+    ) -> None:
         self._loop = loop
 
         self._config = config
@@ -128,17 +138,14 @@ class KubeOrchestrator(Orchestrator):
 
         self._client = KubeClient(
             base_url=config.endpoint_url,
-
             cert_authority_path=config.cert_authority_path,
-
             auth_type=config.auth_type,
             auth_cert_path=config.auth_cert_path,
             auth_cert_key_path=config.auth_cert_key_path,
-
             namespace=config.namespace,
             conn_timeout_s=config.client_conn_timeout_s,
             read_timeout_s=config.client_read_timeout_s,
-            conn_pool_size=config.client_conn_pool_size
+            conn_pool_size=config.client_conn_pool_size,
         )
 
         self._storage_volume = self._config.create_storage_volume()
@@ -147,7 +154,7 @@ class KubeOrchestrator(Orchestrator):
     def config(self) -> KubeConfig:
         return self._config
 
-    async def __aenter__(self) -> 'KubeOrchestrator':
+    async def __aenter__(self) -> "KubeOrchestrator":
         await self._client.init()
         return self
 
@@ -156,8 +163,7 @@ class KubeOrchestrator(Orchestrator):
             await self._client.close()
 
     async def start_job(self, job: Job) -> JobStatus:
-        descriptor = PodDescriptor.from_job_request(
-            self._storage_volume, job.request)
+        descriptor = PodDescriptor.from_job_request(self._storage_volume, job.request)
         status = await self._client.create_pod(descriptor)
         if job.has_http_server_exposed:
             await self._create_service(descriptor)
@@ -171,21 +177,22 @@ class KubeOrchestrator(Orchestrator):
 
     async def get_job_log_reader(self, job: Job) -> LogReader:
         return PodContainerLogReader(
-            client=self._client, pod_name=job.id, container_name=job.id)
+            client=self._client, pod_name=job.id, container_name=job.id
+        )
 
     async def _create_service(self, pod: PodDescriptor) -> None:
-        service = await self._client.create_service(
-            Service.create_for_pod(pod))
+        service = await self._client.create_service(Service.create_for_pod(pod))
         await self._client.add_ingress_rule(
             name=self._config.jobs_ingress_name,
             rule=IngressRule.from_service(
-                domain_name=self._config.jobs_ingress_domain_name,
-                service=service))
+                domain_name=self._config.jobs_ingress_domain_name, service=service
+            ),
+        )
 
     def _get_ingress_rule_host_for_pod(self, pod_id) -> str:
         ingress_rule = IngressRule.from_service(
             domain_name=self._config.jobs_ingress_domain_name,
-            service=Service(name=pod_id, target_port=0)  # type: ignore
+            service=Service(name=pod_id, target_port=0),  # type: ignore
         )
         return ingress_rule.host
 
@@ -193,13 +200,14 @@ class KubeOrchestrator(Orchestrator):
         host = self._get_ingress_rule_host_for_pod(pod_id)
         try:
             await self._client.remove_ingress_rule(
-                name=self._config.jobs_ingress_name, host=host)
+                name=self._config.jobs_ingress_name, host=host
+            )
         except Exception:
-            logger.exception(f'Failed to remove ingress rule {host}')
+            logger.exception(f"Failed to remove ingress rule {host}")
         try:
             await self._client.delete_service(name=pod_id)
         except Exception:
-            logger.exception(f'Failed to remove service {pod_id}')
+            logger.exception(f"Failed to remove service {pod_id}")
 
     async def delete_job(self, job: Job) -> JobStatus:
         pod_id = job.id

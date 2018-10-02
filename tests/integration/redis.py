@@ -8,23 +8,21 @@ from async_timeout import timeout
 from platform_api.redis import RedisConfig, create_redis_client
 
 
-@pytest.fixture(scope='session')
+@pytest.fixture(scope="session")
 async def _redis_server(docker, reuse_docker):
-    image_name = 'redis:4'
-    container_name = 'redis'
+    image_name = "redis:4"
+    container_name = "redis"
     container_config = {
-        'Image': image_name,
-        'AttachStdout': False,
-        'AttachStderr': False,
-        'HostConfig': {
-            'PublishAllPorts': True,
-        },
+        "Image": image_name,
+        "AttachStdout": False,
+        "AttachStderr": False,
+        "HostConfig": {"PublishAllPorts": True},
     }
 
     if reuse_docker:
         try:
             container = await docker.containers.get(container_name)
-            if container['State']['Running']:
+            if container["State"]["Running"]:
                 redis_config = await create_redis_config(container)
                 await wait_for_redis_server(redis_config)
                 yield redis_config
@@ -38,7 +36,8 @@ async def _redis_server(docker, reuse_docker):
         await docker.images.pull(image_name)
 
     container = await docker.containers.create_or_replace(
-        name=container_name, config=container_config)
+        name=container_name, config=container_config
+    )
     await container.start()
 
     redis_config = await create_redis_config(container)
@@ -59,22 +58,22 @@ async def redis_server(_redis_server):
 
 
 async def create_redis_config(container) -> RedisConfig:
-    host = 'localhost'
-    port = int((await container.port(6379))[0]['HostPort'])
+    host = "localhost"
+    port = int((await container.port(6379))[0]["HostPort"])
     db = 0
-    uri = f'redis://{host}:{port}/{db}'
+    uri = f"redis://{host}:{port}/{db}"
     return RedisConfig(uri=uri)  # type: ignore
 
 
 async def wait_for_redis_server(
-        redis_config: RedisConfig,
-        timeout_s: float = 30, interval_s: float = 1):
+    redis_config: RedisConfig, timeout_s: float = 30, interval_s: float = 1
+):
     async with timeout(timeout_s):
         while True:
             try:
                 async with create_redis_client(redis_config) as redis_client:
                     response = await redis_client.ping()
-                    if response == b'PONG':
+                    if response == b"PONG":
                         break
             except (OSError, aioredis.errors.RedisError):
                 pass
