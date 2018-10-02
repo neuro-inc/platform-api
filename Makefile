@@ -10,7 +10,7 @@ setup:
 
 lint:
 	black --check .
-	flake8
+	flake8 platform_api tests setup.py
 
 format:
 	isort -rc platform_api tests setup.py
