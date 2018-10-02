@@ -28,9 +28,8 @@ clean_k8s: stop_k8s
 test_k8s_platform_api:
 	kubectl config view
 	make test_unit
-	mv .coverage .coverage.unit
+	codecov
 	make test_integration
-	coverage combine
 	codecov
 
 test_k8s_platform_api_e2e: build_api_k8s
