@@ -27,7 +27,6 @@ clean_k8s: stop_k8s
 
 test_k8s_platform_api:
 	kubectl config view
-	make setup
 	make test_unit
 	make test_integration
 
