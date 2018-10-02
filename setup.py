@@ -9,7 +9,8 @@ install_requires = (
     'async-generator==1.9',
     'dataclasses==0.5',  # backport from 3.7 stdlib
     'iso8601==0.1.12',
-    'trafaret==1.1.1'
+    'trafaret==1.1.1',
+    'neuro_auth_client==0.0.1b3',
 )
 
 setup(

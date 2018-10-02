@@ -3,10 +3,18 @@ IMAGE_TAG ?= latest
 IMAGE_NAME_K8S ?= $(IMAGE_NAME)-k8s
 IMAGE_K8S ?= $(GKE_DOCKER_REGISTRY)/$(GKE_PROJECT_ID)/$(IMAGE_NAME_K8S)
 
+ifdef CIRCLECI
+    PIP_INDEX_URL ?= "https://$(DEVPI_USER):$(DEVPI_PASS)@$(DEVPI_HOST)/$(DEVPI_USER)/$(DEVPI_INDEX)"
+else
+    PIP_INDEX_URL ?= "$(shell python pip_extra_index_url.py)"
+endif
+export PIP_INDEX_URL
+
 include k8s.mk
 
 build_api_k8s:
-	docker build -f Dockerfile.k8s -t $(IMAGE_NAME_K8S):$(IMAGE_TAG) .
+	@docker build --build-arg PIP_INDEX_URL="$(PIP_INDEX_URL)" \
+	    -f Dockerfile.k8s -t $(IMAGE_NAME_K8S):$(IMAGE_TAG) .
 
 run_api_k8s:
 	NP_STORAGE_HOST_MOUNT_PATH=/tmp \
