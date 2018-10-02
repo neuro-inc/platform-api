@@ -31,6 +31,7 @@ test_k8s_platform_api:
 	mv .coverage .coverage.unit
 	make test_integration
 	coverage combine
+	codecov
 
 test_k8s_platform_api_e2e: build_api_k8s
 	./run_e2e_tests.sh
