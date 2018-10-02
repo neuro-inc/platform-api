@@ -50,11 +50,16 @@ jobs:
     <<: *defaults
     steps:
       - checkout
+
+      - run:
+          name: Installing Dependencies
+          command: |
+            pyenv install --debug 3.6.3
+            pyenv local 3.6.3-debug
+
       - run:
           name: Install Dependencies
           command: |
-            # NOTE: python3.6-dev is required to compile Hiredis
-            sudo bash -c "yes | add-apt-repository ppa:jonathonf/python-3.6 && apt-get update && apt-get install -y python3.6-dev"
             sudo apt-get install nfs-common
 
       - run:
@@ -62,14 +67,31 @@ jobs:
           command: |
             make start_k8s
 
+# below rule cleans out hiredis, this is due to circle ci issue, to be resolved by moving to dockerized test execution
+      - run:
+          name: Setting Up Python Virtual Environment
+          command: |
+            python -m venv venv
+            source venv/bin/activate
+            make setup
+            pip uninstall -y hiredis
+
+      - run:
+          name: Running Static Code Analysis
+          command: |
+            source venv/bin/activate
+            make lint
+
       - run:
           name: Run Platform Tests
           command: |
+            source venv/bin/activate
             make test_k8s_platform_api
 
       - run:
           name: Running E2E Test Suite
           command: |
+            source venv/bin/activate
             make test_k8s_platform_api_e2e
 
       - run:
