@@ -13,14 +13,14 @@ lint:
 	flake8
 
 format:
-	isort -rc auth_server tests
+	isort -rc platform_api tests
 	black .
 
 test_unit:
-	pytest -vv --cov-config=setup.cfg --cov auth_server tests/unit
+	pytest -vv --cov-config=setup.cfg --cov platform_api tests/unit
 
 test_integration:
-	pytest -vv --cov-config=setup.cfg --cov auth_server tests/integration
+	pytest -vv --cov-config=setup.cfg --cov platform_api tests/integration
 
 
 build_api_k8s:
