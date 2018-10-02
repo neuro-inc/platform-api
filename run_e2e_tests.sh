@@ -13,4 +13,4 @@ until minikube service platformapi --url; do
     ((attempt++))
 done
 
-PLATFORM_API_URL=$(minikube service platformapi --url)/api/v1 make test_2e2
+PLATFORM_API_URL=$(minikube service platformapi --url)/api/v1 make test_e2e
