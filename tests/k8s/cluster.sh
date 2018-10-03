@@ -37,17 +37,17 @@ function k8s::start {
     sudo -E minikube config set WantReportErrorPrompt false
     sudo -E minikube start --vm-driver=none
 
-    k8s::wait
-    k8s::setup_registry
-    k8s::start_nfs
-    k8s::setup_ingress
+    k8s::wait "kubectl get po &> /dev/null"
+    k8s::wait k8s::start_nfs
+    k8s::wait k8s::setup_ingress
 }
 
 function k8s::wait {
+    local cmd=$1
     set +e
     # this for loop waits until kubectl can access the api server that Minikube has created
     for i in {1..150}; do # timeout for 5 minutes
-        kubectl get po &> /dev/null
+        $cmd
         if [ $? -ne 1 ]; then
             break
         fi
