@@ -14,6 +14,7 @@ from platform_api.orchestrator.kube_orchestrator import (
 
 class TestStorageConfig:
     def test_missing_nfs_settings(self):
+        assert False
         with pytest.raises(ValueError, match="Missing NFS settings"):
             StorageConfig(host_mount_path=PurePath("/tmp"), type=StorageType.NFS)
 
