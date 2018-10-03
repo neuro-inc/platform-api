@@ -13,7 +13,11 @@ from platform_api.orchestrator.kube_orchestrator import (
 )
 
 
-pytest_plugins = ["tests.integration.docker", "tests.integration.redis"]
+pytest_plugins = [
+    "tests.integration.docker",
+    "tests.integration.redis",
+    "tests.integration.auth",
+]
 
 
 @pytest.fixture(scope="session")
