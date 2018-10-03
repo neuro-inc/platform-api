@@ -52,6 +52,11 @@ jobs:
       - checkout
 
       - run:
+          name: Configuring Docker Client
+          command: |
+            make -s gke_login
+
+      - run:
           name: Installing Dependencies
           command: |
             pyenv install --debug 3.6.3
