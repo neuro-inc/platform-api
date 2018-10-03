@@ -66,6 +66,9 @@ gke_login:
 	gcloud config set compute/zone $(GKE_COMPUTE_ZONE)
 	gcloud auth configure-docker
 
+gke_docker_pull_test:
+	-docker pull $$(cat AUTH_SERVER_IMAGE_NAME)
+
 _helm:
 	curl https://raw.githubusercontent.com/kubernetes/helm/master/scripts/get | bash
 

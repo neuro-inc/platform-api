@@ -14,7 +14,14 @@ from platform_api.config import AuthConfig
 
 
 @pytest.fixture(scope="session")
-async def auth_server(docker, reuse_docker) -> AsyncGenerator[AuthConfig, None]:
+def auth_server_image_name() -> str:
+    return open("AUTH_SERVER_IMAGE_NAME", "r").read()
+
+
+@pytest.fixture(scope="session")
+async def auth_server(
+    docker, reuse_docker, auth_server_image_name
+) -> AsyncGenerator[AuthConfig, None]:
     image_name = "gcr.io/light-reality-205619/platformauthapi:latest"
     container_name = "auth_server"
     container_config = {
