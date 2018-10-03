@@ -34,40 +34,41 @@ class JobStatusItem:
 
     @classmethod
     def create(
-            cls, status: JobStatus, *,
-            transition_time: Optional[datetime] = None,
-            current_datetime_factory=current_datetime_factory,
-            **kwargs) -> 'JobStatusItem':
+        cls,
+        status: JobStatus,
+        *,
+        transition_time: Optional[datetime] = None,
+        current_datetime_factory=current_datetime_factory,
+        **kwargs,
+    ) -> "JobStatusItem":
         transition_time = transition_time or current_datetime_factory()
         return cls(  # type: ignore
-            status=status,
-            transition_time=transition_time,
-            **kwargs
+            status=status, transition_time=transition_time, **kwargs
         )
 
     @classmethod
-    def from_primitive(cls, payload: Dict[str, Any]) -> 'JobStatusItem':
-        status = JobStatus(payload['status'])
-        transition_time = iso8601.parse_date(payload['transition_time'])
+    def from_primitive(cls, payload: Dict[str, Any]) -> "JobStatusItem":
+        status = JobStatus(payload["status"])
+        transition_time = iso8601.parse_date(payload["transition_time"])
         return cls(  # type: ignore
             status=status,
             transition_time=transition_time,
-            reason=payload.get('reason'),
-            description=payload.get('description'),
+            reason=payload.get("reason"),
+            description=payload.get("description"),
         )
 
     def to_primitive(self) -> Dict[str, Any]:
         return {
-            'status': str(self.status.value),
-            'transition_time': self.transition_time.isoformat(),
-            'reason': self.reason,
-            'description': self.description,
+            "status": str(self.status.value),
+            "transition_time": self.transition_time.isoformat(),
+            "reason": self.reason,
+            "description": self.description,
         }
 
 
 class JobStatusHistory:
     def __init__(self, items: List[JobStatusItem]) -> None:
-        assert items, 'JobStatusHistory should contain at least one entry'
+        assert items, "JobStatusHistory should contain at least one entry"
         self._items = items
 
     @property
@@ -76,8 +77,8 @@ class JobStatusHistory:
 
     @staticmethod
     def _find_with_status(
-            items: Iterable[JobStatusItem], statuses: Sequence[JobStatus]
-            ) -> Optional[JobStatusItem]:
+        items: Iterable[JobStatusItem], statuses: Sequence[JobStatus]
+    ) -> Optional[JobStatusItem]:
         for item in items:
             if item.status in statuses:
                 return item
@@ -94,7 +95,8 @@ class JobStatusHistory:
     @property
     def _first_finished(self) -> Optional[JobStatusItem]:
         return self._find_with_status(
-            self._items, (JobStatus.SUCCEEDED, JobStatus.FAILED))
+            self._items, (JobStatus.SUCCEEDED, JobStatus.FAILED)
+        )
 
     @property
     def first(self) -> JobStatusItem:
@@ -163,23 +165,28 @@ class JobStatusHistory:
 
 class Job:
     def __init__(
-            self, orchestrator_config: OrchestratorConfig,
-            job_request: JobRequest,
-            status_history: Optional[JobStatusHistory] = None,
-            # leaving `status` for backward compat with tests
-            status: JobStatus = JobStatus.PENDING,
-            is_deleted: bool=False,
-            current_datetime_factory=current_datetime_factory) -> None:
+        self,
+        orchestrator_config: OrchestratorConfig,
+        job_request: JobRequest,
+        status_history: Optional[JobStatusHistory] = None,
+        # leaving `status` for backward compat with tests
+        status: JobStatus = JobStatus.PENDING,
+        is_deleted: bool = False,
+        current_datetime_factory=current_datetime_factory,
+    ) -> None:
         self._orchestrator_config = orchestrator_config
         self._job_request = job_request
 
         if status_history:
             self._status_history = status_history
         else:
-            self._status_history = JobStatusHistory([
-                JobStatusItem.create(
-                    status,
-                    current_datetime_factory=current_datetime_factory)])
+            self._status_history = JobStatusHistory(
+                [
+                    JobStatusItem.create(
+                        status, current_datetime_factory=current_datetime_factory
+                    )
+                ]
+            )
 
         self._is_deleted = is_deleted
 
@@ -200,7 +207,8 @@ class Job:
     @status.setter
     def status(self, value: JobStatus) -> None:
         item = JobStatusItem.create(
-            value, current_datetime_factory=self._current_datetime_factory)
+            value, current_datetime_factory=self._current_datetime_factory
+        )
         self._status_history.current = item
 
     @property
@@ -232,8 +240,7 @@ class Job:
         if not self.finished_at:
             return None
 
-        return (
-            self.finished_at + self._orchestrator_config.job_deletion_delay)
+        return self.finished_at + self._orchestrator_config.job_deletion_delay
 
     @property
     def _is_time_for_deletion(self) -> bool:
@@ -241,9 +248,7 @@ class Job:
 
     @property
     def should_be_deleted(self) -> bool:
-        return (
-            self.is_finished and not self.is_deleted and
-            self._is_time_for_deletion)
+        return self.is_finished and not self.is_deleted and self._is_time_for_deletion
 
     @property
     def has_http_server_exposed(self) -> bool:
@@ -253,7 +258,7 @@ class Job:
     def http_url(self) -> str:
         assert self.has_http_server_exposed
         jobs_domain_name = self._orchestrator_config.jobs_domain_name
-        return f'http://{self.id}.{jobs_domain_name}'
+        return f"http://{self.id}.{jobs_domain_name}"
 
     @property
     def finished_at_str(self) -> Optional[str]:
@@ -263,46 +268,44 @@ class Job:
         statuses = [item.to_primitive() for item in self._status_history.all]
         # preserving `status` and `finished_at` for forward compat
         return {
-            'id': self.id,
-            'request': self.request.to_primitive(),
-            'status': self.status.value,
-
-            'statuses': statuses,
-
-            'is_deleted': self.is_deleted,
-            'finished_at': self.finished_at_str,
+            "id": self.id,
+            "request": self.request.to_primitive(),
+            "status": self.status.value,
+            "statuses": statuses,
+            "is_deleted": self.is_deleted,
+            "finished_at": self.finished_at_str,
         }
 
     @classmethod
     def from_primitive(
-            cls, orchestrator_config: OrchestratorConfig,
-            payload: Dict) -> 'Job':
-        job_request = JobRequest.from_primitive(payload['request'])
+        cls, orchestrator_config: OrchestratorConfig, payload: Dict
+    ) -> "Job":
+        job_request = JobRequest.from_primitive(payload["request"])
         status_history = cls.create_status_history_from_primitive(
-            job_request.job_id, payload)
-        is_deleted = payload.get('is_deleted', False)
+            job_request.job_id, payload
+        )
+        is_deleted = payload.get("is_deleted", False)
         return cls(
             orchestrator_config=orchestrator_config,
             job_request=job_request,
             status_history=status_history,
-            is_deleted=is_deleted)
+            is_deleted=is_deleted,
+        )
 
     @staticmethod
     def create_status_history_from_primitive(
-            job_id: str, payload: Dict) -> JobStatusHistory:
-        if 'statuses' in payload:
+        job_id: str, payload: Dict
+    ) -> JobStatusHistory:
+        if "statuses" in payload:
             # already migrated to history
-            items = [
-                JobStatusItem.from_primitive(item)
-                for item in payload['statuses']]
+            items = [JobStatusItem.from_primitive(item) for item in payload["statuses"]]
         else:
-            logger.info(f'Migrating job {job_id} to status history')
-            status = JobStatus(payload['status'])
+            logger.info(f"Migrating job {job_id} to status history")
+            status = JobStatus(payload["status"])
             transition_time = None
             if status.is_finished:
-                finished_at = payload.get('finished_at')
+                finished_at = payload.get("finished_at")
                 if finished_at:
                     transition_time = iso8601.parse_date(finished_at)
-            items = [JobStatusItem.create(
-                status, transition_time=transition_time)]
+            items = [JobStatusItem.create(status, transition_time=transition_time)]
         return JobStatusHistory(items)

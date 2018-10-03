@@ -10,8 +10,12 @@ logger = logging.getLogger(__name__)
 
 class JobsStatusPooling:
     def __init__(
-            self, *, jobs_service: JobsService, interval_s: int = 1,
-            loop: Optional[asyncio.AbstractEventLoop] = None) -> None:
+        self,
+        *,
+        jobs_service: JobsService,
+        interval_s: int = 1,
+        loop: Optional[asyncio.AbstractEventLoop] = None
+    ) -> None:
         self._loop = loop or asyncio.get_event_loop()
 
         self._jobs_service = jobs_service
@@ -21,10 +25,10 @@ class JobsStatusPooling:
         self._task = None
 
     async def start(self):
-        logger.info('Start jobs status pooling')
+        logger.info("Start jobs status pooling")
         await self._init_task()
 
-    async def __aenter__(self) -> 'JobsStatusPooling':
+    async def __aenter__(self) -> "JobsStatusPooling":
         await self.start()
         return self
 
@@ -41,7 +45,7 @@ class JobsStatusPooling:
         await asyncio.sleep(0, loop=self._loop)
 
     async def stop(self):
-        logger.info('Stopping jobs status pooling')
+        logger.info("Stopping jobs status pooling")
         self._is_active.set_result(None)
 
         assert self._task
@@ -59,8 +63,9 @@ class JobsStatusPooling:
         try:
             await self._jobs_service.update_jobs_statuses()
         except Exception:
-            logger.exception('exception when trying update jobs status')
+            logger.exception("exception when trying update jobs status")
 
     async def _wait(self):
         await asyncio.wait(
-            (self._is_active,), loop=self._loop, timeout=self._interval_s)
+            (self._is_active,), loop=self._loop, timeout=self._interval_s
+        )

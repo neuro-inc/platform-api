@@ -17,7 +17,7 @@ class Status:
         self._value = value
 
     @classmethod
-    def create(cls, value: JobStatus) -> 'Status':
+    def create(cls, value: JobStatus) -> "Status":
         status_id = str(uuid.uuid4())
         return cls(status_id, value)  # type: ignore
 

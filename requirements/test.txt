@@ -1,6 +1,8 @@
 -e .
+-r syntax.txt
 aiodocker==0.13.0
-tox==3.0.0
 pytest==3.6.4
 pytest-cov==2.5.1
 pytest-asyncio==0.9.0
+requests==2.19.1
+codecov==2.0.15

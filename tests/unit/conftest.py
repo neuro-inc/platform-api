@@ -5,8 +5,15 @@ import pytest
 
 from platform_api.config import StorageConfig
 from platform_api.orchestrator import (
-    Job, JobError, JobNotFoundException, JobRequest, JobsService, JobStatus,
-    KubeConfig, LogReader, Orchestrator
+    Job,
+    JobError,
+    JobNotFoundException,
+    JobRequest,
+    JobsService,
+    JobStatus,
+    KubeConfig,
+    LogReader,
+    Orchestrator,
 )
 from platform_api.orchestrator.job import JobStatusItem
 from platform_api.orchestrator.job_request import Container, ContainerResources
@@ -34,7 +41,7 @@ class MockOrchestrator(Orchestrator):
 
     async def get_job_status(self, job_id: str) -> JobStatusItem:
         if self.raise_on_get_job_status:
-            raise JobNotFoundException(f'job {job_id} was not found')
+            raise JobNotFoundException(f"job {job_id} was not found")
         return JobStatusItem.create(self._mock_status_to_return)
 
     async def delete_job(self, *args, **kwargs):
@@ -52,36 +59,38 @@ class MockOrchestrator(Orchestrator):
 @pytest.fixture
 def job_request_factory():
     def factory():
-        return JobRequest.create(Container(
-            image='testimage',
-            resources=ContainerResources(cpu=1, memory_mb=128),
-        ))
+        return JobRequest.create(
+            Container(
+                image="testimage", resources=ContainerResources(cpu=1, memory_mb=128)
+            )
+        )
+
     return factory
 
 
-@pytest.fixture(scope='function')
+@pytest.fixture(scope="function")
 def mock_job_request(job_request_factory):
     return job_request_factory()
 
 
-@pytest.fixture(scope='function')
+@pytest.fixture(scope="function")
 def mock_orchestrator():
-    storage_config = StorageConfig(host_mount_path=PurePath('/tmp'))
+    storage_config = StorageConfig(host_mount_path=PurePath("/tmp"))
     config = KubeConfig(
         storage=storage_config,
-        jobs_ingress_name='platformjobsingress',
-        jobs_domain_name='jobs',
-        endpoint_url='http://k8s:1234'
+        jobs_ingress_name="platformjobsingress",
+        jobs_domain_name="jobs",
+        endpoint_url="http://k8s:1234",
     )
     return MockOrchestrator(config=config)
 
 
-@pytest.fixture(scope='function')
+@pytest.fixture(scope="function")
 def jobs_service(mock_orchestrator):
     return JobsService(orchestrator=mock_orchestrator)
 
 
-@pytest.fixture(scope='session')
+@pytest.fixture(scope="session")
 def event_loop():
     loop = asyncio.get_event_loop()
     yield loop

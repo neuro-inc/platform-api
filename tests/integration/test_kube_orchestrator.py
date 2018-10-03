@@ -8,16 +8,29 @@ import pytest
 from async_timeout import timeout
 
 from platform_api.orchestrator import (
-    Job, JobError, JobNotFoundException, JobRequest, JobStatus, LogReader,
-    Orchestrator
+    Job,
+    JobError,
+    JobNotFoundException,
+    JobRequest,
+    JobStatus,
+    LogReader,
+    Orchestrator,
 )
 from platform_api.orchestrator.job import JobStatusItem
 from platform_api.orchestrator.job_request import (
-    Container, ContainerHTTPServer, ContainerResources, ContainerVolume
+    Container,
+    ContainerHTTPServer,
+    ContainerResources,
+    ContainerVolume,
 )
 from platform_api.orchestrator.kube_orchestrator import (
-    Ingress, IngressRule, JobStatusItemFactory, KubeClientException,
-    PodDescriptor, Service, StatusException
+    Ingress,
+    IngressRule,
+    JobStatusItemFactory,
+    KubeClientException,
+    PodDescriptor,
+    Service,
+    StatusException,
 )
 from platform_api.orchestrator.logs import PodContainerLogReader
 
@@ -25,8 +38,7 @@ from platform_api.orchestrator.logs import PodContainerLogReader
 class MyJob(Job):
     def __init__(self, orchestrator: Orchestrator, *args, **kwargs) -> None:
         self._orchestrator = orchestrator
-        super().__init__(
-            *args, orchestrator_config=orchestrator.config, **kwargs)
+        super().__init__(*args, orchestrator_config=orchestrator.config, **kwargs)
 
     async def start(self) -> JobStatus:
         return await self._orchestrator.start_job(self)
@@ -42,19 +54,19 @@ class MyJob(Job):
 async def job_nginx(kube_orchestrator):
     job_id = str(uuid.uuid4())
     container = Container(
-        image='ubuntu', command='sleep 5',
-        resources=ContainerResources(cpu=0.1, memory_mb=256))
-    job_request = JobRequest(
-        job_id=job_id, container=container)
+        image="ubuntu",
+        command="sleep 5",
+        resources=ContainerResources(cpu=0.1, memory_mb=256),
+    )
+    job_request = JobRequest(job_id=job_id, container=container)
     job = MyJob(orchestrator=kube_orchestrator, job_request=job_request)
     return job
 
 
 class TestKubeOrchestrator:
-
     async def wait_for_completion(
-            self, job: Job,
-            interval_s: float=1., max_attempts: int=30):
+        self, job: Job, interval_s: float = 1.0, max_attempts: int = 30
+    ):
         for _ in range(max_attempts):
             status = await job.query_status()
             if status.is_finished:
@@ -62,7 +74,7 @@ class TestKubeOrchestrator:
             else:
                 await asyncio.sleep(interval_s)
         else:
-            pytest.fail('too long')
+            pytest.fail("too long")
 
     async def wait_for_failure(self, *args, **kwargs):
         status = await self.wait_for_completion(*args, **kwargs)
@@ -86,8 +98,9 @@ class TestKubeOrchestrator:
     async def test_start_job_broken_image(self, kube_orchestrator):
         job_id = str(uuid.uuid4())
         container = Container(
-            image='notsuchdockerimage',
-            resources=ContainerResources(cpu=0.1, memory_mb=128))
+            image="notsuchdockerimage",
+            resources=ContainerResources(cpu=0.1, memory_mb=128),
+        )
         job_request = JobRequest(job_id=job_id, container=container)
         job = MyJob(orchestrator=kube_orchestrator, job_request=job_request)
         try:
@@ -100,20 +113,19 @@ class TestKubeOrchestrator:
             assert status == JobStatus.FAILED
 
     @pytest.mark.asyncio
-    async def test_start_job_with_not_unique_id(
-            self, kube_orchestrator, job_nginx):
+    async def test_start_job_with_not_unique_id(self, kube_orchestrator, job_nginx):
         status = await job_nginx.start()
         assert status == JobStatus.PENDING
 
         await self.wait_for_success(job_nginx)
 
         container = Container(
-            image='python',
-            resources=ContainerResources(cpu=0.1, memory_mb=128))
-        job_request_second = JobRequest(
-            job_id=job_nginx.id, container=container)
+            image="python", resources=ContainerResources(cpu=0.1, memory_mb=128)
+        )
+        job_request_second = JobRequest(job_id=job_nginx.id, container=container)
         job_second = MyJob(
-            orchestrator=kube_orchestrator, job_request=job_request_second)
+            orchestrator=kube_orchestrator, job_request=job_request_second
+        )
         with pytest.raises(JobError):
             await job_second.start()
 
@@ -132,10 +144,10 @@ class TestKubeOrchestrator:
 
     @pytest.mark.asyncio
     async def test_broken_job_id(self, kube_orchestrator):
-        job_id = 'some_BROCKEN_JOB-123@#$%^&*(______------ID'
+        job_id = "some_BROCKEN_JOB-123@#$%^&*(______------ID"
         container = Container(
-            image='python',
-            resources=ContainerResources(cpu=0.1, memory_mb=128))
+            image="python", resources=ContainerResources(cpu=0.1, memory_mb=128)
+        )
         job_request = JobRequest(job_id=job_id, container=container)
         job = MyJob(orchestrator=kube_orchestrator, job_request=job_request)
 
@@ -145,11 +157,13 @@ class TestKubeOrchestrator:
     @pytest.mark.asyncio
     async def test_job_succeeded(self, kube_orchestrator):
         container = Container(
-            image='ubuntu', command='true',
-            resources=ContainerResources(cpu=0.1, memory_mb=128))
+            image="ubuntu",
+            command="true",
+            resources=ContainerResources(cpu=0.1, memory_mb=128),
+        )
         job = MyJob(
-            orchestrator=kube_orchestrator,
-            job_request=JobRequest.create(container))
+            orchestrator=kube_orchestrator, job_request=JobRequest.create(container)
+        )
         try:
             status = await job.start()
             assert status == JobStatus.PENDING
@@ -162,11 +176,13 @@ class TestKubeOrchestrator:
     async def test_job_failed_error(self, kube_orchestrator):
         command = 'bash -c "for i in {100..1}; do echo $i; done; false"'
         container = Container(
-            image='ubuntu', command=command,
-            resources=ContainerResources(cpu=0.1, memory_mb=128))
+            image="ubuntu",
+            command=command,
+            resources=ContainerResources(cpu=0.1, memory_mb=128),
+        )
         job = MyJob(
-            orchestrator=kube_orchestrator,
-            job_request=JobRequest.create(container))
+            orchestrator=kube_orchestrator, job_request=JobRequest.create(container)
+        )
         try:
             status = await job.start()
             assert status == JobStatus.PENDING
@@ -174,12 +190,11 @@ class TestKubeOrchestrator:
             await self.wait_for_failure(job, max_attempts=120)
 
             status_item = await kube_orchestrator.get_job_status(job.id)
-            expected_description = ''.join(
-                f'{i}\n' for i in reversed(range(1, 81)))
-            expected_description += '\nExit code: 1'
+            expected_description = "".join(f"{i}\n" for i in reversed(range(1, 81)))
+            expected_description += "\nExit code: 1"
             assert status_item == JobStatusItem.create(
-                JobStatus.FAILED, reason='Error',
-                description=expected_description)
+                JobStatus.FAILED, reason="Error", description=expected_description
+            )
         finally:
             await job.delete()
 
@@ -192,28 +207,35 @@ class TestKubeOrchestrator:
         await self._test_volumes(kube_config_nfs, kube_orchestrator_nfs)
 
     async def _test_volumes(self, kube_config, kube_orchestrator):
-        volumes = [ContainerVolume(
-            src_path=PurePath(kube_config.storage_mount_path),
-            dst_path=PurePath('/storage'))]
-        file_path = '/storage/' + str(uuid.uuid4())
+        volumes = [
+            ContainerVolume(
+                src_path=PurePath(kube_config.storage_mount_path),
+                dst_path=PurePath("/storage"),
+            )
+        ]
+        file_path = "/storage/" + str(uuid.uuid4())
 
         write_container = Container(
-            image='ubuntu',
+            image="ubuntu",
             command=f"""bash -c 'echo "test" > {file_path}'""",
             volumes=volumes,
-            resources=ContainerResources(cpu=0.1, memory_mb=128))
+            resources=ContainerResources(cpu=0.1, memory_mb=128),
+        )
         write_job = MyJob(
             orchestrator=kube_orchestrator,
-            job_request=JobRequest.create(write_container))
+            job_request=JobRequest.create(write_container),
+        )
 
         read_container = Container(
-            image='ubuntu',
+            image="ubuntu",
             command=f"""bash -c '[ "$(cat {file_path})" == "test" ]'""",
             volumes=volumes,
-            resources=ContainerResources(cpu=0.1, memory_mb=128))
+            resources=ContainerResources(cpu=0.1, memory_mb=128),
+        )
         read_job = MyJob(
             orchestrator=kube_orchestrator,
-            job_request=JobRequest.create(read_container))
+            job_request=JobRequest.create(read_container),
+        )
 
         try:
             status = await write_job.start()
@@ -233,22 +255,20 @@ class TestKubeOrchestrator:
 
     @pytest.mark.asyncio
     @pytest.mark.parametrize(
-        'expected_result,expected_status', (
-            ('6', JobStatus.SUCCEEDED),
-            ('7', JobStatus.FAILED),
-        )
+        "expected_result,expected_status",
+        (("6", JobStatus.SUCCEEDED), ("7", JobStatus.FAILED)),
     )
-    async def test_env(
-            self, kube_orchestrator, expected_result, expected_status):
+    async def test_env(self, kube_orchestrator, expected_result, expected_status):
         product = expected_result
         container = Container(
-            image='ubuntu',
-            env={'A': '2', 'B': '3'},
+            image="ubuntu",
+            env={"A": "2", "B": "3"},
             command=f"""bash -c '[ "$(expr $A \* $B)" == "{product}" ]'""",
-            resources=ContainerResources(cpu=0.1, memory_mb=128))
+            resources=ContainerResources(cpu=0.1, memory_mb=128),
+        )
         job = MyJob(
-            orchestrator=kube_orchestrator,
-            job_request=JobRequest.create(container))
+            orchestrator=kube_orchestrator, job_request=JobRequest.create(container)
+        )
 
         try:
             status = await job.start()
@@ -268,38 +288,44 @@ class TestKubeOrchestrator:
 
     @pytest.mark.asyncio
     async def test_ingress(self, kube_client, ingress):
-        await kube_client.add_ingress_rule(
-            ingress.name, IngressRule(host='host1'))
-        await kube_client.add_ingress_rule(
-            ingress.name, IngressRule(host='host2'))
-        await kube_client.add_ingress_rule(
-            ingress.name, IngressRule(host='host3'))
+        await kube_client.add_ingress_rule(ingress.name, IngressRule(host="host1"))
+        await kube_client.add_ingress_rule(ingress.name, IngressRule(host="host2"))
+        await kube_client.add_ingress_rule(ingress.name, IngressRule(host="host3"))
         result_ingress = await kube_client.get_ingress(ingress.name)
-        assert result_ingress == Ingress(name=ingress.name, rules=[
-            IngressRule(host=''), IngressRule(host='host1'),
-            IngressRule(host='host2'), IngressRule(host='host3'),
-        ])
+        assert result_ingress == Ingress(
+            name=ingress.name,
+            rules=[
+                IngressRule(host=""),
+                IngressRule(host="host1"),
+                IngressRule(host="host2"),
+                IngressRule(host="host3"),
+            ],
+        )
 
-        await kube_client.remove_ingress_rule(ingress.name, 'host2')
+        await kube_client.remove_ingress_rule(ingress.name, "host2")
         result_ingress = await kube_client.get_ingress(ingress.name)
-        assert result_ingress == Ingress(name=ingress.name, rules=[
-            IngressRule(host=''), IngressRule(host='host1'),
-            IngressRule(host='host3'),
-        ])
+        assert result_ingress == Ingress(
+            name=ingress.name,
+            rules=[
+                IngressRule(host=""),
+                IngressRule(host="host1"),
+                IngressRule(host="host3"),
+            ],
+        )
 
     @pytest.mark.asyncio
     async def test_remove_ingress_rule(self, kube_client, ingress):
-        with pytest.raises(StatusException, match='Not found'):
-            await kube_client.remove_ingress_rule(ingress.name, 'unknown')
+        with pytest.raises(StatusException, match="Not found"):
+            await kube_client.remove_ingress_rule(ingress.name, "unknown")
 
     @pytest.mark.asyncio
     async def test_delete_ingress_failure(self, kube_client):
-        with pytest.raises(StatusException, match='Failure'):
-            await kube_client.delete_ingress('unknown')
+        with pytest.raises(StatusException, match="Failure"):
+            await kube_client.delete_ingress("unknown")
 
     @pytest.mark.asyncio
     async def test_service(self, kube_client):
-        service_name = f'job-{uuid.uuid4()}'
+        service_name = f"job-{uuid.uuid4()}"
         service = Service(name=service_name, target_port=8080)
         try:
             result_service = await kube_client.create_service(service)
@@ -310,10 +336,15 @@ class TestKubeOrchestrator:
             await kube_client.delete_service(service_name)
 
     async def _wait_for_job_service(
-            self, kube_ingress_ip: str, jobs_ingress_domain_name: str,
-            job_id: str, interval_s: int=1, max_attempts: int=120):
-        url = f'http://{kube_ingress_ip}'
-        headers = {'Host': f'{job_id}.{jobs_ingress_domain_name}'}
+        self,
+        kube_ingress_ip: str,
+        jobs_ingress_domain_name: str,
+        job_id: str,
+        interval_s: int = 1,
+        max_attempts: int = 120,
+    ):
+        url = f"http://{kube_ingress_ip}"
+        headers = {"Host": f"{job_id}.{jobs_ingress_domain_name}"}
         async with aiohttp.ClientSession() as client:
             for _ in range(max_attempts):
                 try:
@@ -324,25 +355,28 @@ class TestKubeOrchestrator:
                     pass
                 await asyncio.sleep(interval_s)
             else:
-                pytest.fail(f'Failed to connect to job service {job_id}')
+                pytest.fail(f"Failed to connect to job service {job_id}")
 
     @pytest.mark.asyncio
     async def test_job_with_exposed_port(
-            self, kube_config, kube_orchestrator, kube_ingress_ip):
+        self, kube_config, kube_orchestrator, kube_ingress_ip
+    ):
         container = Container(
-            image='python', command='python -m http.server 80',
+            image="python",
+            command="python -m http.server 80",
             resources=ContainerResources(cpu=0.1, memory_mb=128),
-            http_server=ContainerHTTPServer(port=80))
+            http_server=ContainerHTTPServer(port=80),
+        )
         job = MyJob(
-            orchestrator=kube_orchestrator,
-            job_request=JobRequest.create(container))
+            orchestrator=kube_orchestrator, job_request=JobRequest.create(container)
+        )
         try:
             status = await job.start()
             assert status == JobStatus.PENDING
 
             await self._wait_for_job_service(
-                kube_ingress_ip, kube_config.jobs_ingress_domain_name,
-                job.id)
+                kube_ingress_ip, kube_config.jobs_ingress_domain_name, job.id
+            )
         finally:
             await job.delete()
 
@@ -362,8 +396,8 @@ class TestKubeOrchestrator:
                 pass
 
     async def _assert_no_such_ingress_rule(
-            self, kube_client, ingress_name, host,
-            timeout_s: int=1, interval_s: int=1):
+        self, kube_client, ingress_name, host, timeout_s: int = 1, interval_s: int = 1
+    ):
         try:
             async with timeout(timeout_s):
                 while True:
@@ -373,7 +407,7 @@ class TestKubeOrchestrator:
                         break
                     await asyncio.sleep(interval_s)
         except asyncio.TimeoutError:
-            pytest.fail('Ingress still exists')
+            pytest.fail("Ingress still exists")
 
 
 @pytest.fixture
@@ -396,86 +430,101 @@ class TestKubeClient:
     @pytest.mark.asyncio
     async def test_wait_pod_is_running_not_found(self, kube_client):
         with pytest.raises(JobNotFoundException):
-            await kube_client.wait_pod_is_running(pod_name='unknown')
+            await kube_client.wait_pod_is_running(pod_name="unknown")
 
     @pytest.mark.asyncio
     async def test_wait_pod_is_running_timed_out(
-            self, kube_config, kube_client, delete_pod_later):
+        self, kube_config, kube_client, delete_pod_later
+    ):
         container = Container(
-            image='ubuntu', command='true',
-            resources=ContainerResources(cpu=0.1, memory_mb=128))
+            image="ubuntu",
+            command="true",
+            resources=ContainerResources(cpu=0.1, memory_mb=128),
+        )
         job_request = JobRequest.create(container)
         pod = PodDescriptor.from_job_request(
-            kube_config.create_storage_volume(), job_request)
+            kube_config.create_storage_volume(), job_request
+        )
         await delete_pod_later(pod)
         await kube_client.create_pod(pod)
         with pytest.raises(asyncio.TimeoutError):
-            await kube_client.wait_pod_is_running(
-                pod_name=pod.name, timeout_s=0.1)
+            await kube_client.wait_pod_is_running(pod_name=pod.name, timeout_s=0.1)
 
     @pytest.mark.asyncio
     async def test_wait_pod_is_running(
-            self, kube_config, kube_client, delete_pod_later):
+        self, kube_config, kube_client, delete_pod_later
+    ):
         container = Container(
-            image='ubuntu', command='true',
-            resources=ContainerResources(cpu=0.1, memory_mb=128))
+            image="ubuntu",
+            command="true",
+            resources=ContainerResources(cpu=0.1, memory_mb=128),
+        )
         job_request = JobRequest.create(container)
         pod = PodDescriptor.from_job_request(
-            kube_config.create_storage_volume(), job_request)
+            kube_config.create_storage_volume(), job_request
+        )
         await delete_pod_later(pod)
         await kube_client.create_pod(pod)
-        await kube_client.wait_pod_is_running(
-            pod_name=pod.name, timeout_s=60.)
+        await kube_client.wait_pod_is_running(pod_name=pod.name, timeout_s=60.0)
         pod_status = await kube_client.get_pod_status(pod.name)
-        assert pod_status.phase == 'Succeeded'
+        assert pod_status.phase == "Succeeded"
 
     @pytest.mark.asyncio
     async def test_create_log_stream_not_found(self, kube_client):
         with pytest.raises(KubeClientException):
             async with kube_client.create_pod_container_logs_stream(
-                    pod_name='unknown', container_name='unknown'):
+                pod_name="unknown", container_name="unknown"
+            ):
                 pass
 
     @pytest.mark.asyncio
     async def test_create_log_stream_creating(
-            self, kube_config, kube_client, delete_pod_later):
+        self, kube_config, kube_client, delete_pod_later
+    ):
         container = Container(
-            image='ubuntu', command='true',
-            resources=ContainerResources(cpu=0.1, memory_mb=128))
+            image="ubuntu",
+            command="true",
+            resources=ContainerResources(cpu=0.1, memory_mb=128),
+        )
         job_request = JobRequest.create(container)
         pod = PodDescriptor.from_job_request(
-            kube_config.create_storage_volume(), job_request)
+            kube_config.create_storage_volume(), job_request
+        )
         await delete_pod_later(pod)
         await kube_client.create_pod(pod)
         stream_cm = kube_client.create_pod_container_logs_stream(
-            pod_name=pod.name, container_name=pod.name)
-        with pytest.raises(KubeClientException, match='ContainerCreating'):
+            pod_name=pod.name, container_name=pod.name
+        )
+        with pytest.raises(KubeClientException, match="ContainerCreating"):
             async with stream_cm:
                 pass
 
     @pytest.mark.asyncio
-    async def test_create_log_stream(
-            self, kube_config, kube_client, delete_pod_later):
+    async def test_create_log_stream(self, kube_config, kube_client, delete_pod_later):
         container = Container(
-            image='ubuntu', command='true',
-            resources=ContainerResources(cpu=0.1, memory_mb=128))
+            image="ubuntu",
+            command="true",
+            resources=ContainerResources(cpu=0.1, memory_mb=128),
+        )
         job_request = JobRequest.create(container)
         pod = PodDescriptor.from_job_request(
-            kube_config.create_storage_volume(), job_request)
+            kube_config.create_storage_volume(), job_request
+        )
         await delete_pod_later(pod)
         await kube_client.create_pod(pod)
-        await kube_client.wait_pod_is_running(
-            pod_name=pod.name, timeout_s=60.)
+        await kube_client.wait_pod_is_running(pod_name=pod.name, timeout_s=60.0)
         stream_cm = kube_client.create_pod_container_logs_stream(
-            pod_name=pod.name, container_name=pod.name)
+            pod_name=pod.name, container_name=pod.name
+        )
         async with stream_cm as stream:
             payload = await stream.read()
-            assert payload == b''
+            assert payload == b""
 
 
 class TestPodContainerLogReader:
     async def _consume_log_reader(
-            self, log_reader: LogReader, chunk_size: int=-1) -> bytes:
+        self, log_reader: LogReader, chunk_size: int = -1
+    ) -> bytes:
         istream = io.BytesIO()
         try:
             async with log_reader:
@@ -493,106 +542,121 @@ class TestPodContainerLogReader:
 
     @pytest.mark.asyncio
     async def test_read_instantly_succeeded(
-            self, kube_config, kube_client, delete_pod_later):
+        self, kube_config, kube_client, delete_pod_later
+    ):
         container = Container(
-            image='ubuntu', command='true',
-            resources=ContainerResources(cpu=0.1, memory_mb=128))
+            image="ubuntu",
+            command="true",
+            resources=ContainerResources(cpu=0.1, memory_mb=128),
+        )
         job_request = JobRequest.create(container)
         pod = PodDescriptor.from_job_request(
-            kube_config.create_storage_volume(), job_request)
+            kube_config.create_storage_volume(), job_request
+        )
         await delete_pod_later(pod)
         await kube_client.create_pod(pod)
         log_reader = PodContainerLogReader(
-            client=kube_client,
-            pod_name=pod.name, container_name=pod.name)
+            client=kube_client, pod_name=pod.name, container_name=pod.name
+        )
         payload = await self._consume_log_reader(log_reader)
-        assert payload == b''
+        assert payload == b""
 
     @pytest.mark.asyncio
     async def test_read_instantly_failed(
-            self, kube_config, kube_client, delete_pod_later):
+        self, kube_config, kube_client, delete_pod_later
+    ):
         command = 'bash -c "echo -n Failure!; false"'
         container = Container(
-            image='ubuntu', command=command,
-            resources=ContainerResources(cpu=0.1, memory_mb=128))
+            image="ubuntu",
+            command=command,
+            resources=ContainerResources(cpu=0.1, memory_mb=128),
+        )
         job_request = JobRequest.create(container)
         pod = PodDescriptor.from_job_request(
-            kube_config.create_storage_volume(), job_request)
+            kube_config.create_storage_volume(), job_request
+        )
         await delete_pod_later(pod)
         await kube_client.create_pod(pod)
         log_reader = PodContainerLogReader(
-            client=kube_client,
-            pod_name=pod.name, container_name=pod.name)
+            client=kube_client, pod_name=pod.name, container_name=pod.name
+        )
         payload = await self._consume_log_reader(log_reader)
-        assert payload == b'Failure!'
+        assert payload == b"Failure!"
 
     @pytest.mark.asyncio
-    async def test_read_timed_out(
-            self, kube_config, kube_client, delete_pod_later):
+    async def test_read_timed_out(self, kube_config, kube_client, delete_pod_later):
         command = 'bash -c "sleep 5; echo -n Success!"'
         container = Container(
-            image='ubuntu', command=command,
-            resources=ContainerResources(cpu=0.1, memory_mb=128))
+            image="ubuntu",
+            command=command,
+            resources=ContainerResources(cpu=0.1, memory_mb=128),
+        )
         job_request = JobRequest.create(container)
         pod = PodDescriptor.from_job_request(
-            kube_config.create_storage_volume(), job_request)
+            kube_config.create_storage_volume(), job_request
+        )
         await delete_pod_later(pod)
         await kube_client.create_pod(pod)
         log_reader = PodContainerLogReader(
             client=kube_client,
-            pod_name=pod.name, container_name=pod.name,
-            client_read_timeout_s=1)
+            pod_name=pod.name,
+            container_name=pod.name,
+            client_read_timeout_s=1,
+        )
         with pytest.raises(asyncio.TimeoutError):
             await self._consume_log_reader(log_reader)
 
     @pytest.mark.asyncio
-    async def test_read_succeeded(
-            self, kube_config, kube_client, delete_pod_later):
+    async def test_read_succeeded(self, kube_config, kube_client, delete_pod_later):
         command = 'bash -c "for i in {1..5}; do echo $i; sleep 1; done"'
         container = Container(
-            image='ubuntu', command=command,
-            resources=ContainerResources(cpu=0.1, memory_mb=128))
+            image="ubuntu",
+            command=command,
+            resources=ContainerResources(cpu=0.1, memory_mb=128),
+        )
         job_request = JobRequest.create(container)
         pod = PodDescriptor.from_job_request(
-            kube_config.create_storage_volume(), job_request)
+            kube_config.create_storage_volume(), job_request
+        )
         await delete_pod_later(pod)
         await kube_client.create_pod(pod)
         log_reader = PodContainerLogReader(
-            client=kube_client,
-            pod_name=pod.name, container_name=pod.name)
+            client=kube_client, pod_name=pod.name, container_name=pod.name
+        )
         payload = await self._consume_log_reader(log_reader, chunk_size=1)
-        expected_payload = '\n'.join(str(i) for i in range(1, 6)) + '\n'
+        expected_payload = "\n".join(str(i) for i in range(1, 6)) + "\n"
         assert payload == expected_payload.encode()
 
     @pytest.mark.asyncio
-    async def test_read_cancelled(
-            self, kube_config, kube_client, delete_pod_later):
+    async def test_read_cancelled(self, kube_config, kube_client, delete_pod_later):
         command = 'bash -c "for i in {1..60}; do echo $i; sleep 1; done"'
         container = Container(
-            image='ubuntu', command=command,
-            resources=ContainerResources(cpu=0.1, memory_mb=128))
+            image="ubuntu",
+            command=command,
+            resources=ContainerResources(cpu=0.1, memory_mb=128),
+        )
         job_request = JobRequest.create(container)
         pod = PodDescriptor.from_job_request(
-            kube_config.create_storage_volume(), job_request)
+            kube_config.create_storage_volume(), job_request
+        )
         await delete_pod_later(pod)
         await kube_client.create_pod(pod)
-        await kube_client.wait_pod_is_running(
-            pod_name=pod.name, timeout_s=60.)
+        await kube_client.wait_pod_is_running(pod_name=pod.name, timeout_s=60.0)
         log_reader = PodContainerLogReader(
-            client=kube_client,
-            pod_name=pod.name, container_name=pod.name)
-        task = asyncio.ensure_future(
-            self._consume_log_reader(log_reader, chunk_size=1))
+            client=kube_client, pod_name=pod.name, container_name=pod.name
+        )
+        task = asyncio.ensure_future(self._consume_log_reader(log_reader, chunk_size=1))
         await asyncio.sleep(10)
         task.cancel()
         payload = await task
-        expected_payload = '\n'.join(str(i) for i in range(1, 6))
+        expected_payload = "\n".join(str(i) for i in range(1, 6))
         assert payload.startswith(expected_payload.encode())
 
 
 class TestPodContainerDevShmSettings:
     async def _consume_log_reader(
-            self, log_reader: LogReader, chunk_size: int = -1) -> bytes:
+        self, log_reader: LogReader, chunk_size: int = -1
+    ) -> bytes:
         istream = io.BytesIO()
         try:
             async with log_reader:
@@ -608,102 +672,103 @@ class TestPodContainerDevShmSettings:
         istream.seek(0)
         return istream.read()
 
-    async def run_command_get_logs(self, kube_config, kube_client,
-                                   delete_pod_later, resources) -> bytes:
-        command = '/bin/df --block-size M --output=avail /dev/shm'
-        container = Container(
-            image='ubuntu', command=command,
-            resources=resources)
+    async def run_command_get_logs(
+        self, kube_config, kube_client, delete_pod_later, resources
+    ) -> bytes:
+        command = "/bin/df --block-size M --output=avail /dev/shm"
+        container = Container(image="ubuntu", command=command, resources=resources)
         job_request = JobRequest.create(container)
         pod = PodDescriptor.from_job_request(
-            kube_config.create_storage_volume(), job_request)
+            kube_config.create_storage_volume(), job_request
+        )
         await delete_pod_later(pod)
         await kube_client.create_pod(pod)
-        await kube_client.wait_pod_is_running(
-            pod_name=pod.name, timeout_s=60.)
+        await kube_client.wait_pod_is_running(pod_name=pod.name, timeout_s=60.0)
         log_reader = PodContainerLogReader(
-            client=kube_client,
-            pod_name=pod.name, container_name=pod.name)
+            client=kube_client, pod_name=pod.name, container_name=pod.name
+        )
         return await self._consume_log_reader(log_reader, chunk_size=1)
 
-    async def run_command_get_status(self, kube_config, kube_client,
-                                     delete_pod_later, resources, command):
-        container = Container(
-            image='ubuntu', command=command,
-            resources=resources)
+    async def run_command_get_status(
+        self, kube_config, kube_client, delete_pod_later, resources, command
+    ):
+        container = Container(image="ubuntu", command=command, resources=resources)
         job_request = JobRequest.create(container)
         pod = PodDescriptor.from_job_request(
-            kube_config.create_storage_volume(), job_request)
+            kube_config.create_storage_volume(), job_request
+        )
         await delete_pod_later(pod)
         await kube_client.create_pod(pod)
-        await kube_client.wait_pod_is_running(
-            pod_name=pod.name, timeout_s=60.)
+        await kube_client.wait_pod_is_running(pod_name=pod.name, timeout_s=60.0)
         log_reader = PodContainerLogReader(
-            client=kube_client,
-            pod_name=pod.name, container_name=pod.name)
+            client=kube_client, pod_name=pod.name, container_name=pod.name
+        )
         await self._consume_log_reader(log_reader)
         pod_status = await kube_client.get_pod_status(pod.name)
         return JobStatusItemFactory(pod_status).create()
 
     @pytest.mark.asyncio
     async def test_shm_extended_request_parameter_omitted(
-            self, kube_config, kube_client, delete_pod_later):
+        self, kube_config, kube_client, delete_pod_later
+    ):
         resources = ContainerResources(cpu=0.1, memory_mb=128)
-        run_output = await self.run_command_get_logs(kube_config, kube_client,
-                                                     delete_pod_later,
-                                                     resources)
-        assert b'64M' in run_output
+        run_output = await self.run_command_get_logs(
+            kube_config, kube_client, delete_pod_later, resources
+        )
+        assert b"64M" in run_output
 
     @pytest.mark.asyncio
     async def test_shm_extended_request_parameter_not_requested(
-            self, kube_config, kube_client, delete_pod_later):
+        self, kube_config, kube_client, delete_pod_later
+    ):
         resources = ContainerResources(cpu=0.1, memory_mb=128, shm=False)
-        run_output = await self.run_command_get_logs(kube_config, kube_client,
-                                                     delete_pod_later,
-                                                     resources)
-        assert b'64M' in run_output
+        run_output = await self.run_command_get_logs(
+            kube_config, kube_client, delete_pod_later, resources
+        )
+        assert b"64M" in run_output
 
     @pytest.mark.asyncio
     async def test_shm_extended_request_parameter_requested(
-            self, kube_config, kube_client, delete_pod_later):
+        self, kube_config, kube_client, delete_pod_later
+    ):
         resources = ContainerResources(cpu=0.1, memory_mb=128, shm=True)
-        run_output = await self.run_command_get_logs(kube_config, kube_client,
-                                                     delete_pod_later,
-                                                     resources)
-        assert b'64M' not in run_output
+        run_output = await self.run_command_get_logs(
+            kube_config, kube_client, delete_pod_later, resources
+        )
+        assert b"64M" not in run_output
 
     @pytest.mark.asyncio
     async def test_shm_extended_not_requested_try_create_huge_file(
-            self, kube_config, kube_client, delete_pod_later):
-        command = 'dd if=/dev/zero of=/dev/shm/test  bs=128M  count=1'
+        self, kube_config, kube_client, delete_pod_later
+    ):
+        command = "dd if=/dev/zero of=/dev/shm/test  bs=128M  count=1"
         resources = ContainerResources(cpu=0.1, memory_mb=128, shm=False)
-        run_output = await self.run_command_get_status(kube_config,
-                                                       kube_client,
-                                                       delete_pod_later,
-                                                       resources, command)
-        job_status = JobStatusItem.create(status=JobStatus.FAILED,
-                                          reason='OOMKilled',
-                                          description='\nExit code: 137')
+        run_output = await self.run_command_get_status(
+            kube_config, kube_client, delete_pod_later, resources, command
+        )
+        job_status = JobStatusItem.create(
+            status=JobStatus.FAILED, reason="OOMKilled", description="\nExit code: 137"
+        )
         assert job_status == run_output
 
     @pytest.mark.asyncio
     async def test_shm_extended_requested_try_create_huge_file(
-            self, kube_config, kube_client, delete_pod_later):
-        command = 'dd if=/dev/zero of=/dev/shm/test bs=256M  count=1'
+        self, kube_config, kube_client, delete_pod_later
+    ):
+        command = "dd if=/dev/zero of=/dev/shm/test bs=256M  count=1"
         resources = ContainerResources(cpu=0.1, memory_mb=1024, shm=True)
-        run_output = await self.run_command_get_status(kube_config,
-                                                       kube_client,
-                                                       delete_pod_later,
-                                                       resources, command)
+        run_output = await self.run_command_get_status(
+            kube_config, kube_client, delete_pod_later, resources, command
+        )
         assert JobStatusItem.create(status=JobStatus.SUCCEEDED) == run_output
 
     @pytest.mark.asyncio
     async def test_shm_extended_not_requested_try_create_small_file(
-            self, kube_config, kube_client, delete_pod_later):
-        command = 'dd if=/dev/zero of=/dev/shm/test  bs=32M  count=1'
+        self, kube_config, kube_client, delete_pod_later
+    ):
+        command = "dd if=/dev/zero of=/dev/shm/test  bs=32M  count=1"
         resources = ContainerResources(cpu=0.1, memory_mb=128, shm=False)
-        run_output = await self.run_command_get_status(kube_config,
-                                                       kube_client,
-                                                       delete_pod_later,
-                                                       resources, command)
+        run_output = await self.run_command_get_status(
+            kube_config, kube_client, delete_pod_later, resources, command
+        )
         assert JobStatusItem.create(status=JobStatus.SUCCEEDED) == run_output

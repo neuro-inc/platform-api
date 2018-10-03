@@ -12,6 +12,26 @@ export PIP_INDEX_URL
 
 include k8s.mk
 
+setup:
+	pip install -r requirements/test.txt
+
+lint:
+	black --check .
+	flake8 platform_api tests setup.py
+
+format:
+	isort -rc platform_api tests setup.py
+	black .
+
+test_unit:
+	pytest -vv --cov-config=setup.cfg --cov platform_api tests/unit
+
+test_integration:
+	pytest -vv --cov-config=setup.cfg --cov platform_api tests/integration
+
+test_e2e:
+	pytest -vv tests/e2e
+
 build_api_k8s:
 	@docker build --build-arg PIP_INDEX_URL="$(PIP_INDEX_URL)" \
 	    -f Dockerfile.k8s -t $(IMAGE_NAME_K8S):$(IMAGE_TAG) .
@@ -55,8 +75,10 @@ gke_k8s_deploy_dev:
 	sudo /opt/google-cloud-sdk/bin/gcloud --quiet container clusters get-credentials $(GKE_CLUSTER_NAME)
 	sudo chown -R circleci: $(HOME)/.kube
 	helm --set "global.env=dev" --set "IMAGE.dev=$(IMAGE_K8S):$(CIRCLE_SHA1)" --wait --timeout 600 upgrade platformapi deploy/platformapi/
-	
+
 gke_k8s_deploy_staging:
 	sudo /opt/google-cloud-sdk/bin/gcloud --quiet container clusters get-credentials $(GKE_STAGE_CLUSTER_NAME)
 	sudo chown -R circleci: $(HOME)/.kube
 	helm --set "global.env=staging" --set "IMAGE.staging=$(IMAGE_K8S):$(CIRCLE_SHA1)" --wait --timeout 600 upgrade platformapi deploy/platformapi/
+
+
