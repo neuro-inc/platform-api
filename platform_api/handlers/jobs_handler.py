@@ -29,6 +29,7 @@ def create_job_response_validator() -> t.Trafaret:
             "status": create_job_status_validator(),
             t.Key("http_url", optional=True): t.String,
             "history": create_job_history_validator(),
+            "container": create_container_request_validator(allow_volumes=True),
         }
     )
 
