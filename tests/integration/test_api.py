@@ -335,7 +335,7 @@ class TestJobs:
                         {
                             "dst_path": "/var/storage",
                             "read_only": False,
-                            "src_storage_uri": "/tmp",
+                            "src_storage_uri": "storage:",
                         }
                     ],
                 },
@@ -366,7 +366,7 @@ class TestJobs:
                     {
                         "dst_path": "/var/storage",
                         "read_only": False,
-                        "src_storage_uri": "/tmp",
+                        "src_storage_uri": "storage:",
                     }
                 ],
             },
@@ -418,12 +418,12 @@ class TestJobs:
                     {
                         "dst_path": "/var/storage",
                         "read_only": True,
-                        "src_storage_uri": "/tmp",
+                        "src_storage_uri": "storage:",
                     },
                     {
                         "dst_path": "/var/storage/result",
                         "read_only": False,
-                        "src_storage_uri": "/tmp/result",
+                        "src_storage_uri": "storage://result",
                     },
                 ],
             },

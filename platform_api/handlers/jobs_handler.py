@@ -57,7 +57,7 @@ def convert_job_container_to_json(container) -> Dict[str, Any]:
     for volume in container.volumes:
         ret["volumes"].append(
             {
-                "src_storage_uri": str(volume.src_path),
+                "src_storage_uri": str(volume.uri),
                 "dst_path": str(volume.dst_path),
                 "read_only": volume.read_only,
             }
