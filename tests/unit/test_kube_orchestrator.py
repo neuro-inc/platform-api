@@ -3,6 +3,7 @@ from unittest import mock
 
 import aiohttp
 import pytest
+from yarl import URL
 
 from platform_api.orchestrator.job import JobStatusItem
 from platform_api.orchestrator.job_request import (
@@ -41,6 +42,7 @@ class TestVolume:
     )
     def test_create_mount(self, volume):
         container_volume = ContainerVolume(
+            uri=URL("storage://host"),
             src_path=PurePath("/host/path/to/dir"),
             dst_path=PurePath("/container/path/to/dir"),
         )
@@ -55,6 +57,7 @@ class TestAbstractVolume:
     def test_create_mount_for_abstract_volume_should_fail(self):
         with pytest.raises(NotImplementedError, match=""):
             container_volume = ContainerVolume(
+                uri=URL("storage://host"),
                 src_path=PurePath("/host/path/to/dir"),
                 dst_path=PurePath("/container/path/to/dir"),
             )
@@ -141,7 +144,11 @@ class TestPodDescriptor:
 
     def test_to_primitive_with_dev_shm(self):
         dev_shm = SharedMemoryVolume(name="dshm")
-        container_volume = ContainerVolume(dst_path=PurePath("/dev/shm"), src_path=None)
+        container_volume = ContainerVolume(
+            dst_path=PurePath("/dev/shm"),
+            src_path=PurePath("/host"),
+            uri=URL("storage://"),
+        )
         pod = PodDescriptor(
             name="testname",
             image="testimage",
@@ -199,7 +206,9 @@ class TestPodDescriptor:
             env={"TESTVAR": "testvalue"},
             volumes=[
                 ContainerVolume(
-                    src_path=PurePath("/tmp/src"), dst_path=PurePath("/dst")
+                    uri=URL("storage://src"),
+                    src_path=PurePath("/tmp/src"),
+                    dst_path=PurePath("/dst"),
                 )
             ],
             resources=ContainerResources(cpu=1, memory_mb=128, gpu=1),

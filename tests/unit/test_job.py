@@ -4,6 +4,7 @@ from pathlib import PurePath
 from unittest import mock
 
 import pytest
+from yarl import URL
 
 from platform_api.config import StorageConfig
 from platform_api.handlers.job_request_builder import ContainerBuilder
@@ -140,6 +141,7 @@ class TestContainerBuilder:
             env={"TESTVAR": "testvalue"},
             volumes=[
                 ContainerVolume(
+                    uri=URL("storage://path/to/dir"),
                     src_path=PurePath("/tmp/path/to/dir"),
                     dst_path=PurePath("/container/path"),
                     read_only=True,
@@ -174,6 +176,7 @@ class TestContainerBuilder:
             env={"TESTVAR": "testvalue"},
             volumes=[
                 ContainerVolume(
+                    uri=URL("storage://path/to/dir"),
                     src_path=PurePath("/tmp/path/to/dir"),
                     dst_path=PurePath("/container/path"),
                     read_only=True,
@@ -209,11 +212,13 @@ class TestModelRequest:
             },
             volumes=[
                 ContainerVolume(
+                    uri=URL("storage://path/to/dir"),
                     src_path=PurePath("/tmp/path/to/dir"),
                     dst_path=PurePath("/var/storage/path/to/dir"),
                     read_only=True,
                 ),
                 ContainerVolume(
+                    uri=URL("storage://path/to/another/dir"),
                     src_path=PurePath("/tmp/path/to/another/dir"),
                     dst_path=PurePath("/var/storage/path/to/another/dir"),
                     read_only=False,
@@ -234,7 +239,12 @@ def job_request_payload():
             "command": None,
             "env": {"testvar": "testval"},
             "volumes": [
-                {"src_path": "/src/path", "dst_path": "/dst/path", "read_only": False}
+                {
+                    "uri": "storage://path",
+                    "src_path": "/src/path",
+                    "dst_path": "/dst/path",
+                    "read_only": False,
+                }
             ],
             "http_server": None,
         },
@@ -340,7 +350,9 @@ class TestJobRequest:
             resources=ContainerResources(cpu=1, memory_mb=128),
             volumes=[
                 ContainerVolume(
-                    src_path=PurePath("/src/path"), dst_path=PurePath("/dst/path")
+                    uri=URL("storage://path"),
+                    src_path=PurePath("/src/path"),
+                    dst_path=PurePath("/dst/path"),
                 )
             ],
         )
@@ -356,7 +368,9 @@ class TestJobRequest:
             resources=ContainerResources(cpu=1, memory_mb=128),
             volumes=[
                 ContainerVolume(
-                    src_path=PurePath("/src/path"), dst_path=PurePath("/dst/path")
+                    uri=URL("storage://path"),
+                    src_path=PurePath("/src/path"),
+                    dst_path=PurePath("/dst/path"),
                 )
             ],
         )
@@ -371,7 +385,9 @@ class TestJobRequest:
             resources=ContainerResources(cpu=1, memory_mb=128, shm=True),
             volumes=[
                 ContainerVolume(
-                    src_path=PurePath("/src/path"), dst_path=PurePath("/dst/path")
+                    uri=URL("storage://path"),
+                    src_path=PurePath("/src/path"),
+                    dst_path=PurePath("/dst/path"),
                 )
             ],
         )
