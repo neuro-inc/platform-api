@@ -81,8 +81,6 @@ class TestEnvironConfigFactory:
             "NP_K8S_API_URL": "https://localhost:8443",
             "NP_K8S_JOBS_INGRESS_NAME": "testingress",
             "NP_K8S_JOBS_INGRESS_DOMAIN_NAME": "jobs.domain",
-            "NP_AUTH_URL": "https://auth",
-            "NP_AUTH_TOKEN": "token",
         }
         config = EnvironConfigFactory(environ=environ).create()
 
@@ -112,8 +110,7 @@ class TestEnvironConfigFactory:
 
         assert config.env_prefix == "NP"
 
-        assert config.auth.server_endpoint_url == URL("https://auth")
-        assert config.auth.service_token == "token"
+        assert config.auth is None
 
     def test_create_value_error_invalid_port(self):
         environ = {
