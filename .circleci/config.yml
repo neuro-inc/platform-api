@@ -52,6 +52,14 @@ jobs:
       - checkout
 
       - run:
+          name: Configuring Docker Client
+          command: |
+            make -s gke_login
+            # docker-credential-gcloud still relies on Python 2.7,
+            # thus we'd better pull testing images before we set up Python 3
+            make gke_docker_pull_test
+
+      - run:
           name: Installing Dependencies
           command: |
             pyenv install --debug 3.6.3

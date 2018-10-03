@@ -2,7 +2,16 @@ import os
 from pathlib import PurePath
 from typing import Optional
 
-from .config import Config, DatabaseConfig, ServerConfig, StorageConfig, StorageType
+from yarl import URL
+
+from .config import (
+    AuthConfig,
+    Config,
+    DatabaseConfig,
+    ServerConfig,
+    StorageConfig,
+    StorageType,
+)
 from .orchestrator import KubeConfig
 from .orchestrator.kube_orchestrator import KubeClientAuthType
 from .redis import RedisConfig
@@ -16,11 +25,13 @@ class EnvironConfigFactory:
         env_prefix = self._environ.get("NP_ENV_PREFIX", Config.env_prefix)
         storage = self.create_storage()
         database = self.create_database()
+        auth = self.create_auth()
         return Config(
             server=self.create_server(),
             storage=storage,
             orchestrator=self.create_orchestrator(storage),
             database=database,
+            auth=auth,
             env_prefix=env_prefix,
         )
 
@@ -117,3 +128,13 @@ class EnvironConfigFactory:
         return RedisConfig(  # type: ignore
             uri=uri, conn_pool_size=conn_pool_size, conn_timeout_s=conn_timeout_s
         )
+
+    def create_auth(self) -> Optional[AuthConfig]:
+        # TODO (A Danshyn 10/03/18): temporarily allowing to not specify auth
+        # config
+        if "NP_AUTH_URL" not in self._environ:
+            return None
+
+        url = URL(self._environ["NP_AUTH_URL"])
+        token = self._environ["NP_AUTH_TOKEN"]
+        return AuthConfig(server_endpoint_url=url, service_token=token)  # type: ignore

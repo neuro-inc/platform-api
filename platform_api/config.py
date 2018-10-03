@@ -1,8 +1,10 @@
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from datetime import timedelta
 from enum import Enum
 from pathlib import PurePath
 from typing import Optional
+
+from yarl import URL
 
 from .redis import RedisConfig
 
@@ -16,6 +18,12 @@ class ServerConfig:
 class StorageType(str, Enum):
     HOST = "host"
     NFS = "nfs"
+
+
+@dataclass(frozen=True)
+class AuthConfig:
+    server_endpoint_url: URL
+    service_token: str = field(repr=False)
 
 
 @dataclass(frozen=True)
@@ -79,6 +87,8 @@ class Config:
     storage: StorageConfig
     orchestrator: OrchestratorConfig
     database: DatabaseConfig
+    # TODO (A Danshyn 10/03/18): not forcing yet
+    auth: Optional[AuthConfig] = None
 
     # used for generating environment variable names and
     # sourcing them inside containers.

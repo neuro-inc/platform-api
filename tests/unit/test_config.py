@@ -2,6 +2,7 @@ from datetime import timedelta
 from pathlib import PurePath
 
 import pytest
+from yarl import URL
 
 from platform_api.config import StorageConfig, StorageType
 from platform_api.config_factory import EnvironConfigFactory
@@ -109,11 +110,15 @@ class TestEnvironConfigFactory:
 
         assert config.env_prefix == "NP"
 
-    def test_create_value_error(self):
+        assert config.auth is None
+
+    def test_create_value_error_invalid_port(self):
         environ = {
             "NP_STORAGE_HOST_MOUNT_PATH": "/tmp",
             "NP_API_PORT": "port",
             "NP_K8S_API_URL": "https://localhost:8443",
+            "NP_AUTH_URL": "https://auth",
+            "NP_AUTH_TOKEN": "token",
         }
         with pytest.raises(ValueError):
             EnvironConfigFactory(environ=environ).create()
@@ -139,6 +144,8 @@ class TestEnvironConfigFactory:
             "NP_DB_REDIS_URI": "redis://localhost:6379/0",
             "NP_DB_REDIS_CONN_POOL_SIZE": "444",
             "NP_DB_REDIS_CONN_TIMEOUT": "555",
+            "NP_AUTH_URL": "https://auth",
+            "NP_AUTH_TOKEN": "token",
         }
         config = EnvironConfigFactory(environ=environ).create()
 
@@ -170,6 +177,9 @@ class TestEnvironConfigFactory:
 
         assert config.env_prefix == "TEST"
 
+        assert config.auth.server_endpoint_url == URL("https://auth")
+        assert config.auth.service_token == "token"
+
     def test_create_nfs(self):
         environ = {
             "NP_STORAGE_TYPE": "nfs",
@@ -179,6 +189,8 @@ class TestEnvironConfigFactory:
             "NP_K8S_API_URL": "https://localhost:8443",
             "NP_K8S_JOBS_INGRESS_NAME": "testingress",
             "NP_K8S_JOBS_INGRESS_DOMAIN_NAME": "jobs.domain",
+            "NP_AUTH_URL": "https://auth",
+            "NP_AUTH_TOKEN": "token",
         }
         config = EnvironConfigFactory(environ=environ).create()
         assert config.storage.nfs_server == "1.2.3.4"
