@@ -37,7 +37,7 @@ function k8s::start {
     sudo -E minikube config set WantReportErrorPrompt false
     sudo -E minikube start --vm-driver=none
 
-    k8s::wait "kubectl get po &> /dev/null"
+    k8s::wait "kubectl get po"
     k8s::wait k8s::start_nfs
     k8s::wait k8s::setup_ingress
 }
