@@ -326,6 +326,19 @@ class TestJobs:
                     "description": None,
                     "created_at": mock.ANY,
                 },
+                "container": {
+                    "command": "true",
+                    "env": {},
+                    "image": "ubuntu",
+                    "resources": {"cpu": 0.1, "memory_mb": 16},
+                    "volumes": [
+                        {
+                            "dst_path": "/var/storage",
+                            "read_only": False,
+                            "src_storage_uri": "/tmp",
+                        }
+                    ],
+                },
             }
             job_id = response_payload["id"]
 
@@ -343,6 +356,19 @@ class TestJobs:
                 "created_at": mock.ANY,
                 "started_at": mock.ANY,
                 "finished_at": mock.ANY,
+            },
+            "container": {
+                "command": "true",
+                "env": {},
+                "image": "ubuntu",
+                "resources": {"cpu": 0.1, "memory_mb": 16},
+                "volumes": [
+                    {
+                        "dst_path": "/var/storage",
+                        "read_only": False,
+                        "src_storage_uri": "/tmp",
+                    }
+                ],
             },
         }
 
@@ -379,5 +405,26 @@ class TestJobs:
                 "created_at": mock.ANY,
                 "started_at": mock.ANY,
                 "finished_at": mock.ANY,
+            },
+            "container": {
+                "command": 'bash -c "echo Failed!; false"',
+                "env": {
+                    "NP_DATASET_PATH": "/var/storage",
+                    "NP_RESULT_PATH": "/var/storage/result",
+                },
+                "image": "ubuntu",
+                "resources": {"cpu": 0.1, "memory_mb": 16},
+                "volumes": [
+                    {
+                        "dst_path": "/var/storage",
+                        "read_only": True,
+                        "src_storage_uri": "/tmp",
+                    },
+                    {
+                        "dst_path": "/var/storage/result",
+                        "read_only": False,
+                        "src_storage_uri": "/tmp/result",
+                    },
+                ],
             },
         }
