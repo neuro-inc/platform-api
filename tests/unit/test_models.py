@@ -1,7 +1,9 @@
 import pytest
 
+from platform_api.handlers.jobs_handler import convert_job_container_to_json
 from platform_api.handlers.models_handler import create_model_response_validator
 from platform_api.handlers.validators import create_container_request_validator
+from platform_api.orchestrator.job_request import Container, ContainerResources
 
 
 class TestContainerRequestValidator:
@@ -108,3 +110,28 @@ class TestModelResponseValidator:
         assert validator.check(
             {"job_id": "testjob", "status": "pending", "http_url": "http://testjob"}
         )
+
+
+class TestJobContainerToJson:
+    def test_minimal(self):
+        container = Container(
+            image="image", resources=ContainerResources(cpu=0.1, memory_mb=16)
+        )
+        assert convert_job_container_to_json(container) == {
+            "env": {},
+            "image": "image",
+            "resources": {"cpu": 0.1, "memory_mb": 16},
+            "volumes": [],
+        }
+
+    def test_gpu_and_shm_resources(self):
+        container = Container(
+            image="image",
+            resources=ContainerResources(cpu=0.1, memory_mb=16, gpu=1, shm=True),
+        )
+        assert convert_job_container_to_json(container) == {
+            "env": {},
+            "image": "image",
+            "resources": {"cpu": 0.1, "memory_mb": 16, "gpu": 1, "shm": True},
+            "volumes": [],
+        }
