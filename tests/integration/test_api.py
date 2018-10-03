@@ -381,3 +381,8 @@ class TestJobs:
                 "finished_at": mock.ANY,
             },
         }
+
+
+@pytest.mark.asyncio
+async def test_auth_client(auth_client):
+    await auth_client.secured_ping()
