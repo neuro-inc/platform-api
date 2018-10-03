@@ -11,6 +11,7 @@ from urllib.parse import urlsplit
 import aiohttp
 from async_generator import asynccontextmanager
 from async_timeout import timeout
+from yarl import URL
 
 from .job_request import (
     ContainerResources,
@@ -278,7 +279,10 @@ class PodDescriptor:
         if job_request.container.resources.shm:
             dev_shm_volume = SharedMemoryVolume(name="dshm")  # type: ignore
             container_volume = ContainerVolume(
-                dst_path=PurePath("/dev/shm"), src_path=PurePath(""), read_only=False
+                URL(""),
+                dst_path=PurePath("/dev/shm"),
+                src_path=PurePath(""),
+                read_only=False,
             )
             volume_mounts.append(dev_shm_volume.create_mount(container_volume))
             volumes.append(dev_shm_volume)

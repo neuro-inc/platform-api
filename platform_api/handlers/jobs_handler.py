@@ -29,8 +29,40 @@ def create_job_response_validator() -> t.Trafaret:
             "status": create_job_status_validator(),
             t.Key("http_url", optional=True): t.String,
             "history": create_job_history_validator(),
+            "container": create_container_request_validator(allow_volumes=True),
         }
     )
+
+
+def convert_job_container_to_json(container) -> Dict[str, Any]:
+    ret = {"image": container.image, "env": container.env, "volumes": []}
+    if container.command is not None:
+        ret["command"] = container.command
+
+    resources = {
+        "cpu": container.resources.cpu,
+        "memory_mb": container.resources.memory_mb,
+    }
+    if container.resources.gpu is not None:
+        resources["gpu"] = container.resources.gpu
+    if container.resources.shm is not None:
+        resources["shm"] = container.resources.shm
+    ret["resources"] = resources
+
+    if container.http_server is not None:
+        ret["http"] = {
+            "port": container.http_server.port,
+            "health_check_path": container.http_server.health_check_path,
+        }
+    for volume in container.volumes:
+        ret["volumes"].append(
+            {
+                "src_storage_uri": str(volume.uri),
+                "dst_path": str(volume.dst_path),
+                "read_only": volume.read_only,
+            }
+        )
+    return ret
 
 
 def convert_job_to_job_response(job: Job) -> Dict[str, Any]:
@@ -45,6 +77,7 @@ def convert_job_to_job_response(job: Job) -> Dict[str, Any]:
             "description": current_status.description,
             "created_at": history.created_at_str,
         },
+        "container": convert_job_container_to_json(job.request.container),
     }
     if job.has_http_server_exposed:
         response_payload["http_url"] = job.http_url

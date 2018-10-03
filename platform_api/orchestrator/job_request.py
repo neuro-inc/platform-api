@@ -6,6 +6,8 @@ from pathlib import PurePath
 from typing import Dict, List, Optional
 from urllib.parse import urlsplit
 
+from yarl import URL
+
 
 class JobException(Exception):
     pass
@@ -21,6 +23,7 @@ class JobNotFoundException(JobException):
 
 @dataclass(frozen=True)
 class ContainerVolume:
+    uri: URL
     src_path: PurePath
     dst_path: PurePath
     read_only: bool = False
@@ -32,12 +35,16 @@ class ContainerVolume:
     @classmethod
     def from_primitive(cls, payload: Dict) -> "ContainerVolume":
         kwargs = payload.copy()
+        # use dct.get() for backward compatibility
+        # old DB records has no src_uri field
+        kwargs["uri"] = URL(kwargs.get("uri", ""))
         kwargs["src_path"] = PurePath(kwargs["src_path"])
         kwargs["dst_path"] = PurePath(kwargs["dst_path"])
         return cls(**kwargs)  # type: ignore
 
     def to_primitive(self) -> Dict:
         payload: Dict = asdict(self)
+        payload["uri"] = str(payload["uri"])
         payload["src_path"] = str(payload["src_path"])
         payload["dst_path"] = str(payload["dst_path"])
         return payload
@@ -252,5 +259,8 @@ class ContainerVolumeFactory:
         if self._extend_dst_mount_path:
             dst_path /= self._path
         return ContainerVolume(  # type: ignore
-            src_path=src_path, dst_path=dst_path, read_only=self._read_only
+            uri=URL(self._uri),
+            src_path=src_path,
+            dst_path=dst_path,
+            read_only=self._read_only,
         )

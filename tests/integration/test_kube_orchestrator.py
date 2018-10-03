@@ -6,6 +6,7 @@ from pathlib import PurePath
 import aiohttp
 import pytest
 from async_timeout import timeout
+from yarl import URL
 
 from platform_api.orchestrator import (
     Job,
@@ -209,6 +210,11 @@ class TestKubeOrchestrator:
     async def _test_volumes(self, kube_config, kube_orchestrator):
         volumes = [
             ContainerVolume(
+                uri=URL(
+                    kube_config.storage.uri_scheme
+                    + "://"
+                    + str(kube_config.storage_mount_path)
+                ),
                 src_path=PurePath(kube_config.storage_mount_path),
                 dst_path=PurePath("/storage"),
             )
