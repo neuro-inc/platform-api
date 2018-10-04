@@ -72,8 +72,8 @@ def test_basic_command(api_models_url, api_jobs_url, compute_token):
     jobs_url = f"{api_jobs_url}/{job_id}"
 
     for _ in range(30):
-        response = requests.get(jobs_url)
-        assert response.status_code == 200
+        response = requests.get(jobs_url, headers=headers)
+        assert response.status_code == 200, response.json()
         jobs_payload = response.json()
         status_name = jobs_payload["status"]
         if status_name == "succeeded":
