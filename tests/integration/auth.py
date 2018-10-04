@@ -1,21 +1,26 @@
 import asyncio
-from typing import AsyncGenerator
+import uuid
+from dataclasses import dataclass
+from typing import AsyncGenerator, Dict, Optional
 
 import aiodocker
 import pytest
 from aiohttp import ClientError
+from aiohttp.hdrs import AUTHORIZATION
 from async_generator import asynccontextmanager
 from async_timeout import timeout
 from jose import jwt
-from neuro_auth_client import AuthClient
+from neuro_auth_client import AuthClient, User as AuthClientUser
 from yarl import URL
 
 from platform_api.config import AuthConfig
+from platform_api.user import User
 
 
 @pytest.fixture(scope="session")
 def auth_server_image_name() -> str:
-    return open("AUTH_SERVER_IMAGE_NAME", "r").read()
+    with open("AUTH_SERVER_IMAGE_NAME", "r") as f:
+        return f.read()
 
 
 @pytest.fixture(scope="session")
@@ -116,3 +121,27 @@ async def wait_for_auth_server(
             except (AssertionError, ClientError):
                 pass
             await asyncio.sleep(interval_s)
+
+
+@dataclass(frozen=True)
+class _User(User):
+    @property
+    def headers(self) -> Dict[str, str]:
+        return {AUTHORIZATION: f"Bearer {self.token}"}
+
+
+@pytest.fixture
+async def regular_user_factory(auth_client, token_factory, admin_token):
+    async def _factory(name: Optional[str] = None) -> _User:
+        if not name:
+            name = str(uuid.uuid4())
+        user = AuthClientUser(name=name)
+        await auth_client.add_user(user, token=admin_token)
+        return _User(name=user.name, token=token_factory(user.name))  # type: ignore
+
+    return _factory
+
+
+@pytest.fixture
+async def regular_user(regular_user_factory) -> _User:
+    return await regular_user_factory()
