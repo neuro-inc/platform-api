@@ -6,7 +6,13 @@ from unittest import mock
 import aiohttp
 import aiohttp.web
 import pytest
-from aiohttp.web import HTTPAccepted, HTTPBadRequest, HTTPNoContent, HTTPOk
+from aiohttp.web import (
+    HTTPAccepted,
+    HTTPBadRequest,
+    HTTPNoContent,
+    HTTPOk,
+    HTTPUnauthorized,
+)
 
 from platform_api.api import create_app
 from platform_api.config import Config, DatabaseConfig, ServerConfig, StorageConfig
@@ -135,6 +141,14 @@ async def model_train():
 
 class TestModels:
     @pytest.mark.asyncio
+    async def test_create_model_unauthorized(
+        self, api, client, model_train, jobs_client
+    ):
+        url = api.model_base_url
+        async with client.post(url, json=model_train) as response:
+            assert response.status == HTTPUnauthorized.status_code
+
+    @pytest.mark.asyncio
     async def test_create_model(
         self, api, client, model_train, jobs_client, regular_user
     ):
@@ -215,6 +229,14 @@ class TestModels:
 
 
 class TestJobs:
+    @pytest.mark.asyncio
+    async def test_create_job_unauthorized(
+        self, api, client, model_train, jobs_client
+    ):
+        url = api.jobs_base_url
+        async with client.post(url, json=model_train) as response:
+            assert response.status == HTTPUnauthorized.status_code
+
     @pytest.mark.asyncio
     async def test_get_all_jobs_clear(self, jobs_client, api, client):
         jobs = await jobs_client.get_all_jobs(api=api, client=client)
