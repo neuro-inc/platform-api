@@ -54,7 +54,7 @@ def test_basic_command(api_models_url, api_jobs_url):
         "result_storage_uri": "storage://result",
     }
     response = requests.post(api_models_url, json=model_request_payload)
-    assert response.status_code == 202
+    assert response.status_code == 202, response.json()
     model_payload = response.json()
     job_id = model_payload["job_id"]
     jobs_url = f"{api_jobs_url}/{job_id}"

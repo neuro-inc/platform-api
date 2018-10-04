@@ -135,9 +135,13 @@ async def model_train():
 
 class TestModels:
     @pytest.mark.asyncio
-    async def test_create_model(self, api, client, model_train, jobs_client):
+    async def test_create_model(
+        self, api, client, model_train, jobs_client, regular_user
+    ):
         url = api.model_base_url
-        async with client.post(url, json=model_train) as response:
+        async with client.post(
+            url, headers=regular_user.headers, json=model_train
+        ) as response:
             assert response.status == HTTPAccepted.status_code
             result = await response.json()
             assert result["status"] in ["pending"]
@@ -151,7 +155,7 @@ class TestModels:
         await jobs_client.delete_job(api=api, client=client, job_id=job_id)
 
     @pytest.mark.asyncio
-    async def test_env_var_sourcing(self, api, client, jobs_client):
+    async def test_env_var_sourcing(self, api, client, jobs_client, regular_user):
         cmd = 'bash -c \'[ "$NP_RESULT_PATH" == "/var/storage/result" ]\''
         payload = {
             "container": {
@@ -163,7 +167,9 @@ class TestModels:
             "result_storage_uri": "storage://result",
         }
         url = api.model_base_url
-        async with client.post(url, json=payload) as response:
+        async with client.post(
+            url, headers=regular_user.headers, json=payload
+        ) as response:
             assert response.status == HTTPAccepted.status_code
             result = await response.json()
             assert result["status"] in ["pending"]
@@ -174,16 +180,18 @@ class TestModels:
         await jobs_client.delete_job(api=api, client=client, job_id=job_id)
 
     @pytest.mark.asyncio
-    async def test_incorrect_request(self, api, client):
+    async def test_incorrect_request(self, api, client, regular_user):
         json_model_train = {"wrong_key": "wrong_value"}
         url = api.model_base_url
-        async with client.post(url, json=json_model_train) as response:
+        async with client.post(
+            url, headers=regular_user.headers, json=json_model_train
+        ) as response:
             assert response.status == HTTPBadRequest.status_code
             data = await response.json()
             assert """'container': DataError(is required)""" in data["error"]
 
     @pytest.mark.asyncio
-    async def test_broken_docker_image(self, api, client, jobs_client):
+    async def test_broken_docker_image(self, api, client, jobs_client, regular_user):
         payload = {
             "container": {
                 "image": "some_broken_image",
@@ -195,7 +203,9 @@ class TestModels:
         }
 
         url = api.model_base_url
-        async with client.post(url, json=payload) as response:
+        async with client.post(
+            url, headers=regular_user.headers, json=payload
+        ) as response:
             assert response.status == HTTPAccepted.status_code
             data = await response.json()
             job_id = data["job_id"]
