@@ -307,9 +307,11 @@ class TestJobs:
             assert payload == expected_payload.encode()
 
     @pytest.mark.asyncio
-    async def test_create_validation_failure(self, api, client):
+    async def test_create_validation_failure(self, api, client, regular_user):
         request_payload = {}
-        async with client.post(api.jobs_base_url, json=request_payload) as response:
+        async with client.post(
+            api.jobs_base_url, headers=regular_user.headers, json=request_payload
+        ) as response:
             assert response.status == HTTPBadRequest.status_code
             response_payload = await response.json()
             assert response_payload == {"error": mock.ANY}
