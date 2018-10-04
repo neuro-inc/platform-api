@@ -129,12 +129,7 @@ class EnvironConfigFactory:
             uri=uri, conn_pool_size=conn_pool_size, conn_timeout_s=conn_timeout_s
         )
 
-    def create_auth(self) -> Optional[AuthConfig]:
-        # TODO (A Danshyn 10/03/18): temporarily allowing to not specify auth
-        # config
-        if "NP_AUTH_URL" not in self._environ:
-            return None
-
+    def create_auth(self) -> AuthConfig:
         url = URL(self._environ["NP_AUTH_URL"])
         token = self._environ["NP_AUTH_TOKEN"]
         return AuthConfig(server_endpoint_url=url, service_token=token)  # type: ignore
