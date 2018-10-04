@@ -7,6 +7,7 @@ from platform_api.orchestrator.job_request import (
     JobError,
     JobRequest,
     JobStatus,
+    User,
 )
 from platform_api.orchestrator.jobs_storage import RedisJobsStorage
 
@@ -18,7 +19,7 @@ class TestRedisJobsStorage:
             command="sleep 5",
             resources=ContainerResources(cpu=0.1, memory_mb=256),
         )
-        return JobRequest.create(container)
+        return JobRequest.create(User("test_user", "test_token"), container)
 
     def _create_pending_job(self, kube_orchestrator):
         return Job(kube_orchestrator.config, job_request=self._create_job_request())

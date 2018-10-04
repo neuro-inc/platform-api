@@ -23,6 +23,7 @@ from platform_api.orchestrator.job_request import (
     ContainerHTTPServer,
     ContainerResources,
     ContainerVolume,
+    User,
 )
 from platform_api.orchestrator.kube_orchestrator import (
     Ingress,
@@ -59,7 +60,9 @@ async def job_nginx(kube_orchestrator):
         command="sleep 5",
         resources=ContainerResources(cpu=0.1, memory_mb=256),
     )
-    job_request = JobRequest(job_id=job_id, container=container)
+    job_request = JobRequest(
+        username="test_user", token="test_token", job_id=job_id, container=container
+    )
     job = MyJob(orchestrator=kube_orchestrator, job_request=job_request)
     return job
 
@@ -102,7 +105,9 @@ class TestKubeOrchestrator:
             image="notsuchdockerimage",
             resources=ContainerResources(cpu=0.1, memory_mb=128),
         )
-        job_request = JobRequest(job_id=job_id, container=container)
+        job_request = JobRequest(
+            username="test_user", token="test_token", job_id=job_id, container=container
+        )
         job = MyJob(orchestrator=kube_orchestrator, job_request=job_request)
         try:
             status = await job.start()
@@ -123,7 +128,12 @@ class TestKubeOrchestrator:
         container = Container(
             image="python", resources=ContainerResources(cpu=0.1, memory_mb=128)
         )
-        job_request_second = JobRequest(job_id=job_nginx.id, container=container)
+        job_request_second = JobRequest(
+            username="test_user",
+            token="test_token",
+            job_id=job_nginx.id,
+            container=container,
+        )
         job_second = MyJob(
             orchestrator=kube_orchestrator, job_request=job_request_second
         )
@@ -149,7 +159,9 @@ class TestKubeOrchestrator:
         container = Container(
             image="python", resources=ContainerResources(cpu=0.1, memory_mb=128)
         )
-        job_request = JobRequest(job_id=job_id, container=container)
+        job_request = JobRequest(
+            username="test_user", token="test_token", job_id=job_id, container=container
+        )
         job = MyJob(orchestrator=kube_orchestrator, job_request=job_request)
 
         with pytest.raises(JobError):
@@ -163,7 +175,8 @@ class TestKubeOrchestrator:
             resources=ContainerResources(cpu=0.1, memory_mb=128),
         )
         job = MyJob(
-            orchestrator=kube_orchestrator, job_request=JobRequest.create(container)
+            orchestrator=kube_orchestrator,
+            job_request=JobRequest.create(User("test_user", "test_token"), container),
         )
         try:
             status = await job.start()
@@ -182,7 +195,8 @@ class TestKubeOrchestrator:
             resources=ContainerResources(cpu=0.1, memory_mb=128),
         )
         job = MyJob(
-            orchestrator=kube_orchestrator, job_request=JobRequest.create(container)
+            orchestrator=kube_orchestrator,
+            job_request=JobRequest.create(User("test_user", "test_token"), container),
         )
         try:
             status = await job.start()
@@ -229,7 +243,9 @@ class TestKubeOrchestrator:
         )
         write_job = MyJob(
             orchestrator=kube_orchestrator,
-            job_request=JobRequest.create(write_container),
+            job_request=JobRequest.create(
+                User("test_user", "test_token"), write_container
+            ),
         )
 
         read_container = Container(
@@ -240,7 +256,9 @@ class TestKubeOrchestrator:
         )
         read_job = MyJob(
             orchestrator=kube_orchestrator,
-            job_request=JobRequest.create(read_container),
+            job_request=JobRequest.create(
+                User("test_user", "test_token"), read_container
+            ),
         )
 
         try:
@@ -273,7 +291,8 @@ class TestKubeOrchestrator:
             resources=ContainerResources(cpu=0.1, memory_mb=128),
         )
         job = MyJob(
-            orchestrator=kube_orchestrator, job_request=JobRequest.create(container)
+            orchestrator=kube_orchestrator,
+            job_request=JobRequest.create(User("test_user", "test_token"), container),
         )
 
         try:
@@ -374,7 +393,8 @@ class TestKubeOrchestrator:
             http_server=ContainerHTTPServer(port=80),
         )
         job = MyJob(
-            orchestrator=kube_orchestrator, job_request=JobRequest.create(container)
+            orchestrator=kube_orchestrator,
+            job_request=JobRequest.create(User("test_user", "test_token"), container),
         )
         try:
             status = await job.start()
@@ -447,7 +467,7 @@ class TestKubeClient:
             command="true",
             resources=ContainerResources(cpu=0.1, memory_mb=128),
         )
-        job_request = JobRequest.create(container)
+        job_request = JobRequest.create(User("test_user", "test_token"), container)
         pod = PodDescriptor.from_job_request(
             kube_config.create_storage_volume(), job_request
         )
@@ -465,7 +485,7 @@ class TestKubeClient:
             command="true",
             resources=ContainerResources(cpu=0.1, memory_mb=128),
         )
-        job_request = JobRequest.create(container)
+        job_request = JobRequest.create(User("test_user", "test_token"), container)
         pod = PodDescriptor.from_job_request(
             kube_config.create_storage_volume(), job_request
         )
@@ -492,7 +512,7 @@ class TestKubeClient:
             command="true",
             resources=ContainerResources(cpu=0.1, memory_mb=128),
         )
-        job_request = JobRequest.create(container)
+        job_request = JobRequest.create(User("test_user", "test_token"), container)
         pod = PodDescriptor.from_job_request(
             kube_config.create_storage_volume(), job_request
         )
@@ -512,7 +532,7 @@ class TestKubeClient:
             command="true",
             resources=ContainerResources(cpu=0.1, memory_mb=128),
         )
-        job_request = JobRequest.create(container)
+        job_request = JobRequest.create(User("test_user", "test_token"), container)
         pod = PodDescriptor.from_job_request(
             kube_config.create_storage_volume(), job_request
         )
@@ -555,7 +575,7 @@ class TestPodContainerLogReader:
             command="true",
             resources=ContainerResources(cpu=0.1, memory_mb=128),
         )
-        job_request = JobRequest.create(container)
+        job_request = JobRequest.create(User("test_user", "test_token"), container)
         pod = PodDescriptor.from_job_request(
             kube_config.create_storage_volume(), job_request
         )
@@ -577,7 +597,7 @@ class TestPodContainerLogReader:
             command=command,
             resources=ContainerResources(cpu=0.1, memory_mb=128),
         )
-        job_request = JobRequest.create(container)
+        job_request = JobRequest.create(User("test_user", "test_token"), container)
         pod = PodDescriptor.from_job_request(
             kube_config.create_storage_volume(), job_request
         )
@@ -597,7 +617,7 @@ class TestPodContainerLogReader:
             command=command,
             resources=ContainerResources(cpu=0.1, memory_mb=128),
         )
-        job_request = JobRequest.create(container)
+        job_request = JobRequest.create(User("test_user", "test_token"), container)
         pod = PodDescriptor.from_job_request(
             kube_config.create_storage_volume(), job_request
         )
@@ -620,7 +640,7 @@ class TestPodContainerLogReader:
             command=command,
             resources=ContainerResources(cpu=0.1, memory_mb=128),
         )
-        job_request = JobRequest.create(container)
+        job_request = JobRequest.create(User("test_user", "test_token"), container)
         pod = PodDescriptor.from_job_request(
             kube_config.create_storage_volume(), job_request
         )
@@ -641,7 +661,7 @@ class TestPodContainerLogReader:
             command=command,
             resources=ContainerResources(cpu=0.1, memory_mb=128),
         )
-        job_request = JobRequest.create(container)
+        job_request = JobRequest.create(User("test_user", "test_token"), container)
         pod = PodDescriptor.from_job_request(
             kube_config.create_storage_volume(), job_request
         )
@@ -683,7 +703,7 @@ class TestPodContainerDevShmSettings:
     ) -> bytes:
         command = "/bin/df --block-size M --output=avail /dev/shm"
         container = Container(image="ubuntu", command=command, resources=resources)
-        job_request = JobRequest.create(container)
+        job_request = JobRequest.create(User("test_user", "test_token"), container)
         pod = PodDescriptor.from_job_request(
             kube_config.create_storage_volume(), job_request
         )
@@ -699,7 +719,7 @@ class TestPodContainerDevShmSettings:
         self, kube_config, kube_client, delete_pod_later, resources, command
     ):
         container = Container(image="ubuntu", command=command, resources=resources)
-        job_request = JobRequest.create(container)
+        job_request = JobRequest.create(User("test_user", "test_token"), container)
         pod = PodDescriptor.from_job_request(
             kube_config.create_storage_volume(), job_request
         )
