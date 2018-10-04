@@ -2,7 +2,7 @@ from typing import Any, Dict
 
 import aiohttp.web
 import trafaret as t
-from aiohttp_security import check_permission
+from aiohttp_security import check_authorized, check_permission
 from neuro_auth_client import Permission
 
 from platform_api.config import Config
@@ -137,6 +137,10 @@ class JobsHandler:
         )
 
     async def handle_get(self, request):
+        # TODO (A Danshyn 10/04/18): we do not store user names in jobs yet,
+        # therefore for now we only check whether the user is authorized
+        await check_authorized(request)
+
         job_id = request.match_info["job_id"]
         job = await self._jobs_service.get_job(job_id)
         response_payload = convert_job_to_job_response(job)
@@ -145,7 +149,11 @@ class JobsHandler:
             data=response_payload, status=aiohttp.web.HTTPOk.status_code
         )
 
-    async def handle_get_all(self, _):
+    async def handle_get_all(self, request):
+        # TODO (A Danshyn 10/04/18): we do not store user names in jobs yet,
+        # therefore for now we only check whether the user is authorized
+        await check_authorized(request)
+
         # TODO use pagination. may eventually explode with OOM.
         jobs = await self._jobs_service.get_all_jobs()
         response_payload = {"jobs": [convert_job_to_job_response(job) for job in jobs]}
@@ -155,11 +163,19 @@ class JobsHandler:
         )
 
     async def handle_delete(self, request):
+        # TODO (A Danshyn 10/04/18): we do not store user names in jobs yet,
+        # therefore for now we only check whether the user is authorized
+        await check_authorized(request)
+
         job_id = request.match_info["job_id"]
         await self._jobs_service.delete_job(job_id)
         raise aiohttp.web.HTTPNoContent()
 
     async def stream_log(self, request):
+        # TODO (A Danshyn 10/04/18): we do not store user names in jobs yet,
+        # therefore for now we only check whether the user is authorized
+        await check_authorized(request)
+
         job_id = request.match_info["job_id"]
         log_reader = await self._jobs_service.get_job_log_reader(job_id)
         # TODO: expose. make configurable
