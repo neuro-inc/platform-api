@@ -222,13 +222,15 @@ class TestJobs:
 
     @pytest.mark.asyncio
     async def test_get_jobs_return_corrects_id(
-        self, jobs_client, api, client, model_train
+        self, jobs_client, api, client, model_train, regular_user
     ):
         jobs_ids = []
         n_jobs = 2
         for _ in range(n_jobs):
             url = api.model_base_url
-            async with client.post(url, json=model_train) as response:
+            async with client.post(
+                url, headers=regular_user.headers, json=model_train
+            ) as response:
                 assert response.status == HTTPAccepted.status_code
                 result = await response.json()
                 assert result["status"] in ["pending"]
@@ -245,9 +247,13 @@ class TestJobs:
             await jobs_client.delete_job(api=api, client=client, job_id=job["id"])
 
     @pytest.mark.asyncio
-    async def test_delete_job(self, api, client, model_train, jobs_client):
+    async def test_delete_job(
+        self, api, client, model_train, jobs_client, regular_user
+    ):
         url = api.model_base_url
-        async with client.post(url, json=model_train) as response:
+        async with client.post(
+            url, headers=regular_user.headers, json=model_train
+        ) as response:
             assert response.status == HTTPAccepted.status_code
             result = await response.json()
             assert result["status"] in ["pending"]
@@ -272,7 +278,7 @@ class TestJobs:
             assert result["error"] == f"no such job {job_id}"
 
     @pytest.mark.asyncio
-    async def test_job_log(self, api, client):
+    async def test_job_log(self, api, client, regular_user):
         command = 'bash -c "for i in {1..5}; do echo $i; sleep 1; done"'
         payload = {
             "container": {
@@ -284,7 +290,9 @@ class TestJobs:
             "result_storage_uri": "storage://result",
         }
         url = api.model_base_url
-        async with client.post(url, json=payload) as response:
+        async with client.post(
+            url, headers=regular_user.headers, json=payload
+        ) as response:
             assert response.status == HTTPAccepted.status_code
             result = await response.json()
             assert result["status"] in ["pending"]
@@ -308,7 +316,9 @@ class TestJobs:
             assert "is required" in response_payload["error"]
 
     @pytest.mark.asyncio
-    async def test_create_with_custom_volumes(self, jobs_client, api, client):
+    async def test_create_with_custom_volumes(
+        self, jobs_client, api, client, regular_user
+    ):
         request_payload = {
             "container": {
                 "image": "ubuntu",
@@ -324,7 +334,9 @@ class TestJobs:
             }
         }
 
-        async with client.post(api.jobs_base_url, json=request_payload) as response:
+        async with client.post(
+            api.jobs_base_url, headers=regular_user.headers, json=request_payload
+        ) as response:
             response_text = await response.text()
             assert response.status == HTTPAccepted.status_code, response_text
             response_payload = await response.json()
@@ -384,7 +396,7 @@ class TestJobs:
         }
 
     @pytest.mark.asyncio
-    async def test_job_failed(self, jobs_client, api, client):
+    async def test_job_failed(self, jobs_client, api, client, regular_user):
         command = 'bash -c "echo Failed!; false"'
         payload = {
             "container": {
@@ -396,7 +408,9 @@ class TestJobs:
             "result_storage_uri": "storage://result",
         }
         url = api.model_base_url
-        async with client.post(url, json=payload) as response:
+        async with client.post(
+            url, headers=regular_user.headers, json=payload
+        ) as response:
             assert response.status == HTTPAccepted.status_code
             result = await response.json()
             assert result["status"] == "pending"
@@ -439,8 +453,3 @@ class TestJobs:
                 ],
             },
         }
-
-
-@pytest.mark.asyncio
-async def test_auth_client(auth_client):
-    await auth_client.secured_ping()

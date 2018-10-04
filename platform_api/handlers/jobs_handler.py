@@ -2,11 +2,14 @@ from typing import Any, Dict
 
 import aiohttp.web
 import trafaret as t
+from aiohttp_security import check_permission
+from neuro_auth_client import Permission
 
 from platform_api.config import Config
 from platform_api.orchestrator import JobsService
 from platform_api.orchestrator.job import Job
 from platform_api.orchestrator.job_request import JobRequest
+from platform_api.user import untrusted_user
 
 from .job_request_builder import ContainerBuilder
 from .validators import (
@@ -116,6 +119,10 @@ class JobsHandler:
         )
 
     async def create_job(self, request):
+        user = await untrusted_user(request)
+        permission = Permission(uri=str(user.to_job_uri()), action="write")
+        await check_permission(request, permission.action, [permission])
+
         orig_payload = await request.json()
         request_payload = self._job_request_validator.check(orig_payload)
         container = ContainerBuilder.from_container_payload(
