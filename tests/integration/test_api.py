@@ -230,9 +230,7 @@ class TestModels:
 
 class TestJobs:
     @pytest.mark.asyncio
-    async def test_create_job_unauthorized(
-        self, api, client, model_train, jobs_client
-    ):
+    async def test_create_job_unauthorized(self, api, client, model_train, jobs_client):
         url = api.jobs_base_url
         async with client.post(url, json=model_train) as response:
             assert response.status == HTTPUnauthorized.status_code
