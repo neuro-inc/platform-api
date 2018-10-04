@@ -30,6 +30,39 @@ spec:
 apiVersion: apps/v1
 kind: ReplicaSet
 metadata:
+  name: platformauthapi
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      service: platformauthapi
+  template:
+    metadata:
+      labels:
+        service: platformauthapi
+    spec:
+      containers:
+      - name: platformauthapi
+        image: platformauthapi:latest
+        imagePullPolicy: Never
+        env:
+        - name: NP_JWT_SECRET
+          value: secret
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: platformauthapi
+spec:
+  ports:
+  - port: 8080
+    targetPort: 8080
+  selector:
+    service: platformauthapi
+---
+apiVersion: apps/v1
+kind: ReplicaSet
+metadata:
   name: platformapi
 spec:
   replicas: 1
@@ -58,6 +91,10 @@ spec:
           value: jobs.platform.dev.neuromation.io
         - name: NP_DB_REDIS_URI
           value: redis://platformredis:6379/0
+        - name: NP_AUTH_URL
+          value: http://platformauthapi:8080
+        - name: NP_AUTH_TOKEN
+          value: eyJ0eXAiOiJKV1QiLCJhbGciOiJIUzI1NiJ9.eyJpZGVudGl0eSI6ImNvbXB1dGUifQ.IJDlKCfbiuNGZH9Sh6p-CdUL5KxEK5JStqzfDk4-RAA
       - name: kubeproxy
         image: lachlanevenson/k8s-kubectl:v1.10.3
         args: [proxy]
