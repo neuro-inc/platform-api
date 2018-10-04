@@ -85,6 +85,11 @@ async def create_auth_config(container) -> AuthConfig:
     return AuthConfig(server_endpoint_url=url, service_token=token)  # type: ignore
 
 
+@pytest.fixture
+async def auth_config(auth_server) -> AuthConfig:
+    yield auth_server
+
+
 @asynccontextmanager
 async def create_auth_client(config: AuthConfig) -> AuthClient:
     async with AuthClient(

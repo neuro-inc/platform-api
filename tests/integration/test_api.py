@@ -37,7 +37,7 @@ class ApiConfig(NamedTuple):
 
 
 @pytest.fixture
-def config(kube_config, redis_config):
+def config(kube_config, redis_config, auth_config):
     server_config = ServerConfig()
     storage_config = StorageConfig(host_mount_path=PurePath("/tmp"))  # type: ignore
     database_config = DatabaseConfig(redis=redis_config)  # type: ignore
@@ -46,6 +46,7 @@ def config(kube_config, redis_config):
         storage=storage_config,
         orchestrator=kube_config,
         database=database_config,
+        auth=auth_config,
     )
 
 
