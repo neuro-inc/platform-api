@@ -218,9 +218,18 @@ class TestModels:
 
 class TestJobs:
     @pytest.mark.asyncio
-    async def test_create_job_unauthorized(self, api, client, model_train):
+    async def test_create_job_unauthorized_no_token(self, api, client, model_train):
         url = api.jobs_base_url
         async with client.post(url, json=model_train) as response:
+            assert response.status == HTTPUnauthorized.status_code
+
+    @pytest.mark.asyncio
+    async def test_create_job_unauthorized_invalid_token(
+        self, api, client, model_train
+    ):
+        url = api.jobs_base_url
+        headers = {"Authorization": "Bearer INVALID"}
+        async with client.post(url, headers=headers, json=model_train) as response:
             assert response.status == HTTPUnauthorized.status_code
 
     @pytest.mark.asyncio
