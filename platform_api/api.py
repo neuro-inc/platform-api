@@ -3,6 +3,8 @@ import logging
 
 import aiohttp.web
 from async_exit_stack import AsyncExitStack
+from neuro_auth_client import AuthClient
+from neuro_auth_client.security import AuthScheme, setup_security
 
 from .config import Config
 from .config_factory import EnvironConfigFactory
@@ -111,6 +113,17 @@ async def create_app(config: Config) -> aiohttp.web.Application:
 
             app["models_app"]["jobs_service"] = jobs_service
             app["jobs_app"]["jobs_service"] = jobs_service
+
+            auth_client = await exit_stack.enter_async_context(
+                AuthClient(
+                    url=config.auth.server_endpoint_url, token=config.auth.service_token
+                )
+            )
+
+            await setup_security(
+                app=app, auth_client=auth_client, auth_scheme=AuthScheme.BEARER
+            )
+
             yield
 
     app.cleanup_ctx.append(_init_app)
