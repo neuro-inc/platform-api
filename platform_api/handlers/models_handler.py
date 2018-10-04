@@ -2,9 +2,12 @@ from typing import Dict
 
 import aiohttp.web
 import trafaret as t
+from aiohttp_security import check_permission
+from neuro_auth_client import Permission
 
 from platform_api.config import Config
 from platform_api.orchestrator import JobRequest, JobsService
+from platform_api.user import untrusted_user
 
 from .job_request_builder import ModelRequest
 from .validators import create_container_request_validator, create_job_status_validator
@@ -63,6 +66,10 @@ class ModelsHandler:
         return payload
 
     async def handle_post(self, request):
+        user = await untrusted_user(request)
+        permission = Permission(uri=str(user.to_job_uri()), action="write")
+        await check_permission(request, permission.action, [permission])
+
         orig_payload = await request.json()
         request_payload = self._model_request_validator.check(orig_payload)
 
