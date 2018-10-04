@@ -4,7 +4,7 @@ import aiohttp.web
 import trafaret as t
 
 from platform_api.config import Config
-from platform_api.orchestrator import JobRequest, JobsService
+from platform_api.orchestrator import JobRequest, JobsService, User
 
 from .job_request_builder import ModelRequest
 from .validators import create_container_request_validator, create_job_status_validator
@@ -54,8 +54,9 @@ class ModelsHandler:
         )
 
     async def _create_job(self, model_request: ModelRequest) -> Dict:
+        user = User("TODO", "TODO")
         container = model_request.to_container()
-        job_request = JobRequest.create(container)
+        job_request = JobRequest.create(user, container)
         job, status = await self._jobs_service.create_job(job_request)
         payload = {"job_id": job.id, "status": status.value}
         if container.has_http_server_exposed:

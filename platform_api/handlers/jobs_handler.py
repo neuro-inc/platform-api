@@ -6,7 +6,7 @@ import trafaret as t
 from platform_api.config import Config
 from platform_api.orchestrator import JobsService
 from platform_api.orchestrator.job import Job
-from platform_api.orchestrator.job_request import JobRequest
+from platform_api.orchestrator.job_request import JobRequest, User
 
 from .job_request_builder import ContainerBuilder
 from .validators import (
@@ -121,7 +121,8 @@ class JobsHandler:
         container = ContainerBuilder.from_container_payload(
             request_payload["container"], storage_config=self._storage_config
         ).build()
-        job_request = JobRequest.create(container)
+        user = User("TODO", "TODO")
+        job_request = JobRequest.create(user, container)
         job, _ = await self._jobs_service.create_job(job_request)
         response_payload = convert_job_to_job_response(job)
         self._job_response_validator.check(response_payload)

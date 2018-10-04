@@ -6,6 +6,7 @@ from .job_request import (  # noqa
     JobError,
     JobRequest,
     JobNotFoundException,
+    User,
 )  # noqa
 from .job import Job  # noqa
 from .jobs_service import JobsService  # noqa

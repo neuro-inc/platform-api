@@ -22,6 +22,12 @@ class JobNotFoundException(JobException):
 
 
 @dataclass(frozen=True)
+class User:
+    name: str
+    token: str
+
+
+@dataclass(frozen=True)
 class ContainerVolume:
     uri: URL
     src_path: PurePath
@@ -142,22 +148,31 @@ class Container:
 
 @dataclass(frozen=True)
 class JobRequest:
+    username: str
+    token: str = field(repr=False, compare=False, hash=False)
     job_id: str
     container: Container
 
     @classmethod
-    def create(cls, container) -> "JobRequest":
+    def create(cls, user: User, container) -> "JobRequest":
         job_id = f"job-{uuid.uuid4()}"
-        return cls(job_id, container)  # type: ignore
+        return cls(user.name, user.token, job_id, container)  # type: ignore
 
     @classmethod
     def from_primitive(cls, payload: Dict) -> "JobRequest":
-        kwargs = payload.copy()
-        kwargs["container"] = Container.from_primitive(kwargs["container"])
-        return cls(**kwargs)  # type: ignore
+        return cls(
+            payload["username"],
+            "",
+            payload["job_id"],
+            Container.from_primitive(payload["container"]),
+        )  # type: ignore
 
     def to_primitive(self) -> Dict:
-        return {"job_id": self.job_id, "container": self.container.to_primitive()}
+        return {
+            "job_id": self.job_id,
+            "container": self.container.to_primitive(),
+            "username": self.username,
+        }
 
 
 class JobStatus(str, enum.Enum):

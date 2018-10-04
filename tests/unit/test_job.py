@@ -232,6 +232,7 @@ class TestModelRequest:
 @pytest.fixture
 def job_request_payload():
     return {
+        "username": "test_user",
         "job_id": "testjob",
         "container": {
             "image": "testimage",
@@ -266,7 +267,9 @@ class TestJob:
             resources=ContainerResources(cpu=1, memory_mb=128),
             http_server=ContainerHTTPServer(port=1234),
         )
-        return JobRequest(job_id="testjob", container=container)
+        return JobRequest(
+            "test_user", "test_token", job_id="testjob", container=container
+        )
 
     def test_http_url(self, mock_orchestrator, job_request):
         job = Job(orchestrator_config=mock_orchestrator.config, job_request=job_request)
@@ -356,7 +359,9 @@ class TestJobRequest:
                 )
             ],
         )
-        request = JobRequest(job_id="testjob", container=container)
+        request = JobRequest(
+            "test_user", "test_token", job_id="testjob", container=container
+        )
         assert request.to_primitive() == job_request_payload
 
     def test_from_primitive(self, job_request_payload):

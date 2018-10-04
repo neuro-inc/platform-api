@@ -4,7 +4,7 @@ import pytest
 
 from platform_api.orchestrator import Job, JobRequest, JobsService, JobStatus
 from platform_api.orchestrator.job import JobStatusItem
-from platform_api.orchestrator.job_request import Container, ContainerResources
+from platform_api.orchestrator.job_request import Container, ContainerResources, User
 from platform_api.orchestrator.jobs_service import InMemoryJobsStorage
 
 
@@ -17,9 +17,10 @@ class TestInMemoryJobsStorage:
 
     def _create_job_request(self):
         return JobRequest.create(
+            User("user_name", "user_token"),
             Container(
                 image="testimage", resources=ContainerResources(cpu=1, memory_mb=128)
-            )
+            ),
         )
 
     @pytest.mark.asyncio
