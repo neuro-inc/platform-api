@@ -13,6 +13,7 @@ from platform_api.orchestrator.job_request import (
     JobError,
     JobRequest,
     JobStatus,
+    User,
 )
 from platform_api.orchestrator.kube_orchestrator import (
     ContainerStatus,
@@ -139,6 +140,7 @@ class TestPodDescriptor:
                 ],
                 "volumes": [],
                 "restartPolicy": "Never",
+                "imagePullSecrets": [],
             },
         }
 
@@ -196,6 +198,7 @@ class TestPodDescriptor:
                 ],
                 "volumes": [{"name": "dshm", "emptyDir": {"medium": "Memory"}}],
                 "restartPolicy": "Never",
+                "imagePullSecrets": [],
             },
         }
 
@@ -214,7 +217,7 @@ class TestPodDescriptor:
             resources=ContainerResources(cpu=1, memory_mb=128, gpu=1),
         )
         volume = HostVolume(name="testvolume", path="/tmp")
-        job_request = JobRequest.create(container)
+        job_request = JobRequest.create(User("test_user", "test_token"), container)
         pod = PodDescriptor.from_job_request(volume, job_request)
         assert pod.name == job_request.job_id
         assert pod.image == "testimage"

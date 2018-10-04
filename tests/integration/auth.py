@@ -6,10 +6,10 @@ import pytest
 from aiohttp import ClientError
 from async_generator import asynccontextmanager
 from async_timeout import timeout
-from yarl import URL
-
 from jose import jwt
 from neuro_auth_client import AuthClient
+from yarl import URL
+
 from platform_api.config import AuthConfig
 
 

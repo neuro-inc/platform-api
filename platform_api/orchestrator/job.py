@@ -163,18 +163,11 @@ class JobStatusHistory:
         return None
 
 
-@dataclass(frozen=True)
-class User:
-    name: str
-    token: str
-
-
 class Job:
     def __init__(
         self,
         orchestrator_config: OrchestratorConfig,
         job_request: JobRequest,
-        user: User,
         status_history: Optional[JobStatusHistory] = None,
         # leaving `status` for backward compat with tests
         status: JobStatus = JobStatus.PENDING,
@@ -198,7 +191,6 @@ class Job:
         self._is_deleted = is_deleted
 
         self._current_datetime_factory = current_datetime_factory
-        self._user = user
 
     @property
     def id(self):
@@ -207,10 +199,6 @@ class Job:
     @property
     def request(self) -> JobRequest:
         return self._job_request
-
-    @property
-    def user(self) -> User:
-        return self._user
 
     @property
     def status(self) -> JobStatus:

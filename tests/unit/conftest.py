@@ -16,7 +16,7 @@ from platform_api.orchestrator import (
     Orchestrator,
 )
 from platform_api.orchestrator.job import JobStatusItem
-from platform_api.orchestrator.job_request import Container, ContainerResources
+from platform_api.orchestrator.job_request import Container, ContainerResources, User
 
 
 class MockOrchestrator(Orchestrator):
@@ -60,9 +60,10 @@ class MockOrchestrator(Orchestrator):
 def job_request_factory():
     def factory():
         return JobRequest.create(
+            User("test_user", "test_token"),
             Container(
                 image="testimage", resources=ContainerResources(cpu=1, memory_mb=128)
-            )
+            ),
         )
 
     return factory

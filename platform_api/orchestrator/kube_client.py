@@ -339,7 +339,7 @@ class PodDescriptor:
 
         resources = Resources.from_container_resources(container.resources)
         image_pull_secrets = [
-            SecretRef(name=DockerRegistrySecret.PREFIX + job.user.name)
+            SecretRef(name=DockerRegistrySecret.PREFIX + job_request.username)
         ]
         return cls(  # type: ignore
             name=job_request.job_id,
@@ -351,6 +351,7 @@ class PodDescriptor:
             resources=resources,
             port=container.port,
             health_check_path=container.health_check_path,
+            image_pull_secrets=image_pull_secrets,
         )
 
     @property
@@ -429,7 +430,7 @@ class PodDescriptor:
             name=metadata["name"],
             image=container_payload["image"],
             status=status,
-            secrets=secrets,
+            image_pull_secrets=secrets,
         )
 
 
