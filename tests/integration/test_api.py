@@ -75,29 +75,25 @@ async def client():
 
 
 class JobsClient:
-    def __init__(self):
-        pass
+    def __init__(self, api_config, client, headers):
+        self._api_config = api_config
+        self._client = client
+        self._headers = headers
 
-    async def get_all_jobs(self, api, client):
-        url = api.jobs_base_url
-        async with client.get(url) as response:
+    async def get_all_jobs(self):
+        url = self._api_config.jobs_base_url
+        async with self._client.get(url, headers=self._headers) as response:
             response_text = await response.text()
             assert response.status == HTTPOk.status_code, response_text
             result = await response.json()
         return result["jobs"]
 
     async def long_pooling_by_job_id(
-        self,
-        api,
-        client,
-        job_id: str,
-        status: str,
-        interval_s: int = 2,
-        max_attempts: int = 60,
+        self, job_id: str, status: str, interval_s: int = 2, max_attempts: int = 60
     ):
-        url = api.generate_job_url(job_id)
+        url = self._api_config.generate_job_url(job_id)
         for _ in range(max_attempts):
-            async with client.get(url) as response:
+            async with self._client.get(url, headers=self._headers) as response:
                 response_text = await response.text()
                 assert response.status == HTTPOk.status_code, response_text
                 result = await response.json()
@@ -107,15 +103,15 @@ class JobsClient:
         else:
             raise RuntimeError("too long")
 
-    async def delete_job(self, api, client, job_id: str):
-        url = api.generate_job_url(job_id)
-        async with client.delete(url) as response:
+    async def delete_job(self, job_id: str):
+        url = self._api_config.generate_job_url(job_id)
+        async with self._client.delete(url, headers=self._headers) as response:
             assert response.status == HTTPNoContent.status_code
 
 
 @pytest.fixture
-async def jobs_client():
-    return JobsClient()
+async def jobs_client(api, client, regular_user):
+    return JobsClient(api, client, headers=regular_user.headers)
 
 
 class TestApi:
@@ -141,9 +137,7 @@ async def model_train():
 
 class TestModels:
     @pytest.mark.asyncio
-    async def test_create_model_unauthorized(
-        self, api, client, model_train, jobs_client
-    ):
+    async def test_create_model_unauthorized(self, api, client, model_train):
         url = api.model_base_url
         async with client.post(url, json=model_train) as response:
             assert response.status == HTTPUnauthorized.status_code
@@ -163,10 +157,8 @@ class TestModels:
             expected_url = f"http://{job_id}.jobs.platform.neuromation.io"
             assert result["http_url"] == expected_url
 
-        await jobs_client.long_pooling_by_job_id(
-            api=api, client=client, job_id=job_id, status="succeeded"
-        )
-        await jobs_client.delete_job(api=api, client=client, job_id=job_id)
+        await jobs_client.long_pooling_by_job_id(job_id=job_id, status="succeeded")
+        await jobs_client.delete_job(job_id=job_id)
 
     @pytest.mark.asyncio
     async def test_env_var_sourcing(self, api, client, jobs_client, regular_user):
@@ -188,10 +180,8 @@ class TestModels:
             result = await response.json()
             assert result["status"] in ["pending"]
             job_id = result["job_id"]
-        await jobs_client.long_pooling_by_job_id(
-            api=api, client=client, job_id=job_id, status="succeeded"
-        )
-        await jobs_client.delete_job(api=api, client=client, job_id=job_id)
+        await jobs_client.long_pooling_by_job_id(job_id=job_id, status="succeeded")
+        await jobs_client.delete_job(job_id=job_id)
 
     @pytest.mark.asyncio
     async def test_incorrect_request(self, api, client, regular_user):
@@ -223,21 +213,19 @@ class TestModels:
             assert response.status == HTTPAccepted.status_code
             data = await response.json()
             job_id = data["job_id"]
-        await jobs_client.long_pooling_by_job_id(
-            api=api, client=client, job_id=job_id, status="failed"
-        )
+        await jobs_client.long_pooling_by_job_id(job_id=job_id, status="failed")
 
 
 class TestJobs:
     @pytest.mark.asyncio
-    async def test_create_job_unauthorized(self, api, client, model_train, jobs_client):
+    async def test_create_job_unauthorized(self, api, client, model_train):
         url = api.jobs_base_url
         async with client.post(url, json=model_train) as response:
             assert response.status == HTTPUnauthorized.status_code
 
     @pytest.mark.asyncio
-    async def test_get_all_jobs_clear(self, jobs_client, api, client):
-        jobs = await jobs_client.get_all_jobs(api=api, client=client)
+    async def test_get_all_jobs_clear(self, jobs_client):
+        jobs = await jobs_client.get_all_jobs()
         assert jobs == []
 
     @pytest.mark.asyncio
@@ -256,15 +244,15 @@ class TestJobs:
                 assert result["status"] in ["pending"]
                 job_id = result["job_id"]
                 await jobs_client.long_pooling_by_job_id(
-                    api=api, client=client, job_id=job_id, status="succeeded"
+                    job_id=job_id, status="succeeded"
                 )
                 jobs_ids.append(job_id)
 
-        jobs = await jobs_client.get_all_jobs(api=api, client=client)
+        jobs = await jobs_client.get_all_jobs()
         assert set(jobs_ids) <= {x["id"] for x in jobs}
         # clean
         for job in jobs:
-            await jobs_client.delete_job(api=api, client=client, job_id=job["id"])
+            await jobs_client.delete_job(job_id=job["id"])
 
     @pytest.mark.asyncio
     async def test_delete_job(
@@ -278,21 +266,19 @@ class TestJobs:
             result = await response.json()
             assert result["status"] in ["pending"]
             job_id = result["job_id"]
-            await jobs_client.long_pooling_by_job_id(
-                api=api, client=client, job_id=job_id, status="succeeded"
-            )
-        await jobs_client.delete_job(api=api, client=client, job_id=job_id)
+            await jobs_client.long_pooling_by_job_id(job_id=job_id, status="succeeded")
+        await jobs_client.delete_job(job_id=job_id)
 
-        jobs = await jobs_client.get_all_jobs(api=api, client=client)
+        jobs = await jobs_client.get_all_jobs()
         assert len(jobs) == 1
         assert jobs[0]["status"] == "succeeded"
         assert jobs[0]["id"] == job_id
 
     @pytest.mark.asyncio
-    async def test_delete_not_exist(self, api, client):
+    async def test_delete_not_exist(self, api, client, regular_user):
         job_id = "kdfghlksjd-jhsdbljh-3456789!@"
         url = api.jobs_base_url + f"/{job_id}"
-        async with client.delete(url) as response:
+        async with client.delete(url, headers=regular_user.headers) as response:
             assert response.status == HTTPBadRequest.status_code
             result = await response.json()
             assert result["error"] == f"no such job {job_id}"
@@ -319,7 +305,7 @@ class TestJobs:
             job_id = result["job_id"]
 
         job_log_url = api.jobs_base_url + f"/{job_id}/log"
-        async with client.get(job_log_url) as response:
+        async with client.get(job_log_url, headers=regular_user.headers) as response:
             assert response.content_type == "text/plain"
             assert response.charset == "utf-8"
             payload = await response.read()
@@ -388,7 +374,7 @@ class TestJobs:
             job_id = response_payload["id"]
 
         response_payload = await jobs_client.long_pooling_by_job_id(
-            api=api, client=client, job_id=job_id, status="succeeded"
+            job_id=job_id, status="succeeded"
         )
 
         assert response_payload == {
@@ -439,7 +425,7 @@ class TestJobs:
             job_id = result["job_id"]
 
         response_payload = await jobs_client.long_pooling_by_job_id(
-            api=api, client=client, job_id=job_id, status="failed"
+            job_id=job_id, status="failed"
         )
 
         assert response_payload == {
