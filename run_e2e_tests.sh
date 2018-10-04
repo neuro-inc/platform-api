@@ -1,5 +1,10 @@
 #!/usr/bin/env bash
 
+docker tag $(cat AUTH_SERVER_IMAGE_NAME) platformauthapi:latest
+docker save -o /tmp/platformauthapi.image platformauthapi:latest
+eval $(minikube docker-env)
+docker load -i /tmp/platformauthapi.image
+
 kubectl create -f deploy/rb.default.gke.yml
 kubectl create -f tests/k8s/platformapi.yml
 
