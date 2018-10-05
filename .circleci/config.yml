@@ -121,7 +121,7 @@ workflows:
           filters:
             branches:
               only:
-                - further_auth_integration
+                - master
       - gke_stage_deploy:
           context: org-global
           requires:
