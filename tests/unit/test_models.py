@@ -166,9 +166,7 @@ class TestJobContainerToJson:
 
     def test_src_storage_uri_fallback_root(self, storage_config):
         volume = ContainerVolume(
-            uri=URL(""),
-            src_path=PurePath("/"),
-            dst_path=PurePath("/var/storage"),
+            uri=URL(""), src_path=PurePath("/"), dst_path=PurePath("/var/storage")
         )
         payload = convert_container_volume_to_json(volume, storage_config)
         assert payload == {
