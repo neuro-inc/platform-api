@@ -1,12 +1,14 @@
+from pathlib import PurePath
 from typing import Any, Dict
 
 import aiohttp.web
 import trafaret as t
+from yarl import URL
 
-from platform_api.config import Config
+from platform_api.config import Config, StorageConfig
 from platform_api.orchestrator import JobsService
 from platform_api.orchestrator.job import Job
-from platform_api.orchestrator.job_request import JobRequest
+from platform_api.orchestrator.job_request import ContainerVolume, JobRequest
 
 from .job_request_builder import ContainerBuilder
 from .validators import (
@@ -34,7 +36,9 @@ def create_job_response_validator() -> t.Trafaret:
     )
 
 
-def convert_job_container_to_json(container) -> Dict[str, Any]:
+def convert_job_container_to_json(
+    container, storage_config: StorageConfig
+) -> Dict[str, Any]:
     ret = {"image": container.image, "env": container.env, "volumes": []}
     if container.command is not None:
         ret["command"] = container.command
@@ -55,17 +59,33 @@ def convert_job_container_to_json(container) -> Dict[str, Any]:
             "health_check_path": container.http_server.health_check_path,
         }
     for volume in container.volumes:
-        ret["volumes"].append(
-            {
-                "src_storage_uri": str(volume.uri),
-                "dst_path": str(volume.dst_path),
-                "read_only": volume.read_only,
-            }
-        )
+        ret["volumes"].append(convert_container_volume_to_json(volume, storage_config))
     return ret
 
 
-def convert_job_to_job_response(job: Job) -> Dict[str, Any]:
+def convert_container_volume_to_json(
+    volume: ContainerVolume, storage_config: StorageConfig
+) -> Dict[str, Any]:
+    uri = str(volume.uri)
+    if not uri:
+        try:
+            rel_dst_path = volume.dst_path.relative_to(
+                storage_config.container_mount_path
+            )
+        except ValueError:
+            rel_dst_path = PurePath()
+        dst_path = PurePath("/") / rel_dst_path
+        uri = str(URL(f"{storage_config.uri_scheme}:/{dst_path}"))
+    return {
+        "src_storage_uri": uri,
+        "dst_path": str(volume.dst_path),
+        "read_only": volume.read_only,
+    }
+
+
+def convert_job_to_job_response(
+    job: Job, storage_config: StorageConfig
+) -> Dict[str, Any]:
     history = job.status_history
     current_status = history.current
     response_payload = {
@@ -123,7 +143,7 @@ class JobsHandler:
         ).build()
         job_request = JobRequest.create(container)
         job, _ = await self._jobs_service.create_job(job_request)
-        response_payload = convert_job_to_job_response(job)
+        response_payload = convert_job_to_job_response(job, self._storage_config)
         self._job_response_validator.check(response_payload)
         return aiohttp.web.json_response(
             data=response_payload, status=aiohttp.web.HTTPAccepted.status_code
@@ -132,7 +152,7 @@ class JobsHandler:
     async def handle_get(self, request):
         job_id = request.match_info["job_id"]
         job = await self._jobs_service.get_job(job_id)
-        response_payload = convert_job_to_job_response(job)
+        response_payload = convert_job_to_job_response(job, self._storage_config)
         self._job_response_validator.check(response_payload)
         return aiohttp.web.json_response(
             data=response_payload, status=aiohttp.web.HTTPOk.status_code
@@ -141,7 +161,11 @@ class JobsHandler:
     async def handle_get_all(self, _):
         # TODO use pagination. may eventually explode with OOM.
         jobs = await self._jobs_service.get_all_jobs()
-        response_payload = {"jobs": [convert_job_to_job_response(job) for job in jobs]}
+        response_payload = {
+            "jobs": [
+                convert_job_to_job_response(job, self._storage_config) for job in jobs
+            ]
+        }
         self._bulk_jobs_response_validator.check(response_payload)
         return aiohttp.web.json_response(
             data=response_payload, status=aiohttp.web.HTTPOk.status_code
