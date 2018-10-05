@@ -86,8 +86,7 @@ class Config:
     storage: StorageConfig
     orchestrator: OrchestratorConfig
     database: DatabaseConfig
-    # TODO (A Danshyn 10/03/18): not forcing yet
-    auth: Optional[AuthConfig] = None
+    auth: AuthConfig
 
     # used for generating environment variable names and
     # sourcing them inside containers.

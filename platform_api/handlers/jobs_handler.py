@@ -3,12 +3,15 @@ from typing import Any, Dict
 
 import aiohttp.web
 import trafaret as t
+from aiohttp_security import check_authorized, check_permission
+from neuro_auth_client import Permission
 from yarl import URL
 
 from platform_api.config import Config, StorageConfig
 from platform_api.orchestrator import JobsService
 from platform_api.orchestrator.job import Job
-from platform_api.orchestrator.job_request import ContainerVolume, JobRequest
+from platform_api.orchestrator.job_request import JobRequest
+from platform_api.user import untrusted_user
 
 from .job_request_builder import ContainerBuilder
 from .validators import (
@@ -136,6 +139,10 @@ class JobsHandler:
         )
 
     async def create_job(self, request):
+        user = await untrusted_user(request)
+        permission = Permission(uri=str(user.to_job_uri()), action="write")
+        await check_permission(request, permission.action, [permission])
+
         orig_payload = await request.json()
         request_payload = self._job_request_validator.check(orig_payload)
         container = ContainerBuilder.from_container_payload(
@@ -150,6 +157,10 @@ class JobsHandler:
         )
 
     async def handle_get(self, request):
+        # TODO (A Danshyn 10/04/18): we do not store user names in jobs yet,
+        # therefore for now we only check whether the user is authorized
+        await check_authorized(request)
+
         job_id = request.match_info["job_id"]
         job = await self._jobs_service.get_job(job_id)
         response_payload = convert_job_to_job_response(job, self._storage_config)
@@ -158,7 +169,11 @@ class JobsHandler:
             data=response_payload, status=aiohttp.web.HTTPOk.status_code
         )
 
-    async def handle_get_all(self, _):
+    async def handle_get_all(self, request):
+        # TODO (A Danshyn 10/04/18): we do not store user names in jobs yet,
+        # therefore for now we only check whether the user is authorized
+        await check_authorized(request)
+
         # TODO use pagination. may eventually explode with OOM.
         jobs = await self._jobs_service.get_all_jobs()
         response_payload = {
@@ -172,11 +187,19 @@ class JobsHandler:
         )
 
     async def handle_delete(self, request):
+        # TODO (A Danshyn 10/04/18): we do not store user names in jobs yet,
+        # therefore for now we only check whether the user is authorized
+        await check_authorized(request)
+
         job_id = request.match_info["job_id"]
         await self._jobs_service.delete_job(job_id)
         raise aiohttp.web.HTTPNoContent()
 
     async def stream_log(self, request):
+        # TODO (A Danshyn 10/04/18): we do not store user names in jobs yet,
+        # therefore for now we only check whether the user is authorized
+        await check_authorized(request)
+
         job_id = request.match_info["job_id"]
         log_reader = await self._jobs_service.get_job_log_reader(job_id)
         # TODO: expose. make configurable
