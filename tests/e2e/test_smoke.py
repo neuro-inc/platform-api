@@ -11,6 +11,15 @@ def api_endpoint_url():
 
 
 @pytest.fixture(scope="session")
+def compute_token():
+    return (
+        "eyJ0eXAiOiJKV1QiLCJhbGciOiJIUzI1NiJ9."
+        "eyJpZGVudGl0eSI6ImNvbXB1dGUifQ."
+        "IJDlKCfbiuNGZH9Sh6p-CdUL5KxEK5JStqzfDk4-RAA"
+    )
+
+
+@pytest.fixture(scope="session")
 def api_ping_url(api_endpoint_url):
     return f"{api_endpoint_url}/ping"
 
@@ -43,7 +52,7 @@ def api(api_ping_url):
 
 
 @pytest.mark.usefixtures("api")
-def test_basic_command(api_models_url, api_jobs_url):
+def test_basic_command(api_models_url, api_jobs_url, compute_token):
     model_request_payload = {
         "container": {
             "image": "ubuntu",
@@ -53,15 +62,18 @@ def test_basic_command(api_models_url, api_jobs_url):
         "dataset_storage_uri": "storage://",
         "result_storage_uri": "storage://result",
     }
-    response = requests.post(api_models_url, json=model_request_payload)
-    assert response.status_code == 202
+    headers = {"Authorization": f"Bearer {compute_token}"}
+    response = requests.post(
+        api_models_url, headers=headers, json=model_request_payload
+    )
+    assert response.status_code == 202, response.json()
     model_payload = response.json()
     job_id = model_payload["job_id"]
     jobs_url = f"{api_jobs_url}/{job_id}"
 
     for _ in range(30):
-        response = requests.get(jobs_url)
-        assert response.status_code == 200
+        response = requests.get(jobs_url, headers=headers)
+        assert response.status_code == 200, response.json()
         jobs_payload = response.json()
         status_name = jobs_payload["status"]
         if status_name == "succeeded":
