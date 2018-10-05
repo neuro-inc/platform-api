@@ -10,7 +10,7 @@ from yarl import URL
 from platform_api.config import Config, StorageConfig
 from platform_api.orchestrator import JobsService
 from platform_api.orchestrator.job import Job
-from platform_api.orchestrator.job_request import JobRequest
+from platform_api.orchestrator.job_request import ContainerVolume, JobRequest
 from platform_api.user import untrusted_user
 
 from .job_request_builder import ContainerBuilder
@@ -100,7 +100,9 @@ def convert_job_to_job_response(
             "description": current_status.description,
             "created_at": history.created_at_str,
         },
-        "container": convert_job_container_to_json(job.request.container),
+        "container": convert_job_container_to_json(
+            job.request.container, storage_config
+        ),
     }
     if job.has_http_server_exposed:
         response_payload["http_url"] = job.http_url
