@@ -33,7 +33,6 @@ class StorageConfig:
 
     type: StorageType = StorageType.HOST
 
-    # TODO (A Danshyn 06/27/18): should be set if type is NFS
     nfs_server: Optional[str] = None
     nfs_export_path: Optional[PurePath] = None
 

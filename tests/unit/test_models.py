@@ -1,9 +1,20 @@
-import pytest
+from pathlib import PurePath
 
-from platform_api.handlers.jobs_handler import convert_job_container_to_json
+import pytest
+from yarl import URL
+
+from platform_api.config import StorageConfig
+from platform_api.handlers.jobs_handler import (
+    convert_container_volume_to_json,
+    convert_job_container_to_json,
+)
 from platform_api.handlers.models_handler import create_model_response_validator
 from platform_api.handlers.validators import create_container_request_validator
-from platform_api.orchestrator.job_request import Container, ContainerResources
+from platform_api.orchestrator.job_request import (
+    Container,
+    ContainerResources,
+    ContainerVolume,
+)
 
 
 class TestContainerRequestValidator:
@@ -113,25 +124,66 @@ class TestModelResponseValidator:
 
 
 class TestJobContainerToJson:
-    def test_minimal(self):
+    @pytest.fixture
+    def storage_config(self) -> StorageConfig:
+        return StorageConfig(host_mount_path=PurePath("/whatever"))
+
+    def test_minimal(self, storage_config):
         container = Container(
             image="image", resources=ContainerResources(cpu=0.1, memory_mb=16)
         )
-        assert convert_job_container_to_json(container) == {
+        assert convert_job_container_to_json(container, storage_config) == {
             "env": {},
             "image": "image",
             "resources": {"cpu": 0.1, "memory_mb": 16},
             "volumes": [],
         }
 
-    def test_gpu_and_shm_resources(self):
+    def test_gpu_and_shm_resources(self, storage_config):
         container = Container(
             image="image",
             resources=ContainerResources(cpu=0.1, memory_mb=16, gpu=1, shm=True),
         )
-        assert convert_job_container_to_json(container) == {
+        assert convert_job_container_to_json(container, storage_config) == {
             "env": {},
             "image": "image",
             "resources": {"cpu": 0.1, "memory_mb": 16, "gpu": 1, "shm": True},
             "volumes": [],
+        }
+
+    def test_src_storage_uri_fallback_default(self, storage_config):
+        volume = ContainerVolume(
+            uri=URL(""),
+            src_path=PurePath("/"),
+            dst_path=PurePath("/var/storage/username/dataset"),
+        )
+        payload = convert_container_volume_to_json(volume, storage_config)
+        assert payload == {
+            "src_storage_uri": "storage://username/dataset",
+            "dst_path": "/var/storage/username/dataset",
+            "read_only": False,
+        }
+
+    def test_src_storage_uri_fallback_root(self, storage_config):
+        volume = ContainerVolume(
+            uri=URL(""), src_path=PurePath("/"), dst_path=PurePath("/var/storage")
+        )
+        payload = convert_container_volume_to_json(volume, storage_config)
+        assert payload == {
+            "src_storage_uri": "storage:",
+            "dst_path": "/var/storage",
+            "read_only": False,
+        }
+
+    def test_src_storage_uri_fallback_custom(self, storage_config):
+        volume = ContainerVolume(
+            uri=URL(""),
+            src_path=PurePath("/"),
+            dst_path=PurePath("/var/custom/username/dataset"),
+        )
+        payload = convert_container_volume_to_json(volume, storage_config)
+        assert payload == {
+            "src_storage_uri": "storage:",
+            "dst_path": "/var/custom/username/dataset",
+            "read_only": False,
         }
