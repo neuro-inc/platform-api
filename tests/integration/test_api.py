@@ -441,6 +441,7 @@ class TestJobs:
 
         assert response_payload == {
             "id": job_id,
+            "owner": regular_user.name,
             "status": "failed",
             "history": {
                 "status": "failed",
