@@ -205,8 +205,10 @@ class Job:
         return self._owner
 
     def to_uri(self) -> URL:
-        path = "/" + self.id
-        return URL.build(scheme="job", host=self.owner, path=path)
+        base_uri = 'job:'
+        if self.owner:
+            base_uri += '//' + self.owner
+        return URL(f'{base_uri}/{self.id}')
 
     @property
     def request(self) -> JobRequest:
