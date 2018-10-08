@@ -165,10 +165,6 @@ class JobsHandler:
         )
 
     async def handle_get(self, request):
-        # TODO (A Danshyn 10/04/18): we do not store user names in jobs yet,
-        # therefore for now we only check whether the user is authorized
-        await check_authorized(request)
-
         job_id = request.match_info["job_id"]
         job = await self._jobs_service.get_job(job_id)
         response_payload = convert_job_to_job_response(job, self._storage_config)
