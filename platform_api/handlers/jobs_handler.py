@@ -29,6 +29,10 @@ def create_job_response_validator() -> t.Trafaret:
     return t.Dict(
         {
             "id": t.String,
+            # TODO (A Danshyn 10/08/18): `owner` is allowed to be a blank
+            # string because initially jobs did not have such information
+            # on the dev and staging envs. we may want to change this once the
+            # prod env is there.
             "owner": t.String(allow_blank=True),
             # `status` is left for backward compat. the python client/cli still
             # relies on it.
