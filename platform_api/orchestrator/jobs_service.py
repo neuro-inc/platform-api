@@ -1,6 +1,8 @@
 import logging
 from typing import List, Optional, Tuple
 
+from platform_api.user import User
+
 from .base import LogReader, Orchestrator
 from .job import Job, JobStatusItem
 from .job_request import JobException, JobNotFoundException, JobRequest, JobStatus
@@ -55,9 +57,13 @@ class JobsService:
 
         await self._jobs_storage.set_job(job)
 
-    async def create_job(self, job_request: JobRequest) -> Tuple[Job, Status]:
+    async def create_job(
+        self, job_request: JobRequest, user: User
+    ) -> Tuple[Job, Status]:
         job = Job(
-            orchestrator_config=self._orchestrator.config, job_request=job_request
+            orchestrator_config=self._orchestrator.config,
+            job_request=job_request,
+            owner=user.name,
         )
         await self._orchestrator.start_job(job)
         status = Status.create(job.status)

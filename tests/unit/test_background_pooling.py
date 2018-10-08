@@ -3,6 +3,7 @@ import asyncio
 import pytest
 
 from platform_api.orchestrator import JobsService, JobsStatusPooling, JobStatus
+from platform_api.user import User
 
 
 class TestJobsStatusPooling:
@@ -30,8 +31,9 @@ class TestJobsStatusPooling:
             mock_orchestrator, event_loop
         )
 
-        await jobs_service.create_job(job_request_factory())
-        await jobs_service.create_job(job_request_factory())
+        user = User(name="testuser", token="")
+        await jobs_service.create_job(job_request_factory(), user=user)
+        await jobs_service.create_job(job_request_factory(), user=user)
 
         all_jobs = await jobs_service.get_all_jobs()
         assert all(job.status == JobStatus.PENDING for job in all_jobs)
@@ -48,8 +50,9 @@ class TestJobsStatusPooling:
             mock_orchestrator, event_loop
         )
 
-        await jobs_service.create_job(job_request_factory())
-        await jobs_service.create_job(job_request_factory())
+        user = User(name="testuser", token="")
+        await jobs_service.create_job(job_request_factory(), user=user)
+        await jobs_service.create_job(job_request_factory(), user=user)
 
         all_jobs = await jobs_service.get_all_jobs()
         assert all(job.status == JobStatus.PENDING for job in all_jobs)
