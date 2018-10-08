@@ -1,4 +1,4 @@
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 
 from aiohttp.web import HTTPUnauthorized, Request
 from aiohttp_security.api import AUTZ_KEY, IDENTITY_KEY
@@ -8,7 +8,7 @@ from yarl import URL
 @dataclass(frozen=True)
 class User:
     name: str
-    token: str
+    token: str = field(repr=False)
 
     def to_job_uri(self) -> URL:
         return URL(f"job://{self.name}")

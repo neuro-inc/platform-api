@@ -1,7 +1,7 @@
 import asyncio
 import uuid
-from dataclasses import dataclass
-from typing import AsyncGenerator, Dict, Optional
+from dataclasses import asdict, dataclass
+from typing import AsyncGenerator, Dict, List, Optional, Sequence
 
 import aiodocker
 import pytest
@@ -10,7 +10,7 @@ from aiohttp.hdrs import AUTHORIZATION
 from async_generator import asynccontextmanager
 from async_timeout import timeout
 from jose import jwt
-from neuro_auth_client import AuthClient, User as AuthClientUser
+from neuro_auth_client import AuthClient, Permission, User as AuthClientUser
 from yarl import URL
 
 from platform_api.config import AuthConfig
@@ -95,16 +95,27 @@ async def auth_config(auth_server) -> AuthConfig:
     yield auth_server
 
 
+class _AuthClient(AuthClient):
+    async def grant_user_permissions(
+        self, name: str, permissions: Sequence[Permission], token: Optional[str] = None
+    ) -> None:
+        assert permissions, "No permissions passed"
+        path = "/api/v1/users/{name}/permissions".format(name=name)
+        headers = self._generate_headers(token)
+        payload: List[Dict[str, str]] = [asdict(p) for p in permissions]
+        await self._request("POST", path, headers=headers, json=payload)
+
+
 @asynccontextmanager
-async def create_auth_client(config: AuthConfig) -> AuthClient:
-    async with AuthClient(
+async def create_auth_client(config: AuthConfig) -> AsyncGenerator[_AuthClient, None]:
+    async with _AuthClient(
         url=config.server_endpoint_url, token=config.service_token
     ) as client:
         yield client
 
 
 @pytest.fixture
-async def auth_client(auth_server: AuthConfig) -> AsyncGenerator[AuthClient, None]:
+async def auth_client(auth_server: AuthConfig) -> AsyncGenerator[_AuthClient, None]:
     async with create_auth_client(auth_server) as client:
         yield client
 

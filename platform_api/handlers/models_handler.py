@@ -1,3 +1,4 @@
+import logging
 from typing import Dict
 
 import aiohttp.web
@@ -11,6 +12,9 @@ from platform_api.user import User, untrusted_user
 
 from .job_request_builder import ModelRequest
 from .validators import create_container_request_validator, create_job_status_validator
+
+
+logger = logging.getLogger(__name__)
 
 
 def create_model_request_validator() -> t.Trafaret:
@@ -68,6 +72,7 @@ class ModelsHandler:
     async def handle_post(self, request):
         user = await untrusted_user(request)
         permission = Permission(uri=str(user.to_job_uri()), action="write")
+        logger.info("Checking whether %r has %r", user, permission)
         await check_permission(request, permission.action, [permission])
 
         orig_payload = await request.json()
