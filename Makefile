@@ -35,7 +35,7 @@ gke_login:
 	sudo /opt/google-cloud-sdk/bin/gcloud config set project $(GKE_PROJECT_ID)
 	sudo /opt/google-cloud-sdk/bin/gcloud --quiet config set container/cluster $(GKE_CLUSTER_NAME)
 	sudo /opt/google-cloud-sdk/bin/gcloud config set compute/zone $(GKE_COMPUTE_ZONE)
-	curl https://raw.githubusercontent.com/kubernetes/helm/master/scripts/get | bash
+	curl https://raw.githubusercontent.com/kubernetes/helm/master/scripts/get | bash -s -- -v v2.11.0
 	sudo /opt/google-cloud-sdk/bin/gcloud docker --authorize-only
 
 gke_docker_push: build_api_k8s
