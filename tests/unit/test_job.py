@@ -285,12 +285,17 @@ class TestJob:
         assert job.should_be_deleted
 
     def test_to_primitive(self, mock_orchestrator, job_request):
-        job = Job(orchestrator_config=mock_orchestrator.config, job_request=job_request)
+        job = Job(
+            orchestrator_config=mock_orchestrator.config,
+            job_request=job_request,
+            owner="testuser",
+        )
         job.status = JobStatus.FAILED
         job.is_deleted = True
         expected_finished_at = job.finished_at.isoformat()
         assert job.to_primitive() == {
             "id": job.id,
+            "owner": "testuser",
             "request": mock.ANY,
             "status": "failed",
             "is_deleted": True,
@@ -314,6 +319,7 @@ class TestJob:
     def test_from_primitive(self, mock_orchestrator, job_request_payload):
         payload = {
             "id": "testjob",
+            "owner": "testuser",
             "request": job_request_payload,
             "status": "succeeded",
             "is_deleted": True,
@@ -324,6 +330,7 @@ class TestJob:
         assert job.status == JobStatus.SUCCEEDED
         assert job.is_deleted
         assert job.finished_at
+        assert job.owner == "testuser"
 
     def test_from_primitive_with_statuses(self, mock_orchestrator, job_request_payload):
         finished_at_str = datetime.now(timezone.utc).isoformat()
@@ -340,6 +347,7 @@ class TestJob:
         assert job.status == JobStatus.FAILED
         assert job.is_deleted
         assert job.finished_at
+        assert job.owner == ""
 
 
 class TestJobRequest:
