@@ -70,7 +70,7 @@ gke_docker_pull_test:
 	-docker pull $$(cat AUTH_SERVER_IMAGE_NAME)
 
 _helm:
-	curl https://raw.githubusercontent.com/kubernetes/helm/master/scripts/get | bash
+	curl https://raw.githubusercontent.com/kubernetes/helm/master/scripts/get | bash -s -- -v v2.11.0
 
 gke_docker_push: build_api_k8s
 	docker tag $(IMAGE_NAME_K8S):$(IMAGE_TAG) $(IMAGE_K8S):latest
