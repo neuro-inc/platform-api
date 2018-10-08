@@ -9,10 +9,12 @@ import pytest
 from aiohttp.web import (
     HTTPAccepted,
     HTTPBadRequest,
+    HTTPForbidden,
     HTTPNoContent,
     HTTPOk,
     HTTPUnauthorized,
 )
+from neuro_auth_client import Permission
 
 from platform_api.api import create_app
 from platform_api.config import Config, DatabaseConfig, ServerConfig, StorageConfig
@@ -236,6 +238,36 @@ class TestJobs:
     async def test_get_all_jobs_clear(self, jobs_client):
         jobs = await jobs_client.get_all_jobs()
         assert jobs == []
+
+    @pytest.mark.asyncio
+    async def test_get_shared_job(
+        self, jobs_client, api, client, model_train, regular_user_factory, auth_client
+    ):
+        owner = await regular_user_factory()
+        follower = await regular_user_factory()
+
+        url = api.model_base_url
+        async with client.post(
+            url, headers=owner.headers, json=model_train
+        ) as response:
+            assert response.status == HTTPAccepted.status_code
+            result = await response.json()
+            job_id = result["job_id"]
+
+        url = f"{api.jobs_base_url}/{job_id}"
+        async with client.get(url, headers=owner.headers) as response:
+            assert response.status == HTTPOk.status_code
+
+        async with client.get(url, headers=follower.headers) as response:
+            assert response.status == HTTPForbidden.status_code
+
+        permission = Permission(uri=f"job://{owner.name}/{job_id}", action="read")
+        await auth_client.grant_user_permissions(
+            follower.name, [permission], token=owner.token
+        )
+
+        async with client.get(url, headers=follower.headers) as response:
+            assert response.status == HTTPOk.status_code
 
     @pytest.mark.asyncio
     async def test_get_jobs_return_corrects_id(

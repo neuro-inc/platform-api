@@ -205,10 +205,10 @@ class Job:
         return self._owner
 
     def to_uri(self) -> URL:
-        base_uri = 'job:'
+        base_uri = "job:"
         if self.owner:
-            base_uri += '//' + self.owner
-        return URL(f'{base_uri}/{self.id}')
+            base_uri += "//" + self.owner
+        return URL(f"{base_uri}/{self.id}")
 
     @property
     def request(self) -> JobRequest:
