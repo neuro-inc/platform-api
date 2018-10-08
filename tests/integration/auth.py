@@ -1,7 +1,7 @@
 import asyncio
 import uuid
 from dataclasses import asdict, dataclass
-from typing import AsyncGenerator, Dict, Optional, Sequence
+from typing import AsyncGenerator, Dict, List, Optional, Sequence
 
 import aiodocker
 import pytest
@@ -102,7 +102,7 @@ class _AuthClient(AuthClient):
         assert permissions, "No permissions passed"
         path = "/api/v1/users/{name}/permissions".format(name=name)
         headers = self._generate_headers(token)
-        payload = [asdict(p) for p in permissions]
+        payload: List[Dict[str, str]] = [asdict(p) for p in permissions]
         await self._request("POST", path, headers=headers, json=payload)
 
 
