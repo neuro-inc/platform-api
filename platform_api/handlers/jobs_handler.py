@@ -151,7 +151,7 @@ class JobsHandler:
             request_payload["container"], storage_config=self._storage_config
         ).build()
         job_request = JobRequest.create(container)
-        job, _ = await self._jobs_service.create_job(job_request)
+        job, _ = await self._jobs_service.create_job(job_request, user=user)
         response_payload = convert_job_to_job_response(job, self._storage_config)
         self._job_response_validator.check(response_payload)
         return aiohttp.web.json_response(
