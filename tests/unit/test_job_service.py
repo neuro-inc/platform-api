@@ -82,6 +82,7 @@ class TestJobsService:
         job = await jobs_service.get_job(job_id=original_job.id)
         assert job.id == original_job.id
         assert job.status == JobStatus.PENDING
+        assert job.owner == "testuser"
 
     @pytest.mark.asyncio
     async def test_get_status_by_job_id(self, jobs_service, mock_job_request):

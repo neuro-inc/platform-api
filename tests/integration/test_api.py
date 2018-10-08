@@ -359,6 +359,7 @@ class TestJobs:
             response_payload = await response.json()
             assert response_payload == {
                 "id": mock.ANY,
+                "owner": regular_user.name,
                 "status": "pending",
                 "history": {
                     "status": "pending",
@@ -388,6 +389,7 @@ class TestJobs:
 
         assert response_payload == {
             "id": job_id,
+            "owner": regular_user.name,
             "status": "succeeded",
             "history": {
                 "status": "succeeded",

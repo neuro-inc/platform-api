@@ -29,6 +29,7 @@ def create_job_response_validator() -> t.Trafaret:
     return t.Dict(
         {
             "id": t.String,
+            "owner": t.String(allow_blank=True),
             # `status` is left for backward compat. the python client/cli still
             # relies on it.
             "status": create_job_status_validator(),
@@ -93,6 +94,7 @@ def convert_job_to_job_response(
     current_status = history.current
     response_payload = {
         "id": job.id,
+        "owner": job.owner,
         "status": current_status.status,
         "history": {
             "status": current_status.status,
