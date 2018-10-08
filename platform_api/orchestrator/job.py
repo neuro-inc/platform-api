@@ -173,6 +173,7 @@ class Job:
         status: JobStatus = JobStatus.PENDING,
         is_deleted: bool = False,
         current_datetime_factory=current_datetime_factory,
+        owner: str = "",
     ) -> None:
         self._orchestrator_config = orchestrator_config
         self._job_request = job_request
@@ -192,9 +193,15 @@ class Job:
 
         self._current_datetime_factory = current_datetime_factory
 
+        self._owner = owner
+
     @property
     def id(self):
         return self._job_request.job_id
+
+    @property
+    def owner(self) -> str:
+        return self._owner
 
     @property
     def request(self) -> JobRequest:
@@ -269,6 +276,7 @@ class Job:
         # preserving `status` and `finished_at` for forward compat
         return {
             "id": self.id,
+            "owner": self._owner,
             "request": self.request.to_primitive(),
             "status": self.status.value,
             "statuses": statuses,
@@ -285,11 +293,13 @@ class Job:
             job_request.job_id, payload
         )
         is_deleted = payload.get("is_deleted", False)
+        owner = payload.get("owner", "")
         return cls(
             orchestrator_config=orchestrator_config,
             job_request=job_request,
             status_history=status_history,
             is_deleted=is_deleted,
+            owner=owner,
         )
 
     @staticmethod
