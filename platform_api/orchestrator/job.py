@@ -5,6 +5,7 @@ from functools import partial
 from typing import Any, Dict, Iterable, List, Optional, Sequence
 
 import iso8601
+from yarl import URL
 
 from ..config import OrchestratorConfig  # noqa
 from .job_request import JobRequest, JobStatus
@@ -202,6 +203,10 @@ class Job:
     @property
     def owner(self) -> str:
         return self._owner
+
+    def to_uri(self) -> URL:
+        path = "/" + self.id
+        return URL.build(scheme="job", host=self.owner, path=path)
 
     @property
     def request(self) -> JobRequest:

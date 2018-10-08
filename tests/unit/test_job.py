@@ -349,6 +349,10 @@ class TestJob:
         assert job.finished_at
         assert job.owner == ""
 
+    def test_to_uri(self, mock_orchestrator, job_request) -> None:
+        job = Job(mock_orchestrator.config, job_request, owner="testuser")
+        assert job.to_uri() == URL(f"job://testuser/{job.id}")
+
 
 class TestJobRequest:
     def test_to_primitive(self, job_request_payload):
