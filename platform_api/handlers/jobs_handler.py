@@ -1,3 +1,4 @@
+import logging
 from pathlib import PurePath
 from typing import Any, Dict
 
@@ -19,6 +20,9 @@ from .validators import (
     create_job_history_validator,
     create_job_status_validator,
 )
+
+
+logger = logging.getLogger(__name__)
 
 
 def create_job_request_validator() -> t.Trafaret:
@@ -149,6 +153,7 @@ class JobsHandler:
     async def create_job(self, request):
         user = await untrusted_user(request)
         permission = Permission(uri=str(user.to_job_uri()), action="write")
+        logger.info("Checking whether %r has %r", user, permission)
         await check_permission(request, permission.action, [permission])
 
         orig_payload = await request.json()
@@ -165,8 +170,14 @@ class JobsHandler:
         )
 
     async def handle_get(self, request):
+        user = await untrusted_user(request)
         job_id = request.match_info["job_id"]
         job = await self._jobs_service.get_job(job_id)
+
+        permission = Permission(uri=str(job.to_uri()), action="read")
+        logger.info("Checking whether %r has %r", user, permission)
+        await check_permission(request, permission.action, [permission])
+
         response_payload = convert_job_to_job_response(job, self._storage_config)
         self._job_response_validator.check(response_payload)
         return aiohttp.web.json_response(
@@ -191,20 +202,26 @@ class JobsHandler:
         )
 
     async def handle_delete(self, request):
-        # TODO (A Danshyn 10/04/18): we do not store user names in jobs yet,
-        # therefore for now we only check whether the user is authorized
-        await check_authorized(request)
-
+        user = await untrusted_user(request)
         job_id = request.match_info["job_id"]
+        job = await self._jobs_service.get_job(job_id)
+
+        permission = Permission(uri=str(job.to_uri()), action="write")
+        logger.info("Checking whether %r has %r", user, permission)
+        await check_permission(request, permission.action, [permission])
+
         await self._jobs_service.delete_job(job_id)
         raise aiohttp.web.HTTPNoContent()
 
     async def stream_log(self, request):
-        # TODO (A Danshyn 10/04/18): we do not store user names in jobs yet,
-        # therefore for now we only check whether the user is authorized
-        await check_authorized(request)
-
+        user = await untrusted_user(request)
         job_id = request.match_info["job_id"]
+        job = await self._jobs_service.get_job(job_id)
+
+        permission = Permission(uri=str(job.to_uri()), action="read")
+        logger.info("Checking whether %r has %r", user, permission)
+        await check_permission(request, permission.action, [permission])
+
         log_reader = await self._jobs_service.get_job_log_reader(job_id)
         # TODO: expose. make configurable
         chunk_size = 1024
