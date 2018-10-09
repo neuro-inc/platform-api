@@ -268,14 +268,21 @@ class TestJobs:
 
     @pytest.mark.asyncio
     async def test_get_all_jobs_shared(
-        self, jobs_client, api, client, model_train, regular_user_factory, auth_client
+        self,
+        jobs_client,
+        api,
+        client,
+        model_request_factory,
+        regular_user_factory,
+        auth_client,
     ):
         owner = await regular_user_factory()
         follower = await regular_user_factory()
 
         url = api.model_base_url
+        model_request = model_request_factory(owner.name)
         async with client.post(
-            url, headers=owner.headers, json=model_train
+            url, headers=owner.headers, json=model_request
         ) as response:
             assert response.status == HTTPAccepted.status_code
             result = await response.json()
