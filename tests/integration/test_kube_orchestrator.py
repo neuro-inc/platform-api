@@ -130,12 +130,15 @@ class TestKubeOrchestrator:
             resources=ContainerResources(cpu=0.1, memory_mb=256),
         )
         job_request = JobRequest(job_id=job_id, container=container)
-        job = MyJob(orchestrator=kube_orchestrator, job_request=job_request,
-                    owner='invalid_name')
+        job = MyJob(
+            orchestrator=kube_orchestrator,
+            job_request=job_request,
+            owner="invalid_name",
+        )
 
         with pytest.raises(StatusException) as cm:
             await job.start()
-        assert str(cm.value) == 'Invalid'
+        assert str(cm.value) == "Invalid"
 
     @pytest.mark.asyncio
     async def test_start_job_with_not_unique_id(self, kube_orchestrator, job_nginx):
