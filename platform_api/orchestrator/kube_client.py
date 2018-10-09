@@ -1,8 +1,10 @@
 import abc
 import asyncio
 import enum
+import json
 import logging
 import ssl
+from base64 import b64encode
 from dataclasses import dataclass, field
 from pathlib import PurePath
 from typing import Dict, List, Optional
