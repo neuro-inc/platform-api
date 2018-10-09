@@ -1,6 +1,7 @@
 from pathlib import PurePath
 
 import pytest
+from neuro_auth_client import Permission
 from neuro_auth_client.client import ClientAccessSubTreeView, ClientSubTreeViewRoot
 from yarl import URL
 
@@ -9,6 +10,7 @@ from platform_api.handlers.jobs_handler import (
     convert_container_volume_to_json,
     convert_job_container_to_json,
     filter_jobs_with_access_tree,
+    infer_permissions_from_container,
 )
 from platform_api.handlers.models_handler import create_model_response_validator
 from platform_api.handlers.validators import create_container_request_validator
@@ -18,6 +20,7 @@ from platform_api.orchestrator.job_request import (
     ContainerResources,
     ContainerVolume,
 )
+from platform_api.user import User
 
 
 class TestContainerRequestValidator:
@@ -249,3 +252,39 @@ class TestFilterJobsWithAccessTree:
         expected_ids = {testuser_job.id, anotheruser_job1.id}
         result_ids = {job.id for job in result}
         assert result_ids == expected_ids
+
+
+class TestInferPermissionsFromContainer:
+    def test_no_volumes(self):
+        user = User(name="testuser", token="")
+        container = Container(
+            image="image", resources=ContainerResources(cpu=0.1, memory_mb=16)
+        )
+        permissions = infer_permissions_from_container(user, container)
+        assert permissions == [Permission(uri="job://testuser", action="write")]
+
+    def test_volumes(self):
+        user = User(name="testuser", token="")
+        container = Container(
+            image="image",
+            resources=ContainerResources(cpu=0.1, memory_mb=16),
+            volumes=[
+                ContainerVolume(
+                    uri=URL("storage://testuser/dataset"),
+                    src_path=PurePath("/"),
+                    dst_path=PurePath("/var/storage/testuser/dataset"),
+                    read_only=True,
+                ),
+                ContainerVolume(
+                    uri=URL("storage://testuser/result"),
+                    src_path=PurePath("/"),
+                    dst_path=PurePath("/var/storage/testuser/result"),
+                ),
+            ],
+        )
+        permissions = infer_permissions_from_container(user, container)
+        assert permissions == [
+            Permission(uri="job://testuser", action="write"),
+            Permission(uri="storage://testuser/dataset", action="read"),
+            Permission(uri="storage://testuser/result", action="write"),
+        ]
