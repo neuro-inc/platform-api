@@ -164,9 +164,9 @@ class KubeOrchestrator(Orchestrator):
         if self._client:
             await self._client.close()
 
-    async def start_job(self, job: Job) -> JobStatus:
+    async def start_job(self, job: Job, token: str) -> JobStatus:
         secret = DockerRegistrySecret(
-            name=job.owner, password="", namespace=self._namespace
+            name=job.owner, password=token, namespace=self._namespace
         )
         await self._client.create_secret(secret)
         secret_names = [secret.objname]

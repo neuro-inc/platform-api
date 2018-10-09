@@ -43,7 +43,7 @@ class MyJob(Job):
         super().__init__(*args, orchestrator_config=orchestrator.config, **kwargs)
 
     async def start(self) -> JobStatus:
-        return await self._orchestrator.start_job(self)
+        return await self._orchestrator.start_job(self, 'test-token')
 
     async def delete(self) -> JobStatus:
         return await self._orchestrator.delete_job(self)
