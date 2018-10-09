@@ -35,7 +35,7 @@ class MockOrchestrator(Orchestrator):
     def config(self, config):
         self._config = config
 
-    async def start_job(self, job: Job):
+    async def start_job(self, job: Job, token: str):
         job.status = JobStatus.PENDING
         return JobStatus.PENDING
 

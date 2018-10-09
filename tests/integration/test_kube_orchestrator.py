@@ -25,11 +25,13 @@ from platform_api.orchestrator.job_request import (
     ContainerVolume,
 )
 from platform_api.orchestrator.kube_orchestrator import (
+    DockerRegistrySecret,
     Ingress,
     IngressRule,
     JobStatusItemFactory,
     KubeClientException,
     PodDescriptor,
+    SecretRef,
     Service,
     StatusException,
 )
@@ -39,10 +41,11 @@ from platform_api.orchestrator.logs import PodContainerLogReader
 class MyJob(Job):
     def __init__(self, orchestrator: Orchestrator, *args, **kwargs) -> None:
         self._orchestrator = orchestrator
+        kwargs.setdefault("owner", "test-owner")
         super().__init__(*args, orchestrator_config=orchestrator.config, **kwargs)
 
     async def start(self) -> JobStatus:
-        return await self._orchestrator.start_job(self)
+        return await self._orchestrator.start_job(self, "test-token")
 
     async def delete(self) -> JobStatus:
         return await self._orchestrator.delete_job(self)
@@ -86,11 +89,16 @@ class TestKubeOrchestrator:
         assert status == JobStatus.SUCCEEDED
 
     @pytest.mark.asyncio
-    async def test_start_job_happy_path(self, job_nginx):
+    async def test_start_job_happy_path(self, job_nginx, kube_orchestrator):
         status = await job_nginx.start()
         assert status == JobStatus.PENDING
 
         await self.wait_for_success(job_nginx)
+
+        pod = await kube_orchestrator._client.get_pod(job_nginx.id)
+        assert pod.image_pull_secrets == [
+            SecretRef(DockerRegistrySecret.PREFIX + job_nginx.owner)
+        ]
 
         status = await job_nginx.delete()
         assert status == JobStatus.SUCCEEDED
@@ -112,6 +120,25 @@ class TestKubeOrchestrator:
         finally:
             status = await job.delete()
             assert status == JobStatus.FAILED
+
+    @pytest.mark.asyncio
+    async def test_start_job_bad_name(self, kube_orchestrator):
+        job_id = str(uuid.uuid4())
+        container = Container(
+            image="ubuntu",
+            command="sleep 5",
+            resources=ContainerResources(cpu=0.1, memory_mb=256),
+        )
+        job_request = JobRequest(job_id=job_id, container=container)
+        job = MyJob(
+            orchestrator=kube_orchestrator,
+            job_request=job_request,
+            owner="invalid_name",
+        )
+
+        with pytest.raises(StatusException) as cm:
+            await job.start()
+        assert str(cm.value) == "Invalid"
 
     @pytest.mark.asyncio
     async def test_start_job_with_not_unique_id(self, kube_orchestrator, job_nginx):
@@ -321,12 +348,12 @@ class TestKubeOrchestrator:
 
     @pytest.mark.asyncio
     async def test_remove_ingress_rule(self, kube_client, ingress):
-        with pytest.raises(StatusException, match="Not found"):
+        with pytest.raises(StatusException, match="NotFound"):
             await kube_client.remove_ingress_rule(ingress.name, "unknown")
 
     @pytest.mark.asyncio
     async def test_delete_ingress_failure(self, kube_client):
-        with pytest.raises(StatusException, match="Failure"):
+        with pytest.raises(StatusException, match="NotFound"):
             await kube_client.delete_ingress("unknown")
 
     @pytest.mark.asyncio

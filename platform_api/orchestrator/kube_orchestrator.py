@@ -10,6 +10,7 @@ from .job import Job, JobStatusItem
 from .job_request import JobStatus
 from .kube_client import *  # noqa
 from .kube_client import (
+    DockerRegistrySecret,
     HostVolume,
     IngressRule,
     KubeClient,
@@ -97,6 +98,9 @@ class KubeConfig(OrchestratorConfig):
 
     job_deletion_delay_s: int = 60 * 60 * 24
 
+    registry_email: str = "registry@neuromation.io"
+    registry_server: str = "registry.dev.neuromation.io"
+
     def __post_init__(self):
         if not all((self.jobs_ingress_name, self.endpoint_url)):
             raise ValueError("Missing required settings")
@@ -162,8 +166,19 @@ class KubeOrchestrator(Orchestrator):
         if self._client:
             await self._client.close()
 
-    async def start_job(self, job: Job) -> JobStatus:
-        descriptor = PodDescriptor.from_job_request(self._storage_volume, job.request)
+    async def start_job(self, job: Job, token: str) -> JobStatus:
+        secret = DockerRegistrySecret(
+            name=job.owner,
+            password=token,
+            namespace=self._config.namespace,
+            email=self._config.registry_email,
+            registry_server=self._config.registry_server,
+        )
+        await self._client.create_secret(secret)
+        secret_names = [secret.objname]
+        descriptor = PodDescriptor.from_job_request(
+            self._storage_volume, job.request, secret_names
+        )
         status = await self._client.create_pod(descriptor)
         if job.has_http_server_exposed:
             await self._create_service(descriptor)

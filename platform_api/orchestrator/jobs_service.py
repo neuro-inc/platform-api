@@ -65,7 +65,7 @@ class JobsService:
             job_request=job_request,
             owner=user.name,
         )
-        await self._orchestrator.start_job(job)
+        await self._orchestrator.start_job(job, user.token)
         status = Status.create(job.status)
         await self._jobs_storage.set_job(job=job)
         return job, status

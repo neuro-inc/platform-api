@@ -1,11 +1,13 @@
 import abc
 import asyncio
 import enum
+import json
 import logging
 import ssl
+from base64 import b64encode
 from dataclasses import dataclass, field
 from pathlib import PurePath
-from typing import Dict, List, Optional
+from typing import Any, ClassVar, Dict, List, Optional
 from urllib.parse import urlsplit
 
 import aiohttp
@@ -251,6 +253,59 @@ class Ingress:
 
 
 @dataclass(frozen=True)
+class DockerRegistrySecret:
+    PREFIX: ClassVar[str] = "neurouser-"
+    name: str
+    password: str
+    namespace: str
+    email: str
+    registry_server: str
+
+    def _build_json(self) -> str:
+        return b64encode(
+            json.dumps(
+                {
+                    "auths": {
+                        self.registry_server: {
+                            "username": self.name,
+                            "password": self.password,
+                            "email": self.email,
+                            "auth": b64encode(
+                                (self.name + ":" + self.password).encode("utf-8")
+                            ).decode("ascii"),
+                        }
+                    }
+                }
+            ).encode("utf-8")
+        ).decode("ascii")
+
+    def to_primitive(self) -> Dict[str, Any]:
+        return {
+            "apiVersion": "v1",
+            "kind": "Secret",
+            "metadata": {"name": self.objname, "namespace": self.namespace},
+            "data": {".dockerconfigjson": self._build_json()},
+            "type": "kubernetes.io/dockerconfigjson",
+        }
+
+    @property
+    def objname(self):
+        return (self.PREFIX + self.name).lower()
+
+
+@dataclass(frozen=True)
+class SecretRef:
+    name: str
+
+    def to_primitive(self) -> Dict[str, str]:
+        return {"name": self.name}
+
+    @classmethod
+    def from_primitive(cls, payload: Dict[str, str]) -> "SecretRef":
+        return cls(**payload)
+
+
+@dataclass(frozen=True)
 class PodDescriptor:
     name: str
     image: str
@@ -265,9 +320,14 @@ class PodDescriptor:
 
     status: Optional["PodStatus"] = None
 
+    image_pull_secrets: List[SecretRef] = field(default_factory=list)
+
     @classmethod
     def from_job_request(
-        cls, volume: Volume, job_request: JobRequest
+        cls,
+        volume: Volume,
+        job_request: JobRequest,
+        secret_names: Optional[List[str]] = None,
     ) -> "PodDescriptor":
         container = job_request.container
         volume_mounts = [
@@ -288,6 +348,10 @@ class PodDescriptor:
             volumes.append(dev_shm_volume)
 
         resources = Resources.from_container_resources(container.resources)
+        if secret_names is not None:
+            image_pull_secrets = [SecretRef(name) for name in secret_names]
+        else:
+            image_pull_secrets = []
         return cls(  # type: ignore
             name=job_request.job_id,
             image=container.image,
@@ -298,6 +362,7 @@ class PodDescriptor:
             resources=resources,
             port=container.port,
             health_check_path=container.health_check_path,
+            image_pull_secrets=image_pull_secrets,
         )
 
     @property
@@ -340,6 +405,9 @@ class PodDescriptor:
                 "containers": [container_payload],
                 "volumes": volumes,
                 "restartPolicy": "Never",
+                "imagePullSecrets": [
+                    secret.to_primitive() for secret in self.image_pull_secrets
+                ],
             },
         }
 
@@ -362,8 +430,18 @@ class PodDescriptor:
         status = None
         if "status" in payload:
             status = PodStatus.from_primitive(payload["status"])
+        if "imagePullSecrets" in payload["spec"]:
+            secrets = [
+                SecretRef.from_primitive(secret)
+                for secret in payload["spec"]["imagePullSecrets"]
+            ]
+        else:
+            secrets = []
         return cls(
-            name=metadata["name"], image=container_payload["image"], status=status
+            name=metadata["name"],
+            image=container_payload["image"],
+            status=status,
+            image_pull_secrets=secrets,
         )
 
 
@@ -602,9 +680,9 @@ class KubeClient:
         self._check_status_payload(payload)
 
     def _check_status_payload(self, payload):
-        assert payload["kind"] == "Status"
-        if payload["status"] == "Failure":
-            raise StatusException("Failure")
+        if payload["kind"] == "Status":
+            if payload["status"] == "Failure":
+                raise StatusException(payload["reason"])
 
     async def add_ingress_rule(self, name: str, rule: IngressRule) -> Ingress:
         # TODO (A Danshyn 06/13/18): test if does not exist already
@@ -622,7 +700,7 @@ class KubeClient:
         ingress = await self.get_ingress(name)
         rule_index = ingress.find_rule_index_by_host(host)
         if rule_index < 0:
-            raise StatusException("Not found")
+            raise StatusException("NotFound")
         url = self._generate_ingress_url(name)
         rule = [
             {"op": "test", "path": f"/spec/rules/{rule_index}/host", "value": host},
@@ -645,6 +723,24 @@ class KubeClient:
         url = self._generate_service_url(name)
         payload = await self._request(method="DELETE", url=url)
         self._check_status_payload(payload)
+
+    async def create_secret(self, secret: DockerRegistrySecret) -> None:
+        try:
+            payload = await self._request(
+                method="PUT",
+                url=f"{self._namespace_url}/secrets/{secret.objname}",
+                json=secret.to_primitive(),
+            )
+            self._check_status_payload(payload)
+        except StatusException as exc:
+            if exc.args[0] != "NotFound":
+                raise
+            payload = await self._request(
+                method="POST",
+                url=f"{self._namespace_url}/secrets",
+                json=secret.to_primitive(),
+            )
+            self._check_status_payload(payload)
 
     async def wait_pod_is_running(
         self, pod_name: str, timeout_s: float = 10.0 * 60, interval_s: float = 1.0
