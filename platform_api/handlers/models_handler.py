@@ -4,7 +4,6 @@ from typing import Any, Dict
 import aiohttp.web
 import trafaret as t
 from aiohttp_security import check_permission
-from neuro_auth_client import Permission
 
 from platform_api.config import Config
 from platform_api.orchestrator import JobRequest, JobsService
