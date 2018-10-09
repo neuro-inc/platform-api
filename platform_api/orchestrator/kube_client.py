@@ -7,7 +7,7 @@ import ssl
 from base64 import b64encode
 from dataclasses import dataclass, field
 from pathlib import PurePath
-from typing import Any, Dict, List, Optional
+from typing import Any, ClassVar, Dict, List, Optional
 from urllib.parse import urlsplit
 
 import aiohttp
@@ -254,12 +254,12 @@ class Ingress:
 
 @dataclass(frozen=True)
 class DockerRegistrySecret:
-    PREFIX = "neurouser-"
+    PREFIX: ClassVar[str] = "neurouser-"
     name: str
     password: str
     namespace: str
-    email: str = "registry@neuromation.io"
-    registry_server: str = "registry.dev.neuromation.io"
+    email: str
+    registry_server: str
 
     def _build_json(self) -> str:
         return b64encode(
