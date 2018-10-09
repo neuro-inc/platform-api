@@ -251,6 +251,52 @@ class Ingress:
 
 
 @dataclass(frozen=True)
+class DockerRegistrySecret:
+    PREFIX = "neurouser-"
+    name: str
+    password: str
+    email: str = "registry@neuromation.io"
+    registry_server: str = "registry.dev.neuromation.io"
+
+    def _build_json(self):
+        return b64encode(
+            json.dumps(
+                {
+                    "auths": {
+                        self.registry_server: {
+                            "username": self.name,
+                            "password": self.password,
+                            "email": self.email,
+                            "auth": b64encode(self.username + ":" + self.password),
+                        }
+                    }
+                }
+            )
+        )
+
+    def to_primitive(self):
+        return {
+            "apiVersion": "v1",
+            "kind": "Secret",
+            "metadata": {"name": self.PREFIX + self.name},
+            "data": {".dockerconfigjson": self._build_json()},
+            "type": "kubernetes.io/dockerconfigjson",
+        }
+
+
+@dataclass(frozen=True)
+class SecretRef:
+    name: str
+
+    def to_primitive(self):
+        return {"name": self.name}
+
+    @classmethod
+    def from_primitive(cls, payload):
+        return cls(**payload)
+
+
+@dataclass(frozen=True)
 class PodDescriptor:
     name: str
     image: str
@@ -265,9 +311,14 @@ class PodDescriptor:
 
     status: Optional["PodStatus"] = None
 
+    image_pull_secrets: List[SecretRef] = field(default_factory=list)
+
     @classmethod
     def from_job_request(
-        cls, volume: Volume, job_request: JobRequest
+        cls,
+        volume: Volume,
+        job_request: JobRequest,
+        secret_names: Optional[List[str]] = None,
     ) -> "PodDescriptor":
         container = job_request.container
         volume_mounts = [
@@ -288,6 +339,10 @@ class PodDescriptor:
             volumes.append(dev_shm_volume)
 
         resources = Resources.from_container_resources(container.resources)
+        if secret_names is not None:
+            image_pull_secrets = [SecretRef(name) for name in secret_names]
+        else:
+            image_pull_secrets = []
         return cls(  # type: ignore
             name=job_request.job_id,
             image=container.image,
@@ -298,6 +353,7 @@ class PodDescriptor:
             resources=resources,
             port=container.port,
             health_check_path=container.health_check_path,
+            image_pull_secrets=image_pull_secrets,
         )
 
     @property
@@ -340,6 +396,9 @@ class PodDescriptor:
                 "containers": [container_payload],
                 "volumes": volumes,
                 "restartPolicy": "Never",
+                "imagePullSecrets": [
+                    secret.to_primitive() for secret in self.image_pull_secrets
+                ],
             },
         }
 
@@ -362,8 +421,18 @@ class PodDescriptor:
         status = None
         if "status" in payload:
             status = PodStatus.from_primitive(payload["status"])
+        if "imagePullSecrets" in payload:
+            secrets = [
+                SecretRef.from_primitive(secret)
+                for secret in payload["imagePullSecrets"]
+            ]
+        else:
+            secrets = []
         return cls(
-            name=metadata["name"], image=container_payload["image"], status=status
+            name=metadata["name"],
+            image=container_payload["image"],
+            status=status,
+            image_pull_secrets=secrets,
         )
 
 

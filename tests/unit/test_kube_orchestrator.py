@@ -139,6 +139,7 @@ class TestPodDescriptor:
                 ],
                 "volumes": [],
                 "restartPolicy": "Never",
+                "imagePullSecrets": [],
             },
         }
 
@@ -196,6 +197,7 @@ class TestPodDescriptor:
                 ],
                 "volumes": [{"name": "dshm", "emptyDir": {"medium": "Memory"}}],
                 "restartPolicy": "Never",
+                "imagePullSecrets": [],
             },
         }
 
