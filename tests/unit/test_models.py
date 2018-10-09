@@ -1,15 +1,18 @@
 from pathlib import PurePath
 
 import pytest
+from neuro_auth_client.client import ClientAccessSubTreeView, ClientSubTreeViewRoot
 from yarl import URL
 
 from platform_api.config import StorageConfig
 from platform_api.handlers.jobs_handler import (
     convert_container_volume_to_json,
     convert_job_container_to_json,
+    filter_jobs_with_access_tree,
 )
 from platform_api.handlers.models_handler import create_model_response_validator
 from platform_api.handlers.validators import create_container_request_validator
+from platform_api.orchestrator.job import Job
 from platform_api.orchestrator.job_request import (
     Container,
     ContainerResources,
@@ -187,3 +190,62 @@ class TestJobContainerToJson:
             "dst_path": "/var/custom/username/dataset",
             "read_only": False,
         }
+
+
+class TestFilterJobsWithAccessTree:
+    @pytest.fixture
+    def job_factory(self, mock_orchestrator, job_request_factory):
+        def _factory(owner):
+            return Job(mock_orchestrator.config, job_request_factory(), owner=owner)
+
+        return _factory
+
+    def test_no_access(self, job_factory):
+        jobs = [job_factory("testuser")]
+        tree = ClientSubTreeViewRoot(
+            path="/", sub_tree=ClientAccessSubTreeView(action="deny", children={})
+        )
+        result = filter_jobs_with_access_tree(jobs, tree)
+        assert not result
+
+    def test_full_access(self, job_factory):
+        jobs = [job_factory("testuser"), job_factory("anotheruser")]
+        tree = ClientSubTreeViewRoot(
+            path="/", sub_tree=ClientAccessSubTreeView(action="manage", children={})
+        )
+        result = filter_jobs_with_access_tree(jobs, tree)
+        expected_ids = {job.id for job in jobs}
+        result_ids = {job.id for job in result}
+        assert result_ids == expected_ids
+
+    def test_mixed_access(self, job_factory):
+        testuser_job = job_factory("testuser")
+        anotheruser_job1 = job_factory("anotheruser")
+        anotheruser_job2 = job_factory("anotheruser")
+        someuser_job = job_factory("someuser")
+        jobs = [testuser_job, anotheruser_job1, anotheruser_job2, someuser_job]
+        tree = ClientSubTreeViewRoot(
+            path="/",
+            sub_tree=ClientAccessSubTreeView(
+                action="list",
+                children={
+                    "testuser": ClientAccessSubTreeView(action="read", children={}),
+                    "anotheruser": ClientAccessSubTreeView(
+                        action="list",
+                        children={
+                            anotheruser_job1.id: ClientAccessSubTreeView(
+                                "read", children={}
+                            ),
+                            anotheruser_job2.id: ClientAccessSubTreeView(
+                                "deny", children={}
+                            ),
+                        },
+                    ),
+                    "someuser": ClientAccessSubTreeView(action="deny", children={}),
+                },
+            ),
+        )
+        result = filter_jobs_with_access_tree(jobs, tree)
+        expected_ids = {testuser_job.id, anotheruser_job1.id}
+        result_ids = {job.id for job in result}
+        assert result_ids == expected_ids

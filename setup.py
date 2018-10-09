@@ -10,7 +10,7 @@ install_requires = (
     "dataclasses==0.6",  # backport from 3.7 stdlib
     "iso8601==0.1.12",
     "trafaret==1.1.1",
-    "neuro_auth_client==0.0.1b3",
+    "neuro_auth_client==0.0.1b4",
 )
 
 setup(
