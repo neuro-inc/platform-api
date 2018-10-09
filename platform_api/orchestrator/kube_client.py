@@ -430,10 +430,10 @@ class PodDescriptor:
         status = None
         if "status" in payload:
             status = PodStatus.from_primitive(payload["status"])
-        if "imagePullSecrets" in payload:
+        if "imagePullSecrets" in payload['spec']:
             secrets = [
                 SecretRef.from_primitive(secret)
-                for secret in payload["imagePullSecrets"]
+                for secret in payload['spec']["imagePullSecrets"]
             ]
         else:
             secrets = []

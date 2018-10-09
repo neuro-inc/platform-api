@@ -25,11 +25,13 @@ from platform_api.orchestrator.job_request import (
     ContainerVolume,
 )
 from platform_api.orchestrator.kube_orchestrator import (
+    DockerRegistrySecret,
     Ingress,
     IngressRule,
     JobStatusItemFactory,
     KubeClientException,
     PodDescriptor,
+    SecretRef,
     Service,
     StatusException,
 )
@@ -87,11 +89,16 @@ class TestKubeOrchestrator:
         assert status == JobStatus.SUCCEEDED
 
     @pytest.mark.asyncio
-    async def test_start_job_happy_path(self, job_nginx):
+    async def test_start_job_happy_path(self, job_nginx, kube_orchestrator):
         status = await job_nginx.start()
         assert status == JobStatus.PENDING
 
         await self.wait_for_success(job_nginx)
+
+        pod = await kube_orchestrator._client.get_pod(job_nginx.id)
+        assert pod.image_pull_secrets == [
+            SecretRef(DockerRegistrySecret.PREFIX + job_nginx.owner)
+        ]
 
         status = await job_nginx.delete()
         assert status == JobStatus.SUCCEEDED
