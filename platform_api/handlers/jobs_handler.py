@@ -177,7 +177,7 @@ class JobsHandler:
 
         permissions = infer_permissions_from_container(user, container)
         logger.info("Checking whether %r has %r", user, permissions)
-        await check_permission(request, next(iter(permissions)).action, permissions)
+        await check_permission(request, permissions[0].action, permissions)
 
         job_request = JobRequest.create(container)
         job, _ = await self._jobs_service.create_job(job_request, user=user)

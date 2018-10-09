@@ -83,7 +83,7 @@ class ModelsHandler:
 
         permissions = infer_permissions_from_container(user, container)
         logger.info("Checking whether %r has %r", user, permissions)
-        await check_permission(request, next(iter(permissions)).action, permissions)
+        await check_permission(request, permissions[0].action, permissions)
 
         response_payload = await self._create_job(user, container)
         self._model_response_validator.check(response_payload)
