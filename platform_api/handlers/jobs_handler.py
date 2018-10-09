@@ -1,11 +1,12 @@
 import logging
 from pathlib import PurePath
-from typing import Any, Dict, List
+from typing import Any, Dict, List, Set
 
 import aiohttp.web
 import trafaret as t
 from aiohttp_security import check_authorized, check_permission
-from neuro_auth_client import Permission
+from neuro_auth_client import AuthClient, Permission
+from neuro_auth_client.client import ClientSubTreeViewRoot
 from yarl import URL
 
 from platform_api.config import Config, StorageConfig
@@ -150,6 +151,10 @@ class JobsHandler:
     def _jobs_service(self) -> JobsService:
         return self._app["jobs_service"]
 
+    @property
+    def _auth_client(self) -> AuthClient:
+        return self._app["auth_client"]
+
     def register(self, app):
         app.add_routes(
             (
@@ -198,12 +203,17 @@ class JobsHandler:
         )
 
     async def handle_get_all(self, request):
-        # TODO (A Danshyn 10/04/18): we do not store user names in jobs yet,
-        # therefore for now we only check whether the user is authorized
+        # TODO (A Danshyn 10/08/18): remove once
+        # AuthClient.get_permissions_tree accepts the token param
         await check_authorized(request)
+        user = await untrusted_user(request)
 
-        # TODO use pagination. may eventually explode with OOM.
+        tree = await self._auth_client.get_permissions_tree(user.name, "job:")
+        # TODO (A Danshyn 10/09/18): retrieving all jobs until the proper
+        # index is in place
         jobs = await self._jobs_service.get_all_jobs()
+        jobs = filter_jobs_with_access_tree(jobs, tree)
+
         response_payload = {
             "jobs": [
                 convert_job_to_job_response(job, self._storage_config) for job in jobs
@@ -253,3 +263,39 @@ class JobsHandler:
 
         await response.write_eof()
         return response
+
+
+def filter_jobs_with_access_tree(
+    jobs: List[Job], tree: ClientSubTreeViewRoot
+) -> List[Job]:
+    owners_shared_all_jobs: Set = set()
+    shared_job_ids: Set = set()
+
+    if tree.sub_tree.action == "deny":
+        # no job resources whatsoever
+        return []
+
+    if tree.sub_tree.action != "list":
+        # read access to all jobs = jobs:
+        return jobs
+
+    for owner, sub_tree in tree.sub_tree.children.items():
+        if sub_tree.action == "deny":
+            continue
+
+        if sub_tree.action == "list":
+            # specific ids
+            shared_job_ids.update(
+                job_id
+                for job_id, job_sub_tree in sub_tree.children.items()
+                if job_sub_tree.action not in ("deny", "list")
+            )
+            continue
+
+        owners_shared_all_jobs.add(owner)
+
+    return [
+        job
+        for job in jobs
+        if job.owner in owners_shared_all_jobs or job.id in shared_job_ids
+    ]

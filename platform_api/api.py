@@ -119,6 +119,7 @@ async def create_app(config: Config) -> aiohttp.web.Application:
                     url=config.auth.server_endpoint_url, token=config.auth.service_token
                 )
             )
+            app["jobs_app"]["auth_client"] = auth_client
 
             await setup_security(
                 app=app, auth_client=auth_client, auth_scheme=AuthScheme.BEARER

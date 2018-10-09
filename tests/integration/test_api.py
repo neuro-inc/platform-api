@@ -267,6 +267,41 @@ class TestJobs:
         assert jobs == []
 
     @pytest.mark.asyncio
+    async def test_get_all_jobs_shared(
+        self, jobs_client, api, client, model_train, regular_user_factory, auth_client
+    ):
+        owner = await regular_user_factory()
+        follower = await regular_user_factory()
+
+        url = api.model_base_url
+        async with client.post(
+            url, headers=owner.headers, json=model_train
+        ) as response:
+            assert response.status == HTTPAccepted.status_code
+            result = await response.json()
+            job_id = result["job_id"]
+
+        url = api.jobs_base_url
+        async with client.get(url, headers=owner.headers) as response:
+            assert response.status == HTTPOk.status_code, await response.text()
+            result = await response.json()
+            job_ids = {item["id"] for item in result["jobs"]}
+            assert job_ids == {job_id}
+
+        async with client.get(url, headers=follower.headers) as response:
+            assert response.status == HTTPOk.status_code
+            result = await response.json()
+            assert not result["jobs"]
+
+        permission = Permission(uri=f"job://{owner.name}/{job_id}", action="read")
+        await auth_client.grant_user_permissions(
+            follower.name, [permission], token=owner.token
+        )
+
+        async with client.get(url, headers=follower.headers) as response:
+            assert response.status == HTTPOk.status_code
+
+    @pytest.mark.asyncio
     async def test_get_shared_job(
         self,
         jobs_client,
