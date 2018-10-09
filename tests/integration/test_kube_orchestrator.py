@@ -39,6 +39,7 @@ from platform_api.orchestrator.logs import PodContainerLogReader
 class MyJob(Job):
     def __init__(self, orchestrator: Orchestrator, *args, **kwargs) -> None:
         self._orchestrator = orchestrator
+        kwargs.setdefault("owner", "test-owner")
         super().__init__(*args, orchestrator_config=orchestrator.config, **kwargs)
 
     async def start(self) -> JobStatus:
@@ -321,12 +322,12 @@ class TestKubeOrchestrator:
 
     @pytest.mark.asyncio
     async def test_remove_ingress_rule(self, kube_client, ingress):
-        with pytest.raises(StatusException, match="Not found"):
+        with pytest.raises(StatusException, match="NotFound"):
             await kube_client.remove_ingress_rule(ingress.name, "unknown")
 
     @pytest.mark.asyncio
     async def test_delete_ingress_failure(self, kube_client):
-        with pytest.raises(StatusException, match="Failure"):
+        with pytest.raises(StatusException, match="NotFound"):
             await kube_client.delete_ingress("unknown")
 
     @pytest.mark.asyncio

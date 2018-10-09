@@ -10,6 +10,7 @@ from .job import Job, JobStatusItem
 from .job_request import JobStatus
 from .kube_client import *  # noqa
 from .kube_client import (
+    DockerRegistrySecret,
     HostVolume,
     IngressRule,
     KubeClient,
@@ -149,6 +150,7 @@ class KubeOrchestrator(Orchestrator):
         )
 
         self._storage_volume = self._config.create_storage_volume()
+        self._namespace = config.namespace
 
     @property
     def config(self) -> KubeConfig:
@@ -163,7 +165,14 @@ class KubeOrchestrator(Orchestrator):
             await self._client.close()
 
     async def start_job(self, job: Job) -> JobStatus:
-        descriptor = PodDescriptor.from_job_request(self._storage_volume, job.request)
+        secret = DockerRegistrySecret(
+            name=job.owner, password="", namespace=self._namespace
+        )
+        await self._client.create_secret(secret)
+        secret_names = [secret.objname]
+        descriptor = PodDescriptor.from_job_request(
+            self._storage_volume, job.request, secret_names
+        )
         status = await self._client.create_pod(descriptor)
         if job.has_http_server_exposed:
             await self._create_service(descriptor)
