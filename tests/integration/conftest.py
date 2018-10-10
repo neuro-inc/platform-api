@@ -5,7 +5,7 @@ from urllib.parse import urlsplit
 
 import pytest
 
-from platform_api.config import StorageConfig, RegistryConfig
+from platform_api.config import RegistryConfig, StorageConfig
 from platform_api.orchestrator.kube_orchestrator import (
     KubeClient,
     KubeConfig,

@@ -4,7 +4,7 @@ from pathlib import PurePath
 import pytest
 from yarl import URL
 
-from platform_api.config import StorageConfig, StorageType, RegistryConfig
+from platform_api.config import RegistryConfig, StorageConfig, StorageType
 from platform_api.config_factory import EnvironConfigFactory
 from platform_api.orchestrator.kube_orchestrator import (
     HostVolume,
