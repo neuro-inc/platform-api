@@ -52,6 +52,7 @@ class ContainerBuilder:
 
     def set_tcp_server(self, tcp_server: ContainerTCPServer) -> "ContainerBuilder":
         self._tcp_server = tcp_server
+        return self
 
     @classmethod
     def from_container_payload(
