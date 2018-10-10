@@ -84,6 +84,18 @@ class ContainerHTTPServer:
 
 
 @dataclass(frozen=True)
+class ContainerSSHServer:
+    port: int
+
+    @classmethod
+    def from_primitive(cls, payload) -> "ContainerSSHServer":
+        return cls(port=payload["port"])  # type: ignore
+
+    def to_primitive(self) -> Dict:
+        return asdict(self)
+
+
+@dataclass(frozen=True)
 class Container:
     image: str
     resources: ContainerResources
@@ -91,6 +103,7 @@ class Container:
     env: Dict[str, str] = field(default_factory=dict)
     volumes: List[ContainerVolume] = field(default_factory=list)
     http_server: Optional[ContainerHTTPServer] = None
+    ssh_server: Optional[ContainerSSHServer] = None
 
     def belongs_to_registry(self, registry_config: RegistryConfig) -> bool:
         prefix = f"{registry_config.host}/"
@@ -138,6 +151,12 @@ class Container:
             )
         elif kwargs.get("port") is not None:
             kwargs["http_server"] = ContainerHTTPServer.from_primitive(kwargs)
+
+        if kwargs.get("ssh_server"):
+            ssh_server_desc = kwargs["ssh_server"]
+            container_desc = ContainerSSHServer.from_primitive(ssh_server_desc)
+            kwargs["ssh_server"] = container_desc
+
         kwargs.pop("port", None)
         kwargs.pop("health_check_path", None)
 
@@ -149,6 +168,8 @@ class Container:
         payload["volumes"] = [volume.to_primitive() for volume in self.volumes]
         if self.http_server:
             payload["http_server"] = self.http_server.to_primitive()
+        if self.ssh_server:
+            payload["ssh_server"] = self.ssh_server.to_primitive()
         return payload
 
 
