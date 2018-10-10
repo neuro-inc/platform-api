@@ -82,6 +82,20 @@ class ContainerHTTPServer:
 
 
 @dataclass(frozen=True)
+class ContainerTCPServer:
+    port: int
+
+    @classmethod
+    def from_primitive(cls, payload) -> "ContainerTCPServer":
+        return cls(  # type: ignore
+            port=payload["port"],
+        )
+
+    def to_primitive(self) -> Dict:
+        return asdict(self)
+
+
+@dataclass(frozen=True)
 class Container:
     image: str
     resources: ContainerResources
@@ -89,6 +103,7 @@ class Container:
     env: Dict[str, str] = field(default_factory=dict)
     volumes: List[ContainerVolume] = field(default_factory=list)
     http_server: Optional[ContainerHTTPServer] = None
+    tcp_server: Optional[ContainerTCPServer] = None
 
     @property
     def port(self) -> Optional[int]:
@@ -137,6 +152,8 @@ class Container:
         payload["volumes"] = [volume.to_primitive() for volume in self.volumes]
         if self.http_server:
             payload["http_server"] = self.http_server.to_primitive()
+        if self.tcp_server:
+            payload["tcp_server"] = self.tcp_server.to_primitive()
         return payload
 
 

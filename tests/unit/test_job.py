@@ -18,7 +18,7 @@ from platform_api.orchestrator.job_request import (
     ContainerVolumeFactory,
     JobRequest,
     JobStatus,
-)
+    ContainerTCPServer)
 
 
 class TestContainer:
@@ -149,6 +149,44 @@ class TestContainerBuilder:
             ],
             resources=ContainerResources(cpu=0.1, memory_mb=128, gpu=1, shm=None),
             http_server=ContainerHTTPServer(port=80, health_check_path="/"),
+            tcp_server=None
+        )
+
+    def test_from_payload_build_with_tcp(self):
+        storage_config = StorageConfig(host_mount_path=PurePath("/tmp"))  # type: ignore
+        payload = {
+            "image": "testimage",
+            "command": "testcommand",
+            "env": {"TESTVAR": "testvalue"},
+            "resources": {"cpu": 0.1, "memory_mb": 128, "gpu": 1},
+            "http": {"port": 80},
+            "tcp": {"port": 22},
+            "volumes": [
+                {
+                    "src_storage_uri": "storage://path/to/dir",
+                    "dst_path": "/container/path",
+                    "read_only": True,
+                }
+            ],
+        }
+        container = ContainerBuilder.from_container_payload(
+            payload, storage_config=storage_config
+        ).build()
+        assert container == Container(
+            image="testimage",
+            command="testcommand",
+            env={"TESTVAR": "testvalue"},
+            volumes=[
+                ContainerVolume(
+                    uri=URL("storage://path/to/dir"),
+                    src_path=PurePath("/tmp/path/to/dir"),
+                    dst_path=PurePath("/container/path"),
+                    read_only=True,
+                )
+            ],
+            resources=ContainerResources(cpu=0.1, memory_mb=128, gpu=1, shm=None),
+            http_server=ContainerHTTPServer(port=80, health_check_path="/"),
+            tcp_server=ContainerTCPServer(port=22)
         )
 
     def test_from_payload_build_with_shm_false(self):
@@ -247,6 +285,7 @@ def job_request_payload():
                 }
             ],
             "http_server": None,
+            "tcp_server": None,
         },
     }
 

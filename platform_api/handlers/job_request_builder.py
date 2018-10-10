@@ -7,7 +7,7 @@ from platform_api.orchestrator.job_request import (
     ContainerHTTPServer,
     ContainerResources,
     ContainerVolume,
-)
+    ContainerTCPServer)
 
 
 class ContainerBuilder:
@@ -20,6 +20,7 @@ class ContainerBuilder:
         self._resources: Optional[ContainerResources] = None
         self._volumes: List[ContainerVolume] = []
         self._http_server: Optional[ContainerHTTPServer] = None
+        self._tcp_server: Optional[ContainerTCPServer] = None
 
     def set_image(self, image: str) -> "ContainerBuilder":
         self._image = image
@@ -48,6 +49,9 @@ class ContainerBuilder:
         self._http_server = http_server
         return self
 
+    def set_tcp_server(self, tcp_server: ContainerTCPServer) -> "ContainerBuilder":
+        self._tcp_server = tcp_server
+
     @classmethod
     def from_container_payload(
         cls, payload: Dict[str, Any], *, storage_config: StorageConfig
@@ -69,6 +73,11 @@ class ContainerBuilder:
                 ),
             )
             builder.set_http_server(http_server)
+
+        tcp = payload.get("tcp", {})
+        if "port" in tcp:
+            tcp_server = ContainerTCPServer(tcp['port'])
+            builder.set_tcp_server(tcp_server)
 
         for volume_payload in payload.get("volumes", []):
             volume = cls.create_volume_from_payload(
@@ -111,6 +120,7 @@ class ContainerBuilder:
             volumes=self._volumes,
             resources=self._resources,
             http_server=self._http_server,
+            tcp_server=self._tcp_server,
         )
 
 
