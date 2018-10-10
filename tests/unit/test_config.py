@@ -115,6 +115,8 @@ class TestEnvironConfigFactory:
         assert config.auth.server_endpoint_url == URL("https://auth")
         assert config.auth.service_token == "token"
 
+        assert config.registry.host == "registry.dev.neuromation.io"
+
     def test_create_value_error_invalid_port(self):
         environ = {
             "NP_STORAGE_HOST_MOUNT_PATH": "/tmp",
@@ -149,6 +151,7 @@ class TestEnvironConfigFactory:
             "NP_DB_REDIS_CONN_TIMEOUT": "555",
             "NP_AUTH_URL": "https://auth",
             "NP_AUTH_TOKEN": "token",
+            "NP_REGISTRY_HOST": "testregistry:5000",
         }
         config = EnvironConfigFactory(environ=environ).create()
 
@@ -182,6 +185,8 @@ class TestEnvironConfigFactory:
 
         assert config.auth.server_endpoint_url == URL("https://auth")
         assert config.auth.service_token == "token"
+
+        assert config.registry.host == "testregistry:5000"
 
     def test_create_nfs(self):
         environ = {
