@@ -5,7 +5,7 @@ from urllib.parse import urlsplit
 
 import pytest
 
-from platform_api.config import StorageConfig
+from platform_api.config import StorageConfig, RegistryConfig
 from platform_api.orchestrator.kube_orchestrator import (
     KubeClient,
     KubeConfig,
@@ -66,8 +66,10 @@ async def kube_config(kube_config_cluster_payload, kube_config_user_payload):
     cluster = kube_config_cluster_payload
     user = kube_config_user_payload
     storage_config = StorageConfig.create_host(host_mount_path=PurePath("/tmp"))
+    registry_config = RegistryConfig()
     return KubeConfig(
         storage=storage_config,
+        registry=registry_config,
         jobs_ingress_name="platformjobsingress",
         jobs_domain_name="jobs.platform.neuromation.io",
         endpoint_url=cluster["server"],
@@ -136,8 +138,10 @@ async def kube_config_nfs(
         nfs_server=nfs_volume_server,
         nfs_export_path=PurePath("/var/storage"),
     )
+    registry_config = RegistryConfig()
     return KubeConfig(
         storage=storage_config,
+        registry=registry_config,
         endpoint_url=cluster["server"],
         cert_authority_path=cluster["certificate-authority"],
         auth_cert_path=user["client-certificate"],

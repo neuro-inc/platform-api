@@ -4,7 +4,7 @@ from pathlib import PurePath
 import pytest
 from yarl import URL
 
-from platform_api.config import StorageConfig, StorageType
+from platform_api.config import StorageConfig, StorageType, RegistryConfig
 from platform_api.config_factory import EnvironConfigFactory
 from platform_api.orchestrator.kube_orchestrator import (
     HostVolume,
@@ -44,8 +44,10 @@ class TestKubeConfig:
             nfs_server="4.3.2.1",
             nfs_export_path=PurePath("/tmp"),
         )
+        registry_config = RegistryConfig()
         kube_config = KubeConfig(
             storage=storage_config,
+            registry=registry_config,
             jobs_domain_name="testdomain",
             jobs_ingress_name="testingress",
             endpoint_url="http://1.2.3.4",
@@ -59,8 +61,10 @@ class TestKubeConfig:
         storage_config = StorageConfig(
             host_mount_path=PurePath("/tmp"), type=StorageType.HOST
         )
+        registry_config = RegistryConfig()
         kube_config = KubeConfig(
             storage=storage_config,
+            registry=registry_config,
             jobs_domain_name="testdomain",
             jobs_ingress_name="testingress",
             endpoint_url="http://1.2.3.4",

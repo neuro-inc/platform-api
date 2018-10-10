@@ -98,9 +98,6 @@ class KubeConfig(OrchestratorConfig):
 
     job_deletion_delay_s: int = 60 * 60 * 24
 
-    registry_email: str = "registry@neuromation.io"
-    registry_server: str = "registry.dev.neuromation.io"
-
     def __post_init__(self):
         if not all((self.jobs_ingress_name, self.endpoint_url)):
             raise ValueError("Missing required settings")
@@ -171,8 +168,8 @@ class KubeOrchestrator(Orchestrator):
             name=job.owner,
             password=token,
             namespace=self._config.namespace,
-            email=self._config.registry_email,
-            registry_server=self._config.registry_server,
+            email=self._config.registry.email,
+            registry_server=self._config.registry.host,
         )
         await self._client.create_secret(secret)
         secret_names = [secret.objname]
