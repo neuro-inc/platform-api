@@ -124,17 +124,25 @@ class TestApi:
 
 
 @pytest.fixture
-async def model_train():
-    return {
-        "container": {
-            "image": "ubuntu",
-            "command": "true",
-            "resources": {"cpu": 0.1, "memory_mb": 16},
-            "http": {"port": 1234},
-        },
-        "dataset_storage_uri": "storage://",
-        "result_storage_uri": "storage://result",
-    }
+async def model_request_factory():
+    def _factory(owner: str):
+        return {
+            "container": {
+                "image": "ubuntu",
+                "command": "true",
+                "resources": {"cpu": 0.1, "memory_mb": 16},
+                "http": {"port": 1234},
+            },
+            "dataset_storage_uri": f"storage://{owner}",
+            "result_storage_uri": f"storage://{owner}/result",
+        }
+
+    return _factory
+
+
+@pytest.fixture
+async def model_train(model_request_factory, regular_user):
+    return model_request_factory(regular_user.name)
 
 
 class TestModels:
@@ -164,15 +172,16 @@ class TestModels:
 
     @pytest.mark.asyncio
     async def test_env_var_sourcing(self, api, client, jobs_client, regular_user):
-        cmd = 'bash -c \'[ "$NP_RESULT_PATH" == "/var/storage/result" ]\''
+        np_result_path = f"/var/storage/{regular_user.name}/result"
+        cmd = f'bash -c \'[ "$NP_RESULT_PATH" == "{np_result_path}" ]\''
         payload = {
             "container": {
                 "image": "ubuntu",
                 "command": cmd,
                 "resources": {"cpu": 0.1, "memory_mb": 16},
             },
-            "dataset_storage_uri": "storage://",
-            "result_storage_uri": "storage://result",
+            "dataset_storage_uri": f"storage://{regular_user.name}",
+            "result_storage_uri": f"storage://{regular_user.name}/result",
         }
         url = api.model_base_url
         async with client.post(
@@ -204,8 +213,8 @@ class TestModels:
                 "command": "true",
                 "resources": {"cpu": 0.1, "memory_mb": 16},
             },
-            "dataset_storage_uri": "storage://",
-            "result_storage_uri": "storage://result",
+            "dataset_storage_uri": f"storage://{regular_user.name}",
+            "result_storage_uri": f"storage://{regular_user.name}/result",
         }
 
         url = api.model_base_url
@@ -216,6 +225,24 @@ class TestModels:
             data = await response.json()
             job_id = data["job_id"]
         await jobs_client.long_pooling_by_job_id(job_id=job_id, status="failed")
+
+    @pytest.mark.asyncio
+    async def test_forbidden_storage_uris(self, api, client, jobs_client, regular_user):
+        payload = {
+            "container": {
+                "image": "ubuntu",
+                "command": "true",
+                "resources": {"cpu": 0.1, "memory_mb": 16},
+            },
+            "dataset_storage_uri": f"storage://",
+            "result_storage_uri": f"storage://result",
+        }
+
+        url = api.model_base_url
+        async with client.post(
+            url, headers=regular_user.headers, json=payload
+        ) as response:
+            assert response.status == HTTPForbidden.status_code, await response.text()
 
 
 class TestJobs:
@@ -241,14 +268,21 @@ class TestJobs:
 
     @pytest.mark.asyncio
     async def test_get_all_jobs_shared(
-        self, jobs_client, api, client, model_train, regular_user_factory, auth_client
+        self,
+        jobs_client,
+        api,
+        client,
+        model_request_factory,
+        regular_user_factory,
+        auth_client,
     ):
         owner = await regular_user_factory()
         follower = await regular_user_factory()
 
         url = api.model_base_url
+        model_request = model_request_factory(owner.name)
         async with client.post(
-            url, headers=owner.headers, json=model_train
+            url, headers=owner.headers, json=model_request
         ) as response:
             assert response.status == HTTPAccepted.status_code
             result = await response.json()
@@ -276,14 +310,21 @@ class TestJobs:
 
     @pytest.mark.asyncio
     async def test_get_shared_job(
-        self, jobs_client, api, client, model_train, regular_user_factory, auth_client
+        self,
+        jobs_client,
+        api,
+        client,
+        model_request_factory,
+        regular_user_factory,
+        auth_client,
     ):
         owner = await regular_user_factory()
         follower = await regular_user_factory()
 
         url = api.model_base_url
+        model_request = model_request_factory(owner.name)
         async with client.post(
-            url, headers=owner.headers, json=model_train
+            url, headers=owner.headers, json=model_request
         ) as response:
             assert response.status == HTTPAccepted.status_code
             result = await response.json()
@@ -368,8 +409,8 @@ class TestJobs:
                 "command": command,
                 "resources": {"cpu": 0.1, "memory_mb": 16},
             },
-            "dataset_storage_uri": "storage://",
-            "result_storage_uri": "storage://result",
+            "dataset_storage_uri": f"storage://{regular_user.name}",
+            "result_storage_uri": f"storage://{regular_user.name}/result",
         }
         url = api.model_base_url
         async with client.post(
@@ -410,7 +451,7 @@ class TestJobs:
                 "resources": {"cpu": 0.1, "memory_mb": 16},
                 "volumes": [
                     {
-                        "src_storage_uri": "storage://",
+                        "src_storage_uri": f"storage://{regular_user.name}",
                         "dst_path": "/var/storage",
                         "read_only": False,
                     }
@@ -443,7 +484,7 @@ class TestJobs:
                         {
                             "dst_path": "/var/storage",
                             "read_only": False,
-                            "src_storage_uri": "storage:",
+                            "src_storage_uri": f"storage://{regular_user.name}",
                         }
                     ],
                 },
@@ -475,7 +516,7 @@ class TestJobs:
                     {
                         "dst_path": "/var/storage",
                         "read_only": False,
-                        "src_storage_uri": "storage:",
+                        "src_storage_uri": f"storage://{regular_user.name}",
                     }
                 ],
             },
@@ -490,8 +531,8 @@ class TestJobs:
                 "command": command,
                 "resources": {"cpu": 0.1, "memory_mb": 16},
             },
-            "dataset_storage_uri": "storage://",
-            "result_storage_uri": "storage://result",
+            "dataset_storage_uri": f"storage://{regular_user.name}",
+            "result_storage_uri": f"storage://{regular_user.name}/result",
         }
         url = api.model_base_url
         async with client.post(
@@ -521,21 +562,21 @@ class TestJobs:
             "container": {
                 "command": 'bash -c "echo Failed!; false"',
                 "env": {
-                    "NP_DATASET_PATH": "/var/storage",
-                    "NP_RESULT_PATH": "/var/storage/result",
+                    "NP_DATASET_PATH": f"/var/storage/{regular_user.name}",
+                    "NP_RESULT_PATH": f"/var/storage/{regular_user.name}/result",
                 },
                 "image": "ubuntu",
                 "resources": {"cpu": 0.1, "memory_mb": 16},
                 "volumes": [
                     {
-                        "dst_path": "/var/storage",
+                        "dst_path": f"/var/storage/{regular_user.name}",
                         "read_only": True,
-                        "src_storage_uri": "storage:",
+                        "src_storage_uri": f"storage://{regular_user.name}",
                     },
                     {
-                        "dst_path": "/var/storage/result",
+                        "dst_path": f"/var/storage/{regular_user.name}/result",
                         "read_only": False,
-                        "src_storage_uri": "storage://result",
+                        "src_storage_uri": f"storage://{regular_user.name}/result",
                     },
                 ],
             },

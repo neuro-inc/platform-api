@@ -12,8 +12,8 @@ from yarl import URL
 from platform_api.config import Config, StorageConfig
 from platform_api.orchestrator import JobsService
 from platform_api.orchestrator.job import Job
-from platform_api.orchestrator.job_request import ContainerVolume, JobRequest
-from platform_api.user import untrusted_user
+from platform_api.orchestrator.job_request import Container, ContainerVolume, JobRequest
+from platform_api.user import User, untrusted_user
 
 from .job_request_builder import ContainerBuilder
 from .validators import (
@@ -124,6 +124,17 @@ def convert_job_to_job_response(
     return response_payload
 
 
+def infer_permissions_from_container(
+    user: User, container: Container
+) -> List[Permission]:
+    permissions = [Permission(uri=str(user.to_job_uri()), action="write")]
+    for volume in container.volumes:
+        action = "read" if volume.read_only else "write"
+        permission = Permission(uri=str(volume.uri), action=action)
+        permissions.append(permission)
+    return permissions
+
+
 class JobsHandler:
     def __init__(self, *, app: aiohttp.web.Application, config: Config) -> None:
         self._app = app
@@ -157,15 +168,17 @@ class JobsHandler:
 
     async def create_job(self, request):
         user = await untrusted_user(request)
-        permission = Permission(uri=str(user.to_job_uri()), action="write")
-        logger.info("Checking whether %r has %r", user, permission)
-        await check_permission(request, permission.action, [permission])
 
         orig_payload = await request.json()
         request_payload = self._job_request_validator.check(orig_payload)
         container = ContainerBuilder.from_container_payload(
             request_payload["container"], storage_config=self._storage_config
         ).build()
+
+        permissions = infer_permissions_from_container(user, container)
+        logger.info("Checking whether %r has %r", user, permissions)
+        await check_permission(request, permissions[0].action, permissions)
+
         job_request = JobRequest.create(container)
         job, _ = await self._jobs_service.create_job(job_request, user=user)
         response_payload = convert_job_to_job_response(job, self._storage_config)

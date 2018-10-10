@@ -59,8 +59,8 @@ def test_basic_command(api_models_url, api_jobs_url, compute_token):
             "command": "true",
             "resources": {"cpu": 0.1, "memory_mb": 16},
         },
-        "dataset_storage_uri": "storage://",
-        "result_storage_uri": "storage://result",
+        "dataset_storage_uri": "storage://compute",
+        "result_storage_uri": "storage://compute/result",
     }
     headers = {"Authorization": f"Bearer {compute_token}"}
     response = requests.post(
