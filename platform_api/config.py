@@ -81,12 +81,19 @@ class DatabaseConfig:
 
 
 @dataclass(frozen=True)
+class RegistryConfig:
+    host: str = "registry.dev.neuromation.io"
+
+
+@dataclass(frozen=True)
 class Config:
     server: ServerConfig
     storage: StorageConfig
     orchestrator: OrchestratorConfig
     database: DatabaseConfig
     auth: AuthConfig
+
+    registry: RegistryConfig = RegistryConfig()
 
     # used for generating environment variable names and
     # sourcing them inside containers.
