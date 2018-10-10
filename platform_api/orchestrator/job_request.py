@@ -8,6 +8,8 @@ from urllib.parse import urlsplit
 
 from yarl import URL
 
+from platform_api.config import RegistryConfig
+
 
 class JobException(Exception):
     pass
@@ -89,6 +91,16 @@ class Container:
     env: Dict[str, str] = field(default_factory=dict)
     volumes: List[ContainerVolume] = field(default_factory=list)
     http_server: Optional[ContainerHTTPServer] = None
+
+    def belongs_to_registry(self, registry_config: RegistryConfig) -> bool:
+        prefix = f"{registry_config.host}/"
+        return self.image.startswith(prefix)
+
+    def to_image_uri(self, registry_config: RegistryConfig) -> URL:
+        assert self.belongs_to_registry(registry_config), "Unknown registry"
+        prefix = f"{registry_config.host}/"
+        repo = self.image.replace(prefix, "", 1)
+        return URL(f"image://{repo}")
 
     @property
     def port(self) -> Optional[int]:
