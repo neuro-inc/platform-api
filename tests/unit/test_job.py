@@ -415,6 +415,25 @@ class TestJobRequest:
         request = JobRequest(job_id="testjob", container=container)
         assert request.to_primitive() == job_request_payload
 
+    def test_to_primitive_with_ssh(self, job_request_payload):
+        job_request_payload["container"]["ssh_server"] = {"port": 678}
+
+        container = Container(
+            image="testimage",
+            env={"testvar": "testval"},
+            resources=ContainerResources(cpu=1, memory_mb=128),
+            volumes=[
+                ContainerVolume(
+                    uri=URL("storage://path"),
+                    src_path=PurePath("/src/path"),
+                    dst_path=PurePath("/dst/path"),
+                )
+            ],
+            ssh_server=ContainerSSHServer(678),
+        )
+        request = JobRequest(job_id="testjob", container=container)
+        assert request.to_primitive() == job_request_payload
+
     def test_from_primitive(self, job_request_payload):
         request = JobRequest.from_primitive(job_request_payload)
         assert request.job_id == "testjob"
@@ -429,6 +448,25 @@ class TestJobRequest:
                     dst_path=PurePath("/dst/path"),
                 )
             ],
+        )
+        assert request.container == expected_container
+
+    def test_from_primitive_with_ssh(self, job_request_payload):
+        job_request_payload["container"]["ssh_server"] = {"port": 678}
+        request = JobRequest.from_primitive(job_request_payload)
+        assert request.job_id == "testjob"
+        expected_container = Container(
+            image="testimage",
+            env={"testvar": "testval"},
+            resources=ContainerResources(cpu=1, memory_mb=128),
+            volumes=[
+                ContainerVolume(
+                    uri=URL("storage://path"),
+                    src_path=PurePath("/src/path"),
+                    dst_path=PurePath("/dst/path"),
+                )
+            ],
+            ssh_server=ContainerSSHServer(port=678),
         )
         assert request.container == expected_container
 
@@ -468,6 +506,17 @@ class TestContainerHTTPServer:
     def test_to_primitive_health_check_path(self):
         server = ContainerHTTPServer(port=1234, health_check_path="/path")
         assert server.to_primitive() == {"port": 1234, "health_check_path": "/path"}
+
+
+class TestContainerSSHServer:
+    def test_from_primitive(self):
+        payload = {"port": 1234}
+        server = ContainerSSHServer.from_primitive(payload)
+        assert server == ContainerSSHServer(port=1234)
+
+    def test_to_primitive(self):
+        server = ContainerSSHServer(port=1234)
+        assert server.to_primitive() == {"port": 1234}
 
 
 class TestJobStatusItem:

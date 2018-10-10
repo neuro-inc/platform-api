@@ -139,6 +139,12 @@ class Container:
             )
         elif kwargs.get("port") is not None:
             kwargs["http_server"] = ContainerHTTPServer.from_primitive(kwargs)
+
+        if kwargs.get("ssh_server"):
+            ssh_server_desc = kwargs["ssh_server"]
+            container_desc = ContainerSSHServer.from_primitive(ssh_server_desc)
+            kwargs["ssh_server"] = container_desc
+
         kwargs.pop("port", None)
         kwargs.pop("health_check_path", None)
 
