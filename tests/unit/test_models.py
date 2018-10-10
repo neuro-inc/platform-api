@@ -18,6 +18,7 @@ from platform_api.orchestrator.job import Job
 from platform_api.orchestrator.job_request import (
     Container,
     ContainerResources,
+    ContainerSSHServer,
     ContainerVolume,
 )
 from platform_api.user import User
@@ -78,7 +79,7 @@ class TestContainerRequestValidator:
             "image": "testimage",
             "resources": {"cpu": 0.1, "memory_mb": 16, "shm": True},
             "volumes": [{"src_storage_uri": "storage:///", "dst_path": "/var/storage"}],
-            "ssh": { "port" : 666}
+            "ssh": {"port": 666},
         }
 
     def test_allowed_volumes(self, payload):
@@ -171,6 +172,20 @@ class TestJobContainerToJson:
             "image": "image",
             "resources": {"cpu": 0.1, "memory_mb": 16, "gpu": 1, "shm": True},
             "volumes": [],
+        }
+
+    def test_with_ssh(self, storage_config):
+        container = Container(
+            image="image",
+            resources=ContainerResources(cpu=0.1, memory_mb=16, gpu=1, shm=True),
+            ssh_server=ContainerSSHServer(port=777),
+        )
+        assert convert_job_container_to_json(container, storage_config) == {
+            "env": {},
+            "image": "image",
+            "resources": {"cpu": 0.1, "memory_mb": 16, "gpu": 1, "shm": True},
+            "volumes": [],
+            "ssh": {"port": 777},
         }
 
     def test_src_storage_uri_fallback_default(self, storage_config):

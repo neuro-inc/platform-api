@@ -71,6 +71,8 @@ def convert_job_container_to_json(
             "port": container.http_server.port,
             "health_check_path": container.http_server.health_check_path,
         }
+    if container.ssh_server is not None:
+        ret["ssh"] = {"port": container.ssh_server.port}
     for volume in container.volumes:
         ret["volumes"].append(convert_container_volume_to_json(volume, storage_config))
     return ret
