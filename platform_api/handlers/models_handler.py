@@ -81,7 +81,9 @@ class ModelsHandler:
             env_prefix=self._config.env_prefix,
         ).to_container()
 
-        permissions = infer_permissions_from_container(user, container)
+        permissions = infer_permissions_from_container(
+            user, container, self._config.registry
+        )
         logger.info("Checking whether %r has %r", user, permissions)
         await check_permission(request, permissions[0].action, permissions)
 

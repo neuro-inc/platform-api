@@ -8,6 +8,7 @@ from .config import (
     AuthConfig,
     Config,
     DatabaseConfig,
+    RegistryConfig,
     ServerConfig,
     StorageConfig,
     StorageType,
@@ -26,12 +27,14 @@ class EnvironConfigFactory:
         storage = self.create_storage()
         database = self.create_database()
         auth = self.create_auth()
+        registry = self.create_registry()
         return Config(
             server=self.create_server(),
             storage=storage,
-            orchestrator=self.create_orchestrator(storage),
+            orchestrator=self.create_orchestrator(storage, registry),
             database=database,
             auth=auth,
+            registry=registry,
             env_prefix=env_prefix,
         )
 
@@ -73,7 +76,9 @@ class EnvironConfigFactory:
             **kwargs
         )
 
-    def create_orchestrator(self, storage: StorageConfig) -> KubeConfig:
+    def create_orchestrator(
+        self, storage: StorageConfig, registry: RegistryConfig
+    ) -> KubeConfig:
         endpoint_url = self._environ["NP_K8S_API_URL"]
         auth_type = KubeClientAuthType(
             self._environ.get("NP_K8S_AUTH_TYPE", KubeConfig.auth_type.value)
@@ -81,6 +86,7 @@ class EnvironConfigFactory:
 
         return KubeConfig(  # type: ignore
             storage=storage,
+            registry=registry,
             endpoint_url=endpoint_url,
             cert_authority_path=self._environ.get("NP_K8S_CA_PATH"),
             auth_type=auth_type,
@@ -133,3 +139,7 @@ class EnvironConfigFactory:
         url = URL(self._environ["NP_AUTH_URL"])
         token = self._environ["NP_AUTH_TOKEN"]
         return AuthConfig(server_endpoint_url=url, service_token=token)  # type: ignore
+
+    def create_registry(self) -> RegistryConfig:
+        host = self._environ.get("NP_REGISTRY_HOST", RegistryConfig.host)
+        return RegistryConfig(host=host)

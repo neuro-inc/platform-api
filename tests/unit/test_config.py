@@ -4,7 +4,7 @@ from pathlib import PurePath
 import pytest
 from yarl import URL
 
-from platform_api.config import StorageConfig, StorageType
+from platform_api.config import RegistryConfig, StorageConfig, StorageType
 from platform_api.config_factory import EnvironConfigFactory
 from platform_api.orchestrator.kube_orchestrator import (
     HostVolume,
@@ -44,8 +44,10 @@ class TestKubeConfig:
             nfs_server="4.3.2.1",
             nfs_export_path=PurePath("/tmp"),
         )
+        registry_config = RegistryConfig()
         kube_config = KubeConfig(
             storage=storage_config,
+            registry=registry_config,
             jobs_domain_name="testdomain",
             jobs_ingress_name="testingress",
             endpoint_url="http://1.2.3.4",
@@ -59,8 +61,10 @@ class TestKubeConfig:
         storage_config = StorageConfig(
             host_mount_path=PurePath("/tmp"), type=StorageType.HOST
         )
+        registry_config = RegistryConfig()
         kube_config = KubeConfig(
             storage=storage_config,
+            registry=registry_config,
             jobs_domain_name="testdomain",
             jobs_ingress_name="testingress",
             endpoint_url="http://1.2.3.4",
@@ -115,6 +119,8 @@ class TestEnvironConfigFactory:
         assert config.auth.server_endpoint_url == URL("https://auth")
         assert config.auth.service_token == "token"
 
+        assert config.registry.host == "registry.dev.neuromation.io"
+
     def test_create_value_error_invalid_port(self):
         environ = {
             "NP_STORAGE_HOST_MOUNT_PATH": "/tmp",
@@ -149,6 +155,7 @@ class TestEnvironConfigFactory:
             "NP_DB_REDIS_CONN_TIMEOUT": "555",
             "NP_AUTH_URL": "https://auth",
             "NP_AUTH_TOKEN": "token",
+            "NP_REGISTRY_HOST": "testregistry:5000",
         }
         config = EnvironConfigFactory(environ=environ).create()
 
@@ -182,6 +189,8 @@ class TestEnvironConfigFactory:
 
         assert config.auth.server_endpoint_url == URL("https://auth")
         assert config.auth.service_token == "token"
+
+        assert config.registry.host == "testregistry:5000"
 
     def test_create_nfs(self):
         environ = {

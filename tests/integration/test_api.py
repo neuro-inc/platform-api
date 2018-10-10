@@ -244,6 +244,45 @@ class TestModels:
         ) as response:
             assert response.status == HTTPForbidden.status_code, await response.text()
 
+    @pytest.mark.asyncio
+    async def test_forbidden_image(self, api, client, jobs_client, regular_user):
+        payload = {
+            "container": {
+                "image": f"registry.dev.neuromation.io/anotheruser/image:tag",
+                "command": "true",
+                "resources": {"cpu": 0.1, "memory_mb": 16},
+            },
+            "dataset_storage_uri": f"storage://{regular_user.name}",
+            "result_storage_uri": f"storage://{regular_user.name}/result",
+        }
+
+        url = api.model_base_url
+        async with client.post(
+            url, headers=regular_user.headers, json=payload
+        ) as response:
+            assert response.status == HTTPForbidden.status_code, await response.text()
+
+    @pytest.mark.asyncio
+    async def test_allowed_image(self, api, client, jobs_client, regular_user):
+        payload = {
+            "container": {
+                "image": f"registry.dev.neuromation.io/{regular_user.name}/image:tag",
+                "command": "true",
+                "resources": {"cpu": 0.1, "memory_mb": 16},
+            },
+            "dataset_storage_uri": f"storage://{regular_user.name}",
+            "result_storage_uri": f"storage://{regular_user.name}/result",
+        }
+
+        url = api.model_base_url
+        async with client.post(
+            url, headers=regular_user.headers, json=payload
+        ) as response:
+            assert response.status == HTTPAccepted.status_code, await response.text()
+            result = await response.json()
+            job_id = result["job_id"]
+        await jobs_client.delete_job(job_id=job_id)
+
 
 class TestJobs:
     @pytest.mark.asyncio

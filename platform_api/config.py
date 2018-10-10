@@ -64,8 +64,15 @@ class StorageConfig:
 
 
 @dataclass(frozen=True)
+class RegistryConfig:
+    host: str = "registry.dev.neuromation.io"
+    email: str = "registry@neuromation.io"
+
+
+@dataclass(frozen=True)
 class OrchestratorConfig:
     storage: StorageConfig
+    registry: RegistryConfig
 
     jobs_domain_name: str
     job_deletion_delay_s: int = 0
@@ -87,6 +94,8 @@ class Config:
     orchestrator: OrchestratorConfig
     database: DatabaseConfig
     auth: AuthConfig
+
+    registry: RegistryConfig = RegistryConfig()
 
     # used for generating environment variable names and
     # sourcing them inside containers.

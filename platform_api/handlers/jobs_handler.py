@@ -9,7 +9,7 @@ from neuro_auth_client import AuthClient, Permission
 from neuro_auth_client.client import ClientSubTreeViewRoot
 from yarl import URL
 
-from platform_api.config import Config, StorageConfig
+from platform_api.config import Config, RegistryConfig, StorageConfig
 from platform_api.orchestrator import JobsService
 from platform_api.orchestrator.job import Job
 from platform_api.orchestrator.job_request import Container, ContainerVolume, JobRequest
@@ -125,9 +125,13 @@ def convert_job_to_job_response(
 
 
 def infer_permissions_from_container(
-    user: User, container: Container
+    user: User, container: Container, registry_config: RegistryConfig
 ) -> List[Permission]:
     permissions = [Permission(uri=str(user.to_job_uri()), action="write")]
+    if container.belongs_to_registry(registry_config):
+        permissions.append(
+            Permission(uri=str(container.to_image_uri(registry_config)), action="read")
+        )
     for volume in container.volumes:
         action = "read" if volume.read_only else "write"
         permission = Permission(uri=str(volume.uri), action=action)
@@ -175,7 +179,9 @@ class JobsHandler:
             request_payload["container"], storage_config=self._storage_config
         ).build()
 
-        permissions = infer_permissions_from_container(user, container)
+        permissions = infer_permissions_from_container(
+            user, container, self._config.registry
+        )
         logger.info("Checking whether %r has %r", user, permissions)
         await check_permission(request, permissions[0].action, permissions)
 

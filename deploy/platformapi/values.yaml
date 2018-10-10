@@ -18,3 +18,7 @@ NP_DB_REDIS_URI:
   _default: redis://10.0.0.3:6379/0
   dev: redis://10.0.0.3:6379/0
   staging: redis://10.0.0.3:6379/1
+NP_REGISTRY_HOST:
+  _default: registry.dev.neuromation.io
+  dev: registry.dev.neuromation.io
+  staging: registry.staging.neuromation.io

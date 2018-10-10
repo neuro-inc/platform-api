@@ -6,7 +6,7 @@ from unittest import mock
 import pytest
 from yarl import URL
 
-from platform_api.config import StorageConfig
+from platform_api.config import RegistryConfig, StorageConfig
 from platform_api.handlers.job_request_builder import ContainerBuilder
 from platform_api.handlers.models_handler import ModelRequest
 from platform_api.orchestrator.job import Job, JobStatusHistory, JobStatusItem
@@ -35,6 +35,47 @@ class TestContainer:
             resources=ContainerResources(cpu=1, memory_mb=128),
         )
         assert container.command_list == ["bash", "-c", "date"]
+
+    def test_belongs_to_registry_no_host(self):
+        container = Container(
+            image="testimage", resources=ContainerResources(cpu=1, memory_mb=128)
+        )
+        registry_config = RegistryConfig(host="example.com")
+        assert not container.belongs_to_registry(registry_config)
+
+    def test_belongs_to_registry_different_host(self):
+        container = Container(
+            image="registry.com/project/testimage",
+            resources=ContainerResources(cpu=1, memory_mb=128),
+        )
+        registry_config = RegistryConfig(host="example.com")
+        assert not container.belongs_to_registry(registry_config)
+
+    def test_belongs_to_registry(self):
+        container = Container(
+            image="example.com/project/testimage",
+            resources=ContainerResources(cpu=1, memory_mb=128),
+        )
+        registry_config = RegistryConfig(host="example.com")
+        assert container.belongs_to_registry(registry_config)
+
+    def test_to_image_uri_failure(self):
+        container = Container(
+            image="registry.com/project/testimage",
+            resources=ContainerResources(cpu=1, memory_mb=128),
+        )
+        registry_config = RegistryConfig(host="example.com")
+        with pytest.raises(AssertionError, match="Unknown registry"):
+            container.to_image_uri(registry_config)
+
+    def test_to_image_uri(self):
+        container = Container(
+            image="example.com/project/testimage",
+            resources=ContainerResources(cpu=1, memory_mb=128),
+        )
+        registry_config = RegistryConfig(host="example.com")
+        uri = container.to_image_uri(registry_config)
+        assert uri == URL("image://project/testimage")
 
 
 class TestContainerVolumeFactory:

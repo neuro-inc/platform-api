@@ -3,7 +3,7 @@ from pathlib import PurePath
 
 import pytest
 
-from platform_api.config import StorageConfig
+from platform_api.config import RegistryConfig, StorageConfig
 from platform_api.orchestrator import (
     Job,
     JobError,
@@ -76,8 +76,10 @@ def mock_job_request(job_request_factory):
 @pytest.fixture(scope="function")
 def mock_orchestrator():
     storage_config = StorageConfig(host_mount_path=PurePath("/tmp"))
+    registry_config = RegistryConfig()
     config = KubeConfig(
         storage=storage_config,
+        registry=registry_config,
         jobs_ingress_name="platformjobsingress",
         jobs_domain_name="jobs",
         endpoint_url="http://k8s:1234",
