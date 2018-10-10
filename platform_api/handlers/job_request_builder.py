@@ -6,7 +6,7 @@ from platform_api.orchestrator.job_request import (
     Container,
     ContainerHTTPServer,
     ContainerResources,
-    ContainerTCPServer,
+    ContainerSSHServer,
     ContainerVolume,
 )
 
@@ -21,7 +21,7 @@ class ContainerBuilder:
         self._resources: Optional[ContainerResources] = None
         self._volumes: List[ContainerVolume] = []
         self._http_server: Optional[ContainerHTTPServer] = None
-        self._tcp_server: Optional[ContainerTCPServer] = None
+        self._ssh_server: Optional[ContainerSSHServer] = None
 
     def set_image(self, image: str) -> "ContainerBuilder":
         self._image = image
@@ -50,8 +50,8 @@ class ContainerBuilder:
         self._http_server = http_server
         return self
 
-    def set_tcp_server(self, tcp_server: ContainerTCPServer) -> "ContainerBuilder":
-        self._tcp_server = tcp_server
+    def set_ssh_server(self, ssh_server: ContainerSSHServer) -> "ContainerBuilder":
+        self._ssh_server = ssh_server
         return self
 
     @classmethod
@@ -76,10 +76,10 @@ class ContainerBuilder:
             )
             builder.set_http_server(http_server)
 
-        tcp = payload.get("tcp", {})
-        if "port" in tcp:
-            tcp_server = ContainerTCPServer(tcp["port"])
-            builder.set_tcp_server(tcp_server)
+        ssh = payload.get("ssh", {})
+        if "port" in ssh:
+            ssh_server = ContainerSSHServer(ssh["port"])
+            builder.set_ssh_server(ssh_server)
 
         for volume_payload in payload.get("volumes", []):
             volume = cls.create_volume_from_payload(
@@ -122,7 +122,7 @@ class ContainerBuilder:
             volumes=self._volumes,
             resources=self._resources,
             http_server=self._http_server,
-            tcp_server=self._tcp_server,
+            ssh_server=self._ssh_server,
         )
 
 

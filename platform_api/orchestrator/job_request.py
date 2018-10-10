@@ -82,11 +82,11 @@ class ContainerHTTPServer:
 
 
 @dataclass(frozen=True)
-class ContainerTCPServer:
+class ContainerSSHServer:
     port: int
 
     @classmethod
-    def from_primitive(cls, payload) -> "ContainerTCPServer":
+    def from_primitive(cls, payload) -> "ContainerSSHServer":
         return cls(port=payload["port"])  # type: ignore
 
     def to_primitive(self) -> Dict:
@@ -101,7 +101,7 @@ class Container:
     env: Dict[str, str] = field(default_factory=dict)
     volumes: List[ContainerVolume] = field(default_factory=list)
     http_server: Optional[ContainerHTTPServer] = None
-    tcp_server: Optional[ContainerTCPServer] = None
+    ssh_server: Optional[ContainerSSHServer] = None
 
     @property
     def port(self) -> Optional[int]:
@@ -150,8 +150,8 @@ class Container:
         payload["volumes"] = [volume.to_primitive() for volume in self.volumes]
         if self.http_server:
             payload["http_server"] = self.http_server.to_primitive()
-        if self.tcp_server:
-            payload["tcp_server"] = self.tcp_server.to_primitive()
+        if self.ssh_server:
+            payload["ssh_server"] = self.ssh_server.to_primitive()
         return payload
 
 

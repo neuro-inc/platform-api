@@ -14,7 +14,7 @@ from platform_api.orchestrator.job_request import (
     Container,
     ContainerHTTPServer,
     ContainerResources,
-    ContainerTCPServer,
+    ContainerSSHServer,
     ContainerVolume,
     ContainerVolumeFactory,
     JobRequest,
@@ -150,10 +150,10 @@ class TestContainerBuilder:
             ],
             resources=ContainerResources(cpu=0.1, memory_mb=128, gpu=1, shm=None),
             http_server=ContainerHTTPServer(port=80, health_check_path="/"),
-            tcp_server=None,
+            ssh_server=None,
         )
 
-    def test_from_payload_build_with_tcp(self):
+    def test_from_payload_build_with_ssh(self):
         storage_config = StorageConfig(host_mount_path=PurePath("/tmp"))  # type: ignore
         payload = {
             "image": "testimage",
@@ -161,7 +161,7 @@ class TestContainerBuilder:
             "env": {"TESTVAR": "testvalue"},
             "resources": {"cpu": 0.1, "memory_mb": 128, "gpu": 1},
             "http": {"port": 80},
-            "tcp": {"port": 22},
+            "ssh": {"port": 22},
             "volumes": [
                 {
                     "src_storage_uri": "storage://path/to/dir",
@@ -187,7 +187,7 @@ class TestContainerBuilder:
             ],
             resources=ContainerResources(cpu=0.1, memory_mb=128, gpu=1, shm=None),
             http_server=ContainerHTTPServer(port=80, health_check_path="/"),
-            tcp_server=ContainerTCPServer(port=22),
+            ssh_server=ContainerSSHServer(port=22),
         )
 
     def test_from_payload_build_with_shm_false(self):
@@ -286,7 +286,7 @@ def job_request_payload():
                 }
             ],
             "http_server": None,
-            "tcp_server": None,
+            "ssh_server": None,
         },
     }
 
