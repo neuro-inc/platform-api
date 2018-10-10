@@ -178,6 +178,7 @@ class KubeOrchestrator(Orchestrator):
         )
         status = await self._client.create_pod(descriptor)
         if job.has_http_server_exposed:
+            # TODO highlight here that we are to start a service for a job.
             await self._create_service(descriptor)
         job.status = convert_pod_status_to_job_status(status).status
         return job.status

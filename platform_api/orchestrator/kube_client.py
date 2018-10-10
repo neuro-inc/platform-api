@@ -316,6 +316,7 @@ class PodDescriptor:
     resources: Optional[Resources] = None
 
     port: Optional[int] = None
+    ssh_port: Optional[int] = None
     health_check_path: str = "/"
 
     status: Optional["PodStatus"] = None
@@ -361,6 +362,7 @@ class PodDescriptor:
             volumes=volumes,
             resources=resources,
             port=container.port,
+            ssh_port=container.ssh_port,
             health_check_path=container.health_check_path,
             image_pull_secrets=image_pull_secrets,
         )
@@ -384,13 +386,15 @@ class PodDescriptor:
             container_payload["args"] = self.args
         if self.resources:
             container_payload["resources"] = self.resources.to_primitive()
+        container_payload["ports"] = []
         if self.port:
-            container_payload["ports"] = [{"containerPort": self.port}]
+            container_payload["ports"].append({"containerPort": self.port})
             container_payload["readinessProbe"] = {
                 "httpGet": {"port": self.port, "path": self.health_check_path},
                 "initialDelaySeconds": 1,
                 "periodSeconds": 1,
             }
+        self._to_primitive_ssh_port(container_payload)
         return {
             "kind": "Pod",
             "apiVersion": "v1",
@@ -410,6 +414,18 @@ class PodDescriptor:
                 ],
             },
         }
+
+    def _to_primitive_ssh_port(self, container_payload):
+        if self.ssh_port:
+            container_payload["ports"].append({"containerPort": self.ssh_port})
+            if not self.port:
+                # TODO (Rafa) HTTP or SSH in our case preferred?
+                # prefer HTTP port for readinessProbe within container
+                container_payload["readinessProbe"] = {
+                    "tcpSocket": {"port": self.ssh_port},
+                    "initialDelaySeconds": 1,
+                    "periodSeconds": 1,
+                }
 
     @classmethod
     def _assert_resource_kind(cls, expected_kind: str, payload: Dict):

@@ -269,6 +269,10 @@ class Job:
         return self._job_request.container.has_http_server_exposed
 
     @property
+    def has_ssh_server_exposed(self) -> bool:
+        return self._job_request.container.has_ssh_server_exposed
+
+    @property
     def http_url(self) -> str:
         assert self.has_http_server_exposed
         jobs_domain_name = self._orchestrator_config.jobs_domain_name
