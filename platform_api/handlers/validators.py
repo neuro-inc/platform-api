@@ -64,6 +64,11 @@ def create_container_request_validator(*, allow_volumes: bool = False) -> t.Traf
                     t.Key("health_check_path", optional=True): t.String,
                 }
             ),
+            t.Key("ssh", optional=True): t.Dict(
+                {
+                    "port": t.Int(gte=0, lte=65535)
+                }
+            )
         }
     )
 
