@@ -5,7 +5,7 @@ from neuro_auth_client import Permission
 from neuro_auth_client.client import ClientAccessSubTreeView, ClientSubTreeViewRoot
 from yarl import URL
 
-from platform_api.config import StorageConfig
+from platform_api.config import RegistryConfig, StorageConfig
 from platform_api.handlers.jobs_handler import (
     convert_container_volume_to_json,
     convert_job_container_to_json,
@@ -260,7 +260,8 @@ class TestInferPermissionsFromContainer:
         container = Container(
             image="image", resources=ContainerResources(cpu=0.1, memory_mb=16)
         )
-        permissions = infer_permissions_from_container(user, container)
+        registry_config = RegistryConfig(host="example.com")
+        permissions = infer_permissions_from_container(user, container, registry_config)
         assert permissions == [Permission(uri="job://testuser", action="write")]
 
     def test_volumes(self):
@@ -282,9 +283,23 @@ class TestInferPermissionsFromContainer:
                 ),
             ],
         )
-        permissions = infer_permissions_from_container(user, container)
+        registry_config = RegistryConfig(host="example.com")
+        permissions = infer_permissions_from_container(user, container, registry_config)
         assert permissions == [
             Permission(uri="job://testuser", action="write"),
             Permission(uri="storage://testuser/dataset", action="read"),
             Permission(uri="storage://testuser/result", action="write"),
+        ]
+
+    def test_image(self):
+        user = User(name="testuser", token="")
+        container = Container(
+            image="example.com/testuser/image",
+            resources=ContainerResources(cpu=0.1, memory_mb=16),
+        )
+        registry_config = RegistryConfig(host="example.com")
+        permissions = infer_permissions_from_container(user, container, registry_config)
+        assert permissions == [
+            Permission(uri="job://testuser", action="write"),
+            Permission(uri="image://testuser/image", action="read"),
         ]
