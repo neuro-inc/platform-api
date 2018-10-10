@@ -72,6 +72,15 @@ class TestContainerRequestValidator:
             "volumes": [{"src_storage_uri": "storage:///", "dst_path": "/var/storage"}],
         }
 
+    @pytest.fixture
+    def payload_with_ssh(self):
+        return {
+            "image": "testimage",
+            "resources": {"cpu": 0.1, "memory_mb": 16, "shm": True},
+            "volumes": [{"src_storage_uri": "storage:///", "dst_path": "/var/storage"}],
+            "ssh": { "port" : 666}
+        }
+
     def test_allowed_volumes(self, payload):
         validator = create_container_request_validator(allow_volumes=True)
         result = validator.check(payload)
@@ -93,6 +102,13 @@ class TestContainerRequestValidator:
         validator = create_container_request_validator(allow_volumes=True)
         result = validator.check(payload_with_zero_gpu)
         assert result["resources"]["gpu"] == 0
+
+    def test_with_ssh(self, payload_with_ssh):
+        validator = create_container_request_validator(allow_volumes=True)
+        result = validator.check(payload_with_ssh)
+        assert result["ssh"]
+        assert result["ssh"]["port"]
+        assert result["ssh"]["port"] == 666
 
     def test_with_one_gpu(self, payload_with_one_gpu):
         validator = create_container_request_validator(allow_volumes=True)
