@@ -14,11 +14,12 @@ from platform_api.orchestrator.job_request import (
     Container,
     ContainerHTTPServer,
     ContainerResources,
+    ContainerTCPServer,
     ContainerVolume,
     ContainerVolumeFactory,
     JobRequest,
     JobStatus,
-    ContainerTCPServer)
+)
 
 
 class TestContainer:
@@ -149,7 +150,7 @@ class TestContainerBuilder:
             ],
             resources=ContainerResources(cpu=0.1, memory_mb=128, gpu=1, shm=None),
             http_server=ContainerHTTPServer(port=80, health_check_path="/"),
-            tcp_server=None
+            tcp_server=None,
         )
 
     def test_from_payload_build_with_tcp(self):
@@ -186,7 +187,7 @@ class TestContainerBuilder:
             ],
             resources=ContainerResources(cpu=0.1, memory_mb=128, gpu=1, shm=None),
             http_server=ContainerHTTPServer(port=80, health_check_path="/"),
-            tcp_server=ContainerTCPServer(port=22)
+            tcp_server=ContainerTCPServer(port=22),
         )
 
     def test_from_payload_build_with_shm_false(self):

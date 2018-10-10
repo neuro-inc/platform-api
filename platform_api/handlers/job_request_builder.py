@@ -6,8 +6,9 @@ from platform_api.orchestrator.job_request import (
     Container,
     ContainerHTTPServer,
     ContainerResources,
+    ContainerTCPServer,
     ContainerVolume,
-    ContainerTCPServer)
+)
 
 
 class ContainerBuilder:
@@ -76,7 +77,7 @@ class ContainerBuilder:
 
         tcp = payload.get("tcp", {})
         if "port" in tcp:
-            tcp_server = ContainerTCPServer(tcp['port'])
+            tcp_server = ContainerTCPServer(tcp["port"])
             builder.set_tcp_server(tcp_server)
 
         for volume_payload in payload.get("volumes", []):

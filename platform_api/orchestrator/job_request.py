@@ -87,9 +87,7 @@ class ContainerTCPServer:
 
     @classmethod
     def from_primitive(cls, payload) -> "ContainerTCPServer":
-        return cls(  # type: ignore
-            port=payload["port"],
-        )
+        return cls(port=payload["port"])  # type: ignore
 
     def to_primitive(self) -> Dict:
         return asdict(self)
