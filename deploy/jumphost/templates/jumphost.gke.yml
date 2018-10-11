@@ -26,7 +26,7 @@ spec:
           valueFrom:
             secretKeyRef:
               name: jumphost-secret
-              key: jumphost_root_id_rsa
+              key: authorizedkeys
 ---
 apiVersion: v1
 kind: Service
