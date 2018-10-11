@@ -1,0 +1,41 @@
+apiVersion: extensions/v1beta1
+kind: Deployment
+metadata:
+  name: jumphost
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      service: jumphost
+  strategy:
+    rollingUpdate:
+      maxSurge: 1
+      maxUnavailable: 0
+    type: RollingUpdate
+  template:
+    metadata:
+      labels:
+        service: jumphost
+    spec:
+      containers:
+      - name: jumphost
+        image: {{ printf "%s" (pluck .Values.global.env .Values.IMAGE | first | default .Values.IMAGE._default) }}
+        imagePullPolicy: Always
+        env:
+        - name: NP_JUMP_HOST_ROOT_TOKEN
+          valueFrom:
+            secretKeyRef:
+              name: jumphost-secret
+              key: jumphost_root_id_rsa
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: jumphost
+spec:
+  type: "LoadBalancer"
+  ports:
+  - port: 8080
+    targetPort: 8080
+  selector:
+    service: jumphost
