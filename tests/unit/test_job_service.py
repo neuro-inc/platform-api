@@ -4,10 +4,7 @@ import pytest
 
 from platform_api.orchestrator import Job, JobRequest, JobsService, JobStatus
 from platform_api.orchestrator.job import JobStatusItem
-from platform_api.orchestrator.job_request import (
-    Container,
-    ContainerResources
-)
+from platform_api.orchestrator.job_request import Container, ContainerResources
 from platform_api.orchestrator.jobs_service import InMemoryJobsStorage
 from platform_api.user import User
 
