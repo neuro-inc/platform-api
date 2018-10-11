@@ -210,6 +210,9 @@ class KubeOrchestrator(Orchestrator):
         return ingress_rule.host
 
     async def _delete_service(self, pod_id: str) -> None:
+        # TODO (Rafa) we shall ensure that ingress exists, as it is not required
+        # for SSH, thus Pods without HTTP but thus which are having SSH,
+        # will not have it
         host = self._get_ingress_rule_host_for_pod(pod_id)
         try:
             await self._client.remove_ingress_rule(
