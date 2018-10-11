@@ -16,8 +16,8 @@ docker build -t jumphost -f Dockerfile.k8s .
 ### Push docker to GCR
 
 ```bash
-docker tag jumphost:latest gcr.io/light-reality-205619/jumphost:latest
-docker push gcr.io/light-reality-205619/jumphost:latest
+docker tag jumphost:latest gcr.io/light-reality-205619/jumphost-openssh-k8s:latest
+docker push gcr.io/light-reality-205619/jumphost-openssh-k8s:latest
 ```
 
 ### Deploy
@@ -26,9 +26,11 @@ docker push gcr.io/light-reality-205619/jumphost:latest
 
 ```bash
 ssh-keygen -q -f jumphost_id_rsa -N '' -t rsa
-KEY=$$(cat jumphost_id_rsa.pub |base64)
-sed "s/PUBLIC_KEY/$${KEY}/" ${PROJECT_DIR}/deploy/jumphost/docker/templates/secret.gke.yaml	> secret.yaml
+KEY=$(cat jumphost_id_rsa.pub |base64)
+sed "s/PUBLIC_KEY/${KEY}/" ${PROJECT_DIR}/deploy/jumphost/secret.gke.yaml	> secret.yaml
 kubectl create -f secret.yaml
 ```
+
+#### Deploy Service and JumpHost
 
 TBD
