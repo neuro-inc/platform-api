@@ -62,3 +62,17 @@ You would need to get and External IP address of your service, in order to use i
 ```bash
 ssh -i jumphost_id_rsa root@<External IP>
 ```
+
+At this point you can add a new user
+
+```bash
+USER_PUBLIC_KEY=...
+uname=...
+adduser $uname
+
+mkdir -p /home/$uname/.ssh
+touch /home/$uname/.ssh/authorized_keys
+echo ${USER_PUBLIC_KEY} > /home/$uname/.ssh/authorized_keys
+chmod 600 /home/$uname/.ssh/authorized_keys
+chown -R $uname:$uname /home/$uname/.ssh 
+```
