@@ -5,6 +5,14 @@
 
 Please note that this section is manual deployment.
 
+### Pre-requisites
+
+- docker client authorized against GCR (gcloud usually does it)
+
+- kubectl configured against your GCP GKE
+
+- helm installed
+
 ### Build docker
 
 ```bash
@@ -27,10 +35,30 @@ docker push gcr.io/light-reality-205619/jumphost-openssh-k8s:latest
 ```bash
 ssh-keygen -q -f jumphost_id_rsa -N '' -t rsa
 KEY=$(cat jumphost_id_rsa.pub |base64)
-sed "s/PUBLIC_KEY/${KEY}/" ${PROJECT_DIR}/deploy/jumphost/secret.gke.yaml	> secret.yaml
-kubectl create -f secret.yaml
+sed "s/PUBLIC_KEY/${KEY}/" ${PROJECT_DIR}/deploy/jumphost/secret.gke.yml > secret.yml
+kubectl create -f secret.yml
 ```
 
 #### Deploy Service and JumpHost
 
-TBD
+```bash
+helm --set "global.env=dev" install --debug jumphost/helmpackage
+```
+
+#### Post deploy smoke
+
+Check kubernetes status:
+
+```bash
+# next would print jump hostpod
+kubectl get pods | grep jumphost
+
+# next should show you our service
+kubectl get service jumphost
+```
+
+You would need to get and External IP address of your service, in order to use in the next command.
+
+```bash
+ssh -i jumphost_id_rsa root@<External IP>
+```
