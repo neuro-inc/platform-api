@@ -21,6 +21,8 @@ spec:
       - name: jumphost
         image: {{ printf "%s" (pluck .Values.global.env .Values.IMAGE | first | default .Values.IMAGE._default) }}
         imagePullPolicy: Always
+        ports:
+          - containerPort: 22
         env:
         - name: NP_JUMP_HOST_ROOT_TOKEN
           valueFrom:
@@ -35,7 +37,7 @@ metadata:
 spec:
   type: "LoadBalancer"
   ports:
-  - port: 8080
-    targetPort: 8080
+  - port: 22
+    targetPort: 22
   selector:
     service: jumphost

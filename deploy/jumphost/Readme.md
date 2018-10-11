@@ -3,6 +3,8 @@
 
 ## Manual installation guide
 
+Please note that this section is manual deployment.
+
 ### Build docker
 
 ```bash
@@ -14,8 +16,8 @@ docker build -t jumphost -f Dockerfile.k8s .
 ### Push docker to GCR
 
 ```bash
-docker tag ...
-docker push ...
+docker tag jumphost:latest gcr.io/light-reality-205619/jumphost:latest
+docker push gcr.io/light-reality-205619/jumphost:latest
 ```
 
 ### Deploy
