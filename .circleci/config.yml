@@ -58,7 +58,7 @@ jobs:
       - run:
           name: GKE Docker Push
           command: |
-            make -C deploy/jumphost -gke_docker_jumphost_push
+            make -C deploy/jumphost gke_docker_jumphost_push
 
       - run:
           name: GKE K8s Deploy
