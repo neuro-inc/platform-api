@@ -176,10 +176,7 @@ workflows:
           filters:
             branches:
               only:
-                - ci-deploy-ssh
-      - gke_stage_jumphost_deploy:
-          context: org-global
-          filters:
+                - master
             branches:
               only:
                 - /release.*/
