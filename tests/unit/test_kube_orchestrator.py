@@ -485,7 +485,7 @@ class TestService:
             "metadata": {"name": "testservice"},
             "spec": {
                 "type": "NodePort",
-                "ports": [{"port": 80, "targetPort": 8080}],
+                "ports": [{"port": 80, "targetPort": 8080, "name": "http"}],
                 "selector": {"job": "testservice"},
             },
         }
@@ -502,6 +502,40 @@ class TestService:
         pod = PodDescriptor(name="testpod", image="testimage", port=1234)
         service = Service.create_for_pod(pod)
         assert service == Service(name="testpod", target_port=1234)
+
+
+class TestServiceWithSSHOnly:
+    @pytest.fixture
+    def service_payload(self):
+        return {
+            "metadata": {"name": "testservice"},
+            "spec": {
+                "type": "NodePort",
+                "ports": [{"port": 89, "targetPort": 8181, "name": "ssh"}],
+                "selector": {"job": "testservice"},
+            },
+        }
+
+    def test_to_primitive(self, service_payload):
+        service = Service(
+            name="testservice", target_port=None, ssh_port=89, ssh_target_port=8181
+        )
+        assert service.to_primitive() == service_payload
+
+    def test_from_primitive(self, service_payload):
+        service = Service.from_primitive(service_payload)
+        assert service == Service(
+            name="testservice",
+            target_port=None,
+            port=80,
+            ssh_target_port=8181,
+            ssh_port=89,
+        )
+
+    def test_create_for_pod(self):
+        pod = PodDescriptor(name="testpod", image="testimage", ssh_port=89)
+        service = Service.create_for_pod(pod)
+        assert service == Service(name="testpod", target_port=None, ssh_target_port=89)
 
 
 class TestContainerStatus:
