@@ -1,4 +1,4 @@
-IMAGE_NAME ?= jumphost-ssh
+IMAGE_NAME ?= jumphost-openssh
 IMAGE_TAG ?= latest
 IMAGE_NAME_K8S ?= $(IMAGE_NAME)-k8s
 IMAGE_K8S ?= $(GKE_DOCKER_REGISTRY)/$(GKE_PROJECT_ID)/$(IMAGE_NAME_K8S)
