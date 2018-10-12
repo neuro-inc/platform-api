@@ -42,7 +42,7 @@ kubectl create -f secret.yml
 #### Deploy Service and JumpHost
 
 ```bash
-helm --set "global.env=dev" install --debug jumphost/helmpackage
+helm --set “global.env=dev” install --name=jumphost helmpackage/
 ```
 
 #### Post deploy smoke

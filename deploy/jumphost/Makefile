@@ -1,10 +1,10 @@
-IMAGE_NAME ?= jumphost
+IMAGE_NAME ?= jumphost-ssh
 IMAGE_TAG ?= latest
 IMAGE_NAME_K8S ?= $(IMAGE_NAME)-k8s
 IMAGE_K8S ?= $(GKE_DOCKER_REGISTRY)/$(GKE_PROJECT_ID)/$(IMAGE_NAME_K8S)
 
 build_jumphost_k8s:
-    docker build -f Dockerfile.k8s -t $(IMAGE_NAME_K8S):$(IMAGE_TAG) docker/
+	docker build -f docker/Dockerfile.k8s -t $(IMAGE_NAME_K8S):$(IMAGE_TAG) docker/
 
 gke_login:
 	sudo /opt/google-cloud-sdk/bin/gcloud --quiet components update --version 204.0.0
