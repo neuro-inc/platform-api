@@ -153,30 +153,61 @@ class Resources:
 @dataclass(frozen=True)
 class Service:
     name: str
-    target_port: int
+    target_port: Optional[int]
+    ssh_target_port: Optional[int] = None
+
     port: int = 80
+    ssh_port: int = 31022
+
+    def _add_port_map(
+        self,
+        port: Optional[int],
+        target_port: Optional[int],
+        port_name: str,
+        ports: List,
+    ):
+        if target_port:
+            ports.append({"port": port, "targetPort": target_port, "name": port_name})
 
     def to_primitive(self):
-        return {
+        service_descriptor = {
             "metadata": {"name": self.name},
-            "spec": {
-                "type": "NodePort",
-                "ports": [{"port": self.port, "targetPort": self.target_port}],
-                "selector": {"job": self.name},
-            },
+            "spec": {"type": "NodePort", "ports": [], "selector": {"job": self.name}},
         }
+        self._add_port_map(
+            self.port, self.target_port, "http", service_descriptor["spec"]["ports"]
+        )
+        self._add_port_map(
+            self.ssh_port,
+            self.ssh_target_port,
+            "ssh",
+            service_descriptor["spec"]["ports"],
+        )
+        return service_descriptor
 
     @classmethod
     def create_for_pod(cls, pod: "PodDescriptor") -> "Service":
-        return cls(pod.name, target_port=pod.port)  # type: ignore
+        return cls(
+            pod.name, target_port=pod.port, ssh_target_port=pod.ssh_port
+        )  # type: ignore
+
+    @classmethod
+    def _find_port_by_name(cls, name: str, port_mappings: List) -> Dict:
+        for port_mapping in port_mappings:
+            if port_mapping.get("name", None) == name:
+                return port_mapping
+        return {}
 
     @classmethod
     def from_primitive(cls, payload) -> "Service":
-        port_payload = payload["spec"]["ports"][0]
+        http_payload = cls._find_port_by_name("http", payload["spec"]["ports"])
+        ssh_payload = cls._find_port_by_name("ssh", payload["spec"]["ports"])
         return cls(  # type: ignore
             name=payload["metadata"]["name"],
-            target_port=port_payload["targetPort"],
-            port=port_payload["port"],
+            target_port=http_payload.get("targetPort", None),
+            port=http_payload.get("port", Service.port),
+            ssh_target_port=ssh_payload.get("targetPort", None),
+            ssh_port=ssh_payload.get("port", Service.ssh_port),
         )
 
 
