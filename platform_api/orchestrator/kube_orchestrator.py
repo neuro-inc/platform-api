@@ -181,9 +181,16 @@ class KubeOrchestrator(Orchestrator):
             self._storage_volume, job.request, secret_names
         )
         status = await self._client.create_pod(descriptor)
-        if job.has_http_server_exposed:
-            # TODO highlight here that we are to start a service for a job.
-            await self._create_service(descriptor)
+        if job.has_http_server_exposed or job.has_ssh_server_exposed:
+            service = await self._create_service(descriptor)
+            if job.has_http_server_exposed:
+                await self._client.add_ingress_rule(
+                    name=self._config.jobs_ingress_name,
+                    rule=IngressRule.from_service(
+                        domain_name=self._config.jobs_ingress_domain_name,
+                        service=service,
+                    ),
+                )
         job.status = convert_pod_status_to_job_status(status).status
         return job.status
 
@@ -197,14 +204,8 @@ class KubeOrchestrator(Orchestrator):
             client=self._client, pod_name=job.id, container_name=job.id
         )
 
-    async def _create_service(self, pod: PodDescriptor) -> None:
-        service = await self._client.create_service(Service.create_for_pod(pod))
-        await self._client.add_ingress_rule(
-            name=self._config.jobs_ingress_name,
-            rule=IngressRule.from_service(
-                domain_name=self._config.jobs_ingress_domain_name, service=service
-            ),
-        )
+    async def _create_service(self, pod: PodDescriptor) -> Service:
+        return await self._client.create_service(Service.create_for_pod(pod))
 
     def _get_ingress_rule_host_for_pod(self, pod_id) -> str:
         ingress_rule = IngressRule.from_service(
@@ -231,7 +232,7 @@ class KubeOrchestrator(Orchestrator):
 
     async def delete_job(self, job: Job) -> JobStatus:
         pod_id = job.id
-        if job.has_http_server_exposed:
+        if job.has_http_server_exposed or job.has_ssh_server_exposed:
             await self._delete_service(pod_id)
         status = await self._client.delete_pod(pod_id)
         return convert_pod_status_to_job_status(status).status
