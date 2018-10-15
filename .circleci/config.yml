@@ -177,6 +177,9 @@ workflows:
             branches:
               only:
                 - master
+      - gke_stage_jumphost_deploy:
+          context: org-global
+          filters:
             branches:
               only:
                 - /release.*/
