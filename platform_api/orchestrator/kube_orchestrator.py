@@ -182,8 +182,10 @@ class KubeOrchestrator(Orchestrator):
         )
         status = await self._client.create_pod(descriptor)
         if job.has_http_server_exposed or job.has_ssh_server_exposed:
+            logger.info(f"Starting Service for {job.id}.")
             service = await self._create_service(descriptor)
             if job.has_http_server_exposed:
+                logger.info(f"Starting Ingress for {job.id}")
                 await self._client.add_ingress_rule(
                     name=self._config.jobs_ingress_name,
                     rule=IngressRule.from_service(
