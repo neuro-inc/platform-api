@@ -386,15 +386,13 @@ class PodDescriptor:
             container_payload["args"] = self.args
         if self.resources:
             container_payload["resources"] = self.resources.to_primitive()
-        container_payload["ports"] = []
-        if self.port:
-            container_payload["ports"].append({"containerPort": self.port})
-            container_payload["readinessProbe"] = {
-                "httpGet": {"port": self.port, "path": self.health_check_path},
-                "initialDelaySeconds": 1,
-                "periodSeconds": 1,
-            }
-        self._to_primitive_ssh_port(container_payload)
+
+        ports, readinesProbe = self._to_primitive_ports()
+        if ports:
+            container_payload["ports"] = ports
+        if readinesProbe:
+            container_payload["readinessProbe"] = readinesProbe
+
         return {
             "kind": "Pod",
             "apiVersion": "v1",
@@ -415,17 +413,26 @@ class PodDescriptor:
             },
         }
 
-    def _to_primitive_ssh_port(self, container_payload):
+    def _to_primitive_ports(self):
+        ports = []
+        readinesProbe = {}
+        if self.port:
+            ports.append({"containerPort": self.port})
+            readinesProbe = {
+                "httpGet": {"port": self.port, "path": self.health_check_path},
+                "initialDelaySeconds": 1,
+                "periodSeconds": 1,
+            }
+
         if self.ssh_port:
-            container_payload["ports"].append({"containerPort": self.ssh_port})
+            ports.append({"containerPort": self.ssh_port})
             if not self.port:
-                # TODO (Rafa) HTTP or SSH in our case preferred?
-                # prefer HTTP port for readinessProbe within container
-                container_payload["readinessProbe"] = {
+                readinesProbe = {
                     "tcpSocket": {"port": self.ssh_port},
                     "initialDelaySeconds": 1,
                     "periodSeconds": 1,
                 }
+        return ports, readinesProbe
 
     @classmethod
     def _assert_resource_kind(cls, expected_kind: str, payload: Dict):
