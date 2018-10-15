@@ -42,7 +42,7 @@ kubectl create -f secret.yml
 #### Deploy Service and JumpHost
 
 ```bash
-helm --set "global.env=dev" install --debug jumphost/helmpackage
+helm --set “global.env=dev” install --name=jumphost helmpackage/
 ```
 
 #### Post deploy smoke
@@ -60,7 +60,8 @@ kubectl get service jumphost
 You would need to get and External IP address of your service, in order to use in the next command.
 
 ```bash
-ssh -i jumphost_id_rsa root@<External IP>
+JUMP_HOST_IP=$(kubectl get svc jumphost -o jsonpath="{.status.loadBalancer.ingress[*]['ip']}")
+ssh -i jumphost_id_rsa root@${JUMP_HOST_IP}
 ```
 
 At this point you can add a new user
