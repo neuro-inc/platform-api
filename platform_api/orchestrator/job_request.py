@@ -122,6 +122,12 @@ class Container:
         return None
 
     @property
+    def ssh_port(self) -> Optional[int]:
+        if self.ssh_server:
+            return self.ssh_server.port
+        return None
+
+    @property
     def health_check_path(self) -> str:
         if self.http_server:
             return self.http_server.health_check_path
@@ -136,6 +142,10 @@ class Container:
     @property
     def has_http_server_exposed(self) -> bool:
         return bool(self.http_server)
+
+    @property
+    def has_ssh_server_exposed(self) -> bool:
+        return bool(self.ssh_server)
 
     @classmethod
     def from_primitive(cls, payload) -> "Container":

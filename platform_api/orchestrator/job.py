@@ -269,10 +269,23 @@ class Job:
         return self._job_request.container.has_http_server_exposed
 
     @property
+    def has_ssh_server_exposed(self) -> bool:
+        return self._job_request.container.has_ssh_server_exposed
+
+    @property
     def http_url(self) -> str:
         assert self.has_http_server_exposed
         jobs_domain_name = self._orchestrator_config.jobs_domain_name
         return f"http://{self.id}.{jobs_domain_name}"
+
+    @property
+    def ssh_connection(self) -> str:
+        assert self.has_ssh_server_exposed
+        jobs_domain_name = self._orchestrator_config.jobs_domain_name
+        return (
+            f"ssh://{self.id}.{jobs_domain_name}"
+            f":{self._job_request.container.ssh_port}"
+        )
 
     @property
     def finished_at_str(self) -> Optional[str]:

@@ -171,6 +171,45 @@ class TestModels:
         await jobs_client.delete_job(job_id=job_id)
 
     @pytest.mark.asyncio
+    async def test_create_model_with_ssh_and_http(
+        self, api, client, model_train, jobs_client, regular_user
+    ):
+        url = api.model_base_url
+        model_train["container"]["ssh"] = {"port": 7867}
+        async with client.post(
+            url, headers=regular_user.headers, json=model_train
+        ) as response:
+            assert response.status == HTTPAccepted.status_code
+            result = await response.json()
+            assert result["status"] in ["pending"]
+            job_id = result["job_id"]
+            expected_url = f"ssh://{job_id}.jobs.platform.neuromation.io:7867"
+            assert result["ssh_server"] == expected_url
+
+        await jobs_client.long_pooling_by_job_id(job_id=job_id, status="succeeded")
+        await jobs_client.delete_job(job_id=job_id)
+
+    @pytest.mark.asyncio
+    async def test_create_model_with_ssh_only(
+        self, api, client, model_train, jobs_client, regular_user
+    ):
+        url = api.model_base_url
+        model_train["container"]["ssh"] = {"port": 7867}
+        model_train["container"].pop("http", None)
+        async with client.post(
+            url, headers=regular_user.headers, json=model_train
+        ) as response:
+            assert response.status == HTTPAccepted.status_code
+            result = await response.json()
+            assert result["status"] in ["pending"]
+            job_id = result["job_id"]
+            expected_url = f"ssh://{job_id}.jobs.platform.neuromation.io:7867"
+            assert result["ssh_server"] == expected_url
+
+        await jobs_client.long_pooling_by_job_id(job_id=job_id, status="succeeded")
+        await jobs_client.delete_job(job_id=job_id)
+
+    @pytest.mark.asyncio
     async def test_env_var_sourcing(self, api, client, jobs_client, regular_user):
         np_result_path = f"/var/storage/{regular_user.name}/result"
         cmd = f'bash -c \'[ "$NP_RESULT_PATH" == "{np_result_path}" ]\''
