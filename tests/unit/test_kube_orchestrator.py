@@ -143,6 +143,129 @@ class TestPodDescriptor:
             },
         }
 
+    def test_to_primitive_http_ssh(self):
+        pod = PodDescriptor(
+            name="testname",
+            image="testimage",
+            env={"TESTVAR": "testvalue"},
+            resources=Resources(cpu=0.5, memory=1024, gpu=1),
+            port=1234,
+            ssh_port=4321,
+        )
+        assert pod.name == "testname"
+        assert pod.image == "testimage"
+        assert pod.to_primitive() == {
+            "kind": "Pod",
+            "apiVersion": "v1",
+            "metadata": {"name": "testname", "labels": {"job": "testname"}},
+            "spec": {
+                "containers": [
+                    {
+                        "name": "testname",
+                        "image": "testimage",
+                        "env": [{"name": "TESTVAR", "value": "testvalue"}],
+                        "volumeMounts": [],
+                        "resources": {
+                            "limits": {
+                                "cpu": "500m",
+                                "memory": "1024Mi",
+                                "nvidia.com/gpu": 1,
+                            }
+                        },
+                        "ports": [{"containerPort": 1234}, {"containerPort": 4321}],
+                        "readinessProbe": {
+                            "httpGet": {"port": 1234, "path": "/"},
+                            "initialDelaySeconds": 1,
+                            "periodSeconds": 1,
+                        },
+                        "terminationMessagePolicy": "FallbackToLogsOnError",
+                    }
+                ],
+                "volumes": [],
+                "restartPolicy": "Never",
+                "imagePullSecrets": [],
+            },
+        }
+
+    def test_to_primitive_ssh_only(self):
+        pod = PodDescriptor(
+            name="testname",
+            image="testimage",
+            env={"TESTVAR": "testvalue"},
+            resources=Resources(cpu=0.5, memory=1024, gpu=1),
+            ssh_port=4321,
+        )
+        assert pod.name == "testname"
+        assert pod.image == "testimage"
+        assert pod.to_primitive() == {
+            "kind": "Pod",
+            "apiVersion": "v1",
+            "metadata": {"name": "testname", "labels": {"job": "testname"}},
+            "spec": {
+                "containers": [
+                    {
+                        "name": "testname",
+                        "image": "testimage",
+                        "env": [{"name": "TESTVAR", "value": "testvalue"}],
+                        "volumeMounts": [],
+                        "resources": {
+                            "limits": {
+                                "cpu": "500m",
+                                "memory": "1024Mi",
+                                "nvidia.com/gpu": 1,
+                            }
+                        },
+                        "ports": [{"containerPort": 4321}],
+                        "readinessProbe": {
+                            "tcpSocket": {"port": 4321},
+                            "initialDelaySeconds": 1,
+                            "periodSeconds": 1,
+                        },
+                        "terminationMessagePolicy": "FallbackToLogsOnError",
+                    }
+                ],
+                "volumes": [],
+                "restartPolicy": "Never",
+                "imagePullSecrets": [],
+            },
+        }
+
+    def test_to_primitive_no_ports(self):
+        pod = PodDescriptor(
+            name="testname",
+            image="testimage",
+            env={"TESTVAR": "testvalue"},
+            resources=Resources(cpu=0.5, memory=1024, gpu=1),
+        )
+        assert pod.name == "testname"
+        assert pod.image == "testimage"
+        assert pod.to_primitive() == {
+            "kind": "Pod",
+            "apiVersion": "v1",
+            "metadata": {"name": "testname", "labels": {"job": "testname"}},
+            "spec": {
+                "containers": [
+                    {
+                        "name": "testname",
+                        "image": "testimage",
+                        "env": [{"name": "TESTVAR", "value": "testvalue"}],
+                        "volumeMounts": [],
+                        "resources": {
+                            "limits": {
+                                "cpu": "500m",
+                                "memory": "1024Mi",
+                                "nvidia.com/gpu": 1,
+                            }
+                        },
+                        "terminationMessagePolicy": "FallbackToLogsOnError",
+                    }
+                ],
+                "volumes": [],
+                "restartPolicy": "Never",
+                "imagePullSecrets": [],
+            },
+        }
+
     def test_to_primitive_with_dev_shm(self):
         dev_shm = SharedMemoryVolume(name="dshm")
         container_volume = ContainerVolume(
