@@ -349,9 +349,49 @@ class TestJob:
         )
         return JobRequest(job_id="testjob", container=container)
 
+    @pytest.fixture
+    def job_request_with_ssh_and_http(self):
+        container = Container(
+            image="testimage",
+            resources=ContainerResources(cpu=1, memory_mb=128),
+            http_server=ContainerHTTPServer(port=1234),
+            ssh_server=ContainerSSHServer(port=4321),
+        )
+        return JobRequest(job_id="testjob", container=container)
+
+    @pytest.fixture
+    def job_request_with_ssh(self):
+        container = Container(
+            image="testimage",
+            resources=ContainerResources(cpu=1, memory_mb=128),
+            ssh_server=ContainerSSHServer(port=4321),
+        )
+        return JobRequest(job_id="testjob", container=container)
+
     def test_http_url(self, mock_orchestrator, job_request):
         job = Job(orchestrator_config=mock_orchestrator.config, job_request=job_request)
         assert job.http_url == "http://testjob.jobs"
+
+    def test_ssh_url(self, mock_orchestrator, job_request_with_ssh):
+        job = Job(
+            orchestrator_config=mock_orchestrator.config,
+            job_request=job_request_with_ssh,
+        )
+        assert job.ssh_server == "ssh://testjob.ssh:22"
+
+    def test_no_ssh(self, mock_orchestrator, job_request):
+        job = Job(orchestrator_config=mock_orchestrator.config, job_request=job_request)
+        assert not job.has_ssh_server_exposed
+        with pytest.raises(AssertionError):
+            assert job.ssh_server
+
+    def test_http_url_and_ssh(self, mock_orchestrator, job_request_with_ssh_and_http):
+        job = Job(
+            orchestrator_config=mock_orchestrator.config,
+            job_request=job_request_with_ssh_and_http,
+        )
+        assert job.http_url == "http://testjob.jobs"
+        assert job.ssh_server == "ssh://testjob.ssh:22"
 
     def test_should_be_deleted_pending(self, mock_orchestrator, job_request):
         job = Job(orchestrator_config=mock_orchestrator.config, job_request=job_request)

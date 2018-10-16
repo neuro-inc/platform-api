@@ -316,6 +316,7 @@ class PodDescriptor:
     resources: Optional[Resources] = None
 
     port: Optional[int] = None
+    ssh_port: Optional[int] = None
     health_check_path: str = "/"
 
     status: Optional["PodStatus"] = None
@@ -361,6 +362,7 @@ class PodDescriptor:
             volumes=volumes,
             resources=resources,
             port=container.port,
+            ssh_port=container.ssh_port,
             health_check_path=container.health_check_path,
             image_pull_secrets=image_pull_secrets,
         )
@@ -384,13 +386,13 @@ class PodDescriptor:
             container_payload["args"] = self.args
         if self.resources:
             container_payload["resources"] = self.resources.to_primitive()
-        if self.port:
-            container_payload["ports"] = [{"containerPort": self.port}]
-            container_payload["readinessProbe"] = {
-                "httpGet": {"port": self.port, "path": self.health_check_path},
-                "initialDelaySeconds": 1,
-                "periodSeconds": 1,
-            }
+
+        ports, readines_probe = self._to_primitive_ports()
+        if ports:
+            container_payload["ports"] = ports
+        if readines_probe:
+            container_payload["readinessProbe"] = readines_probe
+
         return {
             "kind": "Pod",
             "apiVersion": "v1",
@@ -410,6 +412,27 @@ class PodDescriptor:
                 ],
             },
         }
+
+    def _to_primitive_ports(self):
+        ports = []
+        readines_probe = {}
+        if self.port:
+            ports.append({"containerPort": self.port})
+            readines_probe = {
+                "httpGet": {"port": self.port, "path": self.health_check_path},
+                "initialDelaySeconds": 1,
+                "periodSeconds": 1,
+            }
+
+        if self.ssh_port:
+            ports.append({"containerPort": self.ssh_port})
+            if not self.port:
+                readines_probe = {
+                    "tcpSocket": {"port": self.ssh_port},
+                    "initialDelaySeconds": 1,
+                    "periodSeconds": 1,
+                }
+        return ports, readines_probe
 
     @classmethod
     def _assert_resource_kind(cls, expected_kind: str, payload: Dict):
