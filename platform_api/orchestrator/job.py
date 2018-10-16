@@ -281,11 +281,8 @@ class Job:
     @property
     def ssh_connection(self) -> str:
         assert self.has_ssh_server_exposed
-        jobs_domain_name = self._orchestrator_config.jobs_domain_name
-        return (
-            f"ssh://{self.id}.{jobs_domain_name}"
-            f":{self._job_request.container.ssh_port}"
-        )
+        ssh_domain_name = self._orchestrator_config.ssh_domain_name
+        return f"ssh://{self.id}.{ssh_domain_name}:22"
 
     @property
     def finished_at_str(self) -> Optional[str]:

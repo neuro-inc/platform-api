@@ -377,7 +377,7 @@ class TestJob:
             orchestrator_config=mock_orchestrator.config,
             job_request=job_request_with_ssh,
         )
-        assert job.ssh_connection == "ssh://testjob.jobs:4321"
+        assert job.ssh_connection == "ssh://testjob.ssh:22"
 
     def test_no_ssh(self, mock_orchestrator, job_request):
         job = Job(orchestrator_config=mock_orchestrator.config, job_request=job_request)
@@ -391,7 +391,7 @@ class TestJob:
             job_request=job_request_with_ssh_and_http,
         )
         assert job.http_url == "http://testjob.jobs"
-        assert job.ssh_connection == "ssh://testjob.jobs:4321"
+        assert job.ssh_connection == "ssh://testjob.ssh:22"
 
     def test_should_be_deleted_pending(self, mock_orchestrator, job_request):
         job = Job(orchestrator_config=mock_orchestrator.config, job_request=job_request)

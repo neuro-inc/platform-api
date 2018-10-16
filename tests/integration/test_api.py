@@ -183,7 +183,7 @@ class TestModels:
             result = await response.json()
             assert result["status"] in ["pending"]
             job_id = result["job_id"]
-            expected_url = f"ssh://{job_id}.jobs.platform.neuromation.io:7867"
+            expected_url = f"ssh://{job_id}.ssh.platform.neuromation.io:22"
             assert result["ssh_server"] == expected_url
 
         await jobs_client.long_pooling_by_job_id(job_id=job_id, status="succeeded")
@@ -203,7 +203,7 @@ class TestModels:
             result = await response.json()
             assert result["status"] in ["pending"]
             job_id = result["job_id"]
-            expected_url = f"ssh://{job_id}.jobs.platform.neuromation.io:7867"
+            expected_url = f"ssh://{job_id}.ssh.platform.neuromation.io:22"
             assert result["ssh_server"] == expected_url
 
         await jobs_client.long_pooling_by_job_id(job_id=job_id, status="succeeded")
