@@ -387,11 +387,11 @@ class PodDescriptor:
         if self.resources:
             container_payload["resources"] = self.resources.to_primitive()
 
-        ports, readinesProbe = self._to_primitive_ports()
+        ports, readines_probe = self._to_primitive_ports()
         if ports:
             container_payload["ports"] = ports
-        if readinesProbe:
-            container_payload["readinessProbe"] = readinesProbe
+        if readines_probe:
+            container_payload["readinessProbe"] = readines_probe
 
         return {
             "kind": "Pod",
