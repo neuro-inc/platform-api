@@ -110,6 +110,10 @@ class KubeConfig(OrchestratorConfig):
     def jobs_ingress_domain_name(self) -> str:
         return self.jobs_domain_name
 
+    @property
+    def ssh_ingress_domain_name(self) -> str:
+        return self.ssh_domain_name
+
     def create_storage_volume(self) -> Volume:
         if self.storage.is_nfs:
             return NfsVolume(  # type: ignore

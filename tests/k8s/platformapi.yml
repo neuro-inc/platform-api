@@ -89,6 +89,8 @@ spec:
           value: platformjobsingress
         - name: NP_K8S_JOBS_INGRESS_DOMAIN_NAME
           value: jobs.platform.dev.neuromation.io
+        - name: NP_K8S_SSH_INGRESS_DOMAIN_NAME
+          value: ssh.platform.dev.neuromation.io
         - name: NP_DB_REDIS_URI
           value: redis://platformredis:6379/0
         - name: NP_AUTH_URL

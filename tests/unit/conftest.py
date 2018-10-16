@@ -82,6 +82,7 @@ def mock_orchestrator():
         registry=registry_config,
         jobs_ingress_name="platformjobsingress",
         jobs_domain_name="jobs",
+        ssh_domain_name="ssh",
         endpoint_url="http://k8s:1234",
     )
     return MockOrchestrator(config=config)
