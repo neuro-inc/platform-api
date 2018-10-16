@@ -72,6 +72,7 @@ async def kube_config(kube_config_cluster_payload, kube_config_user_payload):
         registry=registry_config,
         jobs_ingress_name="platformjobsingress",
         jobs_domain_name="jobs.platform.neuromation.io",
+        ssh_domain_name="ssh.platform.neuromation.io",
         endpoint_url=cluster["server"],
         cert_authority_path=cluster["certificate-authority"],
         auth_cert_path=user["client-certificate"],
@@ -148,6 +149,7 @@ async def kube_config_nfs(
         auth_cert_key_path=user["client-key"],
         jobs_ingress_name="platformjobsingress",
         jobs_domain_name="jobs.platform.neuromation.io",
+        ssh_domain_name="ssh.platform.neuromation.io",
     )
 
 

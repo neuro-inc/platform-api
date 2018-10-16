@@ -75,6 +75,7 @@ class OrchestratorConfig:
     registry: RegistryConfig
 
     jobs_domain_name: str
+    ssh_domain_name: str
     job_deletion_delay_s: int = 0
 
     @property

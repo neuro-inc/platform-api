@@ -10,6 +10,10 @@ NP_K8S_JOBS_INGRESS_DOMAIN_NAME:
   _default: jobs.platform.dev.neuromation.io
   dev: jobs.platform.dev.neuromation.io
   staging: jobs.platform.staging.neuromation.io
+NP_K8S_SSH_INGRESS_DOMAIN_NAME:
+  _default: ssh.platform.dev.neuromation.io
+  dev: ssh.platform.dev.neuromation.io
+  staging: ssh.platform.staging.neuromation.io
 INGRESS_HOST:
   _default: platform.dev.neuromation.io
   dev: platform.dev.neuromation.io

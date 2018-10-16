@@ -50,6 +50,7 @@ class TestKubeConfig:
             registry=registry_config,
             jobs_domain_name="testdomain",
             jobs_ingress_name="testingress",
+            ssh_domain_name="ssh.domain",
             endpoint_url="http://1.2.3.4",
         )
         volume = kube_config.create_storage_volume()
@@ -66,6 +67,7 @@ class TestKubeConfig:
             storage=storage_config,
             registry=registry_config,
             jobs_domain_name="testdomain",
+            ssh_domain_name="ssh.domain",
             jobs_ingress_name="testingress",
             endpoint_url="http://1.2.3.4",
         )
@@ -85,6 +87,7 @@ class TestEnvironConfigFactory:
             "NP_K8S_API_URL": "https://localhost:8443",
             "NP_K8S_JOBS_INGRESS_NAME": "testingress",
             "NP_K8S_JOBS_INGRESS_DOMAIN_NAME": "jobs.domain",
+            "NP_K8S_SSH_INGRESS_DOMAIN_NAME": "ssh.domain",
             "NP_AUTH_URL": "https://auth",
             "NP_AUTH_TOKEN": "token",
         }
@@ -108,6 +111,7 @@ class TestEnvironConfigFactory:
         assert config.orchestrator.client_conn_pool_size == 100
         assert config.orchestrator.jobs_ingress_name == "testingress"
         assert config.orchestrator.jobs_ingress_domain_name == "jobs.domain"
+        assert config.orchestrator.ssh_ingress_domain_name == "ssh.domain"
 
         assert config.orchestrator.job_deletion_delay_s == 86400
         assert config.orchestrator.job_deletion_delay == timedelta(days=1)
@@ -149,6 +153,7 @@ class TestEnvironConfigFactory:
             "NP_K8S_CLIENT_CONN_POOL_SIZE": "333",
             "NP_K8S_JOBS_INGRESS_NAME": "testingress",
             "NP_K8S_JOBS_INGRESS_DOMAIN_NAME": "jobs.domain",
+            "NP_K8S_SSH_INGRESS_DOMAIN_NAME": "ssh.domain",
             "NP_K8S_JOB_DELETION_DELAY": "3600",
             "NP_DB_REDIS_URI": "redis://localhost:6379/0",
             "NP_DB_REDIS_CONN_POOL_SIZE": "444",
@@ -177,6 +182,7 @@ class TestEnvironConfigFactory:
         assert config.orchestrator.client_conn_pool_size == 333
         assert config.orchestrator.jobs_ingress_name == "testingress"
         assert config.orchestrator.jobs_ingress_domain_name == "jobs.domain"
+        assert config.orchestrator.ssh_ingress_domain_name == "ssh.domain"
 
         assert config.orchestrator.job_deletion_delay_s == 3600
         assert config.orchestrator.job_deletion_delay == timedelta(seconds=3600)
@@ -201,6 +207,7 @@ class TestEnvironConfigFactory:
             "NP_K8S_API_URL": "https://localhost:8443",
             "NP_K8S_JOBS_INGRESS_NAME": "testingress",
             "NP_K8S_JOBS_INGRESS_DOMAIN_NAME": "jobs.domain",
+            "NP_K8S_SSH_INGRESS_DOMAIN_NAME": "ssh.domain",
             "NP_AUTH_URL": "https://auth",
             "NP_AUTH_TOKEN": "token",
         }
