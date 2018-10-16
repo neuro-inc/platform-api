@@ -415,10 +415,10 @@ class PodDescriptor:
 
     def _to_primitive_ports(self):
         ports = []
-        readinesProbe = {}
+        readines_probe = {}
         if self.port:
             ports.append({"containerPort": self.port})
-            readinesProbe = {
+            readines_probe = {
                 "httpGet": {"port": self.port, "path": self.health_check_path},
                 "initialDelaySeconds": 1,
                 "periodSeconds": 1,
@@ -427,12 +427,12 @@ class PodDescriptor:
         if self.ssh_port:
             ports.append({"containerPort": self.ssh_port})
             if not self.port:
-                readinesProbe = {
+                readines_probe = {
                     "tcpSocket": {"port": self.ssh_port},
                     "initialDelaySeconds": 1,
                     "periodSeconds": 1,
                 }
-        return ports, readinesProbe
+        return ports, readines_probe
 
     @classmethod
     def _assert_resource_kind(cls, expected_kind: str, payload: Dict):
