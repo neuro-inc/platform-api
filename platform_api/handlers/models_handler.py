@@ -69,7 +69,7 @@ class ModelsHandler:
         if container.has_http_server_exposed:
             payload["http_url"] = job.http_url
         if container.has_ssh_server_exposed:
-            payload["ssh_server"] = job.ssh_connection
+            payload["ssh_server"] = job.ssh_server
         return payload
 
     async def handle_post(self, request):

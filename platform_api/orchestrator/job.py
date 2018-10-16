@@ -279,7 +279,7 @@ class Job:
         return f"http://{self.id}.{jobs_domain_name}"
 
     @property
-    def ssh_connection(self) -> str:
+    def ssh_server(self) -> str:
         assert self.has_ssh_server_exposed
         ssh_domain_name = self._orchestrator_config.ssh_domain_name
         return f"ssh://{self.id}.{ssh_domain_name}:22"

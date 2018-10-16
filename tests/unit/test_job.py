@@ -377,13 +377,13 @@ class TestJob:
             orchestrator_config=mock_orchestrator.config,
             job_request=job_request_with_ssh,
         )
-        assert job.ssh_connection == "ssh://testjob.ssh:22"
+        assert job.ssh_server == "ssh://testjob.ssh:22"
 
     def test_no_ssh(self, mock_orchestrator, job_request):
         job = Job(orchestrator_config=mock_orchestrator.config, job_request=job_request)
         assert not job.has_ssh_server_exposed
         with pytest.raises(AssertionError):
-            assert job.ssh_connection
+            assert job.ssh_server
 
     def test_http_url_and_ssh(self, mock_orchestrator, job_request_with_ssh_and_http):
         job = Job(
@@ -391,7 +391,7 @@ class TestJob:
             job_request=job_request_with_ssh_and_http,
         )
         assert job.http_url == "http://testjob.jobs"
-        assert job.ssh_connection == "ssh://testjob.ssh:22"
+        assert job.ssh_server == "ssh://testjob.ssh:22"
 
     def test_should_be_deleted_pending(self, mock_orchestrator, job_request):
         job = Job(orchestrator_config=mock_orchestrator.config, job_request=job_request)

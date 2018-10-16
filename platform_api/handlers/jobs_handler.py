@@ -121,7 +121,7 @@ def convert_job_to_job_response(
     if job.has_http_server_exposed:
         response_payload["http_url"] = job.http_url
     if job.has_ssh_server_exposed:
-        response_payload["ssh_server"] = job.ssh_connection
+        response_payload["ssh_server"] = job.ssh_server
     if history.started_at:
         response_payload["history"]["started_at"] = history.started_at_str
     if history.is_finished:
