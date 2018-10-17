@@ -17,12 +17,20 @@ spec:
       labels:
         service: jumphost
     spec:
+      volumes:
+      - name: home
+        gcePersistentDisk:
+          pdName: jumphost-dev
+          fsType: ext4
       containers:
       - name: jumphost
         image: {{ printf "%s" (pluck .Values.global.env .Values.IMAGE | first | default .Values.IMAGE._default) }}
         imagePullPolicy: Always
         ports:
           - containerPort: 22
+        volumeMounts:
+        - name: home
+          mountPath: /home
         env:
         - name: NP_JUMP_HOST_ROOT_TOKEN
           valueFrom:
