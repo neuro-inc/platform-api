@@ -176,7 +176,7 @@ workflows:
           filters:
             branches:
               only:
-                - jumphost-support-users
+                - master
       - gke_stage_jumphost_deploy:
           context: org-global
           filters:
