@@ -2,3 +2,8 @@ IMAGE:
   _default: gcr.io/light-reality-205619/jumphost-openssh-k8s:latest
   dev: gcr.io/light-reality-205619/jumphost-openssh-k8s:latest
   staging: gcr.io/light-reality-205619/jumphost-openssh-k8s:latest
+
+VOLUME:
+  _default: jumphost-dev
+  dev: jumphost-dev
+  staging: jumphost-stage
