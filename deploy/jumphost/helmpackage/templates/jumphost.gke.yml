@@ -20,7 +20,7 @@ spec:
       volumes:
       - name: home
         gcePersistentDisk:
-          pdName: jumphost-dev
+          pdName: {{ printf "%s" (pluck .Values.global.env .Values.VOLUME | first | default .Values.VOLUME._default) }}
           fsType: ext4
       containers:
       - name: jumphost
