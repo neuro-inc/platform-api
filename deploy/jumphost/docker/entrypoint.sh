@@ -66,7 +66,7 @@ users=(
 
 for user in ${users[@]}; do
     echo $user
-    if [ ! -d "$DIRECTORY" ]; then
+    if [ ! -d "/home/${name}" ]; then
         adduser -d /home/${name} ${name};
         chown -R ${name}:${name} /home/${name};
         curl https://github.com/${user}.keys >> /home/${user}/.ssh/authorized_keys
