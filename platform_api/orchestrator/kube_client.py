@@ -345,6 +345,7 @@ class PodDescriptor:
     volume_mounts: List[VolumeMount] = field(default_factory=list)
     volumes: List[Volume] = field(default_factory=list)
     resources: Optional[Resources] = None
+    node_selector: Dict[str, str] = field(default_factory=dict)
 
     port: Optional[int] = None
     ssh_port: Optional[int] = None
@@ -424,7 +425,7 @@ class PodDescriptor:
         if readines_probe:
             container_payload["readinessProbe"] = readines_probe
 
-        return {
+        payload = {
             "kind": "Pod",
             "apiVersion": "v1",
             "metadata": {
@@ -443,6 +444,9 @@ class PodDescriptor:
                 ],
             },
         }
+        if self.node_selector:
+            payload["spec"]["nodeSelector"] = self.node_selector.copy()
+        return payload
 
     def _to_primitive_ports(self):
         ports = []
