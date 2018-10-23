@@ -26,6 +26,8 @@ from .job_request import (
 
 logger = logging.getLogger(__name__)
 
+SERVICE_TYPE_IN_USE = "NodePort"
+
 
 class KubeClientException(Exception):
     pass
@@ -172,7 +174,11 @@ class Service:
     def to_primitive(self):
         service_descriptor = {
             "metadata": {"name": self.name},
-            "spec": {"type": "NodePort", "ports": [], "selector": {"job": self.name}},
+            "spec": {
+                "type": SERVICE_TYPE_IN_USE,
+                "ports": [],
+                "selector": {"job": self.name}
+            },
         }
         self._add_port_map(
             self.port, self.target_port, "http", service_descriptor["spec"]["ports"]
