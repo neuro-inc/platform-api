@@ -607,7 +607,7 @@ class TestService:
         return {
             "metadata": {"name": "testservice"},
             "spec": {
-                "type": "NodePort",
+                "type": "ClusterIP",
                 "ports": [{"port": 80, "targetPort": 8080, "name": "http"}],
                 "selector": {"job": "testservice"},
             },
@@ -633,7 +633,7 @@ class TestServiceWithSSHOnly:
         return {
             "metadata": {"name": "testservice"},
             "spec": {
-                "type": "NodePort",
+                "type": "ClusterIP",
                 "ports": [{"port": 89, "targetPort": 8181, "name": "ssh"}],
                 "selector": {"job": "testservice"},
             },

@@ -26,7 +26,7 @@ from .job_request import (
 
 logger = logging.getLogger(__name__)
 
-SERVICE_TYPE_IN_USE = "NodePort"
+SERVICE_TYPE_IN_USE = "ClusterIP"
 
 
 class KubeClientException(Exception):
@@ -177,7 +177,7 @@ class Service:
             "spec": {
                 "type": SERVICE_TYPE_IN_USE,
                 "ports": [],
-                "selector": {"job": self.name}
+                "selector": {"job": self.name},
             },
         }
         self._add_port_map(
