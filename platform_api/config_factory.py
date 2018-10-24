@@ -1,6 +1,6 @@
 import os
 from pathlib import PurePath
-from typing import Optional
+from typing import List, Optional
 
 from yarl import URL
 
@@ -16,6 +16,7 @@ from .config import (
 from .orchestrator import KubeConfig
 from .orchestrator.kube_orchestrator import KubeClientAuthType
 from .redis import RedisConfig
+from .resource import GKEGPUModels, ResourcePoolType
 
 
 class EnvironConfigFactory:
@@ -84,6 +85,8 @@ class EnvironConfigFactory:
             self._environ.get("NP_K8S_AUTH_TYPE", KubeConfig.auth_type.value)
         )
 
+        pool_types = self.create_resource_pool_types()
+
         return KubeConfig(  # type: ignore
             storage=storage,
             registry=registry,
@@ -116,7 +119,24 @@ class EnvironConfigFactory:
                     "NP_K8S_JOB_DELETION_DELAY", KubeConfig.job_deletion_delay_s
                 )
             ),
+            resource_pool_types=pool_types,
+            node_label_gpu=self._environ.get("NP_K8S_NODE_LABEL_GPU"),
         )
+
+    def create_resource_pool_types(self) -> List[ResourcePoolType]:
+        models = self._environ.get("NP_GKE_GPU_MODELS", "")
+        # the default pool that represents a non-GPU instance type
+        types = [ResourcePoolType()]
+        # skipping blanks
+        model_ids = [model_id for model_id in models.split(",") if model_id]
+        # removing duplicates, but preserving the order
+        model_ids = list(dict.fromkeys(model_ids))
+        for model_id in model_ids:
+            model = GKEGPUModels.find_model_by_id(model_id)
+            if model:
+                # TODO (A Danshyn 10/23/18): drop the hardcoded number of GPUs
+                types.append(ResourcePoolType(gpu=1, gpu_model=model))
+        return types
 
     def create_database(self) -> DatabaseConfig:
         redis = self.create_redis()
