@@ -176,7 +176,7 @@ workflows:
           filters:
             branches:
               only:
-                - jumphost-deploy-strategy
+                - master
       - gke_stage_jumphost_deploy:
           context: org-global
           filters:
