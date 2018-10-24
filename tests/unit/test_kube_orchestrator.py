@@ -100,6 +100,30 @@ class TestVolumeMount:
 
 
 class TestPodDescriptor:
+    def test_to_primitive_defaults(self):
+        pod = PodDescriptor(name="testname", image="testimage")
+        assert pod.name == "testname"
+        assert pod.image == "testimage"
+        assert pod.to_primitive() == {
+            "kind": "Pod",
+            "apiVersion": "v1",
+            "metadata": {"name": "testname", "labels": {"job": "testname"}},
+            "spec": {
+                "containers": [
+                    {
+                        "name": "testname",
+                        "image": "testimage",
+                        "env": [],
+                        "volumeMounts": [],
+                        "terminationMessagePolicy": "FallbackToLogsOnError",
+                    }
+                ],
+                "volumes": [],
+                "restartPolicy": "Never",
+                "imagePullSecrets": [],
+            },
+        }
+
     def test_to_primitive(self):
         pod = PodDescriptor(
             name="testname",
@@ -107,6 +131,7 @@ class TestPodDescriptor:
             env={"TESTVAR": "testvalue"},
             resources=Resources(cpu=0.5, memory=1024, gpu=1),
             port=1234,
+            node_selector={"label": "value"},
         )
         assert pod.name == "testname"
         assert pod.image == "testimage"
@@ -140,6 +165,7 @@ class TestPodDescriptor:
                 "volumes": [],
                 "restartPolicy": "Never",
                 "imagePullSecrets": [],
+                "nodeSelector": {"label": "value"},
             },
         }
 
