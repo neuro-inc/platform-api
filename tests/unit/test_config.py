@@ -11,6 +11,7 @@ from platform_api.orchestrator.kube_orchestrator import (
     KubeConfig,
     NfsVolume,
 )
+from platform_api.resource import ResourcePoolType
 
 
 class TestStorageConfig:
@@ -52,6 +53,7 @@ class TestKubeConfig:
             jobs_ingress_name="testingress",
             ssh_domain_name="ssh.domain",
             endpoint_url="http://1.2.3.4",
+            resource_pool_types=[ResourcePoolType()],
         )
         volume = kube_config.create_storage_volume()
         assert volume == NfsVolume(
@@ -70,6 +72,7 @@ class TestKubeConfig:
             ssh_domain_name="ssh.domain",
             jobs_ingress_name="testingress",
             endpoint_url="http://1.2.3.4",
+            resource_pool_types=[ResourcePoolType()],
         )
         volume = kube_config.create_storage_volume()
         assert volume == HostVolume(name="storage", path=PurePath("/tmp"))

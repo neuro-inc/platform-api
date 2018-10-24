@@ -315,7 +315,13 @@ def job_request_payload():
         "job_id": "testjob",
         "container": {
             "image": "testimage",
-            "resources": {"cpu": 1, "memory_mb": 128, "gpu": None, "shm": None},
+            "resources": {
+                "cpu": 1,
+                "memory_mb": 128,
+                "gpu": None,
+                "gpu_model_id": None,
+                "shm": None,
+            },
             "command": None,
             "env": {"testvar": "testval"},
             "volumes": [

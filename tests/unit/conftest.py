@@ -17,6 +17,7 @@ from platform_api.orchestrator import (
 )
 from platform_api.orchestrator.job import JobStatusItem
 from platform_api.orchestrator.job_request import Container, ContainerResources
+from platform_api.resource import ResourcePoolType
 
 
 class MockOrchestrator(Orchestrator):
@@ -84,6 +85,7 @@ def mock_orchestrator():
         jobs_domain_name="jobs",
         ssh_domain_name="ssh",
         endpoint_url="http://k8s:1234",
+        resource_pool_types=[ResourcePoolType()],
     )
     return MockOrchestrator(config=config)
 
