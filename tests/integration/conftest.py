@@ -127,7 +127,7 @@ class TestKubeClient(KubeClient):
             "kind": "Node",
             "metadata": {"name": name, "labels": labels or {}},
             "status": {
-                "capacity": {"pods": "110"},
+                "capacity": {"pods": "110", "memory": "1Gi", "cpu": 2},
                 "conditions": [{"status": "True", "type": "Ready"}],
             },
         }
@@ -137,7 +137,7 @@ class TestKubeClient(KubeClient):
 
     async def delete_node(self, name: str) -> None:
         url = self._generate_node_url(name)
-        result = await kube_client.request(method="DELETE", url=url)
+        result = await self.request(method="DELETE", url=url)
         self._check_status_payload(result)
 
 
