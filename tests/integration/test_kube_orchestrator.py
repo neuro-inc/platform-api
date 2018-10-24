@@ -844,7 +844,7 @@ class TestNodeSelector:
             pytest.fail("Pod unscheduled")
 
     @pytest.mark.asyncio
-    async def test_gpu(
+    async def test_pod_node_selector(
         self, kube_config, kube_client, delete_pod_later, delete_node_later
     ):
         node_name = str(uuid.uuid4())
