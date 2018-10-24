@@ -653,8 +653,12 @@ class KubeClient:
         await self.close()
 
     @property
+    def _api_v1_url(self) -> str:
+        return f"{self._base_url}/api/v1"
+
+    @property
     def _namespace_url(self) -> str:
-        return f"{self._base_url}/api/v1/namespaces/{self._namespace}"
+        return f"{self._api_v1_url}/namespaces/{self._namespace}"
 
     @property
     def _pods_url(self) -> str:
