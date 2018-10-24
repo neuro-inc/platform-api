@@ -82,7 +82,8 @@ async def kube_config(kube_config_cluster_payload, kube_config_user_payload):
         job_deletion_delay_s=0,
         node_label_gpu="gpu",
         resource_pool_types=[
-            ResourcePoolType(gpu=1, gpu_model=GPUModel(id="gpumodel"))
+            ResourcePoolType(),
+            ResourcePoolType(gpu=1, gpu_model=GPUModel(id="gpumodel")),
         ],
     )
 
@@ -127,7 +128,12 @@ class TestKubeClient(KubeClient):
             "kind": "Node",
             "metadata": {"name": name, "labels": labels or {}},
             "status": {
-                "capacity": {"pods": "110", "memory": "1Gi", "cpu": 2},
+                "capacity": {
+                    "pods": "110",
+                    "memory": "1Gi",
+                    "cpu": 2,
+                    "nvidia.com/gpu": 1,
+                },
                 "conditions": [{"status": "True", "type": "Ready"}],
             },
         }
@@ -189,9 +195,7 @@ async def kube_config_nfs(
         jobs_domain_name="jobs.platform.neuromation.io",
         ssh_domain_name="ssh.platform.neuromation.io",
         node_label_gpu="gpu",
-        resource_pool_types=[
-            ResourcePoolType(gpu=1, gpu_model=GPUModel(id="gpumodel"))
-        ],
+        resource_pool_types=[ResourcePoolType()],
     )
 
 

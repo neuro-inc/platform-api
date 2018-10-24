@@ -880,7 +880,7 @@ class TestNodeSelector:
         container = Container(
             image="ubuntu",
             command="true",
-            resources=ContainerResources(cpu=0.1, memory_mb=128),
+            resources=ContainerResources(cpu=0.1, memory_mb=128, gpu=1),
         )
         job = MyJob(
             orchestrator=kube_orchestrator, job_request=JobRequest.create(container)
