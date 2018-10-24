@@ -26,7 +26,11 @@ from .job_request import (
 
 logger = logging.getLogger(__name__)
 
-SERVICE_TYPE_IN_USE = "ClusterIP"
+
+class ServiceType(str, enum.Enum):
+    CLUSTER_IP = "ClusterIP"
+    NODE_PORT = "NodePort"
+    LOAD_BALANCER = "LoadBalancer"
 
 
 class KubeClientException(Exception):
@@ -161,6 +165,8 @@ class Service:
     port: int = 80
     ssh_port: int = 31022
 
+    service_type: ServiceType = ServiceType.CLUSTER_IP
+
     def _add_port_map(
         self,
         port: Optional[int],
@@ -175,7 +181,7 @@ class Service:
         service_descriptor = {
             "metadata": {"name": self.name},
             "spec": {
-                "type": SERVICE_TYPE_IN_USE,
+                "type": self.service_type,
                 "ports": [],
                 "selector": {"job": self.name},
             },
@@ -214,6 +220,7 @@ class Service:
             port=http_payload.get("port", Service.port),
             ssh_target_port=ssh_payload.get("targetPort", None),
             ssh_port=ssh_payload.get("port", Service.ssh_port),
+            service_type=payload["spec"].get("type", Service.service_type),
         )
 
 

@@ -28,7 +28,7 @@ from platform_api.orchestrator.kube_orchestrator import (
     SharedMemoryVolume,
     Volume,
     VolumeMount,
-)
+    ServiceType)
 from platform_api.orchestrator.logs import FilteredStreamWrapper
 
 
@@ -617,9 +617,21 @@ class TestService:
         service = Service(name="testservice", target_port=8080)
         assert service.to_primitive() == service_payload
 
+    def test_to_primitive_load_balancer(self, service_payload):
+        service = Service(name="testservice", target_port=8080,
+                          service_type=ServiceType.LOAD_BALANCER)
+        service_payload["spec"]["type"] = "LoadBalancer"
+        assert service.to_primitive() == service_payload
+
     def test_from_primitive(self, service_payload):
         service = Service.from_primitive(service_payload)
         assert service == Service(name="testservice", target_port=8080)
+
+    def test_from_primitive_node_port(self, service_payload):
+        service_payload["spec"]["type"] = "NodePort"
+        service = Service.from_primitive(service_payload)
+        assert service == Service(name="testservice", target_port=8080,
+                                  service_type=ServiceType.NODE_PORT)
 
     def test_create_for_pod(self):
         pod = PodDescriptor(name="testpod", image="testimage", port=1234)
