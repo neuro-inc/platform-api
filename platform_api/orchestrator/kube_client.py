@@ -27,6 +27,12 @@ from .job_request import (
 logger = logging.getLogger(__name__)
 
 
+class ServiceType(str, enum.Enum):
+    CLUSTER_IP = "ClusterIP"
+    NODE_PORT = "NodePort"
+    LOAD_BALANCER = "LoadBalancer"
+
+
 class KubeClientException(Exception):
     pass
 
@@ -159,6 +165,8 @@ class Service:
     port: int = 80
     ssh_port: int = 31022
 
+    service_type: ServiceType = ServiceType.CLUSTER_IP
+
     def _add_port_map(
         self,
         port: Optional[int],
@@ -172,7 +180,11 @@ class Service:
     def to_primitive(self):
         service_descriptor = {
             "metadata": {"name": self.name},
-            "spec": {"type": "NodePort", "ports": [], "selector": {"job": self.name}},
+            "spec": {
+                "type": self.service_type.value,
+                "ports": [],
+                "selector": {"job": self.name},
+            },
         }
         self._add_port_map(
             self.port, self.target_port, "http", service_descriptor["spec"]["ports"]
@@ -202,12 +214,14 @@ class Service:
     def from_primitive(cls, payload) -> "Service":
         http_payload = cls._find_port_by_name("http", payload["spec"]["ports"])
         ssh_payload = cls._find_port_by_name("ssh", payload["spec"]["ports"])
+        service_type = payload["spec"].get("type", Service.service_type.value)
         return cls(  # type: ignore
             name=payload["metadata"]["name"],
             target_port=http_payload.get("targetPort", None),
             port=http_payload.get("port", Service.port),
             ssh_target_port=ssh_payload.get("targetPort", None),
             ssh_port=ssh_payload.get("port", Service.ssh_port),
+            service_type=ServiceType(service_type),
         )
 
 
