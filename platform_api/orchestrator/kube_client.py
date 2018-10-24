@@ -361,6 +361,7 @@ class PodDescriptor:
         volume: Volume,
         job_request: JobRequest,
         secret_names: Optional[List[str]] = None,
+        node_selector: Optional[Dict[str, str]] = None,
     ) -> "PodDescriptor":
         container = job_request.container
         volume_mounts = [
@@ -397,6 +398,7 @@ class PodDescriptor:
             ssh_port=container.ssh_port,
             health_check_path=container.health_check_path,
             image_pull_secrets=image_pull_secrets,
+            node_selector=node_selector or {},
         )
 
     @property
