@@ -181,7 +181,7 @@ class Service:
         service_descriptor = {
             "metadata": {"name": self.name},
             "spec": {
-                "type": self.service_type,
+                "type": self.service_type.value,
                 "ports": [],
                 "selector": {"job": self.name},
             },
@@ -214,13 +214,14 @@ class Service:
     def from_primitive(cls, payload) -> "Service":
         http_payload = cls._find_port_by_name("http", payload["spec"]["ports"])
         ssh_payload = cls._find_port_by_name("ssh", payload["spec"]["ports"])
+        service_type = payload["spec"].get("type", Service.service_type.value)
         return cls(  # type: ignore
             name=payload["metadata"]["name"],
             target_port=http_payload.get("targetPort", None),
             port=http_payload.get("port", Service.port),
             ssh_target_port=ssh_payload.get("targetPort", None),
             ssh_port=ssh_payload.get("port", Service.ssh_port),
-            service_type=payload["spec"].get("type", Service.service_type),
+            service_type=ServiceType(service_type),
         )
 
 
