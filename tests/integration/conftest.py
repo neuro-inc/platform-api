@@ -1,6 +1,7 @@
 import asyncio
 import json
 from pathlib import PurePath
+from typing import Any, Dict, Optional
 from urllib.parse import urlsplit
 
 import pytest
@@ -79,7 +80,10 @@ async def kube_config(kube_config_cluster_payload, kube_config_user_payload):
         auth_cert_path=user["client-certificate"],
         auth_cert_key_path=user["client-key"],
         job_deletion_delay_s=0,
-        resource_pool_types=[ResourcePoolType(gpu=1, gpu_model=GPUModel(id="gpu"))],
+        node_label_gpu="gpu",
+        resource_pool_types=[
+            ResourcePoolType(gpu=1, gpu_model=GPUModel(id="gpumodel"))
+        ],
     )
 
 
@@ -97,12 +101,44 @@ class TestKubeClient(KubeClient):
     def _generate_endpoint_url(self, name):
         return f"{self._endpoints_url}/{name}"
 
+    @property
+    def _nodes_url(self):
+        return f"{self._api_v1_url}/nodes"
+
+    def _generate_node_url(self, name):
+        return f"{self._nodes_url}/{name}"
+
     async def get_endpoint(self, name):
         url = self._generate_endpoint_url(name)
         return await self._request(method="GET", url=url)
 
     async def request(self, *args, **kwargs):
         return await self._request(*args, **kwargs)
+
+    async def get_raw_pod(self, name: str) -> Dict[str, Any]:
+        url = self._generate_pod_url(name)
+        return await self._request(method="GET", url=url)
+
+    async def create_node(
+        self, name: str, labels: Optional[Dict[str, str]] = None
+    ) -> None:
+        payload = {
+            "apiVersion": "v1",
+            "kind": "Node",
+            "metadata": {"name": name, "labels": labels or {}},
+            "status": {
+                "capacity": {"pods": "110"},
+                "conditions": [{"status": "True", "type": "Ready"}],
+            },
+        }
+        url = self._nodes_url
+        result = await self._request(method="POST", url=url, json=payload)
+        self._check_status_payload(result)
+
+    async def delete_node(self, name: str) -> None:
+        url = self._generate_node_url(name)
+        result = await kube_client.request(method="DELETE", url=url)
+        self._check_status_payload(result)
 
 
 @pytest.fixture(scope="session")
@@ -152,6 +188,10 @@ async def kube_config_nfs(
         jobs_ingress_name="platformjobsingress",
         jobs_domain_name="jobs.platform.neuromation.io",
         ssh_domain_name="ssh.platform.neuromation.io",
+        node_label_gpu="gpu",
+        resource_pool_types=[
+            ResourcePoolType(gpu=1, gpu_model=GPUModel(id="gpumodel"))
+        ],
     )
 
 
