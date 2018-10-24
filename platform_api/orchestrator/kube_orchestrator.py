@@ -2,7 +2,7 @@ import logging
 from asyncio import AbstractEventLoop
 from dataclasses import dataclass
 from pathlib import PurePath
-from typing import Dict, Optional, Sequence
+from typing import Dict, Optional
 
 from ..config import OrchestratorConfig  # noqa
 from .base import LogReader, Orchestrator
