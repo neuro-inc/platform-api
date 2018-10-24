@@ -9,6 +9,7 @@ from urllib.parse import urlsplit
 from yarl import URL
 
 from platform_api.config import RegistryConfig
+from platform_api.resource import ResourcePoolType
 
 
 class JobException(Exception):
@@ -72,6 +73,27 @@ class ContainerResources:
 
     def to_primitive(self) -> Dict:
         return asdict(self)
+
+    def check_fit_into_pool_type(self, pool_type: ResourcePoolType) -> bool:
+        if not self.gpu:
+            # container does not need GPU. we are good regardless of presence
+            # of GPU in the pool type.
+            return True
+
+        # container needs GPU
+
+        if not pool_type.gpu:
+            return False
+
+        if pool_type.gpu < self.gpu:
+            return False
+
+        if not self.gpu_model_id:
+            # container needs any GPU model
+            return True
+
+        assert pool_type.gpu_model
+        return self.gpu_model_id == pool_type.gpu_model.id
 
 
 @dataclass(frozen=True)

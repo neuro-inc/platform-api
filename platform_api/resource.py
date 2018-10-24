@@ -2,8 +2,6 @@ from dataclasses import dataclass
 from enum import Enum
 from typing import Optional
 
-from platform_api.orchestrator.job_request import Container
-
 
 @dataclass(frozen=True)
 class GPUModel:
@@ -43,24 +41,3 @@ class ResourcePoolType:
     def __post_init__(self) -> None:
         if self.gpu and not self.gpu_model:
             raise ValueError("GPU model unspecified")
-
-    def check_container_fits(self, container: Container) -> bool:
-        if not container.resources.gpu:
-            # container does not need GPU. we are good regardless of presence
-            # of GPU in the pool type.
-            return True
-
-        # container needs GPU
-
-        if not self.gpu:
-            return False
-
-        if self.gpu < container.resources.gpu:
-            return False
-
-        if not container.resources.gpu_model_id:
-            # container needs any GPU model
-            return True
-
-        assert self.gpu_model
-        return container.resources.gpu_model_id == self.gpu_model.id

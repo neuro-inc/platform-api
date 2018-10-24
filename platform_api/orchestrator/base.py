@@ -45,6 +45,5 @@ class Orchestrator(ABC):
     async def delete_job(self, job: Job) -> JobStatus:
         pass
 
-    @abstractmethod
     async def get_resource_pool_types(self) -> Sequence[ResourcePoolType]:
         return self.config.resource_pool_types

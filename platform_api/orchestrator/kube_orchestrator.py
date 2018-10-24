@@ -207,7 +207,7 @@ class KubeOrchestrator(Orchestrator):
 
         pool_types = await self.get_resource_pool_types()
         for pool_type in pool_types:
-            if pool_type.check_container_fits(container):
+            if container.resources.check_fit_into_pool_type(pool_type):
                 if pool_type.gpu_model:
                     selector[self._config.node_label_gpu] = pool_type.gpu_model.id
                 break
