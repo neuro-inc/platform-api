@@ -11,7 +11,7 @@ from platform_api.orchestrator.kube_orchestrator import (
     KubeConfig,
     NfsVolume,
 )
-from platform_api.resource import ResourcePoolType
+from platform_api.resource import GKEGPUModels, ResourcePoolType
 
 
 class TestStorageConfig:
@@ -119,6 +119,9 @@ class TestEnvironConfigFactory:
         assert config.orchestrator.job_deletion_delay_s == 86400
         assert config.orchestrator.job_deletion_delay == timedelta(days=1)
 
+        assert config.orchestrator.resource_pool_types == [ResourcePoolType()]
+        assert config.orchestrator.node_label_gpu is None
+
         assert config.database.redis is None
 
         assert config.env_prefix == "NP"
@@ -164,6 +167,16 @@ class TestEnvironConfigFactory:
             "NP_AUTH_URL": "https://auth",
             "NP_AUTH_TOKEN": "token",
             "NP_REGISTRY_HOST": "testregistry:5000",
+            "NP_K8S_NODE_LABEL_GPU": "testlabel",
+            "NP_GKE_GPU_MODELS": ",".join(
+                [
+                    "",
+                    "nvidia-tesla-k80",
+                    "unknown",
+                    "nvidia-tesla-k80",
+                    "nvidia-tesla-v100",
+                ]
+            ),
         }
         config = EnvironConfigFactory(environ=environ).create()
 
@@ -189,6 +202,13 @@ class TestEnvironConfigFactory:
 
         assert config.orchestrator.job_deletion_delay_s == 3600
         assert config.orchestrator.job_deletion_delay == timedelta(seconds=3600)
+
+        assert config.orchestrator.resource_pool_types == [
+            ResourcePoolType(),
+            ResourcePoolType(gpu=1, gpu_model=GKEGPUModels.K80.value),
+            ResourcePoolType(gpu=1, gpu_model=GKEGPUModels.V100.value),
+        ]
+        assert config.orchestrator.node_label_gpu == "testlabel"
 
         assert config.database.redis.uri == "redis://localhost:6379/0"
         assert config.database.redis.conn_pool_size == 444
