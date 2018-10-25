@@ -6,6 +6,7 @@ from typing import Any, Dict, Optional
 from urllib.parse import urlsplit
 
 import pytest
+from async_timeout import timeout
 
 from platform_api.config import RegistryConfig, StorageConfig
 from platform_api.orchestrator.kube_orchestrator import (
@@ -120,6 +121,25 @@ class TestKubeClient(KubeClient):
     async def get_raw_pod(self, name: str) -> Dict[str, Any]:
         url = self._generate_pod_url(name)
         return await self._request(method="GET", url=url)
+
+    async def wait_pod_scheduled(
+        self, pod_name, node_name, timeout_s=5.0, interval_s=1.0
+    ):
+        try:
+            async with timeout(timeout_s):
+                while True:
+                    raw_pod = await self.get_raw_pod(pod_name)
+                    pod_has_node = raw_pod["spec"].get("nodeName") == node_name
+                    pod_is_scheduled = "PodScheduled" in [
+                        cond["type"]
+                        for cond in raw_pod["status"].get("conditions", [])
+                        if cond["status"]
+                    ]
+                    if pod_has_node and pod_is_scheduled:
+                        return
+                    await asyncio.sleep(interval_s)
+        except asyncio.TimeoutError:
+            pytest.fail("Pod unscheduled")
 
     async def create_node(
         self, name: str, labels: Optional[Dict[str, str]] = None

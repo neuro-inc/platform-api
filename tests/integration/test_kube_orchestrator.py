@@ -809,25 +809,6 @@ class TestPodContainerDevShmSettings:
 
 
 class TestNodeSelector:
-    async def wait_pod_scheduled(
-        self, kube_client, pod_name, node_name, timeout_s=5.0, interval_s=1.0
-    ):
-        try:
-            async with timeout(timeout_s):
-                while True:
-                    raw_pod = await kube_client.get_raw_pod(pod_name)
-                    pod_has_node = raw_pod["spec"].get("nodeName") == node_name
-                    pod_is_scheduled = "PodScheduled" in [
-                        cond["type"]
-                        for cond in raw_pod["status"].get("conditions", [])
-                        if cond["status"]
-                    ]
-                    if pod_has_node and pod_is_scheduled:
-                        return
-                    await asyncio.sleep(interval_s)
-        except asyncio.TimeoutError:
-            pytest.fail("Pod unscheduled")
-
     @pytest.mark.asyncio
     async def test_pod_node_selector(
         self, kube_config, kube_client, delete_pod_later, delete_node_later
@@ -844,7 +825,7 @@ class TestNodeSelector:
         await delete_pod_later(pod)
         await kube_client.create_pod(pod)
 
-        await self.wait_pod_scheduled(kube_client, pod_name, node_name)
+        await kube_client.wait_pod_scheduled(pod_name, node_name)
 
     @pytest.mark.asyncio
     async def test_gpu(
@@ -852,7 +833,6 @@ class TestNodeSelector:
         kube_config,
         kube_client,
         delete_job_later,
-        delete_node_later,
         kube_orchestrator,
         kube_node_gpu,
     ):
@@ -869,4 +849,4 @@ class TestNodeSelector:
         await kube_orchestrator.start_job(job, token="test-token")
         pod_name = job.id
 
-        await self.wait_pod_scheduled(kube_client, pod_name, node_name)
+        await kube_client.wait_pod_scheduled(pod_name, node_name)
