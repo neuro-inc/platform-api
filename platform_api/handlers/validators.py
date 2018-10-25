@@ -1,6 +1,9 @@
+from typing import Optional, Sequence
+
 import trafaret as t
 
 from platform_api.orchestrator.job_request import JobStatus
+from platform_api.resource import GPUModel
 
 
 OptionalString = t.String | t.Null
@@ -33,15 +36,50 @@ def create_volume_request_validator() -> t.Trafaret:
     )
 
 
-def create_container_request_validator(*, allow_volumes: bool = False) -> t.Trafaret:
+def create_resources_validator(
+    *,
+    allow_any_gpu_models: bool = False,
+    allowed_gpu_models: Optional[Sequence[GPUModel]] = None
+) -> t.Trafaret:
+    MAX_GPU_COUNT = 128
+    MAX_CPU_COUNT = 128.0
+
+    common_resources_validator = t.Dict(
+        {
+            "cpu": t.Float(gte=0.1, lte=MAX_CPU_COUNT),
+            "memory_mb": t.Int(gte=16),
+            t.Key("shm", optional=True): t.Bool,
+        }
+    )
+    gpu_validator = t.Int(gte=0, lte=MAX_GPU_COUNT)
+    if allow_any_gpu_models:
+        gpu_model_validator = t.String
+    else:
+        gpu_model_validator = t.Enum(
+            *(gpu_model.id for gpu_model in allowed_gpu_models or [])
+        )
+
+    resources_gpu_validator = common_resources_validator + t.Dict(
+        {t.Key("gpu", optional=True): gpu_validator}
+    )
+    resources_gpu_model_validator = common_resources_validator + t.Dict(
+        {"gpu": gpu_validator, t.Key("gpu_model", optional=True): gpu_model_validator}
+    )
+
+    return resources_gpu_validator | resources_gpu_model_validator
+
+
+def create_container_validator(
+    *,
+    allow_volumes: bool = False,
+    allow_any_gpu_models: bool = False,
+    allowed_gpu_models: Optional[Sequence[GPUModel]] = None
+):
     """Create a validator for primitive container objects.
 
     Meant to be used in high-level resources such as jobs, models, batch
     inference etc.
     """
-
-    MAX_GPU_COUNT = 128
-    MAX_CPU_COUNT = 128.0
 
     validator = t.Dict(
         {
@@ -50,13 +88,9 @@ def create_container_request_validator(*, allow_volumes: bool = False) -> t.Traf
             t.Key("env", optional=True): t.Mapping(
                 t.String, t.String(allow_blank=True)
             ),
-            "resources": t.Dict(
-                {
-                    "cpu": t.Float(gte=0.1, lte=MAX_CPU_COUNT),
-                    "memory_mb": t.Int(gte=16),
-                    t.Key("gpu", optional=True): t.Int(gte=0, lte=MAX_GPU_COUNT),
-                    t.Key("shm", optional=True): t.Bool,
-                }
+            "resources": create_resources_validator(
+                allow_any_gpu_models=allow_any_gpu_models,
+                allowed_gpu_models=allowed_gpu_models,
             ),
             t.Key("http", optional=True): t.Dict(
                 {
@@ -73,3 +107,17 @@ def create_container_request_validator(*, allow_volumes: bool = False) -> t.Traf
         validator += t.Dict({t.Key("volumes", optional=True): t.List(volume_validator)})
 
     return validator
+
+
+def create_container_request_validator(
+    *,
+    allow_volumes: bool = False,
+    allowed_gpu_models: Optional[Sequence[GPUModel]] = None
+) -> t.Trafaret:
+    return create_container_validator(
+        allow_volumes=allow_volumes, allowed_gpu_models=allowed_gpu_models
+    )
+
+
+def create_container_response_validator():
+    return create_container_validator(allow_volumes=True, allow_any_gpu_models=True)
