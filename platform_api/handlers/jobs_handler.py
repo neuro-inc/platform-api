@@ -1,6 +1,6 @@
 import logging
 from pathlib import PurePath
-from typing import Any, Dict, List, Set
+from typing import Any, Dict, List, Optional, Sequence, Set
 
 import aiohttp.web
 import trafaret as t
@@ -13,11 +13,13 @@ from platform_api.config import Config, RegistryConfig, StorageConfig
 from platform_api.orchestrator import JobsService
 from platform_api.orchestrator.job import Job
 from platform_api.orchestrator.job_request import Container, ContainerVolume, JobRequest
+from platform_api.resource import GPUModel
 from platform_api.user import User, untrusted_user
 
 from .job_request_builder import ContainerBuilder
 from .validators import (
     create_container_request_validator,
+    create_container_response_validator,
     create_job_history_validator,
     create_job_status_validator,
 )
@@ -26,8 +28,16 @@ from .validators import (
 logger = logging.getLogger(__name__)
 
 
-def create_job_request_validator() -> t.Trafaret:
-    return t.Dict({"container": create_container_request_validator(allow_volumes=True)})
+def create_job_request_validator(
+    *, allowed_gpu_models: Sequence[GPUModel]
+) -> t.Trafaret:
+    return t.Dict(
+        {
+            "container": create_container_request_validator(
+                allow_volumes=True, allowed_gpu_models=allowed_gpu_models
+            )
+        }
+    )
 
 
 def create_job_response_validator() -> t.Trafaret:
@@ -45,7 +55,7 @@ def create_job_response_validator() -> t.Trafaret:
             t.Key("http_url", optional=True): t.String,
             t.Key("ssh_server", optional=True): t.String,
             "history": create_job_history_validator(),
-            "container": create_container_request_validator(allow_volumes=True),
+            "container": create_container_response_validator(),
         }
     )
 
@@ -63,6 +73,8 @@ def convert_job_container_to_json(
     }
     if container.resources.gpu is not None:
         resources["gpu"] = container.resources.gpu
+    if container.resources.gpu_model_id:
+        resources["gpu_model"] = container.resources.gpu_model_id
     if container.resources.shm is not None:
         resources["shm"] = container.resources.shm
     ret["resources"] = resources
@@ -161,6 +173,10 @@ class JobsHandler:
         return self._app["jobs_service"]
 
     @property
+    def _orchestrator(self) -> Orchestrator:
+        return self._app["orchestrator"]
+
+    @property
     def _auth_client(self) -> AuthClient:
         return self._app["auth_client"]
 
@@ -175,11 +191,23 @@ class JobsHandler:
             )
         )
 
+    async def _create_job_request_validator(self) -> t.Trafaret:
+        pool_types = await self._orchestrator.get_resource_pool_types()
+        gpu_models = list(
+            dict.fromkeys(
+                [pool_type.gpu_model for pool_type in pool_types if pool_type.gpu_model]
+            )
+        )
+        return create_job_request_validator(allowed_gpu_models=gpu_models)
+
     async def create_job(self, request):
         user = await untrusted_user(request)
 
         orig_payload = await request.json()
-        request_payload = self._job_request_validator.check(orig_payload)
+
+        job_request_validator = await self._create_job_request_validator()
+        request_payload = job_request_validator.check(orig_payload)
+
         container = ContainerBuilder.from_container_payload(
             request_payload["container"], storage_config=self._storage_config
         ).build()
