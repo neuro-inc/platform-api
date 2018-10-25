@@ -97,6 +97,9 @@ async def create_app(config: Config) -> aiohttp.web.Application:
             orchestrator = KubeOrchestrator(config=config.orchestrator, loop=app.loop)
             await exit_stack.enter_async_context(orchestrator)
 
+            app["models_app"]["orchestrator"] = orchestrator
+            app["jobs_app"]["orchestrator"] = orchestrator
+
             logger.info("Initializing JobsStorage")
             jobs_storage = RedisJobsStorage(redis_client, orchestrator=orchestrator)
 
