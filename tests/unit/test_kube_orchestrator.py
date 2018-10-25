@@ -647,9 +647,7 @@ class TestServiceWithSSHOnly:
 
     def test_to_primitive_default_port(self, service_payload):
         service_payload["spec"]["ports"][0]["port"] = 22
-        service = Service(
-            name="testservice", target_port=None, ssh_target_port=8181
-        )
+        service = Service(name="testservice", target_port=None, ssh_target_port=8181)
         assert service.to_primitive() == service_payload
 
     def test_from_primitive(self, service_payload):
