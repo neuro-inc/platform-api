@@ -711,3 +711,53 @@ class TestJobs:
             assert response.status == HTTPBadRequest.status_code, response_text
             data = await response.json()
             assert """'gpu_model': DataError(value doesn't match""" in data["error"]
+
+    @pytest.mark.asyncio
+    async def test_create_gpu_model(
+        self, jobs_client, api, client, regular_user, kube_node_gpu, kube_client
+    ):
+        request_payload = {
+            "container": {
+                "image": "ubuntu",
+                "command": "true",
+                "resources": {
+                    "cpu": 0.1,
+                    "memory_mb": 16,
+                    "gpu": 1,
+                    "gpu_model": "gpumodel",
+                },
+            }
+        }
+
+        async with client.post(
+            api.jobs_base_url, headers=regular_user.headers, json=request_payload
+        ) as response:
+            response_text = await response.text()
+            assert response.status == HTTPAccepted.status_code, response_text
+            response_payload = await response.json()
+            assert response_payload == {
+                "id": mock.ANY,
+                "owner": regular_user.name,
+                "status": "pending",
+                "history": {
+                    "status": "pending",
+                    "reason": None,
+                    "description": None,
+                    "created_at": mock.ANY,
+                },
+                "container": {
+                    "command": "true",
+                    "env": {},
+                    "image": "ubuntu",
+                    "resources": {
+                        "cpu": 0.1,
+                        "memory_mb": 16,
+                        "gpu": 1,
+                        "gpu_model": "gpumodel",
+                    },
+                    "volumes": [],
+                },
+            }
+            job_id = response_payload["id"]
+
+        await kube_client.wait_pod_scheduled(job_id, kube_node_gpu)
