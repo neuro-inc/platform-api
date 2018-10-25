@@ -1,13 +1,14 @@
 import logging
-from typing import Any, Dict
+from typing import Any, Dict, Sequence
 
 import aiohttp.web
 import trafaret as t
 from aiohttp_security import check_permission
 
 from platform_api.config import Config
-from platform_api.orchestrator import JobRequest, JobsService
+from platform_api.orchestrator import JobRequest, JobsService, Orchestrator
 from platform_api.orchestrator.job_request import Container
+from platform_api.resource import GPUModel
 from platform_api.user import User, untrusted_user
 
 from .job_request_builder import ModelRequest
@@ -18,7 +19,9 @@ from .validators import create_container_request_validator, create_job_status_va
 logger = logging.getLogger(__name__)
 
 
-def create_model_request_validator() -> t.Trafaret:
+def create_model_request_validator(
+    *, allowed_gpu_models: Sequence[GPUModel]
+) -> t.Trafaret:
     return t.Dict(
         {
             "container": create_container_request_validator(),
@@ -47,12 +50,15 @@ class ModelsHandler:
         self._config = config
         self._storage_config = config.storage
 
-        self._model_request_validator = create_model_request_validator()
         self._model_response_validator = create_model_response_validator()
 
     @property
     def _jobs_service(self) -> JobsService:
         return self._app["jobs_service"]
+
+    @property
+    def _orchestrator(self) -> Orchestrator:
+        return self._app["orchestrator"]
 
     def register(self, app):
         app.add_routes(
@@ -61,6 +67,10 @@ class ModelsHandler:
                 # TODO add here get method for model not for job
             )
         )
+
+    async def _create_model_request_validator(self) -> t.Trafaret:
+        gpu_models = await self._orchestrator.get_available_gpu_models()
+        return create_model_request_validator(allowed_gpu_models=gpu_models)
 
     async def _create_job(self, user: User, container: Container) -> Dict[str, Any]:
         job_request = JobRequest.create(container)
@@ -76,7 +86,8 @@ class ModelsHandler:
         user = await untrusted_user(request)
 
         orig_payload = await request.json()
-        request_payload = self._model_request_validator.check(orig_payload)
+        model_request_validator = await self._create_model_request_validator()
+        request_payload = model_request_validator.check(orig_payload)
 
         container = ModelRequest(
             request_payload,

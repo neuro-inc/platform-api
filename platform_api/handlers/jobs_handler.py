@@ -162,7 +162,6 @@ class JobsHandler:
         self._config = config
         self._storage_config = config.storage
 
-        self._job_request_validator = create_job_request_validator()
         self._job_response_validator = create_job_response_validator()
         self._bulk_jobs_response_validator = t.Dict(
             {"jobs": t.List(self._job_response_validator)}
@@ -192,12 +191,7 @@ class JobsHandler:
         )
 
     async def _create_job_request_validator(self) -> t.Trafaret:
-        pool_types = await self._orchestrator.get_resource_pool_types()
-        gpu_models = list(
-            dict.fromkeys(
-                [pool_type.gpu_model for pool_type in pool_types if pool_type.gpu_model]
-            )
-        )
+        gpu_models = await self._orchestrator.get_available_gpu_models()
         return create_job_request_validator(allowed_gpu_models=gpu_models)
 
     async def create_job(self, request):
