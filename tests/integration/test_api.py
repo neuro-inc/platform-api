@@ -210,6 +210,33 @@ class TestModels:
         await jobs_client.delete_job(job_id=job_id)
 
     @pytest.mark.asyncio
+    async def test_create_unknown_gpu_model(
+        self, jobs_client, api, client, regular_user, kube_node_gpu
+    ):
+        request_payload = {
+            "container": {
+                "image": "ubuntu",
+                "command": "true",
+                "resources": {
+                    "cpu": 0.1,
+                    "memory_mb": 16,
+                    "gpu": 1,
+                    "gpu_model": "unknown",
+                },
+            },
+            "dataset_storage_uri": f"storage://{regular_user.name}",
+            "result_storage_uri": f"storage://{regular_user.name}/result",
+        }
+
+        async with client.post(
+            api.model_base_url, headers=regular_user.headers, json=request_payload
+        ) as response:
+            response_text = await response.text()
+            assert response.status == HTTPBadRequest.status_code, response_text
+            data = await response.json()
+            assert """'gpu_model': DataError(value doesn't match""" in data["error"]
+
+    @pytest.mark.asyncio
     async def test_env_var_sourcing(self, api, client, jobs_client, regular_user):
         np_result_path = f"/var/storage/{regular_user.name}/result"
         cmd = f'bash -c \'[ "$NP_RESULT_PATH" == "{np_result_path}" ]\''
@@ -659,3 +686,28 @@ class TestJobs:
                 ],
             },
         }
+
+    @pytest.mark.asyncio
+    async def test_create_unknown_gpu_model(
+        self, jobs_client, api, client, regular_user, kube_node_gpu
+    ):
+        request_payload = {
+            "container": {
+                "image": "ubuntu",
+                "command": "true",
+                "resources": {
+                    "cpu": 0.1,
+                    "memory_mb": 16,
+                    "gpu": 1,
+                    "gpu_model": "unknown",
+                },
+            }
+        }
+
+        async with client.post(
+            api.jobs_base_url, headers=regular_user.headers, json=request_payload
+        ) as response:
+            response_text = await response.text()
+            assert response.status == HTTPBadRequest.status_code, response_text
+            data = await response.json()
+            assert """'gpu_model': DataError(value doesn't match""" in data["error"]
