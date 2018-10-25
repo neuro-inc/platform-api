@@ -1,6 +1,6 @@
 import logging
 from pathlib import PurePath
-from typing import Any, Dict, List, Optional, Sequence, Set
+from typing import Any, Dict, List, Sequence, Set
 
 import aiohttp.web
 import trafaret as t
@@ -10,7 +10,7 @@ from neuro_auth_client.client import ClientSubTreeViewRoot
 from yarl import URL
 
 from platform_api.config import Config, RegistryConfig, StorageConfig
-from platform_api.orchestrator import JobsService
+from platform_api.orchestrator import JobsService, Orchestrator
 from platform_api.orchestrator.job import Job
 from platform_api.orchestrator.job_request import Container, ContainerVolume, JobRequest
 from platform_api.resource import GPUModel
