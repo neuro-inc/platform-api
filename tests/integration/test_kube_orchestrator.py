@@ -67,6 +67,22 @@ async def job_nginx(kube_orchestrator):
     return job
 
 
+@pytest.fixture
+async def delete_job_later(kube_orchestrator):
+    jobs = []
+
+    async def _add_job(job):
+        jobs.append(job)
+
+    yield _add_job
+
+    for job in jobs:
+        try:
+            await kube_orchestrator.delete_job(job)
+        except Exception:
+            pass
+
+
 class TestKubeOrchestrator:
     async def wait_for_completion(
         self, job: Job, interval_s: float = 1.0, max_attempts: int = 30
@@ -412,21 +428,6 @@ class TestKubeOrchestrator:
             )
         finally:
             await job.delete()
-
-    @pytest.fixture
-    async def delete_job_later(self, kube_orchestrator):
-        jobs = []
-
-        async def _add_job(job):
-            jobs.append(job)
-
-        yield _add_job
-
-        for job in jobs:
-            try:
-                await kube_orchestrator.delete_job(job)
-            except Exception:
-                pass
 
     async def _assert_no_such_ingress_rule(
         self, kube_client, ingress_name, host, timeout_s: int = 1, interval_s: int = 1
@@ -858,5 +859,34 @@ class TestNodeSelector:
 
         await delete_pod_later(pod)
         await kube_client.create_pod(pod)
+
+        await self.wait_pod_scheduled(kube_client, pod_name, node_name)
+
+    @pytest.mark.asyncio
+    async def test_gpu(
+        self,
+        kube_config,
+        kube_client,
+        delete_job_later,
+        delete_node_later,
+        kube_orchestrator,
+    ):
+        node_name = str(uuid.uuid4())
+        await delete_node_later(node_name)
+
+        labels = {kube_config.node_label_gpu: "gpumodel"}
+        await kube_client.create_node(node_name, labels=labels)
+
+        container = Container(
+            image="ubuntu",
+            command="true",
+            resources=ContainerResources(cpu=0.1, memory_mb=128, gpu=1),
+        )
+        job = MyJob(
+            orchestrator=kube_orchestrator, job_request=JobRequest.create(container)
+        )
+        await delete_job_later(job)
+        await kube_orchestrator.start_job(job, token="test-token")
+        pod_name = job.id
 
         await self.wait_pod_scheduled(kube_client, pod_name, node_name)

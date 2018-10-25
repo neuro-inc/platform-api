@@ -2,12 +2,12 @@ import logging
 from asyncio import AbstractEventLoop
 from dataclasses import dataclass
 from pathlib import PurePath
-from typing import Optional
+from typing import Dict, Optional
 
 from ..config import OrchestratorConfig  # noqa
 from .base import LogReader, Orchestrator
 from .job import Job, JobStatusItem
-from .job_request import JobStatus
+from .job_request import Container, JobStatus
 from .kube_client import *  # noqa
 from .kube_client import (
     DockerRegistrySecret,
@@ -98,6 +98,8 @@ class KubeConfig(OrchestratorConfig):
 
     job_deletion_delay_s: int = 60 * 60 * 24
 
+    node_label_gpu: Optional[str] = None
+
     def __post_init__(self):
         if not all((self.jobs_ingress_name, self.endpoint_url)):
             raise ValueError("Missing required settings")
@@ -177,8 +179,9 @@ class KubeOrchestrator(Orchestrator):
         )
         await self._client.create_secret(secret)
         secret_names = [secret.objname]
+        node_selector = await self._get_pod_node_selector(job.request.container)
         descriptor = PodDescriptor.from_job_request(
-            self._storage_volume, job.request, secret_names
+            self._storage_volume, job.request, secret_names, node_selector=node_selector
         )
         status = await self._client.create_pod(descriptor)
         if job.has_http_server_exposed or job.has_ssh_server_exposed:
@@ -195,6 +198,21 @@ class KubeOrchestrator(Orchestrator):
                 )
         job.status = convert_pod_status_to_job_status(status).status
         return job.status
+
+    async def _get_pod_node_selector(self, container: Container) -> Dict[str, str]:
+        selector: Dict[str, str] = {}
+
+        if not self._config.node_label_gpu:
+            return selector
+
+        pool_types = await self.get_resource_pool_types()
+        for pool_type in pool_types:
+            if container.resources.check_fit_into_pool_type(pool_type):
+                if pool_type.gpu_model:
+                    selector[self._config.node_label_gpu] = pool_type.gpu_model.id
+                break
+
+        return selector
 
     async def get_job_status(self, job_id: str) -> JobStatusItem:
         pod_id = job_id

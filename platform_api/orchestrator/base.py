@@ -1,4 +1,7 @@
 from abc import ABC, abstractmethod
+from typing import Sequence
+
+from platform_api.resource import ResourcePoolType
 
 from ..config import OrchestratorConfig  # noqa
 from .job import Job, JobStatusItem
@@ -41,3 +44,6 @@ class Orchestrator(ABC):
     @abstractmethod
     async def delete_job(self, job: Job) -> JobStatus:
         pass
+
+    async def get_resource_pool_types(self) -> Sequence[ResourcePoolType]:
+        return self.config.resource_pool_types

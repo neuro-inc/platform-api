@@ -12,6 +12,7 @@ from platform_api.orchestrator.kube_orchestrator import (
     KubeConfig,
     KubeOrchestrator,
 )
+from platform_api.resource import GPUModel, ResourcePoolType
 
 
 pytest_plugins = [
@@ -79,6 +80,11 @@ async def kube_config(kube_config_cluster_payload, kube_config_user_payload):
         auth_cert_path=user["client-certificate"],
         auth_cert_key_path=user["client-key"],
         job_deletion_delay_s=0,
+        node_label_gpu="gpu",
+        resource_pool_types=[
+            ResourcePoolType(),
+            ResourcePoolType(gpu=1, gpu_model=GPUModel(id="gpumodel")),
+        ],
     )
 
 
@@ -122,7 +128,12 @@ class TestKubeClient(KubeClient):
             "kind": "Node",
             "metadata": {"name": name, "labels": labels or {}},
             "status": {
-                "capacity": {"pods": "110"},
+                "capacity": {
+                    "pods": "110",
+                    "memory": "1Gi",
+                    "cpu": 2,
+                    "nvidia.com/gpu": 1,
+                },
                 "conditions": [{"status": "True", "type": "Ready"}],
             },
         }
@@ -183,6 +194,8 @@ async def kube_config_nfs(
         jobs_ingress_name="platformjobsingress",
         jobs_domain_name="jobs.platform.neuromation.io",
         ssh_domain_name="ssh.platform.neuromation.io",
+        node_label_gpu="gpu",
+        resource_pool_types=[ResourcePoolType()],
     )
 
 
