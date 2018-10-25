@@ -163,7 +163,7 @@ class Service:
     ssh_target_port: Optional[int] = None
 
     port: int = 80
-    ssh_port: int = 31022
+    ssh_port: int = 22
 
     service_type: ServiceType = ServiceType.CLUSTER_IP
 
