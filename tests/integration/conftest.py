@@ -1,5 +1,6 @@
 import asyncio
 import json
+import uuid
 from pathlib import PurePath
 from typing import Any, Dict, Optional
 from urllib.parse import urlsplit
@@ -211,3 +212,30 @@ async def kube_orchestrator_nfs(kube_config_nfs, event_loop):
     orchestrator = KubeOrchestrator(config=kube_config_nfs)
     async with orchestrator:
         yield orchestrator
+
+
+@pytest.fixture
+async def delete_node_later(kube_client):
+    nodes = []
+
+    async def _add_node(node):
+        nodes.append(node)
+
+    yield _add_node
+
+    for node in nodes:
+        try:
+            await kube_client.delete_node(node)
+        except Exception:
+            pass
+
+
+@pytest.fixture
+async def kube_node_gpu(kube_config, kube_client, delete_node_later):
+    node_name = str(uuid.uuid4())
+    await delete_node_later(node_name)
+
+    labels = {kube_config.node_label_gpu: "gpumodel"}
+    await kube_client.create_node(node_name, labels=labels)
+
+    yield node_name

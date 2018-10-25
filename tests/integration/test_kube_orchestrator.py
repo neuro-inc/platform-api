@@ -808,22 +808,6 @@ class TestPodContainerDevShmSettings:
         assert JobStatusItem.create(status=JobStatus.SUCCEEDED) == run_output
 
 
-@pytest.fixture
-async def delete_node_later(kube_client):
-    nodes = []
-
-    async def _add_node(node):
-        nodes.append(node)
-
-    yield _add_node
-
-    for node in nodes:
-        try:
-            await kube_client.delete_node(node)
-        except Exception:
-            pass
-
-
 class TestNodeSelector:
     async def wait_pod_scheduled(
         self, kube_client, pod_name, node_name, timeout_s=5.0, interval_s=1.0
@@ -870,13 +854,9 @@ class TestNodeSelector:
         delete_job_later,
         delete_node_later,
         kube_orchestrator,
+        kube_node_gpu,
     ):
-        node_name = str(uuid.uuid4())
-        await delete_node_later(node_name)
-
-        labels = {kube_config.node_label_gpu: "gpumodel"}
-        await kube_client.create_node(node_name, labels=labels)
-
+        node_name = kube_node_gpu
         container = Container(
             image="ubuntu",
             command="true",
