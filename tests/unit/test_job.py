@@ -194,6 +194,27 @@ class TestContainerBuilder:
             ssh_server=None,
         )
 
+    def test_from_payload_build_gpu_model(self):
+        storage_config = StorageConfig(host_mount_path=PurePath("/tmp"))  # type: ignore
+        payload = {
+            "image": "testimage",
+            "resources": {
+                "cpu": 0.1,
+                "memory_mb": 128,
+                "gpu": 1,
+                "gpu_model": "gpumodel",
+            },
+        }
+        container = ContainerBuilder.from_container_payload(
+            payload, storage_config=storage_config
+        ).build()
+        assert container == Container(
+            image="testimage",
+            resources=ContainerResources(
+                cpu=0.1, memory_mb=128, gpu=1, gpu_model_id="gpumodel"
+            ),
+        )
+
     def test_from_payload_build_with_ssh(self):
         storage_config = StorageConfig(host_mount_path=PurePath("/tmp"))  # type: ignore
         payload = {

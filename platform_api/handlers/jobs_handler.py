@@ -1,6 +1,6 @@
 import logging
 from pathlib import PurePath
-from typing import Any, Dict, List, Set
+from typing import Any, Dict, List, Sequence, Set
 
 import aiohttp.web
 import trafaret as t
@@ -10,14 +10,16 @@ from neuro_auth_client.client import ClientSubTreeViewRoot
 from yarl import URL
 
 from platform_api.config import Config, RegistryConfig, StorageConfig
-from platform_api.orchestrator import JobsService
+from platform_api.orchestrator import JobsService, Orchestrator
 from platform_api.orchestrator.job import Job
 from platform_api.orchestrator.job_request import Container, ContainerVolume, JobRequest
+from platform_api.resource import GPUModel
 from platform_api.user import User, untrusted_user
 
 from .job_request_builder import ContainerBuilder
 from .validators import (
     create_container_request_validator,
+    create_container_response_validator,
     create_job_history_validator,
     create_job_status_validator,
 )
@@ -26,8 +28,16 @@ from .validators import (
 logger = logging.getLogger(__name__)
 
 
-def create_job_request_validator() -> t.Trafaret:
-    return t.Dict({"container": create_container_request_validator(allow_volumes=True)})
+def create_job_request_validator(
+    *, allowed_gpu_models: Sequence[GPUModel]
+) -> t.Trafaret:
+    return t.Dict(
+        {
+            "container": create_container_request_validator(
+                allow_volumes=True, allowed_gpu_models=allowed_gpu_models
+            )
+        }
+    )
 
 
 def create_job_response_validator() -> t.Trafaret:
@@ -45,7 +55,7 @@ def create_job_response_validator() -> t.Trafaret:
             t.Key("http_url", optional=True): t.String,
             t.Key("ssh_server", optional=True): t.String,
             "history": create_job_history_validator(),
-            "container": create_container_request_validator(allow_volumes=True),
+            "container": create_container_response_validator(),
         }
     )
 
@@ -63,6 +73,8 @@ def convert_job_container_to_json(
     }
     if container.resources.gpu is not None:
         resources["gpu"] = container.resources.gpu
+    if container.resources.gpu_model_id:
+        resources["gpu_model"] = container.resources.gpu_model_id
     if container.resources.shm is not None:
         resources["shm"] = container.resources.shm
     ret["resources"] = resources
@@ -150,7 +162,6 @@ class JobsHandler:
         self._config = config
         self._storage_config = config.storage
 
-        self._job_request_validator = create_job_request_validator()
         self._job_response_validator = create_job_response_validator()
         self._bulk_jobs_response_validator = t.Dict(
             {"jobs": t.List(self._job_response_validator)}
@@ -159,6 +170,10 @@ class JobsHandler:
     @property
     def _jobs_service(self) -> JobsService:
         return self._app["jobs_service"]
+
+    @property
+    def _orchestrator(self) -> Orchestrator:
+        return self._app["orchestrator"]
 
     @property
     def _auth_client(self) -> AuthClient:
@@ -175,11 +190,18 @@ class JobsHandler:
             )
         )
 
+    async def _create_job_request_validator(self) -> t.Trafaret:
+        gpu_models = await self._orchestrator.get_available_gpu_models()
+        return create_job_request_validator(allowed_gpu_models=gpu_models)
+
     async def create_job(self, request):
         user = await untrusted_user(request)
 
         orig_payload = await request.json()
-        request_payload = self._job_request_validator.check(orig_payload)
+
+        job_request_validator = await self._create_job_request_validator()
+        request_payload = job_request_validator.check(orig_payload)
+
         container = ContainerBuilder.from_container_payload(
             request_payload["container"], storage_config=self._storage_config
         ).build()
