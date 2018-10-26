@@ -237,6 +237,34 @@ class TestModels:
             assert """'gpu_model': DataError(value doesn't match""" in data["error"]
 
     @pytest.mark.asyncio
+    async def test_create_gpu_model(
+        self, jobs_client, api, client, regular_user, kube_node_gpu, kube_client
+    ):
+        request_payload = {
+            "container": {
+                "image": "ubuntu",
+                "command": "true",
+                "resources": {
+                    "cpu": 0.1,
+                    "memory_mb": 16,
+                    "gpu": 1,
+                    "gpu_model": "gpumodel",
+                },
+            },
+            "dataset_storage_uri": f"storage://{regular_user.name}",
+            "result_storage_uri": f"storage://{regular_user.name}/result",
+        }
+
+        async with client.post(
+            api.model_base_url, headers=regular_user.headers, json=request_payload
+        ) as response:
+            assert response.status == HTTPAccepted.status_code, await response.text()
+            result = await response.json()
+            job_id = result["job_id"]
+
+        await kube_client.wait_pod_scheduled(job_id, kube_node_gpu)
+
+    @pytest.mark.asyncio
     async def test_env_var_sourcing(self, api, client, jobs_client, regular_user):
         np_result_path = f"/var/storage/{regular_user.name}/result"
         cmd = f'bash -c \'[ "$NP_RESULT_PATH" == "{np_result_path}" ]\''

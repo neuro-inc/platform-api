@@ -24,7 +24,9 @@ def create_model_request_validator(
 ) -> t.Trafaret:
     return t.Dict(
         {
-            "container": create_container_request_validator(),
+            "container": create_container_request_validator(
+                allowed_gpu_models=allowed_gpu_models
+            ),
             # TODO (A Danshyn 05/25/18): we may move the storage URI parsing
             # and validation here at some point
             "dataset_storage_uri": t.String,
