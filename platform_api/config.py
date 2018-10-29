@@ -25,6 +25,7 @@ class StorageType(str, Enum):
 class AuthConfig:
     server_endpoint_url: URL
     service_token: str = field(repr=False)
+    service_name: str = "compute"
 
 
 @dataclass(frozen=True)
@@ -81,6 +82,8 @@ class OrchestratorConfig:
     resource_pool_types: Sequence[ResourcePoolType]
 
     job_deletion_delay_s: int = 0
+
+    orphaned_job_owner: str = ""
 
     @property
     def job_deletion_delay(self) -> timedelta:

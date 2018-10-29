@@ -87,6 +87,7 @@ async def kube_config(kube_config_cluster_payload, kube_config_user_payload):
             ResourcePoolType(),
             ResourcePoolType(gpu=1, gpu_model=GPUModel(id="gpumodel")),
         ],
+        orphaned_job_owner="compute",
     )
 
 
@@ -217,6 +218,7 @@ async def kube_config_nfs(
         ssh_domain_name="ssh.platform.neuromation.io",
         node_label_gpu="gpu",
         resource_pool_types=[ResourcePoolType()],
+        orphaned_job_owner="compute",
     )
 
 

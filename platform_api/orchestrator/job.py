@@ -202,7 +202,7 @@ class Job:
 
     @property
     def owner(self) -> str:
-        return self._owner
+        return self._owner or self._orchestrator_config.orphaned_job_owner
 
     def to_uri(self) -> URL:
         base_uri = "job:"
