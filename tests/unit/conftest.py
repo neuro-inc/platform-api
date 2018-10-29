@@ -86,6 +86,7 @@ def mock_orchestrator():
         ssh_domain_name="ssh",
         endpoint_url="http://k8s:1234",
         resource_pool_types=[ResourcePoolType()],
+        orphaned_job_owner="compute",
     )
     return MockOrchestrator(config=config)
 

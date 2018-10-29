@@ -82,6 +82,8 @@ class OrchestratorConfig:
 
     job_deletion_delay_s: int = 0
 
+    orphaned_job_owner: str = ""
+
     @property
     def job_deletion_delay(self) -> timedelta:
         return timedelta(seconds=self.job_deletion_delay_s)

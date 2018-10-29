@@ -495,7 +495,7 @@ class TestJob:
         assert job.status == JobStatus.FAILED
         assert job.is_deleted
         assert job.finished_at
-        assert job.owner == ""
+        assert job.owner == "compute"
 
     def test_to_uri(self, mock_orchestrator, job_request) -> None:
         job = Job(mock_orchestrator.config, job_request, owner="testuser")
@@ -503,7 +503,7 @@ class TestJob:
 
     def test_to_uri_no_owner(self, mock_orchestrator, job_request) -> None:
         job = Job(mock_orchestrator.config, job_request)
-        assert job.to_uri() == URL(f"job:/{job.id}")
+        assert job.to_uri() == URL(f"job://compute/{job.id}")
 
 
 class TestJobRequest:
