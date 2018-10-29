@@ -501,9 +501,14 @@ class TestJob:
         job = Job(mock_orchestrator.config, job_request, owner="testuser")
         assert job.to_uri() == URL(f"job://testuser/{job.id}")
 
-    def test_to_uri_no_owner(self, mock_orchestrator, job_request) -> None:
+    def test_to_uri_orphaned(self, mock_orchestrator, job_request) -> None:
         job = Job(mock_orchestrator.config, job_request)
         assert job.to_uri() == URL(f"job://compute/{job.id}")
+
+    def test_to_uri_no_owner(self, mock_orchestrator, job_request) -> None:
+        config = dataclasses.replace(mock_orchestrator.config, orphaned_job_owner="")
+        job = Job(config, job_request)
+        assert job.to_uri() == URL(f"job:/{job.id}")
 
 
 class TestJobRequest:
