@@ -473,7 +473,7 @@ class TestJob:
             "is_deleted": True,
             "finished_at": datetime.now(timezone.utc).isoformat(),
         }
-        job = Job.from_primitive(mock_orchestrator, payload)
+        job = Job.from_primitive(mock_orchestrator.config, payload)
         assert job.id == "testjob"
         assert job.status == JobStatus.SUCCEEDED
         assert job.is_deleted
@@ -490,7 +490,7 @@ class TestJob:
             "finished_at": finished_at_str,
             "statuses": [{"status": "failed", "transition_time": finished_at_str}],
         }
-        job = Job.from_primitive(mock_orchestrator, payload)
+        job = Job.from_primitive(mock_orchestrator.config, payload)
         assert job.id == "testjob"
         assert job.status == JobStatus.FAILED
         assert job.is_deleted
