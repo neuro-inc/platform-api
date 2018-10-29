@@ -122,12 +122,15 @@ class TestEnvironConfigFactory:
         assert config.orchestrator.resource_pool_types == [ResourcePoolType()]
         assert config.orchestrator.node_label_gpu is None
 
+        assert config.orchestrator.orphaned_job_owner == "compute"
+
         assert config.database.redis is None
 
         assert config.env_prefix == "NP"
 
         assert config.auth.server_endpoint_url == URL("https://auth")
         assert config.auth.service_token == "token"
+        assert config.auth.service_name == "compute"
 
         assert config.registry.host == "registry.dev.neuromation.io"
 
@@ -166,6 +169,7 @@ class TestEnvironConfigFactory:
             "NP_DB_REDIS_CONN_TIMEOUT": "555",
             "NP_AUTH_URL": "https://auth",
             "NP_AUTH_TOKEN": "token",
+            "NP_AUTH_NAME": "servicename",
             "NP_REGISTRY_HOST": "testregistry:5000",
             "NP_K8S_NODE_LABEL_GPU": "testlabel",
             "NP_GKE_GPU_MODELS": ",".join(
@@ -210,6 +214,8 @@ class TestEnvironConfigFactory:
         ]
         assert config.orchestrator.node_label_gpu == "testlabel"
 
+        assert config.orchestrator.orphaned_job_owner == "servicename"
+
         assert config.database.redis.uri == "redis://localhost:6379/0"
         assert config.database.redis.conn_pool_size == 444
         assert config.database.redis.conn_timeout_s == 555.0
@@ -218,6 +224,7 @@ class TestEnvironConfigFactory:
 
         assert config.auth.server_endpoint_url == URL("https://auth")
         assert config.auth.service_token == "token"
+        assert config.auth.service_name == "servicename"
 
         assert config.registry.host == "testregistry:5000"
 

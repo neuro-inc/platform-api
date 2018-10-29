@@ -32,7 +32,7 @@ class EnvironConfigFactory:
         return Config(
             server=self.create_server(),
             storage=storage,
-            orchestrator=self.create_orchestrator(storage, registry),
+            orchestrator=self.create_orchestrator(storage, registry, auth),
             database=database,
             auth=auth,
             registry=registry,
@@ -78,7 +78,7 @@ class EnvironConfigFactory:
         )
 
     def create_orchestrator(
-        self, storage: StorageConfig, registry: RegistryConfig
+        self, storage: StorageConfig, registry: RegistryConfig, auth: AuthConfig
     ) -> KubeConfig:
         endpoint_url = self._environ["NP_K8S_API_URL"]
         auth_type = KubeClientAuthType(
@@ -121,6 +121,7 @@ class EnvironConfigFactory:
             ),
             resource_pool_types=pool_types,
             node_label_gpu=self._environ.get("NP_K8S_NODE_LABEL_GPU"),
+            orphaned_job_owner=auth.service_name,
         )
 
     def create_resource_pool_types(self) -> List[ResourcePoolType]:
@@ -159,7 +160,10 @@ class EnvironConfigFactory:
     def create_auth(self) -> AuthConfig:
         url = URL(self._environ["NP_AUTH_URL"])
         token = self._environ["NP_AUTH_TOKEN"]
-        return AuthConfig(server_endpoint_url=url, service_token=token)  # type: ignore
+        name = self._environ.get("NP_AUTH_NAME", AuthConfig.service_name)
+        return AuthConfig(
+            server_endpoint_url=url, service_token=token, service_name=name
+        )  # type: ignore
 
     def create_registry(self) -> RegistryConfig:
         host = self._environ.get("NP_REGISTRY_HOST", RegistryConfig.host)

@@ -25,6 +25,7 @@ class StorageType(str, Enum):
 class AuthConfig:
     server_endpoint_url: URL
     service_token: str = field(repr=False)
+    service_name: str = "compute"
 
 
 @dataclass(frozen=True)
