@@ -27,6 +27,28 @@ from .logs import PodContainerLogReader
 logger = logging.getLogger(__name__)
 
 
+class AbstractPodNamespacePlacementStrategy:
+    """
+    Helper utility class that would take into account information on user, and would
+    provide details on the namespace where Pod shall be scheduled.
+    It shall in future come as a part of an umbrella strategy classes.
+    """
+
+    def provide_namespace(self, job_owner: Optional[str]) -> str:  # pragma no cover
+        pass
+
+
+class SingleNamespacePlacementStrategy(AbstractPodNamespacePlacementStrategy):
+
+    default_namespace: str = "default"
+
+    def __init__(self, namespace: str) -> None:
+        self._namespace = namespace
+
+    def provide_namespace(self, job_owner: Optional[str]) -> str:
+        return self._namespace
+
+
 class JobStatusItemFactory:
     def __init__(self, pod_status: PodStatus) -> None:
         self._pod_status = pod_status
@@ -88,7 +110,9 @@ class KubeConfig(OrchestratorConfig):
     auth_cert_path: Optional[str] = None
     auth_cert_key_path: Optional[str] = None
 
-    namespace: str = "default"
+    namespace: AbstractPodNamespacePlacementStrategy = SingleNamespacePlacementStrategy(
+        "default"
+    )
 
     client_conn_timeout_s: int = 300
     client_read_timeout_s: int = 300
@@ -149,7 +173,7 @@ class KubeOrchestrator(Orchestrator):
             auth_type=config.auth_type,
             auth_cert_path=config.auth_cert_path,
             auth_cert_key_path=config.auth_cert_key_path,
-            namespace=config.namespace,
+            namespace=config.namespace.provide_namespace("default-user"),
             conn_timeout_s=config.client_conn_timeout_s,
             read_timeout_s=config.client_read_timeout_s,
             conn_pool_size=config.client_conn_pool_size,
