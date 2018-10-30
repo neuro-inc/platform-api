@@ -194,6 +194,27 @@ class TestContainerBuilder:
             ssh_server=None,
         )
 
+    def test_from_payload_build_gpu_model(self):
+        storage_config = StorageConfig(host_mount_path=PurePath("/tmp"))  # type: ignore
+        payload = {
+            "image": "testimage",
+            "resources": {
+                "cpu": 0.1,
+                "memory_mb": 128,
+                "gpu": 1,
+                "gpu_model": "gpumodel",
+            },
+        }
+        container = ContainerBuilder.from_container_payload(
+            payload, storage_config=storage_config
+        ).build()
+        assert container == Container(
+            image="testimage",
+            resources=ContainerResources(
+                cpu=0.1, memory_mb=128, gpu=1, gpu_model_id="gpumodel"
+            ),
+        )
+
     def test_from_payload_build_with_ssh(self):
         storage_config = StorageConfig(host_mount_path=PurePath("/tmp"))  # type: ignore
         payload = {
@@ -315,7 +336,13 @@ def job_request_payload():
         "job_id": "testjob",
         "container": {
             "image": "testimage",
-            "resources": {"cpu": 1, "memory_mb": 128, "gpu": None, "shm": None},
+            "resources": {
+                "cpu": 1,
+                "memory_mb": 128,
+                "gpu": None,
+                "gpu_model_id": None,
+                "shm": None,
+            },
             "command": None,
             "env": {"testvar": "testval"},
             "volumes": [
@@ -349,9 +376,49 @@ class TestJob:
         )
         return JobRequest(job_id="testjob", container=container)
 
+    @pytest.fixture
+    def job_request_with_ssh_and_http(self):
+        container = Container(
+            image="testimage",
+            resources=ContainerResources(cpu=1, memory_mb=128),
+            http_server=ContainerHTTPServer(port=1234),
+            ssh_server=ContainerSSHServer(port=4321),
+        )
+        return JobRequest(job_id="testjob", container=container)
+
+    @pytest.fixture
+    def job_request_with_ssh(self):
+        container = Container(
+            image="testimage",
+            resources=ContainerResources(cpu=1, memory_mb=128),
+            ssh_server=ContainerSSHServer(port=4321),
+        )
+        return JobRequest(job_id="testjob", container=container)
+
     def test_http_url(self, mock_orchestrator, job_request):
         job = Job(orchestrator_config=mock_orchestrator.config, job_request=job_request)
         assert job.http_url == "http://testjob.jobs"
+
+    def test_ssh_url(self, mock_orchestrator, job_request_with_ssh):
+        job = Job(
+            orchestrator_config=mock_orchestrator.config,
+            job_request=job_request_with_ssh,
+        )
+        assert job.ssh_server == "ssh://testjob.ssh:22"
+
+    def test_no_ssh(self, mock_orchestrator, job_request):
+        job = Job(orchestrator_config=mock_orchestrator.config, job_request=job_request)
+        assert not job.has_ssh_server_exposed
+        with pytest.raises(AssertionError):
+            assert job.ssh_server
+
+    def test_http_url_and_ssh(self, mock_orchestrator, job_request_with_ssh_and_http):
+        job = Job(
+            orchestrator_config=mock_orchestrator.config,
+            job_request=job_request_with_ssh_and_http,
+        )
+        assert job.http_url == "http://testjob.jobs"
+        assert job.ssh_server == "ssh://testjob.ssh:22"
 
     def test_should_be_deleted_pending(self, mock_orchestrator, job_request):
         job = Job(orchestrator_config=mock_orchestrator.config, job_request=job_request)
@@ -406,7 +473,7 @@ class TestJob:
             "is_deleted": True,
             "finished_at": datetime.now(timezone.utc).isoformat(),
         }
-        job = Job.from_primitive(mock_orchestrator, payload)
+        job = Job.from_primitive(mock_orchestrator.config, payload)
         assert job.id == "testjob"
         assert job.status == JobStatus.SUCCEEDED
         assert job.is_deleted
@@ -423,19 +490,24 @@ class TestJob:
             "finished_at": finished_at_str,
             "statuses": [{"status": "failed", "transition_time": finished_at_str}],
         }
-        job = Job.from_primitive(mock_orchestrator, payload)
+        job = Job.from_primitive(mock_orchestrator.config, payload)
         assert job.id == "testjob"
         assert job.status == JobStatus.FAILED
         assert job.is_deleted
         assert job.finished_at
-        assert job.owner == ""
+        assert job.owner == "compute"
 
     def test_to_uri(self, mock_orchestrator, job_request) -> None:
         job = Job(mock_orchestrator.config, job_request, owner="testuser")
         assert job.to_uri() == URL(f"job://testuser/{job.id}")
 
-    def test_to_uri_no_owner(self, mock_orchestrator, job_request) -> None:
+    def test_to_uri_orphaned(self, mock_orchestrator, job_request) -> None:
         job = Job(mock_orchestrator.config, job_request)
+        assert job.to_uri() == URL(f"job://compute/{job.id}")
+
+    def test_to_uri_no_owner(self, mock_orchestrator, job_request) -> None:
+        config = dataclasses.replace(mock_orchestrator.config, orphaned_job_owner="")
+        job = Job(config, job_request)
         assert job.to_uri() == URL(f"job:/{job.id}")
 
 

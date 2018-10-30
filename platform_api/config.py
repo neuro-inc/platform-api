@@ -2,11 +2,12 @@ from dataclasses import dataclass, field
 from datetime import timedelta
 from enum import Enum
 from pathlib import PurePath
-from typing import Optional
+from typing import Optional, Sequence
 
 from yarl import URL
 
 from .redis import RedisConfig
+from .resource import ResourcePoolType
 
 
 @dataclass(frozen=True)
@@ -24,6 +25,7 @@ class StorageType(str, Enum):
 class AuthConfig:
     server_endpoint_url: URL
     service_token: str = field(repr=False)
+    service_name: str = "compute"
 
 
 @dataclass(frozen=True)
@@ -75,7 +77,13 @@ class OrchestratorConfig:
     registry: RegistryConfig
 
     jobs_domain_name: str
+    ssh_domain_name: str
+
+    resource_pool_types: Sequence[ResourcePoolType]
+
     job_deletion_delay_s: int = 0
+
+    orphaned_job_owner: str = ""
 
     @property
     def job_deletion_delay(self) -> timedelta:

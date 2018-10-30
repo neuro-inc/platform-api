@@ -13,7 +13,10 @@ from platform_api.handlers.jobs_handler import (
     infer_permissions_from_container,
 )
 from platform_api.handlers.models_handler import create_model_response_validator
-from platform_api.handlers.validators import create_container_request_validator
+from platform_api.handlers.validators import (
+    create_container_request_validator,
+    create_container_response_validator,
+)
 from platform_api.orchestrator.job import Job
 from platform_api.orchestrator.job_request import (
     Container,
@@ -21,6 +24,7 @@ from platform_api.orchestrator.job_request import (
     ContainerSSHServer,
     ContainerVolume,
 )
+from platform_api.resource import GPUModel
 from platform_api.user import User
 
 
@@ -126,6 +130,63 @@ class TestContainerRequestValidator:
         validator = create_container_request_validator(allow_volumes=True)
         with pytest.raises(ValueError, match="gpu"):
             validator.check(payload_with_negative_gpu)
+
+    def test_gpu_model_but_no_gpu(self):
+        payload = {
+            "image": "testimage",
+            "resources": {"cpu": 0.1, "memory_mb": 16, "gpu_model": "unknown"},
+        }
+        validator = create_container_request_validator()
+        with pytest.raises(ValueError, match="gpu_model is not allowed key"):
+            validator.check(payload)
+
+    def test_gpu_model_unknown(self):
+        payload = {
+            "image": "testimage",
+            "resources": {
+                "cpu": 0.1,
+                "memory_mb": 16,
+                "gpu": 1,
+                "gpu_model": "unknown",
+            },
+        }
+        validator = create_container_request_validator()
+        with pytest.raises(ValueError, match="value doesn't match any variant"):
+            validator.check(payload)
+
+    def test_gpu_model(self):
+        payload = {
+            "image": "testimage",
+            "resources": {
+                "cpu": 0.1,
+                "memory_mb": 16,
+                "gpu": 1,
+                "gpu_model": "unknown",
+            },
+        }
+        validator = create_container_request_validator(
+            allowed_gpu_models=[GPUModel(id="unknown")]
+        )
+        result = validator.check(payload)
+        assert result["resources"]["gpu"] == 1
+        assert result["resources"]["gpu_model"] == "unknown"
+
+
+class TestContainerResponseValidator:
+    def test_gpu_model(self):
+        payload = {
+            "image": "testimage",
+            "resources": {
+                "cpu": 0.1,
+                "memory_mb": 16,
+                "gpu": 1,
+                "gpu_model": "unknown",
+            },
+        }
+        validator = create_container_response_validator()
+        result = validator.check(payload)
+        assert result["resources"]["gpu"] == 1
+        assert result["resources"]["gpu_model"] == "unknown"
 
 
 class TestModelResponseValidator:

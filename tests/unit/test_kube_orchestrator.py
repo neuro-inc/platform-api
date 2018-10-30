@@ -25,6 +25,7 @@ from platform_api.orchestrator.kube_orchestrator import (
     PodStatus,
     Resources,
     Service,
+    ServiceType,
     SharedMemoryVolume,
     Volume,
     VolumeMount,
@@ -100,6 +101,30 @@ class TestVolumeMount:
 
 
 class TestPodDescriptor:
+    def test_to_primitive_defaults(self):
+        pod = PodDescriptor(name="testname", image="testimage")
+        assert pod.name == "testname"
+        assert pod.image == "testimage"
+        assert pod.to_primitive() == {
+            "kind": "Pod",
+            "apiVersion": "v1",
+            "metadata": {"name": "testname", "labels": {"job": "testname"}},
+            "spec": {
+                "containers": [
+                    {
+                        "name": "testname",
+                        "image": "testimage",
+                        "env": [],
+                        "volumeMounts": [],
+                        "terminationMessagePolicy": "FallbackToLogsOnError",
+                    }
+                ],
+                "volumes": [],
+                "restartPolicy": "Never",
+                "imagePullSecrets": [],
+            },
+        }
+
     def test_to_primitive(self):
         pod = PodDescriptor(
             name="testname",
@@ -107,6 +132,7 @@ class TestPodDescriptor:
             env={"TESTVAR": "testvalue"},
             resources=Resources(cpu=0.5, memory=1024, gpu=1),
             port=1234,
+            node_selector={"label": "value"},
         )
         assert pod.name == "testname"
         assert pod.image == "testimage"
@@ -133,6 +159,130 @@ class TestPodDescriptor:
                             "httpGet": {"port": 1234, "path": "/"},
                             "initialDelaySeconds": 1,
                             "periodSeconds": 1,
+                        },
+                        "terminationMessagePolicy": "FallbackToLogsOnError",
+                    }
+                ],
+                "volumes": [],
+                "restartPolicy": "Never",
+                "imagePullSecrets": [],
+                "nodeSelector": {"label": "value"},
+            },
+        }
+
+    def test_to_primitive_http_ssh(self):
+        pod = PodDescriptor(
+            name="testname",
+            image="testimage",
+            env={"TESTVAR": "testvalue"},
+            resources=Resources(cpu=0.5, memory=1024, gpu=1),
+            port=1234,
+            ssh_port=4321,
+        )
+        assert pod.name == "testname"
+        assert pod.image == "testimage"
+        assert pod.to_primitive() == {
+            "kind": "Pod",
+            "apiVersion": "v1",
+            "metadata": {"name": "testname", "labels": {"job": "testname"}},
+            "spec": {
+                "containers": [
+                    {
+                        "name": "testname",
+                        "image": "testimage",
+                        "env": [{"name": "TESTVAR", "value": "testvalue"}],
+                        "volumeMounts": [],
+                        "resources": {
+                            "limits": {
+                                "cpu": "500m",
+                                "memory": "1024Mi",
+                                "nvidia.com/gpu": 1,
+                            }
+                        },
+                        "ports": [{"containerPort": 1234}, {"containerPort": 4321}],
+                        "readinessProbe": {
+                            "httpGet": {"port": 1234, "path": "/"},
+                            "initialDelaySeconds": 1,
+                            "periodSeconds": 1,
+                        },
+                        "terminationMessagePolicy": "FallbackToLogsOnError",
+                    }
+                ],
+                "volumes": [],
+                "restartPolicy": "Never",
+                "imagePullSecrets": [],
+            },
+        }
+
+    def test_to_primitive_ssh_only(self):
+        pod = PodDescriptor(
+            name="testname",
+            image="testimage",
+            env={"TESTVAR": "testvalue"},
+            resources=Resources(cpu=0.5, memory=1024, gpu=1),
+            ssh_port=4321,
+        )
+        assert pod.name == "testname"
+        assert pod.image == "testimage"
+        assert pod.to_primitive() == {
+            "kind": "Pod",
+            "apiVersion": "v1",
+            "metadata": {"name": "testname", "labels": {"job": "testname"}},
+            "spec": {
+                "containers": [
+                    {
+                        "name": "testname",
+                        "image": "testimage",
+                        "env": [{"name": "TESTVAR", "value": "testvalue"}],
+                        "volumeMounts": [],
+                        "resources": {
+                            "limits": {
+                                "cpu": "500m",
+                                "memory": "1024Mi",
+                                "nvidia.com/gpu": 1,
+                            }
+                        },
+                        "ports": [{"containerPort": 4321}],
+                        "readinessProbe": {
+                            "tcpSocket": {"port": 4321},
+                            "initialDelaySeconds": 1,
+                            "periodSeconds": 1,
+                        },
+                        "terminationMessagePolicy": "FallbackToLogsOnError",
+                    }
+                ],
+                "volumes": [],
+                "restartPolicy": "Never",
+                "imagePullSecrets": [],
+            },
+        }
+
+    def test_to_primitive_no_ports(self):
+        pod = PodDescriptor(
+            name="testname",
+            image="testimage",
+            env={"TESTVAR": "testvalue"},
+            resources=Resources(cpu=0.5, memory=1024, gpu=1),
+        )
+        assert pod.name == "testname"
+        assert pod.image == "testimage"
+        assert pod.to_primitive() == {
+            "kind": "Pod",
+            "apiVersion": "v1",
+            "metadata": {"name": "testname", "labels": {"job": "testname"}},
+            "spec": {
+                "containers": [
+                    {
+                        "name": "testname",
+                        "image": "testimage",
+                        "env": [{"name": "TESTVAR", "value": "testvalue"}],
+                        "volumeMounts": [],
+                        "resources": {
+                            "limits": {
+                                "cpu": "500m",
+                                "memory": "1024Mi",
+                                "nvidia.com/gpu": 1,
+                            }
                         },
                         "terminationMessagePolicy": "FallbackToLogsOnError",
                     }
@@ -484,8 +634,8 @@ class TestService:
         return {
             "metadata": {"name": "testservice"},
             "spec": {
-                "type": "NodePort",
-                "ports": [{"port": 80, "targetPort": 8080}],
+                "type": "ClusterIP",
+                "ports": [{"port": 80, "targetPort": 8080, "name": "http"}],
                 "selector": {"job": "testservice"},
             },
         }
@@ -494,14 +644,67 @@ class TestService:
         service = Service(name="testservice", target_port=8080)
         assert service.to_primitive() == service_payload
 
+    def test_to_primitive_load_balancer(self, service_payload):
+        service = Service(
+            name="testservice", target_port=8080, service_type=ServiceType.LOAD_BALANCER
+        )
+        service_payload["spec"]["type"] = "LoadBalancer"
+        assert service.to_primitive() == service_payload
+
     def test_from_primitive(self, service_payload):
         service = Service.from_primitive(service_payload)
         assert service == Service(name="testservice", target_port=8080)
+
+    def test_from_primitive_node_port(self, service_payload):
+        service_payload["spec"]["type"] = "NodePort"
+        service = Service.from_primitive(service_payload)
+        assert service == Service(
+            name="testservice", target_port=8080, service_type=ServiceType.NODE_PORT
+        )
 
     def test_create_for_pod(self):
         pod = PodDescriptor(name="testpod", image="testimage", port=1234)
         service = Service.create_for_pod(pod)
         assert service == Service(name="testpod", target_port=1234)
+
+
+class TestServiceWithSSHOnly:
+    @pytest.fixture(scope="function")
+    def service_payload(self):
+        return {
+            "metadata": {"name": "testservice"},
+            "spec": {
+                "type": "ClusterIP",
+                "ports": [{"port": 89, "targetPort": 8181, "name": "ssh"}],
+                "selector": {"job": "testservice"},
+            },
+        }
+
+    def test_to_primitive(self, service_payload):
+        service = Service(
+            name="testservice", target_port=None, ssh_port=89, ssh_target_port=8181
+        )
+        assert service.to_primitive() == service_payload
+
+    def test_to_primitive_default_port(self, service_payload):
+        service_payload["spec"]["ports"][0]["port"] = 22
+        service = Service(name="testservice", target_port=None, ssh_target_port=8181)
+        assert service.to_primitive() == service_payload
+
+    def test_from_primitive(self, service_payload):
+        service = Service.from_primitive(service_payload)
+        assert service == Service(
+            name="testservice",
+            target_port=None,
+            port=80,
+            ssh_target_port=8181,
+            ssh_port=89,
+        )
+
+    def test_create_for_pod(self):
+        pod = PodDescriptor(name="testpod", image="testimage", ssh_port=89)
+        service = Service.create_for_pod(pod)
+        assert service == Service(name="testpod", target_port=None, ssh_target_port=89)
 
 
 class TestContainerStatus:

@@ -2,12 +2,12 @@ import logging
 from asyncio import AbstractEventLoop
 from dataclasses import dataclass
 from pathlib import PurePath
-from typing import Optional
+from typing import Dict, Optional
 
 from ..config import OrchestratorConfig  # noqa
 from .base import LogReader, Orchestrator
 from .job import Job, JobStatusItem
-from .job_request import JobStatus
+from .job_request import Container, JobStatus
 from .kube_client import *  # noqa
 from .kube_client import (
     DockerRegistrySecret,
@@ -98,6 +98,8 @@ class KubeConfig(OrchestratorConfig):
 
     job_deletion_delay_s: int = 60 * 60 * 24
 
+    node_label_gpu: Optional[str] = None
+
     def __post_init__(self):
         if not all((self.jobs_ingress_name, self.endpoint_url)):
             raise ValueError("Missing required settings")
@@ -109,6 +111,10 @@ class KubeConfig(OrchestratorConfig):
     @property
     def jobs_ingress_domain_name(self) -> str:
         return self.jobs_domain_name
+
+    @property
+    def ssh_ingress_domain_name(self) -> str:
+        return self.ssh_domain_name
 
     def create_storage_volume(self) -> Volume:
         if self.storage.is_nfs:
@@ -173,14 +179,40 @@ class KubeOrchestrator(Orchestrator):
         )
         await self._client.create_secret(secret)
         secret_names = [secret.objname]
+        node_selector = await self._get_pod_node_selector(job.request.container)
         descriptor = PodDescriptor.from_job_request(
-            self._storage_volume, job.request, secret_names
+            self._storage_volume, job.request, secret_names, node_selector=node_selector
         )
         status = await self._client.create_pod(descriptor)
-        if job.has_http_server_exposed:
-            await self._create_service(descriptor)
+        if job.has_http_server_exposed or job.has_ssh_server_exposed:
+            logger.info(f"Starting Service for {job.id}.")
+            service = await self._create_service(descriptor)
+            if job.has_http_server_exposed:
+                logger.info(f"Starting Ingress for {job.id}")
+                await self._client.add_ingress_rule(
+                    name=self._config.jobs_ingress_name,
+                    rule=IngressRule.from_service(
+                        domain_name=self._config.jobs_ingress_domain_name,
+                        service=service,
+                    ),
+                )
         job.status = convert_pod_status_to_job_status(status).status
         return job.status
+
+    async def _get_pod_node_selector(self, container: Container) -> Dict[str, str]:
+        selector: Dict[str, str] = {}
+
+        if not self._config.node_label_gpu:
+            return selector
+
+        pool_types = await self.get_resource_pool_types()
+        for pool_type in pool_types:
+            if container.resources.check_fit_into_pool_type(pool_type):
+                if pool_type.gpu_model:
+                    selector[self._config.node_label_gpu] = pool_type.gpu_model.id
+                break
+
+        return selector
 
     async def get_job_status(self, job_id: str) -> JobStatusItem:
         pod_id = job_id
@@ -192,14 +224,8 @@ class KubeOrchestrator(Orchestrator):
             client=self._client, pod_name=job.id, container_name=job.id
         )
 
-    async def _create_service(self, pod: PodDescriptor) -> None:
-        service = await self._client.create_service(Service.create_for_pod(pod))
-        await self._client.add_ingress_rule(
-            name=self._config.jobs_ingress_name,
-            rule=IngressRule.from_service(
-                domain_name=self._config.jobs_ingress_domain_name, service=service
-            ),
-        )
+    async def _create_service(self, pod: PodDescriptor) -> Service:
+        return await self._client.create_service(Service.create_for_pod(pod))
 
     def _get_ingress_rule_host_for_pod(self, pod_id) -> str:
         ingress_rule = IngressRule.from_service(
@@ -209,6 +235,9 @@ class KubeOrchestrator(Orchestrator):
         return ingress_rule.host
 
     async def _delete_service(self, pod_id: str) -> None:
+        # TODO (Rafa) we shall ensure that ingress exists, as it is not required
+        # for SSH, thus Pods without HTTP but thus which are having SSH,
+        # will not have it
         host = self._get_ingress_rule_host_for_pod(pod_id)
         try:
             await self._client.remove_ingress_rule(
@@ -223,7 +252,7 @@ class KubeOrchestrator(Orchestrator):
 
     async def delete_job(self, job: Job) -> JobStatus:
         pod_id = job.id
-        if job.has_http_server_exposed:
+        if job.has_http_server_exposed or job.has_ssh_server_exposed:
             await self._delete_service(pod_id)
         status = await self._client.delete_pod(pod_id)
         return convert_pod_status_to_job_status(status).status

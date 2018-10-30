@@ -11,6 +11,7 @@ from platform_api.orchestrator.kube_orchestrator import (
     KubeConfig,
     NfsVolume,
 )
+from platform_api.resource import GKEGPUModels, ResourcePoolType
 
 
 class TestStorageConfig:
@@ -50,7 +51,9 @@ class TestKubeConfig:
             registry=registry_config,
             jobs_domain_name="testdomain",
             jobs_ingress_name="testingress",
+            ssh_domain_name="ssh.domain",
             endpoint_url="http://1.2.3.4",
+            resource_pool_types=[ResourcePoolType()],
         )
         volume = kube_config.create_storage_volume()
         assert volume == NfsVolume(
@@ -66,8 +69,10 @@ class TestKubeConfig:
             storage=storage_config,
             registry=registry_config,
             jobs_domain_name="testdomain",
+            ssh_domain_name="ssh.domain",
             jobs_ingress_name="testingress",
             endpoint_url="http://1.2.3.4",
+            resource_pool_types=[ResourcePoolType()],
         )
         volume = kube_config.create_storage_volume()
         assert volume == HostVolume(name="storage", path=PurePath("/tmp"))
@@ -85,6 +90,7 @@ class TestEnvironConfigFactory:
             "NP_K8S_API_URL": "https://localhost:8443",
             "NP_K8S_JOBS_INGRESS_NAME": "testingress",
             "NP_K8S_JOBS_INGRESS_DOMAIN_NAME": "jobs.domain",
+            "NP_K8S_SSH_INGRESS_DOMAIN_NAME": "ssh.domain",
             "NP_AUTH_URL": "https://auth",
             "NP_AUTH_TOKEN": "token",
         }
@@ -108,9 +114,15 @@ class TestEnvironConfigFactory:
         assert config.orchestrator.client_conn_pool_size == 100
         assert config.orchestrator.jobs_ingress_name == "testingress"
         assert config.orchestrator.jobs_ingress_domain_name == "jobs.domain"
+        assert config.orchestrator.ssh_ingress_domain_name == "ssh.domain"
 
         assert config.orchestrator.job_deletion_delay_s == 86400
         assert config.orchestrator.job_deletion_delay == timedelta(days=1)
+
+        assert config.orchestrator.resource_pool_types == [ResourcePoolType()]
+        assert config.orchestrator.node_label_gpu is None
+
+        assert config.orchestrator.orphaned_job_owner == "compute"
 
         assert config.database.redis is None
 
@@ -118,6 +130,7 @@ class TestEnvironConfigFactory:
 
         assert config.auth.server_endpoint_url == URL("https://auth")
         assert config.auth.service_token == "token"
+        assert config.auth.service_name == "compute"
 
         assert config.registry.host == "registry.dev.neuromation.io"
 
@@ -149,13 +162,25 @@ class TestEnvironConfigFactory:
             "NP_K8S_CLIENT_CONN_POOL_SIZE": "333",
             "NP_K8S_JOBS_INGRESS_NAME": "testingress",
             "NP_K8S_JOBS_INGRESS_DOMAIN_NAME": "jobs.domain",
+            "NP_K8S_SSH_INGRESS_DOMAIN_NAME": "ssh.domain",
             "NP_K8S_JOB_DELETION_DELAY": "3600",
             "NP_DB_REDIS_URI": "redis://localhost:6379/0",
             "NP_DB_REDIS_CONN_POOL_SIZE": "444",
             "NP_DB_REDIS_CONN_TIMEOUT": "555",
             "NP_AUTH_URL": "https://auth",
             "NP_AUTH_TOKEN": "token",
+            "NP_AUTH_NAME": "servicename",
             "NP_REGISTRY_HOST": "testregistry:5000",
+            "NP_K8S_NODE_LABEL_GPU": "testlabel",
+            "NP_GKE_GPU_MODELS": ",".join(
+                [
+                    "",
+                    "nvidia-tesla-k80",
+                    "unknown",
+                    "nvidia-tesla-k80",
+                    "nvidia-tesla-v100",
+                ]
+            ),
         }
         config = EnvironConfigFactory(environ=environ).create()
 
@@ -177,9 +202,19 @@ class TestEnvironConfigFactory:
         assert config.orchestrator.client_conn_pool_size == 333
         assert config.orchestrator.jobs_ingress_name == "testingress"
         assert config.orchestrator.jobs_ingress_domain_name == "jobs.domain"
+        assert config.orchestrator.ssh_ingress_domain_name == "ssh.domain"
 
         assert config.orchestrator.job_deletion_delay_s == 3600
         assert config.orchestrator.job_deletion_delay == timedelta(seconds=3600)
+
+        assert config.orchestrator.resource_pool_types == [
+            ResourcePoolType(),
+            ResourcePoolType(gpu=1, gpu_model=GKEGPUModels.K80.value),
+            ResourcePoolType(gpu=1, gpu_model=GKEGPUModels.V100.value),
+        ]
+        assert config.orchestrator.node_label_gpu == "testlabel"
+
+        assert config.orchestrator.orphaned_job_owner == "servicename"
 
         assert config.database.redis.uri == "redis://localhost:6379/0"
         assert config.database.redis.conn_pool_size == 444
@@ -189,6 +224,7 @@ class TestEnvironConfigFactory:
 
         assert config.auth.server_endpoint_url == URL("https://auth")
         assert config.auth.service_token == "token"
+        assert config.auth.service_name == "servicename"
 
         assert config.registry.host == "testregistry:5000"
 
@@ -201,6 +237,7 @@ class TestEnvironConfigFactory:
             "NP_K8S_API_URL": "https://localhost:8443",
             "NP_K8S_JOBS_INGRESS_NAME": "testingress",
             "NP_K8S_JOBS_INGRESS_DOMAIN_NAME": "jobs.domain",
+            "NP_K8S_SSH_INGRESS_DOMAIN_NAME": "ssh.domain",
             "NP_AUTH_URL": "https://auth",
             "NP_AUTH_TOKEN": "token",
         }

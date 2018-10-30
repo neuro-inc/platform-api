@@ -171,6 +171,100 @@ class TestModels:
         await jobs_client.delete_job(job_id=job_id)
 
     @pytest.mark.asyncio
+    async def test_create_model_with_ssh_and_http(
+        self, api, client, model_train, jobs_client, regular_user
+    ):
+        url = api.model_base_url
+        model_train["container"]["ssh"] = {"port": 7867}
+        async with client.post(
+            url, headers=regular_user.headers, json=model_train
+        ) as response:
+            assert response.status == HTTPAccepted.status_code
+            result = await response.json()
+            assert result["status"] in ["pending"]
+            job_id = result["job_id"]
+            expected_url = f"ssh://{job_id}.ssh.platform.neuromation.io:22"
+            assert result["ssh_server"] == expected_url
+
+        await jobs_client.long_pooling_by_job_id(job_id=job_id, status="succeeded")
+        await jobs_client.delete_job(job_id=job_id)
+
+    @pytest.mark.asyncio
+    async def test_create_model_with_ssh_only(
+        self, api, client, model_train, jobs_client, regular_user
+    ):
+        url = api.model_base_url
+        model_train["container"]["ssh"] = {"port": 7867}
+        model_train["container"].pop("http", None)
+        async with client.post(
+            url, headers=regular_user.headers, json=model_train
+        ) as response:
+            assert response.status == HTTPAccepted.status_code
+            result = await response.json()
+            assert result["status"] in ["pending"]
+            job_id = result["job_id"]
+            expected_url = f"ssh://{job_id}.ssh.platform.neuromation.io:22"
+            assert result["ssh_server"] == expected_url
+
+        await jobs_client.long_pooling_by_job_id(job_id=job_id, status="succeeded")
+        await jobs_client.delete_job(job_id=job_id)
+
+    @pytest.mark.asyncio
+    async def test_create_unknown_gpu_model(
+        self, jobs_client, api, client, regular_user, kube_node_gpu
+    ):
+        request_payload = {
+            "container": {
+                "image": "ubuntu",
+                "command": "true",
+                "resources": {
+                    "cpu": 0.1,
+                    "memory_mb": 16,
+                    "gpu": 1,
+                    "gpu_model": "unknown",
+                },
+            },
+            "dataset_storage_uri": f"storage://{regular_user.name}",
+            "result_storage_uri": f"storage://{regular_user.name}/result",
+        }
+
+        async with client.post(
+            api.model_base_url, headers=regular_user.headers, json=request_payload
+        ) as response:
+            response_text = await response.text()
+            assert response.status == HTTPBadRequest.status_code, response_text
+            data = await response.json()
+            assert """'gpu_model': DataError(value doesn't match""" in data["error"]
+
+    @pytest.mark.asyncio
+    async def test_create_gpu_model(
+        self, jobs_client, api, client, regular_user, kube_node_gpu, kube_client
+    ):
+        request_payload = {
+            "container": {
+                "image": "ubuntu",
+                "command": "true",
+                "resources": {
+                    "cpu": 0.1,
+                    "memory_mb": 16,
+                    "gpu": 1,
+                    "gpu_model": "gpumodel",
+                },
+            },
+            "dataset_storage_uri": f"storage://{regular_user.name}",
+            "result_storage_uri": f"storage://{regular_user.name}/result",
+        }
+
+        async with client.post(
+            api.model_base_url, headers=regular_user.headers, json=request_payload
+        ) as response:
+            assert response.status == HTTPAccepted.status_code, await response.text()
+            result = await response.json()
+            job_id = result["job_id"]
+
+        await kube_client.wait_pod_scheduled(job_id, kube_node_gpu)
+
+    @pytest.mark.asyncio
     async def test_env_var_sourcing(self, api, client, jobs_client, regular_user):
         np_result_path = f"/var/storage/{regular_user.name}/result"
         cmd = f'bash -c \'[ "$NP_RESULT_PATH" == "{np_result_path}" ]\''
@@ -620,3 +714,78 @@ class TestJobs:
                 ],
             },
         }
+
+    @pytest.mark.asyncio
+    async def test_create_unknown_gpu_model(
+        self, jobs_client, api, client, regular_user, kube_node_gpu
+    ):
+        request_payload = {
+            "container": {
+                "image": "ubuntu",
+                "command": "true",
+                "resources": {
+                    "cpu": 0.1,
+                    "memory_mb": 16,
+                    "gpu": 1,
+                    "gpu_model": "unknown",
+                },
+            }
+        }
+
+        async with client.post(
+            api.jobs_base_url, headers=regular_user.headers, json=request_payload
+        ) as response:
+            response_text = await response.text()
+            assert response.status == HTTPBadRequest.status_code, response_text
+            data = await response.json()
+            assert """'gpu_model': DataError(value doesn't match""" in data["error"]
+
+    @pytest.mark.asyncio
+    async def test_create_gpu_model(
+        self, jobs_client, api, client, regular_user, kube_node_gpu, kube_client
+    ):
+        request_payload = {
+            "container": {
+                "image": "ubuntu",
+                "command": "true",
+                "resources": {
+                    "cpu": 0.1,
+                    "memory_mb": 16,
+                    "gpu": 1,
+                    "gpu_model": "gpumodel",
+                },
+            }
+        }
+
+        async with client.post(
+            api.jobs_base_url, headers=regular_user.headers, json=request_payload
+        ) as response:
+            response_text = await response.text()
+            assert response.status == HTTPAccepted.status_code, response_text
+            response_payload = await response.json()
+            assert response_payload == {
+                "id": mock.ANY,
+                "owner": regular_user.name,
+                "status": "pending",
+                "history": {
+                    "status": "pending",
+                    "reason": None,
+                    "description": None,
+                    "created_at": mock.ANY,
+                },
+                "container": {
+                    "command": "true",
+                    "env": {},
+                    "image": "ubuntu",
+                    "resources": {
+                        "cpu": 0.1,
+                        "memory_mb": 16,
+                        "gpu": 1,
+                        "gpu_model": "gpumodel",
+                    },
+                    "volumes": [],
+                },
+            }
+            job_id = response_payload["id"]
+
+        await kube_client.wait_pod_scheduled(job_id, kube_node_gpu)

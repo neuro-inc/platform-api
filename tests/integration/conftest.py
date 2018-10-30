@@ -1,9 +1,12 @@
 import asyncio
 import json
+import uuid
 from pathlib import PurePath
+from typing import Any, Dict, Optional
 from urllib.parse import urlsplit
 
 import pytest
+from async_timeout import timeout
 
 from platform_api.config import RegistryConfig, StorageConfig
 from platform_api.orchestrator.kube_orchestrator import (
@@ -11,6 +14,7 @@ from platform_api.orchestrator.kube_orchestrator import (
     KubeConfig,
     KubeOrchestrator,
 )
+from platform_api.resource import GPUModel, ResourcePoolType
 
 
 pytest_plugins = [
@@ -72,11 +76,18 @@ async def kube_config(kube_config_cluster_payload, kube_config_user_payload):
         registry=registry_config,
         jobs_ingress_name="platformjobsingress",
         jobs_domain_name="jobs.platform.neuromation.io",
+        ssh_domain_name="ssh.platform.neuromation.io",
         endpoint_url=cluster["server"],
         cert_authority_path=cluster["certificate-authority"],
         auth_cert_path=user["client-certificate"],
         auth_cert_key_path=user["client-key"],
         job_deletion_delay_s=0,
+        node_label_gpu="gpu",
+        resource_pool_types=[
+            ResourcePoolType(),
+            ResourcePoolType(gpu=1, gpu_model=GPUModel(id="gpumodel")),
+        ],
+        orphaned_job_owner="compute",
     )
 
 
@@ -94,12 +105,68 @@ class TestKubeClient(KubeClient):
     def _generate_endpoint_url(self, name):
         return f"{self._endpoints_url}/{name}"
 
+    @property
+    def _nodes_url(self):
+        return f"{self._api_v1_url}/nodes"
+
+    def _generate_node_url(self, name):
+        return f"{self._nodes_url}/{name}"
+
     async def get_endpoint(self, name):
         url = self._generate_endpoint_url(name)
         return await self._request(method="GET", url=url)
 
     async def request(self, *args, **kwargs):
         return await self._request(*args, **kwargs)
+
+    async def get_raw_pod(self, name: str) -> Dict[str, Any]:
+        url = self._generate_pod_url(name)
+        return await self._request(method="GET", url=url)
+
+    async def wait_pod_scheduled(
+        self, pod_name, node_name, timeout_s=5.0, interval_s=1.0
+    ):
+        try:
+            async with timeout(timeout_s):
+                while True:
+                    raw_pod = await self.get_raw_pod(pod_name)
+                    pod_has_node = raw_pod["spec"].get("nodeName") == node_name
+                    pod_is_scheduled = "PodScheduled" in [
+                        cond["type"]
+                        for cond in raw_pod["status"].get("conditions", [])
+                        if cond["status"]
+                    ]
+                    if pod_has_node and pod_is_scheduled:
+                        return
+                    await asyncio.sleep(interval_s)
+        except asyncio.TimeoutError:
+            pytest.fail("Pod unscheduled")
+
+    async def create_node(
+        self, name: str, labels: Optional[Dict[str, str]] = None
+    ) -> None:
+        payload = {
+            "apiVersion": "v1",
+            "kind": "Node",
+            "metadata": {"name": name, "labels": labels or {}},
+            "status": {
+                "capacity": {
+                    "pods": "110",
+                    "memory": "1Gi",
+                    "cpu": 2,
+                    "nvidia.com/gpu": 1,
+                },
+                "conditions": [{"status": "True", "type": "Ready"}],
+            },
+        }
+        url = self._nodes_url
+        result = await self._request(method="POST", url=url, json=payload)
+        self._check_status_payload(result)
+
+    async def delete_node(self, name: str) -> None:
+        url = self._generate_node_url(name)
+        result = await self.request(method="DELETE", url=url)
+        self._check_status_payload(result)
 
 
 @pytest.fixture(scope="session")
@@ -148,6 +215,10 @@ async def kube_config_nfs(
         auth_cert_key_path=user["client-key"],
         jobs_ingress_name="platformjobsingress",
         jobs_domain_name="jobs.platform.neuromation.io",
+        ssh_domain_name="ssh.platform.neuromation.io",
+        node_label_gpu="gpu",
+        resource_pool_types=[ResourcePoolType()],
+        orphaned_job_owner="compute",
     )
 
 
@@ -163,3 +234,30 @@ async def kube_orchestrator_nfs(kube_config_nfs, event_loop):
     orchestrator = KubeOrchestrator(config=kube_config_nfs)
     async with orchestrator:
         yield orchestrator
+
+
+@pytest.fixture
+async def delete_node_later(kube_client):
+    nodes = []
+
+    async def _add_node(node):
+        nodes.append(node)
+
+    yield _add_node
+
+    for node in nodes:
+        try:
+            await kube_client.delete_node(node)
+        except Exception:
+            pass
+
+
+@pytest.fixture
+async def kube_node_gpu(kube_config, kube_client, delete_node_later):
+    node_name = str(uuid.uuid4())
+    await delete_node_later(node_name)
+
+    labels = {kube_config.node_label_gpu: "gpumodel"}
+    await kube_client.create_node(node_name, labels=labels)
+
+    yield node_name

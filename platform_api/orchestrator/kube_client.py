@@ -27,6 +27,12 @@ from .job_request import (
 logger = logging.getLogger(__name__)
 
 
+class ServiceType(str, enum.Enum):
+    CLUSTER_IP = "ClusterIP"
+    NODE_PORT = "NodePort"
+    LOAD_BALANCER = "LoadBalancer"
+
+
 class KubeClientException(Exception):
     pass
 
@@ -153,30 +159,69 @@ class Resources:
 @dataclass(frozen=True)
 class Service:
     name: str
-    target_port: int
+    target_port: Optional[int]
+    ssh_target_port: Optional[int] = None
+
     port: int = 80
+    ssh_port: int = 22
+
+    service_type: ServiceType = ServiceType.CLUSTER_IP
+
+    def _add_port_map(
+        self,
+        port: Optional[int],
+        target_port: Optional[int],
+        port_name: str,
+        ports: List,
+    ):
+        if target_port:
+            ports.append({"port": port, "targetPort": target_port, "name": port_name})
 
     def to_primitive(self):
-        return {
+        service_descriptor = {
             "metadata": {"name": self.name},
             "spec": {
-                "type": "NodePort",
-                "ports": [{"port": self.port, "targetPort": self.target_port}],
+                "type": self.service_type.value,
+                "ports": [],
                 "selector": {"job": self.name},
             },
         }
+        self._add_port_map(
+            self.port, self.target_port, "http", service_descriptor["spec"]["ports"]
+        )
+        self._add_port_map(
+            self.ssh_port,
+            self.ssh_target_port,
+            "ssh",
+            service_descriptor["spec"]["ports"],
+        )
+        return service_descriptor
 
     @classmethod
     def create_for_pod(cls, pod: "PodDescriptor") -> "Service":
-        return cls(pod.name, target_port=pod.port)  # type: ignore
+        return cls(
+            pod.name, target_port=pod.port, ssh_target_port=pod.ssh_port
+        )  # type: ignore
+
+    @classmethod
+    def _find_port_by_name(cls, name: str, port_mappings: List) -> Dict:
+        for port_mapping in port_mappings:
+            if port_mapping.get("name", None) == name:
+                return port_mapping
+        return {}
 
     @classmethod
     def from_primitive(cls, payload) -> "Service":
-        port_payload = payload["spec"]["ports"][0]
+        http_payload = cls._find_port_by_name("http", payload["spec"]["ports"])
+        ssh_payload = cls._find_port_by_name("ssh", payload["spec"]["ports"])
+        service_type = payload["spec"].get("type", Service.service_type.value)
         return cls(  # type: ignore
             name=payload["metadata"]["name"],
-            target_port=port_payload["targetPort"],
-            port=port_payload["port"],
+            target_port=http_payload.get("targetPort", None),
+            port=http_payload.get("port", Service.port),
+            ssh_target_port=ssh_payload.get("targetPort", None),
+            ssh_port=ssh_payload.get("port", Service.ssh_port),
+            service_type=ServiceType(service_type),
         )
 
 
@@ -314,8 +359,10 @@ class PodDescriptor:
     volume_mounts: List[VolumeMount] = field(default_factory=list)
     volumes: List[Volume] = field(default_factory=list)
     resources: Optional[Resources] = None
+    node_selector: Dict[str, str] = field(default_factory=dict)
 
     port: Optional[int] = None
+    ssh_port: Optional[int] = None
     health_check_path: str = "/"
 
     status: Optional["PodStatus"] = None
@@ -328,6 +375,7 @@ class PodDescriptor:
         volume: Volume,
         job_request: JobRequest,
         secret_names: Optional[List[str]] = None,
+        node_selector: Optional[Dict[str, str]] = None,
     ) -> "PodDescriptor":
         container = job_request.container
         volume_mounts = [
@@ -361,8 +409,10 @@ class PodDescriptor:
             volumes=volumes,
             resources=resources,
             port=container.port,
+            ssh_port=container.ssh_port,
             health_check_path=container.health_check_path,
             image_pull_secrets=image_pull_secrets,
+            node_selector=node_selector or {},
         )
 
     @property
@@ -384,14 +434,14 @@ class PodDescriptor:
             container_payload["args"] = self.args
         if self.resources:
             container_payload["resources"] = self.resources.to_primitive()
-        if self.port:
-            container_payload["ports"] = [{"containerPort": self.port}]
-            container_payload["readinessProbe"] = {
-                "httpGet": {"port": self.port, "path": self.health_check_path},
-                "initialDelaySeconds": 1,
-                "periodSeconds": 1,
-            }
-        return {
+
+        ports, readines_probe = self._to_primitive_ports()
+        if ports:
+            container_payload["ports"] = ports
+        if readines_probe:
+            container_payload["readinessProbe"] = readines_probe
+
+        payload = {
             "kind": "Pod",
             "apiVersion": "v1",
             "metadata": {
@@ -410,6 +460,30 @@ class PodDescriptor:
                 ],
             },
         }
+        if self.node_selector:
+            payload["spec"]["nodeSelector"] = self.node_selector.copy()
+        return payload
+
+    def _to_primitive_ports(self):
+        ports = []
+        readines_probe = {}
+        if self.port:
+            ports.append({"containerPort": self.port})
+            readines_probe = {
+                "httpGet": {"port": self.port, "path": self.health_check_path},
+                "initialDelaySeconds": 1,
+                "periodSeconds": 1,
+            }
+
+        if self.ssh_port:
+            ports.append({"containerPort": self.ssh_port})
+            if not self.port:
+                readines_probe = {
+                    "tcpSocket": {"port": self.ssh_port},
+                    "initialDelaySeconds": 1,
+                    "periodSeconds": 1,
+                }
+        return ports, readines_probe
 
     @classmethod
     def _assert_resource_kind(cls, expected_kind: str, payload: Dict):
@@ -599,8 +673,12 @@ class KubeClient:
         await self.close()
 
     @property
+    def _api_v1_url(self) -> str:
+        return f"{self._base_url}/api/v1"
+
+    @property
     def _namespace_url(self) -> str:
-        return f"{self._base_url}/api/v1/namespaces/{self._namespace}"
+        return f"{self._api_v1_url}/namespaces/{self._namespace}"
 
     @property
     def _pods_url(self) -> str:

@@ -97,6 +97,7 @@ class ContainerBuilder:
             cpu=payload["cpu"],
             memory_mb=payload["memory_mb"],
             gpu=payload.get("gpu"),
+            gpu_model_id=payload.get("gpu_model"),
             shm=payload.get("shm"),
         )
 
