@@ -171,7 +171,7 @@ class TestModels:
         await jobs_client.delete_job(job_id=job_id)
 
     @pytest.mark.asyncio
-    async def test_create_model_check_internal_orchestrator_info(
+    async def test_create_model_check_internal_hostname(
         self, api, client, model_train, jobs_client, regular_user
     ):
         url = api.model_base_url
@@ -183,8 +183,7 @@ class TestModels:
             assert result["status"] in ["pending"]
             job_id = result["job_id"]
 
-            expected_hostname = f"{job_id}.default"
-            assert result["internal_orchestrator_info"]["hostname"] == expected_hostname
+            assert result["internal_hostname"] == f"{job_id}.default"
 
         await jobs_client.long_pooling_by_job_id(job_id=job_id, status="succeeded")
         await jobs_client.delete_job(job_id=job_id)

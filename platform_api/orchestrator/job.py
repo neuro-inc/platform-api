@@ -196,7 +196,7 @@ class Job:
 
         self._owner = owner
 
-        self.internal_orchestrator_info: Dict[str, Any] = dict()
+        self._internal_orchestrator_info: Dict[str, Any] = dict()
 
     @property
     def id(self):
@@ -290,13 +290,19 @@ class Job:
     def finished_at_str(self) -> Optional[str]:
         return self._status_history.finished_at_str
 
-    def set_internal_hostname(self, value: str):
-        self.internal_orchestrator_info["hostname"] = value
+    @property
+    def internal_hostname(self):
+        if "internal_hostname" in self._internal_orchestrator_info:
+            return self._internal_orchestrator_info["internal_hostname"]
+
+    @internal_hostname.setter
+    def internal_hostname(self, value: str):
+        self._internal_orchestrator_info["internal_hostname"] = value
 
     def to_primitive(self) -> Dict:
         statuses = [item.to_primitive() for item in self._status_history.all]
         # preserving `status` and `finished_at` for forward compat
-        return {
+        result = {
             "id": self.id,
             "owner": self._owner,
             "request": self.request.to_primitive(),
@@ -304,8 +310,10 @@ class Job:
             "statuses": statuses,
             "is_deleted": self.is_deleted,
             "finished_at": self.finished_at_str,
-            "internal_orchestrator_info": self.internal_orchestrator_info,
         }
+        if self.internal_hostname is not None:
+            result["internal_hostname"] = self.internal_hostname
+        return result
 
     @classmethod
     def from_primitive(
