@@ -80,15 +80,12 @@ class ModelsHandler:
     async def _create_job(self, user: User, container: Container) -> Dict[str, Any]:
         job_request = JobRequest.create(container)
         job, status = await self._jobs_service.create_job(job_request, user=user)
-        # TODO: AY: why not just serialize job ?
         payload = {"job_id": job.id, "status": status.value}
         if container.has_http_server_exposed:
             payload["http_url"] = job.http_url
         if container.has_ssh_server_exposed:
             payload["ssh_server"] = job.ssh_server
-        orch_info = job.internal_orchestrator_info
-        if orch_info:
-            payload["internal_orchestrator_info"] = orch_info
+        payload["internal_orchestrator_info"] = job.internal_orchestrator_info
         return payload
 
     async def handle_post(self, request):
