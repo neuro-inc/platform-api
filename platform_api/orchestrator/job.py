@@ -196,6 +196,8 @@ class Job:
 
         self._owner = owner
 
+        self.internal_orchestrator_info: Dict[str, Any] = dict()
+
     @property
     def id(self):
         return self._job_request.job_id
@@ -288,6 +290,9 @@ class Job:
     def finished_at_str(self) -> Optional[str]:
         return self._status_history.finished_at_str
 
+    def set_internal_hostname(self, value: str):
+        self.internal_orchestrator_info["hostname"] = value
+
     def to_primitive(self) -> Dict:
         statuses = [item.to_primitive() for item in self._status_history.all]
         # preserving `status` and `finished_at` for forward compat
@@ -299,6 +304,7 @@ class Job:
             "statuses": statuses,
             "is_deleted": self.is_deleted,
             "finished_at": self.finished_at_str,
+            "internal_orchestrator_info": self.internal_orchestrator_info,
         }
 
     @classmethod

@@ -462,6 +462,7 @@ class TestJob:
                     "description": None,
                 },
             ],
+            "internal_orchestrator_info": {},
         }
 
     def test_from_primitive(self, mock_orchestrator, job_request_payload):

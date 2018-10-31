@@ -171,6 +171,25 @@ class TestModels:
         await jobs_client.delete_job(job_id=job_id)
 
     @pytest.mark.asyncio
+    async def test_create_model_check_internal_orchestrator_info(
+        self, api, client, model_train, jobs_client, regular_user
+    ):
+        url = api.model_base_url
+        async with client.post(
+            url, headers=regular_user.headers, json=model_train
+        ) as response:
+            assert response.status == HTTPAccepted.status_code
+            result = await response.json()
+            assert result["status"] in ["pending"]
+            job_id = result["job_id"]
+
+            expected_hostname = f"{job_id}.default"
+            assert result["internal_orchestrator_info"]["hostname"] == expected_hostname
+
+        await jobs_client.long_pooling_by_job_id(job_id=job_id, status="succeeded")
+        await jobs_client.delete_job(job_id=job_id)
+
+    @pytest.mark.asyncio
     async def test_create_model_with_ssh_and_http(
         self, api, client, model_train, jobs_client, regular_user
     ):

@@ -42,6 +42,9 @@ def create_model_response_validator() -> t.Trafaret:
             "status": create_job_status_validator(),
             t.Key("http_url", optional=True): t.String,
             t.Key("ssh_server", optional=True): t.String,
+            t.Key("internal_orchestrator_info", optional=True): t.Dict({
+                    "hostname": t.String,
+            }),
         }
     )
 
@@ -77,11 +80,15 @@ class ModelsHandler:
     async def _create_job(self, user: User, container: Container) -> Dict[str, Any]:
         job_request = JobRequest.create(container)
         job, status = await self._jobs_service.create_job(job_request, user=user)
+        # TODO: AY: why not just serialize job ?
         payload = {"job_id": job.id, "status": status.value}
         if container.has_http_server_exposed:
             payload["http_url"] = job.http_url
         if container.has_ssh_server_exposed:
             payload["ssh_server"] = job.ssh_server
+        orch_info = job.internal_orchestrator_info
+        if orch_info:
+            payload["internal_orchestrator_info"] = orch_info
         return payload
 
     async def handle_post(self, request):
