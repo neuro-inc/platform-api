@@ -16,7 +16,7 @@ from .config import (
 from .orchestrator import KubeConfig
 from .orchestrator.kube_orchestrator import (
     KubeClientAuthType,
-    SingleNamespacePlacementStrategy,
+    SingleNamespaceStrategy,
 )
 from .redis import RedisConfig
 from .resource import GKEGPUModels, ResourcePoolType
@@ -90,9 +90,9 @@ class EnvironConfigFactory:
 
         pool_types = self.create_resource_pool_types()
 
-        default_namespace = SingleNamespacePlacementStrategy.default_namespace
+        default_namespace = SingleNamespaceStrategy.default_namespace
         ns_strategy_default_name = self._environ.get("NP_K8S_NS", default_namespace)
-        strategy = SingleNamespacePlacementStrategy(ns_strategy_default_name)
+        namespace_provider = SingleNamespaceStrategy(ns_strategy_default_name)
 
         return KubeConfig(  # type: ignore
             storage=storage,
@@ -102,7 +102,7 @@ class EnvironConfigFactory:
             auth_type=auth_type,
             auth_cert_path=self._environ.get("NP_K8S_AUTH_CERT_PATH"),
             auth_cert_key_path=self._environ.get("NP_K8S_AUTH_CERT_KEY_PATH"),
-            namespace=strategy,
+            namespace_provider=namespace_provider,
             client_conn_timeout_s=int(
                 self._environ.get(
                     "NP_K8S_CLIENT_CONN_TIMEOUT", KubeConfig.client_conn_timeout_s

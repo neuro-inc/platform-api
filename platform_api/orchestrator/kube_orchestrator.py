@@ -27,7 +27,7 @@ from .logs import PodContainerLogReader
 logger = logging.getLogger(__name__)
 
 
-class AbstractPodNamespacePlacementStrategy:
+class AbstractNamespaceStrategy:
     """
     Helper utility class that would take into account information on user, and would
     provide details on the namespace where Pod shall be scheduled.
@@ -38,7 +38,7 @@ class AbstractPodNamespacePlacementStrategy:
         pass
 
 
-class SingleNamespacePlacementStrategy(AbstractPodNamespacePlacementStrategy):
+class SingleNamespaceStrategy(AbstractNamespaceStrategy):
 
     default_namespace: str = "default"
 
@@ -110,8 +110,8 @@ class KubeConfig(OrchestratorConfig):
     auth_cert_path: Optional[str] = None
     auth_cert_key_path: Optional[str] = None
 
-    namespace: AbstractPodNamespacePlacementStrategy = SingleNamespacePlacementStrategy(
-        "default"
+    namespace_provider: AbstractNamespaceStrategy = SingleNamespaceStrategy(
+        SingleNamespaceStrategy.default_namespace
     )
 
     client_conn_timeout_s: int = 300
@@ -173,7 +173,7 @@ class KubeOrchestrator(Orchestrator):
             auth_type=config.auth_type,
             auth_cert_path=config.auth_cert_path,
             auth_cert_key_path=config.auth_cert_key_path,
-            namespace=config.namespace.provide_namespace("default-user"),
+            namespace=config.namespace_provider.provide_namespace("default-user"),
             conn_timeout_s=config.client_conn_timeout_s,
             read_timeout_s=config.client_read_timeout_s,
             conn_pool_size=config.client_conn_pool_size,
@@ -194,10 +194,11 @@ class KubeOrchestrator(Orchestrator):
             await self._client.close()
 
     async def start_job(self, job: Job, token: str) -> JobStatus:
+        pod_namespace = self._config.namespace_provider.provide_namespace(job.owner)
         secret = DockerRegistrySecret(
             name=job.owner,
             password=token,
-            namespace=self._config.namespace,
+            namespace=pod_namespace,
             email=self._config.registry.email,
             registry_server=self._config.registry.host,
         )

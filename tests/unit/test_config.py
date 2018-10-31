@@ -10,7 +10,7 @@ from platform_api.orchestrator.kube_orchestrator import (
     HostVolume,
     KubeConfig,
     NfsVolume,
-    SingleNamespacePlacementStrategy,
+    SingleNamespaceStrategy,
 )
 from platform_api.resource import GKEGPUModels, ResourcePoolType
 
@@ -110,9 +110,9 @@ class TestEnvironConfigFactory:
         assert not config.orchestrator.auth_cert_path
         assert not config.orchestrator.auth_cert_key_path
         assert isinstance(
-            config.orchestrator.namespace, SingleNamespacePlacementStrategy
+            config.orchestrator.namespace_provider, SingleNamespaceStrategy
         )
-        assert config.orchestrator.namespace.provide_namespace("test") == "default"
+        assert config.orchestrator.namespace_provider.provide_namespace("test") == "default"
         assert config.orchestrator.client_conn_timeout_s == 300
         assert config.orchestrator.client_read_timeout_s == 300
         assert config.orchestrator.client_conn_pool_size == 100
@@ -201,9 +201,9 @@ class TestEnvironConfigFactory:
         assert config.orchestrator.auth_cert_path == "/cert_path"
         assert config.orchestrator.auth_cert_key_path == "/cert_key_path"
         assert isinstance(
-            config.orchestrator.namespace, SingleNamespacePlacementStrategy
+            config.orchestrator.namespace_provider, SingleNamespaceStrategy
         )
-        assert config.orchestrator.namespace.provide_namespace("test") == "other"
+        assert config.orchestrator.namespace_provider.provide_namespace("test") == "other"
         assert config.orchestrator.client_conn_timeout_s == 111
         assert config.orchestrator.client_read_timeout_s == 222
         assert config.orchestrator.client_conn_pool_size == 333

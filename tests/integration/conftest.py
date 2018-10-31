@@ -179,7 +179,7 @@ async def kube_client(kube_config):
         auth_type=config.auth_type,
         auth_cert_path=config.auth_cert_path,
         auth_cert_key_path=config.auth_cert_key_path,
-        namespace=config.namespace,
+        namespace=config.namespace_provider.provide_namespace("no-user"),
         conn_timeout_s=config.client_conn_timeout_s,
         read_timeout_s=config.client_read_timeout_s,
         conn_pool_size=config.client_conn_pool_size,
