@@ -42,9 +42,9 @@ def create_model_response_validator() -> t.Trafaret:
             "status": create_job_status_validator(),
             t.Key("http_url", optional=True): t.String,
             t.Key("ssh_server", optional=True): t.String,
-            t.Key("internal_orchestrator_info", optional=True): t.Dict({
-                    "hostname": t.String,
-            }),
+            t.Key("internal_orchestrator_info", optional=True): t.Dict(
+                {"hostname": t.String}
+            ),
         }
     )
 

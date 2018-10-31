@@ -202,7 +202,7 @@ class KubeOrchestrator(Orchestrator):
                 )
         job.status = convert_pod_status_to_job_status(status).status
         namespace = self._get_pod_namespace(descriptor)
-        job.set_internal_hostname(f'{job.id}.{namespace}')
+        job.set_internal_hostname(f"{job.id}.{namespace}")
         return job.status
 
     async def _get_pod_node_selector(self, container: Container) -> Dict[str, str]:
