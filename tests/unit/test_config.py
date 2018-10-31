@@ -112,7 +112,10 @@ class TestEnvironConfigFactory:
         assert isinstance(
             config.orchestrator.namespace_provider, SingleNamespaceStrategy
         )
-        assert config.orchestrator.namespace_provider.provide_namespace("test") == "default"
+        assert (
+            config.orchestrator.namespace_provider.provide_namespace("test")
+            == "default"
+        )
         assert config.orchestrator.client_conn_timeout_s == 300
         assert config.orchestrator.client_read_timeout_s == 300
         assert config.orchestrator.client_conn_pool_size == 100
@@ -203,7 +206,9 @@ class TestEnvironConfigFactory:
         assert isinstance(
             config.orchestrator.namespace_provider, SingleNamespaceStrategy
         )
-        assert config.orchestrator.namespace_provider.provide_namespace("test") == "other"
+        assert (
+            config.orchestrator.namespace_provider.provide_namespace("test") == "other"
+        )
         assert config.orchestrator.client_conn_timeout_s == 111
         assert config.orchestrator.client_read_timeout_s == 222
         assert config.orchestrator.client_conn_pool_size == 333

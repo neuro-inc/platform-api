@@ -14,10 +14,7 @@ from .config import (
     StorageType,
 )
 from .orchestrator import KubeConfig
-from .orchestrator.kube_orchestrator import (
-    KubeClientAuthType,
-    SingleNamespaceStrategy,
-)
+from .orchestrator.kube_orchestrator import KubeClientAuthType, SingleNamespaceStrategy
 from .redis import RedisConfig
 from .resource import GKEGPUModels, ResourcePoolType
 
