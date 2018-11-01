@@ -19,7 +19,11 @@ setup(
     url="https://github.com/neuromation/platform-api",
     packages=find_packages(),
     install_requires=install_requires,
-    entry_points={"console_scripts": ["platform-api=platform_api.api:main",
-                                      "api-ssh-server=platform_api.ssh.server:main"]},
+    entry_points={
+        "console_scripts": [
+            "platform-api=platform_api.api:main",
+            "api-ssh-server=platform_api.ssh.server:main",
+        ]
+    },
     zip_safe=False,
 )
