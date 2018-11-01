@@ -659,6 +659,7 @@ class TestJobs:
         assert response_payload == {
             "id": job_id,
             "owner": regular_user.name,
+            "internal_hostname": f"{job_id}.default",
             "status": "succeeded",
             "history": {
                 "status": "succeeded",
@@ -712,6 +713,7 @@ class TestJobs:
             "id": job_id,
             "owner": regular_user.name,
             "status": "failed",
+            "internal_hostname": f"{job_id}.default",
             "history": {
                 "status": "failed",
                 "reason": "Error",
