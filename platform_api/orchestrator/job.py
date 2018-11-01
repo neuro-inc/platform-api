@@ -299,7 +299,7 @@ class Job:
         return self._internal_orchestrator_info.job_hostname
 
     @internal_hostname.setter
-    def internal_hostname(self, value: str):
+    def internal_hostname(self, value: Optional[str]):
         self._internal_orchestrator_info.job_hostname = value
 
     def to_primitive(self) -> Dict:
