@@ -5,16 +5,20 @@ import json
 import logging
 import ssl
 from base64 import b64encode
+from contextlib import suppress
 from dataclasses import dataclass, field
 from pathlib import PurePath
 from types import TracebackType
-from typing import Any, ClassVar, Dict, List, Optional, Type
+from typing import Any, ClassVar, DefaultDict, Dict, List, Optional, Type
 from urllib.parse import urlsplit
 
 import aiohttp
+from aiohttp import WSMsgType
 from async_generator import asynccontextmanager
 from async_timeout import timeout
 from yarl import URL
+
+from platform_api.utils.stream import Stream
 
 from .job_request import (
     ContainerResources,
@@ -614,7 +618,7 @@ class ExecChannel(int, enum.Enum):
 class PodExec:
     def __init__(self, ws: aiohttp.ClientWebSocketResponse) -> None:
         self._ws = ws
-        self._channels: DefaultDict[ExecChannel, Stream] = defaultdict(Stream)
+        self._channels: DefaultDict[ExecChannel, Stream] = DefaultDict()
         loop = asyncio.get_event_loop()
         self._reader_task = loop.create_task(self._read_data)
 
@@ -633,10 +637,12 @@ class PodExec:
                 # an empty WS message. Have no idea how it can happen.
                 continue
             channel = ExecChannel(bdata[0])
-            bdata = bdata[1:]
+            await channel.put(bdata[1:])
 
     async def close(self):
         self._reader_task.cancel()
+        for stream in self._channels.values():
+            await stream.close()
         with suppress(asyncio.CancelledError):
             await self._reader_task
         await self._ws.close()
@@ -657,7 +663,10 @@ class PodExec:
         await self._ws.send_bytes(msg)
 
     async def read_stdout(self):
-        pass
+        return await self._channels[ExecChannel.STDOUT].get()
+
+    async def read_stderr(self):
+        return await self._channels[ExecChannel.STDERR].get()
 
 
 class KubeClientAuthType(str, enum.Enum):
