@@ -165,6 +165,11 @@ class JobStatusHistory:
 
 
 class Job:
+
+    @dataclass()
+    class InternalOrchestratorInfo:
+        job_hostname: Optional[str] = None
+
     def __init__(
         self,
         orchestrator_config: OrchestratorConfig,
@@ -196,7 +201,8 @@ class Job:
 
         self._owner = owner
 
-        self._internal_orchestrator_info: Dict[str, Any] = dict()
+        self._internal_orchestrator_info: Job.InternalOrchestratorInfo = \
+            Job.InternalOrchestratorInfo()
 
     @property
     def id(self):
@@ -292,12 +298,11 @@ class Job:
 
     @property
     def internal_hostname(self):
-        if "internal_hostname" in self._internal_orchestrator_info:
-            return self._internal_orchestrator_info["internal_hostname"]
+        return self._internal_orchestrator_info.job_hostname
 
     @internal_hostname.setter
     def internal_hostname(self, value: str):
-        self._internal_orchestrator_info["internal_hostname"] = value
+        self._internal_orchestrator_info.job_hostname = value
 
     def to_primitive(self) -> Dict:
         statuses = [item.to_primitive() for item in self._status_history.all]
@@ -311,7 +316,7 @@ class Job:
             "is_deleted": self.is_deleted,
             "finished_at": self.finished_at_str,
         }
-        if self.internal_hostname is not None:
+        if self.internal_hostname:
             result["internal_hostname"] = self.internal_hostname
         return result
 

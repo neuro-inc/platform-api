@@ -83,7 +83,7 @@ class ModelsHandler:
             payload["http_url"] = job.http_url
         if container.has_ssh_server_exposed:
             payload["ssh_server"] = job.ssh_server
-        if job.internal_hostname is not None:
+        if job.internal_hostname:
             payload["internal_hostname"] = job.internal_hostname
         return payload
 
