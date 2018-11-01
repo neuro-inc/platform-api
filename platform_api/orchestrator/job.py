@@ -328,13 +328,16 @@ class Job:
         )
         is_deleted = payload.get("is_deleted", False)
         owner = payload.get("owner", "")
-        return cls(
+        job = cls(
             orchestrator_config=orchestrator_config,
             job_request=job_request,
             status_history=status_history,
             is_deleted=is_deleted,
             owner=owner,
+
         )
+        job.internal_hostname = payload.get("internal_hostname", None)
+        return job
 
     @staticmethod
     def create_status_history_from_primitive(

@@ -429,6 +429,51 @@ class TestKubeOrchestrator:
         finally:
             await job.delete()
 
+    @pytest.mark.asyncio
+    async def test_job_check_dns_hostname(
+        self, kube_config, kube_orchestrator, kube_ingress_ip
+    ):
+        def create_server_job():
+            server_cont = Container(
+                image="python",
+                command="python -m http.server 80",
+                resources=ContainerResources(cpu=0.1, memory_mb=128),
+                http_server=ContainerHTTPServer(port=80),
+            )
+            return MyJob(
+                orchestrator=kube_orchestrator,
+                job_request=JobRequest.create(server_cont)
+            )
+        def create_client_job(server_hostname: str):
+            client_cont = Container(
+                image="ubuntu",
+                command=f"curl --silent --fail http://{server_hostname}/",
+                resources=ContainerResources(cpu=0.1, memory_mb=128),
+            )
+            return MyJob(
+                orchestrator=kube_orchestrator,
+                job_request=JobRequest.create(client_cont)
+            )
+
+        server_job = create_server_job()
+        client_job = None
+        try:
+            server_status = await server_job.start()
+            assert server_status == JobStatus.PENDING
+            server_hostname = server_job.internal_hostname
+            await self._wait_for_job_service(
+                kube_ingress_ip, kube_config.jobs_ingress_domain_name, server_job.id
+            )
+            client_job = create_client_job(server_hostname)
+            client_status = await client_job.start()
+            assert client_status == JobStatus.PENDING
+            assert self.wait_for_success(job=client_job)
+
+        finally:
+            await server_job.delete()
+            if client_job is not None:
+                await client_job.delete()
+
     async def _assert_no_such_ingress_rule(
         self, kube_client, ingress_name, host, timeout_s: int = 1, interval_s: int = 1
     ):
@@ -442,7 +487,6 @@ class TestKubeOrchestrator:
                     await asyncio.sleep(interval_s)
         except asyncio.TimeoutError:
             pytest.fail("Ingress still exists")
-
 
 @pytest.fixture
 async def delete_pod_later(kube_client):

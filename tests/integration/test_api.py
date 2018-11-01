@@ -90,6 +90,14 @@ class JobsClient:
             result = await response.json()
         return result["jobs"]
 
+    async def get_job_by_id(self, job_id: str):
+        url = self._api_config.generate_job_url(job_id)
+        async with self._client.get(url, headers=self._headers) as response:
+            response_text = await response.text()
+            assert response.status == HTTPOk.status_code, response_text
+            result = await response.json()
+        return result
+
     async def long_polling_by_job_id(
         self, job_id: str, status: str, interval_s: int = 2, max_attempts: int = 60
     ):
@@ -162,11 +170,15 @@ class TestModels:
         ) as response:
             assert response.status == HTTPAccepted.status_code
             result = await response.json()
-            assert result["status"] in ["pending"]
             job_id = result["job_id"]
+            assert result["status"] in ["pending"]
             expected_url = f"http://{job_id}.jobs.platform.neuromation.io"
             assert result["http_url"] == expected_url
-            assert result["internal_hostname"] == f"{job_id}.default"
+            expected_internal_hostname = f"{job_id}.default"
+            assert result["internal_hostname"] == expected_internal_hostname
+
+        retrieved_job = await jobs_client.get_job_by_id(job_id=job_id)
+        assert retrieved_job["internal_hostname"] == expected_internal_hostname
 
         await jobs_client.long_polling_by_job_id(job_id=job_id, status="succeeded")
         await jobs_client.delete_job(job_id=job_id)
