@@ -419,12 +419,12 @@ class TestJobs:
 
     @pytest.mark.asyncio
     async def test_create_job_check_internal_hostname(
-            self, api, client, model_request_factory, jobs_client, regular_user
+        self, api, client, model_request_factory, jobs_client, regular_user
     ):
         url = api.model_base_url
         model_request = model_request_factory(regular_user.name)
         async with client.post(
-                url, headers=regular_user.headers, json=model_request
+            url, headers=regular_user.headers, json=model_request
         ) as response:
             assert response.status == HTTPAccepted.status_code
             result = await response.json()

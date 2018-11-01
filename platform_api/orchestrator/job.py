@@ -165,7 +165,6 @@ class JobStatusHistory:
 
 
 class Job:
-
     @dataclass()
     class InternalOrchestratorInfo:
         job_hostname: Optional[str] = None
@@ -201,8 +200,7 @@ class Job:
 
         self._owner = owner
 
-        self._internal_orchestrator_info: Job.InternalOrchestratorInfo = \
-            Job.InternalOrchestratorInfo()
+        self._internal_orchestrator_info: Job.InternalOrchestratorInfo = Job.InternalOrchestratorInfo()
 
     @property
     def id(self):
