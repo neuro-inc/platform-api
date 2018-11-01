@@ -442,8 +442,9 @@ class TestKubeOrchestrator:
             )
             return MyJob(
                 orchestrator=kube_orchestrator,
-                job_request=JobRequest.create(server_cont)
+                job_request=JobRequest.create(server_cont),
             )
+
         def create_client_job(server_hostname: str):
             client_cont = Container(
                 image="ubuntu",
@@ -452,7 +453,7 @@ class TestKubeOrchestrator:
             )
             return MyJob(
                 orchestrator=kube_orchestrator,
-                job_request=JobRequest.create(client_cont)
+                job_request=JobRequest.create(client_cont),
             )
 
         server_job = create_server_job()
@@ -487,6 +488,7 @@ class TestKubeOrchestrator:
                     await asyncio.sleep(interval_s)
         except asyncio.TimeoutError:
             pytest.fail("Ingress still exists")
+
 
 @pytest.fixture
 async def delete_pod_later(kube_client):

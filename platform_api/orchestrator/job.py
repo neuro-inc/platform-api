@@ -334,7 +334,6 @@ class Job:
             status_history=status_history,
             is_deleted=is_deleted,
             owner=owner,
-
         )
         job.internal_hostname = payload.get("internal_hostname", None)
         return job

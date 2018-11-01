@@ -629,7 +629,7 @@ class TestJobs:
             assert response_payload == {
                 "id": mock.ANY,
                 "owner": regular_user.name,
-                "internal_hostname": f'{job_id}.default',
+                "internal_hostname": f"{job_id}.default",
                 "status": "pending",
                 "history": {
                     "status": "pending",
@@ -795,7 +795,7 @@ class TestJobs:
             assert response_payload == {
                 "id": mock.ANY,
                 "owner": regular_user.name,
-                "internal_hostname": f'{job_id}.default',
+                "internal_hostname": f"{job_id}.default",
                 "status": "pending",
                 "history": {
                     "status": "pending",
