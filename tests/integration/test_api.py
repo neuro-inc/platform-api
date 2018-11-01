@@ -90,7 +90,7 @@ class JobsClient:
             result = await response.json()
         return result["jobs"]
 
-    async def long_pooling_by_job_id(
+    async def long_polling_by_job_id(
         self, job_id: str, status: str, interval_s: int = 2, max_attempts: int = 60
     ):
         url = self._api_config.generate_job_url(job_id)
@@ -168,7 +168,7 @@ class TestModels:
             assert result["http_url"] == expected_url
             assert result["internal_hostname"] == f"{job_id}.default"
 
-        await jobs_client.long_pooling_by_job_id(job_id=job_id, status="succeeded")
+        await jobs_client.long_polling_by_job_id(job_id=job_id, status="succeeded")
         await jobs_client.delete_job(job_id=job_id)
 
     @pytest.mark.asyncio
@@ -187,7 +187,7 @@ class TestModels:
             expected_url = f"ssh://{job_id}.ssh.platform.neuromation.io:22"
             assert result["ssh_server"] == expected_url
 
-        await jobs_client.long_pooling_by_job_id(job_id=job_id, status="succeeded")
+        await jobs_client.long_polling_by_job_id(job_id=job_id, status="succeeded")
         await jobs_client.delete_job(job_id=job_id)
 
     @pytest.mark.asyncio
@@ -207,7 +207,7 @@ class TestModels:
             expected_url = f"ssh://{job_id}.ssh.platform.neuromation.io:22"
             assert result["ssh_server"] == expected_url
 
-        await jobs_client.long_pooling_by_job_id(job_id=job_id, status="succeeded")
+        await jobs_client.long_polling_by_job_id(job_id=job_id, status="succeeded")
         await jobs_client.delete_job(job_id=job_id)
 
     @pytest.mark.asyncio
@@ -286,7 +286,7 @@ class TestModels:
             result = await response.json()
             assert result["status"] in ["pending"]
             job_id = result["job_id"]
-        await jobs_client.long_pooling_by_job_id(job_id=job_id, status="succeeded")
+        await jobs_client.long_polling_by_job_id(job_id=job_id, status="succeeded")
         await jobs_client.delete_job(job_id=job_id)
 
     @pytest.mark.asyncio
@@ -319,7 +319,7 @@ class TestModels:
             assert response.status == HTTPAccepted.status_code
             data = await response.json()
             job_id = data["job_id"]
-        await jobs_client.long_pooling_by_job_id(job_id=job_id, status="failed")
+        await jobs_client.long_polling_by_job_id(job_id=job_id, status="failed")
 
     @pytest.mark.asyncio
     async def test_forbidden_storage_uris(self, api, client, jobs_client, regular_user):
@@ -508,7 +508,7 @@ class TestJobs:
                 result = await response.json()
                 assert result["status"] in ["pending"]
                 job_id = result["job_id"]
-                await jobs_client.long_pooling_by_job_id(
+                await jobs_client.long_polling_by_job_id(
                     job_id=job_id, status="succeeded"
                 )
                 jobs_ids.append(job_id)
@@ -531,7 +531,7 @@ class TestJobs:
             result = await response.json()
             assert result["status"] in ["pending"]
             job_id = result["job_id"]
-            await jobs_client.long_pooling_by_job_id(job_id=job_id, status="succeeded")
+            await jobs_client.long_polling_by_job_id(job_id=job_id, status="succeeded")
         await jobs_client.delete_job(job_id=job_id)
 
         jobs = await jobs_client.get_all_jobs()
@@ -640,7 +640,7 @@ class TestJobs:
                 },
             }
 
-        response_payload = await jobs_client.long_pooling_by_job_id(
+        response_payload = await jobs_client.long_polling_by_job_id(
             job_id=job_id, status="succeeded"
         )
 
@@ -692,7 +692,7 @@ class TestJobs:
             assert result["status"] == "pending"
             job_id = result["job_id"]
 
-        response_payload = await jobs_client.long_pooling_by_job_id(
+        response_payload = await jobs_client.long_polling_by_job_id(
             job_id=job_id, status="failed"
         )
 
