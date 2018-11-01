@@ -167,13 +167,17 @@ class KubeOrchestrator(Orchestrator):
         # TODO (A Danshyn 05/21/18): think of the namespace life-time;
         # should we ensure it does exist before continuing
 
+        user_name = config.orphaned_job_owner
+        namespace_provider = config.namespace_provider
+        client_namespace = namespace_provider.provide_namespace(user_name)
+
         self._client = KubeClient(
             base_url=config.endpoint_url,
             cert_authority_path=config.cert_authority_path,
             auth_type=config.auth_type,
             auth_cert_path=config.auth_cert_path,
             auth_cert_key_path=config.auth_cert_key_path,
-            namespace=config.namespace_provider.provide_namespace("default-user"),
+            namespace=client_namespace,
             conn_timeout_s=config.client_conn_timeout_s,
             read_timeout_s=config.client_read_timeout_s,
             conn_pool_size=config.client_conn_pool_size,
