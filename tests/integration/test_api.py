@@ -166,23 +166,6 @@ class TestModels:
             job_id = result["job_id"]
             expected_url = f"http://{job_id}.jobs.platform.neuromation.io"
             assert result["http_url"] == expected_url
-
-        await jobs_client.long_pooling_by_job_id(job_id=job_id, status="succeeded")
-        await jobs_client.delete_job(job_id=job_id)
-
-    @pytest.mark.asyncio
-    async def test_create_model_check_internal_hostname(
-        self, api, client, model_train, jobs_client, regular_user
-    ):
-        url = api.model_base_url
-        async with client.post(
-            url, headers=regular_user.headers, json=model_train
-        ) as response:
-            assert response.status == HTTPAccepted.status_code
-            result = await response.json()
-            assert result["status"] in ["pending"]
-            job_id = result["job_id"]
-
             assert result["internal_hostname"] == f"{job_id}.default"
 
         await jobs_client.long_pooling_by_job_id(job_id=job_id, status="succeeded")
@@ -630,9 +613,11 @@ class TestJobs:
             response_text = await response.text()
             assert response.status == HTTPAccepted.status_code, response_text
             response_payload = await response.json()
+            job_id = response_payload["id"]
             assert response_payload == {
                 "id": mock.ANY,
                 "owner": regular_user.name,
+                "internal_hostname": f'{job_id}.default',
                 "status": "pending",
                 "history": {
                     "status": "pending",
@@ -654,7 +639,6 @@ class TestJobs:
                     ],
                 },
             }
-            job_id = response_payload["id"]
 
         response_payload = await jobs_client.long_pooling_by_job_id(
             job_id=job_id, status="succeeded"
@@ -795,9 +779,11 @@ class TestJobs:
             response_text = await response.text()
             assert response.status == HTTPAccepted.status_code, response_text
             response_payload = await response.json()
+            job_id = response_payload["id"]
             assert response_payload == {
                 "id": mock.ANY,
                 "owner": regular_user.name,
+                "internal_hostname": f'{job_id}.default',
                 "status": "pending",
                 "history": {
                     "status": "pending",
@@ -818,6 +804,5 @@ class TestJobs:
                     "volumes": [],
                 },
             }
-            job_id = response_payload["id"]
 
         await kube_client.wait_pod_scheduled(job_id, kube_node_gpu)

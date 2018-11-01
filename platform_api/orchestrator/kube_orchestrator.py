@@ -201,8 +201,13 @@ class KubeOrchestrator(Orchestrator):
                     ),
                 )
         job.status = convert_pod_status_to_job_status(status).status
-        job.internal_hostname = f"{job.id}.{self._get_pod_namespace(descriptor)}"
+        job.internal_hostname = self._get_service_internal_hostname(job.id, descriptor)
         return job.status
+
+    def _get_service_internal_hostname(self,
+                                       service_name: str,
+                                       pod_descriptor: PodDescriptor) -> str:
+        return f"{service_name}.{self._get_pod_namespace(pod_descriptor)}"
 
     async def _get_pod_node_selector(self, container: Container) -> Dict[str, str]:
         selector: Dict[str, str] = {}
