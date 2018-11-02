@@ -436,7 +436,9 @@ class TestJobStatusItemFactory:
         }
         pod_status = PodStatus.from_primitive(payload)
         job_status_item = JobStatusItemFactory(pod_status).create()
-        assert job_status_item == JobStatusItem.create(JobStatus.PENDING)
+        assert job_status_item == JobStatusItem.create(
+            JobStatus.PENDING, reason="ContainerCreating"
+        )
 
     def test_status_pending_failure(self):
         payload = {
