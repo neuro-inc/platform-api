@@ -53,9 +53,7 @@ class JobStatusItemFactory:
         return JobStatus.PENDING
 
     def _parse_reason_waiting(self) -> Optional[str]:
-        if self._pod_status.container_status.is_waiting:
-            return self._pod_status.container_status.reason
-        return None
+        return self._pod_status.container_status.reason
 
     def _parse_reason(self) -> Optional[str]:
         if self._status == JobStatus.FAILED:
