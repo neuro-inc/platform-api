@@ -243,6 +243,30 @@ class TestKubeOrchestrator:
             await job.delete()
 
     @pytest.mark.asyncio
+    async def test_job_bunch_of_cpu(self, kube_orchestrator):
+        command = 'bash -c "for i in {100..1}; do echo $i; done; false"'
+        container = Container(
+            image="ubuntu",
+            command=command,
+            resources=ContainerResources(cpu=100, memory_mb=16536),
+        )
+        job = MyJob(
+            orchestrator=kube_orchestrator, job_request=JobRequest.create(container)
+        )
+        try:
+            status = await job.start()
+            assert status == JobStatus.PENDING
+
+            await self.wait_for_completion(job, max_attempts=10)
+
+            status_item = await kube_orchestrator.get_job_status(job.id)
+            assert status_item == JobStatusItem.create(
+                JobStatus.FAILED, reason="Doesn't have resources to fulfill request."
+            )
+        finally:
+            await job.delete()
+
+    @pytest.mark.asyncio
     async def test_volumes(self, kube_config, kube_orchestrator):
         await self._test_volumes(kube_config, kube_orchestrator)
 

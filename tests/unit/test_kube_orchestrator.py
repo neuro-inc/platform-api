@@ -1,5 +1,6 @@
 from pathlib import PurePath
 from unittest import mock
+from unittest.mock import MagicMock
 
 import aiohttp
 import pytest
@@ -29,7 +30,7 @@ from platform_api.orchestrator.kube_orchestrator import (
     SharedMemoryVolume,
     Volume,
     VolumeMount,
-)
+    KubeConfig, KubeOrchestrator)
 from platform_api.orchestrator.logs import FilteredStreamWrapper
 
 
