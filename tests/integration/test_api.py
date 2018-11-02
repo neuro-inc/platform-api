@@ -101,15 +101,11 @@ class JobsClient:
     async def long_polling_by_job_id(
         self, job_id: str, status: str, interval_s: int = 2, max_attempts: int = 60
     ):
-        url = self._api_config.generate_job_url(job_id)
         for _ in range(max_attempts):
-            async with self._client.get(url, headers=self._headers) as response:
-                response_text = await response.text()
-                assert response.status == HTTPOk.status_code, response_text
-                result = await response.json()
-                if result["status"] == status:
-                    return result
-                await asyncio.sleep(interval_s)
+            response = await self.get_job_by_id(job_id)
+            if response["status"] == status:
+                return response
+            await asyncio.sleep(interval_s)
         else:
             raise RuntimeError("too long")
 
@@ -411,20 +407,6 @@ class TestJobs:
     async def test_get_all_jobs_clear(self, jobs_client):
         jobs = await jobs_client.get_all_jobs()
         assert jobs == []
-
-    @pytest.mark.asyncio
-    async def test_create_job_check_internal_hostname(
-        self, api, client, model_request_factory, jobs_client, regular_user
-    ):
-        url = api.model_base_url
-        model_request = model_request_factory(regular_user.name)
-        async with client.post(
-            url, headers=regular_user.headers, json=model_request
-        ) as response:
-            assert response.status == HTTPAccepted.status_code
-            result = await response.json()
-            job_id = result["job_id"]
-            assert result["internal_hostname"] == f"{job_id}.default"
 
     @pytest.mark.asyncio
     async def test_get_all_jobs_shared(
