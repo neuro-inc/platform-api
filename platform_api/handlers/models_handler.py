@@ -42,6 +42,7 @@ def create_model_response_validator() -> t.Trafaret:
             "status": create_job_status_validator(),
             t.Key("http_url", optional=True): t.String,
             t.Key("ssh_server", optional=True): t.String,
+            t.Key("internal_hostname", optional=True): t.String,
         }
     )
 
@@ -82,6 +83,8 @@ class ModelsHandler:
             payload["http_url"] = job.http_url
         if container.has_ssh_server_exposed:
             payload["ssh_server"] = job.ssh_server
+        if job.internal_hostname:
+            payload["internal_hostname"] = job.internal_hostname
         return payload
 
     async def handle_post(self, request):

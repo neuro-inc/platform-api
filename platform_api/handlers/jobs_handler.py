@@ -56,6 +56,7 @@ def create_job_response_validator() -> t.Trafaret:
             t.Key("ssh_server", optional=True): t.String,
             "history": create_job_history_validator(),
             "container": create_container_response_validator(),
+            t.Key("internal_hostname", optional=True): t.String,
         }
     )
 
@@ -134,6 +135,8 @@ def convert_job_to_job_response(
         response_payload["http_url"] = job.http_url
     if job.has_ssh_server_exposed:
         response_payload["ssh_server"] = job.ssh_server
+    if job.internal_hostname:
+        response_payload["internal_hostname"] = job.internal_hostname
     if history.started_at:
         response_payload["history"]["started_at"] = history.started_at_str
     if history.is_finished:
