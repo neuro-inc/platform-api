@@ -440,6 +440,12 @@ class TestJobStatusItemFactory:
             JobStatus.PENDING, reason="ContainerCreating"
         )
 
+    def test_status_pending_waiting_no_reason(self):
+        payload = {"phase": "Pending", "containerStatuses": [{}]}
+        pod_status = PodStatus.from_primitive(payload)
+        job_status_item = JobStatusItemFactory(pod_status).create()
+        assert job_status_item == JobStatusItem.create(JobStatus.PENDING)
+
     def test_status_pending_failure(self):
         payload = {
             "phase": "Pending",
