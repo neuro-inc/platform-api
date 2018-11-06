@@ -77,11 +77,9 @@ class ModelsHandler:
         gpu_models = await self._orchestrator.get_available_gpu_models()
         return create_model_request_validator(allowed_gpu_models=gpu_models)
 
-    async def _create_job(self,
-                          user: User,
-                          container: Container,
-                          job_name: Optional[str] = None,
-                          ) -> Dict[str, Any]:
+    async def _create_job(
+        self, user: User, container: Container, job_name: Optional[str] = None
+    ) -> Dict[str, Any]:
         job_request = JobRequest.create(container, job_name)
         job, status = await self._jobs_service.create_job(job_request, user=user)
         payload = {"job_id": job.id, "status": status.value}
