@@ -216,11 +216,14 @@ class Container:
 class JobRequest:
     job_id: str
     container: Container
+    job_name: Optional[str] = None
 
     @classmethod
-    def create(cls, container) -> "JobRequest":
-        job_id = f"job-{uuid.uuid4()}"
-        return cls(job_id, container)  # type: ignore
+    def create(cls, container: Container, job_name: Optional[str] = None) -> "JobRequest":
+        return cls(job_id=f"job-{uuid.uuid4()}",
+                   job_name=job_name,
+                   container=container,
+                   )  # type: ignore
 
     @classmethod
     def from_primitive(cls, payload: Dict) -> "JobRequest":
@@ -229,7 +232,13 @@ class JobRequest:
         return cls(**kwargs)  # type: ignore
 
     def to_primitive(self) -> Dict:
-        return {"job_id": self.job_id, "container": self.container.to_primitive()}
+        result = {
+            "job_id": self.job_id,
+            "container": self.container.to_primitive(),
+        }
+        if self.job_name:
+            result["job_name"] = self.job_name
+        return result
 
 
 class JobStatus(str, enum.Enum):

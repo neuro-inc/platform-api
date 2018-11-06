@@ -334,6 +334,7 @@ class TestModelRequest:
 def job_request_payload():
     return {
         "job_id": "testjob",
+        "job_name": "test-job",
         "container": {
             "image": "testimage",
             "resources": {
@@ -467,6 +468,7 @@ class TestJob:
     def test_from_primitive(self, mock_orchestrator, job_request_payload):
         payload = {
             "id": "testjob",
+            "name": "test-job",
             "owner": "testuser",
             "request": job_request_payload,
             "status": "succeeded",
@@ -475,6 +477,7 @@ class TestJob:
         }
         job = Job.from_primitive(mock_orchestrator.config, payload)
         assert job.id == "testjob"
+        assert job.name == "test-job"
         assert job.status == JobStatus.SUCCEEDED
         assert job.is_deleted
         assert job.finished_at
@@ -484,6 +487,7 @@ class TestJob:
         finished_at_str = datetime.now(timezone.utc).isoformat()
         payload = {
             "id": "testjob",
+            "name": "test-job",
             "request": job_request_payload,
             "status": "succeeded",
             "is_deleted": True,
@@ -525,7 +529,7 @@ class TestJobRequest:
                 )
             ],
         )
-        request = JobRequest(job_id="testjob", container=container)
+        request = JobRequest(job_id="testjob", job_name="test-job", container=container)
         assert request.to_primitive() == job_request_payload
 
     def test_to_primitive_with_ssh(self, job_request_payload):
@@ -544,7 +548,7 @@ class TestJobRequest:
             ],
             ssh_server=ContainerSSHServer(678),
         )
-        request = JobRequest(job_id="testjob", container=container)
+        request = JobRequest(job_id="testjob", job_name="test-job", container=container)
         assert request.to_primitive() == job_request_payload
 
     def test_from_primitive(self, job_request_payload):

@@ -207,6 +207,10 @@ class Job:
         return self._job_request.job_id
 
     @property
+    def name(self):
+        return self._job_request.job_name
+
+    @property
     def owner(self) -> str:
         return self._owner or self._orchestrator_config.orphaned_job_owner
 
@@ -314,6 +318,8 @@ class Job:
             "is_deleted": self.is_deleted,
             "finished_at": self.finished_at_str,
         }
+        if self.name:
+            result["name"] = self.name
         if self.internal_hostname:
             result["internal_hostname"] = self.internal_hostname
         return result
