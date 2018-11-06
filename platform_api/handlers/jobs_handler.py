@@ -35,7 +35,8 @@ def create_job_request_validator(
         {
             "container": create_container_request_validator(
                 allow_volumes=True, allowed_gpu_models=allowed_gpu_models
-            )
+            ),
+            t.Key("name", optional=True): t.String,
         }
     )
 
@@ -57,6 +58,7 @@ def create_job_response_validator() -> t.Trafaret:
             "history": create_job_history_validator(),
             "container": create_container_response_validator(),
             t.Key("internal_hostname", optional=True): t.String,
+            t.Key("name", optional=True): t.String,
         }
     )
 
