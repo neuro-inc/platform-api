@@ -1,5 +1,5 @@
 import logging
-from typing import Any, Dict, Sequence, Optional
+from typing import Any, Dict, Optional, Sequence
 
 import aiohttp.web
 import trafaret as t
