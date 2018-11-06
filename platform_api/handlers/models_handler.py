@@ -110,7 +110,7 @@ class ModelsHandler:
         logger.info("Checking whether %r has %r", user, permissions)
         await check_permission(request, permissions[0].action, permissions)
 
-        job_name = request_payload["name"]
+        job_name = request_payload.get("name", None)
         response_payload = await self._create_job(user, container, job_name)
         self._model_response_validator.check(response_payload)
 

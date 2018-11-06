@@ -217,7 +217,8 @@ class JobsHandler:
         logger.info("Checking whether %r has %r", user, permissions)
         await check_permission(request, permissions[0].action, permissions)
 
-        job_request = JobRequest.create(container, request_payload["name"])
+        job_name = request_payload.get("name", None)
+        job_request = JobRequest.create(container, job_name)
         job, _ = await self._jobs_service.create_job(job_request, user=user)
         response_payload = convert_job_to_job_response(job, self._storage_config)
         self._job_response_validator.check(response_payload)
