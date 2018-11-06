@@ -833,18 +833,16 @@ class KubeClient:
             )
             self._check_status_payload(payload)
 
-    async def get_pod_events(self, pod_id: str, namespace: str)\
-            -> Optional[List[KubernetesEvent]]:
+    async def get_pod_events(
+        self, pod_id: str, namespace: str
+    ) -> Optional[List[KubernetesEvent]]:
         pod_event_selector = f"involvedObject.kind=Pod,involvedObject.name={pod_id}"
-        k8s_event_rest_url = f"{self._api_v1_url}/namespaces/{namespace}"
+        k8s_event_rest_url = f"{self._api_v1_url}/namespaces/{namespace}/events"
         payload = await self._request(
-            method="GET",
-            url=f"{k8s_event_rest_url}?fieldSelector={pod_event_selector}",
+            method="GET", url=f"{k8s_event_rest_url}?fieldSelector={pod_event_selector}"
         )
         if payload and "items" in payload:
-            return [
-                KubernetesEvent(item) for item in payload["items"]
-            ]
+            return [KubernetesEvent(item) for item in payload["items"]]
         return None
 
     async def wait_pod_is_running(

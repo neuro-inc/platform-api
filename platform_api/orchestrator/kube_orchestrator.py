@@ -238,18 +238,29 @@ class KubeOrchestrator(Orchestrator):
         # Pod in pending state, and no container information available
         # possible we are observing the case when Container requested
         # too much resources, check events for NotTriggerScaleUp event
-        if job_status.status == JobStatus.PENDING \
-                and not status.is_container_status_available:
-            pod_events = await self._client.get_pod_events(pod_id, self._get_pod_namespace(None))
+        if (
+            job_status.status == JobStatus.PENDING
+            and not status.is_container_status_available
+        ):
+            pod_events = await self._client.get_pod_events(
+                pod_id, self._get_pod_namespace(None)
+            )
             if pod_events:
-                event = any(event.reason == "NotTriggerScaleUp" for event in pod_events)
+                # Handle clusters with autoscaler and without it
+                event = any(
+                    event.reason == "NotTriggerScaleUp"
+                    or event.reason == "FailedScheduling"
+                    for event in pod_events
+                )
                 if event:
-                    logger.info(f"Found pod that requested too much resources. ID={job_id}")
+                    logger.info(
+                        f"Found pod that requested too much resources. ID={job_id}"
+                    )
                     # Update the reason field of the job to Too Much Requested
                     job_status = JobStatusItem.create(
                         job_status.status,
                         transition_time=job_status.transition_time,
-                        reason="Doesn't have resources to fulfill request.",
+                        reason="Cluster doesn't have resources to fulfill request.",
                         description=job_status.description,
                     )
 
