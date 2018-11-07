@@ -52,9 +52,15 @@ class JobStatusItemFactory:
                 return JobStatus.FAILED
         return JobStatus.PENDING
 
+    def _parse_reason_waiting(self) -> Optional[str]:
+        return self._pod_status.container_status.reason
+
     def _parse_reason(self) -> Optional[str]:
         if self._status == JobStatus.FAILED:
             return self._container_status.reason
+        if self._status == JobStatus.PENDING:
+            return self._parse_reason_waiting()
+
         return None
 
     def _compose_description(self) -> Optional[str]:
