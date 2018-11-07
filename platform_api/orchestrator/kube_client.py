@@ -842,7 +842,7 @@ class KubeClient:
         }
         k8s_event_rest_url = f"{self._api_v1_url}/namespaces/{namespace}/events"
         payload = await self._request(
-            method="GET", url=f"{k8s_event_rest_url}", params=event_filter_params
+            method="GET", url=k8s_event_rest_url, params=event_filter_params
         )
         if payload and "items" in payload:
             return [KubernetesEvent(item) for item in payload["items"]]
