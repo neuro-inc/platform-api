@@ -554,6 +554,7 @@ class TestJobRequest:
     def test_from_primitive(self, job_request_payload):
         request = JobRequest.from_primitive(job_request_payload)
         assert request.job_id == "testjob"
+        assert request.job_name == "test-job"
         expected_container = Container(
             image="testimage",
             env={"testvar": "testval"},
@@ -572,6 +573,7 @@ class TestJobRequest:
         job_request_payload["container"]["ssh_server"] = {"port": 678}
         request = JobRequest.from_primitive(job_request_payload)
         assert request.job_id == "testjob"
+        assert request.job_name == "test-job"
         expected_container = Container(
             image="testimage",
             env={"testvar": "testval"},
@@ -590,6 +592,7 @@ class TestJobRequest:
     def test_from_primitive_with_shm(self, job_request_payload_with_shm):
         request = JobRequest.from_primitive(job_request_payload_with_shm)
         assert request.job_id == "testjob"
+        assert request.job_name == "test-job"
         expected_container = Container(
             image="testimage",
             env={"testvar": "testval"},
