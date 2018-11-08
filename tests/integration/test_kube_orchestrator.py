@@ -2,6 +2,7 @@ import asyncio
 import io
 import uuid
 from pathlib import PurePath
+from typing import Optional, Tuple
 
 import aiohttp
 import pytest
@@ -103,6 +104,28 @@ class TestKubeOrchestrator:
     async def wait_for_success(self, *args, **kwargs):
         status = await self.wait_for_completion(*args, **kwargs)
         assert status == JobStatus.SUCCEEDED
+
+    async def wait_for_job(
+        self, job: Job, interval_s: float = 1.0, max_attempts: int = 30
+    ) -> Tuple[JobStatus, Optional[JobStatus]]:
+        """
+        Function to wait for a job to either sit in current state,
+        or transfer to another stage. Function never fails.
+
+        :param job:
+        :param interval_s:
+        :param max_attempts:
+        :return:
+        """
+        initial_status = await job.query_status()
+        status = None
+        for _ in range(max_attempts):
+            status = await job.query_status()
+            if status != initial_status:
+                break
+            else:
+                await asyncio.sleep(interval_s)
+        return initial_status, status
 
     @pytest.mark.asyncio
     async def test_start_job_happy_path(self, job_nginx, kube_orchestrator):
@@ -238,6 +261,31 @@ class TestKubeOrchestrator:
             expected_description += "\nExit code: 1"
             assert status_item == JobStatusItem.create(
                 JobStatus.FAILED, reason="Error", description=expected_description
+            )
+        finally:
+            await job.delete()
+
+    @pytest.mark.asyncio
+    async def test_job_bunch_of_cpu(self, kube_orchestrator):
+        command = 'bash -c "for i in {100..1}; do echo $i; done; false"'
+        container = Container(
+            image="ubuntu",
+            command=command,
+            resources=ContainerResources(cpu=100, memory_mb=16536),
+        )
+        job = MyJob(
+            orchestrator=kube_orchestrator, job_request=JobRequest.create(container)
+        )
+        try:
+            status = await job.start()
+            assert status == JobStatus.PENDING
+
+            _, _ = await self.wait_for_job(job, max_attempts=10)
+
+            status_item = await kube_orchestrator.get_job_status(job.id)
+            assert status_item == JobStatusItem.create(
+                JobStatus.PENDING,
+                reason="Cluster doesn't have resources to fulfill request.",
             )
         finally:
             await job.delete()

@@ -578,6 +578,15 @@ class ContainerStatus:
         return self.is_waiting and self.reason in (None, "ContainerCreating")
 
 
+class KubernetesEvent:
+    def __init__(self, payload: Dict[str, Any]) -> None:
+        self._payload = payload or {}
+
+    @property
+    def reason(self) -> Optional[str]:
+        return self._payload.get("reason", None)
+
+
 class PodStatus:
     def __init__(self, payload):
         self._payload = payload
@@ -596,6 +605,10 @@ class PodStatus:
     @property
     def is_container_creating(self) -> bool:
         return self.container_status.is_creating
+
+    @property
+    def is_container_status_available(self) -> bool:
+        return "containerStatuses" in self._payload
 
     @classmethod
     def from_primitive(cls, payload):
@@ -819,6 +832,21 @@ class KubeClient:
                 json=secret.to_primitive(),
             )
             self._check_status_payload(payload)
+
+    async def get_pod_events(
+        self, pod_id: str, namespace: str
+    ) -> Optional[List[KubernetesEvent]]:
+        event_filter_params = {
+            "involvedObject.kind": "Pod",
+            "involvedObject.name": pod_id,
+        }
+        k8s_event_rest_url = f"{self._api_v1_url}/namespaces/{namespace}/events"
+        payload = await self._request(
+            method="GET", url=k8s_event_rest_url, params=event_filter_params
+        )
+        if payload and "items" in payload:
+            return [KubernetesEvent(item) for item in payload["items"]]
+        return None
 
     async def wait_pod_is_running(
         self, pod_name: str, timeout_s: float = 10.0 * 60, interval_s: float = 1.0
