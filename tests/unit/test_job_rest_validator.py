@@ -21,7 +21,7 @@ class TestJobRequestValidator:
             "ssh": {"port": 666},
         }
         validator = create_job_request_validator(allowed_gpu_models=[])
-        assert validator.check({"container": container, "name": "test-job"})
+        assert validator.check({"container": container, "description": "test-job"})
 
 
 class TestJobResponseValidator:
@@ -35,7 +35,7 @@ class TestJobResponseValidator:
             "id": "test-job-id",
             "owner": "tests",
             "status": "pending",
-            "name": "test-job",
+            "description": "test-job",
             "history": {
                 "status": "pending",
                 "reason": None,

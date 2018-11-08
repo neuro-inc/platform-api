@@ -31,7 +31,7 @@ def create_model_request_validator(
             # and validation here at some point
             "dataset_storage_uri": t.String,
             "result_storage_uri": t.String,
-            t.Key("name", optional=True): t.String,
+            t.Key("description", optional=True): t.String,
         }
     )
 
@@ -44,7 +44,7 @@ def create_model_response_validator() -> t.Trafaret:
             t.Key("http_url", optional=True): t.String,
             t.Key("ssh_server", optional=True): t.String,
             t.Key("internal_hostname", optional=True): t.String,
-            t.Key("name", optional=True): t.String,
+            t.Key("description", optional=True): t.String,
         }
     )
 
