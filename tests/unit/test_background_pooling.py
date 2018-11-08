@@ -26,7 +26,7 @@ class TestJobsStatusPooling:
         return jobs_status_pooling, jobs_service
 
     @pytest.mark.asyncio
-    async def test_pooling(self, mock_orchestrator, event_loop, job_request_factory):
+    async def test_polling(self, mock_orchestrator, event_loop, job_request_factory):
         jobs_status_pooling, jobs_service = await self.create_job_pooling(
             mock_orchestrator, event_loop
         )
@@ -43,7 +43,7 @@ class TestJobsStatusPooling:
         await jobs_status_pooling.stop()
 
     @pytest.mark.asyncio
-    async def test_pooling_exception(
+    async def test_polling_exception(
         self, event_loop, mock_orchestrator, job_request_factory
     ):
         jobs_status_pooling, jobs_service = await self.create_job_pooling(
