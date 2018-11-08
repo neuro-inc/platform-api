@@ -600,6 +600,21 @@ class TestJobRequest:
         )
         assert request.container == expected_container
 
+    def test_to_and_from_primitive(self, job_request_payload):
+        actual = JobRequest.to_primitive(JobRequest.from_primitive(job_request_payload))
+        assert actual == job_request_payload
+
+    def test_to_and_from_primitive_with_shm(self, job_request_payload_with_shm):
+        actual = JobRequest.to_primitive(
+            JobRequest.from_primitive(job_request_payload_with_shm)
+        )
+        assert actual == job_request_payload_with_shm
+
+    def test_to_and_from_primitive_with_ssh(self, job_request_payload):
+        job_request_payload["container"]["ssh_server"] = {"port": 678}
+        actual = JobRequest.to_primitive(JobRequest.from_primitive(job_request_payload))
+        assert actual == job_request_payload
+
 
 class TestContainerHTTPServer:
     def test_from_primitive(self):
