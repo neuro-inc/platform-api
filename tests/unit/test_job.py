@@ -334,7 +334,7 @@ class TestModelRequest:
 def job_request_payload():
     return {
         "job_id": "testjob",
-        "job_name": "test-job",
+        "description": "Description of the testjob",
         "container": {
             "image": "testimage",
             "resources": {
@@ -468,7 +468,6 @@ class TestJob:
     def test_from_primitive(self, mock_orchestrator, job_request_payload):
         payload = {
             "id": "testjob",
-            "name": "test-job",
             "owner": "testuser",
             "request": job_request_payload,
             "status": "succeeded",
@@ -477,7 +476,7 @@ class TestJob:
         }
         job = Job.from_primitive(mock_orchestrator.config, payload)
         assert job.id == "testjob"
-        assert job.name == "test-job"
+        assert job.description == "Description of the testjob"
         assert job.status == JobStatus.SUCCEEDED
         assert job.is_deleted
         assert job.finished_at
@@ -487,7 +486,6 @@ class TestJob:
         finished_at_str = datetime.now(timezone.utc).isoformat()
         payload = {
             "id": "testjob",
-            "name": "test-job",
             "request": job_request_payload,
             "status": "succeeded",
             "is_deleted": True,
@@ -529,7 +527,9 @@ class TestJobRequest:
                 )
             ],
         )
-        request = JobRequest(job_id="testjob", job_name="test-job", container=container)
+        request = JobRequest(job_id="testjob",
+                             description="Description of the testjob",
+                             container=container)
         assert request.to_primitive() == job_request_payload
 
     def test_to_primitive_with_ssh(self, job_request_payload):
@@ -548,13 +548,15 @@ class TestJobRequest:
             ],
             ssh_server=ContainerSSHServer(678),
         )
-        request = JobRequest(job_id="testjob", job_name="test-job", container=container)
+        request = JobRequest(job_id="testjob",
+                             description="Description of the testjob",
+                             container=container)
         assert request.to_primitive() == job_request_payload
 
     def test_from_primitive(self, job_request_payload):
         request = JobRequest.from_primitive(job_request_payload)
         assert request.job_id == "testjob"
-        assert request.job_name == "test-job"
+        assert request.description == "Description of the testjob"
         expected_container = Container(
             image="testimage",
             env={"testvar": "testval"},
@@ -573,7 +575,7 @@ class TestJobRequest:
         job_request_payload["container"]["ssh_server"] = {"port": 678}
         request = JobRequest.from_primitive(job_request_payload)
         assert request.job_id == "testjob"
-        assert request.job_name == "test-job"
+        assert request.description == "Description of the testjob"
         expected_container = Container(
             image="testimage",
             env={"testvar": "testval"},
@@ -592,7 +594,7 @@ class TestJobRequest:
     def test_from_primitive_with_shm(self, job_request_payload_with_shm):
         request = JobRequest.from_primitive(job_request_payload_with_shm)
         assert request.job_id == "testjob"
-        assert request.job_name == "test-job"
+        assert request.description == "Description of the testjob"
         expected_container = Container(
             image="testimage",
             env={"testvar": "testval"},
