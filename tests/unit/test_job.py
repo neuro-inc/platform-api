@@ -527,9 +527,11 @@ class TestJobRequest:
                 )
             ],
         )
-        request = JobRequest(job_id="testjob",
-                             description="Description of the testjob",
-                             container=container)
+        request = JobRequest(
+            job_id="testjob",
+            description="Description of the testjob",
+            container=container,
+        )
         assert request.to_primitive() == job_request_payload
 
     def test_to_primitive_with_ssh(self, job_request_payload):
@@ -548,9 +550,11 @@ class TestJobRequest:
             ],
             ssh_server=ContainerSSHServer(678),
         )
-        request = JobRequest(job_id="testjob",
-                             description="Description of the testjob",
-                             container=container)
+        request = JobRequest(
+            job_id="testjob",
+            description="Description of the testjob",
+            container=container,
+        )
         assert request.to_primitive() == job_request_payload
 
     def test_from_primitive(self, job_request_payload):
