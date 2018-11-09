@@ -133,6 +133,8 @@ def convert_job_to_job_response(
             job.request.container, storage_config
         ),
     }
+    if job.description:
+        response_payload["description"] = job.description
     if job.has_http_server_exposed:
         response_payload["http_url"] = job.http_url
     if job.has_ssh_server_exposed:
