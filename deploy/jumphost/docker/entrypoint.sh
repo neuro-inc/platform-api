@@ -1,6 +1,6 @@
 #!/bin/bash
 
-mkdir -p ssh-daemon-sessing
+mkdir -p /home/ssh-daemon-sessing
 
 if [[ ! -e /home/ssh-daemon-settings/ssh_host_rsa_key ]]; then
     ssh-keygen -f /home/ssh-daemon-settings/ssh_host_rsa_key -N '' -t rsa
