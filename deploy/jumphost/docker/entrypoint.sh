@@ -1,16 +1,23 @@
 #!/bin/bash
 
-if [[ ! -e /etc/ssh/ssh_host_rsa_key ]]; then
-    ssh-keygen -f /etc/ssh/ssh_host_rsa_key -N '' -t rsa
+mkdir -p ssh-daemon-sessing
+
+if [[ ! -e /home/ssh-daemon-settings/ssh_host_rsa_key ]]; then
+    ssh-keygen -f /home/ssh-daemon-settings/ssh_host_rsa_key -N '' -t rsa
 fi
 
-if [[ ! -e /etc/ssh/ssh_host_ecdsa_key ]]; then
-    ssh-keygen -f /etc/ssh/ssh_host_ecdsa_key -N '' -t ecdsa
+if [[ ! -e /home/ssh-daemon-settings/ssh_host_ecdsa_key ]]; then
+    ssh-keygen -f /home/ssh-daemon-settings/ssh_host_ecdsa_key -N '' -t rsa
 fi
 
-if [[ ! -e /etc/ssh/ssh_host_ed25519_key ]]; then
-    ssh-keygen -f /etc/ssh/ssh_host_ed25519_key -N '' -t ed25519
+if [[ ! -e /home/ssh-daemon-settings/ssh_host_ed25519_key ]]; then
+    ssh-keygen -f /home/ssh-daemon-settings/ssh_host_ed25519_key -N '' -t rsa
 fi
+
+cp /home/ssh-daemon-settings/ssh_host_rsa_key /etc/ssh/ssh_host_rsa_key
+cp /home/ssh-daemon-settings/ssh_host_ecdsa_key /etc/ssh/ssh_host_ecdsa_key
+cp /home/ssh-daemon-settings/ssh_host_ed25519_key /etc/ssh/ssh_host_ed25519_key
+
 
 mkdir -p /root/.ssh
 touch /root/.ssh/authorized_keys
