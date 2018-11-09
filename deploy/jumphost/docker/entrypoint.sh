@@ -1,9 +1,9 @@
 #!/bin/bash
 
-mkdir -p /home/ssh-daemon-sessing
+mkdir -p /home/ssh-daemon-settings
 
 if [[ ! -e /home/ssh-daemon-settings/ssh_host_rsa_key ]]; then
-    ssh-keygen -f /home/ssh-daemon-settings/ssh_host_rsa_key -N '' -t rsa
+    ssh-keygen -f /home/ssh-daemon-sessing/ssh_host_rsa_key -N '' -t rsa
 fi
 
 if [[ ! -e /home/ssh-daemon-settings/ssh_host_ecdsa_key ]]; then
