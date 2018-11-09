@@ -1,8 +1,23 @@
 #!/bin/bash
 
-ssh-keygen -f /etc/ssh/ssh_host_rsa_key -N '' -t rsa
-ssh-keygen -f /etc/ssh/ssh_host_ecdsa_key -N '' -t ecdsa
-ssh-keygen -f /etc/ssh/ssh_host_ed25519_key -N '' -t ed25519
+mkdir -p /home/ssh-daemon-settings
+
+if [[ ! -e /home/ssh-daemon-settings/ssh_host_rsa_key ]]; then
+    ssh-keygen -f /home/ssh-daemon-sessing/ssh_host_rsa_key -N '' -t rsa
+fi
+
+if [[ ! -e /home/ssh-daemon-settings/ssh_host_ecdsa_key ]]; then
+    ssh-keygen -f /home/ssh-daemon-settings/ssh_host_ecdsa_key -N '' -t rsa
+fi
+
+if [[ ! -e /home/ssh-daemon-settings/ssh_host_ed25519_key ]]; then
+    ssh-keygen -f /home/ssh-daemon-settings/ssh_host_ed25519_key -N '' -t rsa
+fi
+
+cp /home/ssh-daemon-settings/ssh_host_rsa_key /etc/ssh/ssh_host_rsa_key
+cp /home/ssh-daemon-settings/ssh_host_ecdsa_key /etc/ssh/ssh_host_ecdsa_key
+cp /home/ssh-daemon-settings/ssh_host_ed25519_key /etc/ssh/ssh_host_ed25519_key
+
 
 mkdir -p /root/.ssh
 touch /root/.ssh/authorized_keys
