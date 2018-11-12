@@ -1,9 +1,8 @@
-from unittest.mock import MagicMock
-
 import dataclasses
 from datetime import datetime, timedelta, timezone
 from pathlib import PurePath
 from unittest import mock
+from unittest.mock import MagicMock
 
 import pytest
 from yarl import URL
@@ -361,17 +360,19 @@ def job_request_payload():
         },
     }
 
+
 @pytest.fixture
 def job_payload(job_request_payload):
     finished_at_str = datetime.now(timezone.utc).isoformat()
     return {
-            "id": "testjob",
-            "request": job_request_payload,
-            "status": "succeeded",
-            "is_deleted": True,
-            "finished_at": finished_at_str,
-            "statuses": [{"status": "failed", "transition_time": finished_at_str}],
-        }
+        "id": "testjob",
+        "request": job_request_payload,
+        "status": "succeeded",
+        "is_deleted": True,
+        "finished_at": finished_at_str,
+        "statuses": [{"status": "failed", "transition_time": finished_at_str}],
+    }
+
 
 @pytest.fixture
 def job_request_payload_with_shm(job_request_payload):
@@ -388,7 +389,11 @@ class TestJob:
             resources=ContainerResources(cpu=1, memory_mb=128),
             http_server=ContainerHTTPServer(port=1234),
         )
-        return JobRequest(job_id="testjob", container=container, description="Description of the testjob")
+        return JobRequest(
+            job_id="testjob",
+            container=container,
+            description="Description of the testjob",
+        )
 
     @pytest.fixture
     def job_request_with_ssh_and_http(self):
@@ -398,7 +403,11 @@ class TestJob:
             http_server=ContainerHTTPServer(port=1234),
             ssh_server=ContainerSSHServer(port=4321),
         )
-        return JobRequest(job_id="testjob", container=container, description="Description of the testjob")
+        return JobRequest(
+            job_id="testjob",
+            container=container,
+            description="Description of the testjob",
+        )
 
     @pytest.fixture
     def job_request_with_ssh(self):
@@ -407,7 +416,11 @@ class TestJob:
             resources=ContainerResources(cpu=1, memory_mb=128),
             ssh_server=ContainerSSHServer(port=4321),
         )
-        return JobRequest(job_id="testjob", container=container, description="Description of the testjob")
+        return JobRequest(
+            job_id="testjob",
+            container=container,
+            description="Description of the testjob",
+        )
 
     def test_http_url(self, mock_orchestrator, job_request):
         job = Job(orchestrator_config=mock_orchestrator.config, job_request=job_request)
