@@ -538,6 +538,28 @@ class TestJob:
         job = Job(config, job_request)
         assert job.to_uri() == URL(f"job:/{job.id}")
 
+    def test_to_and_from_primitive(self, mock_orchestrator, job_request_payload):
+        finished_at_str = datetime.now(timezone.utc).isoformat()
+        current_status_item = {
+            "status": "failed",
+            "transition_time": finished_at_str,
+            "reason": None,
+            "description": None,
+        }
+        expected = {
+            "id": job_request_payload["job_id"],
+            "request": job_request_payload,
+            "owner": "user",
+            "status": current_status_item["status"],
+            "statuses": [current_status_item],
+            "is_deleted": "False",
+            "finished_at": finished_at_str,
+        }
+        actual = Job.to_primitive(
+            Job.from_primitive(mock_orchestrator.config, expected)
+        )
+        assert actual == expected
+
 
 class TestJobRequest:
     def test_to_primitive(self, job_request_payload):
