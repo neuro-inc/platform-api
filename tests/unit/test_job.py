@@ -361,6 +361,19 @@ def job_request_payload():
 
 
 @pytest.fixture
+def job_payload(job_request_payload):
+    finished_at_str = datetime.now(timezone.utc).isoformat()
+    return {
+        "id": "testjob",
+        "request": job_request_payload,
+        "status": "succeeded",
+        "is_deleted": True,
+        "finished_at": finished_at_str,
+        "statuses": [{"status": "failed", "transition_time": finished_at_str}],
+    }
+
+
+@pytest.fixture
 def job_request_payload_with_shm(job_request_payload):
     data = job_request_payload
     data["container"]["resources"]["shm"] = True
@@ -375,7 +388,11 @@ class TestJob:
             resources=ContainerResources(cpu=1, memory_mb=128),
             http_server=ContainerHTTPServer(port=1234),
         )
-        return JobRequest(job_id="testjob", container=container)
+        return JobRequest(
+            job_id="testjob",
+            container=container,
+            description="Description of the testjob",
+        )
 
     @pytest.fixture
     def job_request_with_ssh_and_http(self):
@@ -385,7 +402,11 @@ class TestJob:
             http_server=ContainerHTTPServer(port=1234),
             ssh_server=ContainerSSHServer(port=4321),
         )
-        return JobRequest(job_id="testjob", container=container)
+        return JobRequest(
+            job_id="testjob",
+            container=container,
+            description="Description of the testjob",
+        )
 
     @pytest.fixture
     def job_request_with_ssh(self):
@@ -394,7 +415,11 @@ class TestJob:
             resources=ContainerResources(cpu=1, memory_mb=128),
             ssh_server=ContainerSSHServer(port=4321),
         )
-        return JobRequest(job_id="testjob", container=container)
+        return JobRequest(
+            job_id="testjob",
+            container=container,
+            description="Description of the testjob",
+        )
 
     def test_http_url(self, mock_orchestrator, job_request):
         job = Job(orchestrator_config=mock_orchestrator.config, job_request=job_request)
@@ -445,7 +470,7 @@ class TestJob:
         assert job.to_primitive() == {
             "id": job.id,
             "owner": "testuser",
-            "request": mock.ANY,
+            "request": job_request.to_primitive(),
             "status": "failed",
             "is_deleted": True,
             "finished_at": expected_finished_at,
@@ -476,10 +501,10 @@ class TestJob:
         }
         job = Job.from_primitive(mock_orchestrator.config, payload)
         assert job.id == "testjob"
-        assert job.description == "Description of the testjob"
         assert job.status == JobStatus.SUCCEEDED
         assert job.is_deleted
         assert job.finished_at
+        assert job.description == "Description of the testjob"
         assert job.owner == "testuser"
 
     def test_from_primitive_with_statuses(self, mock_orchestrator, job_request_payload):
@@ -497,6 +522,7 @@ class TestJob:
         assert job.status == JobStatus.FAILED
         assert job.is_deleted
         assert job.finished_at
+        assert job.description == "Description of the testjob"
         assert job.owner == "compute"
 
     def test_to_uri(self, mock_orchestrator, job_request) -> None:
@@ -511,6 +537,28 @@ class TestJob:
         config = dataclasses.replace(mock_orchestrator.config, orphaned_job_owner="")
         job = Job(config, job_request)
         assert job.to_uri() == URL(f"job:/{job.id}")
+
+    def test_to_and_from_primitive(self, mock_orchestrator, job_request_payload):
+        finished_at_str = datetime.now(timezone.utc).isoformat()
+        current_status_item = {
+            "status": "failed",
+            "transition_time": finished_at_str,
+            "reason": None,
+            "description": None,
+        }
+        expected = {
+            "id": job_request_payload["job_id"],
+            "request": job_request_payload,
+            "owner": "user",
+            "status": current_status_item["status"],
+            "statuses": [current_status_item],
+            "is_deleted": "False",
+            "finished_at": finished_at_str,
+        }
+        actual = Job.to_primitive(
+            Job.from_primitive(mock_orchestrator.config, expected)
+        )
+        assert actual == expected
 
 
 class TestJobRequest:
