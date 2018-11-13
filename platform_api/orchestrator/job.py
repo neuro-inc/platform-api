@@ -318,8 +318,6 @@ class Job:
             "is_deleted": self.is_deleted,
             "finished_at": self.finished_at_str,
         }
-        if self.description:
-            result["description"] = self.description
         if self.internal_hostname:
             result["internal_hostname"] = self.internal_hostname
         return result

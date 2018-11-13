@@ -469,9 +469,8 @@ class TestJob:
         expected_finished_at = job.finished_at.isoformat()
         assert job.to_primitive() == {
             "id": job.id,
-            "description": "Description of the testjob",
             "owner": "testuser",
-            "request": mock.ANY,
+            "request": job_request.to_primitive(),
             "status": "failed",
             "is_deleted": True,
             "finished_at": expected_finished_at,
@@ -502,7 +501,6 @@ class TestJob:
         }
         job = Job.from_primitive(mock_orchestrator.config, payload)
         assert job.id == "testjob"
-        assert job.description == "Description of the testjob"
         assert job.status == JobStatus.SUCCEEDED
         assert job.is_deleted
         assert job.finished_at
