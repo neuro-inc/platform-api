@@ -2,7 +2,6 @@ import dataclasses
 from datetime import datetime, timedelta, timezone
 from pathlib import PurePath
 from unittest import mock
-from unittest.mock import MagicMock
 
 import pytest
 from yarl import URL
