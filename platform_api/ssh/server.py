@@ -6,11 +6,23 @@ import signal
 import subprocess
 import traceback
 from contextlib import suppress
+from functools import partial
+from typing import Awaitable
 
 import asyncssh
 
 
+from platform_api.orchestrator.kube_orchestrator import KubeOrchestrator
+from platform_api.config_factory import EnvironConfigFactory
+
+
+logger = logging.getLogger(__name__)
+
+
 class SSHServerHandler(asyncssh.SSHServer):
+    def __init__(self, orchestrator: KubeOrchestrator) -> None:
+        self._orchestrator = orchestrator
+
     def begin_auth(self, username):
         print("Begin auth")
         return False  # False for aonymous
@@ -34,7 +46,9 @@ class ShellSession:
         self._stderr_redirect = None
 
     @classmethod
-    def run(cls, process):
+    def run(cls,
+            process: asyncssh.SSHServerProcess,
+            orchestrator: KubeOrchestrator) -> Awaitable[None]:
         self = cls(process)
         return self.handle_client()
 
@@ -78,6 +92,8 @@ class ShellSession:
             raise
 
     async def handle_client(self):
+        username = self.get_extra_info('username')
+        print(username)
         process = self._process
         loop = asyncio.get_event_loop()
         try:
@@ -147,15 +163,25 @@ class ShellSession:
 
 
 class SSHServer:
-    def __init__(self, host, port):
+    def __init__(self, host: str, port: int,
+                 orchestrator: KubeOrchestrator) -> None:
+        self._orchestrator = orchestrator
         self._host = host
         self._port = port
-        self._handler = SSHServerHandler()
+        self._handler = SSHServerHandler(orchestrator)
         self._server = None
         self._ssh_host_keys = []
         here = pathlib.Path(__file__).parent
         self._ssh_host_keys.append(str(here / "ssh_host_dsa_key"))
         self._ssh_host_keys.append(str(here / "ssh_host_rsa_key"))
+
+    @property
+    def host(self) -> str:
+        return self._host
+
+    @property
+    def port(self) -> int:
+        return self._port
 
     async def start(self):
         self._server = await asyncssh.create_server(
@@ -163,10 +189,13 @@ class SSHServer:
             self._host,
             self._port,
             server_host_keys=self._ssh_host_keys,
-            process_factory=ShellSession.run,
+            process_factory=partial(ShellSession.run,
+                                    orchestrator=self._orchestrator),
             sftp_factory=True,
             allow_scp=True,
         )
+        self._host = self._server.sockets[0][0]
+        self._port = self._server.sockets[0][1]
         # server_host_keys=['ssh_host_key'],
         # process_factory=handle_client)
 
@@ -175,10 +204,29 @@ class SSHServer:
         await self._server.wait_closed()
 
 
+def init_logging():
+    logging.basicConfig(
+        # TODO (A Danshyn 06/01/18): expose in the Config
+        level=logging.DEBUG,
+        format="%(asctime)s - %(name)s - %(levelname)s - %(message)s",
+    )
+
+
 def main():
-    logging.basicConfig(level=logging.DEBUG)
+    init_logging()
+    config = EnvironConfigFactory().create()
+    logging.info("Loaded config: %r", config)
+
     loop = asyncio.get_event_loop()
-    srv = SSHServer("localhost", 8022)
+
+    logger.info("Initializing Orchestrator")
+    orchestrator = KubeOrchestrator(config=config.orchestrator, loop=loop)
+
+    srv = SSHServer("localhost", 8022, orchestrator)
     loop.run_until_complete(srv.start())
     print("Start SSH server on localhost:8022")
     loop.run_forever()
+
+
+if __name__ == '__main__':
+    main()

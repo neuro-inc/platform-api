@@ -637,6 +637,7 @@ class PodExec:
                 # an empty WS message. Have no idea how it can happen.
                 continue
             channel = ExecChannel(bdata[0])
+            print("Data received", bdata[0], bdata[1:])
             await channel.put(bdata[1:])
 
     async def close(self):
@@ -889,11 +890,11 @@ class KubeClient:
 
     async def exec_pod(self, pod_id: str, command: str) -> PodExec:
         url = URL(self._generate_pod_url(pod_id)) / "exec"
-        # resp = stream(api.connect_get_namespaced_pod_exec, name, 'default',
-        #       command=exec_command,
-        #       stderr=True, stdin=True,
-        #       stdout=True, tty=False)
-        url = url.with_query(command=command, tty=1)
+        url = url.with_query(command=command,
+                             tty="true",
+                             stdin="true",
+                             stdout="true",
+                             stderr="true")
         ws = await self._client.ws_connect(url, method="POST")
         return PodExec(ws)
 
