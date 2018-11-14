@@ -618,27 +618,38 @@ class ExecChannel(int, enum.Enum):
 class PodExec:
     def __init__(self, ws: aiohttp.ClientWebSocketResponse) -> None:
         self._ws = ws
-        self._channels: DefaultDict[ExecChannel, Stream] = DefaultDict()
+        self._channels: DefaultDict[ExecChannel, Stream] = DefaultDict(Stream)
         loop = asyncio.get_event_loop()
-        self._reader_task = loop.create_task(self._read_data)
+        self._reader_task = loop.create_task(self._read_data())
+        self._exit_code = loop.create_future()
 
     async def _read_data(self):
-        async for msg in self._ws:
-            if msg.type not in (WSMsgType.TEXT, WSMsgType.BINARY):
-                # looks weird, but the official client doesn't distinguish TEXT and
-                # BINARY WS messages
-                continue
-            data = msg.data
-            if isinstance(data, str):
-                bdata = data.decode("utf-8")
-            else:
-                bdata = data
-            if not bdata:
-                # an empty WS message. Have no idea how it can happen.
-                continue
-            channel = ExecChannel(bdata[0])
-            print("Data received", bdata[0], bdata[1:])
-            await channel.put(bdata[1:])
+        try:
+            print('begin read data')
+            async for msg in self._ws:
+                print('got msg', msg)
+                if msg.type not in (WSMsgType.TEXT, WSMsgType.BINARY):
+                    # looks weird, but the official client doesn't distinguish TEXT and
+                    # BINARY WS messages
+                    continue
+                data = msg.data
+                if isinstance(data, str):
+                    bdata = data.decode("utf-8")
+                else:
+                    bdata = data
+                if not bdata:
+                    # an empty WS message. Have no idea how it can happen.
+                    continue
+                channel = ExecChannel(bdata[0])
+                print("Data received", bdata[0], bdata[1:])
+                stream = self._channels[channel]
+                await stream.put(bdata[1:])
+                print("Wait next cmd")
+        except asyncio.CancelledError:
+            raise
+        except Exception:
+            logger.exception("PodExec._read_data")
+            await self.close()
 
     async def close(self):
         self._reader_task.cancel()
@@ -647,6 +658,9 @@ class PodExec:
         with suppress(asyncio.CancelledError):
             await self._reader_task
         await self._ws.close()
+
+    async def wait(self):
+        return await self._exit_code
 
     async def __aenter__(self) -> "PodExec":
         return self
@@ -890,11 +904,9 @@ class KubeClient:
 
     async def exec_pod(self, pod_id: str, command: str) -> PodExec:
         url = URL(self._generate_pod_url(pod_id)) / "exec"
-        url = url.with_query(command=command,
-                             tty="true",
-                             stdin="true",
-                             stdout="true",
-                             stderr="true")
+        url = url.with_query(
+            command=command, tty="1", stdin="1", stdout="1", stderr="1"
+        )
         ws = await self._client.ws_connect(url, method="POST")
         return PodExec(ws)
 

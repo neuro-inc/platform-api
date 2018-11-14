@@ -11,9 +11,8 @@ from typing import Awaitable
 
 import asyncssh
 
-
-from platform_api.orchestrator.kube_orchestrator import KubeOrchestrator
 from platform_api.config_factory import EnvironConfigFactory
+from platform_api.orchestrator.kube_orchestrator import KubeOrchestrator
 
 
 logger = logging.getLogger(__name__)
@@ -38,32 +37,32 @@ class SSHServerHandler(asyncssh.SSHServer):
 
 
 class ShellSession:
-    def __init__(self, process):
+    def __init__(self, process, orchestrator):
         self._process = process
+        self._orchestrator = orchestrator
         self._subproc = None
         self._stdin_redirect = None
         self._stdout_redirect = None
         self._stderr_redirect = None
 
     @classmethod
-    def run(cls,
-            process: asyncssh.SSHServerProcess,
-            orchestrator: KubeOrchestrator) -> Awaitable[None]:
-        self = cls(process)
+    def run(
+        cls, process: asyncssh.SSHServerProcess, orchestrator: KubeOrchestrator
+    ) -> Awaitable[None]:
+        self = cls(process, orchestrator)
         return self.handle_client()
 
-    async def redirect_in(self, src, dst):
+    async def redirect_in(self, src, writer):
         try:
             while True:
                 data = await src.read(8096)
                 if data:
                     data = data.encode("utf-8")
-                    dst.write(data)
-                    await dst.drain()
+                    await writer(data)
                 else:
-                    print("close")
-                    dst.close()
-                    break
+                    print("STDIN close")
+                    await self.terminate(signal.SIG_KILL)
+                    raise
         except asyncssh.BreakReceived:
             await self.terminate(signal.SIG_INT)
         except asyncssh.SignalReceived as exc:
@@ -74,55 +73,47 @@ class ShellSession:
             await self.terminate(signal.SIG_KILL)
             raise
 
-    async def redirect_out(self, src, dst):
+    async def redirect_out(self, reader, dst):
         try:
             while True:
-                data = await src.read(8096)
-                if data:
-                    data = data.decode("utf-8")
-                    dst.write(data)
-                    await dst.drain()
-                else:
-                    print("close")
-                    dst.close()
-                    break
+                print('BEFORE READ from OUT')
+                data = await reader()
+                print('READ DATA', data)
+                data = data.decode("utf-8")
+                dst.write(data)
+                await dst.drain()
         except BaseException:
             print("Exc in redirect")
             traceback.print_exc()
             raise
 
     async def handle_client(self):
-        username = self.get_extra_info('username')
-        print(username)
         process = self._process
+        username = process.get_extra_info("username")
+        print(username)
+        pod_id = username
         loop = asyncio.get_event_loop()
         try:
-            process.stdout.write(
-                "Welcome to my SSH server, %s!\n" % process.get_extra_info("username")
-            )
+            # process.stdout.write(
+            #     "Welcome to my SSH server, %s!\n" % process.get_extra_info("username")
+            # )
             command = process.command
             if command is None:
                 command = "sh -i"
             print("Command", command)
             print("Process", process.subsystem)
             print("Terminal", process.get_terminal_type())
-            params = shlex.split(command)
-            subproc = await asyncio.create_subprocess_exec(
-                *params,
-                stdin=subprocess.PIPE,
-                stdout=subprocess.PIPE,
-                stderr=subprocess.PIPE
-            )
+            subproc = await self._orchestrator.exec_pod(pod_id, command)
             self._subproc = subproc
             print("Redirect")
             self._stdin_redirect = loop.create_task(
-                self.redirect_in(process.stdin, subproc.stdin)
+                self.redirect_in(process.stdin, subproc.write_stdin)
             )
             self._stdout_redirect = loop.create_task(
-                self.redirect_out(subproc.stdout, process.stdout)
+                self.redirect_out(subproc.read_stdout, process.stdout)
             )
             self._stderr_redirect = loop.create_task(
-                self.redirect_out(subproc.stderr, process.stderr)
+                self.redirect_out(subproc.read_stderr, process.stderr)
             )
 
             print("Wait")
@@ -163,12 +154,10 @@ class ShellSession:
 
 
 class SSHServer:
-    def __init__(self, host: str, port: int,
-                 orchestrator: KubeOrchestrator) -> None:
+    def __init__(self, host: str, port: int, orchestrator: KubeOrchestrator) -> None:
         self._orchestrator = orchestrator
         self._host = host
         self._port = port
-        self._handler = SSHServerHandler(orchestrator)
         self._server = None
         self._ssh_host_keys = []
         here = pathlib.Path(__file__).parent
@@ -185,17 +174,16 @@ class SSHServer:
 
     async def start(self):
         self._server = await asyncssh.create_server(
-            SSHServerHandler,
+            partial(SSHServerHandler, self._orchestrator),
             self._host,
             self._port,
             server_host_keys=self._ssh_host_keys,
-            process_factory=partial(ShellSession.run,
-                                    orchestrator=self._orchestrator),
+            process_factory=partial(ShellSession.run, orchestrator=self._orchestrator),
             sftp_factory=True,
             allow_scp=True,
         )
-        self._host = self._server.sockets[0][0]
-        self._port = self._server.sockets[0][1]
+        address = self._server.sockets[0].getsockname()
+        self._host, self._port = address
         # server_host_keys=['ssh_host_key'],
         # process_factory=handle_client)
 
@@ -212,21 +200,24 @@ def init_logging():
     )
 
 
-def main():
-    init_logging()
+async def run():
     config = EnvironConfigFactory().create()
     logging.info("Loaded config: %r", config)
 
-    loop = asyncio.get_event_loop()
-
     logger.info("Initializing Orchestrator")
-    orchestrator = KubeOrchestrator(config=config.orchestrator, loop=loop)
+    async with KubeOrchestrator(config=config.orchestrator) as orchestrator:
+        srv = SSHServer("localhost", 8022, orchestrator)
+        await srv.start()
+        print("Start SSH server on localhost:8022")
+        while True:
+            await asyncio.sleep(3600)
 
-    srv = SSHServer("localhost", 8022, orchestrator)
-    loop.run_until_complete(srv.start())
-    print("Start SSH server on localhost:8022")
-    loop.run_forever()
+
+async def main():
+    init_logging()
+    loop = asyncio.get_event_loop()
+    loop.run_until_complete(run())
 
 
-if __name__ == '__main__':
+if __name__ == "__main__":
     main()

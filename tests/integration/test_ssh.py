@@ -1,11 +1,14 @@
+from pathlib import PurePath
 from typing import NamedTuple
 
-from platform_api.config import Config, DatabaseConfig, ServerConfig, StorageConfig
-from platform_api.ssh.server import SSHServer
-from platform_api.orchestrator.job import Job, JobRequest
-
+import asyncssh
 import pytest
-from pathlib import PurePath
+
+from platform_api.config import Config, DatabaseConfig, ServerConfig, StorageConfig
+from platform_api.orchestrator.kube_orchestrator import PodDescriptor, KubeOrchestrator
+from platform_api.orchestrator.job import JobRequest
+from platform_api.orchestrator.job_request import Container, ContainerResources
+from platform_api.ssh.server import SSHServer
 
 
 class ApiConfig(NamedTuple):
@@ -48,57 +51,51 @@ def config(kube_config, redis_config, auth_config):
 
 @pytest.fixture
 async def ssh_server(config):
-    orchestrator = config.orchestrator
-    srv = SSHServer('0.0.0.0', 8022, orchestrator)
-    await srv.start
-    yield srv
-    await srv.stop()
+    async with KubeOrchestrator(config=config.orchestrator) as orchestrator:
+        srv = SSHServer("0.0.0.0", 8022, orchestrator)
+        await srv.start()
+        yield srv
+        await srv.stop()
 
 
 @pytest.fixture
-async def job(kube_orchestrator):
-    job_id = str(uuid.uuid4())
+async def delete_pod_later(kube_client):
+    pods = []
+
+    async def _add_pod(pod):
+        pods.append(pod)
+
+    yield _add_pod
+
+    for pod in pods:
+        try:
+            await kube_client.delete_pod(pod.name)
+        except Exception:
+            pass
+
+
+@pytest.mark.asyncio
+async def test_simple(ssh_server, kube_client, kube_config, delete_pod_later):
     container = Container(
         image="ubuntu",
-        command="sleep 5",
+        command="sleep 10",
         resources=ContainerResources(cpu=0.1, memory_mb=16),
     )
-    job_request = JobRequest(job_id=job_id, container=container)
-    job = Job(orchestrator=kube_orchestrator, job_request=job_request, owner="test-owner")
-    return job
+    job_request = JobRequest.create(container)
+    pod = PodDescriptor.from_job_request(
+        kube_config.create_storage_volume(), job_request
+    )
+    await delete_pod_later(pod)
+    await kube_client.create_pod(pod)
+    await kube_client.wait_pod_is_running(pod_name=pod.name, timeout_s=60.0)
 
+    print("POD", pod.name)
 
-async def wait_for_completion(
-    job: Job, interval_s: float = 1.0, max_attempts: int = 30
-):
-    for _ in range(max_attempts):
-        status = await job.query_status()
-        if status.is_finished:
-            return status
-        else:
-            await asyncio.sleep(interval_s)
-    else:
-        pytest.fail("too long")
-
-
-async def wait_for_failure(*args, **kwargs):
-    status = await wait_for_completion(*args, **kwargs)
-    assert status == JobStatus.FAILED
-
-
-async def wait_for_success(*args, **kwargs):
-    status = await wait_for_completion(*args, **kwargs)
-    assert status == JobStatus.SUCCEEDED
-
-
-async def test_simple(ssh_server, job):
-    status = await job.start()
-    await wait_for_success(job)
-
-    async with asyncssh.connect(ssh_server.host, ssh_server.port) as conn:
-        result = await conn.run('echo "Hello!"', check=True)
-        stdout = str(result.stdout)
-        assert stdout == "Hello!"
-
-    status = await job.delete()
-    assert status == JobStatus.SUCCEEDED
+    async with asyncssh.connect(ssh_server.host, ssh_server.port,
+                                username=pod.name) as conn:
+        # result = await conn.run('true', check=True)
+        proc = await conn.create_process('pwd')
+        print('PROC', proc)
+        stdout = await proc.stdout.read()
+        assert stdout == b"/\n"
+        import pdb;pdb.set_trace()
