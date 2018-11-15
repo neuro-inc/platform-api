@@ -91,7 +91,6 @@ async def test_simple(ssh_server, kube_client, kube_config, delete_pod_later):
 
     async with asyncssh.connect(ssh_server.host, ssh_server.port,
                                 username=pod.name) as conn:
-        # result = await conn.run('true', check=True)
         proc = await conn.create_process('pwd')
         stdout = await proc.stdout.read()
         assert stdout == "/\r\n"
@@ -101,7 +100,7 @@ async def test_simple(ssh_server, kube_client, kube_config, delete_pod_later):
 async def test_shell(ssh_server, kube_client, kube_config, delete_pod_later):
     container = Container(
         image="ubuntu",
-        command="sleep 10",
+        command="sleep 100",
         resources=ContainerResources(cpu=0.1, memory_mb=16),
     )
     job_request = JobRequest.create(container)
@@ -114,10 +113,22 @@ async def test_shell(ssh_server, kube_client, kube_config, delete_pod_later):
 
     async with asyncssh.connect(ssh_server.host, ssh_server.port,
                                 username=pod.name) as conn:
-        # result = await conn.run('true', check=True)
         proc = await conn.create_process('bash')
-        print("EXIT STATUS", proc.exit_status)
-        await proc.stdin.write('pwd\r\n')
-        stdout = await proc.stdout.read()
-        assert stdout == "/\r\n"
-        await proc.stdin.write_eof()
+        proc.stdin.write('pwd\n')
+
+        print("!!! READ STDOUT")
+        # stdout = await proc.stdout.read(8096)
+        # assert '\r\n/\r\n' in stdout
+        await proc.stdout.readuntil('\r\n/\r\n')
+
+        print("!!! STDOUT CHECKED")
+
+        proc.stdin.write_eof()
+        # import pdb;pdb.set_trace()
+        # assert stdout == ('\r\n'.join([
+        #     '',
+        #     f'\x1b]0;root@{pod.name}: /\x07root@{pod.name}:/# pwd',
+        #     '/',
+        #     f'\x1b]0;root@{pod.name}: /\x07root@{pod.name}:/# pwd',
+        #     f'\x1b]0;root@{pod.name}: /\x07root@{pod.name}:/# pwd']))
+        print("EXIT CM")

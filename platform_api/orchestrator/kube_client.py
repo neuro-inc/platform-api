@@ -643,7 +643,7 @@ class PodExec:
                 channel = ExecChannel(bdata[0])
                 print("Data received", bdata[0], bdata[1:])
                 stream = self._channels[channel]
-                await stream.put(bdata[1:])
+                await stream.feed(bdata[1:])
                 print("Wait next cmd")
 
             print("Exit")
@@ -681,14 +681,17 @@ class PodExec:
         await self.close()
 
     async def write_stdin(self, data: bytes) -> None:
-        msg = chr(ExecChannel.STDIN) + data
+        msg = bytes((ExecChannel.STDIN,)) + data
         await self._ws.send_bytes(msg)
 
     async def read_stdout(self):
-        return await self._channels[ExecChannel.STDOUT].get()
+        return await self._channels[ExecChannel.STDOUT].read()
 
     async def read_stderr(self):
-        return await self._channels[ExecChannel.STDERR].get()
+        return await self._channels[ExecChannel.STDERR].read()
+
+    async def read_error(self):
+        return await self._channels[ExecChannel.ERROR].read()
 
 
 class KubeClientAuthType(str, enum.Enum):

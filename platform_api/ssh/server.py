@@ -104,7 +104,7 @@ class ShellSession:
             print("Command", command)
             print("Process", process.subsystem)
             print("Terminal TYPE", process.get_terminal_type())
-            print("Terminal MODE", process.get_terminal_mode())
+#            print("Terminal MODE", process.get_terminal_mode())
             print("Terminal SIZE", process.get_terminal_size())
             subproc = await self._orchestrator.exec_pod(pod_id, command)
             self._subproc = subproc

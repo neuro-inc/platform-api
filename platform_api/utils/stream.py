@@ -28,23 +28,23 @@ class Stream:
             self._waiter = None
         self._closed = True
 
-    async def put(self, line: bytes) -> None:
+    async def feed(self, data: bytes) -> None:
         if self._closed:
             raise RuntimeError("The stream is closed")
-        self._data.append(line)
+        self._data.append(data)
         waiter = self._waiter
         if waiter is not None:
             if not waiter.done():
                 waiter.set_result(None)
             self._waiter = None
 
-    async def get(self) -> bytes:
-        if self._closed:
-            raise asyncio.CancelledError()
+    async def read(self) -> bytes:
         if not self._data:
+            if self._closed:
+                raise asyncio.CancelledError()
             assert self._waiter is None
             self._waiter = self._loop.create_future()
             await self._waiter
             assert self._waiter is None
-        line = self._data.popleft()
-        return line
+        data = self._data.popleft()
+        return data
