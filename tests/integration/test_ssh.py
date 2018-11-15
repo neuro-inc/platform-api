@@ -89,12 +89,35 @@ async def test_simple(ssh_server, kube_client, kube_config, delete_pod_later):
     await kube_client.create_pod(pod)
     await kube_client.wait_pod_is_running(pod_name=pod.name, timeout_s=60.0)
 
-    print("POD", pod.name)
-
     async with asyncssh.connect(ssh_server.host, ssh_server.port,
                                 username=pod.name) as conn:
         # result = await conn.run('true', check=True)
         proc = await conn.create_process('pwd')
-        print('PROC', proc)
         stdout = await proc.stdout.read()
         assert stdout == "/\r\n"
+
+
+@pytest.mark.asyncio
+async def test_shell(ssh_server, kube_client, kube_config, delete_pod_later):
+    container = Container(
+        image="ubuntu",
+        command="sleep 10",
+        resources=ContainerResources(cpu=0.1, memory_mb=16),
+    )
+    job_request = JobRequest.create(container)
+    pod = PodDescriptor.from_job_request(
+        kube_config.create_storage_volume(), job_request
+    )
+    await delete_pod_later(pod)
+    await kube_client.create_pod(pod)
+    await kube_client.wait_pod_is_running(pod_name=pod.name, timeout_s=60.0)
+
+    async with asyncssh.connect(ssh_server.host, ssh_server.port,
+                                username=pod.name) as conn:
+        # result = await conn.run('true', check=True)
+        proc = await conn.create_process('bash')
+        print("EXIT STATUS", proc.exit_status)
+        await proc.stdin.write('pwd\r\n')
+        stdout = await proc.stdout.read()
+        assert stdout == "/\r\n"
+        await proc.stdin.write_eof()
