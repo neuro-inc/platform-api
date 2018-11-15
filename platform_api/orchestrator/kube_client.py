@@ -645,13 +645,20 @@ class PodExec:
                 stream = self._channels[channel]
                 await stream.put(bdata[1:])
                 print("Wait next cmd")
+
+            print("Exit")
+            await self.close()
         except asyncio.CancelledError:
+            logger.exception("PodExec cancelled")
             raise
-        except Exception:
+        except BaseException:
             logger.exception("PodExec._read_data")
             await self.close()
 
     async def close(self):
+        if not self._exit_code.done():
+            # Don't know API for getting exit status yet
+            self._exit_code.set_result(0)
         self._reader_task.cancel()
         for stream in self._channels.values():
             await stream.close()

@@ -97,5 +97,4 @@ async def test_simple(ssh_server, kube_client, kube_config, delete_pod_later):
         proc = await conn.create_process('pwd')
         print('PROC', proc)
         stdout = await proc.stdout.read()
-        assert stdout == b"/\n"
-        import pdb;pdb.set_trace()
+        assert stdout == "/\r\n"

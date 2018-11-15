@@ -1,9 +1,7 @@
 import asyncio
 import logging
 import pathlib
-import shlex
 import signal
-import subprocess
 import traceback
 from contextlib import suppress
 from functools import partial
@@ -61,16 +59,17 @@ class ShellSession:
                     await writer(data)
                 else:
                     print("STDIN close")
-                    await self.terminate(signal.SIG_KILL)
-                    raise
+                    await self.terminate(signal.SIGTERM)
+                    return
         except asyncssh.BreakReceived:
-            await self.terminate(signal.SIG_INT)
+            await self.terminate(signal.SIGINT)
         except asyncssh.SignalReceived as exc:
             await self.terminate(exc.signal)
+        except asyncio.CancelledError:
+            raise
         except BaseException:
-            print("Exc in redirect")
-            traceback.print_exc()
-            await self.terminate(signal.SIG_KILL)
+            logger.exception("Exception in redirect")
+            await self.terminate(signal.SIGKILL)
             raise
 
     async def redirect_out(self, reader, dst):
@@ -82,6 +81,8 @@ class ShellSession:
                 data = data.decode("utf-8")
                 dst.write(data)
                 await dst.drain()
+        except asyncio.CancelledError:
+            raise
         except BaseException:
             print("Exc in redirect")
             traceback.print_exc()
@@ -125,12 +126,11 @@ class ShellSession:
             traceback.print_exc()
             raise
         finally:
-            self.cleanup()
+            await self.cleanup()
 
     async def terminate(self, sigcode):
         if self._subproc is not None:
-            if self._subproc.retcode is None:
-                self._subproc.kill(sigcode)
+            await self._subproc.close()
             self._subproc = None
         await self.cleanup()
         self._process.exit_with_signal(sigcode)
