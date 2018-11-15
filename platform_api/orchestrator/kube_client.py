@@ -590,21 +590,43 @@ class KubernetesEvent:
 class PodStatus:
     def __init__(self, payload):
         self._payload = payload
+        self._container_status = self._init_container_status()
 
-    @property
-    def phase(self):
-        return self._payload["phase"]
-
-    @property
-    def container_status(self) -> ContainerStatus:
+    def _init_container_status(self) -> ContainerStatus:
         payload = None
         if "containerStatuses" in self._payload:
             payload = self._payload["containerStatuses"][0]
         return ContainerStatus(payload=payload)
 
     @property
+    def phase(self):
+        return self._payload["phase"]
+
+    @property
+    def reason(self) -> Optional[str]:
+        """
+
+        If kubelet decides to evict the pod, it sets the `Failed` phase along with
+        the `Evicted` reason.
+        https://github.com/kubernetes/kubernetes/blob/a3ccea9d8743f2ff82e41b6c2af6dc2c41dc7b10/pkg/kubelet/eviction/eviction_manager.go#L543-L566
+        If a node the pod scheduled on fails, node lifecycle controller sets
+        the `NodeList` reason.
+        https://github.com/kubernetes/kubernetes/blob/a3ccea9d8743f2ff82e41b6c2af6dc2c41dc7b10/pkg/controller/util/node/controller_utils.go#L109-L126
+        """
+        # the pod status reason has a greater priority
+        return self._payload.get("reason") or self._container_status.reason
+
+    @property
+    def message(self) -> Optional[str]:
+        return self._payload.get("message") or self._container_status.message
+
+    @property
+    def container_status(self) -> ContainerStatus:
+        return self._container_status
+
+    @property
     def is_container_creating(self) -> bool:
-        return self.container_status.is_creating
+        return self._container_status.is_creating
 
     @property
     def is_container_status_available(self) -> bool:
