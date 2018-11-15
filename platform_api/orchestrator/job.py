@@ -179,6 +179,7 @@ class Job:
         is_deleted: bool = False,
         current_datetime_factory=current_datetime_factory,
         owner: str = "",
+        is_preemptible: bool = False,
     ) -> None:
         self._orchestrator_config = orchestrator_config
         self._job_request = job_request
@@ -201,6 +202,7 @@ class Job:
         self._owner = owner
 
         self._internal_orchestrator_info: Job.OrchestratorInfo = Job.OrchestratorInfo()
+        self._is_preemptible = is_preemptible
 
     @property
     def id(self):
@@ -305,6 +307,10 @@ class Job:
     @internal_hostname.setter
     def internal_hostname(self, value: Optional[str]):
         self._internal_orchestrator_info.job_hostname = value
+
+    @property
+    def is_preemptible(self) -> bool:
+        return self._is_preemptible
 
     def to_primitive(self) -> Dict:
         statuses = [item.to_primitive() for item in self._status_history.all]
