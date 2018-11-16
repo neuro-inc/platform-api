@@ -249,17 +249,24 @@ class KubeOrchestrator(Orchestrator):
 
         # PENDING/RUNNING
 
+        # TODO: ask Paul to set up taints on preemptible nodes
+
         pod_name = self._get_job_pod_name(job)
         if job.is_preemptible:
             try:
                 pod_status = await self._client.get_pod_status(pod_name)
                 if pod_status.is_node_lost:
+                    logger.info(
+                        f"Detected NodeLost in pod '{pod_name}'. Job '{job.id}'"
+                    )
                     # if the pod's status reason is `NodeLost` regardless of
                     # the pod's status phase, we need to forcefully delete the
                     # pod and reschedule another one instead.
+                    logger.info(f"Forcefully deleting pod '{pod_name}'. Job '{job.id}'")
                     await self._client.delete_pod(pod_name, force=True)
                     pod_status = None
             except JobNotFoundException:
+                logger.info(f"Pod '{pod_name}' was lost. Job '{job.id}'")
                 # if the job is still in PENDING/RUNNING, but the underlying
                 # pod is gone, this may mean that the node was
                 # preempted/failed (the node resource may no longer exist)
@@ -268,47 +275,49 @@ class KubeOrchestrator(Orchestrator):
                 pod_status = None
 
             if not pod_status:
-                pass
+                logger.info(f"Recreating preempted pod '{pod_name}'. Job '{job.id}'")
+                descriptor = await self._create_pod_descriptor(job)
+                # TODO: this may raise StatusException AlreadyExists in case
+                # the pod is still being deleted.
+                status = await self._client.create_pod(descriptor)
+                assert status
 
-            return await self.get_job_status(job.id)
-        else:
-            return await self.get_job_status(job.id)
+        return await self.get_job_status(job.id)
 
     async def get_job_status(self, job_id: str) -> JobStatusItem:
-        pod_id = job_id
-        status = await self._client.get_pod_status(pod_id)
-        job_status = convert_pod_status_to_job_status(status)
+        pod_name = job_id
+        pod_status = await self._client.get_pod_status(pod_name)
+        job_status = convert_pod_status_to_job_status(pod_status)
 
         # Pod in pending state, and no container information available
         # possible we are observing the case when Container requested
         # too much resources, check events for NotTriggerScaleUp event
-        if (
-            job_status.status == JobStatus.PENDING
-            and not status.is_container_status_available
-        ):
-            pod_events = await self._client.get_pod_events(
-                pod_id, self._get_pod_namespace(None)
-            )
-            if pod_events:
-                # Handle clusters with autoscaler and without it
-                event = any(
-                    event.reason == "NotTriggerScaleUp"
-                    or event.reason == "FailedScheduling"
-                    for event in pod_events
+        if not pod_status.is_scheduled:
+            if not await self._check_pod_is_schedulable(pod_name):
+                logger.info(f"Found pod that requested too much resources. ID={job_id}")
+                # Update the reason field of the job to Too Much Requested
+                job_status = JobStatusItem.create(
+                    job_status.status,
+                    transition_time=job_status.transition_time,
+                    reason="Cluster doesn't have resources to fulfill request.",
+                    description=job_status.description,
                 )
-                if event:
-                    logger.info(
-                        f"Found pod that requested too much resources. ID={job_id}"
-                    )
-                    # Update the reason field of the job to Too Much Requested
-                    job_status = JobStatusItem.create(
-                        job_status.status,
-                        transition_time=job_status.transition_time,
-                        reason="Cluster doesn't have resources to fulfill request.",
-                        description=job_status.description,
-                    )
 
         return job_status
+
+    async def _check_pod_is_schedulable(self, pod_name: str) -> bool:
+        pod_events = await self._client.get_pod_events(pod_name, self._config.namespace)
+        if not pod_events:
+            return True
+
+        # TODO (A Danshyn 11/17/18): note that "FailedScheduling" goes prior
+        # "TriggerScaleUp" as well. seems unclear whether this condition is
+        # correct.
+        # Handle clusters with autoscaler and without it
+        return not any(
+            event.reason == "NotTriggerScaleUp" or event.reason == "FailedScheduling"
+            for event in pod_events
+        )
 
     async def get_job_log_reader(self, job: Job) -> LogReader:
         return PodContainerLogReader(
