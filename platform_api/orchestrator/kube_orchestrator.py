@@ -7,7 +7,7 @@ from typing import Dict, Optional
 from ..config import OrchestratorConfig  # noqa
 from .base import LogReader, Orchestrator
 from .job import Job, JobStatusItem
-from .job_request import Container, JobStatus
+from .job_request import Container, JobNotFoundException, JobStatus
 from .kube_client import *  # noqa
 from .kube_client import (
     DockerRegistrySecret,
@@ -157,6 +157,9 @@ class KubeOrchestrator(Orchestrator):
 
         self._storage_volume = self._config.create_storage_volume()
 
+        # TODO (A Danshyn 11/16/18): make this configurable at some point
+        self._docker_secret_name_prefix = "neurouser-"
+
     @property
     def config(self) -> KubeConfig:
         return self._config
@@ -173,34 +176,31 @@ class KubeOrchestrator(Orchestrator):
         # TODO (A Yushkovskiy 31.10.2018): get namespace for the pod, not statically
         return self._config.namespace
 
+    def _get_docker_secret_name(self, job: Job) -> str:
+        return (self._docker_secret_name_prefix + job.owner).lower()
+
     async def _create_docker_secret(self, job: Job, token: str) -> DockerRegistrySecret:
         secret = DockerRegistrySecret(
-            name=job.owner,
-            password=token,
+            name=self._get_docker_secret_name(job),
             namespace=self._config.namespace,
+            username=job.owner,
+            password=token,
             email=self._config.registry.email,
             registry_server=self._config.registry.host,
         )
-        await self._client.create_secret(secret)
+        await self._client.update_docker_secret(secret, create_non_existent=True)
         return secret
 
-    async def _create_pod(self, job: Job, token: str) -> PodStatus:
-        secret = await self._create_docker_secret(job, token)
-        secret_names = [secret.objname]
+    async def _create_pod_descriptor(self, job: Job) -> PodDescriptor:
+        secret_names = [self._get_docker_secret_name(job)]
         node_selector = await self._get_pod_node_selector(job.request.container)
-        descriptor = PodDescriptor.from_job_request(
+        return PodDescriptor.from_job_request(
             self._storage_volume, job.request, secret_names, node_selector=node_selector
         )
-        return await self._client.create_pod(descriptor)
 
     async def start_job(self, job: Job, token: str) -> JobStatus:
-        status = await self._create_pod(job, token)
-        secret = await self._create_docker_secret(job, token)
-        secret_names = [secret.objname]
-        node_selector = await self._get_pod_node_selector(job.request.container)
-        descriptor = PodDescriptor.from_job_request(
-            self._storage_volume, job.request, secret_names, node_selector=node_selector
-        )
+        await self._create_docker_secret(job, token)
+        descriptor = await self._create_pod_descriptor(job)
         status = await self._client.create_pod(descriptor)
         if job.has_http_server_exposed or job.has_ssh_server_exposed:
             logger.info(f"Starting Service for {job.id}.")

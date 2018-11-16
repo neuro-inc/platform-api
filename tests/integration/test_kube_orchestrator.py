@@ -135,9 +135,7 @@ class TestKubeOrchestrator:
         await self.wait_for_success(job_nginx)
 
         pod = await kube_orchestrator._client.get_pod(job_nginx.id)
-        assert pod.image_pull_secrets == [
-            SecretRef(DockerRegistrySecret.PREFIX + job_nginx.owner)
-        ]
+        assert pod.image_pull_secrets == [SecretRef(f"neurouser-{job_nginx.owner}")]
 
         status = await job_nginx.delete()
         assert status == JobStatus.SUCCEEDED
@@ -647,6 +645,93 @@ class TestKubeClient:
         async with stream_cm as stream:
             payload = await stream.read()
             assert payload == b""
+
+    @pytest.mark.asyncio
+    async def test_create_docker_secret_non_existent_namespace(
+        self, kube_config, kube_client
+    ):
+        name = str(uuid.uuid4())
+        docker_secret = DockerRegistrySecret(
+            name=name,
+            namespace=name,
+            username="testuser",
+            password="testpassword",
+            email="testuser@example.com",
+            registry_server="registry.example.com",
+        )
+
+        with pytest.raises(StatusException, match="NotFound"):
+            await kube_client.create_docker_secret(docker_secret)
+
+    @pytest.mark.asyncio
+    async def test_create_docker_secret_already_exists(self, kube_config, kube_client):
+        name = str(uuid.uuid4())
+        docker_secret = DockerRegistrySecret(
+            name=name,
+            namespace=kube_config.namespace,
+            username="testuser",
+            password="testpassword",
+            email="testuser@example.com",
+            registry_server="registry.example.com",
+        )
+
+        try:
+            await kube_client.create_docker_secret(docker_secret)
+
+            with pytest.raises(StatusException, match="AlreadyExists"):
+                await kube_client.create_docker_secret(docker_secret)
+        finally:
+            await kube_client.delete_secret(name, kube_config.namespace)
+
+    @pytest.mark.asyncio
+    async def test_update_docker_secret_already_exists(self, kube_config, kube_client):
+        name = str(uuid.uuid4())
+        docker_secret = DockerRegistrySecret(
+            name=name,
+            namespace=kube_config.namespace,
+            username="testuser",
+            password="testpassword",
+            email="testuser@example.com",
+            registry_server="registry.example.com",
+        )
+
+        try:
+            await kube_client.create_docker_secret(docker_secret)
+            await kube_client.update_docker_secret(docker_secret)
+        finally:
+            await kube_client.delete_secret(name, kube_config.namespace)
+
+    @pytest.mark.asyncio
+    async def test_update_docker_secret_non_existent(self, kube_config, kube_client):
+        name = str(uuid.uuid4())
+        docker_secret = DockerRegistrySecret(
+            name=name,
+            namespace=kube_config.namespace,
+            username="testuser",
+            password="testpassword",
+            email="testuser@example.com",
+            registry_server="registry.example.com",
+        )
+
+        with pytest.raises(StatusException, match="NotFound"):
+            await kube_client.update_docker_secret(docker_secret)
+
+    @pytest.mark.asyncio
+    async def test_update_docker_secret_create_non_existent(
+        self, kube_config, kube_client
+    ):
+        name = str(uuid.uuid4())
+        docker_secret = DockerRegistrySecret(
+            name=name,
+            namespace=kube_config.namespace,
+            username="testuser",
+            password="testpassword",
+            email="testuser@example.com",
+            registry_server="registry.example.com",
+        )
+
+        await kube_client.update_docker_secret(docker_secret, create_non_existent=True)
+        await kube_client.update_docker_secret(docker_secret)
 
 
 class TestPodContainerLogReader:
