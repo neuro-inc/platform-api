@@ -135,9 +135,7 @@ class TestKubeOrchestrator:
         await self.wait_for_success(job_nginx)
 
         pod = await kube_orchestrator._client.get_pod(job_nginx.id)
-        assert pod.image_pull_secrets == [
-            SecretRef(f"neurouser-{job_nginx.owner}")
-        ]
+        assert pod.image_pull_secrets == [SecretRef(f"neurouser-{job_nginx.owner}")]
 
         status = await job_nginx.delete()
         assert status == JobStatus.SUCCEEDED

@@ -7,7 +7,7 @@ import ssl
 from base64 import b64encode
 from dataclasses import dataclass, field
 from pathlib import PurePath
-from typing import Any, ClassVar, Dict, List, Optional
+from typing import Any, Dict, List, Optional
 from urllib.parse import urlsplit
 
 import aiohttp
