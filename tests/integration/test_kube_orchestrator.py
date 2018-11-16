@@ -1029,3 +1029,38 @@ class TestNodeSelector:
         pod_name = job.id
 
         await kube_client.wait_pod_scheduled(pod_name, node_name)
+
+
+class TestPreemption:
+    @pytest.mark.asyncio
+    async def test_preemptible_job_lost_running_pod(
+        self, kube_config, kube_client, delete_job_later, kube_orchestrator
+    ):
+        container = Container(
+            image="ubuntu",
+            command="bash -c 'sleep infinity'",
+            resources=ContainerResources(cpu=0.1, memory_mb=128),
+        )
+        job = MyJob(
+            orchestrator=kube_orchestrator,
+            job_request=JobRequest.create(container),
+            # marking the job as preemptible
+            is_preemptible=True,
+        )
+        await delete_job_later(job)
+        await kube_orchestrator.start_job(job, token="test-token")
+        pod_name = job.id
+
+        await kube_client.wait_pod_is_running(pod_name=pod_name, timeout_s=10.0)
+        job_status = await kube_orchestrator.get_job_status_v2(job)
+        assert job_status.is_running  # TODO: assert properly
+
+        await kube_client.delete_pod(pod_name, force=True)
+
+        # triggering pod recreation
+        job_status = await kube_orchestrator.get_job_status_v2(job)
+        assert not job_status.is_running  # TODO: assert properly
+
+        await kube_client.wait_pod_is_running(pod_name=pod_name, timeout_s=10.0)
+        job_status = await kube_orchestrator.get_job_status_v2(job)
+        assert job_status.is_running  # TODO: assert properly

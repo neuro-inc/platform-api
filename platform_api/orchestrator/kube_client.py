@@ -602,17 +602,30 @@ class PodStatus:
 
     @property
     def phase(self):
+        """
+        "Pending", "Running", "Succeeded", "Failed", "Unknown"
+        """
         return self._payload["phase"]
+
+    @property
+    def is_phase_pending(self) -> bool:
+        return self.phase == "Pending"
+
+    @property
+    def is_scheduled(self) -> bool:
+        # TODO (A Danshyn 11/16/18): we should consider using "conditions"
+        # type="PodScheduled" reason="unschedulable" instead.
+        return not self.is_phase_pending or self.is_container_status_available
 
     @property
     def reason(self) -> Optional[str]:
         """
 
-        If kubelet decides to evict the pod, it sets the `Failed` phase along with
-        the `Evicted` reason.
+        If kubelet decides to evict the pod, it sets the "Failed" phase along with
+        the "Evicted" reason.
         https://github.com/kubernetes/kubernetes/blob/a3ccea9d8743f2ff82e41b6c2af6dc2c41dc7b10/pkg/kubelet/eviction/eviction_manager.go#L543-L566
         If a node the pod scheduled on fails, node lifecycle controller sets
-        the `NodeList` reason.
+        the "NodeList" reason.
         https://github.com/kubernetes/kubernetes/blob/a3ccea9d8743f2ff82e41b6c2af6dc2c41dc7b10/pkg/controller/util/node/controller_utils.go#L109-L126
         """
         # the pod status reason has a greater priority
