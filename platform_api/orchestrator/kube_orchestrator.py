@@ -163,6 +163,9 @@ class KubeOrchestrator(Orchestrator):
 
         self._storage_volume = self._config.create_storage_volume()
 
+        # TODO (A Danshyn 11/16/18): make this configurable at some point
+        self._docker_secret_name_prefix = "neurouser-"
+
     @property
     def config(self) -> KubeConfig:
         return self._config
@@ -179,20 +182,31 @@ class KubeOrchestrator(Orchestrator):
         # TODO (A Yushkovskiy 31.10.2018): get namespace for the pod, not statically
         return self._config.namespace
 
-    async def start_job(self, job: Job, token: str) -> JobStatus:
+    def _get_docker_secret_name(self, job: Job) -> str:
+        return (self._docker_secret_name_prefix + job.owner).lower()
+
+    async def _create_docker_secret(self, job: Job, token: str) -> DockerRegistrySecret:
         secret = DockerRegistrySecret(
-            name=job.owner,
-            password=token,
+            name=self._get_docker_secret_name(job),
             namespace=self._config.namespace,
+            username=job.owner,
+            password=token,
             email=self._config.registry.email,
             registry_server=self._config.registry.host,
         )
-        await self._client.create_secret(secret)
-        secret_names = [secret.objname]
+        await self._client.update_docker_secret(secret, create_non_existent=True)
+        return secret
+
+    async def _create_pod_descriptor(self, job: Job) -> PodDescriptor:
+        secret_names = [self._get_docker_secret_name(job)]
         node_selector = await self._get_pod_node_selector(job.request.container)
-        descriptor = PodDescriptor.from_job_request(
+        return PodDescriptor.from_job_request(
             self._storage_volume, job.request, secret_names, node_selector=node_selector
         )
+
+    async def start_job(self, job: Job, token: str) -> JobStatus:
+        await self._create_docker_secret(job, token)
+        descriptor = await self._create_pod_descriptor(job)
         status = await self._client.create_pod(descriptor)
         if job.has_http_server_exposed or job.has_ssh_server_exposed:
             logger.info(f"Starting Service for {job.id}.")
