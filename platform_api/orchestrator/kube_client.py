@@ -632,6 +632,10 @@ class PodStatus:
     def is_container_status_available(self) -> bool:
         return "containerStatuses" in self._payload
 
+    @property
+    def is_node_lost(self):
+        return self.reason == "NodeLost"
+
     @classmethod
     def from_primitive(cls, payload):
         return cls(payload)
@@ -770,9 +774,16 @@ class KubeClient:
         pod = await self.get_pod(pod_id)
         return pod.status  # type: ignore
 
-    async def delete_pod(self, pod_id: str) -> PodStatus:
-        url = self._generate_pod_url(pod_id)
-        payload = await self._request(method="DELETE", url=url)
+    async def delete_pod(self, pod_name: str, force: bool = False) -> PodStatus:
+        url = self._generate_pod_url(pod_name)
+        request_payload = None
+        if force:
+            request_payload = {
+                "apiVersion": "v1",
+                "kind": "DeleteOptions",
+                "gracePeriodSeconds": 0,
+            }
+        payload = await self._request(method="DELETE", url=url, json=request_payload)
         return PodDescriptor.from_primitive(payload).status
 
     async def create_ingress(self, name) -> Ingress:

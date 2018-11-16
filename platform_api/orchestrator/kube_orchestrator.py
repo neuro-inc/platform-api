@@ -52,15 +52,9 @@ class JobStatusItemFactory:
                 return JobStatus.FAILED
         return JobStatus.PENDING
 
-    def _parse_reason_waiting(self) -> Optional[str]:
-        return self._pod_status.container_status.reason
-
     def _parse_reason(self) -> Optional[str]:
-        if self._status == JobStatus.FAILED:
+        if self._status in (JobStatus.PENDING, JobStatus.FAILED):
             return self._container_status.reason
-        if self._status == JobStatus.PENDING:
-            return self._parse_reason_waiting()
-
         return None
 
     def _compose_description(self) -> Optional[str]:
@@ -179,7 +173,7 @@ class KubeOrchestrator(Orchestrator):
         # TODO (A Yushkovskiy 31.10.2018): get namespace for the pod, not statically
         return self._config.namespace
 
-    async def start_job(self, job: Job, token: str) -> JobStatus:
+    async def _create_docker_secret(self, job: Job, token: str) -> DockerRegistrySecret:
         secret = DockerRegistrySecret(
             name=job.owner,
             password=token,
@@ -188,6 +182,20 @@ class KubeOrchestrator(Orchestrator):
             registry_server=self._config.registry.host,
         )
         await self._client.create_secret(secret)
+        return secret
+
+    async def _create_pod(self, job: Job, token: str) -> PodStatus:
+        secret = await self._create_docker_secret(job, token)
+        secret_names = [secret.objname]
+        node_selector = await self._get_pod_node_selector(job.request.container)
+        descriptor = PodDescriptor.from_job_request(
+            self._storage_volume, job.request, secret_names, node_selector=node_selector
+        )
+        return await self._client.create_pod(descriptor)
+
+    async def start_job(self, job: Job, token: str) -> JobStatus:
+        status = await self._create_pod(job, token)
+        secret = await self._create_docker_secret(job, token)
         secret_names = [secret.objname]
         node_selector = await self._get_pod_node_selector(job.request.container)
         descriptor = PodDescriptor.from_job_request(
@@ -229,6 +237,42 @@ class KubeOrchestrator(Orchestrator):
                 break
 
         return selector
+
+    def _get_job_pod_name(self, job: Job) -> str:
+        # TODO (A Danshyn 11/15/18): we will need to start storing jobs'
+        # kube pod names explicitly at some point
+        return job.id
+
+    async def get_job_status_v2(self, job: Job) -> JobStatusItem:
+        if job.is_finished:
+            return job.status
+
+        # PENDING/RUNNING
+
+        pod_name = self._get_job_pod_name(job)
+        if job.is_preemptible:
+            try:
+                pod_status = await self._client.get_pod_status(pod_name)
+                if pod_status.is_node_lost:
+                    # if the pod's status reason is `NodeLost` regardless of
+                    # the pod's status phase, we need to forcefully delete the
+                    # pod and reschedule another one instead.
+                    await self._client.delete_pod(pod_name, force=True)
+                    pod_status = None
+            except JobNotFoundException:
+                # if the job is still in PENDING/RUNNING, but the underlying
+                # pod is gone, this may mean that the node was
+                # preempted/failed (the node resource may no longer exist)
+                # and the pods GC evicted the pod, effectively by
+                # forcefully deleting it.
+                pod_status = None
+
+            if not pod_status:
+                pass
+
+            return await self.get_job_status(job.id)
+        else:
+            return await self.get_job_status(job.id)
 
     async def get_job_status(self, job_id: str) -> JobStatusItem:
         pod_id = job_id
