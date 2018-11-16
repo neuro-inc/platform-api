@@ -136,7 +136,7 @@ class TestKubeOrchestrator:
 
         pod = await kube_orchestrator._client.get_pod(job_nginx.id)
         assert pod.image_pull_secrets == [
-            SecretRef(DockerRegistrySecret.PREFIX + job_nginx.owner)
+            SecretRef(f"neurouser-{job_nginx.owner}")
         ]
 
         status = await job_nginx.delete()
