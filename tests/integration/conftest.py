@@ -135,6 +135,12 @@ class TestKubeClient(KubeClient):
         url = self._generate_pod_url(name)
         return await self._request(method="GET", url=url)
 
+    async def set_raw_pod_status(
+        self, name: str, payload: Dict[str, Any]
+    ) -> Dict[str, Any]:
+        url = self._generate_pod_url(name) + "/status"
+        return await self._request(method="PUT", url=url, json=payload)
+
     async def wait_pod_scheduled(
         self, pod_name, node_name, timeout_s=5.0, interval_s=1.0
     ):
