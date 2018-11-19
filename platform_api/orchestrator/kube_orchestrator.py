@@ -7,7 +7,7 @@ from typing import Dict, List, Optional
 from ..config import OrchestratorConfig  # noqa
 from .base import LogReader, Orchestrator
 from .job import Job, JobStatusItem
-from .job_request import Container, JobNotFoundException, JobStatus
+from .job_request import JobNotFoundException, JobStatus
 from .kube_client import *  # noqa
 from .kube_client import (
     DockerRegistrySecret,

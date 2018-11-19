@@ -172,6 +172,7 @@ class TestKubeClient(KubeClient):
         labels: Optional[Dict[str, str]] = None,
         taints: Optional[Sequence[NodeTaint]] = None,
     ) -> None:
+        taints = taints or []
         payload = {
             "apiVersion": "v1",
             "kind": "Node",
