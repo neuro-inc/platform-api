@@ -2,7 +2,7 @@ import logging
 from asyncio import AbstractEventLoop
 from dataclasses import dataclass
 from pathlib import PurePath
-from typing import Dict, Optional
+from typing import Dict, List, Optional
 
 from ..config import OrchestratorConfig  # noqa
 from .base import LogReader, Orchestrator
@@ -19,6 +19,7 @@ from .kube_client import (
     PodDescriptor,
     PodStatus,
     Service,
+    Toleration,
     Volume,
 )
 from .logs import PodContainerLogReader
@@ -193,9 +194,14 @@ class KubeOrchestrator(Orchestrator):
 
     async def _create_pod_descriptor(self, job: Job) -> PodDescriptor:
         secret_names = [self._get_docker_secret_name(job)]
-        node_selector = await self._get_pod_node_selector(job.request.container)
+        node_selector = await self._get_pod_node_selector(job)
+        tolerations = self._get_pod_tolerations(job)
         return PodDescriptor.from_job_request(
-            self._storage_volume, job.request, secret_names, node_selector=node_selector
+            self._storage_volume,
+            job.request,
+            secret_names,
+            node_selector=node_selector,
+            tolerations=tolerations,
         )
 
     async def start_job(self, job: Job, token: str) -> JobStatus:
@@ -223,8 +229,24 @@ class KubeOrchestrator(Orchestrator):
     ) -> str:
         return f"{service_name}.{self._get_pod_namespace(pod_descriptor)}"
 
-    async def _get_pod_node_selector(self, container: Container) -> Dict[str, str]:
+    def _get_pod_tolerations(self, job: Job) -> List[Toleration]:
+        tolerations = []
+        if job.is_preemptible:
+            tolerations.append(
+                Toleration(
+                    key="cloud.google.com/gke-preemptible",
+                    value="true",
+                    effect="NoSchedule",
+                )
+            )
+        return tolerations
+
+    async def _get_pod_node_selector(self, job: Job) -> Dict[str, str]:
+        container = job.request.container
         selector: Dict[str, str] = {}
+
+        if job.force_preemptible_resource_pool_type:
+            selector["cloud.google.com/gke-preemptible"] = "true"
 
         if not self._config.node_label_gpu:
             return selector
@@ -312,8 +334,12 @@ class KubeOrchestrator(Orchestrator):
 
         # TODO (A Danshyn 11/17/18): note that "FailedScheduling" goes prior
         # "TriggerScaleUp" as well. seems unclear whether this condition is
-        # correct.
-        # Handle clusters with autoscaler and without it
+        # correct. In other words, regardless of presence of any of
+        # "TriggerScaleUp"/"NotTriggerScaleUp", we could just look for
+        # "FailedScheduling" and get the same result.
+        # Instead, for clusters without autoscalers, we could just query all
+        # nodes (cache) and check job a job's container resources against the
+        # nodes' capacities.
         return not any(
             event.reason == "NotTriggerScaleUp" or event.reason == "FailedScheduling"
             for event in pod_events
