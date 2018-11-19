@@ -52,7 +52,7 @@ class MyJob(Job):
         return await self._orchestrator.delete_job(self)
 
     async def query_status(self) -> JobStatus:
-        return await self._orchestrator.get_job_status(self).status
+        return (await self._orchestrator.get_job_status(self)).status
 
 
 @pytest.fixture
