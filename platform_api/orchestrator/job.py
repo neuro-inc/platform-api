@@ -318,8 +318,7 @@ class Job:
 
     @property
     def force_preemptible_resource_pool_type(self) -> bool:
-        assert self.is_preemptible
-        return self._force_preemptible_resource_pool_type
+        return self.is_preemptible and self._force_preemptible_resource_pool_type
 
     def to_primitive(self) -> Dict:
         statuses = [item.to_primitive() for item in self._status_history.all]
