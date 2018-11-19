@@ -353,6 +353,26 @@ class SecretRef:
 
 
 @dataclass(frozen=True)
+class Toleration:
+    """
+    https://kubernetes.io/docs/reference/generated/kubernetes-api/v1.12/#toleration-v1-core
+    """
+
+    key: str
+    operation: str = "Equal"
+    value: str = ""
+    effect: str = ""
+
+    def to_primitive(self) -> Dict[str, Any]:
+        return {
+            "key": self.key,
+            "operation": self.operation,
+            "value": self.value,
+            "effect": self.effect,
+        }
+
+
+@dataclass(frozen=True)
 class PodDescriptor:
     name: str
     image: str
@@ -362,6 +382,7 @@ class PodDescriptor:
     volumes: List[Volume] = field(default_factory=list)
     resources: Optional[Resources] = None
     node_selector: Dict[str, str] = field(default_factory=dict)
+    tolerations: List[Toleration] = field(default_factory=list)
 
     port: Optional[int] = None
     ssh_port: Optional[int] = None
@@ -378,6 +399,7 @@ class PodDescriptor:
         job_request: JobRequest,
         secret_names: Optional[List[str]] = None,
         node_selector: Optional[Dict[str, str]] = None,
+        tolerations: Optional[List[Toleration]] = None,
     ) -> "PodDescriptor":
         container = job_request.container
         volume_mounts = [
@@ -415,6 +437,7 @@ class PodDescriptor:
             health_check_path=container.health_check_path,
             image_pull_secrets=image_pull_secrets,
             node_selector=node_selector or {},
+            tolerations=tolerations or [],
         )
 
     @property
@@ -459,6 +482,9 @@ class PodDescriptor:
                 "restartPolicy": "Never",
                 "imagePullSecrets": [
                     secret.to_primitive() for secret in self.image_pull_secrets
+                ],
+                "tolerations": [
+                    toleration.to_primitive() for toleration in self.tolerations
                 ],
             },
         }
