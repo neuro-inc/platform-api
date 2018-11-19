@@ -27,6 +27,7 @@ from platform_api.orchestrator.kube_orchestrator import (
     Service,
     ServiceType,
     SharedMemoryVolume,
+    Toleration,
     Volume,
     VolumeMount,
 )
@@ -122,10 +123,14 @@ class TestPodDescriptor:
                 "volumes": [],
                 "restartPolicy": "Never",
                 "imagePullSecrets": [],
+                "tolerations": [],
             },
         }
 
     def test_to_primitive(self):
+        tolerations = [
+            Toleration(key="testkey", value="testvalue", effect="NoSchedule")
+        ]
         pod = PodDescriptor(
             name="testname",
             image="testimage",
@@ -133,6 +138,7 @@ class TestPodDescriptor:
             resources=Resources(cpu=0.5, memory=1024, gpu=1),
             port=1234,
             node_selector={"label": "value"},
+            tolerations=tolerations,
         )
         assert pod.name == "testname"
         assert pod.image == "testimage"
@@ -167,6 +173,14 @@ class TestPodDescriptor:
                 "restartPolicy": "Never",
                 "imagePullSecrets": [],
                 "nodeSelector": {"label": "value"},
+                "tolerations": [
+                    {
+                        "key": "testkey",
+                        "operation": "Equal",
+                        "value": "testvalue",
+                        "effect": "NoSchedule",
+                    }
+                ],
             },
         }
 
@@ -211,6 +225,7 @@ class TestPodDescriptor:
                 "volumes": [],
                 "restartPolicy": "Never",
                 "imagePullSecrets": [],
+                "tolerations": [],
             },
         }
 
@@ -254,6 +269,7 @@ class TestPodDescriptor:
                 "volumes": [],
                 "restartPolicy": "Never",
                 "imagePullSecrets": [],
+                "tolerations": [],
             },
         }
 
@@ -290,6 +306,7 @@ class TestPodDescriptor:
                 "volumes": [],
                 "restartPolicy": "Never",
                 "imagePullSecrets": [],
+                "tolerations": [],
             },
         }
 
@@ -348,6 +365,7 @@ class TestPodDescriptor:
                 "volumes": [{"name": "dshm", "emptyDir": {"medium": "Memory"}}],
                 "restartPolicy": "Never",
                 "imagePullSecrets": [],
+                "tolerations": [],
             },
         }
 
