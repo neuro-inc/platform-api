@@ -267,41 +267,15 @@ class KubeOrchestrator(Orchestrator):
 
     async def get_job_status(self, job: Job) -> JobStatusItem:
         if job.is_finished:
-            return job.status
+            return job.status_history.current
 
         # handling PENDING/RUNNING jobs
 
         pod_name = self._get_job_pod_name(job)
         if job.is_preemptible:
-            pod_status: Optional[PodStatus]
-
-            try:
-                pod_status = await self._client.get_pod_status(pod_name)
-                if pod_status.is_node_lost:
-                    logger.info(
-                        f"Detected NodeLost in pod '{pod_name}'. Job '{job.id}'"
-                    )
-                    # if the pod's status reason is `NodeLost` regardless of
-                    # the pod's status phase, we need to forcefully delete the
-                    # pod and reschedule another one instead.
-                    logger.info(f"Forcefully deleting pod '{pod_name}'. Job '{job.id}'")
-                    await self._client.delete_pod(pod_name, force=True)
-                    pod_status = None
-            except JobNotFoundException:
-                logger.info(f"Pod '{pod_name}' was lost. Job '{job.id}'")
-                # if the job is still in PENDING/RUNNING, but the underlying
-                # pod is gone, this may mean that the node was
-                # preempted/failed (the node resource may no longer exist)
-                # and the pods GC evicted the pod, effectively by
-                # forcefully deleting it.
-                pod_status = None
-
-            if not pod_status:
-                logger.info(f"Recreating preempted pod '{pod_name}'. Job '{job.id}'")
-                descriptor = await self._create_pod_descriptor(job)
-                # TODO: this may raise StatusException AlreadyExists in case
-                # the pod is still being deleted.
-                pod_status = await self._client.create_pod(descriptor)
+            pod_status = await self._check_preemptible_job_pod(job)
+        else:
+            pod_status = await self._client.get_pod_status(pod_name)
 
         job_status = convert_pod_status_to_job_status(pod_status)
 
@@ -322,6 +296,39 @@ class KubeOrchestrator(Orchestrator):
                 )
 
         return job_status
+
+    async def _check_preemptible_job_pod(self, job: Job) -> PodStatus:
+        assert job.is_preemptible
+
+        pod_name = self._get_job_pod_name(job)
+        do_recreate_pod = False
+        try:
+            pod_status = await self._client.get_pod_status(pod_name)
+            if pod_status.is_node_lost:
+                logger.info(f"Detected NodeLost in pod '{pod_name}'. Job '{job.id}'")
+                # if the pod's status reason is `NodeLost` regardless of
+                # the pod's status phase, we need to forcefully delete the
+                # pod and reschedule another one instead.
+                logger.info(f"Forcefully deleting pod '{pod_name}'. Job '{job.id}'")
+                await self._client.delete_pod(pod_name, force=True)
+                do_recreate_pod = True
+        except JobNotFoundException:
+            logger.info(f"Pod '{pod_name}' was lost. Job '{job.id}'")
+            # if the job is still in PENDING/RUNNING, but the underlying
+            # pod is gone, this may mean that the node was
+            # preempted/failed (the node resource may no longer exist)
+            # and the pods GC evicted the pod, effectively by
+            # forcefully deleting it.
+            do_recreate_pod = True
+
+        if do_recreate_pod:
+            logger.info(f"Recreating preempted pod '{pod_name}'. Job '{job.id}'")
+            descriptor = await self._create_pod_descriptor(job)
+            # TODO: this may raise StatusException AlreadyExists in case
+            # the pod is still being deleted.
+            pod_status = await self._client.create_pod(descriptor)
+
+        return pod_status
 
     async def _check_pod_is_schedulable(self, pod_name: str) -> bool:
         pod_events = await self._client.get_pod_events(pod_name, self._config.namespace)
