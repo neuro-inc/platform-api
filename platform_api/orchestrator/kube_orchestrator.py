@@ -265,16 +265,16 @@ class KubeOrchestrator(Orchestrator):
         # kube pod names explicitly at some point
         return job.id
 
-    async def get_job_status_v2(self, job: Job) -> JobStatusItem:
+    async def get_job_status(self, job: Job) -> JobStatusItem:
         if job.is_finished:
             return job.status
 
-        # PENDING/RUNNING
-
-        # TODO: ask Paul to set up taints on preemptible nodes
+        # handling PENDING/RUNNING jobs
 
         pod_name = self._get_job_pod_name(job)
         if job.is_preemptible:
+            pod_status: Optional[PodStatus]
+
             try:
                 pod_status = await self._client.get_pod_status(pod_name)
                 if pod_status.is_node_lost:
@@ -301,14 +301,8 @@ class KubeOrchestrator(Orchestrator):
                 descriptor = await self._create_pod_descriptor(job)
                 # TODO: this may raise StatusException AlreadyExists in case
                 # the pod is still being deleted.
-                status = await self._client.create_pod(descriptor)
-                assert status
+                pod_status = await self._client.create_pod(descriptor)
 
-        return await self.get_job_status(job.id)
-
-    async def get_job_status(self, job_id: str) -> JobStatusItem:
-        pod_name = job_id
-        pod_status = await self._client.get_pod_status(pod_name)
         job_status = convert_pod_status_to_job_status(pod_status)
 
         # Pod in pending state, and no container information available
@@ -316,7 +310,9 @@ class KubeOrchestrator(Orchestrator):
         # too much resources, check events for NotTriggerScaleUp event
         if not pod_status.is_scheduled:
             if not await self._check_pod_is_schedulable(pod_name):
-                logger.info(f"Found pod that requested too much resources. ID={job_id}")
+                logger.info(
+                    f"Found pod that requested too much resources. Job '{job.id}'"
+                )
                 # Update the reason field of the job to Too Much Requested
                 job_status = JobStatusItem.create(
                     job_status.status,

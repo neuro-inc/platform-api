@@ -52,7 +52,7 @@ class MyJob(Job):
         return await self._orchestrator.delete_job(self)
 
     async def query_status(self) -> JobStatus:
-        return await self._orchestrator.status_job(job_id=self.id)
+        return await self._orchestrator.get_job_status(self).status
 
 
 @pytest.fixture
@@ -254,7 +254,7 @@ class TestKubeOrchestrator:
 
             await self.wait_for_failure(job, max_attempts=120)
 
-            status_item = await kube_orchestrator.get_job_status(job.id)
+            status_item = await kube_orchestrator.get_job_status(job)
             expected_description = "".join(f"{i}\n" for i in reversed(range(1, 81)))
             expected_description += "\nExit code: 1"
             assert status_item == JobStatusItem.create(
@@ -280,7 +280,7 @@ class TestKubeOrchestrator:
 
             _, _ = await self.wait_for_job(job, max_attempts=10)
 
-            status_item = await kube_orchestrator.get_job_status(job.id)
+            status_item = await kube_orchestrator.get_job_status(job)
             assert status_item == JobStatusItem.create(
                 JobStatus.PENDING,
                 reason="Cluster doesn't have resources to fulfill request.",
@@ -1054,17 +1054,17 @@ class TestPreemption:
         pod_name = job.id
 
         await kube_client.wait_pod_is_running(pod_name=pod_name, timeout_s=60.0)
-        job_status = await kube_orchestrator.get_job_status_v2(job)
+        job_status = await kube_orchestrator.get_job_status(job)
         assert job_status.is_running  # TODO: assert properly
 
         await kube_client.delete_pod(pod_name, force=True)
 
         # triggering pod recreation
-        job_status = await kube_orchestrator.get_job_status_v2(job)
+        job_status = await kube_orchestrator.get_job_status(job)
         assert not job_status.is_running  # TODO: assert properly
 
         await kube_client.wait_pod_is_running(pod_name=pod_name, timeout_s=60.0)
-        job_status = await kube_orchestrator.get_job_status_v2(job)
+        job_status = await kube_orchestrator.get_job_status(job)
         assert job_status.is_running  # TODO: assert properly
 
     @pytest.mark.asyncio
@@ -1099,7 +1099,7 @@ class TestPreemption:
         await kube_client.wait_pod_non_existent(pod_name, timeout_s=60.0)
 
         # triggering pod recreation
-        job_status = await kube_orchestrator.get_job_status_v2(job)
+        job_status = await kube_orchestrator.get_job_status(job)
         assert not job_status.is_running  # TODO: assert properly
 
     @pytest.mark.asyncio
@@ -1138,7 +1138,7 @@ class TestPreemption:
         assert raw_pod["status"]["reason"] == "NodeLost"
 
         # triggering pod recreation
-        job_status = await kube_orchestrator.get_job_status_v2(job)
+        job_status = await kube_orchestrator.get_job_status(job)
         assert not job_status.is_running  # TODO: assert properly
 
         await kube_client.wait_pod_scheduled(pod_name, node_name)

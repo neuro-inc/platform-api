@@ -36,7 +36,7 @@ class JobsService:
         old_status_item = job.status_history.current
 
         try:
-            status_item = await self._orchestrator.get_job_status(job.id)
+            status_item = await self._orchestrator.get_job_status(job)
             # TODO: In case job is found, but container is not in state Pending
             # We shall go and check for the events assigned to the pod
             # "pod didn't trigger scale-up (it wouldn't fit if a new node is added)"
