@@ -10,6 +10,7 @@ import pytest
 from async_timeout import timeout
 
 from platform_api.config import RegistryConfig, StorageConfig
+from platform_api.orchestrator.kube_client import JobNotFoundException
 from platform_api.orchestrator.kube_orchestrator import (
     KubeClient,
     KubeConfig,
@@ -152,6 +153,18 @@ class TestKubeClient(KubeClient):
                     await asyncio.sleep(interval_s)
         except asyncio.TimeoutError:
             pytest.fail("Pod unscheduled")
+
+    async def wait_pod_non_existent(self, pod_name, timeout_s=5.0, interval_s=1.0):
+        try:
+            async with timeout(timeout_s):
+                while True:
+                    try:
+                        await self.get_pod(pod_name)
+                    except JobNotFoundException:
+                        return
+                    await asyncio.sleep(interval_s)
+        except asyncio.TimeoutError:
+            pytest.fail("Pod still exists")
 
     async def create_node(
         self,
