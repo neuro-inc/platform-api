@@ -1,8 +1,9 @@
 import asyncio
 import json
 import uuid
+from dataclasses import dataclass
 from pathlib import PurePath
-from typing import Any, Dict, Optional
+from typing import Any, Dict, Optional, Sequence
 from urllib.parse import urlsplit
 
 import pytest
@@ -97,6 +98,16 @@ async def kube_ingress_ip(kube_config_cluster_payload):
     return urlsplit(cluster["server"]).hostname
 
 
+@dataclass(frozen=True)
+class NodeTaint:
+    key: str
+    value: str
+    effect: str = "NoSchedule"
+
+    def to_primitive(self) -> Dict[str, Any]:
+        return {"key": self.key, "value": self.value, "effect": self.effect}
+
+
 class TestKubeClient(KubeClient):
     @property
     def _endpoints_url(self):
@@ -143,12 +154,16 @@ class TestKubeClient(KubeClient):
             pytest.fail("Pod unscheduled")
 
     async def create_node(
-        self, name: str, labels: Optional[Dict[str, str]] = None
+        self,
+        name: str,
+        labels: Optional[Dict[str, str]] = None,
+        taints: Optional[Sequence[NodeTaint]] = None,
     ) -> None:
         payload = {
             "apiVersion": "v1",
             "kind": "Node",
             "metadata": {"name": name, "labels": labels or {}},
+            "spec": {"taints": [taint.to_primitive() for taint in taints]},
             "status": {
                 "capacity": {
                     "pods": "110",
@@ -253,11 +268,28 @@ async def delete_node_later(kube_client):
 
 
 @pytest.fixture
+def kube_node():
+    return "minikube"
+
+
+@pytest.fixture
 async def kube_node_gpu(kube_config, kube_client, delete_node_later):
     node_name = str(uuid.uuid4())
     await delete_node_later(node_name)
 
     labels = {kube_config.node_label_gpu: "gpumodel"}
     await kube_client.create_node(node_name, labels=labels)
+
+    yield node_name
+
+
+@pytest.fixture
+async def kube_node_preemptible(kube_config, kube_client, delete_node_later):
+    node_name = str(uuid.uuid4())
+    await delete_node_later(node_name)
+
+    labels = {"cloud.google.com/gke-preemptible": "true"}
+    taints = [NodeTaint(key="cloud.google.com/gke-preemptible", value="true")]
+    await kube_client.create_node(node_name, labels=labels, taints=taints)
 
     yield node_name
