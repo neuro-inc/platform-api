@@ -593,7 +593,7 @@ class TestKubeClient:
         await kube_client.create_pod(pod)
         await kube_client.wait_pod_is_running(pod_name=pod.name, timeout_s=60.0)
         pod_status = await kube_client.get_pod_status(pod.name)
-        assert pod_status.phase == "Succeeded"
+        assert pod_status.phase in ("Running", "Succeeded")
 
     @pytest.mark.asyncio
     async def test_create_log_stream_not_found(self, kube_client):
