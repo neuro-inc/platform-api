@@ -3,6 +3,7 @@ import asyncio
 import enum
 import json
 import logging
+import re
 import ssl
 from base64 import b64encode
 from contextlib import suppress
@@ -616,6 +617,9 @@ class ExecChannel(int, enum.Enum):
 
 
 class PodExec:
+    RE_EXIT = re.compile(br'^command terminated with non-zero exit code: '
+                         br'Error executing in Docker Container: (\d+)$')
+
     def __init__(self, ws: aiohttp.ClientWebSocketResponse) -> None:
         self._ws = ws
         self._channels: DefaultDict[ExecChannel, Stream] = DefaultDict(Stream)
@@ -641,9 +645,20 @@ class PodExec:
                     # an empty WS message. Have no idea how it can happen.
                     continue
                 channel = ExecChannel(bdata[0])
-                print("Data received", bdata[0], bdata[1:])
+                bdata = bdata[1:]
+                print("Data received", channel, bdata)
+                if channel == ExecChannel.ERROR:
+                    match = self.RE_EXIT.match(bdata)
+                    if match is not None:
+                        # exit code received
+                        if not self._exit_code.done():
+                            self._exit_code.set_result(int(match.group(1)))
+                        continue
+                    else:
+                        # redirect internal error channel into stderr
+                        channel = ExecChannel.STDERR
                 stream = self._channels[channel]
-                await stream.feed(bdata[1:])
+                await stream.feed(bdata)
                 print("Wait next cmd")
 
             print("Exit")

@@ -59,17 +59,20 @@ class ShellSession:
                     await writer(data)
                 else:
                     print("STDIN close")
-                    await self.terminate(signal.SIGTERM)
+                    self.exit_with_signal(signal.SIGTERM)
                     return
         except asyncssh.BreakReceived:
-            await self.terminate(signal.SIGINT)
+            await self._subproc.close()
+            await self.exit_with_signal(signal.SIGINT)
         except asyncssh.SignalReceived as exc:
-            await self.terminate(exc.signal)
+            await self._subproc.close()
+            await self.exit_with_signal(exc.signal)
         except asyncio.CancelledError:
             raise
         except BaseException:
             logger.exception("Exception in redirect")
-            await self.terminate(signal.SIGKILL)
+            await self._subproc.close()
+            await self.exit_with_signal(signal.SIGKILL)
             raise
 
     async def redirect_out(self, reader, dst):
@@ -144,12 +147,12 @@ class ShellSession:
                 await self._stdin_redirect
             self._stdin_redirect = None
         if self._stdout_redirect is not None:
-            self._stdout_redirect.cancel()
+            # self._stdout_redirect.cancel()
             with suppress(asyncio.CancelledError):
                 await self._stdout_redirect
             self._stdout_redirect = None
         if self._stderr_redirect is not None:
-            self._stderr_redirect.cancel()
+            # self._stderr_redirect.cancel()
             with suppress(asyncio.CancelledError):
                 await self._stderr_redirect
             self._stderr_redirect = None
