@@ -77,6 +77,7 @@ users=(
   "yagosu"
   "ybehzadi"
   "zubrabubra"
+  "rebryk"
 )
 
 for user in ${users[@]}; do
