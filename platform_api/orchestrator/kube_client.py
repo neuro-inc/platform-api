@@ -360,14 +360,14 @@ class Toleration:
     """
 
     key: str
-    operation: str = "Equal"
+    operator: str = "Equal"
     value: str = ""
     effect: str = ""
 
     def to_primitive(self) -> Dict[str, Any]:
         return {
             "key": self.key,
-            "operation": self.operation,
+            "operator": self.operator,
             "value": self.value,
             "effect": self.effect,
         }

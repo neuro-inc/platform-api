@@ -100,6 +100,7 @@ class KubeConfig(OrchestratorConfig):
     job_deletion_delay_s: int = 60 * 60 * 24
 
     node_label_gpu: Optional[str] = None
+    node_label_preemptible: Optional[str] = None
 
     def __post_init__(self):
         if not all((self.jobs_ingress_name, self.endpoint_url)):
@@ -233,17 +234,20 @@ class KubeOrchestrator(Orchestrator):
 
     def _get_pod_tolerations(self, job: Job) -> List[Toleration]:
         tolerations = []
-        if job.is_preemptible:
+        if self._config.node_label_preemptible and job.is_preemptible:
             tolerations.append(
                 Toleration(
-                    key="cloud.google.com/gke-preemptible",
-                    value="true",
+                    key=self._config.node_label_preemptible,
+                    operator="Exists",
                     effect="NoSchedule",
                 )
             )
         return tolerations
 
     def _get_pod_node_affinity(self, job: Job) -> Dict[str, Any]:
+        if not self._config.node_label_preemptible:
+            return {}
+
         if not job.is_preemptible:
             return {
                 "requiredDuringSchedulingIgnoredDuringExecution": {
@@ -251,9 +255,8 @@ class KubeOrchestrator(Orchestrator):
                         {
                             "matchExpressions": [
                                 {
-                                    "key": "cloud.google.com/gke-preemptible",
-                                    "operator": "NotIn",
-                                    "values": ["true"],
+                                    "key": self._config.node_label_preemptible,
+                                    "operator": "DoesNotExist",
                                 }
                             ]
                         }
@@ -268,9 +271,8 @@ class KubeOrchestrator(Orchestrator):
                         {
                             "matchExpressions": [
                                 {
-                                    "key": "cloud.google.com/gke-preemptible",
-                                    "operator": "In",
-                                    "values": ["true"],
+                                    "key": self._config.node_label_preemptible,
+                                    "operator": "Exists",
                                 }
                             ]
                         }
@@ -278,6 +280,7 @@ class KubeOrchestrator(Orchestrator):
                 }
             }
 
+        # preferred
         return {}
 
     async def _get_pod_node_selector(self, job: Job) -> Dict[str, str]:

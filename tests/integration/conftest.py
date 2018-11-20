@@ -90,6 +90,7 @@ async def kube_config(kube_config_cluster_payload, kube_config_user_payload):
             ResourcePoolType(gpu=1, gpu_model=GPUModel(id="gpumodel")),
         ],
         orphaned_job_owner="compute",
+        node_label_preemptible="preemptible",
     )
 
 
@@ -308,8 +309,8 @@ async def kube_node_preemptible(kube_config, kube_client, delete_node_later):
     node_name = str(uuid.uuid4())
     await delete_node_later(node_name)
 
-    labels = {"cloud.google.com/gke-preemptible": "true"}
-    taints = [NodeTaint(key="cloud.google.com/gke-preemptible", value="true")]
+    labels = {kube_config.node_label_preemptible: "true"}
+    taints = [NodeTaint(key=kube_config.node_label_preemptible, value="true")]
     await kube_client.create_node(node_name, labels=labels, taints=taints)
 
     yield node_name
