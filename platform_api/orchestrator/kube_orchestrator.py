@@ -270,7 +270,7 @@ class KubeOrchestrator(Orchestrator):
             ]
         }
 
-        if job.force_preemptible_resource_pool_type:
+        if job.is_forced_to_preemptible_pool:
             return {
                 "requiredDuringSchedulingIgnoredDuringExecution": {
                     "nodeSelectorTerms": [node_selector_term]

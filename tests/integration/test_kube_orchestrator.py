@@ -1047,7 +1047,7 @@ class TestPreemption:
             # marking the job as preemptible
             is_preemptible=True,
             # allow the pod to be scheduled on the minikube node
-            force_preemptible_resource_pool_type=False,
+            is_forced_to_preemptible_pool=False,
         )
         await delete_job_later(job)
         await kube_orchestrator.start_job(job, token="test-token")

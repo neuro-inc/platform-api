@@ -184,7 +184,7 @@ class Job:
         current_datetime_factory=current_datetime_factory,
         owner: str = "",
         is_preemptible: bool = False,
-        force_preemptible_resource_pool_type: bool = True,
+        is_forced_to_preemptible_pool: bool = True,
     ) -> None:
         self._orchestrator_config = orchestrator_config
         self._job_request = job_request
@@ -208,9 +208,7 @@ class Job:
 
         self._internal_orchestrator_info: Job.OrchestratorInfo = Job.OrchestratorInfo()
         self._is_preemptible = is_preemptible
-        self._force_preemptible_resource_pool_type = (
-            force_preemptible_resource_pool_type
-        )
+        self._is_forced_to_preemptible_pool = is_forced_to_preemptible_pool
 
     @property
     def id(self):
@@ -321,8 +319,8 @@ class Job:
         return self._is_preemptible
 
     @property
-    def force_preemptible_resource_pool_type(self) -> bool:
-        return self.is_preemptible and self._force_preemptible_resource_pool_type
+    def is_forced_to_preemptible_pool(self) -> bool:
+        return self.is_preemptible and self._is_forced_to_preemptible_pool
 
     def to_primitive(self) -> Dict:
         statuses = [item.to_primitive() for item in self._status_history.all]
