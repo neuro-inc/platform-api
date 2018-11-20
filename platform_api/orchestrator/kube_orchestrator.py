@@ -1,6 +1,5 @@
 import asyncio
 import logging
-from asyncio import AbstractEventLoop
 from dataclasses import dataclass
 from pathlib import PurePath
 from typing import Dict, Optional
@@ -54,9 +53,15 @@ class JobStatusItemFactory:
                 return JobStatus.FAILED
         return JobStatus.PENDING
 
+    def _parse_reason_waiting(self) -> Optional[str]:
+        return self._pod_status.container_status.reason
+
     def _parse_reason(self) -> Optional[str]:
         if self._status == JobStatus.FAILED:
             return self._container_status.reason
+        if self._status == JobStatus.PENDING:
+            return self._parse_reason_waiting()
+
         return None
 
     def _compose_description(self) -> Optional[str]:
@@ -135,12 +140,8 @@ def convert_pod_status_to_job_status(pod_status: PodStatus) -> JobStatusItem:
 
 
 class KubeOrchestrator(Orchestrator):
-    def __init__(
-        self, *, config: KubeConfig, loop: Optional[AbstractEventLoop] = None
-    ) -> None:
-        if loop is None:
-            loop = asyncio.get_event_loop()
-        self._loop = loop
+    def __init__(self, *, config: KubeConfig) -> None:
+        self._loop = asyncio.get_event_loop()
 
         self._config = config
 
@@ -161,6 +162,9 @@ class KubeOrchestrator(Orchestrator):
 
         self._storage_volume = self._config.create_storage_volume()
 
+        # TODO (A Danshyn 11/16/18): make this configurable at some point
+        self._docker_secret_name_prefix = "neurouser-"
+
     @property
     def config(self) -> KubeConfig:
         return self._config
@@ -173,20 +177,35 @@ class KubeOrchestrator(Orchestrator):
         if self._client:
             await self._client.close()
 
-    async def start_job(self, job: Job, token: str) -> JobStatus:
+    def _get_pod_namespace(self, descriptor: PodDescriptor) -> str:
+        # TODO (A Yushkovskiy 31.10.2018): get namespace for the pod, not statically
+        return self._config.namespace
+
+    def _get_docker_secret_name(self, job: Job) -> str:
+        return (self._docker_secret_name_prefix + job.owner).lower()
+
+    async def _create_docker_secret(self, job: Job, token: str) -> DockerRegistrySecret:
         secret = DockerRegistrySecret(
-            name=job.owner,
-            password=token,
+            name=self._get_docker_secret_name(job),
             namespace=self._config.namespace,
+            username=job.owner,
+            password=token,
             email=self._config.registry.email,
             registry_server=self._config.registry.host,
         )
-        await self._client.create_secret(secret)
-        secret_names = [secret.objname]
+        await self._client.update_docker_secret(secret, create_non_existent=True)
+        return secret
+
+    async def _create_pod_descriptor(self, job: Job) -> PodDescriptor:
+        secret_names = [self._get_docker_secret_name(job)]
         node_selector = await self._get_pod_node_selector(job.request.container)
-        descriptor = PodDescriptor.from_job_request(
+        return PodDescriptor.from_job_request(
             self._storage_volume, job.request, secret_names, node_selector=node_selector
         )
+
+    async def start_job(self, job: Job, token: str) -> JobStatus:
+        await self._create_docker_secret(job, token)
+        descriptor = await self._create_pod_descriptor(job)
         status = await self._client.create_pod(descriptor)
         if job.has_http_server_exposed or job.has_ssh_server_exposed:
             logger.info(f"Starting Service for {job.id}.")
@@ -201,7 +220,13 @@ class KubeOrchestrator(Orchestrator):
                     ),
                 )
         job.status = convert_pod_status_to_job_status(status).status
+        job.internal_hostname = self._get_service_internal_hostname(job.id, descriptor)
         return job.status
+
+    def _get_service_internal_hostname(
+        self, service_name: str, pod_descriptor: PodDescriptor
+    ) -> str:
+        return f"{service_name}.{self._get_pod_namespace(pod_descriptor)}"
 
     async def _get_pod_node_selector(self, container: Container) -> Dict[str, str]:
         selector: Dict[str, str] = {}
@@ -221,7 +246,38 @@ class KubeOrchestrator(Orchestrator):
     async def get_job_status(self, job_id: str) -> JobStatusItem:
         pod_id = job_id
         status = await self._client.get_pod_status(pod_id)
-        return convert_pod_status_to_job_status(status)
+        job_status = convert_pod_status_to_job_status(status)
+
+        # Pod in pending state, and no container information available
+        # possible we are observing the case when Container requested
+        # too much resources, check events for NotTriggerScaleUp event
+        if (
+            job_status.status == JobStatus.PENDING
+            and not status.is_container_status_available
+        ):
+            pod_events = await self._client.get_pod_events(
+                pod_id, self._get_pod_namespace(None)
+            )
+            if pod_events:
+                # Handle clusters with autoscaler and without it
+                event = any(
+                    event.reason == "NotTriggerScaleUp"
+                    or event.reason == "FailedScheduling"
+                    for event in pod_events
+                )
+                if event:
+                    logger.info(
+                        f"Found pod that requested too much resources. ID={job_id}"
+                    )
+                    # Update the reason field of the job to Too Much Requested
+                    job_status = JobStatusItem.create(
+                        job_status.status,
+                        transition_time=job_status.transition_time,
+                        reason="Cluster doesn't have resources to fulfill request.",
+                        description=job_status.description,
+                    )
+
+        return job_status
 
     async def get_job_log_reader(self, job: Job) -> LogReader:
         return PodContainerLogReader(

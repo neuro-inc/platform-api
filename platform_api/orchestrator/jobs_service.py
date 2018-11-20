@@ -37,6 +37,13 @@ class JobsService:
 
         try:
             status_item = await self._orchestrator.get_job_status(job.id)
+            # TODO: In case job is found, but container is not in state Pending
+            # We shall go and check for the events assigned to the pod
+            # "pod didn't trigger scale-up (it wouldn't fit if a new node is added)"
+            # this is the sign that we KILL the job.
+            # Event details
+            # Additional details: NotTriggerScaleUp, Nov 2, 2018, 3:00:53 PM,
+            # 	Nov 2, 2018, 3:51:06 PM	178
         except JobNotFoundException as exc:
             logger.warning("Failed to get job %s status. Reason: %s", job.id, exc)
             status_item = JobStatusItem.create(

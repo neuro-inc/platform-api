@@ -165,6 +165,10 @@ class JobStatusHistory:
 
 
 class Job:
+    @dataclass()
+    class OrchestratorInfo:
+        job_hostname: Optional[str] = None
+
     def __init__(
         self,
         orchestrator_config: OrchestratorConfig,
@@ -196,9 +200,15 @@ class Job:
 
         self._owner = owner
 
+        self._internal_orchestrator_info: Job.OrchestratorInfo = Job.OrchestratorInfo()
+
     @property
     def id(self):
         return self._job_request.job_id
+
+    @property
+    def description(self) -> Optional[str]:
+        return self._job_request.description
 
     @property
     def owner(self) -> str:
@@ -288,10 +298,18 @@ class Job:
     def finished_at_str(self) -> Optional[str]:
         return self._status_history.finished_at_str
 
+    @property
+    def internal_hostname(self):
+        return self._internal_orchestrator_info.job_hostname
+
+    @internal_hostname.setter
+    def internal_hostname(self, value: Optional[str]):
+        self._internal_orchestrator_info.job_hostname = value
+
     def to_primitive(self) -> Dict:
         statuses = [item.to_primitive() for item in self._status_history.all]
         # preserving `status` and `finished_at` for forward compat
-        return {
+        result = {
             "id": self.id,
             "owner": self._owner,
             "request": self.request.to_primitive(),
@@ -300,6 +318,9 @@ class Job:
             "is_deleted": self.is_deleted,
             "finished_at": self.finished_at_str,
         }
+        if self.internal_hostname:
+            result["internal_hostname"] = self.internal_hostname
+        return result
 
     @classmethod
     def from_primitive(
@@ -311,13 +332,15 @@ class Job:
         )
         is_deleted = payload.get("is_deleted", False)
         owner = payload.get("owner", "")
-        return cls(
+        job = cls(
             orchestrator_config=orchestrator_config,
             job_request=job_request,
             status_history=status_history,
             is_deleted=is_deleted,
             owner=owner,
         )
+        job.internal_hostname = payload.get("internal_hostname", None)
+        return job
 
     @staticmethod
     def create_status_history_from_primitive(

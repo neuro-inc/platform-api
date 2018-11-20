@@ -1,5 +1,5 @@
 import logging
-from typing import Any, Dict, Sequence
+from typing import Any, Dict, Optional, Sequence
 
 import aiohttp.web
 import trafaret as t
@@ -31,6 +31,7 @@ def create_model_request_validator(
             # and validation here at some point
             "dataset_storage_uri": t.String,
             "result_storage_uri": t.String,
+            t.Key("description", optional=True): t.String,
         }
     )
 
@@ -42,6 +43,8 @@ def create_model_response_validator() -> t.Trafaret:
             "status": create_job_status_validator(),
             t.Key("http_url", optional=True): t.String,
             t.Key("ssh_server", optional=True): t.String,
+            t.Key("internal_hostname", optional=True): t.String,
+            t.Key("description", optional=True): t.String,
         }
     )
 
@@ -74,14 +77,18 @@ class ModelsHandler:
         gpu_models = await self._orchestrator.get_available_gpu_models()
         return create_model_request_validator(allowed_gpu_models=gpu_models)
 
-    async def _create_job(self, user: User, container: Container) -> Dict[str, Any]:
-        job_request = JobRequest.create(container)
+    async def _create_job(
+        self, user: User, container: Container, description: Optional[str] = None
+    ) -> Dict[str, Any]:
+        job_request = JobRequest.create(container, description)
         job, status = await self._jobs_service.create_job(job_request, user=user)
         payload = {"job_id": job.id, "status": status.value}
         if container.has_http_server_exposed:
             payload["http_url"] = job.http_url
         if container.has_ssh_server_exposed:
             payload["ssh_server"] = job.ssh_server
+        if job.internal_hostname:
+            payload["internal_hostname"] = job.internal_hostname
         return payload
 
     async def handle_post(self, request):
@@ -103,7 +110,8 @@ class ModelsHandler:
         logger.info("Checking whether %r has %r", user, permissions)
         await check_permission(request, permissions[0].action, permissions)
 
-        response_payload = await self._create_job(user, container)
+        description = request_payload.get("description")
+        response_payload = await self._create_job(user, container, description)
         self._model_response_validator.check(response_payload)
 
         return aiohttp.web.json_response(

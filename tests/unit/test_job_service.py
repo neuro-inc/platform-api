@@ -1,7 +1,10 @@
 import dataclasses
+from unittest import mock
+from unittest.mock import MagicMock
 
 import pytest
 
+from platform_api.handlers.jobs_handler import convert_job_to_job_response
 from platform_api.orchestrator import Job, JobRequest, JobsService, JobStatus
 from platform_api.orchestrator.job import JobStatusItem
 from platform_api.orchestrator.job_request import Container, ContainerResources
@@ -22,6 +25,40 @@ class TestInMemoryJobsStorage:
                 image="testimage", resources=ContainerResources(cpu=1, memory_mb=128)
             )
         )
+
+    def _create_job_request_with_description(self):
+        return JobRequest.create(
+            Container(
+                image="testimage", resources=ContainerResources(cpu=1, memory_mb=128)
+            ),
+            description="test test description",
+        )
+
+    @pytest.mark.asyncio
+    async def test_job_to_job_response(self, mock_orchestrator):
+        job = Job(
+            orchestrator_config=mock_orchestrator.config,
+            job_request=self._create_job_request_with_description(),
+        )
+        response = convert_job_to_job_response(job, MagicMock())
+        assert response == {
+            "id": job.id,
+            "owner": "compute",
+            "status": "pending",
+            "history": {
+                "status": "pending",
+                "reason": None,
+                "description": None,
+                "created_at": mock.ANY,
+            },
+            "container": {
+                "image": "testimage",
+                "env": {},
+                "volumes": [],
+                "resources": {"cpu": 1, "memory_mb": 128},
+            },
+            "description": "test test description",
+        }
 
     @pytest.mark.asyncio
     async def test_set_get_job(self, mock_orchestrator):

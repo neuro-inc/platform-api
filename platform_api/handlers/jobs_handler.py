@@ -35,7 +35,8 @@ def create_job_request_validator(
         {
             "container": create_container_request_validator(
                 allow_volumes=True, allowed_gpu_models=allowed_gpu_models
-            )
+            ),
+            t.Key("description", optional=True): t.String,
         }
     )
 
@@ -56,6 +57,8 @@ def create_job_response_validator() -> t.Trafaret:
             t.Key("ssh_server", optional=True): t.String,
             "history": create_job_history_validator(),
             "container": create_container_response_validator(),
+            t.Key("internal_hostname", optional=True): t.String,
+            t.Key("description", optional=True): t.String,
         }
     )
 
@@ -130,10 +133,14 @@ def convert_job_to_job_response(
             job.request.container, storage_config
         ),
     }
+    if job.description:
+        response_payload["description"] = job.description
     if job.has_http_server_exposed:
         response_payload["http_url"] = job.http_url
     if job.has_ssh_server_exposed:
         response_payload["ssh_server"] = job.ssh_server
+    if job.internal_hostname:
+        response_payload["internal_hostname"] = job.internal_hostname
     if history.started_at:
         response_payload["history"]["started_at"] = history.started_at_str
     if history.is_finished:
@@ -212,7 +219,8 @@ class JobsHandler:
         logger.info("Checking whether %r has %r", user, permissions)
         await check_permission(request, permissions[0].action, permissions)
 
-        job_request = JobRequest.create(container)
+        description = request_payload.get("description")
+        job_request = JobRequest.create(container, description)
         job, _ = await self._jobs_service.create_job(job_request, user=user)
         response_payload = convert_job_to_job_response(job, self._storage_config)
         self._job_response_validator.check(response_payload)

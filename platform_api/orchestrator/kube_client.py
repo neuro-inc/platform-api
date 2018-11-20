@@ -10,7 +10,7 @@ from contextlib import suppress
 from dataclasses import dataclass, field
 from pathlib import PurePath
 from types import TracebackType
-from typing import Any, ClassVar, DefaultDict, Dict, List, Optional, Type
+from typing import Any, DefaultDict, Dict, List, Optional, Type
 from urllib.parse import urlsplit
 
 import aiohttp
@@ -305,12 +305,18 @@ class Ingress:
 
 @dataclass(frozen=True)
 class DockerRegistrySecret:
-    PREFIX: ClassVar[str] = "neurouser-"
+    # TODO (A Danshyn 11/16/18): these two attributes along with `type` and
+    # `data` should be extracted into a parent class.
     name: str
-    password: str
     namespace: str
+
+    username: str
+    password: str
     email: str
     registry_server: str
+
+    # TODO (A Danshyn 11/16/18): should this be Optional?
+    type: str = "kubernetes.io/dockerconfigjson"
 
     def _build_json(self) -> str:
         return b64encode(
@@ -318,11 +324,11 @@ class DockerRegistrySecret:
                 {
                     "auths": {
                         self.registry_server: {
-                            "username": self.name,
+                            "username": self.username,
                             "password": self.password,
                             "email": self.email,
                             "auth": b64encode(
-                                (self.name + ":" + self.password).encode("utf-8")
+                                (self.username + ":" + self.password).encode("utf-8")
                             ).decode("ascii"),
                         }
                     }
@@ -334,14 +340,10 @@ class DockerRegistrySecret:
         return {
             "apiVersion": "v1",
             "kind": "Secret",
-            "metadata": {"name": self.objname, "namespace": self.namespace},
+            "metadata": {"name": self.name, "namespace": self.namespace},
             "data": {".dockerconfigjson": self._build_json()},
-            "type": "kubernetes.io/dockerconfigjson",
+            "type": self.type,
         }
-
-    @property
-    def objname(self):
-        return (self.PREFIX + self.name).lower()
 
 
 @dataclass(frozen=True)
@@ -584,6 +586,15 @@ class ContainerStatus:
         return self.is_waiting and self.reason in (None, "ContainerCreating")
 
 
+class KubernetesEvent:
+    def __init__(self, payload: Dict[str, Any]) -> None:
+        self._payload = payload or {}
+
+    @property
+    def reason(self) -> Optional[str]:
+        return self._payload.get("reason", None)
+
+
 class PodStatus:
     def __init__(self, payload):
         self._payload = payload
@@ -602,6 +613,10 @@ class PodStatus:
     @property
     def is_container_creating(self) -> bool:
         return self.container_status.is_creating
+
+    @property
+    def is_container_status_available(self) -> bool:
+        return "containerStatuses" in self._payload
 
     @classmethod
     def from_primitive(cls, payload):
@@ -783,9 +798,12 @@ class KubeClient:
     def _api_v1_url(self) -> str:
         return f"{self._base_url}/api/v1"
 
+    def _generate_namespace_url(self, namespace_name: str) -> str:
+        return f"{self._api_v1_url}/namespaces/{namespace_name}"
+
     @property
     def _namespace_url(self) -> str:
-        return f"{self._api_v1_url}/namespaces/{self._namespace}"
+        return self._generate_namespace_url(self._namespace)
 
     @property
     def _pods_url(self) -> str:
@@ -819,6 +837,17 @@ class KubeClient:
             f"{self._generate_pod_url(pod_name)}/log"
             f"?container={pod_name}&follow=true"
         )
+
+    def _generate_all_secrets_url(self, namespace_name: Optional[str] = None) -> str:
+        namespace_name = namespace_name or self._namespace
+        namespace_url = self._generate_namespace_url(namespace_name)
+        return f"{namespace_url}/secrets"
+
+    def _generate_secret_url(
+        self, secret_name: str, namespace_name: Optional[str] = None
+    ) -> str:
+        all_secrets_url = self._generate_all_secrets_url(namespace_name)
+        return f"{all_secrets_url}/{secret_name}"
 
     async def _request(self, *args, **kwargs):
         async with self._client.request(*args, **kwargs) as response:
@@ -909,23 +938,49 @@ class KubeClient:
         payload = await self._request(method="DELETE", url=url)
         self._check_status_payload(payload)
 
-    async def create_secret(self, secret: DockerRegistrySecret) -> None:
+    async def create_docker_secret(self, secret: DockerRegistrySecret) -> None:
+        url = self._generate_all_secrets_url(secret.namespace)
+        payload = await self._request(
+            method="POST", url=url, json=secret.to_primitive()
+        )
+        self._check_status_payload(payload)
+
+    async def update_docker_secret(
+        self, secret: DockerRegistrySecret, create_non_existent: bool = False
+    ) -> None:
         try:
+            url = self._generate_secret_url(secret.name, secret.namespace)
             payload = await self._request(
-                method="PUT",
-                url=f"{self._namespace_url}/secrets/{secret.objname}",
-                json=secret.to_primitive(),
+                method="PUT", url=url, json=secret.to_primitive()
             )
             self._check_status_payload(payload)
         except StatusException as exc:
-            if exc.args[0] != "NotFound":
+            if exc.args[0] != "NotFound" or not create_non_existent:
                 raise
-            payload = await self._request(
-                method="POST",
-                url=f"{self._namespace_url}/secrets",
-                json=secret.to_primitive(),
-            )
-            self._check_status_payload(payload)
+
+            await self.create_docker_secret(secret)
+
+    async def delete_secret(
+        self, secret_name: str, namespace_name: Optional[str] = None
+    ) -> None:
+        url = self._generate_secret_url(secret_name, namespace_name)
+        payload = await self._request(method="DELETE", url=url)
+        self._check_status_payload(payload)
+
+    async def get_pod_events(
+        self, pod_id: str, namespace: str
+    ) -> Optional[List[KubernetesEvent]]:
+        event_filter_params = {
+            "involvedObject.kind": "Pod",
+            "involvedObject.name": pod_id,
+        }
+        k8s_event_rest_url = f"{self._api_v1_url}/namespaces/{namespace}/events"
+        payload = await self._request(
+            method="GET", url=k8s_event_rest_url, params=event_filter_params
+        )
+        if payload and "items" in payload:
+            return [KubernetesEvent(item) for item in payload["items"]]
+        return None
 
     async def exec_pod(self, pod_id: str, command: str) -> PodExec:
         url = URL(self._generate_pod_url(pod_id)) / "exec"

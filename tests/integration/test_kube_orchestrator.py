@@ -2,6 +2,7 @@ import asyncio
 import io
 import uuid
 from pathlib import PurePath
+from typing import Optional, Tuple
 
 import aiohttp
 import pytest
@@ -104,6 +105,28 @@ class TestKubeOrchestrator:
         status = await self.wait_for_completion(*args, **kwargs)
         assert status == JobStatus.SUCCEEDED
 
+    async def wait_for_job(
+        self, job: Job, interval_s: float = 1.0, max_attempts: int = 30
+    ) -> Tuple[JobStatus, Optional[JobStatus]]:
+        """
+        Function to wait for a job to either sit in current state,
+        or transfer to another stage. Function never fails.
+
+        :param job:
+        :param interval_s:
+        :param max_attempts:
+        :return:
+        """
+        initial_status = await job.query_status()
+        status = None
+        for _ in range(max_attempts):
+            status = await job.query_status()
+            if status != initial_status:
+                break
+            else:
+                await asyncio.sleep(interval_s)
+        return initial_status, status
+
     @pytest.mark.asyncio
     async def test_start_job_happy_path(self, job_nginx, kube_orchestrator):
         status = await job_nginx.start()
@@ -112,9 +135,7 @@ class TestKubeOrchestrator:
         await self.wait_for_success(job_nginx)
 
         pod = await kube_orchestrator._client.get_pod(job_nginx.id)
-        assert pod.image_pull_secrets == [
-            SecretRef(DockerRegistrySecret.PREFIX + job_nginx.owner)
-        ]
+        assert pod.image_pull_secrets == [SecretRef(f"neurouser-{job_nginx.owner}")]
 
         status = await job_nginx.delete()
         assert status == JobStatus.SUCCEEDED
@@ -243,6 +264,31 @@ class TestKubeOrchestrator:
             await job.delete()
 
     @pytest.mark.asyncio
+    async def test_job_bunch_of_cpu(self, kube_orchestrator):
+        command = 'bash -c "for i in {100..1}; do echo $i; done; false"'
+        container = Container(
+            image="ubuntu",
+            command=command,
+            resources=ContainerResources(cpu=100, memory_mb=16536),
+        )
+        job = MyJob(
+            orchestrator=kube_orchestrator, job_request=JobRequest.create(container)
+        )
+        try:
+            status = await job.start()
+            assert status == JobStatus.PENDING
+
+            _, _ = await self.wait_for_job(job, max_attempts=10)
+
+            status_item = await kube_orchestrator.get_job_status(job.id)
+            assert status_item == JobStatusItem.create(
+                JobStatus.PENDING,
+                reason="Cluster doesn't have resources to fulfill request.",
+            )
+        finally:
+            await job.delete()
+
+    @pytest.mark.asyncio
     async def test_volumes(self, kube_config, kube_orchestrator):
         await self._test_volumes(kube_config, kube_orchestrator)
 
@@ -312,7 +358,7 @@ class TestKubeOrchestrator:
         container = Container(
             image="ubuntu",
             env={"A": "2", "B": "3"},
-            command=f"""bash -c '[ "$(expr $A \* $B)" == "{product}" ]'""",
+            command=fr"""bash -c '[ "$(expr $A \* $B)" == "{product}" ]'""",
             resources=ContainerResources(cpu=0.1, memory_mb=128),
         )
         job = MyJob(
@@ -428,6 +474,52 @@ class TestKubeOrchestrator:
             )
         finally:
             await job.delete()
+
+    @pytest.mark.asyncio
+    async def test_job_check_dns_hostname(
+        self, kube_config, kube_orchestrator, kube_ingress_ip
+    ):
+        def create_server_job():
+            server_cont = Container(
+                image="python",
+                command="python -m http.server 80",
+                resources=ContainerResources(cpu=0.1, memory_mb=128),
+                http_server=ContainerHTTPServer(port=80),
+            )
+            return MyJob(
+                orchestrator=kube_orchestrator,
+                job_request=JobRequest.create(server_cont),
+            )
+
+        def create_client_job(server_hostname: str):
+            client_cont = Container(
+                image="ubuntu",
+                command=f"curl --silent --fail http://{server_hostname}/",
+                resources=ContainerResources(cpu=0.1, memory_mb=128),
+            )
+            return MyJob(
+                orchestrator=kube_orchestrator,
+                job_request=JobRequest.create(client_cont),
+            )
+
+        server_job = create_server_job()
+        client_job = None
+        try:
+            server_status = await server_job.start()
+            assert server_status == JobStatus.PENDING
+            server_hostname = server_job.internal_hostname
+            await self._wait_for_job_service(
+                kube_ingress_ip, kube_config.jobs_ingress_domain_name, server_job.id
+            )
+            client_job = create_client_job(server_hostname)
+            client_status = await client_job.start()
+            assert client_status == JobStatus.PENDING
+            assert self.wait_for_success(job=client_job)
+
+        finally:
+            await server_job.delete()
+            if client_job is not None:
+                await client_job.delete()
 
     async def _assert_no_such_ingress_rule(
         self, kube_client, ingress_name, host, timeout_s: int = 1, interval_s: int = 1
@@ -553,6 +645,93 @@ class TestKubeClient:
         async with stream_cm as stream:
             payload = await stream.read()
             assert payload == b""
+
+    @pytest.mark.asyncio
+    async def test_create_docker_secret_non_existent_namespace(
+        self, kube_config, kube_client
+    ):
+        name = str(uuid.uuid4())
+        docker_secret = DockerRegistrySecret(
+            name=name,
+            namespace=name,
+            username="testuser",
+            password="testpassword",
+            email="testuser@example.com",
+            registry_server="registry.example.com",
+        )
+
+        with pytest.raises(StatusException, match="NotFound"):
+            await kube_client.create_docker_secret(docker_secret)
+
+    @pytest.mark.asyncio
+    async def test_create_docker_secret_already_exists(self, kube_config, kube_client):
+        name = str(uuid.uuid4())
+        docker_secret = DockerRegistrySecret(
+            name=name,
+            namespace=kube_config.namespace,
+            username="testuser",
+            password="testpassword",
+            email="testuser@example.com",
+            registry_server="registry.example.com",
+        )
+
+        try:
+            await kube_client.create_docker_secret(docker_secret)
+
+            with pytest.raises(StatusException, match="AlreadyExists"):
+                await kube_client.create_docker_secret(docker_secret)
+        finally:
+            await kube_client.delete_secret(name, kube_config.namespace)
+
+    @pytest.mark.asyncio
+    async def test_update_docker_secret_already_exists(self, kube_config, kube_client):
+        name = str(uuid.uuid4())
+        docker_secret = DockerRegistrySecret(
+            name=name,
+            namespace=kube_config.namespace,
+            username="testuser",
+            password="testpassword",
+            email="testuser@example.com",
+            registry_server="registry.example.com",
+        )
+
+        try:
+            await kube_client.create_docker_secret(docker_secret)
+            await kube_client.update_docker_secret(docker_secret)
+        finally:
+            await kube_client.delete_secret(name, kube_config.namespace)
+
+    @pytest.mark.asyncio
+    async def test_update_docker_secret_non_existent(self, kube_config, kube_client):
+        name = str(uuid.uuid4())
+        docker_secret = DockerRegistrySecret(
+            name=name,
+            namespace=kube_config.namespace,
+            username="testuser",
+            password="testpassword",
+            email="testuser@example.com",
+            registry_server="registry.example.com",
+        )
+
+        with pytest.raises(StatusException, match="NotFound"):
+            await kube_client.update_docker_secret(docker_secret)
+
+    @pytest.mark.asyncio
+    async def test_update_docker_secret_create_non_existent(
+        self, kube_config, kube_client
+    ):
+        name = str(uuid.uuid4())
+        docker_secret = DockerRegistrySecret(
+            name=name,
+            namespace=kube_config.namespace,
+            username="testuser",
+            password="testpassword",
+            email="testuser@example.com",
+            registry_server="registry.example.com",
+        )
+
+        await kube_client.update_docker_secret(docker_secret, create_non_existent=True)
+        await kube_client.update_docker_secret(docker_secret)
 
 
 class TestPodContainerLogReader:
