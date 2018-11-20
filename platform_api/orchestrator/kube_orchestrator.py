@@ -363,8 +363,6 @@ class KubeOrchestrator(Orchestrator):
         if do_recreate_pod:
             logger.info(f"Recreating preempted pod '{pod_name}'. Job '{job.id}'")
             descriptor = await self._create_pod_descriptor(job)
-            # TODO: this may raise StatusException AlreadyExists in case
-            # the pod is still being deleted.
             pod_status = await self._client.create_pod(descriptor)
 
         return pod_status

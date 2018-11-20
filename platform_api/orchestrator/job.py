@@ -26,6 +26,10 @@ class JobStatusItem:
     description: Optional[str] = None
 
     @property
+    def is_pending(self) -> bool:
+        return self.status.is_pending
+
+    @property
     def is_running(self) -> bool:
         return self.status.is_running
 
