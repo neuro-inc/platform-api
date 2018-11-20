@@ -358,7 +358,7 @@ class TestKubeOrchestrator:
         container = Container(
             image="ubuntu",
             env={"A": "2", "B": "3"},
-            command=f"""bash -c '[ "$(expr $A \* $B)" == "{product}" ]'""",
+            command=fr"""bash -c '[ "$(expr $A \* $B)" == "{product}" ]'""",
             resources=ContainerResources(cpu=0.1, memory_mb=128),
         )
         job = MyJob(
