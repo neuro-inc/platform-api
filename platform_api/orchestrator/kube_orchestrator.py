@@ -1,5 +1,5 @@
+import asyncio
 import logging
-from asyncio import AbstractEventLoop
 from dataclasses import dataclass
 from pathlib import PurePath
 from typing import Dict, Optional
@@ -139,10 +139,8 @@ def convert_pod_status_to_job_status(pod_status: PodStatus) -> JobStatusItem:
 
 
 class KubeOrchestrator(Orchestrator):
-    def __init__(
-        self, *, config: KubeConfig, loop: Optional[AbstractEventLoop] = None
-    ) -> None:
-        self._loop = loop
+    def __init__(self, *, config: KubeConfig) -> None:
+        self._loop = asyncio.get_event_loop()
 
         self._config = config
 

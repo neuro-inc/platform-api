@@ -9,14 +9,8 @@ logger = logging.getLogger(__name__)
 
 
 class JobsStatusPooling:
-    def __init__(
-        self,
-        *,
-        jobs_service: JobsService,
-        interval_s: int = 1,
-        loop: Optional[asyncio.AbstractEventLoop] = None
-    ) -> None:
-        self._loop = loop or asyncio.get_event_loop()
+    def __init__(self, *, jobs_service: JobsService, interval_s: int = 1) -> None:
+        self._loop = asyncio.get_event_loop()
 
         self._jobs_service = jobs_service
         self._interval_s = interval_s
@@ -40,9 +34,9 @@ class JobsStatusPooling:
         assert not self._task
 
         self._is_active = self._loop.create_future()
-        self._task = asyncio.ensure_future(self._run(), loop=self._loop)
+        self._task = asyncio.ensure_future(self._run())
         # forcing execution of the newly created task
-        await asyncio.sleep(0, loop=self._loop)
+        await asyncio.sleep(0)
 
     async def stop(self):
         logger.info("Stopping jobs status pooling")
@@ -66,6 +60,4 @@ class JobsStatusPooling:
             logger.exception("exception when trying update jobs status")
 
     async def _wait(self):
-        await asyncio.wait(
-            (self._is_active,), loop=self._loop, timeout=self._interval_s
-        )
+        await asyncio.wait((self._is_active,), timeout=self._interval_s)

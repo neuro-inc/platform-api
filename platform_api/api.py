@@ -94,7 +94,7 @@ async def create_app(config: Config) -> aiohttp.web.Application:
             )
 
             logger.info("Initializing Orchestrator")
-            orchestrator = KubeOrchestrator(config=config.orchestrator, loop=app.loop)
+            orchestrator = KubeOrchestrator(config=config.orchestrator)
             await exit_stack.enter_async_context(orchestrator)
 
             app["models_app"]["orchestrator"] = orchestrator
@@ -109,9 +109,7 @@ async def create_app(config: Config) -> aiohttp.web.Application:
             )
 
             logger.info("Initializing JobsStatusPolling")
-            jobs_status_polling = JobsStatusPooling(
-                jobs_service=jobs_service, loop=app.loop
-            )
+            jobs_status_polling = JobsStatusPooling(jobs_service=jobs_service)
             await exit_stack.enter_async_context(jobs_status_polling)
 
             app["models_app"]["jobs_service"] = jobs_service
