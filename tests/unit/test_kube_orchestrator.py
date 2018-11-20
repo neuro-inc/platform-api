@@ -176,7 +176,7 @@ class TestPodDescriptor:
                 "tolerations": [
                     {
                         "key": "testkey",
-                        "operation": "Equal",
+                        "operator": "Equal",
                         "value": "testvalue",
                         "effect": "NoSchedule",
                     }

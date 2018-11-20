@@ -264,24 +264,24 @@ class KubeOrchestrator(Orchestrator):
                 }
             }
 
+        node_selector_term = {
+            "matchExpressions": [
+                {"key": self._config.node_label_preemptible, "operator": "Exists"}
+            ]
+        }
+
         if job.force_preemptible_resource_pool_type:
             return {
                 "requiredDuringSchedulingIgnoredDuringExecution": {
-                    "nodeSelectorTerms": [
-                        {
-                            "matchExpressions": [
-                                {
-                                    "key": self._config.node_label_preemptible,
-                                    "operator": "Exists",
-                                }
-                            ]
-                        }
-                    ]
+                    "nodeSelectorTerms": [node_selector_term]
                 }
             }
 
-        # preferred
-        return {}
+        return {
+            "preferredDuringSchedulingIgnoredDuringExecution": [
+                {"weight": 100, "preference": node_selector_term}
+            ]
+        }
 
     async def _get_pod_node_selector(self, job: Job) -> Dict[str, str]:
         container = job.request.container
