@@ -1,5 +1,6 @@
 import abc
 import asyncio
+import copy
 import enum
 import json
 import logging
@@ -383,6 +384,7 @@ class PodDescriptor:
     resources: Optional[Resources] = None
     node_selector: Dict[str, str] = field(default_factory=dict)
     tolerations: List[Toleration] = field(default_factory=list)
+    node_affinity: Dict[str, Any] = field(default_factory=dict)
 
     port: Optional[int] = None
     ssh_port: Optional[int] = None
@@ -400,6 +402,7 @@ class PodDescriptor:
         secret_names: Optional[List[str]] = None,
         node_selector: Optional[Dict[str, str]] = None,
         tolerations: Optional[List[Toleration]] = None,
+        node_affinity: Optional[Dict[str, Any]] = None,
     ) -> "PodDescriptor":
         container = job_request.container
         volume_mounts = [
@@ -438,6 +441,7 @@ class PodDescriptor:
             image_pull_secrets=image_pull_secrets,
             node_selector=node_selector or {},
             tolerations=tolerations or [],
+            node_affinity=node_affinity or {},
         )
 
     @property
@@ -490,6 +494,10 @@ class PodDescriptor:
         }
         if self.node_selector:
             payload["spec"]["nodeSelector"] = self.node_selector.copy()
+        if self.node_affinity:
+            payload["spec"]["affinity"] = {
+                "nodeAffinity": copy.deepcopy(self.node_affinity)
+            }
         return payload
 
     def _to_primitive_ports(self):

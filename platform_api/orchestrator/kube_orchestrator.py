@@ -2,7 +2,7 @@ import logging
 from asyncio import AbstractEventLoop
 from dataclasses import dataclass
 from pathlib import PurePath
-from typing import Dict, List, Optional
+from typing import Any, Dict, List, Optional
 
 from ..config import OrchestratorConfig  # noqa
 from .base import LogReader, Orchestrator
@@ -196,12 +196,14 @@ class KubeOrchestrator(Orchestrator):
         secret_names = [self._get_docker_secret_name(job)]
         node_selector = await self._get_pod_node_selector(job)
         tolerations = self._get_pod_tolerations(job)
+        node_affinity = self._get_pod_node_affinity(job)
         return PodDescriptor.from_job_request(
             self._storage_volume,
             job.request,
             secret_names,
             node_selector=node_selector,
             tolerations=tolerations,
+            node_affinity=node_affinity,
         )
 
     async def start_job(self, job: Job, token: str) -> JobStatus:
@@ -241,12 +243,46 @@ class KubeOrchestrator(Orchestrator):
             )
         return tolerations
 
+    def _get_pod_node_affinity(self, job: Job) -> Dict[str, Any]:
+        if not job.is_preemptible:
+            return {
+                "requiredDuringSchedulingIgnoredDuringExecution": {
+                    "nodeSelectorTerms": [
+                        {
+                            "matchExpressions": [
+                                {
+                                    "key": "cloud.google.com/gke-preemptible",
+                                    "operator": "NotIn",
+                                    "values": ["true"],
+                                }
+                            ]
+                        }
+                    ]
+                }
+            }
+
+        if job.force_preemptible_resource_pool_type:
+            return {
+                "requiredDuringSchedulingIgnoredDuringExecution": {
+                    "nodeSelectorTerms": [
+                        {
+                            "matchExpressions": [
+                                {
+                                    "key": "cloud.google.com/gke-preemptible",
+                                    "operator": "In",
+                                    "values": ["true"],
+                                }
+                            ]
+                        }
+                    ]
+                }
+            }
+
+        return {}
+
     async def _get_pod_node_selector(self, job: Job) -> Dict[str, str]:
         container = job.request.container
         selector: Dict[str, str] = {}
-
-        if job.force_preemptible_resource_pool_type:
-            selector["cloud.google.com/gke-preemptible"] = "true"
 
         if not self._config.node_label_gpu:
             return selector
