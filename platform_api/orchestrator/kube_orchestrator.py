@@ -7,7 +7,7 @@ from typing import Any, Dict, List, Optional
 from ..config import OrchestratorConfig  # noqa
 from .base import LogReader, Orchestrator
 from .job import Job, JobStatusItem
-from .job_request import JobNotFoundException, JobStatus
+from .job_request import JobError, JobNotFoundException, JobStatus
 from .kube_client import *  # noqa
 from .kube_client import (
     DockerRegistrySecret,
@@ -363,7 +363,13 @@ class KubeOrchestrator(Orchestrator):
         if do_recreate_pod:
             logger.info(f"Recreating preempted pod '{pod_name}'. Job '{job.id}'")
             descriptor = await self._create_pod_descriptor(job)
-            pod_status = await self._client.create_pod(descriptor)
+            try:
+                pod_status = await self._client.create_pod(descriptor)
+            except JobError:
+                # handing possible 422 and other failures
+                raise JobNotFoundException(
+                    f"Pod '{pod_name}' not found. Job '{job.id}'"
+                )
 
         return pod_status
 
