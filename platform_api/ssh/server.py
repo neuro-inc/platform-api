@@ -2,10 +2,9 @@ import asyncio
 import logging
 import pathlib
 import signal
-import traceback
 from contextlib import suppress
 from functools import partial
-from typing import Awaitable
+from typing import Awaitable, List
 
 import asyncssh
 
@@ -90,9 +89,6 @@ class ShellSession:
         pod_id = username
         loop = asyncio.get_event_loop()
         try:
-            # process.stdout.write(
-            #     "Welcome to my SSH server, %s!\n" % process.get_extra_info("username")
-            # )
             command = process.command
             if command is None:
                 command = "sh -i"
@@ -132,12 +128,10 @@ class ShellSession:
                 await self._stdin_redirect
             self._stdin_redirect = None
         if self._stdout_redirect is not None:
-            # self._stdout_redirect.cancel()
             with suppress(asyncio.CancelledError):
                 await self._stdout_redirect
             self._stdout_redirect = None
         if self._stderr_redirect is not None:
-            # self._stderr_redirect.cancel()
             with suppress(asyncio.CancelledError):
                 await self._stderr_redirect
             self._stderr_redirect = None
@@ -149,7 +143,7 @@ class SSHServer:
         self._host = host
         self._port = port
         self._server = None
-        self._ssh_host_keys = []
+        self._ssh_host_keys: List[str] = []
         here = pathlib.Path(__file__).parent
         self._ssh_host_keys.append(str(here / "ssh_host_dsa_key"))
         self._ssh_host_keys.append(str(here / "ssh_host_rsa_key"))
@@ -174,8 +168,6 @@ class SSHServer:
         )
         address = self._server.sockets[0].getsockname()
         self._host, self._port = address
-        # server_host_keys=['ssh_host_key'],
-        # process_factory=handle_client)
 
     async def stop(self):
         self._server.close()
@@ -184,7 +176,6 @@ class SSHServer:
 
 def init_logging():
     logging.basicConfig(
-        # TODO (A Danshyn 06/01/18): expose in the Config
         level=logging.DEBUG,
         format="%(asctime)s - %(name)s - %(levelname)s - %(message)s",
     )
