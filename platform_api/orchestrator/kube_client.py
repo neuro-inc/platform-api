@@ -705,8 +705,10 @@ class ExecChannel(int, enum.Enum):
 
 
 class PodExec:
-    RE_EXIT = re.compile(br'^command terminated with non-zero exit code: '
-                         br'Error executing in Docker Container: (\d+)$')
+    RE_EXIT = re.compile(
+        br"^command terminated with non-zero exit code: "
+        br"Error executing in Docker Container: (\d+)$"
+    )
 
     def __init__(self, ws: aiohttp.ClientWebSocketResponse) -> None:
         self._ws = ws

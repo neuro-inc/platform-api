@@ -5,9 +5,9 @@ import asyncssh
 import pytest
 
 from platform_api.config import Config, DatabaseConfig, ServerConfig, StorageConfig
-from platform_api.orchestrator.kube_orchestrator import PodDescriptor, KubeOrchestrator
 from platform_api.orchestrator.job import JobRequest
 from platform_api.orchestrator.job_request import Container, ContainerResources
+from platform_api.orchestrator.kube_orchestrator import KubeOrchestrator, PodDescriptor
 from platform_api.ssh.server import SSHServer
 
 
@@ -89,9 +89,10 @@ async def test_simple(ssh_server, kube_client, kube_config, delete_pod_later):
     await kube_client.create_pod(pod)
     await kube_client.wait_pod_is_running(pod_name=pod.name, timeout_s=60.0)
 
-    async with asyncssh.connect(ssh_server.host, ssh_server.port,
-                                username=pod.name) as conn:
-        proc = await conn.create_process('pwd')
+    async with asyncssh.connect(
+        ssh_server.host, ssh_server.port, username=pod.name
+    ) as conn:
+        proc = await conn.create_process("pwd")
         stdout = await proc.stdout.read()
         assert stdout == "/\r\n"
 
@@ -111,12 +112,13 @@ async def test_shell(ssh_server, kube_client, kube_config, delete_pod_later):
     await kube_client.create_pod(pod)
     await kube_client.wait_pod_is_running(pod_name=pod.name, timeout_s=60.0)
 
-    async with asyncssh.connect(ssh_server.host, ssh_server.port,
-                                username=pod.name) as conn:
-        proc = await conn.create_process('bash')
-        proc.stdin.write('pwd\n')
+    async with asyncssh.connect(
+        ssh_server.host, ssh_server.port, username=pod.name
+    ) as conn:
+        proc = await conn.create_process("bash")
+        proc.stdin.write("pwd\n")
 
-        await proc.stdout.readuntil('\r\n/\r\n')
+        await proc.stdout.readuntil("\r\n/\r\n")
 
         proc.stdin.write_eof()
 
@@ -136,10 +138,11 @@ async def test_exit_code(ssh_server, kube_client, kube_config, delete_pod_later)
     await kube_client.create_pod(pod)
     await kube_client.wait_pod_is_running(pod_name=pod.name, timeout_s=60.0)
 
-    async with asyncssh.connect(ssh_server.host, ssh_server.port,
-                                username=pod.name) as conn:
-        proc = await conn.create_process('bash')
-        proc.stdin.write('exit 42\n')
+    async with asyncssh.connect(
+        ssh_server.host, ssh_server.port, username=pod.name
+    ) as conn:
+        proc = await conn.create_process("bash")
+        proc.stdin.write("exit 42\n")
 
         ret = await proc.wait()
         assert ret.exit_status == 42
