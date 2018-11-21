@@ -117,7 +117,6 @@ jobs:
             python -m venv venv
             source venv/bin/activate
             pip install -U pip
-            pip install --only-binary :all: -e .
             make setup
             pip uninstall -y hiredis
 
