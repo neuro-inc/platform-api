@@ -26,6 +26,10 @@ class JobStatusItem:
     description: Optional[str] = None
 
     @property
+    def is_pending(self) -> bool:
+        return self.status.is_pending
+
+    @property
     def is_running(self) -> bool:
         return self.status.is_running
 
@@ -179,6 +183,8 @@ class Job:
         is_deleted: bool = False,
         current_datetime_factory=current_datetime_factory,
         owner: str = "",
+        is_preemptible: bool = False,
+        is_forced_to_preemptible_pool: bool = True,
     ) -> None:
         self._orchestrator_config = orchestrator_config
         self._job_request = job_request
@@ -201,6 +207,8 @@ class Job:
         self._owner = owner
 
         self._internal_orchestrator_info: Job.OrchestratorInfo = Job.OrchestratorInfo()
+        self._is_preemptible = is_preemptible
+        self._is_forced_to_preemptible_pool = is_forced_to_preemptible_pool
 
     @property
     def id(self):
@@ -305,6 +313,14 @@ class Job:
     @internal_hostname.setter
     def internal_hostname(self, value: Optional[str]):
         self._internal_orchestrator_info.job_hostname = value
+
+    @property
+    def is_preemptible(self) -> bool:
+        return self._is_preemptible
+
+    @property
+    def is_forced_to_preemptible_pool(self) -> bool:
+        return self.is_preemptible and self._is_forced_to_preemptible_pool
 
     def to_primitive(self) -> Dict:
         statuses = [item.to_primitive() for item in self._status_history.all]

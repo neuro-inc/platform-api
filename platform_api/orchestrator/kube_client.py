@@ -1,5 +1,6 @@
 import abc
 import asyncio
+import copy
 import enum
 import json
 import logging
@@ -359,6 +360,26 @@ class SecretRef:
 
 
 @dataclass(frozen=True)
+class Toleration:
+    """
+    https://kubernetes.io/docs/reference/generated/kubernetes-api/v1.12/#toleration-v1-core
+    """
+
+    key: str
+    operator: str = "Equal"
+    value: str = ""
+    effect: str = ""
+
+    def to_primitive(self) -> Dict[str, Any]:
+        return {
+            "key": self.key,
+            "operator": self.operator,
+            "value": self.value,
+            "effect": self.effect,
+        }
+
+
+@dataclass(frozen=True)
 class PodDescriptor:
     name: str
     image: str
@@ -368,6 +389,8 @@ class PodDescriptor:
     volumes: List[Volume] = field(default_factory=list)
     resources: Optional[Resources] = None
     node_selector: Dict[str, str] = field(default_factory=dict)
+    tolerations: List[Toleration] = field(default_factory=list)
+    node_affinity: Dict[str, Any] = field(default_factory=dict)
 
     port: Optional[int] = None
     ssh_port: Optional[int] = None
@@ -384,6 +407,8 @@ class PodDescriptor:
         job_request: JobRequest,
         secret_names: Optional[List[str]] = None,
         node_selector: Optional[Dict[str, str]] = None,
+        tolerations: Optional[List[Toleration]] = None,
+        node_affinity: Optional[Dict[str, Any]] = None,
     ) -> "PodDescriptor":
         container = job_request.container
         volume_mounts = [
@@ -421,6 +446,8 @@ class PodDescriptor:
             health_check_path=container.health_check_path,
             image_pull_secrets=image_pull_secrets,
             node_selector=node_selector or {},
+            tolerations=tolerations or [],
+            node_affinity=node_affinity or {},
         )
 
     @property
@@ -466,10 +493,17 @@ class PodDescriptor:
                 "imagePullSecrets": [
                     secret.to_primitive() for secret in self.image_pull_secrets
                 ],
+                "tolerations": [
+                    toleration.to_primitive() for toleration in self.tolerations
+                ],
             },
         }
         if self.node_selector:
             payload["spec"]["nodeSelector"] = self.node_selector.copy()
+        if self.node_affinity:
+            payload["spec"]["affinity"] = {
+                "nodeAffinity": copy.deepcopy(self.node_affinity)
+            }
         return payload
 
     def _to_primitive_ports(self):
@@ -598,25 +632,64 @@ class KubernetesEvent:
 class PodStatus:
     def __init__(self, payload):
         self._payload = payload
+        self._container_status = self._init_container_status()
 
-    @property
-    def phase(self):
-        return self._payload["phase"]
-
-    @property
-    def container_status(self) -> ContainerStatus:
+    def _init_container_status(self) -> ContainerStatus:
         payload = None
         if "containerStatuses" in self._payload:
             payload = self._payload["containerStatuses"][0]
         return ContainerStatus(payload=payload)
 
     @property
+    def phase(self):
+        """
+        "Pending", "Running", "Succeeded", "Failed", "Unknown"
+        """
+        return self._payload["phase"]
+
+    @property
+    def is_phase_pending(self) -> bool:
+        return self.phase == "Pending"
+
+    @property
+    def is_scheduled(self) -> bool:
+        # TODO (A Danshyn 11/16/18): we should consider using "conditions"
+        # type="PodScheduled" reason="unschedulable" instead.
+        return not self.is_phase_pending or self.is_container_status_available
+
+    @property
+    def reason(self) -> Optional[str]:
+        """
+
+        If kubelet decides to evict the pod, it sets the "Failed" phase along with
+        the "Evicted" reason.
+        https://github.com/kubernetes/kubernetes/blob/a3ccea9d8743f2ff82e41b6c2af6dc2c41dc7b10/pkg/kubelet/eviction/eviction_manager.go#L543-L566
+        If a node the pod scheduled on fails, node lifecycle controller sets
+        the "NodeList" reason.
+        https://github.com/kubernetes/kubernetes/blob/a3ccea9d8743f2ff82e41b6c2af6dc2c41dc7b10/pkg/controller/util/node/controller_utils.go#L109-L126
+        """
+        # the pod status reason has a greater priority
+        return self._payload.get("reason") or self._container_status.reason
+
+    @property
+    def message(self) -> Optional[str]:
+        return self._payload.get("message") or self._container_status.message
+
+    @property
+    def container_status(self) -> ContainerStatus:
+        return self._container_status
+
+    @property
     def is_container_creating(self) -> bool:
-        return self.container_status.is_creating
+        return self._container_status.is_creating
 
     @property
     def is_container_status_available(self) -> bool:
         return "containerStatuses" in self._payload
+
+    @property
+    def is_node_lost(self):
+        return self.reason == "NodeLost"
 
     @classmethod
     def from_primitive(cls, payload):
@@ -871,9 +944,16 @@ class KubeClient:
         pod = await self.get_pod(pod_id)
         return pod.status  # type: ignore
 
-    async def delete_pod(self, pod_id: str) -> PodStatus:
-        url = self._generate_pod_url(pod_id)
-        payload = await self._request(method="DELETE", url=url)
+    async def delete_pod(self, pod_name: str, force: bool = False) -> PodStatus:
+        url = self._generate_pod_url(pod_name)
+        request_payload = None
+        if force:
+            request_payload = {
+                "apiVersion": "v1",
+                "kind": "DeleteOptions",
+                "gracePeriodSeconds": 0,
+            }
+        payload = await self._request(method="DELETE", url=url, json=request_payload)
         return PodDescriptor.from_primitive(payload).status
 
     async def create_ingress(self, name) -> Ingress:

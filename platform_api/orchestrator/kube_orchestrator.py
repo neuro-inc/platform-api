@@ -2,12 +2,12 @@ import asyncio
 import logging
 from dataclasses import dataclass
 from pathlib import PurePath
-from typing import Dict, Optional
+from typing import Any, Dict, List, Optional
 
 from ..config import OrchestratorConfig  # noqa
 from .base import LogReader, Orchestrator
 from .job import Job, JobStatusItem
-from .job_request import Container, JobStatus
+from .job_request import JobError, JobNotFoundException, JobStatus
 from .kube_client import *  # noqa
 from .kube_client import (
     DockerRegistrySecret,
@@ -20,6 +20,7 @@ from .kube_client import (
     PodExec,
     PodStatus,
     Service,
+    Toleration,
     Volume,
 )
 from .logs import PodContainerLogReader
@@ -53,15 +54,9 @@ class JobStatusItemFactory:
                 return JobStatus.FAILED
         return JobStatus.PENDING
 
-    def _parse_reason_waiting(self) -> Optional[str]:
-        return self._pod_status.container_status.reason
-
     def _parse_reason(self) -> Optional[str]:
-        if self._status == JobStatus.FAILED:
+        if self._status in (JobStatus.PENDING, JobStatus.FAILED):
             return self._container_status.reason
-        if self._status == JobStatus.PENDING:
-            return self._parse_reason_waiting()
-
         return None
 
     def _compose_description(self) -> Optional[str]:
@@ -106,6 +101,7 @@ class KubeConfig(OrchestratorConfig):
     job_deletion_delay_s: int = 60 * 60 * 24
 
     node_label_gpu: Optional[str] = None
+    node_label_preemptible: Optional[str] = None
 
     def __post_init__(self):
         if not all((self.jobs_ingress_name, self.endpoint_url)):
@@ -198,9 +194,16 @@ class KubeOrchestrator(Orchestrator):
 
     async def _create_pod_descriptor(self, job: Job) -> PodDescriptor:
         secret_names = [self._get_docker_secret_name(job)]
-        node_selector = await self._get_pod_node_selector(job.request.container)
+        node_selector = await self._get_pod_node_selector(job)
+        tolerations = self._get_pod_tolerations(job)
+        node_affinity = self._get_pod_node_affinity(job)
         return PodDescriptor.from_job_request(
-            self._storage_volume, job.request, secret_names, node_selector=node_selector
+            self._storage_volume,
+            job.request,
+            secret_names,
+            node_selector=node_selector,
+            tolerations=tolerations,
+            node_affinity=node_affinity,
         )
 
     async def start_job(self, job: Job, token: str) -> JobStatus:
@@ -228,7 +231,59 @@ class KubeOrchestrator(Orchestrator):
     ) -> str:
         return f"{service_name}.{self._get_pod_namespace(pod_descriptor)}"
 
-    async def _get_pod_node_selector(self, container: Container) -> Dict[str, str]:
+    def _get_pod_tolerations(self, job: Job) -> List[Toleration]:
+        tolerations = []
+        if self._config.node_label_preemptible and job.is_preemptible:
+            tolerations.append(
+                Toleration(
+                    key=self._config.node_label_preemptible,
+                    operator="Exists",
+                    effect="NoSchedule",
+                )
+            )
+        return tolerations
+
+    def _get_pod_node_affinity(self, job: Job) -> Dict[str, Any]:
+        if not self._config.node_label_preemptible:
+            return {}
+
+        if not job.is_preemptible:
+            return {
+                "requiredDuringSchedulingIgnoredDuringExecution": {
+                    "nodeSelectorTerms": [
+                        {
+                            "matchExpressions": [
+                                {
+                                    "key": self._config.node_label_preemptible,
+                                    "operator": "DoesNotExist",
+                                }
+                            ]
+                        }
+                    ]
+                }
+            }
+
+        node_selector_term = {
+            "matchExpressions": [
+                {"key": self._config.node_label_preemptible, "operator": "Exists"}
+            ]
+        }
+
+        if job.is_forced_to_preemptible_pool:
+            return {
+                "requiredDuringSchedulingIgnoredDuringExecution": {
+                    "nodeSelectorTerms": [node_selector_term]
+                }
+            }
+
+        return {
+            "preferredDuringSchedulingIgnoredDuringExecution": [
+                {"weight": 100, "preference": node_selector_term}
+            ]
+        }
+
+    async def _get_pod_node_selector(self, job: Job) -> Dict[str, str]:
+        container = job.request.container
         selector: Dict[str, str] = {}
 
         if not self._config.node_label_gpu:
@@ -243,41 +298,97 @@ class KubeOrchestrator(Orchestrator):
 
         return selector
 
-    async def get_job_status(self, job_id: str) -> JobStatusItem:
-        pod_id = job_id
-        status = await self._client.get_pod_status(pod_id)
-        job_status = convert_pod_status_to_job_status(status)
+    def _get_job_pod_name(self, job: Job) -> str:
+        # TODO (A Danshyn 11/15/18): we will need to start storing jobs'
+        # kube pod names explicitly at some point
+        return job.id
+
+    async def get_job_status(self, job: Job) -> JobStatusItem:
+        if job.is_finished:
+            return job.status_history.current
+
+        # handling PENDING/RUNNING jobs
+
+        pod_name = self._get_job_pod_name(job)
+        if job.is_preemptible:
+            pod_status = await self._check_preemptible_job_pod(job)
+        else:
+            pod_status = await self._client.get_pod_status(pod_name)
+
+        job_status = convert_pod_status_to_job_status(pod_status)
 
         # Pod in pending state, and no container information available
         # possible we are observing the case when Container requested
         # too much resources, check events for NotTriggerScaleUp event
-        if (
-            job_status.status == JobStatus.PENDING
-            and not status.is_container_status_available
-        ):
-            pod_events = await self._client.get_pod_events(
-                pod_id, self._get_pod_namespace(None)
-            )
-            if pod_events:
-                # Handle clusters with autoscaler and without it
-                event = any(
-                    event.reason == "NotTriggerScaleUp"
-                    or event.reason == "FailedScheduling"
-                    for event in pod_events
+        if not pod_status.is_scheduled:
+            if not await self._check_pod_is_schedulable(pod_name):
+                logger.info(
+                    f"Found pod that requested too much resources. Job '{job.id}'"
                 )
-                if event:
-                    logger.info(
-                        f"Found pod that requested too much resources. ID={job_id}"
-                    )
-                    # Update the reason field of the job to Too Much Requested
-                    job_status = JobStatusItem.create(
-                        job_status.status,
-                        transition_time=job_status.transition_time,
-                        reason="Cluster doesn't have resources to fulfill request.",
-                        description=job_status.description,
-                    )
+                # Update the reason field of the job to Too Much Requested
+                job_status = JobStatusItem.create(
+                    job_status.status,
+                    transition_time=job_status.transition_time,
+                    reason="Cluster doesn't have resources to fulfill request.",
+                    description=job_status.description,
+                )
 
         return job_status
+
+    async def _check_preemptible_job_pod(self, job: Job) -> PodStatus:
+        assert job.is_preemptible
+
+        pod_name = self._get_job_pod_name(job)
+        do_recreate_pod = False
+        try:
+            pod_status = await self._client.get_pod_status(pod_name)
+            if pod_status.is_node_lost:
+                logger.info(f"Detected NodeLost in pod '{pod_name}'. Job '{job.id}'")
+                # if the pod's status reason is `NodeLost` regardless of
+                # the pod's status phase, we need to forcefully delete the
+                # pod and reschedule another one instead.
+                logger.info(f"Forcefully deleting pod '{pod_name}'. Job '{job.id}'")
+                await self._client.delete_pod(pod_name, force=True)
+                do_recreate_pod = True
+        except JobNotFoundException:
+            logger.info(f"Pod '{pod_name}' was lost. Job '{job.id}'")
+            # if the job is still in PENDING/RUNNING, but the underlying
+            # pod is gone, this may mean that the node was
+            # preempted/failed (the node resource may no longer exist)
+            # and the pods GC evicted the pod, effectively by
+            # forcefully deleting it.
+            do_recreate_pod = True
+
+        if do_recreate_pod:
+            logger.info(f"Recreating preempted pod '{pod_name}'. Job '{job.id}'")
+            descriptor = await self._create_pod_descriptor(job)
+            try:
+                pod_status = await self._client.create_pod(descriptor)
+            except JobError:
+                # handing possible 422 and other failures
+                raise JobNotFoundException(
+                    f"Pod '{pod_name}' not found. Job '{job.id}'"
+                )
+
+        return pod_status
+
+    async def _check_pod_is_schedulable(self, pod_name: str) -> bool:
+        pod_events = await self._client.get_pod_events(pod_name, self._config.namespace)
+        if not pod_events:
+            return True
+
+        # TODO (A Danshyn 11/17/18): note that "FailedScheduling" goes prior
+        # "TriggerScaleUp" as well. seems unclear whether this condition is
+        # correct. In other words, regardless of presence of any of
+        # "TriggerScaleUp"/"NotTriggerScaleUp", we could just look for
+        # "FailedScheduling" and get the same result.
+        # Instead, for clusters without autoscalers, we could just query all
+        # nodes (cache) and check job a job's container resources against the
+        # nodes' capacities.
+        return not any(
+            event.reason == "NotTriggerScaleUp" or event.reason == "FailedScheduling"
+            for event in pod_events
+        )
 
     async def get_job_log_reader(self, job: Job) -> LogReader:
         return PodContainerLogReader(
