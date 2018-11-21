@@ -17,6 +17,7 @@ from .kube_client import (
     KubeClientAuthType,
     NfsVolume,
     PodDescriptor,
+    PodExec,
     PodStatus,
     Service,
     Toleration,
@@ -393,6 +394,9 @@ class KubeOrchestrator(Orchestrator):
         return PodContainerLogReader(
             client=self._client, pod_name=job.id, container_name=job.id
         )
+
+    async def exec_pod(self, job_id: str, command: str) -> PodExec:
+        return await self._client.exec_pod(job_id, command)
 
     async def _create_service(self, pod: PodDescriptor) -> Service:
         return await self._client.create_service(Service.create_for_pod(pod))

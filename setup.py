@@ -11,6 +11,10 @@ install_requires = (
     "iso8601==0.1.12",
     "trafaret==1.1.1",
     "neuro_auth_client==0.0.1b4",
+    # Circle CI fails on the latest cryptography version
+    # because the server has too old OpenSSL version
+    "cryptography==2.4.2",
+    "asyncssh==1.14.0",
 )
 
 setup(
@@ -19,5 +23,11 @@ setup(
     url="https://github.com/neuromation/platform-api",
     packages=find_packages(),
     install_requires=install_requires,
-    entry_points={"console_scripts": "platform-api=platform_api.api:main"},
+    entry_points={
+        "console_scripts": [
+            "platform-api=platform_api.api:main",
+            "api-ssh-server=platform_api.ssh.server:main",
+        ]
+    },
+    zip_safe=False,
 )

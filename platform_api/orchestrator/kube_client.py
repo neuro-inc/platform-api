@@ -4,17 +4,23 @@ import copy
 import enum
 import json
 import logging
+import re
 import ssl
 from base64 import b64encode
+from contextlib import suppress
 from dataclasses import dataclass, field
 from pathlib import PurePath
-from typing import Any, Dict, List, Optional
+from types import TracebackType
+from typing import Any, DefaultDict, Dict, List, Optional, Type
 from urllib.parse import urlsplit
 
 import aiohttp
+from aiohttp import WSMsgType
 from async_generator import asynccontextmanager
 from async_timeout import timeout
 from yarl import URL
+
+from platform_api.utils.stream import Stream
 
 from .job_request import (
     ContainerResources,
@@ -690,6 +696,104 @@ class PodStatus:
         return cls(payload)
 
 
+class ExecChannel(int, enum.Enum):
+    STDIN = 0
+    STDOUT = 1
+    STDERR = 2
+    ERROR = 3
+    RESIZE = 4
+
+
+class PodExec:
+    RE_EXIT = re.compile(
+        br"^command terminated with non-zero exit code: "
+        br"Error executing in Docker Container: (\d+)$"
+    )
+
+    def __init__(self, ws: aiohttp.ClientWebSocketResponse) -> None:
+        self._ws = ws
+        self._channels: DefaultDict[ExecChannel, Stream] = DefaultDict(Stream)
+        loop = asyncio.get_event_loop()
+        self._reader_task = loop.create_task(self._read_data())
+        self._exit_code = loop.create_future()
+
+    async def _read_data(self):
+        try:
+            async for msg in self._ws:
+                if msg.type != WSMsgType.BINARY:
+                    # looks weird, but the official client doesn't distinguish TEXT and
+                    # BINARY WS messages
+                    logger.warning("Unknown pod exec mgs type %r", msg)
+                    continue
+                data = msg.data
+                if isinstance(data, str):
+                    bdata = data.decode("utf-8")
+                else:
+                    bdata = data
+                if not bdata:
+                    # an empty WS message. Have no idea how it can happen.
+                    continue
+                channel = ExecChannel(bdata[0])
+                bdata = bdata[1:]
+                if channel == ExecChannel.ERROR:
+                    match = self.RE_EXIT.match(bdata)
+                    if match is not None:
+                        # exit code received
+                        if not self._exit_code.done():
+                            self._exit_code.set_result(int(match.group(1)))
+                        continue
+                    else:
+                        # redirect internal error channel into stderr
+                        channel = ExecChannel.STDERR
+                stream = self._channels[channel]
+                await stream.feed(bdata)
+
+            await self.close()
+        except asyncio.CancelledError:
+            raise
+        except BaseException:
+            logger.exception("PodExec._read_data")
+            await self.close()
+
+    async def close(self):
+        if not self._exit_code.done():
+            # Don't have exit status yet, assume a normal termination
+            self._exit_code.set_result(0)
+        self._reader_task.cancel()
+        for stream in self._channels.values():
+            await stream.close()
+        with suppress(asyncio.CancelledError):
+            await self._reader_task
+        await self._ws.close()
+
+    async def wait(self):
+        return await self._exit_code
+
+    async def __aenter__(self) -> "PodExec":
+        return self
+
+    async def __aexit__(
+        self,
+        exc_type: Optional[Type[BaseException]],
+        exc_val: Optional[BaseException],
+        exc_tb: Optional[TracebackType],
+    ) -> None:
+        await self.close()
+
+    async def write_stdin(self, data: bytes) -> None:
+        msg = bytes((ExecChannel.STDIN,)) + data
+        await self._ws.send_bytes(msg)
+
+    async def read_stdout(self):
+        return await self._channels[ExecChannel.STDOUT].read()
+
+    async def read_stderr(self):
+        return await self._channels[ExecChannel.STDERR].read()
+
+    async def read_error(self):
+        return await self._channels[ExecChannel.ERROR].read()
+
+
 class KubeClientAuthType(str, enum.Enum):
     NONE = "none"
     # TODO: TOKEN = 'token'
@@ -954,6 +1058,14 @@ class KubeClient:
         if payload and "items" in payload:
             return [KubernetesEvent(item) for item in payload["items"]]
         return None
+
+    async def exec_pod(self, pod_id: str, command: str) -> PodExec:
+        url = URL(self._generate_pod_url(pod_id)) / "exec"
+        url = url.with_query(
+            command=command, tty="1", stdin="1", stdout="1", stderr="1"
+        )
+        ws = await self._client.ws_connect(url, method="POST")  # type: ignore
+        return PodExec(ws)
 
     async def wait_pod_is_running(
         self, pod_name: str, timeout_s: float = 10.0 * 60, interval_s: float = 1.0
