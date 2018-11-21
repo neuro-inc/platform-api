@@ -11,6 +11,7 @@ install_requires = (
     "iso8601==0.1.12",
     "trafaret==1.1.1",
     "neuro_auth_client==0.0.1b4",
+    "asyncssh==1.14.0",
 )
 
 setup(
