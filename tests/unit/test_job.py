@@ -463,6 +463,7 @@ class TestJob:
             orchestrator_config=mock_orchestrator.config,
             job_request=job_request,
             owner="testuser",
+            is_preemptible=True,
         )
         job.status = JobStatus.FAILED
         job.is_deleted = True
@@ -488,6 +489,7 @@ class TestJob:
                     "description": None,
                 },
             ],
+            "is_preemptible": True,
         }
 
     def test_from_primitive(self, mock_orchestrator, job_request_payload):
@@ -506,6 +508,7 @@ class TestJob:
         assert job.finished_at
         assert job.description == "Description of the testjob"
         assert job.owner == "testuser"
+        assert not job.is_preemptible
 
     def test_from_primitive_with_statuses(self, mock_orchestrator, job_request_payload):
         finished_at_str = datetime.now(timezone.utc).isoformat()
@@ -516,6 +519,7 @@ class TestJob:
             "is_deleted": True,
             "finished_at": finished_at_str,
             "statuses": [{"status": "failed", "transition_time": finished_at_str}],
+            "is_preemptible": True,
         }
         job = Job.from_primitive(mock_orchestrator.config, payload)
         assert job.id == "testjob"
@@ -524,6 +528,7 @@ class TestJob:
         assert job.finished_at
         assert job.description == "Description of the testjob"
         assert job.owner == "compute"
+        assert job.is_preemptible
 
     def test_to_uri(self, mock_orchestrator, job_request) -> None:
         job = Job(mock_orchestrator.config, job_request, owner="testuser")
@@ -554,6 +559,7 @@ class TestJob:
             "statuses": [current_status_item],
             "is_deleted": "False",
             "finished_at": finished_at_str,
+            "is_preemptible": False,
         }
         actual = Job.to_primitive(
             Job.from_primitive(mock_orchestrator.config, expected)

@@ -186,6 +186,11 @@ class Job:
         is_preemptible: bool = False,
         is_forced_to_preemptible_pool: bool = False,
     ) -> None:
+        """
+        :param bool is_forced_to_preemptible_pool:
+            used in tests only
+        """
+
         self._orchestrator_config = orchestrator_config
         self._job_request = job_request
 
@@ -333,6 +338,7 @@ class Job:
             "statuses": statuses,
             "is_deleted": self.is_deleted,
             "finished_at": self.finished_at_str,
+            "is_preemptible": self.is_preemptible,
         }
         if self.internal_hostname:
             result["internal_hostname"] = self.internal_hostname
@@ -348,12 +354,14 @@ class Job:
         )
         is_deleted = payload.get("is_deleted", False)
         owner = payload.get("owner", "")
+        is_preemptible = payload.get("is_preemptible", False)
         job = cls(
             orchestrator_config=orchestrator_config,
             job_request=job_request,
             status_history=status_history,
             is_deleted=is_deleted,
             owner=owner,
+            is_preemptible=is_preemptible,
         )
         job.internal_hostname = payload.get("internal_hostname", None)
         return job
