@@ -65,12 +65,13 @@ class JobsService:
         await self._jobs_storage.set_job(job)
 
     async def create_job(
-        self, job_request: JobRequest, user: User
+        self, job_request: JobRequest, user: User, is_preemptible: bool = False
     ) -> Tuple[Job, Status]:
         job = Job(
             orchestrator_config=self._orchestrator.config,
             job_request=job_request,
             owner=user.name,
+            is_preemptible=is_preemptible,
         )
         await self._orchestrator.start_job(job, user.token)
         status = Status.create(job.status)

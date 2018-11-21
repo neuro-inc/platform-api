@@ -80,10 +80,16 @@ class ModelsHandler:
         return create_model_request_validator(allowed_gpu_models=gpu_models)
 
     async def _create_job(
-        self, user: User, container: Container, description: Optional[str] = None
+        self,
+        user: User,
+        container: Container,
+        description: Optional[str] = None,
+        is_preemptible: bool = False,
     ) -> Dict[str, Any]:
         job_request = JobRequest.create(container, description)
-        job, status = await self._jobs_service.create_job(job_request, user=user)
+        job, status = await self._jobs_service.create_job(
+            job_request, user=user, is_preemptible=is_preemptible
+        )
         payload = {
             "job_id": job.id,
             "status": status.value,
@@ -117,7 +123,10 @@ class ModelsHandler:
         await check_permission(request, permissions[0].action, permissions)
 
         description = request_payload.get("description")
-        response_payload = await self._create_job(user, container, description)
+        is_preemptible = request_payload["is_preemptible"]
+        response_payload = await self._create_job(
+            user, container, description=description, is_preemptible=is_preemptible
+        )
         self._model_response_validator.check(response_payload)
 
         return aiohttp.web.json_response(
