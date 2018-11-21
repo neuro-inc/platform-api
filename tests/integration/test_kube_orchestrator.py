@@ -52,7 +52,7 @@ class MyJob(Job):
         return await self._orchestrator.delete_job(self)
 
     async def query_status(self) -> JobStatus:
-        return await self._orchestrator.status_job(job_id=self.id)
+        return (await self._orchestrator.get_job_status(self)).status
 
 
 @pytest.fixture
@@ -254,7 +254,7 @@ class TestKubeOrchestrator:
 
             await self.wait_for_failure(job, max_attempts=120)
 
-            status_item = await kube_orchestrator.get_job_status(job.id)
+            status_item = await kube_orchestrator.get_job_status(job)
             expected_description = "".join(f"{i}\n" for i in reversed(range(1, 81)))
             expected_description += "\nExit code: 1"
             assert status_item == JobStatusItem.create(
@@ -280,7 +280,7 @@ class TestKubeOrchestrator:
 
             _, _ = await self.wait_for_job(job, max_attempts=10)
 
-            status_item = await kube_orchestrator.get_job_status(job.id)
+            status_item = await kube_orchestrator.get_job_status(job)
             assert status_item == JobStatusItem.create(
                 JobStatus.PENDING,
                 reason="Cluster doesn't have resources to fulfill request.",
@@ -593,7 +593,7 @@ class TestKubeClient:
         await kube_client.create_pod(pod)
         await kube_client.wait_pod_is_running(pod_name=pod.name, timeout_s=60.0)
         pod_status = await kube_client.get_pod_status(pod.name)
-        assert pod_status.phase == "Succeeded"
+        assert pod_status.phase in ("Running", "Succeeded")
 
     @pytest.mark.asyncio
     async def test_create_log_stream_not_found(self, kube_client):
@@ -1029,3 +1029,167 @@ class TestNodeSelector:
         pod_name = job.id
 
         await kube_client.wait_pod_scheduled(pod_name, node_name)
+
+
+class TestPreemption:
+    @pytest.mark.asyncio
+    async def test_preemptible_job_lost_running_pod(
+        self, kube_config, kube_client, delete_job_later, kube_orchestrator
+    ):
+        container = Container(
+            image="ubuntu",
+            command="bash -c 'sleep infinity'",
+            resources=ContainerResources(cpu=0.1, memory_mb=128),
+        )
+        job = MyJob(
+            orchestrator=kube_orchestrator,
+            job_request=JobRequest.create(container),
+            # marking the job as preemptible
+            is_preemptible=True,
+            # allow the pod to be scheduled on the minikube node
+            is_forced_to_preemptible_pool=False,
+        )
+        await delete_job_later(job)
+        await kube_orchestrator.start_job(job, token="test-token")
+        pod_name = job.id
+
+        await kube_client.wait_pod_is_running(pod_name=pod_name, timeout_s=60.0)
+        job_status = await kube_orchestrator.get_job_status(job)
+        assert job_status.is_running
+
+        await kube_client.delete_pod(pod_name, force=True)
+
+        # triggering pod recreation
+        job_status = await kube_orchestrator.get_job_status(job)
+        assert job_status.is_pending
+
+        await kube_client.wait_pod_is_running(pod_name=pod_name, timeout_s=60.0)
+        job_status = await kube_orchestrator.get_job_status(job)
+        assert job_status.is_running
+
+    @pytest.mark.asyncio
+    async def test_preemptible_job_lost_node_lost_pod(
+        self,
+        kube_config,
+        kube_client,
+        delete_job_later,
+        kube_orchestrator,
+        kube_node_preemptible,
+    ):
+        node_name = kube_node_preemptible
+        container = Container(
+            image="ubuntu",
+            command="bash -c 'sleep infinity'",
+            resources=ContainerResources(cpu=0.1, memory_mb=128),
+        )
+        job = MyJob(
+            orchestrator=kube_orchestrator,
+            job_request=JobRequest.create(container),
+            # marking the job as preemptible
+            is_preemptible=True,
+        )
+        await delete_job_later(job)
+        await kube_orchestrator.start_job(job, token="test-token")
+        pod_name = job.id
+
+        await kube_client.wait_pod_scheduled(pod_name, node_name)
+
+        await kube_client.delete_node(node_name)
+        # deleting node initiates it's pods deletion
+        await kube_client.wait_pod_non_existent(pod_name, timeout_s=60.0)
+
+        # triggering pod recreation
+        job_status = await kube_orchestrator.get_job_status(job)
+        assert job_status.is_pending
+
+    @pytest.mark.asyncio
+    async def test_preemptible_job_pending_pod_node_not_ready(
+        self,
+        kube_config,
+        kube_client,
+        delete_job_later,
+        kube_orchestrator,
+        kube_node_preemptible,
+    ):
+        node_name = kube_node_preemptible
+        container = Container(
+            image="ubuntu",
+            command="bash -c 'sleep infinity'",
+            resources=ContainerResources(cpu=0.1, memory_mb=128),
+        )
+        job = MyJob(
+            orchestrator=kube_orchestrator,
+            job_request=JobRequest.create(container),
+            # marking the job as preemptible
+            is_preemptible=True,
+        )
+        await delete_job_later(job)
+        await kube_orchestrator.start_job(job, token="test-token")
+        pod_name = job.id
+
+        await kube_client.wait_pod_scheduled(pod_name, node_name)
+
+        raw_pod = await kube_client.get_raw_pod(pod_name)
+
+        raw_pod["status"]["reason"] = "NodeLost"
+        await kube_client.set_raw_pod_status(pod_name, raw_pod)
+
+        raw_pod = await kube_client.get_raw_pod(pod_name)
+        assert raw_pod["status"]["reason"] == "NodeLost"
+
+        # triggering pod recreation
+        job_status = await kube_orchestrator.get_job_status(job)
+        assert job_status.is_pending
+
+        await kube_client.wait_pod_scheduled(pod_name, node_name)
+
+        raw_pod = await kube_client.get_raw_pod(pod_name)
+        assert not raw_pod["status"].get("reason")
+
+    @pytest.mark.asyncio
+    async def test_preemptible_job_recreation_failed(
+        self,
+        kube_config,
+        kube_client,
+        delete_job_later,
+        kube_orchestrator,
+        kube_node_preemptible,
+    ):
+        node_name = kube_node_preemptible
+        container = Container(
+            image="ubuntu",
+            command="bash -c 'sleep infinity'",
+            resources=ContainerResources(cpu=0.1, memory_mb=128),
+        )
+        job = MyJob(
+            orchestrator=kube_orchestrator,
+            job_request=JobRequest.create(container),
+            # marking the job as preemptible
+            is_preemptible=True,
+        )
+        await delete_job_later(job)
+        await kube_orchestrator.start_job(job, token="test-token")
+        pod_name = job.id
+
+        await kube_client.wait_pod_scheduled(pod_name, node_name)
+
+        await kube_client.delete_pod(pod_name, force=True)
+
+        # changing the job details to trigger pod creation failure
+        container = Container(
+            image="ubuntu",
+            command="bash -c 'sleep infinity'",
+            resources=ContainerResources(cpu=0.1, memory_mb=-128),
+        )
+        job = MyJob(
+            orchestrator=kube_orchestrator,
+            job_request=JobRequest(job_id=job.id, container=container),
+            # marking the job as preemptible
+            is_preemptible=True,
+        )
+
+        # triggering pod recreation
+        with pytest.raises(
+            JobNotFoundException, match=f"Pod '{pod_name}' not found. Job '{job.id}'"
+        ):
+            await kube_orchestrator.get_job_status(job)

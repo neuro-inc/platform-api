@@ -1,14 +1,16 @@
 import asyncio
 import json
 import uuid
+from dataclasses import dataclass
 from pathlib import PurePath
-from typing import Any, Dict, Optional
+from typing import Any, Dict, Optional, Sequence
 from urllib.parse import urlsplit
 
 import pytest
 from async_timeout import timeout
 
 from platform_api.config import RegistryConfig, StorageConfig
+from platform_api.orchestrator.kube_client import JobNotFoundException
 from platform_api.orchestrator.kube_orchestrator import (
     KubeClient,
     KubeConfig,
@@ -88,6 +90,7 @@ async def kube_config(kube_config_cluster_payload, kube_config_user_payload):
             ResourcePoolType(gpu=1, gpu_model=GPUModel(id="gpumodel")),
         ],
         orphaned_job_owner="compute",
+        node_label_preemptible="preemptible",
     )
 
 
@@ -95,6 +98,16 @@ async def kube_config(kube_config_cluster_payload, kube_config_user_payload):
 async def kube_ingress_ip(kube_config_cluster_payload):
     cluster = kube_config_cluster_payload
     return urlsplit(cluster["server"]).hostname
+
+
+@dataclass(frozen=True)
+class NodeTaint:
+    key: str
+    value: str
+    effect: str = "NoSchedule"
+
+    def to_primitive(self) -> Dict[str, Any]:
+        return {"key": self.key, "value": self.value, "effect": self.effect}
 
 
 class TestKubeClient(KubeClient):
@@ -123,6 +136,12 @@ class TestKubeClient(KubeClient):
         url = self._generate_pod_url(name)
         return await self._request(method="GET", url=url)
 
+    async def set_raw_pod_status(
+        self, name: str, payload: Dict[str, Any]
+    ) -> Dict[str, Any]:
+        url = self._generate_pod_url(name) + "/status"
+        return await self._request(method="PUT", url=url, json=payload)
+
     async def wait_pod_scheduled(
         self, pod_name, node_name, timeout_s=5.0, interval_s=1.0
     ):
@@ -142,13 +161,30 @@ class TestKubeClient(KubeClient):
         except asyncio.TimeoutError:
             pytest.fail("Pod unscheduled")
 
+    async def wait_pod_non_existent(self, pod_name, timeout_s=5.0, interval_s=1.0):
+        try:
+            async with timeout(timeout_s):
+                while True:
+                    try:
+                        await self.get_pod(pod_name)
+                    except JobNotFoundException:
+                        return
+                    await asyncio.sleep(interval_s)
+        except asyncio.TimeoutError:
+            pytest.fail("Pod still exists")
+
     async def create_node(
-        self, name: str, labels: Optional[Dict[str, str]] = None
+        self,
+        name: str,
+        labels: Optional[Dict[str, str]] = None,
+        taints: Optional[Sequence[NodeTaint]] = None,
     ) -> None:
+        taints = taints or []
         payload = {
             "apiVersion": "v1",
             "kind": "Node",
             "metadata": {"name": name, "labels": labels or {}},
+            "spec": {"taints": [taint.to_primitive() for taint in taints]},
             "status": {
                 "capacity": {
                     "pods": "110",
@@ -253,11 +289,28 @@ async def delete_node_later(kube_client):
 
 
 @pytest.fixture
+def kube_node():
+    return "minikube"
+
+
+@pytest.fixture
 async def kube_node_gpu(kube_config, kube_client, delete_node_later):
     node_name = str(uuid.uuid4())
     await delete_node_later(node_name)
 
     labels = {kube_config.node_label_gpu: "gpumodel"}
     await kube_client.create_node(node_name, labels=labels)
+
+    yield node_name
+
+
+@pytest.fixture
+async def kube_node_preemptible(kube_config, kube_client, delete_node_later):
+    node_name = str(uuid.uuid4())
+    await delete_node_later(node_name)
+
+    labels = {kube_config.node_label_preemptible: "true"}
+    taints = [NodeTaint(key=kube_config.node_label_preemptible, value="true")]
+    await kube_client.create_node(node_name, labels=labels, taints=taints)
 
     yield node_name
