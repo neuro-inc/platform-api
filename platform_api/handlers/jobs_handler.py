@@ -291,6 +291,7 @@ class JobsHandler:
         chunk_size = 1024
 
         response = aiohttp.web.StreamResponse(status=200)
+        response.enable_chunked_encoding()
         response.content_type = "text/plain"
         response.charset = "utf-8"
         await response.prepare(request)
