@@ -664,6 +664,7 @@ class TestJobs:
                     }
                 ],
             },
+            "is_preemptible": False,
         }
 
     @pytest.mark.asyncio
@@ -725,6 +726,7 @@ class TestJobs:
                     },
                 ],
             },
+            "is_preemptible": False,
         }
 
     @pytest.mark.asyncio
@@ -799,6 +801,7 @@ class TestJobs:
                     },
                     "volumes": [],
                 },
+                "is_preemptible": False,
             }
 
         await kube_client.wait_pod_scheduled(job_id, kube_node_gpu)
