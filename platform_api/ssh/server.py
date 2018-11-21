@@ -21,16 +21,13 @@ class SSHServerHandler(asyncssh.SSHServer):
         self._orchestrator = orchestrator
 
     def begin_auth(self, username):
-        print("Begin auth")
         return False  # False for aonymous
 
     def password_auth_supported(self):
-        print("Password auth supported")
         return True
 
     async def validate_password(self, username, password):
         # TODO: add validation
-        print("Validate", username, password)
         return True
 
 
@@ -58,7 +55,6 @@ class ShellSession:
                     data = data.encode("utf-8")
                     await writer(data)
                 else:
-                    print("STDIN close")
                     self.exit_with_signal(signal.SIGTERM)
                     return
         except asyncssh.BreakReceived:
@@ -70,7 +66,7 @@ class ShellSession:
         except asyncio.CancelledError:
             raise
         except BaseException:
-            logger.exception("Exception in redirect")
+            logger.exception("Redirect input error")
             await self._subproc.close()
             await self.exit_with_signal(signal.SIGKILL)
             raise
@@ -78,23 +74,19 @@ class ShellSession:
     async def redirect_out(self, reader, dst):
         try:
             while True:
-                print('BEFORE READ from OUT')
                 data = await reader()
-                print('READ DATA', data)
                 data = data.decode("utf-8")
                 dst.write(data)
                 await dst.drain()
         except asyncio.CancelledError:
             raise
         except BaseException:
-            print("Exc in redirect")
-            traceback.print_exc()
+            logger.exception("Redirect output error")
             raise
 
     async def handle_client(self):
         process = self._process
         username = process.get_extra_info("username")
-        print(username)
         pod_id = username
         loop = asyncio.get_event_loop()
         try:
@@ -104,14 +96,8 @@ class ShellSession:
             command = process.command
             if command is None:
                 command = "sh -i"
-            print("Command", command)
-            print("Process", process.subsystem)
-            print("Terminal TYPE", process.get_terminal_type())
-#            print("Terminal MODE", process.get_terminal_mode())
-            print("Terminal SIZE", process.get_terminal_size())
             subproc = await self._orchestrator.exec_pod(pod_id, command)
             self._subproc = subproc
-            print("Redirect")
             self._stdin_redirect = loop.create_task(
                 self.redirect_in(process.stdin, subproc.write_stdin)
             )
@@ -122,13 +108,12 @@ class ShellSession:
                 self.redirect_out(subproc.read_stderr, process.stderr)
             )
 
-            print("Wait")
             retcode = await subproc.wait()
-            print("Exited", retcode)
             process.exit(retcode)
+        except asyncio.CancelledError:
+            raise
         except BaseException:
-            print("Exc in handle_client")
-            traceback.print_exc()
+            logger.exception("Unhandled error in ssh server")
             raise
         finally:
             await self.cleanup()

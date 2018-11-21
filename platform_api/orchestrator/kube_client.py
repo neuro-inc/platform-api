@@ -717,12 +717,11 @@ class PodExec:
 
     async def _read_data(self):
         try:
-            print('begin read data')
             async for msg in self._ws:
-                print('got msg', msg)
-                if msg.type not in (WSMsgType.TEXT, WSMsgType.BINARY):
+                if msg.type != WSMsgType.BINARY:
                     # looks weird, but the official client doesn't distinguish TEXT and
                     # BINARY WS messages
+                    logger.warning("Unknown pod exec mgs type %r", msg)
                     continue
                 data = msg.data
                 if isinstance(data, str):
@@ -734,7 +733,6 @@ class PodExec:
                     continue
                 channel = ExecChannel(bdata[0])
                 bdata = bdata[1:]
-                print("Data received", channel, bdata)
                 if channel == ExecChannel.ERROR:
                     match = self.RE_EXIT.match(bdata)
                     if match is not None:
@@ -747,12 +745,9 @@ class PodExec:
                         channel = ExecChannel.STDERR
                 stream = self._channels[channel]
                 await stream.feed(bdata)
-                print("Wait next cmd")
 
-            print("Exit")
             await self.close()
         except asyncio.CancelledError:
-            logger.exception("PodExec cancelled")
             raise
         except BaseException:
             logger.exception("PodExec._read_data")

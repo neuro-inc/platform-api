@@ -116,22 +116,9 @@ async def test_shell(ssh_server, kube_client, kube_config, delete_pod_later):
         proc = await conn.create_process('bash')
         proc.stdin.write('pwd\n')
 
-        print("!!! READ STDOUT")
-        # stdout = await proc.stdout.read(8096)
-        # assert '\r\n/\r\n' in stdout
         await proc.stdout.readuntil('\r\n/\r\n')
 
-        print("!!! STDOUT CHECKED")
-
         proc.stdin.write_eof()
-        # import pdb;pdb.set_trace()
-        # assert stdout == ('\r\n'.join([
-        #     '',
-        #     f'\x1b]0;root@{pod.name}: /\x07root@{pod.name}:/# pwd',
-        #     '/',
-        #     f'\x1b]0;root@{pod.name}: /\x07root@{pod.name}:/# pwd',
-        #     f'\x1b]0;root@{pod.name}: /\x07root@{pod.name}:/# pwd']))
-        print("EXIT CM")
 
 
 @pytest.mark.asyncio
