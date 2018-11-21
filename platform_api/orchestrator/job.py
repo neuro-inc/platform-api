@@ -184,7 +184,7 @@ class Job:
         current_datetime_factory=current_datetime_factory,
         owner: str = "",
         is_preemptible: bool = False,
-        is_forced_to_preemptible_pool: bool = True,
+        is_forced_to_preemptible_pool: bool = False,
     ) -> None:
         self._orchestrator_config = orchestrator_config
         self._job_request = job_request
