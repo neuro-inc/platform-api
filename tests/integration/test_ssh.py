@@ -90,7 +90,7 @@ async def test_simple(ssh_server, kube_client, kube_config, delete_pod_later):
     await kube_client.wait_pod_is_running(pod_name=pod.name, timeout_s=60.0)
 
     async with asyncssh.connect(
-        ssh_server.host, ssh_server.port, username=pod.name
+        ssh_server.host, ssh_server.port, username=pod.name, known_hosts=None
     ) as conn:
         proc = await conn.create_process("pwd")
         stdout = await proc.stdout.read()
@@ -113,7 +113,7 @@ async def test_shell(ssh_server, kube_client, kube_config, delete_pod_later):
     await kube_client.wait_pod_is_running(pod_name=pod.name, timeout_s=60.0)
 
     async with asyncssh.connect(
-        ssh_server.host, ssh_server.port, username=pod.name
+        ssh_server.host, ssh_server.port, username=pod.name, known_hosts=None
     ) as conn:
         proc = await conn.create_process("bash")
         proc.stdin.write("pwd\n")
@@ -139,7 +139,7 @@ async def test_exit_code(ssh_server, kube_client, kube_config, delete_pod_later)
     await kube_client.wait_pod_is_running(pod_name=pod.name, timeout_s=60.0)
 
     async with asyncssh.connect(
-        ssh_server.host, ssh_server.port, username=pod.name
+        ssh_server.host, ssh_server.port, username=pod.name, known_hosts=None
     ) as conn:
         proc = await conn.create_process("bash")
         proc.stdin.write("exit 42\n")
