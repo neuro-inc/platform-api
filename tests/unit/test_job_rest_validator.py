@@ -43,6 +43,7 @@ class TestJobResponseValidator:
                 "created_at": "now",
             },
             "container": container,
+            "is_preemptible": False,
         }
         validator = create_job_response_validator()
         assert validator.check(response)
@@ -64,6 +65,7 @@ class TestJobResponseValidator:
                 "created_at": "now",
             },
             "container": container,
+            "is_preemptible": False,
         }
         validator = create_job_response_validator()
         assert validator.check(response)

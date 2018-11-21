@@ -32,6 +32,7 @@ def create_model_request_validator(
             "dataset_storage_uri": t.String,
             "result_storage_uri": t.String,
             t.Key("description", optional=True): t.String,
+            t.Key("is_preemptible", optional=True, default=False): t.Bool,
         }
     )
 
@@ -41,6 +42,7 @@ def create_model_response_validator() -> t.Trafaret:
         {
             "job_id": t.String,
             "status": create_job_status_validator(),
+            "is_preemptible": t.Bool,
             t.Key("http_url", optional=True): t.String,
             t.Key("ssh_server", optional=True): t.String,
             t.Key("internal_hostname", optional=True): t.String,
@@ -82,7 +84,11 @@ class ModelsHandler:
     ) -> Dict[str, Any]:
         job_request = JobRequest.create(container, description)
         job, status = await self._jobs_service.create_job(job_request, user=user)
-        payload = {"job_id": job.id, "status": status.value}
+        payload = {
+            "job_id": job.id,
+            "status": status.value,
+            "is_preemptible": job.is_preemptible,
+        }
         if container.has_http_server_exposed:
             payload["http_url"] = job.http_url
         if container.has_ssh_server_exposed:

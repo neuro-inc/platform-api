@@ -37,6 +37,7 @@ def create_job_request_validator(
                 allow_volumes=True, allowed_gpu_models=allowed_gpu_models
             ),
             t.Key("description", optional=True): t.String,
+            t.Key("is_preemptible", optional=True, default=False): t.Bool,
         }
     )
 
@@ -57,6 +58,7 @@ def create_job_response_validator() -> t.Trafaret:
             t.Key("ssh_server", optional=True): t.String,
             "history": create_job_history_validator(),
             "container": create_container_response_validator(),
+            "is_preemptible": t.Bool,
             t.Key("internal_hostname", optional=True): t.String,
             t.Key("description", optional=True): t.String,
         }
@@ -132,6 +134,7 @@ def convert_job_to_job_response(
         "container": convert_job_container_to_json(
             job.request.container, storage_config
         ),
+        "is_preemptible": job.is_preemptible,
     }
     if job.description:
         response_payload["description"] = job.description
