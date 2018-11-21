@@ -632,6 +632,7 @@ class TestJobs:
                         }
                     ],
                 },
+                "is_preemptible": False,
             }
 
         response_payload = await jobs_client.long_polling_by_job_id(
