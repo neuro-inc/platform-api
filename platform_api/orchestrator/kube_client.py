@@ -757,7 +757,7 @@ class PodExec:
 
     async def close(self):
         if not self._exit_code.done():
-            # Don't know API for getting exit status yet
+            # Don't have exit status yet, assume a normal termination
             self._exit_code.set_result(0)
         self._reader_task.cancel()
         for stream in self._channels.values():
