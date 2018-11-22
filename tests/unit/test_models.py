@@ -244,13 +244,19 @@ class TestModelResponseValidator:
                 "status": "pending",
                 "http_url": "http://testjob",
                 "description": "test-job",
+                "is_preemptible": False,
             }
         )
 
     def test_success_without_name_label(self):
         validator = create_model_response_validator()
         assert validator.check(
-            {"job_id": "testjob", "status": "pending", "http_url": "http://testjob"}
+            {
+                "job_id": "testjob",
+                "status": "pending",
+                "http_url": "http://testjob",
+                "is_preemptible": False,
+            }
         )
 
 

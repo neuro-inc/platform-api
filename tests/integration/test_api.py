@@ -161,6 +161,7 @@ class TestModels:
         self, api, client, model_train, jobs_client, regular_user
     ):
         url = api.model_base_url
+        model_train["is_preemptible"] = True
         async with client.post(
             url, headers=regular_user.headers, json=model_train
         ) as response:
@@ -172,6 +173,7 @@ class TestModels:
             assert result["http_url"] == expected_url
             expected_internal_hostname = f"{job_id}.default"
             assert result["internal_hostname"] == expected_internal_hostname
+            assert result["is_preemptible"]
 
         retrieved_job = await jobs_client.get_job_by_id(job_id=job_id)
         assert retrieved_job["internal_hostname"] == expected_internal_hostname
@@ -598,7 +600,8 @@ class TestJobs:
                         "read_only": False,
                     }
                 ],
-            }
+            },
+            "is_preemptible": True,
         }
 
         async with client.post(
@@ -632,6 +635,7 @@ class TestJobs:
                         }
                     ],
                 },
+                "is_preemptible": True,
             }
 
         response_payload = await jobs_client.long_polling_by_job_id(
@@ -664,6 +668,7 @@ class TestJobs:
                     }
                 ],
             },
+            "is_preemptible": True,
         }
 
     @pytest.mark.asyncio
@@ -725,6 +730,7 @@ class TestJobs:
                     },
                 ],
             },
+            "is_preemptible": False,
         }
 
     @pytest.mark.asyncio
@@ -799,6 +805,7 @@ class TestJobs:
                     },
                     "volumes": [],
                 },
+                "is_preemptible": False,
             }
 
         await kube_client.wait_pod_scheduled(job_id, kube_node_gpu)

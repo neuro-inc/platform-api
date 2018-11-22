@@ -1046,8 +1046,6 @@ class TestPreemption:
             job_request=JobRequest.create(container),
             # marking the job as preemptible
             is_preemptible=True,
-            # allow the pod to be scheduled on the minikube node
-            is_forced_to_preemptible_pool=False,
         )
         await delete_job_later(job)
         await kube_orchestrator.start_job(job, token="test-token")
@@ -1087,6 +1085,7 @@ class TestPreemption:
             job_request=JobRequest.create(container),
             # marking the job as preemptible
             is_preemptible=True,
+            is_forced_to_preemptible_pool=True,
         )
         await delete_job_later(job)
         await kube_orchestrator.start_job(job, token="test-token")
@@ -1122,6 +1121,7 @@ class TestPreemption:
             job_request=JobRequest.create(container),
             # marking the job as preemptible
             is_preemptible=True,
+            is_forced_to_preemptible_pool=True,
         )
         await delete_job_later(job)
         await kube_orchestrator.start_job(job, token="test-token")
@@ -1166,6 +1166,7 @@ class TestPreemption:
             job_request=JobRequest.create(container),
             # marking the job as preemptible
             is_preemptible=True,
+            is_forced_to_preemptible_pool=True,
         )
         await delete_job_later(job)
         await kube_orchestrator.start_job(job, token="test-token")
@@ -1186,6 +1187,7 @@ class TestPreemption:
             job_request=JobRequest(job_id=job.id, container=container),
             # marking the job as preemptible
             is_preemptible=True,
+            is_forced_to_preemptible_pool=True,
         )
 
         # triggering pod recreation

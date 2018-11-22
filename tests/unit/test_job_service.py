@@ -58,6 +58,7 @@ class TestInMemoryJobsStorage:
                 "resources": {"cpu": 1, "memory_mb": 128},
             },
             "description": "test test description",
+            "is_preemptible": False,
         }
 
     @pytest.mark.asyncio
