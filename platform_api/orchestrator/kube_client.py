@@ -421,6 +421,51 @@ class NodeSelectorRequirement:
 
 
 @dataclass(frozen=True)
+class NodeSelectorTerm:
+    match_expressions: List[NodeSelectorRequirement]
+
+    def __post_init__(self):
+        if not self.match_expressions:
+            raise ValueError("no expressions")
+
+    def to_primitive(self) -> Dict[str, Any]:
+        return {
+            "matchExpressions": [expr.to_primitive() for expr in self.match_expressions]
+        }
+
+
+@dataclass(frozen=True)
+class NodePreferredSchedulingTerm:
+    preference: NodeSelectorTerm
+    weight: int = 100
+
+    def to_primitive(self) -> Dict[str, Any]:
+        return {"preference": self.preference.to_primitive(), "weight": self.weight}
+
+
+@dataclass(frozen=True)
+class NodeAffinity:
+    required: List[NodeSelectorTerm] = field(default_factory=list)
+    preferred: List[NodePreferredSchedulingTerm] = field(default_factory=list)
+
+    def __post_init__(self):
+        if not self.required and not self.preferred:
+            raise ValueError("no terms")
+
+    def to_primitive(self) -> Dict[str, Any]:
+        payload = {}
+        if self.required:
+            payload["requiredDuringSchedulingIgnoredDuringExecution"] = {
+                "nodeSelectorTerms": [term.to_primitive() for term in self.required]
+            }
+        if self.preferred:
+            payload["preferredDuringSchedulingIgnoredDuringExecution"] = [
+                term.to_primitive() for term in self.preferred
+            ]
+        return payload
+
+
+@dataclass(frozen=True)
 class PodDescriptor:
     name: str
     image: str
