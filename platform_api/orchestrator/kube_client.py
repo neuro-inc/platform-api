@@ -9,6 +9,7 @@ import ssl
 from base64 import b64encode
 from contextlib import suppress
 from dataclasses import dataclass, field
+from enum import Enum
 from pathlib import PurePath
 from types import TracebackType
 from typing import Any, DefaultDict, Dict, List, Optional, Type
@@ -377,6 +378,46 @@ class Toleration:
             "value": self.value,
             "effect": self.effect,
         }
+
+
+class NodeSelectorOperator(str, Enum):
+    DOES_NOT_EXIST = "DoesNotExist"
+    EXISTS = "Exists"
+    IN = "In"
+    NOT_IN = "NotIn"
+    GT = "Gt"
+    LT = "Lt"
+
+    @property
+    def requires_no_values(self) -> bool:
+        return self in (self.DOES_NOT_EXIST, self.EXISTS)
+
+
+@dataclass(frozen=True)
+class NodeSelectorRequirement:
+    key: str
+    operator: NodeSelectorOperator
+    values: List[str] = field(default_factory=list)
+
+    def __post_init__(self) -> None:
+        if not self.key:
+            raise ValueError("blank key")
+        if self.operator.requires_no_values and self.values:
+            raise ValueError("values must be empty")
+
+    @classmethod
+    def create_exists(cls, key: str) -> "NodeSelectorRequirement":
+        return cls(key=key, operator=NodeSelectorOperator.EXISTS)
+
+    @classmethod
+    def create_does_not_exist(cls, key: str) -> "NodeSelectorRequirement":
+        return cls(key=key, operator=NodeSelectorOperator.DOES_NOT_EXIST)
+
+    def to_primitive(self) -> Dict[str, Any]:
+        payload = {"key": self.key, "operator": self.operator.value}
+        if self.values:
+            payload["values"] = self.values.copy()
+        return payload
 
 
 @dataclass(frozen=True)
