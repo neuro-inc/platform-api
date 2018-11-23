@@ -1,6 +1,5 @@
 import abc
 import asyncio
-import copy
 import enum
 import json
 import logging
@@ -588,7 +587,7 @@ class PodDescriptor:
             payload["spec"]["nodeSelector"] = self.node_selector.copy()
         if self.node_affinity:
             payload["spec"]["affinity"] = {
-                "nodeAffinity": self.node_affinity.to_primitive(),
+                "nodeAffinity": self.node_affinity.to_primitive()
             }
         return payload
 
