@@ -251,7 +251,22 @@ class KubeOrchestrator(Orchestrator):
         if not self._config.node_label_preemptible:
             return None
 
-        if not job.is_preemptible:
+        required_terms = []
+        preferred_terms = []
+
+        if job.is_preemptible:
+            node_selector_term = NodeSelectorTerm(
+                [
+                    NodeSelectorRequirement.create_exists(
+                        self._config.node_label_preemptible
+                    )
+                ]
+            )
+            if job.is_forced_to_preemptible_pool:
+                required_terms.append(node_selector_term)
+            else:
+                preferred_terms.append(NodePreferredSchedulingTerm(node_selector_term))
+        else:
             node_selector_term = NodeSelectorTerm(
                 [
                     NodeSelectorRequirement.create_does_not_exist(
@@ -259,16 +274,9 @@ class KubeOrchestrator(Orchestrator):
                     )
                 ]
             )
-            return NodeAffinity(required=[node_selector_term])
+            required_terms.append(node_selector_term)
 
-        node_selector_term = NodeSelectorTerm(
-            [NodeSelectorRequirement.create_exists(self._config.node_label_preemptible)]
-        )
-
-        if job.is_forced_to_preemptible_pool:
-            return NodeAffinity(required=[node_selector_term])
-
-        return NodeAffinity(preferred=[NodePreferredSchedulingTerm(node_selector_term)])
+        return NodeAffinity(required=required_terms, preferred=preferred_terms)
 
     async def _get_pod_node_selector(self, job: Job) -> Dict[str, str]:
         container = job.request.container
