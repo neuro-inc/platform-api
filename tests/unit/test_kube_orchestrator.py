@@ -21,6 +21,9 @@ from platform_api.orchestrator.kube_orchestrator import (
     IngressRule,
     JobStatusItemFactory,
     NfsVolume,
+    NodeAffinity,
+    NodeSelectorRequirement,
+    NodeSelectorTerm,
     PodDescriptor,
     PodStatus,
     Resources,
@@ -131,6 +134,11 @@ class TestPodDescriptor:
         tolerations = [
             Toleration(key="testkey", value="testvalue", effect="NoSchedule")
         ]
+        node_affinity = NodeAffinity(
+            required=[
+                NodeSelectorTerm([NodeSelectorRequirement.create_exists("testkey")])
+            ]
+        )
         pod = PodDescriptor(
             name="testname",
             image="testimage",
@@ -139,6 +147,7 @@ class TestPodDescriptor:
             port=1234,
             node_selector={"label": "value"},
             tolerations=tolerations,
+            node_affinity=node_affinity,
         )
         assert pod.name == "testname"
         assert pod.image == "testimage"
@@ -181,6 +190,11 @@ class TestPodDescriptor:
                         "effect": "NoSchedule",
                     }
                 ],
+                "affinity": {
+                    "nodeAffinity": {
+                        "requiredDuringSchedulingIgnoredDuringExecution": mock.ANY
+                    }
+                },
             },
         }
 
