@@ -16,7 +16,7 @@ class LogFactory:
         :return: LogStorage
         """
         log_env_vars: Dict[str, str] = log_store_conf.env_vars
-        log_name = log_env_vars.get('NP_LOG_STORE_IMPL', None)
+        log_name = log_env_vars.get("NP_LOG_STORE_IMPL", None)
         if log_name == "gcp_stackdriver":
             return GCPStackDriverLogStorage(log_env_vars)
         return LogStorage()

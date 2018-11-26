@@ -25,6 +25,7 @@ class TestGCPStackDriverConf:
     """
     Test cases to ensure stack driver logging storage properly picked.
     """
+
     private_key = """-----BEGIN RSA PRIVATE KEY-----
 MIIBzAIBAAJhAL+pBqnLy6A7x0FWpDOKKO242q4sSjN37NazvdBCy3/TcySghY49
 yV1KbEkx/xDhUZQDlrUOcUiUvUkynjVRnY6MzPP1LzOZ4TUkSOQZeSF/7zGzpDMp
@@ -37,8 +38,9 @@ Obw/wP5wiGUnub5R0G7Wur5O/W69JMglAjEAyjVVKz3UpH/SXwj6S8IqEEgPrK+N
 PfFrpMvazVc1xyTdcTSsdPI4etR66m+ALgpbOtUCMQChuZwmmaKcgYY7+tRvKoFG
 gUNwOdUjaxFd6quGJh8TAhRwgnHIOqjQ7Bau9SnZ3JE=
 -----END RSA PRIVATE KEY-----"""
-    config = GCPTokenStoreConfig(private_key, iss='test-service@neuromation.io',
-                                 token_expiration=10)
+    config = GCPTokenStoreConfig(
+        private_key, iss="test-service@neuromation.io", token_expiration=10
+    )
 
     @classmethod
     def mocked_async_context_manager(cls, return_value=None):
@@ -62,11 +64,15 @@ gUNwOdUjaxFd6quGJh8TAhRwgnHIOqjQ7Bau9SnZ3JE=
 
             return internal
 
-        store = GCPTokenStore(GCPTokenStoreConfig(private_key='private-key',
-                                                  iss='test-service@neuromation.io',
-                                                  token_expiration=10))
+        store = GCPTokenStore(
+            GCPTokenStoreConfig(
+                private_key="private-key",
+                iss="test-service@neuromation.io",
+                token_expiration=10,
+            )
+        )
 
-        with mock.patch('time.time') as mock_time:
+        with mock.patch("time.time") as mock_time:
             mock_time.return_value = -2
             magic_mock = MagicMock()
             store._request = wrapper_async_call(magic_mock)
@@ -92,10 +98,13 @@ gUNwOdUjaxFd6quGJh8TAhRwgnHIOqjQ7Bau9SnZ3JE=
 
         store = GCPTokenStore(TestGCPStackDriverConf.config)
 
-        with mock.patch("aiohttp.ClientSession.request",
-                        new=TestGCPStackDriverConf.mocked_async_context_manager(
-                                MockResponse(400, None))):
-            with mock.patch('time.time') as mock_time:
+        with mock.patch(
+            "aiohttp.ClientSession.request",
+            new=TestGCPStackDriverConf.mocked_async_context_manager(
+                MockResponse(400, None)
+            ),
+        ):
+            with mock.patch("time.time") as mock_time:
                 mock_time.return_value = 1000
                 assert await store.get_token() is None
 
@@ -105,24 +114,27 @@ gUNwOdUjaxFd6quGJh8TAhRwgnHIOqjQ7Bau9SnZ3JE=
     async def test_gcp_token_valid_response(self) -> None:
         store = GCPTokenStore(TestGCPStackDriverConf.config)
 
-        with mock.patch("aiohttp.ClientSession.post",
-                        new=TestGCPStackDriverConf.mocked_async_context_manager(
-                                MockResponse(200, {'access_token': 'token_test_value'}))):
-            with mock.patch('time.time') as mock_time:
+        with mock.patch(
+            "aiohttp.ClientSession.post",
+            new=TestGCPStackDriverConf.mocked_async_context_manager(
+                MockResponse(200, {"access_token": "token_test_value"})
+            ),
+        ):
+            with mock.patch("time.time") as mock_time:
                 mock_time.return_value = 1020
-                assert await store.get_token() == 'token_test_value'
+                assert await store.get_token() == "token_test_value"
 
         await store.close()
 
     @pytest.mark.asyncio
     async def test_log_store_init(self) -> None:
         env = {
-            'NP_LOG_STORE_GCP_SERVICE_KEY': 'private-key',
-            'NP_LOG_STORE_GCP_SERVICE_EMAIL': 'test-service@neuromation.io',
-            'NP_LOG_STORE_GCP_SERVICE_TOKEN_EXPIRATION': '120',
+            "NP_LOG_STORE_GCP_SERVICE_KEY": "private-key",
+            "NP_LOG_STORE_GCP_SERVICE_EMAIL": "test-service@neuromation.io",
+            "NP_LOG_STORE_GCP_SERVICE_TOKEN_EXPIRATION": "120",
         }
         async with GCPStackDriverLogStorage(env) as store:
-            assert store._private_key == 'private-key'
-            assert store._iss == 'test-service@neuromation.io'
+            assert store._private_key == "private-key"
+            assert store._iss == "test-service@neuromation.io"
             assert store._expiration == 120
             assert store._gcp_token_store

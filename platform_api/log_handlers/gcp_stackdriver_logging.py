@@ -16,17 +16,22 @@ class GCPStackDriverLogStorage(LogStorage):
     def __init__(self, env_vars: Dict[str, str]) -> None:
         self._private_key = env_vars["NP_LOG_STORE_GCP_SERVICE_KEY"]
         self._iss = env_vars["NP_LOG_STORE_GCP_SERVICE_EMAIL"]
-        self._expiration = int(env_vars.get("NP_LOG_STORE_GCP_SERVICE_TOKEN_EXPIRATION", GCPTokenStoreConfig.token_expiration))
+        self._expiration = int(
+            env_vars.get(
+                "NP_LOG_STORE_GCP_SERVICE_TOKEN_EXPIRATION",
+                GCPTokenStoreConfig.token_expiration,
+            )
+        )
 
     async def get_logs(self) -> List[LogEntry]:
         return List[LogEntry]()
 
     async def __aenter__(self) -> "LogStorage":
         config = GCPTokenStoreConfig(
-                private_key=self._private_key,
-                iss=self._iss,
-                token_expiration=self._expiration,
-            )
+            private_key=self._private_key,
+            iss=self._iss,
+            token_expiration=self._expiration,
+        )
         self._gcp_token_store = GCPTokenStore(config)
         return self
 

@@ -11,6 +11,7 @@ class LogStorage:
     Instantiable base implementation of log storage.
     Base does nothing but always returns empty results.
     """
+
     async def get_logs(self) -> List[LogEntry]:
         return List[LogEntry]()
 
