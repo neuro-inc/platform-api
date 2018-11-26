@@ -94,12 +94,12 @@ gUNwOdUjaxFd6quGJh8TAhRwgnHIOqjQ7Bau9SnZ3JE=
         await store.close()
 
     @pytest.mark.asyncio
-    async def test_gcp_token(self) -> None:
+    async def test_gcp_token_http(self) -> None:
 
         store = GCPTokenStore(TestGCPStackDriverConf.config)
 
         with mock.patch(
-            "aiohttp.ClientSession.request",
+            "aiohttp.ClientSession.post",
             new=TestGCPStackDriverConf.mocked_async_context_manager(
                 MockResponse(400, None)
             ),
@@ -123,6 +123,26 @@ gUNwOdUjaxFd6quGJh8TAhRwgnHIOqjQ7Bau9SnZ3JE=
             with mock.patch("time.time") as mock_time:
                 mock_time.return_value = 1020
                 assert await store.get_token() == "token_test_value"
+
+        with mock.patch(
+            "aiohttp.ClientSession.post",
+            new=TestGCPStackDriverConf.mocked_async_context_manager(
+                MockResponse(403, None)
+            ),
+        ):
+            with mock.patch("time.time") as mock_time:
+                mock_time.return_value = 1031
+                assert await store.get_token() == "token_test_value"
+
+        with mock.patch(
+            "aiohttp.ClientSession.post",
+            new=TestGCPStackDriverConf.mocked_async_context_manager(
+                MockResponse(200, {"access_token": "token_test_value2"})
+            ),
+        ):
+            with mock.patch("time.time") as mock_time:
+                mock_time.return_value = 1042
+                assert await store.get_token() == "token_test_value2"
 
         await store.close()
 

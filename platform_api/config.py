@@ -89,9 +89,8 @@ class GCPTokenStore:
     def __init__(self, gcp_store_config: GCPTokenStoreConfig) -> None:
 
         self._token_generation_time = -1
-        self._token_generated = None
+        self._token_generated: Optional[str] = None
 
-        self._client = None
         self._gcp_store_config = gcp_store_config
 
         self._client = aiohttp.ClientSession()
@@ -137,7 +136,7 @@ class GCPTokenStore:
             payload = await response.json()
             return payload["access_token"]
 
-    async def get_token(self) -> str:
+    async def get_token(self) -> Optional[str]:
         import time
 
         now = time.time()
@@ -150,7 +149,7 @@ class GCPTokenStore:
                 self._gcp_store_config.general_auth_url, ceil(now)
             )
             if token_value:
-                self._token_generation_time = now
+                self._token_generation_time = int(now)
                 self._token_generated = token_value
         return self._token_generated
 
