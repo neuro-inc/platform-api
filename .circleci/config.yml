@@ -104,6 +104,7 @@ jobs:
             pyenv local 3.6.3-debug
             sudo apt-get update
             sudo apt-get install nfs-common
+            sudo apt-get install openssl
 
       - run:
           name: Running Kubernetes
