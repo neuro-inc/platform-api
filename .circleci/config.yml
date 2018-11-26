@@ -104,6 +104,7 @@ jobs:
             pyenv local 3.6.3-debug
             sudo apt-get update
             sudo apt-get install nfs-common
+            sudo apt-get install -y software-properties-common
             sudo add-apt-repository ppa:0k53d-karl-f830m/openssl
             sudo apt-get update
             sudo apt-get install openssl
