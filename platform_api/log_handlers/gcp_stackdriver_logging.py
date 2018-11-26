@@ -1,7 +1,7 @@
-from typing import List, Dict
+from typing import Dict, List
 
-from platform_api.config import GCPTokenStoreConfig, GCPTokenStore
-from platform_api.log_handlers.log_collector import LogStorage, LogEntry
+from platform_api.config import GCPTokenStore, GCPTokenStoreConfig
+from platform_api.log_handlers.log_collector import LogEntry, LogStorage
 
 
 class GCPStackDriverLogStorage(LogStorage):
@@ -33,4 +33,3 @@ class GCPStackDriverLogStorage(LogStorage):
     async def __aexit__(self, exc_type, exc, tb):
         if self._gcp_token_store:
             await self._gcp_token_store.close()
-

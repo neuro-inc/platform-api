@@ -20,7 +20,3 @@ class LogFactory:
         if log_name == "gcp_stackdriver":
             return GCPStackDriverLogStorage(log_env_vars)
         return LogStorage()
-
-
-
-
