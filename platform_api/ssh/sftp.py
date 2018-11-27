@@ -4,6 +4,7 @@ from contextlib import suppress
 
 import asyncssh
 
+
 logger = logging.getLogger(__name__)
 
 
@@ -19,11 +20,11 @@ class SFTPServer:
                 if data:
                     await writer(data)
                 else:
-                    self.exit_with_signal('TERM')
+                    self.exit_with_signal("TERM")
                     return
         except asyncssh.BreakReceived:
             await self._subproc.close()
-            await self.exit_with_signal('INT')
+            await self.exit_with_signal("INT")
         except asyncssh.SignalReceived as exc:
             await self._subproc.close()
             await self.exit_with_signal(exc.signal)
@@ -32,7 +33,7 @@ class SFTPServer:
         except Exception:
             logger.exception("Redirect input error")
             await self._subproc.close()
-            await self.exit_with_signal('KILL')
+            await self.exit_with_signal("KILL")
             raise
 
     async def redirect_out(self, reader, dst):
@@ -47,8 +48,9 @@ class SFTPServer:
             logger.exception("Redirect output error")
             raise
 
-    def exit_with_signal(self, signal, core_dumped=False,
-                         msg='', lang=asyncssh.DEFAULT_LANG):
+    def exit_with_signal(
+        self, signal, core_dumped=False, msg="", lang=asyncssh.DEFAULT_LANG
+    ):
         return self._chan.exit_with_signal(signal, core_dumped, msg, lang)
 
     async def run(self, stdin, stdout, stderr):
@@ -58,9 +60,8 @@ class SFTPServer:
 
         try:
             subproc = await self._orchestrator.exec_pod(
-                pod_id,
-                "/usr/lib/openssh/sftp-server",
-                tty=False)
+                pod_id, "/usr/lib/openssh/sftp-server", tty=False
+            )
             self._subproc = subproc
             self._stdin_redirect = loop.create_task(
                 self.redirect_in(stdin, subproc.write_stdin)

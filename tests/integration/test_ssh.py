@@ -1,10 +1,9 @@
 import io
-import aiodocker.utils
-
 from pathlib import PurePath
-from typing import NamedTuple
 from textwrap import dedent
+from typing import NamedTuple
 
+import aiodocker.utils
 import asyncssh
 import pytest
 
@@ -91,12 +90,14 @@ async def sftp_image_name(docker):
     # To prepare a tar context please edit Dockerfile.sftp and pack it
     f = io.BytesIO(DOCKERFILE.encode("utf-8"))
     tar_obj = aiodocker.utils.mktar_from_dockerfile(f)
-    await docker.images.build(fileobj=tar_obj,
-                              encoding='gzip',
-                              tag="ubuntu-sftp-server:latest")
+    await docker.images.build(
+        fileobj=tar_obj, encoding="gzip", tag="ubuntu-sftp-server:latest"
+    )
     tar_obj.close()
     ret = await docker.images.list()
-    filtered = [img['Id'] for img in ret if "ubuntu-sftp-server:latest" in img['RepoTags']]
+    filtered = [
+        img["Id"] for img in ret if "ubuntu-sftp-server:latest" in img["RepoTags"]
+    ]
     return filtered[0]
 
 
@@ -175,7 +176,9 @@ async def test_exit_code(ssh_server, kube_client, kube_config, delete_pod_later)
 
 
 @pytest.mark.asyncio
-async def test_sftp_basic(ssh_server, kube_client, kube_config, delete_pod_later, tmpdir):
+async def test_sftp_basic(
+    ssh_server, kube_client, kube_config, delete_pod_later, tmpdir
+):
     container = Container(
         image="atmoz/sftp",
         command="sleep 100",
@@ -194,33 +197,36 @@ async def test_sftp_basic(ssh_server, kube_client, kube_config, delete_pod_later
     ) as conn:
         async with conn.start_sftp_client() as sftp:
             ret = await sftp.listdir()
-            assert sorted(ret) == ['.',
-                                   '..',
-                                   '.dockerenv',
-                                   'bin',
-                                   'boot',
-                                   'dev',
-                                   'entrypoint',
-                                   'etc',
-                                   'home',
-                                   'lib',
-                                   'lib64',
-                                   'media',
-                                   'mnt',
-                                   'opt',
-                                   'proc',
-                                   'root',
-                                   'run',
-                                   'sbin',
-                                   'srv',
-                                   'sys',
-                                   'tmp',
-                                   'usr',
-                                   'var']
+            assert sorted(ret) == [
+                ".",
+                "..",
+                ".dockerenv",
+                "bin",
+                "boot",
+                "dev",
+                "entrypoint",
+                "etc",
+                "home",
+                "lib",
+                "lib64",
+                "media",
+                "mnt",
+                "opt",
+                "proc",
+                "root",
+                "run",
+                "sbin",
+                "srv",
+                "sys",
+                "tmp",
+                "usr",
+                "var",
+            ]
 
-            await sftp.get('/etc/os-release', tmpdir, follow_symlinks=True)
-            body = (tmpdir / 'os-release').read_text('utf-8')
-            assert body == dedent('''\
+            await sftp.get("/etc/os-release", tmpdir, follow_symlinks=True)
+            body = (tmpdir / "os-release").read_text("utf-8")
+            assert body == dedent(
+                """\
                  PRETTY_NAME="Debian GNU/Linux 9 (stretch)"
                  NAME="Debian GNU/Linux"
                  VERSION_ID="9"
@@ -229,4 +235,5 @@ async def test_sftp_basic(ssh_server, kube_client, kube_config, delete_pod_later
                  HOME_URL="https://www.debian.org/"
                  SUPPORT_URL="https://www.debian.org/support"
                  BUG_REPORT_URL="https://bugs.debian.org/"
-            ''')
+            """
+            )

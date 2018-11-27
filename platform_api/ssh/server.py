@@ -7,10 +7,11 @@ from functools import partial
 from typing import Awaitable, List
 
 import asyncssh
-from asyncssh.stream import SSHStreamSession, SSHServerSession, SSHReader, SSHWriter
+from asyncssh.stream import SSHReader, SSHServerSession, SSHStreamSession, SSHWriter
 
 from platform_api.config_factory import EnvironConfigFactory
 from platform_api.orchestrator.kube_orchestrator import KubeOrchestrator
+
 from .sftp import SFTPServer
 
 
@@ -65,7 +66,7 @@ class SSHServerSession(SSHStreamSession, SSHServerSession):
         stdout = SSHWriter(self, self._chan)
         stderr = SSHWriter(self, self._chan, asyncssh.EXTENDED_DATA_STDERR)
 
-        if self._chan.get_subsystem() == 'sftp':
+        if self._chan.get_subsystem() == "sftp":
             self._chan.set_encoding(None)
             self._encoding = None
 
@@ -73,17 +74,22 @@ class SSHServerSession(SSHStreamSession, SSHServerSession):
 
             sftp = SFTPServer(self._orchestrator, self._chan)
             handler = sftp.run(stdin, stdout, stderr)
-        elif command and command.startswith('scp '):
+        elif command and command.startswith("scp "):
             self._chan.set_encoding(None)
             self._encoding = None
             print("SCP command", command)
-            import pdb;pdb.set_trace()
+            import pdb
 
-            handler = run_scp_server(self._sftp_factory(self._conn),
-                                     command, stdin, stdout, stderr)
+            pdb.set_trace()
+
+            handler = run_scp_server(
+                self._sftp_factory(self._conn), command, stdin, stdout, stderr
+            )
         else:
             print("SHELL session")
-            import pdb;pdb.set_trace()
+            import pdb
+
+            pdb.set_trace()
             handler = self._session_factory(stdin, stdout, stderr)
 
         self._conn.create_task(handler, stdin.logger)
@@ -104,8 +110,9 @@ class SSHServerSession(SSHStreamSession, SSHServerSession):
     def terminal_size_changed(self, width, height, pixwidth, pixheight):
         """Handle an incoming terminal size change on the channel"""
 
-        self._recv_buf[None].append(asyncssh.TerminalSizeChanged(width, height,
-                                                                 pixwidth, pixheight))
+        self._recv_buf[None].append(
+            asyncssh.TerminalSizeChanged(width, height, pixwidth, pixheight)
+        )
         self._unblock_read(None)
 
 
@@ -167,7 +174,9 @@ class ShellSession:
         username = process.get_extra_info("username")
         pod_id = username
         loop = asyncio.get_event_loop()
-        import pdb;pdb.set_trace()
+        import pdb
+
+        pdb.set_trace()
         try:
             command = process.command
             if command is None:
