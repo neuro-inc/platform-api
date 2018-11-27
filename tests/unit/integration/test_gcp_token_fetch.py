@@ -4,7 +4,8 @@ from unittest.mock import MagicMock, Mock
 
 import pytest
 
-from platform_api.config import GCPTokenStore, GCPTokenStoreConfig
+from platform_api.config import GCPTokenStoreConfig
+from platform_api.utils.google_api_auth import GCPTokenStore
 
 
 class MockResponse:
