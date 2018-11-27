@@ -280,7 +280,9 @@ class JobsHandler:
         logger.info("Checking whether %r has %r", user, permission)
         await check_permission(request, permission.action, [permission])
 
-        await self._jobs_service.delete_job(job_id)
+        if not await self._jobs_service.delete_job(job_id):
+            raise aiohttp.web.HTTPGone(text=f"Job {job_id} is not running")
+
         raise aiohttp.web.HTTPNoContent()
 
     async def stream_log(self, request):
