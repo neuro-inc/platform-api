@@ -556,6 +556,7 @@ class TestJobs:
             job_id = result["job_id"]
             await jobs_client.long_polling_by_job_id(job_id=job_id, status="running")
         await jobs_client.delete_job(job_id=job_id)
+        await jobs_client.delete_finished_job(job_id=job_id)
 
     @pytest.mark.asyncio
     async def test_delete_not_exist(self, api, client, regular_user):
