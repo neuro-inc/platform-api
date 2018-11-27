@@ -569,6 +569,8 @@ class TestJobs:
         async with client.get(job_log_url, headers=regular_user.headers) as response:
             assert response.content_type == "text/plain"
             assert response.charset == "utf-8"
+            assert response.headers['Transfer-Encoding'] == 'chunked'
+            assert 'Content-Encoding' not in response.headers
             payload = await response.read()
             expected_payload = "\n".join(str(i) for i in range(1, 6)) + "\n"
             assert payload == expected_payload.encode()

@@ -298,6 +298,7 @@ class JobsHandler:
 
         response = aiohttp.web.StreamResponse(status=200)
         response.enable_chunked_encoding()
+        response.enable_compression(aiohttp.web.ContentCoding.identity)
         response.content_type = "text/plain"
         response.charset = "utf-8"
         await response.prepare(request)
