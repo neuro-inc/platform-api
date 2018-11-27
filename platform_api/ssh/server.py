@@ -7,9 +7,11 @@ from functools import partial
 from typing import Awaitable, List
 
 import asyncssh
+from asyncssh.stream import SSHStreamSession, SSHServerSession, SSHReader, SSHWriter
 
 from platform_api.config_factory import EnvironConfigFactory
 from platform_api.orchestrator.kube_orchestrator import KubeOrchestrator
+from .sftp import SFTPServer
 
 
 logger = logging.getLogger(__name__)
@@ -17,9 +19,11 @@ logger = logging.getLogger(__name__)
 
 class SSHServerHandler(asyncssh.SSHServer):
     def __init__(self, orchestrator: KubeOrchestrator) -> None:
+        super().__init__()
         self._orchestrator = orchestrator
 
     def begin_auth(self, username):
+        print("LOGIN", username)
         return False  # False for aonymous
 
     def password_auth_supported(self):
@@ -28,6 +32,81 @@ class SSHServerHandler(asyncssh.SSHServer):
     async def validate_password(self, username, password):
         # TODO: add validation
         return True
+
+    def session_requested(self):
+        return SSHServerSession(self._orchestrator)
+
+
+class SSHServerSession(SSHStreamSession, SSHServerSession):
+    def __init__(self, orchestrator: KubeOrchestrator) -> None:
+        super().__init__()
+        self._orchestrator = orchestrator
+
+    def shell_requested(self):
+        """Return whether a shell can be requested"""
+
+        return True
+
+    def exec_requested(self, command):
+        print("SESSION exec requested", command)
+        # command could be 'scp ' for SCP sessions
+        return True
+
+    def subsystem_requested(self, subsystem):
+        print("SESSION subsystem requested", subsystem)
+        # subsystem is either empty or 'sftp'
+        return True
+
+    def session_started(self):
+        """Start a session for this newly opened server channel"""
+        command = self._chan.get_command()
+
+        stdin = SSHReader(self, self._chan)
+        stdout = SSHWriter(self, self._chan)
+        stderr = SSHWriter(self, self._chan, asyncssh.EXTENDED_DATA_STDERR)
+
+        if self._chan.get_subsystem() == 'sftp':
+            self._chan.set_encoding(None)
+            self._encoding = None
+
+            print("SFTP session")
+
+            sftp = SFTPServer(self._orchestrator, self._chan)
+            handler = sftp.run(stdin, stdout, stderr)
+        elif command and command.startswith('scp '):
+            self._chan.set_encoding(None)
+            self._encoding = None
+            print("SCP command", command)
+            import pdb;pdb.set_trace()
+
+            handler = run_scp_server(self._sftp_factory(self._conn),
+                                     command, stdin, stdout, stderr)
+        else:
+            print("SHELL session")
+            import pdb;pdb.set_trace()
+            handler = self._session_factory(stdin, stdout, stderr)
+
+        self._conn.create_task(handler, stdin.logger)
+
+    def break_received(self, msec):
+        """Handle an incoming break on the channel"""
+
+        self._recv_buf[None].append(asyncssh.BreakReceived(msec))
+        self._unblock_read(None)
+        return True
+
+    def signal_received(self, signal):
+        """Handle an incoming signal on the channel"""
+
+        self._recv_buf[None].append(asyncssh.SignalReceived(signal))
+        self._unblock_read(None)
+
+    def terminal_size_changed(self, width, height, pixwidth, pixheight):
+        """Handle an incoming terminal size change on the channel"""
+
+        self._recv_buf[None].append(asyncssh.TerminalSizeChanged(width, height,
+                                                                 pixwidth, pixheight))
+        self._unblock_read(None)
 
 
 class ShellSession:
@@ -64,7 +143,7 @@ class ShellSession:
             await self.exit_with_signal(exc.signal)
         except asyncio.CancelledError:
             raise
-        except BaseException:
+        except Exception:
             logger.exception("Redirect input error")
             await self._subproc.close()
             await self.exit_with_signal(signal.SIGKILL)
@@ -79,7 +158,7 @@ class ShellSession:
                 await dst.drain()
         except asyncio.CancelledError:
             raise
-        except BaseException:
+        except Exception:
             logger.exception("Redirect output error")
             raise
 
@@ -88,11 +167,12 @@ class ShellSession:
         username = process.get_extra_info("username")
         pod_id = username
         loop = asyncio.get_event_loop()
+        import pdb;pdb.set_trace()
         try:
             command = process.command
             if command is None:
                 command = "sh -i"
-            subproc = await self._orchestrator.exec_pod(pod_id, command)
+            subproc = await self._orchestrator.exec_pod(pod_id, command, tty=True)
             self._subproc = subproc
             self._stdin_redirect = loop.create_task(
                 self.redirect_in(process.stdin, subproc.write_stdin)
@@ -108,7 +188,7 @@ class ShellSession:
             process.exit(retcode)
         except asyncio.CancelledError:
             raise
-        except BaseException:
+        except Exception:
             logger.exception("Unhandled error in ssh server")
             raise
         finally:
@@ -162,9 +242,9 @@ class SSHServer:
             self._host,
             self._port,
             server_host_keys=self._ssh_host_keys,
-            process_factory=partial(ShellSession.run, orchestrator=self._orchestrator),
-            sftp_factory=True,
-            allow_scp=True,
+            # process_factory=partial(ShellSession.run, orchestrator=self._orchestrator),
+            # sftp_factory=partial(SFTPServer.__call__, orchestrator=self._orchestrator),
+            # allow_scp=True,
         )
         address = self._server.sockets[0].getsockname()
         self._host, self._port = address

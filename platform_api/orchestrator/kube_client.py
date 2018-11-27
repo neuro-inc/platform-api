@@ -751,7 +751,7 @@ class PodExec:
             await self.close()
         except asyncio.CancelledError:
             raise
-        except BaseException:
+        except Exception:
             logger.exception("PodExec._read_data")
             await self.close()
 
@@ -1059,10 +1059,11 @@ class KubeClient:
             return [KubernetesEvent(item) for item in payload["items"]]
         return None
 
-    async def exec_pod(self, pod_id: str, command: str) -> PodExec:
+    async def exec_pod(self, pod_id: str, command: str, *, tty: bool) -> PodExec:
         url = URL(self._generate_pod_url(pod_id)) / "exec"
+        tty = str(int(tty))  # 0 or 1
         url = url.with_query(
-            command=command, tty="1", stdin="1", stdout="1", stderr="1"
+            command=command, tty=tty, stdin="1", stdout="1", stderr="1"
         )
         ws = await self._client.ws_connect(url, method="POST")  # type: ignore
         return PodExec(ws)
