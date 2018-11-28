@@ -735,6 +735,7 @@ class PodExec:
                     continue
                 channel = ExecChannel(bdata[0])
                 bdata = bdata[1:]
+                print("WS DATA", channel, bdata)
                 if channel == ExecChannel.ERROR:
                     match = self.RE_EXIT.match(bdata)
                     if match is not None:
@@ -748,8 +749,10 @@ class PodExec:
                 stream = self._channels[channel]
                 await stream.feed(bdata)
 
+            print("CLOSE WS READER")
             await self.close()
         except asyncio.CancelledError:
+            print("WS READ DATA CANCEL")
             raise
         except Exception:
             logger.exception("PodExec._read_data")

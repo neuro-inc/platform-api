@@ -42,6 +42,7 @@ class SSHServerSession(SSHStreamSession, SSHServerSession):
     def __init__(self, orchestrator: KubeOrchestrator) -> None:
         super().__init__()
         self._orchestrator = orchestrator
+        self._task = None
 
     def shell_requested(self):
         """Return whether a shell can be requested"""
@@ -92,11 +93,19 @@ class SSHServerSession(SSHStreamSession, SSHServerSession):
             pdb.set_trace()
             handler = self._session_factory(stdin, stdout, stderr)
 
-        self._conn.create_task(handler, stdin.logger)
+        self._task = self._conn.create_task(handler, stdin.logger)
+
+    def connection_lost(self, exc):
+        print("SERVER CONNECTION LOST", exc)
+        if self._task is not None:
+            if not self._task.done():
+                self._task.cancel()
+            self._task = None
+        super().connection_lost(exc)
 
     def break_received(self, msec):
         """Handle an incoming break on the channel"""
-
+        print("Break received", msec)
         self._recv_buf[None].append(asyncssh.BreakReceived(msec))
         self._unblock_read(None)
         return True
@@ -104,11 +113,13 @@ class SSHServerSession(SSHStreamSession, SSHServerSession):
     def signal_received(self, signal):
         """Handle an incoming signal on the channel"""
 
+        print("signal received", signal)
         self._recv_buf[None].append(asyncssh.SignalReceived(signal))
         self._unblock_read(None)
 
     def terminal_size_changed(self, width, height, pixwidth, pixheight):
         """Handle an incoming terminal size change on the channel"""
+        print("terminal size changed", width, height, pixwidth, pixheight)
 
         self._recv_buf[None].append(
             asyncssh.TerminalSizeChanged(width, height, pixwidth, pixheight)

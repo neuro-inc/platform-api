@@ -1,3 +1,4 @@
+import asyncio
 import io
 from pathlib import PurePath
 from textwrap import dedent
@@ -237,3 +238,5 @@ async def test_sftp_basic(
                  BUG_REPORT_URL="https://bugs.debian.org/"
             """
             )
+            await asyncio.sleep(0.1)
+    await asyncio.sleep(0.1)
