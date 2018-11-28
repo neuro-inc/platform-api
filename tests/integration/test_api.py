@@ -100,15 +100,16 @@ class JobsClient:
         return result
 
     async def long_polling_by_job_id(
-        self, job_id: str, status: str, interval_s: int = 2, max_attempts: int = 60
+        self, job_id: str, status: str, interval_s: float = 0.5, max_time: float = 180
     ):
-        for _ in range(max_attempts):
+        while True:
             response = await self.get_job_by_id(job_id)
             if response["status"] == status:
                 return response
+            if interval_s > max_time:
+                raise pytest.fail("too long")
             await asyncio.sleep(interval_s)
-        else:
-            raise RuntimeError("too long")
+            interval_s *= 2
 
     async def delete_job(self, job_id: str):
         url = self._api_config.generate_job_url(job_id)

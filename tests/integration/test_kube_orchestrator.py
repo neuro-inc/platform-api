@@ -86,16 +86,17 @@ async def delete_job_later(kube_orchestrator):
 
 class TestKubeOrchestrator:
     async def wait_for_completion(
-        self, job: Job, interval_s: float = 1.0, max_attempts: int = 30
+        self, job: Job, interval_s: float = 0.5, max_time: float = 180
     ):
-        for _ in range(max_attempts):
+        while True:
             status = await job.query_status()
             if status.is_finished:
                 return status
             else:
+                if interval_s > max_time:
+                    pytest.fail("too long")
                 await asyncio.sleep(interval_s)
-        else:
-            pytest.fail("too long")
+                interval_s *= 2
 
     async def wait_for_failure(self, *args, **kwargs):
         status = await self.wait_for_completion(*args, **kwargs)
@@ -106,25 +107,23 @@ class TestKubeOrchestrator:
         assert status == JobStatus.SUCCEEDED
 
     async def wait_for_job(
-        self, job: Job, interval_s: float = 1.0, max_attempts: int = 30
+        self, job: Job, interval_s: float = 1.0, max_time: float = 180
     ) -> Tuple[JobStatus, Optional[JobStatus]]:
         """
         Function to wait for a job to either sit in current state,
         or transfer to another stage. Function never fails.
-
-        :param job:
-        :param interval_s:
-        :param max_attempts:
-        :return:
         """
         initial_status = await job.query_status()
         status = None
-        for _ in range(max_attempts):
+        while True:
             status = await job.query_status()
             if status != initial_status:
                 break
             else:
+                if interval_s > max_time:
+                    break
                 await asyncio.sleep(interval_s)
+                interval_s *= 2
         return initial_status, status
 
     @pytest.mark.asyncio
@@ -233,7 +232,7 @@ class TestKubeOrchestrator:
             status = await job.start()
             assert status == JobStatus.PENDING
 
-            await self.wait_for_success(job, max_attempts=120)
+            await self.wait_for_success(job)
         finally:
             await job.delete()
 
@@ -252,7 +251,7 @@ class TestKubeOrchestrator:
             status = await job.start()
             assert status == JobStatus.PENDING
 
-            await self.wait_for_failure(job, max_attempts=120)
+            await self.wait_for_failure(job)
 
             status_item = await kube_orchestrator.get_job_status(job)
             expected_description = "".join(f"{i}\n" for i in reversed(range(1, 81)))
@@ -278,7 +277,7 @@ class TestKubeOrchestrator:
             status = await job.start()
             assert status == JobStatus.PENDING
 
-            _, _ = await self.wait_for_job(job, max_attempts=10)
+            _, _ = await self.wait_for_job(job, max_time=10)
 
             status_item = await kube_orchestrator.get_job_status(job)
             assert status_item == JobStatusItem.create(
@@ -336,7 +335,7 @@ class TestKubeOrchestrator:
             status = await write_job.start()
             assert status == JobStatus.PENDING
 
-            await self.wait_for_success(write_job, max_attempts=120)
+            await self.wait_for_success(write_job)
         finally:
             await write_job.delete()
 
@@ -344,7 +343,7 @@ class TestKubeOrchestrator:
             status = await read_job.start()
             assert status == JobStatus.PENDING
 
-            await self.wait_for_success(read_job, max_attempts=120)
+            await self.wait_for_success(read_job)
         finally:
             await read_job.delete()
 
@@ -369,7 +368,7 @@ class TestKubeOrchestrator:
             status = await job.start()
             assert status == JobStatus.PENDING
 
-            status = await self.wait_for_completion(job, max_attempts=120)
+            status = await self.wait_for_completion(job)
             assert status == expected_status
         finally:
             await job.delete()
@@ -435,22 +434,23 @@ class TestKubeOrchestrator:
         kube_ingress_ip: str,
         jobs_ingress_domain_name: str,
         job_id: str,
-        interval_s: int = 1,
-        max_attempts: int = 120,
+        interval_s: float = 0.5,
+        max_time: float = 180,
     ):
         url = f"http://{kube_ingress_ip}"
         headers = {"Host": f"{job_id}.{jobs_ingress_domain_name}"}
         async with aiohttp.ClientSession() as client:
-            for _ in range(max_attempts):
+            while True:
                 try:
                     async with client.get(url, headers=headers) as response:
                         if response.status == 200:
                             break
                 except (OSError, aiohttp.ClientError):
                     pass
+                if interval_s > max_time:
+                    pytest.fail(f"Failed to connect to job service {job_id}")
                 await asyncio.sleep(interval_s)
-            else:
-                pytest.fail(f"Failed to connect to job service {job_id}")
+                interval_s *= 2
 
     @pytest.mark.asyncio
     async def test_job_with_exposed_port(
