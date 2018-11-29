@@ -525,20 +525,6 @@ class TestKubeOrchestrator:
             if client_job is not None:
                 await client_job.delete()
 
-    async def _assert_no_such_ingress_rule(
-        self, kube_client, ingress_name, host, timeout_s: int = 1, interval_s: int = 1
-    ):
-        t0 = time.monotonic()
-        while True:
-            ingress = await kube_client.get_ingress(ingress_name)
-            rule_idx = ingress.find_rule_index_by_host(host)
-            if rule_idx == -1:
-                break
-            await asyncio.sleep(max(interval_s, time.monotonic() - t0))
-            if time.monotonic() - t0 > max_time:
-                pytest.fail("Ingress still exists")
-            interval_s *= 1.5
-
 
 @pytest.fixture
 async def delete_pod_later(kube_client):
