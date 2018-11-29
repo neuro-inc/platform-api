@@ -123,7 +123,7 @@ class ModelsHandler:
         await check_permission(request, permissions[0].action, permissions)
 
         description = request_payload.get("description")
-        is_preemptible = request_payload["is_preemptible"]
+        is_preemptible = request_payload.get("is_preemptible")
         response_payload = await self._create_job(
             user, container, description=description, is_preemptible=is_preemptible
         )

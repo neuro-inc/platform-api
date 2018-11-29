@@ -111,11 +111,6 @@ class TestKubeOrchestrator:
         """
         Function to wait for a job to either sit in current state,
         or transfer to another stage. Function never fails.
-
-        :param job:
-        :param interval_s:
-        :param max_attempts:
-        :return:
         """
         initial_status = await job.query_status()
         status = None

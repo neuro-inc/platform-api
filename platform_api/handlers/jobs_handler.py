@@ -223,7 +223,7 @@ class JobsHandler:
         await check_permission(request, permissions[0].action, permissions)
 
         description = request_payload.get("description")
-        is_preemptible = request_payload["is_preemptible"]
+        is_preemptible = request_payload.get("is_preemptible")
         job_request = JobRequest.create(container, description)
         job, _ = await self._jobs_service.create_job(
             job_request, user=user, is_preemptible=is_preemptible
