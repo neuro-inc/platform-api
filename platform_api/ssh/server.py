@@ -2,6 +2,7 @@ import asyncio
 import logging
 import pathlib
 import weakref
+from contextlib import suppress
 from functools import partial
 from typing import List
 
@@ -90,7 +91,7 @@ class SSHServerSession(SSHStreamSession, SSHServerSession):
             handler = shell.run(stdin, stdout, stderr)
 
         self._task = self._conn.create_task(handler, stdin.logger)
-        self._server.register_on_close(self._task)
+        self._server.add_cleanup(self._task)
 
     def connection_lost(self, exc):
         print("SERVER CONNECTION LOST", exc)
@@ -170,11 +171,15 @@ class SSHServer:
         print("WAIT FOR", list(self._waiters))
         await asyncio.gather(*list(self._waiters))
 
-    async def _wait(self, coro):
-        await coro
+    async def _wait(self, task):
+        try:
+            with suppress(asyncio.CancelledError):
+                await task
+        except Exception:
+            logger.exception("Unhandled exception in SSH server")
 
-    def register_on_close(self, task):
-        self._waiters.add(task)
+    def add_cleanup(self, coro):
+        self._waiters.add(self._wait(asyncio.ensure_future(coro)))
 
 
 def init_logging():

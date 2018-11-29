@@ -10,17 +10,12 @@ logger = logging.getLogger(__name__)
 
 class ShellSession:
     def __init__(self, server, channel):
-        self._process = asyncssh.SSHServerProcess(self.handle, None, None)
-        self._process._chan = channel
+        self._chan = channel
         self._server = server
         self._subproc = None
         self._stdin_redirect = None
         self._stdout_redirect = None
         self._stderr_redirect = None
-
-    def run(self, stdin, stdout, stderr):
-        process = self._process
-        return process._start_process(stdin, stdout, stderr)
 
     async def redirect_in(self, src, writer):
         try:
@@ -30,21 +25,21 @@ class ShellSession:
                     data = data.encode("utf-8")
                     await writer(data)
                 else:
-                    self._process.exit_with_signal("TERM")
+                    self.exit_with_signal("TERM")
                     return
         except asyncssh.BreakReceived:
             await self._subproc.close()
-            await self._process.exit_with_signal("INT")
+            self.exit_with_signal("INT")
         except asyncssh.SignalReceived as exc:
             await self._subproc.close()
-            await self._process.exit_with_signal(exc.signal)
+            self.exit_with_signal(exc.signal)
         except asyncio.CancelledError:
-            raise
+            return
         except Exception:
             logger.exception("Redirect input error")
             await self._subproc.close()
-            await self._process.exit_with_signal("KILL")
-            raise
+            self.exit_with_signal("KILL")
+            return
 
     async def redirect_out(self, reader, dst):
         try:
@@ -54,51 +49,76 @@ class ShellSession:
                 dst.write(data)
                 await dst.drain()
         except asyncio.CancelledError:
-            raise
+            return
         except Exception:
             logger.exception("Redirect output error")
-            raise
+            return
 
-    async def handle(self, process):
-        username = process.get_extra_info("username")
+    async def run(self, stdin, stdout, stderr):
+        username = self.username
+        print('USERNAME', username)
         pod_id = username
         loop = asyncio.get_event_loop()
         try:
-            command = process.command
+            command = self.command
             if command is None:
                 command = "sh -i"
+            print('COMMAND', command)
             subproc = await self._server.orchestrator.exec_pod(
                 pod_id, command, tty=True
             )
             self._subproc = subproc
             self._stdin_redirect = loop.create_task(
-                self.redirect_in(process.stdin, subproc.write_stdin)
+                self.redirect_in(stdin, subproc.write_stdin)
             )
+            self._server.add_cleanup(self._stdin_redirect)
             self._stdout_redirect = loop.create_task(
-                self.redirect_out(subproc.read_stdout, process.stdout)
+                self.redirect_out(subproc.read_stdout, stdout)
             )
+            self._server.add_cleanup(self._stdout_redirect)
             self._stderr_redirect = loop.create_task(
-                self.redirect_out(subproc.read_stderr, process.stderr)
+                self.redirect_out(subproc.read_stderr, stderr)
             )
+            self._server.add_cleanup(self._stderr_redirect)
 
             retcode = await subproc.wait()
-            process.exit(retcode)
+            self.exit(retcode)
         except asyncio.CancelledError:
             raise
         except Exception:
             logger.exception("Unhandled error in ssh server")
             raise
         finally:
+            if self._subproc is not None:
+                await self._subproc.close()
             await self.cleanup()
 
-    async def terminate(self, sigcode):
-        if self._subproc is not None:
-            await self._subproc.close()
-            self._subproc = None
-        await self.cleanup()
-        self._process.exit_with_signal(sigcode)
+    def exit(self, status):
+        self._chan.exit(status)
+
+    def exit_with_signal(
+        self, signal, core_dumped=False, msg="", lang=asyncssh.DEFAULT_LANG
+    ):
+        return self._chan.exit_with_signal(signal, core_dumped, msg, lang)
+
+    @property
+    def username(self):
+        return self._chan.get_extra_info('username')
+
+    @property
+    def env(self):
+        return self._chan.get_environment()
+
+    @property
+    def command(self):
+        return self._chan.get_command()
+
+    @property
+    def subsystem(self):
+        return self._chan.get_subsystem()
 
     async def cleanup(self):
+        print("PROC CLEANUP")
         if self._stdin_redirect is not None:
             self._stdin_redirect.cancel()
             with suppress(asyncio.CancelledError):

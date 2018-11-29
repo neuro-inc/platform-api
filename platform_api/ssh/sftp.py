@@ -29,12 +29,12 @@ class SFTPServer:
             await self._subproc.close()
             await self.exit_with_signal(exc.signal)
         except asyncio.CancelledError:
-            raise
+            return
         except Exception:
             logger.exception("Redirect input error")
             await self._subproc.close()
             await self.exit_with_signal("KILL")
-            raise
+            return
 
     async def redirect_out(self, reader, dst):
         try:
@@ -43,10 +43,10 @@ class SFTPServer:
                 dst.write(data)
                 await dst.drain()
         except asyncio.CancelledError:
-            raise
+            return
         except Exception:
             logger.exception("Redirect output error")
-            raise
+            return
 
     def exit_with_signal(
         self, signal, core_dumped=False, msg="", lang=asyncssh.DEFAULT_LANG
@@ -85,14 +85,6 @@ class SFTPServer:
             if self._subproc is not None:
                 await self._subproc.close()
             await self.cleanup()
-
-    async def terminate(self, sigcode):
-        if self._subproc is not None:
-            await self._subproc.close()
-            self._subproc = None
-        await self.cleanup()
-        self._chan.exit(sigcode)
-        await self._chan.wait_closed()
 
     async def cleanup(self):
         if self._stdin_redirect is not None:
