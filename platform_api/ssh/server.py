@@ -2,6 +2,7 @@ import asyncio
 import logging
 import pathlib
 import signal
+import weakref
 from contextlib import suppress
 from functools import partial
 from typing import Awaitable, List
@@ -19,9 +20,9 @@ logger = logging.getLogger(__name__)
 
 
 class SSHServerHandler(asyncssh.SSHServer):
-    def __init__(self, orchestrator: KubeOrchestrator) -> None:
+    def __init__(self, server: 'SSHServer') -> None:
         super().__init__()
-        self._orchestrator = orchestrator
+        self._server = server
 
     def begin_auth(self, username):
         print("LOGIN", username)
@@ -35,13 +36,13 @@ class SSHServerHandler(asyncssh.SSHServer):
         return True
 
     def session_requested(self):
-        return SSHServerSession(self._orchestrator)
+        return SSHServerSession(self._server)
 
 
 class SSHServerSession(SSHStreamSession, SSHServerSession):
-    def __init__(self, orchestrator: KubeOrchestrator) -> None:
+    def __init__(self, server: 'SSHServer') -> None:
         super().__init__()
-        self._orchestrator = orchestrator
+        self._server = server
         self._task = None
 
     def shell_requested(self):
@@ -73,7 +74,7 @@ class SSHServerSession(SSHStreamSession, SSHServerSession):
 
             print("SFTP session")
 
-            sftp = SFTPServer(self._orchestrator, self._chan)
+            sftp = SFTPServer(self._server, self._chan)
             handler = sftp.run(stdin, stdout, stderr)
         elif command and command.startswith("scp "):
             self._chan.set_encoding(None)
@@ -94,14 +95,20 @@ class SSHServerSession(SSHStreamSession, SSHServerSession):
             handler = self._session_factory(stdin, stdout, stderr)
 
         self._task = self._conn.create_task(handler, stdin.logger)
+        self._server.register_on_close(self._task)
 
     def connection_lost(self, exc):
         print("SERVER CONNECTION LOST", exc)
         if self._task is not None:
             if not self._task.done():
+                print('CANCEL TASK')
                 self._task.cancel()
             self._task = None
         super().connection_lost(exc)
+
+    def eof_received(self):
+        print("EOF RECEIVED")
+        super().eof_received()
 
     def break_received(self, msec):
         """Handle an incoming break on the channel"""
@@ -128,9 +135,9 @@ class SSHServerSession(SSHStreamSession, SSHServerSession):
 
 
 class ShellSession:
-    def __init__(self, process, orchestrator):
+    def __init__(self, process, server):
         self._process = process
-        self._orchestrator = orchestrator
+        self._server = server
         self._subproc = None
         self._stdin_redirect = None
         self._stdout_redirect = None
@@ -138,9 +145,9 @@ class ShellSession:
 
     @classmethod
     def run(
-        cls, process: asyncssh.SSHServerProcess, orchestrator: KubeOrchestrator
+        cls, process: asyncssh.SSHServerProcess, server: 'SSHServer'
     ) -> Awaitable[None]:
-        self = cls(process, orchestrator)
+        self = cls(process, server)
         return self.handle_client()
 
     async def redirect_in(self, src, writer):
@@ -192,7 +199,7 @@ class ShellSession:
             command = process.command
             if command is None:
                 command = "sh -i"
-            subproc = await self._orchestrator.exec_pod(pod_id, command, tty=True)
+            subproc = await self._server.orchestrator.exec_pod(pod_id, command, tty=True)
             self._subproc = subproc
             self._stdin_redirect = loop.create_task(
                 self.redirect_in(process.stdin, subproc.write_stdin)
@@ -247,6 +254,7 @@ class SSHServer:
         here = pathlib.Path(__file__).parent
         self._ssh_host_keys.append(str(here / "ssh_host_dsa_key"))
         self._ssh_host_keys.append(str(here / "ssh_host_rsa_key"))
+        self._waiters = weakref.WeakSet()
 
     @property
     def host(self) -> str:
@@ -256,15 +264,16 @@ class SSHServer:
     def port(self) -> int:
         return self._port
 
+    @property
+    def orchestrator(self):
+        return self._orchestrator
+
     async def start(self):
         self._server = await asyncssh.create_server(
-            partial(SSHServerHandler, self._orchestrator),
+            partial(SSHServerHandler, self),
             self._host,
             self._port,
             server_host_keys=self._ssh_host_keys,
-            # process_factory=partial(ShellSession.run, orchestrator=self._orchestrator),
-            # sftp_factory=partial(SFTPServer.__call__, orchestrator=self._orchestrator),
-            # allow_scp=True,
         )
         address = self._server.sockets[0].getsockname()
         self._host, self._port = address
@@ -272,6 +281,15 @@ class SSHServer:
     async def stop(self):
         self._server.close()
         await self._server.wait_closed()
+        # import pdb;pdb.set_trace()
+        print('WAIT FOR', list(self._waiters))
+        await asyncio.gather(*list(self._waiters))
+
+    async def _wait(self, coro):
+        await coro
+
+    def register_on_close(self, task):
+        self._waiters.add(task)
 
 
 def init_logging():

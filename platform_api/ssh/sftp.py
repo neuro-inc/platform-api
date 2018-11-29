@@ -9,8 +9,8 @@ logger = logging.getLogger(__name__)
 
 
 class SFTPServer:
-    def __init__(self, orchestrator, channel):
-        self._orchestrator = orchestrator
+    def __init__(self, server, channel):
+        self._server = server
         self._chan = channel
 
     async def redirect_in(self, src, writer):
@@ -54,12 +54,13 @@ class SFTPServer:
         return self._chan.exit_with_signal(signal, core_dumped, msg, lang)
 
     async def run(self, stdin, stdout, stderr):
+        self._subproc = None
         loop = asyncio.get_event_loop()
         username = self._chan.get_extra_info("username")
         pod_id = username
 
         try:
-            subproc = await self._orchestrator.exec_pod(
+            subproc = await self._server.orchestrator.exec_pod(
                 pod_id, "/usr/lib/openssh/sftp-server", tty=False
             )
             self._subproc = subproc
@@ -81,6 +82,8 @@ class SFTPServer:
             logger.exception("Unhandled error in sftp server")
             raise
         finally:
+            if self._subproc is not None:
+                await self._subproc.close()
             await self.cleanup()
 
     async def terminate(self, sigcode):
@@ -89,6 +92,7 @@ class SFTPServer:
             self._subproc = None
         await self.cleanup()
         self._chan.exit(sigcode)
+        await self._chan.wait_closed()
 
     async def cleanup(self):
         if self._stdin_redirect is not None:
