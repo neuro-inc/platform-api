@@ -1,12 +1,12 @@
 import asyncio
 import io
+import time
 import uuid
 from pathlib import PurePath
 from typing import Optional, Tuple
 
 import aiohttp
 import pytest
-from async_timeout import timeout
 from yarl import URL
 
 from platform_api.orchestrator import (
@@ -88,15 +88,17 @@ class TestKubeOrchestrator:
     async def wait_for_completion(
         self, job: Job, interval_s: float = 0.5, max_time: float = 180
     ):
+        t0 = time.monotonic()
         while True:
             status = await job.query_status()
             if status.is_finished:
                 return status
             else:
-                if interval_s > max_time:
+                await asyncio.sleep(max(interval_s, time.monotonic() - t0))
+                if time.monotonic() - t0 > max_time:
                     pytest.fail("too long")
                 await asyncio.sleep(interval_s)
-                interval_s *= 2
+                interval_s *= 1.5
 
     async def wait_for_failure(self, *args, **kwargs):
         status = await self.wait_for_completion(*args, **kwargs)
@@ -115,15 +117,16 @@ class TestKubeOrchestrator:
         """
         initial_status = await job.query_status()
         status = None
+        t0 = time.monotonic()
         while True:
             status = await job.query_status()
             if status != initial_status:
                 break
             else:
-                if interval_s > max_time:
-                    break
-                await asyncio.sleep(interval_s)
-                interval_s *= 2
+                await asyncio.sleep(max(interval_s, time.monotonic() - t0))
+                if time.monotonic() - t0 > max_time:
+                    pytest.fail("too long")
+                interval_s *= 1.5
         return initial_status, status
 
     @pytest.mark.asyncio
@@ -439,6 +442,7 @@ class TestKubeOrchestrator:
     ):
         url = f"http://{kube_ingress_ip}"
         headers = {"Host": f"{job_id}.{jobs_ingress_domain_name}"}
+        t0 = time.monotonic()
         async with aiohttp.ClientSession() as client:
             while True:
                 try:
@@ -447,10 +451,10 @@ class TestKubeOrchestrator:
                             break
                 except (OSError, aiohttp.ClientError):
                     pass
-                if interval_s > max_time:
+                await asyncio.sleep(max(interval_s, time.monotonic() - t0))
+                if time.monotonic() - t0 > max_time:
                     pytest.fail(f"Failed to connect to job service {job_id}")
-                await asyncio.sleep(interval_s)
-                interval_s *= 2
+                interval_s *= 1.5
 
     @pytest.mark.asyncio
     async def test_job_with_exposed_port(
@@ -524,16 +528,16 @@ class TestKubeOrchestrator:
     async def _assert_no_such_ingress_rule(
         self, kube_client, ingress_name, host, timeout_s: int = 1, interval_s: int = 1
     ):
-        try:
-            async with timeout(timeout_s):
-                while True:
-                    ingress = await kube_client.get_ingress(ingress_name)
-                    rule_idx = ingress.find_rule_index_by_host(host)
-                    if rule_idx == -1:
-                        break
-                    await asyncio.sleep(interval_s)
-        except asyncio.TimeoutError:
-            pytest.fail("Ingress still exists")
+        t0 = time.monotonic()
+        while True:
+            ingress = await kube_client.get_ingress(ingress_name)
+            rule_idx = ingress.find_rule_index_by_host(host)
+            if rule_idx == -1:
+                break
+            await asyncio.sleep(max(interval_s, time.monotonic() - t0))
+            if time.monotonic() - t0 > max_time:
+                pytest.fail("Ingress still exists")
+            interval_s *= 1.5
 
 
 @pytest.fixture
