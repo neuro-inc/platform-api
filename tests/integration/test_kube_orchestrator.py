@@ -95,8 +95,9 @@ class TestKubeOrchestrator:
                 return status
             else:
                 await asyncio.sleep(max(interval_s, time.monotonic() - t0))
-                if time.monotonic() - t0 > max_time:
-                    pytest.fail("too long")
+                current_time = time.monotonic() - t0
+                if current_time > max_time:
+                    pytest.fail(f"too long: {current_time:.3f} sec")
                 await asyncio.sleep(interval_s)
                 interval_s *= 1.5
 
@@ -124,8 +125,9 @@ class TestKubeOrchestrator:
                 break
             else:
                 await asyncio.sleep(max(interval_s, time.monotonic() - t0))
-                if time.monotonic() - t0 > max_time:
-                    pytest.fail("too long")
+                current_time = time.monotonic() - t0
+                if current_time > max_time:
+                    pytest.fail(f"too long: {current_time:.3f} sec")
                 interval_s *= 1.5
         return initial_status, status
 
@@ -279,8 +281,6 @@ class TestKubeOrchestrator:
         try:
             status = await job.start()
             assert status == JobStatus.PENDING
-
-            _, _ = await self.wait_for_job(job, max_time=10)
 
             status_item = await kube_orchestrator.get_job_status(job)
             assert status_item == JobStatusItem.create(
