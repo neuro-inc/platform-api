@@ -1,4 +1,5 @@
 import asyncio
+import time
 from pathlib import PurePath
 from typing import NamedTuple
 from unittest import mock
@@ -100,15 +101,18 @@ class JobsClient:
         return result
 
     async def long_polling_by_job_id(
-        self, job_id: str, status: str, interval_s: int = 2, max_attempts: int = 60
+        self, job_id: str, status: str, interval_s: float = 0.5, max_time: float = 180
     ):
-        for _ in range(max_attempts):
+        t0 = time.monotonic()
+        while True:
             response = await self.get_job_by_id(job_id)
             if response["status"] == status:
                 return response
-            await asyncio.sleep(interval_s)
-        else:
-            raise RuntimeError("too long")
+            await asyncio.sleep(max(interval_s, time.monotonic() - t0))
+            current_time = time.monotonic() - t0
+            if current_time > max_time:
+                pytest.fail(f"too long: {current_time:.3f} sec")
+            interval_s *= 1.5
 
     async def delete_job(self, job_id: str):
         url = self._api_config.generate_job_url(job_id)
