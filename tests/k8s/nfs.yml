@@ -28,9 +28,7 @@ spec:
           mountPath: /var/storage
       volumes:
       - name: storage
-        hostPath:
-          path: /tmp
-          type: Directory
+        emptyDir: {}
 ---
 apiVersion: v1
 kind: Service
