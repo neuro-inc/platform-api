@@ -76,7 +76,6 @@ users=(
   "vasiliy28"
   "yagosu"
   "ybehzadi"
-  "zubrabubra"
   "rebryk"
 )
 

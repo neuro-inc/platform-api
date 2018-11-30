@@ -103,12 +103,10 @@ class JobsService:
         job.is_deleted = True
         await self._jobs_storage.set_job(job)
 
-    async def delete_job(self, job_id: str) -> bool:
+    async def delete_job(self, job_id: str) -> None:
         job = await self._jobs_storage.get_job(job_id)
         if not job.is_finished:
             await self._delete_job(job)
-            return True
-        return False
 
     async def get_all_jobs(self) -> List[Job]:
         return await self._jobs_storage.get_all_jobs()

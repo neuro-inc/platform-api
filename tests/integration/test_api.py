@@ -1,4 +1,5 @@
 import asyncio
+import time
 from pathlib import PurePath
 from typing import NamedTuple
 from unittest import mock
@@ -10,7 +11,6 @@ from aiohttp.web import (
     HTTPAccepted,
     HTTPBadRequest,
     HTTPForbidden,
-    HTTPGone,
     HTTPNoContent,
     HTTPOk,
     HTTPUnauthorized,
@@ -100,25 +100,23 @@ class JobsClient:
         return result
 
     async def long_polling_by_job_id(
-        self, job_id: str, status: str, interval_s: int = 2, max_attempts: int = 60
+        self, job_id: str, status: str, interval_s: float = 0.5, max_time: float = 180
     ):
-        for _ in range(max_attempts):
+        t0 = time.monotonic()
+        while True:
             response = await self.get_job_by_id(job_id)
             if response["status"] == status:
                 return response
-            await asyncio.sleep(interval_s)
-        else:
-            raise RuntimeError("too long")
+            await asyncio.sleep(max(interval_s, time.monotonic() - t0))
+            current_time = time.monotonic() - t0
+            if current_time > max_time:
+                pytest.fail(f"too long: {current_time:.3f} sec")
+            interval_s *= 1.5
 
     async def delete_job(self, job_id: str):
         url = self._api_config.generate_job_url(job_id)
         async with self._client.delete(url, headers=self._headers) as response:
             assert response.status == HTTPNoContent.status_code
-
-    async def delete_finished_job(self, job_id: str):
-        url = self._api_config.generate_job_url(job_id)
-        async with self._client.delete(url, headers=self._headers) as response:
-            assert response.status == HTTPGone.status_code
 
 
 @pytest.fixture
@@ -185,7 +183,7 @@ class TestModels:
         assert retrieved_job["internal_hostname"] == expected_internal_hostname
 
         await jobs_client.long_polling_by_job_id(job_id=job_id, status="succeeded")
-        await jobs_client.delete_finished_job(job_id=job_id)
+        await jobs_client.delete_job(job_id=job_id)
 
     @pytest.mark.asyncio
     async def test_create_model_with_ssh_and_http(
@@ -204,7 +202,7 @@ class TestModels:
             assert result["ssh_server"] == expected_url
 
         await jobs_client.long_polling_by_job_id(job_id=job_id, status="succeeded")
-        await jobs_client.delete_finished_job(job_id=job_id)
+        await jobs_client.delete_job(job_id=job_id)
 
     @pytest.mark.asyncio
     async def test_create_model_with_ssh_only(
@@ -224,7 +222,7 @@ class TestModels:
             assert result["ssh_server"] == expected_url
 
         await jobs_client.long_polling_by_job_id(job_id=job_id, status="succeeded")
-        await jobs_client.delete_finished_job(job_id=job_id)
+        await jobs_client.delete_job(job_id=job_id)
 
     @pytest.mark.asyncio
     async def test_create_unknown_gpu_model(
@@ -303,7 +301,7 @@ class TestModels:
             assert result["status"] in ["pending"]
             job_id = result["job_id"]
         await jobs_client.long_polling_by_job_id(job_id=job_id, status="succeeded")
-        await jobs_client.delete_finished_job(job_id=job_id)
+        await jobs_client.delete_job(job_id=job_id)
 
     @pytest.mark.asyncio
     async def test_incorrect_request(self, api, client, regular_user):
@@ -519,7 +517,7 @@ class TestJobs:
         assert set(jobs_ids) <= {x["id"] for x in jobs}
         # clean
         for job in jobs:
-            await jobs_client.delete_finished_job(job_id=job["id"])
+            await jobs_client.delete_job(job_id=job["id"])
 
     @pytest.mark.asyncio
     async def test_delete_job(
@@ -534,7 +532,7 @@ class TestJobs:
             assert result["status"] in ["pending"]
             job_id = result["job_id"]
             await jobs_client.long_polling_by_job_id(job_id=job_id, status="succeeded")
-        await jobs_client.delete_finished_job(job_id=job_id)
+        await jobs_client.delete_job(job_id=job_id)
 
         jobs = await jobs_client.get_all_jobs()
         assert len(jobs) == 1
@@ -556,7 +554,8 @@ class TestJobs:
             job_id = result["job_id"]
             await jobs_client.long_polling_by_job_id(job_id=job_id, status="running")
         await jobs_client.delete_job(job_id=job_id)
-        await jobs_client.delete_finished_job(job_id=job_id)
+        # delete again (same result expected)
+        await jobs_client.delete_job(job_id=job_id)
 
     @pytest.mark.asyncio
     async def test_delete_not_exist(self, api, client, regular_user):
