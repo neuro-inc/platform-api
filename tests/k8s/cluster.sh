@@ -35,7 +35,7 @@ function k8s::start {
     export CHANGE_MINIKUBE_NONE_USER=true
 
     sudo -E minikube config set WantReportErrorPrompt false
-    sudo -E minikube start --vm-driver=none
+    sudo -E minikube start --vm-driver=none --kubernetes-version=v1.10.0
 
     k8s::wait "kubectl get po"
     k8s::wait k8s::start_nfs
