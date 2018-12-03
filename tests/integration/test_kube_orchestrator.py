@@ -449,8 +449,8 @@ class TestKubeOrchestrator:
                     async with client.get(url, headers=headers) as response:
                         if response.status == 200:
                             break
-                except (OSError, aiohttp.ClientError):
-                    pass
+                except (OSError, aiohttp.ClientError) as exc:
+                    print(exc)
                 await asyncio.sleep(max(interval_s, time.monotonic() - t0))
                 if time.monotonic() - t0 > max_time:
                     pytest.fail(f"Failed to connect to job service {job_id}")
@@ -722,6 +722,44 @@ class TestKubeClient:
 
         await kube_client.update_docker_secret(docker_secret, create_non_existent=True)
         await kube_client.update_docker_secret(docker_secret)
+
+    @pytest.fixture
+    async def delete_network_policy_later(self, kube_client):
+        names = []
+
+        async def _add_name(name):
+            names.append(name)
+
+        yield _add_name
+
+        for name in names:
+            try:
+                await kube_client.delete_network_policy(name)
+            except Exception:
+                pass
+
+    @pytest.mark.asyncio
+    async def test_create_default_network_policy(
+        self, kube_config, kube_client, delete_network_policy_later
+    ):
+        name = str(uuid.uuid4())
+        await delete_network_policy_later(name)
+        payload = await kube_client.create_default_network_policy(
+            name, {"testlabel": name}, namespace_name=kube_config.namespace
+        )
+        assert payload["metadata"]["name"] == name
+
+    @pytest.mark.asyncio
+    async def test_get_network_policy_not_found(self, kube_config, kube_client):
+        name = str(uuid.uuid4())
+        with pytest.raises(StatusException, match="NotFound"):
+            await kube_client.get_network_policy(name)
+
+    @pytest.mark.asyncio
+    async def test_delete_network_policy_not_found(self, kube_config, kube_client):
+        name = str(uuid.uuid4())
+        with pytest.raises(StatusException, match="NotFound"):
+            await kube_client.delete_network_policy(name)
 
 
 class TestPodContainerLogReader:
