@@ -101,7 +101,7 @@ class ShellSession:
 
     @property
     def username(self):
-        return self._chan.get_extra_info('username')
+        return self._chan.get_extra_info("username")
 
     @property
     def env(self):
