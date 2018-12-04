@@ -1,23 +1,28 @@
 import asyncio
 import logging
 import pathlib
-import signal
+import weakref
 from contextlib import suppress
 from functools import partial
-from typing import Awaitable, List
+from typing import List, MutableSet
 
 import asyncssh
+from asyncssh.stream import SSHReader, SSHServerSession, SSHStreamSession, SSHWriter
 
 from platform_api.config_factory import EnvironConfigFactory
 from platform_api.orchestrator.kube_orchestrator import KubeOrchestrator
+
+from .sftp import SFTPServer
+from .shell import ShellSession
 
 
 logger = logging.getLogger(__name__)
 
 
 class SSHServerHandler(asyncssh.SSHServer):
-    def __init__(self, orchestrator: KubeOrchestrator) -> None:
-        self._orchestrator = orchestrator
+    def __init__(self, server: "SSHServer") -> None:
+        super().__init__()
+        self._server = server
 
     def begin_auth(self, username):
         return False  # False for aonymous
@@ -29,112 +34,83 @@ class SSHServerHandler(asyncssh.SSHServer):
         # TODO: add validation
         return True
 
+    def session_requested(self):
+        return SSHSession(self._server)
 
-class ShellSession:
-    def __init__(self, process, orchestrator):
-        self._process = process
-        self._orchestrator = orchestrator
-        self._subproc = None
-        self._stdin_redirect = None
-        self._stdout_redirect = None
-        self._stderr_redirect = None
 
-    @classmethod
-    def run(
-        cls, process: asyncssh.SSHServerProcess, orchestrator: KubeOrchestrator
-    ) -> Awaitable[None]:
-        self = cls(process, orchestrator)
-        return self.handle_client()
+class SSHSession(SSHStreamSession, SSHServerSession):
+    def __init__(self, server: "SSHServer") -> None:
+        super().__init__()
+        self._server = server
+        self._task = None
 
-    async def redirect_in(self, src, writer):
-        try:
-            while True:
-                data = await src.read(8096)
-                if data:
-                    data = data.encode("utf-8")
-                    await writer(data)
-                else:
-                    self.exit_with_signal(signal.SIGTERM)
-                    return
-        except asyncssh.BreakReceived:
-            await self._subproc.close()
-            await self.exit_with_signal(signal.SIGINT)
-        except asyncssh.SignalReceived as exc:
-            await self._subproc.close()
-            await self.exit_with_signal(exc.signal)
-        except asyncio.CancelledError:
-            raise
-        except BaseException:
-            logger.exception("Redirect input error")
-            await self._subproc.close()
-            await self.exit_with_signal(signal.SIGKILL)
-            raise
+    def shell_requested(self):
+        """Return whether a shell can be requested"""
 
-    async def redirect_out(self, reader, dst):
-        try:
-            while True:
-                data = await reader()
-                data = data.decode("utf-8")
-                dst.write(data)
-                await dst.drain()
-        except asyncio.CancelledError:
-            raise
-        except BaseException:
-            logger.exception("Redirect output error")
-            raise
+        return True
 
-    async def handle_client(self):
-        process = self._process
-        username = process.get_extra_info("username")
-        pod_id = username
-        loop = asyncio.get_event_loop()
-        try:
-            command = process.command
-            if command is None:
-                command = "sh -i"
-            subproc = await self._orchestrator.exec_pod(pod_id, command)
-            self._subproc = subproc
-            self._stdin_redirect = loop.create_task(
-                self.redirect_in(process.stdin, subproc.write_stdin)
-            )
-            self._stdout_redirect = loop.create_task(
-                self.redirect_out(subproc.read_stdout, process.stdout)
-            )
-            self._stderr_redirect = loop.create_task(
-                self.redirect_out(subproc.read_stderr, process.stderr)
-            )
+    def exec_requested(self, command):
+        # command could be 'scp ' for SCP sessions
+        return True
 
-            retcode = await subproc.wait()
-            process.exit(retcode)
-        except asyncio.CancelledError:
-            raise
-        except BaseException:
-            logger.exception("Unhandled error in ssh server")
-            raise
-        finally:
-            await self.cleanup()
+    def subsystem_requested(self, subsystem):
+        # subsystem is either empty or 'sftp'
+        return True
 
-    async def terminate(self, sigcode):
-        if self._subproc is not None:
-            await self._subproc.close()
-            self._subproc = None
-        await self.cleanup()
-        self._process.exit_with_signal(sigcode)
+    def session_started(self):
+        """Start a session for this newly opened server channel"""
+        command = self._chan.get_command()
 
-    async def cleanup(self):
-        if self._stdin_redirect is not None:
-            self._stdin_redirect.cancel()
-            with suppress(asyncio.CancelledError):
-                await self._stdin_redirect
-            self._stdin_redirect = None
-        if self._stdout_redirect is not None:
-            with suppress(asyncio.CancelledError):
-                await self._stdout_redirect
-            self._stdout_redirect = None
-        if self._stderr_redirect is not None:
-            with suppress(asyncio.CancelledError):
-                await self._stderr_redirect
-            self._stderr_redirect = None
+        stdin = SSHReader(self, self._chan)
+        stdout = SSHWriter(self, self._chan)
+        stderr = SSHWriter(self, self._chan, asyncssh.EXTENDED_DATA_STDERR)
+
+        if self._chan.get_subsystem() == "sftp":
+            self._chan.set_encoding(None)
+            self._encoding = None
+
+            sftp = SFTPServer(self._server, self._chan)
+            handler = sftp.run(stdin, stdout, stderr)
+        elif command and command.startswith("scp "):
+            self._chan.set_encoding(None)
+            self._encoding = None
+            raise RuntimeError("scp is not supported yet")
+        else:
+            shell = ShellSession(self._server, self._chan)
+            handler = shell.run(stdin, stdout, stderr)
+
+        self._task = self._conn.create_task(handler, stdin.logger)
+        self._server.add_cleanup(self._task)
+
+    def connection_lost(self, exc):
+        if self._task is not None:
+            if not self._task.done():
+                self._task.cancel()
+            self._task = None
+        super().connection_lost(exc)
+
+    def eof_received(self):
+        super().eof_received()
+
+    def break_received(self, msec):
+        """Handle an incoming break on the channel"""
+        self._recv_buf[None].append(asyncssh.BreakReceived(msec))
+        self._unblock_read(None)
+        return True
+
+    def signal_received(self, signal):
+        """Handle an incoming signal on the channel"""
+
+        self._recv_buf[None].append(asyncssh.SignalReceived(signal))
+        self._unblock_read(None)
+
+    def terminal_size_changed(self, width, height, pixwidth, pixheight):
+        """Handle an incoming terminal size change on the channel"""
+
+        self._recv_buf[None].append(
+            asyncssh.TerminalSizeChanged(width, height, pixwidth, pixheight)
+        )
+        self._unblock_read(None)
 
 
 class SSHServer:
@@ -147,6 +123,7 @@ class SSHServer:
         here = pathlib.Path(__file__).parent
         self._ssh_host_keys.append(str(here / "ssh_host_dsa_key"))
         self._ssh_host_keys.append(str(here / "ssh_host_rsa_key"))
+        self._waiters: MutableSet[asyncio.Task[None]] = weakref.WeakSet()
 
     @property
     def host(self) -> str:
@@ -156,15 +133,16 @@ class SSHServer:
     def port(self) -> int:
         return self._port
 
+    @property
+    def orchestrator(self):
+        return self._orchestrator
+
     async def start(self):
         self._server = await asyncssh.create_server(
-            partial(SSHServerHandler, self._orchestrator),
+            partial(SSHServerHandler, self),
             self._host,
             self._port,
             server_host_keys=self._ssh_host_keys,
-            process_factory=partial(ShellSession.run, orchestrator=self._orchestrator),
-            sftp_factory=True,
-            allow_scp=True,
         )
         address = self._server.sockets[0].getsockname()
         self._host, self._port = address
@@ -172,6 +150,18 @@ class SSHServer:
     async def stop(self):
         self._server.close()
         await self._server.wait_closed()
+        # import pdb;pdb.set_trace()
+        await asyncio.gather(*list(self._waiters))
+
+    async def _wait(self, task):
+        try:
+            with suppress(asyncio.CancelledError):
+                await task
+        except Exception:
+            logger.exception("Unhandled exception in SSH server")
+
+    def add_cleanup(self, coro):
+        self._waiters.add(self._wait(asyncio.ensure_future(coro)))
 
 
 def init_logging():

@@ -836,7 +836,7 @@ class PodExec:
             await self.close()
         except asyncio.CancelledError:
             raise
-        except BaseException:
+        except Exception:
             logger.exception("PodExec._read_data")
             await self.close()
 
@@ -844,11 +844,12 @@ class PodExec:
         if not self._exit_code.done():
             # Don't have exit status yet, assume a normal termination
             self._exit_code.set_result(0)
-        self._reader_task.cancel()
-        for stream in self._channels.values():
-            await stream.close()
-        with suppress(asyncio.CancelledError):
-            await self._reader_task
+        if not self._reader_task.done():
+            self._reader_task.cancel()
+            for stream in self._channels.values():
+                await stream.close()
+            with suppress(asyncio.CancelledError):
+                await self._reader_task
         await self._ws.close()
 
     async def wait(self):
@@ -1144,10 +1145,11 @@ class KubeClient:
             return [KubernetesEvent(item) for item in payload["items"]]
         return None
 
-    async def exec_pod(self, pod_id: str, command: str) -> PodExec:
+    async def exec_pod(self, pod_id: str, command: str, *, tty: bool) -> PodExec:
         url = URL(self._generate_pod_url(pod_id)) / "exec"
+        s_tty = str(int(tty))  # 0 or 1
         url = url.with_query(
-            command=command, tty="1", stdin="1", stdout="1", stderr="1"
+            command=command, tty=s_tty, stdin="1", stdout="1", stderr="1"
         )
         ws = await self._client.ws_connect(url, method="POST")  # type: ignore
         return PodExec(ws)
