@@ -892,6 +892,19 @@ class TestPodContainerDevShmSettings:
         )
         return await self._consume_log_reader(log_reader, chunk_size=1)
 
+    async def _get_non_pending_status_for_pod(
+        self, kube_client, pod_name: str, interval_s: float = 0.5, max_time: float = 180
+    ):
+        t0 = time.monotonic()
+        while True:
+            pod_status = await kube_client.get_pod_status(pod_name)
+            if pod_status != "pending":
+                return pod_status
+            await asyncio.sleep(max(interval_s, time.monotonic() - t0))
+            if time.monotonic() - t0 > max_time:
+                pytest.fail("too long")
+            interval_s *= 1.5
+
     async def run_command_get_status(
         self, kube_config, kube_client, delete_pod_later, resources, command
     ):
@@ -907,7 +920,7 @@ class TestPodContainerDevShmSettings:
             client=kube_client, pod_name=pod.name, container_name=pod.name
         )
         await self._consume_log_reader(log_reader)
-        pod_status = await kube_client.get_pod_status(pod.name)
+        pod_status = await self._get_non_pending_status_for_pod(kube_client, pod.name)
         return JobStatusItemFactory(pod_status).create()
 
     @pytest.mark.asyncio
@@ -944,7 +957,7 @@ class TestPodContainerDevShmSettings:
     async def test_shm_extended_not_requested_try_create_huge_file(
         self, kube_config, kube_client, delete_pod_later
     ):
-        command = "dd if=/dev/zero of=/dev/shm/test  bs=128M  count=1"
+        command = "dd if=/dev/zero of=/dev/zero  bs=999999M  count=1"
         resources = ContainerResources(cpu=0.1, memory_mb=128, shm=False)
         run_output = await self.run_command_get_status(
             kube_config, kube_client, delete_pod_later, resources, command
@@ -952,7 +965,7 @@ class TestPodContainerDevShmSettings:
         job_status = JobStatusItem.create(
             status=JobStatus.FAILED, reason="OOMKilled", description="\nExit code: 137"
         )
-        assert job_status == run_output
+        assert job_status == run_output, f"actual: '{run_output}'"
 
     @pytest.mark.asyncio
     async def test_shm_extended_requested_try_create_huge_file(
