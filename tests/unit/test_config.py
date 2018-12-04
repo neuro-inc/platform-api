@@ -121,6 +121,7 @@ class TestEnvironConfigFactory:
 
         assert config.orchestrator.resource_pool_types == [ResourcePoolType()]
         assert config.orchestrator.node_label_gpu is None
+        assert config.orchestrator.node_label_preemptible is None
 
         assert config.orchestrator.orphaned_job_owner == "compute"
 
@@ -181,6 +182,7 @@ class TestEnvironConfigFactory:
                     "nvidia-tesla-v100",
                 ]
             ),
+            "NP_K8S_NODE_LABEL_PREEMPTIBLE": "testpreempt",
         }
         config = EnvironConfigFactory(environ=environ).create()
 
@@ -213,6 +215,7 @@ class TestEnvironConfigFactory:
             ResourcePoolType(gpu=1, gpu_model=GKEGPUModels.V100.value),
         ]
         assert config.orchestrator.node_label_gpu == "testlabel"
+        assert config.orchestrator.node_label_preemptible == "testpreempt"
 
         assert config.orchestrator.orphaned_job_owner == "servicename"
 

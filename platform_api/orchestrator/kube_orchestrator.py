@@ -2,7 +2,7 @@ import asyncio
 import logging
 from dataclasses import dataclass
 from pathlib import PurePath
-from typing import Any, Dict, List, Optional
+from typing import Dict, List, Optional
 
 from ..config import OrchestratorConfig  # noqa
 from .base import LogReader, Orchestrator
@@ -16,6 +16,10 @@ from .kube_client import (
     KubeClient,
     KubeClientAuthType,
     NfsVolume,
+    NodeAffinity,
+    NodePreferredSchedulingTerm,
+    NodeSelectorRequirement,
+    NodeSelectorTerm,
     PodDescriptor,
     PodExec,
     PodStatus,
@@ -243,44 +247,36 @@ class KubeOrchestrator(Orchestrator):
             )
         return tolerations
 
-    def _get_pod_node_affinity(self, job: Job) -> Dict[str, Any]:
+    def _get_pod_node_affinity(self, job: Job) -> Optional[NodeAffinity]:
         if not self._config.node_label_preemptible:
-            return {}
+            return None
 
-        if not job.is_preemptible:
-            return {
-                "requiredDuringSchedulingIgnoredDuringExecution": {
-                    "nodeSelectorTerms": [
-                        {
-                            "matchExpressions": [
-                                {
-                                    "key": self._config.node_label_preemptible,
-                                    "operator": "DoesNotExist",
-                                }
-                            ]
-                        }
-                    ]
-                }
-            }
+        required_terms = []
+        preferred_terms = []
 
-        node_selector_term = {
-            "matchExpressions": [
-                {"key": self._config.node_label_preemptible, "operator": "Exists"}
-            ]
-        }
+        if job.is_preemptible:
+            node_selector_term = NodeSelectorTerm(
+                [
+                    NodeSelectorRequirement.create_exists(
+                        self._config.node_label_preemptible
+                    )
+                ]
+            )
+            if job.is_forced_to_preemptible_pool:
+                required_terms.append(node_selector_term)
+            else:
+                preferred_terms.append(NodePreferredSchedulingTerm(node_selector_term))
+        else:
+            node_selector_term = NodeSelectorTerm(
+                [
+                    NodeSelectorRequirement.create_does_not_exist(
+                        self._config.node_label_preemptible
+                    )
+                ]
+            )
+            required_terms.append(node_selector_term)
 
-        if job.is_forced_to_preemptible_pool:
-            return {
-                "requiredDuringSchedulingIgnoredDuringExecution": {
-                    "nodeSelectorTerms": [node_selector_term]
-                }
-            }
-
-        return {
-            "preferredDuringSchedulingIgnoredDuringExecution": [
-                {"weight": 100, "preference": node_selector_term}
-            ]
-        }
+        return NodeAffinity(required=required_terms, preferred=preferred_terms)
 
     async def _get_pod_node_selector(self, job: Job) -> Dict[str, str]:
         container = job.request.container

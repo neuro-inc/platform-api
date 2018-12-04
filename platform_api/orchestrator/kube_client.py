@@ -1,6 +1,5 @@
 import abc
 import asyncio
-import copy
 import enum
 import json
 import logging
@@ -9,6 +8,7 @@ import ssl
 from base64 import b64encode
 from contextlib import suppress
 from dataclasses import dataclass, field
+from enum import Enum
 from pathlib import PurePath
 from types import TracebackType
 from typing import Any, DefaultDict, Dict, List, Optional, Type
@@ -379,6 +379,91 @@ class Toleration:
         }
 
 
+class NodeSelectorOperator(str, Enum):
+    DOES_NOT_EXIST = "DoesNotExist"
+    EXISTS = "Exists"
+    IN = "In"
+    NOT_IN = "NotIn"
+    GT = "Gt"
+    LT = "Lt"
+
+    @property
+    def requires_no_values(self) -> bool:
+        return self in (self.DOES_NOT_EXIST, self.EXISTS)
+
+
+@dataclass(frozen=True)
+class NodeSelectorRequirement:
+    key: str
+    operator: NodeSelectorOperator
+    values: List[str] = field(default_factory=list)
+
+    def __post_init__(self) -> None:
+        if not self.key:
+            raise ValueError("blank key")
+        if self.operator.requires_no_values and self.values:
+            raise ValueError("values must be empty")
+
+    @classmethod
+    def create_exists(cls, key: str) -> "NodeSelectorRequirement":
+        return cls(key=key, operator=NodeSelectorOperator.EXISTS)
+
+    @classmethod
+    def create_does_not_exist(cls, key: str) -> "NodeSelectorRequirement":
+        return cls(key=key, operator=NodeSelectorOperator.DOES_NOT_EXIST)
+
+    def to_primitive(self) -> Dict[str, Any]:
+        payload = {"key": self.key, "operator": self.operator.value}
+        if self.values:
+            payload["values"] = self.values.copy()
+        return payload
+
+
+@dataclass(frozen=True)
+class NodeSelectorTerm:
+    match_expressions: List[NodeSelectorRequirement]
+
+    def __post_init__(self):
+        if not self.match_expressions:
+            raise ValueError("no expressions")
+
+    def to_primitive(self) -> Dict[str, Any]:
+        return {
+            "matchExpressions": [expr.to_primitive() for expr in self.match_expressions]
+        }
+
+
+@dataclass(frozen=True)
+class NodePreferredSchedulingTerm:
+    preference: NodeSelectorTerm
+    weight: int = 100
+
+    def to_primitive(self) -> Dict[str, Any]:
+        return {"preference": self.preference.to_primitive(), "weight": self.weight}
+
+
+@dataclass(frozen=True)
+class NodeAffinity:
+    required: List[NodeSelectorTerm] = field(default_factory=list)
+    preferred: List[NodePreferredSchedulingTerm] = field(default_factory=list)
+
+    def __post_init__(self):
+        if not self.required and not self.preferred:
+            raise ValueError("no terms")
+
+    def to_primitive(self) -> Dict[str, Any]:
+        payload: Dict[str, Any] = {}
+        if self.required:
+            payload["requiredDuringSchedulingIgnoredDuringExecution"] = {
+                "nodeSelectorTerms": [term.to_primitive() for term in self.required]
+            }
+        if self.preferred:
+            payload["preferredDuringSchedulingIgnoredDuringExecution"] = [
+                term.to_primitive() for term in self.preferred
+            ]
+        return payload
+
+
 @dataclass(frozen=True)
 class PodDescriptor:
     name: str
@@ -390,7 +475,7 @@ class PodDescriptor:
     resources: Optional[Resources] = None
     node_selector: Dict[str, str] = field(default_factory=dict)
     tolerations: List[Toleration] = field(default_factory=list)
-    node_affinity: Dict[str, Any] = field(default_factory=dict)
+    node_affinity: Optional[NodeAffinity] = None
 
     port: Optional[int] = None
     ssh_port: Optional[int] = None
@@ -408,7 +493,7 @@ class PodDescriptor:
         secret_names: Optional[List[str]] = None,
         node_selector: Optional[Dict[str, str]] = None,
         tolerations: Optional[List[Toleration]] = None,
-        node_affinity: Optional[Dict[str, Any]] = None,
+        node_affinity: Optional[NodeAffinity] = None,
     ) -> "PodDescriptor":
         container = job_request.container
         volume_mounts = [
@@ -447,7 +532,7 @@ class PodDescriptor:
             image_pull_secrets=image_pull_secrets,
             node_selector=node_selector or {},
             tolerations=tolerations or [],
-            node_affinity=node_affinity or {},
+            node_affinity=node_affinity,
         )
 
     @property
@@ -502,7 +587,7 @@ class PodDescriptor:
             payload["spec"]["nodeSelector"] = self.node_selector.copy()
         if self.node_affinity:
             payload["spec"]["affinity"] = {
-                "nodeAffinity": copy.deepcopy(self.node_affinity)
+                "nodeAffinity": self.node_affinity.to_primitive()
             }
         return payload
 

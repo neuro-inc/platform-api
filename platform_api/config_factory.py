@@ -121,6 +121,7 @@ class EnvironConfigFactory:
             ),
             resource_pool_types=pool_types,
             node_label_gpu=self._environ.get("NP_K8S_NODE_LABEL_GPU"),
+            node_label_preemptible=self._environ.get("NP_K8S_NODE_LABEL_PREEMPTIBLE"),
             orphaned_job_owner=auth.service_name,
         )
 

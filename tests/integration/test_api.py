@@ -1,4 +1,5 @@
 import asyncio
+import time
 from pathlib import PurePath
 from typing import NamedTuple
 from unittest import mock
@@ -99,15 +100,18 @@ class JobsClient:
         return result
 
     async def long_polling_by_job_id(
-        self, job_id: str, status: str, interval_s: int = 2, max_attempts: int = 60
+        self, job_id: str, status: str, interval_s: float = 0.5, max_time: float = 180
     ):
-        for _ in range(max_attempts):
+        t0 = time.monotonic()
+        while True:
             response = await self.get_job_by_id(job_id)
             if response["status"] == status:
                 return response
-            await asyncio.sleep(interval_s)
-        else:
-            raise RuntimeError("too long")
+            await asyncio.sleep(max(interval_s, time.monotonic() - t0))
+            current_time = time.monotonic() - t0
+            if current_time > max_time:
+                pytest.fail(f"too long: {current_time:.3f} sec")
+            interval_s *= 1.5
 
     async def delete_job(self, job_id: str):
         url = self._api_config.generate_job_url(job_id)
@@ -536,6 +540,24 @@ class TestJobs:
         assert jobs[0]["id"] == job_id
 
     @pytest.mark.asyncio
+    async def test_delete_already_deleted(
+        self, api, client, model_train, jobs_client, regular_user
+    ):
+        url = api.model_base_url
+        model_train["container"]["command"] = "sleep 1000000000"
+        async with client.post(
+            url, headers=regular_user.headers, json=model_train
+        ) as response:
+            assert response.status == HTTPAccepted.status_code
+            result = await response.json()
+            assert result["status"] in ["pending"]
+            job_id = result["job_id"]
+            await jobs_client.long_polling_by_job_id(job_id=job_id, status="running")
+        await jobs_client.delete_job(job_id=job_id)
+        # delete again (same result expected)
+        await jobs_client.delete_job(job_id=job_id)
+
+    @pytest.mark.asyncio
     async def test_delete_not_exist(self, api, client, regular_user):
         job_id = "kdfghlksjd-jhsdbljh-3456789!@"
         url = api.jobs_base_url + f"/{job_id}"
@@ -569,6 +591,8 @@ class TestJobs:
         async with client.get(job_log_url, headers=regular_user.headers) as response:
             assert response.content_type == "text/plain"
             assert response.charset == "utf-8"
+            assert response.headers["Transfer-Encoding"] == "chunked"
+            assert "Content-Encoding" not in response.headers
             payload = await response.read()
             expected_payload = "\n".join(str(i) for i in range(1, 6)) + "\n"
             assert payload == expected_payload.encode()
