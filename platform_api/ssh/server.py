@@ -25,7 +25,6 @@ class SSHServerHandler(asyncssh.SSHServer):
         self._server = server
 
     def begin_auth(self, username):
-        print("LOGIN", username)
         return False  # False for aonymous
 
     def password_auth_supported(self):
@@ -47,17 +46,14 @@ class SSHServerSession(SSHStreamSession, SSHServerSession):
 
     def shell_requested(self):
         """Return whether a shell can be requested"""
-        print("SESSION shell requested")
 
         return True
 
     def exec_requested(self, command):
-        print("SESSION exec requested", command)
         # command could be 'scp ' for SCP sessions
         return True
 
     def subsystem_requested(self, subsystem):
-        print("SESSION subsystem requested", subsystem)
         # subsystem is either empty or 'sftp'
         return True
 
@@ -87,21 +83,17 @@ class SSHServerSession(SSHStreamSession, SSHServerSession):
         self._server.add_cleanup(self._task)
 
     def connection_lost(self, exc):
-        print("SERVER CONNECTION LOST", exc)
         if self._task is not None:
             if not self._task.done():
-                print("CANCEL TASK")
                 self._task.cancel()
             self._task = None
         super().connection_lost(exc)
 
     def eof_received(self):
-        print("EOF RECEIVED")
         super().eof_received()
 
     def break_received(self, msec):
         """Handle an incoming break on the channel"""
-        print("Break received", msec)
         self._recv_buf[None].append(asyncssh.BreakReceived(msec))
         self._unblock_read(None)
         return True
@@ -109,13 +101,11 @@ class SSHServerSession(SSHStreamSession, SSHServerSession):
     def signal_received(self, signal):
         """Handle an incoming signal on the channel"""
 
-        print("signal received", signal)
         self._recv_buf[None].append(asyncssh.SignalReceived(signal))
         self._unblock_read(None)
 
     def terminal_size_changed(self, width, height, pixwidth, pixheight):
         """Handle an incoming terminal size change on the channel"""
-        print("terminal size changed", width, height, pixwidth, pixheight)
 
         self._recv_buf[None].append(
             asyncssh.TerminalSizeChanged(width, height, pixwidth, pixheight)
@@ -161,7 +151,6 @@ class SSHServer:
         self._server.close()
         await self._server.wait_closed()
         # import pdb;pdb.set_trace()
-        print("WAIT FOR", list(self._waiters))
         await asyncio.gather(*list(self._waiters))
 
     async def _wait(self, task):

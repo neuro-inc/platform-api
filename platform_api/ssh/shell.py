@@ -56,14 +56,12 @@ class ShellSession:
 
     async def run(self, stdin, stdout, stderr):
         username = self.username
-        print('USERNAME', username)
         pod_id = username
         loop = asyncio.get_event_loop()
         try:
             command = self.command
             if command is None:
                 command = "sh -i"
-            print('COMMAND', command)
             subproc = await self._server.orchestrator.exec_pod(
                 pod_id, command, tty=True
             )
@@ -118,7 +116,6 @@ class ShellSession:
         return self._chan.get_subsystem()
 
     async def cleanup(self):
-        print("PROC CLEANUP")
         if self._stdin_redirect is not None:
             self._stdin_redirect.cancel()
             with suppress(asyncio.CancelledError):
