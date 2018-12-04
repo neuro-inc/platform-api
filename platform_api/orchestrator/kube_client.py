@@ -476,6 +476,7 @@ class PodDescriptor:
     node_selector: Dict[str, str] = field(default_factory=dict)
     tolerations: List[Toleration] = field(default_factory=list)
     node_affinity: Optional[NodeAffinity] = None
+    labels: Dict[str, str] = field(default_factory=dict)
 
     port: Optional[int] = None
     ssh_port: Optional[int] = None
@@ -494,6 +495,7 @@ class PodDescriptor:
         node_selector: Optional[Dict[str, str]] = None,
         tolerations: Optional[List[Toleration]] = None,
         node_affinity: Optional[NodeAffinity] = None,
+        labels: Optional[Dict[str, str]] = None,
     ) -> "PodDescriptor":
         container = job_request.container
         volume_mounts = [
@@ -533,6 +535,7 @@ class PodDescriptor:
             node_selector=node_selector or {},
             tolerations=tolerations or [],
             node_affinity=node_affinity,
+            labels=labels,
         )
 
     @property
@@ -561,16 +564,15 @@ class PodDescriptor:
         if readines_probe:
             container_payload["readinessProbe"] = readines_probe
 
+        labels = self.labels.copy()
+        # TODO (A Danshyn 12/04/18): the job is left for backward
+        # compatibility
+        labels["job"] = self.name
+
         payload = {
             "kind": "Pod",
             "apiVersion": "v1",
-            "metadata": {
-                "name": self.name,
-                "labels": {
-                    # TODO (A Danshyn 06/13/18): revisit the naming etc
-                    "job": self.name
-                },
-            },
+            "metadata": {"name": self.name, "labels": labels},
             "spec": {
                 "containers": [container_payload],
                 "volumes": volumes,
