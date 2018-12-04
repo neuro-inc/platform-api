@@ -4,7 +4,7 @@ import pathlib
 import weakref
 from contextlib import suppress
 from functools import partial
-from typing import List
+from typing import List, MutableSet
 
 import asyncssh
 from asyncssh.stream import SSHReader, SSHServerSession, SSHStreamSession, SSHWriter
@@ -123,7 +123,7 @@ class SSHServer:
         here = pathlib.Path(__file__).parent
         self._ssh_host_keys.append(str(here / "ssh_host_dsa_key"))
         self._ssh_host_keys.append(str(here / "ssh_host_rsa_key"))
-        self._waiters = weakref.WeakSet()
+        self._waiters: MutableSet[asyncio.Task[None]] = weakref.WeakSet()
 
     @property
     def host(self) -> str:
