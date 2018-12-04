@@ -101,6 +101,8 @@ class ModelsHandler:
             payload["ssh_server"] = job.ssh_server
         if job.internal_hostname:
             payload["internal_hostname"] = job.internal_hostname
+        if job.description:
+            payload["description"] = job.description
         return payload
 
     async def handle_post(self, request):

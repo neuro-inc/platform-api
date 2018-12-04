@@ -957,7 +957,7 @@ class TestPodContainerDevShmSettings:
     async def test_shm_extended_not_requested_try_create_huge_file(
         self, kube_config, kube_client, delete_pod_later
     ):
-        command = "dd if=/dev/zero of=/dev/shm/test  bs=999999M  count=1"
+        command = "dd if=/dev/zero of=/dev/zero  bs=999999M  count=1"
         resources = ContainerResources(cpu=0.1, memory_mb=128, shm=False)
         run_output = await self.run_command_get_status(
             kube_config, kube_client, delete_pod_later, resources, command
