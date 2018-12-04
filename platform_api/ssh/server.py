@@ -78,14 +78,7 @@ class SSHServerSession(SSHStreamSession, SSHServerSession):
         elif command and command.startswith("scp "):
             self._chan.set_encoding(None)
             self._encoding = None
-            print("SCP command", command)
-            import pdb
-
-            pdb.set_trace()
-
-            handler = run_scp_server(
-                self._sftp_factory(self._conn), command, stdin, stdout, stderr
-            )
+            raise RuntimeError("scp is not supported yet")
         else:
             shell = ShellSession(self._server, self._chan)
             handler = shell.run(stdin, stdout, stderr)
