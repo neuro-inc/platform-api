@@ -35,10 +35,10 @@ class SSHServerHandler(asyncssh.SSHServer):
         return True
 
     def session_requested(self):
-        return SSHServerSession(self._server)
+        return SSHSession(self._server)
 
 
-class SSHServerSession(SSHStreamSession, SSHServerSession):
+class SSHSession(SSHStreamSession, SSHServerSession):
     def __init__(self, server: "SSHServer") -> None:
         super().__init__()
         self._server = server
