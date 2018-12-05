@@ -202,6 +202,8 @@ workflows:
                 - master
       - gke_ssh_dev_deploy:
           context: org-global
+          requires:
+            - test
           filters:
             branches:
               only:
