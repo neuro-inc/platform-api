@@ -58,12 +58,18 @@ class ShellSession:
         username = self.username
         pod_id = username
         loop = asyncio.get_event_loop()
+        env = self._chan.get_environment()
         try:
             command = self.command
             if command is None:
                 command = "sh -i"
+            lst = ["env"]
+            for name, val in env.items():
+                lst.append(name + "=" + val)
+            lst.append(command)
+            wrapper = " ".join(lst)
             subproc = await self._server.orchestrator.exec_pod(
-                pod_id, command, tty=True
+                pod_id, wrapper, tty=True
             )
             self._subproc = subproc
             self._stdin_redirect = loop.create_task(
