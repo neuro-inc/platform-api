@@ -184,7 +184,7 @@ async def run():
             await asyncio.sleep(3600)
 
 
-async def main():
+def main():
     init_logging()
     loop = asyncio.get_event_loop()
     loop.run_until_complete(run())
