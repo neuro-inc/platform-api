@@ -535,7 +535,7 @@ class PodDescriptor:
             node_selector=node_selector or {},
             tolerations=tolerations or [],
             node_affinity=node_affinity,
-            labels=labels,
+            labels=labels or {},
         )
 
     @property
