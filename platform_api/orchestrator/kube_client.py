@@ -1216,16 +1216,17 @@ class KubeClient:
         namespace_name: Optional[str] = None,
     ) -> Dict[str, Any]:
         assert pod_labels
-        # TODO: comments
         # https://tools.ietf.org/html/rfc1918#section-3
         request_payload = {
             "apiVersion": "networking.k8s.io/v1",
             "kind": "NetworkPolicy",
             "metadata": {"name": name},
             "spec": {
+                # applying the rules below to labeled pods
                 "podSelector": {"matchLabels": pod_labels},
                 "policyTypes": ["Egress"],
                 "egress": [
+                    # allowing pods to connect to public networks only
                     {
                         "to": [
                             {
@@ -1240,6 +1241,9 @@ class KubeClient:
                             }
                         ]
                     },
+                    # allowing labeled pods to make DNS queries in our private
+                    # networks, because pods' /etc/resolv.conf files still
+                    # point to the internal DNS
                     {
                         "to": [
                             {"ipBlock": {"cidr": "10.0.0.0/8"}},
@@ -1251,6 +1255,7 @@ class KubeClient:
                             {"port": 53, "protocol": "TCP"},
                         ],
                     },
+                    # allowing labeled pods to connect to each other
                     {"to": [{"podSelector": {"matchLabels": pod_labels}}]},
                 ],
             },
