@@ -20,7 +20,7 @@ spec:
       containers:
       - name: ssh
         image: {{ printf "%s" (pluck .Values.global.env .Values.IMAGE | first | default .Values.IMAGE._default) }}
-        command: spi-ssh-server
+        command: api-ssh-server
         imagePullPolicy: Always
         env:
         - name: NP_K8S_API_URL
