@@ -1149,9 +1149,14 @@ class KubeClient:
         url = URL(self._generate_pod_url(pod_id)) / "exec"
         s_tty = str(int(tty))  # 0 or 1
         url = url.with_query(
-            command=command, tty=s_tty, stdin="1", stdout="1", stderr="1"
+            container=pod_id,
+            command=command,
+            tty=s_tty,
+            stdin="1",
+            stdout="1",
+            stderr="1",
         )
-        ws = await self._client.ws_connect(url, method="POST")  # type: ignore
+        ws = await self._client.ws_connect(url, method="GET")  # type: ignore
         return PodExec(ws)
 
     async def wait_pod_is_running(
