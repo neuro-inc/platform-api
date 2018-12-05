@@ -10,6 +10,8 @@ from .config import (
     DatabaseConfig,
     RegistryConfig,
     ServerConfig,
+    SSHConfig,
+    SSHServerConfig,
     StorageConfig,
     StorageType,
 )
@@ -39,9 +41,29 @@ class EnvironConfigFactory:
             env_prefix=env_prefix,
         )
 
+    def create_ssh(self):
+        env_prefix = self._environ.get("NP_ENV_PREFIX", SSHConfig.env_prefix)
+        storage = self.create_storage()
+        database = self.create_database()
+        auth = self.create_auth()
+        registry = self.create_registry()
+        return SSHConfig(
+            server=self.create_ssh_server(),
+            storage=storage,
+            orchestrator=self.create_orchestrator(storage, registry, auth),
+            database=database,
+            auth=auth,
+            registry=registry,
+            env_prefix=env_prefix,
+        )
+
     def create_server(self) -> ServerConfig:
         port = int(self._environ.get("NP_API_PORT", ServerConfig.port))
         return ServerConfig(port=port)  # type: ignore
+
+    def create_ssh_server(self) -> ServerConfig:
+        port = int(self._environ.get("NP_SSH_PORT", SSHServerConfig.port))
+        return SSHServerConfig(port=port)  # type: ignore
 
     @property
     def _storage_host_mount_path(self) -> PurePath:

@@ -108,3 +108,23 @@ class Config:
     # used for generating environment variable names and
     # sourcing them inside containers.
     env_prefix: str = "NP"  # stands for Neuromation Platform
+
+
+@dataclass(frozen=True)
+class SSHServerConfig:
+    host: str = "0.0.0.0"
+    port: int = 8022  # use nonprivileged port for dev mode
+
+
+@dataclass(frozen=True)
+class SSHConfig:
+    server: SSHServerConfig
+    storage: StorageConfig
+    orchestrator: OrchestratorConfig
+    database: DatabaseConfig
+    auth: AuthConfig
+    registry: RegistryConfig = RegistryConfig()
+
+    # used for generating environment variable names and
+    # sourcing them inside containers.
+    env_prefix: str = "NP"  # stands for Neuromation Platform

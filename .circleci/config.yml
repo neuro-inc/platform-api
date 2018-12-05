@@ -27,6 +27,25 @@ jobs:
           command: |
             make gke_k8s_deploy_dev
 
+  gke_ssh_dev_deploy:
+    <<: *defaults
+    steps:
+      - checkout
+      - run:
+          name: GKE Auth
+          command: |
+            make -s gke_login
+
+      - run:
+          name: GKE Docker Push
+          command: |
+            make gke_docker_push
+
+      - run:
+          name: GKE K8s Deploy
+          command: |
+            make gke_k8s_deploy_ssh_dev
+
   gke_stage_deploy:
     <<: *defaults
     steps:
@@ -181,6 +200,12 @@ workflows:
             branches:
               only:
                 - master
+      - gke_ssh_dev_deploy:
+          context: org-global
+          filters:
+            branches:
+              only:
+                - ssh-deploy
       - gke_stage_jumphost_deploy:
           context: org-global
           filters:
