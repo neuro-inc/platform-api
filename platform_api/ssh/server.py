@@ -44,6 +44,10 @@ class SSHSession(SSHStreamSession, SSHServerSession):
         self._server = server
         self._task = None
 
+    def pty_requested(self, term_type, term_size, term_modes):
+        logger.info("PTY requested %s %s %s", term_type, term_size, term_modes)
+        return True
+
     def shell_requested(self):
         """Return whether a shell can be requested"""
 
@@ -184,7 +188,7 @@ async def run():
             await asyncio.sleep(3600)
 
 
-async def main():
+def main():
     init_logging()
     loop = asyncio.get_event_loop()
     loop.run_until_complete(run())
