@@ -525,6 +525,38 @@ class TestKubeOrchestrator:
             if client_job is not None:
                 await client_job.delete()
 
+    @pytest.mark.asyncio
+    async def test_job_pod_labels_and_network_policy(
+        self, kube_config, kube_orchestrator, kube_client, delete_job_later
+    ):
+        container = Container(
+            image="ubuntu",
+            command="sleep infinity",
+            resources=ContainerResources(cpu=0.1, memory_mb=16),
+        )
+        job = MyJob(
+            orchestrator=kube_orchestrator, job_request=JobRequest.create(container)
+        )
+        await delete_job_later(job)
+
+        status = await job.start()
+        assert status == JobStatus.PENDING
+
+        pod_name = job.id
+        await kube_client.wait_pod_is_running(pod_name=pod_name, timeout_s=60.0)
+        raw_pod = await kube_client.get_raw_pod(pod_name)
+        assert raw_pod["metadata"]["labels"] == {
+            "job": job.id,
+            "platform.neuromation.io/job": job.id,
+            "platform.neuromation.io/user": job.owner,
+        }
+
+        policy_name = "neurouser-" + job.owner
+        raw_policy = await kube_client.get_network_policy(policy_name)
+        assert raw_policy["spec"]["podSelector"]["matchLabels"] == {
+            "platform.neuromation.io/user": job.owner
+        }
+
 
 @pytest.fixture
 async def delete_pod_later(kube_client):
