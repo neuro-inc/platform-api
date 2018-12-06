@@ -833,3 +833,35 @@ class TestJobs:
             }
 
         await kube_client.wait_pod_scheduled(job_id, kube_node_gpu)
+
+    @pytest.mark.asyncio
+    async def test_job_top(self, api, client, regular_user):
+        command = 'bash -c "for i in {1..5}; do echo $i; sleep 1; done"'
+        payload = {
+            "container": {
+                "image": "ubuntu",
+                "command": command,
+                "resources": {"cpu": 0.1, "memory_mb": 16},
+            },
+            "dataset_storage_uri": f"storage://{regular_user.name}",
+            "result_storage_uri": f"storage://{regular_user.name}/result",
+        }
+        url = api.model_base_url
+        async with client.post(
+            url, headers=regular_user.headers, json=payload
+        ) as response:
+            assert response.status == HTTPAccepted.status_code
+            result = await response.json()
+            assert result["status"] in ["pending"]
+            job_id = result["job_id"]
+
+        job_log_url = api.jobs_base_url + f"/{job_id}/log"
+        async with client.get(job_log_url, headers=regular_user.headers) as response:
+            assert response.content_type == "text/plain"
+            assert response.charset == "utf-8"
+            assert response.headers["Transfer-Encoding"] == "chunked"
+            assert "Content-Encoding" not in response.headers
+            payload = await response.read()
+            print(payload)
+            expected_payload = "\n".join(str(i) for i in range(1, 6)) + "\n"
+            assert payload == expected_payload.encode()
