@@ -155,6 +155,7 @@ class KubeOrchestrator(Orchestrator):
             auth_type=config.auth_type,
             auth_cert_path=config.auth_cert_path,
             auth_cert_key_path=config.auth_cert_key_path,
+            token_path=config.token_path,
             namespace=config.namespace,
             conn_timeout_s=config.client_conn_timeout_s,
             read_timeout_s=config.client_read_timeout_s,
