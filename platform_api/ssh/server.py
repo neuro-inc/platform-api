@@ -44,6 +44,10 @@ class SSHSession(SSHStreamSession, SSHServerSession):
         self._server = server
         self._task = None
 
+    def pty_requested(self, term_type, term_size, term_modes):
+        logger.info("PTY requested %s %s %s", term_type, term_size, term_modes)
+        return True
+
     def shell_requested(self):
         """Return whether a shell can be requested"""
 
