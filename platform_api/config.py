@@ -2,7 +2,7 @@ from dataclasses import dataclass, field
 from datetime import timedelta
 from enum import Enum
 from pathlib import PurePath
-from typing import Optional, Sequence
+from typing import Container, Optional, Sequence
 
 from yarl import URL
 
@@ -114,6 +114,7 @@ class Config:
 class SSHServerConfig:
     host: str = "0.0.0.0"
     port: int = 8022  # use nonprivileged port for dev mode
+    ssh_host_keys: Container[str] = ()
 
 
 @dataclass(frozen=True)

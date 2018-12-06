@@ -13,6 +13,9 @@ RUN \
 # installing platform-api
 COPY platform_api platform_api
 RUN pip install -e .
+# generage new OpenSSH keys
+# disable it, local SSH doesn't like certs changing on every deploy
+# RUN ssh-keygen -f /etc/ssh/ssh_host_rsa_key -N '' -t rsa && ssh-keygen -f /etc/ssh/ssh_host_dsa_key -N '' -t dsa && ssh-keygen -f /etc/ssh/ssh_host_ecdsa_key -N '' -t ecdsa -b 521
 
 ENV NP_API_PORT=8080
 EXPOSE $NP_API_PORT

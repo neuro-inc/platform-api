@@ -61,9 +61,17 @@ class EnvironConfigFactory:
         port = int(self._environ.get("NP_API_PORT", ServerConfig.port))
         return ServerConfig(port=port)  # type: ignore
 
-    def create_ssh_server(self) -> ServerConfig:
+    def create_ssh_server(self) -> SSHServerConfig:
         port = int(self._environ.get("NP_SSH_PORT", SSHServerConfig.port))
-        return SSHServerConfig(port=port)  # type: ignore
+        # NP_SSH_HOST_KEYS is a comma separated list of paths to SSH server keys
+        ssh_host_keys = [
+            s.strip()
+            for s in self._environ.get(
+                "NP_SSH_HOST_KEYS", SSHServerConfig.port, ""
+            ).split(",")
+            if s.strip()
+        ]
+        return SSHServerConfig(port=port, ssh_host_keys=ssh_host_keys)
 
     @property
     def _storage_host_mount_path(self) -> PurePath:

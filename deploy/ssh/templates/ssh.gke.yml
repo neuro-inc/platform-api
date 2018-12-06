@@ -51,6 +51,9 @@ spec:
           value: http://platformauthapi:8080
         - name: NP_SSH_PORT
           value: "22"
+# Provide path(s) for OpenSSH cert files to override defaults
+#        - name: NP_SSH_HOST_KEYS
+#          value: "/etc/ssh/ssh_host_rsa_key,/etc/ssh/ssh_host_dsa_key,/etc/ssh/ssh_host_ecdsa_key"
         - name: NP_AUTH_TOKEN
           valueFrom:
             secretKeyRef:
