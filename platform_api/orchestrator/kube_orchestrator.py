@@ -25,7 +25,6 @@ from .kube_client import (
     PodExec,
     PodStatus,
     Service,
-    StatusException,
     Toleration,
     Volume,
 )
