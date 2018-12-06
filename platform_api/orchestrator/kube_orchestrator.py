@@ -10,6 +10,7 @@ from .job import Job, JobStatusItem
 from .job_request import JobError, JobNotFoundException, JobStatus
 from .kube_client import *  # noqa
 from .kube_client import (
+    AlreadyExistsException,
     DockerRegistrySecret,
     HostVolume,
     IngressRule,
@@ -24,7 +25,6 @@ from .kube_client import (
     PodExec,
     PodStatus,
     Service,
-    StatusException,
     Toleration,
     Volume,
 )
@@ -204,13 +204,15 @@ class KubeOrchestrator(Orchestrator):
 
     async def _create_user_network_policy(self, job: Job) -> None:
         name = self._get_user_resource_name(job)
+        pod_labels = self._get_user_pod_labels(job)
         try:
-            await self._client.get_network_policy(name)
-        except StatusException:
-            logger.info(f"Creating default network policy for user '{job.owner}'")
-            pod_labels = self._get_user_pod_labels(job)
             await self._client.create_default_network_policy(
                 name, pod_labels, namespace_name=self._config.namespace
+            )
+            logger.info(f"Created default network policy for user '{job.owner}'")
+        except AlreadyExistsException:
+            logger.info(
+                f"Default network policy for user '{job.owner}' already exists."
             )
 
     async def _create_pod_descriptor(self, job: Job) -> PodDescriptor:

@@ -49,6 +49,10 @@ class StatusException(KubeClientException):
     pass
 
 
+class AlreadyExistsException(StatusException):
+    pass
+
+
 def _raise_status_job_exception(pod: dict, job_id: str):
     if pod["code"] == 409:
         raise JobError(f"job with {job_id} already exist")
@@ -1088,6 +1092,8 @@ class KubeClient:
     def _check_status_payload(self, payload):
         if payload["kind"] == "Status":
             if payload["status"] == "Failure":
+                if payload.get("reason") == "AlreadyExists":
+                    raise AlreadyExistsException(payload["reason"])
                 raise StatusException(payload["reason"])
 
     async def add_ingress_rule(self, name: str, rule: IngressRule) -> Ingress:
