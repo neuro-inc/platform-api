@@ -172,19 +172,19 @@ def init_logging():
 
 
 async def run():
-    config = EnvironConfigFactory().create()
+    config = EnvironConfigFactory().create_ssh()
     logging.info("Loaded config: %r", config)
 
     logger.info("Initializing Orchestrator")
     async with KubeOrchestrator(config=config.orchestrator) as orchestrator:
-        srv = SSHServer("localhost", 8022, orchestrator)
+        srv = SSHServer(config.server.host, config.server.port, orchestrator)
         await srv.start()
         print("Start SSH server on localhost:8022")
         while True:
             await asyncio.sleep(3600)
 
 
-async def main():
+def main():
     init_logging()
     loop = asyncio.get_event_loop()
     loop.run_until_complete(run())
