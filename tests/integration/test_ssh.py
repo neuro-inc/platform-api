@@ -152,6 +152,28 @@ async def test_shell(ssh_server, kube_client, kube_config, delete_pod_later):
 
 
 @pytest.mark.asyncio
+async def test_shell_with_args(ssh_server, kube_client, kube_config, delete_pod_later):
+    container = Container(
+        image="ubuntu",
+        command="sleep 100",
+        resources=ContainerResources(cpu=0.1, memory_mb=16),
+    )
+    job_request = JobRequest.create(container)
+    pod = PodDescriptor.from_job_request(
+        kube_config.create_storage_volume(), job_request
+    )
+    await delete_pod_later(pod)
+    await kube_client.create_pod(pod)
+    await kube_client.wait_pod_is_running(pod_name=pod.name, timeout_s=60.0)
+
+    async with asyncssh.connect(
+        ssh_server.host, ssh_server.port, username=pod.name, known_hosts=None
+    ) as conn:
+        proc = await conn.run("bash -c 'echo Hello'")
+        assert proc.stdout == "Hello\r\n"
+
+
+@pytest.mark.asyncio
 async def test_exit_code(ssh_server, kube_client, kube_config, delete_pod_later):
     container = Container(
         image="ubuntu",

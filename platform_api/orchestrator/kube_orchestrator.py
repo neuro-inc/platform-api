@@ -2,7 +2,7 @@ import asyncio
 import logging
 from dataclasses import dataclass
 from pathlib import PurePath
-from typing import Dict, List, Optional
+from typing import Dict, Iterable, List, Optional, Union
 
 from ..config import OrchestratorConfig  # noqa
 from .base import LogReader, Orchestrator
@@ -420,7 +420,9 @@ class KubeOrchestrator(Orchestrator):
             client=self._client, pod_name=job.id, container_name=job.id
         )
 
-    async def exec_pod(self, job_id: str, command: str, *, tty: bool) -> PodExec:
+    async def exec_pod(
+        self, job_id: str, command: Union[str, Iterable[str]], *, tty: bool
+    ) -> PodExec:
         return await self._client.exec_pod(job_id, command, tty=tty)
 
     async def _create_service(self, pod: PodDescriptor) -> Service:
