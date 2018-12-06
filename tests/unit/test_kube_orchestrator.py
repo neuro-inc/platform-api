@@ -148,13 +148,17 @@ class TestPodDescriptor:
             node_selector={"label": "value"},
             tolerations=tolerations,
             node_affinity=node_affinity,
+            labels={"testlabel": "testvalue"},
         )
         assert pod.name == "testname"
         assert pod.image == "testimage"
         assert pod.to_primitive() == {
             "kind": "Pod",
             "apiVersion": "v1",
-            "metadata": {"name": "testname", "labels": {"job": "testname"}},
+            "metadata": {
+                "name": "testname",
+                "labels": {"job": "testname", "testlabel": "testvalue"},
+            },
             "spec": {
                 "containers": [
                     {

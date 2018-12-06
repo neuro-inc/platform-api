@@ -35,7 +35,7 @@ function k8s::start {
     export CHANGE_MINIKUBE_NONE_USER=true
 
     sudo -E minikube config set WantReportErrorPrompt false
-    sudo -E minikube start --vm-driver=none
+    sudo -E minikube start --vm-driver=none --kubernetes-version=v1.10.0
 
     k8s::wait "kubectl get po"
     k8s::wait k8s::start_nfs
@@ -75,6 +75,10 @@ function k8s::setup_registry {
 
 function k8s::setup_ingress {
     sudo -E minikube addons enable ingress
+    # NOTE: minikube --vm-driver=none --kubernetes-version=v1.10.0 stopped
+    # launching the ingress services for some unknown reason!
+    find /etc/kubernetes/addons/ -name ingress* | xargs -L 1 sudo kubectl -n kube-system apply -f
+    find /etc/kubernetes/addons/ -name kube-dns* | xargs -L 1 sudo kubectl -n kube-system apply -f
     kubectl create -f tests/k8s/platformjobsingress.yml
 }
 

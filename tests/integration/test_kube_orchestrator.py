@@ -449,8 +449,8 @@ class TestKubeOrchestrator:
                     async with client.get(url, headers=headers) as response:
                         if response.status == 200:
                             break
-                except (OSError, aiohttp.ClientError):
-                    pass
+                except (OSError, aiohttp.ClientError) as exc:
+                    print(exc)
                 await asyncio.sleep(max(interval_s, time.monotonic() - t0))
                 if time.monotonic() - t0 > max_time:
                     pytest.fail(f"Failed to connect to job service {job_id}")
@@ -524,6 +524,38 @@ class TestKubeOrchestrator:
             await server_job.delete()
             if client_job is not None:
                 await client_job.delete()
+
+    @pytest.mark.asyncio
+    async def test_job_pod_labels_and_network_policy(
+        self, kube_config, kube_orchestrator, kube_client, delete_job_later
+    ):
+        container = Container(
+            image="ubuntu",
+            command="sleep infinity",
+            resources=ContainerResources(cpu=0.1, memory_mb=16),
+        )
+        job = MyJob(
+            orchestrator=kube_orchestrator, job_request=JobRequest.create(container)
+        )
+        await delete_job_later(job)
+
+        status = await job.start()
+        assert status == JobStatus.PENDING
+
+        pod_name = job.id
+        await kube_client.wait_pod_is_running(pod_name=pod_name, timeout_s=60.0)
+        raw_pod = await kube_client.get_raw_pod(pod_name)
+        assert raw_pod["metadata"]["labels"] == {
+            "job": job.id,
+            "platform.neuromation.io/job": job.id,
+            "platform.neuromation.io/user": job.owner,
+        }
+
+        policy_name = "neurouser-" + job.owner
+        raw_policy = await kube_client.get_network_policy(policy_name)
+        assert raw_policy["spec"]["podSelector"]["matchLabels"] == {
+            "platform.neuromation.io/user": job.owner
+        }
 
 
 @pytest.fixture
@@ -722,6 +754,44 @@ class TestKubeClient:
 
         await kube_client.update_docker_secret(docker_secret, create_non_existent=True)
         await kube_client.update_docker_secret(docker_secret)
+
+    @pytest.fixture
+    async def delete_network_policy_later(self, kube_client):
+        names = []
+
+        async def _add_name(name):
+            names.append(name)
+
+        yield _add_name
+
+        for name in names:
+            try:
+                await kube_client.delete_network_policy(name)
+            except Exception:
+                pass
+
+    @pytest.mark.asyncio
+    async def test_create_default_network_policy(
+        self, kube_config, kube_client, delete_network_policy_later
+    ):
+        name = str(uuid.uuid4())
+        await delete_network_policy_later(name)
+        payload = await kube_client.create_default_network_policy(
+            name, {"testlabel": name}, namespace_name=kube_config.namespace
+        )
+        assert payload["metadata"]["name"] == name
+
+    @pytest.mark.asyncio
+    async def test_get_network_policy_not_found(self, kube_config, kube_client):
+        name = str(uuid.uuid4())
+        with pytest.raises(StatusException, match="NotFound"):
+            await kube_client.get_network_policy(name)
+
+    @pytest.mark.asyncio
+    async def test_delete_network_policy_not_found(self, kube_config, kube_client):
+        name = str(uuid.uuid4())
+        with pytest.raises(StatusException, match="NotFound"):
+            await kube_client.delete_network_policy(name)
 
 
 class TestPodContainerLogReader:
