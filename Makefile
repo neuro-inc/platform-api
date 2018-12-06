@@ -84,3 +84,8 @@ gke_k8s_deploy_dev: _helm
 gke_k8s_deploy_staging: _helm
 	gcloud --quiet container clusters get-credentials $(GKE_STAGE_CLUSTER_NAME)
 	helm --set "global.env=staging" --set "IMAGE.staging=$(IMAGE_K8S):$(CIRCLE_SHA1)" upgrade platformapi deploy/platformapi/ --wait --timeout 600
+
+gke_k8s_deploy_ssh_dev: _helm
+	gcloud --quiet container clusters get-credentials $(GKE_CLUSTER_NAME)
+	helm --set "global.env=dev" --set "IMAGE.dev=$(IMAGE_K8S):$(CIRCLE_SHA1)" upgrade ssh deploy/ssh/ --wait --timeout 600
+

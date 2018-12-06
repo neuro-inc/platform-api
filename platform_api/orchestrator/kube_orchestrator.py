@@ -24,6 +24,7 @@ from .kube_client import (
     PodExec,
     PodStatus,
     Service,
+    StatusException,
     Toleration,
     Volume,
 )
@@ -93,6 +94,7 @@ class KubeConfig(OrchestratorConfig):
     auth_type: KubeClientAuthType = KubeClientAuthType.CERTIFICATE
     auth_cert_path: Optional[str] = None
     auth_cert_key_path: Optional[str] = None
+    token_path: Optional[str] = None
 
     namespace: str = "default"
 
@@ -154,6 +156,7 @@ class KubeOrchestrator(Orchestrator):
             auth_type=config.auth_type,
             auth_cert_path=config.auth_cert_path,
             auth_cert_key_path=config.auth_cert_key_path,
+            token_path=config.token_path,
             namespace=config.namespace,
             conn_timeout_s=config.client_conn_timeout_s,
             read_timeout_s=config.client_read_timeout_s,
@@ -181,8 +184,11 @@ class KubeOrchestrator(Orchestrator):
         # TODO (A Yushkovskiy 31.10.2018): get namespace for the pod, not statically
         return self._config.namespace
 
-    def _get_docker_secret_name(self, job: Job) -> str:
+    def _get_user_resource_name(self, job: Job) -> str:
         return (self._docker_secret_name_prefix + job.owner).lower()
+
+    def _get_docker_secret_name(self, job: Job) -> str:
+        return self._get_user_resource_name(job)
 
     async def _create_docker_secret(self, job: Job, token: str) -> DockerRegistrySecret:
         secret = DockerRegistrySecret(
@@ -196,11 +202,23 @@ class KubeOrchestrator(Orchestrator):
         await self._client.update_docker_secret(secret, create_non_existent=True)
         return secret
 
+    async def _create_user_network_policy(self, job: Job) -> None:
+        name = self._get_user_resource_name(job)
+        try:
+            await self._client.get_network_policy(name)
+        except StatusException:
+            logger.info(f"Creating default network policy for user '{job.owner}'")
+            pod_labels = self._get_user_pod_labels(job)
+            await self._client.create_default_network_policy(
+                name, pod_labels, namespace_name=self._config.namespace
+            )
+
     async def _create_pod_descriptor(self, job: Job) -> PodDescriptor:
         secret_names = [self._get_docker_secret_name(job)]
         node_selector = await self._get_pod_node_selector(job)
         tolerations = self._get_pod_tolerations(job)
         node_affinity = self._get_pod_node_affinity(job)
+        labels = self._get_pod_labels(job)
         return PodDescriptor.from_job_request(
             self._storage_volume,
             job.request,
@@ -208,10 +226,21 @@ class KubeOrchestrator(Orchestrator):
             node_selector=node_selector,
             tolerations=tolerations,
             node_affinity=node_affinity,
+            labels=labels,
         )
+
+    def _get_user_pod_labels(self, job: Job) -> Dict[str, str]:
+        return {"platform.neuromation.io/user": job.owner}
+
+    def _get_pod_labels(self, job: Job) -> Dict[str, str]:
+        labels = {"platform.neuromation.io/job": job.id}
+        labels.update(self._get_user_pod_labels(job))
+        return labels
 
     async def start_job(self, job: Job, token: str) -> JobStatus:
         await self._create_docker_secret(job, token)
+        await self._create_user_network_policy(job)
+
         descriptor = await self._create_pod_descriptor(job)
         status = await self._client.create_pod(descriptor)
         if job.has_http_server_exposed or job.has_ssh_server_exposed:

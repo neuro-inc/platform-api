@@ -9,7 +9,7 @@ from base64 import b64encode
 from contextlib import suppress
 from dataclasses import dataclass, field
 from enum import Enum
-from pathlib import PurePath
+from pathlib import Path, PurePath
 from types import TracebackType
 from typing import Any, DefaultDict, Dict, List, Optional, Type
 from urllib.parse import urlsplit
@@ -476,6 +476,7 @@ class PodDescriptor:
     node_selector: Dict[str, str] = field(default_factory=dict)
     tolerations: List[Toleration] = field(default_factory=list)
     node_affinity: Optional[NodeAffinity] = None
+    labels: Dict[str, str] = field(default_factory=dict)
 
     port: Optional[int] = None
     ssh_port: Optional[int] = None
@@ -494,6 +495,7 @@ class PodDescriptor:
         node_selector: Optional[Dict[str, str]] = None,
         tolerations: Optional[List[Toleration]] = None,
         node_affinity: Optional[NodeAffinity] = None,
+        labels: Optional[Dict[str, str]] = None,
     ) -> "PodDescriptor":
         container = job_request.container
         volume_mounts = [
@@ -533,6 +535,7 @@ class PodDescriptor:
             node_selector=node_selector or {},
             tolerations=tolerations or [],
             node_affinity=node_affinity,
+            labels=labels or {},
         )
 
     @property
@@ -561,16 +564,15 @@ class PodDescriptor:
         if readines_probe:
             container_payload["readinessProbe"] = readines_probe
 
+        labels = self.labels.copy()
+        # TODO (A Danshyn 12/04/18): the job is left for backward
+        # compatibility
+        labels["job"] = self.name
+
         payload = {
             "kind": "Pod",
             "apiVersion": "v1",
-            "metadata": {
-                "name": self.name,
-                "labels": {
-                    # TODO (A Danshyn 06/13/18): revisit the naming etc
-                    "job": self.name
-                },
-            },
+            "metadata": {"name": self.name, "labels": labels},
             "spec": {
                 "containers": [container_payload],
                 "volumes": volumes,
@@ -882,7 +884,7 @@ class PodExec:
 
 class KubeClientAuthType(str, enum.Enum):
     NONE = "none"
-    # TODO: TOKEN = 'token'
+    TOKEN = "token"
     CERTIFICATE = "certificate"
 
 
@@ -896,6 +898,7 @@ class KubeClient:
         auth_type: KubeClientAuthType = KubeClientAuthType.CERTIFICATE,
         auth_cert_path: Optional[str] = None,
         auth_cert_key_path: Optional[str] = None,
+        token_path: Optional[str] = None,
         conn_timeout_s: int = 300,
         read_timeout_s: int = 100,
         conn_pool_size: int = 100,
@@ -908,6 +911,7 @@ class KubeClient:
         self._auth_type = auth_type
         self._auth_cert_path = auth_cert_path
         self._auth_cert_key_path = auth_cert_key_path
+        self._token_path = token_path
 
         self._conn_timeout_s = conn_timeout_s
         self._read_timeout_s = read_timeout_s
@@ -932,10 +936,17 @@ class KubeClient:
         connector = aiohttp.TCPConnector(
             limit=self._conn_pool_size, ssl=self._create_ssl_context()
         )
+        if self._auth_type == KubeClientAuthType.TOKEN:
+            assert self._token_path is not None
+            token = Path(self._token_path).read_text()
+            headers = {"Authorization": "Bearer " + token}
+        else:
+            headers = {}
         self._client = aiohttp.ClientSession(
             connector=connector,
             conn_timeout=self._conn_timeout_s,
             read_timeout=self._read_timeout_s,
+            headers=headers,
         )
 
     async def close(self) -> None:
@@ -954,6 +965,10 @@ class KubeClient:
     def _api_v1_url(self) -> str:
         return f"{self._base_url}/api/v1"
 
+    @property
+    def _apis_networking_v1_url(self) -> str:
+        return f"{self._base_url}/apis/networking.k8s.io/v1"
+
     def _generate_namespace_url(self, namespace_name: str) -> str:
         return f"{self._api_v1_url}/namespaces/{namespace_name}"
 
@@ -967,6 +982,19 @@ class KubeClient:
 
     def _generate_pod_url(self, pod_id: str) -> str:
         return f"{self._pods_url}/{pod_id}"
+
+    def _generate_all_network_policies_url(
+        self, namespace_name: Optional[str] = None
+    ) -> str:
+        namespace_name = namespace_name or self._namespace
+        namespace_url = f"{self._apis_networking_v1_url}/namespaces/{namespace_name}"
+        return f"{namespace_url}/networkpolicies"
+
+    def _generate_network_policy_url(
+        self, name: str, namespace_name: Optional[str] = None
+    ) -> str:
+        all_nps_url = self._generate_all_network_policies_url(namespace_name)
+        return f"{all_nps_url}/{name}"
 
     @property
     def _v1beta1_namespace_url(self) -> str:
@@ -1149,7 +1177,12 @@ class KubeClient:
         url = URL(self._generate_pod_url(pod_id)) / "exec"
         s_tty = str(int(tty))  # 0 or 1
         url = url.with_query(
-            command=command, tty=s_tty, stdin="1", stdout="1", stderr="1"
+            container=pod_id,
+            command=command,
+            tty=s_tty,
+            stdin="1",
+            stdout="1",
+            stderr="1",
         )
         ws = await self._client.ws_connect(url, method="POST")  # type: ignore
         return PodExec(ws)
@@ -1191,3 +1224,74 @@ class KubeClient:
         if response.status != 200:
             payload = await response.text()
             raise KubeClientException(payload)
+
+    async def create_default_network_policy(
+        self,
+        name: str,
+        pod_labels: Dict[str, str],
+        namespace_name: Optional[str] = None,
+    ) -> Dict[str, Any]:
+        assert pod_labels
+        # https://tools.ietf.org/html/rfc1918#section-3
+        request_payload = {
+            "apiVersion": "networking.k8s.io/v1",
+            "kind": "NetworkPolicy",
+            "metadata": {"name": name},
+            "spec": {
+                # applying the rules below to labeled pods
+                "podSelector": {"matchLabels": pod_labels},
+                "policyTypes": ["Egress"],
+                "egress": [
+                    # allowing pods to connect to public networks only
+                    {
+                        "to": [
+                            {
+                                "ipBlock": {
+                                    "cidr": "0.0.0.0/0",
+                                    "except": [
+                                        "10.0.0.0/8",
+                                        "172.16.0.0/12",
+                                        "192.168.0.0/16",
+                                    ],
+                                }
+                            }
+                        ]
+                    },
+                    # allowing labeled pods to make DNS queries in our private
+                    # networks, because pods' /etc/resolv.conf files still
+                    # point to the internal DNS
+                    {
+                        "to": [
+                            {"ipBlock": {"cidr": "10.0.0.0/8"}},
+                            {"ipBlock": {"cidr": "172.16.0.0/12"}},
+                            {"ipBlock": {"cidr": "192.168.0.0/16"}},
+                        ],
+                        "ports": [
+                            {"port": 53, "protocol": "UDP"},
+                            {"port": 53, "protocol": "TCP"},
+                        ],
+                    },
+                    # allowing labeled pods to connect to each other
+                    {"to": [{"podSelector": {"matchLabels": pod_labels}}]},
+                ],
+            },
+        }
+        url = self._generate_all_network_policies_url(namespace_name)
+        payload = await self._request(method="POST", url=url, json=request_payload)
+        self._check_status_payload(payload)
+        return payload
+
+    async def get_network_policy(
+        self, name: str, namespace_name: Optional[str] = None
+    ) -> Dict[str, Any]:
+        url = self._generate_network_policy_url(name, namespace_name)
+        payload = await self._request(method="GET", url=url)
+        self._check_status_payload(payload)
+        return payload
+
+    async def delete_network_policy(
+        self, name: str, namespace_name: Optional[str] = None
+    ) -> None:
+        url = self._generate_network_policy_url(name, namespace_name)
+        payload = await self._request(method="DELETE", url=url)
+        self._check_status_payload(payload)
