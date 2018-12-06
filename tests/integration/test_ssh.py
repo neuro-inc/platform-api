@@ -177,6 +177,31 @@ async def test_exit_code(ssh_server, kube_client, kube_config, delete_pod_later)
 
 
 @pytest.mark.asyncio
+async def test_pass_env(ssh_server, kube_client, kube_config, delete_pod_later):
+    container = Container(
+        image="ubuntu",
+        command="sleep 10",
+        resources=ContainerResources(cpu=0.1, memory_mb=16),
+    )
+    job_request = JobRequest.create(container)
+    pod = PodDescriptor.from_job_request(
+        kube_config.create_storage_volume(), job_request
+    )
+    await delete_pod_later(pod)
+    await kube_client.create_pod(pod)
+    await kube_client.wait_pod_is_running(pod_name=pod.name, timeout_s=60.0)
+
+    async with asyncssh.connect(
+        ssh_server.host, ssh_server.port, username=pod.name, known_hosts=None,
+    ) as conn:
+        proc = await conn.create_process("/bin/bash", env={"CUSTOM_ENV": "Custom value"})
+        proc.stdin.write("echo $CUSTOM_ENV")
+
+        stdout = await proc.stdout.read()
+        assert stdout == "Custom value\r\n"
+
+
+@pytest.mark.asyncio
 async def test_sftp_basic(
     ssh_server, kube_client, kube_config, delete_pod_later, tmpdir
 ):

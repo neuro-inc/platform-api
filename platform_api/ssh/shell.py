@@ -64,11 +64,15 @@ class ShellSession:
             command = self.command
             if command is None:
                 command = "sh -i"
-            lst = ["env"]
-            for name, val in env.items():
-                lst.append(name + "=" + shlex.quote(val))
-            lst.append(command)
-            wrapper = " ".join(lst)
+            if env:
+                lst = ["/usr/bin/env"]
+                for name, val in env.items():
+                    lst.append(name + "=" + shlex.quote(val))
+                lst.append(command)
+                wrapper = " ".join(lst)
+                print("WRAPPER", wrapper)
+            else:
+                wrapper = command
             subproc = await self._server.orchestrator.exec_pod(
                 pod_id, wrapper, tty=True
             )
