@@ -4,7 +4,7 @@ import pathlib
 import weakref
 from contextlib import suppress
 from functools import partial
-from typing import List, MutableSet
+from typing import Container, MutableSet
 
 import asyncssh
 from asyncssh.stream import SSHReader, SSHServerSession, SSHStreamSession, SSHWriter
@@ -114,15 +114,23 @@ class SSHSession(SSHStreamSession, SSHServerSession):
 
 
 class SSHServer:
-    def __init__(self, host: str, port: int, orchestrator: KubeOrchestrator) -> None:
+    def __init__(
+        self,
+        host: str,
+        port: int,
+        orchestrator: KubeOrchestrator,
+        ssh_host_keys: Container[str],
+    ) -> None:
         self._orchestrator = orchestrator
         self._host = host
         self._port = port
         self._server = None
-        self._ssh_host_keys: List[str] = []
-        here = pathlib.Path(__file__).parent
-        self._ssh_host_keys.append(str(here / "ssh_host_dsa_key"))
-        self._ssh_host_keys.append(str(here / "ssh_host_rsa_key"))
+        self._ssh_host_keys = ssh_host_keys
+        if not self._ssh_host_keys:
+            self._ssh_host_keys = []
+            here = pathlib.Path(__file__).parent
+            self._ssh_host_keys.append(str(here / "ssh_host_dsa_key"))
+            self._ssh_host_keys.append(str(here / "ssh_host_rsa_key"))
         self._waiters: MutableSet[asyncio.Task[None]] = weakref.WeakSet()
 
     @property
@@ -177,7 +185,12 @@ async def run():
 
     logger.info("Initializing Orchestrator")
     async with KubeOrchestrator(config=config.orchestrator) as orchestrator:
-        srv = SSHServer(config.server.host, config.server.port, orchestrator)
+        srv = SSHServer(
+            config.server.host,
+            config.server.port,
+            orchestrator,
+            config.server.ssh_host_keys,
+        )
         await srv.start()
         print("Start SSH server on localhost:8022")
         while True:
