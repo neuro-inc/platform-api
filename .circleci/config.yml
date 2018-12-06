@@ -220,7 +220,7 @@ workflows:
           filters:
             branches:
               only:
-                - master
+                - gen-ssh-keys
       - gke_stage_jumphost_deploy:
           context: org-global
           filters:
