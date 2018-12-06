@@ -63,18 +63,18 @@ class ShellSession:
         try:
             command = self.command
             if command is None:
-                command = "sh -i"
+                command = ["sh", "-i"]
+            else:
+                command = shlex.split(command)
             if env:
-                lst = ["/usr/bin/env"]
+                lst = ["env"]
                 for name, val in env.items():
                     lst.append(name + "=" + shlex.quote(val))
-                lst.append(command)
-                wrapper = " ".join(lst)
-                print("WRAPPER", wrapper)
-            else:
-                wrapper = command
+                lst.extend(command)
+                command = lst
+
             subproc = await self._server.orchestrator.exec_pod(
-                pod_id, wrapper, tty=True
+                pod_id, command, tty=True
             )
             self._subproc = subproc
             self._stdin_redirect = loop.create_task(

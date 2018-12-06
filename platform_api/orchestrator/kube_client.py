@@ -11,13 +11,14 @@ from dataclasses import dataclass, field
 from enum import Enum
 from pathlib import Path, PurePath
 from types import TracebackType
-from typing import Any, DefaultDict, Dict, List, Optional, Type
+from typing import Any, DefaultDict, Dict, Iterable, List, Optional, Type, Union
 from urllib.parse import urlsplit
 
 import aiohttp
 from aiohttp import WSMsgType
 from async_generator import asynccontextmanager
 from async_timeout import timeout
+from multidict import MultiDict
 from yarl import URL
 
 from platform_api.utils.stream import Stream
@@ -1173,17 +1174,27 @@ class KubeClient:
             return [KubernetesEvent(item) for item in payload["items"]]
         return None
 
-    async def exec_pod(self, pod_id: str, command: str, *, tty: bool) -> PodExec:
+    async def exec_pod(
+        self, pod_id: str, command: Union[str, Iterable[str]], *, tty: bool
+    ) -> PodExec:
         url = URL(self._generate_pod_url(pod_id)) / "exec"
         s_tty = str(int(tty))  # 0 or 1
-        url = url.with_query(
-            container=pod_id,
-            command=command,
-            tty=s_tty,
-            stdin="1",
-            stdout="1",
-            stderr="1",
+        args = MultiDict(
+            {
+                "container": pod_id,
+                "tty": s_tty,
+                "stdin": "1",
+                "stdout": "1",
+                "stderr": "1",
+            }
         )
+        if isinstance(command, str):
+            args["command"] = command
+        else:
+            for part in command:
+                args.add("command", part)
+
+        url = url.with_query(args)
         ws = await self._client.ws_connect(url, method="POST")  # type: ignore
         return PodExec(ws)
 
