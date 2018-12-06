@@ -119,7 +119,7 @@ class SSHServer:
         host: str,
         port: int,
         orchestrator: KubeOrchestrator,
-        ssh_host_keys: Container[str],
+        ssh_host_keys: Container[str] = (),
     ) -> None:
         self._orchestrator = orchestrator
         self._host = host
