@@ -935,6 +935,7 @@ class KubeClient:
             limit=self._conn_pool_size, ssl=self._create_ssl_context()
         )
         if self._auth_type == KubeClientAuthType.TOKEN:
+            assert self._token_path is not None
             token = Path(self._token_path).read_text()
             headers = {"Authorization": "Bearer " + token}
         else:
