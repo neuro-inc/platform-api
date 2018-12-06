@@ -207,7 +207,7 @@ workflows:
           filters:
             branches:
               only:
-                - ssh-deploy
+                - master
       - gke_stage_jumphost_deploy:
           context: org-global
           filters:
