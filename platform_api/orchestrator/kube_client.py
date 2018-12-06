@@ -9,7 +9,7 @@ from base64 import b64encode
 from contextlib import suppress
 from dataclasses import dataclass, field
 from enum import Enum
-from pathlib import PurePath, Path
+from pathlib import Path, PurePath
 from types import TracebackType
 from typing import Any, DefaultDict, Dict, List, Optional, Type
 from urllib.parse import urlsplit
@@ -882,7 +882,7 @@ class PodExec:
 
 class KubeClientAuthType(str, enum.Enum):
     NONE = "none"
-    TOKEN = 'token'
+    TOKEN = "token"
     CERTIFICATE = "certificate"
 
 
