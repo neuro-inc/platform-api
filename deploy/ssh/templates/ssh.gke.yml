@@ -24,7 +24,7 @@ spec:
         imagePullPolicy: Always
         env:
         - name: NP_K8S_API_URL
-          value: "https://kubrenetes"
+          value: "https://kubernetes"
         - name: NP_K8S_AUTH_TYPE
           value: token
         - name: NP_K8S_CA_PATH
