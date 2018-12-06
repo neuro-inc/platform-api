@@ -93,6 +93,7 @@ class KubeConfig(OrchestratorConfig):
     auth_type: KubeClientAuthType = KubeClientAuthType.CERTIFICATE
     auth_cert_path: Optional[str] = None
     auth_cert_key_path: Optional[str] = None
+    token_path: Optional[str] = None
 
     namespace: str = "default"
 

@@ -9,7 +9,7 @@ from base64 import b64encode
 from contextlib import suppress
 from dataclasses import dataclass, field
 from enum import Enum
-from pathlib import PurePath
+from pathlib import PurePath, Path
 from types import TracebackType
 from typing import Any, DefaultDict, Dict, List, Optional, Type
 from urllib.parse import urlsplit
@@ -882,7 +882,7 @@ class PodExec:
 
 class KubeClientAuthType(str, enum.Enum):
     NONE = "none"
-    # TODO: TOKEN = 'token'
+    TOKEN = 'token'
     CERTIFICATE = "certificate"
 
 
@@ -896,6 +896,7 @@ class KubeClient:
         auth_type: KubeClientAuthType = KubeClientAuthType.CERTIFICATE,
         auth_cert_path: Optional[str] = None,
         auth_cert_key_path: Optional[str] = None,
+        token_path: Optional[str] = None,
         conn_timeout_s: int = 300,
         read_timeout_s: int = 100,
         conn_pool_size: int = 100,
@@ -908,6 +909,7 @@ class KubeClient:
         self._auth_type = auth_type
         self._auth_cert_path = auth_cert_path
         self._auth_cert_key_path = auth_cert_key_path
+        self._token_path = token_path
 
         self._conn_timeout_s = conn_timeout_s
         self._read_timeout_s = read_timeout_s
@@ -932,10 +934,16 @@ class KubeClient:
         connector = aiohttp.TCPConnector(
             limit=self._conn_pool_size, ssl=self._create_ssl_context()
         )
+        if self._auth_type == KubeClientAuthType.TOKEN:
+            token = Path(self._token_path).read_text()
+            headers = {"Authorization": "Bearer " + token}
+        else:
+            headers = {}
         self._client = aiohttp.ClientSession(
             connector=connector,
             conn_timeout=self._conn_timeout_s,
             read_timeout=self._read_timeout_s,
+            headers=headers,
         )
 
     async def close(self) -> None:
@@ -1156,7 +1164,7 @@ class KubeClient:
             stdout="1",
             stderr="1",
         )
-        ws = await self._client.ws_connect(url, method="GET")  # type: ignore
+        ws = await self._client.ws_connect(url, method="POST")  # type: ignore
         return PodExec(ws)
 
     async def wait_pod_is_running(

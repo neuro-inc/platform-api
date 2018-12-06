@@ -24,9 +24,13 @@ spec:
         imagePullPolicy: Always
         env:
         - name: NP_K8S_API_URL
-          value: http://localhost:8001
+          value: "https://kubrenetes"
         - name: NP_K8S_AUTH_TYPE
-          value: none
+          value: token
+	- name: NP_K8S_CA_PATH
+	  value: /var/run/secrets/kubernetes.io/serviceaccount/ca.crt
+	- name: NP_K8S_TOKEN_PATH
+	  value: /var/run/secrets/kubernetes.io/serviceaccount/token
         - name: NP_STORAGE_TYPE
           value: nfs
         - name: NP_STORAGE_NFS_SERVER

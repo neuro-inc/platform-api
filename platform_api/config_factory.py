@@ -117,6 +117,7 @@ class EnvironConfigFactory:
             auth_type=auth_type,
             auth_cert_path=self._environ.get("NP_K8S_AUTH_CERT_PATH"),
             auth_cert_key_path=self._environ.get("NP_K8S_AUTH_CERT_KEY_PATH"),
+            token_path=self._environ.get("NP_K8S_TOKEN_PATH"),
             namespace=self._environ.get("NP_K8S_NS", KubeConfig.namespace),
             client_conn_timeout_s=int(
                 self._environ.get(
