@@ -3,7 +3,7 @@ kind: Deployment
 metadata:
   name: platformapi
 spec:
-  replicas: 1
+  replicas: {{ printf "%s" (pluck .Values.global.env .Values.NP_REPLICAS | first | default .Values.NP_REPLICAS._default) }}
   selector:
     matchLabels:
       service: platformapi
@@ -21,6 +21,13 @@ spec:
       - name: platformapi
         image: {{ printf "%s" (pluck .Values.global.env .Values.IMAGE | first | default .Values.IMAGE._default) }}
         imagePullPolicy: Always
+        resources:
+          requests:
+            cpu: {{ printf "%s" (pluck .Values.global.env .Values.NP_REQUESTS_CPU | first | default .Values.NP_REQUESTS_CPU._default) }}
+            memory: {{ printf "%s" (pluck .Values.global.env .Values.NP_REQUESTS_MEMORY | first | default .Values.NP_REQUESTS_MEMORY._default) }}
+          limits:
+            cpu: {{ printf "%s" (pluck .Values.global.env .Values.NP_LIMITS_CPU | first | default .Values.NP_LIMITS_CPU._default) }}
+            memory: {{ printf "%s" (pluck .Values.global.env .Values.NP_LIMITS_MEMORY | first | default .Values.NP_LIMITS_MEMORY._default) }}
         env:
         - name: NP_K8S_API_URL
           value: http://localhost:8001
