@@ -855,13 +855,22 @@ class TestJobs:
             assert result["status"] in ["pending"]
             job_id = result["job_id"]
 
-        job_log_url = api.jobs_base_url + f"/{job_id}/log"
-        async with client.get(job_log_url, headers=regular_user.headers) as response:
-            assert response.content_type == "text/plain"
-            assert response.charset == "utf-8"
-            assert response.headers["Transfer-Encoding"] == "chunked"
-            assert "Content-Encoding" not in response.headers
-            payload = await response.read()
-            print(payload)
-            expected_payload = "\n".join(str(i) for i in range(1, 6)) + "\n"
-            assert payload == expected_payload.encode()
+        job_top_url = api.jobs_base_url + f"/{job_id}/top"
+
+        async with client.ws_connect(
+                job_top_url, headers=regular_user.headers) as ws:
+            async for msg in ws:
+                print('Message received from server:', msg)
+                break
+            await ws.close()
+            # payload = await response.read()
+            # print(payload)
+
+            # assert response.content_type == "text/plain"
+            # assert response.charset == "utf-8"
+            # assert response.headers["Transfer-Encoding"] == "chunked"
+            # assert "Content-Encoding" not in response.headers
+            # payload = await response.read()
+            # print(payload)
+            # expected_payload = "\n".join(str(i) for i in range(1, 6)) + "\n"
+            # assert payload == expected_payload.encode()
