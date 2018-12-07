@@ -2,7 +2,7 @@ from dataclasses import dataclass, field
 from datetime import timedelta
 from enum import Enum
 from pathlib import PurePath
-from typing import Optional, Sequence
+from typing import Container, Optional, Sequence
 
 from yarl import URL
 
@@ -103,6 +103,27 @@ class Config:
     database: DatabaseConfig
     auth: AuthConfig
 
+    registry: RegistryConfig = RegistryConfig()
+
+    # used for generating environment variable names and
+    # sourcing them inside containers.
+    env_prefix: str = "NP"  # stands for Neuromation Platform
+
+
+@dataclass(frozen=True)
+class SSHServerConfig:
+    host: str = "0.0.0.0"
+    port: int = 8022  # use nonprivileged port for dev mode
+    ssh_host_keys: Container[str] = ()
+
+
+@dataclass(frozen=True)
+class SSHConfig:
+    server: SSHServerConfig
+    storage: StorageConfig
+    orchestrator: OrchestratorConfig
+    database: DatabaseConfig
+    auth: AuthConfig
     registry: RegistryConfig = RegistryConfig()
 
     # used for generating environment variable names and

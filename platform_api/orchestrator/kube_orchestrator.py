@@ -2,7 +2,7 @@ import asyncio
 import logging
 from dataclasses import dataclass
 from pathlib import PurePath
-from typing import Dict, List, Optional
+from typing import Dict, Iterable, List, Optional, Union
 
 from ..config import OrchestratorConfig  # noqa
 from .base import LogReader, Orchestrator
@@ -10,6 +10,7 @@ from .job import Job, JobStatusItem
 from .job_request import JobError, JobNotFoundException, JobStatus
 from .kube_client import *  # noqa
 from .kube_client import (
+    AlreadyExistsException,
     DockerRegistrySecret,
     HostVolume,
     IngressRule,
@@ -24,7 +25,6 @@ from .kube_client import (
     PodExec,
     PodStatus,
     Service,
-    StatusException,
     Toleration,
     Volume,
 )
@@ -94,6 +94,7 @@ class KubeConfig(OrchestratorConfig):
     auth_type: KubeClientAuthType = KubeClientAuthType.CERTIFICATE
     auth_cert_path: Optional[str] = None
     auth_cert_key_path: Optional[str] = None
+    token_path: Optional[str] = None
 
     namespace: str = "default"
 
@@ -155,6 +156,7 @@ class KubeOrchestrator(Orchestrator):
             auth_type=config.auth_type,
             auth_cert_path=config.auth_cert_path,
             auth_cert_key_path=config.auth_cert_key_path,
+            token_path=config.token_path,
             namespace=config.namespace,
             conn_timeout_s=config.client_conn_timeout_s,
             read_timeout_s=config.client_read_timeout_s,
@@ -202,13 +204,15 @@ class KubeOrchestrator(Orchestrator):
 
     async def _create_user_network_policy(self, job: Job) -> None:
         name = self._get_user_resource_name(job)
+        pod_labels = self._get_user_pod_labels(job)
         try:
-            await self._client.get_network_policy(name)
-        except StatusException:
-            logger.info(f"Creating default network policy for user '{job.owner}'")
-            pod_labels = self._get_user_pod_labels(job)
             await self._client.create_default_network_policy(
                 name, pod_labels, namespace_name=self._config.namespace
+            )
+            logger.info(f"Created default network policy for user '{job.owner}'")
+        except AlreadyExistsException:
+            logger.info(
+                f"Default network policy for user '{job.owner}' already exists."
             )
 
     async def _create_pod_descriptor(self, job: Job) -> PodDescriptor:
@@ -418,7 +422,9 @@ class KubeOrchestrator(Orchestrator):
             client=self._client, pod_name=job.id, container_name=job.id
         )
 
-    async def exec_pod(self, job_id: str, command: str, *, tty: bool) -> PodExec:
+    async def exec_pod(
+        self, job_id: str, command: Union[str, Iterable[str]], *, tty: bool
+    ) -> PodExec:
         return await self._client.exec_pod(job_id, command, tty=tty)
 
     async def _create_service(self, pod: PodDescriptor) -> Service:
