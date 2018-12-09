@@ -145,6 +145,7 @@ class TestPodDescriptor:
             env={"TESTVAR": "testvalue"},
             resources=Resources(cpu=0.5, memory=1024, gpu=1),
             port=1234,
+            ssh_port=2222,
             node_selector={"label": "value"},
             tolerations=tolerations,
             node_affinity=node_affinity,
@@ -173,12 +174,7 @@ class TestPodDescriptor:
                                 "nvidia.com/gpu": 1,
                             }
                         },
-                        "ports": [{"containerPort": 1234}],
-                        "readinessProbe": {
-                            "httpGet": {"port": 1234, "path": "/"},
-                            "initialDelaySeconds": 1,
-                            "periodSeconds": 1,
-                        },
+                        "ports": [{"containerPort": 1234}, {"containerPort": 2222}],
                         "terminationMessagePolicy": "FallbackToLogsOnError",
                     }
                 ],
@@ -202,7 +198,7 @@ class TestPodDescriptor:
             },
         }
 
-    def test_to_primitive_http_ssh(self):
+    def test_to_primitive_readiness_probe_http(self):
         pod = PodDescriptor(
             name="testname",
             image="testimage",
@@ -210,6 +206,7 @@ class TestPodDescriptor:
             resources=Resources(cpu=0.5, memory=1024, gpu=1),
             port=1234,
             ssh_port=4321,
+            readiness_probe=True,
         )
         assert pod.name == "testname"
         assert pod.image == "testimage"
@@ -247,13 +244,14 @@ class TestPodDescriptor:
             },
         }
 
-    def test_to_primitive_ssh_only(self):
+    def test_to_primitive_readiness_probe_ssh(self):
         pod = PodDescriptor(
             name="testname",
             image="testimage",
             env={"TESTVAR": "testvalue"},
             resources=Resources(cpu=0.5, memory=1024, gpu=1),
             ssh_port=4321,
+            readiness_probe=True,
         )
         assert pod.name == "testname"
         assert pod.image == "testimage"
@@ -372,11 +370,6 @@ class TestPodDescriptor:
                             }
                         },
                         "ports": [{"containerPort": 1234}],
-                        "readinessProbe": {
-                            "httpGet": {"port": 1234, "path": "/"},
-                            "initialDelaySeconds": 1,
-                            "periodSeconds": 1,
-                        },
                         "terminationMessagePolicy": "FallbackToLogsOnError",
                     }
                 ],
