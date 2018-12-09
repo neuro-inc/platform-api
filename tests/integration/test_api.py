@@ -856,21 +856,18 @@ class TestJobs:
             job_id = result["job_id"]
 
         job_top_url = api.jobs_base_url + f"/{job_id}/top"
-
+        num_request = 10
+        num_request_count = 0
         async with client.ws_connect(
                 job_top_url, headers=regular_user.headers) as ws:
-            async for msg in ws:
-                print('Message received from server:', msg)
-                break
-            await ws.close()
-            # payload = await response.read()
-            # print(payload)
+            while True:
+                msg = await ws.receive_json()
+                print(msg)
 
-            # assert response.content_type == "text/plain"
-            # assert response.charset == "utf-8"
-            # assert response.headers["Transfer-Encoding"] == "chunked"
-            # assert "Content-Encoding" not in response.headers
-            # payload = await response.read()
-            # print(payload)
-            # expected_payload = "\n".join(str(i) for i in range(1, 6)) + "\n"
-            # assert payload == expected_payload.encode()
+                num_request_count += 1
+                if num_request_count > num_request:
+                    # TODO (truskovskiyk 09/12/18) do not use protected prop
+                    # https://github.com/aio-libs/aiohttp/issues/3443
+                    proto = ws._writer.protocol
+                    proto.transport.close()
+                    break

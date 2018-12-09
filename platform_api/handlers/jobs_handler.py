@@ -14,6 +14,7 @@ from platform_api.config import Config, RegistryConfig, StorageConfig
 from platform_api.orchestrator import JobsService, Orchestrator
 from platform_api.orchestrator.job import Job
 from platform_api.orchestrator.job_request import Container, ContainerVolume, JobRequest
+from platform_api.orchestrator.jobs_telemetry import JobsTelemetry
 from platform_api.resource import GPUModel
 from platform_api.user import User, untrusted_user
 
@@ -179,6 +180,10 @@ class JobsHandler:
         )
 
     @property
+    def _jobs_telemetry(self) -> JobsTelemetry:
+        return self._app["jobs_telemetry"]
+
+    @property
     def _jobs_service(self) -> JobsService:
         return self._app["jobs_service"]
 
@@ -329,10 +334,17 @@ class JobsHandler:
         await ws.prepare(request)
         logger.info('Websocket connection ready')
 
-        while True:
-            await asyncio.sleep(1)
-            await ws.send_json({'cpu': 100, 'ram': 1, 'gpu': 0.8})
-
+        # TODO (truskovskiyk 09/12/18) remove CancelledError
+        # https://github.com/aio-libs/aiohttp/issues/3443
+        try:
+            while True:
+                if request.transport.is_closing():
+                    break
+                await asyncio.sleep(1)
+                job_top = await self._jobs_telemetry.get_job_top(job_id=job_id)
+                await ws.send_json(job_top.to_primitive())
+        except asyncio.CancelledError as ex:
+            logger.info(f"got cancelled error {ex}")
         return ws
 
 
