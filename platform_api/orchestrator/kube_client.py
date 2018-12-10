@@ -491,6 +491,9 @@ class PodDescriptor:
 
     image_pull_secrets: List[SecretRef] = field(default_factory=list)
 
+    # TODO (A Danshyn 12/09/2018): expose readiness probe properly
+    readiness_probe: bool = False
+
     @classmethod
     def from_job_request(
         cls,
@@ -563,11 +566,12 @@ class PodDescriptor:
         if self.resources:
             container_payload["resources"] = self.resources.to_primitive()
 
-        ports, readines_probe = self._to_primitive_ports()
+        ports = self._to_primitive_ports()
         if ports:
             container_payload["ports"] = ports
-        if readines_probe:
-            container_payload["readinessProbe"] = readines_probe
+        readiness_probe = self._to_primitive_readiness_probe()
+        if readiness_probe:
+            container_payload["readinessProbe"] = readiness_probe
 
         labels = self.labels.copy()
         # TODO (A Danshyn 12/04/18): the job is left for backward
@@ -598,26 +602,33 @@ class PodDescriptor:
             }
         return payload
 
-    def _to_primitive_ports(self):
+    def _to_primitive_ports(self) -> List[Dict[str, int]]:
         ports = []
-        readines_probe = {}
         if self.port:
             ports.append({"containerPort": self.port})
-            readines_probe = {
+        if self.ssh_port:
+            ports.append({"containerPort": self.ssh_port})
+        return ports
+
+    def _to_primitive_readiness_probe(self) -> Dict[str, Any]:
+        if not self.readiness_probe:
+            return {}
+
+        if self.port:
+            return {
                 "httpGet": {"port": self.port, "path": self.health_check_path},
                 "initialDelaySeconds": 1,
                 "periodSeconds": 1,
             }
 
         if self.ssh_port:
-            ports.append({"containerPort": self.ssh_port})
-            if not self.port:
-                readines_probe = {
-                    "tcpSocket": {"port": self.ssh_port},
-                    "initialDelaySeconds": 1,
-                    "periodSeconds": 1,
-                }
-        return ports, readines_probe
+            return {
+                "tcpSocket": {"port": self.ssh_port},
+                "initialDelaySeconds": 1,
+                "periodSeconds": 1,
+            }
+
+        return {}
 
     @classmethod
     def _assert_resource_kind(cls, expected_kind: str, payload: Dict):
