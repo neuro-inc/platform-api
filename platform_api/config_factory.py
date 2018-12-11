@@ -66,9 +66,7 @@ class EnvironConfigFactory:
         # NP_SSH_HOST_KEYS is a comma separated list of paths to SSH server keys
         ssh_host_keys = [
             s.strip()
-            for s in self._environ.get(
-                "NP_SSH_HOST_KEYS", SSHServerConfig.port, ""
-            ).split(",")
+            for s in self._environ.get("NP_SSH_HOST_KEYS", "").split(",")
             if s.strip()
         ]
         return SSHServerConfig(port=port, ssh_host_keys=ssh_host_keys)
