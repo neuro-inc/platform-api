@@ -85,6 +85,8 @@ class OrchestratorConfig:
 
     orphaned_job_owner: str = ""
 
+    is_http_ingress_secure: bool = False
+
     @property
     def job_deletion_delay(self) -> timedelta:
         return timedelta(seconds=self.job_deletion_delay_s)
