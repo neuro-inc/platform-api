@@ -25,6 +25,12 @@ class EnvironConfigFactory:
     def __init__(self, environ=None):
         self._environ = environ or os.environ
 
+    def _get_bool(self, name, default: bool = False) -> bool:
+        value = self._environ.get(name)
+        if not value:  # None/""
+            return default
+        return value.lower() in ("true", "1", "yes", "y")
+
     def create(self):
         env_prefix = self._environ.get("NP_ENV_PREFIX", Config.env_prefix)
         storage = self.create_storage()

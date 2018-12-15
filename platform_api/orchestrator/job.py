@@ -296,10 +296,16 @@ class Job:
         return self._job_request.container.has_ssh_server_exposed
 
     @property
+    def _http_scheme(self) -> str:
+        if self._orchestrator_config.is_http_ingress_secure:
+            return "https"
+        return "http"
+
+    @property
     def http_url(self) -> str:
         assert self.has_http_server_exposed
         jobs_domain_name = self._orchestrator_config.jobs_domain_name
-        return f"http://{self.id}.{jobs_domain_name}"
+        return f"{self._http_scheme}://{self.id}.{jobs_domain_name}"
 
     @property
     def ssh_server(self) -> str:
