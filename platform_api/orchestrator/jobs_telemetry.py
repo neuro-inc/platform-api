@@ -12,6 +12,8 @@ class JobTop:
 
 
 class DataDogClient:
+    # TODO (truskovskiyk 17/12/18) implement it
+    # https://github.com/neuromation/platform-api/issues/377
     def get_job_top(self, job_id: str) -> JobTop:
         # TODO (truskovskiyk fetch from data dog)
         return JobTop(cpu=1, mem=16)
