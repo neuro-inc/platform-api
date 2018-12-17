@@ -858,8 +858,7 @@ class TestJobs:
         job_top_url = api.jobs_base_url + f"/{job_id}/top"
         num_request = 10
         num_request_count = 0
-        async with client.ws_connect(
-                job_top_url, headers=regular_user.headers) as ws:
+        async with client.ws_connect(job_top_url, headers=regular_user.headers) as ws:
             while True:
                 msg = await ws.receive_json()
                 print(msg)

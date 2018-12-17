@@ -28,4 +28,3 @@ class JobsTelemetry:
     @classmethod
     def create(cls):
         return JobsTelemetry(DataDogClient())
-

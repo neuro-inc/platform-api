@@ -14,14 +14,12 @@ def jobs_telemetry():
 
 
 class TestJobTop:
-
     def test_job_top_to_primitive(self, job_top):
-        assert {'cpu': 1, 'mem': 1} == job_top.to_primitive()
+        assert {"cpu": 1, "mem": 1} == job_top.to_primitive()
 
 
 class TestJobsTelemetry:
-
     async def test_get_job_top(self, jobs_telemetry):
-        job_id = 'job_id'
+        job_id = "job_id"
         job_top = jobs_telemetry.get_job_top(job_id=job_id)
-        assert {'cpu': 1, 'mem': 1} == job_top.to_primitive()
+        assert {"cpu": 1, "mem": 1} == job_top.to_primitive()

@@ -329,10 +329,10 @@ class JobsHandler:
         logger.info("Checking whether %r has %r", user, permission)
         await check_permission(request, permission.action, [permission])
 
-        logger.info('Websocket connection starting')
+        logger.info("Websocket connection starting")
         ws = aiohttp.web.WebSocketResponse()
         await ws.prepare(request)
-        logger.info('Websocket connection ready')
+        logger.info("Websocket connection ready")
 
         # TODO (truskovskiyk 09/12/18) remove CancelledError
         # https://github.com/aio-libs/aiohttp/issues/3443
