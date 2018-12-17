@@ -25,6 +25,12 @@ class EnvironConfigFactory:
     def __init__(self, environ=None):
         self._environ = environ or os.environ
 
+    def _get_bool(self, name, default: bool = False) -> bool:
+        value = self._environ.get(name)
+        if not value:  # None/""
+            return default
+        return value.lower() in ("true", "1", "yes", "y")
+
     def create(self):
         env_prefix = self._environ.get("NP_ENV_PREFIX", Config.env_prefix)
         storage = self.create_storage()
@@ -141,6 +147,7 @@ class EnvironConfigFactory:
                 )
             ),
             jobs_ingress_name=self._environ["NP_K8S_JOBS_INGRESS_NAME"],
+            is_http_ingress_secure=self._get_bool("NP_K8S_JOBS_INGRESS_HTTPS"),
             jobs_domain_name=(self._environ["NP_K8S_JOBS_INGRESS_DOMAIN_NAME"]),
             ssh_domain_name=self._environ["NP_K8S_SSH_INGRESS_DOMAIN_NAME"],
             job_deletion_delay_s=int(
