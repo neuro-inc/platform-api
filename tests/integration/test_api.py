@@ -864,11 +864,10 @@ class TestJobs:
                 msg = await ws.receive_json()
                 records.append(msg)
                 num_request_count += 1
-                if num_request_count > num_request:
+                if num_request_count == num_request:
                     # TODO (truskovskiyk 09/12/18) do not use protected prop
                     # https://github.com/aio-libs/aiohttp/issues/3443
                     proto = ws._writer.protocol
                     proto.transport.close()
                     break
-        print(records)
         assert records == [{"cpu": 1, "mem": 16}, {"cpu": 1, "mem": 16}]
