@@ -425,6 +425,13 @@ class TestJob:
         job = Job(orchestrator_config=mock_orchestrator.config, job_request=job_request)
         assert job.http_url == "http://testjob.jobs"
 
+    def test_https_url(self, mock_orchestrator, job_request):
+        config = dataclasses.replace(
+            mock_orchestrator.config, is_http_ingress_secure=True
+        )
+        job = Job(orchestrator_config=config, job_request=job_request)
+        assert job.http_url == "https://testjob.jobs"
+
     def test_ssh_url(self, mock_orchestrator, job_request_with_ssh):
         job = Job(
             orchestrator_config=mock_orchestrator.config,
