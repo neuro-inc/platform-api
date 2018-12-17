@@ -856,13 +856,13 @@ class TestJobs:
             job_id = result["job_id"]
 
         job_top_url = api.jobs_base_url + f"/{job_id}/top"
-        num_request = 10
+        num_request = 2
         num_request_count = 0
+        records = []
         async with client.ws_connect(job_top_url, headers=regular_user.headers) as ws:
             while True:
                 msg = await ws.receive_json()
-                print(msg)
-
+                records.append(msg)
                 num_request_count += 1
                 if num_request_count > num_request:
                     # TODO (truskovskiyk 09/12/18) do not use protected prop
@@ -870,3 +870,5 @@ class TestJobs:
                     proto = ws._writer.protocol
                     proto.transport.close()
                     break
+        print(records)
+        assert records == [{"cpu": 1, "mem": 16}, {"cpu": 1, "mem": 16}]

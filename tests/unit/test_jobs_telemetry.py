@@ -1,6 +1,6 @@
 import pytest
 
-from platform_api.orchestrator.jobs_telemetry import JobTop, JobsTelemetry
+from platform_api.orchestrator.jobs_telemetry import JobsTelemetry, JobTop
 
 
 @pytest.fixture
