@@ -336,13 +336,23 @@ class JobsHandler:
 
         # TODO (truskovskiyk 09/12/18) remove CancelledError
         # https://github.com/aio-libs/aiohttp/issues/3443
+
+        # TODO expose configuration
+        sleep_timeout = 1
+
+        logger.info("Websocket connection ready")
         try:
             while True:
+                job = await self._jobs_service.get_job(job_id)
+                if not job.is_running:
+                    await ws.close()
+                    break
                 if request.transport.is_closing():
                     break
-                await asyncio.sleep(1)
-                job_top = await self._jobs_telemetry.get_job_top(job_id=job_id)
-                await ws.send_json(job_top.to_primitive())
+                await asyncio.sleep(sleep_timeout)
+                if job.is_running:
+                    job_top = await self._jobs_telemetry.get_job_top(job_id=job_id)
+                    await ws.send_json(job_top.to_primitive())
         except asyncio.CancelledError as ex:
             logger.info(f"got cancelled error {ex}")
         return ws
