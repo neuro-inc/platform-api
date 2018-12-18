@@ -15,7 +15,6 @@ class JobTop:
 
 
 class TelemetryClient(ABC):
-
     @abstractmethod
     async def get_job_top(self, job_id: str) -> JobTop:
         pass
