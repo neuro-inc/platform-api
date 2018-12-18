@@ -1,6 +1,6 @@
 import asyncio
-import time
 import json
+import time
 from pathlib import PurePath
 from typing import NamedTuple
 from unittest import mock

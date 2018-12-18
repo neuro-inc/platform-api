@@ -1,5 +1,7 @@
-import pytest
 import time
+
+import pytest
+
 from platform_api.orchestrator.jobs_telemetry import JobsTelemetry, JobTop
 
 

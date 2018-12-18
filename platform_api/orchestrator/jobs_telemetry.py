@@ -1,6 +1,6 @@
+import time
 from abc import ABC, abstractmethod
 from dataclasses import asdict, dataclass, field
-import time
 from typing import Any, Dict
 
 
