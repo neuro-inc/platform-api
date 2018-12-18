@@ -350,9 +350,9 @@ class JobsHandler:
                 if request.transport.is_closing():
                     break
                 await asyncio.sleep(sleep_timeout)
-                if job.is_running:
-                    job_top = await self._jobs_telemetry.get_job_top(job_id=job_id)
-                    await ws.send_json(job_top.to_primitive())
+
+                job_top = await self._jobs_telemetry.get_job_top(job_id=job_id)
+                await ws.send_json(job_top.to_primitive())
         except asyncio.CancelledError as ex:
             logger.info(f"got cancelled error {ex}")
         return ws
