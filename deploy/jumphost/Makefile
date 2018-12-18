@@ -27,8 +27,8 @@ gke_docker_jumphost_push: build_jumphost_k8s
 
 gke_k8s_deploy_jumphost_dev: _helm
 	gcloud --quiet container clusters get-credentials $(GKE_CLUSTER_NAME)
-	helm --set "global.env=dev" --set "IMAGE.dev=$(IMAGE_K8S):$(CIRCLE_SHA1)" upgrade jumphost helmpackage/ --wait --timeout 600
+	helm --set "global.env=dev" --set "IMAGE.dev=$(IMAGE_K8S):$(CIRCLE_SHA1)" upgrade --install jumphost helmpackage/ --wait --timeout 600
 
 gke_k8s_deploy_jumphost_staging: _helm
 	gcloud --quiet container clusters get-credentials $(GKE_STAGE_CLUSTER_NAME)
-	helm --set "global.env=staging" --set "IMAGE.staging=$(IMAGE_K8S):$(CIRCLE_SHA1)" upgrade jumphost helmpackage/ --wait --timeout 600
+	helm --set "global.env=staging" --set "IMAGE.staging=$(IMAGE_K8S):$(CIRCLE_SHA1)" upgrade --install jumphost helmpackage/ --wait --timeout 600
