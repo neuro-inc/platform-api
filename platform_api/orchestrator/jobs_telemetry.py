@@ -25,7 +25,7 @@ class DataDogClient(TelemetryClient):
     # https://github.com/neuromation/platform-api/issues/377
     async def get_job_top(self, job_id: str) -> JobTop:
         # TODO (truskovskiyk fetch from data dog)
-        return JobTop(cpu=1, mem=16)
+        return 
 
 
 class JobsTelemetry:
