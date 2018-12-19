@@ -1,3 +1,4 @@
+import asyncio
 import logging
 from pathlib import PurePath
 from typing import Any, Dict, List, Sequence, Set
@@ -13,6 +14,7 @@ from platform_api.config import Config, RegistryConfig, StorageConfig
 from platform_api.orchestrator import JobsService, Orchestrator
 from platform_api.orchestrator.job import Job
 from platform_api.orchestrator.job_request import Container, ContainerVolume, JobRequest
+from platform_api.orchestrator.jobs_telemetry import JobsTelemetry
 from platform_api.resource import GPUModel
 from platform_api.user import User, untrusted_user
 
@@ -178,6 +180,10 @@ class JobsHandler:
         )
 
     @property
+    def _jobs_telemetry(self) -> JobsTelemetry:
+        return self._app["jobs_telemetry"]
+
+    @property
     def _jobs_service(self) -> JobsService:
         return self._app["jobs_service"]
 
@@ -197,6 +203,7 @@ class JobsHandler:
                 aiohttp.web.delete("/{job_id}", self.handle_delete),
                 aiohttp.web.get("/{job_id}", self.handle_get),
                 aiohttp.web.get("/{job_id}/log", self.stream_log),
+                aiohttp.web.get("/{job_id}/top", self.stream_top),
             )
         )
 
@@ -312,6 +319,49 @@ class JobsHandler:
 
         await response.write_eof()
         return response
+
+    async def stream_top(self, request):
+        user = await untrusted_user(request)
+        job_id = request.match_info["job_id"]
+        job = await self._jobs_service.get_job(job_id)
+
+        permission = Permission(uri=str(job.to_uri()), action="read")
+        logger.info("Checking whether %r has %r", user, permission)
+        await check_permission(request, permission.action, [permission])
+
+        logger.info("Websocket connection starting")
+        ws = aiohttp.web.WebSocketResponse()
+        await ws.prepare(request)
+        logger.info("Websocket connection ready")
+
+        # TODO (truskovskiyk 09/12/18) remove CancelledError
+        # https://github.com/aio-libs/aiohttp/issues/3443
+
+        # TODO expose configuration
+        sleep_timeout = 1
+
+        logger.info("Websocket connection ready")
+        try:
+            while True:
+                # client close connection
+                if request.transport.is_closing():
+                    break
+
+                job = await self._jobs_service.get_job(job_id)
+
+                if job.is_running:
+                    job_top = await self._jobs_telemetry.get_job_top(job_id=job_id)
+                    await ws.send_json(job_top.to_primitive())
+
+                if job.is_finished:
+                    await ws.close()
+                    break
+
+                await asyncio.sleep(sleep_timeout)
+
+        except asyncio.CancelledError as ex:
+            logger.info(f"got cancelled error {ex}")
+        return ws
 
 
 def filter_jobs_with_access_tree(
