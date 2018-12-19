@@ -83,7 +83,7 @@ def admin_token(token_factory):
 
 
 async def create_auth_config(container) -> AuthConfig:
-    host = "localhost"
+    host = "0.0.0.0"
     port = int((await container.port(8080))[0]["HostPort"])
     url = URL(f"http://{host}:{port}")
     token = create_token("compute")

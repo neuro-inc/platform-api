@@ -9,15 +9,16 @@ from base64 import b64encode
 from contextlib import suppress
 from dataclasses import dataclass, field
 from enum import Enum
-from pathlib import PurePath
+from pathlib import Path, PurePath
 from types import TracebackType
-from typing import Any, DefaultDict, Dict, List, Optional, Type
+from typing import Any, DefaultDict, Dict, Iterable, List, Optional, Type, Union
 from urllib.parse import urlsplit
 
 import aiohttp
 from aiohttp import WSMsgType
 from async_generator import asynccontextmanager
 from async_timeout import timeout
+from multidict import MultiDict
 from yarl import URL
 
 from platform_api.utils.stream import Stream
@@ -45,6 +46,10 @@ class KubeClientException(Exception):
 
 
 class StatusException(KubeClientException):
+    pass
+
+
+class AlreadyExistsException(StatusException):
     pass
 
 
@@ -486,6 +491,9 @@ class PodDescriptor:
 
     image_pull_secrets: List[SecretRef] = field(default_factory=list)
 
+    # TODO (A Danshyn 12/09/2018): expose readiness probe properly
+    readiness_probe: bool = False
+
     @classmethod
     def from_job_request(
         cls,
@@ -558,11 +566,12 @@ class PodDescriptor:
         if self.resources:
             container_payload["resources"] = self.resources.to_primitive()
 
-        ports, readines_probe = self._to_primitive_ports()
+        ports = self._to_primitive_ports()
         if ports:
             container_payload["ports"] = ports
-        if readines_probe:
-            container_payload["readinessProbe"] = readines_probe
+        readiness_probe = self._to_primitive_readiness_probe()
+        if readiness_probe:
+            container_payload["readinessProbe"] = readiness_probe
 
         labels = self.labels.copy()
         # TODO (A Danshyn 12/04/18): the job is left for backward
@@ -593,26 +602,33 @@ class PodDescriptor:
             }
         return payload
 
-    def _to_primitive_ports(self):
+    def _to_primitive_ports(self) -> List[Dict[str, int]]:
         ports = []
-        readines_probe = {}
         if self.port:
             ports.append({"containerPort": self.port})
-            readines_probe = {
+        if self.ssh_port:
+            ports.append({"containerPort": self.ssh_port})
+        return ports
+
+    def _to_primitive_readiness_probe(self) -> Dict[str, Any]:
+        if not self.readiness_probe:
+            return {}
+
+        if self.port:
+            return {
                 "httpGet": {"port": self.port, "path": self.health_check_path},
                 "initialDelaySeconds": 1,
                 "periodSeconds": 1,
             }
 
         if self.ssh_port:
-            ports.append({"containerPort": self.ssh_port})
-            if not self.port:
-                readines_probe = {
-                    "tcpSocket": {"port": self.ssh_port},
-                    "initialDelaySeconds": 1,
-                    "periodSeconds": 1,
-                }
-        return ports, readines_probe
+            return {
+                "tcpSocket": {"port": self.ssh_port},
+                "initialDelaySeconds": 1,
+                "periodSeconds": 1,
+            }
+
+        return {}
 
     @classmethod
     def _assert_resource_kind(cls, expected_kind: str, payload: Dict):
@@ -884,7 +900,7 @@ class PodExec:
 
 class KubeClientAuthType(str, enum.Enum):
     NONE = "none"
-    # TODO: TOKEN = 'token'
+    TOKEN = "token"
     CERTIFICATE = "certificate"
 
 
@@ -898,6 +914,7 @@ class KubeClient:
         auth_type: KubeClientAuthType = KubeClientAuthType.CERTIFICATE,
         auth_cert_path: Optional[str] = None,
         auth_cert_key_path: Optional[str] = None,
+        token_path: Optional[str] = None,
         conn_timeout_s: int = 300,
         read_timeout_s: int = 100,
         conn_pool_size: int = 100,
@@ -910,6 +927,7 @@ class KubeClient:
         self._auth_type = auth_type
         self._auth_cert_path = auth_cert_path
         self._auth_cert_key_path = auth_cert_key_path
+        self._token_path = token_path
 
         self._conn_timeout_s = conn_timeout_s
         self._read_timeout_s = read_timeout_s
@@ -934,10 +952,17 @@ class KubeClient:
         connector = aiohttp.TCPConnector(
             limit=self._conn_pool_size, ssl=self._create_ssl_context()
         )
+        if self._auth_type == KubeClientAuthType.TOKEN:
+            assert self._token_path is not None
+            token = Path(self._token_path).read_text()
+            headers = {"Authorization": "Bearer " + token}
+        else:
+            headers = {}
         self._client = aiohttp.ClientSession(
             connector=connector,
             conn_timeout=self._conn_timeout_s,
             read_timeout=self._read_timeout_s,
+            headers=headers,
         )
 
     async def close(self) -> None:
@@ -1078,6 +1103,8 @@ class KubeClient:
     def _check_status_payload(self, payload):
         if payload["kind"] == "Status":
             if payload["status"] == "Failure":
+                if payload.get("reason") == "AlreadyExists":
+                    raise AlreadyExistsException(payload["reason"])
                 raise StatusException(payload["reason"])
 
     async def add_ingress_rule(self, name: str, rule: IngressRule) -> Ingress:
@@ -1164,12 +1191,27 @@ class KubeClient:
             return [KubernetesEvent(item) for item in payload["items"]]
         return None
 
-    async def exec_pod(self, pod_id: str, command: str, *, tty: bool) -> PodExec:
+    async def exec_pod(
+        self, pod_id: str, command: Union[str, Iterable[str]], *, tty: bool
+    ) -> PodExec:
         url = URL(self._generate_pod_url(pod_id)) / "exec"
         s_tty = str(int(tty))  # 0 or 1
-        url = url.with_query(
-            command=command, tty=s_tty, stdin="1", stdout="1", stderr="1"
+        args = MultiDict(
+            {
+                "container": pod_id,
+                "tty": s_tty,
+                "stdin": "1",
+                "stdout": "1",
+                "stderr": "1",
+            }
         )
+        if isinstance(command, str):
+            args["command"] = command
+        else:
+            for part in command:
+                args.add("command", part)
+
+        url = url.with_query(args)
         ws = await self._client.ws_connect(url, method="POST")  # type: ignore
         return PodExec(ws)
 

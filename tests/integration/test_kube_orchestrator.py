@@ -26,6 +26,7 @@ from platform_api.orchestrator.job_request import (
     ContainerVolume,
 )
 from platform_api.orchestrator.kube_orchestrator import (
+    AlreadyExistsException,
     DockerRegistrySecret,
     Ingress,
     IngressRule,
@@ -780,6 +781,21 @@ class TestKubeClient:
             name, {"testlabel": name}, namespace_name=kube_config.namespace
         )
         assert payload["metadata"]["name"] == name
+
+    @pytest.mark.asyncio
+    async def test_create_default_network_policy_twice(
+        self, kube_config, kube_client, delete_network_policy_later
+    ):
+        name = str(uuid.uuid4())
+        await delete_network_policy_later(name)
+        payload = await kube_client.create_default_network_policy(
+            name, {"testlabel": name}, namespace_name=kube_config.namespace
+        )
+        assert payload["metadata"]["name"] == name
+        with pytest.raises(AlreadyExistsException):
+            await kube_client.create_default_network_policy(
+                name, {"testlabel": name}, namespace_name=kube_config.namespace
+            )
 
     @pytest.mark.asyncio
     async def test_get_network_policy_not_found(self, kube_config, kube_client):

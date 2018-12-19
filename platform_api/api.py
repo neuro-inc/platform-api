@@ -11,6 +11,7 @@ from .config_factory import EnvironConfigFactory
 from .handlers import JobsHandler, ModelsHandler
 from .orchestrator import JobException, JobsService, JobsStatusPooling, KubeOrchestrator
 from .orchestrator.jobs_storage import RedisJobsStorage
+from .orchestrator.jobs_telemetry import JobsTelemetry
 from .redis import create_redis_client
 
 
@@ -121,6 +122,10 @@ async def create_app(config: Config) -> aiohttp.web.Application:
                 )
             )
             app["jobs_app"]["auth_client"] = auth_client
+
+            logger.info("Initializing JobTelemetry")
+            jobs_telemetry = JobsTelemetry.create()
+            app["jobs_app"]["jobs_telemetry"] = jobs_telemetry
 
             await setup_security(
                 app=app, auth_client=auth_client, auth_scheme=AuthScheme.BEARER

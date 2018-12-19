@@ -1,5 +1,6 @@
 import asyncio
 import logging
+import shlex
 from contextlib import suppress
 
 import asyncssh
@@ -58,10 +59,20 @@ class ShellSession:
         username = self.username
         pod_id = username
         loop = asyncio.get_event_loop()
+        env = self._chan.get_environment()
         try:
             command = self.command
             if command is None:
-                command = "sh -i"
+                command = ["sh", "-i"]
+            else:
+                command = shlex.split(command)
+            if env:
+                lst = ["env"]
+                for name, val in env.items():
+                    lst.append(name + "=" + shlex.quote(val))
+                lst.extend(command)
+                command = lst
+
             subproc = await self._server.orchestrator.exec_pod(
                 pod_id, command, tty=True
             )

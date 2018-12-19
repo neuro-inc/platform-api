@@ -1,12 +1,12 @@
 apiVersion: extensions/v1beta1
 kind: Deployment
 metadata:
-  name: platformapi
+  name: ssh
 spec:
   replicas: 1
   selector:
     matchLabels:
-      service: platformapi
+      service: ssh
   strategy:
     rollingUpdate:
       maxSurge: 1
@@ -15,17 +15,22 @@ spec:
   template:
     metadata:
       labels:
-        service: platformapi
+        service: ssh
     spec:
       containers:
-      - name: platformapi
+      - name: ssh
         image: {{ printf "%s" (pluck .Values.global.env .Values.IMAGE | first | default .Values.IMAGE._default) }}
+        command: ["api-ssh-server"]
         imagePullPolicy: Always
         env:
         - name: NP_K8S_API_URL
-          value: http://localhost:8001
+          value: "https://kubernetes"
         - name: NP_K8S_AUTH_TYPE
-          value: none
+          value: token
+        - name: NP_K8S_CA_PATH
+          value: /var/run/secrets/kubernetes.io/serviceaccount/ca.crt
+        - name: NP_K8S_TOKEN_PATH
+          value: /var/run/secrets/kubernetes.io/serviceaccount/token
         - name: NP_STORAGE_TYPE
           value: nfs
         - name: NP_STORAGE_NFS_SERVER
@@ -36,8 +41,6 @@ spec:
           value: "{{ printf "%s" (pluck .Values.global.env .Values.NP_STORAGE_NFS_PATH | first | default .Values.NP_STORAGE_NFS_PATH._default) }}"
         - name: NP_K8S_JOBS_INGRESS_NAME
           value: platformjobsingress
-        - name: NP_K8S_JOBS_INGRESS_HTTPS
-          value: true
         - name: NP_K8S_JOBS_INGRESS_DOMAIN_NAME
           value: "{{ printf "%s" (pluck .Values.global.env .Values.NP_K8S_JOBS_INGRESS_DOMAIN_NAME | first | default .Values.NP_K8S_JOBS_INGRESS_DOMAIN_NAME._default) }}"
         - name: NP_K8S_SSH_INGRESS_DOMAIN_NAME
@@ -46,6 +49,11 @@ spec:
           value: "{{ printf "%s" (pluck .Values.global.env .Values.NP_DB_REDIS_URI | first | default .Values.NP_DB_REDIS_URI._default) }}"
         - name: NP_AUTH_URL
           value: http://platformauthapi:8080
+        - name: NP_SSH_PORT
+          value: "22"
+# Provide path(s) for OpenSSH cert files to override defaults
+#        - name: NP_SSH_HOST_KEYS
+#          value: "/etc/ssh/ssh_host_rsa_key,/etc/ssh/ssh_host_dsa_key,/etc/ssh/ssh_host_ecdsa_key"
         - name: NP_AUTH_TOKEN
           valueFrom:
             secretKeyRef:
@@ -66,36 +74,11 @@ spec:
 apiVersion: v1
 kind: Service
 metadata:
-  name: platformapi
+  name: ssh
 spec:
-  type: ClusterIP
+  type: "LoadBalancer"
   ports:
-  - port: 8080
-    targetPort: 8080
+  - port: 22
+    targetPort: 22
   selector:
-    service: platformapi
----
-apiVersion: extensions/v1beta1
-kind: Ingress
-metadata:
-  name: platformapi-ingress
-  annotations:
-    kubernetes.io/ingress.class: traefik
-    traefik.frontend.rule.type: PathPrefix
-spec:
-  rules:
-  - host: {{ printf "%s" (pluck .Values.global.env .Values.INGRESS_HOST | first | default .Values.INGRESS_HOST._default) }}
-    http:
-      paths:
-      - path: /api/v1/storage
-        backend:
-          serviceName: platformstorageapi
-          servicePort: 8080
-      - path: /api/v1/users
-        backend:
-          serviceName: platformauthapi
-          servicePort: 8080
-      - path: /api/v1
-        backend:
-          serviceName: platformapi
-          servicePort: 8080
+    service: ssh
