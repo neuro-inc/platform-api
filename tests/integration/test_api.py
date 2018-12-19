@@ -880,9 +880,11 @@ class TestJobs:
         await jobs_client.delete_job(job_id=job_id)
 
     @pytest.mark.asyncio
-    async def test_job_top_close_when_job_pending(
+    async def test_job_top_silently_wait_when_job_pending(
         self, api, client, regular_user, jobs_client, model_train
     ):
+        command = 'bash -c "for i in {1..10}; do echo $i; sleep 1; done"'
+        model_train["container"]["command"] = command
         url = api.model_base_url
         async with client.post(
             url, headers=regular_user.headers, json=model_train
@@ -894,12 +896,17 @@ class TestJobs:
 
         job_top_url = api.jobs_base_url + f"/{job_id}/top"
         async with client.ws_connect(job_top_url, headers=regular_user.headers) as ws:
+            while True:
+                job = await jobs_client.get_job_by_id(job_id=job_id)
+                assert job["status"] == "pending"
 
-            msg = await ws.receive()
-            job = await jobs_client.get_job_by_id(job_id=job_id)
+                # silently waiting for a job becomes running
+                msg = await ws.receive()
+                job = await jobs_client.get_job_by_id(job_id=job_id)
+                assert job["status"] == "running"
+                assert msg.type == aiohttp.WSMsgType.TEXT
 
-            assert msg.type == aiohttp.WSMsgType.CLOSE
-            assert job["status"] == "pending"
+                break
 
         await jobs_client.delete_job(job_id=job_id)
 
