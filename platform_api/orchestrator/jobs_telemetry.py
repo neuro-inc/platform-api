@@ -8,7 +8,7 @@ from typing import Any, Dict
 class JobTop:
     cpu: float
     mem: float
-    timestamp: float = field(default_factory=time.time)
+    timestamp: float = field(default_factory=time.monotonic)
 
     def to_primitive(self) -> Dict[str, Any]:
         return asdict(self)
