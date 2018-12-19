@@ -143,6 +143,8 @@ jobs:
             # we recommend running mount --make-rshared / during boot before
             # docker is started.
             sudo mount --make-rshared /
+            sudo mount --make-rshared /run
+            sudo mount --make-rshared /var/lib/docker
 
             make start_k8s
 
