@@ -1,8 +1,10 @@
 import io
 import logging
-from typing import Optional
+from typing import Any, Dict, Optional
 
 import aiohttp
+from aioelasticsearch import Elasticsearch
+from aioelasticsearch.helpers import Scan
 
 from .base import LogReader
 from .kube_client import KubeClient
@@ -11,36 +13,44 @@ from .kube_client import KubeClient
 logger = logging.getLogger(__name__)
 
 
-class FilteredStreamWrapper:
-    def __init__(self, stream: aiohttp.StreamReader) -> None:
-        self._stream = stream
+class LogBuffer:
+    def __init__(self) -> None:
         self._buffer = io.BytesIO()
 
     def close(self) -> None:
         self._buffer.close()
 
-    async def read(self, size: int = -1) -> bytes:
-        chunk = self._read_from_buffer(size)
-        if chunk:
-            return chunk
-
-        chunk = await self._readline()
-
-        self._append_to_buffer(chunk)
-        return self._read_from_buffer(size)
-
-    def _read_from_buffer(self, size: int = -1) -> bytes:
+    def read(self, size: int = -1) -> bytes:
         chunk = self._buffer.read(size)
         if not chunk and self._buffer.tell():
             self._buffer.seek(0)
             self._buffer.truncate()
         return chunk
 
-    def _append_to_buffer(self, chunk: bytes) -> None:
+    def write(self, chunk: bytes) -> None:
         pos = self._buffer.tell()
         self._buffer.seek(0, io.SEEK_END)
         self._buffer.write(chunk)
         self._buffer.seek(pos)
+
+
+class FilteredStreamWrapper:
+    def __init__(self, stream: aiohttp.StreamReader) -> None:
+        self._stream = stream
+        self._buffer = LogBuffer()
+
+    def close(self) -> None:
+        self._buffer.close()
+
+    async def read(self, size: int = -1) -> bytes:
+        chunk = self._buffer.read(size)
+        if chunk:
+            return chunk
+
+        chunk = await self._readline()
+
+        self._buffer.write(chunk)
+        return self._buffer.read(size)
 
     async def _readline(self) -> bytes:
         line = await self._stream.readline()
@@ -105,3 +115,71 @@ class PodContainerLogReader(LogReader):
     async def read(self, size: int = -1) -> bytes:
         assert self._stream
         return await self._stream.read(size)
+
+
+class ElasticsearchLogReader(LogReader):
+    def __init__(
+        self,
+        es_client: Elasticsearch,
+        namespace_name: str,
+        pod_name: str,
+        container_name: str,
+    ) -> None:
+        self._es_client = es_client
+        self._index = "logstash-*"
+        self._doc_type = "fluentd"
+
+        self._namespace_name = namespace_name
+        self._pod_name = pod_name
+        self._container_name = container_name
+
+        self._scan: Optional[Scan] = None
+
+        self._buffer = LogBuffer()
+
+    def _combine_search_query(self) -> Dict[str, Any]:
+        terms = [
+            {"term": {"kubernetes.namespace_name.keyword": self._namespace_name}},
+            {"term": {"kubernetes.pod_name.keyword": self._pod_name}},
+            {"term": {"kubernetes.container_name.keyword": self._container_name}},
+        ]
+        return {"query": {"bool": {"must": terms}}, "sort": [{"@timestamp": "asc"}]}
+
+    async def __aenter__(self) -> LogReader:
+        query = self._combine_search_query()
+        self._scan = Scan(
+            self._es_client,
+            index=self._index,
+            doc_type=self._doc_type,
+            scroll="1m",
+            query=query,
+            preserve_order=True,
+            size=100,
+        )
+        await self._scan.__aenter__()
+        return self
+
+    async def __aexit__(self, *args) -> None:
+        self._buffer.close()
+        assert self._scan
+        scan = self._scan
+        self._scan = None
+        await scan.__aexit__(*args)
+
+    async def read(self, size: int = -1) -> bytes:
+        chunk = self._buffer.read(size)
+        if chunk:
+            return chunk
+
+        chunk = await self._readline()
+
+        self._buffer.write(chunk)
+        return self._buffer.read(size)
+
+    async def _readline(self) -> bytes:
+        assert self._scan
+        try:
+            doc = await self._scan.__anext__()
+            return doc["_source"]["log"].encode()
+        except StopAsyncIteration:
+            return b""
