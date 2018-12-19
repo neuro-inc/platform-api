@@ -23,6 +23,7 @@ pytest_plugins = [
     "tests.integration.docker",
     "tests.integration.redis",
     "tests.integration.auth",
+    "tests.integration.elasticsearch",
 ]
 
 
