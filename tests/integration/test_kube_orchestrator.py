@@ -996,9 +996,10 @@ class TestPodContainerLogReader:
         pod_name,
         container_name,
         expected_payload,
-        timeout_s=60.0,
+        timeout_s=120.0,
         interval_s=1.0,
     ):
+        payload = b""
         try:
             async with timeout(timeout_s):
                 while True:
@@ -1013,7 +1014,7 @@ class TestPodContainerLogReader:
                         return
                     await asyncio.sleep(interval_s)
         except asyncio.TimeoutError:
-            pytest.fail("Pod logs did not match.")
+            pytest.fail(f"Pod logs did not match. Last payload: {payload}")
 
 
 class TestPodContainerDevShmSettings:
