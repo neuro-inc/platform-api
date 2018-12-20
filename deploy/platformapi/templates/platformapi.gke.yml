@@ -37,7 +37,7 @@ spec:
         - name: NP_K8S_JOBS_INGRESS_NAME
           value: platformjobsingress
         - name: NP_K8S_JOBS_INGRESS_HTTPS
-          value: true
+          value: "true"
         - name: NP_K8S_JOBS_INGRESS_DOMAIN_NAME
           value: "{{ printf "%s" (pluck .Values.global.env .Values.NP_K8S_JOBS_INGRESS_DOMAIN_NAME | first | default .Values.NP_K8S_JOBS_INGRESS_DOMAIN_NAME._default) }}"
         - name: NP_K8S_SSH_INGRESS_DOMAIN_NAME
