@@ -969,9 +969,6 @@ class TestPodContainerLogReader:
             expected_payload=expected_payload,
         )
 
-        await kube_client.delete_pod(pod.name)
-        await kube_client.wait_pod_non_existent(pod.name)
-
         await self._check_es_logs(
             es_client,
             namespace_name=kube_config.namespace,
