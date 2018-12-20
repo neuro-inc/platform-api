@@ -2,7 +2,7 @@ from dataclasses import dataclass, field
 from datetime import timedelta
 from enum import Enum
 from pathlib import PurePath
-from typing import Container, Optional, Sequence
+from typing import Container, List, Optional, Sequence
 
 from yarl import URL
 
@@ -93,8 +93,18 @@ class OrchestratorConfig:
 
 
 @dataclass(frozen=True)
+class ElasticsearchConfig:
+    hosts: List[str]
+
+
+@dataclass(frozen=True)
 class DatabaseConfig:
     redis: Optional[RedisConfig] = None
+
+
+@dataclass(frozen=True)
+class LoggingConfig:
+    elasticsearch: ElasticsearchConfig
 
 
 @dataclass(frozen=True)
@@ -104,6 +114,7 @@ class Config:
     orchestrator: OrchestratorConfig
     database: DatabaseConfig
     auth: AuthConfig
+    logging: LoggingConfig
 
     registry: RegistryConfig = RegistryConfig()
 
