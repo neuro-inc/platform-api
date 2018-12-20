@@ -811,7 +811,7 @@ class TestKubeClient:
             await kube_client.delete_network_policy(name)
 
 
-class TestPodContainerLogReader:
+class TestLogReader:
     async def _consume_log_reader(
         self, log_reader: LogReader, chunk_size: int = -1
     ) -> bytes:
@@ -943,7 +943,7 @@ class TestPodContainerLogReader:
         assert payload.startswith(expected_payload.encode())
 
     @pytest.mark.asyncio
-    async def test_pod_is_gone(
+    async def test_elasticsearch_log_reader(
         self, kube_config, kube_client, delete_pod_later, es_client
     ):
         command = 'bash -c "for i in {1..5}; do echo $i; sleep 1; done"'
@@ -1012,6 +1012,18 @@ class TestPodContainerLogReader:
                     await asyncio.sleep(interval_s)
         except asyncio.TimeoutError:
             pytest.fail(f"Pod logs did not match. Last payload: {payload}")
+
+    @pytest.mark.asyncio
+    async def test_elasticsearch_log_reader_empty(self, es_client):
+        namespace_name = pod_name = container_name = str(uuid.uuid4())
+        log_reader = ElasticsearchLogReader(
+            es_client,
+            namespace_name=namespace_name,
+            pod_name=pod_name,
+            container_name=container_name,
+        )
+        payload = await self._consume_log_reader(log_reader, chunk_size=1)
+        assert payload == b""
 
 
 class TestPodContainerDevShmSettings:
