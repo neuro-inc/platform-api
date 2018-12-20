@@ -72,8 +72,6 @@ spec:
           - name: FLUENT_CONTAINER_REFRESH_INTERVAL
             value: "1s"
         resources:
-          limits:
-            memory: 200Mi
           requests:
             cpu: 100m
             memory: 200Mi
