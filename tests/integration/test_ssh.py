@@ -62,8 +62,10 @@ def config(kube_config, redis_config, auth_config, es_config):
 
 
 @pytest.fixture
-async def ssh_server(config):
-    async with KubeOrchestrator(config=config.orchestrator) as orchestrator:
+async def ssh_server(config, es_client):
+    async with KubeOrchestrator(
+        config=config.orchestrator, es_client=es_client
+    ) as orchestrator:
         srv = SSHServer("0.0.0.0", 8022, orchestrator)
         await srv.start()
         yield srv
