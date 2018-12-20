@@ -2,11 +2,13 @@ import asyncio
 import logging
 
 import aiohttp.web
+from aioelasticsearch import Elasticsearch
 from async_exit_stack import AsyncExitStack
+from async_generator import asynccontextmanager
 from neuro_auth_client import AuthClient
 from neuro_auth_client.security import AuthScheme, setup_security
 
-from .config import Config
+from .config import Config, ElasticsearchConfig
 from .config_factory import EnvironConfigFactory
 from .handlers import JobsHandler, ModelsHandler
 from .orchestrator import JobException, JobsService, JobsStatusPooling, KubeOrchestrator
@@ -79,6 +81,13 @@ async def create_jobs_app(config: Config):
     jobs_handler = JobsHandler(app=jobs_app, config=config)
     jobs_handler.register(jobs_app)
     return jobs_app
+
+
+@asynccontextmanager
+async def create_elasticsearch_client(config: ElasticsearchConfig) -> Elasticsearch:
+    async with Elasticsearch(hosts=config.hosts) as es_client:
+        await es_client.ping()
+        yield es_client
 
 
 async def create_app(config: Config) -> aiohttp.web.Application:

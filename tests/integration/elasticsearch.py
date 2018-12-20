@@ -4,6 +4,9 @@ import time
 import pytest
 from aioelasticsearch import Elasticsearch
 
+from platform_api.api import create_elasticsearch_client
+from platform_api.config import ElasticsearchConfig
+
 
 @pytest.fixture(scope="session")
 def es_hosts():
@@ -32,8 +35,11 @@ def es_hosts():
 
 
 @pytest.fixture
-async def es_client(es_hosts):
-    es_client = Elasticsearch(hosts=es_hosts)
-    async with es_client:
-        await es_client.ping()
+def es_config(es_hosts):
+    return ElasticsearchConfig(hosts=es_hosts)
+
+
+@pytest.fixture
+async def es_client(es_config):
+    async with create_elasticsearch_client(es_config) as es_client:
         yield es_client
