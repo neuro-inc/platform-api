@@ -67,6 +67,10 @@ spec:
             value: "9200"
           - name: FLUENT_ELASTICSEARCH_SCHEME
             value: "http"
+          - name: FLUENT_ELASTICSEARCH_BUFFER_FLUSH_INTERVAL
+            value: "1s"
+          - name: FLUENT_CONTAINER_REFRESH_INTERVAL
+            value: "1s"
         resources:
           limits:
             memory: 200Mi
@@ -82,6 +86,9 @@ spec:
         - name: journal
           mountPath: /var/log/journal
           readOnly: true
+        - name: kubernetesconf
+          mountPath: /fluentd/etc/kubernetes.conf
+          readOnly: true
       terminationGracePeriodSeconds: 30
       volumes:
       - name: varlog
@@ -93,3 +100,6 @@ spec:
       - name: journal
         hostPath:
           path: /run/log/journal
+      - name: kubernetesconf
+        hostPath:
+          path: /fluentd/kubernetes.conf
