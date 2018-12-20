@@ -17,9 +17,6 @@ function k8s::install_minikube {
     chmod +x minikube
     sudo mv minikube /usr/local/bin/
     sudo -E minikube config set WantReportErrorPrompt false
-
-    sudo -E mkdir -p ~/.minikube/files
-    sudo -E cp -R tests/k8s/fluentd ~/.minikube/files
 }
 
 function k8s::install {
@@ -36,6 +33,9 @@ function k8s::start {
     export MINIKUBE_WANTREPORTERRORPROMPT=false
     export MINIKUBE_HOME=$HOME
     export CHANGE_MINIKUBE_NONE_USER=true
+
+    sudo -E mkdir -p ~/.minikube/files
+    sudo -E cp -R tests/k8s/fluentd ~/.minikube/files
 
     sudo -E minikube config set WantReportErrorPrompt false
     sudo -E minikube start --vm-driver=none --kubernetes-version=v1.10.0
