@@ -102,8 +102,15 @@ async def create_app(config: Config) -> aiohttp.web.Application:
                 create_redis_client(config.database.redis)
             )
 
+            logger.info("Initializing Elasticsearch client")
+            es_client = await exit_stack.enter_async_context(
+                create_elasticsearch_client(config.logging.elasticsearch)
+            )
+
             logger.info("Initializing Orchestrator")
-            orchestrator = KubeOrchestrator(config=config.orchestrator)
+            orchestrator = KubeOrchestrator(
+                config=config.orchestrator, es_client=es_client
+            )
             await exit_stack.enter_async_context(orchestrator)
 
             app["models_app"]["orchestrator"] = orchestrator
