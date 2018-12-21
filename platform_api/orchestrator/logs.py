@@ -151,6 +151,10 @@ class ElasticsearchLogReader(LogReader):
             self._es_client,
             index=self._index,
             doc_type=self._doc_type,
+            # scroll="1m" means that the requested search context will be
+            # preserved in the ES cluster for at most 1 minutes. in other
+            # words, our client code has up to 1 minute to process previous
+            # results and fetch next ones.
             scroll="1m",
             query=query,
             preserve_order=True,
