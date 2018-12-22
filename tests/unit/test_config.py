@@ -93,6 +93,7 @@ class TestEnvironConfigFactory:
             "NP_K8S_SSH_INGRESS_DOMAIN_NAME": "ssh.domain",
             "NP_AUTH_URL": "https://auth",
             "NP_AUTH_TOKEN": "token",
+            "NP_ES_HOSTS": "http://es",
         }
         config = EnvironConfigFactory(environ=environ).create()
 
@@ -135,6 +136,8 @@ class TestEnvironConfigFactory:
         assert config.auth.service_name == "compute"
 
         assert config.registry.host == "registry.dev.neuromation.io"
+
+        assert config.logging.elasticsearch.hosts == ["http://es"]
 
     def test_create_value_error_invalid_port(self):
         environ = {
@@ -185,6 +188,7 @@ class TestEnvironConfigFactory:
                 ]
             ),
             "NP_K8S_NODE_LABEL_PREEMPTIBLE": "testpreempt",
+            "NP_ES_HOSTS": "http://es",
         }
         config = EnvironConfigFactory(environ=environ).create()
 
@@ -234,6 +238,8 @@ class TestEnvironConfigFactory:
 
         assert config.registry.host == "testregistry:5000"
 
+        assert config.logging.elasticsearch.hosts == ["http://es"]
+
     def test_create_nfs(self):
         environ = {
             "NP_STORAGE_TYPE": "nfs",
@@ -246,6 +252,7 @@ class TestEnvironConfigFactory:
             "NP_K8S_SSH_INGRESS_DOMAIN_NAME": "ssh.domain",
             "NP_AUTH_URL": "https://auth",
             "NP_AUTH_TOKEN": "token",
+            "NP_ES_HOSTS": "http://es",
         }
         config = EnvironConfigFactory(environ=environ).create()
         assert config.storage.nfs_server == "1.2.3.4"

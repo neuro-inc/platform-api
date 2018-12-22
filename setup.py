@@ -15,6 +15,7 @@ install_requires = (
     # because the server has too old OpenSSL version
     "cryptography==2.4.2",
     "asyncssh==1.14.0",
+    "aioelasticsearch==0.5.2",
 )
 
 setup(

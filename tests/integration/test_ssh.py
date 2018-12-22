@@ -8,7 +8,13 @@ import aiodocker.utils
 import asyncssh
 import pytest
 
-from platform_api.config import Config, DatabaseConfig, ServerConfig, StorageConfig
+from platform_api.config import (
+    Config,
+    DatabaseConfig,
+    LoggingConfig,
+    ServerConfig,
+    StorageConfig,
+)
 from platform_api.orchestrator.job import JobRequest
 from platform_api.orchestrator.job_request import Container, ContainerResources
 from platform_api.orchestrator.kube_orchestrator import KubeOrchestrator, PodDescriptor
@@ -40,22 +46,26 @@ class ApiConfig(NamedTuple):
 
 
 @pytest.fixture
-def config(kube_config, redis_config, auth_config):
+def config(kube_config, redis_config, auth_config, es_config):
     server_config = ServerConfig()
     storage_config = StorageConfig(host_mount_path=PurePath("/tmp"))  # type: ignore
     database_config = DatabaseConfig(redis=redis_config)  # type: ignore
+    logging_config = LoggingConfig(elasticsearch=es_config)
     return Config(
         server=server_config,
         storage=storage_config,
         orchestrator=kube_config,
         database=database_config,
         auth=auth_config,
+        logging=logging_config,
     )
 
 
 @pytest.fixture
-async def ssh_server(config):
-    async with KubeOrchestrator(config=config.orchestrator) as orchestrator:
+async def ssh_server(config, es_client):
+    async with KubeOrchestrator(
+        config=config.orchestrator, es_client=es_client
+    ) as orchestrator:
         srv = SSHServer("0.0.0.0", 8022, orchestrator)
         await srv.start()
         yield srv

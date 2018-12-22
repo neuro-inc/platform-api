@@ -5,7 +5,7 @@
 1. Install minikube (https://github.com/kubernetes/minikube#installation);
 2. Launch minikube:
 ```shell
-minikube start --kubernetes-version=v1.10.0
+./minikube.sh
 ```
 3. Check the minikube k8s cluster status:
 ```shell
@@ -20,6 +20,7 @@ kubectl config use-context minikube
 minikube addons enable ingress
 kubectl apply -f tests/k8s/nfs.yml
 kubectl apply -f tests/k8s/platformjobsingress.yml
+kubectl apply -f tests/k8s/logging.yml
 ```
 6. Create a new virtual environment with Python 3.6:
 ```shell
