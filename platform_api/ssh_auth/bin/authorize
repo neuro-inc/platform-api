@@ -1,0 +1,7 @@
+#!/bin/bash
+# restore env variables
+set -o allexport
+source /neuromation/.env
+set +o allexport
+# run authorization script
+ssh-authorize

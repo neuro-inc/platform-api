@@ -27,6 +27,7 @@ setup(
         "console_scripts": [
             "platform-api=platform_api.api:main",
             "api-ssh-server=platform_api.ssh.server:main",
+            "ssh-authorize=platform_api.ssh_auth.authorize:main",
         ]
     },
     zip_safe=False,
