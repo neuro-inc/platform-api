@@ -47,8 +47,8 @@ class ExecProxy:
 
     async def authorize(self, token, job_id):
         async with AuthClient(
-                url=self._config.auth.server_endpoint_url,
-                token=self._config.auth.service_token,
+            url=self._config.auth.server_endpoint_url,
+            token=self._config.auth.service_token,
         ) as auth_client:
             auth_policy = AuthPolicy(auth_client)
             user = await auth_policy.authorized_userid(token)
@@ -59,23 +59,19 @@ class ExecProxy:
 
             log.debug(f"user {user}")
             async with KubeOrchestrator(
-                    config=self._config.orchestrator
+                config=self._config.orchestrator
             ) as orchestrator:
                 async with create_redis_client(
-                        self._config.database.redis
+                    self._config.database.redis
                 ) as redis_client:
                     jobs_storage = RedisJobsStorage(
-                        redis_client,
-                        orchestrator=orchestrator
+                        redis_client, orchestrator=orchestrator
                     )
                     try:
                         job = await jobs_storage.get_job(job_id)
                     except JobError as error:
                         raise AuthorizationError(f"{error}")
-                    permission = Permission(
-                        uri=str(job.to_uri()),
-                        action="write"
-                    )
+                    permission = Permission(uri=str(job.to_uri()), action="write")
                     log.debug(f"Checking permission: {permission}")
                     result = await auth_policy.permits(token, None, [permission])
                     if not result:
