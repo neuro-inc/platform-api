@@ -2,13 +2,14 @@ import asyncio
 import json
 import logging
 import subprocess
-import trafaret as t
 from dataclasses import dataclass
 from typing import List
 
+import trafaret as t
 from neuro_auth_client import AuthClient, Permission
 from neuro_auth_client.security import AuthPolicy
 
+from platform_api.config import Config
 from platform_api.orchestrator import KubeOrchestrator
 from platform_api.orchestrator.job_request import JobError
 from platform_api.orchestrator.jobs_storage import RedisJobsStorage
@@ -19,13 +20,7 @@ log = logging.getLogger(__name__)
 
 
 def create_exec_request_validator() -> t.Trafaret:
-    return t.Dict(
-        {
-            "token": t.String,
-            "job": t.String,
-            "command": t.List(t.String),
-        }
-    )
+    return t.Dict({"token": t.String, "job": t.String, "command": t.List(t.String)})
 
 
 @dataclass
@@ -52,12 +47,12 @@ class IllegalArgumentError(ValueError):
 
 
 class ExecProxy:
-    def __init__(self, config, tty):
+    def __init__(self, config: Config, tty: bool) -> None:
         self._config = config
         self._tty = tty
         self._exec_request_validator = create_exec_request_validator()
 
-    async def authorize(self, token, job_id):
+    async def authorize(self, token: str, job_id: str) -> None:
         async with AuthClient(
             url=self._config.auth.server_endpoint_url,
             token=self._config.auth.service_token,
@@ -91,12 +86,12 @@ class ExecProxy:
                             f"Permission denied: user={user}, job={job_id}"
                         )
 
-    def parse(self, request):
+    def parse(self, request: str) -> ExecRequest:
         dict_request = json.loads(request)
         self._exec_request_validator.check(dict_request)
         return ExecRequest(**dict_request)
 
-    def exec_pod(self, job, command):
+    def exec_pod(self, job: str, command: List[str]) -> int:
         log.debug((f"Executing {command} in {job}"))
         if self._tty:
             kubectl_cmd = ["kubectl", "exec", "-it", job, "--"] + command
@@ -105,9 +100,9 @@ class ExecProxy:
         log.debug(f"Running kubectl with command: {kubectl_cmd}")
         retcode = subprocess.call(kubectl_cmd)
 
-        exit(retcode)
+        return retcode
 
-    def process(self, json_request):
+    def process(self, json_request: str) -> int:
         try:
             request = self.parse(json_request)
             log.debug(f"Request: {request}")
@@ -115,4 +110,4 @@ class ExecProxy:
             raise IllegalArgumentError(f"Illegal Payload: {json_request} ({e})")
         loop = asyncio.get_event_loop()
         loop.run_until_complete(self.authorize(request.token, request.job))
-        self.exec_pod(request.job, request.command)
+        return self.exec_pod(request.job, request.command)

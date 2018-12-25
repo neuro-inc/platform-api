@@ -19,26 +19,26 @@ PERMISSION_DENIED = 12
 UNKNOWN = 100
 
 
-def run():
+def run() -> None:
     json_request = os.environ.get("SSH_ORIGINAL_COMMAND", "")
     log.debug(f"SSH_ORIGINAL_COMMAND={json_request}")
-    if (os.environ.get("NP_TTY", "0") == "1"):
+    if os.environ.get("NP_TTY", "0") == "1":
         tty = True
     else:
         tty = False
     log.debug(f"TTY is {tty}")
     proxy = ExecProxy(EnvironConfigFactory().create(), tty)
-    proxy.process(json_request)
+    exit(proxy.process(json_request))
 
 
-def init_logging():
+def init_logging() -> None:
     logging.basicConfig(
         level=logging.WARNING,
         format="%(asctime)s - %(name)s - %(levelname)s - %(message)s",
     )
 
 
-def main():
+def main() -> None:
     init_logging()
     try:
         run()
