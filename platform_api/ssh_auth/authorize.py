@@ -15,7 +15,7 @@ from .proxy import (
 log = logging.getLogger(__name__)
 
 
-def run() -> None:
+def run() -> int:
     json_request = os.environ.get("SSH_ORIGINAL_COMMAND", "")
     log.info(f"Request: {json_request}")
     if os.environ.get("NP_TTY", "0") == "1":
