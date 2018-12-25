@@ -2,6 +2,7 @@ import asyncio
 import json
 import logging
 import subprocess
+import trafaret as t
 from dataclasses import dataclass
 from typing import List
 
@@ -15,6 +16,16 @@ from platform_api.redis import create_redis_client
 
 
 log = logging.getLogger(__name__)
+
+
+def create_exec_request_validator() -> t.Trafaret:
+    return t.Dict(
+        {
+            "token": t.String,
+            "job": t.String,
+            "command": t.List(t.String),
+        }
+    )
 
 
 @dataclass
@@ -44,6 +55,7 @@ class ExecProxy:
     def __init__(self, config, tty):
         self._config = config
         self._tty = tty
+        self._exec_request_validator = create_exec_request_validator()
 
     async def authorize(self, token, job_id):
         async with AuthClient(
@@ -81,6 +93,7 @@ class ExecProxy:
 
     def parse(self, request):
         dict_request = json.loads(request)
+        self._exec_request_validator.check(dict_request)
         return ExecRequest(**dict_request)
 
     def exec_pod(self, job, command):
