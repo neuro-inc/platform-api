@@ -23,7 +23,7 @@ def create_exec_request_validator() -> t.Trafaret:
     return t.Dict({"token": t.String, "job": t.String, "command": t.List(t.String)})
 
 
-@dataclass
+@dataclass(frozen=True)
 class ExecRequest:
     token: str
     job: str

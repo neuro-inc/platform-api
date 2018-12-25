@@ -1,5 +1,6 @@
 import logging
 import os
+import sys
 
 from platform_api.config_factory import EnvironConfigFactory
 
@@ -13,22 +14,19 @@ from .proxy import (
 
 log = logging.getLogger(__name__)
 
-ILLEGAL_ARGUMENT = 1
-UNAUTHORIZED = 11
-PERMISSION_DENIED = 12
-UNKNOWN = 100
-
 
 def run() -> None:
     json_request = os.environ.get("SSH_ORIGINAL_COMMAND", "")
-    log.debug(f"SSH_ORIGINAL_COMMAND={json_request}")
+    log.info(f"Request: {json_request}")
     if os.environ.get("NP_TTY", "0") == "1":
         tty = True
     else:
         tty = False
-    log.debug(f"TTY is {tty}")
+    log.info(f"TTY is {tty}")
     proxy = ExecProxy(EnvironConfigFactory().create(), tty)
-    exit(proxy.process(json_request))
+    retcode = proxy.process(json_request)
+    log.info(f"Done, retcode={retcode}")
+    return retcode
 
 
 def init_logging() -> None:
@@ -41,24 +39,23 @@ def init_logging() -> None:
 def main() -> None:
     init_logging()
     try:
-        run()
-        log.debug("Successfull")
+        sys.exit(run())
     except AuthenticationError as error:
         print("Unauthorized")
         log.error(f"{type(error)}:{error}")
-        exit(UNAUTHORIZED)
+        sys.exit(os.EX_NOPERM)
     except AuthorizationError as error:
         print(f"Permission denied")
         log.error(f"{type(error)}:{error}")
-        exit(PERMISSION_DENIED)
+        sys.exit(os.EX_NOPERM)
     except IllegalArgumentError as error:
         print(f"{error}")
         log.error(f"{type(error)}:{error}")
-        exit(ILLEGAL_ARGUMENT)
+        sys.exit(os.EX_DATAERR)
     except Exception as error:
         print("Unknown exception")
         log.error(f"{type(error)}:{error}")
-        exit(UNKNOWN)
+        sys.exit(os.EX_SOFTWARE)
 
 
 if __name__ == "__main__":
