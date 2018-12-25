@@ -18,11 +18,10 @@ log = logging.getLogger(__name__)
 
 
 @dataclass
-class ConnectionRequest:
+class ExecRequest:
     token: str
     job: str
     command: List[str]
-    tty: bool
 
 
 class AuthError(Exception):
@@ -42,8 +41,9 @@ class IllegalArgumentError(ValueError):
 
 
 class ExecProxy:
-    def __init__(self, config):
+    def __init__(self, config, tty):
         self._config = config
+        self._tty = tty
 
     async def authorize(self, token, job_id):
         async with AuthClient(
@@ -80,11 +80,12 @@ class ExecProxy:
                         )
 
     def parse(self, request):
-        return ConnectionRequest(**json.loads(request))
+        dict_request = json.loads(request)
+        return ExecRequest(**dict_request)
 
-    def exec_pod(self, job, command, tty):
+    def exec_pod(self, job, command):
         log.debug((f"Executing {command} in {job}"))
-        if tty:
+        if self._tty:
             kubectl_cmd = ["kubectl", "exec", "-it", job, "--"] + command
         else:
             kubectl_cmd = ["kubectl", "exec", "-i", job, "--"] + command
@@ -101,4 +102,4 @@ class ExecProxy:
             raise IllegalArgumentError(f"Illegal Payload: {json_request} ({e})")
         loop = asyncio.get_event_loop()
         loop.run_until_complete(self.authorize(request.token, request.job))
-        self.exec_pod(request.job, request.command, request.tty)
+        self.exec_pod(request.job, request.command)

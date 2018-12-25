@@ -22,7 +22,12 @@ UNKNOWN = 100
 def run():
     json_request = os.environ.get("SSH_ORIGINAL_COMMAND", "")
     log.debug(f"SSH_ORIGINAL_COMMAND={json_request}")
-    proxy = ExecProxy(EnvironConfigFactory().create())
+    if (os.environ.get("NP_TTY", "0") == "1"):
+        tty = True
+    else:
+        tty = False
+    log.debug(f"TTY is {tty}")
+    proxy = ExecProxy(EnvironConfigFactory().create(), tty)
     proxy.process(json_request)
 
 
