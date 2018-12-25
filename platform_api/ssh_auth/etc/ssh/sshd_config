@@ -115,6 +115,7 @@ AllowUsers nobody
 Match User nobody
     ForceCommand /bin/bash -c authorize
     PermitEmptyPasswords yes
+    AllowTcpForwarding No
 #    RequiredAuthentications2 publickey
 #	X11Forwarding no
 #	AllowTcpForwarding no
