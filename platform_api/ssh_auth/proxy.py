@@ -1,4 +1,3 @@
-import asyncio
 import json
 import logging
 import subprocess
@@ -9,11 +8,8 @@ import trafaret as t
 from neuro_auth_client import AuthClient, Permission
 from neuro_auth_client.security import AuthPolicy
 
-from platform_api.config import Config
-from platform_api.orchestrator import KubeOrchestrator
 from platform_api.orchestrator.job_request import JobError
-from platform_api.orchestrator.jobs_storage import RedisJobsStorage
-from platform_api.redis import create_redis_client
+from platform_api.orchestrator.jobs_storage import JobsStorage
 
 
 log = logging.getLogger(__name__)
@@ -47,8 +43,10 @@ class IllegalArgumentError(ValueError):
 
 
 class ExecProxy:
-    def __init__(self, config: Config, tty: bool) -> None:
-        self._config = config
+    def __init__(self,
+                 jobs_storage: JobsStorage,
+                 tty: bool) -> None:
+        self._jobs_storage = jobs_storage
         self._tty = tty
         self._exec_request_validator = create_exec_request_validator()
 
@@ -65,26 +63,17 @@ class ExecProxy:
                 )
 
             log.debug(f"user {user}")
-            async with KubeOrchestrator(
-                config=self._config.orchestrator
-            ) as orchestrator:
-                async with create_redis_client(
-                    self._config.database.redis
-                ) as redis_client:
-                    jobs_storage = RedisJobsStorage(
-                        redis_client, orchestrator=orchestrator
-                    )
-                    try:
-                        job = await jobs_storage.get_job(job_id)
-                    except JobError as error:
-                        raise AuthorizationError(f"{error}")
-                    permission = Permission(uri=str(job.to_uri()), action="write")
-                    log.debug(f"Checking permission: {permission}")
-                    result = await auth_policy.permits(token, None, [permission])
-                    if not result:
-                        raise AuthorizationError(
-                            f"Permission denied: user={user}, job={job_id}"
-                        )
+            try:
+                job = await self._jobs_storage.get_job(job_id)
+            except JobError as error:
+                raise AuthorizationError(f"{error}")
+            permission = Permission(uri=str(job.to_uri()), action="write")
+            log.debug(f"Checking permission: {permission}")
+            result = await auth_policy.permits(token, None, [permission])
+            if not result:
+                raise AuthorizationError(
+                    f"Permission denied: user={user}, job={job_id}"
+                )
 
     def parse(self, request: str) -> ExecRequest:
         dict_request = json.loads(request)
@@ -102,12 +91,12 @@ class ExecProxy:
 
         return retcode
 
-    def process(self, json_request: str) -> int:
+    async def process(self, json_request: str) -> int:
         try:
             request = self.parse(json_request)
             log.debug(f"Request: {request}")
         except ValueError as e:
             raise IllegalArgumentError(f"Illegal Payload: {json_request} ({e})")
-        loop = asyncio.get_event_loop()
-        loop.run_until_complete(self.authorize(request.token, request.job))
+
+        await self.authorize(request.token, request.job)
         return self.exec_pod(request.job, request.command)
