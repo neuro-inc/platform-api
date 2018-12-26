@@ -144,7 +144,9 @@ def convert_pod_status_to_job_status(pod_status: PodStatus) -> JobStatusItem:
 
 
 class KubeOrchestrator(Orchestrator):
-    def __init__(self, *, config: KubeConfig, es_client: Elasticsearch) -> None:
+    def __init__(
+        self, *, config: KubeConfig, es_client: Optional[Elasticsearch] = None
+    ) -> None:
         self._loop = asyncio.get_event_loop()
 
         self._config = config
@@ -429,6 +431,7 @@ class KubeOrchestrator(Orchestrator):
             return False
 
     async def get_job_log_reader(self, job: Job) -> LogReader:
+        assert self._es_client
         pod_name = self._get_job_pod_name(job)
         if await self._check_pod_exists(pod_name):
             return PodContainerLogReader(
