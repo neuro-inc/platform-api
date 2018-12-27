@@ -728,6 +728,10 @@ class KubernetesEvent:
         self._payload = payload or {}
 
     @property
+    def involved_object(self) -> Dict[str, str]:
+        return self._payload["involvedObject"]
+
+    @property
     def reason(self) -> Optional[str]:
         return self._payload.get("reason", None)
 

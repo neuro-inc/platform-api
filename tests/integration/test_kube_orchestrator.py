@@ -810,6 +810,29 @@ class TestKubeClient:
         with pytest.raises(StatusException, match="NotFound"):
             await kube_client.delete_network_policy(name)
 
+    @pytest.mark.asyncio
+    async def test_get_pod_events(self, kube_config, kube_client, delete_pod_later):
+        container = Container(
+            image="ubuntu",
+            command="true",
+            resources=ContainerResources(cpu=0.1, memory_mb=128),
+        )
+        job_request = JobRequest.create(container)
+        pod = PodDescriptor.from_job_request(
+            kube_config.create_storage_volume(), job_request
+        )
+        await delete_pod_later(pod)
+        await kube_client.create_pod(pod)
+        await kube_client.wait_pod_is_terminated(pod.name)
+
+        events = await kube_client.get_pod_events(pod.name, kube_config.namespace)
+
+        for event in events:
+            involved_object = event.involved_object
+            assert involved_object["kind"] == "Pod"
+            assert involved_object["namespace"] == kube_config.namespace
+            assert involved_object["name"] == pod.name
+
 
 class TestLogReader:
     async def _consume_log_reader(
