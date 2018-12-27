@@ -34,14 +34,13 @@ async def run() -> int:
     async with AuthClient(
         url=config.auth.server_endpoint_url, token=config.auth.service_token
     ) as auth_client:
-        async with KubeOrchestrator(config=config.orchestrator) as orchestrator:
-            async with create_redis_client(config.database.redis) as redis_client:
-                jobs_storage = RedisJobsStorage(redis_client, orchestrator=orchestrator)
-                executor = KubeCTLExecutor(tty)
-                proxy = ExecProxy(auth_client, jobs_storage, executor)
-                retcode = await proxy.process(json_request)
-                log.info(f"Done, retcode={retcode}")
-                return retcode
+        async with create_redis_client(config.database.redis) as redis_client:
+            jobs_storage = RedisJobsStorage(redis_client, orchestrator_config=config.orchestrator)
+            executor = KubeCTLExecutor(tty)
+            proxy = ExecProxy(auth_client, jobs_storage, executor)
+            retcode = await proxy.process(json_request)
+            log.info(f"Done, retcode={retcode}")
+            return retcode
 
 
 def init_logging() -> None:
