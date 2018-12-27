@@ -6,6 +6,7 @@ import sys
 from platform_api.config_factory import EnvironConfigFactory
 from platform_api.orchestrator import KubeOrchestrator
 from platform_api.orchestrator.jobs_storage import RedisJobsStorage
+from neuro_auth_client import AuthClient
 from platform_api.redis import create_redis_client
 
 from .proxy import (
@@ -14,7 +15,7 @@ from .proxy import (
     ExecProxy,
     IllegalArgumentError,
 )
-
+from .executor import KubeCTLExecutor
 
 log = logging.getLogger(__name__)
 
@@ -27,27 +28,32 @@ async def run() -> int:
     else:
         tty = False
     log.info(f"TTY is {tty}")
-    config = EnvironConfigFactory()
-    async with KubeOrchestrator(
-            config=config.orchestrator
-    ) as orchestrator:
-        async with create_redis_client(
-                config.database.redis
-        ) as redis_client:
-            jobs_storage = RedisJobsStorage(
-                redis_client, orchestrator=orchestrator
-            )
-            proxy = ExecProxy(orchestrator,
-                              jobs_storage,
-                              tty)
-            retcode = await proxy.process(json_request)
-            log.info(f"Done, retcode={retcode}")
-    return retcode
+    config = EnvironConfigFactory().create()
+    async with AuthClient(
+            url=config.auth.server_endpoint_url,
+            token=config.auth.service_token,
+    ) as auth_client:
+        async with KubeOrchestrator(
+                config=config.orchestrator
+        ) as orchestrator:
+            async with create_redis_client(
+                    config.database.redis
+            ) as redis_client:
+                jobs_storage = RedisJobsStorage(
+                    redis_client, orchestrator=orchestrator
+                )
+                executor = KubeCTLExecutor(tty)
+                proxy = ExecProxy(auth_client,
+                                  jobs_storage,
+                                  executor)
+                retcode = await proxy.process(json_request)
+                log.info(f"Done, retcode={retcode}")
+                return retcode
 
 
 def init_logging() -> None:
     logging.basicConfig(
-        level=logging.WARNING,
+        level=logging.INFO,
         format="%(asctime)s - %(name)s - %(levelname)s - %(message)s",
     )
 

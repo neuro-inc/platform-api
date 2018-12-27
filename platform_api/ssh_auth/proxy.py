@@ -1,6 +1,5 @@
 import json
 import logging
-import subprocess
 from dataclasses import dataclass
 from typing import List
 
@@ -10,7 +9,7 @@ from neuro_auth_client.security import AuthPolicy
 
 from platform_api.orchestrator.job_request import JobError
 from platform_api.orchestrator.jobs_storage import JobsStorage
-
+from .executor import Executor
 
 log = logging.getLogger(__name__)
 
@@ -44,52 +43,39 @@ class IllegalArgumentError(ValueError):
 
 class ExecProxy:
     def __init__(self,
+                 auth_client: AuthClient,
                  jobs_storage: JobsStorage,
-                 tty: bool) -> None:
+                 executor: Executor) -> None:
+        self._auth_client = auth_client
         self._jobs_storage = jobs_storage
-        self._tty = tty
         self._exec_request_validator = create_exec_request_validator()
+        self._executor = executor
 
     async def authorize(self, token: str, job_id: str) -> None:
-        async with AuthClient(
-            url=self._config.auth.server_endpoint_url,
-            token=self._config.auth.service_token,
-        ) as auth_client:
-            auth_policy = AuthPolicy(auth_client)
-            user = await auth_policy.authorized_userid(token)
-            if not user:
-                raise AuthenticationError(
-                    f"Incorrect token: token={token}, job={job_id}"
-                )
+        auth_policy = AuthPolicy(self._auth_client)
+        user = await auth_policy.authorized_userid(token)
+        if not user:
+            raise AuthenticationError(
+                f"Incorrect token: token={token}, job={job_id}"
+            )
 
-            log.debug(f"user {user}")
-            try:
-                job = await self._jobs_storage.get_job(job_id)
-            except JobError as error:
-                raise AuthorizationError(f"{error}")
-            permission = Permission(uri=str(job.to_uri()), action="write")
-            log.debug(f"Checking permission: {permission}")
-            result = await auth_policy.permits(token, None, [permission])
-            if not result:
-                raise AuthorizationError(
-                    f"Permission denied: user={user}, job={job_id}"
-                )
+        log.debug(f"user {user}")
+        try:
+            job = await self._jobs_storage.get_job(job_id)
+        except JobError as error:
+            raise AuthorizationError(f"{error}")
+        permission = Permission(uri=str(job.to_uri()), action="write")
+        log.debug(f"Checking permission: {permission}")
+        result = await auth_policy.permits(token, None, [permission])
+        if not result:
+            raise AuthorizationError(
+                f"Permission denied: user={user}, job={job_id}"
+            )
 
     def parse(self, request: str) -> ExecRequest:
         dict_request = json.loads(request)
         self._exec_request_validator.check(dict_request)
         return ExecRequest(**dict_request)
-
-    def exec_pod(self, job: str, command: List[str]) -> int:
-        log.debug((f"Executing {command} in {job}"))
-        if self._tty:
-            kubectl_cmd = ["kubectl", "exec", "-it", job, "--"] + command
-        else:
-            kubectl_cmd = ["kubectl", "exec", "-i", job, "--"] + command
-        log.debug(f"Running kubectl with command: {kubectl_cmd}")
-        retcode = subprocess.call(kubectl_cmd)
-
-        return retcode
 
     async def process(self, json_request: str) -> int:
         try:
@@ -99,4 +85,4 @@ class ExecProxy:
             raise IllegalArgumentError(f"Illegal Payload: {json_request} ({e})")
 
         await self.authorize(request.token, request.job)
-        return self.exec_pod(request.job, request.command)
+        return self._executor.exec_in_job(request.job, request.command)
