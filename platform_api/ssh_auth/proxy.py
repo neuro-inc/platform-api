@@ -9,7 +9,9 @@ from neuro_auth_client.security import AuthPolicy
 
 from platform_api.orchestrator.job_request import JobError
 from platform_api.orchestrator.jobs_storage import JobsStorage
+
 from .executor import Executor
+
 
 log = logging.getLogger(__name__)
 
@@ -42,10 +44,9 @@ class IllegalArgumentError(ValueError):
 
 
 class ExecProxy:
-    def __init__(self,
-                 auth_client: AuthClient,
-                 jobs_storage: JobsStorage,
-                 executor: Executor) -> None:
+    def __init__(
+        self, auth_client: AuthClient, jobs_storage: JobsStorage, executor: Executor
+    ) -> None:
         self._auth_client = auth_client
         self._jobs_storage = jobs_storage
         self._exec_request_validator = create_exec_request_validator()
@@ -55,9 +56,7 @@ class ExecProxy:
         auth_policy = AuthPolicy(self._auth_client)
         user = await auth_policy.authorized_userid(token)
         if not user:
-            raise AuthenticationError(
-                f"Incorrect token: token={token}, job={job_id}"
-            )
+            raise AuthenticationError(f"Incorrect token: token={token}, job={job_id}")
 
         log.debug(f"user {user}")
         try:
@@ -68,9 +67,7 @@ class ExecProxy:
         log.debug(f"Checking permission: {permission}")
         result = await auth_policy.permits(token, None, [permission])
         if not result:
-            raise AuthorizationError(
-                f"Permission denied: user={user}, job={job_id}"
-            )
+            raise AuthorizationError(f"Permission denied: user={user}, job={job_id}")
 
     def parse(self, request: str) -> ExecRequest:
         dict_request = json.loads(request)

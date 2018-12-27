@@ -3,19 +3,21 @@ import logging
 import os
 import sys
 
+from neuro_auth_client import AuthClient
+
 from platform_api.config_factory import EnvironConfigFactory
 from platform_api.orchestrator import KubeOrchestrator
 from platform_api.orchestrator.jobs_storage import RedisJobsStorage
-from neuro_auth_client import AuthClient
 from platform_api.redis import create_redis_client
 
+from .executor import KubeCTLExecutor
 from .proxy import (
     AuthenticationError,
     AuthorizationError,
     ExecProxy,
     IllegalArgumentError,
 )
-from .executor import KubeCTLExecutor
+
 
 log = logging.getLogger(__name__)
 
@@ -30,22 +32,13 @@ async def run() -> int:
     log.info(f"TTY is {tty}")
     config = EnvironConfigFactory().create()
     async with AuthClient(
-            url=config.auth.server_endpoint_url,
-            token=config.auth.service_token,
+        url=config.auth.server_endpoint_url, token=config.auth.service_token
     ) as auth_client:
-        async with KubeOrchestrator(
-                config=config.orchestrator
-        ) as orchestrator:
-            async with create_redis_client(
-                    config.database.redis
-            ) as redis_client:
-                jobs_storage = RedisJobsStorage(
-                    redis_client, orchestrator=orchestrator
-                )
+        async with KubeOrchestrator(config=config.orchestrator) as orchestrator:
+            async with create_redis_client(config.database.redis) as redis_client:
+                jobs_storage = RedisJobsStorage(redis_client, orchestrator=orchestrator)
                 executor = KubeCTLExecutor(tty)
-                proxy = ExecProxy(auth_client,
-                                  jobs_storage,
-                                  executor)
+                proxy = ExecProxy(auth_client, jobs_storage, executor)
                 retcode = await proxy.process(json_request)
                 log.info(f"Done, retcode={retcode}")
                 return retcode
