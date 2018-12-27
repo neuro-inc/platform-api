@@ -18,7 +18,7 @@ class JobsService:
         self, orchestrator: Orchestrator, jobs_storage: Optional[JobsStorage] = None
     ) -> None:
         self._jobs_storage = jobs_storage or InMemoryJobsStorage(
-            orchestrator=orchestrator
+            orchestrator_config=orchestrator.config
         )
         self._orchestrator = orchestrator
 
