@@ -5,7 +5,7 @@ from typing import Dict, List
 
 import aioredis
 
-from .base import Orchestrator
+from .base import OrchestratorConfig
 from .job import Job
 from .job_request import JobError, JobStatus
 
@@ -34,8 +34,8 @@ class JobsStorage(ABC):
 
 
 class InMemoryJobsStorage(JobsStorage):
-    def __init__(self, orchestrator: Orchestrator) -> None:
-        self._orchestrator = orchestrator
+    def __init__(self, orchestrator_config: OrchestratorConfig) -> None:
+        self._orchestrator_config = orchestrator_config
 
         self._job_records: Dict[str, str] = {}
 
@@ -45,7 +45,7 @@ class InMemoryJobsStorage(JobsStorage):
 
     def _parse_job_payload(self, payload: str) -> Job:
         job_record = json.loads(payload)
-        return Job.from_primitive(self._orchestrator.config, job_record)
+        return Job.from_primitive(self._orchestrator_config, job_record)
 
     async def get_job(self, job_id: str) -> Job:
         payload = self._job_records.get(job_id)
@@ -61,9 +61,11 @@ class InMemoryJobsStorage(JobsStorage):
 
 
 class RedisJobsStorage(JobsStorage):
-    def __init__(self, client: aioredis.Redis, orchestrator: Orchestrator) -> None:
+    def __init__(
+        self, client: aioredis.Redis, orchestrator_config: OrchestratorConfig
+    ) -> None:
         self._client = client
-        self._orchestrator = orchestrator
+        self._orchestrator_config = orchestrator_config
 
     def _generate_job_key(self, job_id: str) -> str:
         return f"jobs:{job_id}"
@@ -92,7 +94,7 @@ class RedisJobsStorage(JobsStorage):
 
     def _parse_job_payload(self, payload: str) -> Job:
         job_record = json.loads(payload)
-        return Job.from_primitive(self._orchestrator.config, job_record)
+        return Job.from_primitive(self._orchestrator_config, job_record)
 
     async def get_job(self, job_id: str) -> Job:
         payload = await self._client.get(self._generate_job_key(job_id))
