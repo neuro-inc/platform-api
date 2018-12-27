@@ -136,7 +136,7 @@ class TestRedisJobsStorage:
     @pytest.mark.asyncio
     async def test_get_for_deletion_empty(self, redis_client, kube_orchestrator):
         storage = RedisJobsStorage(
-            redis_client, orchestrator_config=kube_orchestrator.config()
+            redis_client, orchestrator_config=kube_orchestrator.config
         )
 
         jobs = await storage.get_jobs_for_deletion()
