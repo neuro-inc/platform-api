@@ -1182,18 +1182,18 @@ class KubeClient:
 
     async def get_pod_events(
         self, pod_id: str, namespace: str
-    ) -> Optional[List[KubernetesEvent]]:
-        event_filter_params = {
-            "involvedObject.kind": "Pod",
-            "involvedObject.name": pod_id,
+    ) -> List[KubernetesEvent]:
+        params = {
+            "fieldSelector": (
+                "involvedObject.kind=Pod"
+                f",involvedObject.namespace={namespace}"
+                f",involvedObject.name={pod_id}"
+            )
         }
-        k8s_event_rest_url = f"{self._api_v1_url}/namespaces/{namespace}/events"
-        payload = await self._request(
-            method="GET", url=k8s_event_rest_url, params=event_filter_params
-        )
-        if payload and "items" in payload:
-            return [KubernetesEvent(item) for item in payload["items"]]
-        return None
+        url = f"{self._api_v1_url}/namespaces/{namespace}/events"
+        payload = await self._request(method="GET", url=url, params=params)
+        self._check_status_payload(payload)
+        return [KubernetesEvent(item) for item in payload.get("items", [])]
 
     async def exec_pod(
         self, pod_id: str, command: Union[str, Iterable[str]], *, tty: bool

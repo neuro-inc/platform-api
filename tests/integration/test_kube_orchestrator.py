@@ -827,11 +827,19 @@ class TestKubeClient:
 
         events = await kube_client.get_pod_events(pod.name, kube_config.namespace)
 
+        assert events
         for event in events:
             involved_object = event.involved_object
             assert involved_object["kind"] == "Pod"
             assert involved_object["namespace"] == kube_config.namespace
             assert involved_object["name"] == pod.name
+
+    @pytest.mark.asyncio
+    async def test_get_pod_events_empty(self, kube_config, kube_client):
+        pod_name = str(uuid.uuid4())
+        events = await kube_client.get_pod_events(pod_name, kube_config.namespace)
+
+        assert not events
 
 
 class TestLogReader:
