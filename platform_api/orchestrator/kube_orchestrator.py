@@ -4,6 +4,8 @@ from dataclasses import dataclass
 from pathlib import PurePath
 from typing import Dict, Iterable, List, Optional, Union
 
+from aioelasticsearch import Elasticsearch
+
 from ..config import OrchestratorConfig  # noqa
 from .base import LogReader, Orchestrator
 from .job import Job, JobStatusItem
@@ -28,7 +30,7 @@ from .kube_client import (
     Toleration,
     Volume,
 )
-from .logs import PodContainerLogReader
+from .logs import ElasticsearchLogReader, PodContainerLogReader
 
 
 logger = logging.getLogger(__name__)
@@ -142,7 +144,9 @@ def convert_pod_status_to_job_status(pod_status: PodStatus) -> JobStatusItem:
 
 
 class KubeOrchestrator(Orchestrator):
-    def __init__(self, *, config: KubeConfig) -> None:
+    def __init__(
+        self, *, config: KubeConfig, es_client: Optional[Elasticsearch] = None
+    ) -> None:
         self._loop = asyncio.get_event_loop()
 
         self._config = config
@@ -167,6 +171,8 @@ class KubeOrchestrator(Orchestrator):
 
         # TODO (A Danshyn 11/16/18): make this configurable at some point
         self._docker_secret_name_prefix = "neurouser-"
+
+        self._es_client = es_client
 
     @property
     def config(self) -> KubeConfig:
@@ -417,9 +423,25 @@ class KubeOrchestrator(Orchestrator):
             for event in pod_events
         )
 
+    async def _check_pod_exists(self, pod_name: str) -> bool:
+        try:
+            await self._client.get_pod_status(pod_name)
+            return True
+        except JobNotFoundException:
+            return False
+
     async def get_job_log_reader(self, job: Job) -> LogReader:
-        return PodContainerLogReader(
-            client=self._client, pod_name=job.id, container_name=job.id
+        assert self._es_client
+        pod_name = self._get_job_pod_name(job)
+        if await self._check_pod_exists(pod_name):
+            return PodContainerLogReader(
+                client=self._client, pod_name=pod_name, container_name=pod_name
+            )
+        return ElasticsearchLogReader(
+            es_client=self._es_client,
+            namespace_name=self._config.namespace,
+            pod_name=pod_name,
+            container_name=pod_name,
         )
 
     async def exec_pod(

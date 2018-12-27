@@ -93,8 +93,18 @@ class OrchestratorConfig:
 
 
 @dataclass(frozen=True)
+class ElasticsearchConfig:
+    hosts: Sequence[str]
+
+
+@dataclass(frozen=True)
 class DatabaseConfig:
     redis: Optional[RedisConfig] = None
+
+
+@dataclass(frozen=True)
+class LoggingConfig:
+    elasticsearch: ElasticsearchConfig
 
 
 @dataclass(frozen=True)
@@ -104,6 +114,7 @@ class Config:
     orchestrator: OrchestratorConfig
     database: DatabaseConfig
     auth: AuthConfig
+    logging: LoggingConfig
 
     registry: RegistryConfig = RegistryConfig()
 

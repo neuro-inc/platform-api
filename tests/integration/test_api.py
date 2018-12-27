@@ -1,4 +1,5 @@
 import asyncio
+import json
 import time
 from pathlib import PurePath
 from typing import NamedTuple
@@ -18,7 +19,13 @@ from aiohttp.web import (
 from neuro_auth_client import Permission
 
 from platform_api.api import create_app
-from platform_api.config import Config, DatabaseConfig, ServerConfig, StorageConfig
+from platform_api.config import (
+    Config,
+    DatabaseConfig,
+    LoggingConfig,
+    ServerConfig,
+    StorageConfig,
+)
 
 
 class ApiConfig(NamedTuple):
@@ -46,16 +53,18 @@ class ApiConfig(NamedTuple):
 
 
 @pytest.fixture
-def config(kube_config, redis_config, auth_config):
+def config(kube_config, redis_config, auth_config, es_config):
     server_config = ServerConfig()
     storage_config = StorageConfig(host_mount_path=PurePath("/tmp"))  # type: ignore
     database_config = DatabaseConfig(redis=redis_config)  # type: ignore
+    logging_config = LoggingConfig(elasticsearch=es_config)
     return Config(
         server=server_config,
         storage=storage_config,
         orchestrator=kube_config,
         database=database_config,
         auth=auth_config,
+        logging=logging_config,
     )
 
 
@@ -833,3 +842,106 @@ class TestJobs:
             }
 
         await kube_client.wait_pod_scheduled(job_id, kube_node_gpu)
+
+    @pytest.mark.asyncio
+    async def test_job_top(self, api, client, regular_user, jobs_client, model_train):
+
+        command = 'bash -c "for i in {1..5}; do echo $i; sleep 1; done"'
+        model_train["container"]["command"] = command
+        url = api.model_base_url
+        async with client.post(
+            url, headers=regular_user.headers, json=model_train
+        ) as response:
+            assert response.status == HTTPAccepted.status_code
+            result = await response.json()
+            assert result["status"] in ["pending"]
+            job_id = result["job_id"]
+
+        await jobs_client.long_polling_by_job_id(job_id=job_id, status="running")
+
+        job_top_url = api.jobs_base_url + f"/{job_id}/top"
+        num_request = 2
+        num_request_count = 0
+        records = []
+        async with client.ws_connect(job_top_url, headers=regular_user.headers) as ws:
+            # TODO move this ws communication to JobClient
+            while True:
+                msg = await ws.receive()
+                if msg.type == aiohttp.WSMsgType.CLOSE:
+                    break
+                else:
+                    records.append(json.loads(msg.data))
+                    num_request_count += 1
+
+                if num_request_count == num_request:
+                    # TODO (truskovskiyk 09/12/18) do not use protected prop
+                    # https://github.com/aio-libs/aiohttp/issues/3443
+                    proto = ws._writer.protocol
+                    proto.transport.close()
+                    break
+        for x in records:
+            del x["timestamp"]
+
+        assert len(records) == 2
+        assert all(["cpu" in x for x in records])
+        assert all(["mem" in x for x in records])
+        await jobs_client.delete_job(job_id=job_id)
+
+    @pytest.mark.asyncio
+    async def test_job_top_silently_wait_when_job_pending(
+        self, api, client, regular_user, jobs_client, model_train
+    ):
+        command = 'bash -c "for i in {1..10}; do echo $i; sleep 1; done"'
+        model_train["container"]["command"] = command
+        url = api.model_base_url
+        async with client.post(
+            url, headers=regular_user.headers, json=model_train
+        ) as response:
+            assert response.status == HTTPAccepted.status_code
+            result = await response.json()
+            assert result["status"] in ["pending"]
+            job_id = result["job_id"]
+
+        job_top_url = api.jobs_base_url + f"/{job_id}/top"
+        async with client.ws_connect(job_top_url, headers=regular_user.headers) as ws:
+            while True:
+                job = await jobs_client.get_job_by_id(job_id=job_id)
+                assert job["status"] == "pending"
+
+                # silently waiting for a job becomes running
+                msg = await ws.receive()
+                job = await jobs_client.get_job_by_id(job_id=job_id)
+                assert job["status"] == "running"
+                assert msg.type == aiohttp.WSMsgType.TEXT
+
+                break
+
+        await jobs_client.delete_job(job_id=job_id)
+
+    @pytest.mark.asyncio
+    async def test_job_top_close_when_job_succeeded(
+        self, api, client, regular_user, jobs_client, model_train
+    ):
+
+        command = 'bash -c "for i in {1..2}; do echo $i; sleep 1; done"'
+        model_train["container"]["command"] = command
+        url = api.model_base_url
+        async with client.post(
+            url, headers=regular_user.headers, json=model_train
+        ) as response:
+            assert response.status == HTTPAccepted.status_code
+            result = await response.json()
+            assert result["status"] in ["pending"]
+            job_id = result["job_id"]
+
+        await jobs_client.long_polling_by_job_id(job_id=job_id, status="succeeded")
+
+        job_top_url = api.jobs_base_url + f"/{job_id}/top"
+        async with client.ws_connect(job_top_url, headers=regular_user.headers) as ws:
+            msg = await ws.receive()
+            job = await jobs_client.get_job_by_id(job_id=job_id)
+
+            assert msg.type == aiohttp.WSMsgType.CLOSE
+            assert job["status"] == "succeeded"
+
+        await jobs_client.delete_job(job_id=job_id)

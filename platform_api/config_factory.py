@@ -8,6 +8,8 @@ from .config import (
     AuthConfig,
     Config,
     DatabaseConfig,
+    ElasticsearchConfig,
+    LoggingConfig,
     RegistryConfig,
     ServerConfig,
     SSHConfig,
@@ -43,6 +45,7 @@ class EnvironConfigFactory:
             orchestrator=self.create_orchestrator(storage, registry, auth),
             database=database,
             auth=auth,
+            logging=self.create_logging(),
             registry=registry,
             env_prefix=env_prefix,
         )
@@ -193,6 +196,14 @@ class EnvironConfigFactory:
         return RedisConfig(  # type: ignore
             uri=uri, conn_pool_size=conn_pool_size, conn_timeout_s=conn_timeout_s
         )
+
+    def create_logging(self) -> LoggingConfig:
+        es = self.create_elasticsearch()
+        return LoggingConfig(elasticsearch=es)
+
+    def create_elasticsearch(self) -> ElasticsearchConfig:
+        hosts = self._environ["NP_ES_HOSTS"].split(",")
+        return ElasticsearchConfig(hosts=hosts)
 
     def create_auth(self) -> AuthConfig:
         url = URL(self._environ["NP_AUTH_URL"])

@@ -7,6 +7,7 @@ from typing import Optional, Tuple
 
 import aiohttp
 import pytest
+from async_timeout import timeout
 from yarl import URL
 
 from platform_api.orchestrator import (
@@ -37,7 +38,7 @@ from platform_api.orchestrator.kube_orchestrator import (
     Service,
     StatusException,
 )
-from platform_api.orchestrator.logs import PodContainerLogReader
+from platform_api.orchestrator.logs import ElasticsearchLogReader, PodContainerLogReader
 
 
 class MyJob(Job):
@@ -810,7 +811,7 @@ class TestKubeClient:
             await kube_client.delete_network_policy(name)
 
 
-class TestPodContainerLogReader:
+class TestLogReader:
     async def _consume_log_reader(
         self, log_reader: LogReader, chunk_size: int = -1
     ) -> bytes:
@@ -940,6 +941,129 @@ class TestPodContainerLogReader:
         payload = await task
         expected_payload = "\n".join(str(i) for i in range(1, 6))
         assert payload.startswith(expected_payload.encode())
+
+    @pytest.mark.asyncio
+    async def test_elasticsearch_log_reader(
+        self, kube_config, kube_client, delete_pod_later, es_client
+    ):
+        command = 'bash -c "for i in {1..5}; do echo $i; sleep 1; done"'
+        expected_payload = ("\n".join(str(i) for i in range(1, 6)) + "\n").encode()
+        container = Container(
+            image="ubuntu",
+            command=command,
+            resources=ContainerResources(cpu=0.1, memory_mb=128),
+        )
+        job_request = JobRequest.create(container)
+        pod = PodDescriptor.from_job_request(
+            kube_config.create_storage_volume(), job_request
+        )
+        await delete_pod_later(pod)
+        await kube_client.create_pod(pod)
+        await kube_client.wait_pod_is_terminated(pod.name)
+
+        await self._check_kube_logs(
+            kube_client,
+            namespace_name=kube_config.namespace,
+            pod_name=pod.name,
+            container_name=pod.name,
+            expected_payload=expected_payload,
+        )
+
+        await self._check_es_logs(
+            es_client,
+            namespace_name=kube_config.namespace,
+            pod_name=pod.name,
+            container_name=pod.name,
+            expected_payload=expected_payload,
+        )
+
+    async def _check_kube_logs(
+        self, kube_client, namespace_name, pod_name, container_name, expected_payload
+    ):
+        log_reader = PodContainerLogReader(
+            client=kube_client, pod_name=pod_name, container_name=container_name
+        )
+        payload = await self._consume_log_reader(log_reader, chunk_size=1)
+        assert payload == expected_payload, "Pod logs did not match."
+
+    async def _check_es_logs(
+        self,
+        es_client,
+        namespace_name,
+        pod_name,
+        container_name,
+        expected_payload,
+        timeout_s=120.0,
+        interval_s=1.0,
+    ):
+        payload = b""
+        try:
+            async with timeout(timeout_s):
+                while True:
+                    log_reader = ElasticsearchLogReader(
+                        es_client,
+                        namespace_name=namespace_name,
+                        pod_name=pod_name,
+                        container_name=container_name,
+                    )
+                    payload = await self._consume_log_reader(log_reader, chunk_size=1)
+                    if payload == expected_payload:
+                        return
+                    await asyncio.sleep(interval_s)
+        except asyncio.TimeoutError:
+            pytest.fail(f"Pod logs did not match. Last payload: {payload}")
+
+    @pytest.mark.asyncio
+    async def test_elasticsearch_log_reader_empty(self, es_client):
+        namespace_name = pod_name = container_name = str(uuid.uuid4())
+        log_reader = ElasticsearchLogReader(
+            es_client,
+            namespace_name=namespace_name,
+            pod_name=pod_name,
+            container_name=container_name,
+        )
+        payload = await self._consume_log_reader(log_reader, chunk_size=1)
+        assert payload == b""
+
+    @pytest.mark.asyncio
+    async def test_get_job_log_reader(
+        self, kube_config, kube_orchestrator, kube_client, delete_job_later
+    ):
+        command = 'bash -c "for i in {1..5}; do echo $i; sleep 1; done"'
+        expected_payload = ("\n".join(str(i) for i in range(1, 6)) + "\n").encode()
+        container = Container(
+            image="ubuntu",
+            command=command,
+            resources=ContainerResources(cpu=0.1, memory_mb=128),
+        )
+        job = MyJob(
+            orchestrator=kube_orchestrator, job_request=JobRequest.create(container)
+        )
+        await delete_job_later(job)
+        await kube_orchestrator.start_job(job, token="test-token")
+        pod_name = job.id
+
+        await kube_client.wait_pod_is_terminated(pod_name)
+
+        log_reader = await kube_orchestrator.get_job_log_reader(job)
+        assert isinstance(log_reader, PodContainerLogReader)
+
+        await kube_client.delete_pod(pod_name)
+
+        timeout_s = 120.0
+        interval_s = 1.0
+        payload = b""
+        try:
+            async with timeout(timeout_s):
+                while True:
+                    log_reader = await kube_orchestrator.get_job_log_reader(job)
+                    assert isinstance(log_reader, ElasticsearchLogReader)
+                    payload = await self._consume_log_reader(log_reader, chunk_size=1)
+                    if payload == expected_payload:
+                        break
+                    await asyncio.sleep(interval_s)
+        except asyncio.TimeoutError:
+            pytest.fail(f"Pod logs did not match. Last payload: {payload}")
 
 
 class TestPodContainerDevShmSettings:

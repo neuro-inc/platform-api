@@ -23,6 +23,7 @@ pytest_plugins = [
     "tests.integration.docker",
     "tests.integration.redis",
     "tests.integration.auth",
+    "tests.integration.elasticsearch",
 ]
 
 
@@ -173,6 +174,19 @@ class TestKubeClient(KubeClient):
         except asyncio.TimeoutError:
             pytest.fail("Pod still exists")
 
+    async def wait_pod_is_terminated(
+        self, pod_name: str, timeout_s: float = 10.0 * 60, interval_s: float = 1.0
+    ) -> None:
+        try:
+            async with timeout(timeout_s):
+                while True:
+                    pod_status = await self.get_pod_status(pod_name)
+                    if pod_status.container_status.is_terminated:
+                        return
+                    await asyncio.sleep(interval_s)
+        except asyncio.TimeoutError:
+            pytest.fail("Pod has not terminated yet")
+
     async def create_node(
         self,
         name: str,
@@ -259,15 +273,15 @@ async def kube_config_nfs(
 
 
 @pytest.fixture
-async def kube_orchestrator(kube_config, event_loop):
-    orchestrator = KubeOrchestrator(config=kube_config)
+async def kube_orchestrator(kube_config, es_client, event_loop):
+    orchestrator = KubeOrchestrator(config=kube_config, es_client=es_client)
     async with orchestrator:
         yield orchestrator
 
 
 @pytest.fixture
-async def kube_orchestrator_nfs(kube_config_nfs, event_loop):
-    orchestrator = KubeOrchestrator(config=kube_config_nfs)
+async def kube_orchestrator_nfs(kube_config_nfs, es_client, event_loop):
+    orchestrator = KubeOrchestrator(config=kube_config_nfs, es_client=es_client)
     async with orchestrator:
         yield orchestrator
 

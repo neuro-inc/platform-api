@@ -2,15 +2,18 @@ import asyncio
 import logging
 
 import aiohttp.web
+from aioelasticsearch import Elasticsearch
 from async_exit_stack import AsyncExitStack
+from async_generator import asynccontextmanager
 from neuro_auth_client import AuthClient
 from neuro_auth_client.security import AuthScheme, setup_security
 
-from .config import Config
+from .config import Config, ElasticsearchConfig
 from .config_factory import EnvironConfigFactory
 from .handlers import JobsHandler, ModelsHandler
 from .orchestrator import JobException, JobsService, JobsStatusPooling, KubeOrchestrator
 from .orchestrator.jobs_storage import RedisJobsStorage
+from .orchestrator.jobs_telemetry import JobsTelemetry
 from .redis import create_redis_client
 
 
@@ -81,6 +84,13 @@ async def create_jobs_app(config: Config):
     return jobs_app
 
 
+@asynccontextmanager
+async def create_elasticsearch_client(config: ElasticsearchConfig) -> Elasticsearch:
+    async with Elasticsearch(hosts=config.hosts) as es_client:
+        await es_client.ping()
+        yield es_client
+
+
 async def create_app(config: Config) -> aiohttp.web.Application:
     app = aiohttp.web.Application(middlewares=[handle_exceptions])
     app["config"] = config
@@ -93,15 +103,24 @@ async def create_app(config: Config) -> aiohttp.web.Application:
                 create_redis_client(config.database.redis)
             )
 
+            logger.info("Initializing Elasticsearch client")
+            es_client = await exit_stack.enter_async_context(
+                create_elasticsearch_client(config.logging.elasticsearch)
+            )
+
             logger.info("Initializing Orchestrator")
-            orchestrator = KubeOrchestrator(config=config.orchestrator)
+            orchestrator = KubeOrchestrator(
+                config=config.orchestrator, es_client=es_client
+            )
             await exit_stack.enter_async_context(orchestrator)
 
             app["models_app"]["orchestrator"] = orchestrator
             app["jobs_app"]["orchestrator"] = orchestrator
 
             logger.info("Initializing JobsStorage")
-            jobs_storage = RedisJobsStorage(redis_client, orchestrator=orchestrator)
+            jobs_storage = RedisJobsStorage(
+                redis_client, orchestrator_config=config.orchestrator
+            )
 
             logger.info("Initializing JobsService")
             jobs_service = JobsService(
@@ -121,6 +140,10 @@ async def create_app(config: Config) -> aiohttp.web.Application:
                 )
             )
             app["jobs_app"]["auth_client"] = auth_client
+
+            logger.info("Initializing JobTelemetry")
+            jobs_telemetry = JobsTelemetry.create()
+            app["jobs_app"]["jobs_telemetry"] = jobs_telemetry
 
             await setup_security(
                 app=app, auth_client=auth_client, auth_scheme=AuthScheme.BEARER

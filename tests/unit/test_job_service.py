@@ -15,7 +15,7 @@ from platform_api.user import User
 class TestInMemoryJobsStorage:
     @pytest.mark.asyncio
     async def test_get_all_jobs_empty(self, mock_orchestrator):
-        jobs_storage = InMemoryJobsStorage(orchestrator=mock_orchestrator)
+        jobs_storage = InMemoryJobsStorage(orchestrator_config=mock_orchestrator.config)
         jobs = await jobs_storage.get_all_jobs()
         assert not jobs
 
@@ -65,7 +65,7 @@ class TestInMemoryJobsStorage:
     async def test_set_get_job(self, mock_orchestrator):
         config = dataclasses.replace(mock_orchestrator.config, job_deletion_delay_s=0)
         mock_orchestrator.config = config
-        jobs_storage = InMemoryJobsStorage(orchestrator=mock_orchestrator)
+        jobs_storage = InMemoryJobsStorage(orchestrator_config=mock_orchestrator.config)
 
         pending_job = Job(
             orchestrator_config=config, job_request=self._create_job_request()
