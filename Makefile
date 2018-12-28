@@ -78,7 +78,7 @@ gke_docker_push: build_api_k8s
 	docker push $(IMAGE_K8S)
 
 gke_k8s_deploy_dev: _helm
-	gcloud --quiet container clusters get-credentials $(GKE_CLUSTER_NAME)
+	gcloud --quiet container clusters get-credentials $(GKE_CLUSTER_NAME) --region $(GKE_CLUSTER_REGION)
 	helm --set "global.env=dev" --set "IMAGE.dev=$(IMAGE_K8S):$(CIRCLE_SHA1)" upgrade --install platformapi deploy/platformapi/ --wait --timeout 600
 
 gke_k8s_deploy_staging: _helm
@@ -86,6 +86,6 @@ gke_k8s_deploy_staging: _helm
 	helm --set "global.env=staging" --set "IMAGE.staging=$(IMAGE_K8S):$(CIRCLE_SHA1)" upgrade --install platformapi deploy/platformapi/ --wait --timeout 600
 
 gke_k8s_deploy_ssh_dev: _helm
-	gcloud --quiet container clusters get-credentials $(GKE_CLUSTER_NAME)
+	gcloud --quiet container clusters get-credentials $(GKE_CLUSTER_NAME) --region $(GKE_CLUSTER_REGION)
 	helm --set "global.env=dev" --set "IMAGE.dev=$(IMAGE_K8S):$(CIRCLE_SHA1)" upgrade --install ssh deploy/ssh/ --wait --timeout 600
 
