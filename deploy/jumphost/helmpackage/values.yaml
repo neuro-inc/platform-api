@@ -5,5 +5,5 @@ IMAGE:
 
 VOLUME:
   _default: jumphost-dev
-  dev: jumphost-dev
+  dev: jumphost-dev2
   staging: jumphost-stage

@@ -1,3 +1,32 @@
+{{- if eq .Values.global.env "dev" }}
+---
+apiVersion: v1
+kind: PersistentVolume
+metadata:
+  name: dev2-volume
+  labels:
+    failure-domain.beta.kubernetes.io/zone: us-central1-a__us-central1-c
+spec:
+  capacity:
+    storage: 10Gi
+  accessModes:
+  - ReadWriteOnce
+  gcePersistentDisk:
+    pdName: {{ printf "%s" (pluck .Values.global.env .Values.VOLUME | first | default .Values.VOLUME._default) }}
+    fsType: ext4
+---
+kind: PersistentVolumeClaim
+apiVersion: v1
+metadata:
+  name: dev2-volume-pvc
+spec:
+  accessModes:
+    - ReadWriteOnce
+  resources:
+    requests:
+      storage: 10Gi
+{{- end }}
+---
 apiVersion: extensions/v1beta1
 kind: Deployment
 metadata:
@@ -15,10 +44,15 @@ spec:
         service: jumphost
     spec:
       volumes:
-      - name: home
+      - name: dev2-volume
+        {{- if eq .Values.global.env "dev" }}
+        persistentVolumeClaim:
+          claimName: dev2-volume-pvc
+        {{ else }}
         gcePersistentDisk:
           pdName: {{ printf "%s" (pluck .Values.global.env .Values.VOLUME | first | default .Values.VOLUME._default) }}
           fsType: ext4
+          {{- end }}
       containers:
       - name: jumphost
         image: {{ printf "%s" (pluck .Values.global.env .Values.IMAGE | first | default .Values.IMAGE._default) }}
@@ -26,7 +60,7 @@ spec:
         ports:
           - containerPort: 22
         volumeMounts:
-        - name: home
+        - name: dev2-volume
           mountPath: /home
         env:
         - name: NP_JUMP_HOST_ROOT_TOKEN
