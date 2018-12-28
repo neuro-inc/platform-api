@@ -89,12 +89,12 @@ class _User:
 
 @pytest.fixture
 async def regular_user_factory(auth_client, token_factory):
-    async def _factory(name: Optional[str] = None) -> User:
+    async def _factory(name=None):
         if not name:
             name = str(uuid.uuid4())
         user = User(name=name)
         await auth_client.add_user(user)
-        return _User(name=user.name, token=token_factory(user.name))  # type: ignore
+        return _User(name=user.name, token=token_factory(user.name))
 
     return _factory
 
