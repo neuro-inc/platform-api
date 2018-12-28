@@ -44,7 +44,7 @@ spec:
         service: jumphost
     spec:
       volumes:
-      - name: dev2-volume
+      - name: home
         {{- if eq .Values.global.env "dev" }}
         persistentVolumeClaim:
           claimName: dev2-volume-pvc
@@ -60,7 +60,7 @@ spec:
         ports:
           - containerPort: 22
         volumeMounts:
-        - name: dev2-volume
+        - name: home
           mountPath: /home
         env:
         - name: NP_JUMP_HOST_ROOT_TOKEN
