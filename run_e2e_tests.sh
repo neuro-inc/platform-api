@@ -15,15 +15,27 @@ docker tag $(cat AUTH_SERVER_IMAGE_NAME) platformauthapi:latest
 kubectl create -f deploy/platformapi/templates/rb.default.gke.yml
 kubectl create -f tests/k8s/platformapi.yml
 
+wait for uptime
+
+
+check_service() { # attempt, max_attempt, service
+    local attempt=$1
+    local max_attempts=$2
+    local service=$3
+    until minikube service platformapi --url; do
+	if [ $attempt == $max_attempts ]; then
+            exit 1
+	fi
+	sleep 1
+	((attempt++))
+    done    
+}
+
 attempt=1
 max_attempts=30
-until minikube service platformapi --url; do
-    if [ $attempt == $max_attempts ]; then
-        exit 1
-    fi
-    sleep 1
-    ((attempt++))
-done
+
+check_service attempt max_attempts platformapi
+check_service attempt max_attempts platformauthapi
 
 # wait till everything is up to prevent flakes
 sleep 10
