@@ -3,12 +3,12 @@ IMAGE:
   dev: gcr.io/light-reality-205619/platformapi-k8s:latest
   staging: gcr.io/light-reality-205619/platformapi-k8s:latest
 NP_STORAGE_NFS_SERVER:
-  _default: '172.27.83.58'
-  dev: '172.27.83.58'
+  _default: '10.76.126.154'
+  dev: '10.76.126.154'
   staging: '10.69.59.50'
 NP_STORAGE_NFS_PATH:
-  _default: '/staging_premium'
-  dev: '/staging_premium'
+  _default: '/dev2premium'
+  dev: '/dev2premium'
   staging: '/devpremium'
 NP_K8S_JOBS_INGRESS_DOMAIN_NAME:
   _default: jobs.platform.dev.neuromation.io
@@ -23,8 +23,8 @@ INGRESS_HOST:
   dev: platform.dev.neuromation.io
   staging: platform.staging.neuromation.io
 NP_DB_REDIS_URI:
-  _default: redis://10.0.0.3:6379/0
-  dev: redis://10.0.0.3:6379/0
+  _default: redis://10.0.0.11:6379/0
+  dev: redis://10.0.0.11:6379/0
   staging: redis://10.0.0.3:6379/1
 NP_REGISTRY_HOST:
   _default: registry.dev.neuromation.io
