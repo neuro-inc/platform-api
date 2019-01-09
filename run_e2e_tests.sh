@@ -12,18 +12,18 @@ docker tag $(cat AUTH_SERVER_IMAGE_NAME) platformauthapi:latest
 # kubectl delete -f deploy/platformapi/templates/rb.default.gke.yml
 # kubectl delete -f tests/k8s/platformapi.yml
 
-kubectl create -f deploy/platformapi/templates/rb.default.gke.yml
-kubectl create -f tests/k8s/platformapi.yml
+# kubectl create -f deploy/platformapi/templates/rb.default.gke.yml
+# kubectl create -f tests/k8s/platformapi.yml
 
-wait for uptime
-
+# wait for containers to start
 
 check_service() { # attempt, max_attempt, service
-    local attempt=$1
-    local max_attempts=$2
-    local service=$3
+    local attempt=1
+    local max_attempts=$1
+    local service=$2
     until minikube service platformapi --url; do
 	if [ $attempt == $max_attempts ]; then
+	    echo "Can't connect to the container"
             exit 1
 	fi
 	sleep 1
@@ -31,13 +31,12 @@ check_service() { # attempt, max_attempt, service
     done    
 }
 
-attempt=1
 max_attempts=30
 
-check_service attempt max_attempts platformapi
-check_service attempt max_attempts platformauthapi
+check_service $max_attempts platformapi
+check_service $max_attempts platformauthapi
 
-# wait till everything is up to prevent flakes
+# wait till our services are up to prevent flakes
 sleep 10
 
 export PLATFORM_API_URL=$(minikube service platformapi --url)/api/v1
