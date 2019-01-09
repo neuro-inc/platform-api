@@ -2,9 +2,6 @@
 set -o verbose
 docker tag $(cat AUTH_SERVER_IMAGE_NAME) platformauthapi:latest
 
-# NOTE (A Danshyn 10/04/18): in order to run this test locally using a VM-based
-# minikube, one needs to uncomment these lines first
-
 if [ ! "$CI" = true ]; then
     echo "Setting up external services"
     docker save -o /tmp/platformauthapi.image platformauthapi:latest
