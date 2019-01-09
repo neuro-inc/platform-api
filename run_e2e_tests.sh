@@ -12,8 +12,8 @@ docker tag $(cat AUTH_SERVER_IMAGE_NAME) platformauthapi:latest
 # kubectl delete -f deploy/platformapi/templates/rb.default.gke.yml
 # kubectl delete -f tests/k8s/platformapi.yml
 
-# kubectl create -f deploy/platformapi/templates/rb.default.gke.yml
-# kubectl create -f tests/k8s/platformapi.yml
+kubectl create -f deploy/platformapi/templates/rb.default.gke.yml
+kubectl create -f tests/k8s/platformapi.yml
 
 # wait for containers to start
 
