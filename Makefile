@@ -83,7 +83,11 @@ _helm:
 gke_docker_push: build_api_k8s build_ssh_auth_k8s
 	docker tag $(IMAGE_NAME_K8S):$(IMAGE_TAG) $(IMAGE_K8S):latest
 	docker tag $(IMAGE_NAME_K8S):$(IMAGE_TAG) $(IMAGE_K8S):$(CIRCLE_SHA1)
+	docker tag $(SSH_IMAGE_NAME):$(SSH_IMAGE_TAG) $(SSH_K8S):latest
+	docker tag $(SSH_IMAGE_NAME):$(SSH_IMAGE_TAG) $(SSH_K8S):$(CIRCLE_SHA1)
+
 	docker push $(IMAGE_K8S)
+	docker push $(SSH_K8S)
 
 gke_k8s_deploy_dev: _helm
 	gcloud --quiet container clusters get-credentials $(GKE_CLUSTER_NAME) --region $(GKE_CLUSTER_REGION)
