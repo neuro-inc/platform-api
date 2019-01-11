@@ -29,6 +29,12 @@ class PlatformConfig:
         return self.endpoint_url + "/models"
 
 
+@dataclass
+class SSHAuthConfig:
+    ip: str
+    port: int
+
+
 @pytest.fixture(scope="session")
 def api_endpoint_url():
     return os.environ["PLATFORM_API_URL"]
@@ -37,6 +43,12 @@ def api_endpoint_url():
 @pytest.fixture(scope="session")
 def api_config(api_endpoint_url):
     return PlatformConfig(api_endpoint_url)
+
+
+@pytest.fixture(scope="session")
+def ssh_auth_config():
+    url = URL(os.environ["SSH_AUTH_URL"])
+    return SSHAuthConfig(url.host, url.port)
 
 
 @pytest.fixture(scope="session")

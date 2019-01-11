@@ -34,5 +34,5 @@ test_k8s_platform_api:
 	coverage combine
 	codecov
 
-test_k8s_platform_api_e2e: build_api_k8s
+test_k8s_platform_api_e2e: build_api_k8s build_ssh_auth_k8s
 	./run_e2e_tests.sh

@@ -35,7 +35,9 @@ async def run() -> int:
         url=config.auth.server_endpoint_url, token=config.auth.service_token
     ) as auth_client:
         async with create_redis_client(config.database.redis) as redis_client:
-            jobs_storage = RedisJobsStorage(redis_client, orchestrator_config=config.orchestrator)
+            jobs_storage = RedisJobsStorage(
+                redis_client, orchestrator_config=config.orchestrator
+            )
             executor = KubeCTLExecutor(tty)
             proxy = ExecProxy(auth_client, jobs_storage, executor)
             retcode = await proxy.process(json_request)
