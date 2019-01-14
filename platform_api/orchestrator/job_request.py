@@ -143,11 +143,8 @@ class Container:
         prefix = f"{registry_config.host}/"
         repo = self.image.replace(prefix, "", 1)
         uri = URL(f"image://{repo}")
-        path_colon_index = uri.path.find(":")
-        if path_colon_index >= 0:
-            path = uri.path[:path_colon_index]
-            return uri.with_path(path)
-        return uri
+        path, *_ = uri.path.split(":", 1)
+        return uri.with_path(path)
 
     @property
     def port(self) -> Optional[int]:
