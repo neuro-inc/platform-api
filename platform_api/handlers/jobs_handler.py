@@ -337,7 +337,6 @@ class JobsHandler:
 
         telemetry = await self._jobs_service.get_job_telemetry(job.id)
 
-        # waiting for the job to start
         async with telemetry:
 
             try:

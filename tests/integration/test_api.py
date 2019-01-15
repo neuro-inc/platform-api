@@ -861,7 +861,6 @@ class TestJobs:
 
         job_top_url = api.jobs_base_url + f"/{job_id}/top"
         num_request = 2
-        num_request_count = 0
         records = []
         async with client.ws_connect(job_top_url, headers=regular_user.headers) as ws:
             # TODO move this ws communication to JobClient
@@ -871,20 +870,21 @@ class TestJobs:
                     break
                 else:
                     records.append(json.loads(msg.data))
-                    num_request_count += 1
 
-                if num_request_count == num_request:
+                if len(records) == num_request:
                     # TODO (truskovskiyk 09/12/18) do not use protected prop
                     # https://github.com/aio-libs/aiohttp/issues/3443
                     proto = ws._writer.protocol
                     proto.transport.close()
                     break
-        for x in records:
-            del x["timestamp"]
 
-        assert len(records) == 2
-        assert all(["cpu" in x for x in records])
-        assert all(["mem" in x for x in records])
+        assert records
+        for message in records:
+            assert message == {
+                "cpu": mock.ANY,
+                "memory": mock.ANY,
+                "timestamp": mock.ANY,
+            }
         await jobs_client.delete_job(job_id=job_id)
 
     @pytest.mark.asyncio
