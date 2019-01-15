@@ -9,7 +9,7 @@ log = logging.getLogger(__name__)
 
 class Executor(ABC):
     @abstractmethod
-    def exec_in_job(job: str, command: List[str], tty: bool) -> int:
+    def exec_in_job(self, job: str, command: List[str]) -> int:
         pass
 
 
