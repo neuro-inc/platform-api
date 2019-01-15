@@ -494,6 +494,8 @@ class PodDescriptor:
     # TODO (A Danshyn 12/09/2018): expose readiness probe properly
     readiness_probe: bool = False
 
+    node_name: Optional[str] = None
+
     @classmethod
     def from_job_request(
         cls,
@@ -661,6 +663,7 @@ class PodDescriptor:
             image=container_payload["image"],
             status=status,
             image_pull_secrets=secrets,
+            node_name=payload["spec"].get("nodeName"),
         )
 
 
