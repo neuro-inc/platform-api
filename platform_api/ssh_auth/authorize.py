@@ -6,7 +6,6 @@ import sys
 from neuro_auth_client import AuthClient
 
 from platform_api.config_factory import EnvironConfigFactory
-from platform_api.orchestrator import KubeOrchestrator
 from platform_api.orchestrator.jobs_storage import RedisJobsStorage
 from platform_api.redis import create_redis_client
 

@@ -41,6 +41,8 @@ async def alice_job(api_config, alice):
 def test_simple_command(ssh_auth_config, api_config, alice, alice_job):
     command = [
         "ssh",
+        "-o",
+        "StrictHostKeyChecking=no",
         "-p",
         str(ssh_auth_config.port),
         f"nobody@{ssh_auth_config.ip}",
@@ -53,6 +55,8 @@ def test_simple_command(ssh_auth_config, api_config, alice, alice_job):
 def test_wrong_user(ssh_auth_config, api_config, bob, alice_job):
     command = [
         "ssh",
+        "-o",
+        "StrictHostKeyChecking=no",
         "-p",
         str(ssh_auth_config.port),
         f"nobody@{ssh_auth_config.ip}",
@@ -65,6 +69,8 @@ def test_wrong_user(ssh_auth_config, api_config, bob, alice_job):
 def test_incorrect_token(ssh_auth_config, api_config, bob, alice_job):
     command = [
         "ssh",
+        "-o",
+        "StrictHostKeyChecking=no",
         "-p",
         str(ssh_auth_config.port),
         f"nobody@{ssh_auth_config.ip}",
@@ -83,6 +89,8 @@ def test_no_payload(ssh_auth_config, api_config, bob, alice_job):
 def test_incorrect_payload(ssh_auth_config, api_config, bob, alice_job):
     command = [
         "ssh",
+        "-o",
+        "StrictHostKeyChecking=no",
         "-p",
         str(ssh_auth_config.port),
         f"nobody@{ssh_auth_config.ip}",
@@ -95,6 +103,8 @@ def test_incorrect_payload(ssh_auth_config, api_config, bob, alice_job):
 def test_nonzero_error_code(ssh_auth_config, api_config, alice, alice_job):
     command = [
         "ssh",
+        "-o",
+        "StrictHostKeyChecking=no",
         "-p",
         str(ssh_auth_config.port),
         f"nobody@{ssh_auth_config.ip}",
@@ -107,6 +117,8 @@ def test_nonzero_error_code(ssh_auth_config, api_config, alice, alice_job):
 def test_pass_stdin(ssh_auth_config, api_config, alice, alice_job):
     command = [
         "ssh",
+        "-o",
+        "StrictHostKeyChecking=no",
         "-p",
         str(ssh_auth_config.port),
         f"nobody@{ssh_auth_config.ip}",
