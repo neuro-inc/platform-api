@@ -1345,7 +1345,8 @@ class KubeClient:
         https://github.com/kubernetes/kubernetes/blob/master/pkg/kubelet/apis/stats/v1alpha1/types.go
         """
         pod = await self.get_pod(pod_name)
-        assert pod.node_name
+        if not pod.node_name:
+            return None
         url = self._generate_node_stats_summary_url(pod.node_name)
         payload = await self._request(method="GET", url=url)
         summary = StatsSummary(payload)

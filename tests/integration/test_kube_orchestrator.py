@@ -876,9 +876,7 @@ class TestKubeClient:
         assert pod_metrics[0].memory > 0.0
 
     @pytest.mark.asyncio
-    async def test_get_pod_container_stats_no_pod(
-        self, kube_config, kube_client
-    ):
+    async def test_get_pod_container_stats_no_pod(self, kube_config, kube_client):
         pod_name = str(uuid.uuid4())
         with pytest.raises(JobNotFoundException):
             await kube_client.get_pod_container_stats(pod_name, pod_name)
