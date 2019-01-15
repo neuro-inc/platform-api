@@ -82,4 +82,4 @@ class ExecProxy:
             raise IllegalArgumentError(f"Illegal Payload: {json_request} ({e})")
 
         await self.authorize(request.token, request.job)
-        return self._executor.exec_in_job(request.job, request.command)
+        return await self._executor.exec_in_job(request.job, request.command)
