@@ -875,6 +875,33 @@ class TestKubeClient:
         assert pod_metrics[0].cpu >= 0.0
         assert pod_metrics[0].memory > 0.0
 
+    @pytest.mark.asyncio
+    async def test_get_pod_container_stats_no_pod(
+        self, kube_config, kube_client
+    ):
+        pod_name = str(uuid.uuid4())
+        with pytest.raises(JobNotFoundException):
+            await kube_client.get_pod_container_stats(pod_name, pod_name)
+
+    @pytest.mark.asyncio
+    async def test_get_pod_container_stats_not_scheduled_yet(
+        self, kube_config, kube_client, delete_pod_later
+    ):
+        container = Container(
+            image="ubuntu",
+            command="true",
+            resources=ContainerResources(cpu=100, memory_mb=128),
+        )
+        job_request = JobRequest.create(container)
+        pod = PodDescriptor.from_job_request(
+            kube_config.create_storage_volume(), job_request
+        )
+        await delete_pod_later(pod)
+        await kube_client.create_pod(pod)
+
+        stats = await kube_client.get_pod_container_stats(pod.name, pod.name)
+        assert stats is None
+
 
 class TestLogReader:
     async def _consume_log_reader(
