@@ -4,6 +4,7 @@ import time
 import uuid
 from pathlib import PurePath
 from typing import Optional, Tuple
+from unittest import mock
 
 import aiohttp
 import pytest
@@ -33,6 +34,7 @@ from platform_api.orchestrator.kube_orchestrator import (
     IngressRule,
     JobStatusItemFactory,
     KubeClientException,
+    PodContainerStats,
     PodDescriptor,
     SecretRef,
     Service,
@@ -840,6 +842,38 @@ class TestKubeClient:
         events = await kube_client.get_pod_events(pod_name, kube_config.namespace)
 
         assert not events
+
+    @pytest.mark.asyncio
+    async def test_get_pod_container_stats(
+        self, kube_config, kube_client, delete_pod_later
+    ):
+        command = 'bash -c "for i in {1..5}; do echo $i; sleep 1; done"'
+        container = Container(
+            image="ubuntu",
+            command=command,
+            resources=ContainerResources(cpu=0.1, memory_mb=128),
+        )
+        job_request = JobRequest.create(container)
+        pod = PodDescriptor.from_job_request(
+            kube_config.create_storage_volume(), job_request
+        )
+        await delete_pod_later(pod)
+        await kube_client.create_pod(pod)
+        await kube_client.wait_pod_is_running(pod_name=pod.name, timeout_s=60.0)
+
+        pod_metrics = []
+        while True:
+            stats = await kube_client.get_pod_container_stats(pod.name, pod.name)
+            if stats:
+                pod_metrics.append(stats)
+            else:
+                break
+            await asyncio.sleep(1)
+
+        assert pod_metrics
+        assert pod_metrics[0] == PodContainerStats(cpu=mock.ANY, memory=mock.ANY)
+        assert pod_metrics[0].cpu >= 0.0
+        assert pod_metrics[0].memory > 0.0
 
 
 class TestLogReader:
