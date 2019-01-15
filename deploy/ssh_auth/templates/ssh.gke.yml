@@ -20,7 +20,7 @@ spec:
       containers:
       - name: ssh-auth
         # TODO: do this right way
-        image: gcr.io/light-reality-205619/ssh-auth:latest
+        image: {{ printf "%s" (pluck .Values.global.env .Values.IMAGE | first | default .Values.IMAGE._default) }}
         imagePullPolicy: Always
         env:
         - name: NP_K8S_API_URL
@@ -32,7 +32,7 @@ spec:
         - name: NP_K8S_TOKEN_PATH
           value: /var/run/secrets/kubernetes.io/serviceaccount/token
         - name: NP_DB_REDIS_URI
-          value: redis://10.0.0.3:6379/0
+          value: "{{ printf "%s" (pluck .Values.global.env .Values.NP_DB_REDIS_URI | first | default .Values.NP_DB_REDIS_URI._default) }}"
         - name: NP_AUTH_URL
           value: http://platformauthapi:8080
         - name: NP_AUTH_TOKEN
@@ -40,9 +40,6 @@ spec:
             secretKeyRef:
               name: platformservices-secret
               key: compute_token
-      - name: kubeproxy
-        image: lachlanevenson/k8s-kubectl:v1.10.3
-        args: [proxy]
 ---
 apiVersion: v1
 kind: Service
