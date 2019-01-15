@@ -37,6 +37,8 @@ class SSHAuthConfig:
 
 @pytest.fixture(scope="session")
 def api_endpoint_url():
+    if "PLATFORM_API_URL" not in os.environ:
+        pytest.fail("Environment variable PLATFORM_API_URL is not set")
     return os.environ["PLATFORM_API_URL"]
 
 
@@ -47,6 +49,8 @@ def api_config(api_endpoint_url):
 
 @pytest.fixture(scope="session")
 def ssh_auth_config():
+    if "SSH_AUTH_URL" not in os.environ:
+        pytest.fail("Environment variable SSH_AUTH_URL is not set")
     url = URL(os.environ["SSH_AUTH_URL"])
     return SSHAuthConfig(url.host, url.port)
 
@@ -70,6 +74,8 @@ def api(api_config):
 
 @pytest.fixture(scope="session")
 def platform_auth_url():
+    if "AUTH_API_URL" not in os.environ:
+        pytest.fail("Environment variable AUTH_API_URL is not set")
     return URL(os.environ["AUTH_API_URL"])
 
 
