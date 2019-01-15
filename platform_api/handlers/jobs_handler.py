@@ -12,9 +12,8 @@ from yarl import URL
 
 from platform_api.config import Config, RegistryConfig, StorageConfig
 from platform_api.orchestrator import JobsService, Orchestrator
-from platform_api.orchestrator.job import Job
+from platform_api.orchestrator.job import Job, JobStats
 from platform_api.orchestrator.job_request import Container, ContainerVolume, JobRequest
-from platform_api.orchestrator.jobs_telemetry import JobsTelemetry
 from platform_api.resource import GPUModel
 from platform_api.user import User, untrusted_user
 
@@ -180,10 +179,6 @@ class JobsHandler:
         )
 
     @property
-    def _jobs_telemetry(self) -> JobsTelemetry:
-        return self._app["jobs_telemetry"]
-
-    @property
     def _jobs_service(self) -> JobsService:
         return self._app["jobs_service"]
 
@@ -340,28 +335,47 @@ class JobsHandler:
         # TODO expose configuration
         sleep_timeout = 1
 
-        logger.info("Websocket connection ready")
-        try:
-            while True:
-                # client close connection
-                if request.transport.is_closing():
-                    break
+        telemetry = await self._jobs_service.get_job_telemetry(job.id)
 
-                job = await self._jobs_service.get_job(job_id)
+        # waiting for the job to start
+        async with telemetry:
 
-                if job.is_running:
-                    job_top = await self._jobs_telemetry.get_job_top(job_id=job_id)
-                    await ws.send_json(job_top.to_primitive())
+            try:
+                while True:
+                    # client close connection
+                    if request.transport.is_closing():
+                        break
 
-                if job.is_finished:
-                    await ws.close()
-                    break
+                    job = await self._jobs_service.get_job(job_id)
 
-                await asyncio.sleep(sleep_timeout)
+                    if job.is_running:
+                        job_stats = await telemetry.get_latest_stats()
+                        if job_stats:
+                            message = self._convert_job_stats_to_ws_message(job_stats)
+                            await ws.send_json(message)
 
-        except asyncio.CancelledError as ex:
-            logger.info(f"got cancelled error {ex}")
+                    if job.is_finished:
+                        await ws.close()
+                        break
+
+                    await asyncio.sleep(sleep_timeout)
+
+            except asyncio.CancelledError as ex:
+                logger.info(f"got cancelled error {ex}")
+
         return ws
+
+    def _convert_job_stats_to_ws_message(self, job_stats: JobStats) -> Dict[str, Any]:
+        message = {
+            "cpu": job_stats.cpu,
+            "memory": job_stats.memory,
+            "timestamp": job_stats.timestamp,
+        }
+        if job_stats.gpu_duty_cycle is not None:
+            message["gpu_duty_cycle"] = job_stats.gpu_duty_cycle
+        if job_stats.gpu_memory is not None:
+            message["gpu_memory"] = job_stats.gpu_memory
+        return message
 
 
 def filter_jobs_with_access_tree(

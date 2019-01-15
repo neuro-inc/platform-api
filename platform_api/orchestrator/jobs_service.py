@@ -3,7 +3,7 @@ from typing import List, Optional, Tuple
 
 from platform_api.user import User
 
-from .base import LogReader, Orchestrator
+from .base import LogReader, Orchestrator, Telemetry
 from .job import Job, JobStatusItem
 from .job_request import JobException, JobNotFoundException, JobRequest, JobStatus
 from .jobs_storage import InMemoryJobsStorage, JobsStorage
@@ -88,6 +88,10 @@ class JobsService:
     async def get_job_log_reader(self, job_id: str) -> LogReader:
         job = await self.get_job(job_id)
         return await self._orchestrator.get_job_log_reader(job)
+
+    async def get_job_telemetry(self, job_id: str) -> Telemetry:
+        job = await self.get_job(job_id)
+        return await self._orchestrator.get_job_telemetry(job)
 
     async def _delete_job(self, job: Job) -> None:
         logger.info("Deleting job %s", job.id)

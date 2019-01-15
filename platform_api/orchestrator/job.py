@@ -1,4 +1,5 @@
 import logging
+import time
 from dataclasses import dataclass, field
 from datetime import datetime, timezone
 from functools import partial
@@ -389,3 +390,14 @@ class Job:
                     transition_time = iso8601.parse_date(finished_at)
             items = [JobStatusItem.create(status, transition_time=transition_time)]
         return JobStatusHistory(items)
+
+
+@dataclass(frozen=True)
+class JobStats:
+    cpu: float
+    memory: float
+
+    gpu_duty_cycle: Optional[int] = None
+    gpu_memory: Optional[float] = None
+
+    timestamp: float = field(default_factory=time.time)

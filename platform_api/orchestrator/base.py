@@ -1,10 +1,10 @@
 from abc import ABC, abstractmethod
-from typing import Sequence
+from typing import Optional, Sequence
 
 from platform_api.resource import GPUModel, ResourcePoolType
 
 from ..config import OrchestratorConfig  # noqa
-from .job import Job, JobStatusItem
+from .job import Job, JobStats, JobStatusItem
 from .job_request import JobStatus
 
 
@@ -17,6 +17,18 @@ class LogReader(ABC):
 
     @abstractmethod
     async def read(self, size: int = -1) -> bytes:
+        pass
+
+
+class Telemetry(ABC):
+    async def __aenter__(self) -> "Telemetry":
+        return self
+
+    async def __aexit__(self, *args) -> None:
+        pass
+
+    @abstractmethod
+    async def get_latest_stats(self) -> Optional[JobStats]:
         pass
 
 
@@ -36,6 +48,10 @@ class Orchestrator(ABC):
 
     @abstractmethod
     async def get_job_log_reader(self, job: Job) -> LogReader:
+        pass
+
+    @abstractmethod
+    async def get_job_telemetry(self, job: Job) -> Telemetry:
         pass
 
     @abstractmethod

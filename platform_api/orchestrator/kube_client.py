@@ -1360,7 +1360,7 @@ class PodContainerStats:
     cpu: float
     memory: float
     # TODO (A Danshyn): group into a single attribute
-    gpu_duty_cycle: Optional[float] = None
+    gpu_duty_cycle: Optional[int] = None
     gpu_memory: Optional[float] = None
 
     @classmethod

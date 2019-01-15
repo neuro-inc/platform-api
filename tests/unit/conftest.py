@@ -14,6 +14,7 @@ from platform_api.orchestrator import (
     KubeConfig,
     LogReader,
     Orchestrator,
+    Telemetry,
 )
 from platform_api.orchestrator.job import JobStatusItem
 from platform_api.orchestrator.job_request import Container, ContainerResources
@@ -54,6 +55,9 @@ class MockOrchestrator(Orchestrator):
         self._mock_status_to_return = new_status
 
     async def get_job_log_reader(self, job: Job) -> LogReader:
+        pass
+
+    async def get_job_telemetry(self, job: Job) -> Telemetry:
         pass
 
 

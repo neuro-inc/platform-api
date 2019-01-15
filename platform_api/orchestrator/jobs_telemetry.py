@@ -1,41 +1,37 @@
 import time
 from abc import ABC, abstractmethod
-from dataclasses import asdict, dataclass, field
-from typing import Any, Dict
+from dataclasses import dataclass, field
+from typing import Optional
+
+from .base import Telemetry
+from .job import JobStats
+from .kube_client import KubeClient
 
 
-@dataclass(frozen=True)
-class JobTop:
-    cpu: float
-    mem: float
-    timestamp: float = field(default_factory=time.time)
+class KubeTelemetry(Telemetry):
+    def __init__(
+        self,
+        kube_client: KubeClient,
+        namespace_name: str,
+        pod_name: str,
+        container_name: str,
+    ) -> None:
+        self._kube_client = kube_client
 
-    def to_primitive(self) -> Dict[str, Any]:
-        return asdict(self)
+        self._namespace_name = namespace_name
+        self._pod_name = pod_name
+        self._container_name = container_name
 
+    async def get_latest_stats(self) -> Optional[JobStats]:
+        pod_stats = await self._kube_client.get_pod_container_stats(
+            self._pod_name, self._container_name
+        )
+        if not pod_stats:
+            return None
 
-class TelemetryClient(ABC):
-    @abstractmethod
-    async def get_job_top(self, job_id: str) -> JobTop:
-        pass
-
-
-class DataDogClient(TelemetryClient):
-    # TODO (truskovskiyk 17/12/18) implement it
-    # https://github.com/neuromation/platform-api/issues/377
-    async def get_job_top(self, job_id: str) -> JobTop:
-        # TODO (truskovskiyk fetch from data dog)
-        return JobTop(cpu=1, mem=16)
-
-
-class JobsTelemetry:
-    def __init__(self, data_dog_client: DataDogClient) -> None:
-        self._data_dog_client = data_dog_client
-
-    async def get_job_top(self, job_id: str) -> JobTop:
-        job_top = await self._data_dog_client.get_job_top(job_id)
-        return job_top
-
-    @classmethod
-    def create(cls):
-        return JobsTelemetry(DataDogClient())
+        return JobStats(
+            cpu=pod_stats.cpu,
+            memory=pod_stats.memory,
+            gpu_duty_cycle=pod_stats.gpu_duty_cycle,
+            gpu_memory=pod_stats.gpu_memory,
+        )
