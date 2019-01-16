@@ -1,13 +1,12 @@
 import json
 import logging
-import aiohttp
 from dataclasses import dataclass
 from typing import List
 
+import aiohttp
 import trafaret as t
 from neuro_auth_client import AuthClient, Permission
 from neuro_auth_client.security import AuthPolicy
-
 from yarl import URL
 
 from .executor import Executor
