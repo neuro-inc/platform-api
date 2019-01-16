@@ -7,9 +7,10 @@ from typing import Dict, Iterable, List, Optional, Union
 from aioelasticsearch import Elasticsearch
 
 from ..config import OrchestratorConfig  # noqa
-from .base import LogReader, Orchestrator
+from .base import LogReader, Orchestrator, Telemetry
 from .job import Job, JobStatusItem
 from .job_request import JobError, JobNotFoundException, JobStatus
+from .jobs_telemetry import KubeTelemetry
 from .kube_client import *  # noqa
 from .kube_client import (
     AlreadyExistsException,
@@ -439,6 +440,15 @@ class KubeOrchestrator(Orchestrator):
             )
         return ElasticsearchLogReader(
             es_client=self._es_client,
+            namespace_name=self._config.namespace,
+            pod_name=pod_name,
+            container_name=pod_name,
+        )
+
+    async def get_job_telemetry(self, job: Job) -> Telemetry:
+        pod_name = self._get_job_pod_name(job)
+        return KubeTelemetry(
+            self._client,
             namespace_name=self._config.namespace,
             pod_name=pod_name,
             container_name=pod_name,
