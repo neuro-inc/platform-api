@@ -1,9 +1,9 @@
 import os
 import time
 import uuid
-import aiohttp
 from dataclasses import dataclass
 
+import aiohttp
 import pytest
 from jose import jwt
 from neuro_auth_client import AuthClient, User
@@ -131,5 +131,3 @@ async def alice(regular_user_factory):
 @pytest.fixture
 async def bob(regular_user_factory):
     return await regular_user_factory()
-
-

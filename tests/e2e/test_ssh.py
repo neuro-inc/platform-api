@@ -138,10 +138,12 @@ async def test_pass_stdin(ssh_auth_config, api_config, alice, alice_job):
         f"nobody@{ssh_auth_config.ip}",
         f'{{"token": "{alice.token}", "job": "{alice_job}", "command": ["grep", "o"]}}',
     ]
-    proc = await asyncio.create_subprocess_exec(*command,
-                                                stdin=asyncio.subprocess.PIPE,
-                                                stdout=asyncio.subprocess.PIPE,
-                                                stderr=asyncio.subprocess.STDOUT)
+    proc = await asyncio.create_subprocess_exec(
+        *command,
+        stdin=asyncio.subprocess.PIPE,
+        stdout=asyncio.subprocess.PIPE,
+        stderr=asyncio.subprocess.STDOUT,
+    )
     stdout, stderr = await proc.communicate(input=b"one\ntwo\nthree\nfour\nfive")
     exit_code = await proc.wait()
     assert exit_code == 0
