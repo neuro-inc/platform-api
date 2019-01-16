@@ -1,11 +1,11 @@
 import time
 
 import pytest
-import requests
 
 
 @pytest.mark.usefixtures("api")
-def test_basic_command(api_config, alice):
+@pytest.mark.asyncio
+async def test_basic_command(api_config, alice, client):
     model_request_payload = {
         "container": {
             "image": "ubuntu",
@@ -16,17 +16,18 @@ def test_basic_command(api_config, alice):
         "result_storage_uri": f"storage://{alice.name}/result",
     }
     headers = {"Authorization": f"Bearer {alice.token}"}
-    response = requests.post(
+    response = await client.post(
         api_config.models_url, headers=headers, json=model_request_payload
     )
-    model_payload = response.json()
+    model_payload = await response.json()
     job_id = model_payload["job_id"]
     job_url = f"{api_config.jobs_url}/{job_id}"
 
     for i in range(30):
-        response = requests.get(job_url, headers=headers)
-        assert response.status_code == 200, response.json()
-        jobs_payload = response.json()
+        response = await client.get(job_url, headers=headers)
+        assert response.status == 200
+        jobs_payload = await response.json()
+        assert jobs_payload
         status_name = jobs_payload["status"]
         if status_name == "succeeded":
             break
