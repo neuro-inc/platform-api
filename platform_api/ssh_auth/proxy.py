@@ -52,7 +52,7 @@ class ExecProxy:
         self._exec_request_validator = create_exec_request_validator()
         self._executor = executor
 
-    async def authorize(self, token: str, job_id: str) -> None:
+    async def _authorize(self, token: str, job_id: str) -> None:
         auth_policy = AuthPolicy(self._auth_client)
         user = await auth_policy.authorized_userid(token)
         if not user:
@@ -69,17 +69,17 @@ class ExecProxy:
         if not result:
             raise AuthorizationError(f"Permission denied: user={user}, job={job_id}")
 
-    def parse(self, request: str) -> ExecRequest:
+    def _parse(self, request: str) -> ExecRequest:
         dict_request = json.loads(request)
         self._exec_request_validator.check(dict_request)
         return ExecRequest(**dict_request)
 
     async def process(self, json_request: str) -> int:
         try:
-            request = self.parse(json_request)
+            request = self._parse(json_request)
             log.debug(f"Request: {request}")
         except ValueError as e:
             raise IllegalArgumentError(f"Illegal Payload: {json_request} ({e})")
 
-        await self.authorize(request.token, request.job)
+        await self._authorize(request.token, request.job)
         return await self._executor.exec_in_job(request.job, request.command)
