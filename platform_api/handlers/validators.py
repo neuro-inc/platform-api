@@ -121,3 +121,13 @@ def create_container_request_validator(
 
 def create_container_response_validator():
     return create_container_validator(allow_volumes=True, allow_any_gpu_models=True)
+
+
+def validate_status_string(status_str: str) -> bool:
+    if not status_str:
+        return False
+    return all(s in JobStatus.values() for s in status_str.split("+"))
+
+
+def create_job_filter_request_validator() -> t.Trafaret:
+    return t.Dict({t.Key("status", optional=True): validate_status_string})

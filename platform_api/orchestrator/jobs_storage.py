@@ -1,13 +1,41 @@
 import itertools
 import json
 from abc import ABC, abstractmethod
-from typing import Dict, List
+from dataclasses import dataclass, field
+from typing import Dict, List, Optional, Set
 
 import aioredis
 
 from .base import OrchestratorConfig
 from .job import Job
 from .job_request import JobError, JobStatus
+
+
+@dataclass(frozen=True)
+class JobFilter:
+    statuses: Set[JobStatus] = field(default_factory=set)
+
+    def apply(self, job: Job) -> bool:
+        if self.statuses and job.status not in self.statuses:
+            return False
+        return True
+
+    def with_status(self, status_str: str) -> "JobFilter":
+        return JobFilter(statuses=self.parse_status_line(status_str))
+
+    @classmethod
+    def from_primitive(cls, value: Dict[str, str]) -> "JobFilter":
+        return cls(statuses=cls.parse_status_line(value.get("status")))
+
+    @classmethod
+    def parse_status_line(cls, status_str: Optional[str]) -> Optional[Set[JobStatus]]:
+        if status_str is not None:
+            return {JobStatus.parse(status) for status in status_str.split("+")}
+
+
+JOB_FILTER_RUNNING = JobFilter(statuses={JobStatus.RUNNING})
+JOB_FILTER_FINISHED = JobFilter(statuses={JobStatus.SUCCEEDED, JobStatus.FAILED})
+JOB_FILTER_UNFINISHED = JobFilter(statuses={JobStatus.PENDING, JobStatus.RUNNING})
 
 
 class JobsStorage(ABC):
@@ -20,17 +48,21 @@ class JobsStorage(ABC):
         pass
 
     @abstractmethod
-    async def get_all_jobs(self) -> List[Job]:
+    async def get_all_jobs(self, job_filter: Optional[JobFilter] = None) -> List[Job]:
         pass
 
     async def get_running_jobs(self) -> List[Job]:
-        return [job for job in await self.get_all_jobs() if job.is_running]
+        return await self.get_all_jobs(JOB_FILTER_RUNNING)
 
     async def get_jobs_for_deletion(self) -> List[Job]:
-        return [job for job in await self.get_all_jobs() if job.should_be_deleted]
+        return [
+            job
+            for job in await self.get_all_jobs(JOB_FILTER_FINISHED)
+            if job.is_time_for_deletion
+        ]
 
     async def get_unfinished_jobs(self) -> List[Job]:
-        return [job for job in await self.get_all_jobs() if not job.is_finished]
+        return await self.get_all_jobs(JOB_FILTER_UNFINISHED)
 
 
 class InMemoryJobsStorage(JobsStorage):
@@ -53,10 +85,13 @@ class InMemoryJobsStorage(JobsStorage):
             raise JobError(f"no such job {job_id}")
         return self._parse_job_payload(payload)
 
-    async def get_all_jobs(self) -> List[Job]:
+    async def get_all_jobs(self, job_filter: Optional[JobFilter] = None) -> List[Job]:
         jobs = []
         for payload in self._job_records.values():
-            jobs.append(self._parse_job_payload(payload))
+            job = self._parse_job_payload(payload)
+            if job_filter and not job_filter.apply(job) or job.is_deleted:
+                continue
+            jobs.append(job)
         return jobs
 
 
@@ -102,7 +137,31 @@ class RedisJobsStorage(JobsStorage):
             raise JobError(f"no such job {job_id}")
         return self._parse_job_payload(payload)
 
-    async def _get_jobs(self, ids: List[str]) -> List[Job]:
+    async def get_all_jobs(self, job_filter: Optional[JobFilter] = None) -> List[Job]:
+        job_ids = await self._get_all_job_ids(job_filter)
+        return await self._get_all_jobs_payloads(job_ids)
+
+    async def _get_all_job_ids(
+        self, job_filter: Optional[JobFilter] = None
+    ) -> List[str]:
+        result = []
+        if job_filter is None or len(job_filter.statuses) == 0:
+            async for job_id in self._client.isscan(self._generate_jobs_index_key()):
+                result.append(job_id.decode())
+            return result
+        else:
+            tr = self._client.multi_exec()
+            for status in job_filter.statuses:
+                tr.sdiff(
+                    self._generate_jobs_status_index_key(status),
+                    self._generate_jobs_deleted_index_key(),
+                )
+            res = await tr.execute()
+            for id_ in itertools.chain(*res):
+                result.append(id_.decode())
+        return result
+
+    async def _get_all_jobs_payloads(self, ids: List[str]) -> List[Job]:
         jobs: List[Job] = []
         if not ids:
             return jobs
@@ -110,56 +169,3 @@ class RedisJobsStorage(JobsStorage):
         for payload in await self._client.mget(*keys):
             jobs.append(self._parse_job_payload(payload))
         return jobs
-
-    async def _get_all_job_ids(self) -> List[str]:
-        job_ids = []
-        async for job_id in self._client.isscan(self._generate_jobs_index_key()):
-            job_ids.append(job_id.decode())
-        return job_ids
-
-    async def _get_running_job_ids(self) -> List[str]:
-        return await self._get_job_ids_by_status(JobStatus.RUNNING)
-
-    async def _get_job_ids_by_status(self, status: JobStatus) -> List[str]:
-        job_ids = []
-        async for job_id in self._client.isscan(
-            self._generate_jobs_status_index_key(status)
-        ):
-            job_ids.append(job_id.decode())
-        return job_ids
-
-    async def _get_unfinished_job_ids(self) -> List[str]:
-        job_ids = await self._client.sunion(
-            self._generate_jobs_status_index_key(JobStatus.PENDING),
-            self._generate_jobs_status_index_key(JobStatus.RUNNING),
-        )
-        return [id_.decode() for id_ in job_ids]
-
-    async def _get_job_ids_for_deletion(self) -> List[str]:
-        tr = self._client.multi_exec()
-        tr.sdiff(
-            self._generate_jobs_status_index_key(JobStatus.FAILED),
-            self._generate_jobs_deleted_index_key(),
-        )
-        tr.sdiff(
-            self._generate_jobs_status_index_key(JobStatus.SUCCEEDED),
-            self._generate_jobs_deleted_index_key(),
-        )
-        failed, succeeded = await tr.execute()
-        return [id_.decode() for id_ in itertools.chain(failed, succeeded)]
-
-    async def get_all_jobs(self) -> List[Job]:
-        job_ids = await self._get_all_job_ids()
-        return await self._get_jobs(job_ids)
-
-    async def get_running_jobs(self) -> List[Job]:
-        job_ids = await self._get_running_job_ids()
-        return await self._get_jobs(job_ids)
-
-    async def get_jobs_for_deletion(self) -> List[Job]:
-        job_ids = await self._get_job_ids_for_deletion()
-        return await self._get_jobs(job_ids)
-
-    async def get_unfinished_jobs(self) -> List[Job]:
-        job_ids = await self._get_unfinished_job_ids()
-        return await self._get_jobs(job_ids)

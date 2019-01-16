@@ -64,6 +64,7 @@ class JobStatusItem:
         )
 
     def to_primitive(self) -> Dict[str, Any]:
+        # TODO (AY) maybe not encode None properties as we do everywhere else?
         return {
             "status": str(self.status.value),
             "transition_time": self.transition_time.isoformat(),
@@ -281,12 +282,15 @@ class Job:
         return self.finished_at + self._orchestrator_config.job_deletion_delay
 
     @property
-    def _is_time_for_deletion(self) -> bool:
-        return self._deletion_planned_at <= self._current_datetime_factory()
+    def is_time_for_deletion(self) -> bool:
+        return (
+            self._deletion_planned_at
+            and self._deletion_planned_at <= self._current_datetime_factory()
+        )
 
     @property
     def should_be_deleted(self) -> bool:
-        return self.is_finished and not self.is_deleted and self._is_time_for_deletion
+        return self.is_finished and not self.is_deleted and self.is_time_for_deletion
 
     @property
     def has_http_server_exposed(self) -> bool:

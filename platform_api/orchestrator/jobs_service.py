@@ -6,7 +6,7 @@ from platform_api.user import User
 from .base import LogReader, Orchestrator, Telemetry
 from .job import Job, JobStatusItem
 from .job_request import JobException, JobNotFoundException, JobRequest, JobStatus
-from .jobs_storage import InMemoryJobsStorage, JobsStorage
+from .jobs_storage import InMemoryJobsStorage, JobsStorage, JobFilter
 from .status import Status
 
 
@@ -53,6 +53,7 @@ class JobsService:
             )
             job.is_deleted = True
 
+        # TODO (A Yushkovskiy 10.01.2019) this check is redundant
         if old_status_item != status_item:
             job.status_history.current = status_item
             logger.info(
@@ -112,5 +113,5 @@ class JobsService:
         if not job.is_finished:
             await self._delete_job(job)
 
-    async def get_all_jobs(self) -> List[Job]:
-        return await self._jobs_storage.get_all_jobs()
+    async def get_all_jobs(self, job_filter: Optional[JobFilter] = None) -> List[Job]:
+        return await self._jobs_storage.get_all_jobs(job_filter)

@@ -274,6 +274,13 @@ class JobStatus(str, enum.Enum):
     def values(cls) -> List[str]:
         return [item.value for item in cls]  # type: ignore
 
+    @classmethod
+    def parse(cls, status_str) -> "JobStatus":
+        for item in cls:
+            if status_str == item.value:
+                return item
+        raise ValueError(f'Invalid status "{status_str}"')
+
 
 class ContainerVolumeFactory:
     """A factory class for :class:`ContainerVolume`.
