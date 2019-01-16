@@ -941,6 +941,8 @@ class KubeClient:
         self._conn_pool_size = conn_pool_size
         self._client: Optional[aiohttp.ClientSession] = None
 
+        self._kubelet_port = 10255
+
     @property
     def _is_ssl(self) -> bool:
         return urlsplit(self._base_url).scheme == "https"
@@ -1335,7 +1337,7 @@ class KubeClient:
         return f"{self._api_v1_url}/nodes/{name}:{port}/proxy"
 
     def _generate_node_stats_summary_url(self, name: str) -> str:
-        proxy_url = self._generate_node_proxy_url(name, 10255)
+        proxy_url = self._generate_node_proxy_url(name, self._kubelet_port)
         return f"{proxy_url}/stats/summary"
 
     async def get_pod_container_stats(
