@@ -6,8 +6,6 @@ import sys
 from neuro_auth_client import AuthClient
 
 from platform_api.config_factory import EnvironConfigFactory
-from platform_api.orchestrator.jobs_storage import RedisJobsStorage
-from platform_api.redis import create_redis_client
 
 from .executor import KubeCTLExecutor
 from .proxy import (
@@ -29,19 +27,16 @@ async def run() -> int:
     else:
         tty = False
     log.info(f"TTY is {tty}")
-    config = EnvironConfigFactory().create()
+
+    config = EnvironConfigFactory().create_ssh_auth()
     async with AuthClient(
         url=config.auth.server_endpoint_url, token=config.auth.service_token
     ) as auth_client:
-        async with create_redis_client(config.database.redis) as redis_client:
-            jobs_storage = RedisJobsStorage(
-                redis_client, orchestrator_config=config.orchestrator
-            )
-            executor = KubeCTLExecutor(tty)
-            proxy = ExecProxy(auth_client, jobs_storage, executor)
-            retcode = await proxy.process(json_request)
-            log.info(f"Done, retcode={retcode}")
-            return retcode
+        executor = KubeCTLExecutor(tty)
+        proxy = ExecProxy(auth_client, config.platform.server_endpoint_url, executor)
+        retcode = await proxy.process(json_request)
+        log.info(f"Done, retcode={retcode}")
+        return retcode
 
 
 def init_logging() -> None:

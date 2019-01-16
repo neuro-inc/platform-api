@@ -1,5 +1,6 @@
 import json
 import logging
+import aiohttp
 from dataclasses import dataclass
 from typing import List
 
@@ -7,8 +8,7 @@ import trafaret as t
 from neuro_auth_client import AuthClient, Permission
 from neuro_auth_client.security import AuthPolicy
 
-from platform_api.orchestrator.job_request import JobError
-from platform_api.orchestrator.jobs_storage import JobsStorage
+from yarl import URL
 
 from .executor import Executor
 
@@ -45,29 +45,38 @@ class IllegalArgumentError(ValueError):
 
 class ExecProxy:
     def __init__(
-        self, auth_client: AuthClient, jobs_storage: JobsStorage, executor: Executor
+        self, auth_client: AuthClient, platform_url: URL, executor: Executor
     ) -> None:
         self._auth_client = auth_client
-        self._jobs_storage = jobs_storage
+        self._jobs_url = platform_url / "jobs"
         self._exec_request_validator = create_exec_request_validator()
         self._executor = executor
 
     async def _authorize(self, token: str, job_id: str) -> None:
-        auth_policy = AuthPolicy(self._auth_client)
-        user = await auth_policy.authorized_userid(token)
-        if not user:
-            raise AuthenticationError(f"Incorrect token: token={token}, job={job_id}")
-
-        log.debug(f"user {user}")
-        try:
-            job = await self._jobs_storage.get_job(job_id)
-        except JobError as error:
-            raise AuthorizationError(f"{error}")
-        permission = Permission(uri=str(job.to_uri()), action="write")
-        log.debug(f"Checking permission: {permission}")
-        result = await auth_policy.permits(token, None, [permission])
-        if not result:
-            raise AuthorizationError(f"Permission denied: user={user}, job={job_id}")
+        async with aiohttp.ClientSession() as session:
+            auth_policy = AuthPolicy(self._auth_client)
+            user = await auth_policy.authorized_userid(token)
+            if not user:
+                raise AuthenticationError(
+                    f"Incorrect token: token={token}, job={job_id}"
+                )
+            headers = {"Authorization": f"Bearer {token}"}
+            log.debug(f"user {user}")
+            job_url = self._jobs_url / job_id
+            response = await session.get(job_url, headers=headers)
+            if response.status != 200:
+                raise AuthorizationError(f"Return code:{response.status}")
+            job_payload = await response.json()
+            if job_payload is None:
+                raise AuthorizationError(f"Empty job payload")
+            owner = job_payload["owner"]
+            permission = Permission(uri=f"job://{owner}/{job_id}", action="write")
+            log.debug(f"Checking permission: {permission}")
+            result = await auth_policy.permits(token, None, [permission])
+            if not result:
+                raise AuthorizationError(
+                    f"Permission denied: user={user}, job={job_id}"
+                )
 
     def _parse(self, request: str) -> ExecRequest:
         dict_request = json.loads(request)

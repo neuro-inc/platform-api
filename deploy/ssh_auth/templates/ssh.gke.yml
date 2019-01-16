@@ -23,16 +23,6 @@ spec:
         image: {{ printf "%s" (pluck .Values.global.env .Values.IMAGE | first | default .Values.IMAGE._default) }}
         imagePullPolicy: Always
         env:
-        - name: NP_K8S_API_URL
-          value: "https://kubernetes"
-        - name: NP_K8S_AUTH_TYPE
-          value: token
-        - name: NP_K8S_CA_PATH
-          value: /var/run/secrets/kubernetes.io/serviceaccount/ca.crt
-        - name: NP_K8S_TOKEN_PATH
-          value: /var/run/secrets/kubernetes.io/serviceaccount/token
-        - name: NP_DB_REDIS_URI
-          value: "{{ printf "%s" (pluck .Values.global.env .Values.NP_DB_REDIS_URI | first | default .Values.NP_DB_REDIS_URI._default) }}"
         - name: NP_AUTH_URL
           value: http://platformauthapi:8080
         - name: NP_AUTH_TOKEN
@@ -42,14 +32,8 @@ spec:
               key: compute_token
         - name: NP_ES_HOSTS
           value: http://elasticsearch-logging.kube-system:9200
-        - name: NP_STORAGE_HOST_MOUNT_PATH
-          value: none
-        - name: NP_K8S_JOBS_INGRESS_NAME
-          value: none
-        - name: NP_K8S_JOBS_INGRESS_DOMAIN_NAME
-          value: none
-        - name: NP_K8S_SSH_INGRESS_DOMAIN_NAME
-          value: none
+        - name: NP_PLATFORM_API_URL
+          value: http://platformapi:8080/api/v1
 ---
 apiVersion: v1
 kind: Service

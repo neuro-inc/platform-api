@@ -147,7 +147,7 @@ async def test_pass_stdin(ssh_auth_config, api_config, alice, alice_job):
     stdout, stderr = await proc.communicate(input=b"one\ntwo\nthree\nfour\nfive")
     exit_code = await proc.wait()
     assert exit_code == 0
-    output = bytes(stdout.decode())
+    output = bytes(stdout).decode()
 
     # filter logging out
     filtered_output = list(

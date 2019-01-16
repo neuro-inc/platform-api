@@ -10,8 +10,10 @@ from .config import (
     DatabaseConfig,
     ElasticsearchConfig,
     LoggingConfig,
+    PlatformConfig,
     RegistryConfig,
     ServerConfig,
+    SSHAuthConfig,
     SSHConfig,
     SSHServerConfig,
     StorageConfig,
@@ -66,6 +68,11 @@ class EnvironConfigFactory:
             env_prefix=env_prefix,
         )
 
+    def create_ssh_auth(self) -> SSHAuthConfig:
+        platform = self.create_platform()
+        auth = self.create_auth()
+        return SSHAuthConfig(platform=platform, auth=auth)
+
     def create_server(self) -> ServerConfig:
         port = int(self._environ.get("NP_API_PORT", ServerConfig.port))
         return ServerConfig(port=port)  # type: ignore
@@ -79,6 +86,10 @@ class EnvironConfigFactory:
             if s.strip()
         ]
         return SSHServerConfig(port=port, ssh_host_keys=ssh_host_keys)
+
+    def create_platform(self) -> PlatformConfig:
+        server_endpoint_url = URL(os.environ["NP_PLATFORM_API_URL"])
+        return PlatformConfig(server_endpoint_url=server_endpoint_url)
 
     @property
     def _storage_host_mount_path(self) -> PurePath:
