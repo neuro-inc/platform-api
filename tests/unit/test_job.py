@@ -464,15 +464,18 @@ class TestJob:
 
     def test_should_be_deleted_pending(self, mock_orchestrator, job_request):
         job = Job(orchestrator_config=mock_orchestrator.config, job_request=job_request)
+        assert not job.is_finished
         assert not job.finished_at
-        assert not job.should_be_deleted
+        assert not (job.is_finished and job.is_time_for_deletion) or job.is_deleted
 
     def test_should_be_deleted_finished(self, mock_orchestrator, job_request):
         config = dataclasses.replace(mock_orchestrator.config, job_deletion_delay_s=0)
         job = Job(orchestrator_config=config, job_request=job_request)
         job.status = JobStatus.FAILED
+        assert job.is_finished
         assert job.finished_at
-        assert job.should_be_deleted
+        assert not job.is_deleted
+        assert job.is_time_for_deletion
 
     def test_to_primitive(self, mock_orchestrator, job_request):
         job = Job(
@@ -697,6 +700,36 @@ class TestJobRequest:
         job_request_payload["container"]["ssh_server"] = {"port": 678}
         actual = JobRequest.to_primitive(JobRequest.from_primitive(job_request_payload))
         assert actual == job_request_payload
+
+
+class TestJobStatus:
+    def test_parse_pending(self):
+        assert JobStatus.parse("pending") == JobStatus.PENDING
+
+    def test_parse_running(self):
+        assert JobStatus.parse("running") == JobStatus.RUNNING
+
+    def test_parse_succeeded(self):
+        assert JobStatus.parse("succeeded") == JobStatus.SUCCEEDED
+
+    def test_parse_failed(self):
+        assert JobStatus.parse("failed") == JobStatus.FAILED
+
+    def test_parse_empty(self):
+        with pytest.raises(ValueError, match='Invalid status ""'):
+            assert JobStatus.parse("")
+
+    def test_parse_none(self):
+        with pytest.raises(ValueError, match='Invalid status "None"'):
+            assert JobStatus.parse(None)
+
+    def test_parse_wrong_value(self):
+        with pytest.raises(ValueError, match='Invalid status "abrakadabra"'):
+            assert JobStatus.parse("abrakadabra")
+
+    def test_parse_wrong_case(self):
+        with pytest.raises(ValueError, match='Invalid status "PeNdInG"'):
+            assert JobStatus.parse("PeNdInG")
 
 
 class TestContainerHTTPServer:
