@@ -23,7 +23,6 @@ def create_job_request_with_description():
 
 
 class TestJobFilter:
-
     def test_parse_status_line__none(self):
         parsed = JobFilter.parse_status_line(None)
         assert parsed == set()
@@ -95,7 +94,9 @@ class TestJobFilter:
 
     def test_from_primitive(self):
         job_filter = JobFilter.from_primitive({"status": "pending+succeeded+failed"})
-        assert job_filter == JobFilter(statuses={JobStatus.FAILED, JobStatus.SUCCEEDED, JobStatus.PENDING})
+        assert job_filter == JobFilter(
+            statuses={JobStatus.FAILED, JobStatus.SUCCEEDED, JobStatus.PENDING}
+        )
 
     def test_from_primitive_no_status(self):
         job_filter = JobFilter.from_primitive(dict())
@@ -234,16 +235,17 @@ class TestJobsService:
             job, _ = await jobs_service.create_job(job_request=job_request, user=user)
             job_ids.append(job.id)
 
-        expected = sorted([
-            job.id
-            for job in await jobs_service.get_all_jobs()
-            if job.status in {JobStatus.PENDING, JobStatus.SUCCEEDED}
-        ])
+        expected = sorted(
+            [
+                job.id
+                for job in await jobs_service.get_all_jobs()
+                if job.status in {JobStatus.PENDING, JobStatus.SUCCEEDED}
+            ]
+        )
         job_filter = JobFilter.from_primitive({"status": "pending+running"})
-        actual = sorted([
-            job.id
-            for job in (await jobs_service.get_all_jobs(job_filter))
-        ])
+        actual = sorted(
+            [job.id for job in (await jobs_service.get_all_jobs(job_filter))]
+        )
         assert actual == expected
 
     @pytest.mark.asyncio

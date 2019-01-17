@@ -15,7 +15,6 @@ from platform_api.orchestrator import JobsService, Orchestrator
 from platform_api.orchestrator.job import Job, JobStats
 from platform_api.orchestrator.job_request import Container, ContainerVolume, JobRequest
 from platform_api.orchestrator.jobs_storage import JobFilter
-from platform_api.orchestrator.jobs_telemetry import JobsTelemetry
 from platform_api.resource import GPUModel
 from platform_api.user import User, untrusted_user
 

@@ -40,7 +40,7 @@ def create_volume_request_validator() -> t.Trafaret:
 def create_resources_validator(
     *,
     allow_any_gpu_models: bool = False,
-    allowed_gpu_models: Optional[Sequence[GPUModel]] = None
+    allowed_gpu_models: Optional[Sequence[GPUModel]] = None,
 ) -> t.Trafaret:
     MAX_GPU_COUNT = 128
     MAX_CPU_COUNT = 128.0
@@ -74,7 +74,7 @@ def create_container_validator(
     *,
     allow_volumes: bool = False,
     allow_any_gpu_models: bool = False,
-    allowed_gpu_models: Optional[Sequence[GPUModel]] = None
+    allowed_gpu_models: Optional[Sequence[GPUModel]] = None,
 ):
     """Create a validator for primitive container objects.
 
@@ -113,7 +113,7 @@ def create_container_validator(
 def create_container_request_validator(
     *,
     allow_volumes: bool = False,
-    allowed_gpu_models: Optional[Sequence[GPUModel]] = None
+    allowed_gpu_models: Optional[Sequence[GPUModel]] = None,
 ) -> t.Trafaret:
     return create_container_validator(
         allow_volumes=allow_volumes, allowed_gpu_models=allowed_gpu_models

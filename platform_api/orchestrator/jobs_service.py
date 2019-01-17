@@ -6,7 +6,7 @@ from platform_api.user import User
 from .base import LogReader, Orchestrator, Telemetry
 from .job import Job, JobStatusItem
 from .job_request import JobException, JobNotFoundException, JobRequest, JobStatus
-from .jobs_storage import InMemoryJobsStorage, JobsStorage, JobFilter
+from .jobs_storage import InMemoryJobsStorage, JobFilter, JobsStorage
 from .status import Status
 
 
