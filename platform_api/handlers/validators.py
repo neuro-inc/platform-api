@@ -1,6 +1,7 @@
-from typing import Optional, Sequence
+from typing import Optional, Sequence, Set
 
 import trafaret as t
+from trafaret import DataError
 
 from platform_api.orchestrator.job_request import JobStatus
 from platform_api.resource import GPUModel
@@ -123,10 +124,17 @@ def create_container_response_validator():
     return create_container_validator(allow_volumes=True, allow_any_gpu_models=True)
 
 
-def validate_status_string(status_str: str) -> bool:
+def validate_status_string(status_str: str) -> Set[str]:
+    # NOTE: "all" parameter should be converted to "pending+running+failed+succeeded"
+    # by the neuro client
     if not status_str:
-        return False
-    return all(s in JobStatus.values() for s in status_str.split("+"))
+        raise DataError("Empty status parameter")
+    result = set()
+    for status in status_str.split("+"):
+        if status not in JobStatus.values():
+            raise DataError(f"Invalid status parameter: {status}")
+        result.add(status)
+    return result
 
 
 def create_job_filter_request_validator() -> t.Trafaret:
