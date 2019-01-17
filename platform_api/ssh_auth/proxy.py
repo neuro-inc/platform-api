@@ -65,18 +65,14 @@ class ExecProxy:
         auth_policy = AuthPolicy(self._auth_client)
         user = await auth_policy.authorized_userid(token)
         if not user:
-            raise AuthenticationError(
-                f"Incorrect token: token={token}, job={job_id}"
-            )
+            raise AuthenticationError(f"Incorrect token: token={token}, job={job_id}")
         log.debug(f"user {user}")
         owner = await self._get_owner(token, job_id)
         permission = Permission(uri=f"job://{owner}/{job_id}", action="write")
         log.debug(f"Checking permission: {permission}")
         result = await auth_policy.permits(token, None, [permission])
         if not result:
-            raise AuthorizationError(
-                    f"Permission denied: user={user}, job={job_id}"
-            )
+            raise AuthorizationError(f"Permission denied: user={user}, job={job_id}")
 
     def _parse(self, request: str) -> ExecRequest:
         dict_request = json.loads(request)
