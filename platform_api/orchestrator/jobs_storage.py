@@ -31,6 +31,7 @@ class JobFilter:
     def parse_status_line(cls, status_str: Optional[str]) -> Optional[Set[JobStatus]]:
         if status_str is not None:
             return {JobStatus.parse(status) for status in status_str.split("+")}
+        return set()
 
 
 JOB_FILTER_RUNNING = JobFilter(statuses={JobStatus.RUNNING})

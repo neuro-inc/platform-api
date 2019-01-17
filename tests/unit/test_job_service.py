@@ -9,7 +9,97 @@ from platform_api.orchestrator import Job, JobRequest, JobsService, JobStatus
 from platform_api.orchestrator.job import JobStatusItem
 from platform_api.orchestrator.job_request import Container, ContainerResources
 from platform_api.orchestrator.jobs_service import InMemoryJobsStorage
+from platform_api.orchestrator.jobs_storage import JobFilter
 from platform_api.user import User
+
+
+def create_job_request_with_description():
+    return JobRequest.create(
+        Container(
+            image="testimage", resources=ContainerResources(cpu=1, memory_mb=128)
+        ),
+        description="test test description",
+    )
+
+
+class TestJobFilter:
+
+    def test_parse_status_line__none(self):
+        parsed = JobFilter.parse_status_line(None)
+        assert parsed == set()
+
+    def test_parse_status_line__empty(self):
+        with pytest.raises(ValueError, match='Invalid status ""'):
+            JobFilter.parse_status_line("")
+
+    def test_parse_status_line__wrong_case(self):
+        with pytest.raises(ValueError, match='Invalid status "pEnDiNg"'):
+            JobFilter.parse_status_line("pEnDiNg")
+
+    def test_parse_status_line__pending(self):
+        parsed = JobFilter.parse_status_line("pending")
+        assert parsed == {JobStatus.PENDING}
+
+    def test_parse_status_line__running(self):
+        parsed = JobFilter.parse_status_line("running")
+        assert parsed == {JobStatus.RUNNING}
+
+    def test_parse_status_line__succeeded(self):
+        parsed = JobFilter.parse_status_line("succeeded")
+        assert parsed == {JobStatus.SUCCEEDED}
+
+    def test_parse_status_line__failed(self):
+        parsed = JobFilter.parse_status_line("failed")
+        assert parsed == {JobStatus.FAILED}
+
+    def test_parse_status_line__running_pending(self):
+        parsed = JobFilter.parse_status_line("running+pending")
+        assert parsed == {JobStatus.RUNNING, JobStatus.PENDING}
+
+    def test_parse_status_line__succeeded_pending_running(self):
+        parsed = JobFilter.parse_status_line("succeeded+pending+running")
+        assert parsed == {JobStatus.SUCCEEDED, JobStatus.RUNNING, JobStatus.PENDING}
+
+    def test_apply_by_status__true(self, mock_orchestrator):
+        job = Job(
+            orchestrator_config=mock_orchestrator.config,
+            job_request=create_job_request_with_description(),
+        )
+        job.status = JobStatus.PENDING
+        job_filter = JobFilter(statuses={JobStatus.RUNNING, JobStatus.PENDING})
+        assert job_filter.apply(job) is True
+
+    def test_apply_by_status__false(self, mock_orchestrator):
+        job = Job(
+            orchestrator_config=mock_orchestrator.config,
+            job_request=create_job_request_with_description(),
+        )
+        job.status = JobStatus.FAILED
+        job_filter = JobFilter(statuses={JobStatus.RUNNING, JobStatus.PENDING})
+        assert job_filter.apply(job) is False
+
+    def test_apply_by_status_empty_filter(self, mock_orchestrator):
+        job = Job(
+            orchestrator_config=mock_orchestrator.config,
+            job_request=create_job_request_with_description(),
+        )
+        job.status = JobStatus.FAILED
+        job_filter = JobFilter(statuses=set())
+        assert job_filter.apply(job)
+
+    def test_with_status(self):
+        job_filter = JobFilter(statuses={JobStatus.RUNNING})
+        another_filter = job_filter.with_status("pending")
+        assert job_filter.statuses == {JobStatus.RUNNING}
+        assert another_filter.statuses == {JobStatus.PENDING}
+
+    def test_from_primitive(self):
+        job_filter = JobFilter.from_primitive({"status": "pending+succeeded+failed"})
+        assert job_filter == JobFilter(statuses={JobStatus.FAILED, JobStatus.SUCCEEDED, JobStatus.PENDING})
+
+    def test_from_primitive_no_status(self):
+        job_filter = JobFilter.from_primitive(dict())
+        assert job_filter == JobFilter(statuses=set())
 
 
 class TestInMemoryJobsStorage:
@@ -26,19 +116,11 @@ class TestInMemoryJobsStorage:
             )
         )
 
-    def _create_job_request_with_description(self):
-        return JobRequest.create(
-            Container(
-                image="testimage", resources=ContainerResources(cpu=1, memory_mb=128)
-            ),
-            description="test test description",
-        )
-
     @pytest.mark.asyncio
     async def test_job_to_job_response(self, mock_orchestrator):
         job = Job(
             orchestrator_config=mock_orchestrator.config,
-            job_request=self._create_job_request_with_description(),
+            job_request=create_job_request_with_description(),
         )
         response = convert_job_to_job_response(job, MagicMock())
         assert response == {
@@ -141,6 +223,28 @@ class TestJobsService:
 
         jobs = await jobs_service.get_all_jobs()
         assert job_ids == [job.id for job in jobs]
+
+    @pytest.mark.asyncio
+    async def test_get_all_filtered_by_status(self, jobs_service, job_request_factory):
+        user = User(name="testuser", token="")
+        job_ids = []
+        num_jobs = 1000
+        for _ in range(num_jobs):
+            job_request = job_request_factory()
+            job, _ = await jobs_service.create_job(job_request=job_request, user=user)
+            job_ids.append(job.id)
+
+        expected = sorted([
+            job.id
+            for job in await jobs_service.get_all_jobs()
+            if job.status in {JobStatus.PENDING, JobStatus.SUCCEEDED}
+        ])
+        job_filter = JobFilter.from_primitive({"status": "pending+running"})
+        actual = sorted([
+            job.id
+            for job in (await jobs_service.get_all_jobs(job_filter))
+        ])
+        assert actual == expected
 
     @pytest.mark.asyncio
     async def test_update_jobs_statuses_running(
