@@ -242,6 +242,14 @@ workflows:
             branches:
               only:
                 - master
+      - gke_ssh_auth_dev_deploy:
+          context: org-global
+          requires:
+            - test
+          filters:
+            branches:
+              only:
+                - master
       - gke_stage_jumphost_deploy:
           context: org-global
           filters:
