@@ -57,7 +57,7 @@ class ExecProxy:
             headers = {"Authorization": f"Bearer {token}"}
             response = await session.get(job_url, headers=headers)
             if response.status != 200:
-                raise AuthorizationError(f"Return code:{response.status}")
+                raise AuthorizationError(f"Response status: {response.status}")
             job_payload = await response.json()
             return job_payload["owner"]
 

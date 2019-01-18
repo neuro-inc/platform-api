@@ -18,7 +18,7 @@ class KubeCTLExecutor(Executor):
         self._tty = tty
 
     async def exec_in_job(self, job: str, command: List[str]) -> int:
-        log.debug((f"Executing {command} in {job}"))
+        log.debug(f"Executing {command} in {job}")
         if self._tty:
             kubectl_cmd = ["kubectl", "exec", "-it", job, "--"] + command
         else:
