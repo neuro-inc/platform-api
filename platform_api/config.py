@@ -142,3 +142,15 @@ class SSHConfig:
     # used for generating environment variable names and
     # sourcing them inside containers.
     env_prefix: str = "NP"  # stands for Neuromation Platform
+
+
+@dataclass(frozen=True)
+class PlatformConfig:
+    server_endpoint_url: URL
+
+
+@dataclass(frozen=True)
+class SSHAuthConfig:
+    platform: PlatformConfig
+    auth: AuthConfig
+    env_prefix: str = "NP"

@@ -3,8 +3,8 @@ import time
 import uuid
 from dataclasses import dataclass
 
+import aiohttp
 import pytest
-import requests
 from jose import jwt
 from neuro_auth_client import AuthClient, User
 from yarl import URL
@@ -29,8 +29,16 @@ class PlatformConfig:
         return self.endpoint_url + "/models"
 
 
+@dataclass
+class SSHAuthConfig:
+    ip: str
+    port: int
+
+
 @pytest.fixture(scope="session")
 def api_endpoint_url():
+    if "PLATFORM_API_URL" not in os.environ:
+        pytest.fail("Environment variable PLATFORM_API_URL is not set")
     return os.environ["PLATFORM_API_URL"]
 
 
@@ -40,24 +48,17 @@ def api_config(api_endpoint_url):
 
 
 @pytest.fixture(scope="session")
-def api(api_config):
-    url = api_config.ping_url
-    interval_s = 1
-    max_attempts = 30
-    for _ in range(max_attempts):
-        try:
-            response = requests.get(url)
-            if response.status_code == 200:
-                break
-        except OSError:
-            pass
-        time.sleep(interval_s)
-    else:
-        pytest.fail(f"Unable to connect to Platform API: {url}")
+def ssh_auth_config():
+    if "SSH_AUTH_URL" not in os.environ:
+        pytest.fail("Environment variable SSH_AUTH_URL is not set")
+    url = URL(os.environ["SSH_AUTH_URL"])
+    return SSHAuthConfig(url.host, url.port)
 
 
 @pytest.fixture(scope="session")
 def platform_auth_url():
+    if "AUTH_API_URL" not in os.environ:
+        pytest.fail("Environment variable AUTH_API_URL is not set")
     return URL(os.environ["AUTH_API_URL"])
 
 
@@ -73,6 +74,29 @@ def token_factory():
 @pytest.fixture(scope="session")
 def admin_token(token_factory):
     return token_factory("admin")
+
+
+@pytest.fixture
+async def client():
+    async with aiohttp.ClientSession() as session:
+        yield session
+
+
+@pytest.fixture
+async def api(api_config, client):
+    url = api_config.ping_url
+    interval_s = 1
+    max_attempts = 30
+    for _ in range(max_attempts):
+        try:
+            response = await client.get(url)
+            if response.status == 200:
+                break
+        except OSError:
+            pass
+        time.sleep(interval_s)
+    else:
+        pytest.fail(f"Unable to connect to Platform API: {url}")
 
 
 @pytest.fixture

@@ -1,0 +1,5 @@
+#!/bin/bash
+# copy env values to use in ssh session
+env | grep -e NP -e KUBERNETES >> /neuromation/.env
+# start sshd
+/usr/sbin/sshd -De

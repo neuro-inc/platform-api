@@ -1,0 +1,15 @@
+#!/bin/bash
+# restore env variables
+set -o allexport
+source /neuromation/.env
+set +o allexport
+
+# check for tty
+if [ -t 1 ]
+then
+    export NP_TTY=1;
+else
+    export NP_TTY=0;
+fi
+# run authorization script
+ssh-authorize

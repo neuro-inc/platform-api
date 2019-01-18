@@ -2,6 +2,10 @@ IMAGE_NAME ?= platformapi
 IMAGE_TAG ?= latest
 IMAGE_NAME_K8S ?= $(IMAGE_NAME)-k8s
 IMAGE_K8S ?= $(GKE_DOCKER_REGISTRY)/$(GKE_PROJECT_ID)/$(IMAGE_NAME_K8S)
+SSH_IMAGE_NAME ?= ssh-auth
+SSH_IMAGE_TAG ?= latest
+SSH_K8S ?= $(GKE_DOCKER_REGISTRY)/$(GKE_PROJECT_ID)/$(SSH_IMAGE_NAME)
+
 
 ifdef CIRCLECI
     PIP_INDEX_URL ?= https://$(DEVPI_USER):$(DEVPI_PASS)@$(DEVPI_HOST)/$(DEVPI_USER)/$(DEVPI_INDEX)
@@ -31,6 +35,10 @@ test_integration:
 
 test_e2e:
 	pytest -vv tests/e2e
+
+build_ssh_auth_k8s:
+	@docker build --build-arg PIP_INDEX_URL="$(PIP_INDEX_URL)" \
+	    -f deploy/ssh_auth/docker/Dockerfile.ssh-auth.k8s -t $(SSH_IMAGE_NAME):$(SSH_IMAGE_TAG) .
 
 build_api_k8s:
 	@docker build --build-arg PIP_INDEX_URL="$(PIP_INDEX_URL)" \
@@ -72,10 +80,14 @@ gke_docker_pull_test:
 _helm:
 	curl https://raw.githubusercontent.com/kubernetes/helm/master/scripts/get | bash -s -- -v v2.11.0
 
-gke_docker_push: build_api_k8s
+gke_docker_push: build_api_k8s build_ssh_auth_k8s
 	docker tag $(IMAGE_NAME_K8S):$(IMAGE_TAG) $(IMAGE_K8S):latest
 	docker tag $(IMAGE_NAME_K8S):$(IMAGE_TAG) $(IMAGE_K8S):$(CIRCLE_SHA1)
+	docker tag $(SSH_IMAGE_NAME):$(SSH_IMAGE_TAG) $(SSH_K8S):latest
+	docker tag $(SSH_IMAGE_NAME):$(SSH_IMAGE_TAG) $(SSH_K8S):$(CIRCLE_SHA1)
+
 	docker push $(IMAGE_K8S)
+	docker push $(SSH_K8S)
 
 gke_k8s_deploy_dev: _helm
 	gcloud --quiet container clusters get-credentials $(GKE_CLUSTER_NAME) --region $(GKE_CLUSTER_REGION)
