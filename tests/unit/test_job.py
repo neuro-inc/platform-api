@@ -78,6 +78,15 @@ class TestContainer:
         uri = container.to_image_uri(registry_config)
         assert uri == URL("image://project/testimage")
 
+    def test_to_image_uri_ignore_tag(self):
+        container = Container(
+            image="example.com/project/testimage:latest",
+            resources=ContainerResources(cpu=1, memory_mb=128),
+        )
+        registry_config = RegistryConfig(host="example.com")
+        uri = container.to_image_uri(registry_config)
+        assert uri == URL("image://project/testimage")
+
 
 class TestContainerVolumeFactory:
     def test_invalid_storage_uri_scheme(self):

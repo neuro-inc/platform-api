@@ -142,7 +142,9 @@ class Container:
         assert self.belongs_to_registry(registry_config), "Unknown registry"
         prefix = f"{registry_config.host}/"
         repo = self.image.replace(prefix, "", 1)
-        return URL(f"image://{repo}")
+        uri = URL(f"image://{repo}")
+        path, *_ = uri.path.split(":", 1)
+        return uri.with_path(path)
 
     @property
     def port(self) -> Optional[int]:

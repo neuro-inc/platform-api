@@ -6,6 +6,8 @@ from platform_api.orchestrator.kube_client import (
     NodeSelectorOperator,
     NodeSelectorRequirement,
     NodeSelectorTerm,
+    PodContainerStats,
+    StatsSummary,
 )
 
 
@@ -76,3 +78,54 @@ class TestNodeAffinity:
                 }
             ],
         }
+
+
+class TestPodContainerStats:
+    def test_from_primitive_empty(self):
+        payload = {"cpu": {}, "memory": {}}
+        stats = PodContainerStats.from_primitive(payload)
+        assert stats == PodContainerStats(cpu=0.0, memory=0.0)
+
+    def test_from_primitive(self):
+        payload = {
+            "cpu": {"usageNanoCores": 1000},
+            "memory": {"workingSetBytes": 1024 * 1024},
+            "accelerators": [
+                {"dutyCycle": 20, "memoryUsed": 2 * 1024 * 1024},
+                {"dutyCycle": 30, "memoryUsed": 4 * 1024 * 1024},
+            ],
+        }
+        stats = PodContainerStats.from_primitive(payload)
+        assert stats == PodContainerStats(
+            cpu=0.000001, memory=1.0, gpu_duty_cycle=25, gpu_memory=6.0
+        )
+
+
+class TestStatsSummary:
+    def test_get_pod_container_stats_no_pod(self):
+        payload = {"pods": []}
+        stats = StatsSummary(payload).get_pod_container_stats(
+            "namespace", "pod", "container"
+        )
+        assert stats is None
+
+    def test_get_pod_container_stats_no_containers(self):
+        payload = {"pods": [{"podRef": {"namespace": "namespace", "name": "pod"}}]}
+        stats = StatsSummary(payload).get_pod_container_stats(
+            "namespace", "pod", "container"
+        )
+        assert stats is None
+
+    def test_get_pod_container_stats(self):
+        payload = {
+            "pods": [
+                {
+                    "podRef": {"namespace": "namespace", "name": "pod"},
+                    "containers": [{"name": "container", "cpu": {}, "memory": {}}],
+                }
+            ]
+        }
+        stats = StatsSummary(payload).get_pod_container_stats(
+            "namespace", "pod", "container"
+        )
+        assert stats
