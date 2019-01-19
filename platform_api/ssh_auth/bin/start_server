@@ -2,6 +2,6 @@
 # copy env values to use in ssh session
 env | grep -e NP -e KUBERNETES >> /neuromation/.env
 # stream log to stdin
-tail -f /authorization.log &
+2>&1 tail -f /authorization.log &
 # start sshd
 /usr/sbin/sshd -De
