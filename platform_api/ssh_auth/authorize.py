@@ -41,7 +41,7 @@ async def run() -> int:
 
 def init_logging() -> None:
     logging.basicConfig(
-        filename="/nonexistent/authorization.log",
+        filename="/authorization.log",
         level=logging.INFO,
         format="%(asctime)s - %(name)s - %(levelname)s - %(message)s",
     )
