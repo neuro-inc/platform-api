@@ -2,7 +2,7 @@ import asyncio
 import json
 import time
 from pathlib import PurePath
-from typing import NamedTuple
+from typing import Callable, NamedTuple
 from unittest import mock
 
 import aiohttp
@@ -155,6 +155,47 @@ async def model_request_factory():
         }
 
     return _factory
+
+
+@pytest.fixture
+async def create_job_request(regular_user):
+    def _factory(
+        owner: str,
+        image: str = "ubuntu",
+        description: str = "test-job",
+        command: str = "true",
+        cpu: float = 0.1,
+        memory_mb: int = 16,
+        is_preemptible: bool = True,
+    ):
+        return {
+            "container": {
+                "image": image,
+                "command": command,
+                "resources": {"cpu": cpu, "memory_mb": memory_mb},
+                "volumes": [
+                    {
+                        "src_storage_uri": f"storage://{owner}",
+                        "dst_path": "/var/storage",
+                        "read_only": False,
+                    }
+                ],
+            },
+            "is_preemptible": is_preemptible,
+            "description": description,
+        }
+
+    return _factory
+
+
+async def start_job(url, user, job_request):
+    async with client.post(url, headers=user.headers, json=job_request) as response:
+        assert (
+            response.status == HTTPAccepted.status_code,
+            f"request: {job_request}, response body: " + (await response.text()),
+        )
+        result = await response.json()
+        return result["job_id"]
 
 
 @pytest.fixture
@@ -464,6 +505,50 @@ class TestJobs:
 
         async with client.get(url, headers=follower.headers) as response:
             assert response.status == HTTPOk.status_code
+
+    @pytest.mark.asyncio
+    async def test_get_jobs_filtered(
+        self,
+        jobs_client,
+        api,
+        client,
+        regular_user_factory,
+        create_job_request,
+        auth_client,
+    ):
+        user = await regular_user_factory()
+        job_requests = [
+            create_job_request(
+                owner=user.name, image="testimage", description="test job 1"
+            ),
+            create_job_request(
+                owner=user.name, image="testimage", description="test job 1"
+            ),
+            create_job_request(
+                owner=user.name, image="testimage", description="test job 2"
+            ),
+            create_job_request(
+                owner=user.name, image="testimage", description="test job 3"
+            ),
+        ]
+        job_ids = set()
+        url = api.jobs_base_url
+        for job_request in job_requests:
+            job_id = await start_job(url, user, job_request)
+            job_ids.add(job_id)
+
+        statuses = ["running", "pending"]
+        filters = {"status": "+".join(statuses)}
+        url = api.jobs_base_url
+        async with client.get(url, headers=user.headers, params=filters) as response:
+            assert response.status == HTTPOk.status_code, await response.text()
+            result = await response.json()
+            job_ids = {
+                item["id"]
+                for item in result["jobs"]
+                if item["description"] == description and item["status"] in statuses
+            }
+            assert job_ids == job_ids
 
     @pytest.mark.asyncio
     async def test_get_shared_job(
