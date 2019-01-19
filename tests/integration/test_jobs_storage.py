@@ -299,7 +299,7 @@ class TestRedisJobsStorage:
         await storage.set_job(job)
 
         jobs = await storage.get_all_jobs()
-        assert len(jobs) == 1
+        assert len(jobs) == 0
 
         jobs = await storage.get_running_jobs()
         assert jobs == []

@@ -50,6 +50,7 @@ class JobsStorage(ABC):
 
     @abstractmethod
     async def get_all_jobs(self, job_filter: Optional[JobFilter] = None) -> List[Job]:
+        """Returns all non-deleted jobs"""
         pass
 
     async def get_running_jobs(self) -> List[Job]:
@@ -145,11 +146,21 @@ class RedisJobsStorage(JobsStorage):
     async def _get_all_job_ids(
         self, job_filter: Optional[JobFilter] = None
     ) -> List[str]:
-        result = []
-        if job_filter is None or len(job_filter.statuses) == 0:
-            async for job_id in self._client.isscan(self._generate_jobs_index_key()):
-                result.append(job_id.decode())
-            return result
+        if job_filter is None or not job_filter.statuses:
+            res = [
+                await self._client.sdiff(
+                    self._generate_jobs_index_key(),
+                    self._generate_jobs_deleted_index_key(),
+                )
+            ]
+        elif len(job_filter.statuses) == 1:
+            status = next(iter(job_filter.statuses))
+            res = [
+                await self._client.sdiff(
+                    self._generate_jobs_status_index_key(status),
+                    self._generate_jobs_deleted_index_key(),
+                )
+            ]
         else:
             tr = self._client.multi_exec()
             for status in job_filter.statuses:
@@ -158,9 +169,7 @@ class RedisJobsStorage(JobsStorage):
                     self._generate_jobs_deleted_index_key(),
                 )
             res = await tr.execute()
-            for id_ in itertools.chain(*res):
-                result.append(id_.decode())
-        return result
+        return [job_id.decode() for job_id in itertools.chain(*res)]
 
     async def _get_all_jobs_payloads(self, ids: List[str]) -> List[Job]:
         jobs: List[Job] = []
