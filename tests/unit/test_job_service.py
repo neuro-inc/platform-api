@@ -108,7 +108,7 @@ class TestInMemoryJobsStorage:
     async def test_get_all_jobs_empty(self, mock_orchestrator):
         jobs_storage = InMemoryJobsStorage(orchestrator_config=mock_orchestrator.config)
         jobs = await jobs_storage.get_all_jobs()
-        assert not jobs
+        assert jobs == []
 
     def _create_job_request(self):
         return JobRequest.create(

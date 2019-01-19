@@ -17,7 +17,7 @@ def es_hosts():
             (
                 "minikube",
                 "service",
-                "-n",
+                "--namespace",
                 "kube-system",
                 "elasticsearch-logging",
                 "--url",
