@@ -4,4 +4,4 @@ env | grep -e NP -e KUBERNETES >> /neuromation/.env
 # stream log to stderr
 1>&2 tail -f /authorization.log &
 # start sshd
-/usr/sbin/sshd -De
+/usr/sbin/sshd -D
