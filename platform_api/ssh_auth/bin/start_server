@@ -1,7 +1,10 @@
 #!/bin/bash
 # copy env values to use in ssh session
+1>&2 echo "Container started"
 env | grep -e NP -e KUBERNETES >> /neuromation/.env
-# stream log to stderr
-1>&2 tail -f /authorization.log &
+1>&2 echo "Environment saved"
 # start sshd
-/usr/sbin/sshd -D
+1>&2 echo "Starting ssh daemon"
+/usr/sbin/sshd -e
+# stream logs to stderr
+1>&2 tail -f /authorization.log
