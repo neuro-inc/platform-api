@@ -53,7 +53,7 @@ def main() -> None:
         init_logging(pipe)
         loop = asyncio.get_event_loop()
         try:
-            retcode = loop.run_until_complete(run())
+            retcode = loop.run_until_complete(run(config))
             sys.exit(retcode)
         except AuthenticationError as error:
             print("Unauthorized")
