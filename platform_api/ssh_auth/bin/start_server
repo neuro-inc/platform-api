@@ -3,10 +3,9 @@
 1>&2 echo "Container started"
 env | grep -e NP -e KUBERNETES >> /neuromation/.env
 1>&2 echo "Environment saved"
-# start sshd
-1>&2 echo "Starting ssh daemon"
-/usr/sbin/sshd -e
-1>&2 echo "ssh daemon started"
 # stream logs to stderr
+1>&2 tail -f /authorization.log &
 1>&2 echo "Streaming logs to stderr"
-1>&2 tail -f /authorization.log
+# start sshd
+/usr/sbin/sshd -De
+
