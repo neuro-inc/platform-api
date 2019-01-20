@@ -2,6 +2,7 @@ import asyncio
 import logging
 import os
 import sys
+from typing import IO
 
 from neuro_auth_client import AuthClient
 
@@ -39,37 +40,37 @@ async def run() -> int:
         return retcode
 
 
-def init_logging() -> None:
+def init_logging(pipe: IO[str]) -> None:
     logging.basicConfig(
-        filename="/authorization.log",
+        stream="pipe",
         level=logging.INFO,
         format="%(asctime)s - %(name)s - %(levelname)s - %(message)s",
     )
 
 
 def main() -> None:
-    init_logging()
-    loop = asyncio.get_event_loop()
-
-    try:
-        retcode = loop.run_until_complete(run())
-        sys.exit(retcode)
-    except AuthenticationError as error:
-        print("Unauthorized")
-        log.error(f"{type(error)}:{error}")
-        sys.exit(os.EX_NOPERM)
-    except AuthorizationError as error:
-        print(f"Permission denied")
-        log.error(f"{type(error)}:{error}")
-        sys.exit(os.EX_NOPERM)
-    except IllegalArgumentError as error:
-        print(f"{error}")
-        log.error(f"{type(error)}:{error}")
-        sys.exit(os.EX_DATAERR)
-    except Exception as error:
-        print("Unknown exception")
-        log.error(f"{type(error)}:{error}")
-        sys.exit(os.EX_SOFTWARE)
+    with open("/authorization.log", "w") as pipe:
+        init_logging(pipe)
+        loop = asyncio.get_event_loop()
+        try:
+            retcode = loop.run_until_complete(run())
+            sys.exit(retcode)
+        except AuthenticationError as error:
+            print("Unauthorized")
+            log.error(f"{type(error)}:{error}")
+            sys.exit(os.EX_NOPERM)
+        except AuthorizationError as error:
+            print(f"Permission denied")
+            log.error(f"{type(error)}:{error}")
+            sys.exit(os.EX_NOPERM)
+        except IllegalArgumentError as error:
+            print(f"{error}")
+            log.error(f"{type(error)}:{error}")
+            sys.exit(os.EX_DATAERR)
+        except Exception as error:
+            print("Unknown exception")
+            log.error(f"{type(error)}:{error}")
+            sys.exit(os.EX_SOFTWARE)
 
 
 if __name__ == "__main__":

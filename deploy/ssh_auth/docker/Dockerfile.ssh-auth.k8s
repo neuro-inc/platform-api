@@ -44,6 +44,7 @@ RUN cp platform_api/ssh_auth/bin/* /usr/local/bin
 RUN mkdir /nonexistent
 RUN chmod a+rwx /nonexistent
 RUN mkfifo /authorization.log
+RUN chmod a+rwx /authorization.log
 
 # disable password for nobody
 RUN sed -i -re 's/^nobody:[^:]+:/nobody::/' /etc/shadow
