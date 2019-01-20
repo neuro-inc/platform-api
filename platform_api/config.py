@@ -1,7 +1,7 @@
 from dataclasses import dataclass, field
 from datetime import timedelta
 from enum import Enum
-from pathlib import PurePath, Path
+from pathlib import Path, PurePath
 from typing import Container, Optional, Sequence
 
 from yarl import URL
