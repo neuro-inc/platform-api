@@ -42,7 +42,7 @@ async def run() -> int:
 
 def init_logging(pipe: IO[str]) -> None:
     logging.basicConfig(
-        stream="pipe",
+        stream=pipe,
         level=logging.INFO,
         format="%(asctime)s - %(name)s - %(levelname)s - %(message)s",
     )
