@@ -43,8 +43,7 @@ RUN cp platform_api/ssh_auth/bin/* /usr/local/bin
 # create nonexistent dir, as kubectl requires home to be a real directory
 RUN mkdir /nonexistent
 RUN chmod a+rwx /nonexistent
-RUN touch /authorization.log
-RUN chmod a+rw /authorization.log
+RUN mkfifo /authorization.log
 
 # disable password for nobody
 RUN sed -i -re 's/^nobody:[^:]+:/nobody::/' /etc/shadow
