@@ -1,7 +1,7 @@
 from dataclasses import dataclass, field
 from datetime import timedelta
 from enum import Enum
-from pathlib import PurePath
+from pathlib import PurePath, Path
 from typing import Container, Optional, Sequence
 
 from yarl import URL
@@ -153,4 +153,5 @@ class PlatformConfig:
 class SSHAuthConfig:
     platform: PlatformConfig
     auth: AuthConfig
+    log_fifo: Path
     env_prefix: str = "NP"

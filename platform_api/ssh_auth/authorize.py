@@ -6,7 +6,7 @@ from typing import IO
 
 from neuro_auth_client import AuthClient
 
-from platform_api.config_factory import EnvironConfigFactory
+from platform_api.config_factory import EnvironConfigFactory, SSHAuthConfig
 
 from .executor import KubeCTLExecutor
 from .proxy import (
@@ -20,7 +20,7 @@ from .proxy import (
 log = logging.getLogger(__name__)
 
 
-async def run() -> int:
+async def run(config: SSHAuthConfig) -> int:
     json_request = os.environ.get("SSH_ORIGINAL_COMMAND", "")
     log.info(f"Request: {json_request}")
     if os.environ.get("NP_TTY", "0") == "1":
@@ -29,7 +29,6 @@ async def run() -> int:
         tty = False
     log.info(f"TTY is {tty}")
 
-    config = EnvironConfigFactory().create_ssh_auth()
     async with AuthClient(
         url=config.auth.server_endpoint_url, token=config.auth.service_token
     ) as auth_client:
@@ -49,7 +48,8 @@ def init_logging(pipe: IO[str]) -> None:
 
 
 def main() -> None:
-    with open("/authorization.log", "w") as pipe:
+    config = EnvironConfigFactory().create_ssh_auth()
+    with config.log_fifo.open(mode="w") as pipe:
         init_logging(pipe)
         loop = asyncio.get_event_loop()
         try:

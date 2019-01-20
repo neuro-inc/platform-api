@@ -4,8 +4,7 @@
 env | grep -e NP -e KUBERNETES >> /neuromation/.env
 1>&2 echo "Environment saved"
 # stream logs to stderr
-1>&2 tail -f /authorization.log &
+1>&2 tail -f $NP_LOG_FIFO &
 1>&2 echo "Streaming logs to stderr"
 # start sshd
 /usr/sbin/sshd -De
-
