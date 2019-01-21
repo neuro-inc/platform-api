@@ -328,3 +328,52 @@ async def kube_node_preemptible(kube_config, kube_client, delete_node_later):
     await kube_client.create_node(node_name, labels=labels, taints=taints)
 
     yield node_name
+
+
+@pytest.fixture
+async def model_request_factory():
+    def _factory(owner: str):
+        return {
+            "container": {
+                "image": "ubuntu",
+                "command": "true",
+                "resources": {"cpu": 0.1, "memory_mb": 16},
+                "http": {"port": 1234},
+            },
+            "dataset_storage_uri": f"storage://{owner}",
+            "result_storage_uri": f"storage://{owner}/result",
+        }
+    return _factory
+
+
+@pytest.fixture
+async def model_train(model_request_factory, regular_user):
+    return model_request_factory(regular_user.name)
+
+
+@pytest.fixture
+async def job_submit_factory():
+    def _factory():
+        return {
+            "container": {
+                "image": "ubuntu",
+                "command": "true",
+                "resources": {"cpu": 0.1, "memory_mb": 16},
+                "http": {"port": 1234},
+                "volumes": [
+                    {
+                        "src_storage_uri": f"storage://~/",
+                        "dst_path": "/container/read_only",
+                        "read_only": True,
+                    }
+                ],
+            },
+            "description": "integration test job created by job-submit",
+            "is_preemptible": True,
+        }
+    return _factory
+
+
+@pytest.fixture
+async def job_submit(job_submit_factory):
+    return job_submit_factory()

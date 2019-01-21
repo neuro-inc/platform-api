@@ -140,34 +140,12 @@ class TestApi:
             assert response.status == HTTPOk.status_code
 
 
-@pytest.fixture
-async def model_request_factory():
-    def _factory(owner: str):
-        return {
-            "container": {
-                "image": "ubuntu",
-                "command": "true",
-                "resources": {"cpu": 0.1, "memory_mb": 16},
-                "http": {"port": 1234},
-            },
-            "dataset_storage_uri": f"storage://{owner}",
-            "result_storage_uri": f"storage://{owner}/result",
-        }
-
-    return _factory
-
-
-@pytest.fixture
-async def model_train(model_request_factory, regular_user):
-    return model_request_factory(regular_user.name)
-
-
 class TestModels:
     @pytest.mark.asyncio
     async def test_create_model_unauthorized(self, api, client, model_train):
         url = api.model_base_url
-        async with client.post(url, json=model_train) as response:
-            assert response.status == HTTPUnauthorized.status_code
+        async with client.post(url, json=model_train) as resp:
+            assert resp.status == HTTPUnauthorized.status_code, await resp.text()
 
     @pytest.mark.asyncio
     async def test_create_model(
@@ -178,7 +156,7 @@ class TestModels:
         async with client.post(
             url, headers=regular_user.headers, json=model_train
         ) as response:
-            assert response.status == HTTPAccepted.status_code
+            assert response.status == HTTPAccepted.status_code, await response.text()
             result = await response.json()
             job_id = result["job_id"]
             assert result["status"] in ["pending"]
@@ -203,7 +181,7 @@ class TestModels:
         async with client.post(
             url, headers=regular_user.headers, json=model_train
         ) as response:
-            assert response.status == HTTPAccepted.status_code
+            assert response.status == HTTPAccepted.status_code, await response.text()
             result = await response.json()
             assert result["status"] in ["pending"]
             job_id = result["job_id"]
@@ -223,7 +201,7 @@ class TestModels:
         async with client.post(
             url, headers=regular_user.headers, json=model_train
         ) as response:
-            assert response.status == HTTPAccepted.status_code
+            assert response.status == HTTPAccepted.status_code, await response.text()
             result = await response.json()
             assert result["status"] in ["pending"]
             job_id = result["job_id"]
@@ -305,7 +283,7 @@ class TestModels:
         async with client.post(
             url, headers=regular_user.headers, json=payload
         ) as response:
-            assert response.status == HTTPAccepted.status_code
+            assert response.status == HTTPAccepted.status_code, await response.text()
             result = await response.json()
             assert result["status"] in ["pending"]
             job_id = result["job_id"]
@@ -319,7 +297,7 @@ class TestModels:
         async with client.post(
             url, headers=regular_user.headers, json=json_model_train
         ) as response:
-            assert response.status == HTTPBadRequest.status_code
+            assert response.status == HTTPBadRequest.status_code, await response.text()
             data = await response.json()
             assert """'container': DataError(is required)""" in data["error"]
 
@@ -339,7 +317,7 @@ class TestModels:
         async with client.post(
             url, headers=regular_user.headers, json=payload
         ) as response:
-            assert response.status == HTTPAccepted.status_code
+            assert response.status == HTTPAccepted.status_code, await response.text()
             data = await response.json()
             job_id = data["job_id"]
         await jobs_client.long_polling_by_job_id(job_id=job_id, status="failed")
@@ -404,19 +382,19 @@ class TestModels:
 
 class TestJobs:
     @pytest.mark.asyncio
-    async def test_create_job_unauthorized_no_token(self, api, client, model_train):
+    async def test_create_job_unauthorized_no_token(self, api, client, job_submit):
         url = api.jobs_base_url
-        async with client.post(url, json=model_train) as response:
-            assert response.status == HTTPUnauthorized.status_code
+        async with client.post(url, json=job_submit) as response:
+            assert response.status == HTTPUnauthorized.status_code, await response.text()
 
     @pytest.mark.asyncio
     async def test_create_job_unauthorized_invalid_token(
-        self, api, client, model_train
+        self, api, client, job_submit
     ):
         url = api.jobs_base_url
         headers = {"Authorization": "Bearer INVALID"}
-        async with client.post(url, headers=headers, json=model_train) as response:
-            assert response.status == HTTPUnauthorized.status_code
+        async with client.post(url, headers=headers, json=job_submit) as response:
+            assert response.status == HTTPUnauthorized.status_code, await response.text()
 
     @pytest.mark.asyncio
     async def test_get_all_jobs_clear(self, jobs_client):
@@ -429,23 +407,22 @@ class TestJobs:
         jobs_client,
         api,
         client,
-        model_request_factory,
+        job_submit_factory,
         regular_user_factory,
         auth_client,
     ):
         owner = await regular_user_factory()
         follower = await regular_user_factory()
 
-        url = api.model_base_url
-        model_request = model_request_factory(owner.name)
+        url = api.jobs_base_url
+        job_submit_request = job_submit_factory()
         async with client.post(
-            url, headers=owner.headers, json=model_request
+            url, headers=owner.headers, json=job_submit_request
         ) as response:
-            assert response.status == HTTPAccepted.status_code
+            assert response.status == HTTPAccepted.status_code, await response.text()
             result = await response.json()
             job_id = result["job_id"]
 
-        url = api.jobs_base_url
         async with client.get(url, headers=owner.headers) as response:
             assert response.status == HTTPOk.status_code, await response.text()
             result = await response.json()
@@ -453,7 +430,7 @@ class TestJobs:
             assert job_ids == {job_id}
 
         async with client.get(url, headers=follower.headers) as response:
-            assert response.status == HTTPOk.status_code
+            assert response.status == HTTPOk.status_code, await response.text()
             result = await response.json()
             assert not result["jobs"]
 
@@ -463,7 +440,7 @@ class TestJobs:
         )
 
         async with client.get(url, headers=follower.headers) as response:
-            assert response.status == HTTPOk.status_code
+            assert response.status == HTTPOk.status_code, await response.text()
 
     @pytest.mark.asyncio
     async def test_get_shared_job(
@@ -471,28 +448,28 @@ class TestJobs:
         jobs_client,
         api,
         client,
-        model_request_factory,
+        job_submit_factory,
         regular_user_factory,
         auth_client,
     ):
         owner = await regular_user_factory()
         follower = await regular_user_factory()
 
-        url = api.model_base_url
-        model_request = model_request_factory(owner.name)
+        url = api.jobs_base_url
+        job_submit_request = job_submit_factory()
         async with client.post(
-            url, headers=owner.headers, json=model_request
+            url, headers=owner.headers, json=job_submit_request
         ) as response:
-            assert response.status == HTTPAccepted.status_code
+            assert response.status == HTTPAccepted.status_code, await response.text()
             result = await response.json()
             job_id = result["job_id"]
 
         url = f"{api.jobs_base_url}/{job_id}"
         async with client.get(url, headers=owner.headers) as response:
-            assert response.status == HTTPOk.status_code
+            assert response.status == HTTPOk.status_code, await response.text()
 
         async with client.get(url, headers=follower.headers) as response:
-            assert response.status == HTTPForbidden.status_code
+            assert response.status == HTTPForbidden.status_code, await response.text()
 
         permission = Permission(uri=f"job://{owner.name}/{job_id}", action="read")
         await auth_client.grant_user_permissions(
@@ -500,21 +477,21 @@ class TestJobs:
         )
 
         async with client.get(url, headers=follower.headers) as response:
-            assert response.status == HTTPOk.status_code
+            assert response.status == HTTPOk.status_code, await response.text()
 
     @pytest.mark.asyncio
     async def test_get_jobs_return_corrects_id(
-        self, jobs_client, api, client, model_train, regular_user
+        self, jobs_client, api, client, job_submit, regular_user
     ):
         jobs_ids = []
         n_jobs = 2
         for _ in range(n_jobs):
-            url = api.model_base_url
+            url = api.jobs_base_url
             async with client.post(
-                url, headers=regular_user.headers, json=model_train
-            ) as response:
-                assert response.status == HTTPAccepted.status_code
-                result = await response.json()
+                url, headers=regular_user.headers, json=job_submit
+            ) as resp:
+                assert resp.status == HTTPAccepted.status_code, await resp.text()
+                result = await resp.json()
                 assert result["status"] in ["pending"]
                 job_id = result["job_id"]
                 await jobs_client.long_polling_by_job_id(
@@ -530,13 +507,13 @@ class TestJobs:
 
     @pytest.mark.asyncio
     async def test_delete_job(
-        self, api, client, model_train, jobs_client, regular_user
+        self, api, client, job_submit, jobs_client, regular_user
     ):
-        url = api.model_base_url
+        url = api.jobs_base_url
         async with client.post(
-            url, headers=regular_user.headers, json=model_train
+            url, headers=regular_user.headers, json=job_submit
         ) as response:
-            assert response.status == HTTPAccepted.status_code
+            assert response.status == HTTPAccepted.status_code, await response.text()
             result = await response.json()
             assert result["status"] in ["pending"]
             job_id = result["job_id"]
@@ -550,14 +527,14 @@ class TestJobs:
 
     @pytest.mark.asyncio
     async def test_delete_already_deleted(
-        self, api, client, model_train, jobs_client, regular_user
+        self, api, client, job_submit, jobs_client, regular_user
     ):
-        url = api.model_base_url
-        model_train["container"]["command"] = "sleep 1000000000"
+        url = api.jobs_base_url
+        job_submit["container"]["command"] = "sleep 1000000000"
         async with client.post(
-            url, headers=regular_user.headers, json=model_train
+            url, headers=regular_user.headers, json=job_submit
         ) as response:
-            assert response.status == HTTPAccepted.status_code
+            assert response.status == HTTPAccepted.status_code, await response.text()
             result = await response.json()
             assert result["status"] in ["pending"]
             job_id = result["job_id"]
@@ -571,7 +548,7 @@ class TestJobs:
         job_id = "kdfghlksjd-jhsdbljh-3456789!@"
         url = api.jobs_base_url + f"/{job_id}"
         async with client.delete(url, headers=regular_user.headers) as response:
-            assert response.status == HTTPBadRequest.status_code
+            assert response.status == HTTPBadRequest.status_code, await response.text()
             result = await response.json()
             assert result["error"] == f"no such job {job_id}"
 
@@ -587,11 +564,11 @@ class TestJobs:
             "dataset_storage_uri": f"storage://{regular_user.name}",
             "result_storage_uri": f"storage://{regular_user.name}/result",
         }
-        url = api.model_base_url
+        url = api.jobs_base_url
         async with client.post(
             url, headers=regular_user.headers, json=payload
         ) as response:
-            assert response.status == HTTPAccepted.status_code
+            assert response.status == HTTPAccepted.status_code, await response.text()
             result = await response.json()
             assert result["status"] in ["pending"]
             job_id = result["job_id"]
@@ -612,7 +589,7 @@ class TestJobs:
         async with client.post(
             api.jobs_base_url, headers=regular_user.headers, json=request_payload
         ) as response:
-            assert response.status == HTTPBadRequest.status_code
+            assert response.status == HTTPBadRequest.status_code, await response.text()
             response_payload = await response.json()
             assert response_payload == {"error": mock.ANY}
             assert "is required" in response_payload["error"]
@@ -716,11 +693,11 @@ class TestJobs:
             "dataset_storage_uri": f"storage://{regular_user.name}",
             "result_storage_uri": f"storage://{regular_user.name}/result",
         }
-        url = api.model_base_url
+        url = api.jobs_base_url
         async with client.post(
             url, headers=regular_user.headers, json=payload
         ) as response:
-            assert response.status == HTTPAccepted.status_code
+            assert response.status == HTTPAccepted.status_code, await response.text()
             result = await response.json()
             assert result["status"] == "pending"
             job_id = result["job_id"]
@@ -844,15 +821,15 @@ class TestJobs:
         await kube_client.wait_pod_scheduled(job_id, kube_node_gpu)
 
     @pytest.mark.asyncio
-    async def test_job_top(self, api, client, regular_user, jobs_client, model_train):
+    async def test_job_top(self, api, client, regular_user, jobs_client, job_submit):
 
         command = 'bash -c "for i in {1..5}; do echo $i; sleep 1; done"'
-        model_train["container"]["command"] = command
-        url = api.model_base_url
+        job_submit["container"]["command"] = command
+        url = api.jobs_base_url
         async with client.post(
-            url, headers=regular_user.headers, json=model_train
+            url, headers=regular_user.headers, json=job_submit
         ) as response:
-            assert response.status == HTTPAccepted.status_code
+            assert response.status == HTTPAccepted.status_code, await response.text()
             result = await response.json()
             assert result["status"] in ["pending"]
             job_id = result["job_id"]
@@ -889,15 +866,15 @@ class TestJobs:
 
     @pytest.mark.asyncio
     async def test_job_top_silently_wait_when_job_pending(
-        self, api, client, regular_user, jobs_client, model_train
+        self, api, client, regular_user, jobs_client, job_submit
     ):
         command = 'bash -c "for i in {1..10}; do echo $i; sleep 1; done"'
-        model_train["container"]["command"] = command
-        url = api.model_base_url
+        job_submit["container"]["command"] = command
+        url = api.jobs_base_url
         async with client.post(
-            url, headers=regular_user.headers, json=model_train
+            url, headers=regular_user.headers, json=job_submit
         ) as response:
-            assert response.status == HTTPAccepted.status_code
+            assert response.status == HTTPAccepted.status_code, await response.text()
             result = await response.json()
             assert result["status"] in ["pending"]
             job_id = result["job_id"]
@@ -920,16 +897,16 @@ class TestJobs:
 
     @pytest.mark.asyncio
     async def test_job_top_close_when_job_succeeded(
-        self, api, client, regular_user, jobs_client, model_train
+        self, api, client, regular_user, jobs_client, job_submit
     ):
 
         command = 'bash -c "for i in {1..2}; do echo $i; sleep 1; done"'
-        model_train["container"]["command"] = command
-        url = api.model_base_url
+        job_submit["container"]["command"] = command
+        url = api.jobs_base_url
         async with client.post(
-            url, headers=regular_user.headers, json=model_train
+            url, headers=regular_user.headers, json=job_submit
         ) as response:
-            assert response.status == HTTPAccepted.status_code
+            assert response.status == HTTPAccepted.status_code, await response.text()
             result = await response.json()
             assert result["status"] in ["pending"]
             job_id = result["job_id"]
