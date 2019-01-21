@@ -343,6 +343,7 @@ async def model_request_factory():
             "dataset_storage_uri": f"storage://{owner}",
             "result_storage_uri": f"storage://{owner}/result",
         }
+
     return _factory
 
 
@@ -371,6 +372,7 @@ async def job_submit_factory():
             "description": "integration test job created by job-submit",
             "is_preemptible": True,
         }
+
     return _factory
 
 

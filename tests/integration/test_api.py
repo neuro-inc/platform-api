@@ -385,16 +385,18 @@ class TestJobs:
     async def test_create_job_unauthorized_no_token(self, api, client, job_submit):
         url = api.jobs_base_url
         async with client.post(url, json=job_submit) as response:
-            assert response.status == HTTPUnauthorized.status_code, await response.text()
+            assert (
+                response.status == HTTPUnauthorized.status_code
+            ), await response.text()
 
     @pytest.mark.asyncio
-    async def test_create_job_unauthorized_invalid_token(
-        self, api, client, job_submit
-    ):
+    async def test_create_job_unauthorized_invalid_token(self, api, client, job_submit):
         url = api.jobs_base_url
         headers = {"Authorization": "Bearer INVALID"}
         async with client.post(url, headers=headers, json=job_submit) as response:
-            assert response.status == HTTPUnauthorized.status_code, await response.text()
+            assert (
+                response.status == HTTPUnauthorized.status_code
+            ), await response.text()
 
     @pytest.mark.asyncio
     async def test_get_all_jobs_clear(self, jobs_client):
@@ -506,9 +508,7 @@ class TestJobs:
             await jobs_client.delete_job(job_id=job["id"])
 
     @pytest.mark.asyncio
-    async def test_delete_job(
-        self, api, client, job_submit, jobs_client, regular_user
-    ):
+    async def test_delete_job(self, api, client, job_submit, jobs_client, regular_user):
         url = api.jobs_base_url
         async with client.post(
             url, headers=regular_user.headers, json=job_submit
