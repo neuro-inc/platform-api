@@ -1,5 +1,5 @@
 import os
-from pathlib import PurePath
+from pathlib import PurePath, Path
 from typing import List, Optional
 
 from yarl import URL
@@ -71,7 +71,7 @@ class EnvironConfigFactory:
     def create_ssh_auth(self) -> SSHAuthConfig:
         platform = self.create_platform()
         auth = self.create_auth()
-        log_fifo = self._environ["NP_LOG_FIFO"]
+        log_fifo = Path(self._environ["NP_LOG_FIFO"])
         return SSHAuthConfig(platform=platform, auth=auth, log_fifo=log_fifo)
 
     def create_server(self) -> ServerConfig:
