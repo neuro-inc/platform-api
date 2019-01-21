@@ -1,5 +1,5 @@
 import os
-from pathlib import PurePath, Path
+from pathlib import Path, PurePath
 from typing import List, Optional
 
 from yarl import URL
