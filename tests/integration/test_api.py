@@ -2,7 +2,7 @@ import asyncio
 import json
 import time
 from pathlib import PurePath
-from typing import Callable, NamedTuple
+from typing import Dict, NamedTuple, Optional
 from unittest import mock
 
 import aiohttp
@@ -87,14 +87,28 @@ async def client():
 
 
 class JobsClient:
-    def __init__(self, api_config, client, headers):
+    def __init__(self, api_config, client, regular_user):
         self._api_config = api_config
         self._client = client
-        self._headers = headers
+        self._headers = regular_user.headers
+        self._name = regular_user.name
 
-    async def get_all_jobs(self):
+    @property
+    def name(self):
+        return self._name
+
+    async def start_new_job(self, job_request):
+        async with self._client.post(
+            self._api_config.jobs_base_url, headers=self._headers, json=job_request
+        ) as resp:
+            assert resp.status == HTTPAccepted.status_code, await resp.text()
+            return await resp.json()
+
+    async def get_all_jobs(self, filter_params: Optional[Dict[str]] = None):
         url = self._api_config.jobs_base_url
-        async with self._client.get(url, headers=self._headers) as response:
+        async with self._client.get(
+            url, headers=self._headers, params=filter_params
+        ) as response:
             response_text = await response.text()
             assert response.status == HTTPOk.status_code, response_text
             result = await response.json()
@@ -130,7 +144,7 @@ class JobsClient:
 
 @pytest.fixture
 async def jobs_client(api, client, regular_user):
-    return JobsClient(api, client, headers=regular_user.headers)
+    return JobsClient(api, client, regular_user)
 
 
 class TestApi:
@@ -155,47 +169,6 @@ async def model_request_factory():
         }
 
     return _factory
-
-
-@pytest.fixture
-async def create_job_request(regular_user):
-    def _factory(
-        owner: str,
-        image: str = "ubuntu",
-        description: str = "test-job",
-        command: str = "true",
-        cpu: float = 0.1,
-        memory_mb: int = 16,
-        is_preemptible: bool = True,
-    ):
-        return {
-            "container": {
-                "image": image,
-                "command": command,
-                "resources": {"cpu": cpu, "memory_mb": memory_mb},
-                "volumes": [
-                    {
-                        "src_storage_uri": f"storage://{owner}",
-                        "dst_path": "/var/storage",
-                        "read_only": False,
-                    }
-                ],
-            },
-            "is_preemptible": is_preemptible,
-            "description": description,
-        }
-
-    return _factory
-
-
-async def start_job(url, user, job_request):
-    async with client.post(url, headers=user.headers, json=job_request) as response:
-        assert (
-            response.status == HTTPAccepted.status_code,
-            f"request: {job_request}, response body: " + (await response.text()),
-        )
-        result = await response.json()
-        return result["job_id"]
 
 
 @pytest.fixture
@@ -460,7 +433,7 @@ class TestJobs:
             assert response.status == HTTPUnauthorized.status_code
 
     @pytest.mark.asyncio
-    async def test_get_all_jobs_clear(self, jobs_client):
+    async def test_get_all_jobs_empty(self, jobs_client):
         jobs = await jobs_client.get_all_jobs()
         assert jobs == []
 
@@ -507,7 +480,51 @@ class TestJobs:
             assert response.status == HTTPOk.status_code
 
     @pytest.mark.asyncio
-    async def test_get_jobs_filtered(
+    async def test_get_all_jobs_filter_take_all(
+        self,
+        jobs_client,
+        api,
+        client,
+        regular_user_factory,
+        job_request_factory,
+        model_train,
+        auth_client,
+    ):
+        original_jobs = set()
+
+        # start clean job
+        job_request = model_train
+        data = await jobs_client.start_new_job(job_request)
+        assert data["id"].startswith("job")
+        original_jobs.add(data["id"])
+
+        # start job with wrong image (job will fail)
+        job_request = model_train
+        job_request["container"]["image"] = "abrakadabra"
+        data = await jobs_client.start_new_job(job_request)
+        assert data["id"].startswith("job")
+        original_jobs.add(data["id"])
+
+        # start job with wrong command (job will fail)
+        job_request = model_train
+        job_request["container"]["command"] = "false"
+        data = await jobs_client.start_new_job(job_request)
+        assert data["id"].startswith("job")
+        original_jobs.add(data["id"])
+
+        # wait until jobs fail
+        for job_id in original_jobs:
+            await jobs_client.long_polling_by_job_id(job_id, status="failed")
+
+        # check
+        res = await jobs_client.get_all_jobs()
+        jobs = {data["id"] for data in res if data["id"]}
+
+        assert len(jobs) == len(original_jobs)
+        assert jobs == original_jobs
+
+    @pytest.mark.asyncio
+    async def test_get_all_jobs_filtered_by_status(
         self,
         jobs_client,
         api,
@@ -516,39 +533,39 @@ class TestJobs:
         create_job_request,
         auth_client,
     ):
-        user = await regular_user_factory()
-        job_requests = [
-            create_job_request(
-                owner=user.name, image="testimage", description="test job 1"
-            ),
-            create_job_request(
-                owner=user.name, image="testimage", description="test job 1"
-            ),
-            create_job_request(
-                owner=user.name, image="testimage", description="test job 2"
-            ),
-            create_job_request(
-                owner=user.name, image="testimage", description="test job 3"
-            ),
-        ]
-        job_ids = set()
-        url = api.jobs_base_url
-        for job_request in job_requests:
-            job_id = await start_job(url, user, job_request)
-            job_ids.add(job_id)
+        NUMBER_OF_ALL_JOBS = 3
+        NUMBER_OF_KILLED_JOBS = 2
 
+        # run all jobs
+        job_request = create_job_request(image="ubuntu", command="sleep infinity")
+        all_jobs = set()
+        for _ in range(NUMBER_OF_ALL_JOBS):
+            data = await jobs_client.start_new_job(job_request)
+            job_id = data["id"]
+            assert job_id.startswith("job")
+            all_jobs.add(job_id)
+            await jobs_client.long_polling_by_job_id(job_id, status="running")
+
+        # kill jobs => make them succeeded
+        original_jobs_iterator = iter(all_jobs)
+        killed_jobs = set()
+        for _ in range(NUMBER_OF_KILLED_JOBS):
+            job_id = next(original_jobs_iterator)
+            jobs_client.delete_job(job_id)
+            killed_jobs.add(job_id)
+
+        # get all KILLED jobs:
+        filter_params = {"status": "succeeded"}
+        res = await jobs_client.get_all_jobs(filter_params)
+        jobs = {data["id"] for data in res if data["status"] == "succeeded"}
+        assert jobs == killed_jobs
+
+        # get all NON KILLED jobs:
         statuses = ["running", "pending"]
-        filters = {"status": "+".join(statuses)}
-        url = api.jobs_base_url
-        async with client.get(url, headers=user.headers, params=filters) as response:
-            assert response.status == HTTPOk.status_code, await response.text()
-            result = await response.json()
-            job_ids = {
-                item["id"]
-                for item in result["jobs"]
-                if item["description"] == description and item["status"] in statuses
-            }
-            assert job_ids == job_ids
+        filter_params = {"status": "+".join(statuses)}
+        res = await jobs_client.get_all_jobs(filter_params)
+        jobs = {data["id"] for data in res if data["status"] in statuses}
+        assert jobs == (all_jobs - killed_jobs)
 
     @pytest.mark.asyncio
     async def test_get_shared_job(
