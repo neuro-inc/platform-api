@@ -69,7 +69,7 @@ def config(kube_config, redis_config, auth_config, es_config):
 
 
 @pytest.fixture
-async def api(config):
+async def api(config, client):
     app = await create_app(config)
     runner = aiohttp.web.AppRunner(app)
     await runner.setup()
@@ -127,10 +127,16 @@ class JobsClient:
         async with self._client.delete(url, headers=self._headers) as response:
             assert response.status == HTTPNoContent.status_code
 
+    async def cleanup(self):
+        for job in await self.get_all_jobs():
+            await self.delete_job(job["id"])
+
 
 @pytest.fixture
 async def jobs_client(api, client, regular_user):
-    return JobsClient(api, client, headers=regular_user.headers)
+    jobs_client = JobsClient(api, client, headers=regular_user.headers)
+    yield jobs_client
+    await jobs_client.cleanup()
 
 
 class TestApi:
