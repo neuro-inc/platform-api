@@ -276,9 +276,9 @@ class JobStatus(str, enum.Enum):
 
     @classmethod
     def parse(cls, status_str) -> "JobStatus":
-        for item in cls:
-            if status_str == item.value:
-                return item
+        for item in cls:  # type: ignore
+            if status_str == item.value:  # type: ignore
+                return item  # type: ignore
         raise ValueError(f'Invalid status "{status_str}"')
 
 

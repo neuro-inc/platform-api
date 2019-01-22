@@ -104,7 +104,7 @@ class JobsClient:
             assert resp.status == HTTPAccepted.status_code, await resp.text()
             return await resp.json()
 
-    async def get_all_jobs(self, filter_params: Optional[Dict[str]] = None):
+    async def get_all_jobs(self, filter_params: Optional[Dict[str, str]] = None):
         url = self._api_config.jobs_base_url
         async with self._client.get(
             url, headers=self._headers, params=filter_params

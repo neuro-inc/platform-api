@@ -284,7 +284,7 @@ class Job:
     @property
     def is_time_for_deletion(self) -> bool:
         return (
-            self._deletion_planned_at
+            self._deletion_planned_at is not None
             and self._deletion_planned_at <= self._current_datetime_factory()
         )
 
