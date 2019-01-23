@@ -58,6 +58,7 @@ class TestInMemoryJobsStorage:
                 "resources": {"cpu": 1, "memory_mb": 128},
             },
             "description": "test test description",
+            "ssh_auth_server": "ssh://nobody@ssh-auth:22",
             "is_preemptible": False,
         }
 
