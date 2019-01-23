@@ -264,7 +264,7 @@ class JobsHandler:
         tree = await self._auth_client.get_permissions_tree(user.name, "job:")
         # TODO (A Danshyn 10/09/18): retrieving all jobs until the proper
         # index is in place
-        job_filter = JobFilter.from_primitive(dict(request.query or {}))
+        job_filter = JobFilter.from_primitive(dict(request.query))
         jobs = await self._jobs_service.get_all_jobs(job_filter)
         jobs = filter_jobs_with_access_tree(jobs, tree)
 

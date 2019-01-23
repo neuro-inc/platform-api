@@ -141,7 +141,7 @@ class TestJobsStorage:
             assert job.description == original_job.description
 
     @pytest.mark.asyncio
-    async def test_get_all_filter_by_status_empty(
+    async def test_get_all_filter_by_status_empty_result(
         self, redis_client, kube_orchestrator, create_storage, storage_class
     ):
         original_pending_job = self._create_pending_job(kube_orchestrator)

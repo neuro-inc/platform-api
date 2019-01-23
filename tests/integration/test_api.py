@@ -486,7 +486,6 @@ class TestJobs:
         api,
         client,
         regular_user_factory,
-        job_request_factory,
         model_train,
         auth_client,
     ):
@@ -530,14 +529,15 @@ class TestJobs:
         api,
         client,
         regular_user_factory,
-        create_job_request,
+        model_train,
         auth_client,
     ):
         NUMBER_OF_ALL_JOBS = 3
         NUMBER_OF_KILLED_JOBS = 2
 
         # run all jobs
-        job_request = create_job_request(image="ubuntu", command="sleep infinity")
+        job_request = model_train
+        job_request["container"]["command"] = "sleep infinity"
         all_jobs = set()
         for _ in range(NUMBER_OF_ALL_JOBS):
             data = await jobs_client.start_new_job(job_request)
@@ -646,9 +646,7 @@ class TestJobs:
         await jobs_client.delete_job(job_id=job_id)
 
         jobs = await jobs_client.get_all_jobs()
-        assert len(jobs) == 1
-        assert jobs[0]["status"] == "succeeded"
-        assert jobs[0]["id"] == job_id
+        assert not jobs  # platform does not return deleted jobs
 
     @pytest.mark.asyncio
     async def test_delete_already_deleted(

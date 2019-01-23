@@ -292,6 +292,29 @@ class TestJobsService:
         assert job.is_deleted
 
     @pytest.mark.asyncio
+    async def test_get_all_jobs_no_filter_after_delete_job(
+        self, mock_orchestrator, job_request_factory
+    ):
+        config = dataclasses.replace(mock_orchestrator.config, job_deletion_delay_s=0)
+        mock_orchestrator.config = config
+        service = JobsService(orchestrator=mock_orchestrator)
+
+        user = User(name="testuser", token="")
+        original_job, _ = await service.create_job(
+            job_request=job_request_factory(), user=user
+        )
+
+        await service.delete_job(original_job.id)
+
+        jobs = await service.get_all_jobs()
+        assert len(jobs) == 1
+        job = jobs[0]
+        assert job.status == JobStatus.SUCCEEDED
+        assert job.is_finished
+        assert job.finished_at
+        assert job.is_deleted
+
+    @pytest.mark.asyncio
     async def test_update_jobs_statuses_pending_missing(
         self, mock_orchestrator, job_request_factory
     ):

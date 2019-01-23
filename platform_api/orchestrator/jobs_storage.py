@@ -50,7 +50,6 @@ class JobsStorage(ABC):
 
     @abstractmethod
     async def get_all_jobs(self, job_filter: Optional[JobFilter] = None) -> List[Job]:
-        """Returns all non-deleted jobs"""
         pass
 
     async def get_running_jobs(self) -> List[Job]:
