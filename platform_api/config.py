@@ -78,6 +78,7 @@ class OrchestratorConfig:
 
     jobs_domain_name: str
     ssh_domain_name: str
+    ssh_auth_domain_name: str
 
     resource_pool_types: Sequence[ResourcePoolType]
 
