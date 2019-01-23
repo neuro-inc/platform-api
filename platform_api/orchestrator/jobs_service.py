@@ -14,9 +14,7 @@ logger = logging.getLogger(__file__)
 
 
 class JobsService:
-    def __init__(
-        self, orchestrator: Orchestrator, jobs_storage: JobsStorage
-    ) -> None:
+    def __init__(self, orchestrator: Orchestrator, jobs_storage: JobsStorage) -> None:
         self._jobs_storage = jobs_storage
         self._orchestrator = orchestrator
 

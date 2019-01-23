@@ -5,7 +5,7 @@ from typing import Dict, List
 
 import pytest
 
-from platform_api.config import RegistryConfig, StorageConfig, OrchestratorConfig
+from platform_api.config import OrchestratorConfig, RegistryConfig, StorageConfig
 from platform_api.orchestrator import (
     Job,
     JobError,
@@ -20,7 +20,7 @@ from platform_api.orchestrator import (
 )
 from platform_api.orchestrator.job import JobStatusItem
 from platform_api.orchestrator.job_request import Container, ContainerResources
-from platform_api.orchestrator.jobs_storage import RedisJobsStorage, JobsStorage
+from platform_api.orchestrator.jobs_storage import JobsStorage
 from platform_api.resource import ResourcePoolType
 
 
@@ -138,6 +138,7 @@ def mock_orchestrator():
 def mock_jobs_storage_factory():
     def impl(mock_orchestrator_config):
         return MockRedisJobsStorage(mock_orchestrator_config)
+
     return impl
 
 

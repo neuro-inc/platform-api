@@ -44,9 +44,11 @@ class TestJobsService:
 
     @pytest.mark.asyncio
     async def test_update_jobs_statuses_running(
-        self, mock_orchestrator,mock_jobs_storage, job_request_factory
+        self, mock_orchestrator, mock_jobs_storage, job_request_factory
     ):
-        service = JobsService(orchestrator=mock_orchestrator, jobs_storage=mock_jobs_storage)
+        service = JobsService(
+            orchestrator=mock_orchestrator, jobs_storage=mock_jobs_storage
+        )
 
         user = User(name="testuser", token="")
         original_job, _ = await service.create_job(
@@ -70,7 +72,9 @@ class TestJobsService:
         config = dataclasses.replace(mock_orchestrator.config, job_deletion_delay_s=0)
         mock_orchestrator.config = config
         mock_jobs_storage = mock_jobs_storage_factory(config)
-        service = JobsService(orchestrator=mock_orchestrator, jobs_storage=mock_jobs_storage)
+        service = JobsService(
+            orchestrator=mock_orchestrator, jobs_storage=mock_jobs_storage
+        )
 
         user = User(name="testuser", token="")
         original_job, _ = await service.create_job(
@@ -93,7 +97,9 @@ class TestJobsService:
         config = dataclasses.replace(mock_orchestrator.config, job_deletion_delay_s=0)
         mock_orchestrator.config = config
         mock_orchestrator.raise_on_get_job_status = True
-        service = JobsService(orchestrator=mock_orchestrator, jobs_storage=mock_jobs_storage)
+        service = JobsService(
+            orchestrator=mock_orchestrator, jobs_storage=mock_jobs_storage
+        )
 
         user = User(name="testuser", token="")
         original_job, _ = await service.create_job(
@@ -121,7 +127,9 @@ class TestJobsService:
         mock_orchestrator.config = config
         mock_orchestrator.raise_on_delete = True
         mock_jobs_storage = mock_jobs_storage_factory(config)
-        service = JobsService(orchestrator=mock_orchestrator, jobs_storage=mock_jobs_storage)
+        service = JobsService(
+            orchestrator=mock_orchestrator, jobs_storage=mock_jobs_storage
+        )
 
         user = User(name="testuser", token="")
         original_job, _ = await service.create_job(
@@ -138,8 +146,12 @@ class TestJobsService:
         assert job.is_deleted
 
     @pytest.mark.asyncio
-    async def test_delete_running(self, mock_orchestrator, mock_jobs_storage, job_request_factory):
-        service = JobsService(orchestrator=mock_orchestrator, jobs_storage=mock_jobs_storage)
+    async def test_delete_running(
+        self, mock_orchestrator, mock_jobs_storage, job_request_factory
+    ):
+        service = JobsService(
+            orchestrator=mock_orchestrator, jobs_storage=mock_jobs_storage
+        )
 
         user = User(name="testuser", token="")
         original_job, _ = await service.create_job(

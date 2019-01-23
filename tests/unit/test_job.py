@@ -1,9 +1,8 @@
-from unittest.mock import MagicMock
-
 import dataclasses
 from datetime import datetime, timedelta, timezone
 from pathlib import PurePath
 from unittest import mock
+from unittest.mock import MagicMock
 
 import pytest
 from yarl import URL
@@ -397,11 +396,10 @@ async def test_job_to_job_response(mock_orchestrator):
     container = Container(
         image="testimage", resources=ContainerResources(cpu=1, memory_mb=128)
     )
-    job_request = JobRequest.create(container=container, description="test test description")
-    job = Job(
-        orchestrator_config=mock_orchestrator.config,
-        job_request=job_request,
+    job_request = JobRequest.create(
+        container=container, description="test test description"
     )
+    job = Job(orchestrator_config=mock_orchestrator.config, job_request=job_request)
     response = convert_job_to_job_response(job, MagicMock())
     assert response == {
         "id": job.id,

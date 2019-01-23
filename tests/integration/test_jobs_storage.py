@@ -1,10 +1,7 @@
-from unittest import mock
-from unittest.mock import MagicMock
-
 import dataclasses
+
 import pytest
 
-from platform_api.handlers.jobs_handler import convert_job_to_job_response
 from platform_api.orchestrator.job import Job
 from platform_api.orchestrator.job_request import (
     Container,
@@ -169,7 +166,7 @@ class TestRedisJobsStorage:
         assert not job.is_deleted
 
     @pytest.mark.asyncio
-    async def test_set_get_job(self,redis_client, kube_orchestrator):
+    async def test_set_get_job(self, redis_client, kube_orchestrator):
         config = dataclasses.replace(kube_orchestrator.config, job_deletion_delay_s=0)
         jobs_storage = RedisJobsStorage(
             redis_client, orchestrator_config=kube_orchestrator.config
