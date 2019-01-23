@@ -139,10 +139,7 @@ async def infinite_job(api, client, regular_user, jobs_client):
         "container": {
             "image": "ubuntu",
             "command": "tail -f /dev/null",
-            "resources": {
-                "cpu": 0.1,
-                "memory_mb": 16
-            },
+            "resources": {"cpu": 0.1, "memory_mb": 16},
         }
     }
     async with client.post(
