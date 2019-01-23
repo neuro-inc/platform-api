@@ -88,6 +88,7 @@ def mock_orchestrator():
         jobs_ingress_name="platformjobsingress",
         jobs_domain_name="jobs",
         ssh_domain_name="ssh",
+        ssh_auth_domain_name="ssh-auth",
         endpoint_url="http://k8s:1234",
         resource_pool_types=[ResourcePoolType()],
         orphaned_job_owner="compute",

@@ -315,6 +315,11 @@ class Job:
         return f"ssh://{self.id}.{ssh_domain_name}:22"
 
     @property
+    def ssh_auth_server(self) -> str:
+        ssh_auth_domain_name = self._orchestrator_config.ssh_auth_domain_name
+        return f"ssh://nobody@{ssh_auth_domain_name}:22"
+
+    @property
     def finished_at_str(self) -> Optional[str]:
         return self._status_history.finished_at_str
 

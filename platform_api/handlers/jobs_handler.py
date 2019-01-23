@@ -57,6 +57,7 @@ def create_job_response_validator() -> t.Trafaret:
             "status": create_job_status_validator(),
             t.Key("http_url", optional=True): t.String,
             t.Key("ssh_server", optional=True): t.String,
+            "ssh_auth_server": t.String,
             "history": create_job_history_validator(),
             "container": create_container_response_validator(),
             "is_preemptible": t.Bool,
@@ -135,6 +136,7 @@ def convert_job_to_job_response(
         "container": convert_job_container_to_json(
             job.request.container, storage_config
         ),
+        "ssh_auth_server": job.ssh_auth_server,
         "is_preemptible": job.is_preemptible,
     }
     if job.description:
