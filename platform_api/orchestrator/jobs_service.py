@@ -1,12 +1,12 @@
 import logging
-from typing import List, Optional, Tuple
+from typing import List, Tuple
 
 from platform_api.user import User
 
 from .base import LogReader, Orchestrator, Telemetry
 from .job import Job, JobStatusItem
 from .job_request import JobException, JobNotFoundException, JobRequest, JobStatus
-from .jobs_storage import InMemoryJobsStorage, JobsStorage
+from .jobs_storage import JobsStorage
 from .status import Status
 
 
@@ -15,11 +15,9 @@ logger = logging.getLogger(__file__)
 
 class JobsService:
     def __init__(
-        self, orchestrator: Orchestrator, jobs_storage: Optional[JobsStorage] = None
+        self, orchestrator: Orchestrator, jobs_storage: JobsStorage
     ) -> None:
-        self._jobs_storage = jobs_storage or InMemoryJobsStorage(
-            orchestrator_config=orchestrator.config
-        )
+        self._jobs_storage = jobs_storage
         self._orchestrator = orchestrator
 
     async def update_jobs_statuses(self):

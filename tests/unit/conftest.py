@@ -1,9 +1,11 @@
 import asyncio
+import json
 from pathlib import PurePath
+from typing import Dict, List
 
 import pytest
 
-from platform_api.config import RegistryConfig, StorageConfig
+from platform_api.config import RegistryConfig, StorageConfig, OrchestratorConfig
 from platform_api.orchestrator import (
     Job,
     JobError,
@@ -18,11 +20,12 @@ from platform_api.orchestrator import (
 )
 from platform_api.orchestrator.job import JobStatusItem
 from platform_api.orchestrator.job_request import Container, ContainerResources
+from platform_api.orchestrator.jobs_storage import RedisJobsStorage, JobsStorage
 from platform_api.resource import ResourcePoolType
 
 
 class MockOrchestrator(Orchestrator):
-    def __init__(self, config):
+    def __init__(self, config: KubeConfig):
         self._config = config
         self._mock_status_to_return = JobStatus.PENDING
 
@@ -61,6 +64,41 @@ class MockOrchestrator(Orchestrator):
         pass
 
 
+class MockRedisJobsStorage(JobsStorage):
+    def __init__(self, orchestrator_config: OrchestratorConfig) -> None:
+        self._orchestrator_config = orchestrator_config
+        self._job_records: Dict[str, str] = {}
+
+    async def set_job(self, job: Job) -> None:
+        payload = json.dumps(job.to_primitive())
+        self._job_records[job.id] = payload
+
+    def _parse_job_payload(self, payload: str) -> Job:
+        job_record = json.loads(payload)
+        return Job.from_primitive(self._orchestrator_config, job_record)
+
+    async def get_job(self, job_id: str) -> Job:
+        payload = self._job_records.get(job_id)
+        if payload is None:
+            raise JobError(f"no such job {job_id}")
+        return self._parse_job_payload(payload)
+
+    async def get_all_jobs(self) -> List[Job]:
+        jobs = []
+        for payload in self._job_records.values():
+            jobs.append(self._parse_job_payload(payload))
+        return jobs
+
+    async def get_running_jobs(self) -> List[Job]:
+        return [job for job in await self.get_all_jobs() if job.is_running]
+
+    async def get_jobs_for_deletion(self) -> List[Job]:
+        return [job for job in await self.get_all_jobs() if job.should_be_deleted]
+
+    async def get_unfinished_jobs(self) -> List[Job]:
+        return [job for job in await self.get_all_jobs() if not job.is_finished]
+
+
 @pytest.fixture
 def job_request_factory():
     def factory():
@@ -96,8 +134,20 @@ def mock_orchestrator():
 
 
 @pytest.fixture(scope="function")
-def jobs_service(mock_orchestrator):
-    return JobsService(orchestrator=mock_orchestrator)
+def mock_jobs_storage_factory():
+    def impl(mock_orchestrator_config):
+        return MockRedisJobsStorage(mock_orchestrator_config)
+    return impl
+
+
+@pytest.fixture(scope="function")
+def mock_jobs_storage(mock_jobs_storage_factory, mock_orchestrator):
+    return mock_jobs_storage_factory(mock_orchestrator.config)
+
+
+@pytest.fixture(scope="function")
+def jobs_service(mock_orchestrator, mock_jobs_storage):
+    return JobsService(orchestrator=mock_orchestrator, jobs_storage=mock_jobs_storage)
 
 
 @pytest.fixture(scope="session")

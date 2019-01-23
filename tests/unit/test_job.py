@@ -1,3 +1,5 @@
+from unittest.mock import MagicMock
+
 import dataclasses
 from datetime import datetime, timedelta, timezone
 from pathlib import PurePath
@@ -8,6 +10,7 @@ from yarl import URL
 
 from platform_api.config import RegistryConfig, StorageConfig
 from platform_api.handlers.job_request_builder import ContainerBuilder
+from platform_api.handlers.jobs_handler import convert_job_to_job_response
 from platform_api.handlers.models_handler import ModelRequest
 from platform_api.orchestrator.job import Job, JobStatusHistory, JobStatusItem
 from platform_api.orchestrator.job_request import (
@@ -387,6 +390,38 @@ def job_request_payload_with_shm(job_request_payload):
     data = job_request_payload
     data["container"]["resources"]["shm"] = True
     return data
+
+
+@pytest.mark.asyncio
+async def test_job_to_job_response(mock_orchestrator):
+    container = Container(
+        image="testimage", resources=ContainerResources(cpu=1, memory_mb=128)
+    )
+    job_request = JobRequest.create(container=container, description="test test description")
+    job = Job(
+        orchestrator_config=mock_orchestrator.config,
+        job_request=job_request,
+    )
+    response = convert_job_to_job_response(job, MagicMock())
+    assert response == {
+        "id": job.id,
+        "owner": "compute",
+        "status": "pending",
+        "history": {
+            "status": "pending",
+            "reason": None,
+            "description": None,
+            "created_at": mock.ANY,
+        },
+        "container": {
+            "image": "testimage",
+            "env": {},
+            "volumes": [],
+            "resources": {"cpu": 1, "memory_mb": 128},
+        },
+        "description": "test test description",
+        "is_preemptible": False,
+    }
 
 
 class TestJob:

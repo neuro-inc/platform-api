@@ -17,16 +17,16 @@ class TestJobsStatusPooling:
         else:
             pytest.fail("Not all jobs have succeeded")
 
-    async def create_job_pooling(self, mock_orchestrator):
-        jobs_service = JobsService(orchestrator=mock_orchestrator)
+    async def create_job_pooling(self, mock_orchestrator, jobs_storage):
+        jobs_service = JobsService(orchestrator=mock_orchestrator, jobs_storage=jobs_storage)
         jobs_status_pooling = JobsStatusPooling(jobs_service=jobs_service, interval_s=1)
         await jobs_status_pooling.start()
         return jobs_status_pooling, jobs_service
 
     @pytest.mark.asyncio
-    async def test_polling(self, mock_orchestrator, job_request_factory):
+    async def test_polling(self, mock_orchestrator, job_request_factory, mock_jobs_storage):
         jobs_status_pooling, jobs_service = await self.create_job_pooling(
-            mock_orchestrator
+            mock_orchestrator, mock_jobs_storage
         )
 
         user = User(name="testuser", token="")
@@ -41,9 +41,9 @@ class TestJobsStatusPooling:
         await jobs_status_pooling.stop()
 
     @pytest.mark.asyncio
-    async def test_polling_exception(self, mock_orchestrator, job_request_factory):
+    async def test_polling_exception(self, mock_orchestrator, job_request_factory, mock_jobs_storage):
         jobs_status_pooling, jobs_service = await self.create_job_pooling(
-            mock_orchestrator
+            mock_orchestrator, mock_jobs_storage
         )
 
         user = User(name="testuser", token="")

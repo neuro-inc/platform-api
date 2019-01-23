@@ -1,5 +1,10 @@
+from unittest import mock
+from unittest.mock import MagicMock
+
+import dataclasses
 import pytest
 
+from platform_api.handlers.jobs_handler import convert_job_to_job_response
 from platform_api.orchestrator.job import Job
 from platform_api.orchestrator.job_request import (
     Container,
@@ -162,6 +167,52 @@ class TestRedisJobsStorage:
         assert job.id == succeeded_job.id
         assert job.status == JobStatus.SUCCEEDED
         assert not job.is_deleted
+
+    @pytest.mark.asyncio
+    async def test_set_get_job(self,redis_client, kube_orchestrator):
+        config = dataclasses.replace(kube_orchestrator.config, job_deletion_delay_s=0)
+        jobs_storage = RedisJobsStorage(
+            redis_client, orchestrator_config=kube_orchestrator.config
+        )
+
+        pending_job = Job(
+            orchestrator_config=config, job_request=self._create_job_request()
+        )
+        await jobs_storage.set_job(pending_job)
+
+        running_job = Job(
+            orchestrator_config=config,
+            job_request=self._create_job_request(),
+            status=JobStatus.RUNNING,
+        )
+        await jobs_storage.set_job(running_job)
+
+        succeeded_job = Job(
+            orchestrator_config=config,
+            job_request=self._create_job_request(),
+            status=JobStatus.SUCCEEDED,
+        )
+        await jobs_storage.set_job(succeeded_job)
+
+        job = await jobs_storage.get_job(pending_job.id)
+        assert job.id == pending_job.id
+        assert job.request == pending_job.request
+
+        jobs = await jobs_storage.get_all_jobs()
+        assert {job.id for job in jobs} == {
+            pending_job.id,
+            running_job.id,
+            succeeded_job.id,
+        }
+
+        jobs = await jobs_storage.get_running_jobs()
+        assert {job.id for job in jobs} == {running_job.id}
+
+        jobs = await jobs_storage.get_unfinished_jobs()
+        assert {job.id for job in jobs} == {pending_job.id, running_job.id}
+
+        jobs = await jobs_storage.get_jobs_for_deletion()
+        assert {job.id for job in jobs} == {succeeded_job.id}
 
     @pytest.mark.asyncio
     async def test_job_lifecycle(self, redis_client, kube_orchestrator):
