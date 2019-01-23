@@ -19,9 +19,9 @@ NP_K8S_SSH_INGRESS_DOMAIN_NAME:
   dev: ssh.platform.dev.neuromation.io
   staging: ssh.platform.staging.neuromation.io
 NP_K8S_SSH_AUTH_INGRESS_DOMAIN_NAME:
-  _default: ssh-auth.platform.dev.neuromation.io
-  dev: ssh-auth.platform.dev.neuromation.io
-  staging: ssh-auth.platform.staging.neuromation.io
+  _default: ssh-auth.dev.neuromation.io
+  dev: ssh-auth.dev.neuromation.io
+  staging: ssh-auth.staging.neuromation.io
 INGRESS_HOST:
   _default: platform.dev.neuromation.io
   dev: platform.dev.neuromation.io
