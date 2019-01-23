@@ -133,6 +133,27 @@ async def jobs_client(api, client, regular_user):
     return JobsClient(api, client, headers=regular_user.headers)
 
 
+@pytest.fixture
+async def infinite_job(api, client, regular_user, jobs_client):
+    request_payload = {
+        "container": {
+            "image": "ubuntu",
+            "command": "tail -f /dev/null",
+            "resources": {"cpu": 0.1, "memory_mb": 16},
+        }
+    }
+    async with client.post(
+        api.jobs_base_url, headers=regular_user.headers, json=request_payload
+    ) as response:
+        assert response.status == HTTPAccepted.status_code, await response.text()
+        result = await response.json()
+        job_id = result["id"]
+
+    yield job_id
+
+    await jobs_client.delete_job(job_id)
+
+
 class TestApi:
     @pytest.mark.asyncio
     async def test_ping(self, api, client):
@@ -848,22 +869,9 @@ class TestJobs:
         await kube_client.wait_pod_scheduled(job_id, kube_node_gpu)
 
     @pytest.mark.asyncio
-    async def test_job_top(self, api, client, regular_user, jobs_client, model_train):
-
-        command = 'bash -c "for i in {1..5}; do echo $i; sleep 1; done"'
-        model_train["container"]["command"] = command
-        url = api.model_base_url
-        async with client.post(
-            url, headers=regular_user.headers, json=model_train
-        ) as response:
-            assert response.status == HTTPAccepted.status_code
-            result = await response.json()
-            assert result["status"] in ["pending"]
-            job_id = result["job_id"]
-
-        await jobs_client.long_polling_by_job_id(job_id=job_id, status="running")
-
-        job_top_url = api.jobs_base_url + f"/{job_id}/top"
+    async def test_job_top(self, api, client, regular_user, jobs_client, infinite_job):
+        jobs_client.long_polling_by_job_id(job_id=infinite_job, status="running")
+        job_top_url = api.jobs_base_url + f"/{infinite_job}/top"
         num_request = 2
         records = []
         async with client.ws_connect(job_top_url, headers=regular_user.headers) as ws:
@@ -889,7 +897,6 @@ class TestJobs:
                 "memory": mock.ANY,
                 "timestamp": mock.ANY,
             }
-        await jobs_client.delete_job(job_id=job_id)
 
     @pytest.mark.asyncio
     async def test_job_top_silently_wait_when_job_pending(
