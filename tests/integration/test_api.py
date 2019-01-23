@@ -870,7 +870,7 @@ class TestJobs:
 
     @pytest.mark.asyncio
     async def test_job_top(
-        self, api, client, regular_user, jobs_client, model_train, infinite_job
+        self, api, client, regular_user, jobs_client, infinite_job
     ):
         jobs_client.long_polling_by_job_id(job_id=infinite_job, status="running")
         job_top_url = api.jobs_base_url + f"/{infinite_job}/top"
