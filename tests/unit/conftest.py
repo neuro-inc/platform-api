@@ -64,7 +64,7 @@ class MockOrchestrator(Orchestrator):
         pass
 
 
-class MockRedisJobsStorage(JobsStorage):
+class MockJobsStorage(JobsStorage):
     def __init__(self, orchestrator_config: OrchestratorConfig) -> None:
         self._orchestrator_config = orchestrator_config
         self._job_records: Dict[str, str] = {}
@@ -137,7 +137,7 @@ def mock_orchestrator():
 @pytest.fixture(scope="function")
 def mock_jobs_storage_factory():
     def impl(mock_orchestrator_config):
-        return MockRedisJobsStorage(mock_orchestrator_config)
+        return MockJobsStorage(mock_orchestrator_config)
 
     return impl
 
