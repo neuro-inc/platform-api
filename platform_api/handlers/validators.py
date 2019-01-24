@@ -1,6 +1,7 @@
-from typing import Optional, Sequence
+from typing import Optional, Sequence, Set
 
 import trafaret as t
+from trafaret import DataError
 
 from platform_api.orchestrator.job_request import JobStatus
 from platform_api.resource import GPUModel
@@ -39,7 +40,7 @@ def create_volume_request_validator() -> t.Trafaret:
 def create_resources_validator(
     *,
     allow_any_gpu_models: bool = False,
-    allowed_gpu_models: Optional[Sequence[GPUModel]] = None
+    allowed_gpu_models: Optional[Sequence[GPUModel]] = None,
 ) -> t.Trafaret:
     MAX_GPU_COUNT = 128
     MAX_CPU_COUNT = 128.0
@@ -73,7 +74,7 @@ def create_container_validator(
     *,
     allow_volumes: bool = False,
     allow_any_gpu_models: bool = False,
-    allowed_gpu_models: Optional[Sequence[GPUModel]] = None
+    allowed_gpu_models: Optional[Sequence[GPUModel]] = None,
 ):
     """Create a validator for primitive container objects.
 
@@ -112,7 +113,7 @@ def create_container_validator(
 def create_container_request_validator(
     *,
     allow_volumes: bool = False,
-    allowed_gpu_models: Optional[Sequence[GPUModel]] = None
+    allowed_gpu_models: Optional[Sequence[GPUModel]] = None,
 ) -> t.Trafaret:
     return create_container_validator(
         allow_volumes=allow_volumes, allowed_gpu_models=allowed_gpu_models
@@ -121,3 +122,15 @@ def create_container_request_validator(
 
 def create_container_response_validator():
     return create_container_validator(allow_volumes=True, allow_any_gpu_models=True)
+
+
+def validate_status_string(status_str: str) -> Set[str]:
+    # NOTE: "all" parameter should be converted to "pending+running+failed+succeeded"
+    # by the neuro client
+    if not status_str:
+        raise DataError("Empty status line")
+    return {JobStatus.parse(s) for s in status_str.split("+")}
+
+
+def create_job_filter_request_validator() -> t.Trafaret:
+    return t.Dict({t.Key("status", optional=True): validate_status_string})
