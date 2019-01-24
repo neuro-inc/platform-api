@@ -129,7 +129,8 @@ class JobsClient:
 
     async def cleanup(self):
         for job in await self.get_all_jobs():
-            await self.delete_job(job["id"])
+            if job["status"] in ["pending", "running"]:
+                await self.delete_job(job["id"])
 
 
 @pytest.fixture
