@@ -59,16 +59,18 @@ class TestRedisJobsStorage:
             await storage.get_job("unknown")
 
     @pytest.mark.asyncio
-    async def test_get_all_empty(self, redis_client, kube_orchestrator):
+    async def test_get_all_no_filter_empty_result(
+        self, redis_client, kube_orchestrator
+    ):
         storage = RedisJobsStorage(
             redis_client, orchestrator_config=kube_orchestrator.config
         )
 
         jobs = await storage.get_all_jobs()
-        assert not jobs
+        assert jobs == []
 
     @pytest.mark.asyncio
-    async def test_get_all(self, redis_client, kube_orchestrator):
+    async def test_get_all_no_filter_single_job(self, redis_client, kube_orchestrator):
         original_job = self._create_pending_job(kube_orchestrator)
         storage = RedisJobsStorage(
             redis_client, orchestrator_config=kube_orchestrator.config
@@ -82,13 +84,39 @@ class TestRedisJobsStorage:
         assert job.status == original_job.status
 
     @pytest.mark.asyncio
+    async def test_get_all_filter_by_status(self, redis_client, kube_orchestrator):
+        pending_job = self._create_pending_job(kube_orchestrator)
+        running_job = self._create_running_job(kube_orchestrator)
+        succeeded_job = self._create_succeeded_job(kube_orchestrator)
+        storage = RedisJobsStorage(
+            client=redis_client, orchestrator_config=kube_orchestrator.config
+        )
+        await storage.set_job(pending_job)
+        await storage.set_job(running_job)
+        await storage.set_job(succeeded_job)
+
+        jobs = await storage.get_all_jobs()
+        job_ids = {job.id for job in jobs}
+        assert job_ids == {pending_job.id, running_job.id, succeeded_job.id}
+
+        filters = {"status": {JobStatus.FAILED}}
+        jobs = await storage.get_all_jobs(filters)
+        job_ids = {job.id for job in jobs}
+        assert job_ids == set()
+
+        filters = {"status": {JobStatus.SUCCEEDED, JobStatus.RUNNING}}
+        jobs = await storage.get_all_jobs(filters)
+        job_ids = {job.id for job in jobs}
+        assert job_ids == {succeeded_job.id, running_job.id}
+
+    @pytest.mark.asyncio
     async def test_get_running_empty(self, redis_client, kube_orchestrator):
         storage = RedisJobsStorage(
             redis_client, orchestrator_config=kube_orchestrator.config
         )
 
         jobs = await storage.get_running_jobs()
-        assert not jobs
+        assert jobs == []
 
     @pytest.mark.asyncio
     async def test_get_running(self, redis_client, kube_orchestrator):
@@ -114,7 +142,7 @@ class TestRedisJobsStorage:
             redis_client, orchestrator_config=kube_orchestrator.config
         )
         jobs = await storage.get_unfinished_jobs()
-        assert not jobs
+        assert jobs == []
 
     @pytest.mark.asyncio
     async def test_get_unfinished(self, redis_client, kube_orchestrator):
@@ -140,7 +168,7 @@ class TestRedisJobsStorage:
         )
 
         jobs = await storage.get_jobs_for_deletion()
-        assert not jobs
+        assert jobs == []
 
     @pytest.mark.asyncio
     async def test_get_for_deletion(self, redis_client, kube_orchestrator):
@@ -179,10 +207,10 @@ class TestRedisJobsStorage:
         assert job.status == JobStatus.PENDING
 
         jobs = await storage.get_running_jobs()
-        assert not jobs
+        assert jobs == []
 
         jobs = await storage.get_jobs_for_deletion()
-        assert not jobs
+        assert jobs == []
 
         job.status = JobStatus.RUNNING
         await storage.set_job(job)
@@ -197,7 +225,7 @@ class TestRedisJobsStorage:
         assert job.status == JobStatus.RUNNING
 
         jobs = await storage.get_jobs_for_deletion()
-        assert not jobs
+        assert jobs == []
 
         job.status = JobStatus.FAILED
         await storage.set_job(job)
@@ -206,7 +234,7 @@ class TestRedisJobsStorage:
         assert len(jobs) == 1
 
         jobs = await storage.get_running_jobs()
-        assert not jobs
+        assert jobs == []
 
         jobs = await storage.get_jobs_for_deletion()
         assert len(jobs) == 1
@@ -222,7 +250,7 @@ class TestRedisJobsStorage:
         assert len(jobs) == 1
 
         jobs = await storage.get_running_jobs()
-        assert not jobs
+        assert jobs == []
 
         jobs = await storage.get_jobs_for_deletion()
-        assert not jobs
+        assert jobs == []
