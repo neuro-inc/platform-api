@@ -713,19 +713,19 @@ class TestJobStatus:
         assert JobStatus.parse("failed") == JobStatus.FAILED
 
     def test_parse_empty(self):
-        with pytest.raises(ValueError, match='Invalid status ""'):
+        with pytest.raises(ValueError, match='Invalid status: ""'):
             assert JobStatus.parse("")
 
     def test_parse_none(self):
-        with pytest.raises(ValueError, match='Invalid status "None"'):
+        with pytest.raises(ValueError, match='Invalid status: "None"'):
             assert JobStatus.parse(None)
 
     def test_parse_wrong_value(self):
-        with pytest.raises(ValueError, match='Invalid status "abrakadabra"'):
+        with pytest.raises(ValueError, match='Invalid status: "abrakadabra"'):
             assert JobStatus.parse("abrakadabra")
 
     def test_parse_wrong_case(self):
-        with pytest.raises(ValueError, match='Invalid status "PeNdInG"'):
+        with pytest.raises(ValueError, match='Invalid status: "PeNdInG"'):
             assert JobStatus.parse("PeNdInG")
 
 

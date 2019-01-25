@@ -92,7 +92,7 @@ class TestJobFilterRequestValidator:
     def test_job_filter_request_validator__status_empty_fail(self):
         request = {"status": ""}
         validator = create_job_filter_request_validator()
-        with pytest.raises(DataError, match='Empty status line'):
+        with pytest.raises(DataError, match="Empty status line"):
             validator.check(request)
 
     def test_job_filter_request_validator__status_none_fail(self):
