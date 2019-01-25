@@ -1,5 +1,5 @@
 import logging
-from typing import List, Optional, Tuple
+from typing import Any, Dict, List, Optional, Tuple
 
 from platform_api.user import User
 
@@ -112,5 +112,5 @@ class JobsService:
         if not job.is_finished:
             await self._delete_job(job)
 
-    async def get_all_jobs(self) -> List[Job]:
-        return await self._jobs_storage.get_all_jobs()
+    async def get_all_jobs(self, filters: Optional[Dict[str, Any]] = None) -> List[Job]:
+        return await self._jobs_storage.get_all_jobs(filters)

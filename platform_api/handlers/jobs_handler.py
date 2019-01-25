@@ -21,6 +21,7 @@ from .job_request_builder import ContainerBuilder
 from .validators import (
     create_container_request_validator,
     create_container_response_validator,
+    create_job_filter_request_validator,
     create_job_history_validator,
     create_job_status_validator,
 )
@@ -175,6 +176,7 @@ class JobsHandler:
         self._config = config
         self._storage_config = config.storage
 
+        self._job_filter_request_validator = create_job_filter_request_validator()
         self._job_response_validator = create_job_response_validator()
         self._bulk_jobs_response_validator = t.Dict(
             {"jobs": t.List(self._job_response_validator)}
@@ -262,7 +264,8 @@ class JobsHandler:
         tree = await self._auth_client.get_permissions_tree(user.name, "job:")
         # TODO (A Danshyn 10/09/18): retrieving all jobs until the proper
         # index is in place
-        jobs = await self._jobs_service.get_all_jobs()
+        filters = self._job_filter_request_validator.check(dict(request.query))
+        jobs = await self._jobs_service.get_all_jobs(filters)
         jobs = filter_jobs_with_access_tree(jobs, tree)
 
         response_payload = {
