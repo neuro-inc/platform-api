@@ -2,7 +2,7 @@ import asyncio
 import json
 import time
 from pathlib import PurePath
-from typing import NamedTuple
+from typing import Any, Dict, NamedTuple, Optional
 from unittest import mock
 
 import aiohttp
@@ -92,9 +92,11 @@ class JobsClient:
         self._client = client
         self._headers = headers
 
-    async def get_all_jobs(self):
+    async def get_all_jobs(self, filters: Optional[Dict[str, Any]] = None):
         url = self._api_config.jobs_base_url
-        async with self._client.get(url, headers=self._headers) as response:
+        async with self._client.get(
+            url, headers=self._headers, params=filters
+        ) as response:
             response_text = await response.text()
             assert response.status == HTTPOk.status_code, response_text
             result = await response.json()
@@ -443,6 +445,55 @@ class TestJobs:
     async def test_get_all_jobs_clear(self, jobs_client):
         jobs = await jobs_client.get_all_jobs()
         assert jobs == []
+
+    @pytest.mark.asyncio
+    async def test_get_all_jobs_filter_by_status(
+        self, api, client, jobs_client, regular_user, model_request_factory
+    ):
+        url = api.model_base_url
+        headers = regular_user.headers
+        model_request = model_request_factory(regular_user.name)
+        model_request["container"]["command"] = "sleep 3600"
+        job_ids = []
+        for _ in range(5):
+            async with client.post(url, headers=headers, json=model_request) as resp:
+                assert resp.status == HTTPAccepted.status_code
+                result = await resp.json()
+                job_ids.append(result["job_id"])
+
+        job_ids_killed = set(job_ids[:2])
+        job_ids_alive = set(job_ids[2:])
+        job_ids = set(job_ids)
+
+        for job_id in job_ids_killed:
+            await jobs_client.delete_job(job_id=job_id)
+
+        # no filter
+        jobs = await jobs_client.get_all_jobs()
+        jobs = {job["id"] for job in jobs}
+        assert jobs == job_ids
+
+        # all statuses, same as no filter
+        filters = {"status": "pending+running+failed+succeeded"}
+        jobs = await jobs_client.get_all_jobs(filters)
+        jobs = {job["id"] for job in jobs}
+        assert jobs == job_ids
+
+        # two statuses, actually filter out values
+        filters = {"status": "pending+running"}
+        jobs = await jobs_client.get_all_jobs(filters)
+        jobs = {job["id"] for job in jobs}
+        assert jobs == job_ids_alive
+
+        # single status, actually filter out values
+        filters = {"status": "succeeded"}
+        jobs = await jobs_client.get_all_jobs(filters)
+        jobs = {job["id"] for job in jobs}
+        assert jobs == job_ids_killed
+
+        # cleanup
+        for job_id in job_ids_alive:
+            await jobs_client.delete_job(job_id=job_id)
 
     @pytest.mark.asyncio
     async def test_get_all_jobs_shared(
