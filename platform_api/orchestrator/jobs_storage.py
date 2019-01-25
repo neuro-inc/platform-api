@@ -151,11 +151,11 @@ class RedisJobsStorage(JobsStorage):
         job_ids = await self._get_job_ids(statuses)
         return await self._get_jobs(job_ids)
 
+    async def get_jobs_for_deletion(self) -> List[Job]:
+        job_ids = await self._get_job_ids_for_deletion()
+        return await self._get_jobs(job_ids)
+
     async def get_unfinished_jobs(self) -> List[Job]:
         statuses = {JobStatus.PENDING, JobStatus.RUNNING}
         job_ids = await self._get_job_ids(statuses)
-        return await self._get_jobs(job_ids)
-
-    async def get_jobs_for_deletion(self) -> List[Job]:
-        job_ids = await self._get_job_ids_for_deletion()
         return await self._get_jobs(job_ids)
