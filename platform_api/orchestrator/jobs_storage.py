@@ -4,7 +4,7 @@ from abc import ABC, abstractmethod
 from typing import Any, Dict, List, Optional, Set
 
 import aioredis
-from attr import dataclass
+from dataclasses import dataclass
 
 from .base import OrchestratorConfig
 from .job import Job
