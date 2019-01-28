@@ -15,10 +15,6 @@ from .job_request import JobError, JobStatus
 class JobFilter:
     statuses: Set[JobStatus]
 
-    @classmethod
-    def from_primitive(cls, value: Dict[str, Any]) -> "JobFilter":
-        return cls(statuses=value.get("status", set()))
-
 
 class JobsStorage(ABC):
     @abstractmethod

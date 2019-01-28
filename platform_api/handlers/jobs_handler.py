@@ -257,6 +257,9 @@ class JobsHandler:
             data=response_payload, status=aiohttp.web.HTTPOk.status_code
         )
 
+    def build_job_filter(self, filters_dict: Dict[str, Any]) -> JobFilter:
+        return JobFilter(statuses=filters_dict.get("status", set()))
+
     async def handle_get_all(self, request):
         # TODO (A Danshyn 10/08/18): remove once
         # AuthClient.get_permissions_tree accepts the token param
@@ -268,7 +271,7 @@ class JobsHandler:
         # index is in place
         query = convert_multidict_to_dict(request.query)
         job_filter_dict = self._status_filter_request_validator.check(query)
-        job_filter = JobFilter.from_primitive(job_filter_dict)
+        job_filter = self.build_job_filter(job_filter_dict)
         jobs = await self._jobs_service.get_all_jobs(job_filter)
         jobs = filter_jobs_with_access_tree(jobs, tree)
 
