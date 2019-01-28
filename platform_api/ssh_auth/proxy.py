@@ -16,7 +16,14 @@ log = logging.getLogger(__name__)
 
 
 def create_exec_request_validator() -> t.Trafaret:
-    return t.Dict({"token": t.String, "job": t.String, "command": t.List(t.String)})
+    return t.Dict(
+        {
+            "reason": t.Atom("exec"),
+            "payload": t.Dict(
+                {"token": t.String, "job": t.String, "command": t.List(t.String)}
+            ),
+        }
+    )
 
 
 @dataclass(frozen=True)
@@ -77,7 +84,7 @@ class ExecProxy:
     def _parse(self, request: str) -> ExecRequest:
         dict_request = json.loads(request)
         self._exec_request_validator.check(dict_request)
-        return ExecRequest(**dict_request)
+        return ExecRequest(**dict_request["payload"])
 
     async def process(self, json_request: str) -> int:
         try:

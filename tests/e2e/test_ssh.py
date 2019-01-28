@@ -48,11 +48,27 @@ async def test_simple_command(ssh_auth_config, api_config, alice, alice_job):
         "-p",
         str(ssh_auth_config.port),
         f"nobody@{ssh_auth_config.ip}",
-        f'{{"token": "{alice.token}", "job": "{alice_job}", "command": ["true"]}}',
+        f'{{"reason": "exec", "payload": {{"token": "{alice.token}", "job": "{alice_job}", "command": ["true"]}}}}',
     ]
     proc = await asyncio.create_subprocess_exec(*command)
     exit_code = await proc.wait()
     assert exit_code == 0
+
+
+@pytest.mark.asyncio
+async def test_wrong_reason(ssh_auth_config, api_config, alice, alice_job):
+    command = [
+        "ssh",
+        "-o",
+        "StrictHostKeyChecking=no",
+        "-p",
+        str(ssh_auth_config.port),
+        f"nobody@{ssh_auth_config.ip}",
+        f'{{"reason": "ssh", "payload": {{"token": "{alice.token}", "job": "{alice_job}", "command": ["true"]}}}}',
+    ]
+    proc = await asyncio.create_subprocess_exec(*command)
+    exit_code = await proc.wait()
+    assert exit_code == 65
 
 
 @pytest.mark.asyncio
@@ -64,7 +80,7 @@ async def test_wrong_user(ssh_auth_config, api_config, bob, alice_job):
         "-p",
         str(ssh_auth_config.port),
         f"nobody@{ssh_auth_config.ip}",
-        f'{{"token": "{bob.token}", "job": "{alice_job}", "command": ["true"]}}',
+        f'{{"reason": "exec", "payload": {{"token": "{bob.token}", "job": "{alice_job}", "command": ["true"]}}}}',
     ]
     proc = await asyncio.create_subprocess_exec(*command)
     exit_code = await proc.wait()
@@ -80,7 +96,7 @@ async def test_incorrect_token(ssh_auth_config, api_config, bob, alice_job):
         "-p",
         str(ssh_auth_config.port),
         f"nobody@{ssh_auth_config.ip}",
-        f'{{"token": "some_token", "job": "{alice_job}", "command": ["true"]}}',
+        f'{{"reason": "exec", "payload": {{"token": "some_token", "job": "{alice_job}", "command": ["true"]}}}}',
     ]
     proc = await asyncio.create_subprocess_exec(*command)
     exit_code = await proc.wait()
@@ -120,7 +136,7 @@ async def test_nonzero_error_code(ssh_auth_config, api_config, alice, alice_job)
         "-p",
         str(ssh_auth_config.port),
         f"nobody@{ssh_auth_config.ip}",
-        f'{{"token": "{alice.token}", "job": "{alice_job}", "command": ["false"]}}',
+        f'{{"reason": "exec", "payload": {{"token": "{alice.token}", "job": "{alice_job}", "command": ["false"]}}}}',
     ]
     proc = await asyncio.create_subprocess_exec(*command)
     exit_code = await proc.wait()
@@ -136,7 +152,7 @@ async def test_pass_stdin(ssh_auth_config, api_config, alice, alice_job):
         "-p",
         str(ssh_auth_config.port),
         f"nobody@{ssh_auth_config.ip}",
-        f'{{"token": "{alice.token}", "job": "{alice_job}", "command": ["grep", "o"]}}',
+        f'{{"reason": "exec", "payload": {{"token": "{alice.token}", "job": "{alice_job}", "command": ["grep", "o"]}}}}',
     ]
     proc = await asyncio.create_subprocess_exec(
         *command,
