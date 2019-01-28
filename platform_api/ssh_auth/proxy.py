@@ -1,5 +1,6 @@
 import json
 import logging
+from abc import ABC
 from dataclasses import dataclass
 from typing import List
 
@@ -15,15 +16,29 @@ from .executor import Executor
 log = logging.getLogger(__name__)
 
 
-def create_exec_request_validator() -> t.Trafaret:
-    return t.Dict({"token": t.String, "job": t.String, "command": t.List(t.String)})
+@dataclass(frozen=True)
+class Request(ABC):
+    token: str
 
 
 @dataclass(frozen=True)
-class ExecRequest:
-    token: str
+class ExecRequest(Request):
     job: str
     command: List[str]
+
+
+def create_exec_request_validator() -> t.Trafaret:
+    return t.Dict(
+        {
+            "method": t.Atom("job_exec"),
+            "token": t.String,
+            "params": t.Dict({"job": t.String, "command": t.List(t.String)}),
+        }
+    ) >> (
+        lambda d: ExecRequest(
+            token=d["token"], job=d["params"]["job"], command=d["params"]["command"]
+        )
+    )
 
 
 class AuthError(Exception):
@@ -76,8 +91,7 @@ class ExecProxy:
 
     def _parse(self, request: str) -> ExecRequest:
         dict_request = json.loads(request)
-        self._exec_request_validator.check(dict_request)
-        return ExecRequest(**dict_request)
+        return self._exec_request_validator.check(dict_request)
 
     async def process(self, json_request: str) -> int:
         try:
