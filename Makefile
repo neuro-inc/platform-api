@@ -104,3 +104,39 @@ gke_k8s_deploy_ssh_dev: _helm
 gke_k8s_deploy_ssh_auth_dev: _helm
 	gcloud --quiet container clusters get-credentials $(GKE_CLUSTER_NAME) --region $(GKE_CLUSTER_REGION)
 	helm --set "global.env=dev" --set "IMAGE.dev=$(SSH_K8S):$(CIRCLE_SHA1)" upgrade --install ssh-auth deploy/ssh_auth/ --wait --timeout 600
+
+gke_k8s_deploy_ssh_local:
+	@echo "deploy SSH in cluster: $(GKE_CLUSTER_NAME)"
+	@docker build --build-arg PIP_INDEX_URL="$(PIP_INDEX_URL_LOCAL)" \
+		-f Dockerfile.k8s -t $(IMAGE_NAME):local_$(GKE_CLUSTER_NAME)_$(IMAGE_TAG) .
+	docker tag $(IMAGE_NAME):local_$(GKE_CLUSTER_NAME)_$(IMAGE_TAG) $(IMAGE_K8S):local_$(GKE_CLUSTER_NAME)_$(IMAGE_TAG)
+	docker push $(IMAGE_K8S):local_$(GKE_CLUSTER_NAME)_$(IMAGE_TAG)
+	helm --set "global.env=dev" \
+		--set "IMAGE.dev=$(IMAGE_K8S):local_$(GKE_CLUSTER_NAME)_$(IMAGE_TAG)" \
+		--set "NP_STORAGE_NFS_SERVER.dev=$(NFS_IP)" \
+		--set "NP_STORAGE_NFS_PATH.dev=$(NFS_PATH)" \
+		--set "NP_DB_REDIS_URI.dev=$(REDIS_URL)" \
+		--set "NP_K8S_JOBS_INGRESS_DOMAIN_NAME.dev=$(K8S_JOBS_INGRESS_DOMAIN_NAME)" \
+		--set "NP_K8S_SSH_INGRESS_DOMAIN_NAME.dev=$(K8S_SSH_INGRESS_DOMAIN_NAME)" \
+		--set "NP_K8S_SSH_AUTH_INGRESS_DOMAIN_NAME.dev=$(K8S_SSH_AUTH_INGRESS_DOMAIN_NAME)" \
+		--set "INGRESS_HOST.dev=$(INGRESS_HOST)" \
+		--set "NP_REGISTRY_HOST.dev=$(REGISTRY_HOST)" \
+		upgrade --install ssh deploy/ssh/ --wait --timeout 600
+
+gke_k8s_deploy_local:
+	@echo "deploy PLATFORM-API in cluster: $(GKE_CLUSTER_NAME)"
+	@docker build --build-arg PIP_INDEX_URL="$(PIP_INDEX_URL_LOCAL)" \
+		-f Dockerfile.k8s -t $(IMAGE_NAME):local_$(GKE_CLUSTER_NAME)_$(IMAGE_TAG) .
+	docker tag $(IMAGE_NAME):local_$(GKE_CLUSTER_NAME)_$(IMAGE_TAG) $(IMAGE_K8S):local_$(GKE_CLUSTER_NAME)_$(IMAGE_TAG)
+	docker push $(IMAGE_K8S):local_$(GKE_CLUSTER_NAME)_$(IMAGE_TAG)
+	helm --set "global.env=dev" \
+		--set "IMAGE.dev=$(IMAGE_K8S):local_$(GKE_CLUSTER_NAME)_$(IMAGE_TAG)" \
+		--set "NP_STORAGE_NFS_SERVER.dev=$(NFS_IP)" \
+		--set "NP_STORAGE_NFS_PATH.dev=$(NFS_PATH)" \
+		--set "NP_DB_REDIS_URI.dev=$(REDIS_URL)" \
+		--set "NP_K8S_JOBS_INGRESS_DOMAIN_NAME.dev=$(K8S_JOBS_INGRESS_DOMAIN_NAME)" \
+		--set "NP_K8S_SSH_INGRESS_DOMAIN_NAME.dev=$(K8S_SSH_INGRESS_DOMAIN_NAME)" \
+		--set "NP_K8S_SSH_AUTH_INGRESS_DOMAIN_NAME.dev=$(K8S_SSH_AUTH_INGRESS_DOMAIN_NAME)" \
+		--set "INGRESS_HOST.dev=$(INGRESS_HOST)" \
+		--set "NP_REGISTRY_HOST.dev=$(REGISTRY_HOST)" \
+		upgrade --install platformapi deploy/platformapi/ --wait --timeout 600
