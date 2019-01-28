@@ -155,4 +155,5 @@ class SSHAuthConfig:
     platform: PlatformConfig
     auth: AuthConfig
     log_fifo: Path
+    ssh_forwarder_port: int
     env_prefix: str = "NP"

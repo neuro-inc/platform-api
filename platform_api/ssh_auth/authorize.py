@@ -9,6 +9,7 @@ from neuro_auth_client import AuthClient
 from platform_api.config_factory import EnvironConfigFactory, SSHAuthConfig
 
 from .executor import KubeCTLExecutor
+from .forwarder import NCForwarder
 from .proxy import (
     AuthenticationError,
     AuthorizationError,
@@ -32,8 +33,12 @@ async def run(config: SSHAuthConfig) -> int:
     async with AuthClient(
         url=config.auth.server_endpoint_url, token=config.auth.service_token
     ) as auth_client:
+        forwarder = NCForwarder(config.ssh_forwarder_port)
         executor = KubeCTLExecutor(tty)
-        proxy = ExecProxy(auth_client, config.platform.server_endpoint_url, executor)
+        proxy = ExecProxy(auth_client=auth_client,
+                          platform_url=config.platform.server_endpoint_url,
+                          executor=executor,
+                          forwarder=forwarder)
         retcode = await proxy.process(json_request)
         log.info(f"Done, retcode={retcode}")
         return retcode
@@ -42,7 +47,7 @@ async def run(config: SSHAuthConfig) -> int:
 def init_logging(pipe: IO[str]) -> None:
     logging.basicConfig(
         stream=pipe,
-        level=logging.INFO,
+        level=logging.DEBUG,
         format="%(asctime)s - %(name)s - %(levelname)s - %(message)s",
     )
 
