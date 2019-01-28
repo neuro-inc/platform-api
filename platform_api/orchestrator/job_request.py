@@ -275,11 +275,11 @@ class JobStatus(str, enum.Enum):
         return [item.value for item in cls]  # type: ignore
 
     @classmethod
-    def parse(cls, status_str) -> "JobStatus":
+    def parse(cls, value) -> "JobStatus":
         for item in cls:  # type: ignore
-            if status_str == item.value:  # type: ignore
+            if value == item.value:  # type: ignore
                 return item  # type: ignore
-        raise ValueError(f'Invalid status: "{status_str}"')
+        raise ValueError(f'Invalid status: "{value}"')
 
 
 class ContainerVolumeFactory:

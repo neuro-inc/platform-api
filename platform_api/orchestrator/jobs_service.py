@@ -1,12 +1,12 @@
 import logging
-from typing import Any, Dict, List, Optional, Tuple
+from typing import List, Optional, Tuple
 
 from platform_api.user import User
 
 from .base import LogReader, Orchestrator, Telemetry
 from .job import Job, JobStatusItem
 from .job_request import JobException, JobNotFoundException, JobRequest, JobStatus
-from .jobs_storage import InMemoryJobsStorage, JobsStorage
+from .jobs_storage import InMemoryJobsStorage, JobFilter, JobsStorage
 from .status import Status
 
 
@@ -112,5 +112,5 @@ class JobsService:
         if not job.is_finished:
             await self._delete_job(job)
 
-    async def get_all_jobs(self, filters: Optional[Dict[str, Any]] = None) -> List[Job]:
-        return await self._jobs_storage.get_all_jobs(filters)
+    async def get_all_jobs(self, job_filter: Optional[JobFilter] = None) -> List[Job]:
+        return await self._jobs_storage.get_all_jobs(job_filter)

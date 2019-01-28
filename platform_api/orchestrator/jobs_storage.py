@@ -4,10 +4,20 @@ from abc import ABC, abstractmethod
 from typing import Any, Dict, List, Optional, Set
 
 import aioredis
+from attr import dataclass
 
 from .base import OrchestratorConfig
 from .job import Job
 from .job_request import JobError, JobStatus
+
+
+@dataclass(frozen=True)
+class JobFilter:
+    statuses: Set[JobStatus]
+
+    @classmethod
+    def from_primitive(cls, value: Dict[str, Any]) -> "JobFilter":
+        return cls(statuses=value.get("status", set()))
 
 
 class JobsStorage(ABC):
@@ -20,7 +30,7 @@ class JobsStorage(ABC):
         pass
 
     @abstractmethod
-    async def get_all_jobs(self, filters: Optional[Dict[str, Any]] = None) -> List[Job]:
+    async def get_all_jobs(self, job_filter: Optional[JobFilter] = None) -> List[Job]:
         pass
 
     async def get_running_jobs(self) -> List[Job]:
@@ -53,12 +63,16 @@ class InMemoryJobsStorage(JobsStorage):
             raise JobError(f"no such job {job_id}")
         return self._parse_job_payload(payload)
 
-    async def get_all_jobs(self, filters: Optional[Dict[str, Any]] = None) -> List[Job]:
+    async def get_all_jobs(self, job_filter: Optional[JobFilter] = None) -> List[Job]:
+        def check_status(status):
+            if not job_filter or job_filter.statuses is None:
+                return True
+            return status in job_filter.statuses
+
         jobs = []
-        statuses = filters.get("status") if filters else None
         for payload in self._job_records.values():
             job = self._parse_job_payload(payload)
-            if statuses and job.status not in statuses:
+            if not check_status(job.status):
                 continue
             jobs.append(job)
         return jobs
@@ -115,12 +129,11 @@ class RedisJobsStorage(JobsStorage):
             jobs.append(self._parse_job_payload(payload))
         return jobs
 
-    async def _get_job_ids(self, statuses: Set[JobStatus]) -> List[str]:
-        len_statuses = len(statuses)
-        if len_statuses == 0:
+    async def _get_job_ids(self, statuses: Optional[Set[JobStatus]]) -> List[str]:
+        if not statuses:
             key = self._generate_jobs_index_key()
             return [job_id.decode() async for job_id in self._client.isscan(key)]
-        elif len_statuses == 1:
+        elif len(statuses) == 1:
             status = next(iter(statuses))
             key = self._generate_jobs_status_index_key(status)
             return [job_id.decode() async for job_id in self._client.isscan(key)]
@@ -141,8 +154,8 @@ class RedisJobsStorage(JobsStorage):
         failed, succeeded = await tr.execute()
         return [id_.decode() for id_ in itertools.chain(failed, succeeded)]
 
-    async def get_all_jobs(self, filters: Optional[Dict[str, Any]] = None) -> List[Job]:
-        statuses: Set[JobStatus] = filters.get("status", {}) if filters else {}
+    async def get_all_jobs(self, job_filter: Optional[JobFilter] = None) -> List[Job]:
+        statuses = job_filter.statuses if job_filter else set()
         job_ids = await self._get_job_ids(statuses)
         return await self._get_jobs(job_ids)
 

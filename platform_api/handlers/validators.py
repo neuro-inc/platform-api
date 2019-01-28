@@ -1,6 +1,7 @@
-from typing import Optional, Sequence, Set
+from typing import Dict, Optional, Sequence, Set
 
 import trafaret as t
+from multidict import MultiDictProxy
 from trafaret import DataError
 
 from platform_api.orchestrator.job_request import JobStatus
@@ -124,12 +125,25 @@ def create_container_response_validator():
     return create_container_validator(allow_volumes=True, allow_any_gpu_models=True)
 
 
-def validate_status_string(status_str: str) -> Set[str]:
+def convert_multidict_to_dict(multidict: MultiDictProxy) -> Dict:
+    result = dict()
+    for key in multidict.keys():
+        value = multidict.getall(key)
+        value = value[0] if len(value) == 1 else set(value)
+        result[key] = value
+    return result
+
+
+def validate_status_string(value: str) -> Set[str]:
     # NOTE: "all" parameter should be converted to "pending+running+failed+succeeded"
     # by the neuro client
-    if not status_str:
-        raise DataError("Empty status line")
-    return {JobStatus.parse(s) for s in status_str.split("+")}
+    if not value:
+        raise DataError("empty status value")
+    if isinstance(value, str):
+        return {JobStatus.parse(value)}
+    if isinstance(value, set):
+        return {JobStatus.parse(s) for s in value}
+    raise DataError(f"value is not a string or a set of strings: {value}")
 
 
 def create_job_filter_request_validator() -> t.Trafaret:

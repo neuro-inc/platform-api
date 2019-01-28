@@ -9,6 +9,7 @@ from platform_api.orchestrator import Job, JobRequest, JobsService, JobStatus
 from platform_api.orchestrator.job import JobStatusItem
 from platform_api.orchestrator.job_request import Container, ContainerResources
 from platform_api.orchestrator.jobs_service import InMemoryJobsStorage
+from platform_api.orchestrator.jobs_storage import JobFilter
 from platform_api.user import User
 
 
@@ -178,19 +179,18 @@ class TestJobsService:
             job_failed.id,
         }
 
-        jobs = await service.get_all_jobs({"status": {"succeeded", "running"}})
+        job_filter = JobFilter(statuses={JobStatus.SUCCEEDED, JobStatus.RUNNING})
+        jobs = await service.get_all_jobs(job_filter)
         job_ids = {job.id for job in jobs}
         assert job_ids == {job_succeeded.id, job_running.id}
 
-        jobs = await service.get_all_jobs({"status": {"failed", "pending"}})
+        job_filter = JobFilter(statuses={JobStatus.FAILED, JobStatus.PENDING})
+        jobs = await service.get_all_jobs(job_filter)
         job_ids = {job.id for job in jobs}
         assert job_ids == {job_failed.id, job_pending.id}
 
-        jobs = await service.get_all_jobs({"status": {"failed", "failed"}})
-        job_ids = {job.id for job in jobs}
-        assert job_ids == {job_failed.id}
-
-        jobs = await service.get_all_jobs({"status": {"running"}})
+        job_filter = JobFilter(statuses={JobStatus.RUNNING})
+        jobs = await service.get_all_jobs(job_filter)
         job_ids = {job.id for job in jobs}
         assert job_ids == {job_running.id}
 

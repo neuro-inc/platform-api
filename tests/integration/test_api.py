@@ -2,7 +2,7 @@ import asyncio
 import json
 import time
 from pathlib import PurePath
-from typing import Any, Dict, NamedTuple, Optional
+from typing import Any, NamedTuple, Optional
 from unittest import mock
 
 import aiohttp
@@ -92,10 +92,10 @@ class JobsClient:
         self._client = client
         self._headers = headers
 
-    async def get_all_jobs(self, filters: Optional[Dict[str, Any]] = None):
+    async def get_all_jobs(self, params: Optional[Any] = None):
         url = self._api_config.jobs_base_url
         async with self._client.get(
-            url, headers=self._headers, params=filters
+            url, headers=self._headers, params=params
         ) as response:
             response_text = await response.text()
             assert response.status == HTTPOk.status_code, response_text
@@ -468,22 +468,27 @@ class TestJobs:
         for job_id in job_ids_killed:
             await jobs_client.delete_job(job_id=job_id)
 
+        # two statuses, actually filter out values
+        filters = [("status", "pending"), ("status", "running")]
+        jobs = await jobs_client.get_all_jobs(filters)
+        jobs = {job["id"] for job in jobs}
+        assert jobs == job_ids_alive
+
         # no filter
         jobs = await jobs_client.get_all_jobs()
         jobs = {job["id"] for job in jobs}
         assert jobs == job_ids
 
-        # all statuses, same as no filter
-        filters = {"status": "pending+running+failed+succeeded"}
+        # all statuses, same as no filter1
+        filters = [
+            ("status", "pending"),
+            ("status", "running"),
+            ("status", "failed"),
+            ("status", "succeeded"),
+        ]
         jobs = await jobs_client.get_all_jobs(filters)
         jobs = {job["id"] for job in jobs}
         assert jobs == job_ids
-
-        # two statuses, actually filter out values
-        filters = {"status": "pending+running"}
-        jobs = await jobs_client.get_all_jobs(filters)
-        jobs = {job["id"] for job in jobs}
-        assert jobs == job_ids_alive
 
         # single status, actually filter out values
         filters = {"status": "succeeded"}

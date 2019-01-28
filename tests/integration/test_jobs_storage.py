@@ -8,7 +8,7 @@ from platform_api.orchestrator.job_request import (
     JobRequest,
     JobStatus,
 )
-from platform_api.orchestrator.jobs_storage import RedisJobsStorage
+from platform_api.orchestrator.jobs_storage import JobFilter, RedisJobsStorage
 
 
 class TestRedisJobsStorage:
@@ -99,12 +99,12 @@ class TestRedisJobsStorage:
         job_ids = {job.id for job in jobs}
         assert job_ids == {pending_job.id, running_job.id, succeeded_job.id}
 
-        filters = {"status": {JobStatus.FAILED}}
+        filters = JobFilter(statuses={JobStatus.FAILED})
         jobs = await storage.get_all_jobs(filters)
         job_ids = {job.id for job in jobs}
         assert job_ids == set()
 
-        filters = {"status": {JobStatus.SUCCEEDED, JobStatus.RUNNING}}
+        filters = JobFilter(statuses={JobStatus.SUCCEEDED, JobStatus.RUNNING})
         jobs = await storage.get_all_jobs(filters)
         job_ids = {job.id for job in jobs}
         assert job_ids == {succeeded_job.id, running_job.id}
