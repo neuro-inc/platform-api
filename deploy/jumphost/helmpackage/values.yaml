@@ -7,3 +7,4 @@ VOLUME:
   _default: jumphost-dev2
   dev: jumphost-dev2
   staging: jumphost-stage
+  hse: jumphost-hse
