@@ -130,13 +130,13 @@ class TestJobFilterRequestValidator:
     def test_job_filter_request_validator__empty_str_in_set_fail(self):
         request = {"status": {""}}
         validator = create_job_filter_request_validator()
-        with pytest.raises(ValueError, match='Invalid status: ""'):
+        with pytest.raises(ValueError, match="'' is not a valid JobStatus"):
             validator.check(request)
 
     def test_job_filter_request_validator__none_in_set_fail(self):
         request = {"status": {None}}
         validator = create_job_filter_request_validator()
-        with pytest.raises(ValueError, match='Invalid status: "None"'):
+        with pytest.raises(ValueError, match="None is not a valid JobStatus"):
             validator.check(request)
 
     def test_job_filter_request_validator__single_value(self):
@@ -152,13 +152,13 @@ class TestJobFilterRequestValidator:
     def test_job_filter_request_validator__single_value_foo__fail(self):
         request = {"status": "foo"}
         validator = create_job_filter_request_validator()
-        with pytest.raises(ValueError, match='Invalid status: "foo"'):
+        with pytest.raises(ValueError, match="'foo' is not a valid JobStatus"):
             validator.check(request)
 
     def test_job_filter_request_validator__set_single_element_foo__fail(self):
         request = {"status": {"foo"}}
         validator = create_job_filter_request_validator()
-        with pytest.raises(ValueError, match='Invalid status: "foo"'):
+        with pytest.raises(ValueError, match="'foo' is not a valid JobStatus"):
             validator.check(request)
 
     def test_job_filter_request_validator__set_two_elements_running_pending(self):
@@ -176,11 +176,11 @@ class TestJobFilterRequestValidator:
     def test_job_filter_request_validator__set_four_elements__fail(self):
         request = {"status": {"pending", "foo", "failed", "succeeded"}}
         validator = create_job_filter_request_validator()
-        with pytest.raises(ValueError, match='Invalid status: "foo"'):
+        with pytest.raises(ValueError, match="'foo' is not a valid JobStatus"):
             validator.check(request)
 
     def test_job_filter_request_validator__single_value_all__fail(self):
         request = {"status": "all"}
         validator = create_job_filter_request_validator()
-        with pytest.raises(ValueError, match='Invalid status: "all"'):
+        with pytest.raises(ValueError, match="'all' is not a valid JobStatus"):
             validator.check(request)

@@ -699,36 +699,6 @@ class TestJobRequest:
         assert actual == job_request_payload
 
 
-class TestJobStatus:
-    def test_parse_pending(self):
-        assert JobStatus.parse("pending") == JobStatus.PENDING
-
-    def test_parse_running(self):
-        assert JobStatus.parse("running") == JobStatus.RUNNING
-
-    def test_parse_succeeded(self):
-        assert JobStatus.parse("succeeded") == JobStatus.SUCCEEDED
-
-    def test_parse_failed(self):
-        assert JobStatus.parse("failed") == JobStatus.FAILED
-
-    def test_parse_empty(self):
-        with pytest.raises(ValueError, match='Invalid status: ""'):
-            assert JobStatus.parse("")
-
-    def test_parse_none(self):
-        with pytest.raises(ValueError, match='Invalid status: "None"'):
-            assert JobStatus.parse(None)
-
-    def test_parse_wrong_value(self):
-        with pytest.raises(ValueError, match='Invalid status: "abrakadabra"'):
-            assert JobStatus.parse("abrakadabra")
-
-    def test_parse_wrong_case(self):
-        with pytest.raises(ValueError, match='Invalid status: "PeNdInG"'):
-            assert JobStatus.parse("PeNdInG")
-
-
 class TestContainerHTTPServer:
     def test_from_primitive(self):
         payload = {"port": 1234}

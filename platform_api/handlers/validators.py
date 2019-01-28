@@ -140,9 +140,9 @@ def validate_status_string(value: str) -> Set[str]:
     if not value:
         raise DataError("empty status value")
     if isinstance(value, str):
-        return {JobStatus.parse(value)}
+        return {JobStatus(value)}
     if isinstance(value, set):
-        return {JobStatus.parse(s) for s in value}
+        return {JobStatus(s) for s in value}
     raise DataError(f"value is not a string or a set of strings: {value}")
 
 
