@@ -277,7 +277,7 @@ workflows:
             branches:
               only:
                 - /release.*/
-          tags:  # TODO: eventually should be moved to a separate job
+            tags:  # TODO: eventually should be moved to a separate job
               only:
                 - /release.*/
       - gke_stage_jumphost_deploy:
