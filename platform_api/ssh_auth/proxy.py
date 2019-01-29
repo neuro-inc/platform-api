@@ -1,6 +1,6 @@
 import json
 import logging
-from dataclasses import dataclass
+from abc import ABC, abstractmethod
 from typing import List
 
 import aiohttp
@@ -8,48 +8,99 @@ import trafaret as t
 from neuro_auth_client import AuthClient, Permission
 from neuro_auth_client.security import AuthPolicy
 from yarl import URL
-import abc
+
 from .executor import Executor
 from .forwarder import Forwarder
+from operator import attrgetter
 
 log = logging.getLogger(__name__)
 
 
-def create_exec_request_validator() -> t.Trafaret:
-    return t.Dict({"token": t.String, "job": t.String, "command": t.List(t.String)})
+class Request(ABC):
+    @abstractmethod
+    async def process(self, proxy: 'ExecProxy'):
+        pass
 
-
-def create_port_forward_request_validator() -> t.Trafaret:
-    return t.Dict({"token": t.String, "job": t.String})
-
-
-def create_ssh_request_validator() -> t.Trafaret:
-    return t.Or(create_exec_request_validator(),
-                create_port_forward_request_validator())
-
-
-@dataclass(frozen=True)
-class SSHRequest(abc.ABC):
-    token: str
-    job: str
-
-    @abc.abstractmethod
-    async def process(self, proxy: 'ExecProxy') -> int:
+    @abstractmethod
+    async def authorize(self, proxy: 'ExecProxy'):
         pass
 
 
-@dataclass(frozen=True)
-class PortForwardRequest(SSHRequest):
-    async def process(self, proxy: 'ExecProxy') -> int:
-        return await proxy.process_port_forward_request(self)
+class JobRequest(Request):
+    _token: str
+    _job: str
+    _action: str
+
+    def __init__(self, token, job, action):
+        self._token = token
+        self._job = job
+        self._action = action
+
+    async def authorize(self, proxy: 'ExecProxy'):
+        await proxy.authorize(self.token, self.job, self.action)
+
+    token = property(attrgetter('_token'))
+    job = property(attrgetter('_job'))
+    action = property(attrgetter('_action'))
 
 
-@dataclass(frozen=True)
-class ExecRequest(SSHRequest):
-    command: List[str]
+class ExecRequest(JobRequest):
+    _command: List[str]
+
+    def __init__(self, token, job, command):
+        super().__init__(token, job, "write")
+        self._command = command
 
     async def process(self, proxy: 'ExecProxy') -> int:
         return await proxy.process_exec_request(self)
+
+    command = property(attrgetter('_command'))
+
+
+class PortForwardRequest(JobRequest):
+    _port: int
+
+    def __init__(self, token, job, port):
+        super().__init__(token, job, "read")
+        self._port = port
+
+    async def process(self, proxy: 'ExecProxy') -> int:
+        return await proxy.process_port_forward_request(self)
+
+    port = property(attrgetter('_port'))
+
+
+def create_exec_request_validator() -> t.Trafaret:
+    return t.Dict(
+        {
+            "method": t.Atom("job_exec"),
+            "token": t.String,
+            "params": t.Dict({"job": t.String, "command": t.List(t.String)}),
+        }
+    ) >> (
+        lambda d: ExecRequest(
+            token=d["token"], job=d["params"]["job"], command=d["params"]["command"]
+        )
+    )
+
+
+def create_port_forward_request_validator() -> t.Trafaret:
+    return t.Dict(
+        {
+            "method": t.Atom("job_port_forward"),
+            "token": t.String,
+            "params": t.Dict({"job": t.String, "port": t.Int})
+        }
+    ) >> (
+        lambda d: PortForwardRequest(
+            token=d["token"], job=d["params"]["job"], port=d["params"]["port"]
+        )
+    )
+
+
+def create_request_validator() -> t.Trafaret:
+    return t.Or(create_exec_request_validator(),
+                create_port_forward_request_validator())
 
 
 class AuthError(Exception):
@@ -75,7 +126,7 @@ class ExecProxy:
     ) -> None:
         self._auth_client = auth_client
         self._jobs_url = platform_url / "jobs"
-        self._ssh_request_validator = create_ssh_request_validator()
+        self._ssh_request_validator = create_request_validator()
         self._executor = executor
         self._forwarder = forwarder
 
@@ -89,26 +140,22 @@ class ExecProxy:
             job_payload = await response.json()
             return job_payload["owner"]
 
-    async def _authorize(self, token: str, job_id: str) -> None:
+    async def authorize(self, token: str, job_id: str, action: str) -> None:
         auth_policy = AuthPolicy(self._auth_client)
         user = await auth_policy.authorized_userid(token)
         if not user:
             raise AuthenticationError(f"Incorrect token: token={token}, job={job_id}")
         log.debug(f"user {user}")
         owner = await self._get_owner(token, job_id)
-        permission = Permission(uri=f"job://{owner}/{job_id}", action="write")
+        permission = Permission(uri=f"job://{owner}/{job_id}", action=action)
         log.debug(f"Checking permission: {permission}")
         result = await auth_policy.permits(token, None, [permission])
         if not result:
             raise AuthorizationError(f"Permission denied: user={user}, job={job_id}")
 
-    def _parse(self, request: str) -> SSHRequest:
+    def _parse(self, request: str) -> Request:
         dict_request = json.loads(request)
-        self._ssh_request_validator(dict_request)
-        if "command" in dict_request:
-            return ExecRequest(**dict_request)
-        else:
-            return PortForwardRequest(**dict_request)
+        return self._ssh_request_validator(dict_request)
 
     async def process_exec_request(self, request: ExecRequest) -> int:
         return await self._executor.exec_in_job(request.job, request.command)
@@ -123,5 +170,5 @@ class ExecProxy:
         except ValueError as e:
             raise IllegalArgumentError(f"Illegal Payload: {json_request} ({e})")
 
-        await self._authorize(request.token, request.job)
+        await request.authorize(self)
         return await request.process(self)
