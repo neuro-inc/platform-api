@@ -9,7 +9,7 @@ async def test_basic_command(api_config, alice, client):
     model_request_payload = {
         "container": {
             "image": "ubuntu",
-            "command": "true",
+            "command": "tail -f /dev/null",
             "resources": {"cpu": 0.1, "memory_mb": 16},
         },
         "dataset_storage_uri": f"storage://{alice.name}",
@@ -33,4 +33,5 @@ async def test_basic_command(api_config, alice, client):
             break
         if status_name == "failed":
             pytest.fail(f"Job failed: {jobs_payload}")
+        # COMMENT(adavydow): should we fail if we did not succeeded in 30 seconds?
         time.sleep(1)

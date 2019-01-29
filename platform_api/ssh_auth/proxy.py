@@ -122,7 +122,8 @@ class IllegalArgumentError(ValueError):
 class ExecProxy:
     def __init__(
             self, auth_client: AuthClient, platform_url: URL,
-            executor: Executor, forwarder: Forwarder
+            executor: Executor, forwarder: Forwarder,
+            log_file: str
     ) -> None:
         self._auth_client = auth_client
         self._jobs_url = platform_url / "jobs"
@@ -161,7 +162,7 @@ class ExecProxy:
         return await self._executor.exec_in_job(request.job, request.command)
 
     async def process_port_forward_request(self, request: PortForwardRequest) -> int:
-        return await self._forwarder.forward()
+        return await self._forwarder.forward(request.job, request.port)
 
     async def process(self, json_request: str) -> int:
         try:
