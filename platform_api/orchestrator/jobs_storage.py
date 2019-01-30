@@ -2,7 +2,7 @@ import itertools
 import json
 from abc import ABC, abstractmethod
 from dataclasses import dataclass
-from typing import Any, Dict, List, Optional, Set
+from typing import Dict, List, Optional, Set
 
 import aioredis
 
@@ -59,7 +59,7 @@ class InMemoryJobsStorage(JobsStorage):
             raise JobError(f"no such job {job_id}")
         return self._parse_job_payload(payload)
 
-    def _apply_filter(self, job_filter: JobFilter, job: Job) -> bool:
+    def _apply_filter(self, job: Job, job_filter: Optional[JobFilter]) -> bool:
         if not job_filter:
             return True
         if job_filter.statuses and job.status not in job_filter.statuses:
@@ -70,7 +70,7 @@ class InMemoryJobsStorage(JobsStorage):
         jobs = []
         for payload in self._job_records.values():
             job = self._parse_job_payload(payload)
-            if not self._apply_filter(job_filter, job):
+            if not self._apply_filter(job, job_filter):
                 continue
             jobs.append(job)
         return jobs
