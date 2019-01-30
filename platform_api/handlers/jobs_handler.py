@@ -261,10 +261,11 @@ class JobsHandler:
         )
 
     def _build_job_filter_from_query(self, query: MultiDictProxy) -> JobFilter:
-        if "status" in query:
-            statuses = {JobStatus(s) for s in query.getall("status")}
-        else:
-            statuses = {}
+        statuses = (
+            {JobStatus(s) for s in query.getall("status")}
+            if "status" in query
+            else set()
+        )
         return JobFilter(statuses=statuses)
 
     async def handle_get_all(self, request):
