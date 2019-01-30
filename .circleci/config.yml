@@ -84,6 +84,25 @@ jobs:
           command: |
             make gke_k8s_deploy_staging
 
+  gke_ssh_auth_stage_deploy:
+    <<: *defaults
+    steps:
+      - checkout
+      - run:
+          name: GKE Auth
+          command: |
+            make -s gke_login
+
+      - run:
+          name: GKE Docker Push
+          command: |
+            make gke_docker_push
+
+      - run:
+          name: GKE K8s Deploy
+          command: |
+            make gke_k8s_deploy_ssh_auth_staging
+
   gke_dev_jumphost_deploy:
     <<: *defaults
     steps:
@@ -250,6 +269,17 @@ workflows:
             branches:
               only:
                 - master
+      - gke_ssh_auth_stage_deploy:
+          context: org-global
+          requires:
+            - test
+          filters:
+            branches:
+              only:
+                - /release.*/
+            tags:  # TODO: eventually should be moved to a separate job
+              only:
+                - /release.*/
       - gke_stage_jumphost_deploy:
           context: org-global
           filters:
