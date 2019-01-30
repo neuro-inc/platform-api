@@ -262,7 +262,7 @@ class JobsHandler:
             data=response_payload, status=aiohttp.web.HTTPOk.status_code
         )
 
-    def build_job_filter_from_query(self, query: MultiDictProxy) -> JobFilter:
+    def _build_job_filter_from_query(self, query: MultiDictProxy) -> JobFilter:
         return JobFilter(statuses={JobStatus(s) for s in query.getall("status")})
 
     async def handle_get_all(self, request):
@@ -274,7 +274,7 @@ class JobsHandler:
         tree = await self._auth_client.get_permissions_tree(user.name, "job:")
         # TODO (A Danshyn 10/09/18): retrieving all jobs until the proper
         # index is in place
-        job_filter = self.build_job_filter_from_query(request.query)
+        job_filter = self._build_job_filter_from_query(request.query)
         jobs = await self._jobs_service.get_all_jobs(job_filter)
         jobs = filter_jobs_with_access_tree(jobs, tree)
 
