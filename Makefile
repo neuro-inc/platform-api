@@ -106,5 +106,5 @@ gke_k8s_deploy_ssh_auth_dev: _helm
 	helm --set "global.env=dev" --set "IMAGE.dev=$(SSH_K8S):$(CIRCLE_SHA1)" upgrade --install ssh-auth deploy/ssh_auth/ --wait --timeout 600
 
 gke_k8s_deploy_ssh_auth_staging: _helm
-	gcloud --quiet container clusters get-credentials $(GKE_CLUSTER_NAME) --region $(GKE_CLUSTER_REGION)
+	gcloud --quiet container clusters get-credentials $(GKE_STAGE_CLUSTER_NAME)
 	helm --set "global.env=staging" --set "IMAGE.staging=$(SSH_K8S):$(CIRCLE_SHA1)" upgrade --install ssh-auth deploy/ssh_auth/ --wait --timeout 600
