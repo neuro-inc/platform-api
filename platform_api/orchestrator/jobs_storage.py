@@ -128,16 +128,12 @@ class RedisJobsStorage(JobsStorage):
         return jobs
 
     async def _get_job_ids(self, statuses: Set[JobStatus]) -> List[str]:
-        if len(statuses) > 1:
+        if statuses:
             keys = [self._generate_jobs_status_index_key(s) for s in statuses]
             return [job_id.decode() for job_id in await self._client.sunion(*keys)]
-
-        key = (
-            self._generate_jobs_status_index_key(next(iter(statuses)))
-            if statuses
-            else self._generate_jobs_index_key()
-        )
-        return [job_id.decode() async for job_id in self._client.isscan(key)]
+        else:
+            key = self._generate_jobs_index_key()
+            return [job_id.decode() async for job_id in self._client.isscan(key)]
 
     async def _get_job_ids_for_deletion(self) -> List[str]:
         tr = self._client.multi_exec()

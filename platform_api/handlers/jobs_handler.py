@@ -28,7 +28,6 @@ from .job_request_builder import ContainerBuilder
 from .validators import (
     create_container_request_validator,
     create_container_response_validator,
-    create_job_filter_request_validator,
     create_job_history_validator,
     create_job_status_validator,
 )
@@ -183,7 +182,6 @@ class JobsHandler:
         self._config = config
         self._storage_config = config.storage
 
-        self._status_filter_request_validator = create_job_filter_request_validator()
         self._job_response_validator = create_job_response_validator()
         self._bulk_jobs_response_validator = t.Dict(
             {"jobs": t.List(self._job_response_validator)}
@@ -263,7 +261,11 @@ class JobsHandler:
         )
 
     def _build_job_filter_from_query(self, query: MultiDictProxy) -> JobFilter:
-        return JobFilter(statuses={JobStatus(s) for s in query.getall("status")})
+        if "status" in query:
+            statuses = {JobStatus(s) for s in query.getall("status")}
+        else:
+            statuses = {}
+        return JobFilter(statuses=statuses)
 
     async def handle_get_all(self, request):
         # TODO (A Danshyn 10/08/18): remove once
