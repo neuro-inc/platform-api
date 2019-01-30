@@ -1,10 +1,10 @@
 import itertools
 import json
 from abc import ABC, abstractmethod
+from dataclasses import dataclass
 from typing import Any, Dict, List, Optional, Set
 
 import aioredis
-from dataclasses import dataclass
 
 from .base import OrchestratorConfig
 from .job import Job

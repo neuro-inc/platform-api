@@ -20,7 +20,6 @@ from platform_api.user import User, untrusted_user
 
 from .job_request_builder import ContainerBuilder
 from .validators import (
-    convert_multidict_to_dict,
     create_container_request_validator,
     create_container_response_validator,
     create_job_filter_request_validator,
@@ -269,8 +268,7 @@ class JobsHandler:
         tree = await self._auth_client.get_permissions_tree(user.name, "job:")
         # TODO (A Danshyn 10/09/18): retrieving all jobs until the proper
         # index is in place
-        query = convert_multidict_to_dict(request.query)
-        job_filter_dict = self._status_filter_request_validator.check(query)
+        job_filter_dict = self._status_filter_request_validator.check(request.query)
         job_filter = self.build_job_filter(job_filter_dict)
         jobs = await self._jobs_service.get_all_jobs(job_filter)
         jobs = filter_jobs_with_access_tree(jobs, tree)
