@@ -99,6 +99,10 @@ class TestInMemoryJobsStorage:
             succeeded_job.id,
         }
 
+        job_filter = JobFilter(statuses={JobStatus.PENDING, JobStatus.RUNNING})
+        jobs = await jobs_storage.get_all_jobs(job_filter)
+        assert {job.id for job in jobs} == {running_job.id, pending_job.id}
+
         jobs = await jobs_storage.get_running_jobs()
         assert {job.id for job in jobs} == {running_job.id}
 
