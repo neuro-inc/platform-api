@@ -1,8 +1,6 @@
-from typing import Any, Dict, Optional, Sequence, Set
+from typing import Optional, Sequence
 
 import trafaret as t
-from multidict import MultiDictProxy
-from trafaret import DataError
 
 from platform_api.orchestrator.job_request import JobStatus
 from platform_api.resource import GPUModel
@@ -123,15 +121,3 @@ def create_container_request_validator(
 
 def create_container_response_validator():
     return create_container_validator(allow_volumes=True, allow_any_gpu_models=True)
-
-
-def validate_job_filter_request(multidict: MultiDictProxy) -> Dict[str, Any]:
-    return (
-        {"status": {JobStatus(s) for s in multidict.getall("status")}}
-        if "status" in multidict
-        else {}
-    )
-
-
-def create_job_filter_request_validator() -> t.Trafaret:
-    return t.Call(validate_job_filter_request)
