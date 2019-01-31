@@ -2,7 +2,7 @@ import itertools
 import json
 from abc import ABC, abstractmethod
 from dataclasses import dataclass
-from typing import Dict, List, Optional, Set
+from typing import Dict, List, Optional, Set, AbstractSet
 
 import aioredis
 
@@ -13,7 +13,7 @@ from .job_request import JobError, JobStatus
 
 @dataclass(frozen=True)
 class JobFilter:
-    statuses: Set[JobStatus]
+    statuses: AbstractSet[JobStatus]
 
 
 class JobsStorage(ABC):
