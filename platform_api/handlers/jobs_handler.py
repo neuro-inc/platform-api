@@ -6,6 +6,7 @@ from typing import Any, Dict, List, Sequence, Set
 import aiohttp.web
 import trafaret as t
 from aiohttp_security import check_authorized, check_permission
+from multidict import MultiDictProxy
 from neuro_auth_client import AuthClient, Permission
 from neuro_auth_client.client import ClientSubTreeViewRoot
 from yarl import URL
@@ -13,7 +14,13 @@ from yarl import URL
 from platform_api.config import Config, RegistryConfig, StorageConfig
 from platform_api.orchestrator import JobsService, Orchestrator
 from platform_api.orchestrator.job import Job, JobStats
-from platform_api.orchestrator.job_request import Container, ContainerVolume, JobRequest
+from platform_api.orchestrator.job_request import (
+    Container,
+    ContainerVolume,
+    JobRequest,
+    JobStatus,
+)
+from platform_api.orchestrator.jobs_storage import JobFilter
 from platform_api.resource import GPUModel
 from platform_api.user import User, untrusted_user
 
@@ -253,6 +260,14 @@ class JobsHandler:
             data=response_payload, status=aiohttp.web.HTTPOk.status_code
         )
 
+    def _build_job_filter_from_query(self, query: MultiDictProxy) -> JobFilter:
+        statuses = (
+            {JobStatus(s) for s in query.getall("status")}
+            if "status" in query
+            else set()
+        )
+        return JobFilter(statuses=statuses)
+
     async def handle_get_all(self, request):
         # TODO (A Danshyn 10/08/18): remove once
         # AuthClient.get_permissions_tree accepts the token param
@@ -262,7 +277,8 @@ class JobsHandler:
         tree = await self._auth_client.get_permissions_tree(user.name, "job:")
         # TODO (A Danshyn 10/09/18): retrieving all jobs until the proper
         # index is in place
-        jobs = await self._jobs_service.get_all_jobs()
+        job_filter = self._build_job_filter_from_query(request.query)
+        jobs = await self._jobs_service.get_all_jobs(job_filter)
         jobs = filter_jobs_with_access_tree(jobs, tree)
 
         response_payload = {

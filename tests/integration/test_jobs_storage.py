@@ -8,7 +8,7 @@ from platform_api.orchestrator.job_request import (
     JobRequest,
     JobStatus,
 )
-from platform_api.orchestrator.jobs_storage import RedisJobsStorage
+from platform_api.orchestrator.jobs_storage import JobFilter, RedisJobsStorage
 
 
 class TestRedisJobsStorage:
@@ -59,7 +59,9 @@ class TestRedisJobsStorage:
             await storage.get_job("unknown")
 
     @pytest.mark.asyncio
-    async def test_get_all_empty(self, redis_client, kube_orchestrator):
+    async def test_get_all_no_filter_empty_result(
+        self, redis_client, kube_orchestrator
+    ):
         storage = RedisJobsStorage(
             redis_client, orchestrator_config=kube_orchestrator.config
         )
@@ -68,7 +70,7 @@ class TestRedisJobsStorage:
         assert not jobs
 
     @pytest.mark.asyncio
-    async def test_get_all(self, redis_client, kube_orchestrator):
+    async def test_get_all_no_filter_single_job(self, redis_client, kube_orchestrator):
         original_job = self._create_pending_job(kube_orchestrator)
         storage = RedisJobsStorage(
             redis_client, orchestrator_config=kube_orchestrator.config
@@ -80,6 +82,32 @@ class TestRedisJobsStorage:
         job = jobs[0]
         assert job.id == original_job.id
         assert job.status == original_job.status
+
+    @pytest.mark.asyncio
+    async def test_get_all_filter_by_status(self, redis_client, kube_orchestrator):
+        pending_job = self._create_pending_job(kube_orchestrator)
+        running_job = self._create_running_job(kube_orchestrator)
+        succeeded_job = self._create_succeeded_job(kube_orchestrator)
+        storage = RedisJobsStorage(
+            client=redis_client, orchestrator_config=kube_orchestrator.config
+        )
+        await storage.set_job(pending_job)
+        await storage.set_job(running_job)
+        await storage.set_job(succeeded_job)
+
+        jobs = await storage.get_all_jobs()
+        job_ids = {job.id for job in jobs}
+        assert job_ids == {pending_job.id, running_job.id, succeeded_job.id}
+
+        filters = JobFilter(statuses={JobStatus.FAILED})
+        jobs = await storage.get_all_jobs(filters)
+        job_ids = {job.id for job in jobs}
+        assert job_ids == set()
+
+        filters = JobFilter(statuses={JobStatus.SUCCEEDED, JobStatus.RUNNING})
+        jobs = await storage.get_all_jobs(filters)
+        job_ids = {job.id for job in jobs}
+        assert job_ids == {succeeded_job.id, running_job.id}
 
     @pytest.mark.asyncio
     async def test_get_running_empty(self, redis_client, kube_orchestrator):

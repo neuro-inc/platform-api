@@ -9,6 +9,7 @@ from platform_api.orchestrator import Job, JobRequest, JobsService, JobStatus
 from platform_api.orchestrator.job import JobStatusItem
 from platform_api.orchestrator.job_request import Container, ContainerResources
 from platform_api.orchestrator.jobs_service import InMemoryJobsStorage
+from platform_api.orchestrator.jobs_storage import JobFilter
 from platform_api.user import User
 
 
@@ -98,6 +99,10 @@ class TestInMemoryJobsStorage:
             succeeded_job.id,
         }
 
+        job_filter = JobFilter(statuses={JobStatus.PENDING, JobStatus.RUNNING})
+        jobs = await jobs_storage.get_all_jobs(job_filter)
+        assert {job.id for job in jobs} == {running_job.id, pending_job.id}
+
         jobs = await jobs_storage.get_running_jobs()
         assert {job.id for job in jobs} == {running_job.id}
 
@@ -142,6 +147,56 @@ class TestJobsService:
 
         jobs = await jobs_service.get_all_jobs()
         assert job_ids == [job.id for job in jobs]
+
+    @pytest.mark.asyncio
+    async def test_get_all_filter_by_status(
+        self, mock_orchestrator, job_request_factory
+    ):
+        service = JobsService(orchestrator=mock_orchestrator)
+        user = User(name="testuser", token="")
+
+        async def create_job():
+            job_request = job_request_factory()
+            job, _ = await service.create_job(job_request=job_request, user=user)
+            return job
+
+        job_pending = await create_job()
+        job_running = await create_job()
+        job_succeeded = await create_job()
+        job_failed = await create_job()
+
+        mock_orchestrator.update_status_to_return(JobStatus.RUNNING)
+        await service._update_job_status(job_running)
+
+        mock_orchestrator.update_status_to_return(JobStatus.SUCCEEDED)
+        await service._update_job_status(job_succeeded)
+
+        mock_orchestrator.update_status_to_return(JobStatus.FAILED)
+        await service._update_job_status(job_failed)
+
+        jobs = await service.get_all_jobs()
+        job_ids = {job.id for job in jobs}
+        assert job_ids == {
+            job_pending.id,
+            job_running.id,
+            job_succeeded.id,
+            job_failed.id,
+        }
+
+        job_filter = JobFilter(statuses={JobStatus.SUCCEEDED, JobStatus.RUNNING})
+        jobs = await service.get_all_jobs(job_filter)
+        job_ids = {job.id for job in jobs}
+        assert job_ids == {job_succeeded.id, job_running.id}
+
+        job_filter = JobFilter(statuses={JobStatus.FAILED, JobStatus.PENDING})
+        jobs = await service.get_all_jobs(job_filter)
+        job_ids = {job.id for job in jobs}
+        assert job_ids == {job_failed.id, job_pending.id}
+
+        job_filter = JobFilter(statuses={JobStatus.RUNNING})
+        jobs = await service.get_all_jobs(job_filter)
+        job_ids = {job.id for job in jobs}
+        assert job_ids == {job_running.id}
 
     @pytest.mark.asyncio
     async def test_update_jobs_statuses_running(
