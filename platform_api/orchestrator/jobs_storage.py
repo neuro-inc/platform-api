@@ -2,7 +2,7 @@ import itertools
 import json
 from abc import ABC, abstractmethod
 from dataclasses import dataclass
-from typing import Dict, List, Optional, Set, AbstractSet
+from typing import AbstractSet, Dict, List, Optional
 
 import aioredis
 
@@ -125,7 +125,7 @@ class RedisJobsStorage(JobsStorage):
             jobs.append(self._parse_job_payload(payload))
         return jobs
 
-    async def _get_job_ids(self, statuses: Set[JobStatus]) -> List[str]:
+    async def _get_job_ids(self, statuses: AbstractSet[JobStatus]) -> List[str]:
         if statuses:
             keys = [self._generate_jobs_status_index_key(s) for s in statuses]
             return [job_id.decode() for job_id in await self._client.sunion(*keys)]
