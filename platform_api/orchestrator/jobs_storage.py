@@ -59,9 +59,7 @@ class InMemoryJobsStorage(JobsStorage):
             raise JobError(f"no such job {job_id}")
         return self._parse_job_payload(payload)
 
-    def _apply_filter(self, job: Job, job_filter: Optional[JobFilter]) -> bool:
-        if not job_filter:
-            return True
+    def _apply_filter(self, job_filter: JobFilter, job: Job) -> bool:
         if job_filter.statuses and job.status not in job_filter.statuses:
             return False
         return True
@@ -70,7 +68,7 @@ class InMemoryJobsStorage(JobsStorage):
         jobs = []
         for payload in self._job_records.values():
             job = self._parse_job_payload(payload)
-            if not self._apply_filter(job, job_filter):
+            if job_filter and not self._apply_filter(job_filter, job):
                 continue
             jobs.append(job)
         return jobs
