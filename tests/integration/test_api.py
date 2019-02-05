@@ -51,21 +51,39 @@ class ApiConfig(NamedTuple):
     def ping_url(self):
         return self.endpoint + "/ping"
 
+    @property
+    def config_url(self):
+        return self.endpoint + "/config"
+
 
 @pytest.fixture
-def config(kube_config, redis_config, auth_config, es_config):
-    server_config = ServerConfig()
-    storage_config = StorageConfig(host_mount_path=PurePath("/tmp"))  # type: ignore
-    database_config = DatabaseConfig(redis=redis_config)  # type: ignore
-    logging_config = LoggingConfig(elasticsearch=es_config)
-    return Config(
-        server=server_config,
-        storage=storage_config,
-        orchestrator=kube_config,
-        database=database_config,
-        auth=auth_config,
-        logging=logging_config,
-    )
+def config_factory(kube_config, redis_config, auth_config, es_config):
+    def _factory(**kwargs):
+        server_config = ServerConfig()
+        storage_config = StorageConfig(host_mount_path=PurePath("/tmp"))  # type: ignore
+        database_config = DatabaseConfig(redis=redis_config)  # type: ignore
+        logging_config = LoggingConfig(elasticsearch=es_config)
+        return Config(
+            server=server_config,
+            storage=storage_config,
+            orchestrator=kube_config,
+            database=database_config,
+            auth=auth_config,
+            logging=logging_config,
+            **kwargs,
+        )
+
+    return _factory
+
+
+@pytest.fixture
+def config(config_factory):
+    return config_factory()
+
+
+@pytest.fixture
+def config_with_oauth(config_factory, oauth_config_dev):
+    return config_factory(oauth=oauth_config_dev)
 
 
 @pytest.fixture
@@ -74,6 +92,18 @@ async def api(config):
     runner = aiohttp.web.AppRunner(app)
     await runner.setup()
     api_config = ApiConfig(host="0.0.0.0", port=8080)
+    site = aiohttp.web.TCPSite(runner, api_config.host, api_config.port)
+    await site.start()
+    yield api_config
+    await runner.cleanup()
+
+
+@pytest.fixture
+async def api_with_oauth(config_with_oauth):
+    app = await create_app(config_with_oauth)
+    runner = aiohttp.web.AppRunner(app)
+    await runner.setup()
+    api_config = ApiConfig(host="0.0.0.0", port=8081)
     site = aiohttp.web.TCPSite(runner, api_config.host, api_config.port)
     await site.start()
     yield api_config
@@ -162,6 +192,28 @@ class TestApi:
         async with client.get(api.ping_url) as response:
             assert response.status == HTTPOk.status_code
 
+    @pytest.mark.asyncio
+    async def test_config(self, api, client):
+        url = api.config_url
+        async with client.get(url) as resp:
+            assert resp.status == HTTPOk.status_code
+            result = await resp.json()
+            assert result == {"registry_url": "https://registry.dev.neuromation.io"}
+
+    @pytest.mark.asyncio
+    async def test_config_with_oauth(self, api_with_oauth, client):
+        url = api_with_oauth.config_url
+        async with client.get(url) as resp:
+            assert resp.status == HTTPOk.status_code
+            result = await resp.json()
+            assert result == {
+                "registry_url": "https://registry.dev.neuromation.io",
+                "authorization_url": "https://dev-neuromation.auth0.com/authorize",
+                "token_url": "https://dev-neuromation.auth0.com/oauth/token",
+                "client_id": "V7Jz87W9lhIlo0MyD0O6dufBvcXwM4DR",
+                "audience": "https://platform.dev.neuromation.io",
+                "success_redirect_url": "https://platform.neuromation.io",
+            }
 
 @pytest.fixture
 async def model_request_factory():

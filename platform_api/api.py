@@ -3,11 +3,13 @@ import logging
 
 import aiohttp.web
 from aioelasticsearch import Elasticsearch
+from aiohttp_security import check_authorized
 from async_exit_stack import AsyncExitStack
 from async_generator import asynccontextmanager
 from neuro_auth_client import AuthClient
 from neuro_auth_client.security import AuthScheme, setup_security
 
+from user import untrusted_user
 from .config import Config, ElasticsearchConfig
 from .config_factory import EnvironConfigFactory
 from .handlers import JobsHandler, ModelsHandler
@@ -20,11 +22,31 @@ logger = logging.getLogger(__name__)
 
 
 class ApiHandler:
+    def __init__(self, config: Config):
+        self._config = config
+
     def register(self, app):
-        app.add_routes((aiohttp.web.get("/ping", self.handle_ping),))
+        app.add_routes(
+            (
+                aiohttp.web.get("/ping", self.handle_ping),
+                aiohttp.web.get("/config", self.handle_config),
+            )
+        )
 
     async def handle_ping(self, request):
         return aiohttp.web.Response()
+
+    # integration test on API. + units on how we parse config factory
+    async def handle_config(self, request):
+        data = {"registry_url": self._config.registry.url}
+        if self._config.oauth:
+            data["authorization_url"] = str(self._config.oauth.authorization_url)
+            data["token_url"] = str(self._config.oauth.token_url)
+            data["client_id"] = self._config.oauth.client_id
+            data["audience"] = self._config.oauth.audience
+            data["success_redirect_url"] = str(self._config.oauth.success_redirect_url)
+
+        return aiohttp.web.json_response(data)
 
 
 def init_logging():
@@ -62,9 +84,9 @@ async def handle_exceptions(request, handler):
         )
 
 
-async def create_api_v1_app():
+async def create_api_v1_app(config: Config):
     api_v1_app = aiohttp.web.Application()
-    api_v1_handler = ApiHandler()
+    api_v1_handler = ApiHandler(config=config)
     api_v1_handler.register(api_v1_app)
     return api_v1_app
 
@@ -148,7 +170,7 @@ async def create_app(config: Config) -> aiohttp.web.Application:
 
     app.cleanup_ctx.append(_init_app)
 
-    api_v1_app = await create_api_v1_app()
+    api_v1_app = await create_api_v1_app(config)
 
     models_app = await create_models_app(config=config)
     app["models_app"] = models_app

@@ -48,3 +48,19 @@ NP_GKE_GPU_MODELS:
   dev: nvidia-tesla-k80,nvidia-tesla-p4,nvidia-tesla-v100
   staging: nvidia-tesla-k80,nvidia-tesla-p4,nvidia-tesla-v100
   hse: nvidia-tesla-k80,nvidia-tesla-p4,nvidia-tesla-v100
+NP_OAUTH_BASE_URL:
+  _default: https://dev-neuromation.auth0.com
+  dev: https://dev-neuromation.auth0.com
+  staging: https://staging-neuromation.auth0.com
+NP_OAUTH_CLIENT_ID:
+  _default: V7Jz87W9lhIlo0MyD0O6dufBvcXwM4DR
+  dev: V7Jz87W9lhIlo0MyD0O6dufBvcXwM4DR
+  staging: uJV0pm5JPdHkXsSd525rlhFDVcEuUnaV
+NP_OAUTH_CLIENT_AUDIENCE:
+  _default: https://platform.dev.neuromation.io
+  dev: https://platform.dev.neuromation.io
+  staging: https://platform.staging.neuromation.io
+NP_OAUTH_CLIENT_SUCCESS_REDIRECT_URL:
+  _default: https://platform.neuromation.io
+  dev: https://platform.neuromation.io
+  staging: https://platform.neuromation.io

@@ -10,6 +10,7 @@ from .config import (
     DatabaseConfig,
     ElasticsearchConfig,
     LoggingConfig,
+    OAuthConfig,
     PlatformConfig,
     RegistryConfig,
     ServerConfig,
@@ -40,6 +41,7 @@ class EnvironConfigFactory:
         storage = self.create_storage()
         database = self.create_database()
         auth = self.create_auth()
+        oauth = self.create_oauth()
         registry = self.create_registry()
         return Config(
             server=self.create_server(),
@@ -47,6 +49,7 @@ class EnvironConfigFactory:
             orchestrator=self.create_orchestrator(storage, registry, auth),
             database=database,
             auth=auth,
+            oauth=oauth,
             logging=self.create_logging(),
             registry=registry,
             env_prefix=env_prefix,
@@ -225,6 +228,20 @@ class EnvironConfigFactory:
         return AuthConfig(
             server_endpoint_url=url, service_token=token, service_name=name
         )  # type: ignore
+
+    def create_oauth(self) -> OAuthConfig:
+        base_url = URL(self._environ["NP_OAUTH_BASE_URL"])
+        client_id = self._environ["NP_OAUTH_CLIENT_ID"]
+        audience = self._environ["NP_OAUTH_CLIENT_AUDIENCE"]
+        success_redirect_url = URL(
+            self._environ.get("NP_OAUTH_CLIENT_SUCCESS_REDIRECT_URL")
+        )
+        return OAuthConfig(
+            base_url=base_url,
+            client_id=client_id,
+            audience=audience,
+            success_redirect_url=success_redirect_url,
+        )
 
     def create_registry(self) -> RegistryConfig:
         host = self._environ.get("NP_REGISTRY_HOST", RegistryConfig.host)

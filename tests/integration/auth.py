@@ -13,7 +13,7 @@ from jose import jwt
 from neuro_auth_client import AuthClient, Permission, User as AuthClientUser
 from yarl import URL
 
-from platform_api.config import AuthConfig
+from platform_api.config import AuthConfig, OAuthConfig
 from platform_api.user import User
 
 
@@ -156,3 +156,13 @@ async def regular_user_factory(auth_client, token_factory, admin_token):
 @pytest.fixture
 async def regular_user(regular_user_factory) -> _User:
     return await regular_user_factory()
+
+
+@pytest.fixture
+def oauth_config_dev() -> OAuthConfig:
+    return OAuthConfig(
+        base_url=URL("https://dev-neuromation.auth0.com"),
+        client_id="V7Jz87W9lhIlo0MyD0O6dufBvcXwM4DR",
+        audience="https://platform.dev.neuromation.io",
+        success_redirect_url=URL("https://platform.neuromation.io"),
+    )
