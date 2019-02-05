@@ -3,13 +3,11 @@ import logging
 
 import aiohttp.web
 from aioelasticsearch import Elasticsearch
-from aiohttp_security import check_authorized
 from async_exit_stack import AsyncExitStack
 from async_generator import asynccontextmanager
 from neuro_auth_client import AuthClient
 from neuro_auth_client.security import AuthScheme, setup_security
 
-from user import untrusted_user
 from .config import Config, ElasticsearchConfig
 from .config_factory import EnvironConfigFactory
 from .handlers import JobsHandler, ModelsHandler

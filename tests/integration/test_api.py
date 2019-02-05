@@ -215,6 +215,7 @@ class TestApi:
                 "success_redirect_url": "https://platform.neuromation.io",
             }
 
+
 @pytest.fixture
 async def model_request_factory():
     def _factory(owner: str):
