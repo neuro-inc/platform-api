@@ -208,7 +208,7 @@ class TestApi:
             result = await resp.json()
             assert result == {
                 "registry_url": "https://registry.dev.neuromation.io",
-                "authorization_url": "https://dev-neuromation.auth0.com/authorize",
+                "auth_url": "https://dev-neuromation.auth0.com/authorize",
                 "token_url": "https://dev-neuromation.auth0.com/oauth/token",
                 "client_id": "V7Jz87W9lhIlo0MyD0O6dufBvcXwM4DR",
                 "audience": "https://platform.dev.neuromation.io",

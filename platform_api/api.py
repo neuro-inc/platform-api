@@ -37,7 +37,7 @@ class ApiHandler:
     async def handle_config(self, request):
         data = {"registry_url": str(self._config.registry.url)}
         if self._config.oauth:
-            data["authorization_url"] = str(self._config.oauth.auth_url)
+            data["auth_url"] = str(self._config.oauth.auth_url)
             data["token_url"] = str(self._config.oauth.token_url)
             data["client_id"] = self._config.oauth.client_id
             data["audience"] = self._config.oauth.audience
