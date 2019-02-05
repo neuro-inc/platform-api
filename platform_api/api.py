@@ -34,7 +34,6 @@ class ApiHandler:
     async def handle_ping(self, request):
         return aiohttp.web.Response()
 
-    # integration test on API. + units on how we parse config factory
     async def handle_config(self, request):
         data = {"registry_url": self._config.registry.url}
         if self._config.oauth:
