@@ -88,9 +88,9 @@ class RegistryConfig:
     secure: bool = True
 
     @property
-    def url(self):
-        scheme = "https" if self.secure else "http"
-        return f"{scheme}://{self.host}"
+    def url(self) -> URL:
+        scheme = "https" if self.is_secure else "http"
+        return URL(f"{scheme}://{self.host}")
 
 
 @dataclass(frozen=True)
