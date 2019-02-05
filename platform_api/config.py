@@ -36,7 +36,7 @@ class OAuthConfig:
     success_redirect_url: URL
 
     @property
-    def authorization_url(self) -> URL:
+    def auth_url(self) -> URL:
         return self.base_url / "authorize"
 
     @property
