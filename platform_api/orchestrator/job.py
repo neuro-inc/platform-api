@@ -303,10 +303,15 @@ class Job:
         return "http"
 
     @property
+    def http_host(self) -> str:
+        return self._orchestrator_config.jobs_domain_name_template.format(
+            job_id=self.id
+        )
+
+    @property
     def http_url(self) -> str:
         assert self.has_http_server_exposed
-        jobs_domain_name = self._orchestrator_config.jobs_domain_name
-        return f"{self._http_scheme}://{self.id}.{jobs_domain_name}"
+        return f"{self._http_scheme}://{self.http_host}"
 
     @property
     def ssh_server(self) -> str:
