@@ -272,8 +272,7 @@ class IngressRule:
         return payload
 
     @classmethod
-    def from_service(cls, domain_name: str, service: Service) -> "IngressRule":
-        host = f"{service.name}.{domain_name}"
+    def from_service(cls, host: str, service: Service) -> "IngressRule":
         return cls(  # type: ignore
             host=host, service_name=service.name, service_port=service.port
         )

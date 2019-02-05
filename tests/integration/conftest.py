@@ -265,7 +265,7 @@ async def kube_config_nfs(
         auth_cert_path=user["client-certificate"],
         auth_cert_key_path=user["client-key"],
         jobs_ingress_name="platformjobsingress",
-        jobs_domain_name="jobs.platform.neuromation.io",
+        jobs_domain_name_template="{job_id}.jobs.platform.neuromation.io",
         ssh_domain_name="ssh.platform.neuromation.io",
         ssh_auth_domain_name="ssh-auth.platform.neuromation.io",
         node_label_gpu="gpu",

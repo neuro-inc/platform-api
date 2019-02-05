@@ -255,10 +255,7 @@ class KubeOrchestrator(Orchestrator):
                 logger.info(f"Starting Ingress for {job.id}")
                 await self._client.add_ingress_rule(
                     name=self._config.jobs_ingress_name,
-                    rule=IngressRule.from_service(
-                        domain_name=self._config.jobs_ingress_domain_name,
-                        service=service,
-                    ),
+                    rule=IngressRule.from_service(host=job.http_host, service=service),
                 )
         job.status = convert_pod_status_to_job_status(status).status
         job.internal_hostname = self._get_service_internal_hostname(job.id, descriptor)
@@ -458,18 +455,12 @@ class KubeOrchestrator(Orchestrator):
     async def _create_service(self, pod: PodDescriptor) -> Service:
         return await self._client.create_service(Service.create_for_pod(pod))
 
-    def _get_ingress_rule_host_for_pod(self, pod_id) -> str:
-        ingress_rule = IngressRule.from_service(
-            domain_name=self._config.jobs_ingress_domain_name,
-            service=Service(name=pod_id, target_port=0),  # type: ignore
-        )
-        return ingress_rule.host
-
-    async def _delete_service(self, pod_id: str) -> None:
+    async def _delete_service(self, job: Job) -> None:
         # TODO (Rafa) we shall ensure that ingress exists, as it is not required
         # for SSH, thus Pods without HTTP but thus which are having SSH,
         # will not have it
-        host = self._get_ingress_rule_host_for_pod(pod_id)
+        pod_id = self._get_job_pod_name(job)
+        host = job.http_host
         try:
             await self._client.remove_ingress_rule(
                 name=self._config.jobs_ingress_name, host=host
@@ -482,8 +473,8 @@ class KubeOrchestrator(Orchestrator):
             logger.exception(f"Failed to remove service {pod_id}")
 
     async def delete_job(self, job: Job) -> JobStatus:
-        pod_id = job.id
+        pod_id = self._get_job_pod_name(job)
         if job.has_http_server_exposed or job.has_ssh_server_exposed:
-            await self._delete_service(pod_id)
+            await self._delete_service(job)
         status = await self._client.delete_pod(pod_id)
         return convert_pod_status_to_job_status(status).status
