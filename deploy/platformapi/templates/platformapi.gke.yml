@@ -57,10 +57,10 @@ spec:
           value: "{{ printf "%s" (pluck .Values.global.env .Values.NP_OAUTH_BASE_URL | first | default .Values.NP_OAUTH_BASE_URL._default) }}"
         - name: NP_OAUTH_CLIENT_ID
           value: "{{ printf "%s" (pluck .Values.global.env .Values.NP_OAUTH_CLIENT_ID | first | default .Values.NP_OAUTH_CLIENT_ID._default) }}"
-        - name: NP_OAUTH_CLIENT_AUDIENCE
-          value: "{{ printf "%s" (pluck .Values.global.env .Values.NP_OAUTH_CLIENT_AUDIENCE | first | default .Values.NP_OAUTH_CLIENT_AUDIENCE._default) }}"
-        - name: NP_OAUTH_CLIENT_SUCCESS_REDIRECT_URL
-          value: "{{ printf "%s" (pluck .Values.global.env .Values.NP_OAUTH_CLIENT_SUCCESS_REDIRECT_URL | first | default .Values.NP_OAUTH_CLIENT_SUCCESS_REDIRECT_URL._default) }}"
+        - name: NP_OAUTH_AUDIENCE
+          value: "{{ printf "%s" (pluck .Values.global.env .Values.NP_OAUTH_AUDIENCE | first | default .Values.NP_OAUTH_AUDIENCE._default) }}"
+        - name: NP_OAUTH_SUCCESS_REDIRECT_URL
+          value: "{{ printf "%s" (pluck .Values.global.env .Values.NP_OAUTH_SUCCESS_REDIRECT_URL | first | default .Values.NP_OAUTH_SUCCESS_REDIRECT_URL._default) }}"
         - name: NP_REGISTRY_HOST
           value: "{{ printf "%s" (pluck .Values.global.env .Values.NP_REGISTRY_HOST | first | default .Values.NP_REGISTRY_HOST._default) }}"
         - name: NP_K8S_NODE_LABEL_GPU

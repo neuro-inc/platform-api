@@ -56,11 +56,11 @@ NP_OAUTH_CLIENT_ID:
   _default: V7Jz87W9lhIlo0MyD0O6dufBvcXwM4DR
   dev: V7Jz87W9lhIlo0MyD0O6dufBvcXwM4DR
   staging: uJV0pm5JPdHkXsSd525rlhFDVcEuUnaV
-NP_OAUTH_CLIENT_AUDIENCE:
+NP_OAUTH_AUDIENCE:
   _default: https://platform.dev.neuromation.io
   dev: https://platform.dev.neuromation.io
   staging: https://platform.staging.neuromation.io
-NP_OAUTH_CLIENT_SUCCESS_REDIRECT_URL:
+NP_OAUTH_SUCCESS_REDIRECT_URL:
   _default: https://platform.neuromation.io
   dev: https://platform.neuromation.io
   staging: https://platform.neuromation.io

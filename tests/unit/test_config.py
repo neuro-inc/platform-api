@@ -99,8 +99,8 @@ class TestEnvironConfigFactory:
             "NP_ES_HOSTS": "http://es",
             "NP_OAUTH_BASE_URL": "https://oauth",
             "NP_OAUTH_CLIENT_ID": "oauth_client_id",
-            "NP_OAUTH_CLIENT_AUDIENCE": "https://platform-url",
-            "NP_OAUTH_CLIENT_SUCCESS_REDIRECT_URL": "https://platform-default-url",
+            "NP_OAUTH_AUDIENCE": "https://platform-url",
+            "NP_OAUTH_SUCCESS_REDIRECT_URL": "https://platform-default-url",
         }
         config = EnvironConfigFactory(environ=environ).create()
 
