@@ -33,7 +33,14 @@ class OAuthConfig:
     base_url: URL
     client_id: str = field(repr=False)
     audience: str = field(repr=False)
-    success_redirect_url: URL
+
+    callback_urls: Sequence[URL] = (
+        URL("http://0.0.0.0:54540"),
+        URL("http://0.0.0.0:54541"),
+        URL("http://0.0.0.0:54542"),
+    )
+
+    success_redirect_url: Optional[URL] = None
 
     @property
     def auth_url(self) -> URL:

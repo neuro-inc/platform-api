@@ -213,6 +213,11 @@ class TestApi:
                 "client_id": "V7Jz87W9lhIlo0MyD0O6dufBvcXwM4DR",
                 "audience": "https://platform.dev.neuromation.io",
                 "success_redirect_url": "https://platform.neuromation.io",
+                "callback_urls": [
+                    "http://0.0.0.0:54540",
+                    "http://0.0.0.0:54541",
+                    "http://0.0.0.0:54542",
+                ],
             }
 
 

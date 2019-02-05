@@ -41,7 +41,10 @@ class ApiHandler:
             data["token_url"] = str(self._config.oauth.token_url)
             data["client_id"] = self._config.oauth.client_id
             data["audience"] = self._config.oauth.audience
-            data["success_redirect_url"] = str(self._config.oauth.success_redirect_url)
+            data["callback_urls"] = [str(u) for u in self._config.oauth.callback_urls]
+            redirect_url = self._config.oauth.success_redirect_url
+            if redirect_url:
+                data["success_redirect_url"] = str(redirect_url)
 
         return aiohttp.web.json_response(data)
 
