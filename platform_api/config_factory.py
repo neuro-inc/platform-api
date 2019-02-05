@@ -41,8 +41,8 @@ class EnvironConfigFactory:
         storage = self.create_storage()
         database = self.create_database()
         auth = self.create_auth()
-        oauth = self.create_oauth()
         registry = self.create_registry()
+        oauth = self.try_create_oauth()
         return Config(
             server=self.create_server(),
             storage=storage,
@@ -229,18 +229,18 @@ class EnvironConfigFactory:
             server_endpoint_url=url, service_token=token, service_name=name
         )  # type: ignore
 
-    def create_oauth(self) -> OAuthConfig:
-        base_url = URL(self._environ["NP_OAUTH_BASE_URL"])
-        client_id = self._environ["NP_OAUTH_CLIENT_ID"]
-        audience = self._environ["NP_OAUTH_CLIENT_AUDIENCE"]
-        success_redirect_url = URL(
-            self._environ.get("NP_OAUTH_CLIENT_SUCCESS_REDIRECT_URL")
-        )
+    def try_create_oauth(self) -> Optional[OAuthConfig]:
+        base_url = self._environ.get("NP_OAUTH_BASE_URL")
+        client_id = self._environ.get("NP_OAUTH_CLIENT_ID")
+        audience = self._environ.get("NP_OAUTH_CLIENT_AUDIENCE")
+        success_redirect_url = self._environ.get("NP_OAUTH_CLIENT_SUCCESS_REDIRECT_URL")
+        if not all((base_url, client_id, audience, success_redirect_url)):
+            return None
         return OAuthConfig(
-            base_url=base_url,
+            base_url=URL(base_url),
             client_id=client_id,
             audience=audience,
-            success_redirect_url=success_redirect_url,
+            success_redirect_url=URL(success_redirect_url),
         )
 
     def create_registry(self) -> RegistryConfig:

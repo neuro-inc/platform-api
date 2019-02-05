@@ -97,6 +97,10 @@ class TestEnvironConfigFactory:
             "NP_AUTH_URL": "https://auth",
             "NP_AUTH_TOKEN": "token",
             "NP_ES_HOSTS": "http://es",
+            "NP_OAUTH_BASE_URL": "https://oauth",
+            "NP_OAUTH_CLIENT_ID": "oauth_client_id",
+            "NP_OAUTH_CLIENT_AUDIENCE": "https://platform-url",
+            "NP_OAUTH_CLIENT_SUCCESS_REDIRECT_URL": "https://platform-default-url",
         }
         config = EnvironConfigFactory(environ=environ).create()
 
@@ -137,6 +141,11 @@ class TestEnvironConfigFactory:
         assert config.auth.server_endpoint_url == URL("https://auth")
         assert config.auth.service_token == "token"
         assert config.auth.service_name == "compute"
+
+        assert config.oauth.base_url == URL("https://oauth")
+        assert config.oauth.client_id == "oauth_client_id"
+        assert config.oauth.audience == "https://platform-url"
+        assert config.oauth.success_redirect_url == URL("https://platform-default-url")
 
         assert config.registry.host == "registry.dev.neuromation.io"
 
