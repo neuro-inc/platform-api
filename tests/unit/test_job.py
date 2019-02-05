@@ -432,18 +432,18 @@ class TestJob:
 
     def test_http_host(self, mock_orchestrator, job_request):
         job = Job(orchestrator_config=mock_orchestrator.config, job_request=job_request)
-        assert job.http_host == "testjob-jobs"
+        assert job.http_host == "testjob.jobs"
 
     def test_http_url(self, mock_orchestrator, job_request):
         job = Job(orchestrator_config=mock_orchestrator.config, job_request=job_request)
-        assert job.http_url == "http://testjob-jobs"
+        assert job.http_url == "http://testjob.jobs"
 
     def test_https_url(self, mock_orchestrator, job_request):
         config = dataclasses.replace(
             mock_orchestrator.config, is_http_ingress_secure=True
         )
         job = Job(orchestrator_config=config, job_request=job_request)
-        assert job.http_url == "https://testjob-jobs"
+        assert job.http_url == "https://testjob.jobs"
 
     def test_ssh_url(self, mock_orchestrator, job_request_with_ssh):
         job = Job(
@@ -463,7 +463,7 @@ class TestJob:
             orchestrator_config=mock_orchestrator.config,
             job_request=job_request_with_ssh_and_http,
         )
-        assert job.http_url == "http://testjob-jobs"
+        assert job.http_url == "http://testjob.jobs"
         assert job.ssh_server == "ssh://testjob.ssh:22"
 
     def test_should_be_deleted_pending(self, mock_orchestrator, job_request):

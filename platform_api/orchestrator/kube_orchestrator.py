@@ -121,10 +121,6 @@ class KubeConfig(OrchestratorConfig):
         return self.storage.host_mount_path
 
     @property
-    def jobs_ingress_domain_name(self) -> str:
-        return self.jobs_domain_name
-
-    @property
     def ssh_ingress_domain_name(self) -> str:
         return self.ssh_domain_name
 
