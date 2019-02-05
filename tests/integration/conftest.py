@@ -78,7 +78,7 @@ async def kube_config(kube_config_cluster_payload, kube_config_user_payload):
         storage=storage_config,
         registry=registry_config,
         jobs_ingress_name="platformjobsingress",
-        jobs_domain_name="jobs.platform.neuromation.io",
+        jobs_domain_name_template="{job_id}.jobs.platform.neuromation.io",
         ssh_domain_name="ssh.platform.neuromation.io",
         ssh_auth_domain_name="ssh-auth.platform.neuromation.io",
         endpoint_url=cluster["server"],
