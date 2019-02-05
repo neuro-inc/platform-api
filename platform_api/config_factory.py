@@ -245,4 +245,5 @@ class EnvironConfigFactory:
 
     def create_registry(self) -> RegistryConfig:
         host = self._environ.get("NP_REGISTRY_HOST", RegistryConfig.host)
-        return RegistryConfig(host=host)
+        secure = bool(self._environ.get("NP_REGISTRY_HTTPS", RegistryConfig.secure))
+        return RegistryConfig(host=host, secure=secure)

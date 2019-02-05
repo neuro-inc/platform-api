@@ -85,11 +85,12 @@ class StorageConfig:
 class RegistryConfig:
     host: str = "registry.dev.neuromation.io"
     email: str = "registry@neuromation.io"
+    secure: bool = True
 
     @property
     def url(self):
-        # TODO: Where to get right scheme ("https" or "http" ?)
-        return f"https://{self.host}"
+        scheme = "https" if self.secure else "http"
+        return f"{scheme}://{self.host}"
 
 
 @dataclass(frozen=True)

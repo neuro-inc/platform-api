@@ -190,6 +190,7 @@ class TestEnvironConfigFactory:
             "NP_AUTH_TOKEN": "token",
             "NP_AUTH_NAME": "servicename",
             "NP_REGISTRY_HOST": "testregistry:5000",
+            "NP_REGISTRY_HTTPS": "True",
             "NP_K8S_NODE_LABEL_GPU": "testlabel",
             "NP_GKE_GPU_MODELS": ",".join(
                 [
@@ -250,6 +251,8 @@ class TestEnvironConfigFactory:
         assert config.auth.service_name == "servicename"
 
         assert config.registry.host == "testregistry:5000"
+        assert config.registry.secure is True
+        assert config.registry.url == "https://testregistry:5000"
 
         assert config.logging.elasticsearch.hosts == ["http://es"]
 
