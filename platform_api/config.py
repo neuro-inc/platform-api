@@ -85,7 +85,7 @@ class StorageConfig:
 class RegistryConfig:
     host: str = "registry.dev.neuromation.io"
     email: str = "registry@neuromation.io"
-    secure: bool = True
+    is_secure: bool = True
 
     @property
     def url(self) -> URL:
