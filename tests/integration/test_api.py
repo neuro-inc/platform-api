@@ -474,12 +474,12 @@ class TestJobs:
         filters = [("status", "pending"), ("status", "running")]
         jobs = await jobs_client.get_all_jobs(filters)
         jobs = {job["id"] for job in jobs}
-        assert jobs == job_ids_alive
+        assert jobs == job_ids_alive, "killed jobs: " + " ".join(job_ids_killed)
 
         # no filter
         jobs = await jobs_client.get_all_jobs()
         jobs = {job["id"] for job in jobs}
-        assert jobs == job_ids
+        assert jobs == job_ids, "killed jobs: " + " ".join(job_ids_killed)
 
         # all statuses, same as no filter1
         filters = [
@@ -490,13 +490,13 @@ class TestJobs:
         ]
         jobs = await jobs_client.get_all_jobs(filters)
         jobs = {job["id"] for job in jobs}
-        assert jobs == job_ids
+        assert jobs == job_ids, "killed jobs: " + " ".join(job_ids_killed)
 
         # single status, actually filter out values
         filters = {"status": "succeeded"}
         jobs = await jobs_client.get_all_jobs(filters)
         jobs = {job["id"] for job in jobs}
-        assert jobs == job_ids_killed
+        assert jobs == job_ids_killed, "alive jobs: " + " ".join(job_ids_alive)
 
         # cleanup
         for job_id in job_ids_alive:
