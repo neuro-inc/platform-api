@@ -250,9 +250,10 @@ class TestEnvironConfigFactory:
         assert config.auth.service_token == "token"
         assert config.auth.service_name == "servicename"
 
+        assert config.registry.email == "registry@neuromation.io"
         assert config.registry.host == "testregistry:5000"
-        assert config.registry.secure is True
-        assert config.registry.url == "https://testregistry:5000"
+        assert config.registry.is_secure is True
+        assert config.registry.url == URL("https://testregistry:5000")
 
         assert config.logging.elasticsearch.hosts == ["http://es"]
 
