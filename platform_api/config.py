@@ -29,6 +29,29 @@ class AuthConfig:
 
 
 @dataclass(frozen=True)
+class OAuthConfig:
+    base_url: URL
+    client_id: str = field(repr=False)
+    audience: str = field(repr=False)
+
+    callback_urls: Sequence[URL] = (
+        URL("http://0.0.0.0:54540"),
+        URL("http://0.0.0.0:54541"),
+        URL("http://0.0.0.0:54542"),
+    )
+
+    success_redirect_url: Optional[URL] = None
+
+    @property
+    def auth_url(self) -> URL:
+        return self.base_url / "authorize"
+
+    @property
+    def token_url(self) -> URL:
+        return self.base_url / "oauth/token"
+
+
+@dataclass(frozen=True)
 class StorageConfig:
     host_mount_path: PurePath
     container_mount_path: PurePath = PurePath("/var/storage")
@@ -69,6 +92,12 @@ class StorageConfig:
 class RegistryConfig:
     host: str = "registry.dev.neuromation.io"
     email: str = "registry@neuromation.io"
+    is_secure: bool = True
+
+    @property
+    def url(self) -> URL:
+        scheme = "https" if self.is_secure else "http"
+        return URL(f"{scheme}://{self.host}")
 
 
 @dataclass(frozen=True)
@@ -116,6 +145,7 @@ class Config:
     database: DatabaseConfig
     auth: AuthConfig
     logging: LoggingConfig
+    oauth: Optional[OAuthConfig] = None
 
     registry: RegistryConfig = RegistryConfig()
 
