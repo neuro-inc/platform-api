@@ -644,12 +644,21 @@ class TestKubeClient:
         )
         await delete_pod_later(pod)
         await kube_client.create_pod(pod)
-        stream_cm = kube_client.create_pod_container_logs_stream(
-            pod_name=pod.name, container_name=pod.name
-        )
-        with pytest.raises(KubeClientException, match="ContainerCreating"):
-            async with stream_cm:
-                pass
+
+        async with timeout(5.0):
+            while True:
+                try:
+                    stream_cm = kube_client.create_pod_container_logs_stream(
+                        pod_name=pod.name, container_name=pod.name
+                    )
+                    with pytest.raises(KubeClientException, match="ContainerCreating"):
+                        async with stream_cm:
+                            pass
+                    break
+                except AssertionError as exc:
+                    if "Pattern" not in str(exc):
+                        raise
+                await asyncio.sleep(0.1)
 
     @pytest.mark.asyncio
     async def test_create_log_stream(self, kube_config, kube_client, delete_pod_later):
