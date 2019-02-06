@@ -544,7 +544,7 @@ class TestJobs:
             assert response.status == HTTPBadRequest.status_code
 
     @pytest.mark.asyncio
-    async def test_get_all_jobs_filter_by_status_pending(
+    async def test_get_all_jobs_filter_by_status_single_status_pending(
         self, api, client, jobs_client, regular_user, model_request_factory
     ):
         url = api.model_base_url
