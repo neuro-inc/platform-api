@@ -118,7 +118,7 @@ class JobStatusHistory:
 
     @current.setter
     def current(self, item: JobStatusItem) -> None:
-        if self.last != item:
+        if not self.is_finished and self.last != item:
             self._items.append(item)
 
     @property

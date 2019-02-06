@@ -80,14 +80,13 @@ class JobsService:
             )
             job.is_deleted = True
 
-        if old_status_item != status_item:
-            job.status_history.current = status_item
-            logger.info(
-                "Job %s transitioned from %s to %s",
-                job.id,
-                old_status_item.status.name,
-                status_item.status.name,
-            )
+        job.status_history.current = status_item
+        logger.info(
+            "Job %s transitioned from %s to %s",
+            job.id,
+            old_status_item.status.name,
+            status_item.status.name,
+        )
 
     async def create_job(
         self, job_request: JobRequest, user: User, is_preemptible: bool = False
