@@ -97,6 +97,10 @@ class TestEnvironConfigFactory:
             "NP_AUTH_URL": "https://auth",
             "NP_AUTH_TOKEN": "token",
             "NP_ES_HOSTS": "http://es",
+            "NP_OAUTH_BASE_URL": "https://oauth",
+            "NP_OAUTH_CLIENT_ID": "oauth_client_id",
+            "NP_OAUTH_AUDIENCE": "https://platform-url",
+            "NP_OAUTH_SUCCESS_REDIRECT_URL": "https://platform-default-url",
         }
         config = EnvironConfigFactory(environ=environ).create()
 
@@ -137,6 +141,11 @@ class TestEnvironConfigFactory:
         assert config.auth.server_endpoint_url == URL("https://auth")
         assert config.auth.service_token == "token"
         assert config.auth.service_name == "compute"
+
+        assert config.oauth.base_url == URL("https://oauth")
+        assert config.oauth.client_id == "oauth_client_id"
+        assert config.oauth.audience == "https://platform-url"
+        assert config.oauth.success_redirect_url == URL("https://platform-default-url")
 
         assert config.registry.host == "registry.dev.neuromation.io"
 
@@ -181,6 +190,7 @@ class TestEnvironConfigFactory:
             "NP_AUTH_TOKEN": "token",
             "NP_AUTH_NAME": "servicename",
             "NP_REGISTRY_HOST": "testregistry:5000",
+            "NP_REGISTRY_HTTPS": "True",
             "NP_K8S_NODE_LABEL_GPU": "testlabel",
             "NP_GKE_GPU_MODELS": ",".join(
                 [
@@ -240,7 +250,10 @@ class TestEnvironConfigFactory:
         assert config.auth.service_token == "token"
         assert config.auth.service_name == "servicename"
 
+        assert config.registry.email == "registry@neuromation.io"
         assert config.registry.host == "testregistry:5000"
+        assert config.registry.is_secure is True
+        assert config.registry.url == URL("https://testregistry:5000")
 
         assert config.logging.elasticsearch.hosts == ["http://es"]
 

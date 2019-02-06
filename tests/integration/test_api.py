@@ -16,6 +16,7 @@ from aiohttp.web import (
     HTTPOk,
     HTTPUnauthorized,
 )
+from async_generator import asynccontextmanager
 from neuro_auth_client import Permission
 
 from platform_api.api import create_app
@@ -51,33 +52,84 @@ class ApiConfig(NamedTuple):
     def ping_url(self):
         return self.endpoint + "/ping"
 
+    @property
+    def config_url(self):
+        return self.endpoint + "/config"
+
 
 @pytest.fixture
-def config(kube_config, redis_config, auth_config, es_config):
-    server_config = ServerConfig()
-    storage_config = StorageConfig(host_mount_path=PurePath("/tmp"))  # type: ignore
-    database_config = DatabaseConfig(redis=redis_config)  # type: ignore
-    logging_config = LoggingConfig(elasticsearch=es_config)
-    return Config(
-        server=server_config,
-        storage=storage_config,
-        orchestrator=kube_config,
-        database=database_config,
-        auth=auth_config,
-        logging=logging_config,
-    )
+def config_factory(kube_config, redis_config, auth_config, es_config):
+    def _factory(**kwargs):
+        server_config = ServerConfig()
+        storage_config = StorageConfig(host_mount_path=PurePath("/tmp"))  # type: ignore
+        database_config = DatabaseConfig(redis=redis_config)  # type: ignore
+        logging_config = LoggingConfig(elasticsearch=es_config)
+        return Config(
+            server=server_config,
+            storage=storage_config,
+            orchestrator=kube_config,
+            database=database_config,
+            auth=auth_config,
+            logging=logging_config,
+            **kwargs,
+        )
+
+    return _factory
+
+
+@pytest.fixture
+def config(config_factory):
+    return config_factory()
+
+
+@pytest.fixture
+def config_with_oauth(config_factory, oauth_config_dev):
+    return config_factory(oauth=oauth_config_dev)
+
+
+@pytest.fixture
+async def api_factory():
+    @asynccontextmanager
+    async def _factory(config):
+        app = await create_app(config)
+        runner = aiohttp.web.AppRunner(app)
+        try:
+            await runner.setup()
+            api_config = ApiConfig(host="0.0.0.0", port=8080)
+            site = aiohttp.web.TCPSite(runner, api_config.host, api_config.port)
+            await site.start()
+            yield api_config
+        finally:
+            await runner.cleanup()
+
+    yield _factory
+
+
+@asynccontextmanager
+async def create_local_app_server(config: Config, port: int = 8080):
+    app = await create_app(config)
+    runner = aiohttp.web.AppRunner(app)
+    try:
+        await runner.setup()
+        api_config = ApiConfig(host="0.0.0.0", port=port)
+        site = aiohttp.web.TCPSite(runner, api_config.host, api_config.port)
+        await site.start()
+        yield api_config
+    finally:
+        await runner.shutdown()
+        await runner.cleanup()
 
 
 @pytest.fixture
 async def api(config):
-    app = await create_app(config)
-    runner = aiohttp.web.AppRunner(app)
-    await runner.setup()
-    api_config = ApiConfig(host="0.0.0.0", port=8080)
-    site = aiohttp.web.TCPSite(runner, api_config.host, api_config.port)
-    await site.start()
-    yield api_config
-    await runner.cleanup()
+    async with create_local_app_server(config, port=8080) as api_config:
+        yield api_config
+
+
+@pytest.fixture
+async def api_with_oauth(config_with_oauth):
+    async with create_local_app_server(config_with_oauth, port=8081) as api_config:
+        yield api_config
 
 
 @pytest.fixture
@@ -161,6 +213,34 @@ class TestApi:
     async def test_ping(self, api, client):
         async with client.get(api.ping_url) as response:
             assert response.status == HTTPOk.status_code
+
+    @pytest.mark.asyncio
+    async def test_config(self, api, client):
+        url = api.config_url
+        async with client.get(url) as resp:
+            assert resp.status == HTTPOk.status_code
+            result = await resp.json()
+            assert result == {"registry_url": "https://registry.dev.neuromation.io"}
+
+    @pytest.mark.asyncio
+    async def test_config_with_oauth(self, api_with_oauth, client):
+        url = api_with_oauth.config_url
+        async with client.get(url) as resp:
+            assert resp.status == HTTPOk.status_code
+            result = await resp.json()
+            assert result == {
+                "registry_url": "https://registry.dev.neuromation.io",
+                "auth_url": "https://platform-auth0-url/authorize",
+                "token_url": "https://platform-auth0-url/oauth/token",
+                "client_id": "client_id",
+                "audience": "https://platform-dev-url",
+                "success_redirect_url": "https://platform-default-url",
+                "callback_urls": [
+                    "http://0.0.0.0:54540",
+                    "http://0.0.0.0:54541",
+                    "http://0.0.0.0:54542",
+                ],
+            }
 
 
 @pytest.fixture

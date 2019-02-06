@@ -20,11 +20,33 @@ logger = logging.getLogger(__name__)
 
 
 class ApiHandler:
+    def __init__(self, config: Config):
+        self._config = config
+
     def register(self, app):
-        app.add_routes((aiohttp.web.get("/ping", self.handle_ping),))
+        app.add_routes(
+            (
+                aiohttp.web.get("/ping", self.handle_ping),
+                aiohttp.web.get("/config", self.handle_config),
+            )
+        )
 
     async def handle_ping(self, request):
         return aiohttp.web.Response()
+
+    async def handle_config(self, request):
+        data = {"registry_url": str(self._config.registry.url)}
+        if self._config.oauth:
+            data["auth_url"] = str(self._config.oauth.auth_url)
+            data["token_url"] = str(self._config.oauth.token_url)
+            data["client_id"] = self._config.oauth.client_id
+            data["audience"] = self._config.oauth.audience
+            data["callback_urls"] = [str(u) for u in self._config.oauth.callback_urls]
+            redirect_url = self._config.oauth.success_redirect_url
+            if redirect_url:
+                data["success_redirect_url"] = str(redirect_url)
+
+        return aiohttp.web.json_response(data)
 
 
 def init_logging():
@@ -62,9 +84,9 @@ async def handle_exceptions(request, handler):
         )
 
 
-async def create_api_v1_app():
+async def create_api_v1_app(config: Config):
     api_v1_app = aiohttp.web.Application()
-    api_v1_handler = ApiHandler()
+    api_v1_handler = ApiHandler(config=config)
     api_v1_handler.register(api_v1_app)
     return api_v1_app
 
@@ -148,7 +170,7 @@ async def create_app(config: Config) -> aiohttp.web.Application:
 
     app.cleanup_ctx.append(_init_app)
 
-    api_v1_app = await create_api_v1_app()
+    api_v1_app = await create_api_v1_app(config)
 
     models_app = await create_models_app(config=config)
     app["models_app"] = models_app

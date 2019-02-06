@@ -10,6 +10,7 @@ from .config import (
     DatabaseConfig,
     ElasticsearchConfig,
     LoggingConfig,
+    OAuthConfig,
     PlatformConfig,
     RegistryConfig,
     ServerConfig,
@@ -41,12 +42,14 @@ class EnvironConfigFactory:
         database = self.create_database()
         auth = self.create_auth()
         registry = self.create_registry()
+        oauth = self.try_create_oauth()
         return Config(
             server=self.create_server(),
             storage=storage,
             orchestrator=self.create_orchestrator(storage, registry, auth),
             database=database,
             auth=auth,
+            oauth=oauth,
             logging=self.create_logging(),
             registry=registry,
             env_prefix=env_prefix,
@@ -228,6 +231,21 @@ class EnvironConfigFactory:
             server_endpoint_url=url, service_token=token, service_name=name
         )  # type: ignore
 
+    def try_create_oauth(self) -> Optional[OAuthConfig]:
+        base_url = self._environ.get("NP_OAUTH_BASE_URL")
+        client_id = self._environ.get("NP_OAUTH_CLIENT_ID")
+        audience = self._environ.get("NP_OAUTH_AUDIENCE")
+        success_redirect_url = self._environ.get("NP_OAUTH_SUCCESS_REDIRECT_URL")
+        if not all((base_url, client_id, audience, success_redirect_url)):
+            return None
+        return OAuthConfig(
+            base_url=URL(base_url),
+            client_id=client_id,
+            audience=audience,
+            success_redirect_url=URL(success_redirect_url),
+        )
+
     def create_registry(self) -> RegistryConfig:
         host = self._environ.get("NP_REGISTRY_HOST", RegistryConfig.host)
-        return RegistryConfig(host=host)
+        is_https = self._get_bool("NP_REGISTRY_HTTPS", default=RegistryConfig.is_secure)
+        return RegistryConfig(host=host, is_secure=is_https)
