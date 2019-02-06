@@ -16,6 +16,7 @@ from aiohttp.web import (
     HTTPOk,
     HTTPUnauthorized,
 )
+from async_generator import asynccontextmanager
 from neuro_auth_client import Permission
 
 from platform_api.api import create_app
@@ -87,27 +88,48 @@ def config_with_oauth(config_factory, oauth_config_dev):
 
 
 @pytest.fixture
-async def api(config):
+async def api_factory():
+    @asynccontextmanager
+    async def _factory(config):
+        app = await create_app(config)
+        runner = aiohttp.web.AppRunner(app)
+        try:
+            await runner.setup()
+            api_config = ApiConfig(host="0.0.0.0", port=8080)
+            site = aiohttp.web.TCPSite(runner, api_config.host, api_config.port)
+            await site.start()
+            yield api_config
+        finally:
+            await runner.cleanup()
+
+    yield _factory
+
+
+@asynccontextmanager
+async def create_local_app_server(config: Config, port: int = 8080):
     app = await create_app(config)
     runner = aiohttp.web.AppRunner(app)
-    await runner.setup()
-    api_config = ApiConfig(host="0.0.0.0", port=8080)
-    site = aiohttp.web.TCPSite(runner, api_config.host, api_config.port)
-    await site.start()
-    yield api_config
-    await runner.cleanup()
+    try:
+        await runner.setup()
+        api_config = ApiConfig(host="0.0.0.0", port=port)
+        site = aiohttp.web.TCPSite(runner, api_config.host, api_config.port)
+        await site.start()
+        yield api_config
+    finally:
+        await runner.shutdown()
+        await runner.cleanup()
+
+
+@pytest.fixture
+async def api(config):
+    async with create_local_app_server(config, port=8080) as api_config:
+        yield api_config
 
 
 @pytest.fixture
 async def api_with_oauth(config_with_oauth):
-    app = await create_app(config_with_oauth)
-    runner = aiohttp.web.AppRunner(app)
-    await runner.setup()
-    api_config = ApiConfig(host="0.0.0.0", port=8081)
-    site = aiohttp.web.TCPSite(runner, api_config.host, api_config.port)
-    await site.start()
-    yield api_config
-    await runner.cleanup()
+    async with create_local_app_server(config_with_oauth, port=8081) as api_config:
+        yield api_config
 
 
 @pytest.fixture
