@@ -544,6 +544,31 @@ class TestJobs:
             assert response.status == HTTPBadRequest.status_code
 
     @pytest.mark.asyncio
+    async def test_get_all_jobs_filter_by_status_pending(
+        self, api, client, jobs_client, regular_user, model_request_factory
+    ):
+        url = api.model_base_url
+        headers = regular_user.headers
+        model_request = model_request_factory(regular_user.name)
+        model_request["container"]["resources"]["memory_mb"] = 100500
+        async with client.post(url, headers=headers, json=model_request) as resp:
+            assert resp.status == HTTPAccepted.status_code
+            result = await resp.json()
+            job_id = result["job_id"]
+
+        await jobs_client.long_polling_by_job_id(job_id, status="pending")
+
+        filters = {"status": "pending"}
+        jobs = await jobs_client.get_all_jobs(filters)
+        jobs = {job["id"] for job in jobs}
+        assert jobs == {job_id}
+
+        filters = {"status": "running"}
+        jobs = await jobs_client.get_all_jobs(filters)
+        jobs = {job["id"] for job in jobs}
+        assert jobs == set()
+
+    @pytest.mark.asyncio
     async def test_get_all_jobs_filter_by_status(
         self, api, client, jobs_client, regular_user, model_request_factory
     ):
