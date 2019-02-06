@@ -76,7 +76,7 @@ class OrchestratorConfig:
     storage: StorageConfig
     registry: RegistryConfig
 
-    jobs_domain_name: str
+    jobs_domain_name_template: str
     ssh_domain_name: str
     ssh_auth_domain_name: str
 

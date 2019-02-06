@@ -430,6 +430,10 @@ class TestJob:
             description="Description of the testjob",
         )
 
+    def test_http_host(self, mock_orchestrator, job_request):
+        job = Job(orchestrator_config=mock_orchestrator.config, job_request=job_request)
+        assert job.http_host == "testjob.jobs"
+
     def test_http_url(self, mock_orchestrator, job_request):
         job = Job(orchestrator_config=mock_orchestrator.config, job_request=job_request)
         assert job.http_url == "http://testjob.jobs"

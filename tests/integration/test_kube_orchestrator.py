@@ -439,13 +439,13 @@ class TestKubeOrchestrator:
     async def _wait_for_job_service(
         self,
         kube_ingress_ip: str,
-        jobs_ingress_domain_name: str,
+        host: str,
         job_id: str,
         interval_s: float = 0.5,
         max_time: float = 180,
     ):
         url = f"http://{kube_ingress_ip}"
-        headers = {"Host": f"{job_id}.{jobs_ingress_domain_name}"}
+        headers = {"Host": host}
         t0 = time.monotonic()
         async with aiohttp.ClientSession() as client:
             while True:
@@ -478,7 +478,7 @@ class TestKubeOrchestrator:
             assert status == JobStatus.PENDING
 
             await self._wait_for_job_service(
-                kube_ingress_ip, kube_config.jobs_ingress_domain_name, job.id
+                kube_ingress_ip, host=job.http_host, job_id=job.id
             )
         finally:
             await job.delete()
@@ -517,7 +517,7 @@ class TestKubeOrchestrator:
             assert server_status == JobStatus.PENDING
             server_hostname = server_job.internal_hostname
             await self._wait_for_job_service(
-                kube_ingress_ip, kube_config.jobs_ingress_domain_name, server_job.id
+                kube_ingress_ip, host=server_job.http_host, job_id=server_job.id
             )
             client_job = create_client_job(server_hostname)
             client_status = await client_job.start()
@@ -644,12 +644,21 @@ class TestKubeClient:
         )
         await delete_pod_later(pod)
         await kube_client.create_pod(pod)
-        stream_cm = kube_client.create_pod_container_logs_stream(
-            pod_name=pod.name, container_name=pod.name
-        )
-        with pytest.raises(KubeClientException, match="ContainerCreating"):
-            async with stream_cm:
-                pass
+
+        async with timeout(5.0):
+            while True:
+                try:
+                    stream_cm = kube_client.create_pod_container_logs_stream(
+                        pod_name=pod.name, container_name=pod.name
+                    )
+                    with pytest.raises(KubeClientException, match="ContainerCreating"):
+                        async with stream_cm:
+                            pass
+                    break
+                except AssertionError as exc:
+                    if "Pattern" not in str(exc):
+                        raise
+                await asyncio.sleep(0.1)
 
     @pytest.mark.asyncio
     async def test_create_log_stream(self, kube_config, kube_client, delete_pod_later):
