@@ -595,7 +595,7 @@ class TestJobs:
             await jobs_client.long_polling_by_job_id(job_id, status="succeeded")
 
         # two statuses, actually filter out values
-        filters = [("status", "running"), ("status", "pending")]
+        filters = [("status", "pending"), ("status", "running")]
         jobs = await jobs_client.get_all_jobs(filters)
         jobs = {job["id"] for job in jobs}
         assert jobs == job_ids_alive
