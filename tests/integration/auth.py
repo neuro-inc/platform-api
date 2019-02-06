@@ -161,8 +161,8 @@ async def regular_user(regular_user_factory) -> _User:
 @pytest.fixture
 def oauth_config_dev() -> OAuthConfig:
     return OAuthConfig(
-        base_url=URL("https://dev-neuromation.auth0.com"),
-        client_id="V7Jz87W9lhIlo0MyD0O6dufBvcXwM4DR",
-        audience="https://platform.dev.neuromation.io",
-        success_redirect_url=URL("https://platform.neuromation.io"),
+        base_url=URL("https://platform-auth0-url"),
+        client_id="client_id",
+        audience="https://platform-dev-url",
+        success_redirect_url=URL("https://platform-default-url"),
     )
