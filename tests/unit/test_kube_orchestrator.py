@@ -590,7 +590,7 @@ class TestIngressRule:
 
     def test_from_service(self):
         service = Service(name="testname", target_port=1234)
-        rule = IngressRule.from_service(domain_name="testdomain", service=service)
+        rule = IngressRule.from_service(host="testname.testdomain", service=service)
         assert rule == IngressRule(
             host="testname.testdomain", service_name="testname", service_port=80
         )

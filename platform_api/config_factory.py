@@ -163,7 +163,9 @@ class EnvironConfigFactory:
             ),
             jobs_ingress_name=self._environ["NP_K8S_JOBS_INGRESS_NAME"],
             is_http_ingress_secure=self._get_bool("NP_K8S_JOBS_INGRESS_HTTPS"),
-            jobs_domain_name=(self._environ["NP_K8S_JOBS_INGRESS_DOMAIN_NAME"]),
+            jobs_domain_name_template=self._environ[
+                "NP_K8S_JOBS_INGRESS_DOMAIN_NAME_TEMPLATE"
+            ],
             ssh_domain_name=self._environ["NP_K8S_SSH_INGRESS_DOMAIN_NAME"],
             ssh_auth_domain_name=self._environ["NP_K8S_SSH_AUTH_INGRESS_DOMAIN_NAME"],
             job_deletion_delay_s=int(
