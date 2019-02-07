@@ -528,7 +528,46 @@ class TestJobs:
         jobs = await jobs_client.get_all_jobs()
         assert jobs == []
 
-    @pytest.mark.xfail
+    @pytest.mark.asyncio
+    async def test_get_all_jobs_filter_wrong_status(
+        self, api, client, jobs_client, regular_user, model_request_factory
+    ):
+        headers = regular_user.headers
+        url = api.jobs_base_url
+
+        filters = {"status": "abrakadabra"}
+        async with client.get(url, headers=headers, params=filters) as response:
+            assert response.status == HTTPBadRequest.status_code
+
+        filters = [("status", "running"), ("status", "abrakadabra")]
+        async with client.get(url, headers=headers, params=filters) as response:
+            assert response.status == HTTPBadRequest.status_code
+
+    @pytest.mark.asyncio
+    async def test_get_all_jobs_filter_by_status_single_status_pending(
+        self, api, client, jobs_client, regular_user, model_request_factory
+    ):
+        url = api.model_base_url
+        headers = regular_user.headers
+        model_request = model_request_factory(regular_user.name)
+        model_request["container"]["resources"]["memory_mb"] = 100_500
+        async with client.post(url, headers=headers, json=model_request) as resp:
+            assert resp.status == HTTPAccepted.status_code
+            result = await resp.json()
+            job_id = result["job_id"]
+
+        await jobs_client.long_polling_by_job_id(job_id, status="pending")
+
+        filters = {"status": "pending"}
+        jobs = await jobs_client.get_all_jobs(filters)
+        jobs = {job["id"] for job in jobs}
+        assert jobs == {job_id}
+
+        filters = {"status": "running"}
+        jobs = await jobs_client.get_all_jobs(filters)
+        jobs = {job["id"] for job in jobs}
+        assert jobs == set()
+
     @pytest.mark.asyncio
     async def test_get_all_jobs_filter_by_status(
         self, api, client, jobs_client, regular_user, model_request_factory
@@ -536,7 +575,7 @@ class TestJobs:
         url = api.model_base_url
         headers = regular_user.headers
         model_request = model_request_factory(regular_user.name)
-        model_request["container"]["command"] = "sleep 3600"
+        model_request["container"]["command"] = "sleep 20m"
         job_ids = []
         for _ in range(5):
             async with client.post(url, headers=headers, json=model_request) as resp:
@@ -548,8 +587,12 @@ class TestJobs:
         job_ids_alive = set(job_ids[2:])
         job_ids = set(job_ids)
 
+        for job_id in job_ids:
+            await jobs_client.long_polling_by_job_id(job_id, status="running")
+
         for job_id in job_ids_killed:
             await jobs_client.delete_job(job_id=job_id)
+            await jobs_client.long_polling_by_job_id(job_id, status="succeeded")
 
         # two statuses, actually filter out values
         filters = [("status", "pending"), ("status", "running")]
