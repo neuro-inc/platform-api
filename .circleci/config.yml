@@ -245,7 +245,7 @@ workflows:
           filters:
             branches:
               only:
-                - /prod-cluster/
+                - /release.*/
       - gke_deploy:
           context: org-prod
           requires:
@@ -253,13 +253,13 @@ workflows:
           filters:
             branches:
               only:
-                - /prod-cluster/
+                - /release.*/
       - gke_jumphost_deploy:
           context: org-prod
           filters:
             branches:
               only:
-                - /prod-cluster/
+                - /release.*/
       - gke_ssh_auth_deploy:
           context: org-prod
           requires:
@@ -267,4 +267,4 @@ workflows:
           filters:
             branches:
               only:
-                - /prod-cluster/
+                - /release.*/
