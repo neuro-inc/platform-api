@@ -550,7 +550,7 @@ class TestJobs:
         url = api.model_base_url
         headers = regular_user.headers
         model_request = model_request_factory(regular_user.name)
-        model_request["container"]["resources"]["memory_mb"] = 100500
+        model_request["container"]["resources"]["memory_mb"] = 100_500
         async with client.post(url, headers=headers, json=model_request) as resp:
             assert resp.status == HTTPAccepted.status_code
             result = await resp.json()
