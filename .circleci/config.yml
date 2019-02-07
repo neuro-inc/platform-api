@@ -171,13 +171,13 @@ workflows:
   dev:
     jobs:
       - test:
-          context: org-global
+          context: org-dev
           filters:
             branches:
               only:
                 - master
       - gke_deploy:
-          context: org-global
+          context: org-dev
           requires:
             - test
           filters:
@@ -185,13 +185,13 @@ workflows:
               only:
                 - master
       - gke_jumphost_deploy:
-          context: org-global
+          context: org-dev
           filters:
             branches:
               only:
                 - master
       - gke_ssh_deploy:
-          context: org-global
+          context: org-dev
           requires:
             - test
           filters:
@@ -199,7 +199,7 @@ workflows:
               only:
                 - master
       - gke_ssh_auth_deploy:
-          context: org-global
+          context: org-dev
           requires:
             - test
           filters:
@@ -210,13 +210,13 @@ workflows:
   staging:
     jobs:
       - test:
-          context: org-global
+          context: org-staging
           filters:
             branches:
               only:
                 - /release.*/
       - gke_deploy:
-          context: org-global
+          context: org-staging
           requires:
             - test
           filters:
@@ -224,13 +224,13 @@ workflows:
               only:
                 - /release.*/
       - gke_jumphost_deploy:
-          context: org-global
+          context: org-staging
           filters:
             branches:
               only:
                 - /release.*/
       - gke_ssh_auth_deploy:
-          context: org-global
+          context: org-staging
           requires:
             - test
           filters:
