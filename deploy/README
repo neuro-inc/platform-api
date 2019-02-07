@@ -1,11 +1,13 @@
 
+#MANUAL DEPLOY
+
 # Deploy in HSE cluster
 
 ###  _cd_ to _deploy_ folder
 ``` cd deploy ```
 
 ### Connect to cluster
-```gcloud container clusters get-credentials hse-cluster-01 --zone us-central1-a --project light-reality-205619```
+```gcloud container clusters get-credentials hse-cluster-01 --zone us-central1-a --project hse-project-230316```
 
 ### Deploy platform
 Platform api
@@ -16,6 +18,28 @@ SSH-Auth
 
 Jumphost
 ```helm --set "global.env=hse" upgrade --install jumphost jumphost/helmpackage```
+
+
+
+
+# Deploy in Production cluster
+
+###  _cd_ to _deploy_ folder
+``` cd deploy ```
+
+### Connect to cluster
+```gcloud container clusters get-credentials prod-cluster-01 --zone us-west1-b --project production-228907```
+
+### Deploy platform
+Platform api
+```helm --set "global.env=prod" upgrade --install platformapi platformapi```
+
+SSH-Auth
+```helm --set "global.env=prod" upgrade --install ssh-auth ssh_auth```
+
+Jumphost
+```helm --set "global.env=prod" upgrade --install jumphost jumphost/helmpackage```
+
 
 
 

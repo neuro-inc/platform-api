@@ -8,7 +8,7 @@ defaults: &defaults
 version: 2
 jobs:
 
-  gke_dev_deploy:
+  gke_deploy:
     <<: *defaults
     steps:
       - checkout
@@ -25,9 +25,9 @@ jobs:
       - run:
           name: GKE K8s Deploy
           command: |
-            make gke_k8s_deploy_dev
+            make gke_k8s_deploy
 
-  gke_ssh_dev_deploy:
+  gke_ssh_deploy:
     <<: *defaults
     steps:
       - checkout
@@ -44,9 +44,9 @@ jobs:
       - run:
           name: GKE K8s Deploy
           command: |
-            make gke_k8s_deploy_ssh_dev
+            make gke_k8s_deploy_ssh
 
-  gke_ssh_auth_dev_deploy:
+  gke_ssh_auth_deploy:
     <<: *defaults
     steps:
       - checkout
@@ -63,47 +63,9 @@ jobs:
       - run:
           name: GKE K8s Deploy
           command: |
-            make gke_k8s_deploy_ssh_auth_dev
+            make gke_k8s_deploy_ssh_auth
 
-  gke_stage_deploy:
-    <<: *defaults
-    steps:
-      - checkout
-      - run:
-          name: GKE Auth
-          command: |
-            make -s gke_login
-
-      - run:
-          name: GKE Docker Push
-          command: |
-            make gke_docker_push
-
-      - run:
-          name: GKE K8s Deploy
-          command: |
-            make gke_k8s_deploy_staging
-
-  gke_ssh_auth_stage_deploy:
-    <<: *defaults
-    steps:
-      - checkout
-      - run:
-          name: GKE Auth
-          command: |
-            make -s gke_login
-
-      - run:
-          name: GKE Docker Push
-          command: |
-            make gke_docker_push
-
-      - run:
-          name: GKE K8s Deploy
-          command: |
-            make gke_k8s_deploy_ssh_auth_staging
-
-  gke_dev_jumphost_deploy:
+  gke_jumphost_deploy:
     <<: *defaults
     steps:
       - checkout
@@ -120,26 +82,8 @@ jobs:
       - run:
           name: GKE K8s Deploy
           command: |
-            make -C deploy/jumphost gke_k8s_deploy_jumphost_dev
+            make -C deploy/jumphost gke_k8s_deploy_jumphost
 
-  gke_stage_jumphost_deploy:
-    <<: *defaults
-    steps:
-      - checkout
-      - run:
-          name: GKE Auth
-          command: |
-            make -C deploy/jumphost -s gke_login
-
-      - run:
-          name: GKE Docker Push
-          command: |
-            make -C deploy/jumphost gke_docker_jumphost_push
-
-      - run:
-          name: GKE K8s Deploy
-          command: |
-            make -C deploy/jumphost gke_k8s_deploy_jumphost_staging
 
   test:
     <<: *defaults
@@ -224,11 +168,15 @@ jobs:
 workflows:
   version: 2
 
-  main:
+  dev:
     jobs:
       - test:
           context: org-global
-      - gke_dev_deploy:
+          filters:
+            branches:
+              only:
+                - master
+      - gke_deploy:
           context: org-global
           requires:
             - test
@@ -236,24 +184,13 @@ workflows:
             branches:
               only:
                 - master
-      - gke_stage_deploy:
-          context: org-global
-          requires:
-            - test
-          filters:
-            branches:
-              only:
-                - /release.*/
-            tags:  # TODO: eventually should be moved to a separate job
-              only:
-                - /release.*/
-      - gke_dev_jumphost_deploy:
+      - gke_jumphost_deploy:
           context: org-global
           filters:
             branches:
               only:
                 - master
-      - gke_ssh_dev_deploy:
+      - gke_ssh_deploy:
           context: org-global
           requires:
             - test
@@ -261,7 +198,7 @@ workflows:
             branches:
               only:
                 - master
-      - gke_ssh_auth_dev_deploy:
+      - gke_ssh_auth_deploy:
           context: org-global
           requires:
             - test
@@ -269,7 +206,16 @@ workflows:
             branches:
               only:
                 - master
-      - gke_ssh_auth_stage_deploy:
+
+  staging:
+    jobs:
+      - test:
+          context: org-global
+          filters:
+            branches:
+              only:
+                - /release.*/
+      - gke_deploy:
           context: org-global
           requires:
             - test
@@ -277,15 +223,48 @@ workflows:
             branches:
               only:
                 - /release.*/
-            tags:  # TODO: eventually should be moved to a separate job
-              only:
-                - /release.*/
-      - gke_stage_jumphost_deploy:
+      - gke_jumphost_deploy:
           context: org-global
           filters:
             branches:
               only:
                 - /release.*/
-            tags:  # TODO: eventually should be moved to a separate job
+      - gke_ssh_auth_deploy:
+          context: org-global
+          requires:
+            - test
+          filters:
+            branches:
               only:
                 - /release.*/
+
+  prod:
+    jobs:
+      - test:
+          context: org-prod
+          filters:
+            branches:
+              only:
+                - /prod-cluster/
+      - gke_deploy:
+          context: org-prod
+          requires:
+            - test
+          filters:
+            branches:
+              only:
+                - /prod-cluster/
+      - gke_jumphost_deploy:
+          context: org-prod
+          filters:
+            branches:
+              only:
+                - /prod-cluster/
+      - gke_ssh_auth_deploy:
+          context: org-prod
+          requires:
+            - test
+          filters:
+            branches:
+              only:
+                - /prod-cluster/

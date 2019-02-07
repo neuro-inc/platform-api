@@ -3,69 +3,88 @@ IMAGE:
   dev: gcr.io/light-reality-205619/platformapi-k8s:latest
   staging: gcr.io/light-reality-205619/platformapi-k8s:latest
   hse: gcr.io/light-reality-205619/platformapi-k8s:latest
+  prod: gcr.io/production-228907/platformapi-k8s:latest
 NP_STORAGE_NFS_SERVER:
   _default: '10.76.126.154'
   dev: '10.76.126.154'
   staging: '10.69.59.50'
-  hse: '10.60.201.234'
+  hse: '10.247.106.10'
+  prod: '10.47.20.74'
 NP_STORAGE_NFS_PATH:
   _default: '/dev2premium'
   dev: '/dev2premium'
   staging: '/devpremium'
   hse: '/hse_premium'
+  prod: '/prodpremium'
 NP_K8S_JOBS_INGRESS_DOMAIN_NAME_TEMPLATE:
   _default: '{job_id}.jobs.platform.dev.neuromation.io'
   dev: '{job_id}.jobs.platform.dev.neuromation.io'
   staging: '{job_id}.jobs.platform.staging.neuromation.io'
   hse: '{job_id}.jobs.platform.hse.neuromation.io'
+  prod: '{job_id}.jobs.platform.prod.neuromation.io'
 NP_K8S_SSH_INGRESS_DOMAIN_NAME:
   _default: ssh.platform.dev.neuromation.io
   dev: ssh.platform.dev.neuromation.io
   staging: ssh.platform.staging.neuromation.io
   hse: ssh.platform.hse.neuromation.io
+  prod: ssh.platform.prod.neuromation.io
 NP_K8S_SSH_AUTH_INGRESS_DOMAIN_NAME:
   _default: ssh-auth.dev.neuromation.io
   dev: ssh-auth.dev.neuromation.io
   staging: ssh-auth.staging.neuromation.io
   hse: ssh-auth.hse.neuromation.io
+  prod: ssh-auth.prod.neuromation.io
 INGRESS_HOST:
   _default: platform.dev.neuromation.io
   dev: platform.dev.neuromation.io
   staging: platform.staging.neuromation.io
   hse: platform.hse.neuromation.io
+  prod: platform.prod.neuromation.io
 NP_DB_REDIS_URI:
   _default: redis://10.0.0.11:6379/0
   dev: redis://10.0.0.11:6379/0
   staging: redis://10.0.0.3:6379/1
-  hse: redis://10.0.0.19:6379/0
+  hse: redis://10.0.16.3:6379/0
+  prod: redis://10.0.0.3:6379/0
 NP_REGISTRY_HOST:
   _default: registry.dev.neuromation.io
   dev: registry.dev.neuromation.io
   staging: registry.staging.neuromation.io
   hse: registry.hse.neuromation.io
+  prod: registry.prod.neuromation.io
 NP_REGISTRY_HTTPS:
   _default: true
   dev: true
   staging: true
   hse: true
+  prod: true
 NP_GKE_GPU_MODELS:
   _default: nvidia-tesla-k80,nvidia-tesla-p4,nvidia-tesla-v100
   dev: nvidia-tesla-k80,nvidia-tesla-p4,nvidia-tesla-v100
   staging: nvidia-tesla-k80,nvidia-tesla-p4,nvidia-tesla-v100
   hse: nvidia-tesla-k80,nvidia-tesla-p4,nvidia-tesla-v100
+  prod: nvidia-tesla-k80,nvidia-tesla-p4,nvidia-tesla-v100
 NP_OAUTH_BASE_URL:
   _default: https://dev-neuromation.auth0.com
   dev: https://dev-neuromation.auth0.com
   staging: https://staging-neuromation.auth0.com
+  hse:
+  prod:
 NP_OAUTH_CLIENT_ID:
   _default: V7Jz87W9lhIlo0MyD0O6dufBvcXwM4DR
   dev: V7Jz87W9lhIlo0MyD0O6dufBvcXwM4DR
   staging: uJV0pm5JPdHkXsSd525rlhFDVcEuUnaV
+  hse:
+  prod:
 NP_OAUTH_AUDIENCE:
   _default: https://platform.dev.neuromation.io
   dev: https://platform.dev.neuromation.io
   staging: https://platform.staging.neuromation.io
+  hse: https://platform.hse.neuromation.io
+  prod: https://platform.prod.neuromation.io
 NP_OAUTH_SUCCESS_REDIRECT_URL:
   _default: https://platform.neuromation.io
   dev: https://platform.neuromation.io
   staging: https://platform.neuromation.io
+  hse: https://platform.neuromation.io
+  prod: https://platform.neuromation.io

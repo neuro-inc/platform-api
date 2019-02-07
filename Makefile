@@ -71,7 +71,11 @@ gke_login:
 	gcloud auth activate-service-account --key-file $(HOME)/gcloud-service-key.json
 	gcloud config set project $(GKE_PROJECT_ID)
 	gcloud --quiet config set container/cluster $(GKE_CLUSTER_NAME)
-	gcloud config set compute/zone $(GKE_COMPUTE_ZONE)
+	@if [ "$(CLUSTER_TYPE)" = "regional" ]; then\
+		gcloud config set compute/region $(GKE_CLUSTER_REGION); \
+	else \
+		gcloud config set compute/zone $(GKE_COMPUTE_ZONE); \
+	fi
 	gcloud auth configure-docker
 
 gke_docker_pull_test:
@@ -89,22 +93,26 @@ gke_docker_push: build_api_k8s build_ssh_auth_k8s
 	docker push $(IMAGE_K8S)
 	docker push $(SSH_K8S)
 
-gke_k8s_deploy_dev: _helm
-	gcloud --quiet container clusters get-credentials $(GKE_CLUSTER_NAME) --region $(GKE_CLUSTER_REGION)
-	helm --set "global.env=dev" --set "IMAGE.dev=$(IMAGE_K8S):$(CIRCLE_SHA1)" upgrade --install platformapi deploy/platformapi/ --wait --timeout 600
+gke_k8s_deploy: _helm
+	@if [ "$(CLUSTER_TYPE)" = "regional" ]; then\
+		gcloud --quiet container clusters get-credentials $(GKE_CLUSTER_NAME) --region $(GKE_CLUSTER_REGION); \
+	else \
+		gcloud --quiet container clusters get-credentials $(GKE_CLUSTER_NAME) --zone $(GKE_COMPUTE_ZONE); \
+	fi
+	helm --set "global.env=$(HELM_ENV)" --set "IMAGE.$(HELM_ENV)=$(IMAGE_K8S):$(CIRCLE_SHA1)" upgrade --install platformapi deploy/platformapi/ --wait --timeout 600
 
-gke_k8s_deploy_staging: _helm
-	gcloud --quiet container clusters get-credentials $(GKE_STAGE_CLUSTER_NAME)
-	helm --set "global.env=staging" --set "IMAGE.staging=$(IMAGE_K8S):$(CIRCLE_SHA1)" upgrade --install platformapi deploy/platformapi/ --wait --timeout 600
+gke_k8s_deploy_ssh: _helm
+	@if [ "$(CLUSTER_TYPE)" = "regional" ]; then\
+		gcloud --quiet container clusters get-credentials $(GKE_CLUSTER_NAME) --region $(GKE_CLUSTER_REGION); \
+	else \
+		gcloud --quiet container clusters get-credentials $(GKE_CLUSTER_NAME) --zone $(GKE_COMPUTE_ZONE); \
+	fi
+	helm --set "global.env=$(HELM_ENV)" --set "IMAGE.$(HELM_ENV)=$(IMAGE_K8S):$(CIRCLE_SHA1)" upgrade --install ssh deploy/ssh/ --wait --timeout 600
 
-gke_k8s_deploy_ssh_dev: _helm
-	gcloud --quiet container clusters get-credentials $(GKE_CLUSTER_NAME) --region $(GKE_CLUSTER_REGION)
-	helm --set "global.env=dev" --set "IMAGE.dev=$(IMAGE_K8S):$(CIRCLE_SHA1)" upgrade --install ssh deploy/ssh/ --wait --timeout 600
-
-gke_k8s_deploy_ssh_auth_dev: _helm
-	gcloud --quiet container clusters get-credentials $(GKE_CLUSTER_NAME) --region $(GKE_CLUSTER_REGION)
-	helm --set "global.env=dev" --set "IMAGE.dev=$(SSH_K8S):$(CIRCLE_SHA1)" upgrade --install ssh-auth deploy/ssh_auth/ --wait --timeout 600
-
-gke_k8s_deploy_ssh_auth_staging: _helm
-	gcloud --quiet container clusters get-credentials $(GKE_STAGE_CLUSTER_NAME)
-	helm --set "global.env=staging" --set "IMAGE.staging=$(SSH_K8S):$(CIRCLE_SHA1)" upgrade --install ssh-auth deploy/ssh_auth/ --wait --timeout 600
+gke_k8s_deploy_ssh_auth: _helm
+	@if [ "$(CLUSTER_TYPE)" = "regional" ]; then\
+		gcloud --quiet container clusters get-credentials $(GKE_CLUSTER_NAME) --region $(GKE_CLUSTER_REGION); \
+	else \
+		gcloud --quiet container clusters get-credentials $(GKE_CLUSTER_NAME) --zone $(GKE_COMPUTE_ZONE); \
+	fi
+	helm --set "global.env=$(HELM_ENV)" --set "IMAGE.$(HELM_ENV)=$(SSH_K8S):$(CIRCLE_SHA1)" upgrade --install ssh-auth deploy/ssh_auth/ --wait --timeout 600
