@@ -9,7 +9,7 @@ async def test_basic_command(api_config, alice, client):
     model_request_payload = {
         "container": {
             "image": "ubuntu",
-            "command": "tail -f /dev/null",
+            "command": "true",
             "resources": {"cpu": 0.1, "memory_mb": 16},
         },
         "dataset_storage_uri": f"storage://{alice.name}",

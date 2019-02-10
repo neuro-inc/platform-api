@@ -35,10 +35,12 @@ async def run(config: SSHAuthConfig) -> int:
     ) as auth_client:
         forwarder = NCForwarder(config.ssh_forwarder_port, config.log_fifo)
         executor = KubeCTLExecutor(tty)
-        proxy = ExecProxy(auth_client=auth_client,
-                          platform_url=config.platform.server_endpoint_url,
-                          executor=executor,
-                          forwarder=forwarder)
+        proxy = ExecProxy(
+            auth_client=auth_client,
+            platform_url=config.platform.server_endpoint_url,
+            executor=executor,
+            forwarder=forwarder,
+        )
         retcode = await proxy.process(json_request)
         log.info(f"Done, retcode={retcode}")
         return retcode
@@ -76,6 +78,8 @@ def main() -> None:
             print("Unknown exception")
             log.error(f"{type(error)}:{error}")
             sys.exit(os.EX_SOFTWARE)
+        finally:
+            loop.set_exception_handler(lambda loop, context: None)
 
 
 if __name__ == "__main__":

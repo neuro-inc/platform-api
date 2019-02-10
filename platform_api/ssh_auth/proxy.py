@@ -1,6 +1,7 @@
 import json
 import logging
 from abc import ABC, abstractmethod
+from operator import attrgetter
 from typing import List
 
 import aiohttp
@@ -11,18 +12,18 @@ from yarl import URL
 
 from .executor import Executor
 from .forwarder import Forwarder
-from operator import attrgetter
+
 
 log = logging.getLogger(__name__)
 
 
 class Request(ABC):
     @abstractmethod
-    async def process(self, proxy: 'ExecProxy'):
+    async def process(self, proxy: "ExecProxy"):
         pass
 
     @abstractmethod
-    async def authorize(self, proxy: 'ExecProxy'):
+    async def authorize(self, proxy: "ExecProxy"):
         pass
 
 
@@ -36,12 +37,12 @@ class JobRequest(Request):
         self._job = job
         self._action = action
 
-    async def authorize(self, proxy: 'ExecProxy'):
+    async def authorize(self, proxy: "ExecProxy"):
         await proxy.authorize(self.token, self.job, self.action)
 
-    token = property(attrgetter('_token'))
-    job = property(attrgetter('_job'))
-    action = property(attrgetter('_action'))
+    token = property(attrgetter("_token"))
+    job = property(attrgetter("_job"))
+    action = property(attrgetter("_action"))
 
 
 class ExecRequest(JobRequest):
@@ -51,10 +52,10 @@ class ExecRequest(JobRequest):
         super().__init__(token, job, "write")
         self._command = command
 
-    async def process(self, proxy: 'ExecProxy') -> int:
+    async def process(self, proxy: "ExecProxy") -> int:
         return await proxy.process_exec_request(self)
 
-    command = property(attrgetter('_command'))
+    command = property(attrgetter("_command"))
 
 
 class PortForwardRequest(JobRequest):
@@ -64,10 +65,10 @@ class PortForwardRequest(JobRequest):
         super().__init__(token, job, "read")
         self._port = port
 
-    async def process(self, proxy: 'ExecProxy') -> int:
+    async def process(self, proxy: "ExecProxy") -> int:
         return await proxy.process_port_forward_request(self)
 
-    port = property(attrgetter('_port'))
+    port = property(attrgetter("_port"))
 
 
 def create_exec_request_validator() -> t.Trafaret:
@@ -89,7 +90,7 @@ def create_port_forward_request_validator() -> t.Trafaret:
         {
             "method": t.Atom("job_port_forward"),
             "token": t.String,
-            "params": t.Dict({"job": t.String, "port": t.Int})
+            "params": t.Dict({"job": t.String, "port": t.Int}),
         }
     ) >> (
         lambda d: PortForwardRequest(
@@ -99,8 +100,9 @@ def create_port_forward_request_validator() -> t.Trafaret:
 
 
 def create_request_validator() -> t.Trafaret:
-    return t.Or(create_exec_request_validator(),
-                create_port_forward_request_validator())
+    return t.Or(
+        create_exec_request_validator(), create_port_forward_request_validator()
+    )
 
 
 class AuthError(Exception):
@@ -121,9 +123,11 @@ class IllegalArgumentError(ValueError):
 
 class ExecProxy:
     def __init__(
-            self, auth_client: AuthClient, platform_url: URL,
-            executor: Executor, forwarder: Forwarder,
-            log_file: str
+        self,
+        auth_client: AuthClient,
+        platform_url: URL,
+        executor: Executor,
+        forwarder: Forwarder,
     ) -> None:
         self._auth_client = auth_client
         self._jobs_url = platform_url / "jobs"
