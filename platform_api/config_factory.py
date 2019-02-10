@@ -72,11 +72,7 @@ class EnvironConfigFactory:
         platform = self.create_platform()
         auth = self.create_auth()
         log_fifo = Path(self._environ["NP_LOG_FIFO"])
-        return SSHAuthConfig(
-            platform=platform,
-            auth=auth,
-            log_fifo=log_fifo,
-        )
+        return SSHAuthConfig(platform=platform, auth=auth, log_fifo=log_fifo)
 
     def create_server(self) -> ServerConfig:
         port = int(self._environ.get("NP_API_PORT", ServerConfig.port))
