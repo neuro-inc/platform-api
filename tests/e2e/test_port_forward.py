@@ -113,8 +113,8 @@ async def test_wrong_user(ssh_auth_config, api_config, bob, alice_job):
                 line = await asyncio.wait_for(proc.stderr.readline(), 30)
             if b"Warning: Permanently added" in line:
                 line = await asyncio.wait_for(proc.stderr.readline(), 30)
-            if b"in use" in line:
-                continue
+            if b"in use" not in line:
+                break
         except asyncio.TimeoutError:
             break
     exit_code = await proc.wait()
@@ -149,8 +149,8 @@ async def test_incorrect_token(ssh_auth_config, api_config, alice_job):
                 line = await asyncio.wait_for(proc.stderr.readline(), 30)
             if b"Warning: Permanently added" in line:
                 line = await asyncio.wait_for(proc.stderr.readline(), 30)
-            if b"in use" in line:
-                continue
+            if b"in use" not in line:
+                break
         except asyncio.TimeoutError:
             break
     exit_code = await proc.wait()
@@ -185,8 +185,8 @@ async def test_port_forward_nonexposed(ssh_auth_config, api_config, alice, alice
                 line = await asyncio.wait_for(proc.stderr.readline(), 30)
             if b"Warning: Permanently added" in line:
                 line = await asyncio.wait_for(proc.stderr.readline(), 30)
-            if b"in use" in line:
-                continue
+            if b"in use" not in line:
+                break
         except asyncio.TimeoutError:
             break
         exit_code = await proc.wait()
