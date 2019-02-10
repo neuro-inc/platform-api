@@ -72,6 +72,8 @@ async def test_port_forward(ssh_auth_config, api_config, alice, alice_job, clien
             line = await asyncio.wait_for(proc.stderr.readline(), 30)
             if b"Warning: Permanently added" in line:
                 line = await asyncio.wait_for(proc.stderr.readline(), 30)
+            if b"Warning: Permanently added" in line:
+                line = await asyncio.wait_for(proc.stderr.readline(), 30)
             assert b"in use" in line
             continue
         except asyncio.TimeoutError:
@@ -109,6 +111,8 @@ async def test_wrong_user(ssh_auth_config, api_config, bob, alice_job):
             line = await asyncio.wait_for(proc.stderr.readline(), 30)
             if b"Warning: Permanently added" in line:
                 line = await asyncio.wait_for(proc.stderr.readline(), 30)
+            if b"Warning: Permanently added" in line:
+                line = await asyncio.wait_for(proc.stderr.readline(), 30)
             if b"in use" in line:
                 continue
         except asyncio.TimeoutError:
@@ -143,6 +147,8 @@ async def test_incorrect_token(ssh_auth_config, api_config, alice_job):
             line = await asyncio.wait_for(proc.stderr.readline(), 30)
             if b"Warning: Permanently added" in line:
                 line = await asyncio.wait_for(proc.stderr.readline(), 30)
+            if b"Warning: Permanently added" in line:
+                line = await asyncio.wait_for(proc.stderr.readline(), 30)
             if b"in use" in line:
                 continue
         except asyncio.TimeoutError:
@@ -175,6 +181,8 @@ async def test_port_forward_nonexposed(ssh_auth_config, api_config, alice, alice
         )
         try:
             line = await asyncio.wait_for(proc.stderr.readline(), 30)
+            if b"Warning: Permanently added" in line:
+                line = await asyncio.wait_for(proc.stderr.readline(), 30)
             if b"Warning: Permanently added" in line:
                 line = await asyncio.wait_for(proc.stderr.readline(), 30)
             if b"in use" in line:
