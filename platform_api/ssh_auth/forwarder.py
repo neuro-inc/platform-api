@@ -42,6 +42,7 @@ class NCForwarder(Forwarder):
             proc = await asyncio.create_subprocess_exec(
                 *command, stdout=asyncio.subprocess.PIPE, stderr=asyncio.subprocess.PIPE
             )
+            assert proc.stderr
             line = (await proc.stderr.readline()).decode()
             if "listening" in line:
                 break
