@@ -17,8 +17,7 @@ class Forwarder(ABC):
 
 
 class NCForwarder(Forwarder):
-    def __init__(self, port: int, log_fifo: str) -> None:
-        self._port = port
+    def __init__(self, log_fifo: str) -> None:
         self._log_fifo = log_fifo
 
     async def forward(self, job_id: str, job_port: int) -> int:

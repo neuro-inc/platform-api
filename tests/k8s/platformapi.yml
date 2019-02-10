@@ -145,6 +145,8 @@ spec:
           value: http://platformapi:8080/api/v1
         - name: NP_LOG_FIFO
           value: /authorization.log
+        - name: NP_SSH_PORT
+          value: '22'
 ---
 apiVersion: v1
 kind: Service
