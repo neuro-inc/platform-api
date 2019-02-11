@@ -19,10 +19,6 @@ log = logging.getLogger(__name__)
 
 class Request(ABC):
     @abstractmethod
-    async def process(self, proxy: "ExecProxy"):
-        pass
-
-    @abstractmethod
     async def authorize(self, proxy: "ExecProxy"):
         pass
 
@@ -52,9 +48,6 @@ class ExecRequest(JobRequest):
         super().__init__(token, job, "write")
         self._command = command
 
-    async def process(self, proxy: "ExecProxy") -> int:
-        return await proxy.process_exec_request(self)
-
     command = property(attrgetter("_command"))
 
 
@@ -64,9 +57,6 @@ class PortForwardRequest(JobRequest):
     def __init__(self, token, job, port):
         super().__init__(token, job, "read")
         self._port = port
-
-    async def process(self, proxy: "ExecProxy") -> int:
-        return await proxy.process_port_forward_request(self)
 
     port = property(attrgetter("_port"))
 
@@ -176,4 +166,9 @@ class ExecProxy:
             raise IllegalArgumentError(f"Illegal Payload: {json_request} ({e})")
 
         await request.authorize(self)
-        return await request.process(self)
+        if type(request) is ExecRequest:
+            return await self.process_exec_request(request)
+        elif type(request) is PortForwardRequest:
+            return await self.process_port_forward_request(request)
+        else:
+            raise IllegalArgumentError(f"Unknown request type")

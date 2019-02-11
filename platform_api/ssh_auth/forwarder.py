@@ -22,7 +22,7 @@ class NCForwarder(Forwarder):
 
     async def forward(self, job_id: str, job_port: int) -> int:
         log.debug(f"Forwarding")
-        while True:
+        for i in range(10):
             port = random.randint(MIN_PORT, MAX_PORT)
             log.debug(f"Trying port: {port}")
             command = [
@@ -46,6 +46,8 @@ class NCForwarder(Forwarder):
             if "listening" in line:
                 break
             log.debug(f"Port {port} is not available")
+        else:
+            raise OSError("No ports are available")
         log.debug(f"Redirecting input/output")
         command = ["nc", "127.0.0.1", str(port)]
         proc = await asyncio.create_subprocess_exec(*command)
