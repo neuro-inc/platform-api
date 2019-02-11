@@ -8,7 +8,7 @@ log = logging.getLogger(__name__)
 
 MIN_PORT = 49152
 MAX_PORT = 65535
-
+MAX_ATTEMPT = 10
 
 class Forwarder(ABC):
     @abstractmethod
@@ -22,7 +22,7 @@ class NCForwarder(Forwarder):
 
     async def forward(self, job_id: str, job_port: int) -> int:
         log.debug(f"Forwarding")
-        for i in range(10):
+        for i in range(MAX_ATTEMPT):
             port = random.randint(MIN_PORT, MAX_PORT)
             log.debug(f"Trying port: {port}")
             command = [
