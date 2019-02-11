@@ -166,9 +166,9 @@ class ExecProxy:
             raise IllegalArgumentError(f"Illegal Payload: {json_request} ({e})")
 
         await request.authorize(self)
-        if type(request) is ExecRequest:
+        if isinstance(request, ExecRequest):
             return await self.process_exec_request(request)
-        elif type(request) is PortForwardRequest:
+        elif isinstance(request, PortForwardRequest):
             return await self.process_port_forward_request(request)
         else:
             raise IllegalArgumentError(f"Unknown request type")
