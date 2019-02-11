@@ -1,6 +1,5 @@
 #!/usr/bin/env bash
 set -o verbose
-docker build -f tests/e2e/docker/Dockerfile.socat . -t socat:latest
 docker tag $(cat AUTH_SERVER_IMAGE_NAME) platformauthapi:latest
 
 if [ ! "$CI" = true ]; then
@@ -8,12 +7,10 @@ if [ ! "$CI" = true ]; then
     docker save -o /tmp/platformauthapi.image platformauthapi:latest
     docker save -o /tmp/platformapi.image platformapi-k8s:latest
     docker save -o /tmp/ssh-auth.image ssh-auth:latest
-    docker save -o /tmp/socat.image socat:latest
     eval $(minikube docker-env)
     docker load -i /tmp/platformauthapi.image
     docker load -i /tmp/platformapi.image
     docker load -i /tmp/ssh-auth.image
-    docker load -i /tmp/socat.image
     kubectl delete -f deploy/platformapi/templates/rb.default.gke.yml
     kubectl delete -f tests/k8s/platformapi.yml
     echo "Services set up"
