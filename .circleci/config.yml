@@ -168,14 +168,11 @@ jobs:
 workflows:
   version: 2
 
+
   dev:
     jobs:
       - test:
           context: org-dev
-          filters:
-            branches:
-              only:
-                - master
       - gke_deploy:
           context: org-dev
           requires:
@@ -211,10 +208,6 @@ workflows:
     jobs:
       - test:
           context: org-staging
-          filters:
-            branches:
-              only:
-                - /release.*/
       - gke_deploy:
           context: org-staging
           requires:
@@ -242,10 +235,6 @@ workflows:
     jobs:
       - test:
           context: org-prod
-          filters:
-            branches:
-              only:
-                - /release.*/
       - gke_deploy:
           context: org-prod
           requires:
