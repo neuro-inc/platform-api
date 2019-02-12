@@ -79,6 +79,8 @@ def main() -> None:
             log.error(f"{type(error)}:{error}")
             sys.exit(os.EX_SOFTWARE)
         finally:
+            # Suppess error messages, as aiohttp can send a false warning
+            # about unclosed stream
             loop.set_exception_handler(lambda loop, context: None)
 
 
