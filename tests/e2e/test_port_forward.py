@@ -189,5 +189,5 @@ async def test_port_forward_nonexposed(ssh_auth_config, api_config, alice, alice
                 break
         except asyncio.TimeoutError:
             break
-        exit_code = await proc.wait()
-        assert exit_code == 255
+    exit_code = await proc.wait()
+    assert exit_code == 255

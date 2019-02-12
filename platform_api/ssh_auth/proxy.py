@@ -1,7 +1,7 @@
 import json
 import logging
 from abc import ABC, abstractmethod
-from operator import attrgetter
+from dataclasses import dataclass
 from typing import List
 
 import aiohttp
@@ -17,48 +17,32 @@ from .forwarder import Forwarder
 log = logging.getLogger(__name__)
 
 
-class Request(ABC):
+@dataclass(frozen=True)
+class Request:
+    pass
+
+
+@dataclass(frozen=True)  # type: ignore
+class JobRequest(ABC):
+    token: str
+    job: str
+
+    @property
     @abstractmethod
-    async def authorize(self, proxy: "ExecProxy"):
+    def action(self) -> str:
         pass
 
 
-class JobRequest(Request):
-    _token: str
-    _job: str
-    _action: str
-
-    def __init__(self, token, job, action):
-        self._token = token
-        self._job = job
-        self._action = action
-
-    async def authorize(self, proxy: "ExecProxy"):
-        await proxy.authorize(self.token, self.job, self.action)
-
-    token = property(attrgetter("_token"))
-    job = property(attrgetter("_job"))
-    action = property(attrgetter("_action"))
-
-
+@dataclass(frozen=True)
 class ExecRequest(JobRequest):
-    _command: List[str]
-
-    def __init__(self, token, job, command):
-        super().__init__(token, job, "write")
-        self._command = command
-
-    command = property(attrgetter("_command"))
+    command: List[str]
+    action: str = "write"
 
 
+@dataclass(frozen=True)
 class PortForwardRequest(JobRequest):
-    _port: int
-
-    def __init__(self, token, job, port):
-        super().__init__(token, job, "read")
-        self._port = port
-
-    port = property(attrgetter("_port"))
+    port: int
+    action: str = "write"
 
 
 def create_exec_request_validator() -> t.Trafaret:
@@ -135,7 +119,7 @@ class ExecProxy:
             job_payload = await response.json()
             return job_payload["owner"]
 
-    async def authorize(self, token: str, job_id: str, action: str) -> None:
+    async def authorize_job(self, token: str, job_id: str, action: str) -> None:
         auth_policy = AuthPolicy(self._auth_client)
         user = await auth_policy.authorized_userid(token)
         if not user:
@@ -165,7 +149,9 @@ class ExecProxy:
         except ValueError as e:
             raise IllegalArgumentError(f"Illegal Payload: {json_request} ({e})")
 
-        await request.authorize(self)
+        if isinstance(request, JobRequest):
+            await self.authorize_job(request.token, request.job, request.action)
+
         if isinstance(request, ExecRequest):
             return await self.process_exec_request(request)
         elif isinstance(request, PortForwardRequest):
