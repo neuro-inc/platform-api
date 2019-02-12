@@ -10,6 +10,7 @@ MIN_PORT = 49152
 MAX_PORT = 65535
 MAX_ATTEMPT = 10
 
+
 class Forwarder(ABC):
     @abstractmethod
     async def forward(self, job_id: str, job_port: int) -> int:
@@ -17,9 +18,6 @@ class Forwarder(ABC):
 
 
 class NCForwarder(Forwarder):
-    def __init__(self, log_fifo: str) -> None:
-        self._log_fifo = log_fifo
-
     async def forward(self, job_id: str, job_port: int) -> int:
         log.debug(f"Forwarding")
         for i in range(MAX_ATTEMPT):

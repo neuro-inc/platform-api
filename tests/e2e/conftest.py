@@ -125,7 +125,7 @@ async def regular_user_factory(auth_client, token_factory):
 
 @pytest.fixture
 async def alice(regular_user_factory):
-    return await regular_user_factory()
+    return await regular_user_factory("alice")
 
 
 @pytest.fixture

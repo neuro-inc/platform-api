@@ -17,11 +17,6 @@ from .forwarder import Forwarder
 log = logging.getLogger(__name__)
 
 
-@dataclass(frozen=True)
-class Request:
-    pass
-
-
 @dataclass(frozen=True)  # type: ignore
 class JobRequest(ABC):
     token: str
@@ -132,7 +127,7 @@ class ExecProxy:
         if not result:
             raise AuthorizationError(f"Permission denied: user={user}, job={job_id}")
 
-    def _parse(self, request: str) -> Request:
+    def _parse(self, request: str) -> JobRequest:
         dict_request = json.loads(request)
         return self._ssh_request_validator(dict_request)
 
