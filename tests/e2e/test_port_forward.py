@@ -42,6 +42,7 @@ async def alice_job(api_config, alice, client):
 
     yield job_id
 
+
 #    response = await client.delete(job_url, headers=headers)
 #    assert response.status == 204
 
