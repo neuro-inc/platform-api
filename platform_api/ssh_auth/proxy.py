@@ -143,7 +143,6 @@ class ExecProxy:
             log.debug(f"Request: {request}")
         except ValueError as e:
             raise IllegalArgumentError(f"Illegal Payload: {json_request} ({e})")
-
         if isinstance(request, JobRequest):
             await self.authorize_job(request.token, request.job, request.action)
 
