@@ -2,9 +2,10 @@ import itertools
 import json
 from abc import ABC, abstractmethod
 from dataclasses import dataclass
-from typing import AbstractSet, Dict, List, Optional
+from typing import AbstractSet, AsyncIterator, Dict, List, Optional, Tuple
 
 import aioredis
+from async_generator import asynccontextmanager
 
 from .base import OrchestratorConfig
 from .job import Job
@@ -92,6 +93,30 @@ class RedisJobsStorage(JobsStorage):
 
     def _generate_jobs_index_key(self) -> str:
         return "jobs"
+
+    @asynccontextmanager
+    async def _acquire_conn(self) -> AsyncIterator[aioredis.Redis]:
+        try:
+            conn = await self._client.acquire()
+            yield aioredis.Redis(conn)
+        finally:
+            self._client.release(conn)
+
+    @asynccontextmanager
+    async def acquire_job(self, job_id: str) -> AsyncIterator[Tuple[JobsStorage, Job]]:
+        async with self._acquire_conn() as client:
+            key = self._generate_job_key(job_id)
+            try:
+                await client.watch(key)
+
+                storage = type(self)(
+                    client=client, orchestrator_config=self._orchestrator_config
+                )
+                job = await storage.get_job(job_id)
+
+                yield (storage, job)
+            finally:
+                await client.unwatch()
 
     async def set_job(self, job: Job) -> None:
         payload = json.dumps(job.to_primitive())
