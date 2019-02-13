@@ -254,3 +254,14 @@ class TestRedisJobsStorage:
 
         jobs = await storage.get_jobs_for_deletion()
         assert not jobs
+
+    @pytest.mark.asyncio
+    async def test_acquire_job(self, redis_client, kube_orchestrator) -> None:
+        storage = RedisJobsStorage(
+            redis_client, orchestrator_config=kube_orchestrator.config
+        )
+        pending_job = self._create_pending_job(kube_orchestrator)
+        await storage.set_job(pending_job)
+
+        async with storage.acquire_job(pending_job.id) as (_, job):
+            assert job.id == pending_job.id

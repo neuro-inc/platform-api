@@ -96,11 +96,12 @@ class RedisJobsStorage(JobsStorage):
 
     @asynccontextmanager
     async def _acquire_conn(self) -> AsyncIterator[aioredis.Redis]:
+        pool = self._client.connection
         try:
-            conn = await self._client.acquire()
+            conn = await pool.acquire()
             yield aioredis.Redis(conn)
         finally:
-            self._client.release(conn)
+            pool.release(conn)
 
     @asynccontextmanager
     async def acquire_job(self, job_id: str) -> AsyncIterator[Tuple[JobsStorage, Job]]:
