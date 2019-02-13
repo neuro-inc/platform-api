@@ -17,20 +17,20 @@ NP_STORAGE_NFS_PATH:
   hse: '/hse_premium'
   prod: '/prodpremium'
 NP_K8S_JOBS_INGRESS_DOMAIN_NAME_TEMPLATE:
-  _default: '{job_id}.jobs.platform.dev.neuromation.io'
-  dev: '{job_id}.jobs.platform.dev.neuromation.io'
+  _default: '{job_id}-jobs-dev.ai.neuromation.io'
+  dev: '{job_id}-jobs-dev.ai.neuromation.io'
   staging: '{job_id}.jobs.platform.staging.neuromation.io'
   hse: '{job_id}.jobs.platform.hse.neuromation.io'
   prod: '{job_id}.jobs.platform.prod.neuromation.io'
 NP_K8S_SSH_INGRESS_DOMAIN_NAME:
-  _default: ssh.platform.dev.neuromation.io
-  dev: ssh.platform.dev.neuromation.io
+  _default: ssh-dev.ai.neuromation.io
+  dev: ssh-dev.ai.neuromation.io
   staging: ssh.platform.staging.neuromation.io
   hse: ssh.platform.hse.neuromation.io
   prod: ssh.platform.prod.neuromation.io
 NP_K8S_SSH_AUTH_INGRESS_DOMAIN_NAME:
-  _default: ssh-auth.dev.neuromation.io
-  dev: ssh-auth.dev.neuromation.io
+  _default: ssh-auth-dev.ai.neuromation.io
+  dev: ssh-auth-dev.ai.neuromation.io
   staging: ssh-auth.staging.neuromation.io
   hse: ssh-auth.hse.neuromation.io
   prod: ssh-auth.prod.neuromation.io
@@ -40,6 +40,12 @@ INGRESS_HOST:
   staging: platform.staging.neuromation.io
   hse: platform.hse.neuromation.io
   prod: platform.prod.neuromation.io
+INGRESS_HOST_TEMPORARY:
+  _default: dev.ai.neuromation.io
+  dev: dev.ai.neuromation.io
+  staging: staging.ai.neuromation.io
+  hse: hse.ai.neuromation.io
+  prod: prod.ai.neuromation.io
 NP_DB_REDIS_URI:
   _default: redis://10.0.0.11:6379/0
   dev: redis://10.0.0.11:6379/0
@@ -47,8 +53,8 @@ NP_DB_REDIS_URI:
   hse: redis://10.0.16.3:6379/0
   prod: redis://10.0.0.3:6379/0
 NP_REGISTRY_HOST:
-  _default: registry.dev.neuromation.io
-  dev: registry.dev.neuromation.io
+  _default: registry-dev.ai.neuromation.io
+  dev: registry-dev.ai.neuromation.io
   staging: registry.staging.neuromation.io
   hse: registry.hse.neuromation.io
   prod: registry.prod.neuromation.io
