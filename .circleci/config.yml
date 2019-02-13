@@ -169,6 +169,11 @@ workflows:
   version: 2
 
 
+  main:
+    jobs:
+      - test:
+          context: org-global
+
   dev:
     jobs:
       - test:
@@ -183,6 +188,8 @@ workflows:
                 - master
       - gke_jumphost_deploy:
           context: org-dev
+          requires:
+            - test
           filters:
             branches:
               only:
@@ -218,6 +225,8 @@ workflows:
                 - /release.*/
       - gke_jumphost_deploy:
           context: org-staging
+          requires:
+            - test
           filters:
             branches:
               only:
@@ -245,6 +254,8 @@ workflows:
                 - /release.*/
       - gke_jumphost_deploy:
           context: org-prod
+          requires:
+            - test
           filters:
             branches:
               only:
