@@ -1,4 +1,5 @@
 import asyncio
+import aiohttp
 import random
 import time
 
@@ -159,7 +160,7 @@ async def test_incorrect_token(ssh_auth_config, api_config, alice_job):
 
 @pytest.mark.usefixtures("api")
 @pytest.mark.asyncio
-async def test_port_forward_nonexposed(ssh_auth_config, api_config, alice, alice_job):
+async def test_port_forward_nonexposed(ssh_auth_config, api_config, alice, alice_job, client):
     retries = 5
     for i in range(retries):
         port = random.randint(MIN_PORT, MAX_PORT)
@@ -189,5 +190,7 @@ async def test_port_forward_nonexposed(ssh_auth_config, api_config, alice, alice
                 break
         except asyncio.TimeoutError:
             break
+    with pytest.raises(aiohttp.ClientOSError):
+        response = await client.get(f"http://{LOCALHOST}:{port}")
+    proc.kill()
     exit_code = await proc.wait()
-    assert exit_code == 255
