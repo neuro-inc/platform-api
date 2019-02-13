@@ -38,6 +38,11 @@ INGRESS_HOST_TEMPORARY:
   dev: dev.ai.neuromation.io
   staging: staging.ai.neuromation.io
   hse: hse.ai.neuromation.io
+INGRESS_HOST_TEMPORARY_NEW_DOMAIN:
+  _default: dev.neu.ro
+  dev: dev.neu.ro
+  staging: staging.neu.ro
+  hse: hse.neu.ro
 NP_DB_REDIS_URI:
   _default: redis://10.0.0.11:6379/0
   dev: redis://10.0.0.11:6379/0
