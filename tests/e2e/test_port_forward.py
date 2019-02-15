@@ -160,7 +160,9 @@ async def test_incorrect_token(ssh_auth_config, api_config, alice_job):
 
 @pytest.mark.usefixtures("api")
 @pytest.mark.asyncio
-async def test_port_forward_nonexposed(ssh_auth_config, api_config, alice, alice_job, client):
+async def test_port_forward_nonexposed(
+    ssh_auth_config, api_config, alice, alice_job, client
+):
     retries = 5
     for i in range(retries):
         port = random.randint(MIN_PORT, MAX_PORT)
