@@ -1,8 +1,8 @@
 import asyncio
-import aiohttp
 import random
 import time
 
+import aiohttp
 import pytest
 
 
