@@ -10,7 +10,7 @@ from platform_api.orchestrator.job_request import (
 )
 from platform_api.orchestrator.jobs_storage import (
     JobFilter,
-    JobsStorageException,
+    JobStorageTransactionError,
     RedisJobsStorage,
 )
 
@@ -287,13 +287,13 @@ class TestRedisJobsStorage:
         await storage.set_job(pending_job)
 
         with pytest.raises(
-            JobsStorageException, match=f"Job {pending_job.id} has been changed."
+            JobStorageTransactionError, match=f"Job {pending_job.id} has been changed."
         ):
 
             async with storage.try_update_job(pending_job.id) as first_job:
                 assert first_job.status == JobStatus.PENDING
 
-                with pytest.not_raises(JobsStorageException):
+                with pytest.not_raises(JobStorageTransactionError):
 
                     async with storage.try_update_job(pending_job.id) as second_job:
                         assert pending_job.status == JobStatus.PENDING

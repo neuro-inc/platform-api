@@ -122,7 +122,7 @@ class RedisJobsStorage(JobsStorage):
                     client=client, orchestrator_config=self._orchestrator_config
                 )
             except (aioredis.errors.MultiExecError, aioredis.errors.WatchVariableError):
-                raise JobsStorageException(f"Job {job_id} has been changed.")
+                raise JobStorageTransactionError(f"Job {job_id} has been changed.")
             finally:
                 await client.unwatch()
 
