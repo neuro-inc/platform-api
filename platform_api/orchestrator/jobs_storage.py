@@ -35,6 +35,11 @@ class JobsStorage(ABC):
         pass
 
     @abstractmethod
+    @asynccontextmanager
+    async def try_update_job(self, job_id: str) -> AsyncIterator[Job]:
+        pass
+
+    @abstractmethod
     async def get_all_jobs(self, job_filter: Optional[JobFilter] = None) -> List[Job]:
         pass
 
@@ -67,6 +72,12 @@ class InMemoryJobsStorage(JobsStorage):
         if payload is None:
             raise JobError(f"no such job {job_id}")
         return self._parse_job_payload(payload)
+
+    @asynccontextmanager
+    async def try_update_job(self, job_id: str) -> AsyncIterator[Job]:
+        job = await self.get_job(job_id)
+        yield job
+        await self.set_job(job)
 
     def _apply_filter(self, job_filter: JobFilter, job: Job) -> bool:
         if job_filter.statuses and job.status not in job_filter.statuses:
