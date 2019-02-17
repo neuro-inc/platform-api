@@ -152,7 +152,8 @@ class TestJobsService:
     async def test_get_all_filter_by_status(
         self, mock_orchestrator, job_request_factory
     ):
-        service = JobsService(orchestrator=mock_orchestrator)
+        storage = InMemoryJobsStorage(orchestrator_config=mock_orchestrator.config)
+        service = JobsService(orchestrator=mock_orchestrator, jobs_storage=storage)
         user = User(name="testuser", token="")
 
         async def create_job():
@@ -161,18 +162,18 @@ class TestJobsService:
             return job
 
         job_pending = await create_job()
+
         job_running = await create_job()
+        job_running.status = JobStatus.RUNNING
+        await storage.set_job(job_running)
+
         job_succeeded = await create_job()
+        job_succeeded.status = JobStatus.SUCCEEDED
+        await storage.set_job(job_succeeded)
+
         job_failed = await create_job()
-
-        mock_orchestrator.update_status_to_return(JobStatus.RUNNING)
-        await service._update_job_status(job_running)
-
-        mock_orchestrator.update_status_to_return(JobStatus.SUCCEEDED)
-        await service._update_job_status(job_succeeded)
-
-        mock_orchestrator.update_status_to_return(JobStatus.FAILED)
-        await service._update_job_status(job_failed)
+        job_failed.status = JobStatus.FAILED
+        await storage.set_job(job_failed)
 
         jobs = await service.get_all_jobs()
         job_ids = {job.id for job in jobs}
