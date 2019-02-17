@@ -8,7 +8,11 @@ from platform_api.orchestrator.job_request import (
     JobRequest,
     JobStatus,
 )
-from platform_api.orchestrator.jobs_storage import JobFilter, RedisJobsStorage
+from platform_api.orchestrator.jobs_storage import (
+    JobFilter,
+    JobsStorageException,
+    RedisJobsStorage,
+)
 
 
 class TestRedisJobsStorage:
@@ -256,12 +260,46 @@ class TestRedisJobsStorage:
         assert not jobs
 
     @pytest.mark.asyncio
-    async def test_acquire_job(self, redis_client, kube_orchestrator) -> None:
+    async def test_try_update_job_success(
+        self, redis_client, kube_orchestrator
+    ) -> None:
         storage = RedisJobsStorage(
             redis_client, orchestrator_config=kube_orchestrator.config
         )
         pending_job = self._create_pending_job(kube_orchestrator)
         await storage.set_job(pending_job)
 
-        async with storage.acquire_job(pending_job.id) as (_, job):
-            assert job.id == pending_job.id
+        async with storage.try_update_job(pending_job.id) as job:
+            assert pending_job.status == JobStatus.PENDING
+            job.status = JobStatus.RUNNING
+
+        running_job = await storage.get_job(pending_job.id)
+        assert running_job.status == JobStatus.RUNNING
+
+    @pytest.mark.asyncio
+    async def test_try_update_job_conflict(
+        self, redis_client, kube_orchestrator
+    ) -> None:
+        storage = RedisJobsStorage(
+            redis_client, orchestrator_config=kube_orchestrator.config
+        )
+        pending_job = self._create_pending_job(kube_orchestrator)
+        await storage.set_job(pending_job)
+
+        with pytest.raises(
+            JobsStorageException, match=f"Job {pending_job.id} has been changed."
+        ):
+
+            async with storage.try_update_job(pending_job.id) as first_job:
+                assert first_job.status == JobStatus.PENDING
+
+                with pytest.not_raises(JobsStorageException):
+
+                    async with storage.try_update_job(pending_job.id) as second_job:
+                        assert pending_job.status == JobStatus.PENDING
+                        second_job.status = JobStatus.FAILED
+
+                first_job.status = JobStatus.FAILED
+
+        failed_job = await storage.get_job(pending_job.id)
+        assert failed_job.status == JobStatus.FAILED

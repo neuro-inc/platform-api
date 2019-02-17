@@ -2,7 +2,7 @@ import itertools
 import json
 from abc import ABC, abstractmethod
 from dataclasses import dataclass
-from typing import AbstractSet, AsyncIterator, Dict, List, Optional, Tuple
+from typing import AbstractSet, AsyncIterator, Dict, List, Optional
 
 import aioredis
 from async_generator import asynccontextmanager
@@ -10,6 +10,14 @@ from async_generator import asynccontextmanager
 from .base import OrchestratorConfig
 from .job import Job
 from .job_request import JobError, JobStatus
+
+
+class JobsStorageException(Exception):
+    pass
+
+
+class JobStorageTransactionError(JobsStorageException):
+    pass
 
 
 @dataclass(frozen=True)
@@ -104,20 +112,26 @@ class RedisJobsStorage(JobsStorage):
             pool.release(conn)
 
     @asynccontextmanager
-    async def acquire_job(self, job_id: str) -> AsyncIterator[Tuple[JobsStorage, Job]]:
+    async def _watch_job(self, job_id: str) -> AsyncIterator[JobsStorage]:
         async with self._acquire_conn() as client:
             key = self._generate_job_key(job_id)
             try:
                 await client.watch(key)
 
-                storage = type(self)(
+                yield type(self)(
                     client=client, orchestrator_config=self._orchestrator_config
                 )
-                job = await storage.get_job(job_id)
-
-                yield (storage, job)
+            except (aioredis.errors.MultiExecError, aioredis.errors.WatchVariableError):
+                raise JobsStorageException(f"Job {job_id} has been changed.")
             finally:
                 await client.unwatch()
+
+    @asynccontextmanager
+    async def try_update_job(self, job_id: str) -> AsyncIterator[Job]:
+        async with self._watch_job(job_id) as storage:
+            job = await storage.get_job(job_id)
+            yield job
+            await storage.set_job(job)
 
     async def set_job(self, job: Job) -> None:
         payload = json.dumps(job.to_primitive())
