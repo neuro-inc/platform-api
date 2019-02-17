@@ -35,7 +35,6 @@ class JobsStorage(ABC):
         pass
 
     @abstractmethod
-    @asynccontextmanager
     async def try_update_job(self, job_id: str) -> AsyncIterator[Job]:
         pass
 
