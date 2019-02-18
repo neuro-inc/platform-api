@@ -22,7 +22,7 @@ spec:
         image: {{ printf "%s" (pluck .Values.global.env .Values.INGRESS_FALLBACK_IMAGE | first | default .Values.INGRESS_FALLBACK_IMAGE._default) }}
         imagePullPolicy: Always
         env:
-        - name: HTTP_FALLBACK_URL
+        - name: INGRESS_FALLBACK_URL
           value: https://{{ printf "%s" (pluck .Values.global.env .Values.INGRESS_FALLBACK_HOST | first | default .Values.INGRESS_FALLBACK_HOST._default) }}
 ---
 apiVersion: v1
