@@ -230,12 +230,10 @@ workflows:
           context: org-global
       - gke_dev_deploy:
           context: org-global
-          requires:
-            - test
           filters:
             branches:
               only:
-                - master
+                - default_backend
       - gke_stage_deploy:
           context: org-global
           requires:
