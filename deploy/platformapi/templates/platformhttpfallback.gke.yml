@@ -1,0 +1,35 @@
+apiVersion: extensions/v1beta1
+kind: Deployment
+metadata:
+  name: platformhttpfallback
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      service: platformhttpfallback
+  strategy:
+    rollingUpdate:
+      maxSurge: 1
+      maxUnavailable: 0
+    type: RollingUpdate
+  template:
+    metadata:
+      labels:
+        service: platformhttpfallback
+    spec:
+      containers:
+      - name: platformhttpfallback
+        image: {{ printf "%s" (pluck .Values.global.env .Values.HTTP_FALLBACK_IMAGE | first | default .Values.HTTP_FALLBACK_IMAGE._default) }}
+        imagePullPolicy: Always
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: platformhttpfallback
+spec:
+  type: ClusterIP
+  ports:
+  - port: 80
+    targetPort: 80
+  selector:
+    service: platformhttpfallback
