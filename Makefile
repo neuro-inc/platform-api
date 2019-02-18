@@ -91,7 +91,7 @@ gke_docker_push: build_api_k8s build_ssh_auth_k8s
 	docker push $(IMAGE_K8S)
 	docker push $(SSH_K8S)
 
-	make -C platform_INGRESS_FALLback IMAGE_NAME=$(INGRESS_FALLBACK_IMAGE_NAME) build
+	make -C platform_ingress_fallback IMAGE_NAME=$(INGRESS_FALLBACK_IMAGE_NAME) build
 
 	docker tag $(INGRESS_FALLBACK_IMAGE_NAME):latest $(INGRESS_FALLBACK_IMAGE_K8S):latest
 	docker tag $(INGRESS_FALLBACK_IMAGE_NAME):latest $(INGRESS_FALLBACK_IMAGE_K8S):$(CIRCLE_SHA1)
