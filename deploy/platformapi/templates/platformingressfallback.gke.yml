@@ -1,12 +1,12 @@
 apiVersion: extensions/v1beta1
 kind: Deployment
 metadata:
-  name: platformhttpfallback
+  name: platformingressfallback
 spec:
   replicas: 1
   selector:
     matchLabels:
-      service: platformhttpfallback
+      service: platformingressfallback
   strategy:
     rollingUpdate:
       maxSurge: 1
@@ -15,24 +15,24 @@ spec:
   template:
     metadata:
       labels:
-        service: platformhttpfallback
+        service: platformingressfallback
     spec:
       containers:
-      - name: platformhttpfallback
+      - name: platformingressfallback
         image: {{ printf "%s" (pluck .Values.global.env .Values.HTTP_FALLBACK_IMAGE | first | default .Values.HTTP_FALLBACK_IMAGE._default) }}
         imagePullPolicy: Always
         env:
         - name: HTTP_FALLBACK_URL
-          value: https://{{ printf "%s" (pluck .Values.global.env .Values.HTTP_FALLBACK_DOMAIN_NAME | first | default .Values.HTTP_FALLBACK_DOMAIN_NAME._default) }}
+          value: https://{{ printf "%s" (pluck .Values.global.env .Values.INGRESS_FALLBACK_HOST | first | default .Values.INGRESS_FALLBACK_HOST._default) }}
 ---
 apiVersion: v1
 kind: Service
 metadata:
-  name: platformhttpfallback
+  name: platformingressfallback
 spec:
   type: ClusterIP
   ports:
   - port: 80
     targetPort: 80
   selector:
-    service: platformhttpfallback
+    service: platformingressfallback

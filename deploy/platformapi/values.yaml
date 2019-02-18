@@ -3,16 +3,11 @@ IMAGE:
   dev: gcr.io/light-reality-205619/platformapi-k8s:latest
   staging: gcr.io/light-reality-205619/platformapi-k8s:latest
   hse: gcr.io/light-reality-205619/platformapi-k8s:latest
-HTTP_FALLBACK_IMAGE:
-  _default: gcr.io/light-reality-205619/platformhttpfallback:latest
-  dev: gcr.io/light-reality-205619/platformhttpfallback:latest
-  staging: gcr.io/light-reality-205619/platformhttpfallback:latest
-  hse: gcr.io/light-reality-205619/platformhttpfallback:latest
-HTTP_FALLBACK_DOMAIN_NAME:
-  _default: 'default.jobs-dev.neu.ro'
-  dev: 'default.jobs-dev.neu.ro'
-  staging: 'default.jobs.platform.staging.neuromation.io'
-  hse: 'default.jobs.platform.hse.neuromation.io'
+INGRESS_FALLBACK_IMAGE:
+  _default: gcr.io/light-reality-205619/platformingressfallback:latest
+  dev: gcr.io/light-reality-205619/platformingressfallback:latest
+  staging: gcr.io/light-reality-205619/platformingressfallback:latest
+  hse: gcr.io/light-reality-205619/platformingressfallback:latest
 NP_STORAGE_NFS_SERVER:
   _default: '10.76.126.154'
   dev: '10.76.126.154'
@@ -53,6 +48,11 @@ INGRESS_HOST_TEMPORARY_NEW_DOMAIN:
   dev: dev.neu.ro
   staging: staging.neu.ro
   hse: hse.neu.ro
+INGRESS_FALLBACK_HOST:
+  _default: 'default.jobs-dev.neu.ro'
+  dev: 'default.jobs-dev.neu.ro'
+  staging: 'default.jobs.platform.staging.neuromation.io'
+  hse: 'default.jobs.platform.hse.neuromation.io'
 NP_DB_REDIS_URI:
   _default: redis://10.0.0.11:6379/0
   dev: redis://10.0.0.11:6379/0
