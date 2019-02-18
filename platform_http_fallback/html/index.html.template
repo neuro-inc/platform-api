@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <title>Neuromation Platform</title>
-    <link rel="icon" href="favicon.png" type="image/png">
+    <link rel="icon" href="${HTTP_FALLBACK_URL}/favicon.png" type="image/png">
 
     <script>
         window.onload = function () {
@@ -30,7 +30,7 @@
 
 <body>
     <div class="div">
-        <img src="neuromation_symbol_RGB_150h150w.png" />
+        <img src="${HTTP_FALLBACK_URL}/neuromation_symbol_RGB_150h150w.png" />
     </div>
 </body>
 
