@@ -21,6 +21,9 @@ spec:
       - name: platformhttpfallback
         image: {{ printf "%s" (pluck .Values.global.env .Values.HTTP_FALLBACK_IMAGE | first | default .Values.HTTP_FALLBACK_IMAGE._default) }}
         imagePullPolicy: Always
+        env:
+        - name: HTTP_FALLBACK_URL
+          value: https://{{ printf "%s" (pluck .Values.global.env .Values.HTTP_FALLBACK_DOMAIN_NAME | first | default .Values.HTTP_FALLBACK_DOMAIN_NAME._default) }}
 ---
 apiVersion: v1
 kind: Service
