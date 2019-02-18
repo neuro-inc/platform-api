@@ -19,7 +19,7 @@ spec:
     spec:
       containers:
       - name: platformingressfallback
-        image: {{ printf "%s" (pluck .Values.global.env .Values.HTTP_FALLBACK_IMAGE | first | default .Values.HTTP_FALLBACK_IMAGE._default) }}
+        image: {{ printf "%s" (pluck .Values.global.env .Values.INGRESS_FALLBACK_IMAGE | first | default .Values.INGRESS_FALLBACK_IMAGE._default) }}
         imagePullPolicy: Always
         env:
         - name: HTTP_FALLBACK_URL
