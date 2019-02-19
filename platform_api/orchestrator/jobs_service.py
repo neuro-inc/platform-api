@@ -6,7 +6,12 @@ from platform_api.user import User
 from .base import LogReader, Orchestrator, Telemetry
 from .job import Job, JobStatusItem
 from .job_request import JobException, JobNotFoundException, JobRequest, JobStatus
-from .jobs_storage import InMemoryJobsStorage, JobFilter, JobsStorage
+from .jobs_storage import (
+    InMemoryJobsStorage,
+    JobFilter,
+    JobsStorage,
+    JobStorageTransactionError,
+)
 from .status import Status
 
 
@@ -22,16 +27,38 @@ class JobsService:
         )
         self._orchestrator = orchestrator
 
+        self._max_deletion_attempts = 3
+
     async def update_jobs_statuses(self):
+        # TODO (A Danshyn 02/17/19): instead of returning `Job` objects,
+        # it makes sense to just return their IDs.
+
         for job in await self._jobs_storage.get_unfinished_jobs():
-            await self._update_job_status(job)
+            try:
+                async with self._jobs_storage.try_update_job(job.id) as job:
+                    await self._update_job_status(job)
+            except JobStorageTransactionError:
+                # intentionally ignoring any transaction failures here because
+                # the job may have been changed and a retry is needed.
+                pass
 
         for job in await self._jobs_storage.get_jobs_for_deletion():
-            await self._delete_job(job)
+            # finished, but not yet deleted jobs
+            # assert job.is_finished and not job.is_deleted
+            try:
+                async with self._jobs_storage.try_update_job(job.id) as job:
+                    await self._delete_job(job)
+            except JobStorageTransactionError:
+                # intentionally ignoring any transaction failures here because
+                # the job may have been changed and a retry is needed.
+                pass
 
     async def _update_job_status(self, job: Job) -> None:
+        if job.is_finished:
+            logger.warning("Ignoring an attempt to update a finished job %s", job.id)
+            return
+
         logger.info("Updating job %s", job.id)
-        assert not job.is_finished
 
         old_status_item = job.status_history.current
 
@@ -61,8 +88,6 @@ class JobsService:
                 old_status_item.status.name,
                 status_item.status.name,
             )
-
-        await self._jobs_storage.set_job(job)
 
     async def create_job(
         self, job_request: JobRequest, user: User, is_preemptible: bool = False
@@ -105,12 +130,17 @@ class JobsService:
             # deletion of a still running job
             job.status = JobStatus.SUCCEEDED
         job.is_deleted = True
-        await self._jobs_storage.set_job(job)
 
     async def delete_job(self, job_id: str) -> None:
-        job = await self._jobs_storage.get_job(job_id)
-        if not job.is_finished:
-            await self._delete_job(job)
+        for _ in range(self._max_deletion_attempts):
+            try:
+                async with self._jobs_storage.try_update_job(job_id) as job:
+                    if not job.is_finished:
+                        await self._delete_job(job)
+                return
+            except JobStorageTransactionError:
+                logger.warning("Failed to mark a job %s as deleted. Retrying.", job.id)
+        logger.warning("Failed to mark a job %s as deleted. Giving up.", job.id)
 
     async def get_all_jobs(self, job_filter: Optional[JobFilter] = None) -> List[Job]:
         return await self._jobs_storage.get_all_jobs(job_filter)
