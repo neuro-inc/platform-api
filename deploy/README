@@ -1,26 +1,6 @@
 
 #MANUAL DEPLOY
 
-# Deploy in HSE cluster
-
-###  _cd_ to _deploy_ folder
-``` cd deploy ```
-
-### Connect to cluster
-```gcloud container clusters get-credentials hse-cluster-01 --zone us-central1-a --project hse-project-230316```
-
-### Deploy platform
-Platform api
-```helm --set "global.env=hse" upgrade --install platformapi platformapi```
-
-SSH-Auth
-```helm --set "global.env=hse" upgrade --install ssh-auth ssh_auth```
-
-Jumphost
-```helm --set "global.env=hse" upgrade --install jumphost jumphost/helmpackage```
-
-
-
 
 # Deploy in Production cluster
 
@@ -43,7 +23,7 @@ Jumphost
 
 
 
-#Deploy in stagging and dev clusters
+#Deploy in staging and dev clusters
 
 
 ## Platform api
@@ -51,7 +31,7 @@ Jumphost
 Dev : 
 	```helm --set "global.env=dev" upgrade --install platformapi platformapi```
 
-Stage : 
+Staging :
 	```helm --set "global.env=staging" upgrade --install platformapi platformapi```
 
 
@@ -61,7 +41,7 @@ Stage :
 Dev :
 	```helm --set "global.env=dev" upgrade --install ssh-auth ssh_auth```
 
-Stage :
+Staging :
 	```helm --set "global.env=staging" upgrade --install ssh-auth ssh_auth```
 
 
@@ -72,5 +52,5 @@ Stage :
 Dev :
 	```helm --set "global.env=dev" upgrade --install jumphost jumphost/helmpackage```
 
-Stage :
+Staging :
 	```helm --set "global.env=staging" upgrade --install jumphost jumphost/helmpackage```
