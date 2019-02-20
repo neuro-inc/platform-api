@@ -21,17 +21,17 @@ NP_STORAGE_NFS_PATH:
 NP_K8S_JOBS_INGRESS_DOMAIN_NAME_TEMPLATE:
   _default: '{job_id}.jobs-dev.neu.ro'
   dev: '{job_id}.jobs-dev.neu.ro'
-  staging: '{job_id}.jobs.platform.staging.neuromation.io'
+  staging: '{job_id}.jobs-staging.neu.ro'
   hse: '{job_id}.jobs.platform.hse.neuromation.io'
 NP_K8S_SSH_INGRESS_DOMAIN_NAME:
   _default: ssh-dev.neu.ro
   dev: ssh-dev.neu.ro
-  staging: ssh.platform.staging.neuromation.io
+  staging: ssh-staging.neu.ro
   hse: ssh.platform.hse.neuromation.io
 NP_K8S_SSH_AUTH_INGRESS_DOMAIN_NAME:
   _default: ssh-auth-dev.neu.ro
   dev: ssh-auth-dev.neu.ro
-  staging: ssh-auth.staging.neuromation.io
+  staging: ssh-auth-staging.neu.ro
   hse: ssh-auth.hse.neuromation.io
 INGRESS_HOST:
   _default: platform.dev.neuromation.io
@@ -51,7 +51,7 @@ INGRESS_HOST_TEMPORARY_NEW_DOMAIN:
 INGRESS_FALLBACK_HOST:
   _default: 'default.jobs-dev.neu.ro'
   dev: 'default.jobs-dev.neu.ro'
-  staging: 'default.jobs.platform.staging.neuromation.io'
+  staging: 'default.jobs-staging.neu.ro'
   hse: 'default.jobs.platform.hse.neuromation.io'
 NP_DB_REDIS_URI:
   _default: redis://10.0.0.11:6379/0
@@ -61,7 +61,7 @@ NP_DB_REDIS_URI:
 NP_REGISTRY_HOST:
   _default: registry-dev.neu.ro
   dev: registry-dev.neu.ro
-  staging: registry.staging.neuromation.io
+  staging: registry-staging.neu.ro
   hse: registry.hse.neuromation.io
 NP_GKE_GPU_MODELS:
   _default: nvidia-tesla-k80,nvidia-tesla-p4,nvidia-tesla-v100
