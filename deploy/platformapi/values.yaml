@@ -42,7 +42,7 @@ INGRESS_HOST_TEMPORARY:
   _default: dev.ai.neuromation.io
   dev: dev.ai.neuromation.io
   staging: staging.ai.neuromation.io
-  prod: prod.ai.neuromation.io
+  prod: ai.neuromation.io
 INGRESS_HOST_TEMPORARY_NEW_DOMAIN:
   _default: dev.neu.ro
   dev: dev.neu.ro
