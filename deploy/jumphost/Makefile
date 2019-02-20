@@ -14,7 +14,7 @@ gke_login:
 	gcloud auth activate-service-account --key-file $(HOME)/gcloud-service-key.json
 	gcloud config set project $(GKE_PROJECT_ID)
 	gcloud --quiet config set container/cluster $(GKE_CLUSTER_NAME)
-	gcloud config set compute/zone $(GKE_COMPUTE_ZONE)
+	gcloud config set $(SET_CLUSTER_ZONE_REGION)
 	gcloud auth configure-docker
 
 _helm:
@@ -25,10 +25,6 @@ gke_docker_jumphost_push: build_jumphost_k8s
 	docker tag $(IMAGE_NAME_K8S):$(IMAGE_TAG) $(IMAGE_K8S):$(CIRCLE_SHA1)
 	docker push $(IMAGE_K8S)
 
-gke_k8s_deploy_jumphost_dev: _helm
-	gcloud --quiet container clusters get-credentials $(GKE_CLUSTER_NAME) --region $(GKE_CLUSTER_REGION)
-	helm --set "global.env=dev" --set "IMAGE.dev=$(IMAGE_K8S):$(CIRCLE_SHA1)" upgrade --install jumphost helmpackage/ --wait --timeout 600
-
-gke_k8s_deploy_jumphost_staging: _helm
-	gcloud --quiet container clusters get-credentials $(GKE_STAGE_CLUSTER_NAME)
-	helm --set "global.env=staging" --set "IMAGE.staging=$(IMAGE_K8S):$(CIRCLE_SHA1)" upgrade --install jumphost helmpackage/ --wait --timeout 600
+gke_k8s_deploy_jumphost: _helm
+	gcloud --quiet container clusters get-credentials $(GKE_CLUSTER_NAME) $(CLUSTER_ZONE_REGION);
+	helm --set "global.env=$(HELM_ENV)" --set "IMAGE.$(HELM_ENV)=$(IMAGE_K8S):$(CIRCLE_SHA1)" upgrade --install jumphost helmpackage/ --wait --timeout 600

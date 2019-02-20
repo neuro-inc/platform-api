@@ -73,7 +73,7 @@ gke_login:
 	gcloud auth activate-service-account --key-file $(HOME)/gcloud-service-key.json
 	gcloud config set project $(GKE_PROJECT_ID)
 	gcloud --quiet config set container/cluster $(GKE_CLUSTER_NAME)
-	gcloud config set compute/zone $(GKE_COMPUTE_ZONE)
+	gcloud config set $(SET_CLUSTER_ZONE_REGION)
 	gcloud auth configure-docker
 
 gke_docker_pull_test:
@@ -97,30 +97,18 @@ gke_docker_push: build_api_k8s build_ssh_auth_k8s
 	docker tag $(INGRESS_FALLBACK_IMAGE_NAME):latest $(INGRESS_FALLBACK_IMAGE_K8S):$(CIRCLE_SHA1)
 	docker push $(INGRESS_FALLBACK_IMAGE_K8S)
 
-gke_k8s_deploy_dev: _helm
-	gcloud --quiet container clusters get-credentials $(GKE_CLUSTER_NAME) --region $(GKE_CLUSTER_REGION)
+gke_k8s_deploy: _helm
+	gcloud --quiet container clusters get-credentials $(GKE_CLUSTER_NAME) $(CLUSTER_ZONE_REGION)
 	helm \
-	    --set "global.env=dev" \
-	    --set "IMAGE.dev=$(IMAGE_K8S):$(CIRCLE_SHA1)" \
-	    --set "INGRESS_FALLBACK_IMAGE.dev=$(INGRESS_FALLBACK_IMAGE_K8S):$(CIRCLE_SHA1)" \
-	    upgrade --install platformapi deploy/platformapi/ --wait --timeout 600
+		--set "global.env=$(HELM_ENV)" \
+		--set "IMAGE.$(HELM_ENV)=$(IMAGE_K8S):$(CIRCLE_SHA1)" \
+		--set "INGRESS_FALLBACK_IMAGE.$(HELM_ENV)=$(INGRESS_FALLBACK_IMAGE_K8S):$(CIRCLE_SHA1)" \
+		upgrade --install platformapi deploy/platformapi/ --wait --timeout 600
 
-gke_k8s_deploy_staging: _helm
-	gcloud --quiet container clusters get-credentials $(GKE_STAGE_CLUSTER_NAME)
-	helm \
-	    --set "global.env=staging" \
-	    --set "IMAGE.staging=$(IMAGE_K8S):$(CIRCLE_SHA1)" \
-	    --set "INGRESS_FALLBACK_IMAGE.staging=$(INGRESS_FALLBACK_IMAGE_K8S):$(CIRCLE_SHA1)" \
-	    upgrade --install platformapi deploy/platformapi/ --wait --timeout 600
+gke_k8s_deploy_ssh: _helm
+	gcloud --quiet container clusters get-credentials $(GKE_CLUSTER_NAME) $(CLUSTER_ZONE_REGION)
+	helm --set "global.env=$(HELM_ENV)" --set "IMAGE.$(HELM_ENV)=$(IMAGE_K8S):$(CIRCLE_SHA1)" upgrade --install ssh deploy/ssh/ --wait --timeout 600
 
-gke_k8s_deploy_ssh_dev: _helm
-	gcloud --quiet container clusters get-credentials $(GKE_CLUSTER_NAME) --region $(GKE_CLUSTER_REGION)
-	helm --set "global.env=dev" --set "IMAGE.dev=$(IMAGE_K8S):$(CIRCLE_SHA1)" upgrade --install ssh deploy/ssh/ --wait --timeout 600
-
-gke_k8s_deploy_ssh_auth_dev: _helm
-	gcloud --quiet container clusters get-credentials $(GKE_CLUSTER_NAME) --region $(GKE_CLUSTER_REGION)
-	helm --set "global.env=dev" --set "IMAGE.dev=$(SSH_K8S):$(CIRCLE_SHA1)" upgrade --install ssh-auth deploy/ssh_auth/ --wait --timeout 600
-
-gke_k8s_deploy_ssh_auth_staging: _helm
-	gcloud --quiet container clusters get-credentials $(GKE_STAGE_CLUSTER_NAME)
-	helm --set "global.env=staging" --set "IMAGE.staging=$(SSH_K8S):$(CIRCLE_SHA1)" upgrade --install ssh-auth deploy/ssh_auth/ --wait --timeout 600
+gke_k8s_deploy_ssh_auth: _helm
+	gcloud --quiet container clusters get-credentials $(GKE_CLUSTER_NAME) $(CLUSTER_ZONE_REGION)
+	helm --set "global.env=$(HELM_ENV)" --set "IMAGE.$(HELM_ENV)=$(SSH_K8S):$(CIRCLE_SHA1)" upgrade --install ssh-auth deploy/ssh_auth/ --wait --timeout 600

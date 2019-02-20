@@ -2,9 +2,9 @@ IMAGE:
   _default: gcr.io/light-reality-205619/ssh-auth:latest
   dev: gcr.io/light-reality-205619/ssh-auth:latest
   staging: gcr.io/light-reality-205619/ssh-auth:latest
-  hse: gcr.io/light-reality-205619/ssh-auth:latest
+  prod: gcr.io/production-228907/ssh-auth:latest
 NP_DB_REDIS_URI:
   _default: redis://10.0.0.11:6379/0
   dev: redis://10.0.0.11:6379/0
   staging: redis://10.0.0.3:6379/1
-  hse: redis://10.0.0.19:6379/0
+  prod: redis://10.0.0.3:6379/0
