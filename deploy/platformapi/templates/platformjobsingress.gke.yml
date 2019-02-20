@@ -4,6 +4,23 @@ metadata:
   name: platformjobsingress
   annotations:
     kubernetes.io/ingress.class: traefik
+    traefik.ingress.kubernetes.io/error-pages: |-
+      default:
+        status:
+        - "500-600"
+        backend: error-pages
+        query: /
 spec:
   rules:
-  - host: unknown
+  - host: error-pages
+    http:
+      paths:
+      - backend:
+          serviceName: platformingressfallback
+          servicePort: 80
+  - host: {{ printf "%s" (pluck .Values.global.env .Values.INGRESS_FALLBACK_HOST | first | default .Values.INGRESS_FALLBACK_HOST._default) }}
+    http:
+      paths:
+      - backend:
+          serviceName: platformingressfallback
+          servicePort: 80

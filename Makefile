@@ -5,6 +5,8 @@ IMAGE_K8S ?= $(GKE_DOCKER_REGISTRY)/$(GKE_PROJECT_ID)/$(IMAGE_NAME_K8S)
 SSH_IMAGE_NAME ?= ssh-auth
 SSH_IMAGE_TAG ?= latest
 SSH_K8S ?= $(GKE_DOCKER_REGISTRY)/$(GKE_PROJECT_ID)/$(SSH_IMAGE_NAME)
+INGRESS_FALLBACK_IMAGE_NAME ?= platformingressfallback
+INGRESS_FALLBACK_IMAGE_K8S ?= $(GKE_DOCKER_REGISTRY)/$(GKE_PROJECT_ID)/$(INGRESS_FALLBACK_IMAGE_NAME)
 
 
 ifdef CIRCLECI
@@ -89,9 +91,19 @@ gke_docker_push: build_api_k8s build_ssh_auth_k8s
 	docker push $(IMAGE_K8S)
 	docker push $(SSH_K8S)
 
+	make -C platform_ingress_fallback IMAGE_NAME=$(INGRESS_FALLBACK_IMAGE_NAME) build
+
+	docker tag $(INGRESS_FALLBACK_IMAGE_NAME):latest $(INGRESS_FALLBACK_IMAGE_K8S):latest
+	docker tag $(INGRESS_FALLBACK_IMAGE_NAME):latest $(INGRESS_FALLBACK_IMAGE_K8S):$(CIRCLE_SHA1)
+	docker push $(INGRESS_FALLBACK_IMAGE_K8S)
+
 gke_k8s_deploy: _helm
 	gcloud --quiet container clusters get-credentials $(GKE_CLUSTER_NAME) $(CLUSTER_ZONE_REGION)
-	helm --set "global.env=$(HELM_ENV)" --set "IMAGE.$(HELM_ENV)=$(IMAGE_K8S):$(CIRCLE_SHA1)" upgrade --install platformapi deploy/platformapi/ --wait --timeout 600
+	helm \
+		--set "global.env=$(HELM_ENV)" \
+		--set "IMAGE.$(HELM_ENV)=$(IMAGE_K8S):$(CIRCLE_SHA1)" \
+		--set "INGRESS_FALLBACK_IMAGE.$(HELM_ENV)=$(INGRESS_FALLBACK_IMAGE_K8S):$(CIRCLE_SHA1)" \
+		upgrade --install platformapi deploy/platformapi/ --wait --timeout 600
 
 gke_k8s_deploy_ssh: _helm
 	gcloud --quiet container clusters get-credentials $(GKE_CLUSTER_NAME) $(CLUSTER_ZONE_REGION)

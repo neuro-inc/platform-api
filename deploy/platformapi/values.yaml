@@ -4,6 +4,12 @@ IMAGE:
   staging: gcr.io/light-reality-205619/platformapi-k8s:latest
   hse: gcr.io/light-reality-205619/platformapi-k8s:latest
   prod: gcr.io/production-228907/platformapi-k8s:latest
+INGRESS_FALLBACK_IMAGE:
+  _default: gcr.io/light-reality-205619/platformingressfallback:latest
+  dev: gcr.io/light-reality-205619/platformingressfallback:latest
+  staging: gcr.io/light-reality-205619/platformingressfallback:latest
+  hse: gcr.io/light-reality-205619/platformingressfallback:latest
+  prod: gcr.io/production-228907/platformingressfallback:latest
 NP_STORAGE_NFS_SERVER:
   _default: '10.76.126.154'
   dev: '10.76.126.154'
@@ -17,21 +23,21 @@ NP_STORAGE_NFS_PATH:
   hse: '/hse_premium'
   prod: '/prodpremium'
 NP_K8S_JOBS_INGRESS_DOMAIN_NAME_TEMPLATE:
-  _default: '{job_id}-jobs-dev.ai.neuromation.io'
-  dev: '{job_id}-jobs-dev.ai.neuromation.io'
-  staging: '{job_id}.jobs.platform.staging.neuromation.io'
+  _default: '{job_id}.jobs-dev.neu.ro'
+  dev: '{job_id}.jobs-dev.neu.ro'
+  staging: '{job_id}.jobs-staging.neu.ro'
   hse: '{job_id}.jobs.platform.hse.neuromation.io'
   prod: '{job_id}.jobs.platform.prod.neuromation.io'
 NP_K8S_SSH_INGRESS_DOMAIN_NAME:
-  _default: ssh-dev.ai.neuromation.io
-  dev: ssh-dev.ai.neuromation.io
-  staging: ssh.platform.staging.neuromation.io
+  _default: ssh-dev.neu.ro
+  dev: ssh-dev.neu.ro
+  staging: ssh-staging.neu.ro
   hse: ssh.platform.hse.neuromation.io
   prod: ssh.platform.prod.neuromation.io
 NP_K8S_SSH_AUTH_INGRESS_DOMAIN_NAME:
-  _default: ssh-auth-dev.ai.neuromation.io
-  dev: ssh-auth-dev.ai.neuromation.io
-  staging: ssh-auth.staging.neuromation.io
+  _default: ssh-auth-dev.neu.ro
+  dev: ssh-auth-dev.neu.ro
+  staging: ssh-auth-staging.neu.ro
   hse: ssh-auth.hse.neuromation.io
   prod: ssh-auth.prod.neuromation.io
 INGRESS_HOST:
@@ -46,6 +52,18 @@ INGRESS_HOST_TEMPORARY:
   staging: staging.ai.neuromation.io
   hse: hse.ai.neuromation.io
   prod: prod.ai.neuromation.io
+INGRESS_HOST_TEMPORARY_NEW_DOMAIN:
+  _default: dev.neu.ro
+  dev: dev.neu.ro
+  staging: staging.neu.ro
+  hse: hse.neu.ro
+  prod: neu.ro
+INGRESS_FALLBACK_HOST:
+  _default: 'default.jobs-dev.neu.ro'
+  dev: 'default.jobs-dev.neu.ro'
+  staging: 'default.jobs-staging.neu.ro'
+  hse: 'default.jobs.platform.hse.neuromation.io'
+  prod: 'default.jobs.platform.prod.neuromation.io'
 NP_DB_REDIS_URI:
   _default: redis://10.0.0.11:6379/0
   dev: redis://10.0.0.11:6379/0
@@ -53,17 +71,11 @@ NP_DB_REDIS_URI:
   hse: redis://10.0.16.3:6379/0
   prod: redis://10.0.0.3:6379/0
 NP_REGISTRY_HOST:
-  _default: registry-dev.ai.neuromation.io
-  dev: registry-dev.ai.neuromation.io
-  staging: registry.staging.neuromation.io
+  _default: registry-dev.neu.ro
+  dev: registry-dev.neu.ro
+  staging: registry-staging.neu.ro
   hse: registry.hse.neuromation.io
   prod: registry.prod.neuromation.io
-NP_REGISTRY_HTTPS:
-  _default: true
-  dev: true
-  staging: true
-  hse: true
-  prod: true
 NP_GKE_GPU_MODELS:
   _default: nvidia-tesla-k80,nvidia-tesla-p4,nvidia-tesla-v100
   dev: nvidia-tesla-k80,nvidia-tesla-p4,nvidia-tesla-v100
