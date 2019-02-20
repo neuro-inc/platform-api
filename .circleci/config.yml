@@ -253,7 +253,7 @@ workflows:
       - test:
           context: org-prod
           filters:
-            branches:
+            tags:
               only:
                 - /release.*/
       - gke_deploy:
@@ -261,7 +261,7 @@ workflows:
           requires:
             - test
           filters:
-            branches:
+            tags:
               only:
                 - /release.*/
       - gke_jumphost_deploy:
@@ -269,7 +269,7 @@ workflows:
           requires:
             - test
           filters:
-            branches:
+            tags:
               only:
                 - /release.*/
       - gke_ssh_auth_deploy:
@@ -277,6 +277,6 @@ workflows:
           requires:
             - test
           filters:
-            branches:
+            tags:
               only:
                 - /release.*/
