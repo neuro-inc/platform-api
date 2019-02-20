@@ -33,4 +33,5 @@ async def test_basic_command(api_config, alice, client):
             break
         if status_name == "failed":
             pytest.fail(f"Job failed: {jobs_payload}")
+        # COMMENT(adavydow): should we fail if we did not succeeded in 30 seconds?
         time.sleep(1)
