@@ -253,6 +253,8 @@ workflows:
       - test:
           context: org-prod
           filters:
+            branches:
+              ignore: /.*/
             tags:
               only:
                 - /release.*/
@@ -261,6 +263,8 @@ workflows:
           requires:
             - test
           filters:
+            branches:
+              ignore: /.*/
             tags:
               only:
                 - /release.*/
@@ -269,6 +273,8 @@ workflows:
           requires:
             - test
           filters:
+            branches:
+              ignore: /.*/
             tags:
               only:
                 - /release.*/
@@ -277,6 +283,8 @@ workflows:
           requires:
             - test
           filters:
+            branches:
+              ignore: /.*/
             tags:
               only:
                 - /release.*/
