@@ -35,9 +35,9 @@ class OAuthConfig:
     audience: str = field(repr=False)
 
     callback_urls: Sequence[URL] = (
-        URL("http://0.0.0.0:54540"),
-        URL("http://0.0.0.0:54541"),
-        URL("http://0.0.0.0:54542"),
+        URL("http://127.0.0.1:54540"),
+        URL("http://127.0.0.1:54541"),
+        URL("http://127.0.0.1:54542"),
     )
 
     success_redirect_url: Optional[URL] = None

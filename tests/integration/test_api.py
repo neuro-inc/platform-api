@@ -236,9 +236,9 @@ class TestApi:
                 "audience": "https://platform-dev-url",
                 "success_redirect_url": "https://platform-default-url",
                 "callback_urls": [
-                    "http://0.0.0.0:54540",
-                    "http://0.0.0.0:54541",
-                    "http://0.0.0.0:54542",
+                    "http://127.0.0.1:54540",
+                    "http://127.0.0.1:54541",
+                    "http://127.0.0.1:54542",
                 ],
             }
 
