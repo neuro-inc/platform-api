@@ -32,6 +32,7 @@ class TestInMemoryJobsStorage:
             Container(
                 image="testimage", resources=ContainerResources(cpu=1, memory_mb=128)
             ),
+            job_name="test-job-name",
             description="test test description",
         )
 
@@ -58,6 +59,7 @@ class TestInMemoryJobsStorage:
                 "volumes": [],
                 "resources": {"cpu": 1, "memory_mb": 128},
             },
+            "job_name": "test-job-name",
             "description": "test test description",
             "ssh_auth_server": "ssh://nobody@ssh-auth:22",
             "is_preemptible": False,

@@ -343,6 +343,7 @@ class TestModelRequest:
 def job_request_payload():
     return {
         "job_id": "testjob",
+        "job_name": "test-job-name",
         "description": "Description of the testjob",
         "container": {
             "image": "testimage",
@@ -399,6 +400,7 @@ class TestJob:
         )
         return JobRequest(
             job_id="testjob",
+            job_name="test-job-name-123",
             container=container,
             description="Description of the testjob",
         )
@@ -433,6 +435,10 @@ class TestJob:
     def test_http_host(self, mock_orchestrator, job_request):
         job = Job(orchestrator_config=mock_orchestrator.config, job_request=job_request)
         assert job.http_host == "testjob.jobs"
+
+    def test_job_name(self, mock_orchestrator, job_request):
+        job = Job(orchestrator_config=mock_orchestrator.config, job_request=job_request)
+        assert job.name == "test-job-name-123"
 
     def test_http_url(self, mock_orchestrator, job_request):
         job = Job(orchestrator_config=mock_orchestrator.config, job_request=job_request)
@@ -526,6 +532,7 @@ class TestJob:
         assert job.status == JobStatus.SUCCEEDED
         assert job.is_deleted
         assert job.finished_at
+        assert job.name == "test-job-name"
         assert job.description == "Description of the testjob"
         assert job.owner == "testuser"
         assert not job.is_preemptible
@@ -603,6 +610,7 @@ class TestJobRequest:
         )
         request = JobRequest(
             job_id="testjob",
+            job_name="test-job-name",
             description="Description of the testjob",
             container=container,
         )
@@ -626,6 +634,7 @@ class TestJobRequest:
         )
         request = JobRequest(
             job_id="testjob",
+            job_name="test-job-name",
             description="Description of the testjob",
             container=container,
         )

@@ -45,7 +45,6 @@ def create_job_request_validator(
             "container": create_container_request_validator(
                 allow_volumes=True, allowed_gpu_models=allowed_gpu_models
             ),
-            # TODO: patch integration
             t.Key("name", optional=True): t.Call(validate_job_name),
             t.Key("description", optional=True): t.String,
             t.Key("is_preemptible", optional=True, default=False): t.Bool,
@@ -72,7 +71,6 @@ def create_job_response_validator() -> t.Trafaret:
             "container": create_container_response_validator(),
             "is_preemptible": t.Bool,
             t.Key("internal_hostname", optional=True): t.String,
-            # TODO : patch tests
             t.Key("job_name", optional=True): t.Call(validate_job_name),
             t.Key("description", optional=True): t.String,
         }
@@ -151,8 +149,8 @@ def convert_job_to_job_response(
         "ssh_auth_server": job.ssh_auth_server,
         "is_preemptible": job.is_preemptible,
     }
-    if job.job_name:
-        response_payload["job_name"] = job.job_name
+    if job.name:
+        response_payload["job_name"] = job.name
     if job.description:
         response_payload["description"] = job.description
     if job.has_http_server_exposed:

@@ -110,8 +110,7 @@ class ModelsHandler:
             payload["ssh_server"] = job.ssh_server
         if job.internal_hostname:
             payload["internal_hostname"] = job.internal_hostname
-        # TODO: patch test
-        if job.job_name:
+        if job.name:
             payload["job_name"] = job.description
         if job.description:
             payload["description"] = job.description

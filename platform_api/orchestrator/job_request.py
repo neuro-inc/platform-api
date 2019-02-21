@@ -236,13 +236,11 @@ class JobRequest:
         )  # type: ignore
 
     @classmethod
-    # TODO: check tests: job_name
     def from_primitive(cls, payload: Dict) -> "JobRequest":
         kwargs = payload.copy()
         kwargs["container"] = Container.from_primitive(kwargs["container"])
         return cls(**kwargs)  # type: ignore
 
-    # TODO: patch tests
     def to_primitive(self) -> Dict:
         result = {"job_id": self.job_id, "container": self.container.to_primitive()}
         if self.job_name:

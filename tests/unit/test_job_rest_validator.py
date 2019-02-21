@@ -35,6 +35,7 @@ class TestJobResponseValidator:
             "id": "test-job-id",
             "owner": "tests",
             "status": "pending",
+            "job_name": "test-job-name",
             "description": "test-job",
             "history": {
                 "status": "pending",

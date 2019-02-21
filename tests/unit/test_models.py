@@ -243,6 +243,7 @@ class TestModelResponseValidator:
                 "job_id": "testjob",
                 "status": "pending",
                 "http_url": "http://testjob",
+                "job_name": "test-job-name",
                 "description": "test-job",
                 "is_preemptible": False,
             }
