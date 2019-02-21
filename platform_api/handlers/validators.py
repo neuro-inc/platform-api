@@ -1,3 +1,4 @@
+import re
 from typing import Optional, Sequence
 
 import trafaret as t
@@ -121,3 +122,9 @@ def create_container_request_validator(
 
 def create_container_response_validator():
     return create_container_validator(allow_volumes=True, allow_any_gpu_models=True)
+
+
+# TODO: unit
+def validate_job_name(value: str) -> bool:
+    match = re.match(f"^[a-zA-Z0-9][a-zA-Z0-9_.-]+$", value)
+    return match is not None

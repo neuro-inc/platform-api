@@ -218,24 +218,35 @@ class Container:
 class JobRequest:
     job_id: str
     container: Container
+    job_name: Optional[str] = None
     description: Optional[str] = None
 
     @classmethod
     def create(
-        cls, container: Container, description: Optional[str] = None
+        cls,
+        container: Container,
+        job_name: Optional[str] = None,
+        description: Optional[str] = None,
     ) -> "JobRequest":
         return cls(
-            job_id=f"job-{uuid.uuid4()}", description=description, container=container
+            job_id=f"job-{uuid.uuid4()}",
+            job_name=job_name,
+            description=description,
+            container=container,
         )  # type: ignore
 
     @classmethod
+    # TODO: check tests: job_name
     def from_primitive(cls, payload: Dict) -> "JobRequest":
         kwargs = payload.copy()
         kwargs["container"] = Container.from_primitive(kwargs["container"])
         return cls(**kwargs)  # type: ignore
 
+    # TODO: patch tests
     def to_primitive(self) -> Dict:
         result = {"job_id": self.job_id, "container": self.container.to_primitive()}
+        if self.job_name:
+            result["job_name"] = self.job_name
         if self.description:
             result["description"] = self.description
         return result

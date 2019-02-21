@@ -24,7 +24,7 @@ class JobStatusItem:
     status: JobStatus
     transition_time: datetime = field(compare=False)
     reason: Optional[str] = None
-    description: Optional[str] = None
+    description: Optional[str] = None  # job status description, not job description
 
     @property
     def is_pending(self) -> bool:
@@ -223,6 +223,10 @@ class Job:
     @property
     def description(self) -> Optional[str]:
         return self._job_request.description
+
+    @property
+    def job_name(self) -> Optional[str]:
+        return self._job_request.job_name
 
     @property
     def owner(self) -> str:
