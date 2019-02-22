@@ -125,5 +125,5 @@ def create_container_response_validator():
 
 
 def validate_job_name(value: str) -> bool:
-    match = re.match("^[a-zA-Z0-9][a-zA-Z0-9_.-]{2,255}$", value)
+    match = re.match("^[a-zA-Z0-9][a-zA-Z0-9_.-]{1,255}$", value)
     return match is not None
