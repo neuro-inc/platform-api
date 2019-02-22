@@ -1,8 +1,8 @@
-from platform_api.handlers.validators import validate_job_name
 from platform_api.handlers.jobs_handler import (
     create_job_request_validator,
     create_job_response_validator,
 )
+from platform_api.handlers.validators import validate_job_name
 
 
 def test_validate_job_name__fail():
