@@ -339,7 +339,7 @@ class TestModels:
         await jobs_client.delete_job(job_id=job_id)
 
     @pytest.mark.asyncio
-    async def test_create_unknown_gpu_model(
+    async def test_model_create_unknown_gpu_model(
         self, jobs_client, api, client, regular_user, kube_node_gpu
     ):
         request_payload = {
@@ -973,7 +973,7 @@ class TestJobs:
         }
 
     @pytest.mark.asyncio
-    async def test_create_unknown_gpu_model(
+    async def test_job_create_unknown_gpu_model(
         self, jobs_client, api, client, regular_user, kube_node_gpu
     ):
         request_payload = {
