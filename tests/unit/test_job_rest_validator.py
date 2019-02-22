@@ -43,7 +43,13 @@ class TestJobRequestValidator:
             "ssh": {"port": 666},
         }
         validator = create_job_request_validator(allowed_gpu_models=[])
-        assert validator.check({"container": container, "name": "test_job-Name_123", "description": "test-job"})
+        assert validator.check(
+            {
+                "container": container,
+                "name": "test_job-Name_123",
+                "description": "test-job",
+            }
+        )
 
 
 class TestJobResponseValidator:
@@ -94,5 +100,3 @@ class TestJobResponseValidator:
         }
         validator = create_job_response_validator()
         assert validator.check(response)
-
-
