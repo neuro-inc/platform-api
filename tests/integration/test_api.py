@@ -255,6 +255,7 @@ async def model_request_factory():
             },
             "dataset_storage_uri": f"storage://{owner}",
             "result_storage_uri": f"storage://{owner}/result",
+            "name": "some-test-JobName_123",
             "description": "test job submitted by neuro model train",
         }
 
@@ -291,6 +292,7 @@ class TestModels:
             expected_internal_hostname = f"{job_id}.default"
             assert result["internal_hostname"] == expected_internal_hostname
             assert result["is_preemptible"]
+            assert result["name"] == "some-test-JobName_123"
             assert result["description"] == "test job submitted by neuro model train"
 
         retrieved_job = await jobs_client.get_job_by_id(job_id=job_id)
