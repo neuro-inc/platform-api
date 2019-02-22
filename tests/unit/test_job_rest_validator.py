@@ -1,4 +1,4 @@
-from handlers.validators import validate_job_name
+from platform_api.handlers.validators import validate_job_name
 from platform_api.handlers.jobs_handler import (
     create_job_request_validator,
     create_job_response_validator,
