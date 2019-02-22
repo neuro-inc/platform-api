@@ -71,7 +71,7 @@ def create_job_response_validator() -> t.Trafaret:
             "container": create_container_response_validator(),
             "is_preemptible": t.Bool,
             t.Key("internal_hostname", optional=True): t.String,
-            t.Key("job_name", optional=True): t.Call(validate_job_name),
+            t.Key("name", optional=True): t.Call(validate_job_name),
             t.Key("description", optional=True): t.String,
         }
     )
@@ -150,7 +150,7 @@ def convert_job_to_job_response(
         "is_preemptible": job.is_preemptible,
     }
     if job.name:
-        response_payload["job_name"] = job.name
+        response_payload["name"] = job.name
     if job.description:
         response_payload["description"] = job.description
     if job.has_http_server_exposed:

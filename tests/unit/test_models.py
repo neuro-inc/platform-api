@@ -200,6 +200,7 @@ class TestModelRequestValidator:
         validator = create_model_request_validator(allowed_gpu_models=[])
         assert validator.check(
             {
+                "name": "test-image-Name_123",
                 "container": container,
                 "description": "test-job",
                 "dataset_storage_uri": "dataset",
@@ -243,7 +244,7 @@ class TestModelResponseValidator:
                 "job_id": "testjob",
                 "status": "pending",
                 "http_url": "http://testjob",
-                "job_name": "test-job-name",
+                "name": "test-job-name",
                 "description": "test-job",
                 "is_preemptible": False,
             }

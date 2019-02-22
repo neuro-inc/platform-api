@@ -124,7 +124,6 @@ def create_container_response_validator():
     return create_container_validator(allow_volumes=True, allow_any_gpu_models=True)
 
 
-# TODO: unit
 def validate_job_name(value: str) -> bool:
-    match = re.match(f"^[a-zA-Z0-9][a-zA-Z0-9_.-]+$", value)
+    match = re.match("^[a-zA-Z0-9][a-zA-Z0-9_.-]{2,255}$", value)
     return match is not None

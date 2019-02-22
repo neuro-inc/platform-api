@@ -1,7 +1,30 @@
+from handlers.validators import validate_job_name
 from platform_api.handlers.jobs_handler import (
     create_job_request_validator,
     create_job_response_validator,
 )
+
+
+def test_validate_job_name__fail():
+    assert validate_job_name("") is False, "should be at least 3 letters"
+    assert validate_job_name("a") is False, "should be at least 3 letters"
+    assert validate_job_name("ab") is False, "should be at least 3 letters"
+    assert validate_job_name("-abc") is False, "should not start with dash"
+    assert validate_job_name("_abc") is False, "should not start with underscore"
+    assert validate_job_name(".abc") is False, "should not start with dot"
+    assert validate_job_name("A" * 257) is False, "should be at most 256 letters"
+
+
+def test_validate_job_name__ok():
+    assert validate_job_name("abc") is True, "minimum length"
+    assert validate_job_name("Abcde") is True, "startswith a capital letter"
+    assert validate_job_name("abCde") is True, "contains capital letter"
+    assert validate_job_name("abc-d") is True, "contains dash"
+    assert validate_job_name("abc_d") is True, "contains underscore"
+    assert validate_job_name("abc.d") is True, "contains dot"
+    assert validate_job_name("abc5") is True, "contains a number"
+    assert validate_job_name("5abc") is True, "startswith a number"
+    assert validate_job_name("A" * 256) is True, "maximum length"
 
 
 class TestJobRequestValidator:
@@ -21,7 +44,7 @@ class TestJobRequestValidator:
             "ssh": {"port": 666},
         }
         validator = create_job_request_validator(allowed_gpu_models=[])
-        assert validator.check({"container": container, "description": "test-job"})
+        assert validator.check({"container": container, "name": "test_job-Name_123", "description": "test-job"})
 
 
 class TestJobResponseValidator:
@@ -35,7 +58,7 @@ class TestJobResponseValidator:
             "id": "test-job-id",
             "owner": "tests",
             "status": "pending",
-            "job_name": "test-job-name",
+            "name": "test-job-Name_123",
             "description": "test-job",
             "history": {
                 "status": "pending",
@@ -72,3 +95,5 @@ class TestJobResponseValidator:
         }
         validator = create_job_response_validator()
         assert validator.check(response)
+
+

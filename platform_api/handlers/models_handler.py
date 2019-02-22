@@ -35,7 +35,7 @@ def create_model_request_validator(
             # and validation here at some point
             "dataset_storage_uri": t.String,
             "result_storage_uri": t.String,
-            t.Key("job_name", optional=True): t.Call(validate_job_name),
+            t.Key("name", optional=True): t.Call(validate_job_name),
             t.Key("description", optional=True): t.String,
             t.Key("is_preemptible", optional=True, default=False): t.Bool,
         }
@@ -51,7 +51,7 @@ def create_model_response_validator() -> t.Trafaret:
             t.Key("http_url", optional=True): t.String,
             t.Key("ssh_server", optional=True): t.String,
             t.Key("internal_hostname", optional=True): t.String,
-            t.Key("job_name", optional=True): t.Call(validate_job_name),
+            t.Key("name", optional=True): t.Call(validate_job_name),
             t.Key("description", optional=True): t.String,
         }
     )
@@ -111,7 +111,7 @@ class ModelsHandler:
         if job.internal_hostname:
             payload["internal_hostname"] = job.internal_hostname
         if job.name:
-            payload["job_name"] = job.description
+            payload["name"] = job.description
         if job.description:
             payload["description"] = job.description
         return payload
@@ -135,7 +135,7 @@ class ModelsHandler:
         logger.info("Checking whether %r has %r", user, permissions)
         await check_permission(request, permissions[0].action, permissions)
 
-        job_name = request_payload.get("job_name")
+        job_name = request_payload.get("name")
         description = request_payload.get("description")
         is_preemptible = request_payload["is_preemptible"]
         response_payload = await self._create_job(
