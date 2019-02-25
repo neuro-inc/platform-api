@@ -3,9 +3,9 @@ from typing import Optional, Sequence
 
 from platform_api.resource import GPUModel, ResourcePoolType
 
-from ..config import OrchestratorConfig  # noqa
 from .job import Job, JobStats, JobStatusItem
 from .job_request import JobStatus
+from ..config import OrchestratorConfig  # noqa
 
 
 class LogReader(ABC):
