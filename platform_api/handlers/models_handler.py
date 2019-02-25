@@ -111,7 +111,7 @@ class ModelsHandler:
         if job.internal_hostname:
             payload["internal_hostname"] = job.internal_hostname
         if job.name:
-            payload["name"] = job.description
+            payload["name"] = job.name
         if job.description:
             payload["description"] = job.description
         return payload

@@ -124,6 +124,9 @@ def create_container_response_validator():
     return create_container_validator(allow_volumes=True, allow_any_gpu_models=True)
 
 
-def validate_job_name(value: str) -> bool:
-    match = re.match("^[a-zA-Z0-9][a-zA-Z0-9_.-]{1,255}$", value)
-    return match is not None
+def validate_job_name(value: str) -> Optional[str]:
+    pattern = "^[a-zA-Z0-9][a-zA-Z0-9_.-]{1,255}$"
+    match = re.match(pattern, value)
+    if match is None:
+        raise ValueError(f"Invalid job name '{value}': must conform pattern {pattern}")
+    return match.group(0)

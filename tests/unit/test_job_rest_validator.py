@@ -1,3 +1,5 @@
+import pytest
+
 from platform_api.handlers.jobs_handler import (
     create_job_request_validator,
     create_job_response_validator,
@@ -5,25 +7,38 @@ from platform_api.handlers.jobs_handler import (
 from platform_api.handlers.validators import validate_job_name
 
 
-def test_validate_job_name__fail():
-    assert validate_job_name("") is False, "should be at least 2 letters"
-    assert validate_job_name("a") is False, "should be at least 2 letters"
-    assert validate_job_name("-abc") is False, "should not start with dash"
-    assert validate_job_name("_abc") is False, "should not start with underscore"
-    assert validate_job_name(".abc") is False, "should not start with dot"
-    assert validate_job_name("A" * 257) is False, "should be at most 256 letters"
+@pytest.mark.parametrize(
+    "fail_value,description",
+    [
+        ("", "should be at least 2 letters"),
+        ("a", "should be at least 2 letters"),
+        ("-abc", "should not start with dash"),
+        ("_abc", "should not start with underscore"),
+        (".abc", "should not start with dot"),
+        ("A" * 257, "should be at most 256 letters"),
+    ],
+)
+def test_validate_job_name__fail(fail_value: str, description: str):
+    with pytest.raises(ValueError, match=f"Invalid job name '{fail_value}'"):
+        assert validate_job_name(fail_value), description
 
 
-def test_validate_job_name__ok():
-    assert validate_job_name("ab") is True, "minimum length"
-    assert validate_job_name("Abcde") is True, "startswith a capital letter"
-    assert validate_job_name("abCde") is True, "contains capital letter"
-    assert validate_job_name("abc-d") is True, "contains dash"
-    assert validate_job_name("abc_d") is True, "contains underscore"
-    assert validate_job_name("abc.d") is True, "contains dot"
-    assert validate_job_name("abc5") is True, "contains a number"
-    assert validate_job_name("5abc") is True, "startswith a number"
-    assert validate_job_name("A" * 256) is True, "maximum length"
+@pytest.mark.parametrize(
+    "ok_value,description",
+    [
+        ("ab", "minimum length"),
+        ("Abcde", "startswith a capital letter"),
+        ("abCde", "contains capital letter"),
+        ("abc_d", "contains dash"),
+        ("abc_d", "contains underscore"),
+        ("abc_d", "contains dot"),
+        ("abc5", "contains a number"),
+        ("5abc", "startswith a number"),
+        ("A" * 256, "maximum length"),
+    ],
+)
+def test_validate_job_name__ok(ok_value: str, description: str):
+    assert validate_job_name(ok_value) == ok_value, description
 
 
 class TestJobRequestValidator:
