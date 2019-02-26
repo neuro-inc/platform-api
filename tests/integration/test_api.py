@@ -297,6 +297,7 @@ class TestModels:
 
         retrieved_job = await jobs_client.get_job_by_id(job_id=job_id)
         assert retrieved_job["internal_hostname"] == expected_internal_hostname
+        assert retrieved_job["name"] == "some-test-JobName_123"
 
         await jobs_client.long_polling_by_job_id(job_id=job_id, status="succeeded")
         await jobs_client.delete_job(job_id=job_id)
