@@ -89,15 +89,15 @@ class ModelsHandler:
         self,
         user: User,
         container: Container,
-        name: Optional[str] = None,
+        job_name: Optional[str] = None,
         description: Optional[str] = None,
         is_preemptible: bool = False,
     ) -> Dict[str, Any]:
         job_request = JobRequest.create(
-            container, name=name, description=description
+            container, description=description
         )
         job, status = await self._jobs_service.create_job(
-            job_request, user=user, is_preemptible=is_preemptible
+            job_request, user=user, job_name=job_name, is_preemptible=is_preemptible
         )
         payload = {
             "job_id": job.id,
@@ -135,13 +135,13 @@ class ModelsHandler:
         logger.info("Checking whether %r has %r", user, permissions)
         await check_permission(request, permissions[0].action, permissions)
 
-        name = request_payload.get("name")
+        job_name = request_payload.get("name")
         description = request_payload.get("description")
         is_preemptible = request_payload["is_preemptible"]
         response_payload = await self._create_job(
             user,
             container,
-            name=name,
+            job_name=job_name,
             description=description,
             is_preemptible=is_preemptible,
         )

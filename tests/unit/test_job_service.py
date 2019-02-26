@@ -32,7 +32,6 @@ class TestInMemoryJobsStorage:
             Container(
                 image="testimage", resources=ContainerResources(cpu=1, memory_mb=128)
             ),
-            job_name="test-job-name",
             description="test test description",
         )
 
@@ -41,6 +40,7 @@ class TestInMemoryJobsStorage:
         job = Job(
             orchestrator_config=mock_orchestrator.config,
             job_request=self._create_job_request_with_description(),
+            name="test-job-name",
         )
         response = convert_job_to_job_response(job, MagicMock())
         assert response == {

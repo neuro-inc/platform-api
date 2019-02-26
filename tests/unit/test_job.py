@@ -343,7 +343,6 @@ class TestModelRequest:
 def job_request_payload():
     return {
         "job_id": "testjob",
-        "name": "test-job-name",
         "description": "Description of the testjob",
         "container": {
             "image": "testimage",
@@ -400,7 +399,6 @@ class TestJob:
         )
         return JobRequest(
             job_id="testjob",
-            job_name="test-job-name-123",
             container=container,
             description="Description of the testjob",
         )
@@ -437,7 +435,7 @@ class TestJob:
         assert job.http_host == "testjob.jobs"
 
     def test_job_name(self, mock_orchestrator, job_request):
-        job = Job(orchestrator_config=mock_orchestrator.config, job_request=job_request)
+        job = Job(orchestrator_config=mock_orchestrator.config, job_request=job_request, name="test-job-name-123")
         assert job.name == "test-job-name-123"
 
     def test_http_url(self, mock_orchestrator, job_request):
@@ -489,6 +487,7 @@ class TestJob:
             orchestrator_config=mock_orchestrator.config,
             job_request=job_request,
             owner="testuser",
+            name="test-job-name",
             is_preemptible=True,
         )
         job.status = JobStatus.FAILED
@@ -496,6 +495,7 @@ class TestJob:
         expected_finished_at = job.finished_at.isoformat()
         assert job.to_primitive() == {
             "id": job.id,
+            "name": "test-job-name",
             "owner": "testuser",
             "request": job_request.to_primitive(),
             "status": "failed",
@@ -532,10 +532,24 @@ class TestJob:
         assert job.status == JobStatus.SUCCEEDED
         assert job.is_deleted
         assert job.finished_at
-        assert job.name == "test-job-name"
         assert job.description == "Description of the testjob"
+        assert job.name is None
         assert job.owner == "testuser"
         assert not job.is_preemptible
+
+    def test_from_primitive_check_name(self, mock_orchestrator, job_request_payload):
+        payload = {
+            "id": "testjob",
+            "name": "test-job-name",
+            "owner": "testuser",
+            "request": job_request_payload,
+            "status": "succeeded",
+            "is_deleted": True,
+            "finished_at": datetime.now(timezone.utc).isoformat(),
+        }
+        job = Job.from_primitive(mock_orchestrator.config, payload)
+        assert job.id == "testjob"
+        assert job.name == "test-job-name"
 
     def test_from_primitive_with_statuses(self, mock_orchestrator, job_request_payload):
         finished_at_str = datetime.now(timezone.utc).isoformat()
@@ -610,7 +624,6 @@ class TestJobRequest:
         )
         request = JobRequest(
             job_id="testjob",
-            job_name="test-job-name",
             description="Description of the testjob",
             container=container,
         )
@@ -634,7 +647,6 @@ class TestJobRequest:
         )
         request = JobRequest(
             job_id="testjob",
-            job_name="test-job-name",
             description="Description of the testjob",
             container=container,
         )
