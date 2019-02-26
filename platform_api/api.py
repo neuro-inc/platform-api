@@ -8,12 +8,11 @@ from async_generator import asynccontextmanager
 from neuro_auth_client import AuthClient
 from neuro_auth_client.security import AuthScheme, setup_security
 
-from .orchestrator.jobs_service import JobsServiceException
-
 from .config import Config, ElasticsearchConfig
 from .config_factory import EnvironConfigFactory
 from .handlers import JobsHandler, ModelsHandler
 from .orchestrator import JobException, JobsService, JobsStatusPooling, KubeOrchestrator
+from .orchestrator.jobs_service import JobsServiceException
 from .orchestrator.jobs_storage import RedisJobsStorage
 from .redis import create_redis_client
 

@@ -179,7 +179,9 @@ class TestJobsService:
             job_2, _ = await jobs_service.create_job(job_request=request, user=user)
 
     @pytest.mark.asyncio
-    @pytest.mark.parametrize("first_job_status", [JobStatus.FAILED, JobStatus.SUCCEEDED])
+    @pytest.mark.parametrize(
+        "first_job_status", [JobStatus.FAILED, JobStatus.SUCCEEDED]
+    )
     async def test_create_job__name_no_conflict_with_another_in_terminal_status(
         self, mock_orchestrator, job_request_factory, first_job_status
     ):

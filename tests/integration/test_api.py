@@ -574,7 +574,7 @@ class TestJobs:
 
     @pytest.mark.asyncio
     async def test_create_multiple_jobs_with_same_name_fail(
-        self, api, client, model_train, regular_user, jobs_client,
+        self, api, client, model_train, regular_user, jobs_client
     ):
         url = api.model_base_url
         headers = regular_user.headers
@@ -596,7 +596,7 @@ class TestJobs:
 
     @pytest.mark.asyncio
     async def test_create_multiple_jobs_with_same_name_after_first_finished(
-        self, api, client, model_train, regular_user, jobs_client,
+        self, api, client, model_train, regular_user, jobs_client
     ):
         url = api.model_base_url
         headers = regular_user.headers
