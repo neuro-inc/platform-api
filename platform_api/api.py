@@ -8,6 +8,8 @@ from async_generator import asynccontextmanager
 from neuro_auth_client import AuthClient
 from neuro_auth_client.security import AuthScheme, setup_security
 
+from .orchestrator.jobs_service import JobsServiceException
+
 from .config import Config, ElasticsearchConfig
 from .config_factory import EnvironConfigFactory
 from .handlers import JobsHandler, ModelsHandler
@@ -62,6 +64,11 @@ async def handle_exceptions(request, handler):
     try:
         return await handler(request)
     except JobException as e:
+        payload = {"error": str(e)}
+        return aiohttp.web.json_response(
+            payload, status=aiohttp.web.HTTPBadRequest.status_code
+        )
+    except JobsServiceException as e:
         payload = {"error": str(e)}
         return aiohttp.web.json_response(
             payload, status=aiohttp.web.HTTPBadRequest.status_code

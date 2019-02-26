@@ -10,12 +10,17 @@ from .jobs_storage import (
     InMemoryJobsStorage,
     JobFilter,
     JobsStorage,
+    JobsStorageException,
     JobStorageTransactionError,
 )
 from .status import Status
 
 
 logger = logging.getLogger(__file__)
+
+
+class JobsServiceException(Exception):
+    pass
 
 
 class JobsService:
@@ -103,10 +108,12 @@ class JobsService:
             name=job_name,
             is_preemptible=is_preemptible,
         )
-        await self._orchestrator.start_job(job, user.token)
-        status = Status.create(job.status)
-        await self._jobs_storage.set_job(job=job)
-        return job, status
+        try:
+            await self._jobs_storage.try_create_job(job=job)
+            await self._orchestrator.start_job(job, user.token)
+            return job, Status.create(job.status)
+        except JobsStorageException as e:
+            raise JobsServiceException(f"Failed to create job {job.id}: {e}")
 
     async def get_job_status(self, job_id: str) -> JobStatus:
         job = await self._jobs_storage.get_job(job_id)

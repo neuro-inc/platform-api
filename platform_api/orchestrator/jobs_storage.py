@@ -20,12 +20,29 @@ class JobStorageTransactionError(JobsStorageException):
     pass
 
 
+class JobStorageJobFoundError(JobsStorageException):
+    def __init__(self, job_name: str, job_owner: str, found_job_id: str):
+        self._job_name = job_name
+        self._job_owner = job_owner
+        self._found_job_id = found_job_id
+
+    def __str__(self):
+        return (
+            f"job with name '{self._job_name}' and owner '{self._job_owner}' "
+            f"already exists: {self._found_job_id}"
+        )
+
+
 @dataclass(frozen=True)
 class JobFilter:
     statuses: AbstractSet[JobStatus]
 
 
 class JobsStorage(ABC):
+    @abstractmethod
+    async def try_create_job(self, job: Job) -> None:
+        pass
+
     @abstractmethod
     async def set_job(self, job: Job) -> None:
         pass
@@ -56,21 +73,29 @@ class InMemoryJobsStorage(JobsStorage):
     def __init__(self, orchestrator_config: OrchestratorConfig) -> None:
         self._orchestrator_config = orchestrator_config
 
-        self._job_records: Dict[str, str] = {}
+        self._job_records: Dict[str, Job] = {}
+
+    async def try_create_job(self, job: Job) -> None:
+        if job.name is not None:
+            for record in self._job_records.values():
+                if record.status not in (JobStatus.PENDING, JobStatus.RUNNING):
+                    continue
+                if record.owner == job.owner and record.name == job.name:
+                    raise JobStorageJobFoundError(job.name, job.owner, record.id)
+        await self.set_job(job)
 
     async def set_job(self, job: Job) -> None:
-        payload = json.dumps(job.to_primitive())
-        self._job_records[job.id] = payload
+        self._job_records[job.id] = job
 
     def _parse_job_payload(self, payload: str) -> Job:
         job_record = json.loads(payload)
         return Job.from_primitive(self._orchestrator_config, job_record)
 
     async def get_job(self, job_id: str) -> Job:
-        payload = self._job_records.get(job_id)
-        if payload is None:
+        job = self._job_records.get(job_id)
+        if job is None:
             raise JobError(f"no such job {job_id}")
-        return self._parse_job_payload(payload)
+        return job
 
     @asynccontextmanager
     async def try_update_job(self, job_id: str) -> AsyncIterator[Job]:
@@ -85,8 +110,7 @@ class InMemoryJobsStorage(JobsStorage):
 
     async def get_all_jobs(self, job_filter: Optional[JobFilter] = None) -> List[Job]:
         jobs = []
-        for payload in self._job_records.values():
-            job = self._parse_job_payload(payload)
+        for job in self._job_records.values():
             if job_filter and not self._apply_filter(job_filter, job):
                 continue
             jobs.append(job)
@@ -106,6 +130,9 @@ class RedisJobsStorage(JobsStorage):
     def _generate_jobs_status_index_key(self, status: JobStatus) -> str:
         return f"jobs.status.{status}"
 
+    def _generate_jobs_name_index_key(self, owner: str, job_name: str) -> str:
+        return f"jobs.name.{owner}.{job_name}"
+
     def _generate_jobs_deleted_index_key(self) -> str:
         return "jobs.deleted"
 
@@ -122,9 +149,8 @@ class RedisJobsStorage(JobsStorage):
             pool.release(conn)
 
     @asynccontextmanager
-    async def _watch_job(self, job_id: str) -> AsyncIterator[JobsStorage]:
+    async def _watch_key(self, key: str) -> AsyncIterator[JobsStorage]:
         async with self._acquire_conn() as client:
-            key = self._generate_job_key(job_id)
             try:
                 await client.watch(key)
 
@@ -132,16 +158,29 @@ class RedisJobsStorage(JobsStorage):
                     client=client, orchestrator_config=self._orchestrator_config
                 )
             except (aioredis.errors.MultiExecError, aioredis.errors.WatchVariableError):
-                raise JobStorageTransactionError(f"Job {job_id} has been changed.")
+                raise JobStorageTransactionError(f"Key '{key}' has been changed.")
             finally:
                 await client.unwatch()
 
     @asynccontextmanager
     async def try_update_job(self, job_id: str) -> AsyncIterator[Job]:
-        async with self._watch_job(job_id) as storage:
+        key = self._generate_job_key(job_id)
+        async with self._watch_key(key) as storage:
             job = await storage.get_job(job_id)
             yield job
             await storage.set_job(job)
+
+    async def try_create_job(self, job: Job) -> None:
+        if job.name is None:
+            await self.set_job(job)
+            return
+        name_key = self._generate_jobs_name_index_key(job.owner, job.name)
+        async with self._watch_key(name_key) as client:
+            found_job_id = await self._client.get(name_key)
+            if found_job_id:
+                job_id = found_job_id.decode("utf-8")
+                raise JobStorageJobFoundError(job.name, job.owner, job_id)
+            await self.set_job(job)
 
     async def set_job(self, job: Job) -> None:
         payload = json.dumps(job.to_primitive())
@@ -152,6 +191,14 @@ class RedisJobsStorage(JobsStorage):
         for status in JobStatus:
             tr.srem(self._generate_jobs_status_index_key(status), job.id)
         tr.sadd(self._generate_jobs_status_index_key(job.status), job.id)
+
+        if job.name is not None:
+            name_key = self._generate_jobs_name_index_key(job.owner, job.name)
+            if job.status in (JobStatus.PENDING, JobStatus.RUNNING):
+                tr.set(name_key, job.id)  # if the key exists, it is overwritten
+            else:
+                tr.delete(name_key)
+
         if job.is_deleted:
             tr.sadd(self._generate_jobs_deleted_index_key(), job.id)
         await tr.execute()

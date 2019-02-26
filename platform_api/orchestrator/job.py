@@ -219,7 +219,7 @@ class Job:
         self._is_forced_to_preemptible_pool = is_forced_to_preemptible_pool
 
     @property
-    def id(self):
+    def id(self) -> str:
         return self._job_request.job_id
 
     @property
