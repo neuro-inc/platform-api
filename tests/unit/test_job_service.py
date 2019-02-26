@@ -8,7 +8,10 @@ from platform_api.handlers.jobs_handler import convert_job_to_job_response
 from platform_api.orchestrator import Job, JobRequest, JobsService, JobStatus
 from platform_api.orchestrator.job import JobStatusItem
 from platform_api.orchestrator.job_request import Container, ContainerResources
-from platform_api.orchestrator.jobs_service import InMemoryJobsStorage
+from platform_api.orchestrator.jobs_service import (
+    InMemoryJobsStorage,
+    JobsServiceException,
+)
 from platform_api.orchestrator.jobs_storage import JobFilter
 from platform_api.user import User
 
@@ -129,6 +132,80 @@ class TestJobsService:
         assert job.id == original_job.id
         assert job.status == JobStatus.PENDING
         assert job.owner == "testuser"
+
+    @pytest.mark.asyncio
+    async def test_create_job__name_conflict_with_pending(
+        self, jobs_service, job_request_factory
+    ):
+        user = User(name="testuser", token="")
+        job_name = "test-Job_name"
+        request = job_request_factory(job_name=job_name)
+        job_1, _ = await jobs_service.create_job(job_request=request, user=user)
+        assert job_1.status == JobStatus.PENDING
+        assert not job_1.is_finished
+
+        with pytest.raises(
+            JobsServiceException,
+            match=f"job with name '{job_name}' and owner '{user.name}'"
+            f" already exists: {job_1.id}",
+        ):
+            job_2, _ = await jobs_service.create_job(job_request=request, user=user)
+
+    @pytest.mark.asyncio
+    async def test_create_job__name_conflict_with_running(
+        self, mock_orchestrator, job_request_factory
+    ):
+        storage = InMemoryJobsStorage(orchestrator_config=mock_orchestrator.config)
+        jobs_service = JobsService(orchestrator=mock_orchestrator, jobs_storage=storage)
+        user = User(name="testuser", token="")
+        job_name = "test-Job_name"
+        request = job_request_factory(job_name=job_name)
+        job_1, _ = await jobs_service.create_job(job_request=request, user=user)
+        assert job_1.status == JobStatus.PENDING
+        assert not job_1.is_finished
+
+        job_1.status = JobStatus.RUNNING
+        await storage.set_job(job_1)
+
+        job = await jobs_service.get_job(job_id=job_1.id)
+        assert job.id == job_1.id
+        assert job.status == JobStatus.RUNNING
+
+        with pytest.raises(
+            JobsServiceException,
+            match=f"job with name '{job_name}' and owner '{user.name}'"
+            f" already exists: {job_1.id}",
+        ):
+            job_2, _ = await jobs_service.create_job(job_request=request, user=user)
+
+    @pytest.mark.asyncio
+    @pytest.mark.parametrize("first_job_status", [JobStatus.FAILED, JobStatus.SUCCEEDED])
+    async def test_create_job__name_no_conflict_with_another_in_terminal_status(
+        self, mock_orchestrator, job_request_factory, first_job_status
+    ):
+        storage = InMemoryJobsStorage(orchestrator_config=mock_orchestrator.config)
+        jobs_service = JobsService(orchestrator=mock_orchestrator, jobs_storage=storage)
+        user = User(name="testuser", token="")
+        job_name = "test-Job_name"
+        request = job_request_factory(job_name=job_name)
+        first_job, _ = await jobs_service.create_job(job_request=request, user=user)
+        assert first_job.status == JobStatus.PENDING
+        assert not first_job.is_finished
+
+        first_job.status = first_job_status
+        await storage.set_job(first_job)
+
+        job = await jobs_service.get_job(job_id=first_job.id)
+        assert job.id == first_job.id
+        assert job.status == first_job_status
+
+        second_job, _ = await jobs_service.create_job(job_request=request, user=user)
+        assert second_job.status == JobStatus.PENDING
+        assert not second_job.is_finished
+
+        job = await jobs_service.get_job(job_id=second_job.id)
+        assert job.id == second_job.id
+        assert job.status == JobStatus.PENDING
 
     @pytest.mark.asyncio
     async def test_get_status_by_job_id(self, jobs_service, mock_job_request):

@@ -1,3 +1,5 @@
+from typing import Optional
+
 import pytest
 
 from platform_api.orchestrator.job import Job
@@ -10,35 +12,51 @@ from platform_api.orchestrator.job_request import (
 )
 from platform_api.orchestrator.jobs_storage import (
     JobFilter,
+    JobsStorageException,
     JobStorageTransactionError,
     RedisJobsStorage,
 )
 
 
 class TestRedisJobsStorage:
-    def _create_job_request(self):
+    def _create_job_request(self, job_name: Optional[str] = None):
         container = Container(
             image="ubuntu",
             command="sleep 5",
             resources=ContainerResources(cpu=0.1, memory_mb=256),
         )
-        return JobRequest.create(container)
+        return JobRequest.create(container, job_name=job_name)
 
-    def _create_pending_job(self, kube_orchestrator):
-        return Job(kube_orchestrator.config, job_request=self._create_job_request())
-
-    def _create_running_job(self, kube_orchestrator):
+    def _create_pending_job(self, kube_orchestrator, job_name: Optional[str] = None):
         return Job(
             kube_orchestrator.config,
-            job_request=self._create_job_request(),
+            job_request=self._create_job_request(job_name=job_name),
+        )
+
+    def _create_running_job(self, kube_orchestrator, job_name: Optional[str] = None):
+        return Job(
+            kube_orchestrator.config,
+            job_request=self._create_job_request(job_name=job_name),
             status=JobStatus.RUNNING,
         )
 
-    def _create_succeeded_job(self, kube_orchestrator, is_deleted=False):
+    def _create_succeeded_job(
+        self, kube_orchestrator, is_deleted=False, job_name: Optional[str] = None
+    ):
         return Job(
             kube_orchestrator.config,
-            job_request=self._create_job_request(),
+            job_request=self._create_job_request(job_name=job_name),
             status=JobStatus.SUCCEEDED,
+            is_deleted=is_deleted,
+        )
+
+    def _create_failed_job(
+        self, kube_orchestrator, is_deleted=False, job_name: Optional[str] = None
+    ):
+        return Job(
+            kube_orchestrator.config,
+            job_request=self._create_job_request(job_name=job_name),
+            status=JobStatus.FAILED,
             is_deleted=is_deleted,
         )
 
@@ -53,6 +71,108 @@ class TestRedisJobsStorage:
         job = await storage.get_job(original_job.id)
         assert job.id == original_job.id
         assert job.status == original_job.status
+
+    @pytest.mark.asyncio
+    async def test_try_create_job__single_job(self, redis_client, kube_orchestrator):
+        original_job = self._create_pending_job(kube_orchestrator)
+        storage = RedisJobsStorage(
+            redis_client, orchestrator_config=kube_orchestrator.config
+        )
+        await storage.try_create_job(original_job)
+
+        job = await storage.get_job(original_job.id)
+        assert job.id == original_job.id
+        assert job.status == original_job.status
+
+    @pytest.mark.asyncio
+    async def test_try_create_job__name_conflict_with_pending(
+        self, redis_client, kube_orchestrator
+    ):
+        job_name = f"test_job-Name.123"
+        first_job = self._create_pending_job(kube_orchestrator, job_name=job_name)
+        storage = RedisJobsStorage(
+            redis_client, orchestrator_config=kube_orchestrator.config
+        )
+        await storage.try_create_job(first_job)
+
+        job = await storage.get_job(first_job.id)
+        assert job.id == first_job.id
+        assert job.status == first_job.status
+
+        second_job = self._create_pending_job(kube_orchestrator, job_name=job_name)
+        with pytest.raises(
+            JobsStorageException,
+            match=f"job with name '{job_name}' and owner '{first_job.owner}'"
+            f" already exists: {first_job.id}",
+        ):
+            await storage.try_create_job(second_job)
+
+    @pytest.mark.asyncio
+    async def test_try_create_job__name_conflict_with_running(
+        self, redis_client, kube_orchestrator
+    ):
+        job_name = f"test_job-Name.123"
+        first_job = self._create_running_job(kube_orchestrator, job_name=job_name)
+        storage = RedisJobsStorage(
+            redis_client, orchestrator_config=kube_orchestrator.config
+        )
+        await storage.try_create_job(first_job)
+
+        job = await storage.get_job(first_job.id)
+        assert job.id == first_job.id
+        assert job.status == first_job.status
+
+        second_job = self._create_pending_job(kube_orchestrator, job_name=job_name)
+        with pytest.raises(
+            JobsStorageException,
+            match=f"job with name '{job_name}' and owner '{first_job.owner}'"
+            f" already exists: {first_job.id}",
+        ):
+            await storage.try_create_job(second_job)
+
+    @pytest.mark.asyncio
+    async def test_try_create_job__name_conflict_with_succeeded(
+        self, redis_client, kube_orchestrator
+    ):
+        job_name = f"test_job-Name.123"
+        first_job = self._create_succeeded_job(kube_orchestrator, job_name=job_name)
+        storage = RedisJobsStorage(
+            redis_client, orchestrator_config=kube_orchestrator.config
+        )
+        await storage.try_create_job(first_job)
+
+        job = await storage.get_job(first_job.id)
+        assert job.id == first_job.id
+        assert job.status == first_job.status
+
+        second_job = self._create_pending_job(kube_orchestrator, job_name=job_name)
+        await storage.try_create_job(second_job)
+
+        job = await storage.get_job(second_job.id)
+        assert job.id == second_job.id
+        assert job.status == second_job.status
+
+    @pytest.mark.asyncio
+    async def test_try_create_job__name_conflict_with_failed(
+        self, redis_client, kube_orchestrator
+    ):
+        job_name = f"test_job-Name.123"
+        first_job = self._create_failed_job(kube_orchestrator, job_name=job_name)
+        storage = RedisJobsStorage(
+            redis_client, orchestrator_config=kube_orchestrator.config
+        )
+        await storage.try_create_job(first_job)
+
+        job = await storage.get_job(first_job.id)
+        assert job.id == first_job.id
+        assert job.status == first_job.status
+
+        second_job = self._create_pending_job(kube_orchestrator, job_name=job_name)
+        await storage.try_create_job(second_job)
+
+        job = await storage.get_job(second_job.id)
+        assert job.id == second_job.id
+        assert job.status == second_job.status
 
     @pytest.mark.asyncio
     async def test_get_non_existent(self, redis_client, kube_orchestrator):
@@ -287,7 +407,7 @@ class TestRedisJobsStorage:
         await storage.set_job(pending_job)
 
         with pytest.raises(
-            JobStorageTransactionError, match=f"Job {pending_job.id} has been changed."
+            JobStorageTransactionError, match=f"Key jobs:{pending_job.id} has been changed."
         ):
 
             async with storage.try_update_job(pending_job.id) as first_job:

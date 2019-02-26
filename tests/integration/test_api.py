@@ -573,6 +573,49 @@ class TestJobs:
             assert response.status == HTTPBadRequest.status_code
 
     @pytest.mark.asyncio
+    async def test_create_multiple_jobs_with_same_name_fail(
+        self, api, client, model_train, regular_user, jobs_client,
+    ):
+        url = api.model_base_url
+        headers = regular_user.headers
+        model_train["name"] = "test-job-name"
+        model_train["container"]["command"] = "sleep 100500"
+
+        async with client.post(url, headers=headers, json=model_train) as response:
+            assert response.status == HTTPAccepted.status_code
+            payload = await response.json()
+            job_id = payload["job_id"]
+
+        await jobs_client.long_polling_by_job_id(job_id, status="running")
+
+        async with client.post(url, headers=headers, json=model_train) as response:
+            assert response.status == HTTPBadRequest.status_code
+
+        # cleanup
+        await jobs_client.delete_job(job_id)
+
+    @pytest.mark.asyncio
+    async def test_create_multiple_jobs_with_same_name_after_first_finished(
+        self, api, client, model_train, regular_user, jobs_client,
+    ):
+        url = api.model_base_url
+        headers = regular_user.headers
+        model_train["name"] = "test-job-name"
+        model_train["container"]["command"] = "sleep 100500"
+
+        async with client.post(url, headers=headers, json=model_train) as response:
+            assert response.status == HTTPAccepted.status_code
+            payload = await response.json()
+            job_id = payload["job_id"]
+
+        await jobs_client.long_polling_by_job_id(job_id, status="running")
+        await jobs_client.delete_job(job_id)
+        await jobs_client.long_polling_by_job_id(job_id, status="succeeded")
+
+        async with client.post(url, headers=headers, json=model_train) as response:
+            assert response.status == HTTPAccepted.status_code
+
+    @pytest.mark.asyncio
     async def test_get_all_jobs_clear(self, jobs_client):
         jobs = await jobs_client.get_all_jobs()
         assert jobs == []

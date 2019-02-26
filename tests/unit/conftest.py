@@ -63,11 +63,12 @@ class MockOrchestrator(Orchestrator):
 
 @pytest.fixture
 def job_request_factory():
-    def factory():
+    def factory(job_name: str = None):
         return JobRequest.create(
-            Container(
+            container=Container(
                 image="testimage", resources=ContainerResources(cpu=1, memory_mb=128)
-            )
+            ),
+            job_name=job_name,
         )
 
     return factory
