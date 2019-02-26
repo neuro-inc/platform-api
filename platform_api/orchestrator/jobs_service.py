@@ -90,7 +90,11 @@ class JobsService:
             )
 
     async def create_job(
-        self, job_request: JobRequest, user: User, job_name: Optional[str] = None, is_preemptible: bool = False
+        self,
+        job_request: JobRequest,
+        user: User,
+        job_name: Optional[str] = None,
+        is_preemptible: bool = False,
     ) -> Tuple[Job, Status]:
         job = Job(
             orchestrator_config=self._orchestrator.config,

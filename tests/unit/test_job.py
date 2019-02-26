@@ -435,7 +435,11 @@ class TestJob:
         assert job.http_host == "testjob.jobs"
 
     def test_job_name(self, mock_orchestrator, job_request):
-        job = Job(orchestrator_config=mock_orchestrator.config, job_request=job_request, name="test-job-name-123")
+        job = Job(
+            orchestrator_config=mock_orchestrator.config,
+            job_request=job_request,
+            name="test-job-name-123",
+        )
         assert job.name == "test-job-name-123"
 
     def test_http_url(self, mock_orchestrator, job_request):
