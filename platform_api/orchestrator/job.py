@@ -24,7 +24,7 @@ class JobStatusItem:
     status: JobStatus
     transition_time: datetime = field(compare=False)
     reason: Optional[str] = None
-    description: Optional[str] = None  # job status description, not job description
+    description: Optional[str] = None
 
     @property
     def is_pending(self) -> bool:
