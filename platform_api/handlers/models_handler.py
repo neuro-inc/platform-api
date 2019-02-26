@@ -89,7 +89,7 @@ class ModelsHandler:
         self,
         user: User,
         container: Container,
-        job_name: Optional[str] = None,
+        name: Optional[str] = None,
         description: Optional[str] = None,
         is_preemptible: bool = False,
     ) -> Dict[str, Any]:
@@ -97,7 +97,7 @@ class ModelsHandler:
             container, description=description
         )
         job, status = await self._jobs_service.create_job(
-            job_request, user=user, job_name=job_name, is_preemptible=is_preemptible
+            job_request, user=user, job_name=name, is_preemptible=is_preemptible
         )
         payload = {
             "job_id": job.id,
@@ -141,7 +141,7 @@ class ModelsHandler:
         response_payload = await self._create_job(
             user,
             container,
-            job_name=job_name,
+            name=job_name,
             description=description,
             is_preemptible=is_preemptible,
         )
