@@ -218,19 +218,19 @@ class Container:
 class JobRequest:
     job_id: str
     container: Container
-    job_name: Optional[str] = None
+    name: Optional[str] = None
     description: Optional[str] = None
 
     @classmethod
     def create(
         cls,
         container: Container,
-        job_name: Optional[str] = None,
+        name: Optional[str] = None,
         description: Optional[str] = None,
     ) -> "JobRequest":
         return cls(
             job_id=f"job-{uuid.uuid4()}",
-            job_name=job_name,
+            name=name,
             description=description,
             container=container,
         )  # type: ignore
@@ -243,8 +243,8 @@ class JobRequest:
 
     def to_primitive(self) -> Dict:
         result = {"job_id": self.job_id, "container": self.container.to_primitive()}
-        if self.job_name:
-            result["job_name"] = self.job_name
+        if self.name:
+            result["name"] = self.name
         if self.description:
             result["description"] = self.description
         return result

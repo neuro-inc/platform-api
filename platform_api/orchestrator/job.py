@@ -226,7 +226,7 @@ class Job:
 
     @property
     def name(self) -> Optional[str]:
-        return self._job_request.job_name
+        return self._job_request.name
 
     @property
     def owner(self) -> str:

@@ -343,7 +343,7 @@ class TestModelRequest:
 def job_request_payload():
     return {
         "job_id": "testjob",
-        "job_name": "test-job-name",
+        "name": "test-job-name",
         "description": "Description of the testjob",
         "container": {
             "image": "testimage",

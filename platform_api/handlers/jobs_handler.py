@@ -238,11 +238,11 @@ class JobsHandler:
         logger.info("Checking whether %r has %r", user, permissions)
         await check_permission(request, permissions[0].action, permissions)
 
-        job_name = request_payload.get("name")
+        name = request_payload.get("name")
         description = request_payload.get("description")
         is_preemptible = request_payload["is_preemptible"]
         job_request = JobRequest.create(
-            container, job_name=job_name, description=description
+            container, name=name, description=description
         )
         job, _ = await self._jobs_service.create_job(
             job_request, user=user, is_preemptible=is_preemptible
