@@ -26,11 +26,11 @@ from platform_api.user import User, untrusted_user
 
 from .job_request_builder import ContainerBuilder
 from .validators import (
+    JOB_NAME_PATTERN,
     create_container_request_validator,
     create_container_response_validator,
     create_job_history_validator,
     create_job_status_validator,
-    validate_job_name,
 )
 
 
@@ -45,7 +45,7 @@ def create_job_request_validator(
             "container": create_container_request_validator(
                 allow_volumes=True, allowed_gpu_models=allowed_gpu_models
             ),
-            t.Key("name", optional=True): t.Call(validate_job_name),
+            t.Key("name", optional=True): t.Regexp(JOB_NAME_PATTERN),
             t.Key("description", optional=True): t.String,
             t.Key("is_preemptible", optional=True, default=False): t.Bool,
         }
@@ -71,7 +71,7 @@ def create_job_response_validator() -> t.Trafaret:
             "container": create_container_response_validator(),
             "is_preemptible": t.Bool,
             t.Key("internal_hostname", optional=True): t.String,
-            t.Key("name", optional=True): t.Call(validate_job_name),
+            t.Key("name", optional=True): t.Regexp(JOB_NAME_PATTERN),
             t.Key("description", optional=True): t.String,
         }
     )
@@ -241,9 +241,7 @@ class JobsHandler:
         name = request_payload.get("name")
         description = request_payload.get("description")
         is_preemptible = request_payload["is_preemptible"]
-        job_request = JobRequest.create(
-            container, description=description
-        )
+        job_request = JobRequest.create(container, description=description)
         job, _ = await self._jobs_service.create_job(
             job_request, user=user, job_name=name, is_preemptible=is_preemptible
         )

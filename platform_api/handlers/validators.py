@@ -1,4 +1,3 @@
-import re
 from typing import Optional, Sequence
 
 import trafaret as t
@@ -6,6 +5,8 @@ import trafaret as t
 from platform_api.orchestrator.job_request import JobStatus
 from platform_api.resource import GPUModel
 
+
+JOB_NAME_PATTERN = "^[a-zA-Z0-9][a-zA-Z0-9_.-]{1,255}$"
 
 OptionalString = t.String | t.Null
 
@@ -122,11 +123,3 @@ def create_container_request_validator(
 
 def create_container_response_validator():
     return create_container_validator(allow_volumes=True, allow_any_gpu_models=True)
-
-
-def validate_job_name(value: str) -> Optional[str]:
-    pattern = "^[a-zA-Z0-9][a-zA-Z0-9_.-]{1,255}$"
-    match = re.match(pattern, value)
-    if match is None:
-        raise ValueError(f"Invalid job name '{value}': must conform pattern {pattern}")
-    return match.group(0)

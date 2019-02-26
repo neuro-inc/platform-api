@@ -1,10 +1,12 @@
+import re
+
 import pytest
 
 from platform_api.handlers.jobs_handler import (
     create_job_request_validator,
     create_job_response_validator,
 )
-from platform_api.handlers.validators import validate_job_name
+from platform_api.handlers.validators import JOB_NAME_PATTERN
 
 
 @pytest.mark.parametrize(
@@ -18,9 +20,9 @@ from platform_api.handlers.validators import validate_job_name
         ("A" * 257, "should be at most 256 letters"),
     ],
 )
-def test_validate_job_name__fail(fail_value: str, description: str):
-    with pytest.raises(ValueError, match=f"Invalid job name '{fail_value}'"):
-        assert validate_job_name(fail_value), description
+def test_job_name_pattern__fail(fail_value: str, description: str):
+    match = re.match(JOB_NAME_PATTERN, fail_value)
+    assert match is None, description
 
 
 @pytest.mark.parametrize(
@@ -37,8 +39,9 @@ def test_validate_job_name__fail(fail_value: str, description: str):
         ("A" * 256, "maximum length"),
     ],
 )
-def test_validate_job_name__ok(ok_value: str, description: str):
-    assert validate_job_name(ok_value) == ok_value, description
+def test_job_name_pattern__ok(ok_value: str, description: str):
+    match = re.match(JOB_NAME_PATTERN, ok_value)
+    assert match is not None, description
 
 
 class TestJobRequestValidator:
