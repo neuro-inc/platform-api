@@ -88,7 +88,11 @@ class InMemoryJobsStorage(JobsStorage):
     async def try_create_job(self, job: Job) -> None:
         if job.name is not None:
             for record in self._job_records.values():
-                if record.owner == job.owner and record.name == job.name and record.status in (JobStatus.PENDING, JobStatus.RUNNING):
+                if (
+                    record.owner == job.owner
+                    and record.name == job.name
+                    and record.status in (JobStatus.PENDING, JobStatus.RUNNING)
+                ):
                     raise JobStorageJobFoundError(job.name, job.owner, record.id)
         await self.set_job(job)
 
@@ -109,6 +113,7 @@ class InMemoryJobsStorage(JobsStorage):
         for record in self._job_records.values():
             if record.owner == owner and record.name == job_name:
                 return record
+        return None
 
     @asynccontextmanager
     async def try_update_job(self, job_id: str) -> AsyncIterator[Job]:
@@ -136,7 +141,8 @@ class RedisJobsStorage(JobsStorage):
     ) -> None:
         self._client = client
         self._orchestrator_config = orchestrator_config
-        self._encoding = self._client.encoding or "utf8"
+        self._encoding = "utf8"  # TODO (ajuszkowski, 27-feb-2019) maybe pass this as a
+        # parameter or use 'self._client.encoding' ?
 
     def _decode(self, value: bytes) -> str:
         return value.decode(self._encoding)
@@ -237,6 +243,7 @@ class RedisJobsStorage(JobsStorage):
         if job_id_bytes is not None:
             job_id = self._decode(job_id_bytes)
             return await self.get_job(job_id)
+        return None
 
     async def _get_jobs(self, ids: List[str]) -> List[Job]:
         jobs: List[Job] = []
