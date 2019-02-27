@@ -82,7 +82,7 @@ class TestRedisJobsStorage:
         storage = RedisJobsStorage(
             redis_client, orchestrator_config=kube_orchestrator.config
         )
-        async with storage.try_create_job(original_job) as _:
+        async with storage.try_create_job(original_job) as _:  # noqa
             pass
 
         job = await storage.get_job(original_job.id)
@@ -98,7 +98,7 @@ class TestRedisJobsStorage:
         storage = RedisJobsStorage(
             redis_client, orchestrator_config=kube_orchestrator.config
         )
-        async with storage.try_create_job(first_job) as _:
+        async with storage.try_create_job(first_job) as _:  # noqa
             pass
 
         job = await storage.get_job(first_job.id)
@@ -111,7 +111,7 @@ class TestRedisJobsStorage:
             match=f"job with name '{job_name}' and owner '{first_job.owner}'"
             f" already exists: '{first_job.id}'",
         ):
-            async with storage.try_create_job(second_job) as _:
+            async with storage.try_create_job(second_job) as _:  # noqa
                 pass
 
     @pytest.mark.asyncio
@@ -123,7 +123,7 @@ class TestRedisJobsStorage:
         storage = RedisJobsStorage(
             redis_client, orchestrator_config=kube_orchestrator.config
         )
-        async with storage.try_create_job(first_job) as _:
+        async with storage.try_create_job(first_job) as _:  # noqa
             pass
 
         job = await storage.get_job(first_job.id)
@@ -136,7 +136,7 @@ class TestRedisJobsStorage:
             match=f"job with name '{job_name}' and owner '{first_job.owner}'"
             f" already exists: '{first_job.id}'",
         ):
-            async with storage.try_create_job(second_job) as _:
+            async with storage.try_create_job(second_job) as _:  # noqa
                 pass
 
     @pytest.mark.asyncio
@@ -148,7 +148,7 @@ class TestRedisJobsStorage:
         storage = RedisJobsStorage(
             redis_client, orchestrator_config=kube_orchestrator.config
         )
-        async with storage.try_create_job(first_job) as _:
+        async with storage.try_create_job(first_job) as _:  # noqa
             pass
 
         job = await storage.get_job(first_job.id)
@@ -156,7 +156,7 @@ class TestRedisJobsStorage:
         assert job.status == first_job.status
 
         second_job = self._create_pending_job(kube_orchestrator, job_name=job_name)
-        async with storage.try_create_job(second_job) as _:
+        async with storage.try_create_job(second_job) as _:  # noqa
             pass
 
         job = await storage.get_job(second_job.id)
@@ -173,7 +173,7 @@ class TestRedisJobsStorage:
             redis_client, orchestrator_config=kube_orchestrator.config
         )
 
-        async with storage.try_create_job(first_job) as _:
+        async with storage.try_create_job(first_job) as _:  # noqa
             pass
 
         job = await storage.get_job(first_job.id)
@@ -181,7 +181,7 @@ class TestRedisJobsStorage:
         assert job.status == first_job.status
 
         second_job = self._create_pending_job(kube_orchestrator, job_name=job_name)
-        async with storage.try_create_job(second_job) as _:
+        async with storage.try_create_job(second_job) as _:  # noqa
             pass
 
         job = await storage.get_job(second_job.id)
