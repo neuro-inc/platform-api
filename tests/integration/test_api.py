@@ -306,6 +306,9 @@ class TestModels:
             url, headers=regular_user.headers, json=model_train
         ) as response:
             assert response.status == HTTPBadRequest.status_code
+            payload = await response.json()
+            e = "{'name': DataError(does not match pattern ^[a-z][-a-z0-9]*[a-z0-9]$)}"
+            assert payload == {"error": e}
 
     @pytest.mark.asyncio
     async def test_create_model(
@@ -571,6 +574,9 @@ class TestJobs:
             url, headers=regular_user.headers, json=job_submit
         ) as response:
             assert response.status == HTTPBadRequest.status_code
+            payload = await response.json()
+            e = "{'name': DataError(does not match pattern ^[a-z][-a-z0-9]*[a-z0-9]$)}"
+            assert payload == {"error": e}
 
     @pytest.mark.asyncio
     async def test_create_multiple_jobs_with_same_name_fail(
@@ -578,7 +584,8 @@ class TestJobs:
     ):
         url = api.jobs_base_url
         headers = regular_user.headers
-        job_submit["name"] = "test-job-name"
+        job_name = "test-job-name"
+        job_submit["name"] = job_name
         job_submit["container"]["command"] = "sleep 100500"
 
         async with client.post(url, headers=headers, json=job_submit) as response:
@@ -590,6 +597,13 @@ class TestJobs:
 
         async with client.post(url, headers=headers, json=job_submit) as response:
             assert response.status == HTTPBadRequest.status_code
+            payload = await response.json()
+            assert payload == {
+                "error": (
+                    f"Failed to create job: job with name '{job_name}' "
+                    f"and owner '{regular_user.name}' already exists: '{job_id}'"
+                )
+            }
 
         # cleanup
         await jobs_client.delete_job(job_id)

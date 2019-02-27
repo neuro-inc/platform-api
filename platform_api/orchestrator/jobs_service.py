@@ -118,7 +118,8 @@ class JobsService:
 
             return job, Status.create(job.status)
         except JobsStorageException as e:
-            raise JobsServiceException(f"Failed to create job {job.id}: {e}")
+            logger.error(f"Failed to create job {job_request.job_id}: {e}")
+            raise JobsServiceException(f"Failed to create job: {e}")
 
     async def get_job_status(self, job_id: str) -> JobStatus:
         job = await self._jobs_storage.get_job(job_id)
