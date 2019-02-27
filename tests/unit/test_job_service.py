@@ -139,8 +139,8 @@ class TestJobsService:
     ):
         user = User(name="testuser", token="")
         job_name = "test-Job_name"
-        request = job_request_factory(job_name=job_name)
-        job_1, _ = await jobs_service.create_job(job_request=request, user=user)
+        request = job_request_factory()
+        job_1, _ = await jobs_service.create_job(request, user, job_name=job_name)
         assert job_1.status == JobStatus.PENDING
         assert not job_1.is_finished
 
@@ -149,7 +149,7 @@ class TestJobsService:
             match=f"job with name '{job_name}' and owner '{user.name}'"
             f" already exists: {job_1.id}",
         ):
-            job_2, _ = await jobs_service.create_job(job_request=request, user=user)
+            job_2, _ = await jobs_service.create_job(request, user, job_name=job_name)
 
     @pytest.mark.asyncio
     async def test_create_job__name_conflict_with_running(
@@ -159,8 +159,8 @@ class TestJobsService:
         jobs_service = JobsService(orchestrator=mock_orchestrator, jobs_storage=storage)
         user = User(name="testuser", token="")
         job_name = "test-Job_name"
-        request = job_request_factory(job_name=job_name)
-        job_1, _ = await jobs_service.create_job(job_request=request, user=user)
+        request = job_request_factory()
+        job_1, _ = await jobs_service.create_job(request, user, job_name=job_name)
         assert job_1.status == JobStatus.PENDING
         assert not job_1.is_finished
 
@@ -176,7 +176,7 @@ class TestJobsService:
             match=f"job with name '{job_name}' and owner '{user.name}'"
             f" already exists: {job_1.id}",
         ):
-            job_2, _ = await jobs_service.create_job(job_request=request, user=user)
+            job_2, _ = await jobs_service.create_job(request, user, job_name=job_name)
 
     @pytest.mark.asyncio
     @pytest.mark.parametrize(
@@ -189,8 +189,9 @@ class TestJobsService:
         jobs_service = JobsService(orchestrator=mock_orchestrator, jobs_storage=storage)
         user = User(name="testuser", token="")
         job_name = "test-Job_name"
-        request = job_request_factory(job_name=job_name)
-        first_job, _ = await jobs_service.create_job(job_request=request, user=user)
+        request = job_request_factory()
+        
+        first_job, _ = await jobs_service.create_job(request, user, job_name=job_name)
         assert first_job.status == JobStatus.PENDING
         assert not first_job.is_finished
 
@@ -201,7 +202,7 @@ class TestJobsService:
         assert job.id == first_job.id
         assert job.status == first_job_status
 
-        second_job, _ = await jobs_service.create_job(job_request=request, user=user)
+        second_job, _ = await jobs_service.create_job(request, user, job_name=job_name)
         assert second_job.status == JobStatus.PENDING
         assert not second_job.is_finished
 

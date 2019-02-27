@@ -109,8 +109,8 @@ class JobsService:
             is_preemptible=is_preemptible,
         )
         try:
-            # first, put the value into jobs_storage database:
-            await self._jobs_storage.try_create_job(job=job)
+            # first, try to put the value into jobs_storage database:
+            await self._jobs_storage.try_create_job(job)
             # then, if transaction has not failed, send the signal to orchestrator:
             await self._orchestrator.start_job(job, user.token)
             return job, Status.create(job.status)

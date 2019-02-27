@@ -39,6 +39,12 @@ class JobFilter:
 
 
 class JobsStorage(ABC):
+    # TODO (ajuszkowski 27-feb-2019) change prefixes of the method names of this class:
+    # Currently, methods 'try_create_job' and 'try_update_job' implement positive
+    # locking, method 'try_get_job_by_name' returns found value or None, and all
+    # other methods (that don't contain any special prefix in the name) raise
+    # an exception if the job was not found: this should be reflected in method name.
+
     @abstractmethod
     async def try_create_job(self, job: Job) -> None:
         pass
@@ -52,7 +58,7 @@ class JobsStorage(ABC):
         pass
 
     @abstractmethod
-    async def get_job_by_name(self, owner: str, job_name: str) -> Optional[Job]:
+    async def try_get_job_by_name(self, owner: str, job_name: str) -> Optional[Job]:
         pass
 
     @abstractmethod
@@ -101,7 +107,7 @@ class InMemoryJobsStorage(JobsStorage):
             raise JobError(f"no such job {job_id}")
         return job
 
-    async def get_job_by_name(self, owner: str, job_name: str) -> Optional[Job]:
+    async def try_get_job_by_name(self, owner: str, job_name: str) -> Optional[Job]:
         # TODO
         raise Exception("not impl")
 
@@ -188,9 +194,11 @@ class RedisJobsStorage(JobsStorage):
             return
         name_key = self._generate_jobs_name_index_key(job.owner, job.name)
         async with self._watch_key(name_key) as client:
-            another_job = await client.get_job_by_name(job.owner, job.name)
+            another_job = await client.try_get_job_by_name(job.owner, job.name)
             if another_job is not None:
-                raise JobStorageJobFoundError(another_job.name, another_job.owner, another_job.id)
+                raise JobStorageJobFoundError(
+                    another_job.name, another_job.owner, another_job.id
+                )
             await client.set_job(job)
 
     async def set_job(self, job: Job) -> None:
@@ -224,7 +232,7 @@ class RedisJobsStorage(JobsStorage):
             raise JobError(f"no such job {job_id}")
         return self._parse_job_payload(payload)
 
-    async def get_job_by_name(self, owner: str, job_name: str) -> Optional[Job]:
+    async def try_get_job_by_name(self, owner: str, job_name: str) -> Optional[Job]:
         key = self._generate_jobs_name_index_key(owner, job_name)
         job_id_bytes = await self._client.get(key)
         if job_id_bytes is not None:
