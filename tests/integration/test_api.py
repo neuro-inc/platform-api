@@ -584,7 +584,7 @@ class TestJobs:
         async with client.post(url, headers=headers, json=job_submit) as response:
             assert response.status == HTTPAccepted.status_code
             payload = await response.json()
-            job_id = payload["job_id"]
+            job_id = payload["id"]
 
         await jobs_client.long_polling_by_job_id(job_id, status="running")
 
@@ -598,7 +598,7 @@ class TestJobs:
     async def test_create_multiple_jobs_with_same_name_after_first_finished(
         self, api, client, job_submit, regular_user, jobs_client
     ):
-        url = api.model_base_url
+        url = api.jobs_base_url
         headers = regular_user.headers
         job_submit["name"] = "test-job-name"
         job_submit["container"]["command"] = "sleep 100500"
@@ -606,7 +606,7 @@ class TestJobs:
         async with client.post(url, headers=headers, json=job_submit) as response:
             assert response.status == HTTPAccepted.status_code
             payload = await response.json()
-            job_id = payload["job_id"]
+            job_id = payload["id"]
 
         await jobs_client.long_polling_by_job_id(job_id, status="running")
         await jobs_client.delete_job(job_id)

@@ -52,6 +52,10 @@ class JobsStorage(ABC):
         pass
 
     @abstractmethod
+    async def get_job_by_name(self, owner: str, job_name: str) -> Optional[Job]:
+        pass
+
+    @abstractmethod
     async def try_update_job(self, job_id: str) -> AsyncIterator[Job]:
         pass
 
@@ -97,6 +101,10 @@ class InMemoryJobsStorage(JobsStorage):
             raise JobError(f"no such job {job_id}")
         return job
 
+    async def get_job_by_name(self, owner: str, job_name: str) -> Optional[Job]:
+        # TODO
+        raise Exception("not impl")
+
     @asynccontextmanager
     async def try_update_job(self, job_id: str) -> AsyncIterator[Job]:
         job = await self.get_job(job_id)
@@ -123,6 +131,10 @@ class RedisJobsStorage(JobsStorage):
     ) -> None:
         self._client = client
         self._orchestrator_config = orchestrator_config
+        self._encoding = self._client.encoding or "utf8"
+
+    def _decode(self, value: bytes) -> str:
+        return value.decode(self._encoding)
 
     def _generate_job_key(self, job_id: str) -> str:
         return f"jobs:{job_id}"
@@ -176,19 +188,15 @@ class RedisJobsStorage(JobsStorage):
             return
         name_key = self._generate_jobs_name_index_key(job.owner, job.name)
         async with self._watch_key(name_key) as client:
-            found_job_id = await client.get(name_key)
-            if found_job_id:
-                job_id = found_job_id.decode("utf-8")
-                raise JobStorageJobFoundError(job.name, job.owner, job_id)
-            await self._set_job(client, job)
+            another_job = await client.get_job_by_name(job.owner, job.name)
+            if another_job is not None:
+                raise JobStorageJobFoundError(another_job.name, another_job.owner, another_job.id)
+            await client.set_job(job)
 
     async def set_job(self, job: Job) -> None:
-        await self._set_job(self._client, job)
-
-    async def _set_job(self, client: aioredis.Redis, job: Job) -> None:
         payload = json.dumps(job.to_primitive())
 
-        tr = client.multi_exec()
+        tr = self._client.multi_exec()
         tr.set(self._generate_job_key(job.id), payload)
         tr.sadd("jobs", job.id)
         for status in JobStatus:
@@ -215,6 +223,13 @@ class RedisJobsStorage(JobsStorage):
         if payload is None:
             raise JobError(f"no such job {job_id}")
         return self._parse_job_payload(payload)
+
+    async def get_job_by_name(self, owner: str, job_name: str) -> Optional[Job]:
+        key = self._generate_jobs_name_index_key(owner, job_name)
+        job_id_bytes = await self._client.get(key)
+        if job_id_bytes is not None:
+            job_id = self._decode(job_id_bytes)
+            return await self.get_job(job_id)
 
     async def _get_jobs(self, ids: List[str]) -> List[Job]:
         jobs: List[Job] = []

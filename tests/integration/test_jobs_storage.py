@@ -19,24 +19,26 @@ from platform_api.orchestrator.jobs_storage import (
 
 
 class TestRedisJobsStorage:
-    def _create_job_request(self, job_name: Optional[str] = None):
+    def _create_job_request(self):
         container = Container(
             image="ubuntu",
             command="sleep 5",
             resources=ContainerResources(cpu=0.1, memory_mb=256),
         )
-        return JobRequest.create(container, job_name=job_name)
+        return JobRequest.create(container)
 
     def _create_pending_job(self, kube_orchestrator, job_name: Optional[str] = None):
         return Job(
             kube_orchestrator.config,
-            job_request=self._create_job_request(job_name=job_name),
+            job_request=self._create_job_request(),
+            name=job_name,
         )
 
     def _create_running_job(self, kube_orchestrator, job_name: Optional[str] = None):
         return Job(
             kube_orchestrator.config,
-            job_request=self._create_job_request(job_name=job_name),
+            job_request=self._create_job_request(),
+            name=job_name,
             status=JobStatus.RUNNING,
         )
 
@@ -45,7 +47,8 @@ class TestRedisJobsStorage:
     ):
         return Job(
             kube_orchestrator.config,
-            job_request=self._create_job_request(job_name=job_name),
+            job_request=self._create_job_request(),
+            name=job_name,
             status=JobStatus.SUCCEEDED,
             is_deleted=is_deleted,
         )
@@ -55,7 +58,8 @@ class TestRedisJobsStorage:
     ):
         return Job(
             kube_orchestrator.config,
-            job_request=self._create_job_request(job_name=job_name),
+            job_request=self._create_job_request(),
+            name=job_name,
             status=JobStatus.FAILED,
             is_deleted=is_deleted,
         )
