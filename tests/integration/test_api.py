@@ -255,7 +255,6 @@ async def model_request_factory():
             },
             "dataset_storage_uri": f"storage://{owner}",
             "result_storage_uri": f"storage://{owner}/result",
-            "name": "some-test-job-name",
             "description": "test job submitted by neuro model train",
         }
 
@@ -314,6 +313,7 @@ class TestModels:
     ):
         url = api.model_base_url
         model_train["is_preemptible"] = True
+        model_train["name"] = "some-test-job-name"
         async with client.post(
             url, headers=regular_user.headers, json=model_train
         ) as response:

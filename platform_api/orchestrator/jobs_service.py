@@ -109,10 +109,13 @@ class JobsService:
             is_preemptible=is_preemptible,
         )
         try:
-            # first, try to put the value into jobs_storage database:
+            # 1. try to put bear job into database; fails in case of job name conflict:
             await self._jobs_storage.try_create_job(job)
-            # then, if transaction has not failed, send the signal to orchestrator:
+            # 2. if transaction succeeded, send the signal to orchestrator:
             await self._orchestrator.start_job(job, user.token)
+            # 3. update the job's information that was changed by orchestrator:
+            await self._jobs_storage.set_job(job)
+
             return job, Status.create(job.status)
         except JobsStorageException as e:
             raise JobsServiceException(f"Failed to create job {job.id}: {e}")

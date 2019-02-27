@@ -125,7 +125,7 @@ class TestInMemoryJobsStorage:
 
         owner = "test-user"
         job_name = "test-job-name"
-        not_found_job = await jobs_storage.try_get_job_by_name(owner, job_name)
+        not_found_job = await jobs_storage.find_job(owner, job_name)
         assert not_found_job is None
 
         job = Job(
@@ -136,7 +136,7 @@ class TestInMemoryJobsStorage:
         )
         await jobs_storage.set_job(job)
 
-        found_job = await jobs_storage.try_get_job_by_name(owner, job_name)
+        found_job = await jobs_storage.find_job(owner, job_name)
         assert found_job == job
 
 
