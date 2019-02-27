@@ -14,7 +14,6 @@ from platform_api.user import User, untrusted_user
 from .job_request_builder import ModelRequest
 from .jobs_handler import infer_permissions_from_container
 from .validators import (
-    JOB_NAME_PATTERN,
     create_container_request_validator,
     create_job_name_validator,
     create_job_status_validator,

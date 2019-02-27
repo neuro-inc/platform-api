@@ -1,5 +1,6 @@
 import pytest
 import trafaret as t
+
 from platform_api.handlers.jobs_handler import (
     create_job_request_validator,
     create_job_response_validator,
@@ -24,7 +25,7 @@ class TestJobNameValidator:
         assert validator.check(value)
 
     @pytest.mark.parametrize("value", ["", None])
-    def test_invalid_job_names__too_short(self, value: str):
+    def test_invalid_job_names__empty(self, value: str):
         validator = create_job_name_validator()
         with pytest.raises(t.DataError, match="blank value is not allowed"):
             assert validator.check(value)
@@ -35,27 +36,37 @@ class TestJobNameValidator:
         with pytest.raises(t.DataError, match="String is shorter than 3 characters"):
             assert validator.check(value)
 
-    @pytest.mark.parametrize("value", ["a"*101])
-    def test_invalid_job_names__too_short(self, value: str):
+    @pytest.mark.parametrize("value", ["a" * 101])
+    def test_invalid_job_names__too_long(self, value: str):
         validator = create_job_name_validator()
         with pytest.raises(t.DataError, match="String is longer than 100 characters"):
             assert validator.check(value)
 
-    @pytest.mark.parametrize("value",
-                             [
-                                 "-abc", "_abc", ".abc", "?abc", "#abc",
-                                 "a_bc", "a.bc", "a?bc", "a#bc",
-                                 "abc-", "abc_", "abc.", "abc?", "abc#",
-                             ])
+    @pytest.mark.parametrize(
+        "value",
+        [
+            "-abc",
+            "_abc",
+            ".abc",
+            "?abc",
+            "#abc",
+            "a_bc",
+            "a.bc",
+            "a?bc",
+            "a#bc",
+            "abc-",
+            "abc_",
+            "abc.",
+            "abc?",
+            "abc#",
+        ],
+    )
     def test_invalid_job_names__contains_illegal_char(self, value: str):
         validator = create_job_name_validator()
         with pytest.raises(t.DataError, match="does not match pattern"):
             assert validator.check(value)
 
-    @pytest.mark.parametrize("value",
-                             [
-                                 "Abcde", "abCde", "abcdE",
-                             ])
+    @pytest.mark.parametrize("value", ["Abcde", "abCde", "abcdE"])
     def test_invalid_job_names__contains_upppercase_char(self, value: str):
         validator = create_job_name_validator()
         with pytest.raises(t.DataError, match="does not match pattern"):
@@ -80,11 +91,7 @@ class TestJobRequestValidator:
         }
         validator = create_job_request_validator(allowed_gpu_models=[])
         assert validator.check(
-            {
-                "container": container,
-                "name": "test-job-name",
-                "description": "test-job",
-            }
+            {"container": container, "name": "test-job-name", "description": "test-job"}
         )
 
 
