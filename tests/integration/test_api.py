@@ -255,7 +255,7 @@ async def model_request_factory():
             },
             "dataset_storage_uri": f"storage://{owner}",
             "result_storage_uri": f"storage://{owner}/result",
-            "name": "some-test-JobName_123",
+            "name": "some-test-job-name",
             "description": "test job submitted by neuro model train",
         }
 
@@ -292,12 +292,12 @@ class TestModels:
             expected_internal_hostname = f"{job_id}.default"
             assert result["internal_hostname"] == expected_internal_hostname
             assert result["is_preemptible"]
-            assert result["name"] == "some-test-JobName_123"
+            assert result["name"] == "some-test-job-name"
             assert result["description"] == "test job submitted by neuro model train"
 
         retrieved_job = await jobs_client.get_job_by_id(job_id=job_id)
         assert retrieved_job["internal_hostname"] == expected_internal_hostname
-        assert retrieved_job["name"] == "some-test-JobName_123"
+        assert retrieved_job["name"] == "some-test-job-name"
 
         await jobs_client.long_polling_by_job_id(job_id=job_id, status="succeeded")
         await jobs_client.delete_job(job_id=job_id)

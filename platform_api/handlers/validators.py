@@ -6,9 +6,13 @@ from platform_api.orchestrator.job_request import JobStatus
 from platform_api.resource import GPUModel
 
 
-JOB_NAME_PATTERN = "^[a-zA-Z0-9][a-zA-Z0-9_.-]{1,255}$"
+JOB_NAME_PATTERN = "^[a-z][-a-z0-9]*[a-z0-9]$"
 
 OptionalString = t.String | t.Null
+
+
+def create_job_name_validator() -> t.Trafaret:
+    return t.String(min_length=3, max_length=100) & t.Regexp(JOB_NAME_PATTERN)
 
 
 def create_job_status_validator() -> t.Trafaret:

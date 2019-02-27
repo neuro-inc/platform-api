@@ -16,6 +16,7 @@ from .jobs_handler import infer_permissions_from_container
 from .validators import (
     JOB_NAME_PATTERN,
     create_container_request_validator,
+    create_job_name_validator,
     create_job_status_validator,
 )
 
@@ -35,7 +36,7 @@ def create_model_request_validator(
             # and validation here at some point
             "dataset_storage_uri": t.String,
             "result_storage_uri": t.String,
-            t.Key("name", optional=True): t.Regexp(JOB_NAME_PATTERN),
+            t.Key("name", optional=True): create_job_name_validator(),
             t.Key("description", optional=True): t.String,
             t.Key("is_preemptible", optional=True, default=False): t.Bool,
         }
@@ -51,7 +52,7 @@ def create_model_response_validator() -> t.Trafaret:
             t.Key("http_url", optional=True): t.String,
             t.Key("ssh_server", optional=True): t.String,
             t.Key("internal_hostname", optional=True): t.String,
-            t.Key("name", optional=True): t.Regexp(JOB_NAME_PATTERN),
+            t.Key("name", optional=True): create_job_name_validator(),
             t.Key("description", optional=True): t.String,
         }
     )
