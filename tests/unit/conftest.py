@@ -65,7 +65,7 @@ class MockOrchestrator(Orchestrator):
 def job_request_factory():
     def factory():
         return JobRequest.create(
-            container=Container(
+            Container(
                 image="testimage", resources=ContainerResources(cpu=1, memory_mb=128)
             )
         )
