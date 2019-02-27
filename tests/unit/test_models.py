@@ -200,8 +200,8 @@ class TestModelRequestValidator:
         validator = create_model_request_validator(allowed_gpu_models=[])
         assert validator.check(
             {
-                "name": "test-image-Name_123",
                 "container": container,
+                "name": "test-job-name",
                 "description": "test-job",
                 "dataset_storage_uri": "dataset",
                 "result_storage_uri": "result",

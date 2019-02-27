@@ -15,7 +15,7 @@ class TestJobNameValidator:
             ("abc-d", "contains dash"),
             ("a-b-c-d", "contains dash"),
             ("ab3d", "contains a number"),
-            ("abc5", "ends with a number"),
+            ("abc3", "ends with a number"),
             ("a" * 3, "minimum length"),
             ("a" * 100, "maximum length"),
         ],
@@ -24,8 +24,14 @@ class TestJobNameValidator:
         validator = create_job_name_validator()
         assert validator.check(value)
 
-    @pytest.mark.parametrize("value", ["", None])
-    def test_invalid_job_names__empty(self, value: str):
+    def test_invalid_job_names__none(self):
+        value = None
+        validator = create_job_name_validator()
+        with pytest.raises(t.DataError, match="value is not a string"):
+            assert validator.check(value)
+
+    def test_invalid_job_names__empty(self):
+        value = ""
         validator = create_job_name_validator()
         with pytest.raises(t.DataError, match="blank value is not allowed"):
             assert validator.check(value)
@@ -62,6 +68,24 @@ class TestJobNameValidator:
         ],
     )
     def test_invalid_job_names__contains_illegal_char(self, value: str):
+        validator = create_job_name_validator()
+        with pytest.raises(t.DataError, match="does not match pattern"):
+            assert validator.check(value)
+
+    def test_invalid_job_names__startswith_dash(self):
+        value = "-abc"
+        validator = create_job_name_validator()
+        with pytest.raises(t.DataError, match="does not match pattern"):
+            assert validator.check(value)
+
+    def test_invalid_job_names__endswith_dash(self):
+        value = "abc-"
+        validator = create_job_name_validator()
+        with pytest.raises(t.DataError, match="does not match pattern"):
+            assert validator.check(value)
+
+    def test_invalid_job_names__startswith_number(self):
+        value = "5abc"
         validator = create_job_name_validator()
         with pytest.raises(t.DataError, match="does not match pattern"):
             assert validator.check(value)

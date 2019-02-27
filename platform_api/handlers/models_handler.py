@@ -93,7 +93,7 @@ class ModelsHandler:
         description: Optional[str] = None,
         is_preemptible: bool = False,
     ) -> Dict[str, Any]:
-        job_request = JobRequest.create(container, description=description)
+        job_request = JobRequest.create(container, description)
         job, status = await self._jobs_service.create_job(
             job_request, user=user, job_name=name, is_preemptible=is_preemptible
         )

@@ -241,7 +241,7 @@ class JobsHandler:
         name = request_payload.get("name")
         description = request_payload.get("description")
         is_preemptible = request_payload["is_preemptible"]
-        job_request = JobRequest.create(container, description=description)
+        job_request = JobRequest.create(container, description)
         job, _ = await self._jobs_service.create_job(
             job_request, user=user, job_name=name, is_preemptible=is_preemptible
         )
