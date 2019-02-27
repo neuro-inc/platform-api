@@ -29,6 +29,7 @@ from .validators import (
     create_container_request_validator,
     create_container_response_validator,
     create_job_history_validator,
+    create_job_name_validator,
     create_job_status_validator,
 )
 
@@ -44,6 +45,7 @@ def create_job_request_validator(
             "container": create_container_request_validator(
                 allow_volumes=True, allowed_gpu_models=allowed_gpu_models
             ),
+            t.Key("name", optional=True): create_job_name_validator(),
             t.Key("description", optional=True): t.String,
             t.Key("is_preemptible", optional=True, default=False): t.Bool,
         }
@@ -69,6 +71,7 @@ def create_job_response_validator() -> t.Trafaret:
             "container": create_container_response_validator(),
             "is_preemptible": t.Bool,
             t.Key("internal_hostname", optional=True): t.String,
+            t.Key("name", optional=True): create_job_name_validator(),
             t.Key("description", optional=True): t.String,
         }
     )
@@ -146,6 +149,8 @@ def convert_job_to_job_response(
         "ssh_auth_server": job.ssh_auth_server,
         "is_preemptible": job.is_preemptible,
     }
+    if job.name:
+        response_payload["name"] = job.name
     if job.description:
         response_payload["description"] = job.description
     if job.has_http_server_exposed:
@@ -233,11 +238,12 @@ class JobsHandler:
         logger.info("Checking whether %r has %r", user, permissions)
         await check_permission(request, permissions[0].action, permissions)
 
+        name = request_payload.get("name")
         description = request_payload.get("description")
         is_preemptible = request_payload["is_preemptible"]
         job_request = JobRequest.create(container, description)
         job, _ = await self._jobs_service.create_job(
-            job_request, user=user, is_preemptible=is_preemptible
+            job_request, user=user, job_name=name, is_preemptible=is_preemptible
         )
         response_payload = convert_job_to_job_response(job, self._storage_config)
         self._job_response_validator.check(response_payload)

@@ -184,6 +184,7 @@ class Job:
         is_deleted: bool = False,
         current_datetime_factory=current_datetime_factory,
         owner: str = "",
+        name: Optional[str] = None,
         is_preemptible: bool = False,
         is_forced_to_preemptible_pool: bool = False,
     ) -> None:
@@ -211,6 +212,7 @@ class Job:
         self._current_datetime_factory = current_datetime_factory
 
         self._owner = owner
+        self._name = name
 
         self._internal_orchestrator_info: Job.OrchestratorInfo = Job.OrchestratorInfo()
         self._is_preemptible = is_preemptible
@@ -223,6 +225,10 @@ class Job:
     @property
     def description(self) -> Optional[str]:
         return self._job_request.description
+
+    @property
+    def name(self) -> Optional[str]:
+        return self._name
 
     @property
     def owner(self) -> str:
@@ -359,6 +365,8 @@ class Job:
         }
         if self.internal_hostname:
             result["internal_hostname"] = self.internal_hostname
+        if self.name:
+            result["name"] = self.name
         return result
 
     @classmethod
@@ -371,6 +379,7 @@ class Job:
         )
         is_deleted = payload.get("is_deleted", False)
         owner = payload.get("owner", "")
+        name = payload.get("name")
         is_preemptible = payload.get("is_preemptible", False)
         job = cls(
             orchestrator_config=orchestrator_config,
@@ -378,6 +387,7 @@ class Job:
             status_history=status_history,
             is_deleted=is_deleted,
             owner=owner,
+            name=name,
             is_preemptible=is_preemptible,
         )
         job.internal_hostname = payload.get("internal_hostname", None)

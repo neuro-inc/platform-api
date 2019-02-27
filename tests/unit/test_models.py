@@ -201,6 +201,7 @@ class TestModelRequestValidator:
         assert validator.check(
             {
                 "container": container,
+                "name": "test-job-name",
                 "description": "test-job",
                 "dataset_storage_uri": "dataset",
                 "result_storage_uri": "result",
@@ -243,6 +244,7 @@ class TestModelResponseValidator:
                 "job_id": "testjob",
                 "status": "pending",
                 "http_url": "http://testjob",
+                "name": "test-job-name",
                 "description": "test-job",
                 "is_preemptible": False,
             }

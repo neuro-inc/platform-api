@@ -13,7 +13,11 @@ from platform_api.user import User, untrusted_user
 
 from .job_request_builder import ModelRequest
 from .jobs_handler import infer_permissions_from_container
-from .validators import create_container_request_validator, create_job_status_validator
+from .validators import (
+    create_container_request_validator,
+    create_job_name_validator,
+    create_job_status_validator,
+)
 
 
 logger = logging.getLogger(__name__)
@@ -31,6 +35,7 @@ def create_model_request_validator(
             # and validation here at some point
             "dataset_storage_uri": t.String,
             "result_storage_uri": t.String,
+            t.Key("name", optional=True): create_job_name_validator(),
             t.Key("description", optional=True): t.String,
             t.Key("is_preemptible", optional=True, default=False): t.Bool,
         }
@@ -46,6 +51,7 @@ def create_model_response_validator() -> t.Trafaret:
             t.Key("http_url", optional=True): t.String,
             t.Key("ssh_server", optional=True): t.String,
             t.Key("internal_hostname", optional=True): t.String,
+            t.Key("name", optional=True): create_job_name_validator(),
             t.Key("description", optional=True): t.String,
         }
     )
@@ -83,12 +89,13 @@ class ModelsHandler:
         self,
         user: User,
         container: Container,
+        name: Optional[str] = None,
         description: Optional[str] = None,
         is_preemptible: bool = False,
     ) -> Dict[str, Any]:
         job_request = JobRequest.create(container, description)
         job, status = await self._jobs_service.create_job(
-            job_request, user=user, is_preemptible=is_preemptible
+            job_request, user=user, job_name=name, is_preemptible=is_preemptible
         )
         payload = {
             "job_id": job.id,
@@ -101,6 +108,8 @@ class ModelsHandler:
             payload["ssh_server"] = job.ssh_server
         if job.internal_hostname:
             payload["internal_hostname"] = job.internal_hostname
+        if job.name:
+            payload["name"] = job.name
         if job.description:
             payload["description"] = job.description
         return payload
@@ -124,10 +133,15 @@ class ModelsHandler:
         logger.info("Checking whether %r has %r", user, permissions)
         await check_permission(request, permissions[0].action, permissions)
 
+        job_name = request_payload.get("name")
         description = request_payload.get("description")
         is_preemptible = request_payload["is_preemptible"]
         response_payload = await self._create_job(
-            user, container, description=description, is_preemptible=is_preemptible
+            user,
+            container,
+            name=job_name,
+            description=description,
+            is_preemptible=is_preemptible,
         )
         self._model_response_validator.check(response_payload)
 
