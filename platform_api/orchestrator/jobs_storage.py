@@ -126,12 +126,16 @@ class InMemoryJobsStorage(JobsStorage):
 
 class RedisJobsStorage(JobsStorage):
     def __init__(
-        self, client: aioredis.Redis, orchestrator_config: OrchestratorConfig
+        self,
+        client: aioredis.Redis,
+        orchestrator_config: OrchestratorConfig,
+        encoding: str = "utf8",
     ) -> None:
         self._client = client
         self._orchestrator_config = orchestrator_config
-        self._encoding = "utf8"  # TODO (ajuszkowski, 27-feb-2019) maybe pass this as a
-        # parameter or use 'self._client.encoding' ?
+        self._encoding = (
+            encoding
+        )  # TODO (ajuszkowski, 27feb2019) use '_client.encoding'?
 
     def _decode(self, value: bytes) -> str:
         return value.decode(self._encoding)
@@ -161,7 +165,22 @@ class RedisJobsStorage(JobsStorage):
             pool.release(conn)
 
     @asynccontextmanager
-    async def _watch_key(self, key: str) -> AsyncIterator[JobsStorage]:
+    async def _watch_job_id(self, job_id: str) -> AsyncIterator[JobsStorage]:
+        key = self._generate_job_key(job_id)
+        error_msg = f"Job with id='{job_id}' has been changed"
+        async for storage in self._watch_key(key, error_msg):
+            yield storage
+
+    @asynccontextmanager
+    async def _watch_job_name(
+        self, owner: str, job_name: str
+    ) -> AsyncIterator[JobsStorage]:
+        key = self._generate_jobs_name_index_key(owner, job_name)
+        error_msg = f"Job with owner='{owner}', name='{job_name}' has been changed"
+        async for storage in self._watch_key(key, error_msg):
+            yield storage
+
+    async def _watch_key(self, key: str, error_msg: str) -> AsyncIterator[JobsStorage]:
         async with self._acquire_conn() as client:
             try:
                 await client.watch(key)
@@ -170,14 +189,13 @@ class RedisJobsStorage(JobsStorage):
                     client=client, orchestrator_config=self._orchestrator_config
                 )
             except (aioredis.errors.MultiExecError, aioredis.errors.WatchVariableError):
-                raise JobStorageTransactionError(f"Key '{key}' has been changed.")
+                raise JobStorageTransactionError(error_msg)
             finally:
                 await client.unwatch()
 
     @asynccontextmanager
     async def try_update_job(self, job_id: str) -> AsyncIterator[Job]:
-        key = self._generate_job_key(job_id)
-        async with self._watch_key(key) as storage:
+        async with self._watch_job_id(job_id) as storage:
             job = await storage.get_job(job_id)
             yield job
             await storage.set_job(job)
@@ -186,8 +204,7 @@ class RedisJobsStorage(JobsStorage):
         if job.name is None:
             await self.set_job(job)
             return
-        name_key = self._generate_jobs_name_index_key(job.owner, job.name)
-        async with self._watch_key(name_key) as storage:
+        async with self._watch_job_name(job.owner, job.name) as storage:
             another_job = await storage.find_job(job.owner, job.name)
             if another_job is not None:
                 raise JobStorageJobFoundError(
