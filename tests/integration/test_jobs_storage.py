@@ -85,10 +85,10 @@ class TestRedisJobsStorage:
         assert job.status == original_job.status
 
     @pytest.mark.asyncio
-    async def test_try_create_job__name_conflict_with_pending(
+    async def test_try_create_job__name_conflict_with_pending_job(
         self, redis_client, kube_orchestrator
     ):
-        job_name = f"test_job-Name.123"
+        job_name = "some-test-job-name"
         first_job = self._create_pending_job(kube_orchestrator, job_name=job_name)
         storage = RedisJobsStorage(
             redis_client, orchestrator_config=kube_orchestrator.config
@@ -108,10 +108,10 @@ class TestRedisJobsStorage:
             await storage.try_create_job(second_job)
 
     @pytest.mark.asyncio
-    async def test_try_create_job__name_conflict_with_running(
+    async def test_try_create_job__name_conflict_with_running_job(
         self, redis_client, kube_orchestrator
     ):
-        job_name = f"test_job-Name.123"
+        job_name = "some-test-job-name"
         first_job = self._create_running_job(kube_orchestrator, job_name=job_name)
         storage = RedisJobsStorage(
             redis_client, orchestrator_config=kube_orchestrator.config
@@ -131,10 +131,10 @@ class TestRedisJobsStorage:
             await storage.try_create_job(second_job)
 
     @pytest.mark.asyncio
-    async def test_try_create_job__name_conflict_with_succeeded(
+    async def test_try_create_job__same_name_with_succeeded_job(
         self, redis_client, kube_orchestrator
     ):
-        job_name = f"test_job-Name.123"
+        job_name = "some-test-job-name"
         first_job = self._create_succeeded_job(kube_orchestrator, job_name=job_name)
         storage = RedisJobsStorage(
             redis_client, orchestrator_config=kube_orchestrator.config
@@ -153,10 +153,10 @@ class TestRedisJobsStorage:
         assert job.status == second_job.status
 
     @pytest.mark.asyncio
-    async def test_try_create_job__name_conflict_with_failed(
+    async def test_try_create_job__same_name_with_failed_job(
         self, redis_client, kube_orchestrator
     ):
-        job_name = f"test_job-Name.123"
+        job_name = "some-test-job-name"
         first_job = self._create_failed_job(kube_orchestrator, job_name=job_name)
         storage = RedisJobsStorage(
             redis_client, orchestrator_config=kube_orchestrator.config

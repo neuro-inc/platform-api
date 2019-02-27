@@ -176,16 +176,19 @@ class RedisJobsStorage(JobsStorage):
             return
         name_key = self._generate_jobs_name_index_key(job.owner, job.name)
         async with self._watch_key(name_key) as client:
-            found_job_id = await self._client.get(name_key)
+            found_job_id = await client.get(name_key)
             if found_job_id:
                 job_id = found_job_id.decode("utf-8")
                 raise JobStorageJobFoundError(job.name, job.owner, job_id)
-            await self.set_job(job)
+            await self._set_job(client, job)
 
     async def set_job(self, job: Job) -> None:
+        await self._set_job(self._client, job)
+
+    async def _set_job(self, client: aioredis.Redis, job: Job) -> None:
         payload = json.dumps(job.to_primitive())
 
-        tr = self._client.multi_exec()
+        tr = client.multi_exec()
         tr.set(self._generate_job_key(job.id), payload)
         tr.sadd("jobs", job.id)
         for status in JobStatus:
