@@ -564,7 +564,7 @@ class TestJobs:
     async def test_create_job_invalid_job_name(
             self, api, client, job_submit, jobs_client, regular_user
     ):
-        url = api.model_base_url
+        url = api.jobs_base_url
         job_submit["is_preemptible"] = True
         job_submit["name"] = "Invalid_job_name!"
         async with client.post(
