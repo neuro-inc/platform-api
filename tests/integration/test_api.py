@@ -263,8 +263,30 @@ async def model_request_factory():
 
 
 @pytest.fixture
+async def job_request_factory():
+    def _factory():
+        return {
+            "container": {
+                "image": "ubuntu",
+                "command": "true",
+                "resources": {"cpu": 0.1, "memory_mb": 16},
+                "http": {"port": 1234},
+            },
+            "name": "some-test-job-name",
+            "description": "test job submitted by neuro model train",
+        }
+
+    return _factory
+
+
+@pytest.fixture
 async def model_train(model_request_factory, regular_user):
     return model_request_factory(regular_user.name)
+
+
+@pytest.fixture
+async def job_submit(job_request_factory):
+    return job_request_factory()
 
 
 class TestModels:
@@ -275,13 +297,25 @@ class TestModels:
             assert response.status == HTTPUnauthorized.status_code
 
     @pytest.mark.asyncio
+    async def test_create_model_invalid_job_name(
+            self, api, client, model_train, jobs_client, regular_user
+    ):
+        url = api.model_base_url
+        model_train["is_preemptible"] = True
+        model_train["name"] = "Invalid_job_name!"
+        async with client.post(
+                url, headers=regular_user.headers, json=model_train
+        ) as response:
+            assert response.status == HTTPBadRequest.status_code
+
+    @pytest.mark.asyncio
     async def test_create_model(
-        self, api, client, model_train, jobs_client, regular_user
+            self, api, client, model_train, jobs_client, regular_user
     ):
         url = api.model_base_url
         model_train["is_preemptible"] = True
         async with client.post(
-            url, headers=regular_user.headers, json=model_train
+                url, headers=regular_user.headers, json=model_train
         ) as response:
             assert response.status == HTTPAccepted.status_code
             result = await response.json()
@@ -525,6 +559,18 @@ class TestJobs:
         headers = {"Authorization": "Bearer INVALID"}
         async with client.post(url, headers=headers, json=model_train) as response:
             assert response.status == HTTPUnauthorized.status_code
+
+    @pytest.mark.asyncio
+    async def test_create_job_invalid_job_name(
+            self, api, client, job_submit, jobs_client, regular_user
+    ):
+        url = api.model_base_url
+        job_submit["is_preemptible"] = True
+        job_submit["name"] = "Invalid_job_name!"
+        async with client.post(
+                url, headers=regular_user.headers, json=job_submit
+        ) as response:
+            assert response.status == HTTPBadRequest.status_code
 
     @pytest.mark.asyncio
     async def test_get_all_jobs_clear(self, jobs_client):
