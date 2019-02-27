@@ -218,7 +218,6 @@ class Container:
 class JobRequest:
     job_id: str
     container: Container
-    name: Optional[str] = None
     description: Optional[str] = None
 
     @classmethod
