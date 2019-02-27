@@ -117,6 +117,28 @@ class TestInMemoryJobsStorage:
         jobs = await jobs_storage.get_jobs_for_deletion()
         assert {job.id for job in jobs} == {succeeded_job.id}
 
+    @pytest.mark.asyncio
+    async def test_try_get_job_by_name(self, mock_orchestrator):
+        config = dataclasses.replace(mock_orchestrator.config, job_deletion_delay_s=0)
+        mock_orchestrator.config = config
+        jobs_storage = InMemoryJobsStorage(orchestrator_config=mock_orchestrator.config)
+
+        owner = "test-user"
+        job_name = "test-job-name"
+        not_found_job = await jobs_storage.try_get_job_by_name(owner, job_name)
+        assert not_found_job is None
+
+        job = Job(
+            orchestrator_config=config,
+            job_request=self._create_job_request(),
+            owner=owner,
+            name=job_name,
+        )
+        await jobs_storage.set_job(job)
+
+        found_job = await jobs_storage.try_get_job_by_name(owner, job_name)
+        assert found_job == job
+
 
 class TestJobsService:
     @pytest.mark.asyncio
@@ -190,7 +212,7 @@ class TestJobsService:
         user = User(name="testuser", token="")
         job_name = "test-Job_name"
         request = job_request_factory()
-        
+
         first_job, _ = await jobs_service.create_job(request, user, job_name=job_name)
         assert first_job.status == JobStatus.PENDING
         assert not first_job.is_finished

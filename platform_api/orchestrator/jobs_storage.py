@@ -88,9 +88,7 @@ class InMemoryJobsStorage(JobsStorage):
     async def try_create_job(self, job: Job) -> None:
         if job.name is not None:
             for record in self._job_records.values():
-                if record.status not in (JobStatus.PENDING, JobStatus.RUNNING):
-                    continue
-                if record.owner == job.owner and record.name == job.name:
+                if record.owner == job.owner and record.name == job.name and record.status in (JobStatus.PENDING, JobStatus.RUNNING):
                     raise JobStorageJobFoundError(job.name, job.owner, record.id)
         await self.set_job(job)
 
@@ -108,8 +106,9 @@ class InMemoryJobsStorage(JobsStorage):
         return job
 
     async def try_get_job_by_name(self, owner: str, job_name: str) -> Optional[Job]:
-        # TODO
-        raise Exception("not impl")
+        for record in self._job_records.values():
+            if record.owner == owner and record.name == job_name:
+                return record
 
     @asynccontextmanager
     async def try_update_job(self, job_id: str) -> AsyncIterator[Job]:

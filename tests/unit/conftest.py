@@ -67,7 +67,7 @@ def job_request_factory():
         return JobRequest.create(
             container=Container(
                 image="testimage", resources=ContainerResources(cpu=1, memory_mb=128)
-            ),
+            )
         )
 
     return factory
