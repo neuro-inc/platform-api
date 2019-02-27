@@ -170,7 +170,7 @@ class RedisJobsStorage(JobsStorage):
     async def _watch_job_id(self, job_id: str) -> AsyncIterator[JobsStorage]:
         key = self._generate_job_key(job_id)
         error_msg = f"Job with id='{job_id}' has been changed"
-        async for storage in self._watch_key(key, error_msg):
+        async with self._watch_key(key, error_msg) as storage:
             yield storage
 
     @asynccontextmanager
@@ -179,9 +179,10 @@ class RedisJobsStorage(JobsStorage):
     ) -> AsyncIterator[JobsStorage]:
         key = self._generate_jobs_name_index_key(owner, job_name)
         error_msg = f"Job with owner='{owner}', name='{job_name}' has been changed"
-        async for storage in self._watch_key(key, error_msg):
+        async with self._watch_key(key, error_msg) as storage:
             yield storage
 
+    @asynccontextmanager
     async def _watch_key(self, key: str, error_msg: str) -> AsyncIterator[JobsStorage]:
         async with self._acquire_conn() as client:
             try:
@@ -216,7 +217,6 @@ class RedisJobsStorage(JobsStorage):
         else:
             yield job
             await self.set_job(job)
-
 
     async def set_job(self, job: Job) -> None:
         payload = json.dumps(job.to_primitive())
