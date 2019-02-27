@@ -82,7 +82,8 @@ class TestRedisJobsStorage:
         storage = RedisJobsStorage(
             redis_client, orchestrator_config=kube_orchestrator.config
         )
-        await storage.try_create_job(original_job)
+        async with storage.try_create_job(original_job) as _:
+            pass
 
         job = await storage.get_job(original_job.id)
         assert job.id == original_job.id
@@ -97,7 +98,8 @@ class TestRedisJobsStorage:
         storage = RedisJobsStorage(
             redis_client, orchestrator_config=kube_orchestrator.config
         )
-        await storage.try_create_job(first_job)
+        async with storage.try_create_job(first_job) as _:
+            pass
 
         job = await storage.get_job(first_job.id)
         assert job.id == first_job.id
@@ -107,9 +109,10 @@ class TestRedisJobsStorage:
         with pytest.raises(
             JobsStorageException,
             match=f"job with name '{job_name}' and owner '{first_job.owner}'"
-            f" already exists: {first_job.id}",
+            f" already exists: '{first_job.id}'",
         ):
-            await storage.try_create_job(second_job)
+            async with storage.try_create_job(second_job) as _:
+                pass
 
     @pytest.mark.asyncio
     async def test_try_create_job__name_conflict_with_running_job(
@@ -120,7 +123,8 @@ class TestRedisJobsStorage:
         storage = RedisJobsStorage(
             redis_client, orchestrator_config=kube_orchestrator.config
         )
-        await storage.try_create_job(first_job)
+        async with storage.try_create_job(first_job) as _:
+            pass
 
         job = await storage.get_job(first_job.id)
         assert job.id == first_job.id
@@ -130,9 +134,10 @@ class TestRedisJobsStorage:
         with pytest.raises(
             JobsStorageException,
             match=f"job with name '{job_name}' and owner '{first_job.owner}'"
-            f" already exists: {first_job.id}",
+            f" already exists: '{first_job.id}'",
         ):
-            await storage.try_create_job(second_job)
+            async with storage.try_create_job(second_job) as _:
+                pass
 
     @pytest.mark.asyncio
     async def test_try_create_job__same_name_with_succeeded_job(
@@ -143,14 +148,16 @@ class TestRedisJobsStorage:
         storage = RedisJobsStorage(
             redis_client, orchestrator_config=kube_orchestrator.config
         )
-        await storage.try_create_job(first_job)
+        async with storage.try_create_job(first_job) as _:
+            pass
 
         job = await storage.get_job(first_job.id)
         assert job.id == first_job.id
         assert job.status == first_job.status
 
         second_job = self._create_pending_job(kube_orchestrator, job_name=job_name)
-        await storage.try_create_job(second_job)
+        async with storage.try_create_job(second_job) as _:
+            pass
 
         job = await storage.get_job(second_job.id)
         assert job.id == second_job.id
@@ -165,14 +172,17 @@ class TestRedisJobsStorage:
         storage = RedisJobsStorage(
             redis_client, orchestrator_config=kube_orchestrator.config
         )
-        await storage.try_create_job(first_job)
+
+        async with storage.try_create_job(first_job) as _:
+            pass
 
         job = await storage.get_job(first_job.id)
         assert job.id == first_job.id
         assert job.status == first_job.status
 
         second_job = self._create_pending_job(kube_orchestrator, job_name=job_name)
-        await storage.try_create_job(second_job)
+        async with storage.try_create_job(second_job) as _:
+            pass
 
         job = await storage.get_job(second_job.id)
         assert job.id == second_job.id

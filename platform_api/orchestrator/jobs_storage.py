@@ -35,7 +35,7 @@ class JobFilter:
 
 class JobsStorage(ABC):
     @abstractmethod
-    async def try_create_job(self, job: Job) -> None:
+    async def try_create_job(self, job: Job) -> AsyncIterator[Job]:
         pass
 
     @abstractmethod
@@ -74,7 +74,8 @@ class InMemoryJobsStorage(JobsStorage):
 
         self._job_records: Dict[str, Job] = {}
 
-    async def try_create_job(self, job: Job) -> None:
+    @asynccontextmanager
+    async def try_create_job(self, job: Job) -> AsyncIterator[Job]:
         if job.name is not None:
             for record in self._job_records.values():
                 if (
@@ -83,6 +84,7 @@ class InMemoryJobsStorage(JobsStorage):
                     and record.status in (JobStatus.PENDING, JobStatus.RUNNING)
                 ):
                     raise JobStorageJobFoundError(job.name, job.owner, record.id)
+        yield job
         await self.set_job(job)
 
     async def set_job(self, job: Job) -> None:
@@ -200,17 +202,21 @@ class RedisJobsStorage(JobsStorage):
             yield job
             await storage.set_job(job)
 
-    async def try_create_job(self, job: Job) -> None:
-        if job.name is None:
+    @asynccontextmanager
+    async def try_create_job(self, job: Job) -> AsyncIterator[Job]:
+        if job.name is not None:
+            async with self._watch_job_name(job.owner, job.name) as storage:
+                another_job = await storage.find_job(job.owner, job.name)
+                if another_job is not None:
+                    raise JobStorageJobFoundError(
+                        another_job.name, another_job.owner, another_job.id
+                    )
+                yield job
+                await storage.set_job(job)
+        else:
+            yield job
             await self.set_job(job)
-            return
-        async with self._watch_job_name(job.owner, job.name) as storage:
-            another_job = await storage.find_job(job.owner, job.name)
-            if another_job is not None:
-                raise JobStorageJobFoundError(
-                    another_job.name, another_job.owner, another_job.id
-                )
-            await storage.set_job(job)
+
 
     async def set_job(self, job: Job) -> None:
         payload = json.dumps(job.to_primitive())
@@ -225,7 +231,8 @@ class RedisJobsStorage(JobsStorage):
         if job.name is not None:
             name_key = self._generate_jobs_name_index_key(job.owner, job.name)
             if job.status in (JobStatus.PENDING, JobStatus.RUNNING):
-                tr.set(name_key, job.id)  # if the key exists, it's overwritten by 'set'
+                # if the key exists, it's overwritten by 'set'
+                tr.set(name_key, job.id)
             else:
                 tr.delete(name_key)
 
