@@ -298,24 +298,24 @@ class TestModels:
 
     @pytest.mark.asyncio
     async def test_create_model_invalid_job_name(
-            self, api, client, model_train, jobs_client, regular_user
+        self, api, client, model_train, jobs_client, regular_user
     ):
         url = api.model_base_url
         model_train["is_preemptible"] = True
         model_train["name"] = "Invalid_job_name!"
         async with client.post(
-                url, headers=regular_user.headers, json=model_train
+            url, headers=regular_user.headers, json=model_train
         ) as response:
             assert response.status == HTTPBadRequest.status_code
 
     @pytest.mark.asyncio
     async def test_create_model(
-            self, api, client, model_train, jobs_client, regular_user
+        self, api, client, model_train, jobs_client, regular_user
     ):
         url = api.model_base_url
         model_train["is_preemptible"] = True
         async with client.post(
-                url, headers=regular_user.headers, json=model_train
+            url, headers=regular_user.headers, json=model_train
         ) as response:
             assert response.status == HTTPAccepted.status_code
             result = await response.json()
@@ -562,13 +562,13 @@ class TestJobs:
 
     @pytest.mark.asyncio
     async def test_create_job_invalid_job_name(
-            self, api, client, job_submit, jobs_client, regular_user
+        self, api, client, job_submit, jobs_client, regular_user
     ):
         url = api.jobs_base_url
         job_submit["is_preemptible"] = True
         job_submit["name"] = "Invalid_job_name!"
         async with client.post(
-                url, headers=regular_user.headers, json=job_submit
+            url, headers=regular_user.headers, json=job_submit
         ) as response:
             assert response.status == HTTPBadRequest.status_code
 
