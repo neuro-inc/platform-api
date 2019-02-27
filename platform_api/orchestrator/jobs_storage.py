@@ -135,9 +135,7 @@ class RedisJobsStorage(JobsStorage):
     ) -> None:
         self._client = client
         self._orchestrator_config = orchestrator_config
-        self._encoding = (
-            encoding
-        )  # TODO (ajuszkowski, 27feb2019) use '_client.encoding'?
+        self._encoding = encoding
 
     def _decode(self, value: bytes) -> str:
         return value.decode(self._encoding)
