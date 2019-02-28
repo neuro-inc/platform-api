@@ -146,8 +146,8 @@ class RedisJobsStorage(JobsStorage):
     def _generate_jobs_status_index_key(self, status: JobStatus) -> str:
         return f"jobs.status.{status}"
 
-    def _generate_jobs_name_index_key(self, owner: str, job_name: str) -> str:
-        return f"jobs.name.{owner}.{job_name}"
+    def _generate_alive_job_name_index_key(self, owner: str, job_name: str) -> str:
+        return f"job-alive.name.{owner}.{job_name}"
 
     def _generate_jobs_deleted_index_key(self) -> str:
         return "jobs.deleted"
@@ -172,10 +172,10 @@ class RedisJobsStorage(JobsStorage):
             yield storage
 
     @asynccontextmanager
-    async def _watch_job_name(
+    async def _watch_alive_job_name(
         self, owner: str, job_name: str
     ) -> AsyncIterator[JobsStorage]:
-        key = self._generate_jobs_name_index_key(owner, job_name)
+        key = self._generate_alive_job_name_index_key(owner, job_name)
         error_msg = f"Job with owner='{owner}', name='{job_name}' has been changed"
         async with self._watch_key(key, error_msg) as storage:
             yield storage
@@ -204,7 +204,7 @@ class RedisJobsStorage(JobsStorage):
     @asynccontextmanager
     async def try_create_job(self, job: Job) -> AsyncIterator[Job]:
         if job.name is not None:
-            async with self._watch_job_name(job.owner, job.name) as storage:
+            async with self._watch_alive_job_name(job.owner, job.name) as storage:
                 another_job = await storage.find_job(job.owner, job.name)
                 if another_job is not None:
                     raise JobStorageJobFoundError(
@@ -227,7 +227,7 @@ class RedisJobsStorage(JobsStorage):
         tr.sadd(self._generate_jobs_status_index_key(job.status), job.id)
 
         if job.name is not None:
-            name_key = self._generate_jobs_name_index_key(job.owner, job.name)
+            name_key = self._generate_alive_job_name_index_key(job.owner, job.name)
             if job.status in (JobStatus.PENDING, JobStatus.RUNNING):
                 # if the key exists, it's overwritten by 'set'
                 tr.set(name_key, job.id)
@@ -249,7 +249,7 @@ class RedisJobsStorage(JobsStorage):
         return self._parse_job_payload(payload)
 
     async def find_job(self, owner: str, job_name: str) -> Optional[Job]:
-        key = self._generate_jobs_name_index_key(owner, job_name)
+        key = self._generate_alive_job_name_index_key(owner, job_name)
         job_id_bytes = await self._client.get(key)
         if job_id_bytes is not None:
             job_id = self._decode(job_id_bytes)
