@@ -2,7 +2,7 @@ import asyncio
 import json
 import time
 from pathlib import PurePath
-from typing import Any, NamedTuple, Optional
+from typing import Any, Dict, NamedTuple, Optional
 from unittest import mock
 
 import aiohttp
@@ -183,8 +183,16 @@ class JobsClient:
 
 
 @pytest.fixture
-async def jobs_client(api, client, regular_user):
-    return JobsClient(api, client, headers=regular_user.headers)
+def jobs_client_factory(api, client):
+    def impl(user):
+        return JobsClient(api, client, headers=user.headers)
+
+    yield impl
+
+
+@pytest.fixture
+def jobs_client(jobs_client_factory, regular_user):
+    return jobs_client_factory(regular_user)
 
 
 @pytest.fixture
@@ -262,7 +270,7 @@ async def model_request_factory():
 
 
 @pytest.fixture
-async def job_request_factory():
+def job_request_factory():
     def _factory():
         return {
             "container": {
@@ -655,7 +663,7 @@ class TestJobs:
             assert response.status == HTTPBadRequest.status_code
 
     @pytest.mark.asyncio
-    async def test_get_all_jobs_filter_by_status_single_status_pending(
+    async def test_get_all_jobs_filter_by_status_only_single_status_pending(
         self, api, client, jobs_client, regular_user, model_request_factory
     ):
         url = api.model_base_url
@@ -680,7 +688,7 @@ class TestJobs:
         assert jobs == set()
 
     @pytest.mark.asyncio
-    async def test_get_all_jobs_filter_by_status(
+    async def test_get_all_jobs_filter_by_status_only(
         self, api, client, jobs_client, regular_user, model_request_factory
     ):
         url = api.model_base_url
@@ -736,6 +744,116 @@ class TestJobs:
         # cleanup
         for job_id in job_ids_alive:
             await jobs_client.delete_job(job_id=job_id)
+
+    @pytest.fixture
+    async def setup_new_user_for_filtration(
+        self,
+        api,
+        regular_user_factory,
+        jobs_client_factory,
+        job_request_factory,
+        client,
+    ):
+        async def factory(job_name: str = "test-job-name"):
+            url = api.jobs_base_url
+            user = await regular_user_factory()
+            jobs_client = jobs_client_factory(user)
+            headers = user.headers
+
+            job_request = job_request_factory()
+            job_request["container"]["command"] = "sleep 30m"
+
+            jobs_dict: Dict[str, Any] = dict()
+            jobs_dict["job_name:yes"] = dict()
+            jobs_dict["job_name:no"] = dict()
+
+            async def run_job(with_name: bool, do_kill: bool):
+                if with_name:
+                    job_request["name"] = job_name
+                    job_name_key = "job_name:yes"
+                else:
+                    if "name" in job_request:
+                        del job_request["name"]
+                    job_name_key = "job_name:no"
+
+                async with client.post(url, headers=headers, json=job_request) as resp:
+                    assert resp.status == HTTPAccepted.status_code
+                    result = await resp.json()
+                    job_id = result["id"]
+                    await jobs_client.long_polling_by_job_id(job_id, status="running")
+                    if do_kill:
+                        await jobs_client.delete_job(job_id=job_id)
+                        await jobs_client.long_polling_by_job_id(
+                            job_id, status="succeeded"
+                        )
+                        status_key = "status:succeeded"
+                    else:
+                        status_key = "status:running"
+                jobs_dict[job_name_key][status_key] = job_id
+
+            await run_job(with_name=True, do_kill=True)
+            await run_job(with_name=True, do_kill=False)
+            await run_job(with_name=False, do_kill=True)
+            await run_job(with_name=False, do_kill=False)
+
+            return user, jobs_client, jobs_dict
+
+        yield factory
+
+    @pytest.mark.asyncio
+    async def test_get_all_jobs_filter_by_name_owner_and_status(
+        self, api, client, setup_new_user_for_filtration
+    ):
+        job_name = "test-job-name"
+        user_1, jobs_client_1, jobs_1 = await setup_new_user_for_filtration(job_name)
+        user_2, jobs_client_2, jobs_2 = await setup_new_user_for_filtration(job_name)
+
+        # owner: 1, name: yes
+        filters = [("name", job_name)]
+        jobs = await jobs_client_1.get_all_jobs(filters)
+        jobs = {job["id"] for job in jobs}
+        assert jobs == {jobs_1["job_name:yes"]["status:running"]}
+
+        # owner: 1, name: yes, status: running
+        filters = [("name", job_name), ("status", "running")]
+        jobs = await jobs_client_1.get_all_jobs(filters)
+        jobs = {job["id"] for job in jobs}
+        assert jobs == {
+            jobs_1["job_name:yes"]["status:running"],
+            jobs_1["job_name:yes"]["status:succeeded"],
+        }
+
+        # owner: 1, name: yes, status: running+succeeded
+        filters = [("name", job_name), ("status", "running"), ("status", "succeeded")]
+        jobs = await jobs_client_1.get_all_jobs(filters)
+        jobs = {job["id"] for job in jobs}
+        assert jobs == {
+            jobs_1["job_name:yes"]["status:running"],
+            jobs_1["job_name:yes"]["status:succeeded"],
+        }
+
+        # owner: 2, name: not-found, status: succeeded
+        filters = [("status", "running"), ("name", "not-found-name")]
+        jobs = await jobs_client_2.get_all_jobs(filters)
+        jobs = {job["id"] for job in jobs}
+        assert jobs == set()
+
+    @pytest.mark.asyncio
+    async def test_get_all_jobs_filter_by_name_owner_and_status_invalid_name(
+        self, api, client, regular_user
+    ):
+        url = api.jobs_base_url
+        headers = regular_user.headers
+
+        # filter by name only
+        filters = {"name": "InValid_Name.txt"}
+        async with client.get(url, headers=headers, params=filters) as resp:
+            assert resp.status == HTTPBadRequest.status_code
+
+        # filter by name and status
+        filters = [("status", "running"), ("name", "InValid_Name.txt")]
+        async with client.get(url, headers=headers, params=filters) as resp:
+            assert resp.status == HTTPBadRequest.status_code
 
     @pytest.mark.asyncio
     async def test_get_all_jobs_shared(

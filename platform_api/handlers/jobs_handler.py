@@ -188,6 +188,7 @@ class JobsHandler:
         self._config = config
         self._storage_config = config.storage
 
+        self._job_name_validator = create_job_name_validator()
         self._job_response_validator = create_job_response_validator()
         self._bulk_jobs_response_validator = t.Dict(
             {"jobs": t.List(self._job_response_validator)}
@@ -267,13 +268,20 @@ class JobsHandler:
             data=response_payload, status=aiohttp.web.HTTPOk.status_code
         )
 
-    def _build_job_filter_from_query(self, query: MultiDictProxy) -> JobFilter:
+    def _build_job_filter_from_query(
+        self, query: MultiDictProxy, owner: str
+    ) -> JobFilter:
+        # filtering by job-owner is allowed only together with job-name
+        job_name, job_owner = None, None
+        if "name" in query:
+            job_name = self._job_name_validator.check(query["name"])
+            job_owner = owner
         statuses = (
             {JobStatus(s) for s in query.getall("status")}
             if "status" in query
             else set()
         )
-        return JobFilter(statuses=statuses)
+        return JobFilter(statuses=statuses, owner=job_owner, name=job_name)
 
     async def handle_get_all(self, request):
         # TODO (A Danshyn 10/08/18): remove once
@@ -284,7 +292,7 @@ class JobsHandler:
         tree = await self._auth_client.get_permissions_tree(user.name, "job:")
         # TODO (A Danshyn 10/09/18): retrieving all jobs until the proper
         # index is in place
-        job_filter = self._build_job_filter_from_query(request.query)
+        job_filter = self._build_job_filter_from_query(request.query, user.name)
         jobs = await self._jobs_service.get_all_jobs(job_filter)
         jobs = filter_jobs_with_access_tree(jobs, tree)
 

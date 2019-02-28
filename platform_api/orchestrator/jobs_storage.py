@@ -1,8 +1,10 @@
 import itertools
 import json
 from abc import ABC, abstractmethod
-from dataclasses import dataclass
+from dataclasses import dataclass, field
+from time import time as timestamp
 from typing import AbstractSet, AsyncIterator, Dict, List, Optional, Sequence, Tuple
+from uuid import uuid4
 
 import aioredis
 from async_generator import asynccontextmanager
@@ -30,7 +32,12 @@ class JobStorageJobFoundError(JobsStorageException):
 
 @dataclass(frozen=True)
 class JobFilter:
-    statuses: AbstractSet[JobStatus]
+    statuses: AbstractSet[JobStatus] = field(default_factory=set)
+    owner: Optional[str] = None
+    name: Optional[str] = None
+
+    def with_owner(self, owner: str) -> "JobFilter":
+        return JobFilter(statuses=self.statuses, name=self.name, owner=owner)
 
 
 class JobsStorage(ABC):
@@ -108,6 +115,10 @@ class InMemoryJobsStorage(JobsStorage):
     def _apply_filter(self, job_filter: JobFilter, job: Job) -> bool:
         if job_filter.statuses and job.status not in job_filter.statuses:
             return False
+        if job_filter.owner and job_filter.owner != job.owner:
+            return False
+        if job_filter.name and job_filter.name != job.name:
+            return False
         return True
 
     async def get_all_jobs(self, job_filter: Optional[JobFilter] = None) -> List[Job]:
@@ -149,11 +160,20 @@ class RedisJobsStorage(JobsStorage):
         assert job_name, "job name is not defined"
         return f"job-last-created.owner.{owner}.name.{job_name}"
 
+    def _generate_jobs_name_index_zset_key(self, owner: str, job_name: str) -> str:
+        return f"jobs.name.{owner}.{job_name}"
+
     def _generate_jobs_deleted_index_key(self) -> str:
         return "jobs.deleted"
 
     def _generate_jobs_index_key(self) -> str:
         return "jobs"
+
+    def _generate_temp_zset_key(self) -> str:
+        """ Temporary index used for storing the result of operations over
+        Z-sets (union, intersection)
+        """
+        return f"temp_zset_{uuid4()}_{timestamp()}"
 
     @asynccontextmanager
     async def _acquire_conn(self) -> AsyncIterator[aioredis.Redis]:
@@ -289,13 +309,49 @@ class RedisJobsStorage(JobsStorage):
             jobs.append(self._parse_job_payload(payload))
         return jobs
 
-    async def _get_job_ids(self, statuses: AbstractSet[JobStatus]) -> List[str]:
-        if statuses:
-            keys = [self._generate_jobs_status_index_key(s) for s in statuses]
-            return [job_id.decode() for job_id in await self._client.sunion(*keys)]
+    async def _get_job_ids(
+        self,
+        statuses: AbstractSet[JobStatus],
+        owner: Optional[str] = None,
+        name: Optional[str] = None,
+    ) -> List[str]:
+        statuses_keys = [self._generate_jobs_status_index_key(s) for s in statuses]
+        if bool(owner) ^ bool(name):
+            raise ValueError(
+                "filtering jobs by name is allowed only together with owner, "
+                f"found: owner='{owner}', name='{name}'"
+            )
+        if owner and name:
+            name_key = self._generate_jobs_name_index_zset_key(owner, name)
+            if statuses:
+                payloads = await self._get_job_ids_filter_by_name_owner_statuses(
+                    name_key, statuses_keys
+                )
+            else:
+                payloads = await self._client.zrange(name_key)
         else:
-            key = self._generate_jobs_index_key()
-            return [job_id.decode() async for job_id in self._client.isscan(key)]
+            if statuses:
+                payloads = await self._client.sunion(*statuses_keys)
+            else:
+                jobs_key = self._generate_jobs_index_key()
+                payloads = [job_id async for job_id in self._client.isscan(jobs_key)]
+        return [job_id.decode() for job_id in payloads]
+
+    async def _get_job_ids_filter_by_name_owner_statuses(
+        self, name_key: str, statuses_keys: List[str]
+    ):
+        temp_keys = []
+        try:
+            for status_key in statuses_keys:
+                out_key = self._generate_temp_zset_key()
+                temp_keys.append(out_key)
+                await self._client.zinterstore(out_key, name_key, status_key)
+            result_temp_key = self._generate_temp_zset_key()
+            await self._client.zunionstore(result_temp_key, *temp_keys)
+            return await self._client.zrange(result_temp_key)
+        finally:
+            for out_key in temp_keys:
+                await self._client.delete(out_key)
 
     async def _get_job_ids_for_deletion(self) -> List[str]:
         tr = self._client.multi_exec()
@@ -311,8 +367,11 @@ class RedisJobsStorage(JobsStorage):
         return [id_.decode() for id_ in itertools.chain(failed, succeeded)]
 
     async def get_all_jobs(self, job_filter: Optional[JobFilter] = None) -> List[Job]:
-        statuses = job_filter.statuses if job_filter else set()
-        job_ids = await self._get_job_ids(statuses)
+        if not job_filter:
+            job_filter = JobFilter()
+        job_ids = await self._get_job_ids(
+            job_filter.statuses, job_filter.owner, job_filter.name
+        )
         return await self._get_jobs(job_ids)
 
     async def get_running_jobs(self) -> List[Job]:
