@@ -47,7 +47,7 @@ class JobsStorage(ABC):
         pass
 
     @abstractmethod
-    async def find_job(self, owner: str, job_name: str) -> Optional[Job]:
+    async def get_alive_job_or_none(self, owner: str, job_name: str) -> Optional[Job]:
         pass
 
     @abstractmethod
@@ -100,7 +100,7 @@ class InMemoryJobsStorage(JobsStorage):
             raise JobError(f"no such job {job_id}")
         return job
 
-    async def find_job(self, owner: str, job_name: str) -> Optional[Job]:
+    async def get_alive_job_or_none(self, owner: str, job_name: str) -> Optional[Job]:
         for record in self._job_records.values():
             if record.owner == owner and record.name == job_name:
                 return record
@@ -205,7 +205,7 @@ class RedisJobsStorage(JobsStorage):
     async def try_create_job(self, job: Job) -> AsyncIterator[Job]:
         if job.name is not None:
             async with self._watch_alive_job_name(job.owner, job.name) as storage:
-                another_job = await storage.find_job(job.owner, job.name)
+                another_job = await storage.get_alive_job_or_none(job.owner, job.name)
                 if another_job is not None:
                     raise JobStorageJobFoundError(
                         another_job.name, another_job.owner, another_job.id
@@ -248,7 +248,7 @@ class RedisJobsStorage(JobsStorage):
             raise JobError(f"no such job {job_id}")
         return self._parse_job_payload(payload)
 
-    async def find_job(self, owner: str, job_name: str) -> Optional[Job]:
+    async def get_alive_job_or_none(self, owner: str, job_name: str) -> Optional[Job]:
         key = self._generate_alive_job_name_index_key(owner, job_name)
         job_id_bytes = await self._client.get(key)
         if job_id_bytes is not None:
