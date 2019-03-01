@@ -176,7 +176,9 @@ class RedisJobsStorage(JobsStorage):
             yield storage
 
     @asynccontextmanager
-    async def _watch_key(self, key: str, error_msg: str) -> AsyncIterator["RedisJobsStorage"]:
+    async def _watch_key(
+        self, key: str, error_msg: str
+    ) -> AsyncIterator["RedisJobsStorage"]:
         async with self._acquire_conn() as client:
             try:
                 await client.watch(key)
