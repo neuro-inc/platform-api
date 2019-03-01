@@ -168,12 +168,16 @@ class JobsClient:
         t0 = time.monotonic()
         while True:
             response = await self.get_job_by_id(job_id)
-            if response["status"] == status:
+            last_status = response["status"]
+            if last_status == status:
                 return response
-            await asyncio.sleep(max(interval_s, time.monotonic() - t0))
+            await asyncio.sleep(interval_s)
             current_time = time.monotonic() - t0
             if current_time > max_time:
-                pytest.fail(f"too long: {current_time:.3f} sec")
+                pytest.fail(
+                    f"too long: {current_time:.3f} sec while waiting for {job_id}. "
+                    f"Waiting for status {status}, last status: {last_status}"
+                )
             interval_s *= 1.5
 
     async def delete_job(self, job_id: str):
