@@ -77,7 +77,7 @@ class InMemoryJobsStorage(JobsStorage):
                 if (
                     record.owner == job.owner
                     and record.name == job.name
-                    and record.status in (JobStatus.PENDING, JobStatus.RUNNING)
+                    and not record.is_finished
                 ):
                     raise JobStorageJobFoundError(job.name, job.owner, record.id)
         yield job
