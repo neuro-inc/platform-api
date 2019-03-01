@@ -223,11 +223,10 @@ class RedisJobsStorage(JobsStorage):
 
         if job.name is not None:
             name_key = self._generate_alive_job_name_index_key(job.owner, job.name)
-            if job.status in (JobStatus.PENDING, JobStatus.RUNNING):
-                # if the key exists, it's overwritten by 'set'
-                tr.set(name_key, job.id)
-            else:
+            if job.is_finished:
                 tr.delete(name_key)
+            else:
+                tr.set(name_key, job.id)  # overwrites existing value
 
         if job.is_deleted:
             tr.sadd(self._generate_jobs_deleted_index_key(), job.id)
