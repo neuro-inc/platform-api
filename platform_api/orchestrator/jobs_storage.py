@@ -128,6 +128,8 @@ class RedisJobsStorage(JobsStorage):
     ) -> None:
         self._client = client
         self._orchestrator_config = orchestrator_config
+        # TODO (ajuszkowski 1-mar-2019) I think it's better to somehow get encoding
+        # from redis configuration (client or server?), e.g. 'self._client.encoding'
         self._encoding = encoding
 
     def _decode(self, value: bytes) -> str:
