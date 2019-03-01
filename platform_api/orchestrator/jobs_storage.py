@@ -68,33 +68,35 @@ class InMemoryJobsStorage(JobsStorage):
     def __init__(self, orchestrator_config: OrchestratorConfig) -> None:
         self._orchestrator_config = orchestrator_config
 
-        self._job_records: Dict[str, Job] = {}
+        self._job_records: Dict[str, str] = {}
 
     @asynccontextmanager
     async def try_create_job(self, job: Job) -> AsyncIterator[Job]:
         if job.name is not None:
             for record in self._job_records.values():
+                stored_job = self._parse_job_payload(record)
                 if (
-                    record.owner == job.owner
-                    and record.name == job.name
-                    and not record.is_finished
+                    stored_job.owner == stored_job.owner
+                    and stored_job.name == stored_job.name
+                    and not stored_job.is_finished
                 ):
-                    raise JobStorageJobFoundError(job.name, job.owner, record.id)
+                    raise JobStorageJobFoundError(job.name, job.owner, stored_job.id)
         yield job
         await self.set_job(job)
 
     async def set_job(self, job: Job) -> None:
-        self._job_records[job.id] = job
+        payload = json.dumps(job.to_primitive())
+        self._job_records[job.id] = payload
 
     def _parse_job_payload(self, payload: str) -> Job:
         job_record = json.loads(payload)
         return Job.from_primitive(self._orchestrator_config, job_record)
 
     async def get_job(self, job_id: str) -> Job:
-        job = self._job_records.get(job_id)
-        if job is None:
+        payload = self._job_records.get(job_id)
+        if payload is None:
             raise JobError(f"no such job {job_id}")
-        return job
+        return self._parse_job_payload(payload)
 
     @asynccontextmanager
     async def try_update_job(self, job_id: str) -> AsyncIterator[Job]:
@@ -109,7 +111,8 @@ class InMemoryJobsStorage(JobsStorage):
 
     async def get_all_jobs(self, job_filter: Optional[JobFilter] = None) -> List[Job]:
         jobs = []
-        for job in self._job_records.values():
+        for payload in self._job_records.values():
+            job = self._parse_job_payload(payload)
             if job_filter and not self._apply_filter(job_filter, job):
                 continue
             jobs.append(job)
