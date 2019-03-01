@@ -47,10 +47,6 @@ class JobsStorage(ABC):
         pass
 
     @abstractmethod
-    async def get_alive_job_or_none(self, owner: str, job_name: str) -> Optional[Job]:
-        pass
-
-    @abstractmethod
     async def try_update_job(self, job_id: str) -> AsyncIterator[Job]:
         pass
 
@@ -99,12 +95,6 @@ class InMemoryJobsStorage(JobsStorage):
         if job is None:
             raise JobError(f"no such job {job_id}")
         return job
-
-    async def get_alive_job_or_none(self, owner: str, job_name: str) -> Optional[Job]:
-        for record in self._job_records.values():
-            if record.owner == owner and record.name == job_name:
-                return record
-        return None
 
     @asynccontextmanager
     async def try_update_job(self, job_id: str) -> AsyncIterator[Job]:
@@ -165,7 +155,7 @@ class RedisJobsStorage(JobsStorage):
             pool.release(conn)
 
     @asynccontextmanager
-    async def _watch_job_id(self, job_id: str) -> AsyncIterator[JobsStorage]:
+    async def _watch_job_id(self, job_id: str) -> AsyncIterator["RedisJobsStorage"]:
         key = self._generate_job_key(job_id)
         error_msg = f"Job with id='{job_id}' has been changed"
         async with self._watch_key(key, error_msg) as storage:
@@ -174,14 +164,14 @@ class RedisJobsStorage(JobsStorage):
     @asynccontextmanager
     async def _watch_alive_job_name(
         self, owner: str, job_name: str
-    ) -> AsyncIterator[JobsStorage]:
+    ) -> AsyncIterator["RedisJobsStorage"]:
         key = self._generate_alive_job_name_index_key(owner, job_name)
         error_msg = f"Job with owner='{owner}', name='{job_name}' has been changed"
         async with self._watch_key(key, error_msg) as storage:
             yield storage
 
     @asynccontextmanager
-    async def _watch_key(self, key: str, error_msg: str) -> AsyncIterator[JobsStorage]:
+    async def _watch_key(self, key: str, error_msg: str) -> AsyncIterator["RedisJobsStorage"]:
         async with self._acquire_conn() as client:
             try:
                 await client.watch(key)
