@@ -55,12 +55,10 @@ class NCForwarder(Forwarder):
         else:
             raise OSError("No ports are available")
         log.debug(f"Redirecting input/output")
-        command = ["nc", "127.0.0.1", str(port)]
+        command = ["nc", "-q", "3", "127.0.0.1", str(port)]
         nc_proc = await asyncio.create_subprocess_exec(*command)
         try:
-            nc_ret = await nc_proc.wait()
-            ssh_ret = await ssh_proc.wait()
-            return nc_ret or ssh_ret
+            await nc_proc.wait()
         finally:
             log.debug(f"Cleanup")
             try_kill(ssh_proc)
