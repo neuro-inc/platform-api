@@ -422,7 +422,7 @@ class TestRedisJobsStorage:
 
         with pytest.raises(
             JobStorageTransactionError,
-            match=f"Job with id='{pending_job.id}' has been changed",
+            match=f"Job \(id={pending_job.id}\) has been changed",
         ):
 
             async with storage.try_update_job(pending_job.id) as first_job:
