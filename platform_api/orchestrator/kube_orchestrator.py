@@ -6,6 +6,7 @@ from typing import Dict, Iterable, List, Optional, Union
 
 from aioelasticsearch import Elasticsearch
 
+from ..config import OrchestratorConfig  # noqa
 from .base import LogReader, Orchestrator, Telemetry
 from .job import Job, JobStatusItem
 from .job_request import JobError, JobNotFoundException, JobStatus
@@ -31,7 +32,6 @@ from .kube_client import (
     Volume,
 )
 from .logs import ElasticsearchLogReader, PodContainerLogReader
-from ..config import OrchestratorConfig  # noqa
 
 
 logger = logging.getLogger(__name__)

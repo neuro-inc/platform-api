@@ -1,6 +1,5 @@
 import asyncio
 from pathlib import PurePath
-from unittest import mock
 
 import pytest
 

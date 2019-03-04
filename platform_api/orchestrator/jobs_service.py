@@ -10,7 +10,6 @@ from .jobs_storage import (
     InMemoryJobsStorage,
     JobFilter,
     JobsStorage,
-    JobsStorageException,
     JobStorageJobFoundError,
     JobStorageTransactionError,
 )
@@ -113,7 +112,6 @@ class JobsService:
         try:
             async with self._jobs_storage.try_create_job(job) as saved_job:
                 await self._orchestrator.start_job(saved_job, user.token)
-
             return saved_job, Status.create(job.status)
 
         except JobStorageJobFoundError as name_conflict_err:

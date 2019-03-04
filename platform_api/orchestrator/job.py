@@ -8,8 +8,8 @@ from typing import Any, Dict, Iterable, List, Optional, Sequence
 import iso8601
 from yarl import URL
 
-from .job_request import JobRequest, JobStatus
 from ..config import OrchestratorConfig  # noqa
+from .job_request import JobRequest, JobStatus
 
 
 logger = logging.getLogger(__name__)
