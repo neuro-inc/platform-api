@@ -11,6 +11,7 @@ from .jobs_storage import (
     JobFilter,
     JobsStorage,
     JobsStorageException,
+    JobStorageJobFoundError,
     JobStorageTransactionError,
 )
 from .status import Status
@@ -108,13 +109,27 @@ class JobsService:
             name=job_name,
             is_preemptible=is_preemptible,
         )
+        job_id = job_request.job_id
         try:
             async with self._jobs_storage.try_create_job(job) as saved_job:
                 await self._orchestrator.start_job(saved_job, user.token)
+
             return saved_job, Status.create(job.status)
-        except JobsStorageException as e:
-            logger.error(f"Failed to create job {job_request.job_id}: {e}")
-            raise JobsServiceException(f"Failed to create job: {e}")
+
+        except JobStorageJobFoundError as name_conflict_err:
+            logger.error(f"Failed to create job {job_id}: {name_conflict_err}")
+            raise JobsServiceException(f"Failed to create job: {name_conflict_err}")
+
+        except JobStorageTransactionError as transaction_err:
+            logger.error(f"Failed to create job {job_id}: {transaction_err}")
+            try:
+                await self._orchestrator.delete_job(job)
+            except Exception as cleanup_exc:
+                logger.info(
+                    f"Failed to cleanup job {job_id} during unsuccessful "
+                    f"creation: {cleanup_exc}"
+                )
+            raise JobsServiceException(f"Failed to create job: {transaction_err}")
 
     async def get_job_status(self, job_id: str) -> JobStatus:
         job = await self._jobs_storage.get_job(job_id)

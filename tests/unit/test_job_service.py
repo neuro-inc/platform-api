@@ -211,6 +211,50 @@ class TestJobsService:
         assert job.status == JobStatus.PENDING
 
     @pytest.mark.asyncio
+    async def test_create_job__transaction_error__job_is_cleaned_up__ok(
+        self, mock_orchestrator, job_request_factory
+    ):
+        mock_orchestrator.raise_on_delete = False
+
+        storage = InMemoryJobsStorage(orchestrator_config=mock_orchestrator.config)
+        storage.fail_set_job_transaction = True
+        jobs_service = JobsService(orchestrator=mock_orchestrator, jobs_storage=storage)
+
+        user = User(name="testuser", token="")
+        job_name = "test-Job_name"
+
+        request = job_request_factory()
+
+        with pytest.raises(
+            JobsServiceException, match=f"Failed to create job: transaction failed"
+        ):
+            job, _ = await jobs_service.create_job(request, user, job_name=job_name)
+            # check that the job was cleaned up:
+            assert job in mock_orchestrator.successfully_deleted_jobs
+
+    @pytest.mark.asyncio
+    async def test_create_job__transaction_error__job_failed_to_be_cleaned_up(
+        self, mock_orchestrator, job_request_factory
+    ):
+        mock_orchestrator.raise_on_delete = True
+
+        storage = InMemoryJobsStorage(orchestrator_config=mock_orchestrator.config)
+        storage.fail_set_job_transaction = True
+        jobs_service = JobsService(orchestrator=mock_orchestrator, jobs_storage=storage)
+
+        user = User(name="testuser", token="")
+        job_name = "test-Job_name"
+
+        request = job_request_factory()
+
+        with pytest.raises(
+            JobsServiceException, match=f"Failed to create job: transaction failed"
+        ):
+            job, _ = await jobs_service.create_job(request, user, job_name=job_name)
+            # check that the job failed to be cleaned up (failure ignored):
+            assert job not in mock_orchestrator.successfully_deleted_jobs
+
+    @pytest.mark.asyncio
     async def test_get_status_by_job_id(self, jobs_service, mock_job_request):
         user = User(name="testuser", token="")
         job, _ = await jobs_service.create_job(job_request=mock_job_request, user=user)

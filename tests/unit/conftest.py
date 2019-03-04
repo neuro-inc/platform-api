@@ -1,5 +1,6 @@
 import asyncio
 from pathlib import PurePath
+from unittest import mock
 
 import pytest
 
@@ -28,6 +29,7 @@ class MockOrchestrator(Orchestrator):
 
         self.raise_on_get_job_status = False
         self.raise_on_delete = False
+        self._successfully_deleted_jobs = []
 
     @property
     def config(self):
@@ -46,13 +48,17 @@ class MockOrchestrator(Orchestrator):
             raise JobNotFoundException(f"job {job.id} was not found")
         return JobStatusItem.create(self._mock_status_to_return)
 
-    async def delete_job(self, *args, **kwargs):
+    async def delete_job(self, job: Job) -> JobStatus:
         if self.raise_on_delete:
             raise JobError()
+        self._successfully_deleted_jobs.append(job)
         return JobStatus.SUCCEEDED
 
     def update_status_to_return(self, new_status: JobStatus):
         self._mock_status_to_return = new_status
+
+    def successfully_deleted_jobs(self):
+        return self._successfully_deleted_jobs
 
     async def get_job_log_reader(self, job: Job) -> LogReader:
         pass
