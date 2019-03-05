@@ -120,8 +120,8 @@ class JobsService:
             try:
                 await self._orchestrator.delete_job(job)
             except Exception as cleanup_exc:
-                # ignore exception
-                logger.info(
+                # ignore exceptions
+                logger.warning(
                     f"Failed to cleanup job {job_id} during unsuccessful "
                     f"creation: {cleanup_exc}"
                 )
