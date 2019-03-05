@@ -10,6 +10,7 @@ from .jobs_storage import (
     InMemoryJobsStorage,
     JobFilter,
     JobsStorage,
+    JobsStorageException,
     JobStorageJobFoundError,
     JobStorageTransactionError,
 )
@@ -114,11 +115,7 @@ class JobsService:
                 await self._orchestrator.start_job(saved_job, user.token)
             return saved_job, Status.create(job.status)
 
-        except JobStorageJobFoundError as name_conflict_err:
-            logger.error(f"Failed to create job {job_id}: {name_conflict_err}")
-            raise JobsServiceException(f"Failed to create job: {name_conflict_err}")
-
-        except JobStorageTransactionError as transaction_err:
+        except JobsStorageException as transaction_err:
             logger.error(f"Failed to create job {job_id}: {transaction_err}")
             try:
                 await self._orchestrator.delete_job(job)

@@ -164,96 +164,74 @@ class RedisJobsStorage(JobsStorage):
                 pool.release(conn)
 
     @asynccontextmanager
-    async def _watch_key(
-        self, client: aioredis.Redis, key: str, description: str
-    ) -> AsyncGenerator:
-        try:
-            await client.watch(key)
-            yield
-        except (aioredis.errors.MultiExecError, aioredis.errors.WatchVariableError):
-            raise JobStorageTransactionError(f"Job ({description}) has been changed")
-        finally:
-            await client.unwatch()
+    async def _watch_keys(
+        self, description: str, key: str, *other_keys: Optional[str]
+    ) -> AsyncIterator[JobsStorage]:
+        other_keys = filter(lambda key: key is not None, other_keys)
+        async with self._acquire_conn() as client:
+            try:
+                await client.watch(key, *other_keys)
+
+                yield type(self)(
+                    client=client, orchestrator_config=self._orchestrator_config
+                )
+            except (aioredis.errors.MultiExecError, aioredis.errors.WatchVariableError):
+                raise JobStorageTransactionError(f"Job {{{description}}} has changed")
+            finally:
+                await client.unwatch()
 
     @asynccontextmanager
-    async def watch_id_key(
-        self, client: aioredis.Redis, job_id: str
-    ) -> AsyncIterator[str]:
-        id_key = self._generate_job_key(job_id)
+    async def _watch_job_id_and_name_keys(
+        self, job_id: str, owner: str, job_name: str
+    ) -> AsyncIterator[JobsStorage]:
         description = f"id={job_id}"
-        async with self._watch_key(client, id_key, description):
-            yield id_key
-
-    @asynccontextmanager
-    async def watch_name_key(
-        self, client: aioredis.Redis, owner: str, name: str
-    ) -> AsyncIterator[str]:
-        name_key = self._generate_alive_job_name_index_key(owner, name)
-        description = f"owner={owner}, name={name}"
-        async with self._watch_key(client, name_key, description):
-            yield name_key
-
-    def _create_storage(self, client: aioredis.Redis):
-        return type(self)(client=client, orchestrator_config=self._orchestrator_config)
+        job_id_key = self._generate_job_key(job_id)
+        job_name_key = None
+        if job_name:
+            description += f", owner={owner}, name={job_name}"
+            job_name_key = self._generate_alive_job_name_index_key(owner, job_name)
+        async with self._watch_keys(description, job_id_key, job_name_key) as storage:
+            yield storage
 
     @asynccontextmanager
     async def try_update_job(self, job_id: str) -> AsyncIterator[Job]:
-        async with self._acquire_conn() as client:
-            storage = self._create_storage(client)
-            async with storage.watch_id_key(client, job_id):
-                job = await storage.get_job(job_id)
-                if job.name:
-                    async with storage.watch_name_key(
-                        client, job.owner, job.name
-                    ) as name_key:
+        # here we assume that job.name does not change and thus we can avoid
+        # watching job_id at this moment
+        job_name = (await self.get_job(job_id)).name
 
-                        yield job
+        async with self._watch_job_id_and_name_keys(job_id, job_name) as storage:
+            job = await storage.get_job(job_id)
 
-                        another = await storage.get_job_by_key(name_key)
-                        need_to_update_name_index = another is None or (
-                            another.owner == job.owner and another.name == job.name
-                        )
-                        await storage.update_job_in_transaction(
-                            job, need_to_update_name_index
-                        )
-                else:
-                    yield job
-                    await storage.update_job_in_transaction(
-                        job, need_to_update_name_index=False
-                    )
+            yield job
+
+            if job.name is None:
+                await storage.update_job_atomic(job, need_to_update_name_index=False)
+            else:
+                another = await storage.get_job_by_name(job_name)
+                need_to_update_name_index = another is None or another.id == job.id
+                await storage.update_job_atomic(job, need_to_update_name_index)
 
     @asynccontextmanager
     async def try_create_job(self, job: Job) -> AsyncIterator[Job]:
-        async with self._acquire_conn() as client:
-            storage = self._create_storage(client)
-            async with storage.watch_id_key(client, job.id):
-                if job.name:
-                    async with storage.watch_name_key(
-                        client, job.owner, job.name
-                    ) as name_key:
-                        another = await storage.get_job_by_key(name_key)
-                        if another is not None:
-                            raise JobStorageJobFoundError(
-                                another.name, another.owner, another.id
-                            )
-
-                        yield job
-
-                        await storage.update_job_in_transaction(
-                            job, need_to_update_name_index=True
-                        )
-                else:
-                    yield job
-                    await storage.update_job_in_transaction(
-                        job, need_to_update_name_index=False
+        async with self._watch_job_id_and_name_keys(job.id, job.name) as storage:
+            if job.name:
+                another = await storage.get_job_by_name(job.name)
+                if another is not None:
+                    raise JobStorageJobFoundError(
+                        another.name, another.owner, another.id
                     )
+                yield job
+                await storage.update_job_atomic(job, need_to_update_name_index=True)
+            else:
+                yield job
+                await storage.update_job_atomic(job, need_to_update_name_index=False)
 
     async def set_job(self, job: Job) -> None:
         # TODO (ajuszkowski, 4-feb-2019) remove this method from interface as well
-        # because it does not watch values
-        await self.update_job_in_transaction(job, need_to_update_name_index=True)
+        # because it does not watch keys that it updates
+        await self.update_job_atomic(job, need_to_update_name_index=True)
 
-    async def update_job_in_transaction(
+    async def update_job_atomic(
         self, job: Job, need_to_update_name_index: bool
     ) -> None:
         payload = json.dumps(job.to_primitive())
@@ -286,8 +264,9 @@ class RedisJobsStorage(JobsStorage):
             raise JobError(f"no such job {job_id}")
         return self._parse_job_payload(payload)
 
-    async def get_job_by_key(self, get_job_id_key: str) -> Optional[Job]:
-        job_id_bytes = await self._client.get(get_job_id_key)
+    async def get_job_by_name(self, owner: str, job_name: str) -> Optional[Job]:
+        job_name_key = self._generate_alive_job_name_index_key(owner, job_name)
+        job_id_bytes = await self._client.get(job_name_key)
         if job_id_bytes is not None:
             job_id = self._decode(job_id_bytes)
             return await self.get_job(job_id)
