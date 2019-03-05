@@ -165,9 +165,8 @@ class RedisJobsStorage(JobsStorage):
 
     @asynccontextmanager
     async def _watch_keys(
-        self, description: str, key: str, *other_keys: Optional[str]
+        self, description: str, key: str, *other_keys: str
     ) -> AsyncIterator[JobsStorage]:
-        other_keys = filter(lambda key: key is not None, other_keys)
         async with self._acquire_conn() as client:
             try:
                 await client.watch(key, *other_keys)
@@ -184,22 +183,28 @@ class RedisJobsStorage(JobsStorage):
     async def _watch_job_id_and_name_keys(
         self, job_id: str, owner: str, job_name: str
     ) -> AsyncIterator[JobsStorage]:
-        description = f"id={job_id}"
+        assert job_name is not None
+        description = f"id={job_id}, owner={owner}, name={job_name}"
         job_id_key = self._generate_job_key(job_id)
-        job_name_key = None
-        if job_name:
-            description += f", owner={owner}, name={job_name}"
-            job_name_key = self._generate_alive_job_name_index_key(owner, job_name)
+        job_name_key = self._generate_alive_job_name_index_key(owner, job_name)
         async with self._watch_keys(description, job_id_key, job_name_key) as storage:
             yield storage
 
     @asynccontextmanager
-    async def try_update_job(self, job_id: str) -> AsyncIterator[Job]:
-        # here we assume that job.name does not change and thus we can avoid
-        # watching job_id at this moment
-        job_name = (await self.get_job(job_id)).name
+    async def _watch_job_id_key(self, job_id: str) -> AsyncIterator[JobsStorage]:
+        description = f"id={job_id}"
+        job_id_key = self._generate_job_key(job_id)
+        async with self._watch_keys(description, job_id_key) as storage:
+            yield storage
 
-        async with self._watch_job_id_and_name_keys(job_id, job_name) as storage:
+    @asynccontextmanager
+    async def try_update_job(self, job_id: str) -> AsyncIterator[Job]:
+        # No need to WATCH the alive-job-name key ("job-alive.name.{owner}.{job_name}")
+        # with the following assumptions:
+        # - `try_update_job` can only read or delete alive-job-name key
+        # - `try_create_job` can only read or create alive-job-name key
+        # - `try_create_job` fails if alive-job-name is not None
+        async with self._watch_job_id_key(job_id) as storage:
             job = await storage.get_job(job_id)
 
             yield job
@@ -207,19 +212,19 @@ class RedisJobsStorage(JobsStorage):
             if job.name is None:
                 await storage.update_job_atomic(job, need_to_update_name_index=False)
             else:
-                another = await storage.get_job_by_name(job_name)
-                need_to_update_name_index = another is None or another.id == job.id
-                await storage.update_job_atomic(job, need_to_update_name_index)
+                another = await storage.get_job_by_name(job.name)
+                await storage.update_job_atomic(
+                    job,
+                    need_to_update_name_index=(another is None or another.id == job.id),
+                )
 
     @asynccontextmanager
     async def try_create_job(self, job: Job) -> AsyncIterator[Job]:
         async with self._watch_job_id_and_name_keys(job.id, job.name) as storage:
             if job.name:
-                another = await storage.get_job_by_name(job.name)
-                if another is not None:
-                    raise JobStorageJobFoundError(
-                        another.name, another.owner, another.id
-                    )
+                other = await storage.get_job_by_name(job.name)
+                if other is not None:
+                    raise JobStorageJobFoundError(other.name, other.owner, other.id)
                 yield job
                 await storage.update_job_atomic(job, need_to_update_name_index=True)
             else:
@@ -234,6 +239,13 @@ class RedisJobsStorage(JobsStorage):
     async def update_job_atomic(
         self, job: Job, need_to_update_name_index: bool
     ) -> None:
+        if need_to_update_name_index:
+            name_key = self._generate_alive_job_name_index_key(job.owner, job.name)
+            another_alive_job = await self._client.get(name_key)  # for debug purposes
+        else:
+            name_key = None
+            another_alive_job = None
+
         payload = json.dumps(job.to_primitive())
 
         tr = self._client.multi_exec()
@@ -244,11 +256,12 @@ class RedisJobsStorage(JobsStorage):
         tr.sadd(self._generate_jobs_status_index_key(job.status), job.id)
 
         if need_to_update_name_index:
-            name_key = self._generate_alive_job_name_index_key(job.owner, job.name)
             if job.is_finished:
-                tr.delete(name_key)
+                assert another_alive_job is not None, "job is not running"  # TODO: log.error , not assert!
+                tr.delete(name_key)  # can be only while `try_update_job`
             else:
-                tr.set(name_key, job.id)  # overwrites existing value
+                assert another_alive_job is None, f"job conflict: {another_alive_job}"
+                tr.set(name_key, job.id)  # can be only while `try_create_job`
 
         if job.is_deleted:
             tr.sadd(self._generate_jobs_deleted_index_key(), job.id)
