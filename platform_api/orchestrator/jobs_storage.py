@@ -68,7 +68,6 @@ class InMemoryJobsStorage(JobsStorage):
     def __init__(self, orchestrator_config: OrchestratorConfig) -> None:
         self._orchestrator_config = orchestrator_config
         self._job_records: Dict[str, str] = {}
-        self.fail_set_job_transaction = False
 
     @asynccontextmanager
     async def try_create_job(self, job: Job) -> AsyncIterator[Job]:
@@ -86,8 +85,6 @@ class InMemoryJobsStorage(JobsStorage):
 
     async def set_job(self, job: Job) -> None:
         payload = json.dumps(job.to_primitive())
-        if self.fail_set_job_transaction:
-            raise JobStorageTransactionError("transaction failed")
         self._job_records[job.id] = payload
 
     def _parse_job_payload(self, payload: str) -> Job:
