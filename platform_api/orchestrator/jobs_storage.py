@@ -209,7 +209,7 @@ class RedisJobsStorage(JobsStorage):
     async def try_create_job(self, job: Job) -> AsyncIterator[Job]:
         if job.name:
             async with self._watch_job_id_and_name_keys(job.id, job.name) as storage:
-                other_id = await storage.get_job_by_name(job.name)
+                other_id = await storage.get_last_created_job_by_name(job.name)
                 if other_id is not None:
                     other_job = await storage.get_job(other_id)
                     if not other_job.is_finished:
@@ -265,7 +265,9 @@ class RedisJobsStorage(JobsStorage):
             raise JobError(f"no such job {job_id}")
         return self._parse_job_payload(payload)
 
-    async def get_job_by_name(self, owner: str, job_name: str) -> Optional[Job]:
+    async def get_last_created_job_by_name(
+        self, owner: str, job_name: str
+    ) -> Optional[Job]:
         job_name_key = self._generate_last_job_name_index_key(owner, job_name)
         job_id_bytes = await self._client.get(job_name_key)
         if job_id_bytes is not None:
