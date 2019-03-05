@@ -199,6 +199,8 @@ class RedisJobsStorage(JobsStorage):
     @asynccontextmanager
     async def try_update_job(self, job_id: str) -> AsyncIterator[Job]:
         async with self._watch_job_id_key(job_id) as storage:
+            # note, this method does not need to WATCH the job-last-created key as it
+            # does not rely on this key
             job = await storage.get_job(job_id)
             yield job
             await storage.update_job_atomically(job)
@@ -214,7 +216,12 @@ class RedisJobsStorage(JobsStorage):
                         raise JobStorageJobFoundError(
                             other_id.name, other_id.owner, other_id.id
                         )
+                # with the yield below, the job creation signal is sent to orchestrator.
+                # Thus, if a job with the same name already exists, the appropriate
+                # exception is thrown before sending this signal to the orchestrator.
                 yield job
+                # after the orchestrator has started the job, it fills the 'job' object
+                # with some new values, so we write the new value of 'job' to Redis:
                 await storage.update_job_atomically(job, need_to_update_name_index=True)
         else:
             async with self._watch_job_id_key(job.id) as storage:
@@ -223,8 +230,9 @@ class RedisJobsStorage(JobsStorage):
 
     async def set_job(self, job: Job) -> None:
         # TODO (ajuszkowski, 4-feb-2019) remove this method from interface as well
-        # because it does not watch keys that it updates
-        await self.update_job_atomically(job)
+        # because it does not watch keys that it updates AND it does not update
+        # the 'last-job-created' key!
+        await self.update_job_atomically(job, need_to_update_name_index=False)
 
     async def update_job_atomically(
         self, job: Job, need_to_update_name_index: bool = False
