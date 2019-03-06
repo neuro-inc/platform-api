@@ -741,11 +741,19 @@ class TestContainerHTTPServer:
 
     def test_to_primitive(self):
         server = ContainerHTTPServer(port=1234)
-        assert server.to_primitive() == {"port": 1234, "health_check_path": "/"}
+        assert server.to_primitive() == {
+            "port": 1234,
+            "health_check_path": "/",
+            "is_auth_required": False,
+        }
 
     def test_to_primitive_health_check_path(self):
         server = ContainerHTTPServer(port=1234, health_check_path="/path")
-        assert server.to_primitive() == {"port": 1234, "health_check_path": "/path"}
+        assert server.to_primitive() == {
+            "port": 1234,
+            "health_check_path": "/path",
+            "is_auth_required": False,
+        }
 
 
 class TestContainerSSHServer:

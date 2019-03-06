@@ -100,12 +100,14 @@ class ContainerResources:
 class ContainerHTTPServer:
     port: int
     health_check_path: str = "/"
+    is_auth_required: bool = False
 
     @classmethod
     def from_primitive(cls, payload) -> "ContainerHTTPServer":
         return cls(  # type: ignore
             port=payload["port"],
             health_check_path=payload.get("health_check_path") or cls.health_check_path,
+            is_auth_required=payload.get("is_auth_required", cls.is_auth_required),
         )
 
     def to_primitive(self) -> Dict:
