@@ -73,6 +73,9 @@ class ContainerBuilder:
                 health_check_path=http.get(
                     "health_check_path", ContainerHTTPServer.health_check_path
                 ),
+                requires_auth=http.get(
+                    "requires_auth", ContainerHTTPServer.requires_auth
+                ),
             )
             builder.set_http_server(http_server)
 
