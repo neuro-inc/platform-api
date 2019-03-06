@@ -100,6 +100,7 @@ def convert_job_container_to_json(
         ret["http"] = {
             "port": container.http_server.port,
             "health_check_path": container.http_server.health_check_path,
+            "auth_required": container.http_server.is_auth_required,
         }
     if container.ssh_server is not None:
         ret["ssh"] = {"port": container.ssh_server.port}

@@ -102,6 +102,7 @@ def create_container_validator(
                 {
                     "port": t.Int(gte=0, lte=65535),
                     t.Key("health_check_path", optional=True): t.String,
+                    t.Key("auth_required", optional=True, default=True): t.Bool,
                 }
             ),
             t.Key("ssh", optional=True): t.Dict({"port": t.Int(gte=0, lte=65535)}),
