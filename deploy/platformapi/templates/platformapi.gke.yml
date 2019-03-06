@@ -131,6 +131,10 @@ spec:
   - host: {{ printf "%s" (pluck .Values.global.env .Values.INGRESS_HOST_TEMPORARY_NEW_DOMAIN | first | default .Values.INGRESS_HOST_TEMPORARY_NEW_DOMAIN._default) }}
     http:
       paths:
+      - path: /oauth
+        backend:
+          serviceName: platformingressauth
+          servicePort: 8080
       - path: /api/v1/storage
         backend:
           serviceName: platformstorageapi
