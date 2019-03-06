@@ -24,3 +24,33 @@ spec:
       - backend:
           serviceName: platformingressfallback
           servicePort: 80
+---
+apiVersion: extensions/v1beta1
+kind: Ingress
+metadata:
+  name: platformjobsingressauth
+  annotations:
+    kubernetes.io/ingress.class: traefik
+    traefik.ingress.kubernetes.io/error-pages: |-
+      default:
+        status:
+        - "500-600"
+        backend: error-pages
+        query: /
+    ingress.kubernetes.io/auth-type: forward
+    ingress.kubernetes.io/auth-trust-headers: "true"
+    ingress.kubernetes.io/auth-url: http://platformingressauth:8080/oauth/authorize
+spec:
+  rules:
+  - host: error-pages
+    http:
+      paths:
+      - backend:
+          serviceName: platformingressfallback
+          servicePort: 80
+  - host: {{ printf "%s" (pluck .Values.global.env .Values.INGRESS_FALLBACK_HOST | first | default .Values.INGRESS_FALLBACK_HOST._default) }}
+    http:
+      paths:
+      - backend:
+          serviceName: platformingressfallback
+          servicePort: 80
