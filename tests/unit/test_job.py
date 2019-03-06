@@ -739,12 +739,17 @@ class TestContainerHTTPServer:
         server = ContainerHTTPServer.from_primitive(payload)
         assert server == ContainerHTTPServer(port=1234, health_check_path="/path")
 
+    def test_from_primitive_requires_auth(self):
+        payload = {"port": 1234, "requires_auth": True}
+        server = ContainerHTTPServer.from_primitive(payload)
+        assert server == ContainerHTTPServer(port=1234, requires_auth=True)
+
     def test_to_primitive(self):
         server = ContainerHTTPServer(port=1234)
         assert server.to_primitive() == {
             "port": 1234,
             "health_check_path": "/",
-            "is_auth_required": False,
+            "requires_auth": False,
         }
 
     def test_to_primitive_health_check_path(self):
@@ -752,7 +757,7 @@ class TestContainerHTTPServer:
         assert server.to_primitive() == {
             "port": 1234,
             "health_check_path": "/path",
-            "is_auth_required": False,
+            "requires_auth": False,
         }
 
 
