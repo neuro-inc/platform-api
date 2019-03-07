@@ -143,7 +143,7 @@ class RedisJobsStorage(JobsStorage):
         return f"jobs.status.{status}"
 
     def _generate_last_job_name_index_key(self, owner: str, job_name: str) -> str:
-        return f"job-last-created.name.{owner}.{job_name}"  # todo: SETEX
+        return f"job-last-created.owner.{owner}.name.{job_name}"
 
     def _generate_jobs_deleted_index_key(self) -> str:
         return "jobs.deleted"
@@ -209,14 +209,14 @@ class RedisJobsStorage(JobsStorage):
     async def try_create_job(self, job: Job) -> AsyncIterator[Job]:
         if job.name:
             async with self._watch_job_id_and_name_keys(job.id, job.name) as storage:
-                other_id = await storage.get_last_created_job_by_name(job.name)
+                other_id = await storage.get_last_created_job(job.owner, job.name)
                 if other_id is not None:
                     other_job = await storage.get_job(other_id)
                     if not other_job.is_finished:
                         raise JobStorageJobFoundError(
                             other_id.name, other_id.owner, other_id.id
                         )
-                # with the yield below, the job creation signal is sent to orchestrator.
+                # with yield below, the job creation signal is sent to the orchestrator.
                 # Thus, if a job with the same name already exists, the appropriate
                 # exception is thrown before sending this signal to the orchestrator.
                 yield job
@@ -247,7 +247,7 @@ class RedisJobsStorage(JobsStorage):
         tr.sadd(self._generate_jobs_status_index_key(job.status), job.id)
 
         if need_to_update_name_index:
-            # can be here only when called by 'try_create_job'
+            # we can be here only when called by 'try_create_job'
             name_key = self._generate_last_job_name_index_key(job.owner, job.name)
             tr.setex(name_key, self._last_created_job_ttl_s, job.id)
 
@@ -265,9 +265,7 @@ class RedisJobsStorage(JobsStorage):
             raise JobError(f"no such job {job_id}")
         return self._parse_job_payload(payload)
 
-    async def get_last_created_job_by_name(
-        self, owner: str, job_name: str
-    ) -> Optional[Job]:
+    async def get_last_created_job(self, owner: str, job_name: str) -> Optional[Job]:
         job_name_key = self._generate_last_job_name_index_key(owner, job_name)
         job_id_bytes = await self._client.get(job_name_key)
         if job_id_bytes is not None:
