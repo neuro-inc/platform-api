@@ -97,6 +97,7 @@ metadata:
     kubernetes.io/ingress.class: traefik
     traefik.frontend.rule.type: PathPrefix
     external-dns.platform.neuromation.io: "true"
+    traefik.ingress.kubernetes.io/priority: "100"
 spec:
   rules:
   - host: {{ printf "%s" (pluck .Values.global.env .Values.INGRESS_HOST | first | default .Values.INGRESS_HOST._default) }}
