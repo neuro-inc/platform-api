@@ -3,7 +3,8 @@ from pathlib import PurePath
 
 import pytest
 
-from platform_api.config import RegistryConfig, StorageConfig
+from platform_api.orchestrator.jobs_storage import InMemoryJobsStorage, JobStorageTransactionError
+from platform_api.config import RegistryConfig, StorageConfig, OrchestratorConfig
 from platform_api.orchestrator import (
     Job,
     JobError,
@@ -56,6 +57,7 @@ class MockOrchestrator(Orchestrator):
     def update_status_to_return(self, new_status: JobStatus):
         self._mock_status_to_return = new_status
 
+    @property
     def successfully_deleted_jobs(self):
         return self._successfully_deleted_jobs
 
@@ -111,3 +113,16 @@ def event_loop():
     loop = asyncio.get_event_loop()
     yield loop
     loop.close()
+
+
+class MockJobsStorage(InMemoryJobsStorage):
+    # TODO (ajuszkowski, 7-mar-2019) get rid of InMemoryJobsStorage, keep only
+    # this mocked jobs storage
+    def __init__(self, orchestrator_config: OrchestratorConfig) -> None:
+        super().__init__(orchestrator_config)
+        self.fail_set_job_transaction = False
+
+    async def set_job(self, job: Job) -> None:
+        if self.fail_set_job_transaction:
+            raise JobStorageTransactionError("transaction failed")
+        await super().set_job(job)

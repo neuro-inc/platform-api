@@ -8,18 +8,16 @@ from platform_api.handlers.jobs_handler import convert_job_to_job_response
 from platform_api.orchestrator import Job, JobRequest, JobsService, JobStatus
 from platform_api.orchestrator.job import JobStatusItem
 from platform_api.orchestrator.job_request import Container, ContainerResources
-from platform_api.orchestrator.jobs_service import (
-    InMemoryJobsStorage,
-    JobsServiceException,
-)
+from platform_api.orchestrator.jobs_service import JobsServiceException
 from platform_api.orchestrator.jobs_storage import JobFilter
 from platform_api.user import User
+from tests.unit.conftest import MockJobsStorage
 
 
-class TestInMemoryJobsStorage:
+class TestMockJobsStorage:
     @pytest.mark.asyncio
     async def test_get_all_jobs_empty(self, mock_orchestrator):
-        jobs_storage = InMemoryJobsStorage(orchestrator_config=mock_orchestrator.config)
+        jobs_storage = MockJobsStorage(orchestrator_config=mock_orchestrator.config)
         jobs = await jobs_storage.get_all_jobs()
         assert not jobs
 
@@ -72,7 +70,7 @@ class TestInMemoryJobsStorage:
     async def test_set_get_job(self, mock_orchestrator):
         config = dataclasses.replace(mock_orchestrator.config, job_deletion_delay_s=0)
         mock_orchestrator.config = config
-        jobs_storage = InMemoryJobsStorage(orchestrator_config=mock_orchestrator.config)
+        jobs_storage = MockJobsStorage(orchestrator_config=mock_orchestrator.config)
 
         pending_job = Job(
             orchestrator_config=config, job_request=self._create_job_request()
@@ -155,7 +153,7 @@ class TestJobsService:
     async def test_create_job__name_conflict_with_running(
         self, mock_orchestrator, job_request_factory
     ):
-        storage = InMemoryJobsStorage(orchestrator_config=mock_orchestrator.config)
+        storage = MockJobsStorage(orchestrator_config=mock_orchestrator.config)
         jobs_service = JobsService(orchestrator=mock_orchestrator, jobs_storage=storage)
         user = User(name="testuser", token="")
         job_name = "test-Job_name"
@@ -185,7 +183,7 @@ class TestJobsService:
     async def test_create_job__name_no_conflict_with_another_in_terminal_status(
         self, mock_orchestrator, job_request_factory, first_job_status
     ):
-        storage = InMemoryJobsStorage(orchestrator_config=mock_orchestrator.config)
+        storage = MockJobsStorage(orchestrator_config=mock_orchestrator.config)
         jobs_service = JobsService(orchestrator=mock_orchestrator, jobs_storage=storage)
         user = User(name="testuser", token="")
         job_name = "test-Job_name"
@@ -211,12 +209,12 @@ class TestJobsService:
         assert job.status == JobStatus.PENDING
 
     @pytest.mark.asyncio
-    async def test_create_job__transaction_error__job_is_cleaned_up__ok(
+    async def test_create_job__clean_up_the_job_on_transaction_error__ok(
         self, mock_orchestrator, job_request_factory
     ):
         mock_orchestrator.raise_on_delete = False
 
-        storage = InMemoryJobsStorage(orchestrator_config=mock_orchestrator.config)
+        storage = MockJobsStorage(orchestrator_config=mock_orchestrator.config)
         storage.fail_set_job_transaction = True
         jobs_service = JobsService(orchestrator=mock_orchestrator, jobs_storage=storage)
 
@@ -233,12 +231,12 @@ class TestJobsService:
             assert job in mock_orchestrator.successfully_deleted_jobs
 
     @pytest.mark.asyncio
-    async def test_create_job__transaction_error__job_failed_to_be_cleaned_up(
+    async def test_create_job__clean_up_the_job_on_transaction_error__fail(
         self, mock_orchestrator, job_request_factory
     ):
         mock_orchestrator.raise_on_delete = True
 
-        storage = InMemoryJobsStorage(orchestrator_config=mock_orchestrator.config)
+        storage = MockJobsStorage(orchestrator_config=mock_orchestrator.config)
         storage.fail_set_job_transaction = True
         jobs_service = JobsService(orchestrator=mock_orchestrator, jobs_storage=storage)
 
@@ -278,7 +276,7 @@ class TestJobsService:
     async def test_get_all_filter_by_status(
         self, mock_orchestrator, job_request_factory
     ):
-        storage = InMemoryJobsStorage(orchestrator_config=mock_orchestrator.config)
+        storage = MockJobsStorage(orchestrator_config=mock_orchestrator.config)
         service = JobsService(orchestrator=mock_orchestrator, jobs_storage=storage)
         user = User(name="testuser", token="")
 
