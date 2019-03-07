@@ -100,12 +100,14 @@ class ContainerResources:
 class ContainerHTTPServer:
     port: int
     health_check_path: str = "/"
+    requires_auth: bool = False
 
     @classmethod
     def from_primitive(cls, payload) -> "ContainerHTTPServer":
         return cls(  # type: ignore
             port=payload["port"],
             health_check_path=payload.get("health_check_path") or cls.health_check_path,
+            requires_auth=payload.get("requires_auth", cls.requires_auth),
         )
 
     def to_primitive(self) -> Dict:
@@ -177,6 +179,10 @@ class Container:
     @property
     def has_ssh_server_exposed(self) -> bool:
         return bool(self.ssh_server)
+
+    @property
+    def requires_http_auth(self) -> bool:
+        return bool(self.http_server and self.http_server.requires_auth)
 
     @classmethod
     def from_primitive(cls, payload) -> "Container":

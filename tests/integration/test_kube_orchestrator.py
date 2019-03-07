@@ -461,8 +461,8 @@ class TestKubeOrchestrator:
                 interval_s *= 1.5
 
     @pytest.mark.asyncio
-    async def test_job_with_exposed_port(
-        self, kube_config, kube_orchestrator, kube_ingress_ip
+    async def test_job_with_exposed_http_server(
+        self, kube_config, kube_orchestrator, kube_ingress_ip, kube_client
     ):
         container = Container(
             image="python",
@@ -480,6 +480,41 @@ class TestKubeOrchestrator:
             await self._wait_for_job_service(
                 kube_ingress_ip, host=job.http_host, job_id=job.id
             )
+
+            ingress = await kube_client.get_ingress(kube_config.jobs_ingress_name)
+            assert ingress.find_rule_index_by_host(job.http_host) >= 0
+
+            ingress = await kube_client.get_ingress(kube_config.jobs_ingress_auth_name)
+            assert ingress.find_rule_index_by_host(job.http_host) == -1
+        finally:
+            await job.delete()
+
+    @pytest.mark.asyncio
+    async def test_job_with_exposed_http_server_with_auth(
+        self, kube_config, kube_orchestrator, kube_ingress_ip, kube_client
+    ):
+        container = Container(
+            image="python",
+            command="python -m http.server 80",
+            resources=ContainerResources(cpu=0.1, memory_mb=128),
+            http_server=ContainerHTTPServer(port=80, requires_auth=True),
+        )
+        job = MyJob(
+            orchestrator=kube_orchestrator, job_request=JobRequest.create(container)
+        )
+        try:
+            status = await job.start()
+            assert status == JobStatus.PENDING
+
+            await self._wait_for_job_service(
+                kube_ingress_ip, host=job.http_host, job_id=job.id
+            )
+
+            ingress = await kube_client.get_ingress(kube_config.jobs_ingress_name)
+            assert ingress.find_rule_index_by_host(job.http_host) == -1
+
+            ingress = await kube_client.get_ingress(kube_config.jobs_ingress_auth_name)
+            assert ingress.find_rule_index_by_host(job.http_host) >= 0
         finally:
             await job.delete()
 

@@ -303,6 +303,10 @@ class Job:
         return self._job_request.container.has_ssh_server_exposed
 
     @property
+    def requires_http_auth(self) -> bool:
+        return self._job_request.container.requires_http_auth
+
+    @property
     def _http_scheme(self) -> str:
         if self._orchestrator_config.is_http_ingress_secure:
             return "https"

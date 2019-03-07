@@ -739,13 +739,26 @@ class TestContainerHTTPServer:
         server = ContainerHTTPServer.from_primitive(payload)
         assert server == ContainerHTTPServer(port=1234, health_check_path="/path")
 
+    def test_from_primitive_requires_auth(self):
+        payload = {"port": 1234, "requires_auth": True}
+        server = ContainerHTTPServer.from_primitive(payload)
+        assert server == ContainerHTTPServer(port=1234, requires_auth=True)
+
     def test_to_primitive(self):
         server = ContainerHTTPServer(port=1234)
-        assert server.to_primitive() == {"port": 1234, "health_check_path": "/"}
+        assert server.to_primitive() == {
+            "port": 1234,
+            "health_check_path": "/",
+            "requires_auth": False,
+        }
 
     def test_to_primitive_health_check_path(self):
         server = ContainerHTTPServer(port=1234, health_check_path="/path")
-        assert server.to_primitive() == {"port": 1234, "health_check_path": "/path"}
+        assert server.to_primitive() == {
+            "port": 1234,
+            "health_check_path": "/path",
+            "requires_auth": False,
+        }
 
 
 class TestContainerSSHServer:

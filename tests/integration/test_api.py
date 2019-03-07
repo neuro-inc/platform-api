@@ -314,6 +314,7 @@ class TestModels:
     ):
         url = api.model_base_url
         model_train["is_preemptible"] = True
+        model_train["container"]["http"]["requires_auth"] = True
         async with client.post(
             url, headers=regular_user.headers, json=model_train
         ) as response:
@@ -332,6 +333,7 @@ class TestModels:
         retrieved_job = await jobs_client.get_job_by_id(job_id=job_id)
         assert retrieved_job["internal_hostname"] == expected_internal_hostname
         assert retrieved_job["name"] == "some-test-job-name"
+        assert retrieved_job["container"]["http"]["requires_auth"]
 
         await jobs_client.long_polling_by_job_id(job_id=job_id, status="succeeded")
         await jobs_client.delete_job(job_id=job_id)
@@ -351,6 +353,9 @@ class TestModels:
             job_id = result["job_id"]
             expected_url = f"ssh://{job_id}.ssh.platform.neuromation.io:22"
             assert result["ssh_server"] == expected_url
+
+        retrieved_job = await jobs_client.get_job_by_id(job_id=job_id)
+        assert not retrieved_job["container"]["http"]["requires_auth"]
 
         await jobs_client.long_polling_by_job_id(job_id=job_id, status="succeeded")
         await jobs_client.delete_job(job_id=job_id)
