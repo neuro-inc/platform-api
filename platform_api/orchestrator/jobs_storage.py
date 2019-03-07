@@ -67,19 +67,23 @@ class JobsStorage(ABC):
 class InMemoryJobsStorage(JobsStorage):
     def __init__(self, orchestrator_config: OrchestratorConfig) -> None:
         self._orchestrator_config = orchestrator_config
-        self._job_records: Dict[str, str] = {}
+        self._job_records: Dict[str, str] = {}  # job-id to job mapping
+        self._last_alive_job_records: Dict[str, str] = {}  # job-name+owner to job-id
+
+    def _generate_last_job_name_key(self, owner: str, job_name: str) -> str:
+        return f"job-last-created.owner.{owner}.name.{job_name}"
 
     @asynccontextmanager
     async def try_create_job(self, job: Job) -> AsyncIterator[Job]:
         if job.name is not None:
-            for record in self._job_records.values():
-                stored_job = self._parse_job_payload(record)
-                if (
-                    stored_job.owner == stored_job.owner
-                    and stored_job.name == stored_job.name
-                    and not stored_job.is_finished
-                ):
-                    raise JobStorageJobFoundError(job.name, job.owner, stored_job.id)
+            key = self._generate_last_job_name_key(job.owner, job.name)
+            same_name_job_id = self._last_alive_job_records.get(key)
+            if same_name_job_id is not None:
+                same_name_job_serialized = self._job_records[same_name_job_id]
+                same_name_job = self._parse_job_payload(same_name_job_serialized)
+                if not same_name_job.is_finished:
+                    raise JobStorageJobFoundError(job.name, job.owner, same_name_job_id)
+            self._last_alive_job_records[key] = job.id
         yield job
         await self.set_job(job)
 
