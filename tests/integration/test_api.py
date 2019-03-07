@@ -173,7 +173,7 @@ class JobsClient:
             await asyncio.sleep(max(interval_s, time.monotonic() - t0))
             current_time = time.monotonic() - t0
             if current_time > max_time:
-                pytest.fail(f"too long: {current_time:.3f} sec")
+                pytest.fail(f"too long: {current_time:.3f} sec; resp: {response}")
             interval_s *= 1.5
 
     async def delete_job(self, job_id: str):
