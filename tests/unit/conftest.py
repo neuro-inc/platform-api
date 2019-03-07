@@ -57,8 +57,7 @@ class MockOrchestrator(Orchestrator):
     def update_status_to_return(self, new_status: JobStatus):
         self._mock_status_to_return = new_status
 
-    @property
-    def successfully_deleted_jobs(self):
+    def get_successfully_deleted_jobs(self):
         return self._successfully_deleted_jobs
 
     async def get_job_log_reader(self, job: Job) -> LogReader:

@@ -228,7 +228,7 @@ class TestJobsService:
         ):
             job, _ = await jobs_service.create_job(request, user, job_name=job_name)
             # check that the job was cleaned up:
-            assert job in mock_orchestrator.successfully_deleted_jobs
+            assert job in mock_orchestrator.get_successfully_deleted_jobs()
 
     @pytest.mark.asyncio
     async def test_create_job__clean_up_the_job_on_transaction_error__fail(
@@ -250,7 +250,7 @@ class TestJobsService:
         ):
             job, _ = await jobs_service.create_job(request, user, job_name=job_name)
             # check that the job failed to be cleaned up (failure ignored):
-            assert job not in mock_orchestrator.successfully_deleted_jobs
+            assert job not in mock_orchestrator.get_successfully_deleted_jobs()
 
     @pytest.mark.asyncio
     async def test_get_status_by_job_id(self, jobs_service, mock_job_request):
