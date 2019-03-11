@@ -90,6 +90,7 @@ class JobStatusItemFactory:
 @dataclass(frozen=True)
 class KubeConfig(OrchestratorConfig):
     jobs_ingress_name: str = ""
+    jobs_ingress_auth_name: str = ""
 
     endpoint_url: str = ""
     cert_authority_path: Optional[str] = None
@@ -253,10 +254,7 @@ class KubeOrchestrator(Orchestrator):
             service = await self._create_service(descriptor)
             if job.has_http_server_exposed:
                 logger.info(f"Starting Ingress for {job.id}")
-                await self._client.add_ingress_rule(
-                    name=self._config.jobs_ingress_name,
-                    rule=IngressRule.from_service(host=job.http_host, service=service),
-                )
+                await self._create_ingress(job, service)
         job.status = convert_pod_status_to_job_status(status).status
         job.internal_hostname = self._get_service_internal_hostname(job.id, descriptor)
         return job.status
@@ -456,25 +454,37 @@ class KubeOrchestrator(Orchestrator):
         return await self._client.create_service(Service.create_for_pod(pod))
 
     async def _delete_service(self, job: Job) -> None:
-        # TODO (Rafa) we shall ensure that ingress exists, as it is not required
-        # for SSH, thus Pods without HTTP but thus which are having SSH,
-        # will not have it
         pod_id = self._get_job_pod_name(job)
-        host = job.http_host
-        try:
-            await self._client.remove_ingress_rule(
-                name=self._config.jobs_ingress_name, host=host
-            )
-        except Exception:
-            logger.exception(f"Failed to remove ingress rule {host}")
         try:
             await self._client.delete_service(name=pod_id)
         except Exception:
             logger.exception(f"Failed to remove service {pod_id}")
 
     async def delete_job(self, job: Job) -> JobStatus:
-        pod_id = self._get_job_pod_name(job)
+        if job.has_http_server_exposed:
+            await self._delete_ingress(job)
         if job.has_http_server_exposed or job.has_ssh_server_exposed:
             await self._delete_service(job)
+        pod_id = self._get_job_pod_name(job)
         status = await self._client.delete_pod(pod_id)
         return convert_pod_status_to_job_status(status).status
+
+    async def _create_ingress(self, job: Job, service: Service) -> None:
+        await self._client.add_ingress_rule(
+            name=self._get_ingress_name(job),
+            rule=IngressRule.from_service(host=job.http_host, service=service),
+        )
+
+    async def _delete_ingress(self, job: Job) -> None:
+        host = job.http_host
+        try:
+            await self._client.remove_ingress_rule(
+                name=self._get_ingress_name(job), host=host
+            )
+        except Exception:
+            logger.exception(f"Failed to remove ingress rule {host}")
+
+    def _get_ingress_name(self, job: Job) -> str:
+        if job.requires_http_auth and self._config.jobs_ingress_auth_name:
+            return self._config.jobs_ingress_auth_name
+        return self._config.jobs_ingress_name

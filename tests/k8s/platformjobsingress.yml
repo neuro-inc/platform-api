@@ -5,3 +5,11 @@ metadata:
 spec:
   rules:
   - host: unknown
+---
+apiVersion: extensions/v1beta1
+kind: Ingress
+metadata:
+  name: platformjobsingressauth
+spec:
+  rules:
+  - host: unknown

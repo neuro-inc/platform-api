@@ -121,6 +121,7 @@ class TestEnvironConfigFactory:
         assert config.orchestrator.client_read_timeout_s == 300
         assert config.orchestrator.client_conn_pool_size == 100
         assert config.orchestrator.jobs_ingress_name == "testingress"
+        assert config.orchestrator.jobs_ingress_auth_name == "testingress"
         assert not config.orchestrator.is_http_ingress_secure
         assert config.orchestrator.jobs_domain_name_template == "{job_id}.jobs.domain"
         assert config.orchestrator.ssh_ingress_domain_name == "ssh.domain"
@@ -178,6 +179,7 @@ class TestEnvironConfigFactory:
             "NP_K8S_CLIENT_READ_TIMEOUT": "222",
             "NP_K8S_CLIENT_CONN_POOL_SIZE": "333",
             "NP_K8S_JOBS_INGRESS_NAME": "testingress",
+            "NP_K8S_JOBS_INGRESS_AUTH_NAME": "testingressauth",
             "NP_K8S_JOBS_INGRESS_HTTPS": "True",
             "NP_K8S_JOBS_INGRESS_DOMAIN_NAME_TEMPLATE": "{job_id}.jobs.domain",
             "NP_K8S_SSH_INGRESS_DOMAIN_NAME": "ssh.domain",
@@ -223,6 +225,7 @@ class TestEnvironConfigFactory:
         assert config.orchestrator.client_read_timeout_s == 222
         assert config.orchestrator.client_conn_pool_size == 333
         assert config.orchestrator.jobs_ingress_name == "testingress"
+        assert config.orchestrator.jobs_ingress_auth_name == "testingressauth"
         assert config.orchestrator.is_http_ingress_secure
         assert config.orchestrator.jobs_domain_name_template == "{job_id}.jobs.domain"
         assert config.orchestrator.ssh_ingress_domain_name == "ssh.domain"
