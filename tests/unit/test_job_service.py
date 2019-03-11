@@ -9,7 +9,7 @@ from platform_api.orchestrator import Job, JobRequest, JobsService, JobStatus
 from platform_api.orchestrator.job import JobStatusItem
 from platform_api.orchestrator.job_request import Container, ContainerResources
 from platform_api.orchestrator.jobs_service import JobsServiceException
-from platform_api.orchestrator.jobs_storage import JobFilter
+from platform_api.orchestrator.jobs_storage import JobFilter, JobStorageJobFoundError
 from platform_api.user import User
 from tests.unit.conftest import MockJobsStorage
 
@@ -114,6 +114,26 @@ class TestMockJobsStorage:
 
         jobs = await jobs_storage.get_jobs_for_deletion()
         assert {job.id for job in jobs} == {succeeded_job.id}
+
+    @pytest.mark.asyncio
+    async def test_try_create_job(self, mock_orchestrator):
+        config = dataclasses.replace(mock_orchestrator.config, job_deletion_delay_s=0)
+        mock_orchestrator.config = config
+        jobs_storage = MockJobsStorage(orchestrator_config=mock_orchestrator.config)
+
+        job = Job(
+            orchestrator_config=config, job_request=self._create_job_request(), name="job-name"
+        )
+
+        async with jobs_storage.try_create_job(job) as new_job:
+            pass
+
+        retrieved_job = await jobs_storage.get_job(job.id)
+        assert retrieved_job.id == job.id
+
+        with pytest.raises(JobStorageJobFoundError):
+            async with jobs_storage.try_create_job(job) as new_job:
+                pass
 
 
 class TestJobsService:
