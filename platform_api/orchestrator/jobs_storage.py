@@ -2,7 +2,7 @@ import itertools
 import json
 from abc import ABC, abstractmethod
 from dataclasses import dataclass
-from typing import AbstractSet, AsyncIterator, Dict, List, Optional, Sequence
+from typing import AbstractSet, AsyncIterator, Dict, List, Optional, Sequence, Tuple
 
 import aioredis
 from async_generator import asynccontextmanager
@@ -67,16 +67,15 @@ class JobsStorage(ABC):
 class InMemoryJobsStorage(JobsStorage):
     def __init__(self, orchestrator_config: OrchestratorConfig) -> None:
         self._orchestrator_config = orchestrator_config
-        self._job_records: Dict[str, str] = {}  # job_id to job mapping
-        self._last_alive_job_records: Dict[str, str] = {}  # job_name+owner to job-id
-
-    def _generate_last_job_name_key(self, owner: str, job_name: str) -> str:
-        return f"job-last-created.owner.{owner}.name.{job_name}"
+        # job_id to job mapping:
+        self._job_records: Dict[str, str] = {}
+        # job_name+owner to job_id mapping:
+        self._last_alive_job_records: Dict[Tuple[str, str], str] = {}
 
     @asynccontextmanager
     async def try_create_job(self, job: Job) -> AsyncIterator[Job]:
         if job.name is not None:
-            key = self._generate_last_job_name_key(job.owner, job.name)
+            key = (job.owner, job.name)
             same_name_job_id = self._last_alive_job_records.get(key)
             if same_name_job_id is not None:
                 same_name_job = await self.get_job(same_name_job_id)
