@@ -79,7 +79,7 @@ class InMemoryJobsStorage(JobsStorage):
             key = self._generate_last_job_name_key(job.owner, job.name)
             same_name_job_id = self._last_alive_job_records.get(key)
             if same_name_job_id is not None:
-                same_name_job_serialized = self._job_records[same_name_job_id]
+                same_name_job_serialized = await self.get_job(same_name_job_id)
                 same_name_job = self._parse_job_payload(same_name_job_serialized)
                 if not same_name_job.is_finished:
                     raise JobStorageJobFoundError(job.name, job.owner, same_name_job_id)
