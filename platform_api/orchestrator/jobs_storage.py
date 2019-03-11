@@ -170,7 +170,7 @@ class RedisJobsStorage(JobsStorage):
 
     @asynccontextmanager
     async def _watch_keys(
-        self, description: str, key: str, *other_keys: Sequence[str]
+        self, key: str, *other_keys: Sequence[str], description: str
     ) -> AsyncIterator[JobsStorage]:
         async with self._acquire_conn() as client:
             try:
@@ -192,17 +192,16 @@ class RedisJobsStorage(JobsStorage):
         self, job_id: str, owner: str, job_name: str
     ) -> AsyncIterator[JobsStorage]:
         assert job_name
-        description = f"id={job_id}, owner={owner}, name={job_name}"
-        job_id_key = self._generate_job_key(job_id)
-        job_name_key = self._generate_last_job_name_index_key(owner, job_name)
-        async with self._watch_keys(description, job_id_key, job_name_key) as storage:
+        id_key = self._generate_job_key(job_id)
+        name_key = self._generate_last_job_name_index_key(owner, job_name)
+        desc = f"id={job_id}, owner={owner}, name={job_name}"
+        async with self._watch_keys(id_key, name_key, description=desc) as storage:
             yield storage
 
     @asynccontextmanager
     async def _watch_job_id_key(self, job_id: str) -> AsyncIterator[JobsStorage]:
-        description = f"id={job_id}"
-        job_id_key = self._generate_job_key(job_id)
-        async with self._watch_keys(description, job_id_key) as storage:
+        id_key = self._generate_job_key(job_id)
+        async with self._watch_keys(id_key, description=f"id={job_id}") as storage:
             yield storage
 
     @asynccontextmanager
