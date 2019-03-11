@@ -67,8 +67,8 @@ class JobsStorage(ABC):
 class InMemoryJobsStorage(JobsStorage):
     def __init__(self, orchestrator_config: OrchestratorConfig) -> None:
         self._orchestrator_config = orchestrator_config
-        self._job_records: Dict[str, str] = {}  # job-id to job mapping
-        self._last_alive_job_records: Dict[str, str] = {}  # job-name+owner to job-id
+        self._job_records: Dict[str, str] = {}  # job_id to job mapping
+        self._last_alive_job_records: Dict[str, str] = {}  # job_name+owner to job-id
 
     def _generate_last_job_name_key(self, owner: str, job_name: str) -> str:
         return f"job-last-created.owner.{owner}.name.{job_name}"
