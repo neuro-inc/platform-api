@@ -555,9 +555,7 @@ class TestRedisJobsStorage:
         )
         pending_job = self._create_pending_job(kube_orchestrator)
 
-        with pytest.raises(
-            JobError, match=f"no such job {pending_job.id}"
-        ):
+        with pytest.raises(JobError, match=f"no such job {pending_job.id}"):
             async with storage.try_update_job(pending_job.id):
                 pass
 
