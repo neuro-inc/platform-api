@@ -12,6 +12,7 @@ from .config import Config, ElasticsearchConfig
 from .config_factory import EnvironConfigFactory
 from .handlers import JobsHandler, ModelsHandler
 from .orchestrator import JobException, JobsService, JobsStatusPooling, KubeOrchestrator
+from .orchestrator.jobs_service import JobsServiceException
 from .orchestrator.jobs_storage import RedisJobsStorage
 from .redis import create_redis_client
 
@@ -62,6 +63,11 @@ async def handle_exceptions(request, handler):
     try:
         return await handler(request)
     except JobException as e:
+        payload = {"error": str(e)}
+        return aiohttp.web.json_response(
+            payload, status=aiohttp.web.HTTPBadRequest.status_code
+        )
+    except JobsServiceException as e:
         payload = {"error": str(e)}
         return aiohttp.web.json_response(
             payload, status=aiohttp.web.HTTPBadRequest.status_code

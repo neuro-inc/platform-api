@@ -8,8 +8,8 @@ from typing import Any, Dict, Iterable, List, Optional, Sequence
 import iso8601
 from yarl import URL
 
-from .job_request import JobRequest, JobStatus
 from ..config import OrchestratorConfig  # noqa
+from .job_request import JobRequest, JobStatus
 
 
 logger = logging.getLogger(__name__)
@@ -219,7 +219,7 @@ class Job:
         self._is_forced_to_preemptible_pool = is_forced_to_preemptible_pool
 
     @property
-    def id(self):
+    def id(self) -> str:
         return self._job_request.job_id
 
     @property

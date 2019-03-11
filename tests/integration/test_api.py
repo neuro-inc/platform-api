@@ -255,7 +255,6 @@ async def model_request_factory():
             },
             "dataset_storage_uri": f"storage://{owner}",
             "result_storage_uri": f"storage://{owner}/result",
-            "name": "some-test-job-name",
             "description": "test job submitted by neuro model train",
         }
 
@@ -307,6 +306,9 @@ class TestModels:
             url, headers=regular_user.headers, json=model_train
         ) as response:
             assert response.status == HTTPBadRequest.status_code
+            payload = await response.json()
+            e = "{'name': DataError(does not match pattern ^[a-z][-a-z0-9]*[a-z0-9]$)}"
+            assert payload == {"error": e}
 
     @pytest.mark.asyncio
     async def test_create_model(
@@ -315,6 +317,7 @@ class TestModels:
         url = api.model_base_url
         model_train["is_preemptible"] = True
         model_train["container"]["http"]["requires_auth"] = True
+        model_train["name"] = "some-test-job-name"
         async with client.post(
             url, headers=regular_user.headers, json=model_train
         ) as response:
@@ -576,6 +579,60 @@ class TestJobs:
             url, headers=regular_user.headers, json=job_submit
         ) as response:
             assert response.status == HTTPBadRequest.status_code
+            payload = await response.json()
+            e = "{'name': DataError(does not match pattern ^[a-z][-a-z0-9]*[a-z0-9]$)}"
+            assert payload == {"error": e}
+
+    @pytest.mark.asyncio
+    async def test_create_multiple_jobs_with_same_name_fail(
+        self, api, client, job_submit, regular_user, jobs_client
+    ):
+        url = api.jobs_base_url
+        headers = regular_user.headers
+        job_name = "test-job-name"
+        job_submit["name"] = job_name
+        job_submit["container"]["command"] = "sleep 100500"
+
+        async with client.post(url, headers=headers, json=job_submit) as response:
+            assert response.status == HTTPAccepted.status_code
+            payload = await response.json()
+            job_id = payload["id"]
+
+        await jobs_client.long_polling_by_job_id(job_id, status="running")
+
+        async with client.post(url, headers=headers, json=job_submit) as response:
+            assert response.status == HTTPBadRequest.status_code
+            payload = await response.json()
+            assert payload == {
+                "error": (
+                    f"Failed to create job: job with name '{job_name}' "
+                    f"and owner '{regular_user.name}' already exists: '{job_id}'"
+                )
+            }
+
+        # cleanup
+        await jobs_client.delete_job(job_id)
+
+    @pytest.mark.asyncio
+    async def test_create_multiple_jobs_with_same_name_after_first_finished(
+        self, api, client, job_submit, regular_user, jobs_client
+    ):
+        url = api.jobs_base_url
+        headers = regular_user.headers
+        job_submit["name"] = "test-job-name"
+        job_submit["container"]["command"] = "sleep 100500"
+
+        async with client.post(url, headers=headers, json=job_submit) as response:
+            assert response.status == HTTPAccepted.status_code
+            payload = await response.json()
+            job_id = payload["id"]
+
+        await jobs_client.long_polling_by_job_id(job_id, status="running")
+        await jobs_client.delete_job(job_id)
+        await jobs_client.long_polling_by_job_id(job_id, status="succeeded")
+
+        async with client.post(url, headers=headers, json=job_submit) as response:
+            assert response.status == HTTPAccepted.status_code
 
     @pytest.mark.asyncio
     async def test_get_all_jobs_clear(self, jobs_client):

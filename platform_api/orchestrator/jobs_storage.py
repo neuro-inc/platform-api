@@ -2,7 +2,7 @@ import itertools
 import json
 from abc import ABC, abstractmethod
 from dataclasses import dataclass
-from typing import AbstractSet, AsyncIterator, Dict, List, Optional
+from typing import AbstractSet, AsyncIterator, Dict, List, Optional, Sequence, Tuple
 
 import aioredis
 from async_generator import asynccontextmanager
@@ -20,12 +20,24 @@ class JobStorageTransactionError(JobsStorageException):
     pass
 
 
+class JobStorageJobFoundError(JobsStorageException):
+    def __init__(self, job_name: str, job_owner: str, found_job_id: str):
+        super().__init__(
+            f"job with name '{job_name}' and owner '{job_owner}' "
+            f"already exists: '{found_job_id}'"
+        )
+
+
 @dataclass(frozen=True)
 class JobFilter:
     statuses: AbstractSet[JobStatus]
 
 
 class JobsStorage(ABC):
+    @abstractmethod
+    async def try_create_job(self, job: Job) -> AsyncIterator[Job]:
+        pass
+
     @abstractmethod
     async def set_job(self, job: Job) -> None:
         pass
@@ -55,8 +67,23 @@ class JobsStorage(ABC):
 class InMemoryJobsStorage(JobsStorage):
     def __init__(self, orchestrator_config: OrchestratorConfig) -> None:
         self._orchestrator_config = orchestrator_config
-
+        # job_id to job mapping:
         self._job_records: Dict[str, str] = {}
+        # job_name+owner to job_id mapping:
+        self._last_alive_job_records: Dict[Tuple[str, str], str] = {}
+
+    @asynccontextmanager
+    async def try_create_job(self, job: Job) -> AsyncIterator[Job]:
+        if job.name is not None:
+            key = (job.owner, job.name)
+            same_name_job_id = self._last_alive_job_records.get(key)
+            if same_name_job_id is not None:
+                same_name_job = await self.get_job(same_name_job_id)
+                if not same_name_job.is_finished:
+                    raise JobStorageJobFoundError(job.name, job.owner, same_name_job_id)
+            self._last_alive_job_records[key] = job.id
+        yield job
+        await self.set_job(job)
 
     async def set_job(self, job: Job) -> None:
         payload = json.dumps(job.to_primitive())
@@ -95,16 +122,32 @@ class InMemoryJobsStorage(JobsStorage):
 
 class RedisJobsStorage(JobsStorage):
     def __init__(
-        self, client: aioredis.Redis, orchestrator_config: OrchestratorConfig
+        self,
+        client: aioredis.Redis,
+        orchestrator_config: OrchestratorConfig,
+        encoding: str = "utf8",
+        last_created_job_ttl_s: int = 60 * 60 * 24 * 365 * 2,  # 2 years
     ) -> None:
         self._client = client
         self._orchestrator_config = orchestrator_config
+        # TODO (ajuszkowski 1-mar-2019) I think it's better to somehow get encoding
+        # from redis configuration (client or server?), e.g. 'self._client.encoding'
+        self._encoding = encoding
+        self._last_created_job_ttl_s = last_created_job_ttl_s
+
+    def _decode(self, value: bytes) -> str:
+        return value.decode(self._encoding)
 
     def _generate_job_key(self, job_id: str) -> str:
         return f"jobs:{job_id}"
 
     def _generate_jobs_status_index_key(self, status: JobStatus) -> str:
         return f"jobs.status.{status}"
+
+    def _generate_last_job_name_index_key(self, owner: str, job_name: str) -> str:
+        assert owner, "job owner is not defined"
+        assert job_name, "job name is not defined"
+        return f"job-last-created.owner.{owner}.name.{job_name}"
 
     def _generate_jobs_deleted_index_key(self) -> str:
         return "jobs.deleted"
@@ -115,35 +158,92 @@ class RedisJobsStorage(JobsStorage):
     @asynccontextmanager
     async def _acquire_conn(self) -> AsyncIterator[aioredis.Redis]:
         pool = self._client.connection
+        conn = None
         try:
             conn = await pool.acquire()
             yield aioredis.Redis(conn)
         finally:
-            pool.release(conn)
+            if conn:
+                pool.release(conn)
 
     @asynccontextmanager
-    async def _watch_job(self, job_id: str) -> AsyncIterator[JobsStorage]:
+    async def _watch_keys(
+        self, key: str, *other_keys: Sequence[str], description: str
+    ) -> AsyncIterator[JobsStorage]:
         async with self._acquire_conn() as client:
-            key = self._generate_job_key(job_id)
             try:
-                await client.watch(key)
+                await client.watch(key, *other_keys)
 
                 yield type(self)(
                     client=client, orchestrator_config=self._orchestrator_config
                 )
             except (aioredis.errors.MultiExecError, aioredis.errors.WatchVariableError):
-                raise JobStorageTransactionError(f"Job {job_id} has been changed.")
+                raise JobStorageTransactionError(
+                    "Job {" + description + "} has changed"
+                )
             finally:
                 await client.unwatch()
 
     @asynccontextmanager
+    async def _watch_all_job_keys(
+        self, job_id: str, owner: str, job_name: str
+    ) -> AsyncIterator[JobsStorage]:
+        assert job_name
+        id_key = self._generate_job_key(job_id)
+        name_key = self._generate_last_job_name_index_key(owner, job_name)
+        desc = f"id={job_id}, owner={owner}, name={job_name}"
+        async with self._watch_keys(id_key, name_key, description=desc) as storage:
+            yield storage
+
+    @asynccontextmanager
+    async def _watch_job_id_key(self, job_id: str) -> AsyncIterator[JobsStorage]:
+        id_key = self._generate_job_key(job_id)
+        async with self._watch_keys(id_key, description=f"id={job_id}") as storage:
+            yield storage
+
+    @asynccontextmanager
     async def try_update_job(self, job_id: str) -> AsyncIterator[Job]:
-        async with self._watch_job(job_id) as storage:
+        """ NOTE: this method yields the job retrieved from the database
+        """
+        async with self._watch_job_id_key(job_id) as storage:
+            # NOTE: this method does not need to WATCH the job-last-created key as it
+            # does not rely on this key
             job = await storage.get_job(job_id)
             yield job
-            await storage.set_job(job)
+            await storage.update_job_atomically(job)
+
+    @asynccontextmanager
+    async def try_create_job(self, job: Job) -> AsyncIterator[Job]:
+        """ NOTE: this method yields the job, the same object as it came as an argument
+        """
+        if job.name:
+            async with self._watch_all_job_keys(job.id, job.owner, job.name) as storage:
+                other_id = await storage.get_last_created_job_id(job.owner, job.name)
+                if other_id is not None:
+                    other = await self.get_job(other_id)
+                    if not other.is_finished:
+                        raise JobStorageJobFoundError(other.name, other.owner, other_id)
+                # with yield below, the job creation signal is sent to the orchestrator.
+                # Thus, if a job with the same name already exists, the appropriate
+                # exception is thrown before sending this signal to the orchestrator.
+                yield job
+                # after the orchestrator has started the job, it fills the 'job' object
+                # with some new values, so we write the new value of 'job' to Redis:
+                await storage.update_job_atomically(job, need_to_update_name_index=True)
+        else:
+            async with self._watch_job_id_key(job.id) as storage:
+                yield job
+                await storage.update_job_atomically(job)
 
     async def set_job(self, job: Job) -> None:
+        # TODO (ajuszkowski, 4-feb-2019) remove this method from interface as well
+        # because it does not watch keys that it updates AND it does not update
+        # the 'last-job-created' key!
+        await self.update_job_atomically(job, need_to_update_name_index=False)
+
+    async def update_job_atomically(
+        self, job: Job, need_to_update_name_index: bool = False
+    ) -> None:
         payload = json.dumps(job.to_primitive())
 
         tr = self._client.multi_exec()
@@ -152,6 +252,12 @@ class RedisJobsStorage(JobsStorage):
         for status in JobStatus:
             tr.srem(self._generate_jobs_status_index_key(status), job.id)
         tr.sadd(self._generate_jobs_status_index_key(job.status), job.id)
+
+        if need_to_update_name_index:
+            # we can be here only when called by 'try_create_job'
+            name_key = self._generate_last_job_name_index_key(job.owner, job.name)
+            tr.setex(name_key, self._last_created_job_ttl_s, job.id)
+
         if job.is_deleted:
             tr.sadd(self._generate_jobs_deleted_index_key(), job.id)
         await tr.execute()
@@ -165,6 +271,14 @@ class RedisJobsStorage(JobsStorage):
         if payload is None:
             raise JobError(f"no such job {job_id}")
         return self._parse_job_payload(payload)
+
+    async def get_last_created_job_id(self, owner: str, job_name: str) -> Optional[str]:
+        job_name_key = self._generate_last_job_name_index_key(owner, job_name)
+        job_id_bytes = await self._client.get(job_name_key)
+        if job_id_bytes is not None:
+            job_id = self._decode(job_id_bytes)
+            return job_id
+        return None
 
     async def _get_jobs(self, ids: List[str]) -> List[Job]:
         jobs: List[Job] = []

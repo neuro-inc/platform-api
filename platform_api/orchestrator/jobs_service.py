@@ -10,12 +10,17 @@ from .jobs_storage import (
     InMemoryJobsStorage,
     JobFilter,
     JobsStorage,
+    JobsStorageException,
     JobStorageTransactionError,
 )
 from .status import Status
 
 
 logger = logging.getLogger(__file__)
+
+
+class JobsServiceException(Exception):
+    pass
 
 
 class JobsService:
@@ -103,10 +108,23 @@ class JobsService:
             name=job_name,
             is_preemptible=is_preemptible,
         )
-        await self._orchestrator.start_job(job, user.token)
-        status = Status.create(job.status)
-        await self._jobs_storage.set_job(job=job)
-        return job, status
+        job_id = job_request.job_id
+        try:
+            async with self._jobs_storage.try_create_job(job) as new_job:
+                await self._orchestrator.start_job(new_job, user.token)
+            return new_job, Status.create(job.status)
+
+        except JobsStorageException as transaction_err:
+            logger.error(f"Failed to create job {job_id}: {transaction_err}")
+            try:
+                await self._orchestrator.delete_job(job)
+            except Exception as cleanup_exc:
+                # ignore exceptions
+                logger.warning(
+                    f"Failed to cleanup job {job_id} during unsuccessful "
+                    f"creation: {cleanup_exc}"
+                )
+            raise JobsServiceException(f"Failed to create job: {transaction_err}")
 
     async def get_job_status(self, job_id: str) -> JobStatus:
         job = await self._jobs_storage.get_job(job_id)

@@ -3,7 +3,7 @@ from pathlib import PurePath
 
 import pytest
 
-from platform_api.config import RegistryConfig, StorageConfig
+from platform_api.config import OrchestratorConfig, RegistryConfig, StorageConfig
 from platform_api.orchestrator import (
     Job,
     JobError,
@@ -18,6 +18,10 @@ from platform_api.orchestrator import (
 )
 from platform_api.orchestrator.job import JobStatusItem
 from platform_api.orchestrator.job_request import Container, ContainerResources
+from platform_api.orchestrator.jobs_storage import (
+    InMemoryJobsStorage,
+    JobStorageTransactionError,
+)
 from platform_api.resource import ResourcePoolType
 
 
@@ -28,6 +32,7 @@ class MockOrchestrator(Orchestrator):
 
         self.raise_on_get_job_status = False
         self.raise_on_delete = False
+        self._successfully_deleted_jobs = []
 
     @property
     def config(self):
@@ -46,13 +51,17 @@ class MockOrchestrator(Orchestrator):
             raise JobNotFoundException(f"job {job.id} was not found")
         return JobStatusItem.create(self._mock_status_to_return)
 
-    async def delete_job(self, *args, **kwargs):
+    async def delete_job(self, job: Job) -> JobStatus:
         if self.raise_on_delete:
             raise JobError()
+        self._successfully_deleted_jobs.append(job)
         return JobStatus.SUCCEEDED
 
     def update_status_to_return(self, new_status: JobStatus):
         self._mock_status_to_return = new_status
+
+    def get_successfully_deleted_jobs(self):
+        return self._successfully_deleted_jobs
 
     async def get_job_log_reader(self, job: Job) -> LogReader:
         pass
@@ -106,3 +115,16 @@ def event_loop():
     loop = asyncio.get_event_loop()
     yield loop
     loop.close()
+
+
+class MockJobsStorage(InMemoryJobsStorage):
+    # TODO (ajuszkowski, 7-mar-2019) get rid of InMemoryJobsStorage, keep only
+    # this mocked jobs storage
+    def __init__(self, orchestrator_config: OrchestratorConfig) -> None:
+        super().__init__(orchestrator_config)
+        self.fail_set_job_transaction = False
+
+    async def set_job(self, job: Job) -> None:
+        if self.fail_set_job_transaction:
+            raise JobStorageTransactionError("transaction failed")
+        await super().set_job(job)
