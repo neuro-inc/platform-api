@@ -70,6 +70,19 @@ class MockOrchestrator(Orchestrator):
         pass
 
 
+class MockJobsStorage(InMemoryJobsStorage):
+    # TODO (ajuszkowski, 7-mar-2019) get rid of InMemoryJobsStorage, keep only
+    # this mocked jobs storage
+    def __init__(self, orchestrator_config: OrchestratorConfig) -> None:
+        super().__init__(orchestrator_config)
+        self.fail_set_job_transaction = False
+
+    async def set_job(self, job: Job) -> None:
+        if self.fail_set_job_transaction:
+            raise JobStorageTransactionError("transaction failed")
+        await super().set_job(job)
+
+
 @pytest.fixture
 def job_request_factory():
     def factory():
@@ -101,13 +114,19 @@ def mock_orchestrator():
         endpoint_url="http://k8s:1234",
         resource_pool_types=[ResourcePoolType()],
         orphaned_job_owner="compute",
+        job_deletion_delay_s=0,
     )
     return MockOrchestrator(config=config)
 
 
 @pytest.fixture(scope="function")
-def jobs_service(mock_orchestrator):
-    return JobsService(orchestrator=mock_orchestrator)
+def mock_jobs_storage(mock_orchestrator):
+    return MockJobsStorage(mock_orchestrator.config)
+
+
+@pytest.fixture(scope="function")
+def jobs_service(mock_orchestrator, mock_jobs_storage):
+    return JobsService(orchestrator=mock_orchestrator, jobs_storage=mock_jobs_storage)
 
 
 @pytest.fixture(scope="session")
@@ -115,16 +134,3 @@ def event_loop():
     loop = asyncio.get_event_loop()
     yield loop
     loop.close()
-
-
-class MockJobsStorage(InMemoryJobsStorage):
-    # TODO (ajuszkowski, 7-mar-2019) get rid of InMemoryJobsStorage, keep only
-    # this mocked jobs storage
-    def __init__(self, orchestrator_config: OrchestratorConfig) -> None:
-        super().__init__(orchestrator_config)
-        self.fail_set_job_transaction = False
-
-    async def set_job(self, job: Job) -> None:
-        if self.fail_set_job_transaction:
-            raise JobStorageTransactionError("transaction failed")
-        await super().set_job(job)
