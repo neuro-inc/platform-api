@@ -152,42 +152,7 @@ class TestRedisJobsStorage:
         assert result_job.status == JobStatus.SUCCEEDED
 
     @pytest.mark.asyncio
-    async def test_try_create_job__no_name__job_id_conflict_first_wins(
-        self, redis_client, kube_orchestrator
-    ):
-        storage = RedisJobsStorage(
-            redis_client, orchestrator_config=kube_orchestrator.config
-        )
-        job = self._create_pending_job(kube_orchestrator)
-
-        # process-1
-        with not_raises(JobStorageTransactionError):
-            async with storage.try_create_job(job) as first_job:
-                # value in orchestrator: PENDING, value in redis: None
-                assert first_job.status == JobStatus.PENDING
-                first_job.status = JobStatus.SUCCEEDED
-                # value in orchestrator: SUCCEEDED, value in redis: None
-                # now status SUCCEEDED is written into the redis by process-1
-
-        # process-2
-        with pytest.raises(
-            JobStorageTransactionError, match=f"Job {{id={job.id}}} has changed"
-        ):
-            async with storage.try_create_job(job) as second_job:
-                # value in orchestrator: SUCCEEDED, value in redis: SUCCEEDED
-                assert job.status == JobStatus.SUCCEEDED
-                second_job.status = JobStatus.FAILED
-                # value in orchestrator: failed, value in redis: None
-                # now status FAILED fails to be written into the redis by process-2
-
-            # now jobs-service catches transaction exception thrown
-            # by process-2 and deletes the newly created job.
-
-        result_job = await storage.get_job(job.id)
-        assert result_job.status == JobStatus.SUCCEEDED
-
-    @pytest.mark.asyncio
-    async def test_try_create_job__no_name__job_id_conflict_second_wins(
+    async def test_try_create_job__no_name__job_changed_while_creation(
         self, redis_client, kube_orchestrator
     ):
         storage = RedisJobsStorage(
@@ -209,18 +174,18 @@ class TestRedisJobsStorage:
                 with not_raises(JobStorageTransactionError):
                     async with storage.try_create_job(job) as second_job:
                         # value in orchestrator: succeeded, value in redis: None
-                        assert job.status == JobStatus.SUCCEEDED
-                        second_job.status = JobStatus.FAILED
-                        # value in orchestrator: failed, value in redis: None
+                        assert second_job.status == JobStatus.SUCCEEDED
+                        second_job.status = JobStatus.RUNNING
+                        # value in orchestrator: FAILED, value in redis: None
                         # now status FAILED is written into the redis by process-2
 
                 # now status SUCCEEDED fails to be written into the redis by process-1
 
                 # now jobs-service catches transaction exception thrown
-                # by process-1 and deletes the newly created job.
+                # by process-1 and deletes the newly created by process-1 job.
 
         result_job = await storage.get_job(job.id)
-        assert result_job.status == JobStatus.FAILED
+        assert result_job.status == JobStatus.RUNNING
 
     @pytest.mark.asyncio
     async def test_try_create_job__different_name_same_owner__ok(
@@ -394,7 +359,7 @@ class TestRedisJobsStorage:
         assert len(jobs) == 1
         job = jobs[0]
         assert job.id == original_job.id
-        assert job.status == JobStatus.PENDING
+        assert job.status == original_job.status
 
     @pytest.mark.asyncio
     async def test_get_all_filter_by_status(self, redis_client, kube_orchestrator):
@@ -582,6 +547,56 @@ class TestRedisJobsStorage:
 
         running_job = await storage.get_job(pending_job.id)
         assert running_job.status == JobStatus.RUNNING
+
+    @pytest.mark.asyncio
+    async def test_try_update_job__not_found(self, redis_client, kube_orchestrator):
+        storage = RedisJobsStorage(
+            redis_client, orchestrator_config=kube_orchestrator.config
+        )
+        pending_job = self._create_pending_job(kube_orchestrator)
+
+        with pytest.raises(
+            JobError, match=f"no such job {pending_job.id}"
+        ):
+            async with storage.try_update_job(pending_job.id):
+                pass
+
+    @pytest.mark.asyncio
+    async def test_try_update_job__no_name__job_changed_while_creation(
+        self, redis_client, kube_orchestrator
+    ):
+        storage = RedisJobsStorage(
+            redis_client, orchestrator_config=kube_orchestrator.config
+        )
+        job = self._create_pending_job(kube_orchestrator)
+        await storage.set_job(job)
+
+        # process-1
+        with pytest.raises(
+            JobStorageTransactionError, match=f"Job {{id={job.id}}} has changed"
+        ):
+            async with storage.try_update_job(job.id) as first_job:
+                # value in orchestrator: PENDING, value in redis: None
+                assert first_job.status == JobStatus.PENDING
+                first_job.status = JobStatus.SUCCEEDED
+                # value in orchestrator: SUCCEEDED, value in redis: None
+
+                # process-2
+                with not_raises(JobStorageTransactionError):
+                    async with storage.try_update_job(job.id) as second_job:
+                        # value in orchestrator: succeeded, value in redis: None
+                        assert second_job.status == JobStatus.PENDING
+                        second_job.status = JobStatus.RUNNING
+                        # value in orchestrator: FAILED, value in redis: None
+                        # now status FAILED is written into the redis by process-2
+
+                # now status SUCCEEDED fails to be written into the redis by process-1
+
+                # now jobs-service catches transaction exception thrown
+                # by process-1 and deletes the newly created by process-1 job.
+
+        result_job = await storage.get_job(job.id)
+        assert result_job.status == JobStatus.RUNNING
 
     @pytest.mark.asyncio
     async def test_try_update_job__different_name_same_owner__ok(

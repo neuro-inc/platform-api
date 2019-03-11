@@ -2,7 +2,7 @@ import itertools
 import json
 from abc import ABC, abstractmethod
 from dataclasses import dataclass
-from typing import AbstractSet, AsyncGenerator, AsyncIterator, Dict, List, Optional
+from typing import AbstractSet, AsyncIterator, Dict, List, Optional, Sequence
 
 import aioredis
 from async_generator import asynccontextmanager
@@ -147,6 +147,8 @@ class RedisJobsStorage(JobsStorage):
         return f"jobs.status.{status}"
 
     def _generate_last_job_name_index_key(self, owner: str, job_name: str) -> str:
+        assert owner, "job owner is not defined"
+        assert job_name, "job name is not defined"
         return f"job-last-created.owner.{owner}.name.{job_name}"
 
     def _generate_jobs_deleted_index_key(self) -> str:
@@ -168,7 +170,7 @@ class RedisJobsStorage(JobsStorage):
 
     @asynccontextmanager
     async def _watch_keys(
-        self, description: str, key: str, *other_keys: str
+        self, description: str, key: str, *other_keys: Sequence[str]
     ) -> AsyncIterator[JobsStorage]:
         async with self._acquire_conn() as client:
             try:
@@ -177,13 +179,16 @@ class RedisJobsStorage(JobsStorage):
                 yield type(self)(
                     client=client, orchestrator_config=self._orchestrator_config
                 )
-            except (aioredis.errors.MultiExecError, aioredis.errors.WatchVariableError):
+            except (
+                aioredis.errors.MultiExecError,
+                aioredis.errors.WatchVariableError,
+            ) as e:
                 raise JobStorageTransactionError(f"Job {{{description}}} has changed")
             finally:
                 await client.unwatch()
 
     @asynccontextmanager
-    async def _watch_job_id_and_name_keys(
+    async def _watch_all_job_keys(
         self, job_id: str, owner: str, job_name: str
     ) -> AsyncIterator[JobsStorage]:
         assert job_name
@@ -202,8 +207,10 @@ class RedisJobsStorage(JobsStorage):
 
     @asynccontextmanager
     async def try_update_job(self, job_id: str) -> AsyncIterator[Job]:
+        """ NOTE: this method yields the job retrieved from the database
+        """
         async with self._watch_job_id_key(job_id) as storage:
-            # note, this method does not need to WATCH the job-last-created key as it
+            # NOTE: this method does not need to WATCH the job-last-created key as it
             # does not rely on this key
             job = await storage.get_job(job_id)
             yield job
@@ -211,15 +218,15 @@ class RedisJobsStorage(JobsStorage):
 
     @asynccontextmanager
     async def try_create_job(self, job: Job) -> AsyncIterator[Job]:
+        """ NOTE: this method yields the job, the same object as it came as an argument
+        """
         if job.name:
-            async with self._watch_job_id_and_name_keys(job.id, job.name) as storage:
-                other_id = await storage.get_last_created_job(job.owner, job.name)
+            async with self._watch_all_job_keys(job.id, job.owner, job.name) as storage:
+                other_id = await storage.get_last_created_job_id(job.owner, job.name)
                 if other_id is not None:
-                    other_job = await storage.get_job(other_id)
-                    if not other_job.is_finished:
-                        raise JobStorageJobFoundError(
-                            other_id.name, other_id.owner, other_id.id
-                        )
+                    other = await self.get_job(other_id)
+                    if not other.is_finished:
+                        raise JobStorageJobFoundError(other.name, other.owner, other_id)
                 # with yield below, the job creation signal is sent to the orchestrator.
                 # Thus, if a job with the same name already exists, the appropriate
                 # exception is thrown before sending this signal to the orchestrator.
@@ -269,12 +276,12 @@ class RedisJobsStorage(JobsStorage):
             raise JobError(f"no such job {job_id}")
         return self._parse_job_payload(payload)
 
-    async def get_last_created_job(self, owner: str, job_name: str) -> Optional[Job]:
+    async def get_last_created_job_id(self, owner: str, job_name: str) -> Optional[str]:
         job_name_key = self._generate_last_job_name_index_key(owner, job_name)
         job_id_bytes = await self._client.get(job_name_key)
         if job_id_bytes is not None:
             job_id = self._decode(job_id_bytes)
-            return await self.get_job(job_id)
+            return job_id
         return None
 
     async def _get_jobs(self, ids: List[str]) -> List[Job]:

@@ -110,9 +110,9 @@ class JobsService:
         )
         job_id = job_request.job_id
         try:
-            async with self._jobs_storage.try_create_job(job) as saved_job:
-                await self._orchestrator.start_job(saved_job, user.token)
-            return saved_job, Status.create(job.status)
+            async with self._jobs_storage.try_create_job(job) as new_job:
+                await self._orchestrator.start_job(new_job, user.token)
+            return new_job, Status.create(job.status)
 
         except JobsStorageException as transaction_err:
             logger.error(f"Failed to create job {job_id}: {transaction_err}")
