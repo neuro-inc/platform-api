@@ -11,7 +11,6 @@ from .jobs_storage import (
     JobFilter,
     JobsStorage,
     JobsStorageException,
-    JobStorageJobFoundError,
     JobStorageTransactionError,
 )
 from .status import Status

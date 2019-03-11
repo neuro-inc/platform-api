@@ -3,8 +3,7 @@ from pathlib import PurePath
 
 import pytest
 
-from platform_api.orchestrator.jobs_storage import InMemoryJobsStorage, JobStorageTransactionError
-from platform_api.config import RegistryConfig, StorageConfig, OrchestratorConfig
+from platform_api.config import OrchestratorConfig, RegistryConfig, StorageConfig
 from platform_api.orchestrator import (
     Job,
     JobError,
@@ -19,6 +18,10 @@ from platform_api.orchestrator import (
 )
 from platform_api.orchestrator.job import JobStatusItem
 from platform_api.orchestrator.job_request import Container, ContainerResources
+from platform_api.orchestrator.jobs_storage import (
+    InMemoryJobsStorage,
+    JobStorageTransactionError,
+)
 from platform_api.resource import ResourcePoolType
 
 
