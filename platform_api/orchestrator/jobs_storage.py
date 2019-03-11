@@ -79,8 +79,7 @@ class InMemoryJobsStorage(JobsStorage):
             key = self._generate_last_job_name_key(job.owner, job.name)
             same_name_job_id = self._last_alive_job_records.get(key)
             if same_name_job_id is not None:
-                same_name_job_serialized = await self.get_job(same_name_job_id)
-                same_name_job = self._parse_job_payload(same_name_job_serialized)
+                same_name_job = await self.get_job(same_name_job_id)
                 if not same_name_job.is_finished:
                     raise JobStorageJobFoundError(job.name, job.owner, same_name_job_id)
             self._last_alive_job_records[key] = job.id
@@ -179,11 +178,10 @@ class RedisJobsStorage(JobsStorage):
                 yield type(self)(
                     client=client, orchestrator_config=self._orchestrator_config
                 )
-            except (
-                aioredis.errors.MultiExecError,
-                aioredis.errors.WatchVariableError,
-            ) as e:
-                raise JobStorageTransactionError(f"Job {{{description}}} has changed")
+            except (aioredis.errors.MultiExecError, aioredis.errors.WatchVariableError):
+                raise JobStorageTransactionError(
+                    "Job {" + description + "} has changed"
+                )
             finally:
                 await client.unwatch()
 
