@@ -122,17 +122,19 @@ class TestMockJobsStorage:
         jobs_storage = MockJobsStorage(orchestrator_config=mock_orchestrator.config)
 
         job = Job(
-            orchestrator_config=config, job_request=self._create_job_request(), name="job-name"
+            orchestrator_config=config,
+            job_request=self._create_job_request(),
+            name="job-name",
         )
 
-        async with jobs_storage.try_create_job(job) as new_job:
+        async with jobs_storage.try_create_job(job):
             pass
 
         retrieved_job = await jobs_storage.get_job(job.id)
         assert retrieved_job.id == job.id
 
         with pytest.raises(JobStorageJobFoundError):
-            async with jobs_storage.try_create_job(job) as new_job:
+            async with jobs_storage.try_create_job(job):
                 pass
 
 
