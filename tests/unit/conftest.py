@@ -82,6 +82,15 @@ class MockJobsStorage(InMemoryJobsStorage):
             raise JobStorageTransactionError("transaction failed")
         await super().set_job(job)
 
+    @property
+    def orchestrator_config(self):
+        return self._orchestrator_config
+
+    @orchestrator_config.setter
+    def orchestrator_config(self, config):
+        self._orchestrator_config = config
+
+
 
 @pytest.fixture
 def job_request_factory():
@@ -114,7 +123,6 @@ def mock_orchestrator():
         endpoint_url="http://k8s:1234",
         resource_pool_types=[ResourcePoolType()],
         orphaned_job_owner="compute",
-        job_deletion_delay_s=0,
     )
     return MockOrchestrator(config=config)
 

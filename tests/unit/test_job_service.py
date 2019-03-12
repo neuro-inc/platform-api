@@ -364,7 +364,7 @@ class TestJobsService:
         assert job.status == JobStatus.SUCCEEDED
         assert job.is_finished
         assert job.finished_at
-        assert job.is_deleted
+        assert not job.is_deleted
 
     @pytest.mark.asyncio
     async def test_update_jobs_statuses_for_deletion(
@@ -372,6 +372,7 @@ class TestJobsService:
     ):
         config = dataclasses.replace(mock_orchestrator.config, job_deletion_delay_s=0)
         mock_orchestrator.config = config
+        mock_jobs_storage.orchestrator_config = config
         service = JobsService(mock_orchestrator, mock_jobs_storage)
 
         user = User(name="testuser", token="")
@@ -421,6 +422,7 @@ class TestJobsService:
     ):
         config = dataclasses.replace(mock_orchestrator.config, job_deletion_delay_s=0)
         mock_orchestrator.config = config
+        mock_jobs_storage.orchestrator_config = config
         service = JobsService(mock_orchestrator, mock_jobs_storage)
 
         user = User(name="testuser", token="")
