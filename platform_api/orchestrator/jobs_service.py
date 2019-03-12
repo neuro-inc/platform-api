@@ -7,7 +7,6 @@ from .base import LogReader, Orchestrator, Telemetry
 from .job import Job, JobStatusItem
 from .job_request import JobException, JobNotFoundException, JobRequest, JobStatus
 from .jobs_storage import (
-    InMemoryJobsStorage,
     JobFilter,
     JobsStorage,
     JobsStorageException,
@@ -24,12 +23,8 @@ class JobsServiceException(Exception):
 
 
 class JobsService:
-    def __init__(
-        self, orchestrator: Orchestrator, jobs_storage: Optional[JobsStorage] = None
-    ) -> None:
-        self._jobs_storage = jobs_storage or InMemoryJobsStorage(
-            orchestrator_config=orchestrator.config
-        )
+    def __init__(self, orchestrator: Orchestrator, jobs_storage: JobsStorage) -> None:
+        self._jobs_storage = jobs_storage
         self._orchestrator = orchestrator
 
         self._max_deletion_attempts = 3
