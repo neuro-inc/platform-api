@@ -158,6 +158,8 @@ class RedisJobsStorage(JobsStorage):
         return f"jobs.status.{status}"
 
     def _generate_jobs_name_index_zset_key(self, owner: str, job_name: str) -> str:
+        assert owner, "job owner is not defined"
+        assert job_name, "job name is not defined"
         return f"jobs.name.{owner}.{job_name}"
 
     def _generate_jobs_deleted_index_key(self) -> str:
@@ -205,8 +207,6 @@ class RedisJobsStorage(JobsStorage):
     async def _watch_all_job_keys(
         self, job_id: str, owner: str, job_name: str
     ) -> AsyncIterator[JobsStorage]:
-        assert job_name
-        assert owner
         id_key = self._generate_job_key(job_id)
         name_key = self._generate_jobs_name_index_zset_key(owner, job_name)
         desc = f"id={job_id}, owner={owner}, name={job_name}"
