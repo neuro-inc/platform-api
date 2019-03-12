@@ -812,16 +812,22 @@ class TestJobs:
         filters = [("name", job_name)]
         jobs = await jobs_client_1.get_all_jobs(filters)
         jobs = {job["id"] for job in jobs}
-        assert jobs == {jobs_1["job_name:yes"]["status:running"]}
+        assert jobs == {
+            jobs_1["job_name:yes"]["status:running"],
+            jobs_1["job_name:yes"]["status:succeeded"],
+        }
 
         # owner: 1, name: yes, status: running
         filters = [("name", job_name), ("status", "running")]
         jobs = await jobs_client_1.get_all_jobs(filters)
         jobs = {job["id"] for job in jobs}
-        assert jobs == {
-            jobs_1["job_name:yes"]["status:running"],
-            jobs_1["job_name:yes"]["status:succeeded"],
-        }
+        assert jobs == {jobs_1["job_name:yes"]["status:running"]}
+
+        # owner: 1, name: yes, status: running+failed
+        filters = [("name", job_name), ("status", "running"), ("status", "failed")]
+        jobs = await jobs_client_1.get_all_jobs(filters)
+        jobs = {job["id"] for job in jobs}
+        assert jobs == {jobs_1["job_name:yes"]["status:running"]}
 
         # owner: 1, name: yes, status: running+succeeded
         filters = [("name", job_name), ("status", "running"), ("status", "succeeded")]
