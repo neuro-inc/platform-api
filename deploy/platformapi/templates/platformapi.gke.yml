@@ -150,24 +150,24 @@ spec:
         backend:
           serviceName: platformapi
           servicePort: 8080
-    {{- if eq .Values.global.env "dev" }}
-    - host: {{ printf "%s" (pluck .Values.global.env .Values.INGRESS_MAIN_SITE_HOST | first | default .Values.INGRESS_MAIN_SITE_HOST._default) }}
-      http:
-        paths:
-        - path: /oauth
-          backend:
-            serviceName: platformingressauth
-            servicePort: 8080
-        - path: /api/v1/storage
-          backend:
-            serviceName: platformstorageapi
-            servicePort: 8080
-        - path: /api/v1/users
-          backend:
-            serviceName: platformauthapi
-            servicePort: 8080
-        - path: /api/v1
-          backend:
-            serviceName: platformapi
-            servicePort: 8080
-    {{- end }}
+{{- if eq .Values.global.env "dev" }}
+  - host: {{ printf "%s" (pluck .Values.global.env .Values.INGRESS_MAIN_SITE_HOST | first | default .Values.INGRESS_MAIN_SITE_HOST._default) }}
+    http:
+      paths:
+      - path: /oauth
+        backend:
+          serviceName: platformingressauth
+          servicePort: 8080
+      - path: /api/v1/storage
+        backend:
+          serviceName: platformstorageapi
+          servicePort: 8080
+      - path: /api/v1/users
+        backend:
+          serviceName: platformauthapi
+          servicePort: 8080
+      - path: /api/v1
+        backend:
+          serviceName: platformapi
+          servicePort: 8080
+{{- end }}
