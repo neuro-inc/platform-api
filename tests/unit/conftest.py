@@ -91,7 +91,6 @@ class MockJobsStorage(InMemoryJobsStorage):
         self._orchestrator_config = config
 
 
-
 @pytest.fixture
 def job_request_factory():
     def factory():
