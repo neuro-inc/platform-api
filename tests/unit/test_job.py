@@ -830,6 +830,7 @@ class TestJobStatusHistory:
         assert history.current == first_item
         assert history.created_at == first_item.transition_time
         assert history.created_at_str == first_item.transition_time.isoformat()
+        assert history.created_at_timestamp == first_item.transition_time.timestamp()
         assert not history.started_at
         assert not history.started_at_str
         assert not history.is_finished

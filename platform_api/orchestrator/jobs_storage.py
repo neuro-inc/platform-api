@@ -14,10 +14,6 @@ from .job import Job
 from .job_request import JobError, JobStatus
 
 
-def get_job_creation_timestamp(job: Job) -> float:
-    return job.status_history.created_at.timestamp()
-
-
 class JobsStorageException(Exception):
     pass
 
@@ -271,7 +267,7 @@ class RedisJobsStorage(JobsStorage):
 
         if job.name and job.owner:
             name_key = self._generate_jobs_name_index_zset_key(job.owner, job.name)
-            tr.zadd(name_key, get_job_creation_timestamp(job), job.id)
+            tr.zadd(name_key, job.status_history.created_at_timestamp, job.id)
 
         if job.is_deleted:
             tr.sadd(self._generate_jobs_deleted_index_key(), job.id)
