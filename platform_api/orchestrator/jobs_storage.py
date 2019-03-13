@@ -35,9 +35,6 @@ class JobFilter:
     owner: Optional[str] = None
     name: Optional[str] = None
 
-    def with_owner(self, owner: str) -> "JobFilter":
-        return JobFilter(statuses=self.statuses, name=self.name, owner=owner)
-
 
 class JobsStorage(ABC):
     @abstractmethod
