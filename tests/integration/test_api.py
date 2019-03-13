@@ -802,45 +802,119 @@ class TestJobs:
 
     @pytest.mark.asyncio
     async def test_get_all_jobs_filter_by_name_owner_and_status(
-        self, api, client, setup_new_user_for_filtration
+        self,
+        api,
+        client,
+        regular_user_factory,
+        jobs_client_factory,
+        job_request_factory,
+        setup_new_user_for_filtration,
     ):
+        url = api.jobs_base_url
+
         job_name = "test-job-name"
-        user_1, jobs_client_1, jobs_1 = await setup_new_user_for_filtration(job_name)
-        user_2, jobs_client_2, jobs_2 = await setup_new_user_for_filtration(job_name)
+
+        def job_request_with_name():
+            job_request = job_request_factory()
+            job_request["container"]["command"] = "sleep 30m"
+            job_request["name"] = job_name
+            return job_request
+
+        def job_request_no_name():
+            job_request = job_request_factory()
+            job_request["container"]["command"] = "sleep 30m"
+            return job_request
+
+        jobs_client_first_user = None
+        job_id_active_without_name_first_user = None
+        job_id_active_with_name_first_user = None
+        job_id_terminated_without_name_first_user = None
+        job_id_terminated_with_name_first_user = None
+
+        for i in range(2):
+            user = await regular_user_factory()
+            headers = user.headers
+            jobs_client = jobs_client_factory(user)
+            if jobs_client_first_user is None:
+                jobs_client_first_user = jobs_client
+
+            # terminated, no name
+            job_request = job_request_no_name()
+            async with client.post(url, headers=headers, json=job_request) as resp:
+                assert resp.status == HTTPAccepted.status_code, str(job_request)
+                data = await resp.json()
+                job_id = data["id"]
+                await jobs_client.long_polling_by_job_id(job_id, "running")
+                await jobs_client.delete_job(job_id)
+                await jobs_client.long_polling_by_job_id(job_id, "succeeded")
+                if job_id_terminated_without_name_first_user is None:
+                    job_id_terminated_without_name_first_user = job_id
+
+            # terminated, with name
+            job_request = job_request_with_name()
+            async with client.post(url, headers=headers, json=job_request) as resp:
+                assert resp.status == HTTPAccepted.status_code
+                data = await resp.json()
+                job_id = data["id"]
+                await jobs_client.long_polling_by_job_id(job_id, "running")
+                await jobs_client.delete_job(job_id)
+                await jobs_client.long_polling_by_job_id(job_id, "succeeded")
+                if job_id_terminated_with_name_first_user is None:
+                    job_id_terminated_with_name_first_user = job_id
+
+            # active, no name
+            job_request = job_request_no_name()
+            async with client.post(url, headers=headers, json=job_request) as resp:
+                assert resp.status == HTTPAccepted.status_code
+                data = await resp.json()
+                job_id = data["id"]
+                if job_id_active_without_name_first_user is None:
+                    job_id_active_without_name_first_user = job_id
+                await jobs_client.long_polling_by_job_id(job_id, "running")
+
+            # active, with name
+            job_request = job_request_with_name()
+            async with client.post(url, headers=headers, json=job_request) as resp:
+                assert resp.status == HTTPAccepted.status_code
+                data = await resp.json()
+                job_id = data["id"]
+                if job_id_active_with_name_first_user is None:
+                    job_id_active_with_name_first_user = job_id
+                await jobs_client.long_polling_by_job_id(job_id, "running")
 
         # owner: 1, name: yes
         filters = [("name", job_name)]
-        jobs = await jobs_client_1.get_all_jobs(filters)
+        jobs = await jobs_client_first_user.get_all_jobs(filters)
         jobs = {job["id"] for job in jobs}
         assert jobs == {
-            jobs_1["job_name:yes"]["status:running"],
-            jobs_1["job_name:yes"]["status:succeeded"],
+            job_id_active_with_name_first_user,
+            job_id_terminated_with_name_first_user,
         }
 
         # owner: 1, name: yes, status: running
         filters = [("name", job_name), ("status", "running")]
-        jobs = await jobs_client_1.get_all_jobs(filters)
+        jobs = await jobs_client_first_user.get_all_jobs(filters)
         jobs = {job["id"] for job in jobs}
-        assert jobs == {jobs_1["job_name:yes"]["status:running"]}
+        assert jobs == {job_id_active_with_name_first_user}
 
         # owner: 1, name: yes, status: running+failed
         filters = [("name", job_name), ("status", "running"), ("status", "failed")]
-        jobs = await jobs_client_1.get_all_jobs(filters)
+        jobs = await jobs_client_first_user.get_all_jobs(filters)
         jobs = {job["id"] for job in jobs}
-        assert jobs == {jobs_1["job_name:yes"]["status:running"]}
+        assert jobs == {job_id_active_with_name_first_user}
 
         # owner: 1, name: yes, status: running+succeeded
         filters = [("name", job_name), ("status", "running"), ("status", "succeeded")]
-        jobs = await jobs_client_1.get_all_jobs(filters)
+        jobs = await jobs_client_first_user.get_all_jobs(filters)
         jobs = {job["id"] for job in jobs}
         assert jobs == {
-            jobs_1["job_name:yes"]["status:running"],
-            jobs_1["job_name:yes"]["status:succeeded"],
+            job_id_active_with_name_first_user,
+            job_id_terminated_with_name_first_user,
         }
 
-        # owner: 2, name: not-found, status: succeeded
+        # owner: 1, name: not-found, status: succeeded
         filters = [("status", "running"), ("name", "not-found-name")]
-        jobs = await jobs_client_2.get_all_jobs(filters)
+        jobs = await jobs_client_first_user.get_all_jobs(filters)
         jobs = {job["id"] for job in jobs}
         assert jobs == set()
 
