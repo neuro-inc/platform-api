@@ -1,8 +1,9 @@
 import itertools
 import json
 from abc import ABC, abstractmethod
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from typing import AbstractSet, AsyncIterator, Dict, List, Optional, Sequence, Tuple
+from uuid import uuid4
 
 import aioredis
 from async_generator import asynccontextmanager
@@ -30,7 +31,9 @@ class JobStorageJobFoundError(JobsStorageException):
 
 @dataclass(frozen=True)
 class JobFilter:
-    statuses: AbstractSet[JobStatus]
+    statuses: AbstractSet[JobStatus] = field(default_factory=set)
+    owner: Optional[str] = None
+    name: Optional[str] = None
 
 
 class JobsStorage(ABC):
@@ -108,6 +111,10 @@ class InMemoryJobsStorage(JobsStorage):
     def _apply_filter(self, job_filter: JobFilter, job: Job) -> bool:
         if job_filter.statuses and job.status not in job_filter.statuses:
             return False
+        if job_filter.owner and job_filter.owner != job.owner:
+            return False
+        if job_filter.name and job_filter.name != job.name:
+            return False
         return True
 
     async def get_all_jobs(self, job_filter: Optional[JobFilter] = None) -> List[Job]:
@@ -126,14 +133,12 @@ class RedisJobsStorage(JobsStorage):
         client: aioredis.Redis,
         orchestrator_config: OrchestratorConfig,
         encoding: str = "utf8",
-        last_created_job_ttl_s: int = 60 * 60 * 24 * 365 * 2,  # 2 years
     ) -> None:
         self._client = client
         self._orchestrator_config = orchestrator_config
         # TODO (ajuszkowski 1-mar-2019) I think it's better to somehow get encoding
         # from redis configuration (client or server?), e.g. 'self._client.encoding'
         self._encoding = encoding
-        self._last_created_job_ttl_s = last_created_job_ttl_s
 
     def _decode(self, value: bytes) -> str:
         return value.decode(self._encoding)
@@ -144,16 +149,22 @@ class RedisJobsStorage(JobsStorage):
     def _generate_jobs_status_index_key(self, status: JobStatus) -> str:
         return f"jobs.status.{status}"
 
-    def _generate_last_job_name_index_key(self, owner: str, job_name: str) -> str:
+    def _generate_jobs_name_index_zset_key(self, owner: str, job_name: str) -> str:
         assert owner, "job owner is not defined"
         assert job_name, "job name is not defined"
-        return f"job-last-created.owner.{owner}.name.{job_name}"
+        return f"jobs.name.{owner}.{job_name}"
 
     def _generate_jobs_deleted_index_key(self) -> str:
         return "jobs.deleted"
 
     def _generate_jobs_index_key(self) -> str:
         return "jobs"
+
+    def _generate_temp_zset_key(self) -> str:
+        """ Temporary index used for storing the result of operations over
+        Z-sets (union, intersection)
+        """
+        return f"temp_zset_{uuid4()}"
 
     @asynccontextmanager
     async def _acquire_conn(self) -> AsyncIterator[aioredis.Redis]:
@@ -188,9 +199,8 @@ class RedisJobsStorage(JobsStorage):
     async def _watch_all_job_keys(
         self, job_id: str, owner: str, job_name: str
     ) -> AsyncIterator[JobsStorage]:
-        assert job_name
         id_key = self._generate_job_key(job_id)
-        name_key = self._generate_last_job_name_index_key(owner, job_name)
+        name_key = self._generate_jobs_name_index_zset_key(owner, job_name)
         desc = f"id={job_id}, owner={owner}, name={job_name}"
         async with self._watch_keys(id_key, name_key, description=desc) as storage:
             yield storage
@@ -210,7 +220,7 @@ class RedisJobsStorage(JobsStorage):
             # does not rely on this key
             job = await storage.get_job(job_id)
             yield job
-            await storage.update_job_atomically(job)
+            await storage.update_job_atomic(job, is_job_creation=False)
 
     @asynccontextmanager
     async def try_create_job(self, job: Job) -> AsyncIterator[Job]:
@@ -229,21 +239,19 @@ class RedisJobsStorage(JobsStorage):
                 yield job
                 # after the orchestrator has started the job, it fills the 'job' object
                 # with some new values, so we write the new value of 'job' to Redis:
-                await storage.update_job_atomically(job, need_to_update_name_index=True)
+                await storage.update_job_atomic(job, is_job_creation=True)
         else:
             async with self._watch_job_id_key(job.id) as storage:
                 yield job
-                await storage.update_job_atomically(job)
+                await storage.update_job_atomic(job, is_job_creation=True)
 
     async def set_job(self, job: Job) -> None:
         # TODO (ajuszkowski, 4-feb-2019) remove this method from interface as well
         # because it does not watch keys that it updates AND it does not update
         # the 'last-job-created' key!
-        await self.update_job_atomically(job, need_to_update_name_index=False)
+        await self.update_job_atomic(job, is_job_creation=True)
 
-    async def update_job_atomically(
-        self, job: Job, need_to_update_name_index: bool = False
-    ) -> None:
+    async def update_job_atomic(self, job: Job, is_job_creation: bool) -> None:
         payload = json.dumps(job.to_primitive())
 
         tr = self._client.multi_exec()
@@ -253,10 +261,9 @@ class RedisJobsStorage(JobsStorage):
             tr.srem(self._generate_jobs_status_index_key(status), job.id)
         tr.sadd(self._generate_jobs_status_index_key(job.status), job.id)
 
-        if need_to_update_name_index:
-            # we can be here only when called by 'try_create_job'
-            name_key = self._generate_last_job_name_index_key(job.owner, job.name)
-            tr.setex(name_key, self._last_created_job_ttl_s, job.id)
+        if is_job_creation and job.name and job.owner:
+            name_key = self._generate_jobs_name_index_zset_key(job.owner, job.name)
+            tr.zadd(name_key, job.status_history.created_at_timestamp, job.id)
 
         if job.is_deleted:
             tr.sadd(self._generate_jobs_deleted_index_key(), job.id)
@@ -273,11 +280,13 @@ class RedisJobsStorage(JobsStorage):
         return self._parse_job_payload(payload)
 
     async def get_last_created_job_id(self, owner: str, job_name: str) -> Optional[str]:
-        job_name_key = self._generate_last_job_name_index_key(owner, job_name)
-        job_id_bytes = await self._client.get(job_name_key)
-        if job_id_bytes is not None:
-            job_id = self._decode(job_id_bytes)
-            return job_id
+        job_ids_key = self._generate_jobs_name_index_zset_key(owner, job_name)
+        last_job_id_singleton = await self._client.zrange(
+            job_ids_key, start=-1, stop=-1
+        )
+        if last_job_id_singleton:
+            last_job_id = self._decode(last_job_id_singleton[0])
+            return last_job_id
         return None
 
     async def _get_jobs(self, ids: List[str]) -> List[Job]:
@@ -289,13 +298,47 @@ class RedisJobsStorage(JobsStorage):
             jobs.append(self._parse_job_payload(payload))
         return jobs
 
-    async def _get_job_ids(self, statuses: AbstractSet[JobStatus]) -> List[str]:
-        if statuses:
-            keys = [self._generate_jobs_status_index_key(s) for s in statuses]
-            return [job_id.decode() for job_id in await self._client.sunion(*keys)]
+    async def _get_job_ids(
+        self,
+        statuses: AbstractSet[JobStatus],
+        owner: Optional[str] = None,
+        name: Optional[str] = None,
+    ) -> List[str]:
+        statuses_keys = [self._generate_jobs_status_index_key(s) for s in statuses]
+        if bool(owner) ^ bool(name):
+            raise ValueError(
+                "filtering jobs by name is allowed only together with owner, "
+                f"found: owner='{owner}', name='{name}'"
+            )
+        if owner and name:
+            name_key = self._generate_jobs_name_index_zset_key(owner, name)
+            if statuses:
+                payloads = await self._get_job_ids_filter_by_name_owner_statuses(
+                    name_key, statuses_keys
+                )
+            else:
+                payloads = await self._client.zrange(name_key)
         else:
-            key = self._generate_jobs_index_key()
-            return [job_id.decode() async for job_id in self._client.isscan(key)]
+            if statuses:
+                payloads = await self._client.sunion(*statuses_keys)
+            else:
+                jobs_key = self._generate_jobs_index_key()
+                payloads = [job_id async for job_id in self._client.isscan(jobs_key)]
+        return [job_id.decode() for job_id in payloads]
+
+    async def _get_job_ids_filter_by_name_owner_statuses(
+        self, name_key: str, statuses_keys: List[str]
+    ):
+        status_temp_key = self._generate_temp_zset_key()
+        result_temp_key = self._generate_temp_zset_key()
+        tr = self._client.multi_exec()
+        tr.sunionstore(status_temp_key, *statuses_keys)
+        tr.zinterstore(result_temp_key, name_key, status_temp_key)
+        tr.zrange(result_temp_key)
+        tr.delete(status_temp_key)
+        tr.delete(result_temp_key)
+        result_union, result_intersect, result_final, *cleanups = await tr.execute()
+        return result_final
 
     async def _get_job_ids_for_deletion(self) -> List[str]:
         tr = self._client.multi_exec()
@@ -311,8 +354,11 @@ class RedisJobsStorage(JobsStorage):
         return [id_.decode() for id_ in itertools.chain(failed, succeeded)]
 
     async def get_all_jobs(self, job_filter: Optional[JobFilter] = None) -> List[Job]:
-        statuses = job_filter.statuses if job_filter else set()
-        job_ids = await self._get_job_ids(statuses)
+        if not job_filter:
+            job_filter = JobFilter()
+        job_ids = await self._get_job_ids(
+            job_filter.statuses, job_filter.owner, job_filter.name
+        )
         return await self._get_jobs(job_ids)
 
     async def get_running_jobs(self) -> List[Job]:

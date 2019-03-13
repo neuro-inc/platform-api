@@ -130,6 +130,10 @@ class JobStatusHistory:
         return self.created_at.isoformat()
 
     @property
+    def created_at_timestamp(self) -> float:
+        return self.created_at.timestamp()
+
+    @property
     def started_at(self) -> Optional[datetime]:
         """Return a `datetime` when a job became RUNNING.
 
