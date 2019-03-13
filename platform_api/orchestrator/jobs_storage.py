@@ -2,7 +2,6 @@ import itertools
 import json
 from abc import ABC, abstractmethod
 from dataclasses import dataclass, field
-import time
 from typing import AbstractSet, AsyncIterator, Dict, List, Optional, Sequence, Tuple
 from uuid import uuid4
 
@@ -168,7 +167,7 @@ class RedisJobsStorage(JobsStorage):
         """ Temporary index used for storing the result of operations over
         Z-sets (union, intersection)
         """
-        return f"temp_zset_{uuid4()}_{time()}"
+        return f"temp_zset_{uuid4()}"
 
     @asynccontextmanager
     async def _acquire_conn(self) -> AsyncIterator[aioredis.Redis]:
