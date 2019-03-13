@@ -332,19 +332,18 @@ class RedisJobsStorage(JobsStorage):
     async def _get_job_ids_filter_by_name_owner_statuses(
         self, name_key: str, statuses_keys: List[str]
     ):
-        temp_keys = []
+        status_temp_key = self._generate_temp_zset_key()
+        result_temp_key = self._generate_temp_zset_key()
+        tr = self._client.multi_exec()
         try:
-            for status_key in statuses_keys:
-                out_key = self._generate_temp_zset_key()
-                temp_keys.append(out_key)
-                await self._client.zinterstore(out_key, name_key, status_key)
-            result_temp_key = self._generate_temp_zset_key()
-            temp_keys.append(result_temp_key)
-            await self._client.zunionstore(result_temp_key, *temp_keys)
-            return await self._client.zrange(result_temp_key)
+            tr.sunionstore(status_temp_key, *statuses_keys)
+            tr.zinterstore(result_temp_key, name_key, status_temp_key)
+            tr.zrange(result_temp_key)
+            *interim_results, result = await tr.execute()
+            return result
         finally:
-            for out_key in temp_keys:
-                await self._client.delete(out_key)
+            await self._client.delete(status_temp_key)
+            await self._client.delete(result_temp_key)
 
     async def _get_job_ids_for_deletion(self) -> List[str]:
         tr = self._client.multi_exec()
