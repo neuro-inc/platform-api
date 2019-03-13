@@ -179,6 +179,8 @@ class Service:
 
     service_type: ServiceType = ServiceType.CLUSTER_IP
 
+    cluster_ip: Optional[str] = None
+
     def _add_port_map(
         self,
         port: Optional[int],
@@ -198,6 +200,10 @@ class Service:
                 "selector": {"job": self.name},
             },
         }
+
+        if self.cluster_ip:
+            service_descriptor["spec"]["clusterIP"] = self.cluster_ip
+
         self._add_port_map(
             self.port, self.target_port, "http", service_descriptor["spec"]["ports"]
         )
@@ -214,6 +220,16 @@ class Service:
         return cls(
             pod.name, target_port=pod.port, ssh_target_port=pod.ssh_port
         )  # type: ignore
+
+    @classmethod
+    def create_headless_for_pod(cls, pod: "PodDescriptor") -> "Service":
+        http_port = pod.port or cls.port
+        return cls(
+            name=pod.name,
+            cluster_ip="None",
+            target_port=http_port,
+            ssh_target_port=pod.ssh_port,
+        )
 
     @classmethod
     def _find_port_by_name(cls, name: str, port_mappings: List) -> Dict:
@@ -234,6 +250,7 @@ class Service:
             ssh_target_port=ssh_payload.get("targetPort", None),
             ssh_port=ssh_payload.get("port", Service.ssh_port),
             service_type=ServiceType(service_type),
+            cluster_ip=payload["spec"].get("clusterIP"),
         )
 
 
