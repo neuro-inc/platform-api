@@ -14,10 +14,7 @@ LOCALHOST = "127.0.0.1"
 @pytest.fixture
 async def alice_job(api_config, alice, client):
     job_request_payload = {
-        "container": {
-            "image": "nginx",
-            "resources": {"cpu": 0.1, "memory_mb": 16},
-        }
+        "container": {"image": "nginx", "resources": {"cpu": 0.1, "memory_mb": 16}}
     }
     headers = {"Authorization": f"Bearer {alice.token}"}
     response = await client.post(
