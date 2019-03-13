@@ -115,7 +115,7 @@ class TestKubeOrchestrator:
         def _predicate(status: JobStatus) -> bool:
             return status.is_finished
 
-        await self._wait_for(*args, **kwargs, status_predicate=_predicate)
+        return await self._wait_for(*args, **kwargs, status_predicate=_predicate)
 
     async def wait_for_failure(self, *args, **kwargs):
         def _predicate(status: JobStatus) -> bool:
