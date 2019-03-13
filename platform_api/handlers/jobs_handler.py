@@ -292,6 +292,7 @@ class JobsHandler:
         tree = await self._auth_client.get_permissions_tree(user.name, "job:")
         # TODO (A Danshyn 10/09/18): retrieving all jobs until the proper
         # index is in place
+        # TODO (ajuszkowski) filtering by name doesn't work with shared jobs (issue 516)
         job_filter = self._build_job_filter_from_query(request.query, user.name)
         jobs = await self._jobs_service.get_all_jobs(job_filter)
         jobs = filter_jobs_with_access_tree(jobs, tree)
