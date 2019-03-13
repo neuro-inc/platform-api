@@ -332,15 +332,13 @@ class RedisJobsStorage(JobsStorage):
         status_temp_key = self._generate_temp_zset_key()
         result_temp_key = self._generate_temp_zset_key()
         tr = self._client.multi_exec()
-        try:
-            tr.sunionstore(status_temp_key, *statuses_keys)
-            tr.zinterstore(result_temp_key, name_key, status_temp_key)
-            tr.zrange(result_temp_key)
-            *interim_results, result = await tr.execute()
-            return result
-        finally:
-            await self._client.delete(status_temp_key)
-            await self._client.delete(result_temp_key)
+        tr.sunionstore(status_temp_key, *statuses_keys)
+        tr.zinterstore(result_temp_key, name_key, status_temp_key)
+        tr.zrange(result_temp_key)
+        tr.delete(status_temp_key)
+        tr.delete(result_temp_key)
+        result_union, result_intersect, result_final, *cleanups = await tr.execute()
+        return result_final
 
     async def _get_job_ids_for_deletion(self) -> List[str]:
         tr = self._client.multi_exec()
