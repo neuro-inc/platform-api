@@ -94,7 +94,7 @@ class TestRedisJobsStorage:
         assert job.status == original_job.status
 
     @pytest.mark.asyncio
-    async def test_get_last_created_job__empty(self, redis_client, kube_orchestrator):
+    async def test_get_last_created_job_id__no_job_updated(self, redis_client, kube_orchestrator):
         job = self._create_pending_job(kube_orchestrator, owner="me", job_name="job-1")
         storage = RedisJobsStorage(
             redis_client, orchestrator_config=kube_orchestrator.config
@@ -111,7 +111,24 @@ class TestRedisJobsStorage:
         assert job_id_last_created is None
 
     @pytest.mark.asyncio
-    async def test_get_last_created_job__single_value(
+    async def test_get_last_created_job_id__is_job_creation_false(self, redis_client, kube_orchestrator):
+
+        job = self._create_pending_job(kube_orchestrator, owner="me", job_name="job-1")
+        storage = RedisJobsStorage(
+            redis_client, orchestrator_config=kube_orchestrator.config
+        )
+        job.status = JobStatus.RUNNING
+        await storage.update_job_atomic(job, is_job_creation=False)
+
+        # check that job exists in database:
+        job_read = await storage.get_job(job.id)
+        assert job_read.to_primitive() == job.to_primitive()
+
+        job_id_last_created = await storage.get_last_created_job_id(job.owner, job.name)
+        assert job_id_last_created is None
+
+    @pytest.mark.asyncio
+    async def test_get_last_created_job_id__is_job_creation_true(
         self, redis_client, kube_orchestrator
     ):
         job = self._create_pending_job(kube_orchestrator, owner="me", job_name="job-1")
@@ -119,7 +136,7 @@ class TestRedisJobsStorage:
             redis_client, orchestrator_config=kube_orchestrator.config
         )
         job.status = JobStatus.RUNNING
-        await storage.update_job_atomically(job)
+        await storage.update_job_atomic(job, is_job_creation=True)
 
         # check that job exists in database:
         job_read = await storage.get_job(job.id)
@@ -127,36 +144,6 @@ class TestRedisJobsStorage:
 
         job_id_last_created = await storage.get_last_created_job_id(job.owner, job.name)
         assert job_id_last_created == job.id
-
-    @pytest.mark.asyncio
-    async def test_get_last_created_job__multiple_values(
-        self, redis_client, kube_orchestrator
-    ):
-        storage = RedisJobsStorage(
-            redis_client, orchestrator_config=kube_orchestrator.config
-        )
-
-        name = "test-job-name"
-        owner = "test-user"
-
-        # First job:
-        job1 = self._create_pending_job(kube_orchestrator, owner=owner, job_name=name)
-        job1.status = JobStatus.RUNNING
-        await storage.update_job_atomically(job1)
-        # check that job exists in database:
-        job_read = await storage.get_job(job1.id)
-        assert job_read.to_primitive() == job1.to_primitive()
-
-        # Second job:
-        job2 = self._create_running_job(kube_orchestrator, owner=owner, job_name=name)
-        job2.status = JobStatus.RUNNING
-        await storage.update_job_atomically(job2)
-        # check that job exists in database:
-        job_read = await storage.get_job(job2.id)
-        assert job_read.to_primitive() == job2.to_primitive()
-
-        job_id_last_created = await storage.get_last_created_job_id(owner, name)
-        assert job_id_last_created == job2.id
 
     @pytest.mark.asyncio
     async def test_try_create_job__no_name__ok(self, redis_client, kube_orchestrator):

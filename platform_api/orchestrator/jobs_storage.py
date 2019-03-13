@@ -223,7 +223,7 @@ class RedisJobsStorage(JobsStorage):
             # does not rely on this key
             job = await storage.get_job(job_id)
             yield job
-            await storage.update_job_atomically(job)
+            await storage.update_job_atomic(job, is_job_creation=False)
 
     @asynccontextmanager
     async def try_create_job(self, job: Job) -> AsyncIterator[Job]:
@@ -242,19 +242,20 @@ class RedisJobsStorage(JobsStorage):
                 yield job
                 # after the orchestrator has started the job, it fills the 'job' object
                 # with some new values, so we write the new value of 'job' to Redis:
-                await storage.update_job_atomically(job)
+                await storage.update_job_atomic(job, is_job_creation=True)
         else:
             async with self._watch_job_id_key(job.id) as storage:
                 yield job
-                await storage.update_job_atomically(job)
+                await storage.update_job_atomic(job, is_job_creation=True)
 
     async def set_job(self, job: Job) -> None:
         # TODO (ajuszkowski, 4-feb-2019) remove this method from interface as well
         # because it does not watch keys that it updates AND it does not update
         # the 'last-job-created' key!
-        await self.update_job_atomically(job)
+        await self.update_job_atomic(job, is_job_creation=True)
 
-    async def update_job_atomically(self, job: Job) -> None:
+    # TODO: test on param
+    async def update_job_atomic(self, job: Job, is_job_creation: bool) -> None:
         payload = json.dumps(job.to_primitive())
 
         tr = self._client.multi_exec()
@@ -264,7 +265,7 @@ class RedisJobsStorage(JobsStorage):
             tr.srem(self._generate_jobs_status_index_key(status), job.id)
         tr.sadd(self._generate_jobs_status_index_key(job.status), job.id)
 
-        if job.name and job.owner:
+        if is_job_creation and job.name and job.owner:
             name_key = self._generate_jobs_name_index_zset_key(job.owner, job.name)
             tr.zadd(name_key, job.status_history.created_at_timestamp, job.id)
 
