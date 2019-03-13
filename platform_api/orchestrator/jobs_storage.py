@@ -254,7 +254,6 @@ class RedisJobsStorage(JobsStorage):
         # the 'last-job-created' key!
         await self.update_job_atomic(job, is_job_creation=True)
 
-    # TODO: test on param
     async def update_job_atomic(self, job: Job, is_job_creation: bool) -> None:
         payload = json.dumps(job.to_primitive())
 
