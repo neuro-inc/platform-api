@@ -61,13 +61,12 @@ class MyJob(Job):
 
 @pytest.fixture
 async def job_nginx(kube_orchestrator):
-    job_id = str(uuid.uuid4())
     container = Container(
         image="ubuntu",
         command="sleep 5",
         resources=ContainerResources(cpu=0.1, memory_mb=256),
     )
-    job_request = JobRequest(job_id=job_id, container=container)
+    job_request = JobRequest.create(container)
     job = MyJob(orchestrator=kube_orchestrator, job_request=job_request)
     return job
 
@@ -150,12 +149,11 @@ class TestKubeOrchestrator:
 
     @pytest.mark.asyncio
     async def test_start_job_broken_image(self, kube_orchestrator):
-        job_id = str(uuid.uuid4())
         container = Container(
             image="notsuchdockerimage",
             resources=ContainerResources(cpu=0.1, memory_mb=128),
         )
-        job_request = JobRequest(job_id=job_id, container=container)
+        job_request = JobRequest.create(container)
         job = MyJob(orchestrator=kube_orchestrator, job_request=job_request)
         try:
             status = await job.start()
