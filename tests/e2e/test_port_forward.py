@@ -52,12 +52,12 @@ async def test_port_forward(ssh_auth_config, api_config, alice, alice_job, clien
         command = [
             "ssh",
             "-NL",
-            f"{port}:{alice_job}:22",
+            f"{port}:{alice_job}:80",
             "-o",
             f"ProxyCommand=ssh -o StrictHostKeyChecking=no -p "
             f"{str(ssh_auth_config.port)} nobody@{ssh_auth_config.ip} "
             f'\'{{"method": "job_port_forward", "token": "{alice.token}",'
-            f'"params": {{"job": "{alice_job}", "port": 22}}}}\'',
+            f'"params": {{"job": "{alice_job}", "port": 80}}}}\'',
             "-o",
             "ExitOnForwardFailure=yes",
             "nobody@127.0.0.1",
