@@ -94,7 +94,9 @@ class TestRedisJobsStorage:
         assert job.status == original_job.status
 
     @pytest.mark.asyncio
-    async def test_get_last_created_job_id__no_job_updated(self, redis_client, kube_orchestrator):
+    async def test_get_last_created_job_id__no_job_updated(
+        self, redis_client, kube_orchestrator
+    ):
         job = self._create_pending_job(kube_orchestrator, owner="me", job_name="job-1")
         storage = RedisJobsStorage(
             redis_client, orchestrator_config=kube_orchestrator.config
@@ -111,7 +113,9 @@ class TestRedisJobsStorage:
         assert job_id_last_created is None
 
     @pytest.mark.asyncio
-    async def test_get_last_created_job_id__is_job_creation_false(self, redis_client, kube_orchestrator):
+    async def test_get_last_created_job_id__is_job_creation_false(
+        self, redis_client, kube_orchestrator
+    ):
 
         job = self._create_pending_job(kube_orchestrator, owner="me", job_name="job-1")
         storage = RedisJobsStorage(
