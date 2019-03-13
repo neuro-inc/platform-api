@@ -288,7 +288,6 @@ class RedisJobsStorage(JobsStorage):
             job_ids_key, start=-1, stop=-1
         )
         if last_job_id_singleton:
-            assert len(last_job_id_singleton) == 1, f"found: {last_job_id_singleton}"
             last_job_id = self._decode(last_job_id_singleton[0])
             return last_job_id
         return None
