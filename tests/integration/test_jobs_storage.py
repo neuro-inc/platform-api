@@ -500,7 +500,7 @@ class TestRedisJobsStorage:
             for job in jobs
             if job.name == name and job.owner == owner and job.status in statuses
         }
-        assert job_ids == expected  # len(expected) == 1
+        assert job_ids == expected
 
         name = "job-first"
         owner = "user1"
@@ -512,7 +512,7 @@ class TestRedisJobsStorage:
             for job in jobs
             if job.name == name and job.owner == owner and job.status in statuses
         }
-        assert job_ids == expected  # len(expected) == 0
+        assert job_ids == expected
 
         name = "job-first"
         owner = "user1"
@@ -524,7 +524,7 @@ class TestRedisJobsStorage:
             for job in jobs
             if job.name == name and job.owner == owner and job.status in statuses
         }
-        assert job_ids == expected  # len(expected) == 1
+        assert job_ids == expected
 
         name = "job-second"
         owner = "user3"
@@ -536,7 +536,7 @@ class TestRedisJobsStorage:
             for job in jobs
             if job.name == name and job.owner == owner and job.status in statuses
         }
-        assert job_ids == expected  # len(expected) == 1
+        assert job_ids == expected
 
     @pytest.mark.asyncio
     async def test_get_running_empty(self, redis_client, kube_orchestrator):
