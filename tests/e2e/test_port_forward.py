@@ -17,7 +17,6 @@ async def alice_job(api_config, alice, client):
         "container": {
             "image": "nginx",
             "resources": {"cpu": 0.1, "memory_mb": 16},
-            "ssh": {"port": 80},
         }
     }
     headers = {"Authorization": f"Bearer {alice.token}"}
