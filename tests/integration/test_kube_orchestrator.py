@@ -3,7 +3,7 @@ import io
 import time
 import uuid
 from pathlib import PurePath
-from typing import Optional, Tuple
+from typing import Callable
 from unittest import mock
 
 import aiohttp
@@ -50,7 +50,9 @@ class MyJob(Job):
         super().__init__(*args, orchestrator_config=orchestrator.config, **kwargs)
 
     async def start(self) -> JobStatus:
-        return await self._orchestrator.start_job(self, "test-token")
+        status = await self._orchestrator.start_job(self, "test-token")
+        assert status == JobStatus.PENDING
+        return status
 
     async def delete(self) -> JobStatus:
         return await self._orchestrator.delete_job(self)
@@ -88,13 +90,18 @@ async def delete_job_later(kube_orchestrator):
 
 
 class TestKubeOrchestrator:
-    async def wait_for_completion(
-        self, job: Job, interval_s: float = 0.5, max_time: float = 180
+    async def _wait_for(
+        self,
+        job: MyJob,
+        interval_s: float = 0.5,
+        max_time: float = 180,
+        *,
+        status_predicate: Callable[[JobStatus], bool],
     ):
         t0 = time.monotonic()
         while True:
             status = await job.query_status()
-            if status.is_finished:
+            if status_predicate(status):
                 return status
             else:
                 await asyncio.sleep(max(interval_s, time.monotonic() - t0))
@@ -104,41 +111,40 @@ class TestKubeOrchestrator:
                 await asyncio.sleep(interval_s)
                 interval_s *= 1.5
 
+    async def wait_for_completion(self, *args, **kwargs):
+        def _predicate(status: JobStatus) -> bool:
+            return status.is_finished
+
+        await self._wait_for(*args, **kwargs, status_predicate=_predicate)
+
     async def wait_for_failure(self, *args, **kwargs):
-        status = await self.wait_for_completion(*args, **kwargs)
-        assert status == JobStatus.FAILED
+        def _predicate(status: JobStatus) -> bool:
+            if not status.is_finished:
+                return False
+            assert status == JobStatus.FAILED
+            return True
+
+        await self._wait_for(*args, **kwargs, status_predicate=_predicate)
 
     async def wait_for_success(self, *args, **kwargs):
-        status = await self.wait_for_completion(*args, **kwargs)
-        assert status == JobStatus.SUCCEEDED
+        def _predicate(status: JobStatus) -> bool:
+            if not status.is_finished:
+                return False
+            assert status == JobStatus.SUCCEEDED
+            return True
 
-    async def wait_for_job(
-        self, job: Job, interval_s: float = 1.0, max_time: float = 180
-    ) -> Tuple[JobStatus, Optional[JobStatus]]:
-        """
-        Function to wait for a job to either sit in current state,
-        or transfer to another stage. Function never fails.
-        """
-        initial_status = await job.query_status()
-        status = None
-        t0 = time.monotonic()
-        while True:
-            status = await job.query_status()
-            if status != initial_status:
-                break
-            else:
-                await asyncio.sleep(max(interval_s, time.monotonic() - t0))
-                current_time = time.monotonic() - t0
-                if current_time > max_time:
-                    pytest.fail(f"too long: {current_time:.3f} sec")
-                interval_s *= 1.5
-        return initial_status, status
+        await self._wait_for(*args, **kwargs, status_predicate=_predicate)
+
+    async def wait_until_running(self, *args, **kwargs):
+        def _predicate(status: JobStatus) -> bool:
+            assert not status.is_finished
+            return status == JobStatus.RUNNING
+
+        await self._wait_for(*args, **kwargs, status_predicate=_predicate)
 
     @pytest.mark.asyncio
     async def test_start_job_happy_path(self, job_nginx, kube_orchestrator):
-        status = await job_nginx.start()
-        assert status == JobStatus.PENDING
-
+        await job_nginx.start()
         await self.wait_for_success(job_nginx)
 
         pod = await kube_orchestrator._client.get_pod(job_nginx.id)
@@ -156,9 +162,7 @@ class TestKubeOrchestrator:
         job_request = JobRequest.create(container)
         job = MyJob(orchestrator=kube_orchestrator, job_request=job_request)
         try:
-            status = await job.start()
-            assert status == JobStatus.PENDING
-
+            await job.start()
             await self.wait_for_failure(job)
         finally:
             status = await job.delete()
@@ -185,9 +189,7 @@ class TestKubeOrchestrator:
 
     @pytest.mark.asyncio
     async def test_start_job_with_not_unique_id(self, kube_orchestrator, job_nginx):
-        status = await job_nginx.start()
-        assert status == JobStatus.PENDING
-
+        await job_nginx.start()
         await self.wait_for_success(job_nginx)
 
         container = Container(
@@ -236,9 +238,7 @@ class TestKubeOrchestrator:
             orchestrator=kube_orchestrator, job_request=JobRequest.create(container)
         )
         try:
-            status = await job.start()
-            assert status == JobStatus.PENDING
-
+            await job.start()
             await self.wait_for_success(job)
         finally:
             await job.delete()
@@ -255,9 +255,7 @@ class TestKubeOrchestrator:
             orchestrator=kube_orchestrator, job_request=JobRequest.create(container)
         )
         try:
-            status = await job.start()
-            assert status == JobStatus.PENDING
-
+            await job.start()
             await self.wait_for_failure(job)
 
             status_item = await kube_orchestrator.get_job_status(job)
@@ -281,8 +279,7 @@ class TestKubeOrchestrator:
             orchestrator=kube_orchestrator, job_request=JobRequest.create(container)
         )
         try:
-            status = await job.start()
-            assert status == JobStatus.PENDING
+            await job.start()
 
             status_item = await kube_orchestrator.get_job_status(job)
             assert status_item == JobStatusItem.create(
@@ -337,17 +334,13 @@ class TestKubeOrchestrator:
         )
 
         try:
-            status = await write_job.start()
-            assert status == JobStatus.PENDING
-
+            await write_job.start()
             await self.wait_for_success(write_job)
         finally:
             await write_job.delete()
 
         try:
-            status = await read_job.start()
-            assert status == JobStatus.PENDING
-
+            await read_job.start()
             await self.wait_for_success(read_job)
         finally:
             await read_job.delete()
@@ -370,9 +363,7 @@ class TestKubeOrchestrator:
         )
 
         try:
-            status = await job.start()
-            assert status == JobStatus.PENDING
-
+            await job.start()
             status = await self.wait_for_completion(job)
             assert status == expected_status
         finally:
@@ -472,9 +463,7 @@ class TestKubeOrchestrator:
             orchestrator=kube_orchestrator, job_request=JobRequest.create(container)
         )
         try:
-            status = await job.start()
-            assert status == JobStatus.PENDING
-
+            await job.start()
             await self._wait_for_job_service(
                 kube_ingress_ip, host=job.http_host, job_id=job.id
             )
@@ -501,9 +490,7 @@ class TestKubeOrchestrator:
             orchestrator=kube_orchestrator, job_request=JobRequest.create(container)
         )
         try:
-            status = await job.start()
-            assert status == JobStatus.PENDING
-
+            await job.start()
             await self._wait_for_job_service(
                 kube_ingress_ip, host=job.http_host, job_id=job.id
             )
@@ -518,7 +505,7 @@ class TestKubeOrchestrator:
 
     @pytest.mark.asyncio
     async def test_job_check_dns_hostname(
-        self, kube_config, kube_orchestrator, kube_ingress_ip
+        self, kube_config, kube_orchestrator, kube_ingress_ip, delete_job_later
     ):
         def create_server_job():
             server_cont = Container(
@@ -544,23 +531,53 @@ class TestKubeOrchestrator:
             )
 
         server_job = create_server_job()
-        client_job = None
-        try:
-            server_status = await server_job.start()
-            assert server_status == JobStatus.PENDING
-            server_hostname = server_job.internal_hostname
-            await self._wait_for_job_service(
-                kube_ingress_ip, host=server_job.http_host, job_id=server_job.id
-            )
-            client_job = create_client_job(server_hostname)
-            client_status = await client_job.start()
-            assert client_status == JobStatus.PENDING
-            assert self.wait_for_success(job=client_job)
+        await delete_job_later(server_job)
+        await server_job.start()
+        server_hostname = server_job.internal_hostname
+        await self._wait_for_job_service(
+            kube_ingress_ip, host=server_job.http_host, job_id=server_job.id
+        )
 
-        finally:
-            await server_job.delete()
-            if client_job is not None:
-                await client_job.delete()
+        client_job = create_client_job(server_hostname)
+        await delete_job_later(client_job)
+        await client_job.start()
+        assert self.wait_for_success(job=client_job)
+
+    @pytest.mark.asyncio
+    async def test_job_check_dns_hostname_undeclared_port(
+        self, kube_config, kube_orchestrator, kube_ingress_ip, delete_job_later
+    ):
+        def create_server_job():
+            server_cont = Container(
+                image="python",
+                command="python -m http.server 12345",
+                resources=ContainerResources(cpu=0.1, memory_mb=128),
+            )
+            return MyJob(
+                orchestrator=kube_orchestrator,
+                job_request=JobRequest.create(server_cont),
+            )
+
+        def create_client_job(server_hostname: str):
+            client_cont = Container(
+                image="ubuntu",
+                command=f"curl --silent --fail http://{server_hostname}:12345/",
+                resources=ContainerResources(cpu=0.1, memory_mb=128),
+            )
+            return MyJob(
+                orchestrator=kube_orchestrator,
+                job_request=JobRequest.create(client_cont),
+            )
+
+        server_job = create_server_job()
+        await delete_job_later(server_job)
+        await server_job.start()
+        await self.wait_until_running(server_job)
+
+        client_job = create_client_job(server_job.internal_hostname)
+        await delete_job_later(client_job)
+        await client_job.start()
+        assert self.wait_for_success(client_job)
 
     @pytest.mark.asyncio
     async def test_job_pod_labels_and_network_policy(
@@ -575,9 +592,7 @@ class TestKubeOrchestrator:
             orchestrator=kube_orchestrator, job_request=JobRequest.create(container)
         )
         await delete_job_later(job)
-
-        status = await job.start()
-        assert status == JobStatus.PENDING
+        await job.start()
 
         pod_name = job.id
         await kube_client.wait_pod_is_running(pod_name=pod_name, timeout_s=60.0)
