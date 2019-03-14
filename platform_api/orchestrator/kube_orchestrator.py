@@ -249,12 +249,14 @@ class KubeOrchestrator(Orchestrator):
 
         descriptor = await self._create_pod_descriptor(job)
         status = await self._client.create_pod(descriptor)
-        if job.has_http_server_exposed or job.has_ssh_server_exposed:
-            logger.info(f"Starting Service for {job.id}.")
-            service = await self._create_service(descriptor)
-            if job.has_http_server_exposed:
-                logger.info(f"Starting Ingress for {job.id}")
-                await self._create_ingress(job, service)
+
+        logger.info(f"Starting Service for {job.id}.")
+        service = await self._create_service(descriptor)
+
+        if job.has_http_server_exposed:
+            logger.info(f"Starting Ingress for {job.id}")
+            await self._create_ingress(job, service)
+
         job.status = convert_pod_status_to_job_status(status).status
         job.internal_hostname = self._get_service_internal_hostname(job.id, descriptor)
         return job.status
@@ -451,7 +453,7 @@ class KubeOrchestrator(Orchestrator):
         return await self._client.exec_pod(job_id, command, tty=tty)
 
     async def _create_service(self, pod: PodDescriptor) -> Service:
-        return await self._client.create_service(Service.create_for_pod(pod))
+        return await self._client.create_service(Service.create_headless_for_pod(pod))
 
     async def _delete_service(self, job: Job) -> None:
         pod_id = self._get_job_pod_name(job)
@@ -463,8 +465,9 @@ class KubeOrchestrator(Orchestrator):
     async def delete_job(self, job: Job) -> JobStatus:
         if job.has_http_server_exposed:
             await self._delete_ingress(job)
-        if job.has_http_server_exposed or job.has_ssh_server_exposed:
-            await self._delete_service(job)
+
+        await self._delete_service(job)
+
         pod_id = self._get_job_pod_name(job)
         status = await self._client.delete_pod(pod_id)
         return convert_pod_status_to_job_status(status).status
