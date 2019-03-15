@@ -1,11 +1,11 @@
-from pip import create_main_parser
+from pip._internal.configuration import Configuration
 
 
-def main():
-    parser = create_main_parser()
-    parser.config.read(parser.files)
+def main() -> None:
+    config = Configuration(isolated=False)
+    config.load()
     try:
-        urls = parser.config["global"]["extra-index-url"].splitlines()
+        urls = config.get_value("global.extra-index-url").splitlines()
         print(", ".join(urls))
     except Exception:
         pass
