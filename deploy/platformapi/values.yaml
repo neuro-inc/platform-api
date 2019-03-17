@@ -89,7 +89,7 @@ NP_OAUTH_AUDIENCE:
   staging: https://platform.staging.neuromation.io
   prod: https://platform.prod.neuromation.io
 NP_OAUTH_SUCCESS_REDIRECT_URL:
-  _default: https://platform.neuromation.io
-  dev: https://platform.neuromation.io
-  staging: https://platform.neuromation.io
-  prod: https://platform.neuromation.io
+  _default: https://neu.ro/#running-your-first-job
+  dev: https://neu.ro/#running-your-first-job
+  staging: https://neu.ro/#running-your-first-job
+  prod: https://neu.ro/#running-your-first-job
