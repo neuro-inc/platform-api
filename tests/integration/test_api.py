@@ -4,9 +4,11 @@ import time
 from pathlib import PurePath
 from typing import Any, Dict, NamedTuple, Optional
 from unittest import mock
+from uuid import uuid4
 
 import aiohttp
 import aiohttp.web
+import multidict
 import pytest
 from aiohttp.web import (
     HTTPAccepted,
@@ -272,6 +274,7 @@ async def model_request_factory():
 @pytest.fixture
 def job_request_factory():
     def _factory():
+        # TODO(ajuszkowski) Optional fields (as "name") should not have a value here
         return {
             "container": {
                 "image": "ubuntu",
@@ -1039,6 +1042,55 @@ class TestJobs:
         # clean
         for job in jobs:
             await jobs_client.delete_job(job_id=job["id"])
+
+    @pytest.mark.asyncio
+    @pytest.mark.parametrize(
+        "filters",
+        [
+            multidict.MultiDict([("name", f"test-job-{uuid4()}")]),
+            multidict.MultiDict(
+                [
+                    ("name", f"test-job-{uuid4()}"),
+                    ("status", "running"),
+                    ("status", "pending"),
+                    ("status", "failed"),
+                    ("status", "succeeded"),
+                ]
+            ),
+        ],
+    )
+    async def test_get_jobs_by_name_preserves_chronological_order_without_statuses(
+        self, jobs_client, api, client, job_submit, regular_user, filters
+    ):
+        # unique job name generated per test-run is stored in "filters"
+        job_submit["name"] = filters.get("name")
+        job_submit["container"]["command"] = "sleep 30m"
+
+        jobs_ids = []
+        n_jobs = 5
+        for i in range(n_jobs):
+            async with client.post(
+                api.jobs_base_url, headers=regular_user.headers, json=job_submit
+            ) as response:
+                assert response.status == HTTPAccepted.status_code, f"{i}-th job"
+                result = await response.json()
+                assert result["status"] == "pending"
+                job_id = result["id"]
+                jobs_ids.append(job_id)
+                await jobs_client.long_polling_by_job_id(job_id, status="running")
+                # let only the last job be running
+                if i < n_jobs - 1:
+                    await jobs_client.delete_job(job_id)
+                    await jobs_client.long_polling_by_job_id(job_id, status="succeeded")
+
+        jobs_ls = await jobs_client.get_all_jobs(params=filters)
+        jobs_ls = [job["id"] for job in jobs_ls]
+        assert set(jobs_ids) == set(jobs_ls), "content differs"
+        assert jobs_ids == jobs_ls, "order differs"
+
+        # cleanup all:
+        for job_id in jobs_ids:
+            await jobs_client.delete_job(job_id=job_id)
 
     @pytest.mark.asyncio
     async def test_delete_job(
