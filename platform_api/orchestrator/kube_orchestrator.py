@@ -57,7 +57,8 @@ class JobStatusItemFactory:
             return JobStatus.FAILED
         elif phase == "Running":
             return JobStatus.RUNNING
-        return JobStatus.PENDING
+        else:
+            return JobStatus.PENDING
 
     def _parse_reason(self) -> Optional[str]:
         if self._status in (JobStatus.PENDING, JobStatus.FAILED):

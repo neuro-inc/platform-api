@@ -300,7 +300,10 @@ class Job:
         if self.is_finished and not self.is_deleted and self._is_time_for_deletion:
             # delete finished jobs
             return True
-        elif status_item.status == JobStatus.PENDING and status_item.reason == "ErrImagePull":
+        elif (
+            status_item.status == JobStatus.PENDING
+            and status_item.reason == "ErrImagePull"
+        ):
             # delete jobs stuck in ErrImagePull loop
             return True
         return False
