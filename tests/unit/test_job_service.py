@@ -454,7 +454,7 @@ class TestJobsService:
         await service.delete_job(original_job.id)
 
         job = await service.get_job(original_job.id)
-        assert job.status == JobStatus.SUCCEEDED
+        assert job.status == JobStatus.FAILED
         assert job.is_finished
         assert job.finished_at
         assert job.is_deleted
