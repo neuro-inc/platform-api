@@ -296,15 +296,16 @@ class Job:
 
     @property
     def should_be_deleted(self) -> bool:
+        return self.is_finished and not self.is_deleted and self._is_time_for_deletion
+
+    @property
+    def should_be_collected(self) -> bool:
         status_item = self._status_history.current
-        if self.is_finished and not self.is_deleted and self._is_time_for_deletion:
-            # delete finished jobs
-            return True
-        elif status_item.status == JobStatus.PENDING and (
+        if status_item.status == JobStatus.PENDING and (
             status_item.reason == "ErrImagePull"
             or status_item.reason == "ImagePullBackOff"
         ):
-            # delete jobs stuck in ErrImagePull loop
+            # collect jobs stuck in ErrImagePull loop
             return True
         return False
 

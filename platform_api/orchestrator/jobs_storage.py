@@ -63,6 +63,9 @@ class JobsStorage(ABC):
     async def get_jobs_for_deletion(self) -> List[Job]:
         return [job for job in await self.get_all_jobs() if job.should_be_deleted]
 
+    async def get_jobs_for_collection(self) -> List[Job]:
+        return [job for job in await self.get_all_jobs() if job.should_be_collected]
+
     async def get_unfinished_jobs(self) -> List[Job]:
         return [job for job in await self.get_all_jobs() if not job.is_finished]
 
@@ -340,6 +343,15 @@ class RedisJobsStorage(JobsStorage):
         result_union, result_intersect, result_final, *cleanups = await tr.execute()
         return result_final
 
+    async def _get_job_ids_for_collection(self) -> List[str]:
+        tr = self._client.multi_exec()
+        tr.sdiff(
+            self._generate_jobs_status_index_key(JobStatus.PENDING),
+            self._generate_jobs_deleted_index_key(),
+        )
+        pending, = await tr.execute()
+        return [id_.decode() for id_ in pending]
+
     async def _get_job_ids_for_deletion(self) -> List[str]:
         tr = self._client.multi_exec()
         tr.sdiff(
@@ -347,15 +359,11 @@ class RedisJobsStorage(JobsStorage):
             self._generate_jobs_deleted_index_key(),
         )
         tr.sdiff(
-            self._generate_jobs_status_index_key(JobStatus.PENDING),
-            self._generate_jobs_deleted_index_key(),
-        )
-        tr.sdiff(
             self._generate_jobs_status_index_key(JobStatus.SUCCEEDED),
             self._generate_jobs_deleted_index_key(),
         )
-        failed, pending, succeeded = await tr.execute()
-        return [id_.decode() for id_ in itertools.chain(failed, pending, succeeded)]
+        failed, succeeded = await tr.execute()
+        return [id_.decode() for id_ in itertools.chain(failed, succeeded)]
 
     async def get_all_jobs(self, job_filter: Optional[JobFilter] = None) -> List[Job]:
         if not job_filter:
@@ -369,6 +377,11 @@ class RedisJobsStorage(JobsStorage):
         statuses = {JobStatus.RUNNING}
         job_ids = await self._get_job_ids(statuses)
         return await self._get_jobs(job_ids)
+
+    async def get_jobs_for_collection(self) -> List[Job]:
+        job_ids = await self._get_job_ids_for_collection()
+        jobs = await self._get_jobs(job_ids)
+        return [job for job in jobs if job.should_be_collected]
 
     async def get_jobs_for_deletion(self) -> List[Job]:
         job_ids = await self._get_job_ids_for_deletion()
