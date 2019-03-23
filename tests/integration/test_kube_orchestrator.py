@@ -166,7 +166,7 @@ class TestKubeOrchestrator:
             await self.wait_for_failure(job)
         finally:
             status = await job.delete()
-            assert status == JobStatus.FAILED
+            assert status == JobStatus.PENDING
 
     @pytest.mark.asyncio
     async def test_start_job_bad_name(self, kube_orchestrator):
