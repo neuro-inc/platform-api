@@ -144,9 +144,12 @@ class JobsService:
             # if the job is missing, we still want to mark it as deleted
             logger.warning("Could not delete job %s. Reason: %s", job.id, exc)
         if not job.is_finished:
-            # explicitly setting the job status as succeeded due to manual
-            # deletion of a still running job
-            job.status = JobStatus.SUCCEEDED
+            if job.status == JobStatus.PENDING:
+                job.status = JobStatus.FAILED
+            else:
+                # explicitly setting the job status as succeeded due to manual
+                # deletion of a still running job
+                job.status = JobStatus.SUCCEEDED
         job.is_deleted = True
 
     async def delete_job(self, job_id: str) -> None:

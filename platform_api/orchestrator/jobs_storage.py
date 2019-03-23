@@ -347,11 +347,15 @@ class RedisJobsStorage(JobsStorage):
             self._generate_jobs_deleted_index_key(),
         )
         tr.sdiff(
+            self._generate_jobs_status_index_key(JobStatus.PENDING),
+            self._generate_jobs_deleted_index_key(),
+        )
+        tr.sdiff(
             self._generate_jobs_status_index_key(JobStatus.SUCCEEDED),
             self._generate_jobs_deleted_index_key(),
         )
-        failed, succeeded = await tr.execute()
-        return [id_.decode() for id_ in itertools.chain(failed, succeeded)]
+        failed, pending, succeeded = await tr.execute()
+        return [id_.decode() for id_ in itertools.chain(failed, pending, succeeded)]
 
     async def get_all_jobs(self, job_filter: Optional[JobFilter] = None) -> List[Job]:
         if not job_filter:
