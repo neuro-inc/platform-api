@@ -344,13 +344,7 @@ class RedisJobsStorage(JobsStorage):
         return result_final
 
     async def _get_job_ids_for_collection(self) -> List[str]:
-        tr = self._client.multi_exec()
-        tr.sdiff(
-            self._generate_jobs_status_index_key(JobStatus.PENDING),
-            self._generate_jobs_deleted_index_key(),
-        )
-        pending, = await tr.execute()
-        return [id_.decode() for id_ in pending]
+        return await self._get_job_ids({JobStatus.PENDING})
 
     async def _get_job_ids_for_deletion(self) -> List[str]:
         tr = self._client.multi_exec()
