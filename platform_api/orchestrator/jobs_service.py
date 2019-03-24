@@ -33,6 +33,10 @@ class JobsService:
         # TODO (A Danshyn 02/17/19): instead of returning `Job` objects,
         # it makes sense to just return their IDs.
 
+        # 1. Only unfinished jobs can be updated and collected.
+        # 2. Only finished jobs can be deleted.
+        # 3. Deletion/Collection always result in finished status.
+
         for job in await self._jobs_storage.get_unfinished_jobs():
             try:
                 async with self._jobs_storage.try_update_job(job.id) as job:
@@ -59,6 +63,9 @@ class JobsService:
             try:
                 async with self._jobs_storage.try_update_job(job.id) as job:
                     await self._update_job_for_collection(job)
+                # Update k8s state only after successful update of storage,
+                # so we will not end in inconsistent state if status
+                # was changed from elsewhere
                 await self._collect_job(job)
             except JobStorageTransactionError:
                 # intentionally ignoring any transaction failures here because
