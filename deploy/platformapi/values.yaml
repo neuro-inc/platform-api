@@ -50,8 +50,8 @@ INGRESS_HOST_TEMPORARY_NEW_DOMAIN:
   prod: neu.ro
 INGRESS_MAIN_SITE_HOST:
   _default: neu.ro
-  dev: neu.ro
-  staging:
+  dev:
+  staging: neu.ro
   prod:
 INGRESS_FALLBACK_HOST:
   _default: 'default.jobs-dev.neu.ro'

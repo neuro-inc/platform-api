@@ -150,7 +150,7 @@ spec:
         backend:
           serviceName: platformapi
           servicePort: 8080
-{{- if eq .Values.global.env "dev" }}
+{{- if eq .Values.global.env "staging" }}
   - host: {{ printf "%s" (pluck .Values.global.env .Values.INGRESS_MAIN_SITE_HOST | first | default .Values.INGRESS_MAIN_SITE_HOST._default) }}
     http:
       paths:
