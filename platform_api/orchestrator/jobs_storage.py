@@ -2,7 +2,18 @@ import itertools
 import json
 from abc import ABC, abstractmethod
 from dataclasses import dataclass, field
-from typing import AbstractSet, AsyncIterator, Dict, List, Optional, Sequence, Tuple
+from typing import (
+    AbstractSet,
+    AsyncIterator,
+    Dict,
+    List,
+    Optional,
+    Sequence,
+    Set,
+    Tuple,
+    Type,
+    cast,
+)
 from uuid import uuid4
 
 import aioredis
@@ -32,13 +43,11 @@ class JobStorageJobFoundError(JobsStorageException):
 
 @dataclass(frozen=True)
 class JobFilter:
-    statuses: AbstractSet[JobStatus] = field(default_factory=set)
-    owners: AbstractSet[str] = field(default_factory=set)
+    statuses: AbstractSet[JobStatus] = field(
+        default_factory=cast(Type[Set[JobStatus]], set)
+    )
+    owners: AbstractSet[str] = field(default_factory=cast(Type[Set[str]], set))
     name: Optional[str] = None
-
-    @property
-    def owner(self) -> Optional[str]:
-        return next(iter(self.owners)) if self.owners else None
 
 
 class JobsStorage(ABC):
@@ -116,7 +125,7 @@ class InMemoryJobsStorage(JobsStorage):
     def _apply_filter(self, job_filter: JobFilter, job: Job) -> bool:
         if job_filter.statuses and job.status not in job_filter.statuses:
             return False
-        if job_filter.owner and job_filter.owner != job.owner:
+        if job_filter.owners and job.owner not in job_filter.owners:
             return False
         if job_filter.name and job_filter.name != job.name:
             return False
