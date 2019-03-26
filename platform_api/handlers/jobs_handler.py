@@ -268,20 +268,24 @@ class JobsHandler:
             data=response_payload, status=aiohttp.web.HTTPOk.status_code
         )
 
-    def _build_job_filter_from_query(
-        self, query: MultiDictProxy, owner: str
+    def _build_job_filter(
+        self, query: MultiDictProxy, tree: ClientSubTreeViewRoot, owner: str
     ) -> JobFilter:
-        # filtering by job-owner is allowed only together with job-name
-        job_name, job_owner = None, None
+        owners = infer_job_owners_filter_from_access_tree(tree)
+        # TODO: intersect owners with the ones that come in query
+        job_name = None
         if "name" in query:
             job_name = self._job_name_validator.check(query["name"])
-            job_owner = owner
+            if not owners:
+                # TODO: this is an edge case when a user who has access to all
+                # jobs (job:) tries to filter them by name. not yet supported
+                # by JobsStorage.
+                owners.add(owner)
         statuses = (
             {JobStatus(s) for s in query.getall("status")}
             if "status" in query
             else set()
         )
-        owners = {job_owner} if job_owner else set()
         return JobFilter(statuses=statuses, owners=owners, name=job_name)
 
     async def handle_get_all(self, request):
@@ -291,12 +295,12 @@ class JobsHandler:
         user = await untrusted_user(request)
 
         tree = await self._auth_client.get_permissions_tree(user.name, "job:")
-        # TODO (A Danshyn 10/09/18): retrieving all jobs until the proper
-        # index is in place
-        # TODO (ajuszkowski) filtering by name doesn't work with shared jobs (issue 516)
-        job_filter = self._build_job_filter_from_query(request.query, user.name)
-        jobs = await self._jobs_service.get_all_jobs(job_filter)
-        jobs = filter_jobs_with_access_tree(jobs, tree)
+        try:
+            job_filter = self._build_job_filter(request.query, tree, user.name)
+            jobs = await self._jobs_service.get_all_jobs(job_filter)
+            jobs = filter_jobs_with_access_tree(jobs, tree)
+        except ValueError:
+            jobs = []
 
         response_payload = {
             "jobs": [
@@ -412,6 +416,38 @@ class JobsHandler:
         return message
 
 
+def infer_job_owners_filter_from_access_tree(tree: ClientSubTreeViewRoot) -> Set[str]:
+    owners: Set[str] = set()
+
+    if tree.sub_tree.action == "deny":
+        # no job resources whatsoever
+        raise ValueError("no jobs")
+
+    if tree.sub_tree.action != "list":
+        # read access to all jobs = job:
+        return owners
+
+    for owner, sub_tree in tree.sub_tree.children.items():
+        if sub_tree.action == "deny":
+            continue
+
+        if sub_tree.action == "list":
+            # specific ids
+            shared_job_ids = [
+                job_id
+                for job_id, job_sub_tree in sub_tree.children.items()
+                if job_sub_tree.action not in ("deny", "list")
+            ]
+            if shared_job_ids:
+                owners.add(owner)
+            continue
+
+        # read/write/manage access to all owner's jobs = job://owner
+        owners.add(owner)
+
+    return owners
+
+
 def filter_jobs_with_access_tree(
     jobs: List[Job], tree: ClientSubTreeViewRoot
 ) -> List[Job]:
@@ -423,7 +459,7 @@ def filter_jobs_with_access_tree(
         return []
 
     if tree.sub_tree.action != "list":
-        # read access to all jobs = jobs:
+        # read access to all jobs = job:
         return jobs
 
     for owner, sub_tree in tree.sub_tree.children.items():
@@ -439,6 +475,7 @@ def filter_jobs_with_access_tree(
             )
             continue
 
+        # read/write/manage access to all owner's jobs = job://owner
         owners_shared_all_jobs.add(owner)
 
     return [
