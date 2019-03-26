@@ -26,9 +26,7 @@ async def untrusted_user(request: Request) -> User:
     if identity is None:
         raise HTTPUnauthorized()
 
-    # TODO (A Danshyn 10/04/18): unfortunately we have to use the private
-    # interface here until the corresponding method is exposed :(
-    name = autz_policy._get_user_name_from_identity(identity)
+    name = autz_policy.get_user_name_from_identity(identity)
     if name is None:
         raise HTTPUnauthorized()
 
@@ -45,8 +43,8 @@ async def authorized_user(request: Request) -> User:
     if identity is None:
         raise HTTPUnauthorized()
 
-    user = autz_policy.authorized_user(identity)
-    if user is None:
+    autz_user = await autz_policy.authorized_user(identity)
+    if autz_user is None:
         raise HTTPUnauthorized()
 
-    return user
+    return User(name=autz_user.name, token=identity)
