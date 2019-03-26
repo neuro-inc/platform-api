@@ -473,7 +473,7 @@ class TestRedisJobsStorage:
         return storage, jobs
 
     @pytest.mark.asyncio
-    async def test_get_all_filter_by_owner_xor_name__fail(
+    async def test_get_all_filter_by_name_with_no_owner(
         self, redis_client, kube_orchestrator
     ):
         storage, jobs = await self.prepare_filtering_test(
@@ -486,10 +486,6 @@ class TestRedisJobsStorage:
 
         with pytest.raises(ValueError, match=invalid_operation_error):
             job_filter = JobFilter(owner=None, name="job-first")
-            await storage.get_all_jobs(job_filter)
-
-        with pytest.raises(ValueError, match=invalid_operation_error):
-            job_filter = JobFilter(owner="user1", name=None)
             await storage.get_all_jobs(job_filter)
 
     @pytest.mark.asyncio

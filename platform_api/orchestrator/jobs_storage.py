@@ -149,6 +149,9 @@ class RedisJobsStorage(JobsStorage):
     def _generate_jobs_status_index_key(self, status: JobStatus) -> str:
         return f"jobs.status.{status}"
 
+    def _generate_jobs_owner_index_key(self, owner: str) -> str:
+        return f"jobs.owner.{owner}"
+
     def _generate_jobs_name_index_zset_key(self, owner: str, job_name: str) -> str:
         assert owner, "job owner is not defined"
         assert job_name, "job name is not defined"
@@ -301,28 +304,38 @@ class RedisJobsStorage(JobsStorage):
     async def _get_job_ids(
         self,
         statuses: AbstractSet[JobStatus],
-        owner: Optional[str] = None,
+        owners: Optional[Sequence[str]] = None,
         name: Optional[str] = None,
     ) -> List[str]:
-        if bool(owner) ^ bool(name):
+        owners = owners or []
+        if name and not owners:
             raise ValueError(
-                "filtering jobs by name is allowed only together with owner, "
-                f"found: owner='{owner}', name='{name}'"
+                "filtering jobs by name is allowed only together with owners"
             )
 
-        status_keys = [self._generate_jobs_status_index_key(s) for s in statuses] or [
-            self._generate_jobs_index_key()
+        status_keys = [self._generate_jobs_status_index_key(s) for s in statuses]
+        status_keys = status_keys or [self._generate_jobs_index_key()]
+
+        owner_keys = [
+            self._generate_jobs_name_index_zset_key(owner, name)
+            if name
+            else self._generate_jobs_owner_index_key(owner)
+            for owner in owners
         ]
 
         temp_key = self._generate_temp_zset_key()
 
         tr = self._client.multi_exec()
         tr.zunionstore(temp_key, *status_keys, aggregate=tr.ZSET_AGGREGATE_MAX)
-        if owner and name:
-            name_key = self._generate_jobs_name_index_zset_key(owner, name)
-            tr.zinterstore(
-                temp_key, name_key, temp_key, aggregate=tr.ZSET_AGGREGATE_MAX
+        if owner_keys:
+            owners_temp_key = self._generate_temp_zset_key()
+            tr.zunionstore(
+                owners_temp_key, *owner_keys, aggregate=tr.ZSET_AGGREGATE_MAX
             )
+            tr.zinterstore(
+                temp_key, owners_temp_key, temp_key, aggregate=tr.ZSET_AGGREGATE_MAX
+            )
+            tr.delete(owners_temp_key)
         tr.zrange(temp_key)
         tr.delete(temp_key)
         *_, payloads, _ = await tr.execute()
@@ -345,8 +358,9 @@ class RedisJobsStorage(JobsStorage):
     async def get_all_jobs(self, job_filter: Optional[JobFilter] = None) -> List[Job]:
         if not job_filter:
             job_filter = JobFilter()
+        owners = [job_filter.owner] if job_filter.owner else []
         job_ids = await self._get_job_ids(
-            job_filter.statuses, job_filter.owner, job_filter.name
+            statuses=job_filter.statuses, owners=owners, name=job_filter.name
         )
         return await self._get_jobs(job_ids)
 
