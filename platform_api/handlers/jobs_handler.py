@@ -281,7 +281,8 @@ class JobsHandler:
             if "status" in query
             else set()
         )
-        return JobFilter(statuses=statuses, owner=job_owner, name=job_name)
+        owners = {job_owner} if job_owner else set()
+        return JobFilter(statuses=statuses, owners=owners, name=job_name)
 
     async def handle_get_all(self, request):
         # TODO (A Danshyn 10/08/18): remove once
