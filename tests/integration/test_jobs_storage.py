@@ -932,3 +932,46 @@ class TestRedisJobsStorage:
         job = await storage.get_job(second_job.id)
         assert job.id == second_job.id
         assert job.status == JobStatus.RUNNING
+
+    @pytest.mark.asyncio
+    async def test_reindex_job_owners_no_jobs(self, redis_client, kube_orchestrator):
+        storage = RedisJobsStorage(
+            client=redis_client, orchestrator_config=kube_orchestrator.config
+        )
+
+        jobs = await storage.get_all_jobs()
+        assert not jobs
+
+        number_reindexed = await storage.reindex_job_owners()
+        assert number_reindexed == 0
+
+    @pytest.mark.asyncio
+    async def test_reindex_job_owners(self, redis_client, kube_orchestrator):
+        first_job = self._create_pending_job(kube_orchestrator, owner="testuser")
+        second_job = self._create_running_job(kube_orchestrator, owner="testuser")
+        storage = RedisJobsStorage(
+            client=redis_client, orchestrator_config=kube_orchestrator.config
+        )
+        async with storage.try_create_job(first_job, skip_owner_index=True):
+            pass
+        async with storage.try_create_job(second_job, skip_owner_index=True):
+            pass
+
+        jobs = await storage.get_all_jobs()
+        job_ids = {job.id for job in jobs}
+        assert job_ids == {first_job.id, second_job.id}
+
+        filters = JobFilter(owners={"testuser"})
+
+        jobs = await storage.get_all_jobs(filters)
+        assert not jobs
+
+        number_reindexed = await storage.reindex_job_owners()
+        assert number_reindexed == 2
+
+        jobs = await storage.get_all_jobs(filters)
+        job_ids = {job.id for job in jobs}
+        assert job_ids == {first_job.id, second_job.id}
+
+        number_reindexed = await storage.reindex_job_owners()
+        assert number_reindexed == 0

@@ -1,5 +1,6 @@
 import itertools
 import json
+import logging
 from abc import ABC, abstractmethod
 from dataclasses import dataclass, field
 from typing import (
@@ -23,6 +24,9 @@ from async_generator import asynccontextmanager
 from .base import OrchestratorConfig
 from .job import Job
 from .job_request import JobError, JobStatus
+
+
+logger = logging.getLogger(__name__)
 
 
 class JobsStorageException(Exception):
@@ -79,6 +83,9 @@ class JobsStorage(ABC):
 
     async def get_unfinished_jobs(self) -> List[Job]:
         return [job for job in await self.get_all_jobs() if not job.is_finished]
+
+    async def migrate(self) -> None:
+        pass
 
 
 class InMemoryJobsStorage(JobsStorage):
@@ -411,3 +418,45 @@ class RedisJobsStorage(JobsStorage):
         statuses = {JobStatus.PENDING, JobStatus.RUNNING}
         job_ids = await self._get_job_ids(statuses)
         return await self._get_jobs(job_ids)
+
+    async def migrate(self) -> None:
+        await self.reindex_job_owners()
+
+    async def reindex_job_owners(self) -> int:
+        logger.info("Starting reindexing job owners")
+
+        job_ids = await self._get_job_ids_unindexed_owner()
+        for job_id in job_ids:
+            job = await self.get_job(job_id)
+            tr = self._client.pipeline()
+            self._update_owner_index(tr, job)
+            await tr.execute()
+
+        logger.info("Finished reindexing job owners")
+        return len(job_ids)
+
+    async def _get_job_ids_unindexed_owner(self) -> Set[str]:
+        jobs_key = self._generate_jobs_index_key()
+        job_ids = {job_id.decode() async for job_id in self._client.isscan(jobs_key)}
+        job_ids -= await self._get_job_ids_indexed_owner()
+
+        logger.info(f"Found {len(job_ids)} jobs with unindexed owners")
+        return job_ids
+
+    async def _get_job_owner_keys(self) -> List[str]:
+        owner_index_key_template = self._generate_jobs_owner_index_key("*")
+        return [key async for key in self._client.iscan(match=owner_index_key_template)]
+
+    async def _get_job_ids_indexed_owner(self) -> Set[str]:
+        owners_keys = await self._get_job_owner_keys()
+        logger.info(f"Found {len(owners_keys)} job owner index keys")
+        if not owners_keys:
+            return set()
+
+        temp_key = self._generate_temp_zset_key()
+        tr = self._client.multi_exec()
+        tr.zunionstore(temp_key, *owners_keys)
+        tr.zrange(temp_key)
+        tr.delete(temp_key)
+        *_, job_ids, _ = await tr.execute()
+        return {job_id.decode() for job_id in job_ids}
