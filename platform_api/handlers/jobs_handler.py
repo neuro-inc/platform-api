@@ -22,7 +22,7 @@ from platform_api.orchestrator.job_request import (
 )
 from platform_api.orchestrator.jobs_storage import JobFilter
 from platform_api.resource import GPUModel
-from platform_api.user import User, untrusted_user
+from platform_api.user import User, authorized_user, untrusted_user
 
 from .job_request_builder import ContainerBuilder
 from .validators import (
@@ -223,7 +223,7 @@ class JobsHandler:
         return create_job_request_validator(allowed_gpu_models=gpu_models)
 
     async def create_job(self, request):
-        user = await untrusted_user(request)
+        user = await authorized_user(request)
 
         orig_payload = await request.json()
 

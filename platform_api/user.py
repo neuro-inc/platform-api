@@ -33,3 +33,20 @@ async def untrusted_user(request: Request) -> User:
         raise HTTPUnauthorized()
 
     return User(name=name, token=identity)  # type: ignore
+
+
+async def authorized_user(request: Request) -> User:
+    """Request auth-server for authenticated information on the user and
+     return the `User` object with all necessary information
+    """
+    identity_policy = request.config_dict.get(IDENTITY_KEY)
+    autz_policy = request.config_dict.get(AUTZ_KEY)
+    identity = await identity_policy.identify(request)
+    if identity is None:
+        raise HTTPUnauthorized()
+
+    user = autz_policy.authorized_user(identity)
+    if user is None:
+        raise HTTPUnauthorized()
+
+    return user
