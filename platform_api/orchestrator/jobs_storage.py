@@ -304,41 +304,30 @@ class RedisJobsStorage(JobsStorage):
         owner: Optional[str] = None,
         name: Optional[str] = None,
     ) -> List[str]:
-        statuses_keys = [self._generate_jobs_status_index_key(s) for s in statuses]
         if bool(owner) ^ bool(name):
             raise ValueError(
                 "filtering jobs by name is allowed only together with owner, "
                 f"found: owner='{owner}', name='{name}'"
             )
+
+        status_keys = [self._generate_jobs_status_index_key(s) for s in statuses] or [
+            self._generate_jobs_index_key()
+        ]
+
+        temp_key = self._generate_temp_zset_key()
+
+        tr = self._client.multi_exec()
+        tr.zunionstore(temp_key, *status_keys, aggregate=tr.ZSET_AGGREGATE_MAX)
         if owner and name:
             name_key = self._generate_jobs_name_index_zset_key(owner, name)
-            if statuses:
-                payloads = await self._get_job_ids_filter_by_name_owner_statuses(
-                    name_key, statuses_keys
-                )
-            else:
-                payloads = await self._client.zrange(name_key)
-        else:
-            if statuses:
-                payloads = await self._client.sunion(*statuses_keys)
-            else:
-                jobs_key = self._generate_jobs_index_key()
-                payloads = [job_id async for job_id in self._client.isscan(jobs_key)]
-        return [job_id.decode() for job_id in payloads]
+            tr.zinterstore(
+                temp_key, name_key, temp_key, aggregate=tr.ZSET_AGGREGATE_MAX
+            )
+        tr.zrange(temp_key)
+        tr.delete(temp_key)
+        *_, payloads, _ = await tr.execute()
 
-    async def _get_job_ids_filter_by_name_owner_statuses(
-        self, name_key: str, statuses_keys: List[str]
-    ):
-        status_temp_key = self._generate_temp_zset_key()
-        result_temp_key = self._generate_temp_zset_key()
-        tr = self._client.multi_exec()
-        tr.sunionstore(status_temp_key, *statuses_keys)
-        tr.zinterstore(result_temp_key, name_key, status_temp_key)
-        tr.zrange(result_temp_key)
-        tr.delete(status_temp_key)
-        tr.delete(result_temp_key)
-        result_union, result_intersect, result_final, *cleanups = await tr.execute()
-        return result_final
+        return [job_id.decode() for job_id in payloads]
 
     async def _get_job_ids_for_deletion(self) -> List[str]:
         tr = self._client.multi_exec()
