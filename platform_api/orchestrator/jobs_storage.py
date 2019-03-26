@@ -251,6 +251,9 @@ class RedisJobsStorage(JobsStorage):
         self, job: Job, skip_owner_index: bool = False
     ) -> AsyncIterator[Job]:
         """ NOTE: this method yields the job, the same object as it came as an argument
+
+        :param bool skip_owner_index:
+            Prevents indexing the job by owner for testing purposes.
         """
         if job.name:
             async with self._watch_all_job_keys(job.id, job.owner, job.name) as storage:
@@ -290,6 +293,10 @@ class RedisJobsStorage(JobsStorage):
             exist=tr.ZSET_IF_NOT_EXIST,
         )
 
+    def _update_name_index(self, tr: Pipeline, job: Job) -> None:
+        name_key = self._generate_jobs_name_index_zset_key(job.owner, job.name)
+        tr.zadd(name_key, job.status_history.created_at_timestamp, job.id)
+
     async def update_job_atomic(
         self, job: Job, is_job_creation: bool, skip_owner_index: bool = False
     ) -> None:
@@ -297,17 +304,17 @@ class RedisJobsStorage(JobsStorage):
 
         tr = self._client.multi_exec()
         tr.set(self._generate_job_key(job.id), payload)
-        tr.sadd("jobs", job.id)
+
         for status in JobStatus:
             tr.srem(self._generate_jobs_status_index_key(status), job.id)
         tr.sadd(self._generate_jobs_status_index_key(job.status), job.id)
 
-        if is_job_creation and job.name:
-            name_key = self._generate_jobs_name_index_zset_key(job.owner, job.name)
-            tr.zadd(name_key, job.status_history.created_at_timestamp, job.id)
-
-        if not skip_owner_index:
-            self._update_owner_index(tr, job)
+        if is_job_creation:
+            tr.sadd(self._generate_jobs_index_key(), job.id)
+            if not skip_owner_index:
+                self._update_owner_index(tr, job)
+            if job.name:
+                self._update_name_index(tr, job)
 
         if job.is_deleted:
             tr.sadd(self._generate_jobs_deleted_index_key(), job.id)
