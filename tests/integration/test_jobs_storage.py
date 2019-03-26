@@ -473,6 +473,54 @@ class TestRedisJobsStorage:
         return storage, jobs
 
     @pytest.mark.asyncio
+    async def test_get_all_filter_by_single_owner(
+        self, redis_client, kube_orchestrator
+    ):
+        storage, jobs = await self.prepare_filtering_test(
+            redis_client, kube_orchestrator
+        )
+
+        owners = {"user1"}
+        job_filter = JobFilter(owners=owners)
+        job_ids = {job.id for job in await storage.get_all_jobs(job_filter)}
+        expected = {job.id for job in jobs if job.owner in owners}
+        assert expected
+        assert job_ids == expected
+
+    @pytest.mark.asyncio
+    async def test_get_all_filter_by_multiple_owners(
+        self, redis_client, kube_orchestrator
+    ):
+        storage, jobs = await self.prepare_filtering_test(
+            redis_client, kube_orchestrator
+        )
+
+        owners = {"user1", "user3"}
+        job_filter = JobFilter(owners=owners)
+        job_ids = {job.id for job in await storage.get_all_jobs(job_filter)}
+        expected = {job.id for job in jobs if job.owner in owners}
+        assert expected
+        assert job_ids == expected
+
+    @pytest.mark.asyncio
+    async def test_get_all_filter_by_multiple_owners_and_statuses(
+        self, redis_client, kube_orchestrator
+    ):
+        storage, jobs = await self.prepare_filtering_test(
+            redis_client, kube_orchestrator
+        )
+
+        owners = {"user1", "user3"}
+        statuses = {JobStatus.RUNNING, JobStatus.SUCCEEDED}
+        job_filter = JobFilter(owners=owners, statuses=statuses)
+        job_ids = {job.id for job in await storage.get_all_jobs(job_filter)}
+        expected = {
+            job.id for job in jobs if job.owner in owners and job.status in statuses
+        }
+        assert expected
+        assert job_ids == expected
+
+    @pytest.mark.asyncio
     async def test_get_all_filter_by_name_with_no_owner(
         self, redis_client, kube_orchestrator
     ):
@@ -485,7 +533,7 @@ class TestRedisJobsStorage:
         )
 
         with pytest.raises(ValueError, match=invalid_operation_error):
-            job_filter = JobFilter(owner=None, name="job-first")
+            job_filter = JobFilter(name="job-first")
             await storage.get_all_jobs(job_filter)
 
     @pytest.mark.asyncio
@@ -499,7 +547,7 @@ class TestRedisJobsStorage:
         name = "job-first"
         owner = "user1"
 
-        job_filter = JobFilter(name=name, owner=owner)
+        job_filter = JobFilter(name=name, owners={owner})
         job_ids = {job.id for job in await storage.get_all_jobs(job_filter)}
         expected = {job.id for job in jobs if job.name == name and job.owner == owner}
         assert job_ids == expected
@@ -515,7 +563,7 @@ class TestRedisJobsStorage:
         name = "job-first"
         owner = "user1"
         statuses = {JobStatus.RUNNING}
-        job_filter = JobFilter(name=name, owner=owner, statuses=statuses)
+        job_filter = JobFilter(name=name, owners={owner}, statuses=statuses)
         job_ids = {job.id for job in await storage.get_all_jobs(job_filter)}
         expected = {
             job.id
@@ -527,7 +575,7 @@ class TestRedisJobsStorage:
         name = "job-first"
         owner = "user1"
         statuses = {JobStatus.SUCCEEDED}
-        job_filter = JobFilter(name=name, owner=owner, statuses=statuses)
+        job_filter = JobFilter(name=name, owners={owner}, statuses=statuses)
         job_ids = {job.id for job in await storage.get_all_jobs(job_filter)}
         expected = {
             job.id
@@ -539,7 +587,7 @@ class TestRedisJobsStorage:
         name = "job-first"
         owner = "user1"
         statuses = {JobStatus.SUCCEEDED, JobStatus.RUNNING}
-        job_filter = JobFilter(name=name, owner=owner, statuses=statuses)
+        job_filter = JobFilter(name=name, owners={owner}, statuses=statuses)
         job_ids = {job.id for job in await storage.get_all_jobs(job_filter)}
         expected = {
             job.id
@@ -551,7 +599,7 @@ class TestRedisJobsStorage:
         name = "job-second"
         owner = "user3"
         statuses = {JobStatus.FAILED}
-        job_filter = JobFilter(name=name, owner=owner, statuses=statuses)
+        job_filter = JobFilter(name=name, owners={owner}, statuses=statuses)
         job_ids = {job.id for job in await storage.get_all_jobs(job_filter)}
         expected = {
             job.id

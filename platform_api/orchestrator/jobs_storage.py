@@ -6,6 +6,7 @@ from typing import AbstractSet, AsyncIterator, Dict, List, Optional, Sequence, T
 from uuid import uuid4
 
 import aioredis
+from aioredis.commands import Pipeline
 from async_generator import asynccontextmanager
 
 from .base import OrchestratorConfig
@@ -32,8 +33,12 @@ class JobStorageJobFoundError(JobsStorageException):
 @dataclass(frozen=True)
 class JobFilter:
     statuses: AbstractSet[JobStatus] = field(default_factory=set)
-    owner: Optional[str] = None
+    owners: AbstractSet[str] = field(default_factory=set)
     name: Optional[str] = None
+
+    @property
+    def owner(self) -> Optional[str]:
+        return next(iter(self.owners)) if self.owners else None
 
 
 class JobsStorage(ABC):
@@ -226,7 +231,9 @@ class RedisJobsStorage(JobsStorage):
             await storage.update_job_atomic(job, is_job_creation=False)
 
     @asynccontextmanager
-    async def try_create_job(self, job: Job) -> AsyncIterator[Job]:
+    async def try_create_job(
+        self, job: Job, skip_owner_index: bool = False
+    ) -> AsyncIterator[Job]:
         """ NOTE: this method yields the job, the same object as it came as an argument
         """
         if job.name:
@@ -242,11 +249,15 @@ class RedisJobsStorage(JobsStorage):
                 yield job
                 # after the orchestrator has started the job, it fills the 'job' object
                 # with some new values, so we write the new value of 'job' to Redis:
-                await storage.update_job_atomic(job, is_job_creation=True)
+                await storage.update_job_atomic(
+                    job, is_job_creation=True, skip_owner_index=skip_owner_index
+                )
         else:
             async with self._watch_job_id_key(job.id) as storage:
                 yield job
-                await storage.update_job_atomic(job, is_job_creation=True)
+                await storage.update_job_atomic(
+                    job, is_job_creation=True, skip_owner_index=skip_owner_index
+                )
 
     async def set_job(self, job: Job) -> None:
         # TODO (ajuszkowski, 4-feb-2019) remove this method from interface as well
@@ -254,7 +265,18 @@ class RedisJobsStorage(JobsStorage):
         # the 'last-job-created' key!
         await self.update_job_atomic(job, is_job_creation=True)
 
-    async def update_job_atomic(self, job: Job, is_job_creation: bool) -> None:
+    def _update_owner_index(self, tr: Pipeline, job: Job) -> None:
+        owner_key = self._generate_jobs_owner_index_key(job.owner)
+        tr.zadd(
+            owner_key,
+            job.status_history.created_at_timestamp,
+            job.id,
+            exist=tr.ZSET_IF_NOT_EXIST,
+        )
+
+    async def update_job_atomic(
+        self, job: Job, is_job_creation: bool, skip_owner_index: bool = False
+    ) -> None:
         payload = json.dumps(job.to_primitive())
 
         tr = self._client.multi_exec()
@@ -264,9 +286,12 @@ class RedisJobsStorage(JobsStorage):
             tr.srem(self._generate_jobs_status_index_key(status), job.id)
         tr.sadd(self._generate_jobs_status_index_key(job.status), job.id)
 
-        if is_job_creation and job.name and job.owner:
+        if is_job_creation and job.name:
             name_key = self._generate_jobs_name_index_zset_key(job.owner, job.name)
             tr.zadd(name_key, job.status_history.created_at_timestamp, job.id)
+
+        if not skip_owner_index:
+            self._update_owner_index(tr, job)
 
         if job.is_deleted:
             tr.sadd(self._generate_jobs_deleted_index_key(), job.id)
@@ -304,10 +329,10 @@ class RedisJobsStorage(JobsStorage):
     async def _get_job_ids(
         self,
         statuses: AbstractSet[JobStatus],
-        owners: Optional[Sequence[str]] = None,
+        owners: Optional[AbstractSet[str]] = None,
         name: Optional[str] = None,
     ) -> List[str]:
-        owners = owners or []
+        owners = owners or set()
         if name and not owners:
             raise ValueError(
                 "filtering jobs by name is allowed only together with owners"
@@ -358,9 +383,8 @@ class RedisJobsStorage(JobsStorage):
     async def get_all_jobs(self, job_filter: Optional[JobFilter] = None) -> List[Job]:
         if not job_filter:
             job_filter = JobFilter()
-        owners = [job_filter.owner] if job_filter.owner else []
         job_ids = await self._get_job_ids(
-            statuses=job_filter.statuses, owners=owners, name=job_filter.name
+            statuses=job_filter.statuses, owners=job_filter.owners, name=job_filter.name
         )
         return await self._get_jobs(job_ids)
 
