@@ -19,7 +19,6 @@ async def untrusted_user(request: Request) -> User:
 
     The primary use case is to not perform an extra HTTP request just to
     retrieve the minimal information about the user.
-    
     NOTE: non-authorization fields like `quota` will be not initialized!
     """
     identity = await _get_identity(request)
