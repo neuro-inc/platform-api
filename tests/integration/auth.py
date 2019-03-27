@@ -153,7 +153,7 @@ async def regular_user_factory(auth_client, token_factory, admin_token):
         user = AuthClientUser(name=name, quota=quota)
         await auth_client.add_user(user, token=admin_token)
         user_token = token_factory(user.name)
-        return _User(name=user.name, token=user_token, quota=quota)  # type: ignore
+        return _User(name=user.name, token=user_token, quota=user.quota)  # type: ignore
 
     return _factory
 
