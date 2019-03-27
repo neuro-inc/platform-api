@@ -404,6 +404,20 @@ class TestJob:
         )
 
     @pytest.fixture
+    def job_request_with_gpu(self):
+        container = Container(
+            image="testimage",
+            resources=ContainerResources(
+                cpu=1, memory_mb=64, gpu=1, gpu_model_id="nvidia-tesla-k80"
+            ),
+        )
+        return JobRequest(
+            job_id="testjob",
+            container=container,
+            description="Description of the testjob with gpu",
+        )
+
+    @pytest.fixture
     def job_request_with_ssh_and_http(self):
         container = Container(
             image="testimage",
@@ -441,6 +455,17 @@ class TestJob:
             name="test-job-name-123",
         )
         assert job.name == "test-job-name-123"
+
+    def test_job_has_gpu_false(self, mock_orchestrator, job_request):
+        job = Job(orchestrator_config=mock_orchestrator.config, job_request=job_request)
+        assert not job.has_gpu
+
+    def test_job_has_gpu_true(self, mock_orchestrator, job_request_with_gpu):
+        job = Job(
+            orchestrator_config=mock_orchestrator.config,
+            job_request=job_request_with_gpu,
+        )
+        assert job.has_gpu
 
     def test_http_url(self, mock_orchestrator, job_request):
         job = Job(orchestrator_config=mock_orchestrator.config, job_request=job_request)

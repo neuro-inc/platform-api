@@ -2,13 +2,13 @@ from dataclasses import dataclass, field
 
 from aiohttp.web import HTTPUnauthorized, Request
 from aiohttp_security.api import AUTZ_KEY, IDENTITY_KEY
+from neuro_auth_client.client import User as AuthClientUser
 from yarl import URL
 
 
 @dataclass(frozen=True)
-class User:
-    name: str
-    token: str = field(repr=False)
+class User(AuthClientUser):
+    token: str = field(repr=False, default="")
 
     def to_job_uri(self) -> URL:
         return URL(f"job://{self.name}")
@@ -41,7 +41,7 @@ async def authorized_user(request: Request) -> User:
     if autz_user is None:
         raise HTTPUnauthorized()
 
-    return User(name=autz_user.name, token=identity)
+    return User(name=autz_user.name, token=identity, quota=autz_user.quota)  # noqa
 
 
 async def _get_identity(request: Request) -> str:

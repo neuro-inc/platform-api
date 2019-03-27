@@ -249,6 +249,10 @@ class Job:
         return self._job_request
 
     @property
+    def has_gpu(self) -> bool:
+        return self._job_request.container.resources.gpu_model_id is not None
+
+    @property
     def status(self) -> JobStatus:
         return self._status_history.current.status
 

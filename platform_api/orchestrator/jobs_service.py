@@ -1,10 +1,12 @@
 import logging
+from dataclasses import dataclass, field
+from datetime import timedelta
 from typing import List, Optional, Tuple
 
 from platform_api.user import User
 
 from .base import LogReader, Orchestrator, Telemetry
-from .job import Job, JobStatusItem
+from .job import Job, JobStatusItem, current_datetime_factory
 from .job_request import JobException, JobNotFoundException, JobRequest, JobStatus
 from .jobs_storage import (
     JobFilter,
@@ -20,6 +22,37 @@ logger = logging.getLogger(__file__)
 
 class JobsServiceException(Exception):
     pass
+
+
+class QuotaException(JobsServiceException):
+    pass
+
+
+class GpuQuotaExceededError(QuotaException):
+    def __init__(self, user: str) -> None:
+        super().__init__(f"GPU quota exceeded for user '{user}'")
+
+
+class NonGpuQuotaExceededError(QuotaException):
+    def __init__(self, user: str) -> None:
+        super().__init__(f"Non-GPU quota exceeded for user '{user}'")
+
+
+@dataclass
+class AggregatedRunTime:
+    user: User
+    total_gpu_run_time_spent: timedelta = field(default_factory=timedelta)
+    total_non_gpu_run_time_spent: timedelta = field(default_factory=timedelta)
+
+    def raise_for_quota(self) -> None:
+        user_name = self.user.name
+        quota = self.user.quota
+        gpu_spent = self.total_gpu_run_time_spent
+        if gpu_spent >= quota.total_gpu_run_time_minutes_delta:
+            raise GpuQuotaExceededError(user_name)
+        non_gpu_spent = self.total_non_gpu_run_time_spent
+        if non_gpu_spent >= quota.total_non_gpu_run_time_minutes_delta:
+            raise NonGpuQuotaExceededError(user_name)
 
 
 class JobsService:
@@ -89,6 +122,25 @@ class JobsService:
                 status_item.status.name,
             )
 
+    async def _get_aggregated_run_time(self, user: User) -> AggregatedRunTime:
+        jobs = await self._jobs_storage.get_all_jobs(JobFilter(owners={user.name}))
+        gpu_time, non_gpu_time = timedelta(), timedelta()
+        for job in jobs:
+            if job.has_gpu:
+                gpu_time += self._get_job_runtime_delta(job)
+            else:
+                non_gpu_time += self._get_job_runtime_delta(job)
+        return AggregatedRunTime(
+            user=user,
+            total_gpu_run_time_spent=gpu_time,
+            total_non_gpu_run_time_spent=non_gpu_time,
+        )
+
+    def _get_job_runtime_delta(self, job: Job) -> timedelta:
+        end_time = job.finished_at or current_datetime_factory()
+        start_time = job.status_history.created_at
+        return end_time - start_time
+
     async def create_job(
         self,
         job_request: JobRequest,
@@ -96,6 +148,10 @@ class JobsService:
         job_name: Optional[str] = None,
         is_preemptible: bool = False,
     ) -> Tuple[Job, Status]:
+
+        aggregated_run_time = await self._get_aggregated_run_time(user)
+        aggregated_run_time.raise_for_quota()
+
         job = Job(
             orchestrator_config=self._orchestrator.config,
             job_request=job_request,
