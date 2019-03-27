@@ -271,21 +271,24 @@ class JobsHandler:
     def _build_job_filter(
         self, query: MultiDictProxy, tree: ClientSubTreeViewRoot, owner: str
     ) -> JobFilter:
-        owners = infer_job_owners_filter_from_access_tree(tree)
-        # TODO: intersect owners with the ones that come in query
+        # validating query parameters first
         job_name = None
         if "name" in query:
             job_name = self._job_name_validator.check(query["name"])
-            if not owners:
-                # TODO: this is an edge case when a user who has access to all
-                # jobs (job:) tries to filter them by name. not yet supported
-                # by JobsStorage.
-                owners.add(owner)
         statuses = (
             {JobStatus(s) for s in query.getall("status")}
             if "status" in query
             else set()
         )
+        owners = infer_job_owners_filter_from_access_tree(tree)
+        # TODO: intersect owners with the ones that come in query
+
+        if job_name and not owners:
+            # TODO: this is an edge case when a user who has access to all
+            # jobs (job:) tries to filter them by name. not yet supported
+            # by JobsStorage.
+            owners.add(owner)
+
         return JobFilter(statuses=statuses, owners=owners, name=job_name)
 
     async def handle_get_all(self, request):
@@ -299,7 +302,7 @@ class JobsHandler:
             job_filter = self._build_job_filter(request.query, tree, user.name)
             jobs = await self._jobs_service.get_all_jobs(job_filter)
             jobs = filter_jobs_with_access_tree(jobs, tree)
-        except ValueError:
+        except JobFilterException:
             jobs = []
 
         response_payload = {
@@ -416,12 +419,16 @@ class JobsHandler:
         return message
 
 
+class JobFilterException(ValueError):
+    pass
+
+
 def infer_job_owners_filter_from_access_tree(tree: ClientSubTreeViewRoot) -> Set[str]:
     owners: Set[str] = set()
 
     if tree.sub_tree.action == "deny":
         # no job resources whatsoever
-        raise ValueError("no jobs")
+        raise JobFilterException("no jobs")
 
     if tree.sub_tree.action != "list":
         # read access to all jobs = job:
