@@ -20,16 +20,33 @@ async def untrusted_user(request: Request) -> User:
     The primary use case is to not perform an extra HTTP request just to
     retrieve the minimal information about the user.
     """
-    identity_policy = request.config_dict.get(IDENTITY_KEY)
-    autz_policy = request.config_dict.get(AUTZ_KEY)
-    identity = await identity_policy.identify(request)
-    if identity is None:
-        raise HTTPUnauthorized()
+    identity = await _get_identity(request)
 
-    # TODO (A Danshyn 10/04/18): unfortunately we have to use the private
-    # interface here until the corresponding method is exposed :(
-    name = autz_policy._get_user_name_from_identity(identity)
+    autz_policy = request.config_dict.get(AUTZ_KEY)
+    name = autz_policy.get_user_name_from_identity(identity)
     if name is None:
         raise HTTPUnauthorized()
 
     return User(name=name, token=identity)  # type: ignore
+
+
+async def authorized_user(request: Request) -> User:
+    """Request auth-server for authenticated information on the user and
+     return the `User` object with all necessary information
+    """
+    identity = await _get_identity(request)
+
+    autz_policy = request.config_dict.get(AUTZ_KEY)
+    autz_user = await autz_policy.authorized_user(identity)
+    if autz_user is None:
+        raise HTTPUnauthorized()
+
+    return User(name=autz_user.name, token=identity)
+
+
+async def _get_identity(request: Request) -> str:
+    identity_policy = request.config_dict.get(IDENTITY_KEY)
+    identity = await identity_policy.identify(request)
+    if identity is None:
+        raise HTTPUnauthorized()
+    return identity
