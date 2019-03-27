@@ -7,9 +7,11 @@ from yarl import URL
 
 from platform_api.config import RegistryConfig, StorageConfig
 from platform_api.handlers.jobs_handler import (
+    JobFilterException,
     convert_container_volume_to_json,
     convert_job_container_to_json,
     filter_jobs_with_access_tree,
+    infer_job_owners_filter_from_access_tree,
     infer_permissions_from_container,
 )
 from platform_api.handlers.models_handler import (
@@ -340,6 +342,43 @@ class TestJobContainerToJson:
             "dst_path": "/var/custom/username/dataset",
             "read_only": False,
         }
+
+
+class TestInferJobOwnersFromAccessTree:
+    def test_no_access(self):
+        tree = ClientSubTreeViewRoot(
+            path="/", sub_tree=ClientAccessSubTreeView(action="deny", children={})
+        )
+        with pytest.raises(JobFilterException, match="no jobs"):
+            infer_job_owners_filter_from_access_tree(tree)
+
+    def test_full_access(self):
+        tree = ClientSubTreeViewRoot(
+            path="/", sub_tree=ClientAccessSubTreeView(action="manage", children={})
+        )
+        owners = infer_job_owners_filter_from_access_tree(tree)
+        assert owners == set()
+
+    def test_mixed_access(self):
+        tree = ClientSubTreeViewRoot(
+            path="/",
+            sub_tree=ClientAccessSubTreeView(
+                action="list",
+                children={
+                    "testuser": ClientAccessSubTreeView(action="read", children={}),
+                    "anotheruser": ClientAccessSubTreeView(
+                        action="list",
+                        children={
+                            "job-test-1": ClientAccessSubTreeView("read", children={}),
+                            "job-test-2": ClientAccessSubTreeView("deny", children={}),
+                        },
+                    ),
+                    "someuser": ClientAccessSubTreeView(action="deny", children={}),
+                },
+            ),
+        )
+        owners = infer_job_owners_filter_from_access_tree(tree)
+        assert owners == {"testuser", "anotheruser"}
 
 
 class TestFilterJobsWithAccessTree:
