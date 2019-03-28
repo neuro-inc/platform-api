@@ -318,7 +318,10 @@ class TestModels:
         ) as response:
             assert response.status == HTTPBadRequest.status_code
             payload = await response.json()
-            e = "{'name': DataError(does not match pattern ^[a-z][-a-z0-9]*[a-z0-9]$)}"
+            e = (
+                "{'name': DataError({0: DataError(value should be None), "
+                "1: DataError(does not match pattern ^[a-z][-a-z0-9]*[a-z0-9]$)})}"
+            )
             assert payload == {"error": e}
 
     @pytest.mark.asyncio
@@ -591,7 +594,10 @@ class TestJobs:
         ) as response:
             assert response.status == HTTPBadRequest.status_code
             payload = await response.json()
-            e = "{'name': DataError(does not match pattern ^[a-z][-a-z0-9]*[a-z0-9]$)}"
+            e = (
+                "{'name': DataError({0: DataError(value should be None), "
+                "1: DataError(does not match pattern ^[a-z][-a-z0-9]*[a-z0-9]$)})}"
+            )
             assert payload == {"error": e}
 
     @pytest.mark.asyncio
