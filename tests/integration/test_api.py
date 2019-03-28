@@ -909,7 +909,7 @@ class TestJobs:
         }
 
         # filter: both owners
-        filters = [("owner", usr1.name)]
+        filters = [("owner", usr1.name), ("owner", usr2.name)]
         jobs = await jobs_client_usr1.get_all_jobs(filters)
         jobs = {job["id"] for job in jobs}
         assert jobs == {
@@ -959,7 +959,7 @@ class TestJobs:
         assert jobs == {job_usr2_with_name, job_usr2_no_name}
 
         # filter: both owners + status
-        filters = [("owner", usr2.name), ("status", "running")]
+        filters = [("owner", usr1.name), ("owner", usr2.name), ("status", "running")]
         jobs = await jobs_client_usr1.get_all_jobs(filters)
         jobs = {job["id"] for job in jobs}
         assert jobs == {
