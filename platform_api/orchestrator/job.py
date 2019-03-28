@@ -250,7 +250,7 @@ class Job:
 
     @property
     def has_gpu(self) -> bool:
-        return self._job_request.container.resources.gpu_model_id is not None
+        return bool(self._job_request.container.resources.gpu)
 
     @property
     def status(self) -> JobStatus:
