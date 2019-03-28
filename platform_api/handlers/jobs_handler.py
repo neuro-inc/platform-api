@@ -32,6 +32,7 @@ from .validators import (
     create_job_history_validator,
     create_job_name_validator,
     create_job_status_validator,
+    create_user_name_validator,
 )
 
 
@@ -190,6 +191,7 @@ class JobsHandler:
         self._storage_config = config.storage
 
         self._job_name_validator = create_job_name_validator()
+        self._user_name_validator = create_user_name_validator()
         self._job_response_validator = create_job_response_validator()
         self._bulk_jobs_response_validator = t.Dict(
             {"jobs": t.List(self._job_response_validator)}
@@ -270,25 +272,29 @@ class JobsHandler:
         )
 
     def _build_job_filter(
-        self, query: MultiDictProxy, tree: ClientSubTreeViewRoot, owner: str
+        self, query: MultiDictProxy, tree: ClientSubTreeViewRoot, user: str
     ) -> JobFilter:
         # validating query parameters first
-        job_name = None
-        if "name" in query:
-            job_name = self._job_name_validator.check(query["name"])
+        job_name = self._job_name_validator.check(query.get("name"))
+
+        owners = infer_job_owners_filter_from_access_tree(tree)
+        if job_name and not owners:
+            # TODO: this is an edge case when a user who has access to all
+            # jobs (job:) tries to filter them by name. not yet supported
+            # by JobsStorage.
+            owners.add(user)
+        if "owner" in query:
+            requested_owners = {
+                self._user_name_validator.check(owner)
+                for owner in query.getall("owner")
+            }
+            owners &= requested_owners
+
         statuses = (
             {JobStatus(s) for s in query.getall("status")}
             if "status" in query
             else set()
         )
-        owners = infer_job_owners_filter_from_access_tree(tree)
-        # TODO: intersect owners with the ones that come in query
-
-        if job_name and not owners:
-            # TODO: this is an edge case when a user who has access to all
-            # jobs (job:) tries to filter them by name. not yet supported
-            # by JobsStorage.
-            owners.add(owner)
 
         return JobFilter(statuses=statuses, owners=owners, name=job_name)
 
