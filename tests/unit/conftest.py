@@ -18,7 +18,7 @@ from platform_api.orchestrator import (
     Orchestrator,
     Telemetry,
 )
-from platform_api.orchestrator.job import JobStatusItem, AggregatedRunTime
+from platform_api.orchestrator.job import AggregatedRunTime, JobStatusItem
 from platform_api.orchestrator.job_request import Container, ContainerResources
 from platform_api.orchestrator.jobs_storage import (
     InMemoryJobsStorage,
@@ -146,8 +146,7 @@ def event_loop():
 
 
 def create_quota(
-    gpu_minutes: Optional[int] = None,
-    non_gpu_minutes: Optional[int] = None,
+    gpu_minutes: Optional[int] = None, non_gpu_minutes: Optional[int] = None
 ) -> AggregatedRunTime:
 
     if gpu_minutes is not None:
@@ -161,6 +160,5 @@ def create_quota(
         non_gpu_delta = timedelta.max
 
     return AggregatedRunTime(
-        total_gpu_run_time_delta=gpu_delta,
-        total_non_gpu_run_time_delta=non_gpu_delta,
+        total_gpu_run_time_delta=gpu_delta, total_non_gpu_run_time_delta=non_gpu_delta
     )

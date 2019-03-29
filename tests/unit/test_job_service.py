@@ -496,7 +496,9 @@ class TestJobsService:
             create_quota(gpu_minutes=0, non_gpu_minutes=100),
         ],
     )
-    async def test_raise_for_quota_raise_for_gpu(self, mock_orchestrator, mock_jobs_storage, job_request_factory, quota):
+    async def test_raise_for_quota_raise_for_gpu(
+        self, mock_orchestrator, mock_jobs_storage, job_request_factory, quota
+    ):
         storage = MockJobsStorage(orchestrator_config=mock_orchestrator.config)
         jobs_service = JobsService(orchestrator=mock_orchestrator, jobs_storage=storage)
         user = User(name="testuser", token="token", quota=quota)
@@ -513,7 +515,9 @@ class TestJobsService:
             create_quota(non_gpu_minutes=0, gpu_minutes=100),
         ],
     )
-    async def test_raise_for_quota_raise_for_non_gpu(self, mock_orchestrator, mock_jobs_storage, job_request_factory, quota):
+    async def test_raise_for_quota_raise_for_non_gpu(
+        self, mock_orchestrator, mock_jobs_storage, job_request_factory, quota
+    ):
         storage = MockJobsStorage(orchestrator_config=mock_orchestrator.config)
         jobs_service = JobsService(orchestrator=mock_orchestrator, jobs_storage=storage)
         user = User(name="testuser", token="token", quota=quota)
