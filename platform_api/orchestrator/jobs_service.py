@@ -33,7 +33,7 @@ class GpuQuotaExceededError(QuotaException):
 
 class NonGpuQuotaExceededError(QuotaException):
     def __init__(self, user: str) -> None:
-        super().__init__(f"Non-GPU quota exceeded for user '{user}'")
+        super().__init__(f"non-GPU quota exceeded for user '{user}'")
 
 
 class JobsService:
