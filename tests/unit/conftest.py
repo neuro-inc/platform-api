@@ -29,7 +29,7 @@ class MockOrchestrator(Orchestrator):
     def __init__(self, config):
         self._config = config
         self._mock_status_to_return = JobStatus.PENDING
-
+        self._mock_reason_to_return = "Initializing"
         self.raise_on_get_job_status = False
         self.raise_on_delete = False
         self._successfully_deleted_jobs = []
@@ -49,7 +49,7 @@ class MockOrchestrator(Orchestrator):
     async def get_job_status(self, job: Job) -> JobStatusItem:
         if self.raise_on_get_job_status:
             raise JobNotFoundException(f"job {job.id} was not found")
-        return JobStatusItem.create(self._mock_status_to_return)
+        return JobStatusItem.create(self._mock_status_to_return, reason=self._mock_reason_to_return)
 
     async def delete_job(self, job: Job) -> JobStatus:
         if self.raise_on_delete:
@@ -59,6 +59,9 @@ class MockOrchestrator(Orchestrator):
 
     def update_status_to_return(self, new_status: JobStatus):
         self._mock_status_to_return = new_status
+
+    def update_reason_to_return(self, new_reason: str):
+        self._mock_reason_to_return = new_reason
 
     def get_successfully_deleted_jobs(self):
         return self._successfully_deleted_jobs

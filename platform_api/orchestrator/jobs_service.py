@@ -41,6 +41,7 @@ class JobsService:
             try:
                 async with self._jobs_storage.try_update_job(job.id) as job:
                     await self._update_job_status(job)
+                    job.collect_if_needed()
             except JobStorageTransactionError:
                 # intentionally ignoring any transaction failures here because
                 # the job may have been changed and a retry is needed.
@@ -52,21 +53,6 @@ class JobsService:
             try:
                 async with self._jobs_storage.try_update_job(job.id) as job:
                     await self._delete_job(job)
-            except JobStorageTransactionError:
-                # intentionally ignoring any transaction failures here because
-                # the job may have been changed and a retry is needed.
-                pass
-
-        for job in await self._jobs_storage.get_jobs_for_collection():
-            # Jobs that should be terminated
-            # assert not job.is_finished and not job.is_deleted
-            try:
-                async with self._jobs_storage.try_update_job(job.id) as job:
-                    await self._update_job_for_collection(job)
-                # Update k8s state only after successful update of storage,
-                # so we will not end in inconsistent state if status
-                # was changed from elsewhere
-                await self._collect_job(job)
             except JobStorageTransactionError:
                 # intentionally ignoring any transaction failures here because
                 # the job may have been changed and a retry is needed.
@@ -167,19 +153,6 @@ class JobsService:
             # deletion of a still running job
             job.status = JobStatus.SUCCEEDED
         job.is_deleted = True
-
-    async def _update_job_for_collection(self, job: Job) -> None:
-        logger.info("Marking job %s as collected", job.id)
-        if not job.is_finished:
-            job.status = JobStatus.FAILED
-        job.is_deleted = True
-
-    async def _collect_job(self, job: Job) -> None:
-        logger.info("Collecting job %s", job.id)
-        try:
-            await self._orchestrator.delete_job(job)
-        except JobException as exc:
-            logger.warning("Could not delete job %s. Reason: %s", job.id, exc)
 
     async def delete_job(self, job_id: str) -> None:
         for _ in range(self._max_deletion_attempts):

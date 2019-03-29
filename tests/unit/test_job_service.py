@@ -417,6 +417,48 @@ class TestJobsService:
         )
 
     @pytest.mark.asyncio
+    async def test_update_jobs_statuses_pending_errimagepull(
+        self, mock_orchestrator, mock_jobs_storage, job_request_factory
+    ):
+        service = JobsService(mock_orchestrator, mock_jobs_storage)
+
+        user = User(name="testuser", token="")
+        original_job, _ = await service.create_job(
+            job_request=job_request_factory(), user=user
+        )
+        assert original_job.status == JobStatus.PENDING
+
+        mock_orchestrator.update_reason_to_return("ErrImagePull")
+        await service.update_jobs_statuses()
+
+        job = await service.get_job(job_id=original_job.id)
+        assert job.status == JobStatus.FAILED
+        assert job.is_finished
+        assert job.finished_at
+        assert job.is_deleted
+
+    @pytest.mark.asyncio
+    async def test_update_jobs_statuses_pending_imagepullbackoff(
+            self, mock_orchestrator, mock_jobs_storage, job_request_factory
+    ):
+        service = JobsService(mock_orchestrator, mock_jobs_storage)
+
+        user = User(name="testuser", token="")
+        original_job, _ = await service.create_job(
+            job_request=job_request_factory(), user=user
+        )
+        assert original_job.status == JobStatus.PENDING
+
+        mock_orchestrator.update_reason_to_return("ImagePullBackOff")
+        await service.update_jobs_statuses()
+
+        job = await service.get_job(job_id=original_job.id)
+        assert job.status == JobStatus.FAILED
+        assert job.is_finished
+        assert job.finished_at
+        assert job.is_deleted
+
+    @pytest.mark.asyncio
     async def test_update_jobs_statuses_succeeded_missing(
         self, mock_orchestrator, mock_jobs_storage, job_request_factory
     ):
