@@ -146,16 +146,16 @@ def event_loop():
 
 
 def create_quota(
-    gpu_minutes: Optional[int] = None, non_gpu_minutes: Optional[int] = None
+    time_gpu_minutes: Optional[int] = None, time_non_gpu_minutes: Optional[int] = None
 ) -> AggregatedRunTime:
 
-    if gpu_minutes is not None:
-        gpu_delta = timedelta(minutes=gpu_minutes)
+    if time_gpu_minutes is not None:
+        gpu_delta = timedelta(minutes=time_gpu_minutes)
     else:
         gpu_delta = timedelta.max
 
-    if non_gpu_minutes is not None:
-        non_gpu_delta = timedelta(minutes=non_gpu_minutes)
+    if time_non_gpu_minutes is not None:
+        non_gpu_delta = timedelta(minutes=time_non_gpu_minutes)
     else:
         non_gpu_delta = timedelta.max
 

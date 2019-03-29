@@ -468,9 +468,9 @@ class TestJobsService:
         "quota",
         [
             create_quota(),
-            create_quota(gpu_minutes=100),
-            create_quota(non_gpu_minutes=100),
-            create_quota(non_gpu_minutes=100, gpu_minutes=100),
+            create_quota(time_gpu_minutes=100),
+            create_quota(time_non_gpu_minutes=100),
+            create_quota(time_non_gpu_minutes=100, time_gpu_minutes=100),
         ],
     )
     async def test_create_job_quota_allows(
@@ -487,7 +487,10 @@ class TestJobsService:
     @pytest.mark.asyncio
     @pytest.mark.parametrize(
         "quota",
-        [create_quota(gpu_minutes=0), create_quota(gpu_minutes=0, non_gpu_minutes=100)],
+        [
+            create_quota(time_gpu_minutes=0),
+            create_quota(time_gpu_minutes=0, time_non_gpu_minutes=100),
+        ],
     )
     async def test_raise_for_quota_raise_for_gpu(
         self, mock_orchestrator, mock_jobs_storage, job_request_factory, quota
@@ -504,8 +507,8 @@ class TestJobsService:
     @pytest.mark.parametrize(
         "quota",
         [
-            create_quota(non_gpu_minutes=0),
-            create_quota(non_gpu_minutes=0, gpu_minutes=100),
+            create_quota(time_non_gpu_minutes=0),
+            create_quota(time_non_gpu_minutes=0, time_gpu_minutes=100),
         ],
     )
     async def test_raise_for_quota_raise_for_non_gpu(
