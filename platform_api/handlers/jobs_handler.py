@@ -12,6 +12,7 @@ from neuro_auth_client.client import ClientSubTreeViewRoot
 from yarl import URL
 
 from platform_api.config import Config, RegistryConfig, StorageConfig
+from platform_api.log import log_debug_time
 from platform_api.orchestrator import JobsService, Orchestrator
 from platform_api.orchestrator.job import Job, JobStats
 from platform_api.orchestrator.job_request import (
@@ -25,7 +26,6 @@ from platform_api.resource import GPUModel
 from platform_api.user import User, authorized_user, untrusted_user
 
 from .job_request_builder import ContainerBuilder
-from .log import log_debug_time
 from .validators import (
     create_container_request_validator,
     create_container_response_validator,
