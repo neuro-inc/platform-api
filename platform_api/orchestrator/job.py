@@ -18,8 +18,8 @@ current_datetime_factory = partial(datetime.now, timezone.utc)
 
 @dataclass(frozen=True)
 class AggregatedRunTime:
-    total_gpu_run_time_delta: timedelta = field(default_factory=timedelta)
-    total_non_gpu_run_time_delta: timedelta = field(default_factory=timedelta)
+    total_gpu_run_time_delta: timedelta
+    total_non_gpu_run_time_delta: timedelta
 
 
 # TODO: consider adding JobStatusReason Enum
