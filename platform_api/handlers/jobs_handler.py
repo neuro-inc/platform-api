@@ -12,6 +12,7 @@ from neuro_auth_client.client import ClientSubTreeViewRoot
 from yarl import URL
 
 from platform_api.config import Config, RegistryConfig, StorageConfig
+from platform_api.log import log_debug_time
 from platform_api.orchestrator import JobsService, Orchestrator
 from platform_api.orchestrator.job import Job, JobStats
 from platform_api.orchestrator.job_request import (
@@ -297,11 +298,14 @@ class JobsHandler:
         await check_authorized(request)
         user = await untrusted_user(request)
 
-        tree = await self._auth_client.get_permissions_tree(user.name, "job:")
+        with log_debug_time(f"Retrieved job access tree for user '{user.name}'"):
+            tree = await self._auth_client.get_permissions_tree(user.name, "job:")
         try:
             job_filter = self._build_job_filter(request.query, tree, user.name)
-            jobs = await self._jobs_service.get_all_jobs(job_filter)
-            jobs = filter_jobs_with_access_tree(jobs, tree)
+            with log_debug_time(f"Read jobs with {job_filter}"):
+                jobs = await self._jobs_service.get_all_jobs(job_filter)
+            with log_debug_time("Filtered jobs"):
+                jobs = filter_jobs_with_access_tree(jobs, tree)
         except JobFilterException:
             jobs = []
 

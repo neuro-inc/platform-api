@@ -362,7 +362,6 @@ class RedisJobsStorage(JobsStorage):
             )
 
         status_keys = [self._generate_jobs_status_index_key(s) for s in statuses]
-        status_keys = status_keys or [self._generate_jobs_index_key()]
 
         owner_keys = [
             self._generate_jobs_name_index_zset_key(owner, name)
@@ -372,19 +371,24 @@ class RedisJobsStorage(JobsStorage):
         ]
 
         temp_key = self._generate_temp_zset_key()
-
         tr = self._client.multi_exec()
-        tr.zunionstore(temp_key, *status_keys, aggregate=tr.ZSET_AGGREGATE_MAX)
+
         if owner_keys:
-            owners_temp_key = self._generate_temp_zset_key()
-            tr.zunionstore(
-                owners_temp_key, *owner_keys, aggregate=tr.ZSET_AGGREGATE_MAX
-            )
-            tr.zinterstore(
-                temp_key, owners_temp_key, temp_key, aggregate=tr.ZSET_AGGREGATE_MAX
-            )
-            tr.delete(owners_temp_key)
-        tr.zrange(temp_key)
+            tr.zunionstore(temp_key, *owner_keys, aggregate=tr.ZSET_AGGREGATE_MAX)
+            if status_keys:
+                status_temp_key = self._generate_temp_zset_key()
+                tr.zunionstore(
+                    status_temp_key, *status_keys, aggregate=tr.ZSET_AGGREGATE_MAX
+                )
+                tr.zinterstore(
+                    temp_key, temp_key, status_temp_key, aggregate=tr.ZSET_AGGREGATE_MAX
+                )
+                tr.delete(status_temp_key)
+            tr.zrange(temp_key)
+        else:
+            status_keys = status_keys or [self._generate_jobs_index_key()]
+            tr.sunion(*status_keys)
+
         tr.delete(temp_key)
         *_, payloads, _ = await tr.execute()
 
