@@ -123,7 +123,6 @@ class JobsService:
     ) -> Tuple[Job, Status]:
 
         await self._raise_for_run_time_quota(user)
-
         job = Job(
             orchestrator_config=self._orchestrator.config,
             job_request=job_request,

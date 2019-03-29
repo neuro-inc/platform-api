@@ -1,15 +1,12 @@
 import dataclasses
-from datetime import timedelta
-from typing import Optional
 from unittest import mock
 from unittest.mock import MagicMock
 
 import pytest
-from neuro_auth_client.client import Quota
 
 from platform_api.handlers.jobs_handler import convert_job_to_job_response
 from platform_api.orchestrator import Job, JobRequest, JobsService, JobStatus
-from platform_api.orchestrator.job import AggregatedRunTime, JobStatusItem
+from platform_api.orchestrator.job import JobStatusItem
 from platform_api.orchestrator.job_request import Container, ContainerResources
 from platform_api.orchestrator.jobs_service import (
     GpuQuotaExceededError,
@@ -490,11 +487,7 @@ class TestJobsService:
     @pytest.mark.asyncio
     @pytest.mark.parametrize(
         "quota",
-        [
-            create_quota(gpu_minutes=0),
-            create_quota(gpu_minutes=0, non_gpu_minutes=0),
-            create_quota(gpu_minutes=0, non_gpu_minutes=100),
-        ],
+        [create_quota(gpu_minutes=0), create_quota(gpu_minutes=0, non_gpu_minutes=100)],
     )
     async def test_raise_for_quota_raise_for_gpu(
         self, mock_orchestrator, mock_jobs_storage, job_request_factory, quota

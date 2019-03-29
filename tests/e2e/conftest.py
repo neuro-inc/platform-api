@@ -2,13 +2,11 @@ import os
 import time
 import uuid
 from dataclasses import dataclass
-from typing import Optional
 
 import aiohttp
 import pytest
 from jose import jwt
 from neuro_auth_client import AuthClient, User
-from neuro_auth_client.client import Quota
 from yarl import URL
 
 
@@ -115,11 +113,10 @@ class _User:
 
 @pytest.fixture
 async def regular_user_factory(auth_client, token_factory):
-    async def _factory(name: str = None, quota: Optional[Quota] = None):
+    async def _factory(name=None):
         if not name:
             name = str(uuid.uuid4())
-        quota = quota or Quota()
-        user = User(name=name, quota=quota)
+        user = User(name=name)
         await auth_client.add_user(user)
         return _User(name=user.name, token=token_factory(user.name))
 
