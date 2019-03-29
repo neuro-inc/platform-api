@@ -2,7 +2,6 @@ from typing import Tuple
 
 import pytest
 import trafaret as t
-from trafaret import DataError
 
 from platform_api.handlers.jobs_handler import create_job_response_validator
 from platform_api.handlers.validators import (
@@ -107,7 +106,7 @@ class TestUserNameValidator:
     def test_create_user_name_validator_none__ok(self) -> None:
         value = None
         validator = create_user_name_validator()
-        with pytest.raises(DataError):
+        with pytest.raises(t.DataError):
             validator.check(value)
 
     @pytest.mark.parametrize(
@@ -173,7 +172,7 @@ class TestUserNameValidator:
     def test_create_user_name_validator__fail(self, pair: Tuple[str, int]) -> None:
         value = pair[0] * pair[1]
         validator = create_user_name_validator()
-        with pytest.raises(DataError):
+        with pytest.raises(t.DataError):
             assert validator.check(value)
 
 
