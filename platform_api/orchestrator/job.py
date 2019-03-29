@@ -1,7 +1,7 @@
 import logging
 import time
 from dataclasses import dataclass, field
-from datetime import datetime, timezone
+from datetime import datetime, timedelta, timezone
 from functools import partial
 from typing import Any, Dict, Iterable, List, Optional, Sequence
 
@@ -14,6 +14,12 @@ from .job_request import JobRequest, JobStatus
 
 logger = logging.getLogger(__name__)
 current_datetime_factory = partial(datetime.now, timezone.utc)
+
+
+@dataclass(frozen=True)
+class AggregatedRunTime:
+    total_gpu_run_time_delta: timedelta = field(default_factory=timedelta)
+    total_non_gpu_run_time_delta: timedelta = field(default_factory=timedelta)
 
 
 # TODO: consider adding JobStatusReason Enum
@@ -361,6 +367,11 @@ class Job:
     @property
     def is_forced_to_preemptible_pool(self) -> bool:
         return self.is_preemptible and self._is_forced_to_preemptible_pool
+
+    def get_run_time(self) -> timedelta:
+        end_time = self.finished_at or self._current_datetime_factory()
+        start_time = self.status_history.created_at
+        return end_time - start_time
 
     def to_primitive(self) -> Dict:
         statuses = [item.to_primitive() for item in self._status_history.all]
