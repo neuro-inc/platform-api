@@ -1,5 +1,6 @@
 import dataclasses
 from datetime import timedelta
+from typing import Optional
 from unittest import mock
 from unittest.mock import MagicMock
 
@@ -8,59 +9,16 @@ from neuro_auth_client.client import Quota
 
 from platform_api.handlers.jobs_handler import convert_job_to_job_response
 from platform_api.orchestrator import Job, JobRequest, JobsService, JobStatus
-from platform_api.orchestrator.job import JobStatusItem
+from platform_api.orchestrator.job import AggregatedRunTime, JobStatusItem
 from platform_api.orchestrator.job_request import Container, ContainerResources
 from platform_api.orchestrator.jobs_service import (
-    AggregatedRunTime,
     GpuQuotaExceededError,
     JobsServiceException,
     NonGpuQuotaExceededError,
 )
 from platform_api.orchestrator.jobs_storage import JobFilter, JobStorageJobFoundError
 from platform_api.user import User
-from tests.unit.conftest import MockJobsStorage
-
-
-class TestAggregatedRunTime:
-    def test_raise_for_quota_not_raise_has_quotas(self):
-        quota = Quota(total_gpu_run_time_minutes=10, total_non_gpu_run_time_minutes=5)
-        spent_gpu = timedelta(minutes=9)
-        spent_non_gpu = timedelta(minutes=4)
-        user = User(name="me", token="token", quota=quota)
-        run_time = AggregatedRunTime(
-            user,
-            total_gpu_run_time_spent=spent_gpu,
-            total_non_gpu_run_time_spent=spent_non_gpu,
-        )
-        assert run_time.raise_for_quota() is None
-
-    def test_raise_for_quota_not_raise_has_no_quotas(self):
-        quota = Quota()
-        spent_gpu = timedelta(minutes=9)
-        spent_non_gpu = timedelta(minutes=4)
-        user = User(name="me", token="token", quota=quota)
-        run_time = AggregatedRunTime(
-            user,
-            total_gpu_run_time_spent=spent_gpu,
-            total_non_gpu_run_time_spent=spent_non_gpu,
-        )
-        assert run_time.raise_for_quota() is None
-
-    def test_raise_for_quota_raise_for_gpu(self):
-        quota = Quota(total_gpu_run_time_minutes=10)
-        spent_gpu = timedelta(hours=1)
-        user = User(name="me", token="token", quota=quota)
-        run_time = AggregatedRunTime(user, total_gpu_run_time_spent=spent_gpu)
-        with pytest.raises(GpuQuotaExceededError, match="GPU quota exceeded"):
-            run_time.raise_for_quota()
-
-    def test_raise_for_quota_raise_for_non_gpu(self):
-        quota = Quota(total_non_gpu_run_time_minutes=10)
-        spent_non_gpu = timedelta(hours=1)
-        user = User(name="me", token="token", quota=quota)
-        run_time = AggregatedRunTime(user, total_non_gpu_run_time_spent=spent_non_gpu)
-        with pytest.raises(NonGpuQuotaExceededError, match="Non-GPU quota exceeded"):
-            run_time.raise_for_quota()
+from tests.unit.conftest import MockJobsStorage, create_quota
 
 
 class TestMockJobsStorage:
@@ -507,3 +465,59 @@ class TestJobsService:
         assert job.is_finished
         assert job.finished_at
         assert job.is_deleted
+
+    @pytest.mark.asyncio
+    @pytest.mark.parametrize(
+        "quota",
+        [
+            create_quota(),
+            create_quota(gpu_minutes=100),
+            create_quota(non_gpu_minutes=100),
+            create_quota(non_gpu_minutes=100, gpu_minutes=100),
+        ],
+    )
+    async def test_create_job_quota_allows(
+        self, mock_orchestrator, mock_jobs_storage, job_request_factory, quota
+    ):
+        storage = MockJobsStorage(orchestrator_config=mock_orchestrator.config)
+        jobs_service = JobsService(orchestrator=mock_orchestrator, jobs_storage=storage)
+        user = User(name="testuser", token="token", quota=quota)
+        request = job_request_factory()
+
+        job, _ = await jobs_service.create_job(request, user)
+        assert job.status == JobStatus.PENDING
+
+    @pytest.mark.asyncio
+    @pytest.mark.parametrize(
+        "quota",
+        [
+            create_quota(gpu_minutes=0),
+            create_quota(gpu_minutes=0, non_gpu_minutes=0),
+            create_quota(gpu_minutes=0, non_gpu_minutes=100),
+        ],
+    )
+    async def test_raise_for_quota_raise_for_gpu(self, mock_orchestrator, mock_jobs_storage, job_request_factory, quota):
+        storage = MockJobsStorage(orchestrator_config=mock_orchestrator.config)
+        jobs_service = JobsService(orchestrator=mock_orchestrator, jobs_storage=storage)
+        user = User(name="testuser", token="token", quota=quota)
+        request = job_request_factory()
+
+        with pytest.raises(GpuQuotaExceededError, match="GPU quota exceeded"):
+            await jobs_service.create_job(request, user)
+
+    @pytest.mark.asyncio
+    @pytest.mark.parametrize(
+        "quota",
+        [
+            create_quota(non_gpu_minutes=0),
+            create_quota(non_gpu_minutes=0, gpu_minutes=100),
+        ],
+    )
+    async def test_raise_for_quota_raise_for_non_gpu(self, mock_orchestrator, mock_jobs_storage, job_request_factory, quota):
+        storage = MockJobsStorage(orchestrator_config=mock_orchestrator.config)
+        jobs_service = JobsService(orchestrator=mock_orchestrator, jobs_storage=storage)
+        user = User(name="testuser", token="token", quota=quota)
+        request = job_request_factory()
+
+        with pytest.raises(NonGpuQuotaExceededError, match="non-GPU quota exceeded"):
+            await jobs_service.create_job(request, user)
