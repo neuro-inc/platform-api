@@ -296,8 +296,14 @@ class Job:
 
     @property
     def should_be_deleted(self) -> bool:
-        return self.is_finished and not self.is_deleted and (
-                self._is_time_for_deletion or self.status_history.current.reason == "Collected")
+        return (
+            self.is_finished
+            and not self.is_deleted
+            and (
+                self._is_time_for_deletion
+                or self.status_history.current.reason == "Collected"
+            )
+        )
 
     @property
     def _collection_reason(self) -> Optional[str]:
@@ -315,9 +321,7 @@ class Job:
         if reason:
             logger.info("Collecting job %s. Reason: %s", self.id, reason)
             status_item = JobStatusItem.create(
-                JobStatus.FAILED,
-                reason="Collected",
-                description=reason,
+                JobStatus.FAILED, reason="Collected", description=reason
             )
             self.status_history.current = status_item
 

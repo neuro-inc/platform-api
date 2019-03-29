@@ -439,7 +439,7 @@ class TestJobsService:
 
     @pytest.mark.asyncio
     async def test_update_jobs_statuses_pending_imagepullbackoff(
-            self, mock_orchestrator, mock_jobs_storage, job_request_factory
+        self, mock_orchestrator, mock_jobs_storage, job_request_factory
     ):
         service = JobsService(mock_orchestrator, mock_jobs_storage)
 
