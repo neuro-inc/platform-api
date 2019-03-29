@@ -626,14 +626,25 @@ class TestJobs:
         await jobs_client.delete_job(job_id)
 
     @pytest.mark.asyncio
-    async def test_create_job_quota_allows(
+    async def test_create_job_gpu_quota_allows(
         self, api, client, job_request_factory, jobs_client, regular_user_factory
     ):
-        quota = Quota(total_gpu_run_time_minutes=100, total_non_gpu_run_time_minutes=10)
+        quota = Quota(total_gpu_run_time_minutes=100)
         user = await regular_user_factory(quota=quota)
         url = api.jobs_base_url
         job_request = job_request_factory()
         job_request["container"]["resources"]["gpu"] = 1
+        async with client.post(url, headers=user.headers, json=job_request) as response:
+            assert response.status == HTTPAccepted.status_code
+
+    @pytest.mark.asyncio
+    async def test_create_job_non_gpu_quota_allows(
+        self, api, client, job_request_factory, jobs_client, regular_user_factory
+    ):
+        quota = Quota(total_non_gpu_run_time_minutes=100)
+        user = await regular_user_factory(quota=quota)
+        url = api.jobs_base_url
+        job_request = job_request_factory()
         async with client.post(url, headers=user.headers, json=job_request) as response:
             assert response.status == HTTPAccepted.status_code
 
@@ -662,7 +673,7 @@ class TestJobs:
         async with client.post(url, headers=user.headers, json=job_request) as response:
             assert response.status == HTTPBadRequest.status_code
             data = await response.json()
-            assert data == {"error": f"Non-GPU quota exceeded for user '{user.name}'"}
+            assert data == {"error": f"non-GPU quota exceeded for user '{user.name}'"}
 
     @pytest.mark.asyncio
     async def test_create_multiple_jobs_with_same_name_after_first_finished(
