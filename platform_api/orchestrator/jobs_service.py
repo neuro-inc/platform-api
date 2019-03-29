@@ -33,10 +33,6 @@ class JobsService:
         # TODO (A Danshyn 02/17/19): instead of returning `Job` objects,
         # it makes sense to just return their IDs.
 
-        # 1. Only unfinished jobs can be updated and collected.
-        # 2. Only finished jobs can be deleted.
-        # 3. Deletion/Collection always result in finished status.
-
         for job in await self._jobs_storage.get_unfinished_jobs():
             try:
                 async with self._jobs_storage.try_update_job(job.id) as job:
