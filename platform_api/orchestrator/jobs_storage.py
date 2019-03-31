@@ -8,7 +8,6 @@ from typing import (
     AbstractSet,
     AsyncIterator,
     Dict,
-    Iterator,
     List,
     Optional,
     Sequence,
