@@ -1,3 +1,4 @@
+import asyncio
 import itertools
 import json
 import logging
@@ -345,8 +346,18 @@ class RedisJobsStorage(JobsStorage):
         if not ids:
             return jobs
         keys = [self._generate_job_key(id_) for id_ in ids]
-        for payload in await self._client.mget(*keys):
-            jobs.append(self._parse_job_payload(payload))
+        payloads = await self._client.mget(*keys)
+        # in case there are lots of jobs to retrieve, the parsing code below
+        # blocks the concurrent execution for significant amount of time.
+        # to mitigate the issue, we call `asyncio.sleep` to let other
+        # coroutines execute too.
+        number_in_chunk = 10
+        chunks = itertools.zip_longest(*([iter(payloads)] * number_in_chunk))
+        for chunk in chunks:
+            jobs.extend(
+                self._parse_job_payload(payload) for payload in chunk if payload
+            )
+            await asyncio.sleep(0.0)
         return jobs
 
     async def _get_job_ids(
