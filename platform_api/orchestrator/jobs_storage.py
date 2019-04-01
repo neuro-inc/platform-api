@@ -63,9 +63,6 @@ class JobsStorage(ABC):
     async def get_jobs_for_deletion(self) -> List[Job]:
         return [job for job in await self.get_all_jobs() if job.should_be_deleted]
 
-    async def get_jobs_for_collection(self) -> List[Job]:
-        return [job for job in await self.get_all_jobs() if job.should_be_collected]
-
     async def get_unfinished_jobs(self) -> List[Job]:
         return [job for job in await self.get_all_jobs() if not job.is_finished]
 
@@ -371,11 +368,6 @@ class RedisJobsStorage(JobsStorage):
         statuses = {JobStatus.RUNNING}
         job_ids = await self._get_job_ids(statuses)
         return await self._get_jobs(job_ids)
-
-    async def get_jobs_for_collection(self) -> List[Job]:
-        job_ids = await self._get_job_ids_for_collection()
-        jobs = await self._get_jobs(job_ids)
-        return [job for job in jobs if job.should_be_collected]
 
     async def get_jobs_for_deletion(self) -> List[Job]:
         job_ids = await self._get_job_ids_for_deletion()
