@@ -340,9 +340,6 @@ class RedisJobsStorage(JobsStorage):
         result_union, result_intersect, result_final, *cleanups = await tr.execute()
         return result_final
 
-    async def _get_job_ids_for_collection(self) -> List[str]:
-        return await self._get_job_ids({JobStatus.PENDING})
-
     async def _get_job_ids_for_deletion(self) -> List[str]:
         tr = self._client.multi_exec()
         tr.sdiff(
