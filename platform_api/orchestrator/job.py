@@ -6,6 +6,7 @@ from functools import partial
 from typing import Any, Dict, Iterable, List, Optional, Sequence
 
 import iso8601
+from neuro_auth_client.client import Quota
 from yarl import URL
 
 from ..config import OrchestratorConfig  # noqa
@@ -20,6 +21,13 @@ current_datetime_factory = partial(datetime.now, timezone.utc)
 class AggregatedRunTime:
     total_gpu_run_time_delta: timedelta
     total_non_gpu_run_time_delta: timedelta
+
+    @classmethod
+    def from_quota(cls, quota: Quota) -> "AggregatedRunTime":
+        return AggregatedRunTime(
+            total_gpu_run_time_delta=quota.total_gpu_run_time_minutes_delta,
+            total_non_gpu_run_time_delta=quota.total_non_gpu_run_time_minutes_delta,
+        )
 
 
 # TODO: consider adding JobStatusReason Enum

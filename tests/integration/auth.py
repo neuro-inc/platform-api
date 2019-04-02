@@ -15,6 +15,7 @@ from neuro_auth_client.client import Quota
 from yarl import URL
 
 from platform_api.config import AuthConfig, OAuthConfig
+from platform_api.orchestrator.job import AggregatedRunTime
 from platform_api.user import User
 
 
@@ -153,7 +154,8 @@ async def regular_user_factory(auth_client, token_factory, admin_token):
         user = AuthClientUser(name=name, quota=quota)
         await auth_client.add_user(user, token=admin_token)
         user_token = token_factory(user.name)
-        return _User(name=user.name, token=user_token, quota=user.quota)  # type: ignore
+        user_quota = AggregatedRunTime.from_quota(user.quota)
+        return _User(name=user.name, token=user_token, quota=user_quota)  # type: ignore
 
     return _factory
 

@@ -3,7 +3,6 @@ from typing import Optional
 
 from aiohttp.web import HTTPUnauthorized, Request
 from aiohttp_security.api import AUTZ_KEY, IDENTITY_KEY
-from neuro_auth_client.client import Quota
 from yarl import URL
 
 from platform_api.orchestrator.job import AggregatedRunTime
@@ -46,7 +45,7 @@ async def authorized_user(request: Request) -> User:
     autz_user = await autz_policy.authorized_user(identity)
     if autz_user is None:
         raise HTTPUnauthorized()
-    quota = _convert_auth_quota_to_aggregated_run_time(autz_user.quota)
+    quota = AggregatedRunTime.from_quota(autz_user.quota)
 
     return User(name=autz_user.name, token=identity, quota=quota)
 
@@ -57,10 +56,3 @@ async def _get_identity(request: Request) -> str:
     if identity is None:
         raise HTTPUnauthorized()
     return identity
-
-
-def _convert_auth_quota_to_aggregated_run_time(quota: Quota) -> AggregatedRunTime:
-    return AggregatedRunTime(
-        total_gpu_run_time_delta=quota.total_gpu_run_time_minutes_delta,
-        total_non_gpu_run_time_delta=quota.total_non_gpu_run_time_minutes_delta,
-    )
