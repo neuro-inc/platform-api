@@ -274,7 +274,7 @@ class JobsHandler:
     def _build_job_filter(
         self, query: MultiDictProxy, tree: ClientSubTreeViewRoot, user: str
     ) -> JobFilter:
-        # validating query parameters first
+        # TODO: move this method to validators.py and cover with unit tests
         job_name = self._job_name_validator.check(query.get("name"))
         statuses = (
             {JobStatus(s) for s in query.getall("status")}
