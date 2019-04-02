@@ -37,6 +37,7 @@ class JobsService:
             try:
                 async with self._jobs_storage.try_update_job(job.id) as job:
                     await self._update_job_status(job)
+                    job.collect_if_needed()
             except JobStorageTransactionError:
                 # intentionally ignoring any transaction failures here because
                 # the job may have been changed and a retry is needed.

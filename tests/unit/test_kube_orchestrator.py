@@ -488,7 +488,7 @@ class TestJobStatusItemFactory:
         pod_status = PodStatus.from_primitive(payload)
         job_status_item = JobStatusItemFactory(pod_status).create()
         assert job_status_item == JobStatusItem.create(
-            JobStatus.FAILED, reason="SomeWeirdReason"
+            JobStatus.PENDING, reason="SomeWeirdReason"
         )
 
     def test_status_failure(self):

@@ -296,7 +296,34 @@ class Job:
 
     @property
     def should_be_deleted(self) -> bool:
-        return self.is_finished and not self.is_deleted and self._is_time_for_deletion
+        return (
+            self.is_finished
+            and not self.is_deleted
+            and (
+                self._is_time_for_deletion
+                or self.status_history.current.reason == "Collected"
+            )
+        )
+
+    @property
+    def _collection_reason(self) -> Optional[str]:
+        status_item = self._status_history.current
+        if status_item.status == JobStatus.PENDING and (
+            status_item.reason == "ErrImagePull"
+            or status_item.reason == "ImagePullBackOff"
+        ):
+            # collect jobs stuck in ErrImagePull loop
+            return "Image can not be pulled"
+        return None
+
+    def collect_if_needed(self) -> None:
+        reason = self._collection_reason
+        if reason:
+            logger.info("Collecting job %s. Reason: %s", self.id, reason)
+            status_item = JobStatusItem.create(
+                JobStatus.FAILED, reason="Collected", description=reason
+            )
+            self.status_history.current = status_item
 
     @property
     def has_http_server_exposed(self) -> bool:
