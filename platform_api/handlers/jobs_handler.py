@@ -276,25 +276,26 @@ class JobsHandler:
     ) -> JobFilter:
         # validating query parameters first
         job_name = self._job_name_validator.check(query.get("name"))
+        statuses = (
+            {JobStatus(s) for s in query.getall("status")}
+            if "status" in query
+            else set()
+        )
 
-        owners = infer_job_owners_filter_from_access_tree(tree)
-        if job_name and not owners:
+        inferred_owners = infer_job_owners_filter_from_access_tree(tree)
+        if job_name and not inferred_owners:
             # TODO: this is an edge case when a user who has access to all
             # jobs (job:) tries to filter them by name. not yet supported
             # by JobsStorage.
-            owners.add(user)
+            inferred_owners.add(user)
+        owners = inferred_owners
+
         if "owner" in query:
             requested_owners = {
                 self._user_name_validator.check(owner)
                 for owner in query.getall("owner")
             }
             owners &= requested_owners
-
-        statuses = (
-            {JobStatus(s) for s in query.getall("status")}
-            if "status" in query
-            else set()
-        )
 
         return JobFilter(statuses=statuses, owners=owners, name=job_name)
 
