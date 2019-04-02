@@ -24,7 +24,7 @@ class AggregatedRunTime:
 
     @classmethod
     def from_quota(cls, quota: Quota) -> "AggregatedRunTime":
-        return AggregatedRunTime(
+        return cls(
             total_gpu_run_time_delta=quota.total_gpu_run_time_minutes_delta,
             total_non_gpu_run_time_delta=quota.total_non_gpu_run_time_minutes_delta,
         )
