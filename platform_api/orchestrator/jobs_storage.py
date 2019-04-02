@@ -1,16 +1,33 @@
+import asyncio
 import itertools
 import json
+import logging
 from abc import ABC, abstractmethod
 from dataclasses import dataclass, field
-from typing import AbstractSet, AsyncIterator, Dict, List, Optional, Sequence, Tuple
+from typing import (
+    AbstractSet,
+    AsyncIterator,
+    Dict,
+    List,
+    Optional,
+    Sequence,
+    Set,
+    Tuple,
+    Type,
+    cast,
+)
 from uuid import uuid4
 
 import aioredis
+from aioredis.commands import Pipeline
 from async_generator import asynccontextmanager
 
 from .base import OrchestratorConfig
 from .job import Job
 from .job_request import JobError, JobStatus
+
+
+logger = logging.getLogger(__name__)
 
 
 class JobsStorageException(Exception):
@@ -31,8 +48,10 @@ class JobStorageJobFoundError(JobsStorageException):
 
 @dataclass(frozen=True)
 class JobFilter:
-    statuses: AbstractSet[JobStatus] = field(default_factory=set)
-    owner: Optional[str] = None
+    statuses: AbstractSet[JobStatus] = field(
+        default_factory=cast(Type[Set[JobStatus]], set)
+    )
+    owners: AbstractSet[str] = field(default_factory=cast(Type[Set[str]], set))
     name: Optional[str] = None
 
 
@@ -65,6 +84,9 @@ class JobsStorage(ABC):
 
     async def get_unfinished_jobs(self) -> List[Job]:
         return [job for job in await self.get_all_jobs() if not job.is_finished]
+
+    async def migrate(self) -> None:
+        pass
 
 
 class InMemoryJobsStorage(JobsStorage):
@@ -111,7 +133,7 @@ class InMemoryJobsStorage(JobsStorage):
     def _apply_filter(self, job_filter: JobFilter, job: Job) -> bool:
         if job_filter.statuses and job.status not in job_filter.statuses:
             return False
-        if job_filter.owner and job_filter.owner != job.owner:
+        if job_filter.owners and job.owner not in job_filter.owners:
             return False
         if job_filter.name and job_filter.name != job.name:
             return False
@@ -148,6 +170,9 @@ class RedisJobsStorage(JobsStorage):
 
     def _generate_jobs_status_index_key(self, status: JobStatus) -> str:
         return f"jobs.status.{status}"
+
+    def _generate_jobs_owner_index_key(self, owner: str) -> str:
+        return f"jobs.owner.{owner}"
 
     def _generate_jobs_name_index_zset_key(self, owner: str, job_name: str) -> str:
         assert owner, "job owner is not defined"
@@ -223,8 +248,13 @@ class RedisJobsStorage(JobsStorage):
             await storage.update_job_atomic(job, is_job_creation=False)
 
     @asynccontextmanager
-    async def try_create_job(self, job: Job) -> AsyncIterator[Job]:
+    async def try_create_job(
+        self, job: Job, skip_owner_index: bool = False
+    ) -> AsyncIterator[Job]:
         """ NOTE: this method yields the job, the same object as it came as an argument
+
+        :param bool skip_owner_index:
+            Prevents indexing the job by owner for testing purposes.
         """
         if job.name:
             async with self._watch_all_job_keys(job.id, job.owner, job.name) as storage:
@@ -239,11 +269,15 @@ class RedisJobsStorage(JobsStorage):
                 yield job
                 # after the orchestrator has started the job, it fills the 'job' object
                 # with some new values, so we write the new value of 'job' to Redis:
-                await storage.update_job_atomic(job, is_job_creation=True)
+                await storage.update_job_atomic(
+                    job, is_job_creation=True, skip_owner_index=skip_owner_index
+                )
         else:
             async with self._watch_job_id_key(job.id) as storage:
                 yield job
-                await storage.update_job_atomic(job, is_job_creation=True)
+                await storage.update_job_atomic(
+                    job, is_job_creation=True, skip_owner_index=skip_owner_index
+                )
 
     async def set_job(self, job: Job) -> None:
         # TODO (ajuszkowski, 4-feb-2019) remove this method from interface as well
@@ -251,19 +285,37 @@ class RedisJobsStorage(JobsStorage):
         # the 'last-job-created' key!
         await self.update_job_atomic(job, is_job_creation=True)
 
-    async def update_job_atomic(self, job: Job, is_job_creation: bool) -> None:
+    def _update_owner_index(self, tr: Pipeline, job: Job) -> None:
+        owner_key = self._generate_jobs_owner_index_key(job.owner)
+        tr.zadd(
+            owner_key,
+            job.status_history.created_at_timestamp,
+            job.id,
+            exist=tr.ZSET_IF_NOT_EXIST,
+        )
+
+    def _update_name_index(self, tr: Pipeline, job: Job) -> None:
+        name_key = self._generate_jobs_name_index_zset_key(job.owner, job.name)
+        tr.zadd(name_key, job.status_history.created_at_timestamp, job.id)
+
+    async def update_job_atomic(
+        self, job: Job, is_job_creation: bool, skip_owner_index: bool = False
+    ) -> None:
         payload = json.dumps(job.to_primitive())
 
         tr = self._client.multi_exec()
         tr.set(self._generate_job_key(job.id), payload)
-        tr.sadd("jobs", job.id)
+
         for status in JobStatus:
             tr.srem(self._generate_jobs_status_index_key(status), job.id)
         tr.sadd(self._generate_jobs_status_index_key(job.status), job.id)
 
-        if is_job_creation and job.name and job.owner:
-            name_key = self._generate_jobs_name_index_zset_key(job.owner, job.name)
-            tr.zadd(name_key, job.status_history.created_at_timestamp, job.id)
+        if is_job_creation:
+            tr.sadd(self._generate_jobs_index_key(), job.id)
+            if not skip_owner_index:
+                self._update_owner_index(tr, job)
+            if job.name:
+                self._update_name_index(tr, job)
 
         if job.is_deleted:
             tr.sadd(self._generate_jobs_deleted_index_key(), job.id)
@@ -294,51 +346,64 @@ class RedisJobsStorage(JobsStorage):
         if not ids:
             return jobs
         keys = [self._generate_job_key(id_) for id_ in ids]
-        for payload in await self._client.mget(*keys):
-            jobs.append(self._parse_job_payload(payload))
+        payloads = await self._client.mget(*keys)
+        # in case there are lots of jobs to retrieve, the parsing code below
+        # blocks the concurrent execution for significant amount of time.
+        # to mitigate the issue, we call `asyncio.sleep` to let other
+        # coroutines execute too.
+        number_in_chunk = 10
+        chunks = itertools.zip_longest(*([iter(payloads)] * number_in_chunk))
+        for chunk in chunks:
+            jobs.extend(
+                self._parse_job_payload(payload) for payload in chunk if payload
+            )
+            await asyncio.sleep(0.0)
         return jobs
 
     async def _get_job_ids(
         self,
         statuses: AbstractSet[JobStatus],
-        owner: Optional[str] = None,
+        owners: Optional[AbstractSet[str]] = None,
         name: Optional[str] = None,
     ) -> List[str]:
-        statuses_keys = [self._generate_jobs_status_index_key(s) for s in statuses]
-        if bool(owner) ^ bool(name):
+        owners = owners or set()
+        if name and not owners:
             raise ValueError(
-                "filtering jobs by name is allowed only together with owner, "
-                f"found: owner='{owner}', name='{name}'"
+                "filtering jobs by name is allowed only together with owners"
             )
-        if owner and name:
-            name_key = self._generate_jobs_name_index_zset_key(owner, name)
-            if statuses:
-                payloads = await self._get_job_ids_filter_by_name_owner_statuses(
-                    name_key, statuses_keys
-                )
-            else:
-                payloads = await self._client.zrange(name_key)
-        else:
-            if statuses:
-                payloads = await self._client.sunion(*statuses_keys)
-            else:
-                jobs_key = self._generate_jobs_index_key()
-                payloads = [job_id async for job_id in self._client.isscan(jobs_key)]
-        return [job_id.decode() for job_id in payloads]
 
-    async def _get_job_ids_filter_by_name_owner_statuses(
-        self, name_key: str, statuses_keys: List[str]
-    ):
-        status_temp_key = self._generate_temp_zset_key()
-        result_temp_key = self._generate_temp_zset_key()
+        status_keys = [self._generate_jobs_status_index_key(s) for s in statuses]
+
+        owner_keys = [
+            self._generate_jobs_name_index_zset_key(owner, name)
+            if name
+            else self._generate_jobs_owner_index_key(owner)
+            for owner in owners
+        ]
+
+        temp_key = self._generate_temp_zset_key()
         tr = self._client.multi_exec()
-        tr.sunionstore(status_temp_key, *statuses_keys)
-        tr.zinterstore(result_temp_key, name_key, status_temp_key)
-        tr.zrange(result_temp_key)
-        tr.delete(status_temp_key)
-        tr.delete(result_temp_key)
-        result_union, result_intersect, result_final, *cleanups = await tr.execute()
-        return result_final
+
+        if owner_keys:
+            tr.zunionstore(temp_key, *owner_keys, aggregate=tr.ZSET_AGGREGATE_MAX)
+            if status_keys:
+                status_temp_key = self._generate_temp_zset_key()
+                tr.zunionstore(
+                    status_temp_key, *status_keys, aggregate=tr.ZSET_AGGREGATE_MAX
+                )
+                tr.zinterstore(
+                    temp_key, temp_key, status_temp_key, aggregate=tr.ZSET_AGGREGATE_MAX
+                )
+                tr.delete(status_temp_key)
+            tr.zrange(temp_key)
+        else:
+            status_keys = status_keys or [self._generate_jobs_index_key()]
+            tr.sunion(*status_keys)
+
+        tr.delete(temp_key)
+        *_, payloads, _ = await tr.execute()
+
+        return [job_id.decode() for job_id in payloads]
 
     async def _get_job_ids_for_deletion(self) -> List[str]:
         tr = self._client.multi_exec()
@@ -357,7 +422,7 @@ class RedisJobsStorage(JobsStorage):
         if not job_filter:
             job_filter = JobFilter()
         job_ids = await self._get_job_ids(
-            job_filter.statuses, job_filter.owner, job_filter.name
+            statuses=job_filter.statuses, owners=job_filter.owners, name=job_filter.name
         )
         return await self._get_jobs(job_ids)
 
@@ -375,3 +440,45 @@ class RedisJobsStorage(JobsStorage):
         statuses = {JobStatus.PENDING, JobStatus.RUNNING}
         job_ids = await self._get_job_ids(statuses)
         return await self._get_jobs(job_ids)
+
+    async def migrate(self) -> None:
+        await self.reindex_job_owners()
+
+    async def reindex_job_owners(self) -> int:
+        logger.info("Starting reindexing job owners")
+
+        job_ids = await self._get_job_ids_unindexed_owner()
+        for job_id in job_ids:
+            job = await self.get_job(job_id)
+            tr = self._client.pipeline()
+            self._update_owner_index(tr, job)
+            await tr.execute()
+
+        logger.info("Finished reindexing job owners")
+        return len(job_ids)
+
+    async def _get_job_ids_unindexed_owner(self) -> Set[str]:
+        jobs_key = self._generate_jobs_index_key()
+        job_ids = {job_id.decode() async for job_id in self._client.isscan(jobs_key)}
+        job_ids -= await self._get_job_ids_indexed_owner()
+
+        logger.info(f"Found {len(job_ids)} jobs with unindexed owners")
+        return job_ids
+
+    async def _get_job_owner_keys(self) -> List[str]:
+        owner_index_key_template = self._generate_jobs_owner_index_key("*")
+        return [key async for key in self._client.iscan(match=owner_index_key_template)]
+
+    async def _get_job_ids_indexed_owner(self) -> Set[str]:
+        owners_keys = await self._get_job_owner_keys()
+        logger.info(f"Found {len(owners_keys)} job owner index keys")
+        if not owners_keys:
+            return set()
+
+        temp_key = self._generate_temp_zset_key()
+        tr = self._client.multi_exec()
+        tr.zunionstore(temp_key, *owners_keys)
+        tr.zrange(temp_key)
+        tr.delete(temp_key)
+        *_, job_ids, _ = await tr.execute()
+        return {job_id.decode() for job_id in job_ids}

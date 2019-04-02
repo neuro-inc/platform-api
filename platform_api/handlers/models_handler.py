@@ -9,7 +9,7 @@ from platform_api.config import Config
 from platform_api.orchestrator import JobRequest, JobsService, Orchestrator
 from platform_api.orchestrator.job_request import Container
 from platform_api.resource import GPUModel
-from platform_api.user import User, untrusted_user
+from platform_api.user import User, authorized_user
 
 from .job_request_builder import ModelRequest
 from .jobs_handler import infer_permissions_from_container
@@ -115,7 +115,7 @@ class ModelsHandler:
         return payload
 
     async def handle_post(self, request):
-        user = await untrusted_user(request)
+        user = await authorized_user(request)
 
         orig_payload = await request.json()
         model_request_validator = await self._create_model_request_validator()
