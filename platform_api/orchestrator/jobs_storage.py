@@ -1,3 +1,4 @@
+import asyncio
 import itertools
 import json
 import logging
@@ -360,8 +361,18 @@ class RedisJobsStorage(JobsStorage):
         if not ids:
             return jobs
         keys = [self._generate_job_key(id_) for id_ in ids]
-        for payload in await self._client.mget(*keys):
-            jobs.append(self._parse_job_payload(payload))
+        payloads = await self._client.mget(*keys)
+        # in case there are lots of jobs to retrieve, the parsing code below
+        # blocks the concurrent execution for significant amount of time.
+        # to mitigate the issue, we call `asyncio.sleep` to let other
+        # coroutines execute too.
+        number_in_chunk = 10
+        chunks = itertools.zip_longest(*([iter(payloads)] * number_in_chunk))
+        for chunk in chunks:
+            jobs.extend(
+                self._parse_job_payload(payload) for payload in chunk if payload
+            )
+            await asyncio.sleep(0.0)
         return jobs
 
     async def _get_job_ids(
@@ -377,7 +388,6 @@ class RedisJobsStorage(JobsStorage):
             )
 
         status_keys = [self._generate_jobs_status_index_key(s) for s in statuses]
-        status_keys = status_keys or [self._generate_jobs_index_key()]
 
         owner_keys = [
             self._generate_jobs_name_index_zset_key(owner, name)
@@ -387,19 +397,24 @@ class RedisJobsStorage(JobsStorage):
         ]
 
         temp_key = self._generate_temp_zset_key()
-
         tr = self._client.multi_exec()
-        tr.zunionstore(temp_key, *status_keys, aggregate=tr.ZSET_AGGREGATE_MAX)
+
         if owner_keys:
-            owners_temp_key = self._generate_temp_zset_key()
-            tr.zunionstore(
-                owners_temp_key, *owner_keys, aggregate=tr.ZSET_AGGREGATE_MAX
-            )
-            tr.zinterstore(
-                temp_key, owners_temp_key, temp_key, aggregate=tr.ZSET_AGGREGATE_MAX
-            )
-            tr.delete(owners_temp_key)
-        tr.zrange(temp_key)
+            tr.zunionstore(temp_key, *owner_keys, aggregate=tr.ZSET_AGGREGATE_MAX)
+            if status_keys:
+                status_temp_key = self._generate_temp_zset_key()
+                tr.zunionstore(
+                    status_temp_key, *status_keys, aggregate=tr.ZSET_AGGREGATE_MAX
+                )
+                tr.zinterstore(
+                    temp_key, temp_key, status_temp_key, aggregate=tr.ZSET_AGGREGATE_MAX
+                )
+                tr.delete(status_temp_key)
+            tr.zrange(temp_key)
+        else:
+            status_keys = status_keys or [self._generate_jobs_index_key()]
+            tr.sunion(*status_keys)
+
         tr.delete(temp_key)
         *_, payloads, _ = await tr.execute()
 
