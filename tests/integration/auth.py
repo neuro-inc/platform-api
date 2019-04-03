@@ -11,9 +11,11 @@ from async_generator import asynccontextmanager
 from async_timeout import timeout
 from jose import jwt
 from neuro_auth_client import AuthClient, Permission, User as AuthClientUser
+from neuro_auth_client.client import Quota
 from yarl import URL
 
 from platform_api.config import AuthConfig, OAuthConfig
+from platform_api.orchestrator.job import AggregatedRunTime
 from platform_api.user import User
 
 
@@ -143,12 +145,17 @@ class _User(User):
 
 @pytest.fixture
 async def regular_user_factory(auth_client, token_factory, admin_token):
-    async def _factory(name: Optional[str] = None) -> _User:
+    async def _factory(
+        name: Optional[str] = None, quota: Optional[Quota] = None
+    ) -> _User:
         if not name:
             name = str(uuid.uuid4())
-        user = AuthClientUser(name=name)
+        quota = quota or Quota()
+        user = AuthClientUser(name=name, quota=quota)
         await auth_client.add_user(user, token=admin_token)
-        return _User(name=user.name, token=token_factory(user.name))  # type: ignore
+        user_token = token_factory(user.name)
+        user_quota = AggregatedRunTime.from_quota(user.quota)
+        return _User(name=user.name, token=user_token, quota=user_quota)  # type: ignore
 
     return _factory
 

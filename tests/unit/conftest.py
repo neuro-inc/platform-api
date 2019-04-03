@@ -1,5 +1,7 @@
 import asyncio
+from datetime import timedelta
 from pathlib import PurePath
+from typing import Optional
 
 import pytest
 
@@ -16,7 +18,7 @@ from platform_api.orchestrator import (
     Orchestrator,
     Telemetry,
 )
-from platform_api.orchestrator.job import JobStatusItem
+from platform_api.orchestrator.job import AggregatedRunTime, JobStatusItem
 from platform_api.orchestrator.job_request import Container, ContainerResources
 from platform_api.orchestrator.jobs_storage import (
     InMemoryJobsStorage,
@@ -146,3 +148,22 @@ def event_loop():
     loop = asyncio.get_event_loop()
     yield loop
     loop.close()
+
+
+def create_quota(
+    time_gpu_minutes: Optional[int] = None, time_non_gpu_minutes: Optional[int] = None
+) -> AggregatedRunTime:
+
+    if time_gpu_minutes is not None:
+        gpu_delta = timedelta(minutes=time_gpu_minutes)
+    else:
+        gpu_delta = timedelta.max
+
+    if time_non_gpu_minutes is not None:
+        non_gpu_delta = timedelta(minutes=time_non_gpu_minutes)
+    else:
+        non_gpu_delta = timedelta.max
+
+    return AggregatedRunTime(
+        total_gpu_run_time_delta=gpu_delta, total_non_gpu_run_time_delta=non_gpu_delta
+    )

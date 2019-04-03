@@ -404,6 +404,20 @@ class TestJob:
         )
 
     @pytest.fixture
+    def job_request_with_gpu(self):
+        container = Container(
+            image="testimage",
+            resources=ContainerResources(
+                cpu=1, memory_mb=64, gpu=1, gpu_model_id="nvidia-tesla-k80"
+            ),
+        )
+        return JobRequest(
+            job_id="testjob",
+            container=container,
+            description="Description of the testjob with gpu",
+        )
+
+    @pytest.fixture
     def job_request_with_ssh_and_http(self):
         container = Container(
             image="testimage",
@@ -441,6 +455,45 @@ class TestJob:
             name="test-job-name-123",
         )
         assert job.name == "test-job-name-123"
+
+    def test_job_has_gpu_false(self, mock_orchestrator, job_request):
+        job = Job(orchestrator_config=mock_orchestrator.config, job_request=job_request)
+        assert not job.has_gpu
+
+    def test_job_has_gpu_true(self, mock_orchestrator, job_request_with_gpu):
+        job = Job(
+            orchestrator_config=mock_orchestrator.config,
+            job_request=job_request_with_gpu,
+        )
+        assert job.has_gpu
+
+    def test_job_get_run_time_active_job(self, mock_orchestrator, job_request):
+        def mocked_datetime_factory():
+            return datetime(year=2099, month=1, day=1)
+
+        started_at = datetime(year=2019, month=1, day=1)
+        first_item = JobStatusItem.create(JobStatus.PENDING, transition_time=started_at)
+        job = Job(
+            orchestrator_config=mock_orchestrator.config,
+            job_request=job_request,
+            status_history=JobStatusHistory(items=[first_item]),
+            current_datetime_factory=mocked_datetime_factory,
+        )
+        expected_timedelta = mocked_datetime_factory() - started_at
+        assert job.get_run_time() == expected_timedelta
+
+    def test_job_get_run_time_terminated_job(self, mock_orchestrator, job_request):
+        started_at = datetime(year=2019, month=3, day=1)
+        finished_at = datetime(year=2019, month=3, day=2)
+        first_item = JobStatusItem.create(JobStatus.PENDING, transition_time=started_at)
+        last_item = JobStatusItem.create(JobStatus.FAILED, transition_time=finished_at)
+        job = Job(
+            orchestrator_config=mock_orchestrator.config,
+            job_request=job_request,
+            status_history=JobStatusHistory(items=[first_item, last_item]),
+        )
+        expected_timedelta = finished_at - started_at
+        assert job.get_run_time() == expected_timedelta
 
     def test_http_url(self, mock_orchestrator, job_request):
         job = Job(orchestrator_config=mock_orchestrator.config, job_request=job_request)

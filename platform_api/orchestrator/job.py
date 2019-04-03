@@ -1,11 +1,12 @@
 import logging
 import time
 from dataclasses import dataclass, field
-from datetime import datetime, timezone
+from datetime import datetime, timedelta, timezone
 from functools import partial
 from typing import Any, Dict, Iterable, List, Optional, Sequence
 
 import iso8601
+from neuro_auth_client.client import Quota
 from yarl import URL
 
 from ..config import OrchestratorConfig  # noqa
@@ -14,6 +15,19 @@ from .job_request import JobRequest, JobStatus
 
 logger = logging.getLogger(__name__)
 current_datetime_factory = partial(datetime.now, timezone.utc)
+
+
+@dataclass(frozen=True)
+class AggregatedRunTime:
+    total_gpu_run_time_delta: timedelta
+    total_non_gpu_run_time_delta: timedelta
+
+    @classmethod
+    def from_quota(cls, quota: Quota) -> "AggregatedRunTime":
+        return cls(
+            total_gpu_run_time_delta=quota.total_gpu_run_time_delta,
+            total_non_gpu_run_time_delta=quota.total_non_gpu_run_time_delta,
+        )
 
 
 # TODO: consider adding JobStatusReason Enum
@@ -249,6 +263,10 @@ class Job:
         return self._job_request
 
     @property
+    def has_gpu(self) -> bool:
+        return bool(self._job_request.container.resources.gpu)
+
+    @property
     def status(self) -> JobStatus:
         return self._status_history.current.status
 
@@ -384,6 +402,11 @@ class Job:
     @property
     def is_forced_to_preemptible_pool(self) -> bool:
         return self.is_preemptible and self._is_forced_to_preemptible_pool
+
+    def get_run_time(self) -> timedelta:
+        end_time = self.finished_at or self._current_datetime_factory()
+        start_time = self.status_history.created_at
+        return end_time - start_time
 
     def to_primitive(self) -> Dict:
         statuses = [item.to_primitive() for item in self._status_history.all]

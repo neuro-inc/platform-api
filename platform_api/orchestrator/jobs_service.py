@@ -22,6 +22,20 @@ class JobsServiceException(Exception):
     pass
 
 
+class QuotaException(JobsServiceException):
+    pass
+
+
+class GpuQuotaExceededError(QuotaException):
+    def __init__(self, user: str) -> None:
+        super().__init__(f"GPU quota exceeded for user '{user}'")
+
+
+class NonGpuQuotaExceededError(QuotaException):
+    def __init__(self, user: str) -> None:
+        super().__init__(f"non-GPU quota exceeded for user '{user}'")
+
+
 class JobsService:
     def __init__(self, orchestrator: Orchestrator, jobs_storage: JobsStorage) -> None:
         self._jobs_storage = jobs_storage
@@ -90,6 +104,17 @@ class JobsService:
                 status_item.status.name,
             )
 
+    async def _raise_for_run_time_quota(self, user: User) -> None:
+        quota = user.quota
+        if quota is None:
+            return
+        run_time_filter = JobFilter(owners={user.name})
+        run_time = await self._jobs_storage.get_aggregated_run_time(run_time_filter)
+        if run_time.total_gpu_run_time_delta >= quota.total_gpu_run_time_delta:
+            raise GpuQuotaExceededError(user.name)
+        if run_time.total_non_gpu_run_time_delta >= quota.total_non_gpu_run_time_delta:
+            raise NonGpuQuotaExceededError(user.name)
+
     async def create_job(
         self,
         job_request: JobRequest,
@@ -97,6 +122,8 @@ class JobsService:
         job_name: Optional[str] = None,
         is_preemptible: bool = False,
     ) -> Tuple[Job, Status]:
+
+        await self._raise_for_run_time_quota(user)
         job = Job(
             orchestrator_config=self._orchestrator.config,
             job_request=job_request,
