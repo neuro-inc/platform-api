@@ -1,4 +1,4 @@
-from typing import Optional
+from typing import List, Optional
 
 import pytest
 
@@ -485,7 +485,6 @@ class TestRedisJobsStorage:
         ]
         storage = RedisJobsStorage(client=redis_client, orchestrator_config=ko.config)
         for job in jobs:
-            print(f"trying job {job.id}...")
             async with storage.try_create_job(job):
                 pass
         return storage, jobs
@@ -519,6 +518,7 @@ class TestRedisJobsStorage:
         expected = {job.id for job in jobs if job.owner in owners}
         assert expected
         assert job_ids == expected
+
     pend = JobStatus.PENDING
     runn = JobStatus.RUNNING
     succ = JobStatus.SUCCEEDED
@@ -557,14 +557,16 @@ class TestRedisJobsStorage:
         ],
     )
     async def test_get_all_with_filters(
-        self, filtering_test_settings, owners, name, statuses
+        self, owners, name, statuses, redis_client, kube_orchestrator
     ):
         def sort_jobs_as_primitives(array: List) -> List:
             return sorted(
                 [job.to_primitive() for job in array], key=lambda job: job["id"]
             )
 
-        storage, jobs = filtering_test_settings
+        storage, jobs = await self.prepare_filtering_test(
+            redis_client, kube_orchestrator
+        )
         job_filter = JobFilter(name=name, owners=set(owners), statuses=set(statuses))
         actual = sort_jobs_as_primitives(await storage.get_all_jobs(job_filter))
         expected = sort_jobs_as_primitives(
@@ -591,9 +593,11 @@ class TestRedisJobsStorage:
         ],
     )
     async def test_get_all_filter_by_name_with_no_owner_fail(
-        self, filtering_test_settings, owners, name, statuses
+        self, owners, name, statuses, redis_client, kube_orchestrator
     ):
-        storage, jobs = filtering_test_settings
+        storage, jobs = await self.prepare_filtering_test(
+            redis_client, kube_orchestrator
+        )
         job_filter = JobFilter(name=name, owners=set(owners), statuses=set(statuses))
         invalid_operation_error = (
             "filtering jobs by name is allowed only together with owner"
