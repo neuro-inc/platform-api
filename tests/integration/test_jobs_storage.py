@@ -457,13 +457,31 @@ class TestRedisJobsStorage:
     async def prepare_filtering_test(self, redis_client, kube_orchestrator):
         ko = kube_orchestrator
         jobs = [
-            self._create_pending_job(ko, owner="user1", job_name="job-first"),
-            self._create_running_job(ko, owner="user1", job_name="job-second"),
-            self._create_failed_job(ko, owner="user2", job_name="job-second"),
-            self._create_failed_job(ko, owner="user2", job_name="job-second"),
-            self._create_succeeded_job(ko, owner="user2", job_name="job-second"),
-            self._create_running_job(ko, owner="user2", job_name="job-second"),
-            self._create_succeeded_job(ko, owner="user3", job_name="job-third"),
+            # no name:
+            self._create_pending_job(ko, owner="user1", job_name=None),
+            self._create_running_job(ko, owner="user2", job_name=None),
+            self._create_succeeded_job(ko, owner="user3", job_name=None),
+            self._create_failed_job(ko, owner="user3", job_name=None),
+            # user1, job-1:
+            self._create_succeeded_job(ko, owner="user1", job_name="job-1"),
+            self._create_failed_job(ko, owner="user1", job_name="job-1"),
+            self._create_pending_job(ko, owner="user1", job_name="job-1"),
+            # user1, job-2:
+            self._create_succeeded_job(ko, owner="user1", job_name="job-2"),
+            self._create_failed_job(ko, owner="user1", job_name="job-2"),
+            self._create_running_job(ko, owner="user1", job_name="job-2"),
+            # user2, job-2:
+            self._create_succeeded_job(ko, owner="user2", job_name="job-2"),
+            self._create_failed_job(ko, owner="user2", job_name="job-2"),
+            self._create_pending_job(ko, owner="user2", job_name="job-2"),
+            # user2, job-3:
+            self._create_succeeded_job(ko, owner="user2", job_name="job-3"),
+            self._create_failed_job(ko, owner="user2", job_name="job-3"),
+            self._create_running_job(ko, owner="user2", job_name="job-3"),
+            # user3, job-3:
+            self._create_succeeded_job(ko, owner="user3", job_name="job-3"),
+            self._create_failed_job(ko, owner="user3", job_name="job-3"),
+            self._create_pending_job(ko, owner="user3", job_name="job-3"),
         ]
         storage = RedisJobsStorage(client=redis_client, orchestrator_config=ko.config)
         for job in jobs:
@@ -501,37 +519,85 @@ class TestRedisJobsStorage:
         expected = {job.id for job in jobs if job.owner in owners}
         assert expected
         assert job_ids == expected
+    pend = JobStatus.PENDING
+    runn = JobStatus.RUNNING
+    succ = JobStatus.SUCCEEDED
+    fail = JobStatus.FAILED
 
     @pytest.mark.asyncio
-    async def test_get_all_filter_by_multiple_owners_and_statuses(
-        self, redis_client, kube_orchestrator
+    @pytest.mark.parametrize(
+        "name,owners,statuses",
+        [
+            (None, (), ()),
+            (None, (), (pend,)),
+            (None, (), (pend, runn)),
+            (None, (), (succ, fail)),
+            (None, (), (succ, fail, runn)),
+            (None, (), (succ, fail, runn, pend)),
+            (None, ("user1",), ()),
+            (None, ("user1",), (pend,)),
+            (None, ("user1",), (pend, runn)),
+            (None, ("user1",), (succ, fail)),
+            (None, ("user1",), (succ, fail, runn, pend)),
+            (None, ("user1", "user2"), ()),
+            (None, ("user1", "user2"), (pend,)),
+            (None, ("user1", "user2"), (pend, runn)),
+            (None, ("user1", "user2"), (succ, fail)),
+            (None, ("user1", "user2"), (succ, fail, runn, pend)),
+            ("job-1", ("user1",), ()),
+            ("job-1", ("user1",), (pend,)),
+            ("job-1", ("user1",), (pend, runn)),
+            ("job-1", ("user1",), (succ, fail)),
+            ("job-1", ("user1",), (succ, fail, runn, pend)),
+            ("job-1", ("user1", "user2"), ()),
+            ("job-1", ("user1", "user2"), (pend,)),
+            ("job-1", ("user1", "user2"), (pend, runn)),
+            ("job-1", ("user1", "user2"), (succ, fail)),
+            ("job-1", ("user1", "user2"), (succ, fail, runn, pend)),
+        ],
+    )
+    async def test_get_all_with_filters(
+        self, filtering_test_settings, owners, name, statuses
     ):
-        storage, jobs = await self.prepare_filtering_test(
-            redis_client, kube_orchestrator
-        )
+        def sort_jobs_as_primitives(array: List) -> List:
+            return sorted(
+                [job.to_primitive() for job in array], key=lambda job: job["id"]
+            )
 
-        owners = {"user1", "user3"}
-        statuses = {JobStatus.RUNNING, JobStatus.SUCCEEDED}
-        job_filter = JobFilter(owners=owners, statuses=statuses)
-        job_ids = {job.id for job in await storage.get_all_jobs(job_filter)}
-        expected = {
-            job.id for job in jobs if job.owner in owners and job.status in statuses
-        }
-        assert expected
-        assert job_ids == expected
+        storage, jobs = filtering_test_settings
+        job_filter = JobFilter(name=name, owners=set(owners), statuses=set(statuses))
+        actual = sort_jobs_as_primitives(await storage.get_all_jobs(job_filter))
+        expected = sort_jobs_as_primitives(
+            [
+                job
+                for job in jobs
+                if (not name or job.name == name)
+                and (not owners or job.owner in owners)
+                and (not statuses or job.status in statuses)
+            ]
+        )
+        assert actual == expected
 
     @pytest.mark.asyncio
-    async def test_get_all_filter_by_name_with_no_owner(
-        self, redis_client, kube_orchestrator
+    @pytest.mark.parametrize(
+        "name,owners,statuses",
+        [
+            ("job-1", (), ()),
+            ("job-1", (), (pend,)),
+            ("job-1", (), (pend, runn)),
+            ("job-1", (), (succ, fail)),
+            ("job-1", (), (succ, fail, runn)),
+            ("job-1", (), (succ, fail, runn, pend)),
+        ],
+    )
+    async def test_get_all_filter_by_name_with_no_owner_fail(
+        self, filtering_test_settings, owners, name, statuses
     ):
-        storage, jobs = await self.prepare_filtering_test(
-            redis_client, kube_orchestrator
-        )
-
+        storage, jobs = filtering_test_settings
+        job_filter = JobFilter(name=name, owners=set(owners), statuses=set(statuses))
         invalid_operation_error = (
             "filtering jobs by name is allowed only together with owner"
         )
-
         with pytest.raises(ValueError, match=invalid_operation_error):
             job_filter = JobFilter(name="job-first")
             await storage.get_all_jobs(job_filter)
