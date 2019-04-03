@@ -1,11 +1,13 @@
+from typing import Tuple
+
 import pytest
 import trafaret as t
 
-from platform_api.handlers.jobs_handler import (
-    create_job_request_validator,
-    create_job_response_validator,
+from platform_api.handlers.jobs_handler import create_job_response_validator
+from platform_api.handlers.validators import (
+    create_job_name_validator,
+    create_user_name_validator,
 )
-from platform_api.handlers.validators import create_job_name_validator
 
 
 class TestJobNameValidator:
@@ -27,8 +29,7 @@ class TestJobNameValidator:
     def test_invalid_job_names__none(self):
         value = None
         validator = create_job_name_validator()
-        with pytest.raises(t.DataError, match="value is not a string"):
-            assert validator.check(value)
+        assert validator.check(value) is None
 
     def test_invalid_job_names__empty(self):
         value = ""
@@ -97,26 +98,82 @@ class TestJobNameValidator:
             assert validator.check(value)
 
 
-class TestJobRequestValidator:
-    def test_job_without_name(self) -> None:
-        container = {
-            "image": "testimage",
-            "resources": {"cpu": 0.1, "memory_mb": 16, "shm": True},
-            "ssh": {"port": 666},
-        }
-        validator = create_job_request_validator(allowed_gpu_models=[])
-        assert validator.check({"container": container})
+class TestUserNameValidator:
+    """ Almost the same test suite as used for the same
+    user-name validation method in platform-auth
+    """
 
-    def test_job_with_name(self) -> None:
-        container = {
-            "image": "testimage",
-            "resources": {"cpu": 0.1, "memory_mb": 16, "shm": True},
-            "ssh": {"port": 666},
-        }
-        validator = create_job_request_validator(allowed_gpu_models=[])
-        assert validator.check(
-            {"container": container, "name": "test-job-name", "description": "test-job"}
-        )
+    def test_create_user_name_validator_none__ok(self) -> None:
+        value = None
+        validator = create_user_name_validator()
+        with pytest.raises(t.DataError):
+            validator.check(value)
+
+    @pytest.mark.parametrize(
+        "pair",
+        [
+            ("test", 1),
+            ("abc", 1),
+            ("a", 255),
+            ("a-b-c", 1),
+            ("a-b-c", (255 // len("a-b-c"))),
+            ("123", 1),
+            ("with123numbers", 1),
+            ("with123numbers-and-underscore", 1),
+        ],
+    )
+    def test_create_user_name_validator__ok(self, pair: Tuple[str, int]) -> None:
+        value = pair[0] * pair[1]
+        validator = create_user_name_validator()
+        assert validator.check(value)
+
+    @pytest.mark.parametrize(
+        "pair",
+        [
+            ("", 1),
+            ("\t", 1),
+            ("abc-", 1),
+            ("-abc", 1),
+            ("a", 1),
+            ("a", 2),
+            ("a", 256),
+            ("too_long-string", 1000),
+            ("a-b-c.com", 1),
+            ("a_b_c", 1),
+            ("a-b-c.bla_bla.com", 1),
+            ("abc--def", 1),
+            ("WithCapitalLetters", 1),
+            ("with123numbers-and-hyphen_and-underscore", 1),
+            ("name_with_hyphen-and-numbers123_and-underscore", 1),
+            ("with123numbers.co.uk", 1),
+            ("WithCapitalLetters", 1),
+            ("foo!", 1),
+            ("foo@", 1),
+            ("foo#", 1),
+            ("foo$", 1),
+            ("foo%", 1),
+            ("foo^", 1),
+            ("foo&", 1),
+            ("foo*", 1),
+            ("foo(", 1),
+            ("foo)", 1),
+            ("foo:", 1),
+            ("foo_", 1),
+            ("foo+", 1),
+            ("foo=", 1),
+            ("foo/", 1),
+            ("foo\\", 1),
+            ("foo~", 1),
+            ("foo,", 1),
+            ("foo.", 1),
+            ("46CAC3A6-2956-481B-B4AA-A80A6EAF2CDE", 1),  # regression test
+        ],
+    )
+    def test_create_user_name_validator__fail(self, pair: Tuple[str, int]) -> None:
+        value = pair[0] * pair[1]
+        validator = create_user_name_validator()
+        with pytest.raises(t.DataError):
+            assert validator.check(value)
 
 
 class TestJobResponseValidator:
