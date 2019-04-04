@@ -86,6 +86,7 @@ class JobsStorage(ABC):
     async def get_unfinished_jobs(self) -> List[Job]:
         return [job for job in await self.get_all_jobs() if not job.is_finished]
 
+    @abstractmethod
     async def get_aggregated_run_time(self, job_filter: JobFilter) -> AggregatedRunTime:
         pass
 
