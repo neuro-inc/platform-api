@@ -153,6 +153,7 @@ class InMemoryJobsStorage(JobsStorage):
         return jobs
 
     async def get_aggregated_run_time(self, job_filter: JobFilter) -> AggregatedRunTime:
+        # TODO (ajuszkowski 4-Apr-2019) add a test on this method if it's used anywhere
         jobs = await self.get_all_jobs(job_filter)
         gpu_run_time, non_gpu_run_time = timedelta(), timedelta()
         for job in jobs:
