@@ -23,7 +23,13 @@ class AggregatedRunTime:
     total_non_gpu_run_time_delta: timedelta
 
     @classmethod
-    def from_quota(cls, quota: Quota) -> "AggregatedRunTime":
+    def from_quota(cls, quota: Quota) -> Optional["AggregatedRunTime"]:
+        # TODO (ajuszkowski 4-Apr-2019) platform-auth's Quota should
+        # have a property "is_initialized"
+        lacks_gpu_limit = quota.total_gpu_run_time_minutes is None
+        lacks_non_gpu_limit = quota.total_non_gpu_run_time_minutes is None
+        if lacks_gpu_limit and lacks_non_gpu_limit:
+            return None
         return cls(
             total_gpu_run_time_delta=quota.total_gpu_run_time_delta,
             total_non_gpu_run_time_delta=quota.total_non_gpu_run_time_delta,
