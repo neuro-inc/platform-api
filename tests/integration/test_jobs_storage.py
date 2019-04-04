@@ -1100,12 +1100,12 @@ class TestRedisJobsStorage:
                 pass
 
         compute_expected_time_started_at = current_time()
-        expected_gpu = timedelta()
+        expected_gpu_time = timedelta()
         for job in jobs_with_gpu:
-            expected_gpu += job.get_run_time()
-        expected_non_gpu = timedelta()
+            expected_gpu_time += job.get_run_time()
+        expected_non_gpu_time = timedelta()
         for job in jobs_no_gpu:
-            expected_non_gpu += job.get_run_time()
+            expected_non_gpu_time += job.get_run_time()
         compute_expected_time_finished_at = current_time()
         compute_expected_time_elapsed = (
             compute_expected_time_finished_at - compute_expected_time_started_at
@@ -1114,12 +1114,14 @@ class TestRedisJobsStorage:
         job_filter = JobFilter(owners={owner})
         actual_run_time = await storage.get_aggregated_run_time(job_filter)
 
-        # Because we don't serialize `Job.current_datetime_factory` (issue #560),
-        # all `Job` instances get the default value of `current_datetime_factory`
-        # after deserialization, so we cannot check exact value of `Job.get_run_time()`
+        # NOTE (ajuszkowski, 4-Apr-2019) Because we don't serialize all fields of `Job`
+        # (specifically, `Job.current_datetime_factory`, see issue #560),
+        # all deserialized `Job` instances get the default value of
+        # `current_datetime_factory`, so we cannot assert exact value
+        # of `Job.get_run_time()` in this test
 
-        expected_gpu_approx = expected_gpu + compute_expected_time_elapsed
+        expected_gpu_approx = expected_gpu_time + compute_expected_time_elapsed
         assert actual_run_time.total_gpu_run_time_delta >= expected_gpu_approx
 
-        expected_non_gpu_approx = expected_non_gpu + compute_expected_time_elapsed
+        expected_non_gpu_approx = expected_non_gpu_time + compute_expected_time_elapsed
         assert actual_run_time.total_non_gpu_run_time_delta >= expected_non_gpu_approx
