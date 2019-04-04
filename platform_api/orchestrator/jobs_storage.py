@@ -87,18 +87,7 @@ class JobsStorage(ABC):
         return [job for job in await self.get_all_jobs() if not job.is_finished]
 
     async def get_aggregated_run_time(self, job_filter: JobFilter) -> AggregatedRunTime:
-        jobs = await self.get_all_jobs(job_filter)
-        gpu_run_time, non_gpu_run_time = timedelta(), timedelta()
-        for job in jobs:
-            job_run_time = job.get_run_time()
-            if job.has_gpu:
-                gpu_run_time += job_run_time
-            else:
-                non_gpu_run_time += job_run_time
-        return AggregatedRunTime(
-            total_gpu_run_time_delta=gpu_run_time,
-            total_non_gpu_run_time_delta=non_gpu_run_time,
-        )
+        pass
 
     async def migrate(self) -> None:
         pass
@@ -162,6 +151,20 @@ class InMemoryJobsStorage(JobsStorage):
                 continue
             jobs.append(job)
         return jobs
+
+    async def get_aggregated_run_time(self, job_filter: JobFilter) -> AggregatedRunTime:
+        jobs = await self.get_all_jobs(job_filter)
+        gpu_run_time, non_gpu_run_time = timedelta(), timedelta()
+        for job in jobs:
+            job_run_time = job.get_run_time()
+            if job.has_gpu:
+                gpu_run_time += job_run_time
+            else:
+                non_gpu_run_time += job_run_time
+        return AggregatedRunTime(
+            total_gpu_run_time_delta=gpu_run_time,
+            total_non_gpu_run_time_delta=non_gpu_run_time,
+        )
 
 
 class RedisJobsStorage(JobsStorage):
@@ -455,6 +458,26 @@ class RedisJobsStorage(JobsStorage):
         statuses = {JobStatus.PENDING, JobStatus.RUNNING}
         job_ids = await self._get_job_ids(statuses)
         return await self._get_jobs(job_ids)
+
+    async def get_aggregated_run_time(self, job_filter: JobFilter) -> AggregatedRunTime:
+        # NOTE (ajuszkowski 4-Apr-2019): because of possible high number of jobs
+        # submitted by a user, we need to process all job separately iterating
+        # by job-ids not by job objects in order not to store them all in memory
+        jobs_ids = await self._get_job_ids(
+            statuses=job_filter.statuses, owners=job_filter.owners, name=job_filter.name
+        )
+        gpu_run_time, non_gpu_run_time = timedelta(), timedelta()
+        for job_id in jobs_ids:
+            job = await self.get_job(job_id)
+            job_run_time = job.get_run_time()
+            if job.has_gpu:
+                gpu_run_time += job_run_time
+            else:
+                non_gpu_run_time += job_run_time
+        return AggregatedRunTime(
+            total_gpu_run_time_delta=gpu_run_time,
+            total_non_gpu_run_time_delta=non_gpu_run_time,
+        )
 
     async def migrate(self) -> None:
         await self.reindex_job_owners()
