@@ -1,8 +1,10 @@
+from datetime import datetime, timedelta, timezone
 from typing import List, Optional
+from uuid import uuid4
 
 import pytest
 
-from platform_api.orchestrator.job import Job
+from platform_api.orchestrator.job import Job, JobStatusHistory, JobStatusItem
 from platform_api.orchestrator.job_request import (
     Container,
     ContainerResources,
@@ -20,12 +22,14 @@ from tests.conftest import not_raises
 
 
 class TestRedisJobsStorage:
-    def _create_job_request(self):
-        container = Container(
-            image="ubuntu",
-            command="sleep 5",
-            resources=ContainerResources(cpu=0.1, memory_mb=256),
-        )
+    def _create_job_request(self, with_gpu: bool = False):
+        if with_gpu:
+            resources = ContainerResources(
+                cpu=0.1, memory_mb=256, gpu=1, gpu_model_id="nvidia-tesla-k80"
+            )
+        else:
+            resources = ContainerResources(cpu=0.1, memory_mb=256)
+        container = Container(image="ubuntu", command="sleep 5", resources=resources)
         return JobRequest.create(container)
 
     def _create_pending_job(
@@ -1044,3 +1048,79 @@ class TestRedisJobsStorage:
 
         number_reindexed = await storage.reindex_job_owners()
         assert number_reindexed == 0
+
+    @pytest.mark.asyncio
+    async def test_get_aggregated_run_time_for_user(
+        self, redis_client, kube_orchestrator
+    ):
+        def current_time():
+            return datetime.now(tz=timezone.utc)
+
+        job_started_at = current_time()
+        job_finished_at = datetime(year=2099, month=1, day=1, tzinfo=timezone.utc)
+
+        owner = f"test-user-{uuid4()}"
+
+        def create_job(status: JobStatus, with_gpu: bool, finished: bool) -> Job:
+            status_history = [
+                JobStatusItem.create(JobStatus.PENDING, transition_time=job_started_at)
+            ]
+            if finished:
+                status_history.append(
+                    JobStatusItem.create(
+                        JobStatus.SUCCEEDED, transition_time=job_finished_at
+                    )
+                )
+            return Job(
+                kube_orchestrator.config,
+                owner=owner,
+                job_request=self._create_job_request(with_gpu),
+                status=status,
+                status_history=JobStatusHistory(status_history),
+            )
+
+        jobs_with_gpu = [
+            create_job(JobStatus.PENDING, with_gpu=True, finished=False),
+            create_job(JobStatus.RUNNING, with_gpu=True, finished=False),
+            create_job(JobStatus.SUCCEEDED, with_gpu=True, finished=True),
+            create_job(JobStatus.FAILED, with_gpu=True, finished=True),
+        ]
+        jobs_no_gpu = [
+            create_job(JobStatus.PENDING, with_gpu=False, finished=False),
+            create_job(JobStatus.RUNNING, with_gpu=False, finished=False),
+            create_job(JobStatus.SUCCEEDED, with_gpu=False, finished=True),
+            create_job(JobStatus.FAILED, with_gpu=False, finished=True),
+        ]
+        storage = RedisJobsStorage(
+            redis_client, orchestrator_config=kube_orchestrator.config
+        )
+        for job in jobs_with_gpu + jobs_no_gpu:
+            async with storage.try_create_job(job):
+                pass
+
+        compute_expected_time_started_at = current_time()
+        expected_gpu_time = timedelta()
+        for job in jobs_with_gpu:
+            expected_gpu_time += job.get_run_time()
+        expected_non_gpu_time = timedelta()
+        for job in jobs_no_gpu:
+            expected_non_gpu_time += job.get_run_time()
+        compute_expected_time_finished_at = current_time()
+        compute_expected_time_elapsed = (
+            compute_expected_time_finished_at - compute_expected_time_started_at
+        )
+
+        job_filter = JobFilter(owners={owner})
+        actual_run_time = await storage.get_aggregated_run_time(job_filter)
+
+        # NOTE (ajuszkowski, 4-Apr-2019) Because we don't serialize all fields of `Job`
+        # (specifically, `Job.current_datetime_factory`, see issue #560),
+        # all deserialized `Job` instances get the default value of
+        # `current_datetime_factory`, so we cannot assert exact value
+        # of `Job.get_run_time()` in this test
+
+        expected_gpu_approx = expected_gpu_time + compute_expected_time_elapsed
+        assert actual_run_time.total_gpu_run_time_delta >= expected_gpu_approx
+
+        expected_non_gpu_approx = expected_non_gpu_time + compute_expected_time_elapsed
+        assert actual_run_time.total_non_gpu_run_time_delta >= expected_non_gpu_approx

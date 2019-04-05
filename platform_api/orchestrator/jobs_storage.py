@@ -7,8 +7,10 @@ from dataclasses import dataclass, field
 from datetime import timedelta
 from typing import (
     AbstractSet,
+    Any,
     AsyncIterator,
     Dict,
+    Iterator,
     List,
     Optional,
     Sequence,
@@ -86,19 +88,9 @@ class JobsStorage(ABC):
     async def get_unfinished_jobs(self) -> List[Job]:
         return [job for job in await self.get_all_jobs() if not job.is_finished]
 
+    @abstractmethod
     async def get_aggregated_run_time(self, job_filter: JobFilter) -> AggregatedRunTime:
-        jobs = await self.get_all_jobs(job_filter)
-        gpu_run_time, non_gpu_run_time = timedelta(), timedelta()
-        for job in jobs:
-            job_run_time = job.get_run_time()
-            if job.has_gpu:
-                gpu_run_time += job_run_time
-            else:
-                non_gpu_run_time += job_run_time
-        return AggregatedRunTime(
-            total_gpu_run_time_delta=gpu_run_time,
-            total_non_gpu_run_time_delta=non_gpu_run_time,
-        )
+        pass
 
     async def migrate(self) -> None:
         pass
@@ -162,6 +154,21 @@ class InMemoryJobsStorage(JobsStorage):
                 continue
             jobs.append(job)
         return jobs
+
+    async def get_aggregated_run_time(self, job_filter: JobFilter) -> AggregatedRunTime:
+        # TODO (ajuszkowski 4-Apr-2019) add a test on this method if it's used anywhere
+        jobs = await self.get_all_jobs(job_filter)
+        gpu_run_time_delta, non_gpu_run_time_delta = timedelta(), timedelta()
+        for job in jobs:
+            job_run_time = job.get_run_time()
+            if job.has_gpu:
+                gpu_run_time_delta += job_run_time
+            else:
+                non_gpu_run_time_delta += job_run_time
+        return AggregatedRunTime(
+            total_gpu_run_time_delta=gpu_run_time_delta,
+            total_non_gpu_run_time_delta=non_gpu_run_time_delta,
+        )
 
 
 class RedisJobsStorage(JobsStorage):
@@ -362,18 +369,19 @@ class RedisJobsStorage(JobsStorage):
             return jobs
         keys = [self._generate_job_key(id_) for id_ in ids]
         payloads = await self._client.mget(*keys)
-        # in case there are lots of jobs to retrieve, the parsing code below
-        # blocks the concurrent execution for significant amount of time.
-        # to mitigate the issue, we call `asyncio.sleep` to let other
-        # coroutines execute too.
-        number_in_chunk = 10
-        chunks = itertools.zip_longest(*([iter(payloads)] * number_in_chunk))
-        for chunk in chunks:
+        for chunk in self._iterate_in_chunks(payloads, chunk_size=10):
             jobs.extend(
                 self._parse_job_payload(payload) for payload in chunk if payload
             )
             await asyncio.sleep(0.0)
         return jobs
+
+    def _iterate_in_chunks(self, payloads: List[Any], chunk_size) -> Iterator[Any]:
+        # in case there are lots of jobs to retrieve, the parsing code below
+        # blocks the concurrent execution for significant amount of time.
+        # to mitigate the issue, we call `asyncio.sleep` to let other
+        # coroutines execute too.
+        return itertools.zip_longest(*([iter(payloads)] * chunk_size))
 
     async def _get_job_ids(
         self,
@@ -455,6 +463,33 @@ class RedisJobsStorage(JobsStorage):
         statuses = {JobStatus.PENDING, JobStatus.RUNNING}
         job_ids = await self._get_job_ids(statuses)
         return await self._get_jobs(job_ids)
+
+    async def get_aggregated_run_time(self, job_filter: JobFilter) -> AggregatedRunTime:
+        # NOTE (ajuszkowski 4-Apr-2019): because of possible high number of jobs
+        # submitted by a user, we need to process all job separately iterating
+        # by job-ids not by job objects in order not to store them all in memory
+        jobs_ids = await self._get_job_ids(
+            statuses=job_filter.statuses, owners=job_filter.owners, name=job_filter.name
+        )
+
+        gpu_run_time, non_gpu_run_time = timedelta(), timedelta()
+        for job_id_chunk in self._iterate_in_chunks(jobs_ids, chunk_size=10):
+            keys = [self._generate_job_key(job_id) for job_id in job_id_chunk if job_id]
+            jobs = [
+                self._parse_job_payload(payload)
+                for payload in await self._client.mget(*keys)
+            ]
+            for job in jobs:
+                job_run_time = job.get_run_time()
+                if job.has_gpu:
+                    gpu_run_time += job_run_time
+                else:
+                    non_gpu_run_time += job_run_time
+
+        return AggregatedRunTime(
+            total_gpu_run_time_delta=gpu_run_time,
+            total_non_gpu_run_time_delta=non_gpu_run_time,
+        )
 
     async def migrate(self) -> None:
         await self.reindex_job_owners()
