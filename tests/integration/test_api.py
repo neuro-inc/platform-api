@@ -2,7 +2,7 @@ import asyncio
 import json
 import time
 from pathlib import PurePath
-from typing import Any, Dict, NamedTuple, Optional
+from typing import Any, NamedTuple, Optional
 from unittest import mock
 from uuid import uuid4
 
@@ -806,61 +806,6 @@ class TestJobs:
             await jobs_client.delete_job(job_id=job_id)
 
     @pytest.fixture
-    async def setup_new_user_for_filtration(
-        self,
-        api,
-        regular_user_factory,
-        jobs_client_factory,
-        job_request_factory,
-        client,
-    ):
-        async def factory(job_name: str = "test-job-name"):
-            url = api.jobs_base_url
-            user = await regular_user_factory()
-            jobs_client = jobs_client_factory(user)
-            headers = user.headers
-
-            job_request = job_request_factory()
-            job_request["container"]["command"] = "sleep 30m"
-
-            jobs_dict: Dict[str, Any] = dict()
-            jobs_dict["job_name:yes"] = dict()
-            jobs_dict["job_name:no"] = dict()
-
-            async def run_job(with_name: bool, do_kill: bool):
-                if with_name:
-                    job_request["name"] = job_name
-                    job_name_key = "job_name:yes"
-                else:
-                    if "name" in job_request:
-                        del job_request["name"]
-                    job_name_key = "job_name:no"
-
-                async with client.post(url, headers=headers, json=job_request) as resp:
-                    assert resp.status == HTTPAccepted.status_code
-                    result = await resp.json()
-                    job_id = result["id"]
-                    await jobs_client.long_polling_by_job_id(job_id, status="running")
-                    if do_kill:
-                        await jobs_client.delete_job(job_id=job_id)
-                        await jobs_client.long_polling_by_job_id(
-                            job_id, status="succeeded"
-                        )
-                        status_key = "status:succeeded"
-                    else:
-                        status_key = "status:running"
-                jobs_dict[job_name_key][status_key] = job_id
-
-            await run_job(with_name=True, do_kill=True)
-            await run_job(with_name=True, do_kill=False)
-            await run_job(with_name=False, do_kill=True)
-            await run_job(with_name=False, do_kill=False)
-
-            return user, jobs_client, jobs_dict
-
-        yield factory
-
-    @pytest.fixture
     async def run_job(self, api, client, jobs_client_factory):
         async def _impl(user, job_request, do_kill=False):
             url = api.jobs_base_url
@@ -898,7 +843,6 @@ class TestJobs:
         job_request_factory,
         run_job,
         share_job,
-        setup_new_user_for_filtration,
     ):
         job_name = "test-job-name"
 
@@ -1042,123 +986,6 @@ class TestJobs:
         jobs = await jobs_client_usr1.get_all_jobs(filters)
         jobs = {job["id"] for job in jobs}
         assert jobs == {job_usr1_with_name_killed, job_usr2_with_name_killed}
-
-    @pytest.mark.asyncio
-    async def test_get_all_jobs_filter_by_name_status(
-        self,
-        api,
-        client,
-        regular_user_factory,
-        jobs_client_factory,
-        job_request_factory,
-        setup_new_user_for_filtration,
-    ):
-        url = api.jobs_base_url
-        job_name = "test-job-name"
-
-        def job_request_with_name():
-            job_request = job_request_factory()
-            job_request["container"]["command"] = "sleep 30m"
-            job_request["name"] = job_name
-            return job_request
-
-        def job_request_no_name():
-            job_request = job_request_factory()
-            job_request["container"]["command"] = "sleep 30m"
-            return job_request
-
-        jobs_client_first_user = None
-        job_id_active_without_name_first_user = None
-        job_id_active_with_name_first_user = None
-        job_id_terminated_without_name_first_user = None
-        job_id_terminated_with_name_first_user = None
-
-        for i in range(2):
-            user = await regular_user_factory()
-            headers = user.headers
-            jobs_client = jobs_client_factory(user)
-            if jobs_client_first_user is None:
-                jobs_client_first_user = jobs_client
-
-            # terminated, no name
-            job_request = job_request_no_name()
-            async with client.post(url, headers=headers, json=job_request) as resp:
-                assert resp.status == HTTPAccepted.status_code, str(job_request)
-                data = await resp.json()
-                job_id = data["id"]
-                await jobs_client.long_polling_by_job_id(job_id, "running")
-                await jobs_client.delete_job(job_id)
-                await jobs_client.long_polling_by_job_id(job_id, "succeeded")
-                if job_id_terminated_without_name_first_user is None:
-                    job_id_terminated_without_name_first_user = job_id
-
-            # terminated, with name
-            job_request = job_request_with_name()
-            async with client.post(url, headers=headers, json=job_request) as resp:
-                assert resp.status == HTTPAccepted.status_code
-                data = await resp.json()
-                job_id = data["id"]
-                await jobs_client.long_polling_by_job_id(job_id, "running")
-                await jobs_client.delete_job(job_id)
-                await jobs_client.long_polling_by_job_id(job_id, "succeeded")
-                if job_id_terminated_with_name_first_user is None:
-                    job_id_terminated_with_name_first_user = job_id
-
-            # active, no name
-            job_request = job_request_no_name()
-            async with client.post(url, headers=headers, json=job_request) as resp:
-                assert resp.status == HTTPAccepted.status_code
-                data = await resp.json()
-                job_id = data["id"]
-                if job_id_active_without_name_first_user is None:
-                    job_id_active_without_name_first_user = job_id
-                await jobs_client.long_polling_by_job_id(job_id, "running")
-
-            # active, with name
-            job_request = job_request_with_name()
-            async with client.post(url, headers=headers, json=job_request) as resp:
-                assert resp.status == HTTPAccepted.status_code
-                data = await resp.json()
-                job_id = data["id"]
-                if job_id_active_with_name_first_user is None:
-                    job_id_active_with_name_first_user = job_id
-                await jobs_client.long_polling_by_job_id(job_id, "running")
-
-        # owner: 1, name: yes
-        filters = [("name", job_name)]
-        jobs = await jobs_client_first_user.get_all_jobs(filters)
-        jobs = {job["id"] for job in jobs}
-        assert jobs == {
-            job_id_active_with_name_first_user,
-            job_id_terminated_with_name_first_user,
-        }
-
-        # owner: 1, name: yes, status: running
-        filters = [("name", job_name), ("status", "running")]
-        jobs = await jobs_client_first_user.get_all_jobs(filters)
-        jobs = {job["id"] for job in jobs}
-        assert jobs == {job_id_active_with_name_first_user}
-
-        # owner: 1, name: yes, status: running+failed
-        filters = [("name", job_name), ("status", "running"), ("status", "failed")]
-        jobs = await jobs_client_first_user.get_all_jobs(filters)
-        jobs = {job["id"] for job in jobs}
-        assert jobs == {job_id_active_with_name_first_user}
-
-        # owner: 1, name: yes, status: running+succeeded
-        filters = [("name", job_name), ("status", "running"), ("status", "succeeded")]
-        jobs = await jobs_client_first_user.get_all_jobs(filters)
-        jobs = {job["id"] for job in jobs}
-        assert jobs == {
-            job_id_active_with_name_first_user,
-            job_id_terminated_with_name_first_user,
-        }
-
-        # owner: 1, name: not-found, status: succeeded
-        filters = [("status", "running"), ("name", "not-found-name")]
-        jobs = await jobs_client_first_user.get_all_jobs(filters)
-        jobs = {job["id"] for job in jobs}
-        assert jobs == set()
 
     @pytest.mark.asyncio
     async def test_get_all_jobs_filter_by_name_owner_and_status_invalid_name(
