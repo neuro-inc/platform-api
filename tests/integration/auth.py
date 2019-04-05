@@ -11,11 +11,12 @@ from async_generator import asynccontextmanager
 from async_timeout import timeout
 from jose import jwt
 from neuro_auth_client import AuthClient, Permission, User as AuthClientUser
-from neuro_auth_client.client import Quota, User
+from neuro_auth_client.client import Quota
 from yarl import URL
 
 from platform_api.config import AuthConfig, OAuthConfig
 from platform_api.orchestrator.job import AggregatedRunTime
+from platform_api.user import User
 
 
 @pytest.fixture(scope="session")
