@@ -474,11 +474,10 @@ class RedisJobsStorage(JobsStorage):
 
         gpu_run_time, non_gpu_run_time = timedelta(), timedelta()
         for job_id_chunk in self._iterate_in_chunks(jobs_ids, chunk_size=10):
-            jobs_keys = [self._generate_job_key(job_id) for job_id in job_id_chunk]
+            keys = [self._generate_job_key(job_id) for job_id in job_id_chunk if job_id]
             jobs = [
                 self._parse_job_payload(payload)
-                for payload in await self._client.mget(*jobs_keys)
-                if payload
+                for payload in await self._client.mget(*keys)
             ]
             for job in jobs:
                 job_run_time = job.get_run_time()
@@ -486,7 +485,6 @@ class RedisJobsStorage(JobsStorage):
                     gpu_run_time += job_run_time
                 else:
                     non_gpu_run_time += job_run_time
-            await asyncio.sleep(0.0)
 
         return AggregatedRunTime(
             total_gpu_run_time_delta=gpu_run_time,

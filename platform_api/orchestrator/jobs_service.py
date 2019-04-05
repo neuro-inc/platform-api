@@ -107,7 +107,7 @@ class JobsService:
     async def _raise_for_run_time_quota(self, user: User) -> None:
         quota = user.quota
         if quota is None:
-            return  # no quota
+            return
         run_time_filter = JobFilter(owners={user.name})
         run_time = await self._jobs_storage.get_aggregated_run_time(run_time_filter)
         if run_time.total_gpu_run_time_delta >= quota.total_gpu_run_time_delta:
