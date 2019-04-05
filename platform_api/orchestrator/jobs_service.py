@@ -106,7 +106,7 @@ class JobsService:
 
     async def _raise_for_run_time_quota(self, user: User) -> None:
         quota = user.quota
-        if quota is None:
+        if not quota.is_initialized():
             return
         run_time_filter = JobFilter(owners={user.name})
         run_time = await self._jobs_storage.get_aggregated_run_time(run_time_filter)

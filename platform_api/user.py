@@ -12,7 +12,7 @@ from platform_api.orchestrator.job import AggregatedRunTime
 class User:
     name: str
     token: str = field(repr=False)
-    quota: Optional[AggregatedRunTime] = None
+    quota: AggregatedRunTime = field(default_factory=AggregatedRunTime)
 
     def to_job_uri(self) -> URL:
         return URL(f"job://{self.name}")

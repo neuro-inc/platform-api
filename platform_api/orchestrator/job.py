@@ -22,14 +22,16 @@ class AggregatedRunTime:
     total_gpu_run_time_delta: timedelta
     total_non_gpu_run_time_delta: timedelta
 
+    def is_initialized(self) -> bool:
+        # for a Quota, the default value is `timedelta.max`
+        has_gpu_quota = self.total_gpu_run_time_delta != timedelta.max
+        has_non_gpu_quota = self.total_non_gpu_run_time_delta != timedelta.max
+        return has_gpu_quota or has_non_gpu_quota
+
     @classmethod
-    def from_quota(cls, quota: Quota) -> Optional["AggregatedRunTime"]:
-        # TODO (ajuszkowski 4-Apr-2019) platform-auth's Quota should
-        # have a property "is_initialized"
-        lacks_gpu_limit = quota.total_gpu_run_time_minutes is None
-        lacks_non_gpu_limit = quota.total_non_gpu_run_time_minutes is None
-        if lacks_gpu_limit and lacks_non_gpu_limit:
-            return None
+    def from_quota(cls, quota: Quota) -> "AggregatedRunTime":
+        # TODO (ajuszkowski 4-Apr-2019) platform-auth's Quota should have
+        # a property `is_initialized` that should be saved in AggrRunTime instance
         return cls(
             total_gpu_run_time_delta=quota.total_gpu_run_time_delta,
             total_non_gpu_run_time_delta=quota.total_non_gpu_run_time_delta,

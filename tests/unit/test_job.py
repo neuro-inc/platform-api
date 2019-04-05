@@ -964,16 +964,21 @@ class TestAggregatedRunTime:
             Quota(total_gpu_run_time_minutes=10, total_non_gpu_run_time_minutes=10),
         ],
     )
-    def test_from_quota_not_none(self, quota):
+    def test_from_quota_is_initialized(self, quota):
         run_time = AggregatedRunTime.from_quota(quota)
         assert run_time == AggregatedRunTime(
             total_gpu_run_time_delta=quota.total_gpu_run_time_delta,
             total_non_gpu_run_time_delta=quota.total_non_gpu_run_time_delta,
         )
+        assert run_time.is_initialized()
 
-    def test_from_quota_none(self):
+    def test_from_quota_not_is_initialized(self):
         quota = Quota(
             total_gpu_run_time_minutes=None, total_non_gpu_run_time_minutes=None
         )
         run_time = AggregatedRunTime.from_quota(quota)
-        assert run_time is None
+        assert run_time == AggregatedRunTime(
+            total_gpu_run_time_delta=timedelta.max,
+            total_non_gpu_run_time_delta=timedelta.max,
+        )
+        assert not run_time.is_initialized()
