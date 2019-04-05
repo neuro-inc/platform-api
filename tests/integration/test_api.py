@@ -632,6 +632,7 @@ class TestJobs:
         await jobs_client.delete_job(job_id)
 
     @pytest.mark.asyncio
+    @pytest.mark.skip(msg="Quotas disabled until issue #565 is considered")
     async def test_create_job_gpu_quota_allows(
         self, api, client, job_request_factory, jobs_client, regular_user_factory
     ):
@@ -644,6 +645,7 @@ class TestJobs:
             assert response.status == HTTPAccepted.status_code
 
     @pytest.mark.asyncio
+    @pytest.mark.skip(msg="Quotas disabled until issue #565 is considered")
     async def test_create_job_non_gpu_quota_allows(
         self, api, client, job_request_factory, jobs_client, regular_user_factory
     ):
@@ -655,6 +657,7 @@ class TestJobs:
             assert response.status == HTTPAccepted.status_code
 
     @pytest.mark.asyncio
+    @pytest.mark.skip(msg="Quotas disabled until issue #565 is considered")
     async def test_create_job_gpu_quota_exceeded(
         self, api, client, job_request_factory, jobs_client, regular_user_factory
     ):
@@ -669,6 +672,7 @@ class TestJobs:
             assert data == {"error": f"GPU quota exceeded for user '{user.name}'"}
 
     @pytest.mark.asyncio
+    @pytest.mark.skip(msg="Quotas disabled until issue #565 is considered")
     async def test_create_job_non_gpu_quota_exceeded(
         self, api, client, job_request_factory, jobs_client, regular_user_factory
     ):

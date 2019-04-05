@@ -471,6 +471,7 @@ class RedisJobsStorage(JobsStorage):
         jobs_ids = await self._get_job_ids(
             statuses=job_filter.statuses, owners=job_filter.owners, name=job_filter.name
         )
+        # TODO (ajuszkowski, 5-Apr-2019) should be done in a transaction
 
         gpu_run_time, non_gpu_run_time = timedelta(), timedelta()
         for job_id_chunk in self._iterate_in_chunks(jobs_ids, chunk_size=10):

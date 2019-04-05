@@ -534,6 +534,7 @@ class TestJobsService:
             create_quota(time_gpu_minutes=0, time_non_gpu_minutes=100),
         ],
     )
+    @pytest.mark.skip(msg="Quotas disabled until issue #565 is considered")
     async def test_raise_for_quota_raise_for_gpu(
         self, mock_orchestrator, mock_jobs_storage, job_request_factory, quota
     ):
@@ -553,6 +554,7 @@ class TestJobsService:
             create_quota(time_non_gpu_minutes=0, time_gpu_minutes=100),
         ],
     )
+    @pytest.mark.skip(msg="Quotas disabled until issue #565 is considered")
     async def test_raise_for_quota_raise_for_non_gpu(
         self, mock_orchestrator, mock_jobs_storage, job_request_factory, quota
     ):
