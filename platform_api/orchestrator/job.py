@@ -22,12 +22,6 @@ class AggregatedRunTime:
     total_gpu_run_time_delta: timedelta
     total_non_gpu_run_time_delta: timedelta
 
-    def is_initialized(self) -> bool:
-        # for a Quota, the default value is `timedelta.max`
-        has_gpu_quota = self.total_gpu_run_time_delta != timedelta.max
-        has_non_gpu_quota = self.total_non_gpu_run_time_delta != timedelta.max
-        return has_gpu_quota or has_non_gpu_quota
-
     @classmethod
     def from_quota(cls, quota: Quota) -> "AggregatedRunTime":
         # TODO (ajuszkowski 4-Apr-2019) platform-auth's Quota should have
@@ -37,6 +31,8 @@ class AggregatedRunTime:
             total_non_gpu_run_time_delta=quota.total_non_gpu_run_time_delta,
         )
 
+
+DEFAULT_QUOTA_NO_RESTRICTIONS: AggregatedRunTime = AggregatedRunTime.from_quota(Quota())
 
 # TODO: consider adding JobStatusReason Enum
 

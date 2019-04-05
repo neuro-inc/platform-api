@@ -5,14 +5,20 @@ from aiohttp.web import HTTPUnauthorized, Request
 from aiohttp_security.api import AUTZ_KEY, IDENTITY_KEY
 from yarl import URL
 
-from platform_api.orchestrator.job import AggregatedRunTime
+from platform_api.orchestrator.job import (
+    DEFAULT_QUOTA_NO_RESTRICTIONS,
+    AggregatedRunTime,
+)
 
 
 @dataclass(frozen=True)
 class User:
     name: str
     token: str = field(repr=False)
-    quota: AggregatedRunTime = field(default_factory=AggregatedRunTime)
+    quota: AggregatedRunTime = field(default=DEFAULT_QUOTA_NO_RESTRICTIONS)
+
+    def has_quota(self) -> bool:
+        return self.quota != DEFAULT_QUOTA_NO_RESTRICTIONS
 
     def to_job_uri(self) -> URL:
         return URL(f"job://{self.name}")

@@ -26,6 +26,7 @@ from platform_api.orchestrator.job_request import (
     JobRequest,
     JobStatus,
 )
+from platform_api.user import User
 
 
 class TestContainer:
@@ -964,15 +965,14 @@ class TestAggregatedRunTime:
             Quota(total_gpu_run_time_minutes=10, total_non_gpu_run_time_minutes=10),
         ],
     )
-    def test_from_quota_is_initialized(self, quota):
+    def test_from_quota_initialized(self, quota):
         run_time = AggregatedRunTime.from_quota(quota)
         assert run_time == AggregatedRunTime(
             total_gpu_run_time_delta=quota.total_gpu_run_time_delta,
             total_non_gpu_run_time_delta=quota.total_non_gpu_run_time_delta,
         )
-        assert run_time.is_initialized()
 
-    def test_from_quota_not_is_initialized(self):
+    def test_from_quota_non_initialized(self):
         quota = Quota(
             total_gpu_run_time_minutes=None, total_non_gpu_run_time_minutes=None
         )
@@ -981,4 +981,53 @@ class TestAggregatedRunTime:
             total_gpu_run_time_delta=timedelta.max,
             total_non_gpu_run_time_delta=timedelta.max,
         )
-        assert not run_time.is_initialized()
+
+
+class TestUser:
+    q_max = timedelta.max
+    q_value = timedelta(10)
+    q_zero = timedelta()
+
+    @pytest.mark.parametrize(
+        "quota",
+        [
+            # max + non-zero
+            AggregatedRunTime(
+                total_gpu_run_time_delta=q_max, total_non_gpu_run_time_delta=q_value
+            ),
+            AggregatedRunTime(
+                total_gpu_run_time_delta=q_value, total_non_gpu_run_time_delta=q_max
+            ),
+            AggregatedRunTime(
+                total_gpu_run_time_delta=q_value, total_non_gpu_run_time_delta=q_value
+            ),
+            # max + zero
+            AggregatedRunTime(
+                total_gpu_run_time_delta=q_max, total_non_gpu_run_time_delta=q_zero
+            ),
+            AggregatedRunTime(
+                total_gpu_run_time_delta=q_zero, total_non_gpu_run_time_delta=q_max
+            ),
+            AggregatedRunTime(
+                total_gpu_run_time_delta=q_zero, total_non_gpu_run_time_delta=q_zero
+            ),
+            # zero + non-zero
+            AggregatedRunTime(
+                total_gpu_run_time_delta=q_value, total_non_gpu_run_time_delta=q_zero
+            ),
+            AggregatedRunTime(
+                total_gpu_run_time_delta=q_zero, total_non_gpu_run_time_delta=q_value
+            ),
+        ],
+    )
+    def test_user_has_quota_true(self, quota):
+        user = User(name="name", token="token", quota=quota)
+        assert user.has_quota()
+
+    def test_user_has_quota_false(self):
+        quota = AggregatedRunTime(
+            total_gpu_run_time_delta=self.q_max,
+            total_non_gpu_run_time_delta=self.q_max,
+        )
+        user = User(name="name", token="token", quota=quota)
+        assert not user.has_quota()
