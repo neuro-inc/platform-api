@@ -142,6 +142,35 @@ class TestMockJobsStorage:
                 pass
 
 
+class TestJobFilter:
+    @pytest.mark.parametrize(
+        "filt",
+        [
+            JobFilter(name="job-name"),
+            JobFilter(name="job-name", statuses={JobStatus.FAILED}),
+        ],
+    )
+    def test_raise_if_inconsistent_raises(self, filt):
+        with pytest.raises(
+            ValueError,
+            match="filtering jobs by name is allowed only together with owners",
+        ):
+            filt.raise_if_inconsistent()
+
+    @pytest.mark.parametrize(
+        "filt",
+        [
+            JobFilter(),
+            JobFilter(name="job-name", owners={"me"}),
+            JobFilter(name="job-name", owners={"me"}, statuses={JobStatus.FAILED}),
+            JobFilter(owners={"me"}),
+            JobFilter(owners={"me"}, statuses={JobStatus.FAILED}),
+        ],
+    )
+    def test_raise_if_inconsistent_not_raises(self, filt):
+        assert filt.raise_if_inconsistent() is None
+
+
 class TestJobsService:
     @pytest.mark.asyncio
     async def test_create_job(self, jobs_service, mock_job_request):

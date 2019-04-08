@@ -389,11 +389,10 @@ class RedisJobsStorage(JobsStorage):
         # coroutines execute too.
         return itertools.zip_longest(*([iter(payloads)] * chunk_size))
 
-    async def _get_job_ids(self, filt: JobFilter) -> List[str]:
+    async def _apply_filter_and_exec(self, tr: Pipeline, filt: JobFilter) -> List[str]:
         filt.raise_if_inconsistent()
 
         status_keys = [self._generate_jobs_status_index_key(s) for s in filt.statuses]
-
         owner_keys = [
             self._generate_jobs_name_index_zset_key(owner, filt.name)
             if filt.name
@@ -402,7 +401,6 @@ class RedisJobsStorage(JobsStorage):
         ]
 
         temp_key = self._generate_temp_zset_key()
-        tr = self._client.multi_exec()
 
         if owner_keys:
             tr.zunionstore(temp_key, *owner_keys, aggregate=tr.ZSET_AGGREGATE_MAX)
@@ -422,8 +420,11 @@ class RedisJobsStorage(JobsStorage):
 
         tr.delete(temp_key)
         *_, payloads, _ = await tr.execute()
-
         return [job_id.decode() for job_id in payloads]
+
+    async def _get_job_ids(self, filt: JobFilter) -> List[str]:
+        tr = self._client.multi_exec()
+        return await self._apply_filter_and_exec(tr, filt)
 
     async def _get_job_ids_for_deletion(self) -> List[str]:
         tr = self._client.multi_exec()
@@ -459,11 +460,11 @@ class RedisJobsStorage(JobsStorage):
         job_ids = await self._get_job_ids(job_filter)
         return await self._get_jobs(job_ids)
 
-    async def get_aggregated_run_time(self, job_filter: JobFilter) -> AggregatedRunTime:
+    async def get_aggregated_run_time(self, filt: JobFilter) -> AggregatedRunTime:
         # NOTE (ajuszkowski 4-Apr-2019): because of possible high number of jobs
         # submitted by a user, we need to process all job separately iterating
         # by job-ids not by job objects in order not to store them all in memory
-        jobs_ids = await self._get_job_ids(job_filter)
+        jobs_ids = await self._get_job_ids(filt)
 
         gpu_run_time, non_gpu_run_time = timedelta(), timedelta()
         for job_id_chunk in self._iterate_in_chunks(jobs_ids, chunk_size=10):
