@@ -57,6 +57,12 @@ class JobFilter:
     owners: AbstractSet[str] = field(default_factory=cast(Type[Set[str]], set))
     name: Optional[str] = None
 
+    def raise_if_inconsistent(self) -> None:
+        if self.name and not self.owners:
+            raise ValueError(
+                "filtering jobs by name is allowed only together with owners"
+            )
+
 
 class JobsStorage(ABC):
     @abstractmethod
@@ -384,10 +390,7 @@ class RedisJobsStorage(JobsStorage):
         return itertools.zip_longest(*([iter(payloads)] * chunk_size))
 
     async def _get_job_ids(self, filt: JobFilter) -> List[str]:
-        if filt.name and not filt.owners:
-            raise ValueError(
-                "filtering jobs by name is allowed only together with owners"
-            )
+        filt.raise_if_inconsistent()
 
         status_keys = [self._generate_jobs_status_index_key(s) for s in filt.statuses]
 
