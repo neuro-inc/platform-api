@@ -390,7 +390,7 @@ class RedisJobsStorage(JobsStorage):
         # coroutines execute too.
         return itertools.zip_longest(*([iter(payloads)] * chunk_size))
 
-    async def _apply_filter_and_exec(self, tr: Pipeline, filt: JobFilter) -> List[str]:
+    def _add_filter_to_transaction(self, tr: Pipeline, filt: JobFilter) -> None:
         filt.raise_if_inconsistent()
 
         status_keys = [self._generate_jobs_status_index_key(s) for s in filt.statuses]
@@ -420,12 +420,12 @@ class RedisJobsStorage(JobsStorage):
             tr.sunion(*status_keys)
 
         tr.delete(temp_key)
-        *_, payloads, _ = await tr.execute()
-        return [job_id.decode() for job_id in payloads]
 
     async def _get_job_ids(self, filt: JobFilter) -> List[str]:
         tr = self._client.multi_exec()
-        return await self._apply_filter_and_exec(tr, filt)
+        await self._add_filter_to_transaction(tr, filt)
+        *_, payloads, _ = await tr.execute()
+        return [job_id.decode() for job_id in payloads]
 
     async def _get_job_ids_for_deletion(self) -> List[str]:
         tr = self._client.multi_exec()
@@ -461,12 +461,15 @@ class RedisJobsStorage(JobsStorage):
         job_ids = await self._get_job_ids(job_filter)
         return await self._get_jobs(job_ids)
 
-    async def get_aggregated_run_time(self, filt: JobFilter) -> AggregatedRunTime:
-        # NOTE (ajuszkowski 4-Apr-2019): because of possible high number of jobs
-        # submitted by a user, we need to process all job separately iterating
-        # by job-ids not by job objects in order not to store them all in memory
-        jobs_ids = await self._get_job_ids(filt)
+    async def get_aggregated_run_time(self, user: str) -> AggregatedRunTime:
+        job_filter = JobFilter(
+            owners={user}, statuses={JobStatus.SUCCEEDED, JobStatus.FAILED}
+        )
+        jobs_ids = await self._get_job_ids(job_filter)
+        run_time = await self._calculate_jobs_run_time(jobs_ids)
+        return run_time
 
+    async def _calculate_jobs_run_time(self, jobs_ids: List[str]) -> AggregatedRunTime:
         gpu_run_time, non_gpu_run_time = timedelta(), timedelta()
         for job_id_chunk in self._iterate_in_chunks(jobs_ids, chunk_size=10):
             keys = [self._generate_job_key(job_id) for job_id in job_id_chunk if job_id]
@@ -480,7 +483,6 @@ class RedisJobsStorage(JobsStorage):
                     gpu_run_time += job_run_time
                 else:
                     non_gpu_run_time += job_run_time
-
         return AggregatedRunTime(
             total_gpu_run_time_delta=gpu_run_time,
             total_non_gpu_run_time_delta=non_gpu_run_time,
