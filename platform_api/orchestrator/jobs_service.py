@@ -108,8 +108,7 @@ class JobsService:
         if not user.has_quota():
             return
         quota = user.quota
-        run_time_filter = JobFilter(owners={user.name})
-        run_time = await self._jobs_storage.get_aggregated_run_time(run_time_filter)
+        run_time = await self._jobs_storage.get_aggregated_run_time(user.name)
         if run_time.total_gpu_run_time_delta >= quota.total_gpu_run_time_delta:
             raise GpuQuotaExceededError(user.name)
         if run_time.total_non_gpu_run_time_delta >= quota.total_non_gpu_run_time_delta:

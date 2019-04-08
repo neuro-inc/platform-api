@@ -95,7 +95,7 @@ class JobsStorage(ABC):
         return [job for job in await self.get_all_jobs() if not job.is_finished]
 
     @abstractmethod
-    async def get_aggregated_run_time(self, job_filter: JobFilter) -> AggregatedRunTime:
+    async def get_aggregated_run_time(self, user: str) -> AggregatedRunTime:
         pass
 
     async def migrate(self) -> None:
@@ -161,8 +161,9 @@ class InMemoryJobsStorage(JobsStorage):
             jobs.append(job)
         return jobs
 
-    async def get_aggregated_run_time(self, job_filter: JobFilter) -> AggregatedRunTime:
+    async def get_aggregated_run_time(self, user: str) -> AggregatedRunTime:
         # TODO (ajuszkowski 4-Apr-2019) add a test on this method if it's used anywhere
+        job_filter = JobFilter(owners={user})
         jobs = await self.get_all_jobs(job_filter)
         gpu_run_time_delta, non_gpu_run_time_delta = timedelta(), timedelta()
         for job in jobs:
