@@ -423,7 +423,7 @@ class RedisJobsStorage(JobsStorage):
 
     async def _get_job_ids(self, filt: JobFilter) -> List[str]:
         tr = self._client.multi_exec()
-        await self._add_filter_to_transaction(tr, filt)
+        self._add_filter_to_transaction(tr, filt)
         *_, payloads, _ = await tr.execute()
         return [job_id.decode() for job_id in payloads]
 
@@ -462,9 +462,7 @@ class RedisJobsStorage(JobsStorage):
         return await self._get_jobs(job_ids)
 
     async def get_aggregated_run_time(self, user: str) -> AggregatedRunTime:
-        job_filter = JobFilter(
-            owners={user}, statuses={JobStatus.SUCCEEDED, JobStatus.FAILED}
-        )
+        job_filter = JobFilter(owners={user})
         jobs_ids = await self._get_job_ids(job_filter)
         run_time = await self._calculate_jobs_run_time(jobs_ids)
         return run_time

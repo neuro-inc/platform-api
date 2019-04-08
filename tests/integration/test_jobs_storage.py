@@ -1111,8 +1111,7 @@ class TestRedisJobsStorage:
             compute_expected_time_finished_at - compute_expected_time_started_at
         )
 
-        job_filter = JobFilter(owners={owner})
-        actual_run_time = await storage.get_aggregated_run_time(job_filter)
+        actual_run_time = await storage.get_aggregated_run_time(owner)
 
         # NOTE (ajuszkowski, 4-Apr-2019) Because we don't serialize all fields of `Job`
         # (specifically, `Job.current_datetime_factory`, see issue #560),
