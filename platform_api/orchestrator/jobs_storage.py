@@ -383,25 +383,19 @@ class RedisJobsStorage(JobsStorage):
         # coroutines execute too.
         return itertools.zip_longest(*([iter(payloads)] * chunk_size))
 
-    async def _get_job_ids(
-        self,
-        statuses: AbstractSet[JobStatus],
-        owners: Optional[AbstractSet[str]] = None,
-        name: Optional[str] = None,
-    ) -> List[str]:
-        owners = owners or set()
-        if name and not owners:
+    async def _get_job_ids(self, filt: JobFilter) -> List[str]:
+        if filt.name and not filt.owners:
             raise ValueError(
                 "filtering jobs by name is allowed only together with owners"
             )
 
-        status_keys = [self._generate_jobs_status_index_key(s) for s in statuses]
+        status_keys = [self._generate_jobs_status_index_key(s) for s in filt.statuses]
 
         owner_keys = [
-            self._generate_jobs_name_index_zset_key(owner, name)
-            if name
+            self._generate_jobs_name_index_zset_key(owner, filt.name)
+            if filt.name
             else self._generate_jobs_owner_index_key(owner)
-            for owner in owners
+            for owner in filt.owners
         ]
 
         temp_key = self._generate_temp_zset_key()
@@ -444,14 +438,12 @@ class RedisJobsStorage(JobsStorage):
     async def get_all_jobs(self, job_filter: Optional[JobFilter] = None) -> List[Job]:
         if not job_filter:
             job_filter = JobFilter()
-        job_ids = await self._get_job_ids(
-            statuses=job_filter.statuses, owners=job_filter.owners, name=job_filter.name
-        )
+        job_ids = await self._get_job_ids(job_filter)
         return await self._get_jobs(job_ids)
 
     async def get_running_jobs(self) -> List[Job]:
-        statuses = {JobStatus.RUNNING}
-        job_ids = await self._get_job_ids(statuses)
+        job_filter = JobFilter(statuses={JobStatus.RUNNING})
+        job_ids = await self._get_job_ids(job_filter)
         return await self._get_jobs(job_ids)
 
     async def get_jobs_for_deletion(self) -> List[Job]:
@@ -460,17 +452,15 @@ class RedisJobsStorage(JobsStorage):
         return [job for job in jobs if job.should_be_deleted]
 
     async def get_unfinished_jobs(self) -> List[Job]:
-        statuses = {JobStatus.PENDING, JobStatus.RUNNING}
-        job_ids = await self._get_job_ids(statuses)
+        job_filter = JobFilter(statuses={JobStatus.PENDING, JobStatus.RUNNING})
+        job_ids = await self._get_job_ids(job_filter)
         return await self._get_jobs(job_ids)
 
     async def get_aggregated_run_time(self, job_filter: JobFilter) -> AggregatedRunTime:
         # NOTE (ajuszkowski 4-Apr-2019): because of possible high number of jobs
         # submitted by a user, we need to process all job separately iterating
         # by job-ids not by job objects in order not to store them all in memory
-        jobs_ids = await self._get_job_ids(
-            statuses=job_filter.statuses, owners=job_filter.owners, name=job_filter.name
-        )
+        jobs_ids = await self._get_job_ids(job_filter)
 
         gpu_run_time, non_gpu_run_time = timedelta(), timedelta()
         for job_id_chunk in self._iterate_in_chunks(jobs_ids, chunk_size=10):
