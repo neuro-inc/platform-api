@@ -1,4 +1,5 @@
 import dataclasses
+from datetime import timedelta
 from unittest import mock
 from unittest.mock import MagicMock
 
@@ -6,14 +7,19 @@ import pytest
 
 from platform_api.handlers.jobs_handler import convert_job_to_job_response
 from platform_api.orchestrator import Job, JobRequest, JobsService, JobStatus
-from platform_api.orchestrator.job import JobStatusItem
+from platform_api.orchestrator.job import AggregatedRunTime, JobStatusItem
 from platform_api.orchestrator.job_request import Container, ContainerResources
 from platform_api.orchestrator.jobs_service import (
     GpuQuotaExceededError,
     JobsServiceException,
     NonGpuQuotaExceededError,
 )
-from platform_api.orchestrator.jobs_storage import JobFilter, JobStorageJobFoundError
+from platform_api.orchestrator.jobs_storage import (
+    JobFilter,
+    JobStorageJobFoundError,
+    RedisJobsStorage,
+)
+from platform_api.orchestrator.utils import RedisSerializationHelper
 from platform_api.user import User
 from tests.unit.conftest import MockJobsStorage, create_quota
 
@@ -140,6 +146,44 @@ class TestMockJobsStorage:
         with pytest.raises(JobStorageJobFoundError):
             async with jobs_storage.try_create_job(job):
                 pass
+
+
+class TestRedisSerializationHelper:
+    td_value = timedelta(10)
+    td_max = timedelta.max
+    td_zero = timedelta(0)
+
+    @pytest.mark.parametrize(
+        "run_time",
+        [
+            AggregatedRunTime(
+                total_gpu_run_time_delta=td_value, total_non_gpu_run_time_delta=td_value
+            ),
+            AggregatedRunTime(
+                total_gpu_run_time_delta=td_max, total_non_gpu_run_time_delta=td_value
+            ),
+            AggregatedRunTime(
+                total_gpu_run_time_delta=td_value, total_non_gpu_run_time_delta=td_max
+            ),
+            AggregatedRunTime(
+                total_gpu_run_time_delta=td_max, total_non_gpu_run_time_delta=td_zero
+            ),
+            AggregatedRunTime(
+                total_gpu_run_time_delta=td_zero, total_non_gpu_run_time_delta=td_max
+            ),
+            AggregatedRunTime(
+                total_gpu_run_time_delta=td_value, total_non_gpu_run_time_delta=td_zero
+            ),
+            AggregatedRunTime(
+                total_gpu_run_time_delta=td_zero, total_non_gpu_run_time_delta=td_value
+            ),
+        ],
+    )
+    def test_serialize_aggregated_run_time(self, run_time):
+        helper = RedisSerializationHelper()
+        serialized = helper.serialize_aggregated_run_time(run_time)
+        deserialized = helper.deserialize_aggregated_run_time(serialized)
+        assert deserialized == run_time
 
 
 class TestJobFilter:

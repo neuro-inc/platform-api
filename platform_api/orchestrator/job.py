@@ -22,6 +22,13 @@ class AggregatedRunTime:
     total_gpu_run_time_delta: timedelta
     total_non_gpu_run_time_delta: timedelta
 
+    def __add__(self, o: "AggregatedRunTime") -> "AggregatedRunTime":
+        gpu_td = self.total_gpu_run_time_delta + o.total_gpu_run_time_delta
+        non_gpu_td = self.total_non_gpu_run_time_delta + o.total_non_gpu_run_time_delta
+        return AggregatedRunTime(
+            total_gpu_run_time_delta=gpu_td, total_non_gpu_run_time_delta=non_gpu_td
+        )
+
     @classmethod
     def from_quota(cls, quota: Quota) -> "AggregatedRunTime":
         # TODO (ajuszkowski 4-Apr-2019) platform-auth's Quota should have
@@ -269,6 +276,10 @@ class Job:
     @property
     def has_gpu(self) -> bool:
         return bool(self._job_request.container.resources.gpu)
+
+    @property
+    def is_active(self) -> bool:
+        return self.status in (JobStatus.PENDING, JobStatus.RUNNING)
 
     @property
     def status(self) -> JobStatus:

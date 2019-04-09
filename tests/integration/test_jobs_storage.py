@@ -126,7 +126,7 @@ class TestRedisJobsStorage:
             redis_client, orchestrator_config=kube_orchestrator.config
         )
         job.status = JobStatus.RUNNING
-        await storage.update_job_atomic(job, is_job_creation=False)
+        await storage.update_job_atomic(job, is_job_creation=False, is_job_termination=False)
 
         # check that job exists in database:
         job_read = await storage.get_job(job.id)
@@ -144,7 +144,7 @@ class TestRedisJobsStorage:
             redis_client, orchestrator_config=kube_orchestrator.config
         )
         job.status = JobStatus.RUNNING
-        await storage.update_job_atomic(job, is_job_creation=True)
+        await storage.update_job_atomic(job, is_job_creation=True, is_job_termination=False)
 
         # check that job exists in database:
         job_read = await storage.get_job(job.id)
@@ -164,13 +164,13 @@ class TestRedisJobsStorage:
         name = "job-name"
 
         job1 = self._create_pending_job(kube_orchestrator, owner=owner, job_name=name)
-        await storage.update_job_atomic(job1, is_job_creation=True)
+        await storage.update_job_atomic(job1, is_job_creation=True, is_job_termination=False)
 
         job2 = self._create_failed_job(kube_orchestrator, owner=owner, job_name=name)
-        await storage.update_job_atomic(job2, is_job_creation=True)
+        await storage.update_job_atomic(job2, is_job_creation=True, is_job_termination=False)
 
         job3 = self._create_succeeded_job(kube_orchestrator, owner=owner, job_name=name)
-        await storage.update_job_atomic(job3, is_job_creation=True)
+        await storage.update_job_atomic(job3, is_job_creation=True, is_job_termination=False)
 
         job_id_last_created = await storage.get_last_created_job_id(owner, name)
         assert job_id_last_created == job3.id

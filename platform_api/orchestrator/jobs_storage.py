@@ -25,6 +25,11 @@ import aioredis
 from aioredis.commands import Pipeline
 from async_generator import asynccontextmanager
 
+from platform_api.orchestrator.utils import (
+    AggregatedRunTimeJSONDecoder,
+    AggregatedRunTimeJSONEncoder,
+)
+
 from .base import OrchestratorConfig
 from .job import AggregatedRunTime, Job
 from .job_request import JobError, JobStatus
@@ -203,6 +208,9 @@ class RedisJobsStorage(JobsStorage):
     def _generate_jobs_owner_index_key(self, owner: str) -> str:
         return f"jobs.owner.{owner}"
 
+    def _generate_jobs_owner_terminated_run_time_index_key(self, owner: str) -> str:
+        return f"run_time.terminated_jobs.owner.{owner}"
+
     def _generate_jobs_name_index_zset_key(self, owner: str, job_name: str) -> str:
         assert owner, "job owner is not defined"
         assert job_name, "job name is not defined"
@@ -250,7 +258,7 @@ class RedisJobsStorage(JobsStorage):
                 await client.unwatch()
 
     @asynccontextmanager
-    async def _watch_all_job_keys(
+    async def _watch_job_id_and_name_keys(
         self, job_id: str, owner: str, job_name: str
     ) -> AsyncIterator[JobsStorage]:
         id_key = self._generate_job_key(job_id)
@@ -266,6 +274,16 @@ class RedisJobsStorage(JobsStorage):
             yield storage
 
     @asynccontextmanager
+    async def _watch_job_terminated_run_time_key(
+        self, owner: str
+    ) -> AsyncIterator[JobsStorage]:
+        async with self._watch_keys(
+            self._generate_jobs_owner_terminated_run_time_index_key(owner),
+            description=f"terminated run-time for owner={owner}",
+        ) as storage:
+            yield storage
+
+    @asynccontextmanager
     async def try_update_job(self, job_id: str) -> AsyncIterator[Job]:
         """ NOTE: this method yields the job retrieved from the database
         """
@@ -273,8 +291,14 @@ class RedisJobsStorage(JobsStorage):
             # NOTE: this method does not need to WATCH the job-last-created key as it
             # does not rely on this key
             job = await storage.get_job(job_id)
-            yield job
-            await storage.update_job_atomic(job, is_job_creation=False)
+            async with self._watch_job_terminated_run_time_key(job.owner) as storage:
+                job_was_active = job.is_active
+                yield job
+                job_is_active = job.is_active
+                is_job_termination = job_was_active and not job_is_active
+                await storage.update_job_atomic(
+                    job, is_job_creation=False, is_job_termination=is_job_termination
+                )
 
     @asynccontextmanager
     async def try_create_job(
@@ -286,7 +310,9 @@ class RedisJobsStorage(JobsStorage):
             Prevents indexing the job by owner for testing purposes.
         """
         if job.name:
-            async with self._watch_all_job_keys(job.id, job.owner, job.name) as storage:
+            async with self._watch_job_id_and_name_keys(
+                job.id, job.owner, job.name
+            ) as storage:
                 other_id = await storage.get_last_created_job_id(job.owner, job.name)
                 if other_id is not None:
                     other = await self.get_job(other_id)
@@ -299,20 +325,28 @@ class RedisJobsStorage(JobsStorage):
                 # after the orchestrator has started the job, it fills the 'job' object
                 # with some new values, so we write the new value of 'job' to Redis:
                 await storage.update_job_atomic(
-                    job, is_job_creation=True, skip_owner_index=skip_owner_index
+                    job,
+                    is_job_creation=True,
+                    is_job_termination=False,
+                    skip_owner_index=skip_owner_index,
                 )
         else:
             async with self._watch_job_id_key(job.id) as storage:
                 yield job
                 await storage.update_job_atomic(
-                    job, is_job_creation=True, skip_owner_index=skip_owner_index
+                    job,
+                    is_job_creation=True,
+                    is_job_termination=False,
+                    skip_owner_index=skip_owner_index,
                 )
 
     async def set_job(self, job: Job) -> None:
         # TODO (ajuszkowski, 4-feb-2019) remove this method from interface as well
         # because it does not watch keys that it updates AND it does not update
         # the 'last-job-created' key!
-        await self.update_job_atomic(job, is_job_creation=True)
+        await self.update_job_atomic(
+            job, is_job_creation=True, is_job_termination=False
+        )
 
     def _update_owner_index(self, tr: Pipeline, job: Job) -> None:
         owner_key = self._generate_jobs_owner_index_key(job.owner)
@@ -328,7 +362,11 @@ class RedisJobsStorage(JobsStorage):
         tr.zadd(name_key, job.status_history.created_at_timestamp, job.id)
 
     async def update_job_atomic(
-        self, job: Job, is_job_creation: bool, skip_owner_index: bool = False
+        self,
+        job: Job,
+        is_job_creation: bool,
+        is_job_termination: bool,
+        skip_owner_index: bool = False,
     ) -> None:
         payload = json.dumps(job.to_primitive())
 
@@ -345,6 +383,12 @@ class RedisJobsStorage(JobsStorage):
                 self._update_owner_index(tr, job)
             if job.name:
                 self._update_name_index(tr, job)
+
+        # if is_job_termination:
+        #     tr.incrby(
+        #         self._generate_jobs_owner_terminated_run_time_index_key(job.owner),
+        #         job.get_run_time(),
+        #     )
 
         if job.is_deleted:
             tr.sadd(self._generate_jobs_deleted_index_key(), job.id)
@@ -462,10 +506,22 @@ class RedisJobsStorage(JobsStorage):
         return await self._get_jobs(job_ids)
 
     async def get_aggregated_run_time(self, user: str) -> AggregatedRunTime:
-        job_filter = JobFilter(owners={user})
-        jobs_ids = await self._get_job_ids(job_filter)
-        run_time = await self._calculate_jobs_run_time(jobs_ids)
-        return run_time
+        tr = self._client.multi_exec()
+        tr.get(self._generate_jobs_owner_terminated_run_time_index_key(user))
+        terminated_run_time_str, *_, active_jobs_ids, _ = await tr.execute()
+
+        terminated_run_time = self._deserialize_aggregated_run_time(
+            terminated_run_time_str
+        )
+        active_run_time = await self._calculate_jobs_run_time(active_jobs_ids)
+
+        return terminated_run_time + active_run_time
+
+    def _serialize_aggregated_run_time(self, obj: AggregatedRunTime) -> str:
+        return json.dumps(obj, cls=AggregatedRunTimeJSONEncoder)
+
+    def _deserialize_aggregated_run_time(self, value: str) -> AggregatedRunTime:
+        return json.loads(value, cls=AggregatedRunTimeJSONDecoder)
 
     async def _calculate_jobs_run_time(self, jobs_ids: List[str]) -> AggregatedRunTime:
         gpu_run_time, non_gpu_run_time = timedelta(), timedelta()
