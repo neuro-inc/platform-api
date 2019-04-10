@@ -57,6 +57,15 @@ class JobFilter:
     owners: AbstractSet[str] = field(default_factory=cast(Type[Set[str]], set))
     name: Optional[str] = None
 
+    def check(self, job: Job) -> bool:
+        if self.statuses and job.status not in self.statuses:
+            return False
+        if self.owners and job.owner not in self.owners:
+            return False
+        if self.name and self.name != job.name:
+            return False
+        return True
+
 
 class JobsStorage(ABC):
     @abstractmethod
@@ -138,13 +147,7 @@ class InMemoryJobsStorage(JobsStorage):
         await self.set_job(job)
 
     def _apply_filter(self, job_filter: JobFilter, job: Job) -> bool:
-        if job_filter.statuses and job.status not in job_filter.statuses:
-            return False
-        if job_filter.owners and job.owner not in job_filter.owners:
-            return False
-        if job_filter.name and job_filter.name != job.name:
-            return False
-        return True
+        return job_filter.check(job)
 
     async def get_all_jobs(self, job_filter: Optional[JobFilter] = None) -> List[Job]:
         jobs = []
