@@ -88,6 +88,12 @@ class JobsStorage(ABC):
     async def get_all_jobs(self, job_filter: Optional[JobFilter] = None) -> List[Job]:
         pass
 
+    @abstractmethod
+    async def get_jobs_by_ids(
+        self, job_ids: Sequence[str], job_filter: Optional[JobFilter] = None
+    ) -> List[Job]:
+        pass
+
     async def get_running_jobs(self) -> List[Job]:
         return [job for job in await self.get_all_jobs() if job.is_running]
 
@@ -146,16 +152,21 @@ class InMemoryJobsStorage(JobsStorage):
         yield job
         await self.set_job(job)
 
-    def _apply_filter(self, job_filter: JobFilter, job: Job) -> bool:
-        return job_filter.check(job)
-
     async def get_all_jobs(self, job_filter: Optional[JobFilter] = None) -> List[Job]:
         jobs = []
         for payload in self._job_records.values():
             job = self._parse_job_payload(payload)
-            if job_filter and not self._apply_filter(job_filter, job):
+            if job_filter and not job_filter.check(job):
                 continue
             jobs.append(job)
+        return jobs
+
+    async def get_jobs_by_ids(
+        self, job_ids: Sequence[str], job_filter: Optional[JobFilter] = None
+    ) -> List[Job]:
+        jobs = [await self.get_job(job_id) for job_id in job_ids]
+        if job_filter:
+            jobs = [job for job in jobs if job_filter.check(job)]
         return jobs
 
     async def get_aggregated_run_time(self, job_filter: JobFilter) -> AggregatedRunTime:
@@ -366,7 +377,7 @@ class RedisJobsStorage(JobsStorage):
             return last_job_id
         return None
 
-    async def _get_jobs(self, ids: List[str]) -> List[Job]:
+    async def _get_jobs(self, ids: Sequence[str]) -> List[Job]:
         jobs: List[Job] = []
         if not ids:
             return jobs
@@ -451,6 +462,14 @@ class RedisJobsStorage(JobsStorage):
             statuses=job_filter.statuses, owners=job_filter.owners, name=job_filter.name
         )
         return await self._get_jobs(job_ids)
+
+    async def get_jobs_by_ids(
+        self, job_ids: Sequence[str], job_filter: Optional[JobFilter] = None
+    ) -> List[Job]:
+        jobs = await self._get_jobs(job_ids)
+        if job_filter:
+            jobs = [job for job in jobs if job_filter.check(job)]
+        return jobs
 
     async def get_running_jobs(self) -> List[Job]:
         statuses = {JobStatus.RUNNING}
