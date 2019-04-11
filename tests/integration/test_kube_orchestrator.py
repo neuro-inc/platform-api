@@ -463,7 +463,7 @@ class TestKubeOrchestrator:
         try:
             await job.start()
 
-            assert job.http_host_named_job is None
+            assert job.http_host_named is None
 
             await self._wait_for_job_service(
                 kube_ingress_ip, host=job.http_host, job_id=job.id
@@ -497,7 +497,7 @@ class TestKubeOrchestrator:
             await job.start()
             assert not (job.requires_http_auth), str(job)
 
-            for host in [job.http_host, job.http_host_named_job]:
+            for host in [job.http_host, job.http_host_named]:
                 assert host
                 await self._wait_for_job_service(
                     kube_ingress_ip, host=host, job_id=job.id
@@ -529,7 +529,7 @@ class TestKubeOrchestrator:
         try:
             await job.start()
 
-            assert job.http_host_named_job is None
+            assert job.http_host_named is None
 
             await self._wait_for_job_service(
                 kube_ingress_ip, host=job.http_host, job_id=job.id
@@ -562,7 +562,7 @@ class TestKubeOrchestrator:
         try:
             await job.start()
 
-            for http_host in [job.http_host, job.http_host_named_job]:
+            for http_host in [job.http_host, job.http_host_named]:
                 assert http_host
                 await self._wait_for_job_service(
                     kube_ingress_ip, host=http_host, job_id=job.id
@@ -654,7 +654,7 @@ class TestKubeOrchestrator:
         await client_job.start()
         assert self.wait_for_success(job=client_job)
 
-        assert server_job.http_host_named_job is None
+        assert server_job.http_host_named is None
 
     @pytest.mark.asyncio
     async def test_job_check_http_hostname_with_job_name(
@@ -679,7 +679,7 @@ class TestKubeOrchestrator:
         await client_job.start()
         assert self.wait_for_success(job=client_job)
 
-        http_host = server_job.http_host_named_job
+        http_host = server_job.http_host_named
         await self._wait_for_job_service(
             kube_ingress_ip, host=http_host, job_id=server_job.id
         )

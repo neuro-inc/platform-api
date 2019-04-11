@@ -455,7 +455,7 @@ class TestJob:
         job = Job(orchestrator_config=mock_orchestrator.config, job_request=job_request)
         assert job.http_host == "testjob.jobs"
 
-    def test_http_host_named_job(self, mock_orchestrator, job_request):
+    def test_http_host_named(self, mock_orchestrator, job_request):
         job = Job(
             orchestrator_config=mock_orchestrator.config,
             job_request=job_request,
@@ -463,7 +463,7 @@ class TestJob:
             owner="owner",
         )
         assert job.http_host == "testjob.jobs"
-        assert job.http_host_named_job == "test-job-name-owner.jobs"
+        assert job.http_host_named == "test-job-name-owner.jobs"
 
     def test_job_name(self, mock_orchestrator, job_request):
         job = Job(

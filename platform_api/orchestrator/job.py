@@ -372,7 +372,7 @@ class Job:
         )
 
     @property
-    def http_host_named_job(self) -> Optional[str]:
+    def http_host_named(self) -> Optional[str]:
         if not self.name:
             return None
         return self._orchestrator_config.jobs_domain_name_template_named_jobs.format(
@@ -382,8 +382,8 @@ class Job:
     @property
     def http_hosts(self) -> Iterator[str]:
         yield self.http_host
-        if self.http_host_named_job:
-            yield self.http_host_named_job
+        if self.http_host_named:
+            yield self.http_host_named
 
     @property
     def http_url(self) -> str:
@@ -393,9 +393,9 @@ class Job:
     @property
     def http_url_named(self) -> Optional[str]:
         assert self.has_http_server_exposed
-        if not self.http_host_named_job:
+        if not self.http_host_named:
             return None
-        return f"{self._http_scheme}://{self.http_host_named_job}"
+        return f"{self._http_scheme}://{self.http_host_named}"
 
     @property
     def ssh_server(self) -> str:
