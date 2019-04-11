@@ -164,9 +164,15 @@ class InMemoryJobsStorage(JobsStorage):
     async def get_jobs_by_ids(
         self, job_ids: Sequence[str], job_filter: Optional[JobFilter] = None
     ) -> List[Job]:
-        jobs = [await self.get_job(job_id) for job_id in job_ids]
-        if job_filter:
-            jobs = [job for job in jobs if job_filter.check(job)]
+        jobs = []
+        for job_id in job_ids:
+            try:
+                job = await self.get_job(job_id)
+            except JobError:
+                # skipping missing
+                continue
+            if not job_filter or job_filter.check(job):
+                jobs.append(job)
         return jobs
 
     async def get_aggregated_run_time(self, job_filter: JobFilter) -> AggregatedRunTime:
@@ -405,7 +411,7 @@ class RedisJobsStorage(JobsStorage):
     ) -> List[str]:
         owners = owners or set()
         if name and not owners:
-            raise ValueError(
+            raise JobsStorageException(
                 "filtering jobs by name is allowed only together with owners"
             )
 
