@@ -7,11 +7,11 @@ from yarl import URL
 
 from platform_api.config import RegistryConfig, StorageConfig
 from platform_api.handlers.jobs_handler import (
+    BulkJobFilter,
+    BulkJobFilterBuilder,
     JobFilterException,
     convert_container_volume_to_json,
     convert_job_container_to_json,
-    filter_jobs_with_access_tree,
-    infer_job_owners_filter_from_access_tree,
     infer_permissions_from_container,
 )
 from platform_api.handlers.models_handler import (
@@ -22,13 +22,13 @@ from platform_api.handlers.validators import (
     create_container_request_validator,
     create_container_response_validator,
 )
-from platform_api.orchestrator.job import Job
 from platform_api.orchestrator.job_request import (
     Container,
     ContainerResources,
     ContainerSSHServer,
     ContainerVolume,
 )
+from platform_api.orchestrator.jobs_storage import JobFilter
 from platform_api.resource import GPUModel
 from platform_api.user import User
 
@@ -344,22 +344,17 @@ class TestJobContainerToJson:
         }
 
 
-class TestInferJobOwnersFromAccessTree:
+class TestBulkJobFilterBuilder:
     def test_no_access(self):
+        query_filter = JobFilter()
         tree = ClientSubTreeViewRoot(
             path="/", sub_tree=ClientAccessSubTreeView(action="deny", children={})
         )
         with pytest.raises(JobFilterException, match="no jobs"):
-            infer_job_owners_filter_from_access_tree(tree)
+            BulkJobFilterBuilder(query_filter, tree).build()
 
-    def test_full_access(self):
-        tree = ClientSubTreeViewRoot(
-            path="/", sub_tree=ClientAccessSubTreeView(action="manage", children={})
-        )
-        owners = infer_job_owners_filter_from_access_tree(tree)
-        assert owners == set()
-
-    def test_mixed_access(self):
+    def test_no_access_with_owners(self):
+        query_filter = JobFilter(owners={"someuser"})
         tree = ClientSubTreeViewRoot(
             path="/",
             sub_tree=ClientAccessSubTreeView(
@@ -377,42 +372,33 @@ class TestInferJobOwnersFromAccessTree:
                 },
             ),
         )
-        owners = infer_job_owners_filter_from_access_tree(tree)
-        assert owners == {"testuser", "anotheruser"}
+        with pytest.raises(JobFilterException, match="no jobs"):
+            BulkJobFilterBuilder(query_filter, tree).build()
 
-
-class TestFilterJobsWithAccessTree:
-    @pytest.fixture
-    def job_factory(self, mock_orchestrator, job_request_factory):
-        def _factory(owner):
-            return Job(mock_orchestrator.config, job_request_factory(), owner=owner)
-
-        return _factory
-
-    def test_no_access(self, job_factory):
-        jobs = [job_factory("testuser")]
-        tree = ClientSubTreeViewRoot(
-            path="/", sub_tree=ClientAccessSubTreeView(action="deny", children={})
-        )
-        result = filter_jobs_with_access_tree(jobs, tree)
-        assert not result
-
-    def test_full_access(self, job_factory):
-        jobs = [job_factory("testuser"), job_factory("anotheruser")]
+    def test_full_access_no_owners(self):
+        query_filter = JobFilter()
         tree = ClientSubTreeViewRoot(
             path="/", sub_tree=ClientAccessSubTreeView(action="manage", children={})
         )
-        result = filter_jobs_with_access_tree(jobs, tree)
-        expected_ids = {job.id for job in jobs}
-        result_ids = {job.id for job in result}
-        assert result_ids == expected_ids
+        bulk_filter = BulkJobFilterBuilder(query_filter, tree).build()
+        assert bulk_filter == BulkJobFilter(
+            bulk_filter=JobFilter(), shared_ids=set(), shared_ids_filter=None
+        )
 
-    def test_mixed_access(self, job_factory):
-        testuser_job = job_factory("testuser")
-        anotheruser_job1 = job_factory("anotheruser")
-        anotheruser_job2 = job_factory("anotheruser")
-        someuser_job = job_factory("someuser")
-        jobs = [testuser_job, anotheruser_job1, anotheruser_job2, someuser_job]
+    def test_full_access_with_owners(self):
+        query_filter = JobFilter(owners={"testuser"})
+        tree = ClientSubTreeViewRoot(
+            path="/", sub_tree=ClientAccessSubTreeView(action="manage", children={})
+        )
+        bulk_filter = BulkJobFilterBuilder(query_filter, tree).build()
+        assert bulk_filter == BulkJobFilter(
+            bulk_filter=JobFilter(owners={"testuser"}),
+            shared_ids=set(),
+            shared_ids_filter=None,
+        )
+
+    def test_mixed_access_no_owners(self):
+        query_filter = JobFilter()
         tree = ClientSubTreeViewRoot(
             path="/",
             sub_tree=ClientAccessSubTreeView(
@@ -422,22 +408,72 @@ class TestFilterJobsWithAccessTree:
                     "anotheruser": ClientAccessSubTreeView(
                         action="list",
                         children={
-                            anotheruser_job1.id: ClientAccessSubTreeView(
-                                "read", children={}
-                            ),
-                            anotheruser_job2.id: ClientAccessSubTreeView(
-                                "deny", children={}
-                            ),
+                            "job-test-1": ClientAccessSubTreeView("read", children={}),
+                            "job-test-2": ClientAccessSubTreeView("deny", children={}),
                         },
                     ),
                     "someuser": ClientAccessSubTreeView(action="deny", children={}),
                 },
             ),
         )
-        result = filter_jobs_with_access_tree(jobs, tree)
-        expected_ids = {testuser_job.id, anotheruser_job1.id}
-        result_ids = {job.id for job in result}
-        assert result_ids == expected_ids
+        bulk_filter = BulkJobFilterBuilder(query_filter, tree).build()
+        assert bulk_filter == BulkJobFilter(
+            bulk_filter=JobFilter(owners={"testuser"}),
+            shared_ids={"job-test-1"},
+            shared_ids_filter=JobFilter(),
+        )
+
+    def test_mixed_access_owners_shared_all(self):
+        query_filter = JobFilter(owners={"testuser"})
+        tree = ClientSubTreeViewRoot(
+            path="/",
+            sub_tree=ClientAccessSubTreeView(
+                action="list",
+                children={
+                    "testuser": ClientAccessSubTreeView(action="read", children={}),
+                    "anotheruser": ClientAccessSubTreeView(
+                        action="list",
+                        children={
+                            "job-test-1": ClientAccessSubTreeView("read", children={}),
+                            "job-test-2": ClientAccessSubTreeView("deny", children={}),
+                        },
+                    ),
+                    "someuser": ClientAccessSubTreeView(action="deny", children={}),
+                },
+            ),
+        )
+        bulk_filter = BulkJobFilterBuilder(query_filter, tree).build()
+        assert bulk_filter == BulkJobFilter(
+            bulk_filter=JobFilter(owners={"testuser"}),
+            shared_ids=set(),
+            shared_ids_filter=None,
+        )
+
+    def test_mixed_access_shared_ids_only(self):
+        query_filter = JobFilter(owners={"anotheruser"})
+        tree = ClientSubTreeViewRoot(
+            path="/",
+            sub_tree=ClientAccessSubTreeView(
+                action="list",
+                children={
+                    "testuser": ClientAccessSubTreeView(action="read", children={}),
+                    "anotheruser": ClientAccessSubTreeView(
+                        action="list",
+                        children={
+                            "job-test-1": ClientAccessSubTreeView("read", children={}),
+                            "job-test-2": ClientAccessSubTreeView("deny", children={}),
+                        },
+                    ),
+                    "someuser": ClientAccessSubTreeView(action="deny", children={}),
+                },
+            ),
+        )
+        bulk_filter = BulkJobFilterBuilder(query_filter, tree).build()
+        assert bulk_filter == BulkJobFilter(
+            bulk_filter=None,
+            shared_ids={"job-test-1"},
+            shared_ids_filter=JobFilter(owners={"anotheruser"}),
+        )
 
 
 class TestInferPermissionsFromContainer:
