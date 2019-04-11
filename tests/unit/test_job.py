@@ -524,7 +524,7 @@ class TestJob:
             owner="owner",
         )
         assert job.http_url == "http://testjob.jobs"
-        assert job.http_url_named_job == "http://test-job-name-owner.jobs"
+        assert job.http_url_named == "http://test-job-name-owner.jobs"
 
     def test_https_url(self, mock_orchestrator, job_request):
         config = dataclasses.replace(
@@ -544,7 +544,7 @@ class TestJob:
             owner="owner",
         )
         assert job.http_url == "https://testjob.jobs"
-        assert job.http_url_named_job == "https://test-job-name-owner.jobs"
+        assert job.http_url_named == "https://test-job-name-owner.jobs"
 
     def test_ssh_url(self, mock_orchestrator, job_request_with_ssh):
         job = Job(
@@ -577,7 +577,7 @@ class TestJob:
             owner="owner",
         )
         assert job.http_url == "http://testjob.jobs"
-        assert job.http_url_named_job == "http://test-job-name-owner.jobs"
+        assert job.http_url_named == "http://test-job-name-owner.jobs"
         assert job.ssh_server == "ssh://testjob.ssh:22"
 
     def test_should_be_deleted_pending(self, mock_orchestrator, job_request):

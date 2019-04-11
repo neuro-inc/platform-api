@@ -67,7 +67,7 @@ def create_job_response_validator() -> t.Trafaret:
             # relies on it.
             "status": create_job_status_validator(),
             t.Key("http_url", optional=True): t.String,
-            t.Key("http_url_named_job", optional=True): t.String,
+            t.Key("http_url_named", optional=True): t.String,
             t.Key("ssh_server", optional=True): t.String,
             "ssh_auth_server": t.String,
             "history": create_job_history_validator(),
@@ -159,8 +159,8 @@ def convert_job_to_job_response(
         response_payload["description"] = job.description
     if job.has_http_server_exposed:
         response_payload["http_url"] = job.http_url
-        if job.http_url_named_job:
-            response_payload["http_url_named_job"] = job.http_url_named_job
+        if job.http_url_named:
+            response_payload["http_url_named"] = job.http_url_named
     if job.has_ssh_server_exposed:
         response_payload["ssh_server"] = job.ssh_server
     if job.internal_hostname:

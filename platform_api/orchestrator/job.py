@@ -391,7 +391,7 @@ class Job:
         return f"{self._http_scheme}://{self.http_host}"
 
     @property
-    def http_url_named_job(self) -> Optional[str]:
+    def http_url_named(self) -> Optional[str]:
         assert self.has_http_server_exposed
         if not self.http_host_named_job:
             return None

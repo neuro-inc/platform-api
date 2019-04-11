@@ -341,7 +341,7 @@ class TestModels:
             job_id = result["job_id"]
             assert result["status"] in ["pending"]
             assert result["http_url"] == f"http://{job_id}.jobs.neu.ro"
-            assert result["http_url_named_job"] == (
+            assert result["http_url_named"] == (
                 f"http://{job_name}-{regular_user.name}.jobs.neu.ro"
             )
             expected_internal_hostname = f"{job_id}.default"
@@ -359,7 +359,7 @@ class TestModels:
         await jobs_client.delete_job(job_id=job_id)
 
     @pytest.mark.asyncio
-    async def test_create_model_without_name_http_url_named_job_not_sent(
+    async def test_create_model_without_name_http_url_named_not_sent(
         self, api, client, model_train, jobs_client, regular_user
     ):
         url = api.model_base_url
@@ -370,7 +370,7 @@ class TestModels:
             result = await response.json()
             job_id = result["job_id"]
             assert result["http_url"] == f"http://{job_id}.jobs.neu.ro"
-            assert "http_url_named_job" not in result
+            assert "http_url_named" not in result
 
         await jobs_client.delete_job(job_id=job_id)
 
@@ -636,7 +636,7 @@ class TestJobs:
             assert payload["name"] == job_name
             assert payload["http_url"] == f"http://{job_id}.jobs.neu.ro"
             assert (
-                payload["http_url_named_job"]
+                payload["http_url_named"]
                 == f"http://{job_name}-{regular_user.name}.jobs.neu.ro"
             )
             expected_internal_hostname = f"{job_id}.default"
@@ -653,7 +653,7 @@ class TestJobs:
         await jobs_client.delete_job(job_id=job_id)
 
     @pytest.mark.asyncio
-    async def test_create_job_without_name_http_url_named_job_not_sent(
+    async def test_create_job_without_name_http_url_named_not_sent(
         self, api, client, job_submit, jobs_client, regular_user
     ):
         url = api.jobs_base_url
@@ -664,7 +664,7 @@ class TestJobs:
             payload = await resp.json()
             job_id = payload["id"]
             assert payload["http_url"] == f"http://{job_id}.jobs.neu.ro"
-            assert "http_url_named_job" not in payload
+            assert "http_url_named" not in payload
 
         await jobs_client.delete_job(job_id=job_id)
 
