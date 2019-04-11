@@ -623,9 +623,6 @@ class TestKubeOrchestrator:
         await delete_job_later(server_job)
         await server_job.start()
         server_hostname = server_job.internal_hostname
-
-        assert server_job.http_host
-        assert server_job.http_host_named_job is None
         await self._wait_for_job_service(
             kube_ingress_ip, host=server_job.http_host, job_id=server_job.id
         )
