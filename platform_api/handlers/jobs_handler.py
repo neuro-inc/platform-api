@@ -1,7 +1,8 @@
 import asyncio
 import logging
+from dataclasses import dataclass, replace
 from pathlib import PurePath
-from typing import Any, Dict, List, Sequence, Set
+from typing import Any, Dict, List, Optional, Sequence, Set
 
 import aiohttp.web
 import trafaret as t
@@ -190,8 +191,7 @@ class JobsHandler:
         self._config = config
         self._storage_config = config.storage
 
-        self._job_name_validator = create_job_name_validator()
-        self._user_name_validator = create_user_name_validator()
+        self._job_filter_factory = JobFilterFactory()
         self._job_response_validator = create_job_response_validator()
         self._bulk_jobs_response_validator = t.Dict(
             {"jobs": t.List(self._job_response_validator)}
@@ -271,34 +271,6 @@ class JobsHandler:
             data=response_payload, status=aiohttp.web.HTTPOk.status_code
         )
 
-    def _build_job_filter(
-        self, query: MultiDictProxy, tree: ClientSubTreeViewRoot, user: str
-    ) -> JobFilter:
-        # TODO: move this method to validators.py and cover with unit tests
-        job_name = self._job_name_validator.check(query.get("name"))
-        statuses = (
-            {JobStatus(s) for s in query.getall("status")}
-            if "status" in query
-            else set()
-        )
-
-        inferred_owners = infer_job_owners_filter_from_access_tree(tree)
-        if job_name and not inferred_owners:
-            # TODO: this is an edge case when a user who has access to all
-            # jobs (job:) tries to filter them by name. not yet supported
-            # by JobsStorage.
-            inferred_owners.add(user)
-        owners = inferred_owners
-
-        if "owner" in query:
-            requested_owners = {
-                self._user_name_validator.check(owner)
-                for owner in query.getall("owner")
-            }
-            owners &= requested_owners
-
-        return JobFilter(statuses=statuses, owners=owners, name=job_name)
-
     async def handle_get_all(self, request):
         # TODO (A Danshyn 10/08/18): remove once
         # AuthClient.get_permissions_tree accepts the token param
@@ -307,14 +279,37 @@ class JobsHandler:
 
         with log_debug_time(f"Retrieved job access tree for user '{user.name}'"):
             tree = await self._auth_client.get_permissions_tree(user.name, "job:")
+
+        jobs = []
+
         try:
-            job_filter = self._build_job_filter(request.query, tree, user.name)
-            with log_debug_time(f"Read jobs with {job_filter}"):
-                jobs = await self._jobs_service.get_all_jobs(job_filter)
-            with log_debug_time("Filtered jobs"):
-                jobs = filter_jobs_with_access_tree(jobs, tree)
+            bulk_job_filter = BulkJobFilterBuilder(
+                query_filter=self._job_filter_factory.create_from_query(request.query),
+                access_tree=tree,
+            ).build()
+
+            if bulk_job_filter.bulk_filter:
+                with log_debug_time(
+                    f"Read bulk jobs with {bulk_job_filter.bulk_filter}"
+                ):
+                    jobs.extend(
+                        await self._jobs_service.get_all_jobs(
+                            bulk_job_filter.bulk_filter
+                        )
+                    )
+
+            if bulk_job_filter.shared_ids:
+                with log_debug_time(
+                    f"Read shared jobs with {bulk_job_filter.shared_ids_filter}"
+                ):
+                    jobs.extend(
+                        await self._jobs_service.get_jobs_by_ids(
+                            bulk_job_filter.shared_ids,
+                            job_filter=bulk_job_filter.shared_ids_filter,
+                        )
+                    )
         except JobFilterException:
-            jobs = []
+            pass
 
         response_payload = {
             "jobs": [
@@ -434,70 +429,98 @@ class JobFilterException(ValueError):
     pass
 
 
-def infer_job_owners_filter_from_access_tree(tree: ClientSubTreeViewRoot) -> Set[str]:
-    owners: Set[str] = set()
+class JobFilterFactory:
+    def __init__(self) -> None:
+        self._job_name_validator = create_job_name_validator()
+        self._user_name_validator = create_user_name_validator()
 
-    if tree.sub_tree.action == "deny":
-        # no job resources whatsoever
-        raise JobFilterException("no jobs")
-
-    if tree.sub_tree.action != "list":
-        # read access to all jobs = job:
-        return owners
-
-    for owner, sub_tree in tree.sub_tree.children.items():
-        if sub_tree.action == "deny":
-            continue
-
-        if sub_tree.action == "list":
-            # specific ids
-            shared_job_ids = [
-                job_id
-                for job_id, job_sub_tree in sub_tree.children.items()
-                if job_sub_tree.action not in ("deny", "list")
-            ]
-            if shared_job_ids:
-                owners.add(owner)
-            continue
-
-        # read/write/manage access to all owner's jobs = job://owner
-        owners.add(owner)
-
-    return owners
+    def create_from_query(self, query: MultiDictProxy) -> JobFilter:
+        job_name = self._job_name_validator.check(query.get("name"))
+        statuses = {JobStatus(s) for s in query.getall("status", [])}
+        owners = {
+            self._user_name_validator.check(owner)
+            for owner in query.getall("owner", [])
+        }
+        return JobFilter(statuses=statuses, owners=owners, name=job_name)
 
 
-def filter_jobs_with_access_tree(
-    jobs: List[Job], tree: ClientSubTreeViewRoot
-) -> List[Job]:
-    owners_shared_all_jobs: Set = set()
-    shared_job_ids: Set = set()
+@dataclass(frozen=True)
+class BulkJobFilter:
+    bulk_filter: Optional[JobFilter]
 
-    if tree.sub_tree.action == "deny":
-        # no job resources whatsoever
-        return []
+    shared_ids: Set[str]
+    shared_ids_filter: Optional[JobFilter]
 
-    if tree.sub_tree.action != "list":
-        # read access to all jobs = job:
-        return jobs
 
-    for owner, sub_tree in tree.sub_tree.children.items():
-        if sub_tree.action == "deny":
-            continue
+class BulkJobFilterBuilder:
+    def __init__(
+        self, query_filter: JobFilter, access_tree: ClientSubTreeViewRoot
+    ) -> None:
+        self._query_filter = query_filter
+        self._access_tree = access_tree
 
-        if sub_tree.action == "list":
-            # specific ids
-            shared_job_ids.update(
-                job_id
-                for job_id, job_sub_tree in sub_tree.children.items()
-                if job_sub_tree.action not in ("deny", "list")
-            )
-            continue
+        self._owners_shared_all: Optional[Set[str]] = None
+        self._shared_ids: Set[str] = set()
 
-        # read/write/manage access to all owner's jobs = job://owner
-        owners_shared_all_jobs.add(owner)
+    def build(self) -> BulkJobFilter:
+        self._traverse_access_tree()
+        bulk_filter = self._create_bulk_filter()
+        shared_ids_filter = self._query_filter if self._shared_ids else None
+        return BulkJobFilter(
+            bulk_filter=bulk_filter,
+            shared_ids=self._shared_ids,
+            shared_ids_filter=shared_ids_filter,
+        )
 
-    return [
-        job
-        for job in jobs
-        if job.owner in owners_shared_all_jobs or job.id in shared_job_ids
-    ]
+    def _traverse_access_tree(self) -> None:
+        tree = self._access_tree
+
+        owners_shared_all: Set[str] = set()
+        shared_ids: Set[str] = set()
+
+        if tree.sub_tree.action == "deny":
+            # no job resources whatsoever
+            raise JobFilterException("no jobs")
+
+        if tree.sub_tree.action != "list":
+            # read access to all jobs = job:
+            self._owners_shared_all = owners_shared_all
+            return
+
+        for owner, sub_tree in tree.sub_tree.children.items():
+            if sub_tree.action == "deny":
+                continue
+
+            if self._query_filter.owners and owner not in self._query_filter.owners:
+                # skipping owners
+                continue
+
+            if sub_tree.action == "list":
+                # specific ids
+                shared_ids.update(
+                    job_id
+                    for job_id, job_sub_tree in sub_tree.children.items()
+                    if job_sub_tree.action not in ("deny", "list")
+                )
+                continue
+
+            # read/write/manage access to all owner's jobs = job://owner
+            owners_shared_all.add(owner)
+
+        if not owners_shared_all and not shared_ids:
+            # no job resources whatsoever
+            raise JobFilterException("no jobs")
+
+        if owners_shared_all:
+            self._owners_shared_all = owners_shared_all
+        self._shared_ids = shared_ids
+
+    def _create_bulk_filter(self) -> Optional[JobFilter]:
+        if self._owners_shared_all is None:
+            return None
+        # `self._owners_shared_all` is already filtered against
+        # `self._query_filter.owners`.
+        # if `self._owners_shared_all` is empty, we still want to try to limit
+        # the scope to the owners passed in the query, otherwise pull all.
+        owners = set(self._owners_shared_all or self._query_filter.owners)
+        return replace(self._query_filter, owners=owners)
