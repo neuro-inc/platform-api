@@ -175,7 +175,7 @@ class EnvironConfigFactory:
             jobs_domain_name_template=self._environ[
                 "NP_K8S_JOBS_INGRESS_DOMAIN_NAME_TEMPLATE"
             ],
-            jobs_domain_name_template_named_jobs=self._environ[
+            named_jobs_domain_name_template=self._environ[
                 "NP_K8S_NAMED_JOBS_INGRESS_DOMAIN_NAME_TEMPLATE"
             ],
             ssh_domain_name=self._environ["NP_K8S_SSH_INGRESS_DOMAIN_NAME"],
