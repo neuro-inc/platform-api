@@ -455,6 +455,16 @@ class TestJob:
         job = Job(orchestrator_config=mock_orchestrator.config, job_request=job_request)
         assert job.http_host == "testjob.jobs"
 
+    def test_http_host_named(self, mock_orchestrator, job_request):
+        job = Job(
+            orchestrator_config=mock_orchestrator.config,
+            job_request=job_request,
+            name="test-job-name",
+            owner="owner",
+        )
+        assert job.http_host == "testjob.jobs"
+        assert job.http_host_named == "test-job-name-owner.jobs"
+
     def test_job_name(self, mock_orchestrator, job_request):
         job = Job(
             orchestrator_config=mock_orchestrator.config,
@@ -506,12 +516,35 @@ class TestJob:
         job = Job(orchestrator_config=mock_orchestrator.config, job_request=job_request)
         assert job.http_url == "http://testjob.jobs"
 
+    def test_http_urls_named(self, mock_orchestrator, job_request):
+        job = Job(
+            orchestrator_config=mock_orchestrator.config,
+            job_request=job_request,
+            name="test-job-name",
+            owner="owner",
+        )
+        assert job.http_url == "http://testjob.jobs"
+        assert job.http_url_named == "http://test-job-name-owner.jobs"
+
     def test_https_url(self, mock_orchestrator, job_request):
         config = dataclasses.replace(
             mock_orchestrator.config, is_http_ingress_secure=True
         )
         job = Job(orchestrator_config=config, job_request=job_request)
         assert job.http_url == "https://testjob.jobs"
+
+    def test_https_urls_named(self, mock_orchestrator, job_request):
+        config = dataclasses.replace(
+            mock_orchestrator.config, is_http_ingress_secure=True
+        )
+        job = Job(
+            orchestrator_config=config,
+            job_request=job_request,
+            name="test-job-name",
+            owner="owner",
+        )
+        assert job.http_url == "https://testjob.jobs"
+        assert job.http_url_named == "https://test-job-name-owner.jobs"
 
     def test_ssh_url(self, mock_orchestrator, job_request_with_ssh):
         job = Job(
@@ -532,6 +565,19 @@ class TestJob:
             job_request=job_request_with_ssh_and_http,
         )
         assert job.http_url == "http://testjob.jobs"
+        assert job.ssh_server == "ssh://testjob.ssh:22"
+
+    def test_http_url_and_ssh_named(
+        self, mock_orchestrator, job_request_with_ssh_and_http
+    ):
+        job = Job(
+            orchestrator_config=mock_orchestrator.config,
+            job_request=job_request_with_ssh_and_http,
+            name="test-job-name",
+            owner="owner",
+        )
+        assert job.http_url == "http://testjob.jobs"
+        assert job.http_url_named == "http://test-job-name-owner.jobs"
         assert job.ssh_server == "ssh://testjob.ssh:22"
 
     def test_should_be_deleted_pending(self, mock_orchestrator, job_request):

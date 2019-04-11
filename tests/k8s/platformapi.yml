@@ -90,6 +90,8 @@ spec:
           value: platformjobsingress
         - name: NP_K8S_JOBS_INGRESS_DOMAIN_NAME_TEMPLATE
           value: '{job_id}.jobs.platform.dev.neuromation.io'
+        - name: NP_K8S_NAMED_JOBS_INGRESS_DOMAIN_NAME_TEMPLATE
+          value: '{job_name}-{job_owner}.jobs.platform.dev.neuromation.io'
         - name: NP_K8S_SSH_INGRESS_DOMAIN_NAME
           value: ssh.platform.dev.neuromation.io
         - name: NP_K8S_SSH_AUTH_INGRESS_DOMAIN_NAME

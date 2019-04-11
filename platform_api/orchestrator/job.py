@@ -3,7 +3,7 @@ import time
 from dataclasses import dataclass, field
 from datetime import datetime, timedelta, timezone
 from functools import partial
-from typing import Any, Dict, Iterable, List, Optional, Sequence
+from typing import Any, Dict, Iterable, Iterator, List, Optional, Sequence
 
 import iso8601
 from neuro_auth_client.client import Quota
@@ -372,9 +372,30 @@ class Job:
         )
 
     @property
+    def http_host_named(self) -> Optional[str]:
+        if not self.name:
+            return None
+        return self._orchestrator_config.named_jobs_domain_name_template.format(
+            job_name=self.name, job_owner=self.owner
+        )
+
+    @property
+    def http_hosts(self) -> Iterator[str]:
+        yield self.http_host
+        if self.http_host_named:
+            yield self.http_host_named
+
+    @property
     def http_url(self) -> str:
         assert self.has_http_server_exposed
         return f"{self._http_scheme}://{self.http_host}"
+
+    @property
+    def http_url_named(self) -> Optional[str]:
+        assert self.has_http_server_exposed
+        if not self.http_host_named:
+            return None
+        return f"{self._http_scheme}://{self.http_host_named}"
 
     @property
     def ssh_server(self) -> str:

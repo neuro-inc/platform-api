@@ -49,6 +49,7 @@ def create_model_response_validator() -> t.Trafaret:
             "status": create_job_status_validator(),
             "is_preemptible": t.Bool,
             t.Key("http_url", optional=True): t.String,
+            t.Key("http_url_named", optional=True): t.String,
             t.Key("ssh_server", optional=True): t.String,
             t.Key("internal_hostname", optional=True): t.String,
             t.Key("name", optional=True): create_job_name_validator(),
@@ -104,6 +105,8 @@ class ModelsHandler:
         }
         if container.has_http_server_exposed:
             payload["http_url"] = job.http_url
+            if job.http_url_named:
+                payload["http_url_named"] = job.http_url_named
         if container.has_ssh_server_exposed:
             payload["ssh_server"] = job.ssh_server
         if job.internal_hostname:
