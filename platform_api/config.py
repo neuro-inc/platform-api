@@ -106,6 +106,8 @@ class OrchestratorConfig:
     registry: RegistryConfig
 
     jobs_domain_name_template: str
+    jobs_domain_name_template_named_jobs: str
+
     ssh_domain_name: str
     ssh_auth_domain_name: str
 

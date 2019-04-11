@@ -283,8 +283,7 @@ def job_request_factory():
                 "resources": {"cpu": 0.1, "memory_mb": 16},
                 "http": {"port": 1234},
             },
-            "name": "some-test-job-name",
-            "description": "test job submitted by neuro model train",
+            "description": "test job submitted by neuro job submit",
         }
 
     return _factory
@@ -340,8 +339,10 @@ class TestModels:
             result = await response.json()
             job_id = result["job_id"]
             assert result["status"] in ["pending"]
-            expected_url = f"http://{job_id}.jobs.platform.neuromation.io"
-            assert result["http_url"] == expected_url
+            assert result["http_url"] == f"http://{job_id}.jobs.neu.ro"
+            assert result["http_url_named_job"] == (
+                f"http://some-test-job-name-{regular_user.name}.jobs.neu.ro"
+            )
             expected_internal_hostname = f"{job_id}.default"
             assert result["internal_hostname"] == expected_internal_hostname
             assert result["is_preemptible"]
@@ -354,6 +355,22 @@ class TestModels:
         assert retrieved_job["container"]["http"]["requires_auth"]
 
         await jobs_client.long_polling_by_job_id(job_id=job_id, status="succeeded")
+        await jobs_client.delete_job(job_id=job_id)
+
+    @pytest.mark.asyncio
+    async def test_create_model_without_name_http_url_named_job_not_sent(
+        self, api, client, model_train, jobs_client, regular_user
+    ):
+        url = api.model_base_url
+        async with client.post(
+            url, headers=regular_user.headers, json=model_train
+        ) as response:
+            assert response.status == HTTPAccepted.status_code
+            result = await response.json()
+            job_id = result["job_id"]
+            assert result["http_url"] == f"http://{job_id}.jobs.neu.ro"
+            assert "http_url_named_job" not in result
+
         await jobs_client.delete_job(job_id=job_id)
 
     @pytest.mark.asyncio
@@ -600,6 +617,55 @@ class TestJobs:
                 "1: DataError(does not match pattern ^[a-z][-a-z0-9]*[a-z0-9]$)})}"
             )
             assert payload == {"error": e}
+
+    @pytest.mark.asyncio
+    async def test_create_job(self, api, client, job_submit, jobs_client, regular_user):
+        job_name = f"test-job-name-{uuid4()}"
+        url = api.jobs_base_url
+        job_submit["is_preemptible"] = True
+        job_submit["name"] = job_name
+        job_submit["container"]["http"]["requires_auth"] = True
+        async with client.post(
+            url, headers=regular_user.headers, json=job_submit
+        ) as resp:
+            assert resp.status == HTTPAccepted.status_code
+            payload = await resp.json()
+            job_id = payload["id"]
+            assert payload["status"] in ["pending"]
+            assert payload["name"] == job_name
+            assert payload["http_url"] == f"http://{job_id}.jobs.neu.ro"
+            assert (
+                payload["http_url_named_job"]
+                == f"http://{job_name}-{regular_user.name}.jobs.neu.ro"
+            )
+            expected_internal_hostname = f"{job_id}.default"
+            assert payload["internal_hostname"] == expected_internal_hostname
+            assert payload["is_preemptible"]
+            assert payload["description"] == "test job submitted by neuro job submit"
+
+        retrieved_job = await jobs_client.get_job_by_id(job_id=job_id)
+        assert retrieved_job["internal_hostname"] == expected_internal_hostname
+        assert retrieved_job["name"] == job_name
+        assert retrieved_job["container"]["http"]["requires_auth"]
+
+        await jobs_client.long_polling_by_job_id(job_id=job_id, status="succeeded")
+        await jobs_client.delete_job(job_id=job_id)
+
+    @pytest.mark.asyncio
+    async def test_create_job_without_name_http_url_named_job_not_sent(
+        self, api, client, job_submit, jobs_client, regular_user
+    ):
+        url = api.jobs_base_url
+        async with client.post(
+            url, headers=regular_user.headers, json=job_submit
+        ) as resp:
+            assert resp.status == HTTPAccepted.status_code
+            payload = await resp.json()
+            job_id = payload["id"]
+            assert payload["http_url"] == f"http://{job_id}.jobs.neu.ro"
+            assert "http_url_named_job" not in payload
+
+        await jobs_client.delete_job(job_id=job_id)
 
     @pytest.mark.asyncio
     async def test_create_multiple_jobs_with_same_name_fail(

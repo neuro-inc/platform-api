@@ -471,19 +471,20 @@ class KubeOrchestrator(Orchestrator):
         return convert_pod_status_to_job_status(status).status
 
     async def _create_ingress(self, job: Job, service: Service) -> None:
-        await self._client.add_ingress_rule(
-            name=self._get_ingress_name(job),
-            rule=IngressRule.from_service(host=job.http_host, service=service),
-        )
+        ingress_name = self._get_ingress_name(job)
+        for host in job.http_hosts:
+            await self._client.add_ingress_rule(
+                name=ingress_name,
+                rule=IngressRule.from_service(host=host, service=service),
+            )
 
     async def _delete_ingress(self, job: Job) -> None:
-        host = job.http_host
-        try:
-            await self._client.remove_ingress_rule(
-                name=self._get_ingress_name(job), host=host
-            )
-        except Exception:
-            logger.exception(f"Failed to remove ingress rule {host}")
+        ingress_name = self._get_ingress_name(job)
+        for host in job.http_hosts:
+            try:
+                await self._client.remove_ingress_rule(name=ingress_name, host=host)
+            except Exception:
+                logger.exception(f"Failed to remove ingress rule {host}")
 
     def _get_ingress_name(self, job: Job) -> str:
         if job.requires_http_auth and self._config.jobs_ingress_auth_name:

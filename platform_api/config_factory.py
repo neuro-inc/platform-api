@@ -175,6 +175,9 @@ class EnvironConfigFactory:
             jobs_domain_name_template=self._environ[
                 "NP_K8S_JOBS_INGRESS_DOMAIN_NAME_TEMPLATE"
             ],
+            jobs_domain_name_template_named_jobs=self._environ[
+                "NP_K8S_JOBS_INGRESS_DOMAIN_NAME_TEMPLATE_NAMED_JOBS"
+            ],
             ssh_domain_name=self._environ["NP_K8S_SSH_INGRESS_DOMAIN_NAME"],
             ssh_auth_domain_name=self._environ["NP_K8S_SSH_AUTH_INGRESS_DOMAIN_NAME"],
             job_deletion_delay_s=int(

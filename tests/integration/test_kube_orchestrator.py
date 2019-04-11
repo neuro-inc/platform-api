@@ -3,8 +3,9 @@ import io
 import time
 import uuid
 from pathlib import PurePath
-from typing import Callable
+from typing import Callable, Optional
 from unittest import mock
+from uuid import uuid4
 
 import aiohttp
 import pytest
@@ -447,7 +448,7 @@ class TestKubeOrchestrator:
                 interval_s *= 1.5
 
     @pytest.mark.asyncio
-    async def test_job_with_exposed_http_server(
+    async def test_job_with_exposed_http_server_no_job_name(
         self, kube_config, kube_orchestrator, kube_ingress_ip, kube_client
     ):
         container = Container(
@@ -461,6 +462,9 @@ class TestKubeOrchestrator:
         )
         try:
             await job.start()
+
+            assert job.http_host_named_job is None
+
             await self._wait_for_job_service(
                 kube_ingress_ip, host=job.http_host, job_id=job.id
             )
@@ -474,7 +478,43 @@ class TestKubeOrchestrator:
             await job.delete()
 
     @pytest.mark.asyncio
-    async def test_job_with_exposed_http_server_with_auth(
+    async def test_job_with_exposed_http_server_with_job_name(
+        self, kube_config, kube_orchestrator, kube_ingress_ip, kube_client
+    ):
+        container = Container(
+            image="python",
+            command="python -m http.server 80",
+            resources=ContainerResources(cpu=0.1, memory_mb=128),
+            http_server=ContainerHTTPServer(port=80),
+        )
+        job = MyJob(
+            orchestrator=kube_orchestrator,
+            job_request=JobRequest.create(container),
+            name=f"test-job-name-{uuid4()}",
+            owner="owner",
+        )
+        try:
+            await job.start()
+            assert not (job.requires_http_auth), str(job)
+
+            for host in [job.http_host, job.http_host_named_job]:
+                assert host
+                await self._wait_for_job_service(
+                    kube_ingress_ip, host=host, job_id=job.id
+                )
+                ingress = await kube_client.get_ingress(kube_config.jobs_ingress_name)
+                assert ingress.find_rule_index_by_host(host) >= 0
+
+                ingress = await kube_client.get_ingress(
+                    kube_config.jobs_ingress_auth_name
+                )
+                assert ingress.find_rule_index_by_host(host) == -1
+
+        finally:
+            await job.delete()
+
+    @pytest.mark.asyncio
+    async def test_job_with_exposed_http_server_with_auth_no_job_name(
         self, kube_config, kube_orchestrator, kube_ingress_ip, kube_client
     ):
         container = Container(
@@ -488,6 +528,9 @@ class TestKubeOrchestrator:
         )
         try:
             await job.start()
+
+            assert job.http_host_named_job is None
+
             await self._wait_for_job_service(
                 kube_ingress_ip, host=job.http_host, job_id=job.id
             )
@@ -501,10 +544,43 @@ class TestKubeOrchestrator:
             await job.delete()
 
     @pytest.mark.asyncio
-    async def test_job_check_dns_hostname(
-        self, kube_config, kube_orchestrator, kube_ingress_ip, delete_job_later
+    async def test_job_with_exposed_http_server_with_auth_with_job_name(
+        self, kube_config, kube_orchestrator, kube_ingress_ip, kube_client
     ):
-        def create_server_job():
+        container = Container(
+            image="python",
+            command="python -m http.server 80",
+            resources=ContainerResources(cpu=0.1, memory_mb=128),
+            http_server=ContainerHTTPServer(port=80, requires_auth=True),
+        )
+        job = MyJob(
+            orchestrator=kube_orchestrator,
+            job_request=JobRequest.create(container),
+            name=f"test-job-name-{uuid4()}",
+            owner="owner",
+        )
+        try:
+            await job.start()
+
+            for http_host in [job.http_host, job.http_host_named_job]:
+                assert http_host
+                await self._wait_for_job_service(
+                    kube_ingress_ip, host=http_host, job_id=job.id
+                )
+
+                ingress = await kube_client.get_ingress(kube_config.jobs_ingress_name)
+                assert ingress.find_rule_index_by_host(http_host) == -1
+
+                ingress = await kube_client.get_ingress(
+                    kube_config.jobs_ingress_auth_name
+                )
+                assert ingress.find_rule_index_by_host(http_host) >= 0
+        finally:
+            await job.delete()
+
+    @pytest.fixture
+    def create_server_job(self, kube_orchestrator):
+        def impl(job_name: Optional[str] = None) -> MyJob:
             server_cont = Container(
                 image="python",
                 command="python -m http.server 80",
@@ -514,9 +590,14 @@ class TestKubeOrchestrator:
             return MyJob(
                 orchestrator=kube_orchestrator,
                 job_request=JobRequest.create(server_cont),
+                name=job_name,
             )
 
-        def create_client_job(server_hostname: str):
+        yield impl
+
+    @pytest.fixture
+    def create_client_job(self, kube_orchestrator):
+        def impl(server_hostname: str) -> MyJob:
             client_cont = Container(
                 image="ubuntu",
                 command=f"curl --silent --fail http://{server_hostname}/",
@@ -527,15 +608,85 @@ class TestKubeOrchestrator:
                 job_request=JobRequest.create(client_cont),
             )
 
+        yield impl
+
+    @pytest.mark.asyncio
+    async def test_job_check_dns_hostname(
+        self,
+        kube_config,
+        create_server_job,
+        create_client_job,
+        kube_ingress_ip,
+        delete_job_later,
+    ):
         server_job = create_server_job()
         await delete_job_later(server_job)
         await server_job.start()
         server_hostname = server_job.internal_hostname
+
+        assert server_job.http_host
+        assert server_job.http_host_named_job is None
         await self._wait_for_job_service(
             kube_ingress_ip, host=server_job.http_host, job_id=server_job.id
         )
 
         client_job = create_client_job(server_hostname)
+        await delete_job_later(client_job)
+        await client_job.start()
+        assert self.wait_for_success(job=client_job)
+
+    @pytest.mark.asyncio
+    async def test_job_check_http_hostname_no_job_name(
+        self,
+        kube_config,
+        create_server_job,
+        create_client_job,
+        kube_ingress_ip,
+        delete_job_later,
+    ):
+        server_job = create_server_job()
+        await delete_job_later(server_job)
+        await server_job.start()
+
+        http_host = server_job.http_host
+        await self._wait_for_job_service(
+            kube_ingress_ip, host=http_host, job_id=server_job.id
+        )
+        client_job = create_client_job(http_host)
+        await delete_job_later(client_job)
+        await client_job.start()
+        assert self.wait_for_success(job=client_job)
+
+        assert server_job.http_host_named_job is None
+
+    @pytest.mark.asyncio
+    async def test_job_check_http_hostname_with_job_name(
+        self,
+        kube_config,
+        create_server_job,
+        create_client_job,
+        kube_ingress_ip,
+        delete_job_later,
+    ):
+        server_job_name = f"server-job-{uuid4()}"
+        server_job = create_server_job(job_name=server_job_name)
+        await delete_job_later(server_job)
+        await server_job.start()
+
+        http_host = server_job.http_host
+        await self._wait_for_job_service(
+            kube_ingress_ip, host=http_host, job_id=server_job.id
+        )
+        client_job = create_client_job(http_host)
+        await delete_job_later(client_job)
+        await client_job.start()
+        assert self.wait_for_success(job=client_job)
+
+        http_host = server_job.http_host_named_job
+        await self._wait_for_job_service(
+            kube_ingress_ip, host=http_host, job_id=server_job.id
+        )
+        client_job = create_client_job(http_host)
         await delete_job_later(client_job)
         await client_job.start()
         assert self.wait_for_success(job=client_job)

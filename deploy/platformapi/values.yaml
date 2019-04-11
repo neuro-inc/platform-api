@@ -23,6 +23,11 @@ NP_K8S_JOBS_INGRESS_DOMAIN_NAME_TEMPLATE:
   dev: '{job_id}.jobs-dev.neu.ro'
   staging: '{job_id}.jobs-staging.neu.ro'
   prod: '{job_id}.jobs.neu.ro'
+NP_K8S_JOBS_INGRESS_DOMAIN_NAME_TEMPLATE_NAMED_JOBS:
+  _default: '{job_name}-{job_owner}.jobs-dev.neu.ro'
+  dev: '{job_name}-{job_owner}.jobs-dev.neu.ro'
+  staging: '{job_name}-{job_owner}.jobs-staging.neu.ro'
+  prod: '{job_name}-{job_owner}.jobs.neu.ro'
 NP_K8S_SSH_INGRESS_DOMAIN_NAME:
   _default: ssh-dev.neu.ro
   dev: ssh-dev.neu.ro
