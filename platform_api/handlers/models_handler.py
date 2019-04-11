@@ -106,7 +106,7 @@ class ModelsHandler:
         if container.has_http_server_exposed:
             payload["http_url"] = job.http_url
             if job.http_url_named_job:
-                payload["http_url"] = job.http_url_named_job
+                payload["http_url_named_job"] = job.http_url_named_job
         if container.has_ssh_server_exposed:
             payload["ssh_server"] = job.ssh_server
         if job.internal_hostname:

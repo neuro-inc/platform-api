@@ -331,7 +331,8 @@ class TestModels:
         url = api.model_base_url
         model_train["is_preemptible"] = True
         model_train["container"]["http"]["requires_auth"] = True
-        model_train["name"] = "some-test-job-name"
+        job_name = "some-test-job-name"
+        model_train["name"] = job_name
         async with client.post(
             url, headers=regular_user.headers, json=model_train
         ) as response:
@@ -341,17 +342,17 @@ class TestModels:
             assert result["status"] in ["pending"]
             assert result["http_url"] == f"http://{job_id}.jobs.neu.ro"
             assert result["http_url_named_job"] == (
-                f"http://some-test-job-name-{regular_user.name}.jobs.neu.ro"
+                f"http://{job_name}-{regular_user.name}.jobs.neu.ro"
             )
             expected_internal_hostname = f"{job_id}.default"
             assert result["internal_hostname"] == expected_internal_hostname
             assert result["is_preemptible"]
-            assert result["name"] == "some-test-job-name"
+            assert result["name"] == job_name
             assert result["description"] == "test job submitted by neuro model train"
 
         retrieved_job = await jobs_client.get_job_by_id(job_id=job_id)
         assert retrieved_job["internal_hostname"] == expected_internal_hostname
-        assert retrieved_job["name"] == "some-test-job-name"
+        assert retrieved_job["name"] == job_name
         assert retrieved_job["container"]["http"]["requires_auth"]
 
         await jobs_client.long_polling_by_job_id(job_id=job_id, status="succeeded")
