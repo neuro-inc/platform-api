@@ -451,10 +451,6 @@ class BulkJobFilter:
     shared_ids: Set[str]
     shared_ids_filter: JobFilter
 
-    def __post_init__(self):
-        if self.shared_ids:
-            assert self.shared_ids_filter is not None, f"no filter, {self.shared_ids}"
-
 
 class BulkJobFilterBuilder:
     def __init__(
