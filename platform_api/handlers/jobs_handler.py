@@ -502,10 +502,9 @@ class BulkJobFilterBuilder:
                     for job_id, job_sub_tree in sub_tree.children.items()
                     if job_sub_tree.action not in ("deny", "list")
                 )
-                continue
-
-            # read/write/manage access to all owner's jobs = job://owner
-            owners_shared_all.add(owner)
+            else:
+                # read/write/manage access to all owner's jobs = job://owner
+                owners_shared_all.add(owner)
 
         if not owners_shared_all and not shared_ids:
             # no job resources whatsoever
