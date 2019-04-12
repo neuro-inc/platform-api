@@ -1,5 +1,5 @@
 import logging
-from typing import List, Optional, Tuple
+from typing import List, Optional, Sequence, Tuple
 
 from platform_api.user import User
 
@@ -190,3 +190,8 @@ class JobsService:
 
     async def get_all_jobs(self, job_filter: Optional[JobFilter] = None) -> List[Job]:
         return await self._jobs_storage.get_all_jobs(job_filter)
+
+    async def get_jobs_by_ids(
+        self, job_ids: Sequence[str], job_filter: Optional[JobFilter] = None
+    ) -> List[Job]:
+        return await self._jobs_storage.get_jobs_by_ids(job_ids, job_filter=job_filter)

@@ -14,6 +14,7 @@ from platform_api.orchestrator.job_request import (
 )
 from platform_api.orchestrator.jobs_storage import (
     JobFilter,
+    JobsStorageException,
     JobStorageJobFoundError,
     JobStorageTransactionError,
     RedisJobsStorage,
@@ -606,7 +607,7 @@ class TestRedisJobsStorage:
         invalid_operation_error = (
             "filtering jobs by name is allowed only together with owner"
         )
-        with pytest.raises(ValueError, match=invalid_operation_error):
+        with pytest.raises(JobsStorageException, match=invalid_operation_error):
             job_filter = JobFilter(name="job-first")
             await storage.get_all_jobs(job_filter)
 
@@ -1125,3 +1126,32 @@ class TestRedisJobsStorage:
 
         expected_non_gpu_approx = expected_non_gpu_time + compute_expected_time_elapsed
         assert actual_run_time.total_non_gpu_run_time_delta >= expected_non_gpu_approx
+
+    @pytest.mark.asyncio
+    async def test_get_jobs_by_ids_missing_only(self, redis_client, kube_orchestrator):
+        storage = RedisJobsStorage(
+            client=redis_client, orchestrator_config=kube_orchestrator.config
+        )
+
+        jobs = await storage.get_jobs_by_ids({"missing"})
+        assert not jobs
+
+    @pytest.mark.asyncio
+    async def test_get_jobs_by_ids(self, redis_client, kube_orchestrator):
+        first_job = self._create_pending_job(kube_orchestrator, owner="testuser")
+        second_job = self._create_running_job(kube_orchestrator, owner="anotheruser")
+        third_job = self._create_running_job(kube_orchestrator, owner="testuser")
+        storage = RedisJobsStorage(
+            client=redis_client, orchestrator_config=kube_orchestrator.config
+        )
+        for job in (first_job, second_job, third_job):
+            async with storage.try_create_job(job):
+                pass
+
+        job_filter = JobFilter(statuses={JobStatus.PENDING}, owners={"testuser"})
+        jobs = await storage.get_jobs_by_ids(
+            {first_job.id, "missing", second_job.id, third_job.id},
+            job_filter=job_filter,
+        )
+        job_ids = {job.id for job in jobs}
+        assert job_ids == {first_job.id}

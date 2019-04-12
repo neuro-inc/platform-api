@@ -57,6 +57,15 @@ class JobFilter:
     owners: AbstractSet[str] = field(default_factory=cast(Type[Set[str]], set))
     name: Optional[str] = None
 
+    def check(self, job: Job) -> bool:
+        if self.statuses and job.status not in self.statuses:
+            return False
+        if self.owners and job.owner not in self.owners:
+            return False
+        if self.name and self.name != job.name:
+            return False
+        return True
+
 
 class JobsStorage(ABC):
     @abstractmethod
@@ -77,6 +86,12 @@ class JobsStorage(ABC):
 
     @abstractmethod
     async def get_all_jobs(self, job_filter: Optional[JobFilter] = None) -> List[Job]:
+        pass
+
+    @abstractmethod
+    async def get_jobs_by_ids(
+        self, job_ids: Sequence[str], job_filter: Optional[JobFilter] = None
+    ) -> List[Job]:
         pass
 
     async def get_running_jobs(self) -> List[Job]:
@@ -137,22 +152,27 @@ class InMemoryJobsStorage(JobsStorage):
         yield job
         await self.set_job(job)
 
-    def _apply_filter(self, job_filter: JobFilter, job: Job) -> bool:
-        if job_filter.statuses and job.status not in job_filter.statuses:
-            return False
-        if job_filter.owners and job.owner not in job_filter.owners:
-            return False
-        if job_filter.name and job_filter.name != job.name:
-            return False
-        return True
-
     async def get_all_jobs(self, job_filter: Optional[JobFilter] = None) -> List[Job]:
         jobs = []
         for payload in self._job_records.values():
             job = self._parse_job_payload(payload)
-            if job_filter and not self._apply_filter(job_filter, job):
+            if job_filter and not job_filter.check(job):
                 continue
             jobs.append(job)
+        return jobs
+
+    async def get_jobs_by_ids(
+        self, job_ids: Sequence[str], job_filter: Optional[JobFilter] = None
+    ) -> List[Job]:
+        jobs = []
+        for job_id in job_ids:
+            try:
+                job = await self.get_job(job_id)
+            except JobError:
+                # skipping missing
+                continue
+            if not job_filter or job_filter.check(job):
+                jobs.append(job)
         return jobs
 
     async def get_aggregated_run_time(self, job_filter: JobFilter) -> AggregatedRunTime:
@@ -363,7 +383,7 @@ class RedisJobsStorage(JobsStorage):
             return last_job_id
         return None
 
-    async def _get_jobs(self, ids: List[str]) -> List[Job]:
+    async def _get_jobs(self, ids: Sequence[str]) -> List[Job]:
         jobs: List[Job] = []
         if not ids:
             return jobs
@@ -391,7 +411,7 @@ class RedisJobsStorage(JobsStorage):
     ) -> List[str]:
         owners = owners or set()
         if name and not owners:
-            raise ValueError(
+            raise JobsStorageException(
                 "filtering jobs by name is allowed only together with owners"
             )
 
@@ -448,6 +468,14 @@ class RedisJobsStorage(JobsStorage):
             statuses=job_filter.statuses, owners=job_filter.owners, name=job_filter.name
         )
         return await self._get_jobs(job_ids)
+
+    async def get_jobs_by_ids(
+        self, job_ids: Sequence[str], job_filter: Optional[JobFilter] = None
+    ) -> List[Job]:
+        jobs = await self._get_jobs(job_ids)
+        if job_filter:
+            jobs = [job for job in jobs if job_filter.check(job)]
+        return jobs
 
     async def get_running_jobs(self) -> List[Job]:
         statuses = {JobStatus.RUNNING}
