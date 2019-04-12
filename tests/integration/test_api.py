@@ -862,6 +862,8 @@ class TestJobs:
 
     @pytest.fixture
     async def run_job(self, api, client, jobs_client_factory):
+        job_id = None
+
         async def _impl(user, job_request, do_kill=False):
             url = api.jobs_base_url
             headers = user.headers
@@ -878,6 +880,9 @@ class TestJobs:
 
         yield _impl
 
+        if job_id:
+            await jobs_client.delete_job(job_id=job_id)
+
     @pytest.fixture
     async def share_job(self, auth_client):
         async def _impl(owner, follower, job_id):
@@ -887,6 +892,179 @@ class TestJobs:
             )
 
         yield _impl
+
+    @pytest.fixture
+    async def share_all_jobs(self, auth_client):
+        async def _impl(owner, follower):
+            permission = Permission(uri=f"job://{owner.name}", action="read")
+            await auth_client.grant_user_permissions(
+                follower.name, [permission], token=owner.token
+            )
+
+        yield _impl
+
+    @pytest.mark.asyncio
+    async def test_get_all_jobs_no_filter(
+        self,
+        api,
+        client,
+        regular_user_factory,
+        jobs_client_factory,
+        job_request_factory,
+        run_job,
+        share_job,
+        setup_new_user_for_filtration,
+    ):
+        job_name = "test-job-name"
+
+        def create_job_request_with_name():
+            job_request = job_request_factory()
+            job_request["container"]["command"] = "sleep 30m"
+            job_request["name"] = job_name
+            return job_request
+
+        def create_job_request_no_name():
+            job_request = job_request_factory()
+            job_request["container"]["command"] = "sleep 30m"
+            return job_request
+
+        job_req_no_name = create_job_request_no_name()
+        job_req_with_name = create_job_request_with_name()
+
+        usr1 = await regular_user_factory()
+        usr2 = await regular_user_factory()
+
+        jobs_client_usr1 = jobs_client_factory(usr1)
+
+        job_usr1_with_name_killed = await run_job(usr1, job_req_with_name, do_kill=True)
+        job_usr1_no_name_killed = await run_job(usr1, job_req_no_name, do_kill=True)
+        job_usr1_with_name = await run_job(usr1, job_req_with_name, do_kill=False)
+        job_usr1_no_name = await run_job(usr1, job_req_no_name, do_kill=False)
+
+        job_usr2_with_name_killed = await run_job(usr2, job_req_with_name, do_kill=True)
+        job_usr2_no_name_killed = await run_job(usr2, job_req_no_name, do_kill=True)
+        job_usr2_with_name = await run_job(usr2, job_req_with_name, do_kill=False)
+        job_usr2_no_name = await run_job(usr2, job_req_no_name, do_kill=False)
+
+        # usr2 shares their jobs with usr1
+        await share_job(usr2, usr1, job_usr2_with_name_killed)
+        await share_job(usr2, usr1, job_usr2_no_name_killed)
+        await share_job(usr2, usr1, job_usr2_with_name)
+        await share_job(usr2, usr1, job_usr2_no_name)
+
+        # filter: another owner
+        jobs = await jobs_client_usr1.get_all_jobs()
+        jobs = {job["id"] for job in jobs}
+        assert jobs == {
+            job_usr1_with_name_killed,
+            job_usr1_no_name_killed,
+            job_usr1_with_name,
+            job_usr1_no_name,
+            job_usr2_with_name_killed,
+            job_usr2_no_name_killed,
+            job_usr2_with_name,
+            job_usr2_no_name,
+        }
+
+    @pytest.mark.asyncio
+    async def test_get_all_jobs_with_both_shared_all_and_shared_singles(
+        self,
+        api,
+        client,
+        regular_user_factory,
+        jobs_client_factory,
+        job_request_factory,
+        run_job,
+        share_job,
+        share_all_jobs,
+        setup_new_user_for_filtration,
+    ):
+        job_name = "test-job-name"
+
+        def create_job_request_with_name():
+            job_request = job_request_factory()
+            job_request["container"]["command"] = "sleep 30m"
+            job_request["name"] = job_name
+            return job_request
+
+        def create_job_request_no_name():
+            job_request = job_request_factory()
+            job_request["container"]["command"] = "sleep 30m"
+            return job_request
+
+        job_req_no_name = create_job_request_no_name()
+        job_req_with_name = create_job_request_with_name()
+
+        usr1 = await regular_user_factory()
+        usr2 = await regular_user_factory()
+        usr3 = await regular_user_factory()
+
+        jobs_client_usr1 = jobs_client_factory(usr1)
+
+        job_usr1_with_name_killed = await run_job(usr1, job_req_with_name, do_kill=True)
+        job_usr1_no_name_killed = await run_job(usr1, job_req_no_name, do_kill=True)
+        job_usr1_with_name = await run_job(usr1, job_req_with_name, do_kill=False)
+        job_usr1_no_name = await run_job(usr1, job_req_no_name, do_kill=False)
+
+        job_usr2_with_name_killed = await run_job(usr2, job_req_with_name, do_kill=True)
+        job_usr2_no_name_killed = await run_job(usr2, job_req_no_name, do_kill=True)
+        await run_job(usr2, job_req_with_name, do_kill=False)  # job_usr2_with_name
+        await run_job(usr2, job_req_no_name, do_kill=False)  # job_usr2_no_name
+
+        job_usr3_with_name_killed = await run_job(usr3, job_req_with_name, do_kill=True)
+        job_usr3_no_name_killed = await run_job(usr3, job_req_no_name, do_kill=True)
+        job_usr3_with_name = await run_job(usr3, job_req_with_name, do_kill=False)
+        job_usr3_no_name = await run_job(usr3, job_req_no_name, do_kill=False)
+
+        # usr2 shares some of their jobs with usr1
+        await share_job(usr2, usr1, job_usr2_with_name_killed)
+        await share_job(usr2, usr1, job_usr2_no_name_killed)
+
+        # usr3 shares all of their jobs with usr1
+        await share_all_jobs(usr3, usr1)
+
+        # filter: no owners
+        jobs = await jobs_client_usr1.get_all_jobs()
+        jobs = {job["id"] for job in jobs}
+        assert jobs == {
+            job_usr1_with_name_killed,
+            job_usr1_no_name_killed,
+            job_usr1_with_name,
+            job_usr1_no_name,
+            # shared by usr2:
+            job_usr2_with_name_killed,
+            job_usr2_no_name_killed,
+            # shared by usr3:
+            job_usr3_with_name_killed,
+            job_usr3_no_name_killed,
+            job_usr3_with_name,
+            job_usr3_no_name,
+        }
+
+        # filter: usr2
+        filters = [("owner", usr2.name)]
+        jobs = await jobs_client_usr1.get_all_jobs(filters)
+        jobs = {job["id"] for job in jobs}
+        assert jobs == {
+            # shared by usr2:
+            job_usr2_with_name_killed,
+            job_usr2_no_name_killed,
+        }
+
+        # filter: usr2 + usr3
+        filters = [("owner", usr2.name), ("owner", usr3.name)]
+        jobs = await jobs_client_usr1.get_all_jobs(filters)
+        jobs = {job["id"] for job in jobs}
+        assert jobs == {
+            # shared by usr2:
+            job_usr2_with_name_killed,
+            job_usr2_no_name_killed,
+            # shared by usr3:
+            job_usr3_with_name_killed,
+            job_usr3_no_name_killed,
+            job_usr3_with_name,
+            job_usr3_no_name,
+        }
 
     @pytest.mark.asyncio
     async def test_get_all_jobs_filter_by_name_owner_and_status(
