@@ -27,6 +27,7 @@ from platform_api.orchestrator.job_request import (
     ContainerResources,
     ContainerSSHServer,
     ContainerVolume,
+    JobStatus,
 )
 from platform_api.orchestrator.jobs_storage import JobFilter
 from platform_api.resource import GPUModel
@@ -473,6 +474,42 @@ class TestBulkJobFilterBuilder:
             bulk_filter=None,
             shared_ids={"job-test-1"},
             shared_ids_filter=JobFilter(owners={"anotheruser"}),
+        )
+
+    def test_mixed_access_owners_shared_all_and_specific(self):
+        query_filter = JobFilter(
+            owners={"testuser", "anotheruser"},
+            statuses={JobStatus.PENDING},
+            name="testname",
+        )
+        tree = ClientSubTreeViewRoot(
+            path="/",
+            sub_tree=ClientAccessSubTreeView(
+                action="list",
+                children={
+                    "testuser": ClientAccessSubTreeView(action="read", children={}),
+                    "anotheruser": ClientAccessSubTreeView(
+                        action="list",
+                        children={
+                            "job-test-1": ClientAccessSubTreeView("read", children={}),
+                            "job-test-2": ClientAccessSubTreeView("deny", children={}),
+                        },
+                    ),
+                    "someuser": ClientAccessSubTreeView(action="deny", children={}),
+                },
+            ),
+        )
+        bulk_filter = BulkJobFilterBuilder(query_filter, tree).build()
+        assert bulk_filter == BulkJobFilter(
+            bulk_filter=JobFilter(
+                owners={"testuser"}, statuses={JobStatus.PENDING}, name="testname"
+            ),
+            shared_ids={"job-test-1"},
+            shared_ids_filter=JobFilter(
+                owners={"testuser", "anotheruser"},
+                statuses={JobStatus.PENDING},
+                name="testname",
+            ),
         )
 
 
