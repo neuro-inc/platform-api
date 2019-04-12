@@ -459,7 +459,8 @@ class BulkJobFilterBuilder:
         self._query_filter = query_filter
         self._access_tree = access_tree
 
-        self._owners_shared_all: Optional[Set[str]] = None
+        self._has_access_to_all: bool = False
+        self._owners_shared_all: Set[str] = set()
         self._shared_ids: Set[str] = set()
 
     def build(self) -> BulkJobFilter:
@@ -484,7 +485,7 @@ class BulkJobFilterBuilder:
 
         if tree.sub_tree.action != "list":
             # read access to all jobs = job:
-            self._owners_shared_all = owners_shared_all
+            self._has_access_to_all = True
             return
 
         for owner, sub_tree in tree.sub_tree.children.items():
@@ -510,12 +511,11 @@ class BulkJobFilterBuilder:
             # no job resources whatsoever
             raise JobFilterException("no jobs")
 
-        if owners_shared_all:
-            self._owners_shared_all = owners_shared_all
+        self._owners_shared_all = owners_shared_all
         self._shared_ids = shared_ids
 
     def _create_bulk_filter(self) -> Optional[JobFilter]:
-        if self._owners_shared_all is None:
+        if not self._has_access_to_all and not self._owners_shared_all:
             return None
         # `self._owners_shared_all` is already filtered against
         # `self._query_filter.owners`.
