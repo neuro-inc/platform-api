@@ -466,21 +466,18 @@ class BulkJobFilterBuilder:
     def build(self) -> BulkJobFilter:
         self._traverse_access_tree()
 
+        shared_ids_filter = JobFilter()
+
         # `self._owners_shared_all` is already filtered by `self._query_filter.owners`:
-        if self._owners_shared_everything:
-            assert self._owners_shared_everything <= self._query_filter.owners
-            bulk_filter = replace(
-                self._query_filter, owners=self._owners_shared_everything
-            )
-        else:
+        if self._has_access_to_everything:
             # all jobs available to the user
             bulk_filter = self._query_filter
-
-        if self._shared_ids:
-            # `self._shared_ids` is already filtered by `self._query_filter.owners`:
-            shared_ids_filter = replace(self._query_filter, owners=set())
         else:
-            shared_ids_filter = JobFilter()
+            owners = self._owners_shared_everything or self._query_filter.owners
+            bulk_filter = replace(self._query_filter, owners=owners)
+            if self._shared_ids:
+                # `self._shared_ids` is already filtered by `self._query_filter.owners`:
+                shared_ids_filter = replace(self._query_filter, owners=set())
 
         return BulkJobFilter(
             bulk_filter=bulk_filter,
