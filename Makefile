@@ -105,10 +105,6 @@ gke_k8s_deploy: _helm
 		--set "INGRESS_FALLBACK_IMAGE.$(HELM_ENV)=$(INGRESS_FALLBACK_IMAGE_K8S):$(CIRCLE_SHA1)" \
 		upgrade --install platformapi deploy/platformapi/ --wait --timeout 600
 
-gke_k8s_deploy_ssh: _helm
-	gcloud --quiet container clusters get-credentials $(GKE_CLUSTER_NAME) $(CLUSTER_ZONE_REGION)
-	helm --set "global.env=$(HELM_ENV)" --set "IMAGE.$(HELM_ENV)=$(IMAGE_K8S):$(CIRCLE_SHA1)" upgrade --install ssh deploy/ssh/ --wait --timeout 600
-
 gke_k8s_deploy_ssh_auth: _helm
 	gcloud --quiet container clusters get-credentials $(GKE_CLUSTER_NAME) $(CLUSTER_ZONE_REGION)
 	helm --set "global.env=$(HELM_ENV)" --set "IMAGE.$(HELM_ENV)=$(SSH_K8S):$(CIRCLE_SHA1)" upgrade --install ssh-auth deploy/ssh_auth/ --wait --timeout 600

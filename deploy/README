@@ -17,10 +17,6 @@ Platform api
 SSH-Auth
 ```helm --set "global.env=prod" upgrade --install ssh-auth ssh_auth```
 
-Jumphost
-```helm --set "global.env=prod" upgrade --install jumphost jumphost/helmpackage```
-
-
 
 
 #Deploy in staging and dev clusters
@@ -45,12 +41,3 @@ Staging :
 	```helm --set "global.env=staging" upgrade --install ssh-auth ssh_auth```
 
 
-
-
-## Jumphost
-
-Dev :
-	```helm --set "global.env=dev" upgrade --install jumphost jumphost/helmpackage```
-
-Staging :
-	```helm --set "global.env=staging" upgrade --install jumphost jumphost/helmpackage```

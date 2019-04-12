@@ -27,25 +27,6 @@ jobs:
           command: |
             make gke_k8s_deploy
 
-  gke_ssh_deploy:
-    <<: *defaults
-    steps:
-      - checkout
-      - run:
-          name: GKE Auth
-          command: |
-            make -s gke_login
-
-      - run:
-          name: GKE Docker Push
-          command: |
-            make gke_docker_push
-
-      - run:
-          name: GKE K8s Deploy
-          command: |
-            make gke_k8s_deploy_ssh
-
   gke_ssh_auth_deploy:
     <<: *defaults
     steps:
@@ -64,25 +45,6 @@ jobs:
           name: GKE K8s Deploy
           command: |
             make gke_k8s_deploy_ssh_auth
-
-  gke_jumphost_deploy:
-    <<: *defaults
-    steps:
-      - checkout
-      - run:
-          name: GKE Auth
-          command: |
-            make -C deploy/jumphost -s gke_login
-
-      - run:
-          name: GKE Docker Push
-          command: |
-            make -C deploy/jumphost gke_docker_jumphost_push
-
-      - run:
-          name: GKE K8s Deploy
-          command: |
-            make -C deploy/jumphost gke_k8s_deploy_jumphost
 
 
   test:
