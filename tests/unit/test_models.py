@@ -346,7 +346,7 @@ class TestJobContainerToJson:
 
 
 class TestBulkJobFilterBuilder:
-    def test_no_access_no_owners(self):
+    def test_no_access(self):
         query_filter = JobFilter()
         tree = ClientSubTreeViewRoot(
             path="/", sub_tree=ClientAccessSubTreeView(action="deny", children={})
@@ -354,15 +354,7 @@ class TestBulkJobFilterBuilder:
         with pytest.raises(JobFilterException, match="no jobs"):
             BulkJobFilterBuilder(query_filter, tree).build()
 
-    def test_no_access_with_owners_root_denied(self):
-        query_filter = JobFilter(owners={"someuser"})
-        tree = ClientSubTreeViewRoot(
-            path="/", sub_tree=ClientAccessSubTreeView(action="deny", children={})
-        )
-        with pytest.raises(JobFilterException, match="no jobs"):
-            BulkJobFilterBuilder(query_filter, tree).build()
-
-    def test_no_access_with_owners_leaf_denied(self):
+    def test_no_access_with_owners(self):
         query_filter = JobFilter(owners={"someuser"})
         tree = ClientSubTreeViewRoot(
             path="/",
