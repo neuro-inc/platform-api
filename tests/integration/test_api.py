@@ -929,6 +929,8 @@ class TestJobs:
 
     @pytest.fixture
     async def run_job(self, api, client, jobs_client_factory):
+        job_id = None
+
         async def _impl(user, job_request, do_kill=False):
             url = api.jobs_base_url
             headers = user.headers
@@ -944,6 +946,9 @@ class TestJobs:
             return job_id
 
         yield _impl
+
+        if job_id:
+            await jobs_client.delete_job(job_id=job_id)
 
     @pytest.fixture
     async def share_job(self, auth_client):
