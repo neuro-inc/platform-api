@@ -449,7 +449,11 @@ class BulkJobFilter:
     bulk_filter: Optional[JobFilter]
 
     shared_ids: Set[str]
-    shared_ids_filter: Optional[JobFilter]
+    shared_ids_filter: JobFilter
+
+    def __post_init__(self):
+        if self.shared_ids:
+            assert self.shared_ids_filter is not None, f"no filter, {self.shared_ids}"
 
 
 class BulkJobFilterBuilder:
@@ -459,13 +463,29 @@ class BulkJobFilterBuilder:
         self._query_filter = query_filter
         self._access_tree = access_tree
 
-        self._owners_shared_all: Optional[Set[str]] = None
+        self._has_access_to_everything = False
+        self._owners_shared_everything: Optional[Set[str]] = None
         self._shared_ids: Set[str] = set()
 
     def build(self) -> BulkJobFilter:
         self._traverse_access_tree()
-        bulk_filter = self._create_bulk_filter()
-        shared_ids_filter = self._query_filter if self._shared_ids else None
+
+        # `self._owners_shared_all` is already filtered by `self._query_filter.owners`:
+        if self._owners_shared_everything:
+            assert self._owners_shared_everything <= self._query_filter.owners
+            bulk_filter = replace(
+                self._query_filter, owners=self._owners_shared_everything
+            )
+        else:
+            # all jobs available to the user
+            bulk_filter = self._query_filter
+
+        if self._shared_ids:
+            # `self._shared_ids` is already filtered by `self._query_filter.owners`:
+            shared_ids_filter = replace(self._query_filter, owners=set())
+        else:
+            shared_ids_filter = JobFilter()
+
         return BulkJobFilter(
             bulk_filter=bulk_filter,
             shared_ids=self._shared_ids,
@@ -475,16 +495,14 @@ class BulkJobFilterBuilder:
     def _traverse_access_tree(self) -> None:
         tree = self._access_tree
 
-        owners_shared_all: Set[str] = set()
-        shared_ids: Set[str] = set()
+        owners_shared_everything: Set[str] = set()
+        ids_shared: Set[str] = set()
 
         if tree.sub_tree.action == "deny":
             # no job resources whatsoever
             raise JobFilterException("no jobs")
-
-        if tree.sub_tree.action != "list":
-            # read access to all jobs = job:
-            self._owners_shared_all = owners_shared_all
+        elif tree.sub_tree.action != "list":
+            self._has_access_to_everything = True
             return
 
         for owner, sub_tree in tree.sub_tree.children.items():
@@ -492,35 +510,22 @@ class BulkJobFilterBuilder:
                 continue
 
             if self._query_filter.owners and owner not in self._query_filter.owners:
-                # skipping owners
+                # skip the owner if it is not in the owners specified in query
                 continue
 
             if sub_tree.action == "list":
-                # specific ids
-                shared_ids.update(
+                # the owner shared some specific ids
+                ids_shared.update(
                     job_id
                     for job_id, job_sub_tree in sub_tree.children.items()
                     if job_sub_tree.action not in ("deny", "list")
                 )
-                continue
+            else:
+                # read/write/manage access to all owner's jobs = job://owner
+                owners_shared_everything.add(owner)
 
-            # read/write/manage access to all owner's jobs = job://owner
-            owners_shared_all.add(owner)
-
-        if not owners_shared_all and not shared_ids:
-            # no job resources whatsoever
+        if not owners_shared_everything and not ids_shared:
             raise JobFilterException("no jobs")
 
-        if owners_shared_all:
-            self._owners_shared_all = owners_shared_all
-        self._shared_ids = shared_ids
-
-    def _create_bulk_filter(self) -> Optional[JobFilter]:
-        if self._owners_shared_all is None:
-            return None
-        # `self._owners_shared_all` is already filtered against
-        # `self._query_filter.owners`.
-        # if `self._owners_shared_all` is empty, we still want to try to limit
-        # the scope to the owners passed in the query, otherwise pull all.
-        owners = set(self._owners_shared_all or self._query_filter.owners)
-        return replace(self._query_filter, owners=owners)
+        self._owners_shared_everything = owners_shared_everything
+        self._shared_ids = ids_shared
