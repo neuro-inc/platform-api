@@ -95,13 +95,16 @@ class JobsStorage(ABC):
         pass
 
     async def get_running_jobs(self) -> List[Job]:
-        return [job for job in await self.get_all_jobs() if job.is_running]
+        filt = JobFilter(statuses={JobStatus.RUNNING})
+        return await self.get_all_jobs(filt)
 
+    @abstractmethod
     async def get_jobs_for_deletion(self) -> List[Job]:
-        return [job for job in await self.get_all_jobs() if job.should_be_deleted]
+        pass
 
     async def get_unfinished_jobs(self) -> List[Job]:
-        return [job for job in await self.get_all_jobs() if not job.is_finished]
+        filt = JobFilter(statuses={JobStatus.PENDING, JobStatus.RUNNING})
+        return await self.get_all_jobs(filt)
 
     @abstractmethod
     async def get_aggregated_run_time(self, job_filter: JobFilter) -> AggregatedRunTime:
@@ -189,6 +192,9 @@ class InMemoryJobsStorage(JobsStorage):
             total_gpu_run_time_delta=gpu_run_time_delta,
             total_non_gpu_run_time_delta=non_gpu_run_time_delta,
         )
+
+    async def get_jobs_for_deletion(self) -> List[Job]:
+        return [job for job in await self.get_all_jobs() if job.should_be_deleted]
 
 
 class RedisJobsStorage(JobsStorage):
@@ -477,20 +483,10 @@ class RedisJobsStorage(JobsStorage):
             jobs = [job for job in jobs if job_filter.check(job)]
         return jobs
 
-    async def get_running_jobs(self) -> List[Job]:
-        statuses = {JobStatus.RUNNING}
-        job_ids = await self._get_job_ids(statuses)
-        return await self._get_jobs(job_ids)
-
     async def get_jobs_for_deletion(self) -> List[Job]:
         job_ids = await self._get_job_ids_for_deletion()
         jobs = await self._get_jobs(job_ids)
         return [job for job in jobs if job.should_be_deleted]
-
-    async def get_unfinished_jobs(self) -> List[Job]:
-        statuses = {JobStatus.PENDING, JobStatus.RUNNING}
-        job_ids = await self._get_job_ids(statuses)
-        return await self._get_jobs(job_ids)
 
     async def get_aggregated_run_time(self, job_filter: JobFilter) -> AggregatedRunTime:
         # NOTE (ajuszkowski 4-Apr-2019): because of possible high number of jobs
