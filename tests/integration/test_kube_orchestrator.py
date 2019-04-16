@@ -1371,7 +1371,7 @@ class TestLogReader:
     ):
         namespace_name = pod_name = container_name = str(uuid.uuid4())
         log_reader = ElasticsearchLogReader(
-            es_client,
+            es_client_no_auth,
             namespace_name=namespace_name,
             pod_name=pod_name,
             container_name=container_name,
