@@ -1,8 +1,10 @@
 import asyncio
 import logging
 
+import aioelasticsearch
 import aiohttp.web
 from aioelasticsearch import Elasticsearch
+from aiohttp import BasicAuth
 from async_exit_stack import AsyncExitStack
 from async_generator import asynccontextmanager
 from neuro_auth_client import AuthClient
@@ -109,6 +111,34 @@ async def create_jobs_app(config: Config):
     jobs_handler = JobsHandler(app=jobs_app, config=config)
     jobs_handler.register(jobs_app)
     return jobs_app
+
+
+class ElasticsearchAIOHttpBasicAuthTransport(aioelasticsearch.AIOHttpTransport):
+    def __init__(self, login: str, password: str, hosts, **kwargs) -> None:
+        self._auth_header = BasicAuth(login, password)
+        super().__init__(hosts, **kwargs)
+
+    async def perform_request(self, method, url, headers=None, params=None, body=None):
+        if headers is None:
+            headers = dict()
+        if "Authorization" in headers:
+            raise ValueError("Already has Authorization header")
+        headers["Authorization"] = self._auth_header.encode()
+        await super().perform_request(method, url, headers, params, body)
+
+
+@asynccontextmanager
+async def create_elasticsearch_client_auth(
+    config: ElasticsearchConfig
+) -> Elasticsearch:
+    def _factory(hosts, **kwargs):
+        return ElasticsearchAIOHttpBasicAuthTransport(
+            login="user", password="password", hosts=hosts, **kwargs
+        )
+
+    async with Elasticsearch(hosts=config.hosts, transport_class=_factory) as es_client:
+        await es_client.ping()
+        yield es_client
 
 
 @asynccontextmanager
