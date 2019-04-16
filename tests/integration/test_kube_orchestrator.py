@@ -7,12 +7,12 @@ from typing import Callable, Optional
 from unittest import mock
 from uuid import uuid4
 
+import aiohttp
 import pytest
 from aiohttp import BasicAuth, web
 from async_timeout import timeout
 from yarl import URL
 
-from platform_api.elasticsearch import ElasticsearchAIOHttpBasicAuthTransport
 from platform_api.orchestrator import (
     Job,
     JobError,
@@ -1102,32 +1102,6 @@ class TestKubeClient:
 
         stats = await kube_client.get_pod_container_stats(pod.name, pod.name)
         assert stats is None
-
-
-class TestElasticsearchAIOHttpBasicAuthTransport:
-    @pytest.mark.asyncio
-    async def test_perform_request_has_auth_header(self, aiohttp_server):
-        login = "test-user"
-        password = "test-password"
-        JSON = {"key": "value"}
-
-        async def handler(request):
-            assert request.headers.get("Authorization") == BasicAuth(
-                login=login, password=password
-            )
-            return web.json_response(JSON)
-
-        app = web.Application()
-        app.router.add_get("/", handler)
-
-        srv = await aiohttp_server(app)
-        url = srv.make_url("/")
-
-        transport = ElasticsearchAIOHttpBasicAuthTransport(
-            login="test-user", password="test-password", hosts=[url.rstrip("/")]
-        )
-        response = await transport.perform_request(method="GET", url=url)
-        assert response == JSON
 
 
 class TestLogReader:
