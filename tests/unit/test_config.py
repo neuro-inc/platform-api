@@ -215,6 +215,8 @@ class TestEnvironConfigFactory:
             ),
             "NP_K8S_NODE_LABEL_PREEMPTIBLE": "testpreempt",
             "NP_ES_HOSTS": "http://es",
+            "NP_ES_AUTH_USER": "test-user",
+            "NP_ES_AUTH_PASSWORD": "test-password",
         }
         config = EnvironConfigFactory(environ=environ).create()
 
@@ -269,6 +271,8 @@ class TestEnvironConfigFactory:
         assert config.registry.url == URL("https://testregistry:5000")
 
         assert config.logging.elasticsearch.hosts == ["http://es"]
+        assert config.logging.elasticsearch_auth.user == "test-user"
+        assert config.logging.elasticsearch_auth.password == "test-password"
 
     def test_create_nfs(self):
         named_host_template = "{job_name}-{job_owner}.jobs.domain"
@@ -286,6 +290,8 @@ class TestEnvironConfigFactory:
             "NP_AUTH_URL": "https://auth",
             "NP_AUTH_TOKEN": "token",
             "NP_ES_HOSTS": "http://es",
+            "NP_ES_AUTH_USER": "test-user",
+            "NP_ES_AUTH_PASSWORD": "test-password",
         }
         config = EnvironConfigFactory(environ=environ).create()
         assert config.storage.nfs_server == "1.2.3.4"
