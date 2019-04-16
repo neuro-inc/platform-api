@@ -9,10 +9,16 @@ from uuid import uuid4
 
 import aiohttp
 import pytest
-from aiohttp import BasicAuth, web
+from aioelasticsearch import Elasticsearch
 from async_timeout import timeout
+from elasticsearch import AuthenticationException
 from yarl import URL
 
+from platform_api.elasticsearch import (
+    ElasticsearchAuthConfig,
+    ElasticsearchConfig,
+    create_elasticsearch_client,
+)
 from platform_api.orchestrator import (
     Job,
     JobError,
@@ -1236,7 +1242,25 @@ class TestLogReader:
         assert payload.startswith(expected_payload.encode())
 
     @pytest.mark.asyncio
-    async def test_elasticsearch_log_reader_no_auth(
+    async def test_create_elasticsearch_client_no_auth_header_fail(
+        self, kube_config, kube_client, delete_pod_later, es_hosts_auth
+    ):
+        es_config = ElasticsearchConfig(hosts=es_hosts_auth)
+        with pytest.raises(AuthenticationException):
+            async with create_elasticsearch_client(config=es_config):
+                pass
+
+    @pytest.mark.asyncio
+    async def test_create_elasticsearch_client_wrong_auth_fail(
+        self, kube_config, kube_client, delete_pod_later, es_config
+    ):
+        es_auth_config = ElasticsearchAuthConfig(user="wrong-user", password="wrong-pw")
+        with pytest.raises(AuthenticationException):
+            async with create_elasticsearch_client(es_config, es_auth_config):
+                pass
+
+    @pytest.mark.asyncio
+    async def test_elasticsearch_log_reader_directly_without_authentication(
         self, kube_config, kube_client, delete_pod_later, es_client_no_auth
     ):
         command = 'bash -c "for i in {1..5}; do echo $i; sleep 1; done"'
@@ -1271,7 +1295,7 @@ class TestLogReader:
         )
 
     @pytest.mark.asyncio
-    async def test_elasticsearch_log_reader(
+    async def test_elasticsearch_log_reader_with_authentication(
         self, kube_config, kube_client, delete_pod_later, es_client
     ):
         command = 'bash -c "for i in {1..5}; do echo $i; sleep 1; done"'
@@ -1342,7 +1366,21 @@ class TestLogReader:
             pytest.fail(f"Pod logs did not match. Last payload: {payload}")
 
     @pytest.mark.asyncio
-    async def test_elasticsearch_log_reader_empty(self, es_client):
+    async def test_elasticsearch_log_reader_empty_without_authentication(
+        self, es_client_no_auth
+    ):
+        namespace_name = pod_name = container_name = str(uuid.uuid4())
+        log_reader = ElasticsearchLogReader(
+            es_client,
+            namespace_name=namespace_name,
+            pod_name=pod_name,
+            container_name=container_name,
+        )
+        payload = await self._consume_log_reader(log_reader, chunk_size=1)
+        assert payload == b""
+
+    @pytest.mark.asyncio
+    async def test_elasticsearch_log_reader_empty_with_authentication(self, es_client):
         namespace_name = pod_name = container_name = str(uuid.uuid4())
         log_reader = ElasticsearchLogReader(
             es_client,

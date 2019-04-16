@@ -1,5 +1,5 @@
 from dataclasses import dataclass
-from typing import Sequence
+from typing import Optional, Sequence
 
 from aioelasticsearch import AIOHttpTransport, Elasticsearch
 from aiohttp import BasicAuth
@@ -25,9 +25,11 @@ class LoggingConfig:
 
 @asynccontextmanager
 async def create_elasticsearch_client(
-    config: ElasticsearchConfig, auth_config: ElasticsearchAuthConfig
+    config: ElasticsearchConfig, auth_config: Optional[ElasticsearchAuthConfig] = None
 ) -> Elasticsearch:
-    http_auth = BasicAuth(auth_config.user, auth_config.password)
+    http_auth = (
+        BasicAuth(auth_config.user, auth_config.password) if auth_config else None
+    )
     async with Elasticsearch(hosts=config.hosts, http_auth=http_auth) as es_client:
         await es_client.ping()
         yield es_client
