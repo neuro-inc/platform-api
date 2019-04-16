@@ -1,9 +1,9 @@
 from dataclasses import dataclass
 from typing import Sequence
 
+from aioelasticsearch import AIOHttpTransport, Elasticsearch
 from aiohttp import BasicAuth
 from async_generator import asynccontextmanager
-from aioelasticsearch import Elasticsearch, AIOHttpTransport
 
 
 @dataclass(frozen=True)

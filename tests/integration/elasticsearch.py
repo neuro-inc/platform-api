@@ -3,6 +3,7 @@ import time
 from typing import List
 
 import pytest
+from aioelasticsearch import Elasticsearch
 
 from platform_api.api import create_elasticsearch_client
 from platform_api.elasticsearch import ElasticsearchAuthConfig, ElasticsearchConfig
@@ -51,4 +52,11 @@ def es_auth_config(es_hosts, es_hosts_auth):
 @pytest.fixture
 async def es_client(es_config, es_auth_config):
     async with create_elasticsearch_client(es_config, es_auth_config) as es_client:
+        yield es_client
+
+
+@pytest.fixture
+async def es_client_no_auth(es_config):
+    async with Elasticsearch(hosts=es_config.hosts) as es_client:
+        await es_client.ping()
         yield es_client

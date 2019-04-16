@@ -7,11 +7,12 @@ from typing import Callable, Optional
 from unittest import mock
 from uuid import uuid4
 
-import aiohttp
 import pytest
+from aiohttp import BasicAuth, web
 from async_timeout import timeout
 from yarl import URL
 
+from platform_api.elasticsearch import ElasticsearchAIOHttpBasicAuthTransport
 from platform_api.orchestrator import (
     Job,
     JobError,
@@ -1103,6 +1104,32 @@ class TestKubeClient:
         assert stats is None
 
 
+class TestElasticsearchAIOHttpBasicAuthTransport:
+    @pytest.mark.asyncio
+    async def test_perform_request_has_auth_header(self, aiohttp_server):
+        login = "test-user"
+        password = "test-password"
+        JSON = {"key": "value"}
+
+        async def handler(request):
+            assert request.headers.get("Authorization") == BasicAuth(
+                login=login, password=password
+            )
+            return web.json_response(JSON)
+
+        app = web.Application()
+        app.router.add_get("/", handler)
+
+        srv = await aiohttp_server(app)
+        url = srv.make_url("/")
+
+        transport = ElasticsearchAIOHttpBasicAuthTransport(
+            login="test-user", password="test-password", hosts=[url.rstrip("/")]
+        )
+        response = await transport.perform_request(method="GET", url=url)
+        assert response == JSON
+
+
 class TestLogReader:
     async def _consume_log_reader(
         self, log_reader: LogReader, chunk_size: int = -1
@@ -1233,6 +1260,41 @@ class TestLogReader:
         payload = await task
         expected_payload = "\n".join(str(i) for i in range(1, 6))
         assert payload.startswith(expected_payload.encode())
+
+    @pytest.mark.asyncio
+    async def test_elasticsearch_log_reader_no_auth(
+        self, kube_config, kube_client, delete_pod_later, es_client_no_auth
+    ):
+        command = 'bash -c "for i in {1..5}; do echo $i; sleep 1; done"'
+        expected_payload = ("\n".join(str(i) for i in range(1, 6)) + "\n").encode()
+        container = Container(
+            image="ubuntu",
+            command=command,
+            resources=ContainerResources(cpu=0.1, memory_mb=128),
+        )
+        job_request = JobRequest.create(container)
+        pod = PodDescriptor.from_job_request(
+            kube_config.create_storage_volume(), job_request
+        )
+        await delete_pod_later(pod)
+        await kube_client.create_pod(pod)
+        await kube_client.wait_pod_is_terminated(pod.name)
+
+        await self._check_kube_logs(
+            kube_client,
+            namespace_name=kube_config.namespace,
+            pod_name=pod.name,
+            container_name=pod.name,
+            expected_payload=expected_payload,
+        )
+
+        await self._check_es_logs(
+            es_client_no_auth,
+            namespace_name=kube_config.namespace,
+            pod_name=pod.name,
+            container_name=pod.name,
+            expected_payload=expected_payload,
+        )
 
     @pytest.mark.asyncio
     async def test_elasticsearch_log_reader(
