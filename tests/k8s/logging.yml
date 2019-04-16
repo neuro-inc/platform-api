@@ -22,6 +22,32 @@ spec:
         - name: "discovery.type"
           value: "single-node"
 ---
+apiVersion: apps/v1
+kind: ReplicaSet
+metadata:
+  name: elasticsearch-auth
+  namespace: kube-system
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      service: elasticsearch-auth
+  template:
+    metadata:
+      labels:
+        service: elasticsearch-auth
+    spec:
+      containers:
+      - name: elasticsearch-auth
+        image: nginx
+        volumeMounts:
+        - name: nginx
+          mountPath: /etc/nginx
+      volumes:
+        - name: nginx
+          hostPath:
+            path: /elasticsearch-auth/nginx
+---
 apiVersion: v1
 kind: Service
 metadata:
@@ -34,6 +60,19 @@ spec:
     targetPort: 9200
   selector:
     service: elasticsearch-logging
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: elasticsearch-auth
+  namespace: kube-system
+spec:
+  type: LoadBalancer
+  ports:
+  - port: 8080
+    targetPort: 8080
+  selector:
+    service: elasticsearch-auth
 ---
 apiVersion: extensions/v1beta1
 kind: DaemonSet
