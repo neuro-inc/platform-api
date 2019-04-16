@@ -124,16 +124,14 @@ class ElasticsearchAIOHttpBasicAuthTransport(aioelasticsearch.AIOHttpTransport):
         if "Authorization" in headers:
             raise ValueError("Already has Authorization header")
         headers["Authorization"] = self._auth_header.encode()
-        await super().perform_request(method, url, headers, params, body)
+        return await super().perform_request(method, url, headers, params, body)
 
 
 @asynccontextmanager
-async def create_elasticsearch_client_auth(
-    config: ElasticsearchConfig
-) -> Elasticsearch:
+async def create_elasticsearch_client(config: ElasticsearchConfig, login: str, password: str) -> Elasticsearch:
     def _factory(hosts, **kwargs):
         return ElasticsearchAIOHttpBasicAuthTransport(
-            login="user", password="password", hosts=hosts, **kwargs
+            login=login, password=password, hosts=hosts, **kwargs
         )
 
     async with Elasticsearch(hosts=config.hosts, transport_class=_factory) as es_client:
