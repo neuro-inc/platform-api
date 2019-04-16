@@ -1,7 +1,7 @@
 from dataclasses import dataclass
 from typing import Optional, Sequence
 
-from aioelasticsearch import AIOHttpTransport, Elasticsearch
+from aioelasticsearch import Elasticsearch
 from aiohttp import BasicAuth
 from async_generator import asynccontextmanager
 

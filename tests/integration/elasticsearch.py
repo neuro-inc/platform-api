@@ -8,7 +8,7 @@ from platform_api.api import create_elasticsearch_client
 from platform_api.elasticsearch import ElasticsearchAuthConfig, ElasticsearchConfig
 
 
-def wait_for_service(service_name: str) -> List[str]:
+def wait_for_service(service_name: str) -> List[str]:  # type: ignore
     timeout_s = 60
     interval_s = 10
 

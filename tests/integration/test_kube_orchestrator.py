@@ -9,7 +9,6 @@ from uuid import uuid4
 
 import aiohttp
 import pytest
-from aioelasticsearch import Elasticsearch
 from async_timeout import timeout
 from elasticsearch import AuthenticationException
 from yarl import URL

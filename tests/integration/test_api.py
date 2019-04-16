@@ -61,12 +61,14 @@ class ApiConfig(NamedTuple):
 
 
 @pytest.fixture
-def config_factory(kube_config, redis_config, auth_config, es_config):
+def config_factory(kube_config, redis_config, auth_config, es_config, es_auth_config):
     def _factory(**kwargs):
         server_config = ServerConfig()
         storage_config = StorageConfig(host_mount_path=PurePath("/tmp"))  # type: ignore
         database_config = DatabaseConfig(redis=redis_config)  # type: ignore
-        logging_config = LoggingConfig(elasticsearch=es_config)
+        logging_config = LoggingConfig(
+            elasticsearch=es_config, elasticsearch_auth=es_auth_config
+        )
         return Config(
             server=server_config,
             storage=storage_config,

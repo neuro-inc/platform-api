@@ -1,18 +1,14 @@
 import asyncio
 import logging
 
-import aioelasticsearch
 import aiohttp.web
-from aioelasticsearch import Elasticsearch
-from aiohttp import BasicAuth
 from async_exit_stack import AsyncExitStack
-from async_generator import asynccontextmanager
 from neuro_auth_client import AuthClient
 from neuro_auth_client.security import AuthScheme, setup_security
 
 from .config import Config
 from .config_factory import EnvironConfigFactory
-from .elasticsearch import ElasticsearchConfig, create_elasticsearch_client
+from .elasticsearch import create_elasticsearch_client
 from .handlers import JobsHandler, ModelsHandler
 from .orchestrator import JobException, JobsService, JobsStatusPooling, KubeOrchestrator
 from .orchestrator.jobs_service import JobsServiceException
