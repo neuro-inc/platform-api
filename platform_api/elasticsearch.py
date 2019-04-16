@@ -1,11 +1,9 @@
 from dataclasses import dataclass
-from typing import Container, Optional, Sequence
+from typing import Sequence
 
-import aioelasticsearch
-import aiohttp
 from aiohttp import BasicAuth
 from async_generator import asynccontextmanager
-from elasticsearch import Elasticsearch
+from aioelasticsearch import Elasticsearch, AIOHttpTransport
 
 
 @dataclass(frozen=True)
@@ -25,7 +23,7 @@ class LoggingConfig:
     elasticsearch_auth: ElasticsearchAuthConfig
 
 
-class ElasticsearchAIOHttpBasicAuthTransport(aioelasticsearch.AIOHttpTransport):
+class ElasticsearchAIOHttpBasicAuthTransport(AIOHttpTransport):
     def __init__(self, login: str, password: str, hosts, **kwargs) -> None:
         self._auth_header_value: str = BasicAuth(login, password).encode()
         super().__init__(hosts, **kwargs)
