@@ -10,7 +10,7 @@ from platform_api.elasticsearch import ElasticsearchAuthConfig, ElasticsearchCon
 
 def wait_for_service(service_name: str) -> List[str]:
     timeout_s = 60
-    interval_s = 20
+    interval_s = 10
 
     while timeout_s:
         process = subprocess.run(
