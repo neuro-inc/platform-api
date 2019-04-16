@@ -6,6 +6,8 @@ from typing import Container, Optional, Sequence
 
 from yarl import URL
 
+from platform_api.elasticsearch import LoggingConfig
+
 from .redis import RedisConfig
 from .resource import ResourcePoolType
 
@@ -125,18 +127,8 @@ class OrchestratorConfig:
 
 
 @dataclass(frozen=True)
-class ElasticsearchConfig:
-    hosts: Sequence[str]
-
-
-@dataclass(frozen=True)
 class DatabaseConfig:
     redis: Optional[RedisConfig] = None
-
-
-@dataclass(frozen=True)
-class LoggingConfig:
-    elasticsearch: ElasticsearchConfig
 
 
 @dataclass(frozen=True)

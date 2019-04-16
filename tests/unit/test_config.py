@@ -101,6 +101,8 @@ class TestEnvironConfigFactory:
             "NP_AUTH_URL": "https://auth",
             "NP_AUTH_TOKEN": "token",
             "NP_ES_HOSTS": "http://es",
+            "NP_ES_AUTH_USER": "test-user",
+            "NP_ES_AUTH_PASSWORD": "test-password",
             "NP_OAUTH_BASE_URL": "https://oauth",
             "NP_OAUTH_CLIENT_ID": "oauth_client_id",
             "NP_OAUTH_AUDIENCE": "https://platform-url",
@@ -155,6 +157,8 @@ class TestEnvironConfigFactory:
         assert config.registry.host == "registry.dev.neuromation.io"
 
         assert config.logging.elasticsearch.hosts == ["http://es"]
+        assert config.logging.elasticsearch_auth.user == "test-user"
+        assert config.logging.elasticsearch_auth.password == "test-password"
 
     def test_create_value_error_invalid_port(self):
         environ = {

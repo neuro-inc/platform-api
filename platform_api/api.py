@@ -10,8 +10,9 @@ from async_generator import asynccontextmanager
 from neuro_auth_client import AuthClient
 from neuro_auth_client.security import AuthScheme, setup_security
 
-from .config import Config, ElasticsearchConfig
+from .config import Config
 from .config_factory import EnvironConfigFactory
+from .elasticsearch import ElasticsearchConfig, create_elasticsearch_client
 from .handlers import JobsHandler, ModelsHandler
 from .orchestrator import JobException, JobsService, JobsStatusPooling, KubeOrchestrator
 from .orchestrator.jobs_service import JobsServiceException
@@ -113,39 +114,6 @@ async def create_jobs_app(config: Config):
     return jobs_app
 
 
-class ElasticsearchAIOHttpBasicAuthTransport(aioelasticsearch.AIOHttpTransport):
-    def __init__(self, login: str, password: str, hosts, **kwargs) -> None:
-        self._auth_header = BasicAuth(login, password)
-        super().__init__(hosts, **kwargs)
-
-    async def perform_request(self, method, url, headers=None, params=None, body=None):
-        if headers is None:
-            headers = dict()
-        if "Authorization" in headers:
-            raise ValueError("Already has Authorization header")
-        headers["Authorization"] = self._auth_header.encode()
-        return await super().perform_request(method, url, headers, params, body)
-
-
-@asynccontextmanager
-async def create_elasticsearch_client(config: ElasticsearchConfig, login: str, password: str) -> Elasticsearch:
-    def _factory(hosts, **kwargs):
-        return ElasticsearchAIOHttpBasicAuthTransport(
-            login=login, password=password, hosts=hosts, **kwargs
-        )
-
-    async with Elasticsearch(hosts=config.hosts, transport_class=_factory) as es_client:
-        await es_client.ping()
-        yield es_client
-
-
-@asynccontextmanager
-async def create_elasticsearch_client(config: ElasticsearchConfig) -> Elasticsearch:
-    async with Elasticsearch(hosts=config.hosts) as es_client:
-        await es_client.ping()
-        yield es_client
-
-
 async def create_app(config: Config) -> aiohttp.web.Application:
     app = aiohttp.web.Application(middlewares=[handle_exceptions])
     app["config"] = config
@@ -160,7 +128,9 @@ async def create_app(config: Config) -> aiohttp.web.Application:
 
             logger.info("Initializing Elasticsearch client")
             es_client = await exit_stack.enter_async_context(
-                create_elasticsearch_client(config.logging.elasticsearch)
+                create_elasticsearch_client(
+                    config.logging.elasticsearch, config.logging.elasticsearch_auth
+                )
             )
 
             logger.info("Initializing Orchestrator")
