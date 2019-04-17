@@ -1318,20 +1318,6 @@ class TestLogReader:
         assert payload == b""
 
     @pytest.mark.asyncio
-    async def test_elasticsearch_log_reader_empty_with_authentication(
-        self, es_client_with_auth
-    ):
-        namespace_name = pod_name = container_name = str(uuid.uuid4())
-        log_reader = ElasticsearchLogReader(
-            es_client_with_auth,
-            namespace_name=namespace_name,
-            pod_name=pod_name,
-            container_name=container_name,
-        )
-        payload = await self._consume_log_reader(log_reader, chunk_size=1)
-        assert payload == b""
-
-    @pytest.mark.asyncio
     async def test_get_job_log_reader(
         self, kube_config, kube_orchestrator, kube_client, delete_job_later
     ):
