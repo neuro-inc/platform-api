@@ -370,7 +370,7 @@ class TestKubeOrchestrator:
     @pytest.fixture
     async def ingress(self, kube_client):
         ingress_name = str(uuid.uuid4())
-        ingress = await kube_client.try_create_ingress(ingress_name)
+        ingress = await kube_client.create_ingress(ingress_name)
         yield ingress
         await kube_client.delete_ingress(ingress.name)
 

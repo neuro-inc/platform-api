@@ -44,7 +44,7 @@ class EnvironConfigFactory:
         auth = self.create_auth()
         registry = self.create_registry()
         oauth = self.try_create_oauth()
-        ingress = self.try_create_ingress()
+        ingress = self.create_ingress()
         return Config(
             server=self.create_server(),
             storage=storage,
@@ -262,11 +262,9 @@ class EnvironConfigFactory:
         is_https = self._get_bool("NP_REGISTRY_HTTPS", default=RegistryConfig.is_secure)
         return RegistryConfig(host=host, is_secure=is_https)
 
-    def try_create_ingress(self) -> Optional[IngressConfig]:
+    def create_ingress(self) -> IngressConfig:
         scheme = "https"
-        domain = self._environ.get("INGRESS_HOST_TEMPORARY_NEW_DOMAIN")
-        if not domain:
-            return None
+        domain = self._environ["INGRESS_HOST_TEMPORARY_NEW_DOMAIN"]
         base_url = URL(f"{scheme}://{domain}/api/v1")
         return IngressConfig(
             storage_url=base_url / "storage",

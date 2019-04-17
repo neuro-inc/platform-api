@@ -69,6 +69,11 @@ def config_factory(kube_config, redis_config, auth_config, es_config):
         storage_config = StorageConfig(host_mount_path=PurePath("/tmp"))  # type: ignore
         database_config = DatabaseConfig(redis=redis_config)  # type: ignore
         logging_config = LoggingConfig(elasticsearch=es_config)
+        ingress_config = IngressConfig(
+            storage_url=URL("https://neu.ro/api/v1/storage"),
+            users_url=URL("https://neu.ro/api/v1/users"),
+            monitoring_url=URL("https://neu.ro/api/v1/monitoring"),
+        )
         return Config(
             server=server_config,
             storage=storage_config,
@@ -76,6 +81,7 @@ def config_factory(kube_config, redis_config, auth_config, es_config):
             database=database_config,
             auth=auth_config,
             logging=logging_config,
+            ingress=ingress_config,
             **kwargs,
         )
 
@@ -90,16 +96,6 @@ def config(config_factory):
 @pytest.fixture
 def config_with_oauth(config_factory, oauth_config_dev):
     return config_factory(oauth=oauth_config_dev)
-
-
-@pytest.fixture
-def config_with_ingress(config_factory):
-    ingress_config = IngressConfig(
-        storage_url=URL("https://storage"),
-        users_url=URL("https://users"),
-        monitoring_url=URL("https://monitoring"),
-    )
-    return config_factory(ingress=ingress_config)
 
 
 @pytest.fixture
@@ -144,12 +140,6 @@ async def api(config):
 @pytest.fixture
 async def api_with_oauth(config_with_oauth):
     async with create_local_app_server(config_with_oauth, port=8081) as api_config:
-        yield api_config
-
-
-@pytest.fixture
-async def api_with_ingress(config_with_ingress):
-    async with create_local_app_server(config_with_ingress, port=8081) as api_config:
         yield api_config
 
 
@@ -249,7 +239,12 @@ class TestApi:
         async with client.get(url) as resp:
             assert resp.status == HTTPOk.status_code
             result = await resp.json()
-            assert result == {"registry_url": "https://registry.dev.neuromation.io"}
+            assert result == {
+                "registry_url": "https://registry.dev.neuromation.io",
+                "storage_url": "https://neu.ro/api/v1/storage",
+                "users_url": "https://neu.ro/api/v1/users",
+                "monitoring_url": "https://neu.ro/api/v1/monitoring",
+            }
 
     @pytest.mark.asyncio
     async def test_config_with_oauth(self, api_with_oauth, client):
@@ -259,6 +254,9 @@ class TestApi:
             result = await resp.json()
             assert result == {
                 "registry_url": "https://registry.dev.neuromation.io",
+                "storage_url": "https://neu.ro/api/v1/storage",
+                "users_url": "https://neu.ro/api/v1/users",
+                "monitoring_url": "https://neu.ro/api/v1/monitoring",
                 "auth_url": "https://platform-auth0-url/authorize",
                 "token_url": "https://platform-auth0-url/oauth/token",
                 "client_id": "client_id",
@@ -269,19 +267,6 @@ class TestApi:
                     "http://127.0.0.1:54541",
                     "http://127.0.0.1:54542",
                 ],
-            }
-
-    @pytest.mark.asyncio
-    async def test_config_with_ingress(self, api_with_ingress, client):
-        url = api_with_ingress.config_url
-        async with client.get(url) as resp:
-            assert resp.status == HTTPOk.status_code
-            result = await resp.json()
-            assert result == {
-                "registry_url": "https://registry.dev.neuromation.io",
-                "storage_url": "https://storage",
-                "users_url": "https://users",
-                "monitoring_url": "https://monitoring",
             }
 
 

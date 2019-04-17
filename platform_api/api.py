@@ -36,7 +36,12 @@ class ApiHandler:
         return aiohttp.web.Response()
 
     async def handle_config(self, request):
-        data = {"registry_url": str(self._config.registry.url)}
+        data = {
+            "registry_url": str(self._config.registry.url),
+            "storage_url": str(self._config.ingress.storage_url),
+            "users_url": str(self._config.ingress.users_url),
+            "monitoring_url": str(self._config.ingress.monitoring_url),
+        }
         if self._config.oauth:
             data["auth_url"] = str(self._config.oauth.auth_url)
             data["token_url"] = str(self._config.oauth.token_url)
@@ -46,11 +51,6 @@ class ApiHandler:
             redirect_url = self._config.oauth.success_redirect_url
             if redirect_url:
                 data["success_redirect_url"] = str(redirect_url)
-        if self._config.ingress:
-            data["storage_url"] = str(self._config.ingress.storage_url)
-            data["users_url"] = str(self._config.ingress.users_url)
-            data["monitoring_url"] = str(self._config.ingress.monitoring_url)
-
         return aiohttp.web.json_response(data)
 
 
