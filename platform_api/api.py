@@ -51,6 +51,7 @@ class ApiHandler:
             redirect_url = self._config.oauth.success_redirect_url
             if redirect_url:
                 data["success_redirect_url"] = str(redirect_url)
+                
         return aiohttp.web.json_response(data)
 
 
