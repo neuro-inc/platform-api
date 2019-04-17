@@ -929,7 +929,7 @@ class TestJobs:
 
     @pytest.fixture
     async def run_job(self, api, client, jobs_client_factory):
-        job_id = None
+        job_ids = []
 
         async def _impl(user, job_request, do_kill=False):
             url = api.jobs_base_url
@@ -943,11 +943,13 @@ class TestJobs:
                 if do_kill:
                     await jobs_client.delete_job(job_id)
                     await jobs_client.long_polling_by_job_id(job_id, "succeeded")
+                else:
+                    job_ids.append(job_id)
             return job_id
 
         yield _impl
 
-        if job_id:
+        for job_id in job_ids:
             await jobs_client.delete_job(job_id=job_id)
 
     @pytest.fixture
