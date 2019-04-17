@@ -55,6 +55,7 @@ def es_config_with_auth(es_hosts_logging, es_hosts_auth):
     """ Config to access Elasticsearch directly via the elasticsearch-auth proxy.
     This fixture waits for es_hosts and es_hosts_auth so that the services are up.
     """
+    # NOTE: these credentials are in `tests/k8s/elasticsearch-auth/nginx/auth.htpasswd`
     return ElasticsearchConfig(
         hosts=es_hosts_auth, user="testuser", password="password"
     )
