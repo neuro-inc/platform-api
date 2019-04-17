@@ -3,8 +3,10 @@ from unittest import mock
 
 import aiohttp
 import pytest
+from elasticsearch import AuthenticationException
 from yarl import URL
 
+from platform_api.elasticsearch import ElasticsearchConfig, create_elasticsearch_client
 from platform_api.orchestrator.job import JobStatusItem
 from platform_api.orchestrator.job_request import (
     Container,
@@ -891,3 +893,21 @@ class TestFilteredStreamWrapper:
         assert chunk == b"rpc error: code = whatever\n"
         chunk = await stream.read()
         assert not chunk
+
+
+class TestElasticsearch:
+    @pytest.mark.asyncio
+    async def test_create_elasticsearch_client_no_auth_header_fail(self, es_hosts_auth):
+        es_config = ElasticsearchConfig(hosts=es_hosts_auth)
+        with pytest.raises(AuthenticationException):
+            async with create_elasticsearch_client(config=es_config):
+                pass
+
+    @pytest.mark.asyncio
+    async def test_create_elasticsearch_client_wrong_auth_fail(self, es_hosts_auth):
+        es_config = ElasticsearchConfig(
+            hosts=es_hosts_auth, user="wrong-user", password="wrong-pw"
+        )
+        with pytest.raises(AuthenticationException):
+            async with create_elasticsearch_client(es_config):
+                pass

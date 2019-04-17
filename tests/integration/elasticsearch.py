@@ -9,6 +9,9 @@ from platform_api.elasticsearch import ElasticsearchConfig
 
 
 def wait_for_service(service_name: str) -> List[str]:  # type: ignore
+    # ignore type because the linter does not know that `pytest.fail` throws an
+    # exception, so it requires to `return None` explicitly, so that the method
+    # will return `Optional[List[str]]` which is incorrect
     timeout_s = 60
     interval_s = 10
 

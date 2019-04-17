@@ -6,8 +6,7 @@ from typing import Container, Optional, Sequence
 
 from yarl import URL
 
-from platform_api.elasticsearch import ElasticsearchConfig
-
+from .elasticsearch import ElasticsearchConfig
 from .redis import RedisConfig
 from .resource import ResourcePoolType
 
