@@ -73,19 +73,25 @@ class ClusterRegistry:
     async def add(self, config: ClusterConfig) -> None:
         await self.remove(config.name)
 
+        logger.info(f"Initializing cluster '{config.name}'")
         cluster = self._factory(config)
         await cluster.init()
+        logger.info(f"Initialized cluster '{config.name}'")
 
         record = ClusterRegistryRecord(cluster=cluster)
         self._add(record)
+        logger.info(f"Registered cluster '{config.name}'")
 
     async def remove(self, name: str) -> None:
         record = self._remove(name)
         if not record:
             return
+        logger.info(f"Unregistered cluster '{name}'")
 
         async with record.lock.writer_lock:
+            logger.info(f"Closing cluster '{name}'")
             await record.cluster.close()
+            logger.info(f"Closed cluster '{name}'")
 
     @asynccontextmanager
     async def get(self, name: str) -> AsyncIterator[Cluster]:
