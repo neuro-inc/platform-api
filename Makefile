@@ -30,8 +30,7 @@ format:
 	black .
 
 test_unit:
-    sleep 20m
-	pytest -vv --cov-config=setup.cfg --cov platform_api tests/unit
+    sleep 20m ; pytest -vv --cov-config=setup.cfg --cov platform_api tests/unit
 
 test_integration:
 	pytest -vv --maxfail=3 --cov-config=setup.cfg --cov platform_api tests/integration
