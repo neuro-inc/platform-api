@@ -58,11 +58,6 @@ INGRESS_HOST_TEMPORARY_NEW_DOMAIN:
   dev: dev.neu.ro
   staging: staging.neu.ro
   prod: neu.ro
-INGRESS_SCHEME_TEMPORARY:
-  _default: https
-  dev: https
-  staging: https
-  prod: https
 INGRESS_MAIN_SITE_HOST:
   _default: neu.ro
   dev:
