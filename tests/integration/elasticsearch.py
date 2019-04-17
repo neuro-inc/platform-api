@@ -41,6 +41,13 @@ def es_hosts_auth():
 
 
 @pytest.fixture
+def es_config(es_hosts_logging):
+    """ Config to access Elasticsearch directly, bypassing the elasticsearch-auth proxy.
+    """
+    return ElasticsearchConfig(hosts=es_hosts_logging)
+
+
+@pytest.fixture
 def es_config_with_auth(es_hosts_logging, es_hosts_auth):
     """ Config to access Elasticsearch directly via the elasticsearch-auth proxy.
     This fixture waits for es_hosts and es_hosts_auth so that the services are up.
@@ -51,10 +58,12 @@ def es_config_with_auth(es_hosts_logging, es_hosts_auth):
 
 
 @pytest.fixture
-def es_config(es_hosts_logging):
-    """ Config to access Elasticsearch directly, bypassing the elasticsearch-auth proxy.
+async def es_client(es_config):
+    """ Elasticsearch client that goes directly to elasticsearch-logging service
+    without any authentication.
     """
-    return ElasticsearchConfig(hosts=es_hosts_logging)
+    async with create_elasticsearch_client(es_config) as es_client:
+        yield es_client
 
 
 @pytest.fixture
@@ -63,12 +72,3 @@ async def es_client_with_auth(es_config_with_auth):
     """
     async with create_elasticsearch_client(es_config_with_auth) as es_client_with_auth:
         yield es_client_with_auth
-
-
-@pytest.fixture
-async def es_client(es_config):
-    """ Elasticsearch client that goes directly to elasticsearch-logging service
-    without any authentication.
-    """
-    async with create_elasticsearch_client(es_config) as es_client:
-        yield es_client

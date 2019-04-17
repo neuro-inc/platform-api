@@ -1377,7 +1377,9 @@ class TestLogReader:
         assert payload == b""
 
     @pytest.mark.asyncio
-    async def test_elasticsearch_log_reader_empty_with_authentication(self, es_client_with_auth):
+    async def test_elasticsearch_log_reader_empty_with_authentication(
+        self, es_client_with_auth
+    ):
         namespace_name = pod_name = container_name = str(uuid.uuid4())
         log_reader = ElasticsearchLogReader(
             es_client_with_auth,
