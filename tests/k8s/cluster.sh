@@ -36,6 +36,7 @@ function k8s::start {
 
     sudo -E mkdir -p ~/.minikube/files
     sudo -E cp -R tests/k8s/fluentd ~/.minikube/files
+    sudo -E cp -R tests/k8s/elasticsearch-auth ~/.minikube/files
 
     sudo -E minikube config set WantReportErrorPrompt false
     sudo -E minikube start --vm-driver=none --kubernetes-version=v1.10.0
