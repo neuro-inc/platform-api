@@ -124,9 +124,7 @@ async def create_app(config: Config) -> aiohttp.web.Application:
 
             logger.info("Initializing Elasticsearch client")
             es_client = await exit_stack.enter_async_context(
-                create_elasticsearch_client(
-                    config.logging.elasticsearch, config.logging.elasticsearch_auth
-                )
+                create_elasticsearch_client(config.logging.elasticsearch)
             )
 
             logger.info("Initializing Orchestrator")
