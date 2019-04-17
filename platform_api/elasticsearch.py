@@ -13,11 +13,6 @@ class ElasticsearchConfig:
     password: Optional[str] = None
 
 
-@dataclass(frozen=True)
-class LoggingConfig:
-    elasticsearch: ElasticsearchConfig
-
-
 @asynccontextmanager
 async def create_elasticsearch_client(config: ElasticsearchConfig) -> Elasticsearch:
     if config.user:

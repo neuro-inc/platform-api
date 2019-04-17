@@ -286,13 +286,6 @@ async def kube_orchestrator(kube_config, es_client, event_loop):
 
 
 @pytest.fixture
-async def kube_orchestrator_auth(kube_config, es_client_auth, event_loop):
-    orchestrator = KubeOrchestrator(config=kube_config, es_client=es_client_auth)
-    async with orchestrator:
-        yield orchestrator
-
-
-@pytest.fixture
 async def kube_orchestrator_nfs(kube_config_nfs, es_client, event_loop):
     orchestrator = KubeOrchestrator(config=kube_config_nfs, es_client=es_client)
     async with orchestrator:
