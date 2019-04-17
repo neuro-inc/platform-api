@@ -47,7 +47,6 @@ spec:
         - name: nginx
           hostPath:
             path: /elasticsearch-auth/nginx
-            type: Directory
 ---
 apiVersion: v1
 kind: Service
