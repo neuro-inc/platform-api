@@ -145,6 +145,8 @@ class IngressConfig:
     users_url: URL
     monitoring_url: URL
 
+    scheme: str = "https"
+
 
 @dataclass(frozen=True)
 class Config:

@@ -105,7 +105,7 @@ class TestEnvironConfigFactory:
             "NP_OAUTH_CLIENT_ID": "oauth_client_id",
             "NP_OAUTH_AUDIENCE": "https://platform-url",
             "NP_OAUTH_SUCCESS_REDIRECT_URL": "https://platform-default-url",
-            "INGRESS_HOST_TEMPORARY_NEW_DOMAIN": "neu.ro",
+            "NP_API_URL": "https://neu.ro/api/v1",
         }
         config = EnvironConfigFactory(environ=environ).create()
 
@@ -164,7 +164,7 @@ class TestEnvironConfigFactory:
             "NP_K8S_API_URL": "https://localhost:8443",
             "NP_AUTH_URL": "https://auth",
             "NP_AUTH_TOKEN": "token",
-            "INGRESS_HOST_TEMPORARY_NEW_DOMAIN": "neu.ro",
+            "NP_API_URL": "https://neu.ro/api/v1",
         }
         with pytest.raises(ValueError):
             EnvironConfigFactory(environ=environ).create()
@@ -213,7 +213,7 @@ class TestEnvironConfigFactory:
             ),
             "NP_K8S_NODE_LABEL_PREEMPTIBLE": "testpreempt",
             "NP_ES_HOSTS": "http://es",
-            "INGRESS_HOST_TEMPORARY_NEW_DOMAIN": "neu.ro",
+            "NP_API_URL": "https://neu.ro/api/v1",
         }
         config = EnvironConfigFactory(environ=environ).create()
 
@@ -289,7 +289,7 @@ class TestEnvironConfigFactory:
             "NP_AUTH_URL": "https://auth",
             "NP_AUTH_TOKEN": "token",
             "NP_ES_HOSTS": "http://es",
-            "INGRESS_HOST_TEMPORARY_NEW_DOMAIN": "neu.ro",
+            "NP_API_URL": "https://neu.ro/api/v1",
         }
         config = EnvironConfigFactory(environ=environ).create()
         assert config.storage.nfs_server == "1.2.3.4"

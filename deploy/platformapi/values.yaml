@@ -38,6 +38,11 @@ NP_K8S_SSH_AUTH_INGRESS_DOMAIN_NAME:
   dev: ssh-auth-dev.neu.ro
   staging: ssh-auth-staging.neu.ro
   prod: ssh-auth.neu.ro
+NP_API_URL:
+  _default: https://dev.neu.ro/api/v1
+  dev: https://dev.neu.ro/api/v1
+  staging: https://staging.neu.ro/api/v1
+  prod: https://neu.ro/api/v1
 INGRESS_HOST:
   _default: platform.dev.neuromation.io
   dev: platform.dev.neuromation.io
@@ -53,6 +58,11 @@ INGRESS_HOST_TEMPORARY_NEW_DOMAIN:
   dev: dev.neu.ro
   staging: staging.neu.ro
   prod: neu.ro
+INGRESS_SCHEME_TEMPORARY:
+  _default: https
+  dev: https
+  staging: https
+  prod: https
 INGRESS_MAIN_SITE_HOST:
   _default: neu.ro
   dev:

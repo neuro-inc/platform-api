@@ -263,9 +263,7 @@ class EnvironConfigFactory:
         return RegistryConfig(host=host, is_secure=is_https)
 
     def create_ingress(self) -> IngressConfig:
-        scheme = "https"
-        domain = self._environ["INGRESS_HOST_TEMPORARY_NEW_DOMAIN"]
-        base_url = URL(f"{scheme}://{domain}/api/v1")
+        base_url = URL(self._environ["NP_API_URL"])
         return IngressConfig(
             storage_url=base_url / "storage",
             users_url=base_url / "users",
