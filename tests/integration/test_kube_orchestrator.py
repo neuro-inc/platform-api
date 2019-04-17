@@ -13,11 +13,7 @@ from async_timeout import timeout
 from elasticsearch import AuthenticationException
 from yarl import URL
 
-from platform_api.elasticsearch import (
-    ElasticsearchAuthConfig,
-    ElasticsearchConfig,
-    create_elasticsearch_client,
-)
+from platform_api.elasticsearch import ElasticsearchConfig, create_elasticsearch_client
 from platform_api.orchestrator import (
     Job,
     JobError,
@@ -1251,11 +1247,13 @@ class TestLogReader:
 
     @pytest.mark.asyncio
     async def test_create_elasticsearch_client_wrong_auth_fail(
-        self, kube_config, kube_client, delete_pod_later, es_config
+        self, kube_config, kube_client, delete_pod_later, es_hosts_auth
     ):
-        es_auth_config = ElasticsearchAuthConfig(user="wrong-user", password="wrong-pw")
+        es_config = ElasticsearchConfig(
+            hosts=es_hosts_auth, user="wrong-user", password="wrong-pw"
+        )
         with pytest.raises(AuthenticationException):
-            async with create_elasticsearch_client(es_config, es_auth_config):
+            async with create_elasticsearch_client(es_config):
                 pass
 
     @pytest.mark.asyncio

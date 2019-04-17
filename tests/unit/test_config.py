@@ -157,8 +157,8 @@ class TestEnvironConfigFactory:
         assert config.registry.host == "registry.dev.neuromation.io"
 
         assert config.logging.elasticsearch.hosts == ["http://es"]
-        assert config.logging.elasticsearch_auth.user == "test-user"
-        assert config.logging.elasticsearch_auth.password == "test-password"
+        assert config.logging.elasticsearch.user == "test-user"
+        assert config.logging.elasticsearch.password == "test-password"
 
     def test_create_value_error_invalid_port(self):
         environ = {
@@ -271,8 +271,8 @@ class TestEnvironConfigFactory:
         assert config.registry.url == URL("https://testregistry:5000")
 
         assert config.logging.elasticsearch.hosts == ["http://es"]
-        assert config.logging.elasticsearch_auth.user == "test-user"
-        assert config.logging.elasticsearch_auth.password == "test-password"
+        assert config.logging.elasticsearch.user == "test-user"
+        assert config.logging.elasticsearch.password == "test-password"
 
     def test_create_nfs(self):
         named_host_template = "{job_name}-{job_owner}.jobs.domain"

@@ -9,27 +9,22 @@ from async_generator import asynccontextmanager
 @dataclass(frozen=True)
 class ElasticsearchConfig:
     hosts: Sequence[str]
-
-
-@dataclass(frozen=True)
-class ElasticsearchAuthConfig:
-    user: str
-    password: str
+    user: Optional[str] = None
+    password: Optional[str] = None
 
 
 @dataclass(frozen=True)
 class LoggingConfig:
     elasticsearch: ElasticsearchConfig
-    elasticsearch_auth: ElasticsearchAuthConfig
 
 
 @asynccontextmanager
-async def create_elasticsearch_client(
-    config: ElasticsearchConfig, auth_config: Optional[ElasticsearchAuthConfig] = None
-) -> Elasticsearch:
-    http_auth = (
-        BasicAuth(auth_config.user, auth_config.password) if auth_config else None
-    )
+async def create_elasticsearch_client(config: ElasticsearchConfig) -> Elasticsearch:
+    if config.user:
+        http_auth = BasicAuth(config.user, config.password)
+    else:
+        http_auth = None
+
     async with Elasticsearch(hosts=config.hosts, http_auth=http_auth) as es_client:
         await es_client.ping()
         yield es_client

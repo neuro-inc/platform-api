@@ -76,10 +76,7 @@ spec:
         - name: NP_K8S_NODE_LABEL_PREEMPTIBLE
           value: cloud.google.com/gke-preemptible
         - name: NP_ES_HOSTS
-          value: http://logging-elasticsearch:9200  # TODO: change this to elasticsearch-auth proxy
-        # TODO:
-        #- name: NP_ES_AUTH_USER
-        #- name: NP_ES_AUTH_PASSWORD
+          value: http://logging-elasticsearch:9200
       - name: kubeproxy
         image: lachlanevenson/k8s-kubectl:v1.10.3
         args: [proxy]
