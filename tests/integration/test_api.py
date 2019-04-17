@@ -21,11 +21,13 @@ from aiohttp.web import (
 from async_generator import asynccontextmanager
 from neuro_auth_client import Permission
 from neuro_auth_client.client import Quota
+from yarl import URL
 
 from platform_api.api import create_app
 from platform_api.config import (
     Config,
     DatabaseConfig,
+    IngressConfig,
     LoggingConfig,
     ServerConfig,
     StorageConfig,
@@ -91,6 +93,16 @@ def config_with_oauth(config_factory, oauth_config_dev):
 
 
 @pytest.fixture
+def config_with_ingress(config_factory):
+    ingress_config = IngressConfig(
+        storage_url=URL("https://storage"),
+        users_url=URL("https://users"),
+        monitoring_url=URL("https://monitoring"),
+    )
+    return config_factory(ingress=ingress_config)
+
+
+@pytest.fixture
 async def api_factory():
     @asynccontextmanager
     async def _factory(config):
@@ -132,6 +144,12 @@ async def api(config):
 @pytest.fixture
 async def api_with_oauth(config_with_oauth):
     async with create_local_app_server(config_with_oauth, port=8081) as api_config:
+        yield api_config
+
+
+@pytest.fixture
+async def api_with_ingress(config_with_ingress):
+    async with create_local_app_server(config_with_ingress, port=8081) as api_config:
         yield api_config
 
 
@@ -251,6 +269,19 @@ class TestApi:
                     "http://127.0.0.1:54541",
                     "http://127.0.0.1:54542",
                 ],
+            }
+
+    @pytest.mark.asyncio
+    async def test_config_with_ingress(self, api_with_ingress, client):
+        url = api_with_ingress.config_url
+        async with client.get(url) as resp:
+            assert resp.status == HTTPOk.status_code
+            result = await resp.json()
+            assert result == {
+                "registry_url": "https://registry.dev.neuromation.io",
+                "storage_url": "https://storage",
+                "users_url": "https://users",
+                "monitoring_url": "https://monitoring",
             }
 
 
