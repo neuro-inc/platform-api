@@ -1261,7 +1261,7 @@ class TestLogReader:
             pass
 
     @pytest.mark.asyncio
-    async def test_elasticsearch_log_reader_directly_no_authentication(
+    async def test_elasticsearch_log_reader(
         self, kube_config, kube_client, delete_pod_later, es_client
     ):
         command = 'bash -c "for i in {1..5}; do echo $i; sleep 1; done"'
@@ -1332,7 +1332,7 @@ class TestLogReader:
             pytest.fail(f"Pod logs did not match. Last payload: {payload}")
 
     @pytest.mark.asyncio
-    async def test_elasticsearch_log_reader_no_authentication_empty(self, es_client):
+    async def test_elasticsearch_log_reader_empty(self, es_client):
         namespace_name = pod_name = container_name = str(uuid.uuid4())
         log_reader = ElasticsearchLogReader(
             es_client,
