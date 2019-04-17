@@ -1258,41 +1258,6 @@ class TestLogReader:
 
     @pytest.mark.asyncio
     async def test_elasticsearch_log_reader_directly_without_authentication(
-        self, kube_config, kube_client, delete_pod_later, es_client_no_auth
-    ):
-        command = 'bash -c "for i in {1..5}; do echo $i; sleep 1; done"'
-        expected_payload = ("\n".join(str(i) for i in range(1, 6)) + "\n").encode()
-        container = Container(
-            image="ubuntu",
-            command=command,
-            resources=ContainerResources(cpu=0.1, memory_mb=128),
-        )
-        job_request = JobRequest.create(container)
-        pod = PodDescriptor.from_job_request(
-            kube_config.create_storage_volume(), job_request
-        )
-        await delete_pod_later(pod)
-        await kube_client.create_pod(pod)
-        await kube_client.wait_pod_is_terminated(pod.name)
-
-        await self._check_kube_logs(
-            kube_client,
-            namespace_name=kube_config.namespace,
-            pod_name=pod.name,
-            container_name=pod.name,
-            expected_payload=expected_payload,
-        )
-
-        await self._check_es_logs(
-            es_client_no_auth,
-            namespace_name=kube_config.namespace,
-            pod_name=pod.name,
-            container_name=pod.name,
-            expected_payload=expected_payload,
-        )
-
-    @pytest.mark.asyncio
-    async def test_elasticsearch_log_reader_with_authentication(
         self, kube_config, kube_client, delete_pod_later, es_client
     ):
         command = 'bash -c "for i in {1..5}; do echo $i; sleep 1; done"'
@@ -1320,6 +1285,41 @@ class TestLogReader:
 
         await self._check_es_logs(
             es_client,
+            namespace_name=kube_config.namespace,
+            pod_name=pod.name,
+            container_name=pod.name,
+            expected_payload=expected_payload,
+        )
+
+    @pytest.mark.asyncio
+    async def test_elasticsearch_log_reader_with_authentication(
+        self, kube_config, kube_client, delete_pod_later, es_client_with_auth
+    ):
+        command = 'bash -c "for i in {1..5}; do echo $i; sleep 1; done"'
+        expected_payload = ("\n".join(str(i) for i in range(1, 6)) + "\n").encode()
+        container = Container(
+            image="ubuntu",
+            command=command,
+            resources=ContainerResources(cpu=0.1, memory_mb=128),
+        )
+        job_request = JobRequest.create(container)
+        pod = PodDescriptor.from_job_request(
+            kube_config.create_storage_volume(), job_request
+        )
+        await delete_pod_later(pod)
+        await kube_client.create_pod(pod)
+        await kube_client.wait_pod_is_terminated(pod.name)
+
+        await self._check_kube_logs(
+            kube_client,
+            namespace_name=kube_config.namespace,
+            pod_name=pod.name,
+            container_name=pod.name,
+            expected_payload=expected_payload,
+        )
+
+        await self._check_es_logs(
+            es_client_with_auth,
             namespace_name=kube_config.namespace,
             pod_name=pod.name,
             container_name=pod.name,
@@ -1364,11 +1364,11 @@ class TestLogReader:
 
     @pytest.mark.asyncio
     async def test_elasticsearch_log_reader_empty_without_authentication(
-        self, es_client_no_auth
+        self, es_client
     ):
         namespace_name = pod_name = container_name = str(uuid.uuid4())
         log_reader = ElasticsearchLogReader(
-            es_client_no_auth,
+            es_client,
             namespace_name=namespace_name,
             pod_name=pod_name,
             container_name=container_name,
@@ -1377,10 +1377,10 @@ class TestLogReader:
         assert payload == b""
 
     @pytest.mark.asyncio
-    async def test_elasticsearch_log_reader_empty_with_authentication(self, es_client):
+    async def test_elasticsearch_log_reader_empty_with_authentication(self, es_client_with_auth):
         namespace_name = pod_name = container_name = str(uuid.uuid4())
         log_reader = ElasticsearchLogReader(
-            es_client,
+            es_client_with_auth,
             namespace_name=namespace_name,
             pod_name=pod_name,
             container_name=container_name,
