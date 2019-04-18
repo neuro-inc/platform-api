@@ -1,7 +1,7 @@
 import logging
 from abc import ABC, abstractmethod
 from dataclasses import dataclass, field
-from typing import AsyncIterator, Callable, Dict, Optional
+from typing import AsyncIterator, Callable, Dict
 
 from aiorwlock import RWLock
 from async_generator import asynccontextmanager
@@ -70,7 +70,7 @@ class ClusterRegistry:
         assert record.name not in self._records
         self._records[record.name] = record
 
-    def _remove(self, name: str) -> Optional[ClusterRegistryRecord]:
+    def _remove(self, name: str) -> ClusterRegistryRecord:
         record = self._records.pop(name, None)
         if not record:
             raise ClusterNotFound.create(name)
