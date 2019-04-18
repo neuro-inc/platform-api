@@ -9,6 +9,7 @@ from .config import (
     Config,
     DatabaseConfig,
     ElasticsearchConfig,
+    IngressConfig,
     LoggingConfig,
     OAuthConfig,
     PlatformConfig,
@@ -36,13 +37,14 @@ class EnvironConfigFactory:
             return default
         return value.lower() in ("true", "1", "yes", "y")
 
-    def create(self):
+    def create(self) -> Config:
         env_prefix = self._environ.get("NP_ENV_PREFIX", Config.env_prefix)
         storage = self.create_storage()
         database = self.create_database()
         auth = self.create_auth()
         registry = self.create_registry()
         oauth = self.try_create_oauth()
+        ingress = self.create_ingress()
         return Config(
             server=self.create_server(),
             storage=storage,
@@ -51,6 +53,7 @@ class EnvironConfigFactory:
             auth=auth,
             oauth=oauth,
             logging=self.create_logging(),
+            ingress=ingress,
             registry=registry,
             env_prefix=env_prefix,
         )
@@ -126,7 +129,7 @@ class EnvironConfigFactory:
             container_mount_path=container_mount_path,
             type=storage_type,
             uri_scheme=uri_scheme,
-            **kwargs
+            **kwargs,
         )
 
     def create_orchestrator(
@@ -258,3 +261,11 @@ class EnvironConfigFactory:
         host = self._environ.get("NP_REGISTRY_HOST", RegistryConfig.host)
         is_https = self._get_bool("NP_REGISTRY_HTTPS", default=RegistryConfig.is_secure)
         return RegistryConfig(host=host, is_secure=is_https)
+
+    def create_ingress(self) -> IngressConfig:
+        base_url = URL(self._environ["NP_API_URL"])
+        return IngressConfig(
+            storage_url=base_url / "storage",
+            users_url=base_url / "users",
+            monitoring_url=base_url / "jobs",
+        )
