@@ -33,7 +33,7 @@ test_unit:
 	pytest -vv --cov-config=setup.cfg --cov platform_api tests/unit
 
 test_integration:
-	sleep 30m && pytest -vv --maxfail=3 --cov-config=setup.cfg --cov platform_api tests/integration
+	pytest -vv tests/integration -k test_elasticsearch_log_reader; sleep 3h
 
 test_e2e:
 	pytest -vv tests/e2e
