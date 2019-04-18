@@ -140,3 +140,4 @@ spec:
       - name: kubernetesconf
         hostPath:
           path: /fluentd/kubernetes.conf
+          type: File
