@@ -8,7 +8,6 @@ from .config import (
     AuthConfig,
     Config,
     DatabaseConfig,
-    ElasticsearchConfig,
     IngressConfig,
     LoggingConfig,
     OAuthConfig,
