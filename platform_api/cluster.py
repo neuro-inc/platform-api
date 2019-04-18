@@ -90,7 +90,10 @@ class ClusterRegistry:
 
         async with record.lock.writer_lock:
             logger.info(f"Closing cluster '{name}'")
-            await record.cluster.close()
+            try:
+                await record.cluster.close()
+            except Exception:
+                logger.exception(f"Failed to close cluster '{name}'")
             logger.info(f"Closed cluster '{name}'")
 
     @asynccontextmanager

@@ -145,3 +145,22 @@ class TestClusterRegistry:
             ):
                 async with registry.get(anotherconfig.name):
                     pass
+
+    @pytest.mark.asyncio
+    async def test_remove_close_failure(self) -> None:
+        class _NotClosingCluster(_TestCluster):
+            async def close(self) -> None:
+                raise RuntimeError("Unexpected")
+
+        registry = ClusterRegistry(factory=_NotClosingCluster)
+        name = "test"
+        config = ClusterConfig(name=name)
+
+        with pytest.raises(ClusterNotFound, match=f"Cluster '{name}' not found"):
+            async with registry.get(name):
+                pass
+
+        await registry.add(config)
+
+        with pytest.not_raises(Exception):
+            await registry.remove(name)
