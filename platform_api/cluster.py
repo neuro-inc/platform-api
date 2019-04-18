@@ -70,6 +70,12 @@ class ClusterRegistry:
     def _remove(self, name: str) -> Optional[ClusterRegistryRecord]:
         return self._records.pop(name, None)
 
+    def _get(self, name: str) -> ClusterRegistryRecord:
+        record = self._records.get(name)
+        if not record:
+            raise ClusterNotFound(f"Cluster '{name}' not found")
+        return record
+
     async def add(self, config: ClusterConfig) -> None:
         await self.remove(config.name)
 
@@ -98,9 +104,7 @@ class ClusterRegistry:
 
     @asynccontextmanager
     async def get(self, name: str) -> AsyncIterator[Cluster]:
-        record = self._records.get(name)
-        if not record:
-            raise ClusterNotFound(f"Cluster '{name}' not found")
+        record = self._get(name)
 
         async with record.lock.reader_lock:
             yield record.cluster
