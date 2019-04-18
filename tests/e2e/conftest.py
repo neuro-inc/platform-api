@@ -52,6 +52,8 @@ def ssh_auth_config():
     if "SSH_AUTH_URL" not in os.environ:
         pytest.fail("Environment variable SSH_AUTH_URL is not set")
     url = URL(os.environ["SSH_AUTH_URL"])
+    assert url.host
+    assert url.port
     return SSHAuthConfig(url.host, url.port)
 
 

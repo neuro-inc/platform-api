@@ -602,6 +602,7 @@ class TestJob:
         )
         job.status = JobStatus.FAILED
         job.is_deleted = True
+        assert job.finished_at
         expected_finished_at = job.finished_at.isoformat()
         assert job.to_primitive() == {
             "id": job.id,

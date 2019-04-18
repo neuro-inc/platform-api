@@ -427,11 +427,13 @@ class TestRedisJobsStorage:
 
         jobs = await storage.get_all_jobs()
 
-        jobs = sorted([job.to_primitive() for job in jobs], key=lambda job: job["id"])
-        original_jobs = sorted(
+        job_reprs = sorted(
+            [job.to_primitive() for job in jobs], key=lambda job: job["id"]
+        )
+        original_job_reprs = sorted(
             [job.to_primitive() for job in original_jobs], key=lambda job: job["id"]
         )
-        assert jobs == original_jobs
+        assert job_reprs == original_job_reprs
 
     @pytest.mark.asyncio
     async def test_get_all_filter_by_status(self, redis_client, kube_orchestrator):

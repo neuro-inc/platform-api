@@ -1,5 +1,6 @@
 import asyncio
 import logging
+from typing import cast, Dict, Any
 
 import aiohttp.web
 from aioelasticsearch import Elasticsearch
@@ -11,7 +12,13 @@ from neuro_auth_client.security import AuthScheme, setup_security
 from .config import Config, ElasticsearchConfig
 from .config_factory import EnvironConfigFactory
 from .handlers import JobsHandler, ModelsHandler
-from .orchestrator import JobException, JobsService, JobsStatusPooling, KubeOrchestrator
+from .orchestrator import (
+    JobException,
+    JobsService,
+    JobsStatusPooling,
+    KubeOrchestrator,
+    KubeConfig,
+)
 from .orchestrator.jobs_service import JobsServiceException
 from .orchestrator.jobs_storage import RedisJobsStorage
 from .redis import create_redis_client
@@ -36,7 +43,7 @@ class ApiHandler:
         return aiohttp.web.Response()
 
     async def handle_config(self, request):
-        data = {
+        data: Dict[str, Any] = {
             "registry_url": str(self._config.registry.url),
             "storage_url": str(self._config.ingress.storage_url),
             "users_url": str(self._config.ingress.users_url),
@@ -142,7 +149,7 @@ async def create_app(config: Config) -> aiohttp.web.Application:
 
             logger.info("Initializing Orchestrator")
             orchestrator = KubeOrchestrator(
-                config=config.orchestrator, es_client=es_client
+                config=cast(KubeConfig, config.orchestrator), es_client=es_client
             )
             await exit_stack.enter_async_context(orchestrator)
 

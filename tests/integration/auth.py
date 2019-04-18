@@ -93,7 +93,7 @@ async def create_auth_config(container) -> AuthConfig:
 
 
 @pytest.fixture
-async def auth_config(auth_server) -> AuthConfig:
+async def auth_config(auth_server) -> AsyncGenerator[AuthConfig, None]:
     yield auth_server
 
 

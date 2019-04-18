@@ -8,8 +8,10 @@ from datetime import timedelta
 from typing import (
     AbstractSet,
     Any,
+    AsyncContextManager,
     AsyncIterator,
     Dict,
+    Iterable,
     Iterator,
     List,
     Optional,
@@ -69,7 +71,7 @@ class JobFilter:
 
 class JobsStorage(ABC):
     @abstractmethod
-    async def try_create_job(self, job: Job) -> AsyncIterator[Job]:
+    def try_create_job(self, job: Job) -> AsyncContextManager[Job]:
         pass
 
     @abstractmethod
@@ -81,7 +83,7 @@ class JobsStorage(ABC):
         pass
 
     @abstractmethod
-    async def try_update_job(self, job_id: str) -> AsyncIterator[Job]:
+    def try_update_job(self, job_id: str) -> AsyncContextManager[Job]:
         pass
 
     @abstractmethod
@@ -90,7 +92,7 @@ class JobsStorage(ABC):
 
     @abstractmethod
     async def get_jobs_by_ids(
-        self, job_ids: Sequence[str], job_filter: Optional[JobFilter] = None
+        self, job_ids: Iterable[str], job_filter: Optional[JobFilter] = None
     ) -> List[Job]:
         pass
 
@@ -165,7 +167,7 @@ class InMemoryJobsStorage(JobsStorage):
         return jobs
 
     async def get_jobs_by_ids(
-        self, job_ids: Sequence[str], job_filter: Optional[JobFilter] = None
+        self, job_ids: Iterable[str], job_filter: Optional[JobFilter] = None
     ) -> List[Job]:
         jobs = []
         for job_id in job_ids:
@@ -309,6 +311,7 @@ class RedisJobsStorage(JobsStorage):
                 other_id = await storage.get_last_created_job_id(job.owner, job.name)
                 if other_id is not None:
                     other = await self.get_job(other_id)
+                    assert other.name is not None
                     if not other.is_finished:
                         raise JobStorageJobFoundError(other.name, other.owner, other_id)
                 # with yield below, the job creation signal is sent to the orchestrator.
@@ -343,6 +346,7 @@ class RedisJobsStorage(JobsStorage):
         )
 
     def _update_name_index(self, tr: Pipeline, job: Job) -> None:
+        assert job.name
         name_key = self._generate_jobs_name_index_zset_key(job.owner, job.name)
         tr.zadd(name_key, job.status_history.created_at_timestamp, job.id)
 
@@ -389,7 +393,7 @@ class RedisJobsStorage(JobsStorage):
             return last_job_id
         return None
 
-    async def _get_jobs(self, ids: Sequence[str]) -> List[Job]:
+    async def _get_jobs(self, ids: Iterable[str]) -> List[Job]:
         jobs: List[Job] = []
         if not ids:
             return jobs
@@ -476,7 +480,7 @@ class RedisJobsStorage(JobsStorage):
         return await self._get_jobs(job_ids)
 
     async def get_jobs_by_ids(
-        self, job_ids: Sequence[str], job_filter: Optional[JobFilter] = None
+        self, job_ids: Iterable[str], job_filter: Optional[JobFilter] = None
     ) -> List[Job]:
         jobs = await self._get_jobs(job_ids)
         if job_filter:

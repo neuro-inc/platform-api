@@ -12,8 +12,8 @@ async def test_stream_ctor():
 
 async def test_nonblocking_put_get():
     stream = Stream()
-    await stream.put(b"data")
-    data = await stream.get()
+    await stream.feed(b"data")
+    data = await stream.read()
     assert data == b"data"
 
 
@@ -21,14 +21,14 @@ async def test_put_in_closed_stream():
     stream = Stream()
     await stream.close()
     with pytest.raises(RuntimeError):
-        await stream.put(b"data")
+        await stream.feed(b"data")
 
 
 async def test_get_from_closed_stream():
     stream = Stream()
     await stream.close()
     with pytest.raises(asyncio.CancelledError):
-        await stream.get()
+        await stream.read()
 
 
 async def test_blocking_get_before_put():
@@ -37,13 +37,13 @@ async def test_blocking_get_before_put():
 
     async def getter():
         ready.set_result(None)
-        data = await stream.get()
+        data = await stream.read()
         assert data == b"data"
 
     stream = Stream()
     task = loop.create_task(getter())
     await ready
-    await stream.put(b"data")
+    await stream.feed(b"data")
     await task
 
 
@@ -53,7 +53,7 @@ async def test_blocking_get_cancellation():
 
     async def getter():
         ready.set_result(None)
-        await stream.get()
+        await stream.read()
 
     stream = Stream()
     task = loop.create_task(getter())

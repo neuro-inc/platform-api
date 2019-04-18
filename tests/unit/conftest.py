@@ -1,7 +1,7 @@
 import asyncio
 from datetime import timedelta
 from pathlib import PurePath
-from typing import Optional
+from typing import Optional, List
 
 import pytest
 
@@ -34,7 +34,7 @@ class MockOrchestrator(Orchestrator):
         self._mock_reason_to_return = "Initializing"
         self.raise_on_get_job_status = False
         self.raise_on_delete = False
-        self._successfully_deleted_jobs = []
+        self._successfully_deleted_jobs: List[Job] = []
 
     @property
     def config(self):

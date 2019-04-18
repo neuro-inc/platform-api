@@ -1,4 +1,5 @@
 from pathlib import PurePath
+from typing import Dict, Any
 from unittest import mock
 
 import aiohttp
@@ -71,7 +72,7 @@ class TestAbstractVolume:
 
 class TestHostVolume:
     def test_to_primitive(self):
-        volume = HostVolume("testvolume", path="/tmp")
+        volume = HostVolume("testvolume", path=PurePath("/tmp"))
         assert volume.to_primitive() == {
             "name": "testvolume",
             "hostPath": {"path": "/tmp", "type": "Directory"},
@@ -394,7 +395,7 @@ class TestPodDescriptor:
             ],
             resources=ContainerResources(cpu=1, memory_mb=128, gpu=1),
         )
-        volume = HostVolume(name="testvolume", path="/tmp")
+        volume = HostVolume(name="testvolume", path=PurePath("/tmp"))
         job_request = JobRequest.create(container)
         pod = PodDescriptor.from_job_request(volume, job_request)
         assert pod.name == job_request.job_id
@@ -766,7 +767,7 @@ class TestServiceWithSSHOnly:
 
 class TestContainerStatus:
     def test_no_state(self):
-        payload = {"state": {}}
+        payload: Dict[str, Any] = {"state": {}}
         status = ContainerStatus(payload)
         assert status.is_waiting
         assert status.reason is None

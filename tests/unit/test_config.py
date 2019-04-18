@@ -1,5 +1,6 @@
 from datetime import timedelta
 from pathlib import PurePath
+from typing import Dict
 
 import pytest
 from yarl import URL
@@ -84,7 +85,7 @@ class TestKubeConfig:
 
 class TestEnvironConfigFactory:
     def test_create_key_error(self):
-        environ = {}
+        environ: Dict[str, str] = {}
         with pytest.raises(KeyError):
             EnvironConfigFactory(environ=environ).create()
 
@@ -116,6 +117,7 @@ class TestEnvironConfigFactory:
         assert config.storage.container_mount_path == PurePath("/var/storage")
         assert config.storage.uri_scheme == "storage"
 
+        assert isinstance(config.orchestrator, KubeConfig)
         assert config.orchestrator.storage_mount_path == PurePath("/tmp")
         assert config.orchestrator.endpoint_url == "https://localhost:8443"
         assert not config.orchestrator.cert_authority_path
@@ -148,6 +150,7 @@ class TestEnvironConfigFactory:
         assert config.auth.service_token == "token"
         assert config.auth.service_name == "compute"
 
+        assert config.oauth is not None
         assert config.oauth.base_url == URL("https://oauth")
         assert config.oauth.client_id == "oauth_client_id"
         assert config.oauth.audience == "https://platform-url"
@@ -228,6 +231,7 @@ class TestEnvironConfigFactory:
         assert config.ingress.users_url == URL("https://neu.ro/api/v1/users")
         assert config.ingress.monitoring_url == URL("https://neu.ro/api/v1/jobs")
 
+        assert isinstance(config.orchestrator, KubeConfig)
         assert config.orchestrator.storage_mount_path == PurePath("/tmp")
         assert config.orchestrator.endpoint_url == "https://localhost:8443"
         assert config.orchestrator.cert_authority_path == "/ca_path"
@@ -256,6 +260,7 @@ class TestEnvironConfigFactory:
 
         assert config.orchestrator.orphaned_job_owner == "servicename"
 
+        assert config.database.redis is not None
         assert config.database.redis.uri == "redis://localhost:6379/0"
         assert config.database.redis.conn_pool_size == 444
         assert config.database.redis.conn_timeout_s == 555.0
