@@ -68,7 +68,10 @@ class ClusterRegistry:
         self._records[record.name] = record
 
     def _remove(self, name: str) -> Optional[ClusterRegistryRecord]:
-        return self._records.pop(name, None)
+        record = self._records.pop(name, None)
+        if not record:
+            raise ClusterNotFound(f"Cluster '{name}' not found")
+        return record
 
     def _get(self, name: str) -> ClusterRegistryRecord:
         record = self._records.get(name)
@@ -77,7 +80,10 @@ class ClusterRegistry:
         return record
 
     async def add(self, config: ClusterConfig) -> None:
-        await self.remove(config.name)
+        try:
+            await self.remove(config.name)
+        except ClusterNotFound:
+            pass
 
         logger.info(f"Initializing cluster '{config.name}'")
         cluster = self._factory(config)
@@ -90,8 +96,7 @@ class ClusterRegistry:
 
     async def remove(self, name: str) -> None:
         record = self._remove(name)
-        if not record:
-            return
+
         logger.info(f"Unregistered cluster '{name}'")
 
         async with record.lock.writer_lock:

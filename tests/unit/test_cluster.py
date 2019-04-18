@@ -82,14 +82,7 @@ class TestClusterRegistry:
         name = "test"
 
         with pytest.raises(ClusterNotFound, match=f"Cluster '{name}' not found"):
-            async with registry.get(name):
-                pass
-
-        await registry.remove(name)
-
-        with pytest.raises(ClusterNotFound, match=f"Cluster '{name}' not found"):
-            async with registry.get(name):
-                pass
+            await registry.remove(name)
 
     @pytest.mark.asyncio
     async def test_remove(self) -> None:
