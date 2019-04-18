@@ -1,6 +1,6 @@
 import logging
 from abc import ABC, abstractmethod
-from dataclasses import dataclass, field
+from dataclasses import dataclass
 from typing import AsyncIterator, Callable, Dict
 
 from aiorwlock import RWLock
@@ -50,11 +50,26 @@ class Cluster(ABC):
 ClusterFactory = Callable[[ClusterConfig], Cluster]
 
 
-@dataclass
 class ClusterRegistryRecord:
-    cluster: Cluster
-    lock: RWLock = field(default_factory=RWLock)
-    is_cluster_closed: bool = False
+    def __init__(self, cluster: Cluster) -> None:
+        self._cluster = cluster
+        self._lock = RWLock()
+        self._is_cluster_closed = False
+
+    @property
+    def cluster(self) -> Cluster:
+        return self._cluster
+
+    @property
+    def lock(self) -> RWLock:
+        return self._lock
+
+    @property
+    def is_cluster_closed(self) -> bool:
+        return self._is_cluster_closed
+
+    def mark_cluster_closed(self) -> None:
+        self._is_cluster_closed = True
 
     @property
     def name(self) -> str:
@@ -103,7 +118,7 @@ class ClusterRegistry:
         logger.info(f"Unregistered cluster '{name}'")
 
         async with record.lock.writer_lock:
-            record.is_cluster_closed = True
+            record.mark_cluster_closed()
 
             logger.info(f"Closing cluster '{name}'")
             try:
