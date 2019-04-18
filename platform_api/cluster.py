@@ -17,7 +17,9 @@ class ClusterException(Exception):
 
 
 class ClusterNotFound(ClusterException):
-    pass
+    @classmethod
+    def create(cls, name: str) -> "ClusterNotFound":
+        return cls(f"Cluster '{name}' not found")
 
 
 @dataclass(frozen=True)
@@ -48,10 +50,11 @@ class Cluster(ABC):
 ClusterFactory = Callable[[ClusterConfig], Cluster]
 
 
-@dataclass(frozen=True)
+@dataclass
 class ClusterRegistryRecord:
     cluster: Cluster
     lock: RWLock = field(default_factory=RWLock)
+    is_cluster_closed: bool = False
 
     @property
     def name(self) -> str:
@@ -70,13 +73,13 @@ class ClusterRegistry:
     def _remove(self, name: str) -> Optional[ClusterRegistryRecord]:
         record = self._records.pop(name, None)
         if not record:
-            raise ClusterNotFound(f"Cluster '{name}' not found")
+            raise ClusterNotFound.create(name)
         return record
 
     def _get(self, name: str) -> ClusterRegistryRecord:
         record = self._records.get(name)
         if not record:
-            raise ClusterNotFound(f"Cluster '{name}' not found")
+            raise ClusterNotFound.create(name)
         return record
 
     async def add(self, config: ClusterConfig) -> None:
@@ -100,6 +103,8 @@ class ClusterRegistry:
         logger.info(f"Unregistered cluster '{name}'")
 
         async with record.lock.writer_lock:
+            record.is_cluster_closed = True
+
             logger.info(f"Closing cluster '{name}'")
             try:
                 await record.cluster.close()
@@ -111,5 +116,12 @@ class ClusterRegistry:
     async def get(self, name: str) -> AsyncIterator[Cluster]:
         record = self._get(name)
 
+        # by switching an execution context here, we are giving both readers
+        # and writers a chance to acquire the lock.
+        # if a writer wins, the readers block until the lock is released, but
+        # once it is released, the underlying cluster is considered to be
+        # closed, therefore we have to check the state explicitly.
         async with record.lock.reader_lock:
+            if record.is_cluster_closed:  # pragma: no cover
+                raise ClusterNotFound.create(name)
             yield record.cluster
