@@ -928,7 +928,7 @@ class TestJobs:
         yield factory
 
     @pytest.fixture
-    async def run_job(self, api, client, jobs_client_factory):
+    async def run_job(self, api, client, jobs_client, jobs_client_factory):
         job_ids = []
 
         async def _impl(user, job_request, do_kill=False):
