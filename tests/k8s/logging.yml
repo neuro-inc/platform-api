@@ -46,7 +46,7 @@ spec:
       volumes:
         - name: nginx
           hostPath:
-            path: /elasticsearch-auth/nginx
+            path: /files
 ---
 apiVersion: v1
 kind: Service
@@ -139,5 +139,4 @@ spec:
           path: /run/log/journal
       - name: kubernetesconf
         hostPath:
-          path: /fluentd/kubernetes.conf
-          type: File
+          path: /files/fluentd-kubernetes.conf
