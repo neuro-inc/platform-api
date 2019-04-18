@@ -136,6 +136,13 @@ class LoggingConfig:
 
 
 @dataclass(frozen=True)
+class IngressConfig:
+    storage_url: URL
+    users_url: URL
+    monitoring_url: URL
+
+
+@dataclass(frozen=True)
 class Config:
     server: ServerConfig
     storage: StorageConfig
@@ -143,6 +150,7 @@ class Config:
     database: DatabaseConfig
     auth: AuthConfig
     logging: LoggingConfig
+    ingress: IngressConfig
     oauth: Optional[OAuthConfig] = None
 
     registry: RegistryConfig = RegistryConfig()

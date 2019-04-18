@@ -7,10 +7,12 @@ from typing import NamedTuple
 import aiodocker.utils
 import asyncssh
 import pytest
+from yarl import URL
 
 from platform_api.config import (
     Config,
     DatabaseConfig,
+    IngressConfig,
     LoggingConfig,
     ServerConfig,
     StorageConfig,
@@ -51,6 +53,11 @@ def config(kube_config, redis_config, auth_config, es_config):
     storage_config = StorageConfig(host_mount_path=PurePath("/tmp"))  # type: ignore
     database_config = DatabaseConfig(redis=redis_config)  # type: ignore
     logging_config = LoggingConfig(elasticsearch=es_config)
+    ingress_config = IngressConfig(
+        storage_url=URL("https://neu.ro/api/v1/storage"),
+        users_url=URL("https://neu.ro/api/v1/users"),
+        monitoring_url=URL("https://neu.ro/api/v1/monitoring"),
+    )
     return Config(
         server=server_config,
         storage=storage_config,
@@ -58,6 +65,7 @@ def config(kube_config, redis_config, auth_config, es_config):
         database=database_config,
         auth=auth_config,
         logging=logging_config,
+        ingress=ingress_config,
     )
 
 

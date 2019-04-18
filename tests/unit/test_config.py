@@ -107,6 +107,7 @@ class TestEnvironConfigFactory:
             "NP_OAUTH_CLIENT_ID": "oauth_client_id",
             "NP_OAUTH_AUDIENCE": "https://platform-url",
             "NP_OAUTH_SUCCESS_REDIRECT_URL": "https://platform-default-url",
+            "NP_API_URL": "https://neu.ro/api/v1",
         }
         config = EnvironConfigFactory(environ=environ).create()
 
@@ -167,6 +168,7 @@ class TestEnvironConfigFactory:
             "NP_K8S_API_URL": "https://localhost:8443",
             "NP_AUTH_URL": "https://auth",
             "NP_AUTH_TOKEN": "token",
+            "NP_API_URL": "https://neu.ro/api/v1",
         }
         with pytest.raises(ValueError):
             EnvironConfigFactory(environ=environ).create()
@@ -217,6 +219,7 @@ class TestEnvironConfigFactory:
             "NP_ES_HOSTS": "http://es",
             "NP_ES_AUTH_USER": "test-user",
             "NP_ES_AUTH_PASSWORD": "test-password",
+            "NP_API_URL": "https://neu.ro/api/v1",
         }
         config = EnvironConfigFactory(environ=environ).create()
 
@@ -226,6 +229,10 @@ class TestEnvironConfigFactory:
         assert config.storage.host_mount_path == PurePath("/tmp")
         assert config.storage.container_mount_path == PurePath("/opt/storage")
         assert config.storage.uri_scheme == "something"
+
+        assert config.ingress.storage_url == URL("https://neu.ro/api/v1/storage")
+        assert config.ingress.users_url == URL("https://neu.ro/api/v1/users")
+        assert config.ingress.monitoring_url == URL("https://neu.ro/api/v1/jobs")
 
         assert config.orchestrator.storage_mount_path == PurePath("/tmp")
         assert config.orchestrator.endpoint_url == "https://localhost:8443"
@@ -290,8 +297,6 @@ class TestEnvironConfigFactory:
             "NP_AUTH_URL": "https://auth",
             "NP_AUTH_TOKEN": "token",
             "NP_ES_HOSTS": "http://es",
-            "NP_ES_AUTH_USER": "test-user",
-            "NP_ES_AUTH_PASSWORD": "test-password",
         }
         config = EnvironConfigFactory(environ=environ).create()
         assert config.storage.nfs_server == "1.2.3.4"

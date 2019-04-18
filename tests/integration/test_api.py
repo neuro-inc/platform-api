@@ -21,11 +21,13 @@ from aiohttp.web import (
 from async_generator import asynccontextmanager
 from neuro_auth_client import Permission
 from neuro_auth_client.client import Quota
+from yarl import URL
 
 from platform_api.api import create_app
 from platform_api.config import (
     Config,
     DatabaseConfig,
+    IngressConfig,
     LoggingConfig,
     ServerConfig,
     StorageConfig,
@@ -67,6 +69,11 @@ def config_factory(kube_config, redis_config, auth_config, es_config):
         storage_config = StorageConfig(host_mount_path=PurePath("/tmp"))  # type: ignore
         database_config = DatabaseConfig(redis=redis_config)  # type: ignore
         logging_config = LoggingConfig(elasticsearch=es_config)
+        ingress_config = IngressConfig(
+            storage_url=URL("https://neu.ro/api/v1/storage"),
+            users_url=URL("https://neu.ro/api/v1/users"),
+            monitoring_url=URL("https://neu.ro/api/v1/monitoring"),
+        )
         return Config(
             server=server_config,
             storage=storage_config,
@@ -74,6 +81,7 @@ def config_factory(kube_config, redis_config, auth_config, es_config):
             database=database_config,
             auth=auth_config,
             logging=logging_config,
+            ingress=ingress_config,
             **kwargs,
         )
 
@@ -231,7 +239,12 @@ class TestApi:
         async with client.get(url) as resp:
             assert resp.status == HTTPOk.status_code
             result = await resp.json()
-            assert result == {"registry_url": "https://registry.dev.neuromation.io"}
+            assert result == {
+                "registry_url": "https://registry.dev.neuromation.io",
+                "storage_url": "https://neu.ro/api/v1/storage",
+                "users_url": "https://neu.ro/api/v1/users",
+                "monitoring_url": "https://neu.ro/api/v1/monitoring",
+            }
 
     @pytest.mark.asyncio
     async def test_config_with_oauth(self, api_with_oauth, client):
@@ -241,6 +254,9 @@ class TestApi:
             result = await resp.json()
             assert result == {
                 "registry_url": "https://registry.dev.neuromation.io",
+                "storage_url": "https://neu.ro/api/v1/storage",
+                "users_url": "https://neu.ro/api/v1/users",
+                "monitoring_url": "https://neu.ro/api/v1/monitoring",
                 "auth_url": "https://platform-auth0-url/authorize",
                 "token_url": "https://platform-auth0-url/oauth/token",
                 "client_id": "client_id",
