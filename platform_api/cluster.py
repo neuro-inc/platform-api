@@ -1,3 +1,4 @@
+import asyncio
 import logging
 from abc import ABC, abstractmethod
 from dataclasses import dataclass
@@ -123,6 +124,8 @@ class ClusterRegistry:
             logger.info(f"Closing cluster '{name}'")
             try:
                 await record.cluster.close()
+            except asyncio.CancelledError:
+                raise
             except Exception:
                 logger.exception(f"Failed to close cluster '{name}'")
             logger.info(f"Closed cluster '{name}'")
