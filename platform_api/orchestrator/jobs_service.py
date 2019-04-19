@@ -1,5 +1,5 @@
 import logging
-from typing import List, Optional, Iterable, Tuple
+from typing import Iterable, List, Optional, Tuple
 
 from platform_api.user import User
 

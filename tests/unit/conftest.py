@@ -1,7 +1,7 @@
 import asyncio
 from datetime import timedelta
 from pathlib import PurePath
-from typing import Optional, List
+from typing import List, Optional
 
 import pytest
 

@@ -1,6 +1,6 @@
 import asyncio
 import logging
-from typing import cast, Dict, Any
+from typing import Any, Dict, cast
 
 import aiohttp.web
 from aioelasticsearch import Elasticsearch
@@ -16,8 +16,8 @@ from .orchestrator import (
     JobException,
     JobsService,
     JobsStatusPooling,
-    KubeOrchestrator,
     KubeConfig,
+    KubeOrchestrator,
 )
 from .orchestrator.jobs_service import JobsServiceException
 from .orchestrator.jobs_storage import RedisJobsStorage

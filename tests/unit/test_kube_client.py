@@ -1,5 +1,6 @@
+from typing import Any, Dict
+
 import pytest
-from typing import Dict, Any
 
 from platform_api.orchestrator.kube_client import (
     NodeAffinity,
