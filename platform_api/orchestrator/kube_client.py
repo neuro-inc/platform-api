@@ -993,11 +993,11 @@ class KubeClient:
             headers = {"Authorization": "Bearer " + token}
         else:
             headers = {}
+        timeout = aiohttp.ClientTimeout(
+            connect=self._conn_timeout_s, total=self._read_timeout_s
+        )
         self._client = aiohttp.ClientSession(
-            connector=connector,
-            conn_timeout=self._conn_timeout_s,
-            read_timeout=self._read_timeout_s,
-            headers=headers,
+            connector=connector, timeout=timeout, headers=headers
         )
 
     async def close(self) -> None:
