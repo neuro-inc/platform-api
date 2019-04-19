@@ -167,13 +167,9 @@ def convert_job_to_job_response(
     if job.internal_hostname:
         response_payload["internal_hostname"] = job.internal_hostname
     if history.started_at:
-        response_payload["history"][
-            "started_at"
-        ] = history.started_at_str  # type: ignore
+        response_payload["history"]["started_at"] = history.started_at_str
     if history.is_finished:
-        response_payload["history"][
-            "finished_at"
-        ] = history.finished_at_str  # type: ignore
+        response_payload["history"]["finished_at"] = history.finished_at_str
     return response_payload
 
 
