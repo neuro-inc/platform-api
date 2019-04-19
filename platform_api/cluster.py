@@ -118,7 +118,7 @@ class ClusterRegistry:
 
         logger.info(f"Unregistered cluster '{name}'")
 
-        async with record.lock.writer_lock:
+        async with record.lock.writer:
             record.mark_cluster_closed()
 
             logger.info(f"Closing cluster '{name}'")
@@ -139,7 +139,7 @@ class ClusterRegistry:
         # if a writer wins, the readers block until the lock is released, but
         # once it is released, the underlying cluster is considered to be
         # closed, therefore we have to check the state explicitly.
-        async with record.lock.reader_lock:
+        async with record.lock.reader:
             if record.is_cluster_closed:  # pragma: no cover
                 raise ClusterNotFound.create(name)
             yield record.cluster
