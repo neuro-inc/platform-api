@@ -1,4 +1,4 @@
-mypy==0.641
+mypy==0.701
 flake8==3.5.0
 flake8-mypy==17.8.0
 flake8-isort==2.5

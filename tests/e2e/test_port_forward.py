@@ -65,6 +65,7 @@ async def test_port_forward(ssh_auth_config, api_config, alice, alice_job, clien
         proc = await asyncio.create_subprocess_exec(
             *command, stdout=asyncio.subprocess.PIPE, stderr=asyncio.subprocess.PIPE
         )
+        assert proc.stderr
         try:
             line = await asyncio.wait_for(proc.stderr.readline(), 30)
             if b"Warning: Permanently added" in line:
@@ -104,6 +105,7 @@ async def test_wrong_user(ssh_auth_config, api_config, bob, alice_job):
         proc = await asyncio.create_subprocess_exec(
             *command, stdout=asyncio.subprocess.PIPE, stderr=asyncio.subprocess.PIPE
         )
+        assert proc.stderr
         try:
             line = await asyncio.wait_for(proc.stderr.readline(), 30)
             if b"Warning: Permanently added" in line:
@@ -140,6 +142,7 @@ async def test_incorrect_token(ssh_auth_config, api_config, alice_job):
         proc = await asyncio.create_subprocess_exec(
             *command, stdout=asyncio.subprocess.PIPE, stderr=asyncio.subprocess.PIPE
         )
+        assert proc.stderr
         try:
             line = await asyncio.wait_for(proc.stderr.readline(), 30)
             if b"Warning: Permanently added" in line:
@@ -178,6 +181,7 @@ async def test_port_forward_nonexposed(
         proc = await asyncio.create_subprocess_exec(
             *command, stdout=asyncio.subprocess.PIPE, stderr=asyncio.subprocess.PIPE
         )
+        assert proc.stderr
         try:
             line = await asyncio.wait_for(proc.stderr.readline(), 30)
             if b"Warning: Permanently added" in line:

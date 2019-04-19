@@ -801,8 +801,8 @@ class TestJobs:
         async with client.get(url, headers=headers, params=filters) as response:
             assert response.status == HTTPBadRequest.status_code
 
-        filters = [("status", "running"), ("status", "abrakadabra")]
-        async with client.get(url, headers=headers, params=filters) as response:
+        filters2 = [("status", "running"), ("status", "abrakadabra")]
+        async with client.get(url, headers=headers, params=filters2) as response:
             assert response.status == HTTPBadRequest.status_code
 
     @pytest.mark.asyncio
@@ -838,18 +838,18 @@ class TestJobs:
         headers = regular_user.headers
         model_request = model_request_factory(regular_user.name)
         model_request["container"]["command"] = "sleep 20m"
-        job_ids = []
+        job_ids_list = []
         for _ in range(5):
             async with client.post(url, headers=headers, json=model_request) as resp:
                 assert resp.status == HTTPAccepted.status_code
                 result = await resp.json()
-                job_ids.append(result["job_id"])
+                job_ids_list.append(result["job_id"])
 
-        job_ids_killed = set(job_ids[:2])
-        job_ids_alive = set(job_ids[2:])
-        job_ids = set(job_ids)
+        job_ids_killed = set(job_ids_list[:2])
+        job_ids_alive = set(job_ids_list[2:])
+        job_ids_all = set(job_ids_list)
 
-        for job_id in job_ids:
+        for job_id in job_ids_all:
             await jobs_client.long_polling_by_job_id(job_id, status="running")
 
         for job_id in job_ids_killed:
@@ -859,13 +859,13 @@ class TestJobs:
         # two statuses, actually filter out values
         filters = [("status", "pending"), ("status", "running")]
         jobs = await jobs_client.get_all_jobs(filters)
-        jobs = {job["id"] for job in jobs}
-        assert jobs == job_ids_alive
+        job_ids = {job["id"] for job in jobs}
+        assert job_ids == job_ids_alive
 
         # no filter
         jobs = await jobs_client.get_all_jobs()
-        jobs = {job["id"] for job in jobs}
-        assert jobs == job_ids
+        job_ids = {job["id"] for job in jobs}
+        assert job_ids == job_ids_all
 
         # all statuses, same as no filter1
         filters = [
@@ -875,14 +875,14 @@ class TestJobs:
             ("status", "succeeded"),
         ]
         jobs = await jobs_client.get_all_jobs(filters)
-        jobs = {job["id"] for job in jobs}
-        assert jobs == job_ids
+        job_ids = {job["id"] for job in jobs}
+        assert job_ids == job_ids_all
 
         # single status, actually filter out values
-        filters = {"status": "succeeded"}
-        jobs = await jobs_client.get_all_jobs(filters)
-        jobs = {job["id"] for job in jobs}
-        assert jobs == job_ids_killed
+        filters2 = {"status": "succeeded"}
+        jobs = await jobs_client.get_all_jobs(filters2)
+        job_ids = {job["id"] for job in jobs}
+        assert job_ids == job_ids_killed
 
         # cleanup
         for job_id in job_ids_alive:
@@ -1150,7 +1150,6 @@ class TestJobs:
             job_request["container"]["command"] = "sleep 30m"
             return job_request
 
-        jobs_client_first_user = None
         job_id_active_without_name_first_user = None
         job_id_active_with_name_first_user = None
         job_id_terminated_without_name_first_user = None
@@ -1160,7 +1159,7 @@ class TestJobs:
             user = await regular_user_factory()
             headers = user.headers
             jobs_client = jobs_client_factory(user)
-            if jobs_client_first_user is None:
+            if i == 0:
                 jobs_client_first_user = jobs_client
 
             # terminated, no name
@@ -1210,8 +1209,8 @@ class TestJobs:
         # owner: 1, name: yes
         filters = [("name", job_name)]
         jobs = await jobs_client_first_user.get_all_jobs(filters)
-        jobs = {job["id"] for job in jobs}
-        assert jobs == {
+        job_ids = {job["id"] for job in jobs}
+        assert job_ids == {
             job_id_active_with_name_first_user,
             job_id_terminated_with_name_first_user,
         }
@@ -1219,20 +1218,20 @@ class TestJobs:
         # owner: 1, name: yes, status: running
         filters = [("name", job_name), ("status", "running")]
         jobs = await jobs_client_first_user.get_all_jobs(filters)
-        jobs = {job["id"] for job in jobs}
-        assert jobs == {job_id_active_with_name_first_user}
+        job_ids = {job["id"] for job in jobs}
+        assert job_ids == {job_id_active_with_name_first_user}
 
         # owner: 1, name: yes, status: running+failed
         filters = [("name", job_name), ("status", "running"), ("status", "failed")]
         jobs = await jobs_client_first_user.get_all_jobs(filters)
-        jobs = {job["id"] for job in jobs}
-        assert jobs == {job_id_active_with_name_first_user}
+        job_ids = {job["id"] for job in jobs}
+        assert job_ids == {job_id_active_with_name_first_user}
 
         # owner: 1, name: yes, status: running+succeeded
         filters = [("name", job_name), ("status", "running"), ("status", "succeeded")]
         jobs = await jobs_client_first_user.get_all_jobs(filters)
-        jobs = {job["id"] for job in jobs}
-        assert jobs == {
+        job_ids = {job["id"] for job in jobs}
+        assert job_ids == {
             job_id_active_with_name_first_user,
             job_id_terminated_with_name_first_user,
         }
@@ -1240,8 +1239,8 @@ class TestJobs:
         # owner: 1, name: not-found, status: succeeded
         filters = [("status", "running"), ("name", "not-found-name")]
         jobs = await jobs_client_first_user.get_all_jobs(filters)
-        jobs = {job["id"] for job in jobs}
-        assert jobs == set()
+        job_ids = {job["id"] for job in jobs}
+        assert job_ids == set()
 
     @pytest.mark.asyncio
     async def test_get_all_jobs_filter_by_name_owner_and_status_invalid_name(
@@ -1256,8 +1255,8 @@ class TestJobs:
             assert resp.status == HTTPBadRequest.status_code
 
         # filter by name and status
-        filters = [("status", "running"), ("name", "InValid_Name.txt")]
-        async with client.get(url, headers=headers, params=filters) as resp:
+        filters2 = [("status", "running"), ("name", "InValid_Name.txt")]
+        async with client.get(url, headers=headers, params=filters2) as resp:
             assert resp.status == HTTPBadRequest.status_code
 
     @pytest.mark.asyncio
@@ -1494,7 +1493,7 @@ class TestJobs:
 
     @pytest.mark.asyncio
     async def test_create_validation_failure(self, api, client, regular_user):
-        request_payload = {}
+        request_payload: Dict[str, Any] = {}
         async with client.post(
             api.jobs_base_url, headers=regular_user.headers, json=request_payload
         ) as response:

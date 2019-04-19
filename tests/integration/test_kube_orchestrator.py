@@ -50,7 +50,10 @@ class MyJob(Job):
     def __init__(self, orchestrator: Orchestrator, *args, **kwargs) -> None:
         self._orchestrator = orchestrator
         kwargs.setdefault("owner", "test-owner")
-        super().__init__(*args, orchestrator_config=orchestrator.config, **kwargs)
+        if args:
+            super().__init__(orchestrator.config, *args, **kwargs)
+        else:
+            super().__init__(orchestrator_config=orchestrator.config, **kwargs)
 
     async def start(self) -> JobStatus:
         status = await self._orchestrator.start_job(self, "test-token")

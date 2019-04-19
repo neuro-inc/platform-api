@@ -138,7 +138,7 @@ def convert_job_to_job_response(
 ) -> Dict[str, Any]:
     history = job.status_history
     current_status = history.current
-    response_payload = {
+    response_payload: Dict[str, Any] = {
         "id": job.id,
         "owner": job.owner,
         "status": current_status.status,
@@ -283,7 +283,7 @@ class JobsHandler:
         with log_debug_time(f"Retrieved job access tree for user '{user.name}'"):
             tree = await self._auth_client.get_permissions_tree(user.name, "job:")
 
-        jobs = []
+        jobs: List[Job] = []
 
         try:
             bulk_job_filter = BulkJobFilterBuilder(

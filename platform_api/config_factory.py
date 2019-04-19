@@ -250,7 +250,7 @@ class EnvironConfigFactory:
         client_id = self._environ.get("NP_OAUTH_CLIENT_ID")
         audience = self._environ.get("NP_OAUTH_AUDIENCE")
         success_redirect_url = self._environ.get("NP_OAUTH_SUCCESS_REDIRECT_URL")
-        if not all((base_url, client_id, audience, success_redirect_url)):
+        if not (base_url and client_id and audience and success_redirect_url):
             return None
         return OAuthConfig(
             base_url=URL(base_url),

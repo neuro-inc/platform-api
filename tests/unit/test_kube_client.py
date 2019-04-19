@@ -1,3 +1,5 @@
+from typing import Any, Dict
+
 import pytest
 
 from platform_api.orchestrator.kube_client import (
@@ -82,7 +84,7 @@ class TestNodeAffinity:
 
 class TestPodContainerStats:
     def test_from_primitive_empty(self):
-        payload = {"cpu": {}, "memory": {}}
+        payload: Dict[str, Any] = {"cpu": {}, "memory": {}}
         stats = PodContainerStats.from_primitive(payload)
         assert stats == PodContainerStats(cpu=0.0, memory=0.0)
 
@@ -103,7 +105,7 @@ class TestPodContainerStats:
 
 class TestStatsSummary:
     def test_get_pod_container_stats_no_pod(self):
-        payload = {"pods": []}
+        payload: Dict[str, Any] = {"pods": []}
         stats = StatsSummary(payload).get_pod_container_stats(
             "namespace", "pod", "container"
         )

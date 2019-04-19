@@ -1,5 +1,6 @@
 import io
 import logging
+import warnings
 from typing import Any, Dict, Optional
 
 import aiohttp
@@ -63,7 +64,9 @@ class FilteredStreamWrapper:
             next_line = await self._stream.readline()
             if next_line:
                 logging.warning("An rpc error line was not at the end of the log")
-                self._stream.unread_data(next_line)
+                with warnings.catch_warnings():
+                    warnings.filterwarnings("ignore", category=DeprecationWarning)
+                    self._stream.unread_data(next_line)
             else:
                 logging.info("Skipping an rpc error line at the end of the log")
                 line = next_line

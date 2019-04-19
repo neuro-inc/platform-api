@@ -11,7 +11,17 @@ from dataclasses import dataclass, field
 from enum import Enum
 from pathlib import Path, PurePath
 from types import TracebackType
-from typing import Any, DefaultDict, Dict, Iterable, List, Optional, Type, Union
+from typing import (
+    Any,
+    AsyncIterator,
+    DefaultDict,
+    Dict,
+    Iterable,
+    List,
+    Optional,
+    Type,
+    Union,
+)
 from urllib.parse import urlsplit
 
 import aiohttp
@@ -53,7 +63,7 @@ class AlreadyExistsException(StatusException):
     pass
 
 
-def _raise_status_job_exception(pod: dict, job_id: str):
+def _raise_status_job_exception(pod: dict, job_id: Union[str, None]):
     if pod["code"] == 409:
         raise JobError(f"job with {job_id} already exist")
     elif pod["code"] == 404:
@@ -596,7 +606,7 @@ class PodDescriptor:
         # compatibility
         labels["job"] = self.name
 
-        payload = {
+        payload: Dict[str, Any] = {
             "kind": "Pod",
             "apiVersion": "v1",
             "metadata": {"name": self.name, "labels": labels},
@@ -853,7 +863,7 @@ class PodExec:
                     continue
                 data = msg.data
                 if isinstance(data, str):
-                    bdata = data.decode("utf-8")
+                    bdata = data.encode()
                 else:
                     bdata = data
                 if not bdata:
@@ -968,7 +978,7 @@ class KubeClient:
             return None
         ssl_context = ssl.create_default_context(cafile=self._cert_authority_path)
         if self._auth_type == KubeClientAuthType.CERTIFICATE:
-            ssl_context.load_cert_chain(  # noqa
+            ssl_context.load_cert_chain(  # type: ignore
                 self._auth_cert_path, self._auth_cert_key_path
             )
         return ssl_context
@@ -983,11 +993,11 @@ class KubeClient:
             headers = {"Authorization": "Bearer " + token}
         else:
             headers = {}
+        timeout = aiohttp.ClientTimeout(
+            connect=self._conn_timeout_s, total=self._read_timeout_s
+        )
         self._client = aiohttp.ClientSession(
-            connector=connector,
-            conn_timeout=self._conn_timeout_s,
-            read_timeout=self._read_timeout_s,
-            headers=headers,
+            connector=connector, timeout=timeout, headers=headers
         )
 
     async def close(self) -> None:
@@ -1262,7 +1272,7 @@ class KubeClient:
         container_name: str,
         conn_timeout_s: float = 60 * 5,
         read_timeout_s: float = 60 * 30,
-    ) -> aiohttp.StreamReader:
+    ) -> AsyncIterator[aiohttp.StreamReader]:
         url = self._generate_pod_log_url(pod_name, container_name)
         client_timeout = aiohttp.ClientTimeout(
             connect=conn_timeout_s, sock_read=read_timeout_s
