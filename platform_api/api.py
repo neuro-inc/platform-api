@@ -149,7 +149,8 @@ async def create_app(config: Config) -> aiohttp.web.Application:
 
             logger.info("Initializing Orchestrator")
             orchestrator = KubeOrchestrator(
-                config=cast(KubeConfig, config.orchestrator), es_client=es_client
+                config=cast(KubeConfig, config.orchestrator),  # noqa
+                es_client=es_client,
             )
             await exit_stack.enter_async_context(orchestrator)
 
