@@ -1,7 +1,7 @@
 import asyncio
 import uuid
 from dataclasses import asdict, dataclass
-from typing import AsyncGenerator, Dict, List, Optional, Sequence
+from typing import AsyncGenerator, AsyncIterator, Dict, List, Optional, Sequence
 
 import aiodocker
 import pytest
@@ -93,7 +93,7 @@ async def create_auth_config(container) -> AuthConfig:
 
 
 @pytest.fixture
-async def auth_config(auth_server) -> AsyncGenerator[AuthConfig, None]:
+async def auth_config(auth_server) -> AsyncIterator[AuthConfig]:
     yield auth_server
 
 

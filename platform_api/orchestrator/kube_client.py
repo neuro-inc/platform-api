@@ -13,6 +13,7 @@ from pathlib import Path, PurePath
 from types import TracebackType
 from typing import (
     Any,
+    AsyncIterator,
     DefaultDict,
     Dict,
     Iterable,
@@ -20,7 +21,6 @@ from typing import (
     Optional,
     Type,
     Union,
-    AsyncGenerator,
 )
 from urllib.parse import urlsplit
 
@@ -1272,7 +1272,7 @@ class KubeClient:
         container_name: str,
         conn_timeout_s: float = 60 * 5,
         read_timeout_s: float = 60 * 30,
-    ) -> AsyncGenerator[aiohttp.StreamReader, None]:
+    ) -> AsyncIterator[aiohttp.StreamReader]:
         url = self._generate_pod_log_url(pod_name, container_name)
         client_timeout = aiohttp.ClientTimeout(
             connect=conn_timeout_s, sock_read=read_timeout_s
