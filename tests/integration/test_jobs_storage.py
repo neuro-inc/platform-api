@@ -1,5 +1,5 @@
 from datetime import datetime, timedelta, timezone
-from typing import List, Optional
+from typing import Any, Dict, List, Optional
 from uuid import uuid4
 
 import pytest
@@ -566,7 +566,7 @@ class TestRedisJobsStorage:
     async def test_get_all_with_filters(
         self, owners, name, statuses, redis_client, kube_orchestrator
     ):
-        def sort_jobs_as_primitives(array: List) -> List:
+        def sort_jobs_as_primitives(array: List[Job]) -> List[Dict[str, Any]]:
             return sorted(
                 [job.to_primitive() for job in array], key=lambda job: job["id"]
             )
