@@ -437,7 +437,7 @@ class JobFilterFactory:
         self._job_name_validator = create_job_name_validator()
         self._user_name_validator = create_user_name_validator()
 
-    def create_from_query(self, query: MultiDictProxy[Dict[str, Any]]) -> JobFilter:
+    def create_from_query(self, query: MultiDictProxy) -> JobFilter:  # type: ignore
         job_name = self._job_name_validator.check(query.get("name"))
         statuses = {JobStatus(s) for s in query.getall("status", [])}
         owners = {
