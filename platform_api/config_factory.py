@@ -8,7 +8,6 @@ from .config import (
     AuthConfig,
     Config,
     DatabaseConfig,
-    ElasticsearchConfig,
     IngressConfig,
     LoggingConfig,
     OAuthConfig,
@@ -21,6 +20,7 @@ from .config import (
     StorageConfig,
     StorageType,
 )
+from .elasticsearch import ElasticsearchConfig
 from .orchestrator import KubeConfig
 from .orchestrator.kube_orchestrator import KubeClientAuthType
 from .redis import RedisConfig
@@ -233,7 +233,9 @@ class EnvironConfigFactory:
 
     def create_elasticsearch(self) -> ElasticsearchConfig:
         hosts = self._environ["NP_ES_HOSTS"].split(",")
-        return ElasticsearchConfig(hosts=hosts)
+        user = self._environ.get("NP_ES_AUTH_USER")
+        password = self._environ.get("NP_ES_AUTH_PASSWORD")
+        return ElasticsearchConfig(hosts=hosts, user=user, password=password)
 
     def create_auth(self) -> AuthConfig:
         url = URL(self._environ["NP_AUTH_URL"])

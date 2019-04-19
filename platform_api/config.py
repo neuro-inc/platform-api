@@ -6,6 +6,7 @@ from typing import Container, Optional, Sequence
 
 from yarl import URL
 
+from .elasticsearch import ElasticsearchConfig
 from .redis import RedisConfig
 from .resource import ResourcePoolType
 
@@ -122,11 +123,6 @@ class OrchestratorConfig:
     @property
     def job_deletion_delay(self) -> timedelta:
         return timedelta(seconds=self.job_deletion_delay_s)
-
-
-@dataclass(frozen=True)
-class ElasticsearchConfig:
-    hosts: Sequence[str]
 
 
 @dataclass(frozen=True)

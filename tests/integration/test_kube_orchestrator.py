@@ -10,8 +10,10 @@ from uuid import uuid4
 import aiohttp
 import pytest
 from async_timeout import timeout
+from elasticsearch import AuthenticationException
 from yarl import URL
 
+from platform_api.elasticsearch import ElasticsearchConfig, create_elasticsearch_client
 from platform_api.orchestrator import (
     Job,
     JobError,
@@ -1233,6 +1235,30 @@ class TestLogReader:
         payload = await task
         expected_payload = "\n".join(str(i) for i in range(1, 6))
         assert payload.startswith(expected_payload.encode())
+
+    @pytest.mark.asyncio
+    async def test_create_elasticsearch_client_no_auth_header_fail(self, es_hosts_auth):
+        es_config = ElasticsearchConfig(hosts=es_hosts_auth)
+        with pytest.raises(AuthenticationException):
+            async with create_elasticsearch_client(config=es_config):
+                pass
+
+    @pytest.mark.asyncio
+    async def test_create_elasticsearch_client_wrong_auth_fail(self, es_hosts_auth):
+        es_config = ElasticsearchConfig(
+            hosts=es_hosts_auth, user="wrong-user", password="wrong-pw"
+        )
+        with pytest.raises(AuthenticationException):
+            async with create_elasticsearch_client(es_config):
+                pass
+
+    @pytest.mark.asyncio
+    async def test_create_elasticsearch_client_correct_credentials(self, es_hosts_auth):
+        es_config = ElasticsearchConfig(
+            hosts=es_hosts_auth, user="testuser", password="password"
+        )
+        async with create_elasticsearch_client(es_config):
+            pass
 
     @pytest.mark.asyncio
     async def test_elasticsearch_log_reader(

@@ -101,6 +101,8 @@ class TestEnvironConfigFactory:
             "NP_AUTH_URL": "https://auth",
             "NP_AUTH_TOKEN": "token",
             "NP_ES_HOSTS": "http://es",
+            "NP_ES_AUTH_USER": "test-user",
+            "NP_ES_AUTH_PASSWORD": "test-password",
             "NP_OAUTH_BASE_URL": "https://oauth",
             "NP_OAUTH_CLIENT_ID": "oauth_client_id",
             "NP_OAUTH_AUDIENCE": "https://platform-url",
@@ -156,6 +158,8 @@ class TestEnvironConfigFactory:
         assert config.registry.host == "registry.dev.neuromation.io"
 
         assert config.logging.elasticsearch.hosts == ["http://es"]
+        assert config.logging.elasticsearch.user == "test-user"
+        assert config.logging.elasticsearch.password == "test-password"
 
     def test_create_value_error_invalid_port(self):
         environ = {
@@ -213,6 +217,8 @@ class TestEnvironConfigFactory:
             ),
             "NP_K8S_NODE_LABEL_PREEMPTIBLE": "testpreempt",
             "NP_ES_HOSTS": "http://es",
+            "NP_ES_AUTH_USER": "test-user",
+            "NP_ES_AUTH_PASSWORD": "test-password",
             "NP_API_URL": "https://neu.ro/api/v1",
         }
         config = EnvironConfigFactory(environ=environ).create()
@@ -272,6 +278,8 @@ class TestEnvironConfigFactory:
         assert config.registry.url == URL("https://testregistry:5000")
 
         assert config.logging.elasticsearch.hosts == ["http://es"]
+        assert config.logging.elasticsearch.user == "test-user"
+        assert config.logging.elasticsearch.password == "test-password"
 
     def test_create_nfs(self):
         named_host_template = "{job_name}-{job_owner}.jobs.domain"
@@ -286,10 +294,10 @@ class TestEnvironConfigFactory:
             "NP_K8S_NAMED_JOBS_INGRESS_DOMAIN_NAME_TEMPLATE": named_host_template,
             "NP_K8S_SSH_INGRESS_DOMAIN_NAME": "ssh.domain",
             "NP_K8S_SSH_AUTH_INGRESS_DOMAIN_NAME": "ssh-auth.domain",
+            "NP_API_URL": "https://neu.ro/api/v1",
             "NP_AUTH_URL": "https://auth",
             "NP_AUTH_TOKEN": "token",
             "NP_ES_HOSTS": "http://es",
-            "NP_API_URL": "https://neu.ro/api/v1",
         }
         config = EnvironConfigFactory(environ=environ).create()
         assert config.storage.nfs_server == "1.2.3.4"
