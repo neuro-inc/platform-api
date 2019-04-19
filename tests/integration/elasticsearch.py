@@ -37,8 +37,9 @@ def es_hosts_logging():
 
 
 @pytest.fixture(scope="session")
-def es_hosts_auth():
-    """ Waits for elasticsearch authentication proxy service and returns its URLs.
+def es_hosts_auth(es_hosts_logging):
+    """ Waits for elasticsearch-auth proxy service and returns its URLs. This fixture
+    depends on es_hosts_logging so that the service elasticsearch-logging is up.
     """
     return wait_for_service("elasticsearch-auth")
 
@@ -51,9 +52,8 @@ def es_config(es_hosts_logging):
 
 
 @pytest.fixture
-def es_config_with_auth(es_hosts_logging, es_hosts_auth):
+def es_config_with_auth(es_hosts_auth):
     """ Config to access Elasticsearch directly via the elasticsearch-auth proxy.
-    This fixture waits for es_hosts and es_hosts_auth so that the services are up.
     """
     # NOTE: these credentials are in `tests/k8s/elasticsearch-auth/nginx/auth.htpasswd`
     return ElasticsearchConfig(
