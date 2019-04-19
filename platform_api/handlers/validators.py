@@ -87,7 +87,7 @@ def create_container_validator(
     allow_volumes: bool = False,
     allow_any_gpu_models: bool = False,
     allowed_gpu_models: Optional[Sequence[GPUModel]] = None,
-):
+) -> t.Trafaret:
     """Create a validator for primitive container objects.
 
     Meant to be used in high-level resources such as jobs, models, batch
@@ -133,5 +133,5 @@ def create_container_request_validator(
     )
 
 
-def create_container_response_validator():
+def create_container_response_validator() -> t.Trafaret:
     return create_container_validator(allow_volumes=True, allow_any_gpu_models=True)

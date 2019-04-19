@@ -2,23 +2,30 @@ import asyncio
 import logging
 import shlex
 from contextlib import suppress
+from typing import Any, Awaitable, Callable, Dict, Optional
 
 import asyncssh
+
+from platform_api.orchestrator.kube_client import PodExec
+from platform_api.ssh.server import SSHServer
 
 
 logger = logging.getLogger(__name__)
 
 
 class ShellSession:
-    def __init__(self, server, channel):
+    def __init__(self, server: SSHServer, channel: asyncssh.SSHChannel) -> None:
         self._chan = channel
         self._server = server
-        self._subproc = None
-        self._stdin_redirect = None
-        self._stdout_redirect = None
-        self._stderr_redirect = None
+        self._subproc: Optional[PodExec] = None
+        self._stdin_redirect: Optional[asyncio.Task[Any]] = None
+        self._stdout_redirect: Optional[asyncio.Task[Any]] = None
+        self._stderr_redirect: Optional[asyncio.Task[Any]] = None
 
-    async def redirect_in(self, src, writer):
+    async def redirect_in(
+        self, src: asyncssh.SSHReader, writer: Callable[[bytes], Awaitable[None]]
+    ) -> None:
+        assert self._subproc is not None
         try:
             while True:
                 data = await src.read(8096)
@@ -42,12 +49,14 @@ class ShellSession:
             self.exit_with_signal("KILL")
             return
 
-    async def redirect_out(self, reader, dst):
+    async def redirect_out(
+        self, reader: Callable[[], Awaitable[bytes]], dst: asyncssh.SSHWriter
+    ) -> None:
         try:
             while True:
                 data = await reader()
-                data = data.decode("utf-8")
-                dst.write(data)
+                sdata = data.decode("utf-8")
+                dst.write(sdata)
                 await dst.drain()
         except asyncio.CancelledError:
             return
@@ -55,17 +64,22 @@ class ShellSession:
             logger.exception("Redirect output error")
             return
 
-    async def run(self, stdin, stdout, stderr):
+    async def run(
+        self,
+        stdin: asyncssh.SSHReader,
+        stdout: asyncssh.SSHWriter,
+        stderr: asyncssh.SSHWriter,
+    ) -> None:
         username = self.username
         pod_id = username
         loop = asyncio.get_event_loop()
         env = self._chan.get_environment()
         try:
-            command = self.command
-            if command is None:
+            command_str = self.command
+            if command_str is None:
                 command = ["sh", "-i"]
             else:
-                command = shlex.split(command)
+                command = shlex.split(command_str)
             if env:
                 lst = ["env"]
                 for name, val in env.items():
@@ -102,31 +116,35 @@ class ShellSession:
                 await self._subproc.close()
             await self.cleanup()
 
-    def exit(self, status):
+    def exit(self, status: int) -> None:
         self._chan.exit(status)
 
     def exit_with_signal(
-        self, signal, core_dumped=False, msg="", lang=asyncssh.DEFAULT_LANG
-    ):
+        self,
+        signal: str,
+        core_dumped: bool = False,
+        msg: str = "",
+        lang: str = asyncssh.DEFAULT_LANG,
+    ) -> None:
         return self._chan.exit_with_signal(signal, core_dumped, msg, lang)
 
     @property
-    def username(self):
+    def username(self) -> str:
         return self._chan.get_extra_info("username")
 
     @property
-    def env(self):
+    def env(self) -> Dict[str, str]:
         return self._chan.get_environment()
 
     @property
-    def command(self):
+    def command(self) -> Optional[str]:
         return self._chan.get_command()
 
     @property
-    def subsystem(self):
+    def subsystem(self) -> Optional[str]:
         return self._chan.get_subsystem()
 
-    async def cleanup(self):
+    async def cleanup(self) -> None:
         if self._stdin_redirect is not None:
             self._stdin_redirect.cancel()
             with suppress(asyncio.CancelledError):

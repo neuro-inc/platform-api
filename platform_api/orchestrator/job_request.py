@@ -32,7 +32,7 @@ class ContainerVolume:
     read_only: bool = False
 
     @staticmethod
-    def create(*args, **kwargs) -> "ContainerVolume":
+    def create(*args: Any, **kwargs: Any) -> "ContainerVolume":
         return ContainerVolumeFactory(*args, **kwargs).create()
 
     @classmethod
@@ -103,7 +103,7 @@ class ContainerHTTPServer:
     requires_auth: bool = False
 
     @classmethod
-    def from_primitive(cls, payload) -> "ContainerHTTPServer":
+    def from_primitive(cls, payload: Dict[str, Any]) -> "ContainerHTTPServer":
         return cls(  # type: ignore
             port=payload["port"],
             health_check_path=payload.get("health_check_path") or cls.health_check_path,
@@ -119,7 +119,7 @@ class ContainerSSHServer:
     port: int
 
     @classmethod
-    def from_primitive(cls, payload) -> "ContainerSSHServer":
+    def from_primitive(cls, payload: Dict[str, Any]) -> "ContainerSSHServer":
         return cls(port=payload["port"])  # type: ignore
 
     def to_primitive(self) -> Dict[str, Any]:
@@ -185,7 +185,7 @@ class Container:
         return bool(self.http_server and self.http_server.requires_auth)
 
     @classmethod
-    def from_primitive(cls, payload) -> "Container":
+    def from_primitive(cls, payload: Dict[str, Any]) -> "Container":
         kwargs = payload.copy()
         kwargs["resources"] = ContainerResources.from_primitive(kwargs["resources"])
         kwargs["volumes"] = [
@@ -319,7 +319,7 @@ class ContainerVolumeFactory:
         self._dst_mount_path: PurePath = dst_mount_path
         self._extend_dst_mount_path = extend_dst_mount_path
 
-    def _parse_uri(self):
+    def _parse_uri(self) -> None:
         url = urlsplit(self._uri)
         if url.scheme != self._scheme:
             raise ValueError(f"Invalid URI scheme: {self._uri}")

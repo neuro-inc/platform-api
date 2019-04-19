@@ -74,7 +74,7 @@ class ModelsHandler:
     def _orchestrator(self) -> Orchestrator:
         return self._app["orchestrator"]
 
-    def register(self, app):
+    def register(self, app: aiohttp.web.Application) -> None:
         app.add_routes(
             (
                 aiohttp.web.post("", self.handle_post),
@@ -117,7 +117,9 @@ class ModelsHandler:
             payload["description"] = job.description
         return payload
 
-    async def handle_post(self, request):
+    async def handle_post(
+        self, request: aiohttp.web.Request
+    ) -> aiohttp.web.StreamResponse:
         user = await authorized_user(request)
 
         orig_payload = await request.json()
