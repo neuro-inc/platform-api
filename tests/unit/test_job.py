@@ -178,7 +178,7 @@ class TestContainerVolumeFactory:
 
 class TestContainerBuilder:
     def test_from_payload_build(self) -> None:
-        storage_config = StorageConfig(host_mount_path=PurePath("/tmp"))  # type: ignore
+        storage_config = StorageConfig(host_mount_path=PurePath("/tmp"))
         payload = {
             "image": "testimage",
             "command": "testcommand",
@@ -214,7 +214,7 @@ class TestContainerBuilder:
         )
 
     def test_from_payload_build_gpu_model(self) -> None:
-        storage_config = StorageConfig(host_mount_path=PurePath("/tmp"))  # type: ignore
+        storage_config = StorageConfig(host_mount_path=PurePath("/tmp"))
         payload = {
             "image": "testimage",
             "resources": {
@@ -235,7 +235,7 @@ class TestContainerBuilder:
         )
 
     def test_from_payload_build_with_ssh(self) -> None:
-        storage_config = StorageConfig(host_mount_path=PurePath("/tmp"))  # type: ignore
+        storage_config = StorageConfig(host_mount_path=PurePath("/tmp"))
         payload = {
             "image": "testimage",
             "command": "testcommand",
@@ -272,7 +272,7 @@ class TestContainerBuilder:
         )
 
     def test_from_payload_build_with_shm_false(self) -> None:
-        storage_config = StorageConfig(host_mount_path=PurePath("/tmp"))  # type: ignore
+        storage_config = StorageConfig(host_mount_path=PurePath("/tmp"))
         payload = {
             "image": "testimage",
             "command": "testcommand",
@@ -309,7 +309,7 @@ class TestContainerBuilder:
 
 class TestModelRequest:
     def test_to_container(self) -> None:
-        storage_config = StorageConfig(host_mount_path=PurePath("/tmp"))  # type: ignore
+        storage_config = StorageConfig(host_mount_path=PurePath("/tmp"))
         payload = {
             "container": {
                 "image": "testimage",

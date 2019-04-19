@@ -37,7 +37,7 @@ async def untrusted_user(request: Request) -> User:
     if name is None:
         raise HTTPUnauthorized()
 
-    return User(name=name, token=identity)  # type: ignore
+    return User(name=name, token=identity)
 
 
 async def authorized_user(request: Request) -> User:

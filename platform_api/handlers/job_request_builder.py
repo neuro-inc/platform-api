@@ -96,7 +96,7 @@ class ContainerBuilder:
     def create_resources_from_payload(
         cls, payload: Dict[str, Any]
     ) -> ContainerResources:
-        return ContainerResources(  # type: ignore
+        return ContainerResources(
             cpu=payload["cpu"],
             memory_mb=payload["memory_mb"],
             gpu=payload.get("gpu"),
@@ -119,7 +119,7 @@ class ContainerBuilder:
         )
 
     def build(self) -> Container:
-        return Container(  # type: ignore
+        return Container(  # type: ignore  # noqa
             image=self._image,
             command=self._command,
             env=self._env,

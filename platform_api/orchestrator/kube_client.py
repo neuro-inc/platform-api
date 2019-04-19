@@ -92,7 +92,7 @@ class PathVolume(Volume):
 
     def create_mount(self, container_volume: ContainerVolume) -> "VolumeMount":
         sub_path = container_volume.src_path.relative_to(self.path)
-        return VolumeMount(  # type: ignore
+        return VolumeMount(
             volume=self,
             mount_path=container_volume.dst_path,
             sub_path=sub_path,
@@ -115,7 +115,7 @@ class SharedMemoryVolume(Volume):
         return {"name": self.name, "emptyDir": {"medium": "Memory"}}
 
     def create_mount(self, container_volume: ContainerVolume) -> "VolumeMount":
-        return VolumeMount(  # type: ignore
+        return VolumeMount(
             volume=self,
             mount_path=container_volume.dst_path,
             sub_path=PurePath(""),
@@ -176,7 +176,7 @@ class Resources:
 
     @classmethod
     def from_container_resources(cls, resources: ContainerResources) -> "Resources":
-        return cls(  # type: ignore
+        return cls(
             cpu=resources.cpu,
             memory=resources.memory_mb,
             gpu=resources.gpu,
@@ -233,9 +233,7 @@ class Service:
 
     @classmethod
     def create_for_pod(cls, pod: "PodDescriptor") -> "Service":
-        return cls(
-            pod.name, target_port=pod.port, ssh_target_port=pod.ssh_port
-        )  # type: ignore
+        return cls(pod.name, target_port=pod.port, ssh_target_port=pod.ssh_port)
 
     @classmethod
     def create_headless_for_pod(cls, pod: "PodDescriptor") -> "Service":
@@ -261,7 +259,7 @@ class Service:
         http_payload = cls._find_port_by_name("http", payload["spec"]["ports"])
         ssh_payload = cls._find_port_by_name("ssh", payload["spec"]["ports"])
         service_type = payload["spec"].get("type", Service.service_type.value)
-        return cls(  # type: ignore
+        return cls(
             name=payload["metadata"]["name"],
             target_port=http_payload.get("targetPort", None),
             port=http_payload.get("port", Service.port),
@@ -308,9 +306,7 @@ class IngressRule:
 
     @classmethod
     def from_service(cls, host: str, service: Service) -> "IngressRule":
-        return cls(  # type: ignore
-            host=host, service_name=service.name, service_port=service.port
-        )
+        return cls(host=host, service_name=service.name, service_port=service.port)
 
 
 @dataclass(frozen=True)
@@ -549,7 +545,7 @@ class PodDescriptor:
         volumes = [volume]
 
         if job_request.container.resources.shm:
-            dev_shm_volume = SharedMemoryVolume(name="dshm")  # type: ignore
+            dev_shm_volume = SharedMemoryVolume(name="dshm")
             container_volume = ContainerVolume(
                 URL(""),
                 dst_path=PurePath("/dev/shm"),
@@ -564,7 +560,7 @@ class PodDescriptor:
             image_pull_secrets = [SecretRef(name) for name in secret_names]
         else:
             image_pull_secrets = []
-        return cls(  # type: ignore
+        return cls(
             name=job_request.job_id,
             image=container.image,
             args=container.command_list,
@@ -1130,7 +1126,7 @@ class KubeClient:
         return pod.status  # type: ignore
 
     async def create_ingress(self, name: str) -> Ingress:
-        ingress = Ingress(name=name)  # type: ignore
+        ingress = Ingress(name=name)
         payload = await self._request(
             method="POST", url=self._ingresses_url, json=ingress.to_primitive()
         )

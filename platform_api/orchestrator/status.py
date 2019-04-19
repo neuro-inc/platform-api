@@ -19,7 +19,7 @@ class Status:
     @classmethod
     def create(cls, value: JobStatus) -> "Status":
         status_id = str(uuid.uuid4())
-        return cls(status_id, value)  # type: ignore
+        return cls(status_id, value)
 
     @property
     def id(self) -> str:

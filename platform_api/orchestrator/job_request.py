@@ -43,7 +43,7 @@ class ContainerVolume:
         kwargs["uri"] = URL(kwargs.get("uri", ""))
         kwargs["src_path"] = PurePath(kwargs["src_path"])
         kwargs["dst_path"] = PurePath(kwargs["dst_path"])
-        return cls(**kwargs)  # type: ignore
+        return cls(**kwargs)
 
     def to_primitive(self) -> Dict[str, Any]:
         payload: Dict[str, Any] = asdict(self)
@@ -69,7 +69,7 @@ class ContainerResources:
             gpu=payload.get("gpu"),
             gpu_model_id=payload.get("gpu_model_id"),
             shm=payload.get("shm"),
-        )  # type: ignore
+        )
 
     def to_primitive(self) -> Dict[str, Any]:
         return asdict(self)
@@ -104,7 +104,7 @@ class ContainerHTTPServer:
 
     @classmethod
     def from_primitive(cls, payload: Dict[str, Any]) -> "ContainerHTTPServer":
-        return cls(  # type: ignore
+        return cls(
             port=payload["port"],
             health_check_path=payload.get("health_check_path") or cls.health_check_path,
             requires_auth=payload.get("requires_auth", cls.requires_auth),
@@ -120,7 +120,7 @@ class ContainerSSHServer:
 
     @classmethod
     def from_primitive(cls, payload: Dict[str, Any]) -> "ContainerSSHServer":
-        return cls(port=payload["port"])  # type: ignore
+        return cls(port=payload["port"])
 
     def to_primitive(self) -> Dict[str, Any]:
         return asdict(self)
@@ -207,7 +207,7 @@ class Container:
         kwargs.pop("port", None)
         kwargs.pop("health_check_path", None)
 
-        return cls(**kwargs)  # type: ignore
+        return cls(**kwargs)
 
     def to_primitive(self) -> Dict[str, Any]:
         payload: Dict[str, Any] = asdict(self)
@@ -232,13 +232,13 @@ class JobRequest:
     ) -> "JobRequest":
         return cls(
             job_id=f"job-{uuid.uuid4()}", description=description, container=container
-        )  # type: ignore
+        )
 
     @classmethod
     def from_primitive(cls, payload: Dict[str, Any]) -> "JobRequest":
         kwargs = payload.copy()
         kwargs["container"] = Container.from_primitive(kwargs["container"])
-        return cls(**kwargs)  # type: ignore
+        return cls(**kwargs)
 
     def to_primitive(self) -> Dict[str, Any]:
         result = {"job_id": self.job_id, "container": self.container.to_primitive()}
@@ -278,7 +278,7 @@ class JobStatus(str, enum.Enum):
 
     @classmethod
     def values(cls) -> List[str]:
-        return [item.value for item in cls]  # type: ignore
+        return [item.value for item in cls]
 
 
 class ContainerVolumeFactory:
@@ -345,7 +345,7 @@ class ContainerVolumeFactory:
         dst_path = self._dst_mount_path
         if self._extend_dst_mount_path:
             dst_path /= self._path
-        return ContainerVolume(  # type: ignore
+        return ContainerVolume(
             uri=URL(self._uri),
             src_path=src_path,
             dst_path=dst_path,

@@ -396,7 +396,7 @@ def config_factory(
 ) -> Callable[..., Config]:
     def _factory(**kwargs: Any) -> Config:
         server_config = ServerConfig()
-        database_config = DatabaseConfig(redis=redis_config)  # type: ignore
+        database_config = DatabaseConfig(redis=redis_config)
         logging_config = LoggingConfig(elasticsearch=es_config)
         ingress_config = IngressConfig(
             storage_url=URL("https://neu.ro/api/v1/storage"),

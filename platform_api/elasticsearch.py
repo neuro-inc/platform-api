@@ -17,7 +17,7 @@ class ElasticsearchConfig:
 async def create_elasticsearch_client(config: ElasticsearchConfig) -> Elasticsearch:
     http_auth: Optional[BasicAuth]
     if config.user:
-        http_auth = BasicAuth(config.user, config.password)  # type: ignore
+        http_auth = BasicAuth(config.user, config.password)  # type: ignore  # noqa
     else:
         http_auth = None
 

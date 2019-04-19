@@ -1,6 +1,6 @@
 import os
 from pathlib import Path, PurePath
-from typing import Dict, List, Optional
+from typing import Any, Dict, List, Optional
 
 from yarl import URL
 
@@ -87,7 +87,7 @@ class EnvironConfigFactory:
 
     def create_server(self) -> ServerConfig:
         port = int(self._environ.get("NP_API_PORT", ServerConfig.port))
-        return ServerConfig(port=port)  # type: ignore
+        return ServerConfig(port=port)
 
     def create_ssh_server(self) -> SSHServerConfig:
         port = int(self._environ.get("NP_SSH_PORT", SSHServerConfig.port))
@@ -121,15 +121,13 @@ class EnvironConfigFactory:
         uri_scheme = self._environ.get(
             "NP_STORAGE_URI_SCHEME", StorageConfig.uri_scheme
         )
-        kwargs = {}
+        kwargs: Dict[str, Any] = {}
         if storage_type == StorageType.NFS:
             kwargs.update(
-                dict(
-                    nfs_server=self._environ["NP_STORAGE_NFS_SERVER"],
-                    nfs_export_path=PurePath(self._environ["NP_STORAGE_NFS_PATH"]),
-                )
+                nfs_server=self._environ["NP_STORAGE_NFS_SERVER"],
+                nfs_export_path=PurePath(self._environ["NP_STORAGE_NFS_PATH"]),
             )
-        return StorageConfig(  # type: ignore
+        return StorageConfig(
             host_mount_path=host_mount_path,
             container_mount_path=container_mount_path,
             type=storage_type,
@@ -152,7 +150,7 @@ class EnvironConfigFactory:
             "NP_K8S_JOBS_INGRESS_AUTH_NAME", jobs_ingress_name
         )
 
-        return KubeConfig(  # type: ignore
+        return KubeConfig(
             storage=storage,
             registry=registry,
             endpoint_url=endpoint_url,
@@ -216,7 +214,7 @@ class EnvironConfigFactory:
 
     def create_database(self) -> DatabaseConfig:
         redis = self.create_redis()
-        return DatabaseConfig(redis=redis)  # type: ignore
+        return DatabaseConfig(redis=redis)
 
     def create_redis(self) -> Optional[RedisConfig]:
         uri = self._environ.get("NP_DB_REDIS_URI")
@@ -228,7 +226,7 @@ class EnvironConfigFactory:
         conn_timeout_s = float(
             self._environ.get("NP_DB_REDIS_CONN_TIMEOUT", RedisConfig.conn_timeout_s)
         )
-        return RedisConfig(  # type: ignore
+        return RedisConfig(
             uri=uri, conn_pool_size=conn_pool_size, conn_timeout_s=conn_timeout_s
         )
 
@@ -248,7 +246,7 @@ class EnvironConfigFactory:
         name = self._environ.get("NP_AUTH_NAME", AuthConfig.service_name)
         return AuthConfig(
             server_endpoint_url=url, service_token=token, service_name=name
-        )  # type: ignore
+        )
 
     def try_create_oauth(self) -> Optional[OAuthConfig]:
         base_url = self._environ.get("NP_OAUTH_BASE_URL")
