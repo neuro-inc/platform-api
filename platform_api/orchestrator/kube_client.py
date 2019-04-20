@@ -63,7 +63,7 @@ class AlreadyExistsException(StatusException):
     pass
 
 
-def _raise_status_job_exception(pod: dict, job_id: Union[str, None]):
+def _raise_status_job_exception(pod: Dict[str, Any], job_id: Union[str, None]):
     if pod["code"] == 409:
         raise JobError(f"job with {job_id} already exist")
     elif pod["code"] == 404:
@@ -196,7 +196,7 @@ class Service:
         port: Optional[int],
         target_port: Optional[int],
         port_name: str,
-        ports: List,
+        ports: List[Dict[str, Any]],
     ):
         if target_port:
             ports.append({"port": port, "targetPort": target_port, "name": port_name})
@@ -242,7 +242,9 @@ class Service:
         )
 
     @classmethod
-    def _find_port_by_name(cls, name: str, port_mappings: List) -> Dict:
+    def _find_port_by_name(
+        cls, name: str, port_mappings: List[Dict[str, Any]]
+    ) -> Dict[str, Any]:
         for port_mapping in port_mappings:
             if port_mapping.get("name", None) == name:
                 return port_mapping
@@ -659,7 +661,7 @@ class PodDescriptor:
         return {}
 
     @classmethod
-    def _assert_resource_kind(cls, expected_kind: str, payload: Dict):
+    def _assert_resource_kind(cls, expected_kind: str, payload: Dict[str, Any]):
         kind = payload["kind"]
         if kind == "Status":
             _raise_status_job_exception(payload, job_id="")
@@ -698,7 +700,7 @@ class ContainerStatus:
         self._payload = payload or {}
 
     @property
-    def _state(self) -> Dict:
+    def _state(self) -> Dict[str, Any]:
         return self._payload.get("state", {})
 
     @property

@@ -433,7 +433,7 @@ class Job:
         start_time = self.status_history.created_at
         return end_time - start_time
 
-    def to_primitive(self) -> Dict:
+    def to_primitive(self) -> Dict[str, Any]:
         statuses = [item.to_primitive() for item in self._status_history.all]
         # preserving `status` and `finished_at` for forward compat
         result = {
@@ -454,7 +454,7 @@ class Job:
 
     @classmethod
     def from_primitive(
-        cls, orchestrator_config: OrchestratorConfig, payload: Dict
+        cls, orchestrator_config: OrchestratorConfig, payload: Dict[str, Any]
     ) -> "Job":
         job_request = JobRequest.from_primitive(payload["request"])
         status_history = cls.create_status_history_from_primitive(
@@ -478,7 +478,7 @@ class Job:
 
     @staticmethod
     def create_status_history_from_primitive(
-        job_id: str, payload: Dict
+        job_id: str, payload: Dict[str, Any]
     ) -> JobStatusHistory:
         if "statuses" in payload:
             # already migrated to history
