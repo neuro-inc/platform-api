@@ -28,7 +28,7 @@ from .resource import GKEGPUModels, ResourcePoolType
 
 
 class EnvironConfigFactory:
-    def __init__(self, environ: Dict[str, str] = None):
+    def __init__(self, environ: Optional[Dict[str, str]] = None):
         self._environ = environ or os.environ
 
     def _get_bool(self, name: str, default: bool = False) -> bool:

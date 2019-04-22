@@ -702,7 +702,7 @@ class PodDescriptor:
 
 
 class ContainerStatus:
-    def __init__(self, payload: Dict[str, Any] = None) -> None:
+    def __init__(self, payload: Optional[Dict[str, Any]] = None) -> None:
         self._payload = payload or {}
 
     @property
