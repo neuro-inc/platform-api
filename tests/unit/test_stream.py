@@ -6,13 +6,13 @@ from platform_api.utils.stream import Stream
 
 
 @pytest.mark.asyncio
-async def test_stream_ctor():
+async def test_stream_ctor() -> None:
     stream = Stream()
     assert not stream.closed
 
 
 @pytest.mark.asyncio
-async def test_nonblocking_put_get():
+async def test_nonblocking_put_get() -> None:
     stream = Stream()
     await stream.feed(b"data")
     data = await stream.read()
@@ -20,7 +20,7 @@ async def test_nonblocking_put_get():
 
 
 @pytest.mark.asyncio
-async def test_put_in_closed_stream():
+async def test_put_in_closed_stream() -> None:
     stream = Stream()
     await stream.close()
     with pytest.raises(RuntimeError):
@@ -28,7 +28,7 @@ async def test_put_in_closed_stream():
 
 
 @pytest.mark.asyncio
-async def test_get_from_closed_stream():
+async def test_get_from_closed_stream() -> None:
     stream = Stream()
     await stream.close()
     with pytest.raises(asyncio.CancelledError):
@@ -36,11 +36,11 @@ async def test_get_from_closed_stream():
 
 
 @pytest.mark.asyncio
-async def test_blocking_get_before_put():
+async def test_blocking_get_before_put() -> None:
     loop = asyncio.get_event_loop()
     ready = loop.create_future()
 
-    async def getter():
+    async def getter() -> None:
         ready.set_result(None)
         data = await stream.read()
         assert data == b"data"
@@ -53,11 +53,11 @@ async def test_blocking_get_before_put():
 
 
 @pytest.mark.asyncio
-async def test_blocking_get_cancellation():
+async def test_blocking_get_cancellation() -> None:
     loop = asyncio.get_event_loop()
     ready = loop.create_future()
 
-    async def getter():
+    async def getter() -> None:
         ready.set_result(None)
         await stream.read()
 

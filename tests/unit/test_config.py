@@ -16,11 +16,11 @@ from platform_api.resource import GKEGPUModels, ResourcePoolType
 
 
 class TestStorageConfig:
-    def test_missing_nfs_settings(self):
+    def test_missing_nfs_settings(self) -> None:
         with pytest.raises(ValueError, match="Missing NFS settings"):
             StorageConfig(host_mount_path=PurePath("/tmp"), type=StorageType.NFS)
 
-    def test_redundant_nfs_settings(self):
+    def test_redundant_nfs_settings(self) -> None:
         with pytest.raises(ValueError, match="Redundant NFS settings"):
             StorageConfig(
                 host_mount_path=PurePath("/tmp"),
@@ -28,7 +28,7 @@ class TestStorageConfig:
                 nfs_server="1.2.3.4",
             )
 
-    def test_is_nfs(self):
+    def test_is_nfs(self) -> None:
         config = StorageConfig(
             host_mount_path=PurePath("/tmp"),
             type=StorageType.NFS,
@@ -39,7 +39,7 @@ class TestStorageConfig:
 
 
 class TestKubeConfig:
-    def test_create_storage_volume_nfs(self):
+    def test_create_storage_volume_nfs(self) -> None:
         storage_config = StorageConfig(
             host_mount_path=PurePath("/tmp"),
             type=StorageType.NFS,
@@ -63,7 +63,7 @@ class TestKubeConfig:
             name="storage", path=PurePath("/tmp"), server="4.3.2.1"
         )
 
-    def test_create_storage_volume_host(self):
+    def test_create_storage_volume_host(self) -> None:
         storage_config = StorageConfig(
             host_mount_path=PurePath("/tmp"), type=StorageType.HOST
         )
@@ -84,12 +84,12 @@ class TestKubeConfig:
 
 
 class TestEnvironConfigFactory:
-    def test_create_key_error(self):
+    def test_create_key_error(self) -> None:
         environ: Dict[str, str] = {}
         with pytest.raises(KeyError):
             EnvironConfigFactory(environ=environ).create()
 
-    def test_create_defaults(self):
+    def test_create_defaults(self) -> None:
         named_host_template = "{job_name}-{job_owner}.jobs.domain"
         environ = {
             "NP_STORAGE_HOST_MOUNT_PATH": "/tmp",
@@ -164,7 +164,7 @@ class TestEnvironConfigFactory:
         assert config.logging.elasticsearch.user == "test-user"
         assert config.logging.elasticsearch.password == "test-password"
 
-    def test_create_value_error_invalid_port(self):
+    def test_create_value_error_invalid_port(self) -> None:
         environ = {
             "NP_STORAGE_HOST_MOUNT_PATH": "/tmp",
             "NP_API_PORT": "port",
@@ -176,7 +176,7 @@ class TestEnvironConfigFactory:
         with pytest.raises(ValueError):
             EnvironConfigFactory(environ=environ).create()
 
-    def test_create_custom(self):
+    def test_create_custom(self) -> None:
         named_host_template = "{job_name}-{job_owner}.jobs.domain"
         environ = {
             "NP_ENV_PREFIX": "TEST",
@@ -286,7 +286,7 @@ class TestEnvironConfigFactory:
         assert config.logging.elasticsearch.user == "test-user"
         assert config.logging.elasticsearch.password == "test-password"
 
-    def test_create_nfs(self):
+    def test_create_nfs(self) -> None:
         named_host_template = "{job_name}-{job_owner}.jobs.domain"
         environ = {
             "NP_STORAGE_TYPE": "nfs",

@@ -1,4 +1,5 @@
 from pathlib import PurePath
+from typing import Any, Dict
 
 import pytest
 from neuro_auth_client import Permission
@@ -36,7 +37,7 @@ from platform_api.user import User
 
 class TestContainerRequestValidator:
     @pytest.fixture
-    def payload(self):
+    def payload(self) -> Dict[str, Any]:
         return {
             "image": "testimage",
             "resources": {"cpu": 0.1, "memory_mb": 16},
@@ -44,7 +45,7 @@ class TestContainerRequestValidator:
         }
 
     @pytest.fixture
-    def payload_with_zero_gpu(self):
+    def payload_with_zero_gpu(self) -> Dict[str, Any]:
         return {
             "image": "testimage",
             "resources": {"cpu": 0.1, "memory_mb": 16, "gpu": 0},
@@ -52,7 +53,7 @@ class TestContainerRequestValidator:
         }
 
     @pytest.fixture
-    def payload_with_negative_gpu(self):
+    def payload_with_negative_gpu(self) -> Dict[str, Any]:
         return {
             "image": "testimage",
             "resources": {"cpu": 0.1, "memory_mb": 16, "gpu": -1},
@@ -60,7 +61,7 @@ class TestContainerRequestValidator:
         }
 
     @pytest.fixture
-    def payload_with_one_gpu(self):
+    def payload_with_one_gpu(self) -> Dict[str, Any]:
         return {
             "image": "testimage",
             "resources": {"cpu": 0.1, "memory_mb": 16, "gpu": 1},
@@ -68,7 +69,7 @@ class TestContainerRequestValidator:
         }
 
     @pytest.fixture
-    def payload_with_too_many_gpu(self):
+    def payload_with_too_many_gpu(self) -> Dict[str, Any]:
         return {
             "image": "testimage",
             "resources": {"cpu": 0.1, "memory_mb": 16, "gpu": 130},
@@ -76,7 +77,7 @@ class TestContainerRequestValidator:
         }
 
     @pytest.fixture
-    def payload_with_dev_shm(self):
+    def payload_with_dev_shm(self) -> Dict[str, Any]:
         return {
             "image": "testimage",
             "resources": {"cpu": 0.1, "memory_mb": 16, "shm": True},
@@ -84,7 +85,7 @@ class TestContainerRequestValidator:
         }
 
     @pytest.fixture
-    def payload_with_ssh(self):
+    def payload_with_ssh(self) -> Dict[str, Any]:
         return {
             "image": "testimage",
             "resources": {"cpu": 0.1, "memory_mb": 16, "shm": True},
@@ -92,52 +93,54 @@ class TestContainerRequestValidator:
             "ssh": {"port": 666},
         }
 
-    def test_allowed_volumes(self, payload):
+    def test_allowed_volumes(self, payload: Dict[str, Any]) -> None:
         validator = create_container_request_validator(allow_volumes=True)
         result = validator.check(payload)
         assert result["volumes"][0]["read_only"]
         assert "shm" not in result["resources"]
 
-    def test_allowed_volumes_with_shm(self, payload_with_dev_shm):
+    def test_allowed_volumes_with_shm(
+        self, payload_with_dev_shm: Dict[str, Any]
+    ) -> None:
         validator = create_container_request_validator(allow_volumes=True)
         result = validator.check(payload_with_dev_shm)
         assert result["volumes"][0]["read_only"]
         assert result["resources"]["shm"]
 
-    def test_disallowed_volumes(self, payload):
+    def test_disallowed_volumes(self, payload: Dict[str, Any]) -> None:
         validator = create_container_request_validator()
         with pytest.raises(ValueError, match="volumes is not allowed key"):
             validator.check(payload)
 
-    def test_with_zero_gpu(self, payload_with_zero_gpu):
+    def test_with_zero_gpu(self, payload_with_zero_gpu: Dict[str, Any]) -> None:
         validator = create_container_request_validator(allow_volumes=True)
         result = validator.check(payload_with_zero_gpu)
         assert result["resources"]["gpu"] == 0
 
-    def test_with_ssh(self, payload_with_ssh):
+    def test_with_ssh(self, payload_with_ssh: Dict[str, Any]) -> None:
         validator = create_container_request_validator(allow_volumes=True)
         result = validator.check(payload_with_ssh)
         assert result["ssh"]
         assert result["ssh"]["port"]
         assert result["ssh"]["port"] == 666
 
-    def test_with_one_gpu(self, payload_with_one_gpu):
+    def test_with_one_gpu(self, payload_with_one_gpu: Dict[str, Any]) -> None:
         validator = create_container_request_validator(allow_volumes=True)
         result = validator.check(payload_with_one_gpu)
         assert result["resources"]["gpu"]
         assert result["resources"]["gpu"] == 1
 
-    def test_with_too_many_gpu(self, payload_with_too_many_gpu):
+    def test_with_too_many_gpu(self, payload_with_too_many_gpu: Dict[str, Any]) -> None:
         validator = create_container_request_validator(allow_volumes=True)
         with pytest.raises(ValueError, match="gpu"):
             validator.check(payload_with_too_many_gpu)
 
-    def test_with_negative_gpu(self, payload_with_negative_gpu):
+    def test_with_negative_gpu(self, payload_with_negative_gpu: Dict[str, Any]) -> None:
         validator = create_container_request_validator(allow_volumes=True)
         with pytest.raises(ValueError, match="gpu"):
             validator.check(payload_with_negative_gpu)
 
-    def test_gpu_model_but_no_gpu(self):
+    def test_gpu_model_but_no_gpu(self) -> None:
         payload = {
             "image": "testimage",
             "resources": {"cpu": 0.1, "memory_mb": 16, "gpu_model": "unknown"},
@@ -146,7 +149,7 @@ class TestContainerRequestValidator:
         with pytest.raises(ValueError, match="gpu_model is not allowed key"):
             validator.check(payload)
 
-    def test_gpu_model_unknown(self):
+    def test_gpu_model_unknown(self) -> None:
         payload = {
             "image": "testimage",
             "resources": {
@@ -160,7 +163,7 @@ class TestContainerRequestValidator:
         with pytest.raises(ValueError, match="value doesn't match any variant"):
             validator.check(payload)
 
-    def test_gpu_model(self):
+    def test_gpu_model(self) -> None:
         payload = {
             "image": "testimage",
             "resources": {
@@ -213,7 +216,7 @@ class TestModelRequestValidator:
 
 
 class TestContainerResponseValidator:
-    def test_gpu_model(self):
+    def test_gpu_model(self) -> None:
         payload = {
             "image": "testimage",
             "resources": {
@@ -230,17 +233,17 @@ class TestContainerResponseValidator:
 
 
 class TestModelResponseValidator:
-    def test_empty(self):
+    def test_empty(self) -> None:
         validator = create_model_response_validator()
         with pytest.raises(ValueError, match="is required"):
             validator.check({})
 
-    def test_failure(self):
+    def test_failure(self) -> None:
         validator = create_model_response_validator()
         with pytest.raises(ValueError, match="doesn't match any variant"):
             validator.check({"job_id": "testjob", "status": "INVALID"})
 
-    def test_success(self):
+    def test_success(self) -> None:
         validator = create_model_response_validator()
         assert validator.check(
             {
@@ -254,7 +257,7 @@ class TestModelResponseValidator:
             }
         )
 
-    def test_success_without_name_label(self):
+    def test_success_without_name_label(self) -> None:
         validator = create_model_response_validator()
         assert validator.check(
             {
@@ -271,7 +274,7 @@ class TestJobContainerToJson:
     def storage_config(self) -> StorageConfig:
         return StorageConfig(host_mount_path=PurePath("/whatever"))
 
-    def test_minimal(self, storage_config):
+    def test_minimal(self, storage_config: StorageConfig) -> None:
         container = Container(
             image="image", resources=ContainerResources(cpu=0.1, memory_mb=16)
         )
@@ -282,7 +285,7 @@ class TestJobContainerToJson:
             "volumes": [],
         }
 
-    def test_gpu_and_shm_resources(self, storage_config):
+    def test_gpu_and_shm_resources(self, storage_config: StorageConfig) -> None:
         container = Container(
             image="image",
             resources=ContainerResources(cpu=0.1, memory_mb=16, gpu=1, shm=True),
@@ -294,7 +297,7 @@ class TestJobContainerToJson:
             "volumes": [],
         }
 
-    def test_with_ssh(self, storage_config):
+    def test_with_ssh(self, storage_config: StorageConfig) -> None:
         container = Container(
             image="image",
             resources=ContainerResources(cpu=0.1, memory_mb=16, gpu=1, shm=True),
@@ -308,7 +311,9 @@ class TestJobContainerToJson:
             "ssh": {"port": 777},
         }
 
-    def test_src_storage_uri_fallback_default(self, storage_config):
+    def test_src_storage_uri_fallback_default(
+        self, storage_config: StorageConfig
+    ) -> None:
         volume = ContainerVolume(
             uri=URL(""),
             src_path=PurePath("/"),
@@ -321,7 +326,7 @@ class TestJobContainerToJson:
             "read_only": False,
         }
 
-    def test_src_storage_uri_fallback_root(self, storage_config):
+    def test_src_storage_uri_fallback_root(self, storage_config: StorageConfig) -> None:
         volume = ContainerVolume(
             uri=URL(""), src_path=PurePath("/"), dst_path=PurePath("/var/storage")
         )
@@ -332,7 +337,9 @@ class TestJobContainerToJson:
             "read_only": False,
         }
 
-    def test_src_storage_uri_fallback_custom(self, storage_config):
+    def test_src_storage_uri_fallback_custom(
+        self, storage_config: StorageConfig
+    ) -> None:
         volume = ContainerVolume(
             uri=URL(""),
             src_path=PurePath("/"),
@@ -347,7 +354,7 @@ class TestJobContainerToJson:
 
 
 class TestBulkJobFilterBuilder:
-    def test_no_access(self):
+    def test_no_access(self) -> None:
         query_filter = JobFilter()
         tree = ClientSubTreeViewRoot(
             path="/", sub_tree=ClientAccessSubTreeView(action="deny", children={})
@@ -355,7 +362,7 @@ class TestBulkJobFilterBuilder:
         with pytest.raises(JobFilterException, match="no jobs"):
             BulkJobFilterBuilder(query_filter, tree).build()
 
-    def test_no_access_with_owners(self):
+    def test_no_access_with_owners(self) -> None:
         query_filter = JobFilter(owners={"someuser"})
         tree = ClientSubTreeViewRoot(
             path="/",
@@ -377,7 +384,7 @@ class TestBulkJobFilterBuilder:
         with pytest.raises(JobFilterException, match="no jobs"):
             BulkJobFilterBuilder(query_filter, tree).build()
 
-    def test_full_access_no_owners(self):
+    def test_full_access_no_owners(self) -> None:
         query_filter = JobFilter()
         tree = ClientSubTreeViewRoot(
             path="/", sub_tree=ClientAccessSubTreeView(action="manage", children={})
@@ -387,7 +394,7 @@ class TestBulkJobFilterBuilder:
             bulk_filter=JobFilter(), shared_ids=set(), shared_ids_filter=None
         )
 
-    def test_full_access_with_owners(self):
+    def test_full_access_with_owners(self) -> None:
         query_filter = JobFilter(owners={"testuser"})
         tree = ClientSubTreeViewRoot(
             path="/", sub_tree=ClientAccessSubTreeView(action="manage", children={})
@@ -399,7 +406,7 @@ class TestBulkJobFilterBuilder:
             shared_ids_filter=None,
         )
 
-    def test_mixed_access_no_owners(self):
+    def test_mixed_access_no_owners(self) -> None:
         query_filter = JobFilter()
         tree = ClientSubTreeViewRoot(
             path="/",
@@ -425,7 +432,7 @@ class TestBulkJobFilterBuilder:
             shared_ids_filter=JobFilter(),
         )
 
-    def test_mixed_access_owners_shared_all(self):
+    def test_mixed_access_owners_shared_all(self) -> None:
         query_filter = JobFilter(owners={"testuser"})
         tree = ClientSubTreeViewRoot(
             path="/",
@@ -451,7 +458,7 @@ class TestBulkJobFilterBuilder:
             shared_ids_filter=None,
         )
 
-    def test_mixed_access_shared_ids_only(self):
+    def test_mixed_access_shared_ids_only(self) -> None:
         query_filter = JobFilter(owners={"anotheruser"})
         tree = ClientSubTreeViewRoot(
             path="/",
@@ -477,7 +484,7 @@ class TestBulkJobFilterBuilder:
             shared_ids_filter=JobFilter(owners={"anotheruser"}),
         )
 
-    def test_mixed_access_owners_shared_all_and_specific(self):
+    def test_mixed_access_owners_shared_all_and_specific(self) -> None:
         query_filter = JobFilter(
             owners={"testuser", "anotheruser"},
             statuses={JobStatus.PENDING},
@@ -515,7 +522,7 @@ class TestBulkJobFilterBuilder:
 
 
 class TestInferPermissionsFromContainer:
-    def test_no_volumes(self):
+    def test_no_volumes(self) -> None:
         user = User(name="testuser", token="")
         container = Container(
             image="image", resources=ContainerResources(cpu=0.1, memory_mb=16)
@@ -524,7 +531,7 @@ class TestInferPermissionsFromContainer:
         permissions = infer_permissions_from_container(user, container, registry_config)
         assert permissions == [Permission(uri="job://testuser", action="write")]
 
-    def test_volumes(self):
+    def test_volumes(self) -> None:
         user = User(name="testuser", token="")
         container = Container(
             image="image",
@@ -551,7 +558,7 @@ class TestInferPermissionsFromContainer:
             Permission(uri="storage://testuser/result", action="write"),
         ]
 
-    def test_image(self):
+    def test_image(self) -> None:
         user = User(name="testuser", token="")
         container = Container(
             image="example.com/testuser/image",

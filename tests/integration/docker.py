@@ -1,3 +1,5 @@
+from typing import Any, AsyncIterator
+
 import aiodocker
 import pytest
 
@@ -5,7 +7,7 @@ import pytest
 PYTEST_REUSE_DOCKER_OPT = "--reuse-docker"
 
 
-def pytest_addoption(parser):
+def pytest_addoption(parser: Any) -> None:
     parser.addoption(
         PYTEST_REUSE_DOCKER_OPT,
         action="store_true",
@@ -14,12 +16,12 @@ def pytest_addoption(parser):
 
 
 @pytest.fixture(scope="session")
-def reuse_docker(request):
+def reuse_docker(request: Any) -> Any:
     return request.config.getoption(PYTEST_REUSE_DOCKER_OPT)
 
 
 @pytest.fixture(scope="session")
-async def docker():
+async def docker() -> AsyncIterator[aiodocker.Docker]:
     client = aiodocker.Docker()
     yield client
     await client.close()
