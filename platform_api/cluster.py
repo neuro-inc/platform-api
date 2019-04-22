@@ -98,6 +98,13 @@ class ClusterRegistry:
             raise ClusterNotFound.create(name)
         return record
 
+    async def __aenter__(self) -> "ClusterRegistry":
+        return self
+
+    async def __aexit__(self, *args) -> None:
+        for name in list(self._records):
+            await self.remove(name)
+
     async def add(self, config: ClusterConfig) -> None:
         try:
             await self.remove(config.name)
@@ -124,7 +131,7 @@ class ClusterRegistry:
             logger.info(f"Closing cluster '{name}'")
             try:
                 await record.cluster.close()
-            except asyncio.CancelledError:
+            except asyncio.CancelledError:  # pragma: no cover
                 raise
             except Exception:
                 logger.exception(f"Failed to close cluster '{name}'")

@@ -157,3 +157,19 @@ class TestClusterRegistry:
 
         with pytest.not_raises(Exception):
             await registry.remove(name)
+
+    @pytest.mark.asyncio
+    async def test_cleanup(self) -> None:
+        registry = ClusterRegistry(factory=_TestCluster)
+        name = "test"
+        config = ClusterConfig(name=name)
+
+        async with registry:
+            await registry.add(config)
+
+            async with registry.get(name):
+                pass
+
+        with pytest.raises(ClusterNotFound, match=f"Cluster '{name}' not found"):
+            async with registry.get(name):
+                pass
