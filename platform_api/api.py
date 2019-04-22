@@ -1,6 +1,6 @@
 import asyncio
 import logging
-from typing import Any, Dict, cast
+from typing import Any, AsyncIterator, Awaitable, Callable, Dict, cast
 
 import aiohttp.web
 from async_exit_stack import AsyncExitStack
@@ -30,7 +30,7 @@ class ApiHandler:
     def __init__(self, config: Config):
         self._config = config
 
-    def register(self, app):
+    def register(self, app: aiohttp.web.Application) -> None:
         app.add_routes(
             (
                 aiohttp.web.get("/ping", self.handle_ping),
@@ -38,10 +38,10 @@ class ApiHandler:
             )
         )
 
-    async def handle_ping(self, request):
+    async def handle_ping(self, request: aiohttp.web.Request) -> aiohttp.web.Response:
         return aiohttp.web.Response()
 
-    async def handle_config(self, request):
+    async def handle_config(self, request: aiohttp.web.Request) -> aiohttp.web.Response:
         data: Dict[str, Any] = {
             "registry_url": str(self._config.registry.url),
             "storage_url": str(self._config.ingress.storage_url),
@@ -61,7 +61,7 @@ class ApiHandler:
         return aiohttp.web.json_response(data)
 
 
-def init_logging():
+def init_logging() -> None:
     logging.basicConfig(
         # TODO (A Danshyn 06/01/18): expose in the Config
         level=logging.DEBUG,
@@ -70,7 +70,10 @@ def init_logging():
 
 
 @aiohttp.web.middleware
-async def handle_exceptions(request, handler):
+async def handle_exceptions(
+    request: aiohttp.web.Request,
+    handler: Callable[[aiohttp.web.Request], Awaitable[aiohttp.web.StreamResponse]],
+) -> aiohttp.web.StreamResponse:
     try:
         return await handler(request)
     except JobException as e:
@@ -101,21 +104,21 @@ async def handle_exceptions(request, handler):
         )
 
 
-async def create_api_v1_app(config: Config):
+async def create_api_v1_app(config: Config) -> aiohttp.web.Application:
     api_v1_app = aiohttp.web.Application()
     api_v1_handler = ApiHandler(config=config)
     api_v1_handler.register(api_v1_app)
     return api_v1_app
 
 
-async def create_models_app(config: Config):
+async def create_models_app(config: Config) -> aiohttp.web.Application:
     models_app = aiohttp.web.Application()
     models_handler = ModelsHandler(app=models_app, config=config)
     models_handler.register(models_app)
     return models_app
 
 
-async def create_jobs_app(config: Config):
+async def create_jobs_app(config: Config) -> aiohttp.web.Application:
     jobs_app = aiohttp.web.Application()
     jobs_handler = JobsHandler(app=jobs_app, config=config)
     jobs_handler.register(jobs_app)
@@ -126,7 +129,7 @@ async def create_app(config: Config) -> aiohttp.web.Application:
     app = aiohttp.web.Application(middlewares=[handle_exceptions])
     app["config"] = config
 
-    async def _init_app(app: aiohttp.web.Application):
+    async def _init_app(app: aiohttp.web.Application) -> AsyncIterator[None]:
         async with AsyncExitStack() as exit_stack:
 
             logger.info("Initializing Redis client")
@@ -196,7 +199,7 @@ async def create_app(config: Config) -> aiohttp.web.Application:
     return app
 
 
-def main():
+def main() -> None:
     init_logging()
     config = EnvironConfigFactory().create()
     logging.info("Loaded config: %r", config)

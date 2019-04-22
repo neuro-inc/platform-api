@@ -106,7 +106,7 @@ class PodContainerLogReader(LogReader):
         self._stream = FilteredStreamWrapper(stream)
         return self
 
-    async def __aexit__(self, *args) -> None:
+    async def __aexit__(self, *args: Any) -> None:
         assert self._stream
         assert self._stream_cm
         stream_cm = self._stream_cm
@@ -166,7 +166,7 @@ class ElasticsearchLogReader(LogReader):
         await self._scan.__aenter__()
         return self
 
-    async def __aexit__(self, *args) -> None:
+    async def __aexit__(self, *args: Any) -> None:
         self._buffer.close()
         assert self._scan
         scan = self._scan

@@ -2,7 +2,7 @@ from dataclasses import dataclass, field
 from datetime import timedelta
 from enum import Enum
 from pathlib import Path, PurePath
-from typing import Container, Optional, Sequence
+from typing import Any, Container, Optional, Sequence
 
 from yarl import URL
 
@@ -64,10 +64,10 @@ class StorageConfig:
 
     uri_scheme: str = "storage"
 
-    def __post_init__(self):
+    def __post_init__(self) -> None:
         self._check_nfs_attrs()
 
-    def _check_nfs_attrs(self):
+    def _check_nfs_attrs(self) -> None:
         nfs_attrs = (self.nfs_server, self.nfs_export_path)
         if self.is_nfs:
             if not all(nfs_attrs):
@@ -81,11 +81,11 @@ class StorageConfig:
         return self.type == StorageType.NFS
 
     @classmethod
-    def create_nfs(cls, *args, **kwargs) -> "StorageConfig":
+    def create_nfs(cls, *args: Any, **kwargs: Any) -> "StorageConfig":
         return cls(*args, type=StorageType.NFS, **kwargs)  # type: ignore
 
     @classmethod
-    def create_host(cls, *args, **kwargs) -> "StorageConfig":
+    def create_host(cls, *args: Any, **kwargs: Any) -> "StorageConfig":
         return cls(*args, **kwargs)  # type: ignore
 
 
