@@ -1,5 +1,5 @@
 from abc import ABC, abstractmethod
-from typing import Optional, Sequence
+from typing import Any, Optional, Sequence
 
 from platform_api.resource import GPUModel, ResourcePoolType
 
@@ -12,7 +12,7 @@ class LogReader(ABC):
     async def __aenter__(self) -> "LogReader":
         return self
 
-    async def __aexit__(self, *args) -> None:
+    async def __aexit__(self, *args: Any) -> None:
         pass
 
     @abstractmethod
@@ -24,7 +24,7 @@ class Telemetry(ABC):
     async def __aenter__(self) -> "Telemetry":
         return self
 
-    async def __aexit__(self, *args) -> None:
+    async def __aexit__(self, *args: Any) -> None:
         pass
 
     @abstractmethod

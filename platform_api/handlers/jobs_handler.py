@@ -82,13 +82,17 @@ def create_job_response_validator() -> t.Trafaret:
 
 
 def convert_job_container_to_json(
-    container, storage_config: StorageConfig
+    container: Container, storage_config: StorageConfig
 ) -> Dict[str, Any]:
-    ret = {"image": container.image, "env": container.env, "volumes": []}
+    ret: Dict[str, Any] = {
+        "image": container.image,
+        "env": container.env,
+        "volumes": [],
+    }
     if container.command is not None:
         ret["command"] = container.command
 
-    resources = {
+    resources: Dict[str, Any] = {
         "cpu": container.resources.cpu,
         "memory_mb": container.resources.memory_mb,
     }
@@ -212,7 +216,7 @@ class JobsHandler:
     def _auth_client(self) -> AuthClient:
         return self._app["auth_client"]
 
-    def register(self, app):
+    def register(self, app: aiohttp.web.Application) -> None:
         app.add_routes(
             (
                 aiohttp.web.get("", self.handle_get_all),
@@ -228,7 +232,7 @@ class JobsHandler:
         gpu_models = await self._orchestrator.get_available_gpu_models()
         return create_job_request_validator(allowed_gpu_models=gpu_models)
 
-    async def create_job(self, request):
+    async def create_job(self, request: aiohttp.web.Request) -> aiohttp.web.Response:
         user = await authorized_user(request)
 
         orig_payload = await request.json()
@@ -259,7 +263,7 @@ class JobsHandler:
             data=response_payload, status=aiohttp.web.HTTPAccepted.status_code
         )
 
-    async def handle_get(self, request):
+    async def handle_get(self, request: aiohttp.web.Request) -> aiohttp.web.Response:
         user = await untrusted_user(request)
         job_id = request.match_info["job_id"]
         job = await self._jobs_service.get_job(job_id)
@@ -274,7 +278,9 @@ class JobsHandler:
             data=response_payload, status=aiohttp.web.HTTPOk.status_code
         )
 
-    async def handle_get_all(self, request):
+    async def handle_get_all(
+        self, request: aiohttp.web.Request
+    ) -> aiohttp.web.Response:
         # TODO (A Danshyn 10/08/18): remove once
         # AuthClient.get_permissions_tree accepts the token param
         await check_authorized(request)
@@ -324,7 +330,9 @@ class JobsHandler:
             data=response_payload, status=aiohttp.web.HTTPOk.status_code
         )
 
-    async def handle_delete(self, request):
+    async def handle_delete(
+        self, request: aiohttp.web.Request
+    ) -> aiohttp.web.StreamResponse:
         user = await untrusted_user(request)
         job_id = request.match_info["job_id"]
         job = await self._jobs_service.get_job(job_id)
@@ -336,7 +344,9 @@ class JobsHandler:
         await self._jobs_service.delete_job(job_id)
         raise aiohttp.web.HTTPNoContent()
 
-    async def stream_log(self, request):
+    async def stream_log(
+        self, request: aiohttp.web.Request
+    ) -> aiohttp.web.StreamResponse:
         user = await untrusted_user(request)
         job_id = request.match_info["job_id"]
         job = await self._jobs_service.get_job(job_id)
@@ -366,7 +376,9 @@ class JobsHandler:
         await response.write_eof()
         return response
 
-    async def stream_top(self, request):
+    async def stream_top(
+        self, request: aiohttp.web.Request
+    ) -> aiohttp.web.WebSocketResponse:
         user = await untrusted_user(request)
         job_id = request.match_info["job_id"]
         job = await self._jobs_service.get_job(job_id)
@@ -393,6 +405,7 @@ class JobsHandler:
             try:
                 while True:
                     # client close connection
+                    assert request.transport is not None
                     if request.transport.is_closing():
                         break
 

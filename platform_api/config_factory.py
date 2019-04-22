@@ -1,6 +1,6 @@
 import os
 from pathlib import Path, PurePath
-from typing import List, Optional
+from typing import Dict, List, Optional
 
 from yarl import URL
 
@@ -31,10 +31,10 @@ from .resource import GKEGPUModels, ResourcePoolType
 
 
 class EnvironConfigFactory:
-    def __init__(self, environ=None):
+    def __init__(self, environ: Optional[Dict[str, str]] = None):
         self._environ = environ or os.environ
 
-    def _get_bool(self, name, default: bool = False) -> bool:
+    def _get_bool(self, name: str, default: bool = False) -> bool:
         value = self._environ.get(name)
         if not value:  # None/""
             return default
@@ -63,7 +63,7 @@ class EnvironConfigFactory:
             logging=self.create_logging(),
         )
 
-    def create_ssh(self):
+    def create_ssh(self) -> SSHConfig:
         env_prefix = self._environ.get("NP_ENV_PREFIX", SSHConfig.env_prefix)
         storage = self.create_storage()
         database = self.create_database()

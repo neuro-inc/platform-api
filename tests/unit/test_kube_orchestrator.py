@@ -421,6 +421,7 @@ class TestPodDescriptor:
         pod = PodDescriptor.from_primitive(payload)
         assert pod.name == "testname"
         assert pod.image == "testimage"
+        assert pod.status is not None
         assert pod.status.phase == "Running"
 
     def test_from_primitive_failure(self):

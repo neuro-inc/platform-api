@@ -3,7 +3,7 @@ import time
 from dataclasses import dataclass, field
 from datetime import datetime, timedelta, timezone
 from functools import partial
-from typing import Any, Dict, Iterable, Iterator, List, Optional, Sequence
+from typing import Any, Callable, Dict, Iterable, Iterator, List, Optional, Sequence
 
 import iso8601
 from neuro_auth_client.client import Quota
@@ -62,8 +62,8 @@ class JobStatusItem:
         status: JobStatus,
         *,
         transition_time: Optional[datetime] = None,
-        current_datetime_factory=current_datetime_factory,
-        **kwargs,
+        current_datetime_factory: Callable[[], datetime] = current_datetime_factory,
+        **kwargs: Any,
     ) -> "JobStatusItem":
         transition_time = transition_time or current_datetime_factory()
         return cls(  # type: ignore
@@ -204,7 +204,7 @@ class Job:
         # leaving `status` for backward compat with tests
         status: JobStatus = JobStatus.PENDING,
         is_deleted: bool = False,
-        current_datetime_factory=current_datetime_factory,
+        current_datetime_factory: Callable[[], datetime] = current_datetime_factory,
         owner: str = "",
         name: Optional[str] = None,
         is_preemptible: bool = False,
@@ -306,15 +306,12 @@ class Job:
         self._is_deleted = value
 
     @property
-    def _deletion_planned_at(self) -> Optional[datetime]:
-        if not self.finished_at:
-            return None
-
-        return self.finished_at + self._orchestrator_config.job_deletion_delay
-
-    @property
     def _is_time_for_deletion(self) -> bool:
-        return self._deletion_planned_at <= self._current_datetime_factory()
+        assert self.finished_at
+        deletion_planned_at = (
+            self.finished_at + self._orchestrator_config.job_deletion_delay
+        )
+        return deletion_planned_at <= self._current_datetime_factory()
 
     @property
     def should_be_deleted(self) -> bool:
@@ -413,11 +410,11 @@ class Job:
         return self._status_history.finished_at_str
 
     @property
-    def internal_hostname(self):
+    def internal_hostname(self) -> Optional[str]:
         return self._internal_orchestrator_info.job_hostname
 
     @internal_hostname.setter
-    def internal_hostname(self, value: Optional[str]):
+    def internal_hostname(self, value: Optional[str]) -> None:
         self._internal_orchestrator_info.job_hostname = value
 
     @property

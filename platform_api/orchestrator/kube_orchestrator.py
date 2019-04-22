@@ -2,7 +2,7 @@ import asyncio
 import logging
 from dataclasses import dataclass
 from pathlib import PurePath
-from typing import Dict, Iterable, List, Optional, Union
+from typing import Any, Dict, Iterable, List, Optional, Union
 
 from aioelasticsearch import Elasticsearch
 
@@ -111,7 +111,7 @@ class KubeConfig(OrchestratorConfig):
     node_label_gpu: Optional[str] = None
     node_label_preemptible: Optional[str] = None
 
-    def __post_init__(self):
+    def __post_init__(self) -> None:
         if not all((self.jobs_ingress_name, self.endpoint_url)):
             raise ValueError("Missing required settings")
 
@@ -178,7 +178,7 @@ class KubeOrchestrator(Orchestrator):
         await self._client.init()
         return self
 
-    async def __aexit__(self, *args) -> None:
+    async def __aexit__(self, *args: Any) -> None:
         if self._client:
             await self._client.close()
 

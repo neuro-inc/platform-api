@@ -43,7 +43,7 @@ class JobsService:
 
         self._max_deletion_attempts = 3
 
-    async def update_jobs_statuses(self):
+    async def update_jobs_statuses(self) -> None:
         # TODO (A Danshyn 02/17/19): instead of returning `Job` objects,
         # it makes sense to just return their IDs.
 
