@@ -13,7 +13,7 @@ logger = logging.getLogger(__name__)
 
 
 class SFTPServer:
-    def __init__(self, server: SSHServer, channel: asyncssh.SSHChannel) -> None:
+    def __init__(self, server: SSHServer, channel: asyncssh.channel.SSHChannel) -> None:
         self._server = server
         self._chan = channel
         self._subproc: Optional[PodExec] = None

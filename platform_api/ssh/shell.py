@@ -14,7 +14,7 @@ logger = logging.getLogger(__name__)
 
 
 class ShellSession:
-    def __init__(self, server: SSHServer, channel: asyncssh.SSHChannel) -> None:
+    def __init__(self, server: SSHServer, channel: asyncssh.channel.SSHChannel) -> None:
         self._chan = channel
         self._server = server
         self._subproc: Optional[PodExec] = None

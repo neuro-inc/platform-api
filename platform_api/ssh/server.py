@@ -12,9 +12,6 @@ from asyncssh.stream import SSHReader, SSHServerSession, SSHStreamSession, SSHWr
 from platform_api.config_factory import EnvironConfigFactory
 from platform_api.orchestrator.kube_orchestrator import KubeConfig, KubeOrchestrator
 
-from .sftp import SFTPServer
-from .shell import ShellSession
-
 
 logger = logging.getLogger(__name__)
 
@@ -75,6 +72,8 @@ class SSHSession(SSHStreamSession, SSHServerSession):
             self._chan.set_encoding(None)
             self._encoding = None
 
+            from .sftp import SFTPServer
+
             sftp = SFTPServer(self._server, self._chan)
             handler = sftp.run(stdin, stdout, stderr)
         elif command and command.startswith("scp "):
@@ -82,6 +81,8 @@ class SSHSession(SSHStreamSession, SSHServerSession):
             self._encoding = None
             raise RuntimeError("scp is not supported yet")
         else:
+            from .shell import ShellSession
+
             shell = ShellSession(self._server, self._chan)
             handler = shell.run(stdin, stdout, stderr)
 
@@ -172,7 +173,7 @@ class SSHServer:
         # import pdb;pdb.set_trace()
         await asyncio.gather(*list(self._waiters))
 
-    async def _wait(self, task: asyncio.Task[Any]) -> None:
+    async def _wait(self, task: "asyncio.Task[Any]") -> None:
         try:
             with suppress(asyncio.CancelledError):
                 await task
