@@ -32,7 +32,9 @@ class _TestCluster(Cluster):
 
 
 def create_cluster_config(name: str) -> ClusterConfig:
-    return ClusterConfig(name=name, orchestrator=None, logging=None)  # type: ignore
+    return ClusterConfig(  # type: ignore
+        name=name, orchestrator=None, logging=None, ingress=None
+    )
 
 
 class TestClusterRegistry:
@@ -166,7 +168,7 @@ class TestClusterRegistry:
     async def test_cleanup(self) -> None:
         registry = ClusterRegistry(factory=_TestCluster)
         name = "test"
-        config = ClusterConfig(name=name)
+        config = create_cluster_config(name=name)
 
         async with registry:
             await registry.add(config)
