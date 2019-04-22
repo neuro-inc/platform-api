@@ -8,8 +8,18 @@ from urllib.parse import urlsplit
 
 import pytest
 from async_timeout import timeout
+from yarl import URL
 
-from platform_api.config import RegistryConfig, StorageConfig
+from platform_api.config import (
+    ClusterConfig,
+    Config,
+    DatabaseConfig,
+    IngressConfig,
+    LoggingConfig,
+    RegistryConfig,
+    ServerConfig,
+    StorageConfig,
+)
 from platform_api.orchestrator.kube_client import JobNotFoundException
 from platform_api.orchestrator.kube_orchestrator import (
     KubeClient,
@@ -334,3 +344,41 @@ async def kube_node_preemptible(kube_config, kube_client, delete_node_later):
     await kube_client.create_node(node_name, labels=labels, taints=taints)
 
     yield node_name
+
+
+@pytest.fixture
+def config_factory(kube_config, redis_config, auth_config, es_config):
+    def _factory(**kwargs):
+        server_config = ServerConfig()
+        database_config = DatabaseConfig(redis=redis_config)  # type: ignore
+        logging_config = LoggingConfig(elasticsearch=es_config)
+        ingress_config = IngressConfig(
+            storage_url=URL("https://neu.ro/api/v1/storage"),
+            users_url=URL("https://neu.ro/api/v1/users"),
+            monitoring_url=URL("https://neu.ro/api/v1/monitoring"),
+        )
+        cluster_config = ClusterConfig(
+            name="default",
+            orchestrator=kube_config,
+            logging=logging_config,
+            ingress=ingress_config,
+        )
+        return Config(
+            server=server_config,
+            cluster=cluster_config,
+            database=database_config,
+            auth=auth_config,
+            **kwargs,
+        )
+
+    return _factory
+
+
+@pytest.fixture
+def config(config_factory):
+    return config_factory()
+
+
+@pytest.fixture
+def config_with_oauth(config_factory, oauth_config_dev):
+    return config_factory(oauth=oauth_config_dev)
