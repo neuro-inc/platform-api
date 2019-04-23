@@ -1,6 +1,7 @@
 import dataclasses
 from datetime import datetime, timedelta, timezone
 from pathlib import PurePath
+from typing import Any, Dict
 from unittest import mock
 
 import pytest
@@ -28,15 +29,17 @@ from platform_api.orchestrator.job_request import (
 )
 from platform_api.user import User
 
+from .conftest import MockOrchestrator
+
 
 class TestContainer:
-    def test_command_list_empty(self):
+    def test_command_list_empty(self) -> None:
         container = Container(
             image="testimage", resources=ContainerResources(cpu=1, memory_mb=128)
         )
         assert container.command_list == []
 
-    def test_command_list(self):
+    def test_command_list(self) -> None:
         container = Container(
             image="testimage",
             command="bash -c date",
@@ -44,14 +47,14 @@ class TestContainer:
         )
         assert container.command_list == ["bash", "-c", "date"]
 
-    def test_belongs_to_registry_no_host(self):
+    def test_belongs_to_registry_no_host(self) -> None:
         container = Container(
             image="testimage", resources=ContainerResources(cpu=1, memory_mb=128)
         )
         registry_config = RegistryConfig(host="example.com")
         assert not container.belongs_to_registry(registry_config)
 
-    def test_belongs_to_registry_different_host(self):
+    def test_belongs_to_registry_different_host(self) -> None:
         container = Container(
             image="registry.com/project/testimage",
             resources=ContainerResources(cpu=1, memory_mb=128),
@@ -59,7 +62,7 @@ class TestContainer:
         registry_config = RegistryConfig(host="example.com")
         assert not container.belongs_to_registry(registry_config)
 
-    def test_belongs_to_registry(self):
+    def test_belongs_to_registry(self) -> None:
         container = Container(
             image="example.com/project/testimage",
             resources=ContainerResources(cpu=1, memory_mb=128),
@@ -67,7 +70,7 @@ class TestContainer:
         registry_config = RegistryConfig(host="example.com")
         assert container.belongs_to_registry(registry_config)
 
-    def test_to_image_uri_failure(self):
+    def test_to_image_uri_failure(self) -> None:
         container = Container(
             image="registry.com/project/testimage",
             resources=ContainerResources(cpu=1, memory_mb=128),
@@ -76,7 +79,7 @@ class TestContainer:
         with pytest.raises(AssertionError, match="Unknown registry"):
             container.to_image_uri(registry_config)
 
-    def test_to_image_uri(self):
+    def test_to_image_uri(self) -> None:
         container = Container(
             image="example.com/project/testimage",
             resources=ContainerResources(cpu=1, memory_mb=128),
@@ -85,7 +88,7 @@ class TestContainer:
         uri = container.to_image_uri(registry_config)
         assert uri == URL("image://project/testimage")
 
-    def test_to_image_uri_ignore_tag(self):
+    def test_to_image_uri_ignore_tag(self) -> None:
         container = Container(
             image="example.com/project/testimage:latest",
             resources=ContainerResources(cpu=1, memory_mb=128),
@@ -96,7 +99,7 @@ class TestContainer:
 
 
 class TestContainerVolumeFactory:
-    def test_invalid_storage_uri_scheme(self):
+    def test_invalid_storage_uri_scheme(self) -> None:
         uri = "invalid://path"
         with pytest.raises(ValueError, match="Invalid URI scheme"):
             ContainerVolumeFactory(
@@ -104,7 +107,7 @@ class TestContainerVolumeFactory:
             )
 
     @pytest.mark.parametrize("uri", ("storage:///", "storage://"))
-    def test_invalid_storage_uri_path(self, uri):
+    def test_invalid_storage_uri_path(self, uri: str) -> None:
         volume = ContainerVolumeFactory(
             uri, src_mount_path=PurePath("/host"), dst_mount_path=PurePath("/container")
         ).create()
@@ -121,7 +124,7 @@ class TestContainerVolumeFactory:
             "storage://path/to/dir",
         ),
     )
-    def test_create(self, uri):
+    def test_create(self, uri: str) -> None:
         volume = ContainerVolume.create(
             uri,
             src_mount_path=PurePath("/host"),
@@ -133,7 +136,7 @@ class TestContainerVolumeFactory:
         assert volume.read_only
 
     @pytest.mark.parametrize("uri", ("storage:///../to/dir", "storage://path/../dir"))
-    def test_create_invalid_path(self, uri):
+    def test_create_invalid_path(self, uri: str) -> None:
         with pytest.raises(ValueError, match="Invalid path"):
             ContainerVolumeFactory(
                 uri,
@@ -141,7 +144,7 @@ class TestContainerVolumeFactory:
                 dst_mount_path=PurePath("/container"),
             ).create()
 
-    def test_create_without_extending_dst_mount_path(self):
+    def test_create_without_extending_dst_mount_path(self) -> None:
         uri = "storage:///path/to/dir"
         volume = ContainerVolume.create(
             uri,
@@ -154,7 +157,7 @@ class TestContainerVolumeFactory:
         assert volume.dst_path == PurePath("/container")
         assert volume.read_only
 
-    def test_relative_dst_mount_path(self):
+    def test_relative_dst_mount_path(self) -> None:
         uri = "storage:///path/to/dir"
         with pytest.raises(ValueError, match="Mount path must be absolute"):
             ContainerVolumeFactory(
@@ -163,7 +166,7 @@ class TestContainerVolumeFactory:
                 dst_mount_path=PurePath("container"),
             )
 
-    def test_dots_dst_mount_path(self):
+    def test_dots_dst_mount_path(self) -> None:
         uri = "storage:///path/to/dir"
         with pytest.raises(ValueError, match="Invalid path"):
             ContainerVolumeFactory(
@@ -174,7 +177,7 @@ class TestContainerVolumeFactory:
 
 
 class TestContainerBuilder:
-    def test_from_payload_build(self):
+    def test_from_payload_build(self) -> None:
         storage_config = StorageConfig(host_mount_path=PurePath("/tmp"))  # type: ignore
         payload = {
             "image": "testimage",
@@ -210,7 +213,7 @@ class TestContainerBuilder:
             ssh_server=None,
         )
 
-    def test_from_payload_build_gpu_model(self):
+    def test_from_payload_build_gpu_model(self) -> None:
         storage_config = StorageConfig(host_mount_path=PurePath("/tmp"))  # type: ignore
         payload = {
             "image": "testimage",
@@ -231,7 +234,7 @@ class TestContainerBuilder:
             ),
         )
 
-    def test_from_payload_build_with_ssh(self):
+    def test_from_payload_build_with_ssh(self) -> None:
         storage_config = StorageConfig(host_mount_path=PurePath("/tmp"))  # type: ignore
         payload = {
             "image": "testimage",
@@ -268,7 +271,7 @@ class TestContainerBuilder:
             ssh_server=ContainerSSHServer(port=22),
         )
 
-    def test_from_payload_build_with_shm_false(self):
+    def test_from_payload_build_with_shm_false(self) -> None:
         storage_config = StorageConfig(host_mount_path=PurePath("/tmp"))  # type: ignore
         payload = {
             "image": "testimage",
@@ -305,7 +308,7 @@ class TestContainerBuilder:
 
 
 class TestModelRequest:
-    def test_to_container(self):
+    def test_to_container(self) -> None:
         storage_config = StorageConfig(host_mount_path=PurePath("/tmp"))  # type: ignore
         payload = {
             "container": {
@@ -347,7 +350,7 @@ class TestModelRequest:
 
 
 @pytest.fixture
-def job_request_payload():
+def job_request_payload() -> Dict[str, Any]:
     return {
         "job_id": "testjob",
         "description": "Description of the testjob",
@@ -377,7 +380,7 @@ def job_request_payload():
 
 
 @pytest.fixture
-def job_payload(job_request_payload):
+def job_payload(job_request_payload: Any) -> Dict[str, Any]:
     finished_at_str = datetime.now(timezone.utc).isoformat()
     return {
         "id": "testjob",
@@ -390,7 +393,7 @@ def job_payload(job_request_payload):
 
 
 @pytest.fixture
-def job_request_payload_with_shm(job_request_payload):
+def job_request_payload_with_shm(job_request_payload: Dict[str, Any]) -> Dict[str, Any]:
     data = job_request_payload
     data["container"]["resources"]["shm"] = True
     return data
@@ -398,7 +401,7 @@ def job_request_payload_with_shm(job_request_payload):
 
 class TestJob:
     @pytest.fixture
-    def job_request(self):
+    def job_request(self) -> JobRequest:
         container = Container(
             image="testimage",
             resources=ContainerResources(cpu=1, memory_mb=128),
@@ -411,7 +414,7 @@ class TestJob:
         )
 
     @pytest.fixture
-    def job_request_with_gpu(self):
+    def job_request_with_gpu(self) -> JobRequest:
         container = Container(
             image="testimage",
             resources=ContainerResources(
@@ -425,7 +428,7 @@ class TestJob:
         )
 
     @pytest.fixture
-    def job_request_with_ssh_and_http(self):
+    def job_request_with_ssh_and_http(self) -> JobRequest:
         container = Container(
             image="testimage",
             resources=ContainerResources(cpu=1, memory_mb=128),
@@ -439,7 +442,7 @@ class TestJob:
         )
 
     @pytest.fixture
-    def job_request_with_ssh(self):
+    def job_request_with_ssh(self) -> JobRequest:
         container = Container(
             image="testimage",
             resources=ContainerResources(cpu=1, memory_mb=128),
@@ -451,11 +454,15 @@ class TestJob:
             description="Description of the testjob",
         )
 
-    def test_http_host(self, mock_orchestrator, job_request):
+    def test_http_host(
+        self, mock_orchestrator: MockOrchestrator, job_request: JobRequest
+    ) -> None:
         job = Job(orchestrator_config=mock_orchestrator.config, job_request=job_request)
         assert job.http_host == "testjob.jobs"
 
-    def test_http_host_named(self, mock_orchestrator, job_request):
+    def test_http_host_named(
+        self, mock_orchestrator: MockOrchestrator, job_request: JobRequest
+    ) -> None:
         job = Job(
             orchestrator_config=mock_orchestrator.config,
             job_request=job_request,
@@ -465,7 +472,9 @@ class TestJob:
         assert job.http_host == "testjob.jobs"
         assert job.http_host_named == "test-job-name-owner.jobs"
 
-    def test_job_name(self, mock_orchestrator, job_request):
+    def test_job_name(
+        self, mock_orchestrator: MockOrchestrator, job_request: JobRequest
+    ) -> None:
         job = Job(
             orchestrator_config=mock_orchestrator.config,
             job_request=job_request,
@@ -473,19 +482,25 @@ class TestJob:
         )
         assert job.name == "test-job-name-123"
 
-    def test_job_has_gpu_false(self, mock_orchestrator, job_request):
+    def test_job_has_gpu_false(
+        self, mock_orchestrator: MockOrchestrator, job_request: JobRequest
+    ) -> None:
         job = Job(orchestrator_config=mock_orchestrator.config, job_request=job_request)
         assert not job.has_gpu
 
-    def test_job_has_gpu_true(self, mock_orchestrator, job_request_with_gpu):
+    def test_job_has_gpu_true(
+        self, mock_orchestrator: MockOrchestrator, job_request_with_gpu: JobRequest
+    ) -> None:
         job = Job(
             orchestrator_config=mock_orchestrator.config,
             job_request=job_request_with_gpu,
         )
         assert job.has_gpu
 
-    def test_job_get_run_time_active_job(self, mock_orchestrator, job_request):
-        def mocked_datetime_factory():
+    def test_job_get_run_time_active_job(
+        self, mock_orchestrator: MockOrchestrator, job_request: JobRequest
+    ) -> None:
+        def mocked_datetime_factory() -> datetime:
             return datetime(year=2099, month=1, day=1)
 
         started_at = datetime(year=2019, month=1, day=1)
@@ -499,7 +514,9 @@ class TestJob:
         expected_timedelta = mocked_datetime_factory() - started_at
         assert job.get_run_time() == expected_timedelta
 
-    def test_job_get_run_time_terminated_job(self, mock_orchestrator, job_request):
+    def test_job_get_run_time_terminated_job(
+        self, mock_orchestrator: MockOrchestrator, job_request: JobRequest
+    ) -> None:
         started_at = datetime(year=2019, month=3, day=1)
         finished_at = datetime(year=2019, month=3, day=2)
         first_item = JobStatusItem.create(JobStatus.PENDING, transition_time=started_at)
@@ -512,11 +529,15 @@ class TestJob:
         expected_timedelta = finished_at - started_at
         assert job.get_run_time() == expected_timedelta
 
-    def test_http_url(self, mock_orchestrator, job_request):
+    def test_http_url(
+        self, mock_orchestrator: MockOrchestrator, job_request: JobRequest
+    ) -> None:
         job = Job(orchestrator_config=mock_orchestrator.config, job_request=job_request)
         assert job.http_url == "http://testjob.jobs"
 
-    def test_http_urls_named(self, mock_orchestrator, job_request):
+    def test_http_urls_named(
+        self, mock_orchestrator: MockOrchestrator, job_request: JobRequest
+    ) -> None:
         job = Job(
             orchestrator_config=mock_orchestrator.config,
             job_request=job_request,
@@ -526,14 +547,18 @@ class TestJob:
         assert job.http_url == "http://testjob.jobs"
         assert job.http_url_named == "http://test-job-name-owner.jobs"
 
-    def test_https_url(self, mock_orchestrator, job_request):
+    def test_https_url(
+        self, mock_orchestrator: MockOrchestrator, job_request: JobRequest
+    ) -> None:
         config = dataclasses.replace(
             mock_orchestrator.config, is_http_ingress_secure=True
         )
         job = Job(orchestrator_config=config, job_request=job_request)
         assert job.http_url == "https://testjob.jobs"
 
-    def test_https_urls_named(self, mock_orchestrator, job_request):
+    def test_https_urls_named(
+        self, mock_orchestrator: MockOrchestrator, job_request: JobRequest
+    ) -> None:
         config = dataclasses.replace(
             mock_orchestrator.config, is_http_ingress_secure=True
         )
@@ -546,20 +571,28 @@ class TestJob:
         assert job.http_url == "https://testjob.jobs"
         assert job.http_url_named == "https://test-job-name-owner.jobs"
 
-    def test_ssh_url(self, mock_orchestrator, job_request_with_ssh):
+    def test_ssh_url(
+        self, mock_orchestrator: MockOrchestrator, job_request_with_ssh: JobRequest
+    ) -> None:
         job = Job(
             orchestrator_config=mock_orchestrator.config,
             job_request=job_request_with_ssh,
         )
         assert job.ssh_server == "ssh://testjob.ssh:22"
 
-    def test_no_ssh(self, mock_orchestrator, job_request):
+    def test_no_ssh(
+        self, mock_orchestrator: MockOrchestrator, job_request: JobRequest
+    ) -> None:
         job = Job(orchestrator_config=mock_orchestrator.config, job_request=job_request)
         assert not job.has_ssh_server_exposed
         with pytest.raises(AssertionError):
             assert job.ssh_server
 
-    def test_http_url_and_ssh(self, mock_orchestrator, job_request_with_ssh_and_http):
+    def test_http_url_and_ssh(
+        self,
+        mock_orchestrator: MockOrchestrator,
+        job_request_with_ssh_and_http: JobRequest,
+    ) -> None:
         job = Job(
             orchestrator_config=mock_orchestrator.config,
             job_request=job_request_with_ssh_and_http,
@@ -568,8 +601,10 @@ class TestJob:
         assert job.ssh_server == "ssh://testjob.ssh:22"
 
     def test_http_url_and_ssh_named(
-        self, mock_orchestrator, job_request_with_ssh_and_http
-    ):
+        self,
+        mock_orchestrator: MockOrchestrator,
+        job_request_with_ssh_and_http: JobRequest,
+    ) -> None:
         job = Job(
             orchestrator_config=mock_orchestrator.config,
             job_request=job_request_with_ssh_and_http,
@@ -580,19 +615,25 @@ class TestJob:
         assert job.http_url_named == "http://test-job-name-owner.jobs"
         assert job.ssh_server == "ssh://testjob.ssh:22"
 
-    def test_should_be_deleted_pending(self, mock_orchestrator, job_request):
+    def test_should_be_deleted_pending(
+        self, mock_orchestrator: MockOrchestrator, job_request: JobRequest
+    ) -> None:
         job = Job(orchestrator_config=mock_orchestrator.config, job_request=job_request)
         assert not job.finished_at
         assert not job.should_be_deleted
 
-    def test_should_be_deleted_finished(self, mock_orchestrator, job_request):
+    def test_should_be_deleted_finished(
+        self, mock_orchestrator: MockOrchestrator, job_request: JobRequest
+    ) -> None:
         config = dataclasses.replace(mock_orchestrator.config, job_deletion_delay_s=0)
         job = Job(orchestrator_config=config, job_request=job_request)
         job.status = JobStatus.FAILED
         assert job.finished_at
         assert job.should_be_deleted
 
-    def test_to_primitive(self, mock_orchestrator, job_request):
+    def test_to_primitive(
+        self, mock_orchestrator: MockOrchestrator, job_request: JobRequest
+    ) -> None:
         job = Job(
             orchestrator_config=mock_orchestrator.config,
             job_request=job_request,
@@ -629,7 +670,9 @@ class TestJob:
             "is_preemptible": True,
         }
 
-    def test_from_primitive(self, mock_orchestrator, job_request_payload):
+    def test_from_primitive(
+        self, mock_orchestrator: MockOrchestrator, job_request_payload: Dict[str, Any]
+    ) -> None:
         payload = {
             "id": "testjob",
             "owner": "testuser",
@@ -648,7 +691,9 @@ class TestJob:
         assert job.owner == "testuser"
         assert not job.is_preemptible
 
-    def test_from_primitive_check_name(self, mock_orchestrator, job_request_payload):
+    def test_from_primitive_check_name(
+        self, mock_orchestrator: MockOrchestrator, job_request_payload: Dict[str, Any]
+    ) -> None:
         payload = {
             "id": "testjob",
             "name": "test-job-name",
@@ -662,7 +707,9 @@ class TestJob:
         assert job.id == "testjob"
         assert job.name == "test-job-name"
 
-    def test_from_primitive_with_statuses(self, mock_orchestrator, job_request_payload):
+    def test_from_primitive_with_statuses(
+        self, mock_orchestrator: MockOrchestrator, job_request_payload: Dict[str, Any]
+    ) -> None:
         finished_at_str = datetime.now(timezone.utc).isoformat()
         payload = {
             "id": "testjob",
@@ -682,20 +729,28 @@ class TestJob:
         assert job.owner == "compute"
         assert job.is_preemptible
 
-    def test_to_uri(self, mock_orchestrator, job_request) -> None:
+    def test_to_uri(
+        self, mock_orchestrator: MockOrchestrator, job_request: JobRequest
+    ) -> None:
         job = Job(mock_orchestrator.config, job_request, owner="testuser")
         assert job.to_uri() == URL(f"job://testuser/{job.id}")
 
-    def test_to_uri_orphaned(self, mock_orchestrator, job_request) -> None:
+    def test_to_uri_orphaned(
+        self, mock_orchestrator: MockOrchestrator, job_request: JobRequest
+    ) -> None:
         job = Job(mock_orchestrator.config, job_request)
         assert job.to_uri() == URL(f"job://compute/{job.id}")
 
-    def test_to_uri_no_owner(self, mock_orchestrator, job_request) -> None:
+    def test_to_uri_no_owner(
+        self, mock_orchestrator: MockOrchestrator, job_request: JobRequest
+    ) -> None:
         config = dataclasses.replace(mock_orchestrator.config, orphaned_job_owner="")
         job = Job(config, job_request)
         assert job.to_uri() == URL(f"job:/{job.id}")
 
-    def test_to_and_from_primitive(self, mock_orchestrator, job_request_payload):
+    def test_to_and_from_primitive(
+        self, mock_orchestrator: MockOrchestrator, job_request_payload: Dict[str, Any]
+    ) -> None:
         finished_at_str = datetime.now(timezone.utc).isoformat()
         current_status_item = {
             "status": "failed",
@@ -720,7 +775,7 @@ class TestJob:
 
 
 class TestJobRequest:
-    def test_to_primitive(self, job_request_payload):
+    def test_to_primitive(self, job_request_payload: Dict[str, Any]) -> None:
         container = Container(
             image="testimage",
             env={"testvar": "testval"},
@@ -740,7 +795,7 @@ class TestJobRequest:
         )
         assert request.to_primitive() == job_request_payload
 
-    def test_to_primitive_with_ssh(self, job_request_payload):
+    def test_to_primitive_with_ssh(self, job_request_payload: Dict[str, Any]) -> None:
         job_request_payload["container"]["ssh_server"] = {"port": 678}
 
         container = Container(
@@ -763,7 +818,7 @@ class TestJobRequest:
         )
         assert request.to_primitive() == job_request_payload
 
-    def test_from_primitive(self, job_request_payload):
+    def test_from_primitive(self, job_request_payload: Dict[str, Any]) -> None:
         request = JobRequest.from_primitive(job_request_payload)
         assert request.job_id == "testjob"
         assert request.description == "Description of the testjob"
@@ -781,7 +836,7 @@ class TestJobRequest:
         )
         assert request.container == expected_container
 
-    def test_from_primitive_with_ssh(self, job_request_payload):
+    def test_from_primitive_with_ssh(self, job_request_payload: Dict[str, Any]) -> None:
         job_request_payload["container"]["ssh_server"] = {"port": 678}
         request = JobRequest.from_primitive(job_request_payload)
         assert request.job_id == "testjob"
@@ -801,7 +856,9 @@ class TestJobRequest:
         )
         assert request.container == expected_container
 
-    def test_from_primitive_with_shm(self, job_request_payload_with_shm):
+    def test_from_primitive_with_shm(
+        self, job_request_payload_with_shm: Dict[str, Any]
+    ) -> None:
         request = JobRequest.from_primitive(job_request_payload_with_shm)
         assert request.job_id == "testjob"
         assert request.description == "Description of the testjob"
@@ -819,39 +876,43 @@ class TestJobRequest:
         )
         assert request.container == expected_container
 
-    def test_to_and_from_primitive(self, job_request_payload):
+    def test_to_and_from_primitive(self, job_request_payload: Dict[str, Any]) -> None:
         actual = JobRequest.to_primitive(JobRequest.from_primitive(job_request_payload))
         assert actual == job_request_payload
 
-    def test_to_and_from_primitive_with_shm(self, job_request_payload_with_shm):
+    def test_to_and_from_primitive_with_shm(
+        self, job_request_payload_with_shm: Dict[str, Any]
+    ) -> None:
         actual = JobRequest.to_primitive(
             JobRequest.from_primitive(job_request_payload_with_shm)
         )
         assert actual == job_request_payload_with_shm
 
-    def test_to_and_from_primitive_with_ssh(self, job_request_payload):
+    def test_to_and_from_primitive_with_ssh(
+        self, job_request_payload: Dict[str, Any]
+    ) -> None:
         job_request_payload["container"]["ssh_server"] = {"port": 678}
         actual = JobRequest.to_primitive(JobRequest.from_primitive(job_request_payload))
         assert actual == job_request_payload
 
 
 class TestContainerHTTPServer:
-    def test_from_primitive(self):
+    def test_from_primitive(self) -> None:
         payload = {"port": 1234}
         server = ContainerHTTPServer.from_primitive(payload)
         assert server == ContainerHTTPServer(port=1234)
 
-    def test_from_primitive_health_check_path(self):
+    def test_from_primitive_health_check_path(self) -> None:
         payload = {"port": 1234, "health_check_path": "/path"}
         server = ContainerHTTPServer.from_primitive(payload)
         assert server == ContainerHTTPServer(port=1234, health_check_path="/path")
 
-    def test_from_primitive_requires_auth(self):
+    def test_from_primitive_requires_auth(self) -> None:
         payload = {"port": 1234, "requires_auth": True}
         server = ContainerHTTPServer.from_primitive(payload)
         assert server == ContainerHTTPServer(port=1234, requires_auth=True)
 
-    def test_to_primitive(self):
+    def test_to_primitive(self) -> None:
         server = ContainerHTTPServer(port=1234)
         assert server.to_primitive() == {
             "port": 1234,
@@ -859,7 +920,7 @@ class TestContainerHTTPServer:
             "requires_auth": False,
         }
 
-    def test_to_primitive_health_check_path(self):
+    def test_to_primitive_health_check_path(self) -> None:
         server = ContainerHTTPServer(port=1234, health_check_path="/path")
         assert server.to_primitive() == {
             "port": 1234,
@@ -869,18 +930,18 @@ class TestContainerHTTPServer:
 
 
 class TestContainerSSHServer:
-    def test_from_primitive(self):
+    def test_from_primitive(self) -> None:
         payload = {"port": 1234}
         server = ContainerSSHServer.from_primitive(payload)
         assert server == ContainerSSHServer(port=1234)
 
-    def test_to_primitive(self):
+    def test_to_primitive(self) -> None:
         server = ContainerSSHServer(port=1234)
         assert server.to_primitive() == {"port": 1234}
 
 
 class TestJobStatusItem:
-    def test_from_primitive(self):
+    def test_from_primitive(self) -> None:
         transition_time = datetime.now(timezone.utc)
         payload = {
             "status": "succeeded",
@@ -895,7 +956,7 @@ class TestJobStatusItem:
         assert item.reason == "test reason"
         assert item.description == "test description"
 
-    def test_to_primitive(self):
+    def test_to_primitive(self) -> None:
         item = JobStatusItem(
             status=JobStatus.SUCCEEDED, transition_time=datetime.now(timezone.utc)
         )
@@ -906,12 +967,12 @@ class TestJobStatusItem:
             "description": None,
         }
 
-    def test_eq_defaults(self):
+    def test_eq_defaults(self) -> None:
         old_item = JobStatusItem.create(JobStatus.RUNNING)
         new_item = JobStatusItem.create(JobStatus.RUNNING)
         assert old_item == new_item
 
-    def test_eq_different_times(self):
+    def test_eq_different_times(self) -> None:
         old_item = JobStatusItem.create(
             JobStatus.RUNNING, transition_time=datetime.now(timezone.utc)
         )
@@ -921,14 +982,14 @@ class TestJobStatusItem:
         )
         assert old_item == new_item
 
-    def test_not_eq(self):
+    def test_not_eq(self) -> None:
         old_item = JobStatusItem.create(JobStatus.RUNNING)
         new_item = JobStatusItem.create(JobStatus.RUNNING, reason="Whatever")
         assert old_item != new_item
 
 
 class TestJobStatusHistory:
-    def test_single_pending(self):
+    def test_single_pending(self) -> None:
         first_item = JobStatusItem.create(JobStatus.PENDING)
         items = [first_item]
         history = JobStatusHistory(items=items)
@@ -944,7 +1005,7 @@ class TestJobStatusHistory:
         assert not history.finished_at
         assert not history.finished_at_str
 
-    def test_single_failed(self):
+    def test_single_failed(self) -> None:
         first_item = JobStatusItem.create(JobStatus.FAILED)
         items = [first_item]
         history = JobStatusHistory(items=items)
@@ -956,7 +1017,7 @@ class TestJobStatusHistory:
         assert history.is_finished
         assert history.finished_at == first_item.transition_time
 
-    def test_full_cycle(self):
+    def test_full_cycle(self) -> None:
         pending_item = JobStatusItem.create(JobStatus.PENDING)
         running_item = JobStatusItem.create(JobStatus.RUNNING)
         finished_item = JobStatusItem.create(JobStatus.SUCCEEDED)
@@ -974,7 +1035,7 @@ class TestJobStatusHistory:
         assert history.finished_at == finished_item.transition_time
         assert history.finished_at_str == (finished_item.transition_time.isoformat())
 
-    def test_current_update(self):
+    def test_current_update(self) -> None:
         pending_item = JobStatusItem.create(JobStatus.PENDING)
         running_item = JobStatusItem.create(JobStatus.RUNNING)
 
@@ -987,7 +1048,7 @@ class TestJobStatusHistory:
         assert history.current == running_item
         assert history.is_running
 
-    def test_current_discard_update(self):
+    def test_current_discard_update(self) -> None:
         pending_item = JobStatusItem.create(JobStatus.PENDING)
         new_pending_item = JobStatusItem.create(
             JobStatus.PENDING,
@@ -1012,14 +1073,14 @@ class TestAggregatedRunTime:
             Quota(total_gpu_run_time_minutes=10, total_non_gpu_run_time_minutes=10),
         ],
     )
-    def test_from_quota_initialized(self, quota):
+    def test_from_quota_initialized(self, quota: Quota) -> None:
         run_time = AggregatedRunTime.from_quota(quota)
         assert run_time == AggregatedRunTime(
             total_gpu_run_time_delta=quota.total_gpu_run_time_delta,
             total_non_gpu_run_time_delta=quota.total_non_gpu_run_time_delta,
         )
 
-    def test_from_quota_non_initialized(self):
+    def test_from_quota_non_initialized(self) -> None:
         quota = Quota(
             total_gpu_run_time_minutes=None, total_non_gpu_run_time_minutes=None
         )
@@ -1067,11 +1128,11 @@ class TestUser:
             ),
         ],
     )
-    def test_user_has_quota_true(self, quota):
+    def test_user_has_quota_true(self, quota: Quota) -> None:
         user = User(name="name", token="token", quota=quota)
         assert user.has_quota()
 
-    def test_user_has_quota_false(self):
+    def test_user_has_quota_false(self) -> None:
         quota = AggregatedRunTime(
             total_gpu_run_time_delta=self.q_max, total_non_gpu_run_time_delta=self.q_max
         )

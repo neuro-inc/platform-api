@@ -1,7 +1,7 @@
 import asyncio
 from datetime import timedelta
 from pathlib import PurePath
-from typing import List, Optional
+from typing import Callable, Iterator, List, Optional
 
 import pytest
 
@@ -28,7 +28,7 @@ from platform_api.resource import ResourcePoolType
 
 
 class MockOrchestrator(Orchestrator):
-    def __init__(self, config):
+    def __init__(self, config: KubeConfig) -> None:
         self._config = config
         self._mock_status_to_return = JobStatus.PENDING
         self._mock_reason_to_return = "Initializing"
@@ -37,14 +37,14 @@ class MockOrchestrator(Orchestrator):
         self._successfully_deleted_jobs: List[Job] = []
 
     @property
-    def config(self):
+    def config(self) -> KubeConfig:
         return self._config
 
     @config.setter
-    def config(self, config):
+    def config(self, config: KubeConfig) -> None:
         self._config = config
 
-    async def start_job(self, job: Job, token: str):
+    async def start_job(self, job: Job, token: str) -> JobStatus:
         job.status = JobStatus.PENDING
         return JobStatus.PENDING
 
@@ -61,13 +61,13 @@ class MockOrchestrator(Orchestrator):
         self._successfully_deleted_jobs.append(job)
         return JobStatus.SUCCEEDED
 
-    def update_status_to_return(self, new_status: JobStatus):
+    def update_status_to_return(self, new_status: JobStatus) -> None:
         self._mock_status_to_return = new_status
 
-    def update_reason_to_return(self, new_reason: str):
+    def update_reason_to_return(self, new_reason: str) -> None:
         self._mock_reason_to_return = new_reason
 
-    def get_successfully_deleted_jobs(self):
+    def get_successfully_deleted_jobs(self) -> List[Job]:
         return self._successfully_deleted_jobs
 
     async def get_job_log_reader(self, job: Job) -> LogReader:
@@ -90,17 +90,17 @@ class MockJobsStorage(InMemoryJobsStorage):
         await super().set_job(job)
 
     @property
-    def orchestrator_config(self):
+    def orchestrator_config(self) -> OrchestratorConfig:
         return self._orchestrator_config
 
     @orchestrator_config.setter
-    def orchestrator_config(self, config):
+    def orchestrator_config(self, config: KubeConfig) -> None:
         self._orchestrator_config = config
 
 
 @pytest.fixture
-def job_request_factory():
-    def factory():
+def job_request_factory() -> Callable[[], JobRequest]:
+    def factory() -> JobRequest:
         return JobRequest.create(
             Container(
                 image="testimage", resources=ContainerResources(cpu=1, memory_mb=128)
@@ -111,12 +111,12 @@ def job_request_factory():
 
 
 @pytest.fixture(scope="function")
-def mock_job_request(job_request_factory):
+def mock_job_request(job_request_factory: Callable[[], JobRequest]) -> JobRequest:
     return job_request_factory()
 
 
 @pytest.fixture(scope="function")
-def mock_orchestrator():
+def mock_orchestrator() -> MockOrchestrator:
     storage_config = StorageConfig(host_mount_path=PurePath("/tmp"))
     registry_config = RegistryConfig()
     config = KubeConfig(
@@ -135,17 +135,19 @@ def mock_orchestrator():
 
 
 @pytest.fixture(scope="function")
-def mock_jobs_storage(mock_orchestrator):
+def mock_jobs_storage(mock_orchestrator: MockOrchestrator) -> MockJobsStorage:
     return MockJobsStorage(mock_orchestrator.config)
 
 
 @pytest.fixture(scope="function")
-def jobs_service(mock_orchestrator, mock_jobs_storage):
+def jobs_service(
+    mock_orchestrator: MockOrchestrator, mock_jobs_storage: MockJobsStorage
+) -> JobsService:
     return JobsService(orchestrator=mock_orchestrator, jobs_storage=mock_jobs_storage)
 
 
 @pytest.fixture(scope="session")
-def event_loop():
+def event_loop() -> Iterator[asyncio.AbstractEventLoop]:
     loop = asyncio.get_event_loop()
     yield loop
     loop.close()

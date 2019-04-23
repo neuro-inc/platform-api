@@ -1,9 +1,12 @@
 import asyncio
 import random
 import time
+from typing import AsyncIterator
 
 import aiohttp
 import pytest
+
+from .conftest import PlatformConfig, SSHAuthConfig, _User
 
 
 MIN_PORT = 49152
@@ -12,7 +15,9 @@ LOCALHOST = "127.0.0.1"
 
 
 @pytest.fixture
-async def alice_job(api_config, alice, client):
+async def alice_job(
+    api_config: PlatformConfig, alice: _User, client: aiohttp.ClientSession
+) -> AsyncIterator[str]:
     job_request_payload = {
         "container": {"image": "nginx", "resources": {"cpu": 0.1, "memory_mb": 16}}
     }
@@ -23,6 +28,7 @@ async def alice_job(api_config, alice, client):
     payload = await response.json()
     assert response.status == 202
     job_id = payload["id"]
+    assert isinstance(job_id, str)
     job_url = f"{api_config.jobs_url}/{job_id}"
 
     for i in range(30):
@@ -45,7 +51,13 @@ async def alice_job(api_config, alice, client):
 
 @pytest.mark.usefixtures("api")
 @pytest.mark.asyncio
-async def test_port_forward(ssh_auth_config, api_config, alice, alice_job, client):
+async def test_port_forward(
+    ssh_auth_config: SSHAuthConfig,
+    api_config: PlatformConfig,
+    alice: _User,
+    alice_job: str,
+    client: aiohttp.ClientSession,
+) -> None:
     retries = 5
     for i in range(retries):
         port = random.randint(MIN_PORT, MAX_PORT)
@@ -85,7 +97,12 @@ async def test_port_forward(ssh_auth_config, api_config, alice, alice_job, clien
 
 @pytest.mark.usefixtures("api")
 @pytest.mark.asyncio
-async def test_wrong_user(ssh_auth_config, api_config, bob, alice_job):
+async def test_wrong_user(
+    ssh_auth_config: SSHAuthConfig,
+    api_config: PlatformConfig,
+    bob: _User,
+    alice_job: str,
+) -> None:
     retries = 5
     for i in range(retries):
         port = random.randint(MIN_PORT, MAX_PORT)
@@ -122,7 +139,9 @@ async def test_wrong_user(ssh_auth_config, api_config, bob, alice_job):
 
 @pytest.mark.usefixtures("api")
 @pytest.mark.asyncio
-async def test_incorrect_token(ssh_auth_config, api_config, alice_job):
+async def test_incorrect_token(
+    ssh_auth_config: SSHAuthConfig, api_config: PlatformConfig, alice_job: str
+) -> None:
     retries = 5
     for i in range(retries):
         port = random.randint(MIN_PORT, MAX_PORT)
@@ -160,8 +179,12 @@ async def test_incorrect_token(ssh_auth_config, api_config, alice_job):
 @pytest.mark.usefixtures("api")
 @pytest.mark.asyncio
 async def test_port_forward_nonexposed(
-    ssh_auth_config, api_config, alice, alice_job, client
-):
+    ssh_auth_config: SSHAuthConfig,
+    api_config: PlatformConfig,
+    alice: _User,
+    alice_job: str,
+    client: aiohttp.ClientSession,
+) -> None:
     retries = 5
     for i in range(retries):
         port = random.randint(MIN_PORT, MAX_PORT)

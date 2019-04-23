@@ -3,6 +3,7 @@ import time
 from typing import List
 
 import pytest
+from aioelasticsearch import Elasticsearch
 
 from platform_api.api import create_elasticsearch_client
 from platform_api.elasticsearch import ElasticsearchConfig
@@ -30,14 +31,14 @@ def wait_for_service(service_name: str) -> List[str]:  # type: ignore
 
 
 @pytest.fixture(scope="session")
-def es_hosts_logging():
+def es_hosts_logging() -> List[str]:
     """ Waits for elasticsearch logging service and returns its URLs.
     """
     return wait_for_service("elasticsearch-logging")
 
 
 @pytest.fixture(scope="session")
-def es_hosts_auth(es_hosts_logging):
+def es_hosts_auth(es_hosts_logging: List[str]) -> List[str]:
     """ Waits for elasticsearch-auth proxy service and returns its URLs. This fixture
     depends on es_hosts_logging so that the service elasticsearch-logging is up.
     """
@@ -45,14 +46,14 @@ def es_hosts_auth(es_hosts_logging):
 
 
 @pytest.fixture
-def es_config(es_hosts_logging):
+def es_config(es_hosts_logging: List[str]) -> ElasticsearchConfig:
     """ Config to access Elasticsearch directly, bypassing the elasticsearch-auth proxy.
     """
     return ElasticsearchConfig(hosts=es_hosts_logging)
 
 
 @pytest.fixture
-def es_config_with_auth(es_hosts_auth):
+def es_config_with_auth(es_hosts_auth: List[str]) -> ElasticsearchConfig:
     """ Config to access Elasticsearch directly via the elasticsearch-auth proxy.
     """
     # NOTE: these credentials are in `tests/k8s/elasticsearch-auth/nginx/auth.htpasswd`
@@ -62,7 +63,7 @@ def es_config_with_auth(es_hosts_auth):
 
 
 @pytest.fixture
-async def es_client(es_config):
+async def es_client(es_config: ElasticsearchConfig) -> Elasticsearch:
     """ Elasticsearch client that goes directly to elasticsearch-logging service
     without any authentication.
     """
@@ -71,7 +72,9 @@ async def es_client(es_config):
 
 
 @pytest.fixture
-async def es_client_with_auth(es_config_with_auth):
+async def es_client_with_auth(
+    es_config_with_auth: ElasticsearchConfig
+) -> Elasticsearch:
     """ Elasticsearch client that goes through elasticsearch-auth proxy.
     """
     async with create_elasticsearch_client(es_config_with_auth) as es_client_with_auth:

@@ -1,7 +1,7 @@
 import asyncio
 import logging
 from abc import ABC, abstractmethod
-from typing import AsyncIterator, Callable, Dict
+from typing import Any, AsyncIterator, Callable, Dict
 
 from aiorwlock import RWLock
 from async_generator import asynccontextmanager
@@ -96,7 +96,7 @@ class ClusterRegistry:
     async def __aenter__(self) -> "ClusterRegistry":
         return self
 
-    async def __aexit__(self, *args) -> None:
+    async def __aexit__(self, *args: Any) -> None:
         for name in list(self._records):
             await self.remove(name)
 

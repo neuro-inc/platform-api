@@ -112,7 +112,7 @@ class TestClusterRegistry:
                 pass
 
     @pytest.mark.asyncio
-    async def test_remove_locked(self, event_loop) -> None:
+    async def test_remove_locked(self, event_loop: asyncio.AbstractEventLoop) -> None:
         registry = ClusterRegistry(factory=_TestCluster)
         name = "test"
         config = create_cluster_config(name=name)
@@ -125,7 +125,9 @@ class TestClusterRegistry:
                     await event_loop.create_task(registry.remove(name))
 
     @pytest.mark.asyncio
-    async def test_remove_another_locked(self, event_loop) -> None:
+    async def test_remove_another_locked(
+        self, event_loop: asyncio.AbstractEventLoop
+    ) -> None:
         registry = ClusterRegistry(factory=_TestCluster)
         config = create_cluster_config(name="test1")
         anotherconfig = create_cluster_config(name="test2")
