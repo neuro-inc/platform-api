@@ -152,22 +152,6 @@ workflows:
             branches:
               only:
                 - master
-      - gke_jumphost_deploy:
-          context: org-dev
-          requires:
-            - test
-          filters:
-            branches:
-              only:
-                - master
-      - gke_ssh_deploy:
-          context: org-dev
-          requires:
-            - test
-          filters:
-            branches:
-              only:
-                - master
       - gke_ssh_auth_deploy:
           context: org-dev
           requires:
@@ -186,14 +170,6 @@ workflows:
               only:
                 - /release.*/
       - gke_deploy:
-          context: org-staging
-          requires:
-            - test
-          filters:
-            branches:
-              only:
-                - /release.*/
-      - gke_jumphost_deploy:
           context: org-staging
           requires:
             - test
@@ -221,16 +197,6 @@ workflows:
               only:
                 - /release.*/
       - gke_deploy:
-          context: org-prod
-          requires:
-            - test
-          filters:
-            branches:
-              ignore: /.*/
-            tags:
-              only:
-                - /release.*/
-      - gke_jumphost_deploy:
           context: org-prod
           requires:
             - test
