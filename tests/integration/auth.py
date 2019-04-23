@@ -100,7 +100,7 @@ async def create_auth_config(
     port = int((await container.port(8080))[0]["HostPort"])
     url = URL(f"http://{host}:{port}")
     token = create_token("compute")
-    return AuthConfig(server_endpoint_url=url, service_token=token)  # type: ignore
+    return AuthConfig(server_endpoint_url=url, service_token=token)
 
 
 @pytest.fixture
@@ -168,7 +168,7 @@ async def regular_user_factory(
         await auth_client.add_user(user, token=admin_token)
         user_token = token_factory(user.name)
         user_quota = AggregatedRunTime.from_quota(user.quota)
-        return _User(name=user.name, token=user_token, quota=user_quota)  # type: ignore
+        return _User(name=user.name, token=user_token, quota=user_quota)  # noqa
 
     return _factory
 

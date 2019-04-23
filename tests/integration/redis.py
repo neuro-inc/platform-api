@@ -67,7 +67,7 @@ async def create_redis_config(
     port = int((await container.port(6379))[0]["HostPort"])
     db = 0
     uri = f"redis://{host}:{port}/{db}"
-    return RedisConfig(uri=uri)  # type: ignore
+    return RedisConfig(uri=uri)
 
 
 async def wait_for_redis_server(

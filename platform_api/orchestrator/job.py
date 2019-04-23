@@ -66,15 +66,13 @@ class JobStatusItem:
         **kwargs: Any,
     ) -> "JobStatusItem":
         transition_time = transition_time or current_datetime_factory()
-        return cls(  # type: ignore
-            status=status, transition_time=transition_time, **kwargs
-        )
+        return cls(status=status, transition_time=transition_time, **kwargs)
 
     @classmethod
     def from_primitive(cls, payload: Dict[str, Any]) -> "JobStatusItem":
         status = JobStatus(payload["status"])
         transition_time = iso8601.parse_date(payload["transition_time"])
-        return cls(  # type: ignore
+        return cls(
             status=status,
             transition_time=transition_time,
             reason=payload.get("reason"),

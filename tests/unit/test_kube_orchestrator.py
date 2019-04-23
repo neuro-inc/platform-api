@@ -42,8 +42,8 @@ class TestVolume:
     @pytest.mark.parametrize(
         "volume",
         (
-            HostVolume("testvolume", path="/host"),  # type: ignore
-            NfsVolume("testvolume", server="1.2.3.4", path="/host"),  # type: ignore
+            HostVolume("testvolume", path=PurePath("/host")),
+            NfsVolume("testvolume", server="1.2.3.4", path=PurePath("/host")),
         ),
     )
     def test_create_mount(self, volume: Volume) -> None:
@@ -524,21 +524,19 @@ class TestPodStatus:
 
 class TestResources:
     def test_to_primitive(self) -> None:
-        resources = Resources(cpu=0.5, memory=1024)  # type: ignore
+        resources = Resources(cpu=0.5, memory=1024)
         assert resources.to_primitive() == {
             "limits": {"cpu": "500m", "memory": "1024Mi"}
         }
 
     def test_to_primitive_gpu(self) -> None:
-        resources = Resources(cpu=0.5, memory=1024, gpu=2)  # type: ignore
+        resources = Resources(cpu=0.5, memory=1024, gpu=2)
         assert resources.to_primitive() == {
             "limits": {"cpu": "500m", "memory": "1024Mi", "nvidia.com/gpu": 2}
         }
 
     def test_from_container_resources(self) -> None:
-        container_resources = ContainerResources(  # type: ignore
-            cpu=1, memory_mb=128, gpu=1
-        )
+        container_resources = ContainerResources(cpu=1, memory_mb=128, gpu=1)
         resources = Resources.from_container_resources(container_resources)
         assert resources == Resources(cpu=1, memory=128, gpu=1)
 

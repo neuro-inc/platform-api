@@ -125,14 +125,12 @@ class KubeConfig(OrchestratorConfig):
 
     def create_storage_volume(self) -> Volume:
         if self.storage.is_nfs:
-            return NfsVolume(  # type: ignore
+            return NfsVolume(  # type: ignore # noqa
                 name=self.storage_volume_name,
                 server=self.storage.nfs_server,
                 path=self.storage.nfs_export_path,
             )
-        return HostVolume(  # type: ignore
-            name=self.storage_volume_name, path=self.storage_mount_path
-        )
+        return HostVolume(name=self.storage_volume_name, path=self.storage_mount_path)
 
 
 def convert_pod_status_to_job_status(pod_status: PodStatus) -> JobStatusItem:
