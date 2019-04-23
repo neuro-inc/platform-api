@@ -4,21 +4,24 @@ from typing import Dict, List, Optional
 
 from yarl import URL
 
+from .cluster_config import (
+    ClusterConfig,
+    LoggingConfig,
+    RegistryConfig,
+    StorageConfig,
+    StorageType,
+)
 from .config import (
     AuthConfig,
     Config,
     DatabaseConfig,
     IngressConfig,
-    LoggingConfig,
     OAuthConfig,
     PlatformConfig,
-    RegistryConfig,
     ServerConfig,
     SSHAuthConfig,
     SSHConfig,
     SSHServerConfig,
-    StorageConfig,
-    StorageType,
 )
 from .elasticsearch import ElasticsearchConfig
 from .orchestrator import KubeConfig
@@ -39,23 +42,25 @@ class EnvironConfigFactory:
 
     def create(self) -> Config:
         env_prefix = self._environ.get("NP_ENV_PREFIX", Config.env_prefix)
-        storage = self.create_storage()
-        database = self.create_database()
         auth = self.create_auth()
-        registry = self.create_registry()
-        oauth = self.try_create_oauth()
-        ingress = self.create_ingress()
         return Config(
             server=self.create_server(),
-            storage=storage,
-            orchestrator=self.create_orchestrator(storage, registry, auth),
-            database=database,
+            cluster=self.create_cluster(orphaned_job_owner=auth.service_name),
+            database=self.create_database(),
             auth=auth,
-            oauth=oauth,
-            logging=self.create_logging(),
-            ingress=ingress,
-            registry=registry,
+            oauth=self.try_create_oauth(),
             env_prefix=env_prefix,
+        )
+
+    def create_cluster(self, *, orphaned_job_owner: str) -> ClusterConfig:
+        orchestrator = self.create_orchestrator(
+            self.create_storage(), self.create_registry(), orphaned_job_owner
+        )
+        return ClusterConfig(
+            name="default",
+            orchestrator=orchestrator,
+            ingress=self.create_ingress(),
+            logging=self.create_logging(),
         )
 
     def create_ssh(self) -> SSHConfig:
@@ -67,7 +72,7 @@ class EnvironConfigFactory:
         return SSHConfig(
             server=self.create_ssh_server(),
             storage=storage,
-            orchestrator=self.create_orchestrator(storage, registry, auth),
+            orchestrator=self.create_orchestrator(storage, registry, auth.service_name),
             database=database,
             auth=auth,
             registry=registry,
@@ -133,7 +138,7 @@ class EnvironConfigFactory:
         )
 
     def create_orchestrator(
-        self, storage: StorageConfig, registry: RegistryConfig, auth: AuthConfig
+        self, storage: StorageConfig, registry: RegistryConfig, orphaned_job_owner: str
     ) -> KubeConfig:
         endpoint_url = self._environ["NP_K8S_API_URL"]
         auth_type = KubeClientAuthType(
@@ -191,7 +196,7 @@ class EnvironConfigFactory:
             resource_pool_types=pool_types,
             node_label_gpu=self._environ.get("NP_K8S_NODE_LABEL_GPU"),
             node_label_preemptible=self._environ.get("NP_K8S_NODE_LABEL_PREEMPTIBLE"),
-            orphaned_job_owner=auth.service_name,
+            orphaned_job_owner=orphaned_job_owner,
         )
 
     def create_resource_pool_types(self) -> List[ResourcePoolType]:

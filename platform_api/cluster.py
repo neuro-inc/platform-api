@@ -1,12 +1,12 @@
 import asyncio
 import logging
 from abc import ABC, abstractmethod
-from dataclasses import dataclass
 from typing import Any, AsyncIterator, Callable, Dict
 
 from aiorwlock import RWLock
 from async_generator import asynccontextmanager
 
+from .cluster_config import ClusterConfig
 from .orchestrator import Orchestrator
 
 
@@ -21,11 +21,6 @@ class ClusterNotFound(ClusterException):
     @classmethod
     def create(cls, name: str) -> "ClusterNotFound":
         return cls(f"Cluster '{name}' not found")
-
-
-@dataclass(frozen=True)
-class ClusterConfig:
-    name: str
 
 
 class Cluster(ABC):

@@ -31,6 +31,12 @@ class _TestCluster(Cluster):
         pass
 
 
+def create_cluster_config(name: str) -> ClusterConfig:
+    return ClusterConfig(  # type: ignore
+        name=name, orchestrator=None, logging=None, ingress=None
+    )
+
+
 class TestClusterRegistry:
     @pytest.mark.asyncio
     async def test_get_not_found(self) -> None:
@@ -43,7 +49,7 @@ class TestClusterRegistry:
     @pytest.mark.asyncio
     async def test_add(self) -> None:
         registry = ClusterRegistry(factory=_TestCluster)
-        config = ClusterConfig(name="test")
+        config = create_cluster_config(name="test")
 
         await registry.add(config)
 
@@ -54,7 +60,7 @@ class TestClusterRegistry:
     async def test_add_existing(self) -> None:
         registry = ClusterRegistry(factory=_TestCluster)
         name = "test"
-        config = ClusterConfig(name=name)
+        config = create_cluster_config(name=name)
 
         with pytest.raises(ClusterNotFound, match=f"Cluster '{name}' not found"):
             async with registry.get(name):
@@ -88,7 +94,7 @@ class TestClusterRegistry:
     async def test_remove(self) -> None:
         registry = ClusterRegistry(factory=_TestCluster)
         name = "test"
-        config = ClusterConfig(name=name)
+        config = create_cluster_config(name=name)
 
         with pytest.raises(ClusterNotFound, match=f"Cluster '{name}' not found"):
             async with registry.get(name):
@@ -109,7 +115,7 @@ class TestClusterRegistry:
     async def test_remove_locked(self, event_loop: asyncio.AbstractEventLoop) -> None:
         registry = ClusterRegistry(factory=_TestCluster)
         name = "test"
-        config = ClusterConfig(name=name)
+        config = create_cluster_config(name=name)
 
         await registry.add(config)
 
@@ -123,8 +129,8 @@ class TestClusterRegistry:
         self, event_loop: asyncio.AbstractEventLoop
     ) -> None:
         registry = ClusterRegistry(factory=_TestCluster)
-        config = ClusterConfig(name="test1")
-        anotherconfig = ClusterConfig(name="test2")
+        config = create_cluster_config(name="test1")
+        anotherconfig = create_cluster_config(name="test2")
 
         await registry.add(config)
         await registry.add(anotherconfig)
@@ -149,7 +155,7 @@ class TestClusterRegistry:
 
         registry = ClusterRegistry(factory=_NotClosingCluster)
         name = "test"
-        config = ClusterConfig(name=name)
+        config = create_cluster_config(name=name)
 
         with pytest.raises(ClusterNotFound, match=f"Cluster '{name}' not found"):
             async with registry.get(name):
@@ -164,7 +170,7 @@ class TestClusterRegistry:
     async def test_cleanup(self) -> None:
         registry = ClusterRegistry(factory=_TestCluster)
         name = "test"
-        config = ClusterConfig(name=name)
+        config = create_cluster_config(name=name)
 
         async with registry:
             await registry.add(config)

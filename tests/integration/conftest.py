@@ -18,14 +18,28 @@ from urllib.parse import urlsplit
 import pytest
 from aioelasticsearch import Elasticsearch
 from async_timeout import timeout
+from yarl import URL
 
-from platform_api.config import RegistryConfig, StorageConfig
+from platform_api.config import (
+    AuthConfig,
+    ClusterConfig,
+    Config,
+    DatabaseConfig,
+    IngressConfig,
+    LoggingConfig,
+    OAuthConfig,
+    RegistryConfig,
+    ServerConfig,
+    StorageConfig,
+)
+from platform_api.elasticsearch import ElasticsearchConfig
 from platform_api.orchestrator.kube_client import JobNotFoundException
 from platform_api.orchestrator.kube_orchestrator import (
     KubeClient,
     KubeConfig,
     KubeOrchestrator,
 )
+from platform_api.redis import RedisConfig
 from platform_api.resource import GPUModel, ResourcePoolType
 
 
@@ -371,3 +385,48 @@ async def kube_node_preemptible(
     await kube_client.create_node(node_name, labels=labels, taints=taints)
 
     yield node_name
+
+
+@pytest.fixture
+def config_factory(
+    kube_config: KubeConfig,
+    redis_config: RedisConfig,
+    auth_config: AuthConfig,
+    es_config: ElasticsearchConfig,
+) -> Callable[..., Config]:
+    def _factory(**kwargs: Any) -> Config:
+        server_config = ServerConfig()
+        database_config = DatabaseConfig(redis=redis_config)  # type: ignore
+        logging_config = LoggingConfig(elasticsearch=es_config)
+        ingress_config = IngressConfig(
+            storage_url=URL("https://neu.ro/api/v1/storage"),
+            users_url=URL("https://neu.ro/api/v1/users"),
+            monitoring_url=URL("https://neu.ro/api/v1/monitoring"),
+        )
+        cluster_config = ClusterConfig(
+            name="default",
+            orchestrator=kube_config,
+            logging=logging_config,
+            ingress=ingress_config,
+        )
+        return Config(
+            server=server_config,
+            cluster=cluster_config,
+            database=database_config,
+            auth=auth_config,
+            **kwargs,
+        )
+
+    return _factory
+
+
+@pytest.fixture
+def config(config_factory: Callable[..., Config]) -> Config:
+    return config_factory()
+
+
+@pytest.fixture
+def config_with_oauth(
+    config_factory: Callable[..., Config], oauth_config_dev: Optional[OAuthConfig]
+) -> Config:
+    return config_factory(oauth=oauth_config_dev)

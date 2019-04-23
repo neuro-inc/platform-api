@@ -1,6 +1,6 @@
 import asyncio
 import io
-from pathlib import Path, PurePath
+from pathlib import Path
 from textwrap import dedent
 from typing import AsyncIterator, Awaitable, Callable, NamedTuple, Optional, cast
 
@@ -8,18 +8,8 @@ import aiodocker.utils
 import asyncssh
 import pytest
 from aioelasticsearch import Elasticsearch
-from yarl import URL
 
-from platform_api.config import (
-    AuthConfig,
-    Config,
-    DatabaseConfig,
-    IngressConfig,
-    LoggingConfig,
-    ServerConfig,
-    StorageConfig,
-)
-from platform_api.elasticsearch import ElasticsearchConfig
+from platform_api.config import Config
 from platform_api.orchestrator.job import JobRequest
 from platform_api.orchestrator.job_request import Container, ContainerResources
 from platform_api.orchestrator.kube_orchestrator import (
@@ -28,7 +18,6 @@ from platform_api.orchestrator.kube_orchestrator import (
     KubeOrchestrator,
     PodDescriptor,
 )
-from platform_api.redis import RedisConfig
 from platform_api.ssh.server import SSHServer
 
 
@@ -54,33 +43,6 @@ class ApiConfig(NamedTuple):
     @property
     def ping_url(self) -> str:
         return self.endpoint + "/ping"
-
-
-@pytest.fixture
-def config(
-    kube_config: KubeConfig,
-    redis_config: RedisConfig,
-    auth_config: AuthConfig,
-    es_config: ElasticsearchConfig,
-) -> Config:
-    server_config = ServerConfig()
-    storage_config = StorageConfig(host_mount_path=PurePath("/tmp"))  # type: ignore
-    database_config = DatabaseConfig(redis=redis_config)  # type: ignore
-    logging_config = LoggingConfig(elasticsearch=es_config)
-    ingress_config = IngressConfig(
-        storage_url=URL("https://neu.ro/api/v1/storage"),
-        users_url=URL("https://neu.ro/api/v1/users"),
-        monitoring_url=URL("https://neu.ro/api/v1/monitoring"),
-    )
-    return Config(
-        server=server_config,
-        storage=storage_config,
-        orchestrator=kube_config,
-        database=database_config,
-        auth=auth_config,
-        logging=logging_config,
-        ingress=ingress_config,
-    )
 
 
 @pytest.fixture

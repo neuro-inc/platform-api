@@ -1,7 +1,6 @@
 import asyncio
 import json
 import time
-from pathlib import PurePath
 from typing import (
     Any,
     AsyncContextManager,
@@ -12,7 +11,6 @@ from typing import (
     Iterator,
     List,
     NamedTuple,
-    Optional,
     Tuple,
 )
 from unittest import mock
@@ -34,22 +32,9 @@ from aiohttp.web import (
 from async_generator import asynccontextmanager
 from neuro_auth_client import Permission
 from neuro_auth_client.client import Quota
-from yarl import URL
 
 from platform_api.api import create_app
-from platform_api.config import (
-    AuthConfig,
-    Config,
-    DatabaseConfig,
-    ElasticsearchConfig,
-    IngressConfig,
-    LoggingConfig,
-    OAuthConfig,
-    OrchestratorConfig,
-    RedisConfig,
-    ServerConfig,
-    StorageConfig,
-)
+from platform_api.config import Config
 
 from .auth import _AuthClient, _User
 from .conftest import TestKubeClient
@@ -81,49 +66,6 @@ class ApiConfig(NamedTuple):
     @property
     def config_url(self) -> str:
         return self.endpoint + "/config"
-
-
-@pytest.fixture
-def config_factory(
-    kube_config: OrchestratorConfig,
-    redis_config: Optional[RedisConfig],
-    auth_config: AuthConfig,
-    es_config: ElasticsearchConfig,
-) -> Callable[..., Config]:
-    def _factory(**kwargs: Any) -> Config:
-        server_config = ServerConfig()
-        storage_config = StorageConfig(host_mount_path=PurePath("/tmp"))  # type: ignore
-        database_config = DatabaseConfig(redis=redis_config)  # type: ignore
-        logging_config = LoggingConfig(elasticsearch=es_config)
-        ingress_config = IngressConfig(
-            storage_url=URL("https://neu.ro/api/v1/storage"),
-            users_url=URL("https://neu.ro/api/v1/users"),
-            monitoring_url=URL("https://neu.ro/api/v1/monitoring"),
-        )
-        return Config(
-            server=server_config,
-            storage=storage_config,
-            orchestrator=kube_config,
-            database=database_config,
-            auth=auth_config,
-            logging=logging_config,
-            ingress=ingress_config,
-            **kwargs,
-        )
-
-    return _factory
-
-
-@pytest.fixture
-def config(config_factory: Callable[[], Config]) -> Config:
-    return config_factory()
-
-
-@pytest.fixture
-def config_with_oauth(
-    config_factory: Callable[..., Config], oauth_config_dev: Optional[OAuthConfig]
-) -> Config:
-    return config_factory(oauth=oauth_config_dev)
 
 
 @pytest.fixture
