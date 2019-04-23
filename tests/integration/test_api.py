@@ -200,7 +200,7 @@ class JobsClient:
         jobs = result["jobs"]
         assert isinstance(jobs, list)
         for job in jobs:
-            assert isinstance(jobs, dict)
+            assert isinstance(job, dict)
             for key in job:
                 assert isinstance(key, str)
         return jobs
