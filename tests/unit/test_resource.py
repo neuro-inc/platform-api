@@ -1,5 +1,3 @@
-from typing import Any
-
 import pytest
 
 from platform_api.orchestrator.job_request import ContainerResources
@@ -20,7 +18,7 @@ class TestContainerResourcesFit:
             ResourcePoolType(gpu=1, gpu_model=GPUModel(id="gpumodel")),
         ),
     )
-    def test_container_requires_no_gpu(self, pool_type: Any) -> None:
+    def test_container_requires_no_gpu(self, pool_type: ResourcePoolType) -> None:
         resources = ContainerResources(cpu=1, memory_mb=32)
         assert resources.check_fit_into_pool_type(pool_type)
 

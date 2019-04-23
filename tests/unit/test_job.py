@@ -107,7 +107,7 @@ class TestContainerVolumeFactory:
             )
 
     @pytest.mark.parametrize("uri", ("storage:///", "storage://"))
-    def test_invalid_storage_uri_path(self, uri: Any) -> None:
+    def test_invalid_storage_uri_path(self, uri: str) -> None:
         volume = ContainerVolumeFactory(
             uri, src_mount_path=PurePath("/host"), dst_mount_path=PurePath("/container")
         ).create()
@@ -124,7 +124,7 @@ class TestContainerVolumeFactory:
             "storage://path/to/dir",
         ),
     )
-    def test_create(self, uri: Any) -> None:
+    def test_create(self, uri: str) -> None:
         volume = ContainerVolume.create(
             uri,
             src_mount_path=PurePath("/host"),
@@ -136,7 +136,7 @@ class TestContainerVolumeFactory:
         assert volume.read_only
 
     @pytest.mark.parametrize("uri", ("storage:///../to/dir", "storage://path/../dir"))
-    def test_create_invalid_path(self, uri: Any) -> None:
+    def test_create_invalid_path(self, uri: str) -> None:
         with pytest.raises(ValueError, match="Invalid path"):
             ContainerVolumeFactory(
                 uri,
@@ -1073,7 +1073,7 @@ class TestAggregatedRunTime:
             Quota(total_gpu_run_time_minutes=10, total_non_gpu_run_time_minutes=10),
         ],
     )
-    def test_from_quota_initialized(self, quota: Any) -> None:
+    def test_from_quota_initialized(self, quota: Quota) -> None:
         run_time = AggregatedRunTime.from_quota(quota)
         assert run_time == AggregatedRunTime(
             total_gpu_run_time_delta=quota.total_gpu_run_time_delta,
@@ -1128,7 +1128,7 @@ class TestUser:
             ),
         ],
     )
-    def test_user_has_quota_true(self, quota: Any) -> None:
+    def test_user_has_quota_true(self, quota: Quota) -> None:
         user = User(name="name", token="token", quota=quota)
         assert user.has_quota()
 

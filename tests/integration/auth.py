@@ -2,7 +2,6 @@ import asyncio
 import uuid
 from dataclasses import asdict, dataclass
 from typing import (
-    Any,
     AsyncGenerator,
     AsyncIterator,
     Awaitable,
@@ -37,7 +36,7 @@ def auth_server_image_name() -> str:
 
 @pytest.fixture(scope="session")
 async def auth_server(
-    docker: aiodocker.Docker, reuse_docker: bool, auth_server_image_name: Any
+    docker: aiodocker.Docker, reuse_docker: bool, auth_server_image_name: str
 ) -> AsyncIterator[AuthConfig]:
     image_name = "gcr.io/light-reality-205619/platformauthapi:latest"
     container_name = "auth_server"

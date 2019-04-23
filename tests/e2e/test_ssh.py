@@ -1,6 +1,6 @@
 import asyncio
 import time
-from typing import Any, AsyncIterator
+from typing import AsyncIterator
 
 import aiohttp
 import pytest
@@ -11,7 +11,7 @@ from .conftest import PlatformConfig, SSHAuthConfig, _User
 @pytest.fixture
 async def alice_job(
     api_config: PlatformConfig, alice: _User, client: aiohttp.ClientSession
-) -> AsyncIterator[Any]:
+) -> AsyncIterator[str]:
     job_request_payload = {
         "container": {
             "image": "ubuntu",
@@ -25,6 +25,7 @@ async def alice_job(
     )
     payload = await response.json()
     job_id = payload["id"]
+    assert isinstance(job_id, str)
     job_url = f"{api_config.jobs_url}/{job_id}"
 
     for i in range(30):
@@ -50,7 +51,7 @@ async def test_simple_command(
     ssh_auth_config: SSHAuthConfig,
     api_config: PlatformConfig,
     alice: _User,
-    alice_job: Any,
+    alice_job: str,
 ) -> None:
     command = [
         "ssh",
@@ -72,7 +73,7 @@ async def test_wrong_method(
     ssh_auth_config: SSHAuthConfig,
     api_config: PlatformConfig,
     alice: _User,
-    alice_job: Any,
+    alice_job: str,
 ) -> None:
     command = [
         "ssh",
@@ -94,7 +95,7 @@ async def test_wrong_user(
     ssh_auth_config: SSHAuthConfig,
     api_config: PlatformConfig,
     bob: _User,
-    alice_job: Any,
+    alice_job: str,
 ) -> None:
     command = [
         "ssh",
@@ -116,7 +117,7 @@ async def test_incorrect_token(
     ssh_auth_config: SSHAuthConfig,
     api_config: PlatformConfig,
     bob: _User,
-    alice_job: Any,
+    alice_job: str,
 ) -> None:
     command = [
         "ssh",
@@ -138,7 +139,7 @@ async def test_no_payload(
     ssh_auth_config: SSHAuthConfig,
     api_config: PlatformConfig,
     bob: _User,
-    alice_job: Any,
+    alice_job: str,
 ) -> None:
     command = ["ssh", "-p", str(ssh_auth_config.port), f"nobody@{ssh_auth_config.ip}"]
     proc = await asyncio.create_subprocess_exec(*command)
@@ -151,7 +152,7 @@ async def test_incorrect_payload(
     ssh_auth_config: SSHAuthConfig,
     api_config: PlatformConfig,
     bob: _User,
-    alice_job: Any,
+    alice_job: str,
 ) -> None:
     command = [
         "ssh",
@@ -172,7 +173,7 @@ async def test_nonzero_error_code(
     ssh_auth_config: SSHAuthConfig,
     api_config: PlatformConfig,
     alice: _User,
-    alice_job: Any,
+    alice_job: str,
 ) -> None:
     command = [
         "ssh",
@@ -194,7 +195,7 @@ async def test_pass_stdin(
     ssh_auth_config: SSHAuthConfig,
     api_config: PlatformConfig,
     alice: _User,
-    alice_job: Any,
+    alice_job: str,
 ) -> None:
     command = [
         "ssh",

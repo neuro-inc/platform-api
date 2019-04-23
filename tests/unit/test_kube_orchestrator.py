@@ -46,7 +46,7 @@ class TestVolume:
             NfsVolume("testvolume", server="1.2.3.4", path="/host"),  # type: ignore
         ),
     )
-    def test_create_mount(self, volume: Any) -> None:
+    def test_create_mount(self, volume: Volume) -> None:
         container_volume = ContainerVolume(
             uri=URL("storage://host"),
             src_path=PurePath("/host/path/to/dir"),
@@ -446,7 +446,7 @@ class TestJobStatusItemFactory:
             ("NewPhase", JobStatus.PENDING),
         ),
     )
-    def test_status(self, phase: Any, expected_status: Any) -> None:
+    def test_status(self, phase: str, expected_status: JobStatus) -> None:
         payload = {"phase": phase}
         pod_status = PodStatus.from_primitive(payload)
         job_status_item = JobStatusItemFactory(pod_status).create()
