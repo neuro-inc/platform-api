@@ -44,12 +44,16 @@ class StorageConfig:
         return self.type == StorageType.NFS
 
     @classmethod
-    def create_nfs(cls, *args: Any, **kwargs: Any) -> "StorageConfig":
-        if len(args) > 2:
-            args = (*args[:2], StorageType.NFS, *args[2:])
-            return cls(*args, **kwargs)
-        else:
-            return cls(*args, type=StorageType.NFS, **kwargs)  # type: ignore
+    def create_nfs(
+        cls,
+        host_mount_path: PurePath,
+        container_mount_path: PurePath = container_mount_path,
+        *args: Any,
+        **kwargs: Any,
+    ) -> "StorageConfig":
+        return cls(
+            host_mount_path, container_mount_path, StorageType.NFS, *args, **kwargs
+        )
 
     @classmethod
     def create_host(cls, *args: Any, **kwargs: Any) -> "StorageConfig":
