@@ -179,10 +179,11 @@ class JobsClient:
                 pytest.fail(f"too long: {current_time:.3f} sec; resp: {response}")
             interval_s *= 1.5
 
-    async def delete_job(self, job_id: str):
+    async def delete_job(self, job_id: str, assert_success: bool = True):
         url = self._api_config.generate_job_url(job_id)
         async with self._client.delete(url, headers=self._headers) as response:
-            assert response.status == HTTPNoContent.status_code
+            if assert_success:
+                assert response.status == HTTPNoContent.status_code
 
 
 @pytest.fixture
@@ -950,7 +951,7 @@ class TestJobs:
         yield _impl
 
         for job_id in job_ids:
-            await jobs_client.delete_job(job_id=job_id)
+            await jobs_client.delete_job(job_id=job_id, assert_success=False)
 
     @pytest.fixture
     async def share_job(self, auth_client):
