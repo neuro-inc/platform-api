@@ -1,7 +1,6 @@
 import asyncio
 import json
 import time
-from pathlib import PurePath
 from typing import Any, Dict, NamedTuple, Optional
 from unittest import mock
 from uuid import uuid4
@@ -21,17 +20,9 @@ from aiohttp.web import (
 from async_generator import asynccontextmanager
 from neuro_auth_client import Permission
 from neuro_auth_client.client import Quota
-from yarl import URL
 
 from platform_api.api import create_app
-from platform_api.config import (
-    Config,
-    DatabaseConfig,
-    IngressConfig,
-    LoggingConfig,
-    ServerConfig,
-    StorageConfig,
-)
+from platform_api.config import Config
 
 
 class ApiConfig(NamedTuple):
@@ -60,42 +51,6 @@ class ApiConfig(NamedTuple):
     @property
     def config_url(self):
         return self.endpoint + "/config"
-
-
-@pytest.fixture
-def config_factory(kube_config, redis_config, auth_config, es_config):
-    def _factory(**kwargs):
-        server_config = ServerConfig()
-        storage_config = StorageConfig(host_mount_path=PurePath("/tmp"))  # type: ignore
-        database_config = DatabaseConfig(redis=redis_config)  # type: ignore
-        logging_config = LoggingConfig(elasticsearch=es_config)
-        ingress_config = IngressConfig(
-            storage_url=URL("https://neu.ro/api/v1/storage"),
-            users_url=URL("https://neu.ro/api/v1/users"),
-            monitoring_url=URL("https://neu.ro/api/v1/monitoring"),
-        )
-        return Config(
-            server=server_config,
-            storage=storage_config,
-            orchestrator=kube_config,
-            database=database_config,
-            auth=auth_config,
-            logging=logging_config,
-            ingress=ingress_config,
-            **kwargs,
-        )
-
-    return _factory
-
-
-@pytest.fixture
-def config(config_factory):
-    return config_factory()
-
-
-@pytest.fixture
-def config_with_oauth(config_factory, oauth_config_dev):
-    return config_factory(oauth=oauth_config_dev)
 
 
 @pytest.fixture
