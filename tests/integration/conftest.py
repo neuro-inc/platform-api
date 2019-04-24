@@ -122,6 +122,7 @@ async def kube_config(
         ],
         orphaned_job_owner="compute",
         node_label_preemptible="preemptible",
+        namespace="platformapi-tests",
     )
 
 
@@ -310,6 +311,7 @@ async def kube_config_nfs(
         node_label_gpu="gpu",
         resource_pool_types=[ResourcePoolType()],
         orphaned_job_owner="compute",
+        namespace="platformapi-tests",
     )
 
 

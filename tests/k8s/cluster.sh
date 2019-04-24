@@ -41,7 +41,8 @@ function k8s::start {
     sudo -E minikube config set WantReportErrorPrompt false
     sudo -E minikube start --vm-driver=none --kubernetes-version=v1.10.0
 
-    k8s::wait "kubectl get po"
+    k8s::wait k8s::setup_namespace
+    k8s::wait "kubectl get po --all-namespaces"
     k8s::wait k8s::start_nfs
     k8s::wait k8s::setup_ingress
     k8s::wait k8s::setup_logging
@@ -66,6 +67,10 @@ function k8s::stop {
     sudo -E minikube delete || :
     sudo -E rm -rf ~/.minikube
     sudo rm -rf /root/.minikube
+}
+
+function k8s::setup_namespace {
+    kubectl apply -f tests/k8s/namespace.yml
 }
 
 function k8s::setup_registry {
