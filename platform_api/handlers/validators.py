@@ -1,4 +1,4 @@
-from typing import Optional, Sequence, Dict, Any, Set
+from typing import Any, Dict, Optional, Sequence, Set
 
 import trafaret as t
 
@@ -39,12 +39,18 @@ def create_job_history_validator() -> t.Trafaret:
     )
 
 
-def _validate_unique_volume_paths(volumes: Sequence[Dict[str, Any]]) -> Sequence[Dict[str, Any]]:
+def _validate_unique_volume_paths(
+    volumes: Sequence[Dict[str, Any]]
+) -> Sequence[Dict[str, Any]]:
     paths: Set[str] = set()
     for volume in volumes:
         path = volume["dst_path"]
         if path in paths:
-            return t.DataError("destination path '{path}' was encountered multiple times".format(path=path))
+            return t.DataError(
+                "destination path '{path}' was encountered multiple times".format(
+                    path=path
+                )
+            )
         paths.add(path)
     return volumes
 
@@ -128,7 +134,9 @@ def create_container_validator(
     )
 
     if allow_volumes:
-        validator += t.Dict({t.Key("volumes", optional=True): create_volumes_validator()})
+        validator += t.Dict(
+            {t.Key("volumes", optional=True): create_volumes_validator()}
+        )
 
     return validator
 
