@@ -19,7 +19,7 @@ export PIP_INDEX_URL
 include k8s.mk
 
 setup:
-	pip install --no-binary cryptography -r requirements/test.txt
+	pip install --no-use-pep517 --no-binary cryptography -r requirements/test.txt
 
 lint:
 	black --check platform_api tests setup.py
