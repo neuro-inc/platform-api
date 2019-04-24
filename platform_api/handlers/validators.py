@@ -1,4 +1,4 @@
-from typing import Optional, Sequence
+from typing import Optional, Sequence, Dict, Any, Set
 
 import trafaret as t
 
@@ -39,14 +39,25 @@ def create_job_history_validator() -> t.Trafaret:
     )
 
 
-def create_volume_request_validator() -> t.Trafaret:
-    return t.Dict(
+def _validate_unique_volume_paths(volumes: Sequence[Dict[str, Any]]) -> Sequence[Dict[str, Any]]:
+    paths: Set[str] = set()
+    for volume in volumes:
+        path = volume["dst_path"]
+        if path in paths:
+            return t.DataError("destination path '{path}' was encountered multiple times".format(path=path))
+        paths.add(path)
+    return volumes
+
+
+def create_volumes_validator() -> t.Trafaret:
+    single_volume_validator: t.Trafaret = t.Dict(
         {
             "src_storage_uri": t.String,
             "dst_path": t.String,
             t.Key("read_only", optional=True, default=True): t.Bool(),
         }
     )
+    return t.List(single_volume_validator) & t.Call(_validate_unique_volume_paths)
 
 
 def create_resources_validator(
@@ -117,8 +128,7 @@ def create_container_validator(
     )
 
     if allow_volumes:
-        volume_validator = create_volume_request_validator()
-        validator += t.Dict({t.Key("volumes", optional=True): t.List(volume_validator)})
+        validator += t.Dict({t.Key("volumes", optional=True): create_volumes_validator()})
 
     return validator
 
