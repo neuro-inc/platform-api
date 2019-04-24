@@ -56,4 +56,4 @@ class KubeCluster(Cluster):
         self._orchestrator = orchestrator
 
     async def close(self) -> None:
-        await self._exit_stack.__aexit__()
+        await self._exit_stack.__aexit__(None, None, None)

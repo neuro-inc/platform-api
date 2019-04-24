@@ -3,7 +3,6 @@ import json
 import time
 from typing import (
     Any,
-    AsyncContextManager,
     AsyncIterator,
     Awaitable,
     Callable,
@@ -11,6 +10,7 @@ from typing import (
     Iterator,
     List,
     NamedTuple,
+    Optional,
     Tuple,
 )
 from unittest import mock
@@ -68,26 +68,6 @@ class ApiConfig(NamedTuple):
         return self.endpoint + "/config"
 
 
-@pytest.fixture
-async def api_factory() -> AsyncIterator[
-    Callable[[Config], AsyncContextManager[ApiConfig]]
-]:
-    @asynccontextmanager
-    async def _factory(config: Config) -> AsyncIterator[ApiConfig]:
-        app = await create_app(config)
-        runner = aiohttp.web.AppRunner(app)
-        try:
-            await runner.setup()
-            api_config = ApiConfig(host="0.0.0.0", port=8080)
-            site = aiohttp.web.TCPSite(runner, api_config.host, api_config.port)
-            await site.start()
-            yield api_config
-        finally:
-            await runner.cleanup()
-
-    yield _factory
-
-
 @asynccontextmanager
 async def create_local_app_server(
     config: Config, port: int = 8080
@@ -105,16 +85,46 @@ async def create_local_app_server(
         await runner.cleanup()
 
 
+class ApiRunner:
+    def __init__(self, config: Config, port: int) -> None:
+        self._config = config
+        self._port = port
+
+        self._api_config_future: asyncio.Future[ApiConfig] = asyncio.Future()
+        self._cleanup_future: asyncio.Future[None] = asyncio.Future()
+        self._task: Optional[asyncio.Task[None]] = None
+
+    async def _run(self) -> None:
+        async with create_local_app_server(self._config, port=self._port) as api_config:
+            self._api_config_future.set_result(api_config)
+            await asyncio.wait_for(self._cleanup_future, timeout=None)
+
+    async def run(self) -> ApiConfig:
+        loop = asyncio.get_event_loop()
+        self._task = loop.create_task(self._run())
+        await asyncio.wait_for(self._api_config_future, timeout=None)
+        return self._api_config_future.result()
+
+    async def close(self) -> None:
+        if self._task:
+            task = self._task
+            self._task = None
+            self._cleanup_future.set_result(None)
+            await task
+
+
 @pytest.fixture
 async def api(config: Config) -> AsyncIterator[ApiConfig]:
-    async with create_local_app_server(config, port=8080) as api_config:
-        yield api_config
+    runner = ApiRunner(config, port=8080)
+    yield await runner.run()
+    await runner.close()
 
 
 @pytest.fixture
 async def api_with_oauth(config_with_oauth: Config) -> AsyncIterator[ApiConfig]:
-    async with create_local_app_server(config_with_oauth, port=8081) as api_config:
-        yield api_config
+    runner = ApiRunner(config_with_oauth, port=8081)
+    yield await runner.run()
+    await runner.close()
 
 
 @pytest.fixture
