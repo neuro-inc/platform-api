@@ -89,7 +89,7 @@ function k8s::setup_ingress {
     # launching the ingress services for some unknown reason!
     find /etc/kubernetes/addons/ -name ingress* | xargs -L 1 sudo kubectl -n kube-system apply -f
     find /etc/kubernetes/addons/ -name kube-dns* | xargs -L 1 sudo kubectl -n kube-system apply -f
-    kubectl create -f tests/k8s/platformjobsingress.yml
+    kubectl create -f tests/k8s/platformjobsingress.yml --namespace=platformapi-tests
 }
 
 function k8s::setup_logging {
