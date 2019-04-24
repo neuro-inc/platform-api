@@ -47,7 +47,7 @@ class KubeCluster(Cluster):
     async def _init_orchestrator(self) -> None:
         assert self._es_client
         assert not self._orchestrator
-        assert isinstance(self._config, KubeConfig)
+        assert isinstance(self._config.orchestrator, KubeConfig)
         logger.info(f"Cluster '{self.name}': initializing Orchestrator")
         orchestrator = KubeOrchestrator(
             config=self._config.orchestrator, es_client=self._es_client
