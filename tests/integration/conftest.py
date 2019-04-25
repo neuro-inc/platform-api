@@ -143,7 +143,6 @@ class NodeTaint:
 
 
 class TestKubeClient(KubeClient):
-
     def _generate_endpoint_url(self, name: str, namespace: str) -> str:
         return f"{namespace}/endpoints/{name}"
 
@@ -154,7 +153,9 @@ class TestKubeClient(KubeClient):
     def _generate_node_url(self, name: str) -> str:
         return f"{self._nodes_url}/{name}"
 
-    async def get_endpoint(self, name: str, namespace: Optional[str] = None) -> Dict[str, Any]:
+    async def get_endpoint(
+        self, name: str, namespace: Optional[str] = None
+    ) -> Dict[str, Any]:
         url = self._generate_endpoint_url(name, namespace or self._namespace_url)
         return await self._request(method="GET", url=url)
 
