@@ -178,10 +178,11 @@ class JobsClient:
                 pytest.fail(f"too long: {current_time:.3f} sec; resp: {response}")
             interval_s *= 1.5
 
-    async def delete_job(self, job_id: str) -> None:
+    async def delete_job(self, job_id: str, assert_success: bool = True) -> None:
         url = self._api_config.generate_job_url(job_id)
         async with self._client.delete(url, headers=self._headers) as response:
-            assert response.status == HTTPNoContent.status_code
+            if assert_success:
+                assert response.status == HTTPNoContent.status_code
 
 
 @pytest.fixture
@@ -1095,6 +1096,8 @@ class TestJobs:
         client: aiohttp.ClientSession,
         jobs_client_factory: Callable[[_User], JobsClient],
     ) -> AsyncIterator[Callable[[_User, Dict[str, Any], bool], Awaitable[str]]]:
+        cleanup_pairs = []
+
         async def _impl(
             user: _User, job_request: Dict[str, Any], do_kill: bool = False
         ) -> str:
@@ -1109,10 +1112,14 @@ class TestJobs:
                 if do_kill:
                     await jobs_client.delete_job(job_id)
                     await jobs_client.long_polling_by_job_id(job_id, "succeeded")
-            assert isinstance(job_id, str)
+                else:
+                    cleanup_pairs.append((jobs_client, job_id))
             return job_id
 
         yield _impl
+
+        for jobs_client, job_id in cleanup_pairs:
+            await jobs_client.delete_job(job_id=job_id, assert_success=False)
 
     @pytest.fixture
     async def share_job(
