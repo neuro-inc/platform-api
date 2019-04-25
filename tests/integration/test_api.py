@@ -1109,7 +1109,7 @@ class TestJobs:
 
         yield _impl
 
-        for job_client, job_id in cleanup_pairs:
+        for jobs_client, job_id in cleanup_pairs:
             await jobs_client.delete_job(job_id=job_id, assert_success=False)
 
     @pytest.fixture
