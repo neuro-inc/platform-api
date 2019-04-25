@@ -1088,7 +1088,7 @@ class TestJobs:
         jobs_client_factory: Callable[[_User], JobsClient],
     ) -> AsyncIterator[Callable[[_User, Dict[str, Any], bool], Awaitable[str]]]:
         job_ids = []
-        
+
         async def _impl(
             user: _User, job_request: Dict[str, Any], do_kill: bool = False
         ) -> str:
