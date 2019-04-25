@@ -1,10 +1,11 @@
 from datetime import timedelta
 from pathlib import PurePath
+from typing import Dict
 
 import pytest
 from yarl import URL
 
-from platform_api.config import RegistryConfig, StorageConfig, StorageType
+from platform_api.cluster_config import RegistryConfig, StorageConfig, StorageType
 from platform_api.config_factory import EnvironConfigFactory
 from platform_api.orchestrator.kube_orchestrator import (
     HostVolume,
@@ -15,11 +16,11 @@ from platform_api.resource import GKEGPUModels, ResourcePoolType
 
 
 class TestStorageConfig:
-    def test_missing_nfs_settings(self):
+    def test_missing_nfs_settings(self) -> None:
         with pytest.raises(ValueError, match="Missing NFS settings"):
             StorageConfig(host_mount_path=PurePath("/tmp"), type=StorageType.NFS)
 
-    def test_redundant_nfs_settings(self):
+    def test_redundant_nfs_settings(self) -> None:
         with pytest.raises(ValueError, match="Redundant NFS settings"):
             StorageConfig(
                 host_mount_path=PurePath("/tmp"),
@@ -27,7 +28,7 @@ class TestStorageConfig:
                 nfs_server="1.2.3.4",
             )
 
-    def test_is_nfs(self):
+    def test_is_nfs(self) -> None:
         config = StorageConfig(
             host_mount_path=PurePath("/tmp"),
             type=StorageType.NFS,
@@ -38,7 +39,7 @@ class TestStorageConfig:
 
 
 class TestKubeConfig:
-    def test_create_storage_volume_nfs(self):
+    def test_create_storage_volume_nfs(self) -> None:
         storage_config = StorageConfig(
             host_mount_path=PurePath("/tmp"),
             type=StorageType.NFS,
@@ -62,7 +63,7 @@ class TestKubeConfig:
             name="storage", path=PurePath("/tmp"), server="4.3.2.1"
         )
 
-    def test_create_storage_volume_host(self):
+    def test_create_storage_volume_host(self) -> None:
         storage_config = StorageConfig(
             host_mount_path=PurePath("/tmp"), type=StorageType.HOST
         )
@@ -83,12 +84,12 @@ class TestKubeConfig:
 
 
 class TestEnvironConfigFactory:
-    def test_create_key_error(self):
-        environ = {}
+    def test_create_key_error(self) -> None:
+        environ: Dict[str, str] = {}
         with pytest.raises(KeyError):
             EnvironConfigFactory(environ=environ).create()
 
-    def test_create_defaults(self):
+    def test_create_defaults(self) -> None:
         named_host_template = "{job_name}-{job_owner}.jobs.domain"
         environ = {
             "NP_STORAGE_HOST_MOUNT_PATH": "/tmp",
@@ -101,10 +102,13 @@ class TestEnvironConfigFactory:
             "NP_AUTH_URL": "https://auth",
             "NP_AUTH_TOKEN": "token",
             "NP_ES_HOSTS": "http://es",
+            "NP_ES_AUTH_USER": "test-user",
+            "NP_ES_AUTH_PASSWORD": "test-password",
             "NP_OAUTH_BASE_URL": "https://oauth",
             "NP_OAUTH_CLIENT_ID": "oauth_client_id",
             "NP_OAUTH_AUDIENCE": "https://platform-url",
             "NP_OAUTH_SUCCESS_REDIRECT_URL": "https://platform-default-url",
+            "NP_API_URL": "https://neu.ro/api/v1",
         }
         config = EnvironConfigFactory(environ=environ).create()
 
@@ -115,6 +119,7 @@ class TestEnvironConfigFactory:
         assert config.storage.container_mount_path == PurePath("/var/storage")
         assert config.storage.uri_scheme == "storage"
 
+        assert isinstance(config.orchestrator, KubeConfig)
         assert config.orchestrator.storage_mount_path == PurePath("/tmp")
         assert config.orchestrator.endpoint_url == "https://localhost:8443"
         assert not config.orchestrator.cert_authority_path
@@ -147,6 +152,7 @@ class TestEnvironConfigFactory:
         assert config.auth.service_token == "token"
         assert config.auth.service_name == "compute"
 
+        assert config.oauth is not None
         assert config.oauth.base_url == URL("https://oauth")
         assert config.oauth.client_id == "oauth_client_id"
         assert config.oauth.audience == "https://platform-url"
@@ -155,19 +161,22 @@ class TestEnvironConfigFactory:
         assert config.registry.host == "registry.dev.neuromation.io"
 
         assert config.logging.elasticsearch.hosts == ["http://es"]
+        assert config.logging.elasticsearch.user == "test-user"
+        assert config.logging.elasticsearch.password == "test-password"
 
-    def test_create_value_error_invalid_port(self):
+    def test_create_value_error_invalid_port(self) -> None:
         environ = {
             "NP_STORAGE_HOST_MOUNT_PATH": "/tmp",
             "NP_API_PORT": "port",
             "NP_K8S_API_URL": "https://localhost:8443",
             "NP_AUTH_URL": "https://auth",
             "NP_AUTH_TOKEN": "token",
+            "NP_API_URL": "https://neu.ro/api/v1",
         }
         with pytest.raises(ValueError):
             EnvironConfigFactory(environ=environ).create()
 
-    def test_create_custom(self):
+    def test_create_custom(self) -> None:
         named_host_template = "{job_name}-{job_owner}.jobs.domain"
         environ = {
             "NP_ENV_PREFIX": "TEST",
@@ -211,6 +220,9 @@ class TestEnvironConfigFactory:
             ),
             "NP_K8S_NODE_LABEL_PREEMPTIBLE": "testpreempt",
             "NP_ES_HOSTS": "http://es",
+            "NP_ES_AUTH_USER": "test-user",
+            "NP_ES_AUTH_PASSWORD": "test-password",
+            "NP_API_URL": "https://neu.ro/api/v1",
         }
         config = EnvironConfigFactory(environ=environ).create()
 
@@ -221,6 +233,11 @@ class TestEnvironConfigFactory:
         assert config.storage.container_mount_path == PurePath("/opt/storage")
         assert config.storage.uri_scheme == "something"
 
+        assert config.ingress.storage_url == URL("https://neu.ro/api/v1/storage")
+        assert config.ingress.users_url == URL("https://neu.ro/api/v1/users")
+        assert config.ingress.monitoring_url == URL("https://neu.ro/api/v1/jobs")
+
+        assert isinstance(config.orchestrator, KubeConfig)
         assert config.orchestrator.storage_mount_path == PurePath("/tmp")
         assert config.orchestrator.endpoint_url == "https://localhost:8443"
         assert config.orchestrator.cert_authority_path == "/ca_path"
@@ -249,6 +266,7 @@ class TestEnvironConfigFactory:
 
         assert config.orchestrator.orphaned_job_owner == "servicename"
 
+        assert config.database.redis is not None
         assert config.database.redis.uri == "redis://localhost:6379/0"
         assert config.database.redis.conn_pool_size == 444
         assert config.database.redis.conn_timeout_s == 555.0
@@ -265,8 +283,10 @@ class TestEnvironConfigFactory:
         assert config.registry.url == URL("https://testregistry:5000")
 
         assert config.logging.elasticsearch.hosts == ["http://es"]
+        assert config.logging.elasticsearch.user == "test-user"
+        assert config.logging.elasticsearch.password == "test-password"
 
-    def test_create_nfs(self):
+    def test_create_nfs(self) -> None:
         named_host_template = "{job_name}-{job_owner}.jobs.domain"
         environ = {
             "NP_STORAGE_TYPE": "nfs",
@@ -279,6 +299,7 @@ class TestEnvironConfigFactory:
             "NP_K8S_NAMED_JOBS_INGRESS_DOMAIN_NAME_TEMPLATE": named_host_template,
             "NP_K8S_SSH_INGRESS_DOMAIN_NAME": "ssh.domain",
             "NP_K8S_SSH_AUTH_INGRESS_DOMAIN_NAME": "ssh-auth.domain",
+            "NP_API_URL": "https://neu.ro/api/v1",
             "NP_AUTH_URL": "https://auth",
             "NP_AUTH_TOKEN": "token",
             "NP_ES_HOSTS": "http://es",

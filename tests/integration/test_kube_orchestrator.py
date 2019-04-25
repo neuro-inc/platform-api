@@ -3,21 +3,29 @@ import io
 import time
 import uuid
 from pathlib import PurePath
-from typing import Callable, Optional
+from typing import Any, AsyncIterator, Awaitable, Callable, Iterator, Optional, Sequence
 from unittest import mock
 from uuid import uuid4
 
 import aiohttp
 import pytest
 from async_timeout import timeout
+from elasticsearch import AuthenticationException
 from yarl import URL
 
+from platform_api.elasticsearch import (
+    Elasticsearch,
+    ElasticsearchConfig,
+    create_elasticsearch_client,
+)
 from platform_api.orchestrator import (
     Job,
     JobError,
     JobNotFoundException,
     JobRequest,
     JobStatus,
+    KubeConfig,
+    KubeOrchestrator,
     LogReader,
     Orchestrator,
 )
@@ -28,6 +36,7 @@ from platform_api.orchestrator.job_request import (
     ContainerResources,
     ContainerVolume,
 )
+from platform_api.orchestrator.kube_client import KubeClient, PodStatus
 from platform_api.orchestrator.kube_orchestrator import (
     AlreadyExistsException,
     DockerRegistrySecret,
@@ -43,12 +52,17 @@ from platform_api.orchestrator.kube_orchestrator import (
 )
 from platform_api.orchestrator.logs import ElasticsearchLogReader, PodContainerLogReader
 
+from .conftest import TestKubeClient
+
 
 class MyJob(Job):
-    def __init__(self, orchestrator: Orchestrator, *args, **kwargs) -> None:
+    def __init__(self, orchestrator: Orchestrator, *args: Any, **kwargs: Any) -> None:
         self._orchestrator = orchestrator
         kwargs.setdefault("owner", "test-owner")
-        super().__init__(*args, orchestrator_config=orchestrator.config, **kwargs)
+        if args:
+            super().__init__(orchestrator.config, *args, **kwargs)
+        else:
+            super().__init__(orchestrator_config=orchestrator.config, **kwargs)
 
     async def start(self) -> JobStatus:
         status = await self._orchestrator.start_job(self, "test-token")
@@ -63,7 +77,7 @@ class MyJob(Job):
 
 
 @pytest.fixture
-async def job_nginx(kube_orchestrator):
+async def job_nginx(kube_orchestrator: KubeOrchestrator) -> MyJob:
     container = Container(
         image="ubuntu",
         command="sleep 5",
@@ -75,10 +89,12 @@ async def job_nginx(kube_orchestrator):
 
 
 @pytest.fixture
-async def delete_job_later(kube_orchestrator):
+async def delete_job_later(
+    kube_orchestrator: KubeOrchestrator
+) -> AsyncIterator[Callable[[Job], Awaitable[None]]]:
     jobs = []
 
-    async def _add_job(job):
+    async def _add_job(job: Job) -> None:
         jobs.append(job)
 
     yield _add_job
@@ -98,7 +114,7 @@ class TestKubeOrchestrator:
         max_time: float = 180,
         *,
         status_predicate: Callable[[JobStatus], bool],
-    ):
+    ) -> JobStatus:
         t0 = time.monotonic()
         while True:
             status = await job.query_status()
@@ -112,39 +128,41 @@ class TestKubeOrchestrator:
                 await asyncio.sleep(interval_s)
                 interval_s *= 1.5
 
-    async def wait_for_completion(self, *args, **kwargs):
+    async def wait_for_completion(self, *args: Any, **kwargs: Any) -> JobStatus:
         def _predicate(status: JobStatus) -> bool:
             return status.is_finished
 
-        return await self._wait_for(*args, **kwargs, status_predicate=_predicate)
+        return await self._wait_for(*args, status_predicate=_predicate, **kwargs)
 
-    async def wait_for_failure(self, *args, **kwargs):
+    async def wait_for_failure(self, *args: Any, **kwargs: Any) -> None:
         def _predicate(status: JobStatus) -> bool:
             if not status.is_finished:
                 return False
             assert status == JobStatus.FAILED
             return True
 
-        await self._wait_for(*args, **kwargs, status_predicate=_predicate)
+        await self._wait_for(*args, status_predicate=_predicate, **kwargs)
 
-    async def wait_for_success(self, *args, **kwargs):
+    async def wait_for_success(self, *args: Any, **kwargs: Any) -> None:
         def _predicate(status: JobStatus) -> bool:
             if not status.is_finished:
                 return False
             assert status == JobStatus.SUCCEEDED
             return True
 
-        await self._wait_for(*args, **kwargs, status_predicate=_predicate)
+        await self._wait_for(*args, status_predicate=_predicate, **kwargs)
 
-    async def wait_until_running(self, *args, **kwargs):
+    async def wait_until_running(self, *args: Any, **kwargs: Any) -> None:
         def _predicate(status: JobStatus) -> bool:
             assert not status.is_finished
             return status == JobStatus.RUNNING
 
-        await self._wait_for(*args, **kwargs, status_predicate=_predicate)
+        await self._wait_for(*args, status_predicate=_predicate, **kwargs)
 
     @pytest.mark.asyncio
-    async def test_start_job_happy_path(self, job_nginx, kube_orchestrator):
+    async def test_start_job_happy_path(
+        self, job_nginx: MyJob, kube_orchestrator: KubeOrchestrator
+    ) -> None:
         await job_nginx.start()
         await self.wait_for_success(job_nginx)
 
@@ -155,7 +173,9 @@ class TestKubeOrchestrator:
         assert status == JobStatus.SUCCEEDED
 
     @pytest.mark.asyncio
-    async def test_start_job_broken_image(self, kube_orchestrator):
+    async def test_start_job_broken_image(
+        self, kube_orchestrator: KubeOrchestrator
+    ) -> None:
         container = Container(
             image="notsuchdockerimage",
             resources=ContainerResources(cpu=0.1, memory_mb=128),
@@ -167,7 +187,9 @@ class TestKubeOrchestrator:
         assert status == JobStatus.PENDING
 
     @pytest.mark.asyncio
-    async def test_start_job_bad_name(self, kube_orchestrator):
+    async def test_start_job_bad_name(
+        self, kube_orchestrator: KubeOrchestrator
+    ) -> None:
         job_id = str(uuid.uuid4())
         container = Container(
             image="ubuntu",
@@ -186,7 +208,9 @@ class TestKubeOrchestrator:
         assert str(cm.value) == "Invalid"
 
     @pytest.mark.asyncio
-    async def test_start_job_with_not_unique_id(self, kube_orchestrator, job_nginx):
+    async def test_start_job_with_not_unique_id(
+        self, kube_orchestrator: KubeOrchestrator, job_nginx: MyJob
+    ) -> None:
         await job_nginx.start()
         await self.wait_for_success(job_nginx)
 
@@ -204,17 +228,17 @@ class TestKubeOrchestrator:
         assert status == JobStatus.SUCCEEDED
 
     @pytest.mark.asyncio
-    async def test_status_job_not_exist(self, job_nginx):
+    async def test_status_job_not_exist(self, job_nginx: MyJob) -> None:
         with pytest.raises(JobNotFoundException):
             await job_nginx.query_status()
 
     @pytest.mark.asyncio
-    async def test_delete_job_not_exist(self, job_nginx):
+    async def test_delete_job_not_exist(self, job_nginx: MyJob) -> None:
         with pytest.raises(JobNotFoundException):
             await job_nginx.delete()
 
     @pytest.mark.asyncio
-    async def test_broken_job_id(self, kube_orchestrator):
+    async def test_broken_job_id(self, kube_orchestrator: KubeOrchestrator) -> None:
         job_id = "some_BROCKEN_JOB-123@#$%^&*(______------ID"
         container = Container(
             image="python", resources=ContainerResources(cpu=0.1, memory_mb=128)
@@ -226,7 +250,7 @@ class TestKubeOrchestrator:
             await job.start()
 
     @pytest.mark.asyncio
-    async def test_job_succeeded(self, kube_orchestrator):
+    async def test_job_succeeded(self, kube_orchestrator: KubeOrchestrator) -> None:
         container = Container(
             image="ubuntu",
             command="true",
@@ -242,7 +266,7 @@ class TestKubeOrchestrator:
             await job.delete()
 
     @pytest.mark.asyncio
-    async def test_job_failed_error(self, kube_orchestrator):
+    async def test_job_failed_error(self, kube_orchestrator: KubeOrchestrator) -> None:
         command = 'bash -c "for i in {100..1}; do echo $i; done; false"'
         container = Container(
             image="ubuntu",
@@ -266,7 +290,7 @@ class TestKubeOrchestrator:
             await job.delete()
 
     @pytest.mark.asyncio
-    async def test_job_bunch_of_cpu(self, kube_orchestrator):
+    async def test_job_bunch_of_cpu(self, kube_orchestrator: KubeOrchestrator) -> None:
         command = 'bash -c "for i in {100..1}; do echo $i; done; false"'
         container = Container(
             image="ubuntu",
@@ -288,14 +312,20 @@ class TestKubeOrchestrator:
             await job.delete()
 
     @pytest.mark.asyncio
-    async def test_volumes(self, kube_config, kube_orchestrator):
+    async def test_volumes(
+        self, kube_config: KubeConfig, kube_orchestrator: KubeOrchestrator
+    ) -> None:
         await self._test_volumes(kube_config, kube_orchestrator)
 
     @pytest.mark.asyncio
-    async def test_volumes_nfs(self, kube_config_nfs, kube_orchestrator_nfs):
+    async def test_volumes_nfs(
+        self, kube_config_nfs: KubeConfig, kube_orchestrator_nfs: KubeOrchestrator
+    ) -> None:
         await self._test_volumes(kube_config_nfs, kube_orchestrator_nfs)
 
-    async def _test_volumes(self, kube_config, kube_orchestrator):
+    async def _test_volumes(
+        self, kube_config: KubeConfig, kube_orchestrator: KubeOrchestrator
+    ) -> None:
         volumes = [
             ContainerVolume(
                 uri=URL(
@@ -348,7 +378,12 @@ class TestKubeOrchestrator:
         "expected_result,expected_status",
         (("6", JobStatus.SUCCEEDED), ("7", JobStatus.FAILED)),
     )
-    async def test_env(self, kube_orchestrator, expected_result, expected_status):
+    async def test_env(
+        self,
+        kube_orchestrator: KubeOrchestrator,
+        expected_result: str,
+        expected_status: JobStatus,
+    ) -> None:
         product = expected_result
         container = Container(
             image="ubuntu",
@@ -368,14 +403,14 @@ class TestKubeOrchestrator:
             await job.delete()
 
     @pytest.fixture
-    async def ingress(self, kube_client):
+    async def ingress(self, kube_client: KubeClient) -> AsyncIterator[Ingress]:
         ingress_name = str(uuid.uuid4())
         ingress = await kube_client.create_ingress(ingress_name)
         yield ingress
         await kube_client.delete_ingress(ingress.name)
 
     @pytest.mark.asyncio
-    async def test_ingress(self, kube_client, ingress):
+    async def test_ingress(self, kube_client: KubeClient, ingress: Ingress) -> None:
         await kube_client.add_ingress_rule(ingress.name, IngressRule(host="host1"))
         await kube_client.add_ingress_rule(ingress.name, IngressRule(host="host2"))
         await kube_client.add_ingress_rule(ingress.name, IngressRule(host="host3"))
@@ -402,17 +437,19 @@ class TestKubeOrchestrator:
         )
 
     @pytest.mark.asyncio
-    async def test_remove_ingress_rule(self, kube_client, ingress):
+    async def test_remove_ingress_rule(
+        self, kube_client: KubeClient, ingress: Ingress
+    ) -> None:
         with pytest.raises(StatusException, match="NotFound"):
             await kube_client.remove_ingress_rule(ingress.name, "unknown")
 
     @pytest.mark.asyncio
-    async def test_delete_ingress_failure(self, kube_client):
+    async def test_delete_ingress_failure(self, kube_client: KubeClient) -> None:
         with pytest.raises(StatusException, match="NotFound"):
             await kube_client.delete_ingress("unknown")
 
     @pytest.mark.asyncio
-    async def test_service(self, kube_client):
+    async def test_service(self, kube_client: KubeClient) -> None:
         service_name = f"job-{uuid.uuid4()}"
         service = Service(name=service_name, target_port=8080)
         try:
@@ -430,7 +467,7 @@ class TestKubeOrchestrator:
         job_id: str,
         interval_s: float = 0.5,
         max_time: float = 180,
-    ):
+    ) -> None:
         url = f"http://{kube_ingress_ip}"
         headers = {"Host": host}
         t0 = time.monotonic()
@@ -449,8 +486,12 @@ class TestKubeOrchestrator:
 
     @pytest.mark.asyncio
     async def test_job_with_exposed_http_server_no_job_name(
-        self, kube_config, kube_orchestrator, kube_ingress_ip, kube_client
-    ):
+        self,
+        kube_config: KubeConfig,
+        kube_orchestrator: KubeOrchestrator,
+        kube_ingress_ip: str,
+        kube_client: KubeClient,
+    ) -> None:
         container = Container(
             image="python",
             command="python -m http.server 80",
@@ -479,8 +520,12 @@ class TestKubeOrchestrator:
 
     @pytest.mark.asyncio
     async def test_job_with_exposed_http_server_with_job_name(
-        self, kube_config, kube_orchestrator, kube_ingress_ip, kube_client
-    ):
+        self,
+        kube_config: KubeConfig,
+        kube_orchestrator: KubeOrchestrator,
+        kube_ingress_ip: str,
+        kube_client: KubeClient,
+    ) -> None:
         container = Container(
             image="python",
             command="python -m http.server 80",
@@ -515,8 +560,12 @@ class TestKubeOrchestrator:
 
     @pytest.mark.asyncio
     async def test_job_with_exposed_http_server_with_auth_no_job_name(
-        self, kube_config, kube_orchestrator, kube_ingress_ip, kube_client
-    ):
+        self,
+        kube_config: KubeConfig,
+        kube_orchestrator: KubeOrchestrator,
+        kube_ingress_ip: str,
+        kube_client: KubeClient,
+    ) -> None:
         container = Container(
             image="python",
             command="python -m http.server 80",
@@ -545,8 +594,12 @@ class TestKubeOrchestrator:
 
     @pytest.mark.asyncio
     async def test_job_with_exposed_http_server_with_auth_with_job_name(
-        self, kube_config, kube_orchestrator, kube_ingress_ip, kube_client
-    ):
+        self,
+        kube_config: KubeConfig,
+        kube_orchestrator: KubeOrchestrator,
+        kube_ingress_ip: str,
+        kube_client: KubeClient,
+    ) -> None:
         container = Container(
             image="python",
             command="python -m http.server 80",
@@ -579,7 +632,9 @@ class TestKubeOrchestrator:
             await job.delete()
 
     @pytest.fixture
-    def create_server_job(self, kube_orchestrator):
+    def create_server_job(
+        self, kube_orchestrator: KubeOrchestrator
+    ) -> Iterator[Callable[[Optional[str]], MyJob]]:
         def impl(job_name: Optional[str] = None) -> MyJob:
             server_cont = Container(
                 image="python",
@@ -596,7 +651,9 @@ class TestKubeOrchestrator:
         yield impl
 
     @pytest.fixture
-    def create_client_job(self, kube_orchestrator):
+    def create_client_job(
+        self, kube_orchestrator: KubeOrchestrator
+    ) -> Iterator[Callable[[str], MyJob]]:
         def impl(server_hostname: str) -> MyJob:
             client_cont = Container(
                 image="ubuntu",
@@ -613,16 +670,17 @@ class TestKubeOrchestrator:
     @pytest.mark.asyncio
     async def test_job_check_dns_hostname(
         self,
-        kube_config,
-        create_server_job,
-        create_client_job,
-        kube_ingress_ip,
-        delete_job_later,
-    ):
+        kube_config: KubeConfig,
+        create_server_job: Callable[..., MyJob],
+        create_client_job: Callable[[str], MyJob],
+        kube_ingress_ip: str,
+        delete_job_later: Callable[[Job], Awaitable[None]],
+    ) -> None:
         server_job = create_server_job()
         await delete_job_later(server_job)
         await server_job.start()
         server_hostname = server_job.internal_hostname
+        assert server_hostname
         await self._wait_for_job_service(
             kube_ingress_ip, host=server_job.http_host, job_id=server_job.id
         )
@@ -635,12 +693,12 @@ class TestKubeOrchestrator:
     @pytest.mark.asyncio
     async def test_job_check_http_hostname_no_job_name(
         self,
-        kube_config,
-        create_server_job,
-        create_client_job,
-        kube_ingress_ip,
-        delete_job_later,
-    ):
+        kube_config: KubeConfig,
+        create_server_job: Callable[..., MyJob],
+        create_client_job: Callable[[str], MyJob],
+        kube_ingress_ip: str,
+        delete_job_later: Callable[[Job], Awaitable[None]],
+    ) -> None:
         server_job = create_server_job()
         await delete_job_later(server_job)
         await server_job.start()
@@ -659,12 +717,12 @@ class TestKubeOrchestrator:
     @pytest.mark.asyncio
     async def test_job_check_http_hostname_with_job_name(
         self,
-        kube_config,
-        create_server_job,
-        create_client_job,
-        kube_ingress_ip,
-        delete_job_later,
-    ):
+        kube_config: KubeConfig,
+        create_server_job: Callable[..., MyJob],
+        create_client_job: Callable[[str], MyJob],
+        kube_ingress_ip: str,
+        delete_job_later: Callable[[Job], Awaitable[None]],
+    ) -> None:
         server_job_name = f"server-job-{uuid4()}"
         server_job = create_server_job(job_name=server_job_name)
         await delete_job_later(server_job)
@@ -679,6 +737,7 @@ class TestKubeOrchestrator:
         await client_job.start()
         assert self.wait_for_success(job=client_job)
 
+        assert server_job.http_host_named
         http_host = server_job.http_host_named
         await self._wait_for_job_service(
             kube_ingress_ip, host=http_host, job_id=server_job.id
@@ -690,9 +749,13 @@ class TestKubeOrchestrator:
 
     @pytest.mark.asyncio
     async def test_job_check_dns_hostname_undeclared_port(
-        self, kube_config, kube_orchestrator, kube_ingress_ip, delete_job_later
-    ):
-        def create_server_job():
+        self,
+        kube_config: KubeConfig,
+        kube_orchestrator: KubeOrchestrator,
+        kube_ingress_ip: str,
+        delete_job_later: Callable[[Job], Awaitable[None]],
+    ) -> None:
+        def create_server_job() -> MyJob:
             server_cont = Container(
                 image="python",
                 command="python -m http.server 12345",
@@ -703,7 +766,7 @@ class TestKubeOrchestrator:
                 job_request=JobRequest.create(server_cont),
             )
 
-        def create_client_job(server_hostname: str):
+        def create_client_job(server_hostname: str) -> MyJob:
             client_cont = Container(
                 image="ubuntu",
                 command=f"curl --silent --fail http://{server_hostname}:12345/",
@@ -719,6 +782,7 @@ class TestKubeOrchestrator:
         await server_job.start()
         await self.wait_until_running(server_job)
 
+        assert server_job.internal_hostname
         client_job = create_client_job(server_job.internal_hostname)
         await delete_job_later(client_job)
         await client_job.start()
@@ -726,8 +790,12 @@ class TestKubeOrchestrator:
 
     @pytest.mark.asyncio
     async def test_job_pod_labels_and_network_policy(
-        self, kube_config, kube_orchestrator, kube_client, delete_job_later
-    ):
+        self,
+        kube_config: KubeConfig,
+        kube_orchestrator: KubeOrchestrator,
+        kube_client: TestKubeClient,
+        delete_job_later: Callable[[Job], Awaitable[None]],
+    ) -> None:
         container = Container(
             image="ubuntu",
             command="sleep infinity",
@@ -756,10 +824,12 @@ class TestKubeOrchestrator:
 
 
 @pytest.fixture
-async def delete_pod_later(kube_client):
+async def delete_pod_later(
+    kube_client: KubeClient
+) -> AsyncIterator[Callable[[PodDescriptor], Awaitable[None]]]:
     pods = []
 
-    async def _add_pod(pod):
+    async def _add_pod(pod: PodDescriptor) -> None:
         pods.append(pod)
 
     yield _add_pod
@@ -771,16 +841,19 @@ async def delete_pod_later(kube_client):
             pass
 
 
-class TestKubeClient:
+class Test_KubeClient:
     @pytest.mark.asyncio
-    async def test_wait_pod_is_running_not_found(self, kube_client):
+    async def test_wait_pod_is_running_not_found(self, kube_client: KubeClient) -> None:
         with pytest.raises(JobNotFoundException):
             await kube_client.wait_pod_is_running(pod_name="unknown")
 
     @pytest.mark.asyncio
     async def test_wait_pod_is_running_timed_out(
-        self, kube_config, kube_client, delete_pod_later
-    ):
+        self,
+        kube_config: KubeConfig,
+        kube_client: KubeClient,
+        delete_pod_later: Callable[[PodDescriptor], Awaitable[None]],
+    ) -> None:
         container = Container(
             image="ubuntu",
             command="true",
@@ -797,8 +870,11 @@ class TestKubeClient:
 
     @pytest.mark.asyncio
     async def test_wait_pod_is_running(
-        self, kube_config, kube_client, delete_pod_later
-    ):
+        self,
+        kube_config: KubeConfig,
+        kube_client: KubeClient,
+        delete_pod_later: Callable[[PodDescriptor], Awaitable[None]],
+    ) -> None:
         container = Container(
             image="ubuntu",
             command="true",
@@ -815,7 +891,7 @@ class TestKubeClient:
         assert pod_status.phase in ("Running", "Succeeded")
 
     @pytest.mark.asyncio
-    async def test_create_log_stream_not_found(self, kube_client):
+    async def test_create_log_stream_not_found(self, kube_client: KubeClient) -> None:
         with pytest.raises(KubeClientException):
             async with kube_client.create_pod_container_logs_stream(
                 pod_name="unknown", container_name="unknown"
@@ -824,8 +900,11 @@ class TestKubeClient:
 
     @pytest.mark.asyncio
     async def test_create_log_stream_creating(
-        self, kube_config, kube_client, delete_pod_later
-    ):
+        self,
+        kube_config: KubeConfig,
+        kube_client: KubeClient,
+        delete_pod_later: Callable[[PodDescriptor], Awaitable[None]],
+    ) -> None:
         container = Container(
             image="ubuntu",
             command="true",
@@ -854,7 +933,12 @@ class TestKubeClient:
                 await asyncio.sleep(0.1)
 
     @pytest.mark.asyncio
-    async def test_create_log_stream(self, kube_config, kube_client, delete_pod_later):
+    async def test_create_log_stream(
+        self,
+        kube_config: KubeConfig,
+        kube_client: KubeClient,
+        delete_pod_later: Callable[[PodDescriptor], Awaitable[None]],
+    ) -> None:
         container = Container(
             image="ubuntu",
             command="true",
@@ -876,8 +960,8 @@ class TestKubeClient:
 
     @pytest.mark.asyncio
     async def test_create_docker_secret_non_existent_namespace(
-        self, kube_config, kube_client
-    ):
+        self, kube_config: KubeConfig, kube_client: KubeClient
+    ) -> None:
         name = str(uuid.uuid4())
         docker_secret = DockerRegistrySecret(
             name=name,
@@ -892,7 +976,9 @@ class TestKubeClient:
             await kube_client.create_docker_secret(docker_secret)
 
     @pytest.mark.asyncio
-    async def test_create_docker_secret_already_exists(self, kube_config, kube_client):
+    async def test_create_docker_secret_already_exists(
+        self, kube_config: KubeConfig, kube_client: KubeClient
+    ) -> None:
         name = str(uuid.uuid4())
         docker_secret = DockerRegistrySecret(
             name=name,
@@ -912,7 +998,9 @@ class TestKubeClient:
             await kube_client.delete_secret(name, kube_config.namespace)
 
     @pytest.mark.asyncio
-    async def test_update_docker_secret_already_exists(self, kube_config, kube_client):
+    async def test_update_docker_secret_already_exists(
+        self, kube_config: KubeConfig, kube_client: KubeClient
+    ) -> None:
         name = str(uuid.uuid4())
         docker_secret = DockerRegistrySecret(
             name=name,
@@ -930,7 +1018,9 @@ class TestKubeClient:
             await kube_client.delete_secret(name, kube_config.namespace)
 
     @pytest.mark.asyncio
-    async def test_update_docker_secret_non_existent(self, kube_config, kube_client):
+    async def test_update_docker_secret_non_existent(
+        self, kube_config: KubeConfig, kube_client: KubeClient
+    ) -> None:
         name = str(uuid.uuid4())
         docker_secret = DockerRegistrySecret(
             name=name,
@@ -946,8 +1036,8 @@ class TestKubeClient:
 
     @pytest.mark.asyncio
     async def test_update_docker_secret_create_non_existent(
-        self, kube_config, kube_client
-    ):
+        self, kube_config: KubeConfig, kube_client: KubeClient
+    ) -> None:
         name = str(uuid.uuid4())
         docker_secret = DockerRegistrySecret(
             name=name,
@@ -962,10 +1052,12 @@ class TestKubeClient:
         await kube_client.update_docker_secret(docker_secret)
 
     @pytest.fixture
-    async def delete_network_policy_later(self, kube_client):
+    async def delete_network_policy_later(
+        self, kube_client: KubeClient
+    ) -> AsyncIterator[Callable[[str], Awaitable[None]]]:
         names = []
 
-        async def _add_name(name):
+        async def _add_name(name: str) -> None:
             names.append(name)
 
         yield _add_name
@@ -978,8 +1070,11 @@ class TestKubeClient:
 
     @pytest.mark.asyncio
     async def test_create_default_network_policy(
-        self, kube_config, kube_client, delete_network_policy_later
-    ):
+        self,
+        kube_config: KubeConfig,
+        kube_client: KubeClient,
+        delete_network_policy_later: Callable[[str], Awaitable[None]],
+    ) -> None:
         name = str(uuid.uuid4())
         await delete_network_policy_later(name)
         payload = await kube_client.create_default_network_policy(
@@ -989,8 +1084,11 @@ class TestKubeClient:
 
     @pytest.mark.asyncio
     async def test_create_default_network_policy_twice(
-        self, kube_config, kube_client, delete_network_policy_later
-    ):
+        self,
+        kube_config: KubeConfig,
+        kube_client: KubeClient,
+        delete_network_policy_later: Callable[[str], Awaitable[None]],
+    ) -> None:
         name = str(uuid.uuid4())
         await delete_network_policy_later(name)
         payload = await kube_client.create_default_network_policy(
@@ -1003,19 +1101,28 @@ class TestKubeClient:
             )
 
     @pytest.mark.asyncio
-    async def test_get_network_policy_not_found(self, kube_config, kube_client):
+    async def test_get_network_policy_not_found(
+        self, kube_config: KubeConfig, kube_client: KubeClient
+    ) -> None:
         name = str(uuid.uuid4())
         with pytest.raises(StatusException, match="NotFound"):
             await kube_client.get_network_policy(name)
 
     @pytest.mark.asyncio
-    async def test_delete_network_policy_not_found(self, kube_config, kube_client):
+    async def test_delete_network_policy_not_found(
+        self, kube_config: KubeConfig, kube_client: KubeClient
+    ) -> None:
         name = str(uuid.uuid4())
         with pytest.raises(StatusException, match="NotFound"):
             await kube_client.delete_network_policy(name)
 
     @pytest.mark.asyncio
-    async def test_get_pod_events(self, kube_config, kube_client, delete_pod_later):
+    async def test_get_pod_events(
+        self,
+        kube_config: KubeConfig,
+        kube_client: TestKubeClient,
+        delete_pod_later: Callable[[PodDescriptor], Awaitable[None]],
+    ) -> None:
         container = Container(
             image="ubuntu",
             command="true",
@@ -1039,7 +1146,9 @@ class TestKubeClient:
             assert involved_object["name"] == pod.name
 
     @pytest.mark.asyncio
-    async def test_get_pod_events_empty(self, kube_config, kube_client):
+    async def test_get_pod_events_empty(
+        self, kube_config: KubeConfig, kube_client: KubeClient
+    ) -> None:
         pod_name = str(uuid.uuid4())
         events = await kube_client.get_pod_events(pod_name, kube_config.namespace)
 
@@ -1047,8 +1156,11 @@ class TestKubeClient:
 
     @pytest.mark.asyncio
     async def test_get_pod_container_stats(
-        self, kube_config, kube_client, delete_pod_later
-    ):
+        self,
+        kube_config: KubeConfig,
+        kube_client: KubeClient,
+        delete_pod_later: Callable[[PodDescriptor], Awaitable[None]],
+    ) -> None:
         command = 'bash -c "for i in {1..5}; do echo $i; sleep 1; done"'
         container = Container(
             image="ubuntu",
@@ -1078,15 +1190,20 @@ class TestKubeClient:
         assert pod_metrics[0].memory > 0.0
 
     @pytest.mark.asyncio
-    async def test_get_pod_container_stats_no_pod(self, kube_config, kube_client):
+    async def test_get_pod_container_stats_no_pod(
+        self, kube_config: KubeConfig, kube_client: KubeClient
+    ) -> None:
         pod_name = str(uuid.uuid4())
         with pytest.raises(JobNotFoundException):
             await kube_client.get_pod_container_stats(pod_name, pod_name)
 
     @pytest.mark.asyncio
     async def test_get_pod_container_stats_not_scheduled_yet(
-        self, kube_config, kube_client, delete_pod_later
-    ):
+        self,
+        kube_config: KubeConfig,
+        kube_client: KubeClient,
+        delete_pod_later: Callable[[PodDescriptor], Awaitable[None]],
+    ) -> None:
         container = Container(
             image="ubuntu",
             command="true",
@@ -1124,8 +1241,11 @@ class TestLogReader:
 
     @pytest.mark.asyncio
     async def test_read_instantly_succeeded(
-        self, kube_config, kube_client, delete_pod_later
-    ):
+        self,
+        kube_config: KubeConfig,
+        kube_client: KubeClient,
+        delete_pod_later: Callable[[PodDescriptor], Awaitable[None]],
+    ) -> None:
         container = Container(
             image="ubuntu",
             command="true",
@@ -1145,8 +1265,11 @@ class TestLogReader:
 
     @pytest.mark.asyncio
     async def test_read_instantly_failed(
-        self, kube_config, kube_client, delete_pod_later
-    ):
+        self,
+        kube_config: KubeConfig,
+        kube_client: KubeClient,
+        delete_pod_later: Callable[[PodDescriptor], Awaitable[None]],
+    ) -> None:
         command = 'bash -c "echo -n Failure!; false"'
         container = Container(
             image="ubuntu",
@@ -1166,7 +1289,12 @@ class TestLogReader:
         assert payload == b"Failure!"
 
     @pytest.mark.asyncio
-    async def test_read_timed_out(self, kube_config, kube_client, delete_pod_later):
+    async def test_read_timed_out(
+        self,
+        kube_config: KubeConfig,
+        kube_client: KubeClient,
+        delete_pod_later: Callable[[PodDescriptor], Awaitable[None]],
+    ) -> None:
         command = 'bash -c "sleep 5; echo -n Success!"'
         container = Container(
             image="ubuntu",
@@ -1189,7 +1317,12 @@ class TestLogReader:
             await self._consume_log_reader(log_reader)
 
     @pytest.mark.asyncio
-    async def test_read_succeeded(self, kube_config, kube_client, delete_pod_later):
+    async def test_read_succeeded(
+        self,
+        kube_config: KubeConfig,
+        kube_client: KubeClient,
+        delete_pod_later: Callable[[PodDescriptor], Awaitable[None]],
+    ) -> None:
         command = 'bash -c "for i in {1..5}; do echo $i; sleep 1; done"'
         container = Container(
             image="ubuntu",
@@ -1210,7 +1343,12 @@ class TestLogReader:
         assert payload == expected_payload.encode()
 
     @pytest.mark.asyncio
-    async def test_read_cancelled(self, kube_config, kube_client, delete_pod_later):
+    async def test_read_cancelled(
+        self,
+        kube_config: KubeConfig,
+        kube_client: KubeClient,
+        delete_pod_later: Callable[[PodDescriptor], Awaitable[None]],
+    ) -> None:
         command = 'bash -c "for i in {1..60}; do echo $i; sleep 1; done"'
         container = Container(
             image="ubuntu",
@@ -1235,9 +1373,43 @@ class TestLogReader:
         assert payload.startswith(expected_payload.encode())
 
     @pytest.mark.asyncio
+    async def test_create_elasticsearch_client_no_auth_header_fail(
+        self, es_hosts_auth: Sequence[str]
+    ) -> None:
+        es_config = ElasticsearchConfig(hosts=es_hosts_auth)
+        with pytest.raises(AuthenticationException):
+            async with create_elasticsearch_client(config=es_config):
+                pass
+
+    @pytest.mark.asyncio
+    async def test_create_elasticsearch_client_wrong_auth_fail(
+        self, es_hosts_auth: Sequence[str]
+    ) -> None:
+        es_config = ElasticsearchConfig(
+            hosts=es_hosts_auth, user="wrong-user", password="wrong-pw"
+        )
+        with pytest.raises(AuthenticationException):
+            async with create_elasticsearch_client(es_config):
+                pass
+
+    @pytest.mark.asyncio
+    async def test_create_elasticsearch_client_correct_credentials(
+        self, es_hosts_auth: Sequence[str]
+    ) -> None:
+        es_config = ElasticsearchConfig(
+            hosts=es_hosts_auth, user="testuser", password="password"
+        )
+        async with create_elasticsearch_client(es_config):
+            pass
+
+    @pytest.mark.asyncio
     async def test_elasticsearch_log_reader(
-        self, kube_config, kube_client, delete_pod_later, es_client
-    ):
+        self,
+        kube_config: KubeConfig,
+        kube_client: TestKubeClient,
+        delete_pod_later: Callable[[PodDescriptor], Awaitable[None]],
+        es_client: Elasticsearch,
+    ) -> None:
         command = 'bash -c "for i in {1..5}; do echo $i; sleep 1; done"'
         expected_payload = ("\n".join(str(i) for i in range(1, 6)) + "\n").encode()
         container = Container(
@@ -1270,8 +1442,13 @@ class TestLogReader:
         )
 
     async def _check_kube_logs(
-        self, kube_client, namespace_name, pod_name, container_name, expected_payload
-    ):
+        self,
+        kube_client: KubeClient,
+        namespace_name: str,
+        pod_name: str,
+        container_name: str,
+        expected_payload: Any,
+    ) -> None:
         log_reader = PodContainerLogReader(
             client=kube_client, pod_name=pod_name, container_name=container_name
         )
@@ -1280,14 +1457,14 @@ class TestLogReader:
 
     async def _check_es_logs(
         self,
-        es_client,
-        namespace_name,
-        pod_name,
-        container_name,
-        expected_payload,
-        timeout_s=120.0,
-        interval_s=1.0,
-    ):
+        es_client: Elasticsearch,
+        namespace_name: str,
+        pod_name: str,
+        container_name: str,
+        expected_payload: Any,
+        timeout_s: float = 120.0,
+        interval_s: float = 1.0,
+    ) -> None:
         payload = b""
         try:
             async with timeout(timeout_s):
@@ -1306,7 +1483,9 @@ class TestLogReader:
             pytest.fail(f"Pod logs did not match. Last payload: {payload}")
 
     @pytest.mark.asyncio
-    async def test_elasticsearch_log_reader_empty(self, es_client):
+    async def test_elasticsearch_log_reader_empty(
+        self, es_client: Elasticsearch
+    ) -> None:
         namespace_name = pod_name = container_name = str(uuid.uuid4())
         log_reader = ElasticsearchLogReader(
             es_client,
@@ -1319,8 +1498,12 @@ class TestLogReader:
 
     @pytest.mark.asyncio
     async def test_get_job_log_reader(
-        self, kube_config, kube_orchestrator, kube_client, delete_job_later
-    ):
+        self,
+        kube_config: KubeConfig,
+        kube_orchestrator: KubeOrchestrator,
+        kube_client: TestKubeClient,
+        delete_job_later: Callable[[Job], Awaitable[None]],
+    ) -> None:
         command = 'bash -c "for i in {1..5}; do echo $i; sleep 1; done"'
         expected_payload = ("\n".join(str(i) for i in range(1, 6)) + "\n").encode()
         container = Container(
@@ -1378,7 +1561,11 @@ class TestPodContainerDevShmSettings:
         return istream.read()
 
     async def run_command_get_logs(
-        self, kube_config, kube_client, delete_pod_later, resources
+        self,
+        kube_config: KubeConfig,
+        kube_client: KubeClient,
+        delete_pod_later: Callable[[PodDescriptor], Awaitable[None]],
+        resources: ContainerResources,
     ) -> bytes:
         command = "/bin/df --block-size M --output=avail /dev/shm"
         container = Container(image="ubuntu", command=command, resources=resources)
@@ -1395,8 +1582,12 @@ class TestPodContainerDevShmSettings:
         return await self._consume_log_reader(log_reader, chunk_size=1)
 
     async def _get_non_pending_status_for_pod(
-        self, kube_client, pod_name: str, interval_s: float = 0.5, max_time: float = 180
-    ):
+        self,
+        kube_client: KubeClient,
+        pod_name: str,
+        interval_s: float = 0.5,
+        max_time: float = 180,
+    ) -> PodStatus:
         t0 = time.monotonic()
         while True:
             pod_status = await kube_client.get_pod_status(pod_name)
@@ -1408,8 +1599,13 @@ class TestPodContainerDevShmSettings:
             interval_s *= 1.5
 
     async def run_command_get_status(
-        self, kube_config, kube_client, delete_pod_later, resources, command
-    ):
+        self,
+        kube_config: KubeConfig,
+        kube_client: KubeClient,
+        delete_pod_later: Callable[[PodDescriptor], Awaitable[None]],
+        resources: ContainerResources,
+        command: str,
+    ) -> JobStatusItem:
         container = Container(image="ubuntu", command=command, resources=resources)
         job_request = JobRequest.create(container)
         pod = PodDescriptor.from_job_request(
@@ -1427,8 +1623,11 @@ class TestPodContainerDevShmSettings:
 
     @pytest.mark.asyncio
     async def test_shm_extended_request_parameter_omitted(
-        self, kube_config, kube_client, delete_pod_later
-    ):
+        self,
+        kube_config: KubeConfig,
+        kube_client: KubeClient,
+        delete_pod_later: Callable[[PodDescriptor], Awaitable[None]],
+    ) -> None:
         resources = ContainerResources(cpu=0.1, memory_mb=128)
         run_output = await self.run_command_get_logs(
             kube_config, kube_client, delete_pod_later, resources
@@ -1437,8 +1636,11 @@ class TestPodContainerDevShmSettings:
 
     @pytest.mark.asyncio
     async def test_shm_extended_request_parameter_not_requested(
-        self, kube_config, kube_client, delete_pod_later
-    ):
+        self,
+        kube_config: KubeConfig,
+        kube_client: KubeClient,
+        delete_pod_later: Callable[[PodDescriptor], Awaitable[None]],
+    ) -> None:
         resources = ContainerResources(cpu=0.1, memory_mb=128, shm=False)
         run_output = await self.run_command_get_logs(
             kube_config, kube_client, delete_pod_later, resources
@@ -1447,8 +1649,11 @@ class TestPodContainerDevShmSettings:
 
     @pytest.mark.asyncio
     async def test_shm_extended_request_parameter_requested(
-        self, kube_config, kube_client, delete_pod_later
-    ):
+        self,
+        kube_config: KubeConfig,
+        kube_client: KubeClient,
+        delete_pod_later: Callable[[PodDescriptor], Awaitable[None]],
+    ) -> None:
         resources = ContainerResources(cpu=0.1, memory_mb=128, shm=True)
         run_output = await self.run_command_get_logs(
             kube_config, kube_client, delete_pod_later, resources
@@ -1457,8 +1662,11 @@ class TestPodContainerDevShmSettings:
 
     @pytest.mark.asyncio
     async def test_shm_extended_not_requested_try_create_huge_file(
-        self, kube_config, kube_client, delete_pod_later
-    ):
+        self,
+        kube_config: KubeConfig,
+        kube_client: KubeClient,
+        delete_pod_later: Callable[[PodDescriptor], Awaitable[None]],
+    ) -> None:
         command = "dd if=/dev/zero of=/dev/zero  bs=999999M  count=1"
         resources = ContainerResources(cpu=0.1, memory_mb=128, shm=False)
         run_output = await self.run_command_get_status(
@@ -1471,8 +1679,11 @@ class TestPodContainerDevShmSettings:
 
     @pytest.mark.asyncio
     async def test_shm_extended_requested_try_create_huge_file(
-        self, kube_config, kube_client, delete_pod_later
-    ):
+        self,
+        kube_config: KubeConfig,
+        kube_client: KubeClient,
+        delete_pod_later: Callable[[PodDescriptor], Awaitable[None]],
+    ) -> None:
         command = "dd if=/dev/zero of=/dev/shm/test bs=256M  count=1"
         resources = ContainerResources(cpu=0.1, memory_mb=1024, shm=True)
         run_output = await self.run_command_get_status(
@@ -1482,8 +1693,11 @@ class TestPodContainerDevShmSettings:
 
     @pytest.mark.asyncio
     async def test_shm_extended_not_requested_try_create_small_file(
-        self, kube_config, kube_client, delete_pod_later
-    ):
+        self,
+        kube_config: KubeConfig,
+        kube_client: KubeClient,
+        delete_pod_later: Callable[[PodDescriptor], Awaitable[None]],
+    ) -> None:
         command = "dd if=/dev/zero of=/dev/shm/test  bs=32M  count=1"
         resources = ContainerResources(cpu=0.1, memory_mb=128, shm=False)
         run_output = await self.run_command_get_status(
@@ -1495,8 +1709,12 @@ class TestPodContainerDevShmSettings:
 class TestNodeSelector:
     @pytest.mark.asyncio
     async def test_pod_node_selector(
-        self, kube_config, kube_client, delete_pod_later, delete_node_later
-    ):
+        self,
+        kube_config: KubeConfig,
+        kube_client: TestKubeClient,
+        delete_pod_later: Callable[[PodDescriptor], Awaitable[None]],
+        delete_node_later: Callable[[str], Awaitable[None]],
+    ) -> None:
         node_name = str(uuid.uuid4())
         await delete_node_later(node_name)
 
@@ -1514,12 +1732,12 @@ class TestNodeSelector:
     @pytest.mark.asyncio
     async def test_gpu(
         self,
-        kube_config,
-        kube_client,
-        delete_job_later,
-        kube_orchestrator,
-        kube_node_gpu,
-    ):
+        kube_config: KubeConfig,
+        kube_client: TestKubeClient,
+        delete_job_later: Callable[[Job], Awaitable[None]],
+        kube_orchestrator: KubeOrchestrator,
+        kube_node_gpu: str,
+    ) -> None:
         node_name = kube_node_gpu
         container = Container(
             image="ubuntu",
@@ -1539,8 +1757,12 @@ class TestNodeSelector:
 class TestPreemption:
     @pytest.mark.asyncio
     async def test_preemptible_job_lost_running_pod(
-        self, kube_config, kube_client, delete_job_later, kube_orchestrator
-    ):
+        self,
+        kube_config: KubeConfig,
+        kube_client: KubeClient,
+        delete_job_later: Callable[[Job], Awaitable[None]],
+        kube_orchestrator: KubeOrchestrator,
+    ) -> None:
         container = Container(
             image="ubuntu",
             command="bash -c 'sleep infinity'",
@@ -1573,12 +1795,12 @@ class TestPreemption:
     @pytest.mark.asyncio
     async def test_preemptible_job_lost_node_lost_pod(
         self,
-        kube_config,
-        kube_client,
-        delete_job_later,
-        kube_orchestrator,
-        kube_node_preemptible,
-    ):
+        kube_config: KubeConfig,
+        kube_client: TestKubeClient,
+        delete_job_later: Callable[[Job], Awaitable[None]],
+        kube_orchestrator: KubeOrchestrator,
+        kube_node_preemptible: str,
+    ) -> None:
         node_name = kube_node_preemptible
         container = Container(
             image="ubuntu",
@@ -1609,12 +1831,12 @@ class TestPreemption:
     @pytest.mark.asyncio
     async def test_preemptible_job_pending_pod_node_not_ready(
         self,
-        kube_config,
-        kube_client,
-        delete_job_later,
-        kube_orchestrator,
-        kube_node_preemptible,
-    ):
+        kube_config: KubeConfig,
+        kube_client: TestKubeClient,
+        delete_job_later: Callable[[Job], Awaitable[None]],
+        kube_orchestrator: KubeOrchestrator,
+        kube_node_preemptible: str,
+    ) -> None:
         node_name = kube_node_preemptible
         container = Container(
             image="ubuntu",
@@ -1654,12 +1876,12 @@ class TestPreemption:
     @pytest.mark.asyncio
     async def test_preemptible_job_recreation_failed(
         self,
-        kube_config,
-        kube_client,
-        delete_job_later,
-        kube_orchestrator,
-        kube_node_preemptible,
-    ):
+        kube_config: KubeConfig,
+        kube_client: TestKubeClient,
+        delete_job_later: Callable[[Job], Awaitable[None]],
+        kube_orchestrator: KubeOrchestrator,
+        kube_node_preemptible: str,
+    ) -> None:
         node_name = kube_node_preemptible
         container = Container(
             image="ubuntu",

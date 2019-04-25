@@ -3,7 +3,7 @@ import shlex
 import uuid
 from dataclasses import asdict, dataclass, field
 from pathlib import PurePath
-from typing import Dict, List, Optional
+from typing import Any, Dict, List, Optional
 from urllib.parse import urlsplit
 
 from yarl import URL
@@ -32,21 +32,21 @@ class ContainerVolume:
     read_only: bool = False
 
     @staticmethod
-    def create(*args, **kwargs) -> "ContainerVolume":
+    def create(*args: Any, **kwargs: Any) -> "ContainerVolume":
         return ContainerVolumeFactory(*args, **kwargs).create()
 
     @classmethod
-    def from_primitive(cls, payload: Dict) -> "ContainerVolume":
+    def from_primitive(cls, payload: Dict[str, Any]) -> "ContainerVolume":
         kwargs = payload.copy()
         # use dct.get() for backward compatibility
         # old DB records has no src_uri field
         kwargs["uri"] = URL(kwargs.get("uri", ""))
         kwargs["src_path"] = PurePath(kwargs["src_path"])
         kwargs["dst_path"] = PurePath(kwargs["dst_path"])
-        return cls(**kwargs)  # type: ignore
+        return cls(**kwargs)
 
-    def to_primitive(self) -> Dict:
-        payload: Dict = asdict(self)
+    def to_primitive(self) -> Dict[str, Any]:
+        payload: Dict[str, Any] = asdict(self)
         payload["uri"] = str(payload["uri"])
         payload["src_path"] = str(payload["src_path"])
         payload["dst_path"] = str(payload["dst_path"])
@@ -62,16 +62,16 @@ class ContainerResources:
     shm: Optional[bool] = None
 
     @classmethod
-    def from_primitive(cls, payload: Dict) -> "ContainerResources":
+    def from_primitive(cls, payload: Dict[str, Any]) -> "ContainerResources":
         return cls(
             cpu=payload["cpu"],
             memory_mb=payload["memory_mb"],
             gpu=payload.get("gpu"),
             gpu_model_id=payload.get("gpu_model_id"),
             shm=payload.get("shm"),
-        )  # type: ignore
+        )
 
-    def to_primitive(self) -> Dict:
+    def to_primitive(self) -> Dict[str, Any]:
         return asdict(self)
 
     def check_fit_into_pool_type(self, pool_type: ResourcePoolType) -> bool:
@@ -103,14 +103,14 @@ class ContainerHTTPServer:
     requires_auth: bool = False
 
     @classmethod
-    def from_primitive(cls, payload) -> "ContainerHTTPServer":
-        return cls(  # type: ignore
+    def from_primitive(cls, payload: Dict[str, Any]) -> "ContainerHTTPServer":
+        return cls(
             port=payload["port"],
             health_check_path=payload.get("health_check_path") or cls.health_check_path,
             requires_auth=payload.get("requires_auth", cls.requires_auth),
         )
 
-    def to_primitive(self) -> Dict:
+    def to_primitive(self) -> Dict[str, Any]:
         return asdict(self)
 
 
@@ -119,10 +119,10 @@ class ContainerSSHServer:
     port: int
 
     @classmethod
-    def from_primitive(cls, payload) -> "ContainerSSHServer":
-        return cls(port=payload["port"])  # type: ignore
+    def from_primitive(cls, payload: Dict[str, Any]) -> "ContainerSSHServer":
+        return cls(port=payload["port"])
 
-    def to_primitive(self) -> Dict:
+    def to_primitive(self) -> Dict[str, Any]:
         return asdict(self)
 
 
@@ -185,7 +185,7 @@ class Container:
         return bool(self.http_server and self.http_server.requires_auth)
 
     @classmethod
-    def from_primitive(cls, payload) -> "Container":
+    def from_primitive(cls, payload: Dict[str, Any]) -> "Container":
         kwargs = payload.copy()
         kwargs["resources"] = ContainerResources.from_primitive(kwargs["resources"])
         kwargs["volumes"] = [
@@ -207,10 +207,10 @@ class Container:
         kwargs.pop("port", None)
         kwargs.pop("health_check_path", None)
 
-        return cls(**kwargs)  # type: ignore
+        return cls(**kwargs)
 
-    def to_primitive(self) -> Dict:
-        payload: Dict = asdict(self)
+    def to_primitive(self) -> Dict[str, Any]:
+        payload: Dict[str, Any] = asdict(self)
         payload["resources"] = self.resources.to_primitive()
         payload["volumes"] = [volume.to_primitive() for volume in self.volumes]
         if self.http_server:
@@ -232,15 +232,15 @@ class JobRequest:
     ) -> "JobRequest":
         return cls(
             job_id=f"job-{uuid.uuid4()}", description=description, container=container
-        )  # type: ignore
+        )
 
     @classmethod
-    def from_primitive(cls, payload: Dict) -> "JobRequest":
+    def from_primitive(cls, payload: Dict[str, Any]) -> "JobRequest":
         kwargs = payload.copy()
         kwargs["container"] = Container.from_primitive(kwargs["container"])
-        return cls(**kwargs)  # type: ignore
+        return cls(**kwargs)
 
-    def to_primitive(self) -> Dict:
+    def to_primitive(self) -> Dict[str, Any]:
         result = {"job_id": self.job_id, "container": self.container.to_primitive()}
         if self.description:
             result["description"] = self.description
@@ -278,7 +278,7 @@ class JobStatus(str, enum.Enum):
 
     @classmethod
     def values(cls) -> List[str]:
-        return [item.value for item in cls]  # type: ignore
+        return [item.value for item in cls]
 
 
 class ContainerVolumeFactory:
@@ -319,7 +319,7 @@ class ContainerVolumeFactory:
         self._dst_mount_path: PurePath = dst_mount_path
         self._extend_dst_mount_path = extend_dst_mount_path
 
-    def _parse_uri(self):
+    def _parse_uri(self) -> None:
         url = urlsplit(self._uri)
         if url.scheme != self._scheme:
             raise ValueError(f"Invalid URI scheme: {self._uri}")
@@ -345,7 +345,7 @@ class ContainerVolumeFactory:
         dst_path = self._dst_mount_path
         if self._extend_dst_mount_path:
             dst_path /= self._path
-        return ContainerVolume(  # type: ignore
+        return ContainerVolume(
             uri=URL(self._uri),
             src_path=src_path,
             dst_path=dst_path,

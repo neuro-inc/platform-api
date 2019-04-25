@@ -1,8 +1,18 @@
 import asyncio
 import json
 import time
-from pathlib import PurePath
-from typing import Any, Dict, NamedTuple, Optional
+from typing import (
+    Any,
+    AsyncContextManager,
+    AsyncIterator,
+    Awaitable,
+    Callable,
+    Dict,
+    Iterator,
+    List,
+    NamedTuple,
+    Tuple,
+)
 from unittest import mock
 from uuid import uuid4
 
@@ -10,6 +20,7 @@ import aiohttp
 import aiohttp.web
 import multidict
 import pytest
+from aiohttp.client import ClientSession
 from aiohttp.web import (
     HTTPAccepted,
     HTTPBadRequest,
@@ -23,13 +34,10 @@ from neuro_auth_client import Permission
 from neuro_auth_client.client import Quota
 
 from platform_api.api import create_app
-from platform_api.config import (
-    Config,
-    DatabaseConfig,
-    LoggingConfig,
-    ServerConfig,
-    StorageConfig,
-)
+from platform_api.config import Config
+
+from .auth import _AuthClient, _User
+from .conftest import TestKubeClient
 
 
 class ApiConfig(NamedTuple):
@@ -37,63 +45,35 @@ class ApiConfig(NamedTuple):
     port: int
 
     @property
-    def endpoint(self):
+    def endpoint(self) -> str:
         return f"http://{self.host}:{self.port}/api/v1"
 
     @property
-    def model_base_url(self):
+    def model_base_url(self) -> str:
         return self.endpoint + "/models"
 
     @property
-    def jobs_base_url(self):
+    def jobs_base_url(self) -> str:
         return self.endpoint + "/jobs"
 
     def generate_job_url(self, job_id: str) -> str:
         return f"{self.jobs_base_url}/{job_id}"
 
     @property
-    def ping_url(self):
+    def ping_url(self) -> str:
         return self.endpoint + "/ping"
 
     @property
-    def config_url(self):
+    def config_url(self) -> str:
         return self.endpoint + "/config"
 
 
 @pytest.fixture
-def config_factory(kube_config, redis_config, auth_config, es_config):
-    def _factory(**kwargs):
-        server_config = ServerConfig()
-        storage_config = StorageConfig(host_mount_path=PurePath("/tmp"))  # type: ignore
-        database_config = DatabaseConfig(redis=redis_config)  # type: ignore
-        logging_config = LoggingConfig(elasticsearch=es_config)
-        return Config(
-            server=server_config,
-            storage=storage_config,
-            orchestrator=kube_config,
-            database=database_config,
-            auth=auth_config,
-            logging=logging_config,
-            **kwargs,
-        )
-
-    return _factory
-
-
-@pytest.fixture
-def config(config_factory):
-    return config_factory()
-
-
-@pytest.fixture
-def config_with_oauth(config_factory, oauth_config_dev):
-    return config_factory(oauth=oauth_config_dev)
-
-
-@pytest.fixture
-async def api_factory():
+async def api_factory() -> AsyncIterator[
+    Callable[[Config], AsyncContextManager[ApiConfig]]
+]:
     @asynccontextmanager
-    async def _factory(config):
+    async def _factory(config: Config) -> AsyncIterator[ApiConfig]:
         app = await create_app(config)
         runner = aiohttp.web.AppRunner(app)
         try:
@@ -109,7 +89,9 @@ async def api_factory():
 
 
 @asynccontextmanager
-async def create_local_app_server(config: Config, port: int = 8080):
+async def create_local_app_server(
+    config: Config, port: int = 8080
+) -> AsyncIterator[ApiConfig]:
     app = await create_app(config)
     runner = aiohttp.web.AppRunner(app)
     try:
@@ -124,30 +106,32 @@ async def create_local_app_server(config: Config, port: int = 8080):
 
 
 @pytest.fixture
-async def api(config):
+async def api(config: Config) -> AsyncIterator[ApiConfig]:
     async with create_local_app_server(config, port=8080) as api_config:
         yield api_config
 
 
 @pytest.fixture
-async def api_with_oauth(config_with_oauth):
+async def api_with_oauth(config_with_oauth: Config) -> AsyncIterator[ApiConfig]:
     async with create_local_app_server(config_with_oauth, port=8081) as api_config:
         yield api_config
 
 
 @pytest.fixture
-async def client():
+async def client() -> AsyncIterator[aiohttp.ClientSession]:
     async with aiohttp.ClientSession() as session:
         yield session
 
 
 class JobsClient:
-    def __init__(self, api_config, client, headers):
+    def __init__(
+        self, api_config: ApiConfig, client: ClientSession, headers: Dict[str, str]
+    ) -> None:
         self._api_config = api_config
         self._client = client
         self._headers = headers
 
-    async def get_all_jobs(self, params: Optional[Any] = None):
+    async def get_all_jobs(self, params: Any = None) -> List[Dict[str, Any]]:
         url = self._api_config.jobs_base_url
         async with self._client.get(
             url, headers=self._headers, params=params
@@ -155,9 +139,15 @@ class JobsClient:
             response_text = await response.text()
             assert response.status == HTTPOk.status_code, response_text
             result = await response.json()
-        return result["jobs"]
+        jobs = result["jobs"]
+        assert isinstance(jobs, list)
+        for job in jobs:
+            assert isinstance(job, dict)
+            for key in job:
+                assert isinstance(key, str)
+        return jobs
 
-    async def get_job_by_id(self, job_id: str):
+    async def get_job_by_id(self, job_id: str) -> Dict[str, Any]:
         url = self._api_config.generate_job_url(job_id)
         async with self._client.get(url, headers=self._headers) as response:
             response_text = await response.text()
@@ -167,7 +157,7 @@ class JobsClient:
 
     async def long_polling_by_job_id(
         self, job_id: str, status: str, interval_s: float = 0.5, max_time: float = 180
-    ):
+    ) -> Dict[str, Any]:
         t0 = time.monotonic()
         while True:
             response = await self.get_job_by_id(job_id)
@@ -179,7 +169,7 @@ class JobsClient:
                 pytest.fail(f"too long: {current_time:.3f} sec; resp: {response}")
             interval_s *= 1.5
 
-    async def delete_job(self, job_id: str, assert_success: bool = True):
+    async def delete_job(self, job_id: str, assert_success: bool = True) -> None:
         url = self._api_config.generate_job_url(job_id)
         async with self._client.delete(url, headers=self._headers) as response:
             if assert_success:
@@ -187,20 +177,29 @@ class JobsClient:
 
 
 @pytest.fixture
-def jobs_client_factory(api, client):
-    def impl(user):
+def jobs_client_factory(
+    api: ApiConfig, client: ClientSession
+) -> Iterator[Callable[[_User], JobsClient]]:
+    def impl(user: _User) -> JobsClient:
         return JobsClient(api, client, headers=user.headers)
 
     yield impl
 
 
 @pytest.fixture
-def jobs_client(jobs_client_factory, regular_user):
+def jobs_client(
+    jobs_client_factory: Callable[[_User], JobsClient], regular_user: _User
+) -> JobsClient:
     return jobs_client_factory(regular_user)
 
 
 @pytest.fixture
-async def infinite_job(api, client, regular_user, jobs_client):
+async def infinite_job(
+    api: ApiConfig,
+    client: aiohttp.ClientSession,
+    regular_user: _User,
+    jobs_client: JobsClient,
+) -> AsyncIterator[str]:
     request_payload = {
         "container": {
             "image": "ubuntu",
@@ -214,6 +213,7 @@ async def infinite_job(api, client, regular_user, jobs_client):
         assert response.status == HTTPAccepted.status_code, await response.text()
         result = await response.json()
         job_id = result["id"]
+        assert isinstance(job_id, str)
 
     yield job_id
 
@@ -222,26 +222,36 @@ async def infinite_job(api, client, regular_user, jobs_client):
 
 class TestApi:
     @pytest.mark.asyncio
-    async def test_ping(self, api, client):
+    async def test_ping(self, api: ApiConfig, client: aiohttp.ClientSession) -> None:
         async with client.get(api.ping_url) as response:
             assert response.status == HTTPOk.status_code
 
     @pytest.mark.asyncio
-    async def test_config(self, api, client):
+    async def test_config(self, api: ApiConfig, client: aiohttp.ClientSession) -> None:
         url = api.config_url
         async with client.get(url) as resp:
             assert resp.status == HTTPOk.status_code
             result = await resp.json()
-            assert result == {"registry_url": "https://registry.dev.neuromation.io"}
+            assert result == {
+                "registry_url": "https://registry.dev.neuromation.io",
+                "storage_url": "https://neu.ro/api/v1/storage",
+                "users_url": "https://neu.ro/api/v1/users",
+                "monitoring_url": "https://neu.ro/api/v1/monitoring",
+            }
 
     @pytest.mark.asyncio
-    async def test_config_with_oauth(self, api_with_oauth, client):
+    async def test_config_with_oauth(
+        self, api_with_oauth: ApiConfig, client: aiohttp.ClientSession
+    ) -> None:
         url = api_with_oauth.config_url
         async with client.get(url) as resp:
             assert resp.status == HTTPOk.status_code
             result = await resp.json()
             assert result == {
                 "registry_url": "https://registry.dev.neuromation.io",
+                "storage_url": "https://neu.ro/api/v1/storage",
+                "users_url": "https://neu.ro/api/v1/users",
+                "monitoring_url": "https://neu.ro/api/v1/monitoring",
                 "auth_url": "https://platform-auth0-url/authorize",
                 "token_url": "https://platform-auth0-url/oauth/token",
                 "client_id": "client_id",
@@ -256,8 +266,8 @@ class TestApi:
 
 
 @pytest.fixture
-async def model_request_factory():
-    def _factory(owner: str):
+async def model_request_factory() -> Callable[[str], Dict[str, Any]]:
+    def _factory(owner: str) -> Dict[str, Any]:
         return {
             "container": {
                 "image": "ubuntu",
@@ -274,8 +284,8 @@ async def model_request_factory():
 
 
 @pytest.fixture
-def job_request_factory():
-    def _factory():
+def job_request_factory() -> Callable[[], Dict[str, Any]]:
+    def _factory() -> Dict[str, Any]:
         # TODO(ajuszkowski) Optional fields (as "name") should not have a value here
         return {
             "container": {
@@ -291,26 +301,37 @@ def job_request_factory():
 
 
 @pytest.fixture
-async def model_train(model_request_factory, regular_user):
+async def model_train(
+    model_request_factory: Callable[[str], Dict[str, Any]], regular_user: _User
+) -> Dict[str, Any]:
     return model_request_factory(regular_user.name)
 
 
 @pytest.fixture
-async def job_submit(job_request_factory):
+async def job_submit(
+    job_request_factory: Callable[[], Dict[str, Any]]
+) -> Dict[str, Any]:
     return job_request_factory()
 
 
 class TestModels:
     @pytest.mark.asyncio
-    async def test_create_model_unauthorized(self, api, client, model_train):
+    async def test_create_model_unauthorized(
+        self, api: ApiConfig, client: aiohttp.ClientSession, model_train: Dict[str, Any]
+    ) -> None:
         url = api.model_base_url
         async with client.post(url, json=model_train) as response:
             assert response.status == HTTPUnauthorized.status_code
 
     @pytest.mark.asyncio
     async def test_create_model_invalid_job_name(
-        self, api, client, model_train, jobs_client, regular_user
-    ):
+        self,
+        api: ApiConfig,
+        client: aiohttp.ClientSession,
+        model_train: Dict[str, Any],
+        jobs_client: JobsClient,
+        regular_user: _User,
+    ) -> None:
         url = api.model_base_url
         model_train["is_preemptible"] = True
         model_train["name"] = "Invalid_job_name!"
@@ -327,8 +348,13 @@ class TestModels:
 
     @pytest.mark.asyncio
     async def test_create_model(
-        self, api, client, model_train, jobs_client, regular_user
-    ):
+        self,
+        api: ApiConfig,
+        client: aiohttp.ClientSession,
+        model_train: Dict[str, Any],
+        jobs_client: JobsClient,
+        regular_user: _User,
+    ) -> None:
         url = api.model_base_url
         model_train["is_preemptible"] = True
         model_train["container"]["http"]["requires_auth"] = True
@@ -361,8 +387,13 @@ class TestModels:
 
     @pytest.mark.asyncio
     async def test_create_model_without_name_http_url_named_not_sent(
-        self, api, client, model_train, jobs_client, regular_user
-    ):
+        self,
+        api: ApiConfig,
+        client: aiohttp.ClientSession,
+        model_train: Dict[str, Any],
+        jobs_client: JobsClient,
+        regular_user: _User,
+    ) -> None:
         url = api.model_base_url
         async with client.post(
             url, headers=regular_user.headers, json=model_train
@@ -377,8 +408,13 @@ class TestModels:
 
     @pytest.mark.asyncio
     async def test_create_model_with_ssh_and_http(
-        self, api, client, model_train, jobs_client, regular_user
-    ):
+        self,
+        api: ApiConfig,
+        client: aiohttp.ClientSession,
+        model_train: Dict[str, Any],
+        jobs_client: JobsClient,
+        regular_user: _User,
+    ) -> None:
         url = api.model_base_url
         model_train["container"]["ssh"] = {"port": 7867}
         async with client.post(
@@ -399,8 +435,13 @@ class TestModels:
 
     @pytest.mark.asyncio
     async def test_create_model_with_ssh_only(
-        self, api, client, model_train, jobs_client, regular_user
-    ):
+        self,
+        api: ApiConfig,
+        client: aiohttp.ClientSession,
+        model_train: Dict[str, Any],
+        jobs_client: JobsClient,
+        regular_user: _User,
+    ) -> None:
         url = api.model_base_url
         model_train["container"]["ssh"] = {"port": 7867}
         model_train["container"].pop("http", None)
@@ -419,8 +460,13 @@ class TestModels:
 
     @pytest.mark.asyncio
     async def test_model_create_unknown_gpu_model(
-        self, jobs_client, api, client, regular_user, kube_node_gpu
-    ):
+        self,
+        jobs_client: JobsClient,
+        api: ApiConfig,
+        client: aiohttp.ClientSession,
+        regular_user: _User,
+        kube_node_gpu: str,
+    ) -> None:
         request_payload = {
             "container": {
                 "image": "ubuntu",
@@ -446,8 +492,14 @@ class TestModels:
 
     @pytest.mark.asyncio
     async def test_create_gpu_model(
-        self, jobs_client, api, client, regular_user, kube_node_gpu, kube_client
-    ):
+        self,
+        jobs_client: JobsClient,
+        api: ApiConfig,
+        client: aiohttp.ClientSession,
+        regular_user: _User,
+        kube_node_gpu: str,
+        kube_client: TestKubeClient,
+    ) -> None:
         request_payload = {
             "container": {
                 "image": "ubuntu",
@@ -473,7 +525,13 @@ class TestModels:
         await kube_client.wait_pod_scheduled(job_id, kube_node_gpu)
 
     @pytest.mark.asyncio
-    async def test_env_var_sourcing(self, api, client, jobs_client, regular_user):
+    async def test_env_var_sourcing(
+        self,
+        api: ApiConfig,
+        client: aiohttp.ClientSession,
+        jobs_client: JobsClient,
+        regular_user: _User,
+    ) -> None:
         np_result_path = f"/var/storage/{regular_user.name}/result"
         cmd = f'bash -c \'[ "$NP_RESULT_PATH" == "{np_result_path}" ]\''
         payload = {
@@ -497,7 +555,9 @@ class TestModels:
         await jobs_client.delete_job(job_id=job_id)
 
     @pytest.mark.asyncio
-    async def test_incorrect_request(self, api, client, regular_user):
+    async def test_incorrect_request(
+        self, api: ApiConfig, client: aiohttp.ClientSession, regular_user: _User
+    ) -> None:
         json_model_train = {"wrong_key": "wrong_value"}
         url = api.model_base_url
         async with client.post(
@@ -508,7 +568,13 @@ class TestModels:
             assert """'container': DataError(is required)""" in data["error"]
 
     @pytest.mark.asyncio
-    async def test_broken_docker_image(self, api, client, jobs_client, regular_user):
+    async def test_broken_docker_image(
+        self,
+        api: ApiConfig,
+        client: aiohttp.ClientSession,
+        jobs_client: JobsClient,
+        regular_user: _User,
+    ) -> None:
         payload = {
             "container": {
                 "image": "some_broken_image",
@@ -529,7 +595,13 @@ class TestModels:
         await jobs_client.long_polling_by_job_id(job_id=job_id, status="failed")
 
     @pytest.mark.asyncio
-    async def test_forbidden_storage_uris(self, api, client, jobs_client, regular_user):
+    async def test_forbidden_storage_uris(
+        self,
+        api: ApiConfig,
+        client: aiohttp.ClientSession,
+        jobs_client: JobsClient,
+        regular_user: _User,
+    ) -> None:
         payload = {
             "container": {
                 "image": "ubuntu",
@@ -547,7 +619,13 @@ class TestModels:
             assert response.status == HTTPForbidden.status_code, await response.text()
 
     @pytest.mark.asyncio
-    async def test_forbidden_image(self, api, client, jobs_client, regular_user):
+    async def test_forbidden_image(
+        self,
+        api: ApiConfig,
+        client: aiohttp.ClientSession,
+        jobs_client: JobsClient,
+        regular_user: _User,
+    ) -> None:
         payload = {
             "container": {
                 "image": f"registry.dev.neuromation.io/anotheruser/image:tag",
@@ -565,7 +643,13 @@ class TestModels:
             assert response.status == HTTPForbidden.status_code, await response.text()
 
     @pytest.mark.asyncio
-    async def test_allowed_image(self, api, client, jobs_client, regular_user):
+    async def test_allowed_image(
+        self,
+        api: ApiConfig,
+        client: aiohttp.ClientSession,
+        jobs_client: JobsClient,
+        regular_user: _User,
+    ) -> None:
         payload = {
             "container": {
                 "image": f"registry.dev.neuromation.io/{regular_user.name}/image:tag",
@@ -588,15 +672,17 @@ class TestModels:
 
 class TestJobs:
     @pytest.mark.asyncio
-    async def test_create_job_unauthorized_no_token(self, api, client, model_train):
+    async def test_create_job_unauthorized_no_token(
+        self, api: ApiConfig, client: aiohttp.ClientSession, model_train: Dict[str, Any]
+    ) -> None:
         url = api.jobs_base_url
         async with client.post(url, json=model_train) as response:
             assert response.status == HTTPUnauthorized.status_code
 
     @pytest.mark.asyncio
     async def test_create_job_unauthorized_invalid_token(
-        self, api, client, model_train
-    ):
+        self, api: ApiConfig, client: aiohttp.ClientSession, model_train: Dict[str, Any]
+    ) -> None:
         url = api.jobs_base_url
         headers = {"Authorization": "Bearer INVALID"}
         async with client.post(url, headers=headers, json=model_train) as response:
@@ -604,8 +690,13 @@ class TestJobs:
 
     @pytest.mark.asyncio
     async def test_create_job_invalid_job_name(
-        self, api, client, job_submit, jobs_client, regular_user
-    ):
+        self,
+        api: ApiConfig,
+        client: aiohttp.ClientSession,
+        job_submit: Dict[str, Any],
+        jobs_client: JobsClient,
+        regular_user: _User,
+    ) -> None:
         url = api.jobs_base_url
         job_submit["is_preemptible"] = True
         job_submit["name"] = "Invalid_job_name!"
@@ -621,7 +712,14 @@ class TestJobs:
             assert payload == {"error": e}
 
     @pytest.mark.asyncio
-    async def test_create_job(self, api, client, job_submit, jobs_client, regular_user):
+    async def test_create_job(
+        self,
+        api: ApiConfig,
+        client: aiohttp.ClientSession,
+        job_submit: Dict[str, Any],
+        jobs_client: JobsClient,
+        regular_user: _User,
+    ) -> None:
         job_name = f"test-job-name-{uuid4()}"
         url = api.jobs_base_url
         job_submit["is_preemptible"] = True
@@ -655,8 +753,13 @@ class TestJobs:
 
     @pytest.mark.asyncio
     async def test_create_job_without_name_http_url_named_not_sent(
-        self, api, client, job_submit, jobs_client, regular_user
-    ):
+        self,
+        api: ApiConfig,
+        client: aiohttp.ClientSession,
+        job_submit: Dict[str, Any],
+        jobs_client: JobsClient,
+        regular_user: _User,
+    ) -> None:
         url = api.jobs_base_url
         async with client.post(
             url, headers=regular_user.headers, json=job_submit
@@ -671,8 +774,13 @@ class TestJobs:
 
     @pytest.mark.asyncio
     async def test_create_multiple_jobs_with_same_name_fail(
-        self, api, client, job_submit, regular_user, jobs_client
-    ):
+        self,
+        api: ApiConfig,
+        client: aiohttp.ClientSession,
+        job_submit: Dict[str, Any],
+        regular_user: _User,
+        jobs_client: JobsClient,
+    ) -> None:
         url = api.jobs_base_url
         headers = regular_user.headers
         job_name = "test-job-name"
@@ -701,8 +809,13 @@ class TestJobs:
 
     @pytest.mark.asyncio
     async def test_create_job_gpu_quota_allows(
-        self, api, client, job_request_factory, jobs_client, regular_user_factory
-    ):
+        self,
+        api: ApiConfig,
+        client: aiohttp.ClientSession,
+        job_request_factory: Callable[[], Dict[str, Any]],
+        jobs_client: Callable[[], Any],
+        regular_user_factory: Callable[..., Any],
+    ) -> None:
         quota = Quota(total_gpu_run_time_minutes=100)
         user = await regular_user_factory(quota=quota)
         url = api.jobs_base_url
@@ -713,8 +826,13 @@ class TestJobs:
 
     @pytest.mark.asyncio
     async def test_create_job_non_gpu_quota_allows(
-        self, api, client, job_request_factory, jobs_client, regular_user_factory
-    ):
+        self,
+        api: ApiConfig,
+        client: aiohttp.ClientSession,
+        job_request_factory: Callable[[], Dict[str, Any]],
+        jobs_client: Callable[[], Any],
+        regular_user_factory: Callable[..., Any],
+    ) -> None:
         quota = Quota(total_non_gpu_run_time_minutes=100)
         user = await regular_user_factory(quota=quota)
         url = api.jobs_base_url
@@ -724,8 +842,13 @@ class TestJobs:
 
     @pytest.mark.asyncio
     async def test_create_job_gpu_quota_exceeded(
-        self, api, client, job_request_factory, jobs_client, regular_user_factory
-    ):
+        self,
+        api: ApiConfig,
+        client: aiohttp.ClientSession,
+        job_request_factory: Callable[[], Dict[str, Any]],
+        jobs_client: JobsClient,
+        regular_user_factory: Callable[..., Any],
+    ) -> None:
         quota = Quota(total_gpu_run_time_minutes=0)
         user = await regular_user_factory(quota=quota)
         url = api.jobs_base_url
@@ -738,8 +861,13 @@ class TestJobs:
 
     @pytest.mark.asyncio
     async def test_create_job_non_gpu_quota_exceeded(
-        self, api, client, job_request_factory, jobs_client, regular_user_factory
-    ):
+        self,
+        api: ApiConfig,
+        client: aiohttp.ClientSession,
+        job_request_factory: Callable[[], Dict[str, Any]],
+        jobs_client: JobsClient,
+        regular_user_factory: Callable[..., Any],
+    ) -> None:
         quota = Quota(total_non_gpu_run_time_minutes=0)
         user = await regular_user_factory(quota=quota)
         url = api.jobs_base_url
@@ -751,8 +879,13 @@ class TestJobs:
 
     @pytest.mark.asyncio
     async def test_create_multiple_jobs_with_same_name_after_first_finished(
-        self, api, client, job_submit, regular_user, jobs_client
-    ):
+        self,
+        api: ApiConfig,
+        client: aiohttp.ClientSession,
+        job_submit: Dict[str, Any],
+        regular_user: _User,
+        jobs_client: JobsClient,
+    ) -> None:
         url = api.jobs_base_url
         headers = regular_user.headers
         job_submit["name"] = "test-job-name"
@@ -771,14 +904,19 @@ class TestJobs:
             assert response.status == HTTPAccepted.status_code
 
     @pytest.mark.asyncio
-    async def test_get_all_jobs_clear(self, jobs_client):
+    async def test_get_all_jobs_clear(self, jobs_client: JobsClient) -> None:
         jobs = await jobs_client.get_all_jobs()
         assert jobs == []
 
     @pytest.mark.asyncio
     async def test_get_all_jobs_filter_wrong_status(
-        self, api, client, jobs_client, regular_user, model_request_factory
-    ):
+        self,
+        api: ApiConfig,
+        client: aiohttp.ClientSession,
+        jobs_client: JobsClient,
+        regular_user: _User,
+        model_request_factory: Callable[[str], Dict[str, Any]],
+    ) -> None:
         headers = regular_user.headers
         url = api.jobs_base_url
 
@@ -786,14 +924,19 @@ class TestJobs:
         async with client.get(url, headers=headers, params=filters) as response:
             assert response.status == HTTPBadRequest.status_code
 
-        filters = [("status", "running"), ("status", "abrakadabra")]
-        async with client.get(url, headers=headers, params=filters) as response:
+        filters2 = [("status", "running"), ("status", "abrakadabra")]
+        async with client.get(url, headers=headers, params=filters2) as response:
             assert response.status == HTTPBadRequest.status_code
 
     @pytest.mark.asyncio
     async def test_get_all_jobs_filter_by_status_only_single_status_pending(
-        self, api, client, jobs_client, regular_user, model_request_factory
-    ):
+        self,
+        api: ApiConfig,
+        client: aiohttp.ClientSession,
+        jobs_client: JobsClient,
+        regular_user: _User,
+        model_request_factory: Callable[[str], Dict[str, Any]],
+    ) -> None:
         url = api.model_base_url
         headers = regular_user.headers
         model_request = model_request_factory(regular_user.name)
@@ -807,34 +950,39 @@ class TestJobs:
 
         filters = {"status": "pending"}
         jobs = await jobs_client.get_all_jobs(filters)
-        jobs = {job["id"] for job in jobs}
-        assert jobs == {job_id}
+        job_ids = {job["id"] for job in jobs}
+        assert job_ids == {job_id}
 
         filters = {"status": "running"}
         jobs = await jobs_client.get_all_jobs(filters)
-        jobs = {job["id"] for job in jobs}
-        assert jobs == set()
+        job_ids = {job["id"] for job in jobs}
+        assert job_ids == set()
 
     @pytest.mark.asyncio
     async def test_get_all_jobs_filter_by_status_only(
-        self, api, client, jobs_client, regular_user, model_request_factory
-    ):
+        self,
+        api: ApiConfig,
+        client: aiohttp.ClientSession,
+        jobs_client: JobsClient,
+        regular_user: _User,
+        model_request_factory: Callable[[str], Dict[str, Any]],
+    ) -> None:
         url = api.model_base_url
         headers = regular_user.headers
         model_request = model_request_factory(regular_user.name)
         model_request["container"]["command"] = "sleep 20m"
-        job_ids = []
+        job_ids_list = []
         for _ in range(5):
             async with client.post(url, headers=headers, json=model_request) as resp:
                 assert resp.status == HTTPAccepted.status_code
                 result = await resp.json()
-                job_ids.append(result["job_id"])
+                job_ids_list.append(result["job_id"])
 
-        job_ids_killed = set(job_ids[:2])
-        job_ids_alive = set(job_ids[2:])
-        job_ids = set(job_ids)
+        job_ids_killed = set(job_ids_list[:2])
+        job_ids_alive = set(job_ids_list[2:])
+        job_ids_all = set(job_ids_list)
 
-        for job_id in job_ids:
+        for job_id in job_ids_all:
             await jobs_client.long_polling_by_job_id(job_id, status="running")
 
         for job_id in job_ids_killed:
@@ -844,13 +992,13 @@ class TestJobs:
         # two statuses, actually filter out values
         filters = [("status", "pending"), ("status", "running")]
         jobs = await jobs_client.get_all_jobs(filters)
-        jobs = {job["id"] for job in jobs}
-        assert jobs == job_ids_alive
+        job_ids = {job["id"] for job in jobs}
+        assert job_ids == job_ids_alive
 
         # no filter
         jobs = await jobs_client.get_all_jobs()
-        jobs = {job["id"] for job in jobs}
-        assert jobs == job_ids
+        job_ids = {job["id"] for job in jobs}
+        assert job_ids == job_ids_all
 
         # all statuses, same as no filter1
         filters = [
@@ -860,14 +1008,14 @@ class TestJobs:
             ("status", "succeeded"),
         ]
         jobs = await jobs_client.get_all_jobs(filters)
-        jobs = {job["id"] for job in jobs}
-        assert jobs == job_ids
+        job_ids = {job["id"] for job in jobs}
+        assert job_ids == job_ids_all
 
         # single status, actually filter out values
-        filters = {"status": "succeeded"}
-        jobs = await jobs_client.get_all_jobs(filters)
-        jobs = {job["id"] for job in jobs}
-        assert jobs == job_ids_killed
+        filters2 = {"status": "succeeded"}
+        jobs = await jobs_client.get_all_jobs(filters2)
+        job_ids = {job["id"] for job in jobs}
+        assert job_ids == job_ids_killed
 
         # cleanup
         for job_id in job_ids_alive:
@@ -876,13 +1024,17 @@ class TestJobs:
     @pytest.fixture
     async def setup_new_user_for_filtration(
         self,
-        api,
-        regular_user_factory,
-        jobs_client_factory,
-        job_request_factory,
-        client,
-    ):
-        async def factory(job_name: str = "test-job-name"):
+        api: ApiConfig,
+        regular_user_factory: Callable[[], Any],
+        jobs_client_factory: Callable[[_User], JobsClient],
+        job_request_factory: Callable[[], Dict[str, Any]],
+        client: aiohttp.ClientSession,
+    ) -> AsyncIterator[
+        Callable[[str], Awaitable[Tuple[_User, JobsClient, Dict[str, Any]]]]
+    ]:
+        async def factory(
+            job_name: str = "test-job-name"
+        ) -> Tuple[_User, JobsClient, Dict[str, Any]]:
             url = api.jobs_base_url
             user = await regular_user_factory()
             jobs_client = jobs_client_factory(user)
@@ -895,7 +1047,7 @@ class TestJobs:
             jobs_dict["job_name:yes"] = dict()
             jobs_dict["job_name:no"] = dict()
 
-            async def run_job(with_name: bool, do_kill: bool):
+            async def run_job(with_name: bool, do_kill: bool) -> None:
                 if with_name:
                     job_request["name"] = job_name
                     job_name_key = "job_name:yes"
@@ -929,10 +1081,15 @@ class TestJobs:
         yield factory
 
     @pytest.fixture
-    async def run_job(self, api, client, jobs_client, jobs_client_factory):
-        job_ids = []
-
-        async def _impl(user, job_request, do_kill=False):
+    async def run_job(
+        self,
+        api: ApiConfig,
+        client: aiohttp.ClientSession,
+        jobs_client_factory: Callable[[_User], JobsClient],
+    ) -> AsyncIterator[Callable[[_User, Dict[str, Any], bool], Awaitable[str]]]:
+        async def _impl(
+            user: _User, job_request: Dict[str, Any], do_kill: bool = False
+        ) -> str:
             url = api.jobs_base_url
             headers = user.headers
             jobs_client = jobs_client_factory(user)
@@ -940,6 +1097,7 @@ class TestJobs:
                 assert resp.status == HTTPAccepted.status_code, str(job_request)
                 data = await resp.json()
                 job_id = data["id"]
+                assert isinstance(job_id, str)
                 await jobs_client.long_polling_by_job_id(job_id, "running")
                 if do_kill:
                     await jobs_client.delete_job(job_id)
@@ -954,8 +1112,10 @@ class TestJobs:
             await jobs_client.delete_job(job_id=job_id, assert_success=False)
 
     @pytest.fixture
-    async def share_job(self, auth_client):
-        async def _impl(owner, follower, job_id):
+    async def share_job(
+        self, auth_client: _AuthClient
+    ) -> AsyncIterator[Callable[[_User, _User, Any], Awaitable[None]]]:
+        async def _impl(owner: _User, follower: _User, job_id: str) -> None:
             permission = Permission(uri=f"job://{owner.name}/{job_id}", action="read")
             await auth_client.grant_user_permissions(
                 follower.name, [permission], token=owner.token
@@ -966,24 +1126,26 @@ class TestJobs:
     @pytest.mark.asyncio
     async def test_get_all_jobs_filter_by_name_owner_and_status(
         self,
-        api,
-        client,
-        regular_user_factory,
-        jobs_client_factory,
-        job_request_factory,
-        run_job,
-        share_job,
-        setup_new_user_for_filtration,
-    ):
+        api: ApiConfig,
+        client: aiohttp.ClientSession,
+        regular_user_factory: Callable[[], Any],
+        jobs_client_factory: Callable[[_User], JobsClient],
+        job_request_factory: Callable[[], Dict[str, Any]],
+        run_job: Callable[..., Awaitable[None]],
+        share_job: Callable[[_User, _User, Any], Awaitable[None]],
+        setup_new_user_for_filtration: Callable[
+            [str], Awaitable[Tuple[_User, JobsClient, Dict[str, Any]]]
+        ],
+    ) -> None:
         job_name = "test-job-name"
 
-        def create_job_request_with_name():
+        def create_job_request_with_name() -> Dict[str, Any]:
             job_request = job_request_factory()
             job_request["container"]["command"] = "sleep 30m"
             job_request["name"] = job_name
             return job_request
 
-        def create_job_request_no_name():
+        def create_job_request_no_name() -> Dict[str, Any]:
             job_request = job_request_factory()
             job_request["container"]["command"] = "sleep 30m"
             return job_request
@@ -1015,8 +1177,8 @@ class TestJobs:
         # filter: another owner
         filters = [("owner", usr2.name)]
         jobs = await jobs_client_usr1.get_all_jobs(filters)
-        jobs = {job["id"] for job in jobs}
-        assert jobs == {
+        job_ids = {job["id"] for job in jobs}
+        assert job_ids == {
             job_usr2_with_name_killed,
             job_usr2_no_name_killed,
             job_usr2_with_name,
@@ -1026,8 +1188,8 @@ class TestJobs:
         # filter: self owner
         filters = [("owner", usr1.name)]
         jobs = await jobs_client_usr1.get_all_jobs(filters)
-        jobs = {job["id"] for job in jobs}
-        assert jobs == {
+        job_ids = {job["id"] for job in jobs}
+        assert job_ids == {
             job_usr1_with_name_killed,
             job_usr1_no_name_killed,
             job_usr1_with_name,
@@ -1037,8 +1199,8 @@ class TestJobs:
         # filter: both owners
         filters = [("owner", usr1.name), ("owner", usr2.name)]
         jobs = await jobs_client_usr1.get_all_jobs(filters)
-        jobs = {job["id"] for job in jobs}
-        assert jobs == {
+        job_ids = {job["id"] for job in jobs}
+        assert job_ids == {
             job_usr1_with_name_killed,
             job_usr1_no_name_killed,
             job_usr1_with_name,
@@ -1052,20 +1214,20 @@ class TestJobs:
         # filter: another owner + job name
         filters = [("name", job_name), ("owner", usr2.name)]
         jobs = await jobs_client_usr1.get_all_jobs(filters)
-        jobs = {job["id"] for job in jobs}
-        assert jobs == {job_usr2_with_name_killed, job_usr2_with_name}
+        job_ids = {job["id"] for job in jobs}
+        assert job_ids == {job_usr2_with_name_killed, job_usr2_with_name}
 
         # filter: self owner + job name
         filters = [("name", job_name), ("owner", usr1.name)]
         jobs = await jobs_client_usr1.get_all_jobs(filters)
-        jobs = {job["id"] for job in jobs}
-        assert jobs == {job_usr1_with_name_killed, job_usr1_with_name}
+        job_ids = {job["id"] for job in jobs}
+        assert job_ids == {job_usr1_with_name_killed, job_usr1_with_name}
 
         # filter: both owners + job name
         filters = [("name", job_name), ("owner", usr1.name), ("owner", usr2.name)]
         jobs = await jobs_client_usr1.get_all_jobs(filters)
-        jobs = {job["id"] for job in jobs}
-        assert jobs == {
+        job_ids = {job["id"] for job in jobs}
+        assert job_ids == {
             job_usr1_with_name_killed,
             job_usr1_with_name,
             job_usr2_with_name_killed,
@@ -1075,20 +1237,20 @@ class TestJobs:
         # filter: self owner + status
         filters = [("owner", usr1.name), ("status", "running")]
         jobs = await jobs_client_usr1.get_all_jobs(filters)
-        jobs = {job["id"] for job in jobs}
-        assert jobs == {job_usr1_with_name, job_usr1_no_name}
+        job_ids = {job["id"] for job in jobs}
+        assert job_ids == {job_usr1_with_name, job_usr1_no_name}
 
         # filter: another owner + status
         filters = [("owner", usr2.name), ("status", "running")]
         jobs = await jobs_client_usr1.get_all_jobs(filters)
-        jobs = {job["id"] for job in jobs}
-        assert jobs == {job_usr2_with_name, job_usr2_no_name}
+        job_ids = {job["id"] for job in jobs}
+        assert job_ids == {job_usr2_with_name, job_usr2_no_name}
 
         # filter: both owners + status
         filters = [("owner", usr1.name), ("owner", usr2.name), ("status", "running")]
         jobs = await jobs_client_usr1.get_all_jobs(filters)
-        jobs = {job["id"] for job in jobs}
-        assert jobs == {
+        job_ids = {job["id"] for job in jobs}
+        assert job_ids == {
             job_usr2_with_name,
             job_usr2_no_name,
             job_usr1_with_name,
@@ -1098,14 +1260,14 @@ class TestJobs:
         # filter: self owner + name + status
         filters = [("owner", usr1.name), ("name", job_name), ("status", "succeeded")]
         jobs = await jobs_client_usr1.get_all_jobs(filters)
-        jobs = {job["id"] for job in jobs}
-        assert jobs == {job_usr1_with_name_killed}
+        job_ids = {job["id"] for job in jobs}
+        assert job_ids == {job_usr1_with_name_killed}
 
         # filter: another owner + name + status
         filters = [("owner", usr2.name), ("name", job_name), ("status", "succeeded")]
         jobs = await jobs_client_usr1.get_all_jobs(filters)
-        jobs = {job["id"] for job in jobs}
-        assert jobs == {job_usr2_with_name_killed}
+        job_ids = {job["id"] for job in jobs}
+        assert job_ids == {job_usr2_with_name_killed}
 
         # filter: both owners + name + status
         filters = [
@@ -1115,34 +1277,35 @@ class TestJobs:
             ("status", "succeeded"),
         ]
         jobs = await jobs_client_usr1.get_all_jobs(filters)
-        jobs = {job["id"] for job in jobs}
-        assert jobs == {job_usr1_with_name_killed, job_usr2_with_name_killed}
+        job_ids = {job["id"] for job in jobs}
+        assert job_ids == {job_usr1_with_name_killed, job_usr2_with_name_killed}
 
     @pytest.mark.asyncio
     async def test_get_all_jobs_filter_by_name_status(
         self,
-        api,
-        client,
-        regular_user_factory,
-        jobs_client_factory,
-        job_request_factory,
-        setup_new_user_for_filtration,
-    ):
+        api: ApiConfig,
+        client: aiohttp.ClientSession,
+        regular_user_factory: Callable[[], Any],
+        jobs_client_factory: Callable[[_User], JobsClient],
+        job_request_factory: Callable[[], Dict[str, Any]],
+        setup_new_user_for_filtration: Callable[
+            [str], Awaitable[Tuple[_User, JobsClient, Dict[str, Any]]]
+        ],
+    ) -> None:
         url = api.jobs_base_url
         job_name = "test-job-name"
 
-        def job_request_with_name():
+        def job_request_with_name() -> Dict[str, Any]:
             job_request = job_request_factory()
             job_request["container"]["command"] = "sleep 30m"
             job_request["name"] = job_name
             return job_request
 
-        def job_request_no_name():
+        def job_request_no_name() -> Dict[str, Any]:
             job_request = job_request_factory()
             job_request["container"]["command"] = "sleep 30m"
             return job_request
 
-        jobs_client_first_user = None
         job_id_active_without_name_first_user = None
         job_id_active_with_name_first_user = None
         job_id_terminated_without_name_first_user = None
@@ -1152,7 +1315,7 @@ class TestJobs:
             user = await regular_user_factory()
             headers = user.headers
             jobs_client = jobs_client_factory(user)
-            if jobs_client_first_user is None:
+            if i == 0:
                 jobs_client_first_user = jobs_client
 
             # terminated, no name
@@ -1202,8 +1365,8 @@ class TestJobs:
         # owner: 1, name: yes
         filters = [("name", job_name)]
         jobs = await jobs_client_first_user.get_all_jobs(filters)
-        jobs = {job["id"] for job in jobs}
-        assert jobs == {
+        job_ids = {job["id"] for job in jobs}
+        assert job_ids == {
             job_id_active_with_name_first_user,
             job_id_terminated_with_name_first_user,
         }
@@ -1211,20 +1374,20 @@ class TestJobs:
         # owner: 1, name: yes, status: running
         filters = [("name", job_name), ("status", "running")]
         jobs = await jobs_client_first_user.get_all_jobs(filters)
-        jobs = {job["id"] for job in jobs}
-        assert jobs == {job_id_active_with_name_first_user}
+        job_ids = {job["id"] for job in jobs}
+        assert job_ids == {job_id_active_with_name_first_user}
 
         # owner: 1, name: yes, status: running+failed
         filters = [("name", job_name), ("status", "running"), ("status", "failed")]
         jobs = await jobs_client_first_user.get_all_jobs(filters)
-        jobs = {job["id"] for job in jobs}
-        assert jobs == {job_id_active_with_name_first_user}
+        job_ids = {job["id"] for job in jobs}
+        assert job_ids == {job_id_active_with_name_first_user}
 
         # owner: 1, name: yes, status: running+succeeded
         filters = [("name", job_name), ("status", "running"), ("status", "succeeded")]
         jobs = await jobs_client_first_user.get_all_jobs(filters)
-        jobs = {job["id"] for job in jobs}
-        assert jobs == {
+        job_ids = {job["id"] for job in jobs}
+        assert job_ids == {
             job_id_active_with_name_first_user,
             job_id_terminated_with_name_first_user,
         }
@@ -1232,13 +1395,13 @@ class TestJobs:
         # owner: 1, name: not-found, status: succeeded
         filters = [("status", "running"), ("name", "not-found-name")]
         jobs = await jobs_client_first_user.get_all_jobs(filters)
-        jobs = {job["id"] for job in jobs}
-        assert jobs == set()
+        job_ids = {job["id"] for job in jobs}
+        assert job_ids == set()
 
     @pytest.mark.asyncio
     async def test_get_all_jobs_filter_by_name_owner_and_status_invalid_name(
-        self, api, client, regular_user
-    ):
+        self, api: ApiConfig, client: aiohttp.ClientSession, regular_user: _User
+    ) -> None:
         url = api.jobs_base_url
         headers = regular_user.headers
 
@@ -1248,20 +1411,20 @@ class TestJobs:
             assert resp.status == HTTPBadRequest.status_code
 
         # filter by name and status
-        filters = [("status", "running"), ("name", "InValid_Name.txt")]
-        async with client.get(url, headers=headers, params=filters) as resp:
+        filters2 = [("status", "running"), ("name", "InValid_Name.txt")]
+        async with client.get(url, headers=headers, params=filters2) as resp:
             assert resp.status == HTTPBadRequest.status_code
 
     @pytest.mark.asyncio
     async def test_get_all_jobs_shared(
         self,
-        jobs_client,
-        api,
-        client,
-        model_request_factory,
-        regular_user_factory,
-        auth_client,
-    ):
+        jobs_client: JobsClient,
+        api: ApiConfig,
+        client: aiohttp.ClientSession,
+        model_request_factory: Callable[[str], Dict[str, Any]],
+        regular_user_factory: Callable[[], Any],
+        auth_client: _AuthClient,
+    ) -> None:
         owner = await regular_user_factory()
         follower = await regular_user_factory()
 
@@ -1297,13 +1460,13 @@ class TestJobs:
     @pytest.mark.asyncio
     async def test_get_shared_job(
         self,
-        jobs_client,
-        api,
-        client,
-        model_request_factory,
-        regular_user_factory,
-        auth_client,
-    ):
+        jobs_client: JobsClient,
+        api: ApiConfig,
+        client: aiohttp.ClientSession,
+        model_request_factory: Callable[[str], Dict[str, Any]],
+        regular_user_factory: Callable[[], Any],
+        auth_client: _AuthClient,
+    ) -> None:
         owner = await regular_user_factory()
         follower = await regular_user_factory()
 
@@ -1333,8 +1496,13 @@ class TestJobs:
 
     @pytest.mark.asyncio
     async def test_get_jobs_return_corrects_id(
-        self, jobs_client, api, client, model_train, regular_user
-    ):
+        self,
+        jobs_client: JobsClient,
+        api: ApiConfig,
+        client: aiohttp.ClientSession,
+        model_train: Dict[str, Any],
+        regular_user: _User,
+    ) -> None:
         jobs_ids = []
         n_jobs = 2
         for _ in range(n_jobs):
@@ -1374,8 +1542,14 @@ class TestJobs:
         ],
     )
     async def test_get_jobs_by_name_preserves_chronological_order_without_statuses(
-        self, jobs_client, api, client, job_submit, regular_user, filters
-    ):
+        self,
+        jobs_client: JobsClient,
+        api: ApiConfig,
+        client: aiohttp.ClientSession,
+        job_submit: Dict[str, Any],
+        regular_user: _User,
+        filters: Dict[str, Any],
+    ) -> None:
         # unique job name generated per test-run is stored in "filters"
         job_submit["name"] = filters.get("name")
         job_submit["container"]["command"] = "sleep 30m"
@@ -1408,8 +1582,13 @@ class TestJobs:
 
     @pytest.mark.asyncio
     async def test_delete_job(
-        self, api, client, model_train, jobs_client, regular_user
-    ):
+        self,
+        api: ApiConfig,
+        client: aiohttp.ClientSession,
+        model_train: Dict[str, Any],
+        jobs_client: JobsClient,
+        regular_user: _User,
+    ) -> None:
         url = api.model_base_url
         async with client.post(
             url, headers=regular_user.headers, json=model_train
@@ -1428,8 +1607,13 @@ class TestJobs:
 
     @pytest.mark.asyncio
     async def test_delete_already_deleted(
-        self, api, client, model_train, jobs_client, regular_user
-    ):
+        self,
+        api: ApiConfig,
+        client: aiohttp.ClientSession,
+        model_train: Dict[str, Any],
+        jobs_client: JobsClient,
+        regular_user: _User,
+    ) -> None:
         url = api.model_base_url
         model_train["container"]["command"] = "sleep 1000000000"
         async with client.post(
@@ -1445,7 +1629,9 @@ class TestJobs:
         await jobs_client.delete_job(job_id=job_id)
 
     @pytest.mark.asyncio
-    async def test_delete_not_exist(self, api, client, regular_user):
+    async def test_delete_not_exist(
+        self, api: ApiConfig, client: aiohttp.ClientSession, regular_user: _User
+    ) -> None:
         job_id = "kdfghlksjd-jhsdbljh-3456789!@"
         url = api.jobs_base_url + f"/{job_id}"
         async with client.delete(url, headers=regular_user.headers) as response:
@@ -1454,7 +1640,9 @@ class TestJobs:
             assert result["error"] == f"no such job {job_id}"
 
     @pytest.mark.asyncio
-    async def test_job_log(self, api, client, regular_user):
+    async def test_job_log(
+        self, api: ApiConfig, client: aiohttp.ClientSession, regular_user: _User
+    ) -> None:
         command = 'bash -c "for i in {1..5}; do echo $i; sleep 1; done"'
         payload = {
             "container": {
@@ -1480,13 +1668,15 @@ class TestJobs:
             assert response.charset == "utf-8"
             assert response.headers["Transfer-Encoding"] == "chunked"
             assert "Content-Encoding" not in response.headers
-            payload = await response.read()
+            actual_payload = await response.read()
             expected_payload = "\n".join(str(i) for i in range(1, 6)) + "\n"
-            assert payload == expected_payload.encode()
+            assert actual_payload == expected_payload.encode()
 
     @pytest.mark.asyncio
-    async def test_create_validation_failure(self, api, client, regular_user):
-        request_payload = {}
+    async def test_create_validation_failure(
+        self, api: ApiConfig, client: aiohttp.ClientSession, regular_user: _User
+    ) -> None:
+        request_payload: Dict[str, Any] = {}
         async with client.post(
             api.jobs_base_url, headers=regular_user.headers, json=request_payload
         ) as response:
@@ -1497,8 +1687,12 @@ class TestJobs:
 
     @pytest.mark.asyncio
     async def test_create_with_custom_volumes(
-        self, jobs_client, api, client, regular_user
-    ):
+        self,
+        jobs_client: JobsClient,
+        api: ApiConfig,
+        client: aiohttp.ClientSession,
+        regular_user: _User,
+    ) -> None:
         request_payload = {
             "container": {
                 "image": "ubuntu",
@@ -1585,7 +1779,13 @@ class TestJobs:
         }
 
     @pytest.mark.asyncio
-    async def test_job_failed(self, jobs_client, api, client, regular_user):
+    async def test_job_failed(
+        self,
+        jobs_client: JobsClient,
+        api: ApiConfig,
+        client: aiohttp.ClientSession,
+        regular_user: _User,
+    ) -> None:
         command = 'bash -c "echo Failed!; false"'
         payload = {
             "container": {
@@ -1649,8 +1849,13 @@ class TestJobs:
 
     @pytest.mark.asyncio
     async def test_job_create_unknown_gpu_model(
-        self, jobs_client, api, client, regular_user, kube_node_gpu
-    ):
+        self,
+        jobs_client: JobsClient,
+        api: ApiConfig,
+        client: aiohttp.ClientSession,
+        regular_user: _User,
+        kube_node_gpu: str,
+    ) -> None:
         request_payload = {
             "container": {
                 "image": "ubuntu",
@@ -1674,8 +1879,14 @@ class TestJobs:
 
     @pytest.mark.asyncio
     async def test_create_gpu_model(
-        self, jobs_client, api, client, regular_user, kube_node_gpu, kube_client
-    ):
+        self,
+        jobs_client: JobsClient,
+        api: ApiConfig,
+        client: aiohttp.ClientSession,
+        regular_user: _User,
+        kube_node_gpu: str,
+        kube_client: TestKubeClient,
+    ) -> None:
         request_payload = {
             "container": {
                 "image": "ubuntu",
@@ -1726,7 +1937,14 @@ class TestJobs:
         await kube_client.wait_pod_scheduled(job_id, kube_node_gpu)
 
     @pytest.mark.asyncio
-    async def test_job_top(self, api, client, regular_user, jobs_client, infinite_job):
+    async def test_job_top(
+        self,
+        api: ApiConfig,
+        client: aiohttp.ClientSession,
+        regular_user: _User,
+        jobs_client: JobsClient,
+        infinite_job: str,
+    ) -> None:
         jobs_client.long_polling_by_job_id(job_id=infinite_job, status="running")
         job_top_url = api.jobs_base_url + f"/{infinite_job}/top"
         num_request = 2
@@ -1744,6 +1962,7 @@ class TestJobs:
                     # TODO (truskovskiyk 09/12/18) do not use protected prop
                     # https://github.com/aio-libs/aiohttp/issues/3443
                     proto = ws._writer.protocol
+                    assert proto.transport is not None
                     proto.transport.close()
                     break
 
@@ -1757,8 +1976,13 @@ class TestJobs:
 
     @pytest.mark.asyncio
     async def test_job_top_silently_wait_when_job_pending(
-        self, api, client, regular_user, jobs_client, model_train
-    ):
+        self,
+        api: ApiConfig,
+        client: aiohttp.ClientSession,
+        regular_user: _User,
+        jobs_client: JobsClient,
+        model_train: Dict[str, Any],
+    ) -> None:
         command = 'bash -c "for i in {1..10}; do echo $i; sleep 1; done"'
         model_train["container"]["command"] = command
         url = api.model_base_url
@@ -1788,8 +2012,13 @@ class TestJobs:
 
     @pytest.mark.asyncio
     async def test_job_top_close_when_job_succeeded(
-        self, api, client, regular_user, jobs_client, model_train
-    ):
+        self,
+        api: ApiConfig,
+        client: aiohttp.ClientSession,
+        regular_user: _User,
+        jobs_client: JobsClient,
+        model_train: Dict[str, Any],
+    ) -> None:
 
         command = 'bash -c "for i in {1..2}; do echo $i; sleep 1; done"'
         model_train["container"]["command"] = command

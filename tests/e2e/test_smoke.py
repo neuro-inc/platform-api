@@ -1,11 +1,16 @@
 import time
 
+import aiohttp
 import pytest
+
+from .conftest import PlatformConfig, _User
 
 
 @pytest.mark.usefixtures("api")
 @pytest.mark.asyncio
-async def test_basic_command(api_config, alice, client):
+async def test_basic_command(
+    api_config: PlatformConfig, alice: _User, client: aiohttp.ClientSession
+) -> None:
     model_request_payload = {
         "container": {
             "image": "ubuntu",

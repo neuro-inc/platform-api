@@ -11,7 +11,18 @@ from dataclasses import dataclass, field
 from enum import Enum
 from pathlib import Path, PurePath
 from types import TracebackType
-from typing import Any, DefaultDict, Dict, Iterable, List, Optional, Type, Union
+from typing import (
+    Any,
+    AsyncIterator,
+    DefaultDict,
+    Dict,
+    Iterable,
+    List,
+    NoReturn,
+    Optional,
+    Type,
+    Union,
+)
 from urllib.parse import urlsplit
 
 import aiohttp
@@ -53,7 +64,7 @@ class AlreadyExistsException(StatusException):
     pass
 
 
-def _raise_status_job_exception(pod: dict, job_id: str):
+def _raise_status_job_exception(pod: Dict[str, Any], job_id: Optional[str]) -> NoReturn:
     if pod["code"] == 409:
         raise JobError(f"job with {job_id} already exist")
     elif pod["code"] == 404:
@@ -71,6 +82,9 @@ class Volume(metaclass=abc.ABCMeta):
     def create_mount(self, container_volume: ContainerVolume) -> "VolumeMount":
         raise NotImplementedError("Cannot create mount for abstract Volume type.")
 
+    def to_primitive(self) -> Dict[str, Any]:
+        raise NotImplementedError
+
 
 @dataclass(frozen=True)
 class PathVolume(Volume):
@@ -78,7 +92,7 @@ class PathVolume(Volume):
 
     def create_mount(self, container_volume: ContainerVolume) -> "VolumeMount":
         sub_path = container_volume.src_path.relative_to(self.path)
-        return VolumeMount(  # type: ignore
+        return VolumeMount(
             volume=self,
             mount_path=container_volume.dst_path,
             sub_path=sub_path,
@@ -88,7 +102,7 @@ class PathVolume(Volume):
 
 @dataclass(frozen=True)
 class HostVolume(PathVolume):
-    def to_primitive(self):
+    def to_primitive(self) -> Dict[str, Any]:
         return {
             "name": self.name,
             "hostPath": {"path": str(self.path), "type": "Directory"},
@@ -97,11 +111,11 @@ class HostVolume(PathVolume):
 
 @dataclass(frozen=True)
 class SharedMemoryVolume(Volume):
-    def to_primitive(self):
+    def to_primitive(self) -> Dict[str, Any]:
         return {"name": self.name, "emptyDir": {"medium": "Memory"}}
 
     def create_mount(self, container_volume: ContainerVolume) -> "VolumeMount":
-        return VolumeMount(  # type: ignore
+        return VolumeMount(
             volume=self,
             mount_path=container_volume.dst_path,
             sub_path=PurePath(""),
@@ -113,7 +127,7 @@ class SharedMemoryVolume(Volume):
 class NfsVolume(PathVolume):
     server: str
 
-    def to_primitive(self):
+    def to_primitive(self) -> Dict[str, Any]:
         return {
             "name": self.name,
             "nfs": {"server": self.server, "path": str(self.path)},
@@ -127,7 +141,7 @@ class VolumeMount:
     sub_path: PurePath = PurePath("")
     read_only: bool = False
 
-    def to_primitive(self):
+    def to_primitive(self) -> Dict[str, Any]:
         return {
             "name": self.volume.name,
             "mountPath": str(self.mount_path),
@@ -152,15 +166,17 @@ class Resources:
     def memory_mib(self) -> str:
         return f"{self.memory}Mi"
 
-    def to_primitive(self):
-        payload = {"limits": {"cpu": self.cpu_mcores, "memory": self.memory_mib}}
+    def to_primitive(self) -> Dict[str, Any]:
+        payload: Dict[str, Any] = {
+            "limits": {"cpu": self.cpu_mcores, "memory": self.memory_mib}
+        }
         if self.gpu:
             payload["limits"]["nvidia.com/gpu"] = self.gpu
         return payload
 
     @classmethod
     def from_container_resources(cls, resources: ContainerResources) -> "Resources":
-        return cls(  # type: ignore
+        return cls(
             cpu=resources.cpu,
             memory=resources.memory_mb,
             gpu=resources.gpu,
@@ -186,12 +202,12 @@ class Service:
         port: Optional[int],
         target_port: Optional[int],
         port_name: str,
-        ports: List,
-    ):
+        ports: List[Dict[str, Any]],
+    ) -> None:
         if target_port:
             ports.append({"port": port, "targetPort": target_port, "name": port_name})
 
-    def to_primitive(self):
+    def to_primitive(self) -> Dict[str, Any]:
         service_descriptor = {
             "metadata": {"name": self.name},
             "spec": {
@@ -217,9 +233,7 @@ class Service:
 
     @classmethod
     def create_for_pod(cls, pod: "PodDescriptor") -> "Service":
-        return cls(
-            pod.name, target_port=pod.port, ssh_target_port=pod.ssh_port
-        )  # type: ignore
+        return cls(pod.name, target_port=pod.port, ssh_target_port=pod.ssh_port)
 
     @classmethod
     def create_headless_for_pod(cls, pod: "PodDescriptor") -> "Service":
@@ -232,18 +246,20 @@ class Service:
         )
 
     @classmethod
-    def _find_port_by_name(cls, name: str, port_mappings: List) -> Dict:
+    def _find_port_by_name(
+        cls, name: str, port_mappings: List[Dict[str, Any]]
+    ) -> Dict[str, Any]:
         for port_mapping in port_mappings:
             if port_mapping.get("name", None) == name:
                 return port_mapping
         return {}
 
     @classmethod
-    def from_primitive(cls, payload) -> "Service":
+    def from_primitive(cls, payload: Dict[str, Any]) -> "Service":
         http_payload = cls._find_port_by_name("http", payload["spec"]["ports"])
         ssh_payload = cls._find_port_by_name("ssh", payload["spec"]["ports"])
         service_type = payload["spec"].get("type", Service.service_type.value)
-        return cls(  # type: ignore
+        return cls(
             name=payload["metadata"]["name"],
             target_port=http_payload.get("targetPort", None),
             port=http_payload.get("port", Service.port),
@@ -261,7 +277,7 @@ class IngressRule:
     service_port: Optional[int] = None
 
     @classmethod
-    def from_primitive(cls, payload):
+    def from_primitive(cls, payload: Dict[str, Any]) -> "IngressRule":
         http_paths = payload.get("http", {}).get("paths", [])
         http_path = http_paths[0] if http_paths else {}
         backend = http_path.get("backend", {})
@@ -273,8 +289,8 @@ class IngressRule:
             service_port=service_port,
         )
 
-    def to_primitive(self):
-        payload = {"host": self.host}
+    def to_primitive(self) -> Dict[str, Any]:
+        payload: Dict[str, Any] = {"host": self.host}
         if self.service_name:
             payload["http"] = {
                 "paths": [
@@ -290,9 +306,7 @@ class IngressRule:
 
     @classmethod
     def from_service(cls, host: str, service: Service) -> "IngressRule":
-        return cls(  # type: ignore
-            host=host, service_name=service.name, service_port=service.port
-        )
+        return cls(host=host, service_name=service.name, service_port=service.port)
 
 
 @dataclass(frozen=True)
@@ -300,12 +314,12 @@ class Ingress:
     name: str
     rules: List[IngressRule] = field(default_factory=list)
 
-    def to_primitive(self):
-        rules = [rule.to_primitive() for rule in self.rules] or [None]
+    def to_primitive(self) -> Dict[str, Any]:
+        rules: List[Any] = [rule.to_primitive() for rule in self.rules] or [None]
         return {"metadata": {"name": self.name}, "spec": {"rules": rules}}
 
     @classmethod
-    def from_primitive(cls, payload):
+    def from_primitive(cls, payload: Dict[str, Any]) -> "Ingress":
         # TODO (A Danshyn 06/13/18): should be refactored along with PodStatus
         kind = payload["kind"]
         if kind == "Ingress":
@@ -444,7 +458,7 @@ class NodeSelectorRequirement:
 class NodeSelectorTerm:
     match_expressions: List[NodeSelectorRequirement]
 
-    def __post_init__(self):
+    def __post_init__(self) -> None:
         if not self.match_expressions:
             raise ValueError("no expressions")
 
@@ -468,7 +482,7 @@ class NodeAffinity:
     required: List[NodeSelectorTerm] = field(default_factory=list)
     preferred: List[NodePreferredSchedulingTerm] = field(default_factory=list)
 
-    def __post_init__(self):
+    def __post_init__(self) -> None:
         if not self.required and not self.preferred:
             raise ValueError("no terms")
 
@@ -531,7 +545,7 @@ class PodDescriptor:
         volumes = [volume]
 
         if job_request.container.resources.shm:
-            dev_shm_volume = SharedMemoryVolume(name="dshm")  # type: ignore
+            dev_shm_volume = SharedMemoryVolume(name="dshm")
             container_volume = ContainerVolume(
                 URL(""),
                 dst_path=PurePath("/dev/shm"),
@@ -546,7 +560,7 @@ class PodDescriptor:
             image_pull_secrets = [SecretRef(name) for name in secret_names]
         else:
             image_pull_secrets = []
-        return cls(  # type: ignore
+        return cls(
             name=job_request.job_id,
             image=container.image,
             args=container.command_list,
@@ -565,10 +579,10 @@ class PodDescriptor:
         )
 
     @property
-    def env_list(self):
+    def env_list(self) -> List[Dict[str, str]]:
         return [dict(name=name, value=value) for name, value in self.env.items()]
 
-    def to_primitive(self):
+    def to_primitive(self) -> Dict[str, Any]:
         volume_mounts = [mount.to_primitive() for mount in self.volume_mounts]
         volumes = [volume.to_primitive() for volume in self.volumes]
 
@@ -596,7 +610,7 @@ class PodDescriptor:
         # compatibility
         labels["job"] = self.name
 
-        payload = {
+        payload: Dict[str, Any] = {
             "kind": "Pod",
             "apiVersion": "v1",
             "metadata": {"name": self.name, "labels": labels},
@@ -649,7 +663,7 @@ class PodDescriptor:
         return {}
 
     @classmethod
-    def _assert_resource_kind(cls, expected_kind: str, payload: Dict):
+    def _assert_resource_kind(cls, expected_kind: str, payload: Dict[str, Any]) -> None:
         kind = payload["kind"]
         if kind == "Status":
             _raise_status_job_exception(payload, job_id="")
@@ -657,7 +671,7 @@ class PodDescriptor:
             raise ValueError(f"unknown kind: {kind}")
 
     @classmethod
-    def from_primitive(cls, payload):
+    def from_primitive(cls, payload: Dict[str, Any]) -> "PodDescriptor":
         cls._assert_resource_kind(expected_kind="Pod", payload=payload)
 
         metadata = payload["metadata"]
@@ -684,11 +698,11 @@ class PodDescriptor:
 
 
 class ContainerStatus:
-    def __init__(self, payload=None):
+    def __init__(self, payload: Optional[Dict[str, Any]] = None) -> None:
         self._payload = payload or {}
 
     @property
-    def _state(self) -> Dict:
+    def _state(self) -> Dict[str, Any]:
         return self._payload.get("state", {})
 
     @property
@@ -756,7 +770,7 @@ class KubernetesEvent:
 
 
 class PodStatus:
-    def __init__(self, payload):
+    def __init__(self, payload: Dict[str, Any]) -> None:
         self._payload = payload
         self._container_status = self._init_container_status()
 
@@ -767,7 +781,7 @@ class PodStatus:
         return ContainerStatus(payload=payload)
 
     @property
-    def phase(self):
+    def phase(self) -> str:
         """
         "Pending", "Running", "Succeeded", "Failed", "Unknown"
         """
@@ -814,11 +828,11 @@ class PodStatus:
         return "containerStatuses" in self._payload
 
     @property
-    def is_node_lost(self):
+    def is_node_lost(self) -> bool:
         return self.reason == "NodeLost"
 
     @classmethod
-    def from_primitive(cls, payload):
+    def from_primitive(cls, payload: Dict[str, Any]) -> "PodStatus":
         return cls(payload)
 
 
@@ -843,7 +857,7 @@ class PodExec:
         self._reader_task = loop.create_task(self._read_data())
         self._exit_code = loop.create_future()
 
-    async def _read_data(self):
+    async def _read_data(self) -> None:
         try:
             async for msg in self._ws:
                 if msg.type != WSMsgType.BINARY:
@@ -853,7 +867,7 @@ class PodExec:
                     continue
                 data = msg.data
                 if isinstance(data, str):
-                    bdata = data.decode("utf-8")
+                    bdata = data.encode()
                 else:
                     bdata = data
                 if not bdata:
@@ -881,7 +895,7 @@ class PodExec:
             logger.exception("PodExec._read_data")
             await self.close()
 
-    async def close(self):
+    async def close(self) -> None:
         if not self._exit_code.done():
             # Don't have exit status yet, assume a normal termination
             self._exit_code.set_result(0)
@@ -893,7 +907,7 @@ class PodExec:
                 await self._reader_task
         await self._ws.close()
 
-    async def wait(self):
+    async def wait(self) -> int:
         return await self._exit_code
 
     async def __aenter__(self) -> "PodExec":
@@ -911,13 +925,13 @@ class PodExec:
         msg = bytes((ExecChannel.STDIN,)) + data
         await self._ws.send_bytes(msg)
 
-    async def read_stdout(self):
+    async def read_stdout(self) -> bytes:
         return await self._channels[ExecChannel.STDOUT].read()
 
-    async def read_stderr(self):
+    async def read_stderr(self) -> bytes:
         return await self._channels[ExecChannel.STDERR].read()
 
-    async def read_error(self):
+    async def read_error(self) -> bytes:
         return await self._channels[ExecChannel.ERROR].read()
 
 
@@ -968,7 +982,7 @@ class KubeClient:
             return None
         ssl_context = ssl.create_default_context(cafile=self._cert_authority_path)
         if self._auth_type == KubeClientAuthType.CERTIFICATE:
-            ssl_context.load_cert_chain(  # noqa
+            ssl_context.load_cert_chain(  # type: ignore
                 self._auth_cert_path, self._auth_cert_key_path
             )
         return ssl_context
@@ -983,11 +997,11 @@ class KubeClient:
             headers = {"Authorization": "Bearer " + token}
         else:
             headers = {}
+        timeout = aiohttp.ClientTimeout(
+            connect=self._conn_timeout_s, total=self._read_timeout_s
+        )
         self._client = aiohttp.ClientSession(
-            connector=connector,
-            conn_timeout=self._conn_timeout_s,
-            read_timeout=self._read_timeout_s,
-            headers=headers,
+            connector=connector, timeout=timeout, headers=headers
         )
 
     async def close(self) -> None:
@@ -999,7 +1013,7 @@ class KubeClient:
         await self.init()
         return self
 
-    async def __aexit__(self, *args) -> None:
+    async def __aexit__(self, *args: Any) -> None:
         await self.close()
 
     @property
@@ -1074,7 +1088,8 @@ class KubeClient:
         all_secrets_url = self._generate_all_secrets_url(namespace_name)
         return f"{all_secrets_url}/{secret_name}"
 
-    async def _request(self, *args, **kwargs):
+    async def _request(self, *args: Any, **kwargs: Any) -> Dict[str, Any]:
+        assert self._client
         async with self._client.request(*args, **kwargs) as response:
             # TODO (A Danshyn 05/21/18): check status code etc
             payload = await response.json()
@@ -1085,7 +1100,8 @@ class KubeClient:
         payload = await self._request(
             method="POST", url=self._pods_url, json=descriptor.to_primitive()
         )
-        return PodDescriptor.from_primitive(payload).status
+        pod = PodDescriptor.from_primitive(payload)
+        return pod.status  # type: ignore
 
     async def get_pod(self, pod_name: str) -> PodDescriptor:
         url = self._generate_pod_url(pod_name)
@@ -1106,26 +1122,27 @@ class KubeClient:
                 "gracePeriodSeconds": 0,
             }
         payload = await self._request(method="DELETE", url=url, json=request_payload)
-        return PodDescriptor.from_primitive(payload).status
+        pod = PodDescriptor.from_primitive(payload)
+        return pod.status  # type: ignore
 
-    async def create_ingress(self, name) -> Ingress:
-        ingress = Ingress(name=name)  # type: ignore
+    async def create_ingress(self, name: str) -> Ingress:
+        ingress = Ingress(name=name)
         payload = await self._request(
             method="POST", url=self._ingresses_url, json=ingress.to_primitive()
         )
         return Ingress.from_primitive(payload)
 
-    async def get_ingress(self, name) -> Ingress:
+    async def get_ingress(self, name: str) -> Ingress:
         url = self._generate_ingress_url(name)
         payload = await self._request(method="GET", url=url)
         return Ingress.from_primitive(payload)
 
-    async def delete_ingress(self, name) -> None:
+    async def delete_ingress(self, name: str) -> None:
         url = self._generate_ingress_url(name)
         payload = await self._request(method="DELETE", url=url)
         self._check_status_payload(payload)
 
-    def _check_status_payload(self, payload):
+    def _check_status_payload(self, payload: Dict[str, Any]) -> None:
         if payload["kind"] == "Status":
             if payload["status"] == "Failure":
                 if payload.get("reason") == "AlreadyExists":
@@ -1262,7 +1279,7 @@ class KubeClient:
         container_name: str,
         conn_timeout_s: float = 60 * 5,
         read_timeout_s: float = 60 * 30,
-    ) -> aiohttp.StreamReader:
+    ) -> AsyncIterator[aiohttp.StreamReader]:
         url = self._generate_pod_log_url(pod_name, container_name)
         client_timeout = aiohttp.ClientTimeout(
             connect=conn_timeout_s, sock_read=read_timeout_s
@@ -1273,7 +1290,7 @@ class KubeClient:
             await self._check_response_status(response)
             yield response.content
 
-    async def _check_response_status(self, response) -> None:
+    async def _check_response_status(self, response: aiohttp.ClientResponse) -> None:
         if response.status != 200:
             payload = await response.text()
             raise KubeClientException(payload)

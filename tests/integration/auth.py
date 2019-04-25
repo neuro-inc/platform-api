@@ -1,7 +1,16 @@
 import asyncio
 import uuid
 from dataclasses import asdict, dataclass
-from typing import AsyncGenerator, Dict, List, Optional, Sequence
+from typing import (
+    AsyncGenerator,
+    AsyncIterator,
+    Awaitable,
+    Callable,
+    Dict,
+    List,
+    Optional,
+    Sequence,
+)
 
 import aiodocker
 import pytest
@@ -27,8 +36,8 @@ def auth_server_image_name() -> str:
 
 @pytest.fixture(scope="session")
 async def auth_server(
-    docker, reuse_docker, auth_server_image_name
-) -> AsyncGenerator[AuthConfig, None]:
+    docker: aiodocker.Docker, reuse_docker: bool, auth_server_image_name: str
+) -> AsyncIterator[AuthConfig]:
     image_name = "gcr.io/light-reality-205619/platformauthapi:latest"
     container_name = "auth_server"
     container_config = {
@@ -75,25 +84,27 @@ def create_token(name: str) -> str:
 
 
 @pytest.fixture
-def token_factory():
+def token_factory() -> Callable[[str], str]:
     return create_token
 
 
 @pytest.fixture
-def admin_token(token_factory):
+def admin_token(token_factory: Callable[[str], str]) -> str:
     return token_factory("admin")
 
 
-async def create_auth_config(container) -> AuthConfig:
+async def create_auth_config(
+    container: aiodocker.containers.DockerContainer
+) -> AuthConfig:
     host = "0.0.0.0"
     port = int((await container.port(8080))[0]["HostPort"])
     url = URL(f"http://{host}:{port}")
     token = create_token("compute")
-    return AuthConfig(server_endpoint_url=url, service_token=token)  # type: ignore
+    return AuthConfig(server_endpoint_url=url, service_token=token)
 
 
 @pytest.fixture
-async def auth_config(auth_server) -> AuthConfig:
+async def auth_config(auth_server: AuthConfig) -> AsyncIterator[AuthConfig]:
     yield auth_server
 
 
@@ -144,7 +155,9 @@ class _User(User):
 
 
 @pytest.fixture
-async def regular_user_factory(auth_client, token_factory, admin_token):
+async def regular_user_factory(
+    auth_client: _AuthClient, token_factory: Callable[[str], str], admin_token: str
+) -> Callable[[Optional[str], Optional[Quota]], Awaitable[_User]]:
     async def _factory(
         name: Optional[str] = None, quota: Optional[Quota] = None
     ) -> _User:
@@ -155,13 +168,13 @@ async def regular_user_factory(auth_client, token_factory, admin_token):
         await auth_client.add_user(user, token=admin_token)
         user_token = token_factory(user.name)
         user_quota = AggregatedRunTime.from_quota(user.quota)
-        return _User(name=user.name, token=user_token, quota=user_quota)  # type: ignore
+        return _User(name=user.name, token=user_token, quota=user_quota)  # noqa
 
     return _factory
 
 
 @pytest.fixture
-async def regular_user(regular_user_factory) -> _User:
+async def regular_user(regular_user_factory: Callable[[], Awaitable[_User]]) -> _User:
     return await regular_user_factory()
 
 

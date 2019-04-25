@@ -82,13 +82,17 @@ def create_job_response_validator() -> t.Trafaret:
 
 
 def convert_job_container_to_json(
-    container, storage_config: StorageConfig
+    container: Container, storage_config: StorageConfig
 ) -> Dict[str, Any]:
-    ret = {"image": container.image, "env": container.env, "volumes": []}
+    ret: Dict[str, Any] = {
+        "image": container.image,
+        "env": container.env,
+        "volumes": [],
+    }
     if container.command is not None:
         ret["command"] = container.command
 
-    resources = {
+    resources: Dict[str, Any] = {
         "cpu": container.resources.cpu,
         "memory_mb": container.resources.memory_mb,
     }
@@ -138,7 +142,7 @@ def convert_job_to_job_response(
 ) -> Dict[str, Any]:
     history = job.status_history
     current_status = history.current
-    response_payload = {
+    response_payload: Dict[str, Any] = {
         "id": job.id,
         "owner": job.owner,
         "status": current_status.status,
@@ -212,7 +216,7 @@ class JobsHandler:
     def _auth_client(self) -> AuthClient:
         return self._app["auth_client"]
 
-    def register(self, app):
+    def register(self, app: aiohttp.web.Application) -> None:
         app.add_routes(
             (
                 aiohttp.web.get("", self.handle_get_all),
@@ -228,7 +232,7 @@ class JobsHandler:
         gpu_models = await self._orchestrator.get_available_gpu_models()
         return create_job_request_validator(allowed_gpu_models=gpu_models)
 
-    async def create_job(self, request):
+    async def create_job(self, request: aiohttp.web.Request) -> aiohttp.web.Response:
         user = await authorized_user(request)
 
         orig_payload = await request.json()
@@ -259,7 +263,7 @@ class JobsHandler:
             data=response_payload, status=aiohttp.web.HTTPAccepted.status_code
         )
 
-    async def handle_get(self, request):
+    async def handle_get(self, request: aiohttp.web.Request) -> aiohttp.web.Response:
         user = await untrusted_user(request)
         job_id = request.match_info["job_id"]
         job = await self._jobs_service.get_job(job_id)
@@ -274,7 +278,9 @@ class JobsHandler:
             data=response_payload, status=aiohttp.web.HTTPOk.status_code
         )
 
-    async def handle_get_all(self, request):
+    async def handle_get_all(
+        self, request: aiohttp.web.Request
+    ) -> aiohttp.web.Response:
         # TODO (A Danshyn 10/08/18): remove once
         # AuthClient.get_permissions_tree accepts the token param
         await check_authorized(request)
@@ -283,7 +289,7 @@ class JobsHandler:
         with log_debug_time(f"Retrieved job access tree for user '{user.name}'"):
             tree = await self._auth_client.get_permissions_tree(user.name, "job:")
 
-        jobs = []
+        jobs: List[Job] = []
 
         try:
             bulk_job_filter = BulkJobFilterBuilder(
@@ -324,7 +330,9 @@ class JobsHandler:
             data=response_payload, status=aiohttp.web.HTTPOk.status_code
         )
 
-    async def handle_delete(self, request):
+    async def handle_delete(
+        self, request: aiohttp.web.Request
+    ) -> aiohttp.web.StreamResponse:
         user = await untrusted_user(request)
         job_id = request.match_info["job_id"]
         job = await self._jobs_service.get_job(job_id)
@@ -336,7 +344,9 @@ class JobsHandler:
         await self._jobs_service.delete_job(job_id)
         raise aiohttp.web.HTTPNoContent()
 
-    async def stream_log(self, request):
+    async def stream_log(
+        self, request: aiohttp.web.Request
+    ) -> aiohttp.web.StreamResponse:
         user = await untrusted_user(request)
         job_id = request.match_info["job_id"]
         job = await self._jobs_service.get_job(job_id)
@@ -366,7 +376,9 @@ class JobsHandler:
         await response.write_eof()
         return response
 
-    async def stream_top(self, request):
+    async def stream_top(
+        self, request: aiohttp.web.Request
+    ) -> aiohttp.web.WebSocketResponse:
         user = await untrusted_user(request)
         job_id = request.match_info["job_id"]
         job = await self._jobs_service.get_job(job_id)
@@ -393,6 +405,7 @@ class JobsHandler:
             try:
                 while True:
                     # client close connection
+                    assert request.transport is not None
                     if request.transport.is_closing():
                         break
 
@@ -437,7 +450,7 @@ class JobFilterFactory:
         self._job_name_validator = create_job_name_validator()
         self._user_name_validator = create_user_name_validator()
 
-    def create_from_query(self, query: MultiDictProxy) -> JobFilter:
+    def create_from_query(self, query: MultiDictProxy) -> JobFilter:  # type: ignore
         job_name = self._job_name_validator.check(query.get("name"))
         statuses = {JobStatus(s) for s in query.getall("status", [])}
         owners = {

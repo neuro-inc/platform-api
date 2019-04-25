@@ -1,3 +1,5 @@
+from typing import Any, Dict
+
 import pytest
 
 from platform_api.orchestrator.kube_client import (
@@ -12,24 +14,24 @@ from platform_api.orchestrator.kube_client import (
 
 
 class TestNodeSelectorRequirement:
-    def test_blank_key(self):
+    def test_blank_key(self) -> None:
         with pytest.raises(ValueError, match="blank key"):
             NodeSelectorRequirement("", operator=NodeSelectorOperator.EXISTS)
 
-    def test_non_empty_values_with_exists(self):
+    def test_non_empty_values_with_exists(self) -> None:
         with pytest.raises(ValueError, match="values must be empty"):
             NodeSelectorRequirement(
                 "key", operator=NodeSelectorOperator.EXISTS, values=["value"]
             )
 
-    def test_create_exists(self):
+    def test_create_exists(self) -> None:
         req = NodeSelectorRequirement.create_exists("testkey")
         assert req == NodeSelectorRequirement(
             key="testkey", operator=NodeSelectorOperator.EXISTS
         )
         assert req.to_primitive() == {"key": "testkey", "operator": "Exists"}
 
-    def test_create_does_not_exist(self):
+    def test_create_does_not_exist(self) -> None:
         req = NodeSelectorRequirement.create_does_not_exist("testkey")
         assert req == NodeSelectorRequirement(
             key="testkey", operator=NodeSelectorOperator.DOES_NOT_EXIST
@@ -38,17 +40,17 @@ class TestNodeSelectorRequirement:
 
 
 class TestNodeSelectorTerm:
-    def test_empty(self):
+    def test_empty(self) -> None:
         with pytest.raises(ValueError, match="no expressions"):
             NodeSelectorTerm([])
 
 
 class TestNodeAffinity:
-    def test_empty(self):
+    def test_empty(self) -> None:
         with pytest.raises(ValueError, match="no terms"):
             NodeAffinity()
 
-    def test_to_primitive(self):
+    def test_to_primitive(self) -> None:
         node_affinity = NodeAffinity(
             required=[
                 NodeSelectorTerm([NodeSelectorRequirement.create_exists("testkey")])
@@ -81,12 +83,12 @@ class TestNodeAffinity:
 
 
 class TestPodContainerStats:
-    def test_from_primitive_empty(self):
-        payload = {"cpu": {}, "memory": {}}
+    def test_from_primitive_empty(self) -> None:
+        payload: Dict[str, Any] = {"cpu": {}, "memory": {}}
         stats = PodContainerStats.from_primitive(payload)
         assert stats == PodContainerStats(cpu=0.0, memory=0.0)
 
-    def test_from_primitive(self):
+    def test_from_primitive(self) -> None:
         payload = {
             "cpu": {"usageNanoCores": 1000},
             "memory": {"workingSetBytes": 1024 * 1024},
@@ -102,21 +104,21 @@ class TestPodContainerStats:
 
 
 class TestStatsSummary:
-    def test_get_pod_container_stats_no_pod(self):
-        payload = {"pods": []}
+    def test_get_pod_container_stats_no_pod(self) -> None:
+        payload: Dict[str, Any] = {"pods": []}
         stats = StatsSummary(payload).get_pod_container_stats(
             "namespace", "pod", "container"
         )
         assert stats is None
 
-    def test_get_pod_container_stats_no_containers(self):
+    def test_get_pod_container_stats_no_containers(self) -> None:
         payload = {"pods": [{"podRef": {"namespace": "namespace", "name": "pod"}}]}
         stats = StatsSummary(payload).get_pod_container_stats(
             "namespace", "pod", "container"
         )
         assert stats is None
 
-    def test_get_pod_container_stats(self):
+    def test_get_pod_container_stats(self) -> None:
         payload = {
             "pods": [
                 {

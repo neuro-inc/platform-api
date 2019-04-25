@@ -2,7 +2,7 @@ import asyncio
 import logging
 from dataclasses import dataclass
 from pathlib import PurePath
-from typing import Dict, Iterable, List, Optional, Union
+from typing import Any, Dict, Iterable, List, Optional, Union
 
 from aioelasticsearch import Elasticsearch
 
@@ -111,7 +111,7 @@ class KubeConfig(OrchestratorConfig):
     node_label_gpu: Optional[str] = None
     node_label_preemptible: Optional[str] = None
 
-    def __post_init__(self):
+    def __post_init__(self) -> None:
         if not all((self.jobs_ingress_name, self.endpoint_url)):
             raise ValueError("Missing required settings")
 
@@ -125,14 +125,12 @@ class KubeConfig(OrchestratorConfig):
 
     def create_storage_volume(self) -> Volume:
         if self.storage.is_nfs:
-            return NfsVolume(  # type: ignore
+            return NfsVolume(  # type: ignore # noqa
                 name=self.storage_volume_name,
                 server=self.storage.nfs_server,
                 path=self.storage.nfs_export_path,
             )
-        return HostVolume(  # type: ignore
-            name=self.storage_volume_name, path=self.storage_mount_path
-        )
+        return HostVolume(name=self.storage_volume_name, path=self.storage_mount_path)
 
 
 def convert_pod_status_to_job_status(pod_status: PodStatus) -> JobStatusItem:
@@ -178,7 +176,7 @@ class KubeOrchestrator(Orchestrator):
         await self._client.init()
         return self
 
-    async def __aexit__(self, *args) -> None:
+    async def __aexit__(self, *args: Any) -> None:
         if self._client:
             await self._client.close()
 

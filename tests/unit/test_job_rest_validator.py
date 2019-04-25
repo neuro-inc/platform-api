@@ -22,29 +22,29 @@ class TestJobNameValidator:
             ("a" * 100, "maximum length"),
         ],
     )
-    def test_valid_job_names(self, value: str, description: str):
+    def test_valid_job_names(self, value: str, description: str) -> None:
         validator = create_job_name_validator()
         assert validator.check(value)
 
-    def test_invalid_job_names__none(self):
+    def test_invalid_job_names__none(self) -> None:
         value = None
         validator = create_job_name_validator()
         assert validator.check(value) is None
 
-    def test_invalid_job_names__empty(self):
+    def test_invalid_job_names__empty(self) -> None:
         value = ""
         validator = create_job_name_validator()
         with pytest.raises(t.DataError, match="blank value is not allowed"):
             assert validator.check(value)
 
     @pytest.mark.parametrize("value", ["a", "aa"])
-    def test_invalid_job_names__too_short(self, value: str):
+    def test_invalid_job_names__too_short(self, value: str) -> None:
         validator = create_job_name_validator()
         with pytest.raises(t.DataError, match="String is shorter than 3 characters"):
             assert validator.check(value)
 
     @pytest.mark.parametrize("value", ["a" * 101])
-    def test_invalid_job_names__too_long(self, value: str):
+    def test_invalid_job_names__too_long(self, value: str) -> None:
         validator = create_job_name_validator()
         with pytest.raises(t.DataError, match="String is longer than 100 characters"):
             assert validator.check(value)
@@ -68,31 +68,31 @@ class TestJobNameValidator:
             "abc#",
         ],
     )
-    def test_invalid_job_names__contains_illegal_char(self, value: str):
+    def test_invalid_job_names__contains_illegal_char(self, value: str) -> None:
         validator = create_job_name_validator()
         with pytest.raises(t.DataError, match="does not match pattern"):
             assert validator.check(value)
 
-    def test_invalid_job_names__startswith_dash(self):
+    def test_invalid_job_names__startswith_dash(self) -> None:
         value = "-abc"
         validator = create_job_name_validator()
         with pytest.raises(t.DataError, match="does not match pattern"):
             assert validator.check(value)
 
-    def test_invalid_job_names__endswith_dash(self):
+    def test_invalid_job_names__endswith_dash(self) -> None:
         value = "abc-"
         validator = create_job_name_validator()
         with pytest.raises(t.DataError, match="does not match pattern"):
             assert validator.check(value)
 
-    def test_invalid_job_names__startswith_number(self):
+    def test_invalid_job_names__startswith_number(self) -> None:
         value = "5abc"
         validator = create_job_name_validator()
         with pytest.raises(t.DataError, match="does not match pattern"):
             assert validator.check(value)
 
     @pytest.mark.parametrize("value", ["Abcde", "abCde", "abcdE"])
-    def test_invalid_job_names__contains_upppercase_char(self, value: str):
+    def test_invalid_job_names__contains_upppercase_char(self, value: str) -> None:
         validator = create_job_name_validator()
         with pytest.raises(t.DataError, match="does not match pattern"):
             assert validator.check(value)

@@ -1,25 +1,29 @@
 import os
 from pathlib import Path, PurePath
-from typing import List, Optional
+from typing import Any, Dict, List, Optional
 
 from yarl import URL
 
+from .cluster_config import (
+    ClusterConfig,
+    LoggingConfig,
+    RegistryConfig,
+    StorageConfig,
+    StorageType,
+)
 from .config import (
     AuthConfig,
     Config,
     DatabaseConfig,
-    ElasticsearchConfig,
-    LoggingConfig,
+    IngressConfig,
     OAuthConfig,
     PlatformConfig,
-    RegistryConfig,
     ServerConfig,
     SSHAuthConfig,
     SSHConfig,
     SSHServerConfig,
-    StorageConfig,
-    StorageType,
 )
+from .elasticsearch import ElasticsearchConfig
 from .orchestrator import KubeConfig
 from .orchestrator.kube_orchestrator import KubeClientAuthType
 from .redis import RedisConfig
@@ -27,35 +31,39 @@ from .resource import GKEGPUModels, ResourcePoolType
 
 
 class EnvironConfigFactory:
-    def __init__(self, environ=None):
+    def __init__(self, environ: Optional[Dict[str, str]] = None):
         self._environ = environ or os.environ
 
-    def _get_bool(self, name, default: bool = False) -> bool:
+    def _get_bool(self, name: str, default: bool = False) -> bool:
         value = self._environ.get(name)
         if not value:  # None/""
             return default
         return value.lower() in ("true", "1", "yes", "y")
 
-    def create(self):
+    def create(self) -> Config:
         env_prefix = self._environ.get("NP_ENV_PREFIX", Config.env_prefix)
-        storage = self.create_storage()
-        database = self.create_database()
         auth = self.create_auth()
-        registry = self.create_registry()
-        oauth = self.try_create_oauth()
         return Config(
             server=self.create_server(),
-            storage=storage,
-            orchestrator=self.create_orchestrator(storage, registry, auth),
-            database=database,
+            cluster=self.create_cluster(orphaned_job_owner=auth.service_name),
+            database=self.create_database(),
             auth=auth,
-            oauth=oauth,
-            logging=self.create_logging(),
-            registry=registry,
+            oauth=self.try_create_oauth(),
             env_prefix=env_prefix,
         )
 
-    def create_ssh(self):
+    def create_cluster(self, *, orphaned_job_owner: str) -> ClusterConfig:
+        orchestrator = self.create_orchestrator(
+            self.create_storage(), self.create_registry(), orphaned_job_owner
+        )
+        return ClusterConfig(
+            name="default",
+            orchestrator=orchestrator,
+            ingress=self.create_ingress(),
+            logging=self.create_logging(),
+        )
+
+    def create_ssh(self) -> SSHConfig:
         env_prefix = self._environ.get("NP_ENV_PREFIX", SSHConfig.env_prefix)
         storage = self.create_storage()
         database = self.create_database()
@@ -64,7 +72,7 @@ class EnvironConfigFactory:
         return SSHConfig(
             server=self.create_ssh_server(),
             storage=storage,
-            orchestrator=self.create_orchestrator(storage, registry, auth),
+            orchestrator=self.create_orchestrator(storage, registry, auth.service_name),
             database=database,
             auth=auth,
             registry=registry,
@@ -79,7 +87,7 @@ class EnvironConfigFactory:
 
     def create_server(self) -> ServerConfig:
         port = int(self._environ.get("NP_API_PORT", ServerConfig.port))
-        return ServerConfig(port=port)  # type: ignore
+        return ServerConfig(port=port)
 
     def create_ssh_server(self) -> SSHServerConfig:
         port = int(self._environ.get("NP_SSH_PORT", SSHServerConfig.port))
@@ -113,24 +121,22 @@ class EnvironConfigFactory:
         uri_scheme = self._environ.get(
             "NP_STORAGE_URI_SCHEME", StorageConfig.uri_scheme
         )
-        kwargs = {}
+        kwargs: Dict[str, Any] = {}
         if storage_type == StorageType.NFS:
             kwargs.update(
-                dict(
-                    nfs_server=self._environ["NP_STORAGE_NFS_SERVER"],
-                    nfs_export_path=PurePath(self._environ["NP_STORAGE_NFS_PATH"]),
-                )
+                nfs_server=self._environ["NP_STORAGE_NFS_SERVER"],
+                nfs_export_path=PurePath(self._environ["NP_STORAGE_NFS_PATH"]),
             )
-        return StorageConfig(  # type: ignore
+        return StorageConfig(
             host_mount_path=host_mount_path,
             container_mount_path=container_mount_path,
             type=storage_type,
             uri_scheme=uri_scheme,
-            **kwargs
+            **kwargs,
         )
 
     def create_orchestrator(
-        self, storage: StorageConfig, registry: RegistryConfig, auth: AuthConfig
+        self, storage: StorageConfig, registry: RegistryConfig, orphaned_job_owner: str
     ) -> KubeConfig:
         endpoint_url = self._environ["NP_K8S_API_URL"]
         auth_type = KubeClientAuthType(
@@ -144,7 +150,7 @@ class EnvironConfigFactory:
             "NP_K8S_JOBS_INGRESS_AUTH_NAME", jobs_ingress_name
         )
 
-        return KubeConfig(  # type: ignore
+        return KubeConfig(
             storage=storage,
             registry=registry,
             endpoint_url=endpoint_url,
@@ -188,7 +194,7 @@ class EnvironConfigFactory:
             resource_pool_types=pool_types,
             node_label_gpu=self._environ.get("NP_K8S_NODE_LABEL_GPU"),
             node_label_preemptible=self._environ.get("NP_K8S_NODE_LABEL_PREEMPTIBLE"),
-            orphaned_job_owner=auth.service_name,
+            orphaned_job_owner=orphaned_job_owner,
         )
 
     def create_resource_pool_types(self) -> List[ResourcePoolType]:
@@ -208,7 +214,7 @@ class EnvironConfigFactory:
 
     def create_database(self) -> DatabaseConfig:
         redis = self.create_redis()
-        return DatabaseConfig(redis=redis)  # type: ignore
+        return DatabaseConfig(redis=redis)
 
     def create_redis(self) -> Optional[RedisConfig]:
         uri = self._environ.get("NP_DB_REDIS_URI")
@@ -220,7 +226,7 @@ class EnvironConfigFactory:
         conn_timeout_s = float(
             self._environ.get("NP_DB_REDIS_CONN_TIMEOUT", RedisConfig.conn_timeout_s)
         )
-        return RedisConfig(  # type: ignore
+        return RedisConfig(
             uri=uri, conn_pool_size=conn_pool_size, conn_timeout_s=conn_timeout_s
         )
 
@@ -230,7 +236,9 @@ class EnvironConfigFactory:
 
     def create_elasticsearch(self) -> ElasticsearchConfig:
         hosts = self._environ["NP_ES_HOSTS"].split(",")
-        return ElasticsearchConfig(hosts=hosts)
+        user = self._environ.get("NP_ES_AUTH_USER")
+        password = self._environ.get("NP_ES_AUTH_PASSWORD")
+        return ElasticsearchConfig(hosts=hosts, user=user, password=password)
 
     def create_auth(self) -> AuthConfig:
         url = URL(self._environ["NP_AUTH_URL"])
@@ -238,14 +246,14 @@ class EnvironConfigFactory:
         name = self._environ.get("NP_AUTH_NAME", AuthConfig.service_name)
         return AuthConfig(
             server_endpoint_url=url, service_token=token, service_name=name
-        )  # type: ignore
+        )
 
     def try_create_oauth(self) -> Optional[OAuthConfig]:
         base_url = self._environ.get("NP_OAUTH_BASE_URL")
         client_id = self._environ.get("NP_OAUTH_CLIENT_ID")
         audience = self._environ.get("NP_OAUTH_AUDIENCE")
         success_redirect_url = self._environ.get("NP_OAUTH_SUCCESS_REDIRECT_URL")
-        if not all((base_url, client_id, audience, success_redirect_url)):
+        if not (base_url and client_id and audience and success_redirect_url):
             return None
         return OAuthConfig(
             base_url=URL(base_url),
@@ -258,3 +266,11 @@ class EnvironConfigFactory:
         host = self._environ.get("NP_REGISTRY_HOST", RegistryConfig.host)
         is_https = self._get_bool("NP_REGISTRY_HTTPS", default=RegistryConfig.is_secure)
         return RegistryConfig(host=host, is_secure=is_https)
+
+    def create_ingress(self) -> IngressConfig:
+        base_url = URL(self._environ["NP_API_URL"])
+        return IngressConfig(
+            storage_url=base_url / "storage",
+            users_url=base_url / "users",
+            monitoring_url=base_url / "jobs",
+        )

@@ -15,7 +15,7 @@ class Stream:
         self._closed = False
 
     @property
-    def closed(self):
+    def closed(self) -> bool:
         return self._closed
 
     async def close(self) -> None:

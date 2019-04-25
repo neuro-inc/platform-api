@@ -3,7 +3,7 @@ import time
 from dataclasses import dataclass, field
 from datetime import datetime, timedelta, timezone
 from functools import partial
-from typing import Any, Dict, Iterable, Iterator, List, Optional, Sequence
+from typing import Any, Callable, Dict, Iterable, Iterator, List, Optional, Sequence
 
 import iso8601
 from neuro_auth_client.client import Quota
@@ -62,19 +62,17 @@ class JobStatusItem:
         status: JobStatus,
         *,
         transition_time: Optional[datetime] = None,
-        current_datetime_factory=current_datetime_factory,
-        **kwargs,
+        current_datetime_factory: Callable[[], datetime] = current_datetime_factory,
+        **kwargs: Any,
     ) -> "JobStatusItem":
         transition_time = transition_time or current_datetime_factory()
-        return cls(  # type: ignore
-            status=status, transition_time=transition_time, **kwargs
-        )
+        return cls(status=status, transition_time=transition_time, **kwargs)
 
     @classmethod
     def from_primitive(cls, payload: Dict[str, Any]) -> "JobStatusItem":
         status = JobStatus(payload["status"])
         transition_time = iso8601.parse_date(payload["transition_time"])
-        return cls(  # type: ignore
+        return cls(
             status=status,
             transition_time=transition_time,
             reason=payload.get("reason"),
@@ -204,7 +202,7 @@ class Job:
         # leaving `status` for backward compat with tests
         status: JobStatus = JobStatus.PENDING,
         is_deleted: bool = False,
-        current_datetime_factory=current_datetime_factory,
+        current_datetime_factory: Callable[[], datetime] = current_datetime_factory,
         owner: str = "",
         name: Optional[str] = None,
         is_preemptible: bool = False,
@@ -306,15 +304,12 @@ class Job:
         self._is_deleted = value
 
     @property
-    def _deletion_planned_at(self) -> Optional[datetime]:
-        if not self.finished_at:
-            return None
-
-        return self.finished_at + self._orchestrator_config.job_deletion_delay
-
-    @property
     def _is_time_for_deletion(self) -> bool:
-        return self._deletion_planned_at <= self._current_datetime_factory()
+        assert self.finished_at
+        deletion_planned_at = (
+            self.finished_at + self._orchestrator_config.job_deletion_delay
+        )
+        return deletion_planned_at <= self._current_datetime_factory()
 
     @property
     def should_be_deleted(self) -> bool:
@@ -413,11 +408,11 @@ class Job:
         return self._status_history.finished_at_str
 
     @property
-    def internal_hostname(self):
+    def internal_hostname(self) -> Optional[str]:
         return self._internal_orchestrator_info.job_hostname
 
     @internal_hostname.setter
-    def internal_hostname(self, value: Optional[str]):
+    def internal_hostname(self, value: Optional[str]) -> None:
         self._internal_orchestrator_info.job_hostname = value
 
     @property
@@ -433,7 +428,7 @@ class Job:
         start_time = self.status_history.created_at
         return end_time - start_time
 
-    def to_primitive(self) -> Dict:
+    def to_primitive(self) -> Dict[str, Any]:
         statuses = [item.to_primitive() for item in self._status_history.all]
         # preserving `status` and `finished_at` for forward compat
         result = {
@@ -454,7 +449,7 @@ class Job:
 
     @classmethod
     def from_primitive(
-        cls, orchestrator_config: OrchestratorConfig, payload: Dict
+        cls, orchestrator_config: OrchestratorConfig, payload: Dict[str, Any]
     ) -> "Job":
         job_request = JobRequest.from_primitive(payload["request"])
         status_history = cls.create_status_history_from_primitive(
@@ -478,7 +473,7 @@ class Job:
 
     @staticmethod
     def create_status_history_from_primitive(
-        job_id: str, payload: Dict
+        job_id: str, payload: Dict[str, Any]
     ) -> JobStatusHistory:
         if "statuses" in payload:
             # already migrated to history

@@ -77,6 +77,8 @@ spec:
           value: cloud.google.com/gke-preemptible
         - name: NP_ES_HOSTS
           value: http://logging-elasticsearch:9200
+        - name: NP_API_URL
+          value: "{{ printf "%s" (pluck .Values.global.env .Values.NP_API_URL | first | default .Values.NP_API_URL._default) }}"
       - name: kubeproxy
         image: lachlanevenson/k8s-kubectl:v1.10.3
         args: [proxy]

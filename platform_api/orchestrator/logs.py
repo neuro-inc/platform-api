@@ -1,5 +1,6 @@
 import io
 import logging
+import warnings
 from typing import Any, Dict, Optional
 
 import aiohttp
@@ -63,7 +64,9 @@ class FilteredStreamWrapper:
             next_line = await self._stream.readline()
             if next_line:
                 logging.warning("An rpc error line was not at the end of the log")
-                self._stream.unread_data(next_line)
+                with warnings.catch_warnings():
+                    warnings.filterwarnings("ignore", category=DeprecationWarning)
+                    self._stream.unread_data(next_line)
             else:
                 logging.info("Skipping an rpc error line at the end of the log")
                 line = next_line
@@ -103,7 +106,7 @@ class PodContainerLogReader(LogReader):
         self._stream = FilteredStreamWrapper(stream)
         return self
 
-    async def __aexit__(self, *args) -> None:
+    async def __aexit__(self, *args: Any) -> None:
         assert self._stream
         assert self._stream_cm
         stream_cm = self._stream_cm
@@ -163,7 +166,7 @@ class ElasticsearchLogReader(LogReader):
         await self._scan.__aenter__()
         return self
 
-    async def __aexit__(self, *args) -> None:
+    async def __aexit__(self, *args: Any) -> None:
         self._buffer.close()
         assert self._scan
         scan = self._scan

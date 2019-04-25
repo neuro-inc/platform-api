@@ -1,23 +1,23 @@
 import asyncio
 import io
-from pathlib import PurePath
+from pathlib import Path
 from textwrap import dedent
-from typing import NamedTuple
+from typing import AsyncIterator, Awaitable, Callable, NamedTuple, Optional, cast
 
 import aiodocker.utils
 import asyncssh
 import pytest
+from aioelasticsearch import Elasticsearch
 
-from platform_api.config import (
-    Config,
-    DatabaseConfig,
-    LoggingConfig,
-    ServerConfig,
-    StorageConfig,
-)
+from platform_api.config import Config
 from platform_api.orchestrator.job import JobRequest
 from platform_api.orchestrator.job_request import Container, ContainerResources
-from platform_api.orchestrator.kube_orchestrator import KubeOrchestrator, PodDescriptor
+from platform_api.orchestrator.kube_orchestrator import (
+    KubeClient,
+    KubeConfig,
+    KubeOrchestrator,
+    PodDescriptor,
+)
 from platform_api.ssh.server import SSHServer
 
 
@@ -26,45 +26,31 @@ class ApiConfig(NamedTuple):
     port: int
 
     @property
-    def endpoint(self):
+    def endpoint(self) -> str:
         return f"http://{self.host}:{self.port}/api/v1"
 
     @property
-    def model_base_url(self):
+    def model_base_url(self) -> str:
         return self.endpoint + "/models"
 
     @property
-    def jobs_base_url(self):
+    def jobs_base_url(self) -> str:
         return self.endpoint + "/jobs"
 
     def generate_job_url(self, job_id: str) -> str:
         return f"{self.jobs_base_url}/{job_id}"
 
     @property
-    def ping_url(self):
+    def ping_url(self) -> str:
         return self.endpoint + "/ping"
 
 
 @pytest.fixture
-def config(kube_config, redis_config, auth_config, es_config):
-    server_config = ServerConfig()
-    storage_config = StorageConfig(host_mount_path=PurePath("/tmp"))  # type: ignore
-    database_config = DatabaseConfig(redis=redis_config)  # type: ignore
-    logging_config = LoggingConfig(elasticsearch=es_config)
-    return Config(
-        server=server_config,
-        storage=storage_config,
-        orchestrator=kube_config,
-        database=database_config,
-        auth=auth_config,
-        logging=logging_config,
-    )
-
-
-@pytest.fixture
-async def ssh_server(config, es_client):
+async def ssh_server(
+    config: Config, es_client: Optional[Elasticsearch]
+) -> AsyncIterator[SSHServer]:
     async with KubeOrchestrator(
-        config=config.orchestrator, es_client=es_client
+        config=cast(KubeConfig, config.orchestrator), es_client=es_client  # noqa
     ) as orchestrator:
         srv = SSHServer("0.0.0.0", 8022, orchestrator)
         await srv.start()
@@ -73,10 +59,12 @@ async def ssh_server(config, es_client):
 
 
 @pytest.fixture
-async def delete_pod_later(kube_client):
+async def delete_pod_later(
+    kube_client: KubeClient
+) -> AsyncIterator[Callable[[PodDescriptor], Awaitable[None]]]:
     pods = []
 
-    async def _add_pod(pod):
+    async def _add_pod(pod: PodDescriptor) -> None:
         pods.append(pod)
 
     yield _add_pod
@@ -97,7 +85,7 @@ CMD ["/bin/bash"]
 
 
 @pytest.fixture(scope="session")
-async def sftp_image_name(docker):
+async def sftp_image_name(docker: aiodocker.Docker) -> str:
     # To prepare a tar context please edit Dockerfile.sftp and pack it
     f = io.BytesIO(DOCKERFILE.encode("utf-8"))
     tar_obj = aiodocker.utils.mktar_from_dockerfile(f)
@@ -113,7 +101,12 @@ async def sftp_image_name(docker):
 
 
 @pytest.mark.asyncio
-async def test_simple(ssh_server, kube_client, kube_config, delete_pod_later):
+async def test_simple(
+    ssh_server: SSHServer,
+    kube_client: KubeClient,
+    kube_config: KubeConfig,
+    delete_pod_later: Callable[[PodDescriptor], Awaitable[None]],
+) -> None:
     container = Container(
         image="ubuntu",
         command="sleep 10",
@@ -136,7 +129,12 @@ async def test_simple(ssh_server, kube_client, kube_config, delete_pod_later):
 
 
 @pytest.mark.asyncio
-async def test_shell(ssh_server, kube_client, kube_config, delete_pod_later):
+async def test_shell(
+    ssh_server: SSHServer,
+    kube_client: KubeClient,
+    kube_config: KubeConfig,
+    delete_pod_later: Callable[[PodDescriptor], Awaitable[None]],
+) -> None:
     container = Container(
         image="ubuntu",
         command="sleep 100",
@@ -162,7 +160,12 @@ async def test_shell(ssh_server, kube_client, kube_config, delete_pod_later):
 
 
 @pytest.mark.asyncio
-async def test_shell_with_args(ssh_server, kube_client, kube_config, delete_pod_later):
+async def test_shell_with_args(
+    ssh_server: SSHServer,
+    kube_client: KubeClient,
+    kube_config: KubeConfig,
+    delete_pod_later: Callable[[PodDescriptor], Awaitable[None]],
+) -> None:
     container = Container(
         image="ubuntu",
         command="sleep 100",
@@ -184,7 +187,12 @@ async def test_shell_with_args(ssh_server, kube_client, kube_config, delete_pod_
 
 
 @pytest.mark.asyncio
-async def test_exit_code(ssh_server, kube_client, kube_config, delete_pod_later):
+async def test_exit_code(
+    ssh_server: SSHServer,
+    kube_client: KubeClient,
+    kube_config: KubeConfig,
+    delete_pod_later: Callable[[PodDescriptor], Awaitable[None]],
+) -> None:
     container = Container(
         image="ubuntu",
         command="sleep 10",
@@ -209,7 +217,12 @@ async def test_exit_code(ssh_server, kube_client, kube_config, delete_pod_later)
 
 
 @pytest.mark.asyncio
-async def test_pass_env(ssh_server, kube_client, kube_config, delete_pod_later):
+async def test_pass_env(
+    ssh_server: SSHServer,
+    kube_client: KubeClient,
+    kube_config: KubeConfig,
+    delete_pod_later: Callable[[PodDescriptor], Awaitable[None]],
+) -> None:
     container = Container(
         image="ubuntu",
         command="sleep 10",
@@ -234,8 +247,12 @@ async def test_pass_env(ssh_server, kube_client, kube_config, delete_pod_later):
 
 @pytest.mark.asyncio
 async def test_sftp_basic(
-    ssh_server, kube_client, kube_config, delete_pod_later, tmpdir
-):
+    ssh_server: SSHServer,
+    kube_client: KubeClient,
+    kube_config: KubeConfig,
+    delete_pod_later: Callable[[PodDescriptor], Awaitable[None]],
+    tmpdir: Path,
+) -> None:
     container = Container(
         image="atmoz/sftp",
         command="sleep 100",
