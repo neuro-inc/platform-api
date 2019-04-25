@@ -144,7 +144,7 @@ class NodeTaint:
 
 class TestKubeClient(KubeClient):
     def _generate_endpoint_url(self, name: str, namespace: str) -> str:
-        return f"{namespace}/endpoints/{name}"
+        return f"{self._generate_namespace_url(namespace)}/endpoints/{name}"
 
     @property
     def _nodes_url(self) -> str:
