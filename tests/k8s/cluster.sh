@@ -112,7 +112,7 @@ function k8s::test {
 }
 
 function k8s::start_nfs {
-    kubectl apply -f tests/k8s/nfs.yml --namespace=platformapi-tests
+    kubectl apply -f tests/k8s/nfs.yml
 }
 
 function k8s::stop_nfs {

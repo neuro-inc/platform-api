@@ -19,7 +19,7 @@ kubectl config use-context minikube
 ```shell
 minikube addons enable ingress
 kubectl apply -f tests/k8s/namespace.yml
-kubectl apply -f tests/k8s/nfs.yml --namespace=platformapi-tests
+kubectl apply -f tests/k8s/nfs.yml
 kubectl apply -f tests/k8s/platformjobsingress.yml --namespace=platformapi-tests
 kubectl apply -f tests/k8s/logging.yml
 ```
