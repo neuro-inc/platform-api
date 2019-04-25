@@ -1087,7 +1087,7 @@ class TestJobs:
         client: aiohttp.ClientSession,
         jobs_client_factory: Callable[[_User], JobsClient],
     ) -> AsyncIterator[Callable[[_User, Dict[str, Any], bool], Awaitable[str]]]:
-        job_ids = []
+        cleanup_pairs = []
 
         async def _impl(
             user: _User, job_request: Dict[str, Any], do_kill: bool = False
@@ -1104,12 +1104,12 @@ class TestJobs:
                     await jobs_client.delete_job(job_id)
                     await jobs_client.long_polling_by_job_id(job_id, "succeeded")
                 else:
-                    job_ids.append(job_id)
+                    cleanup_pairs.append((jobs_client, job_id))
             return job_id
 
         yield _impl
 
-        for job_id in job_ids:
+        for job_client, job_id in cleanup_pairs:
             await jobs_client.delete_job(job_id=job_id, assert_success=False)
 
     @pytest.fixture
