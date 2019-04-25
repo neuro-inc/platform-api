@@ -102,8 +102,7 @@ class ApiRunner:
     async def run(self) -> ApiConfig:
         loop = asyncio.get_event_loop()
         self._task = loop.create_task(self._run())
-        await self._api_config_future
-        return self._api_config_future.result()
+        return await self._api_config_future
 
     async def close(self) -> None:
         if self._task:
