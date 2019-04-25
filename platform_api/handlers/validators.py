@@ -13,13 +13,13 @@ OptionalString = t.String | t.Null
 
 
 def create_job_name_validator() -> t.Trafaret:
-    return t.Null | t.String(min_length=3, max_length=100) & t.Regexp(JOB_NAME_PATTERN)
+    return t.Null | t.String(min_length=3, max_length=35) & t.Regexp(JOB_NAME_PATTERN)
 
 
 def create_user_name_validator() -> t.Trafaret:
     """ Completely the same validator as the one used in platform-auth
     """
-    return t.String(min_length=3, max_length=255) & t.Regexp(USER_NAME_PATTERN)
+    return t.String(min_length=3, max_length=25) & t.Regexp(USER_NAME_PATTERN)
 
 
 def create_job_status_validator() -> t.Trafaret:
