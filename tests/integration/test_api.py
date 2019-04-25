@@ -370,7 +370,7 @@ class TestModels:
             assert result["http_url_named"] == (
                 f"http://{job_name}-{regular_user.name}.jobs.neu.ro"
             )
-            expected_internal_hostname = f"{job_id}.default"
+            expected_internal_hostname = f"{job_id}.platformapi-tests"
             assert result["internal_hostname"] == expected_internal_hostname
             assert result["is_preemptible"]
             assert result["name"] == job_name
@@ -737,7 +737,7 @@ class TestJobs:
                 payload["http_url_named"]
                 == f"http://{job_name}-{regular_user.name}.jobs.neu.ro"
             )
-            expected_internal_hostname = f"{job_id}.default"
+            expected_internal_hostname = f"{job_id}.platformapi-tests"
             assert payload["internal_hostname"] == expected_internal_hostname
             assert payload["is_preemptible"]
             assert payload["description"] == "test job submitted by neuro job submit"
@@ -1713,7 +1713,7 @@ class TestJobs:
             assert response_payload == {
                 "id": mock.ANY,
                 "owner": regular_user.name,
-                "internal_hostname": f"{job_id}.default",
+                "internal_hostname": f"{job_id}.platformapi-tests",
                 "status": "pending",
                 "history": {
                     "status": "pending",
@@ -1745,7 +1745,7 @@ class TestJobs:
         assert response_payload == {
             "id": job_id,
             "owner": regular_user.name,
-            "internal_hostname": f"{job_id}.default",
+            "internal_hostname": f"{job_id}.platformapi-tests",
             "status": "succeeded",
             "history": {
                 "status": "succeeded",
@@ -1807,7 +1807,7 @@ class TestJobs:
             "id": job_id,
             "owner": regular_user.name,
             "status": "failed",
-            "internal_hostname": f"{job_id}.default",
+            "internal_hostname": f"{job_id}.platformapi-tests",
             "history": {
                 "status": "failed",
                 "reason": "Error",
@@ -1904,7 +1904,7 @@ class TestJobs:
             assert response_payload == {
                 "id": mock.ANY,
                 "owner": regular_user.name,
-                "internal_hostname": f"{job_id}.default",
+                "internal_hostname": f"{job_id}.platformapi-tests",
                 "status": "pending",
                 "history": {
                     "status": "pending",
