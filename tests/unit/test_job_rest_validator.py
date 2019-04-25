@@ -7,6 +7,7 @@ from platform_api.handlers.jobs_handler import create_job_response_validator
 from platform_api.handlers.validators import (
     create_job_name_validator,
     create_user_name_validator,
+    create_volumes_validator,
 )
 
 
@@ -224,3 +225,47 @@ class TestJobResponseValidator:
         }
         validator = create_job_response_validator()
         assert validator.check(response)
+
+
+class TestVolumesValidator:
+    def test_valid_volumes(self) -> None:
+        value = [
+            {
+                "src_storage_uri": "storage://uri1",
+                "dst_path": "path1",
+                "read_only": True,
+            },
+            {
+                "src_storage_uri": "storage://uri2",
+                "dst_path": "path2",
+                "read_only": True,
+            },
+        ]
+        validator = create_volumes_validator()
+        assert validator.check(value)
+
+    def test_destination_paths_are_unique(self) -> None:
+        value = [
+            {
+                "src_storage_uri": "storage://uri1",
+                "dst_path": "path",
+                "read_only": True,
+            },
+            {
+                "src_storage_uri": "storage://uri2",
+                "dst_path": "path",
+                "read_only": True,
+            },
+        ]
+        validator = create_volumes_validator()
+        with pytest.raises(t.DataError):
+            assert validator.check(value)
+
+    def test_volumes_are_unique(self) -> None:
+        value = [
+            {"src_storage_uri": "storage://uri", "dst_path": "path", "read_only": True},
+            {"src_storage_uri": "storage://uri", "dst_path": "path", "read_only": True},
+        ]
+        validator = create_volumes_validator()
+        with pytest.raises(t.DataError):
+            assert validator.check(value)
