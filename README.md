@@ -18,8 +18,9 @@ kubectl config use-context minikube
 5. Apply minikube configuration and some k8s fixture services:
 ```shell
 minikube addons enable ingress
+kubectl apply -f tests/k8s/namespace.yml
 kubectl apply -f tests/k8s/nfs.yml
-kubectl apply -f tests/k8s/platformjobsingress.yml
+kubectl apply -f tests/k8s/platformjobsingress.yml --namespace=platformapi-tests
 kubectl apply -f tests/k8s/logging.yml
 ```
 6. Create a new virtual environment with Python 3.6:

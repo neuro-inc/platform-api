@@ -122,6 +122,7 @@ async def kube_config(
         ],
         orphaned_job_owner="compute",
         node_label_preemptible="preemptible",
+        namespace="platformapi-tests",
     )
 
 
@@ -142,12 +143,8 @@ class NodeTaint:
 
 
 class TestKubeClient(KubeClient):
-    @property
-    def _endpoints_url(self) -> str:
-        return f"{self._namespace_url}/endpoints"
-
-    def _generate_endpoint_url(self, name: str) -> str:
-        return f"{self._endpoints_url}/{name}"
+    def _generate_endpoint_url(self, name: str, namespace: str) -> str:
+        return f"{self._generate_namespace_url(namespace)}/endpoints/{name}"
 
     @property
     def _nodes_url(self) -> str:
@@ -156,8 +153,10 @@ class TestKubeClient(KubeClient):
     def _generate_node_url(self, name: str) -> str:
         return f"{self._nodes_url}/{name}"
 
-    async def get_endpoint(self, name: str) -> Dict[str, Any]:
-        url = self._generate_endpoint_url(name)
+    async def get_endpoint(
+        self, name: str, namespace: Optional[str] = None
+    ) -> Dict[str, Any]:
+        url = self._generate_endpoint_url(name, namespace or self._namespace)
         return await self._request(method="GET", url=url)
 
     async def request(self, *args: Any, **kwargs: Any) -> Dict[str, Any]:
@@ -276,7 +275,7 @@ async def kube_client(kube_config: KubeConfig) -> AsyncIterator[KubeClient]:
 
 @pytest.fixture(scope="session")
 async def nfs_volume_server(kube_client: TestKubeClient) -> Any:
-    payload = await kube_client.get_endpoint("platformstoragenfs")
+    payload = await kube_client.get_endpoint("platformstoragenfs", namespace="default")
     return payload["subsets"][0]["addresses"][0]["ip"]
 
 
@@ -310,6 +309,7 @@ async def kube_config_nfs(
         node_label_gpu="gpu",
         resource_pool_types=[ResourcePoolType()],
         orphaned_job_owner="compute",
+        namespace="platformapi-tests",
     )
 
 
