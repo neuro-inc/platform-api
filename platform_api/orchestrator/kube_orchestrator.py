@@ -6,12 +6,12 @@ from typing import Any, Dict, Iterable, List, Optional, Union
 
 from aioelasticsearch import Elasticsearch
 
-from ..config import OrchestratorConfig  # noqa
+from platform_api.cluster_config import OrchestratorConfig
+
 from .base import LogReader, Orchestrator, Telemetry
 from .job import Job, JobStatusItem
 from .job_request import JobError, JobNotFoundException, JobStatus
 from .jobs_telemetry import KubeTelemetry
-from .kube_client import *  # noqa
 from .kube_client import (
     AlreadyExistsException,
     DockerRegistrySecret,
