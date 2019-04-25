@@ -156,7 +156,7 @@ class TestKubeClient(KubeClient):
     async def get_endpoint(
         self, name: str, namespace: Optional[str] = None
     ) -> Dict[str, Any]:
-        url = self._generate_endpoint_url(name, namespace or self._namespace_url)
+        url = self._generate_endpoint_url(name, namespace or self._namespace)
         return await self._request(method="GET", url=url)
 
     async def request(self, *args: Any, **kwargs: Any) -> Dict[str, Any]:
