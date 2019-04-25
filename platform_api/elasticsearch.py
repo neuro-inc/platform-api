@@ -22,5 +22,4 @@ async def create_elasticsearch_client(config: ElasticsearchConfig) -> Elasticsea
         http_auth = None
 
     async with Elasticsearch(hosts=config.hosts, http_auth=http_auth) as es_client:
-        await es_client.ping()
         yield es_client

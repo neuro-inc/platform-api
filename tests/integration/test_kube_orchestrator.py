@@ -1378,8 +1378,8 @@ class TestLogReader:
     ) -> None:
         es_config = ElasticsearchConfig(hosts=es_hosts_auth)
         with pytest.raises(AuthenticationException):
-            async with create_elasticsearch_client(config=es_config):
-                pass
+            async with create_elasticsearch_client(config=es_config) as es_client:
+                await es_client.ping()
 
     @pytest.mark.asyncio
     async def test_create_elasticsearch_client_wrong_auth_fail(
@@ -1389,8 +1389,8 @@ class TestLogReader:
             hosts=es_hosts_auth, user="wrong-user", password="wrong-pw"
         )
         with pytest.raises(AuthenticationException):
-            async with create_elasticsearch_client(es_config):
-                pass
+            async with create_elasticsearch_client(es_config) as es_client:
+                await es_client.ping()
 
     @pytest.mark.asyncio
     async def test_create_elasticsearch_client_correct_credentials(
@@ -1399,8 +1399,8 @@ class TestLogReader:
         es_config = ElasticsearchConfig(
             hosts=es_hosts_auth, user="testuser", password="password"
         )
-        async with create_elasticsearch_client(es_config):
-            pass
+        async with create_elasticsearch_client(es_config) as es_client:
+            await es_client.ping()
 
     @pytest.mark.asyncio
     async def test_elasticsearch_log_reader(

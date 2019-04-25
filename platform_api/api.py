@@ -1,23 +1,18 @@
 import asyncio
 import logging
-from typing import Any, AsyncIterator, Awaitable, Callable, Dict, cast
+from typing import Any, AsyncIterator, Awaitable, Callable, Dict
 
 import aiohttp.web
 from async_exit_stack import AsyncExitStack
 from neuro_auth_client import AuthClient
 from neuro_auth_client.security import AuthScheme, setup_security
 
+from .cluster import Cluster, ClusterConfig, ClusterRegistry
 from .config import Config
 from .config_factory import EnvironConfigFactory
-from .elasticsearch import create_elasticsearch_client
 from .handlers import JobsHandler, ModelsHandler
-from .orchestrator import (
-    JobException,
-    JobsService,
-    JobsStatusPooling,
-    KubeConfig,
-    KubeOrchestrator,
-)
+from .kube_cluster import KubeCluster
+from .orchestrator import JobException, JobsService, JobsStatusPooling
 from .orchestrator.jobs_service import JobsServiceException
 from .orchestrator.jobs_storage import RedisJobsStorage
 from .redis import create_redis_client
@@ -125,6 +120,10 @@ async def create_jobs_app(config: Config) -> aiohttp.web.Application:
     return jobs_app
 
 
+def create_cluster(config: ClusterConfig) -> Cluster:
+    return KubeCluster(config)
+
+
 async def create_app(config: Config) -> aiohttp.web.Application:
     app = aiohttp.web.Application(middlewares=[handle_exceptions])
     app["config"] = config
@@ -137,17 +136,17 @@ async def create_app(config: Config) -> aiohttp.web.Application:
                 create_redis_client(config.database.redis)
             )
 
-            logger.info("Initializing Elasticsearch client")
-            es_client = await exit_stack.enter_async_context(
-                create_elasticsearch_client(config.logging.elasticsearch)
+            logger.info("Initializing Cluster Registry")
+            cluster_registry = await exit_stack.enter_async_context(
+                ClusterRegistry(factory=create_cluster)
             )
 
-            logger.info("Initializing Orchestrator")
-            orchestrator = KubeOrchestrator(
-                config=cast(KubeConfig, config.orchestrator),  # noqa
-                es_client=es_client,
+            await cluster_registry.add(config.cluster)
+
+            cluster = await exit_stack.enter_async_context(
+                cluster_registry.get(config.cluster.name)
             )
-            await exit_stack.enter_async_context(orchestrator)
+            orchestrator = cluster.orchestrator
 
             app["models_app"]["orchestrator"] = orchestrator
             app["jobs_app"]["orchestrator"] = orchestrator

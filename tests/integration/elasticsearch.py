@@ -5,8 +5,7 @@ from typing import List
 import pytest
 from aioelasticsearch import Elasticsearch
 
-from platform_api.api import create_elasticsearch_client
-from platform_api.elasticsearch import ElasticsearchConfig
+from platform_api.elasticsearch import ElasticsearchConfig, create_elasticsearch_client
 
 
 def wait_for_service(service_name: str) -> List[str]:  # type: ignore
