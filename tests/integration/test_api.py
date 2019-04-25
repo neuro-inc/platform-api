@@ -1087,6 +1087,8 @@ class TestJobs:
         client: aiohttp.ClientSession,
         jobs_client_factory: Callable[[_User], JobsClient],
     ) -> AsyncIterator[Callable[[_User, Dict[str, Any], bool], Awaitable[str]]]:
+        job_ids = []
+        
         async def _impl(
             user: _User, job_request: Dict[str, Any], do_kill: bool = False
         ) -> str:
@@ -1097,7 +1099,6 @@ class TestJobs:
                 assert resp.status == HTTPAccepted.status_code, str(job_request)
                 data = await resp.json()
                 job_id = data["id"]
-                assert isinstance(job_id, str)
                 await jobs_client.long_polling_by_job_id(job_id, "running")
                 if do_kill:
                     await jobs_client.delete_job(job_id)
