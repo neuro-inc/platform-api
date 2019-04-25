@@ -97,12 +97,12 @@ class ApiRunner:
     async def _run(self) -> None:
         async with create_local_app_server(self._config, port=self._port) as api_config:
             self._api_config_future.set_result(api_config)
-            await asyncio.wait_for(self._cleanup_future, timeout=None)
+            await self._cleanup_future
 
     async def run(self) -> ApiConfig:
         loop = asyncio.get_event_loop()
         self._task = loop.create_task(self._run())
-        await asyncio.wait_for(self._api_config_future, timeout=None)
+        await self._api_config_future
         return self._api_config_future.result()
 
     async def close(self) -> None:
