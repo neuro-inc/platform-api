@@ -1033,9 +1033,7 @@ class TestJobs:
     async def run_job(
         self,
         api: ApiConfig,
-        regular_user_factory: Callable[[], Any],
         jobs_client_factory: Callable[[_User], JobsClient],
-        job_request_factory: Callable[[], Dict[str, Any]],
         client: aiohttp.ClientSession,
     ) -> AsyncIterator[Callable[[_User, Dict[str, Any], bool], Awaitable[str]]]:
         cleanup_pairs = []
