@@ -25,6 +25,7 @@ from yarl import URL
 from platform_api.config import AuthConfig, OAuthConfig
 from platform_api.orchestrator.job import AggregatedRunTime
 from platform_api.user import User
+from tests.conftest import random_str
 
 
 @pytest.fixture(scope="session")
@@ -155,16 +156,13 @@ class _User(User):
 
 @pytest.fixture
 async def regular_user_factory(
-    auth_client: _AuthClient,
-    token_factory: Callable[[str], str],
-    admin_token: str,
-    random_str_factory: Callable[[], str],
+    auth_client: _AuthClient, token_factory: Callable[[str], str], admin_token: str
 ) -> Callable[[Optional[str], Optional[Quota]], Awaitable[_User]]:
     async def _factory(
         name: Optional[str] = None, quota: Optional[Quota] = None
     ) -> _User:
         if not name:
-            name = random_str_factory()
+            name = random_str()
         quota = quota or Quota()
         user = AuthClientUser(name=name, quota=quota)
         await auth_client.add_user(user, token=admin_token)

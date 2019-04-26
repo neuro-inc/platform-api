@@ -1,5 +1,5 @@
 from datetime import datetime, timedelta, timezone
-from typing import Any, Dict, List, Optional, Tuple, Callable
+from typing import Any, Dict, List, Optional, Tuple
 
 import aioredis
 import pytest
@@ -20,7 +20,7 @@ from platform_api.orchestrator.jobs_storage import (
     JobStorageTransactionError,
     RedisJobsStorage,
 )
-from tests.conftest import not_raises
+from tests.conftest import not_raises, random_str
 
 
 class TestRedisJobsStorage:
@@ -1118,7 +1118,7 @@ class TestRedisJobsStorage:
 
     @pytest.mark.asyncio
     async def test_get_aggregated_run_time_for_user(
-        self, redis_client: aioredis.Redis, kube_orchestrator: KubeOrchestrator, random_str_factory: Callable[[], str]
+        self, redis_client: aioredis.Redis, kube_orchestrator: KubeOrchestrator
     ) -> None:
         def current_time() -> datetime:
             return datetime.now(tz=timezone.utc)
@@ -1126,7 +1126,7 @@ class TestRedisJobsStorage:
         job_started_at = current_time()
         job_finished_at = datetime(year=2099, month=1, day=1, tzinfo=timezone.utc)
 
-        owner = f"test-user-{random_str_factory()}"
+        owner = f"test-user-{random_str()}"
 
         def create_job(status: JobStatus, with_gpu: bool, finished: bool) -> Job:
             status_history = [

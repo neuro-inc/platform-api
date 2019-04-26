@@ -34,6 +34,7 @@ from neuro_auth_client.client import Quota
 
 from platform_api.api import create_app
 from platform_api.config import Config
+from tests.conftest import random_str
 
 from .auth import _AuthClient, _User
 from .conftest import TestKubeClient
@@ -727,9 +728,8 @@ class TestJobs:
         job_submit: Dict[str, Any],
         jobs_client: JobsClient,
         regular_user: _User,
-        random_str_factory: Callable[[], str]
     ) -> None:
-        job_name = f"test-job-name-{random_str_factory()}"
+        job_name = f"test-job-name-{random_str()}"
         url = api.jobs_base_url
         job_submit["is_preemptible"] = True
         job_submit["name"] = job_name
@@ -1539,9 +1539,10 @@ class TestJobs:
     @pytest.mark.parametrize(
         "filters",
         [
-            multidict.MultiDict([]),
+            multidict.MultiDict([("name", f"test-job-{random_str()}")]),
             multidict.MultiDict(
                 [
+                    ("name", f"test-job-{random_str()}"),
                     ("status", "running"),
                     ("status", "pending"),
                     ("status", "failed"),
@@ -1558,10 +1559,8 @@ class TestJobs:
         job_submit: Dict[str, Any],
         regular_user: _User,
         filters: Dict[str, Any],
-        random_str_factory: Callable[[], str]
     ) -> None:
         # unique job name generated per test-run is stored in "filters"
-        filters["name"] = f"test-job-{random_str_factory()}"
         job_submit["name"] = filters.get("name")
         job_submit["container"]["command"] = "sleep 30m"
 

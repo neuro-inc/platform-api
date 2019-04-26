@@ -9,6 +9,8 @@ from jose import jwt
 from neuro_auth_client import AuthClient, User
 from yarl import URL
 
+from tests.conftest import random_str
+
 
 class PlatformConfig:
     endpoint_url: str
@@ -117,13 +119,11 @@ class _User:
 
 @pytest.fixture
 async def regular_user_factory(
-    auth_client: AuthClient,
-    token_factory: Callable[[str], str],
-    random_str_factory: Callable[[], str],
+    auth_client: AuthClient, token_factory: Callable[[str], str]
 ) -> Callable[[Optional[str]], Awaitable[_User]]:
     async def _factory(name: Optional[str] = None) -> _User:
         if not name:
-            name = random_str_factory()
+            name = random_str()
         user = User(name=name)
         await auth_client.add_user(user)
         return _User(name=user.name, token=token_factory(user.name))
