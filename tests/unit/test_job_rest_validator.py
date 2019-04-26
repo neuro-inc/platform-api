@@ -98,6 +98,17 @@ class TestJobNameValidator:
         with pytest.raises(t.DataError, match="does not match pattern"):
             assert validator.check(value)
 
+    def test_create_job_name_validator_custom_max_length_non_null(self) -> None:
+        value = "a" * 11
+        validator = create_job_name_validator(max_length=10)
+        with pytest.raises(t.DataError):
+            assert validator.check(value)
+
+    def test_create_job_name_validator_custom_max_length_null(self) -> None:
+        value = "a" * 11
+        validator = create_job_name_validator(max_length=None)
+        assert validator.check(value)
+
 
 class TestUserNameValidator:
     """ Almost the same test suite as used for the same

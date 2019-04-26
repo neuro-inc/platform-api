@@ -75,7 +75,7 @@ def create_job_response_validator() -> t.Trafaret:
             "container": create_container_response_validator(),
             "is_preemptible": t.Bool,
             t.Key("internal_hostname", optional=True): t.String,
-            t.Key("name", optional=True): create_job_name_validator(),
+            t.Key("name", optional=True): create_job_name_validator(max_length=None),
             t.Key("description", optional=True): t.String,
         }
     )
