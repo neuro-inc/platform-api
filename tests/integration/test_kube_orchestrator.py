@@ -53,7 +53,7 @@ from platform_api.orchestrator.kube_orchestrator import JobStatusItemFactory
 from platform_api.orchestrator.logs import ElasticsearchLogReader, PodContainerLogReader
 from tests.conftest import random_str
 
-from .conftest import TestKubeClient
+from .conftest import MyKubeClient
 
 
 class MyJob(Job):
@@ -794,7 +794,7 @@ class TestKubeOrchestrator:
         self,
         kube_config: KubeConfig,
         kube_orchestrator: KubeOrchestrator,
-        kube_client: TestKubeClient,
+        kube_client: MyKubeClient,
         delete_job_later: Callable[[Job], Awaitable[None]],
     ) -> None:
         container = Container(
@@ -842,7 +842,7 @@ async def delete_pod_later(
             pass
 
 
-class Test_KubeClient:
+class TestKubeClient:
     @pytest.mark.asyncio
     async def test_wait_pod_is_running_not_found(self, kube_client: KubeClient) -> None:
         with pytest.raises(JobNotFoundException):
@@ -1121,7 +1121,7 @@ class Test_KubeClient:
     async def test_get_pod_events(
         self,
         kube_config: KubeConfig,
-        kube_client: TestKubeClient,
+        kube_client: MyKubeClient,
         delete_pod_later: Callable[[PodDescriptor], Awaitable[None]],
     ) -> None:
         container = Container(
@@ -1407,7 +1407,7 @@ class TestLogReader:
     async def test_elasticsearch_log_reader(
         self,
         kube_config: KubeConfig,
-        kube_client: TestKubeClient,
+        kube_client: MyKubeClient,
         delete_pod_later: Callable[[PodDescriptor], Awaitable[None]],
         es_client: Elasticsearch,
     ) -> None:
@@ -1502,7 +1502,7 @@ class TestLogReader:
         self,
         kube_config: KubeConfig,
         kube_orchestrator: KubeOrchestrator,
-        kube_client: TestKubeClient,
+        kube_client: MyKubeClient,
         delete_job_later: Callable[[Job], Awaitable[None]],
     ) -> None:
         command = 'bash -c "for i in {1..5}; do echo $i; sleep 1; done"'
@@ -1712,7 +1712,7 @@ class TestNodeSelector:
     async def test_pod_node_selector(
         self,
         kube_config: KubeConfig,
-        kube_client: TestKubeClient,
+        kube_client: MyKubeClient,
         delete_pod_later: Callable[[PodDescriptor], Awaitable[None]],
         delete_node_later: Callable[[str], Awaitable[None]],
     ) -> None:
@@ -1734,7 +1734,7 @@ class TestNodeSelector:
     async def test_gpu(
         self,
         kube_config: KubeConfig,
-        kube_client: TestKubeClient,
+        kube_client: MyKubeClient,
         delete_job_later: Callable[[Job], Awaitable[None]],
         kube_orchestrator: KubeOrchestrator,
         kube_node_gpu: str,
@@ -1797,7 +1797,7 @@ class TestPreemption:
     async def test_preemptible_job_lost_node_lost_pod(
         self,
         kube_config: KubeConfig,
-        kube_client: TestKubeClient,
+        kube_client: MyKubeClient,
         delete_job_later: Callable[[Job], Awaitable[None]],
         kube_orchestrator: KubeOrchestrator,
         kube_node_preemptible: str,
@@ -1833,7 +1833,7 @@ class TestPreemption:
     async def test_preemptible_job_pending_pod_node_not_ready(
         self,
         kube_config: KubeConfig,
-        kube_client: TestKubeClient,
+        kube_client: MyKubeClient,
         delete_job_later: Callable[[Job], Awaitable[None]],
         kube_orchestrator: KubeOrchestrator,
         kube_node_preemptible: str,
@@ -1878,7 +1878,7 @@ class TestPreemption:
     async def test_preemptible_job_recreation_failed(
         self,
         kube_config: KubeConfig,
-        kube_client: TestKubeClient,
+        kube_client: MyKubeClient,
         delete_job_later: Callable[[Job], Awaitable[None]],
         kube_orchestrator: KubeOrchestrator,
         kube_node_preemptible: str,
