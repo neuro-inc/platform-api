@@ -29,7 +29,10 @@ from platform_api.user import User, authorized_user, untrusted_user
 from .job_request_builder import ContainerBuilder
 from .validators import (
     create_container_request_validator,
+    create_container_response_validator,
+    create_job_history_validator,
     create_job_name_validator,
+    create_job_status_validator,
     create_user_name_validator,
 )
 
@@ -48,6 +51,32 @@ def create_job_request_validator(
             t.Key("name", optional=True): create_job_name_validator(),
             t.Key("description", optional=True): t.String,
             t.Key("is_preemptible", optional=True, default=False): t.Bool,
+        }
+    )
+
+
+def create_job_response_validator() -> t.Trafaret:
+    return t.Dict(
+        {
+            "id": t.String,
+            # TODO (A Danshyn 10/08/18): `owner` is allowed to be a blank
+            # string because initially jobs did not have such information
+            # on the dev and staging envs. we may want to change this once the
+            # prod env is there.
+            "owner": t.String(allow_blank=True),
+            # `status` is left for backward compat. the python client/cli still
+            # relies on it.
+            "status": create_job_status_validator(),
+            t.Key("http_url", optional=True): t.String,
+            t.Key("http_url_named", optional=True): t.String,
+            t.Key("ssh_server", optional=True): t.String,
+            "ssh_auth_server": t.String,
+            "history": create_job_history_validator(),
+            "container": create_container_response_validator(),
+            "is_preemptible": t.Bool,
+            t.Key("internal_hostname", optional=True): t.String,
+            t.Key("name", optional=True): create_job_name_validator(max_length=None),
+            t.Key("description", optional=True): t.String,
         }
     )
 
@@ -170,6 +199,10 @@ class JobsHandler:
         self._storage_config = config.storage
 
         self._job_filter_factory = JobFilterFactory()
+        self._job_response_validator = create_job_response_validator()
+        self._bulk_jobs_response_validator = t.Dict(
+            {"jobs": t.List(self._job_response_validator)}
+        )
 
     @property
     def _jobs_service(self) -> JobsService:
@@ -225,6 +258,7 @@ class JobsHandler:
             job_request, user=user, job_name=name, is_preemptible=is_preemptible
         )
         response_payload = convert_job_to_job_response(job, self._storage_config)
+        self._job_response_validator.check(response_payload)
         return aiohttp.web.json_response(
             data=response_payload, status=aiohttp.web.HTTPAccepted.status_code
         )
@@ -239,6 +273,7 @@ class JobsHandler:
         await check_permission(request, permission.action, [permission])
 
         response_payload = convert_job_to_job_response(job, self._storage_config)
+        self._job_response_validator.check(response_payload)
         return aiohttp.web.json_response(
             data=response_payload, status=aiohttp.web.HTTPOk.status_code
         )
@@ -290,6 +325,7 @@ class JobsHandler:
                 convert_job_to_job_response(job, self._storage_config) for job in jobs
             ]
         }
+        self._bulk_jobs_response_validator.check(response_payload)
         return aiohttp.web.json_response(
             data=response_payload, status=aiohttp.web.HTTPOk.status_code
         )

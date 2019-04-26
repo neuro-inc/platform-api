@@ -3,6 +3,7 @@ from typing import Tuple
 import pytest
 import trafaret as t
 
+from platform_api.handlers.jobs_handler import create_job_response_validator
 from platform_api.handlers.validators import (
     create_job_name_validator,
     create_user_name_validator,
@@ -97,6 +98,17 @@ class TestJobNameValidator:
         with pytest.raises(t.DataError, match="does not match pattern"):
             assert validator.check(value)
 
+    def test_create_job_name_validator_custom_max_length_non_null(self) -> None:
+        value = "a" * 11
+        validator = create_job_name_validator(max_length=10)
+        with pytest.raises(t.DataError):
+            assert validator.check(value)
+
+    def test_create_job_name_validator_custom_max_length_null(self) -> None:
+        value = "a" * 11
+        validator = create_job_name_validator(max_length=None)
+        assert validator.check(value)
+
 
 class TestUserNameValidator:
     """ Almost the same test suite as used for the same
@@ -174,6 +186,56 @@ class TestUserNameValidator:
         validator = create_user_name_validator()
         with pytest.raises(t.DataError):
             assert validator.check(value)
+
+
+class TestJobResponseValidator:
+    def test_job_details_with_name(self) -> None:
+        container = {
+            "image": "testimage",
+            "resources": {"cpu": 0.1, "memory_mb": 16, "shm": True},
+            "ssh": {"port": 666},
+        }
+        response = {
+            "id": "test-job-id",
+            "owner": "tests",
+            "status": "pending",
+            "name": "test-job-name",
+            "description": "test-job",
+            "history": {
+                "status": "pending",
+                "reason": None,
+                "description": None,
+                "created_at": "now",
+            },
+            "container": container,
+            "ssh_auth_server": "ssh-auth",
+            "is_preemptible": False,
+        }
+        validator = create_job_response_validator()
+        assert validator.check(response)
+
+    def test_job_details_without_name(self) -> None:
+        container = {
+            "image": "testimage",
+            "resources": {"cpu": 0.1, "memory_mb": 16, "shm": True},
+            "ssh": {"port": 666},
+        }
+        response = {
+            "id": "test-job-id",
+            "owner": "tests",
+            "status": "pending",
+            "history": {
+                "status": "pending",
+                "reason": None,
+                "description": None,
+                "created_at": "now",
+            },
+            "container": container,
+            "ssh_auth_server": "ssh-auth",
+            "is_preemptible": False,
+        }
+        validator = create_job_response_validator()
+        assert validator.check(response)
 
 
 class TestVolumesValidator:

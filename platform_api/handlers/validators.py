@@ -12,8 +12,10 @@ USER_NAME_PATTERN = "^[a-z0-9]([a-z0-9]|(-[a-z0-9]))*$"
 OptionalString = t.String | t.Null
 
 
-def create_job_name_validator() -> t.Trafaret:
-    return t.Null | t.String(min_length=3, max_length=35) & t.Regexp(JOB_NAME_PATTERN)
+def create_job_name_validator(max_length: Optional[int] = 35) -> t.Trafaret:
+    return t.Null | t.String(min_length=3, max_length=max_length) & t.Regexp(
+        JOB_NAME_PATTERN
+    )
 
 
 def create_user_name_validator() -> t.Trafaret:
