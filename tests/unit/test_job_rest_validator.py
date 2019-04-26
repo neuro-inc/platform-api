@@ -3,7 +3,6 @@ from typing import Tuple
 import pytest
 import trafaret as t
 
-from platform_api.handlers.jobs_handler import create_job_response_validator
 from platform_api.handlers.validators import (
     create_job_name_validator,
     create_user_name_validator,
@@ -175,56 +174,6 @@ class TestUserNameValidator:
         validator = create_user_name_validator()
         with pytest.raises(t.DataError):
             assert validator.check(value)
-
-
-class TestJobResponseValidator:
-    def test_job_details_with_name(self) -> None:
-        container = {
-            "image": "testimage",
-            "resources": {"cpu": 0.1, "memory_mb": 16, "shm": True},
-            "ssh": {"port": 666},
-        }
-        response = {
-            "id": "test-job-id",
-            "owner": "tests",
-            "status": "pending",
-            "name": "test-job-name",
-            "description": "test-job",
-            "history": {
-                "status": "pending",
-                "reason": None,
-                "description": None,
-                "created_at": "now",
-            },
-            "container": container,
-            "ssh_auth_server": "ssh-auth",
-            "is_preemptible": False,
-        }
-        validator = create_job_response_validator()
-        assert validator.check(response)
-
-    def test_job_details_without_name(self) -> None:
-        container = {
-            "image": "testimage",
-            "resources": {"cpu": 0.1, "memory_mb": 16, "shm": True},
-            "ssh": {"port": 666},
-        }
-        response = {
-            "id": "test-job-id",
-            "owner": "tests",
-            "status": "pending",
-            "history": {
-                "status": "pending",
-                "reason": None,
-                "description": None,
-                "created_at": "now",
-            },
-            "container": container,
-            "ssh_auth_server": "ssh-auth",
-            "is_preemptible": False,
-        }
-        validator = create_job_response_validator()
-        assert validator.check(response)
 
 
 class TestVolumesValidator:
