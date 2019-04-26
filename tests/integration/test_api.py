@@ -1955,7 +1955,7 @@ class TestJobs:
         jobs_client: JobsClient,
         infinite_job: str,
     ) -> None:
-        jobs_client.long_polling_by_job_id(job_id=infinite_job, status="running")
+        await jobs_client.long_polling_by_job_id(job_id=infinite_job, status="running")
         job_top_url = api.jobs_base_url + f"/{infinite_job}/top"
         num_request = 2
         records = []
