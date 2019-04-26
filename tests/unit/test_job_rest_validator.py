@@ -20,7 +20,7 @@ class TestJobNameValidator:
             ("ab3d", "contains a number"),
             ("abc3", "ends with a number"),
             ("a" * 3, "minimum length"),
-            ("a" * 100, "maximum length"),
+            ("a" * 35, "maximum length"),
         ],
     )
     def test_valid_job_names(self, value: str, description: str) -> None:
@@ -44,10 +44,10 @@ class TestJobNameValidator:
         with pytest.raises(t.DataError, match="String is shorter than 3 characters"):
             assert validator.check(value)
 
-    @pytest.mark.parametrize("value", ["a" * 101])
+    @pytest.mark.parametrize("value", ["a" * 36])
     def test_invalid_job_names__too_long(self, value: str) -> None:
         validator = create_job_name_validator()
-        with pytest.raises(t.DataError, match="String is longer than 100 characters"):
+        with pytest.raises(t.DataError, match="String is longer than 35 characters"):
             assert validator.check(value)
 
     @pytest.mark.parametrize(
@@ -115,12 +115,12 @@ class TestUserNameValidator:
         [
             ("test", 1),
             ("abc", 1),
-            ("a", 255),
+            ("a", 25),
             ("a-b-c", 1),
-            ("a-b-c", (255 // len("a-b-c"))),
+            ("a-b-c", (25 // len("a-b-c"))),
             ("123", 1),
             ("with123numbers", 1),
-            ("with123numbers-and-underscore", 1),
+            ("with123numbers-and-dash", 1),
         ],
     )
     def test_create_user_name_validator__ok(self, pair: Tuple[str, int]) -> None:
@@ -137,7 +137,7 @@ class TestUserNameValidator:
             ("-abc", 1),
             ("a", 1),
             ("a", 2),
-            ("a", 256),
+            ("a", 26),
             ("too_long-string", 1000),
             ("a-b-c.com", 1),
             ("a_b_c", 1),

@@ -1,6 +1,5 @@
 import os
 import time
-import uuid
 from dataclasses import dataclass
 from typing import AsyncIterator, Awaitable, Callable, Optional
 
@@ -9,6 +8,8 @@ import pytest
 from jose import jwt
 from neuro_auth_client import AuthClient, User
 from yarl import URL
+
+from tests.conftest import random_str
 
 
 class PlatformConfig:
@@ -122,7 +123,7 @@ async def regular_user_factory(
 ) -> Callable[[Optional[str]], Awaitable[_User]]:
     async def _factory(name: Optional[str] = None) -> _User:
         if not name:
-            name = str(uuid.uuid4())
+            name = random_str()
         user = User(name=name)
         await auth_client.add_user(user)
         return _User(name=user.name, token=token_factory(user.name))

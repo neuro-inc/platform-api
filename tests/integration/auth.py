@@ -1,5 +1,4 @@
 import asyncio
-import uuid
 from dataclasses import asdict, dataclass
 from typing import (
     AsyncGenerator,
@@ -26,6 +25,7 @@ from yarl import URL
 from platform_api.config import AuthConfig, OAuthConfig
 from platform_api.orchestrator.job import AggregatedRunTime
 from platform_api.user import User
+from tests.conftest import random_str
 
 
 @pytest.fixture(scope="session")
@@ -162,7 +162,7 @@ async def regular_user_factory(
         name: Optional[str] = None, quota: Optional[Quota] = None
     ) -> _User:
         if not name:
-            name = str(uuid.uuid4())
+            name = random_str()
         quota = quota or Quota()
         user = AuthClientUser(name=name, quota=quota)
         await auth_client.add_user(user, token=admin_token)

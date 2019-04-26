@@ -5,7 +5,6 @@ import uuid
 from pathlib import PurePath
 from typing import Any, AsyncIterator, Awaitable, Callable, Iterator, Optional, Sequence
 from unittest import mock
-from uuid import uuid4
 
 import aiohttp
 import pytest
@@ -51,6 +50,7 @@ from platform_api.orchestrator.kube_orchestrator import (
     StatusException,
 )
 from platform_api.orchestrator.logs import ElasticsearchLogReader, PodContainerLogReader
+from tests.conftest import random_str
 
 from .conftest import TestKubeClient
 
@@ -535,7 +535,7 @@ class TestKubeOrchestrator:
         job = MyJob(
             orchestrator=kube_orchestrator,
             job_request=JobRequest.create(container),
-            name=f"test-job-name-{uuid4()}",
+            name=f"test-job-name-{random_str()}",
             owner="owner",
         )
         try:
@@ -609,7 +609,7 @@ class TestKubeOrchestrator:
         job = MyJob(
             orchestrator=kube_orchestrator,
             job_request=JobRequest.create(container),
-            name=f"test-job-name-{uuid4()}",
+            name=f"test-job-name-{random_str()}",
             owner="owner",
         )
         try:
@@ -723,7 +723,7 @@ class TestKubeOrchestrator:
         kube_ingress_ip: str,
         delete_job_later: Callable[[Job], Awaitable[None]],
     ) -> None:
-        server_job_name = f"server-job-{uuid4()}"
+        server_job_name = f"server-job-{random_str()}"
         server_job = create_server_job(job_name=server_job_name)
         await delete_job_later(server_job)
         await server_job.start()
