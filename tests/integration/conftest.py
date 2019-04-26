@@ -1,18 +1,8 @@
 import asyncio
 import json
 import uuid
-from dataclasses import dataclass
 from pathlib import PurePath
-from typing import (
-    Any,
-    AsyncIterator,
-    Awaitable,
-    Callable,
-    Dict,
-    Iterator,
-    Optional,
-    Sequence,
-)
+from typing import Any, AsyncIterator, Awaitable, Callable, Dict, Iterator, Optional
 from urllib.parse import urlsplit
 
 import pytest
@@ -33,12 +23,9 @@ from platform_api.config import (
     StorageConfig,
 )
 from platform_api.elasticsearch import ElasticsearchConfig
-from platform_api.orchestrator.kube_client import JobNotFoundException
-from platform_api.orchestrator.kube_orchestrator import (
-    KubeClient,
-    KubeConfig,
-    KubeOrchestrator,
-)
+from platform_api.orchestrator.job_request import JobNotFoundException
+from platform_api.orchestrator.kube_client import KubeClient, NodeTaint
+from platform_api.orchestrator.kube_orchestrator import KubeConfig, KubeOrchestrator
 from platform_api.redis import RedisConfig
 from platform_api.resource import GPUModel, ResourcePoolType
 
@@ -132,46 +119,7 @@ async def kube_ingress_ip(kube_config_cluster_payload: Dict[str, Any]) -> str:
     return urlsplit(cluster["server"]).hostname
 
 
-@dataclass(frozen=True)
-class NodeTaint:
-    key: str
-    value: str
-    effect: str = "NoSchedule"
-
-    def to_primitive(self) -> Dict[str, Any]:
-        return {"key": self.key, "value": self.value, "effect": self.effect}
-
-
 class TestKubeClient(KubeClient):
-    def _generate_endpoint_url(self, name: str, namespace: str) -> str:
-        return f"{self._generate_namespace_url(namespace)}/endpoints/{name}"
-
-    @property
-    def _nodes_url(self) -> str:
-        return f"{self._api_v1_url}/nodes"
-
-    def _generate_node_url(self, name: str) -> str:
-        return f"{self._nodes_url}/{name}"
-
-    async def get_endpoint(
-        self, name: str, namespace: Optional[str] = None
-    ) -> Dict[str, Any]:
-        url = self._generate_endpoint_url(name, namespace or self._namespace)
-        return await self._request(method="GET", url=url)
-
-    async def request(self, *args: Any, **kwargs: Any) -> Dict[str, Any]:
-        return await self._request(*args, **kwargs)
-
-    async def get_raw_pod(self, name: str) -> Dict[str, Any]:
-        url = self._generate_pod_url(name)
-        return await self._request(method="GET", url=url)
-
-    async def set_raw_pod_status(
-        self, name: str, payload: Dict[str, Any]
-    ) -> Dict[str, Any]:
-        url = self._generate_pod_url(name) + "/status"
-        return await self._request(method="PUT", url=url, json=payload)
-
     async def wait_pod_scheduled(
         self,
         pod_name: str,
@@ -222,40 +170,9 @@ class TestKubeClient(KubeClient):
         except asyncio.TimeoutError:
             pytest.fail("Pod has not terminated yet")
 
-    async def create_node(
-        self,
-        name: str,
-        labels: Optional[Dict[str, str]] = None,
-        taints: Optional[Sequence[NodeTaint]] = None,
-    ) -> None:
-        taints = taints or []
-        payload = {
-            "apiVersion": "v1",
-            "kind": "Node",
-            "metadata": {"name": name, "labels": labels or {}},
-            "spec": {"taints": [taint.to_primitive() for taint in taints]},
-            "status": {
-                "capacity": {
-                    "pods": "110",
-                    "memory": "1Gi",
-                    "cpu": 2,
-                    "nvidia.com/gpu": 1,
-                },
-                "conditions": [{"status": "True", "type": "Ready"}],
-            },
-        }
-        url = self._nodes_url
-        result = await self._request(method="POST", url=url, json=payload)
-        self._check_status_payload(result)
-
-    async def delete_node(self, name: str) -> None:
-        url = self._generate_node_url(name)
-        result = await self.request(method="DELETE", url=url)
-        self._check_status_payload(result)
-
 
 @pytest.fixture(scope="session")
-async def kube_client(kube_config: KubeConfig) -> AsyncIterator[KubeClient]:
+async def kube_client(kube_config: KubeConfig) -> AsyncIterator[TestKubeClient]:
     config = kube_config
     # TODO (A Danshyn 06/06/18): create a factory method
     client = TestKubeClient(

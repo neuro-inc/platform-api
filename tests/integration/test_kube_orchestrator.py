@@ -35,20 +35,21 @@ from platform_api.orchestrator.job_request import (
     ContainerResources,
     ContainerVolume,
 )
-from platform_api.orchestrator.kube_client import KubeClient, PodStatus
-from platform_api.orchestrator.kube_orchestrator import (
+from platform_api.orchestrator.kube_client import (
     AlreadyExistsException,
     DockerRegistrySecret,
     Ingress,
     IngressRule,
-    JobStatusItemFactory,
+    KubeClient,
     KubeClientException,
     PodContainerStats,
     PodDescriptor,
+    PodStatus,
     SecretRef,
     Service,
     StatusException,
 )
+from platform_api.orchestrator.kube_orchestrator import JobStatusItemFactory
 from platform_api.orchestrator.logs import ElasticsearchLogReader, PodContainerLogReader
 from tests.conftest import random_str
 
