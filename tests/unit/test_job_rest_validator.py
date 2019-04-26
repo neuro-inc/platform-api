@@ -8,6 +8,8 @@ from platform_api.handlers.validators import (
     create_job_name_validator,
     create_user_name_validator,
     create_volumes_validator,
+USER_NAME_MAX_LENGTH,
+JOB_NAME_MAX_LENGTH,
 )
 
 
@@ -20,7 +22,7 @@ class TestJobNameValidator:
             ("ab3d", "contains a number"),
             ("abc3", "ends with a number"),
             ("a" * 3, "minimum length"),
-            ("a" * 40, "maximum length"),
+            ("a" * JOB_NAME_MAX_LENGTH, "maximum length"),
         ],
     )
     def test_valid_job_names(self, value: str, description: str) -> None:
@@ -44,10 +46,10 @@ class TestJobNameValidator:
         with pytest.raises(t.DataError, match="String is shorter than 3 characters"):
             assert validator.check(value)
 
-    @pytest.mark.parametrize("value", ["a" * 41])
-    def test_invalid_job_names__too_long(self, value: str) -> None:
+    def test_invalid_job_names__too_long(self) -> None:
+        value = "a" * (JOB_NAME_MAX_LENGTH + 1)
         validator = create_job_name_validator()
-        with pytest.raises(t.DataError, match="String is longer than 40 characters"):
+        with pytest.raises(t.DataError, match=f"String is longer than {JOB_NAME_MAX_LENGTH} characters"):
             assert validator.check(value)
 
     @pytest.mark.parametrize(
@@ -126,9 +128,9 @@ class TestUserNameValidator:
         [
             ("test", 1),
             ("abc", 1),
-            ("a", 20),
+            ("a", USER_NAME_MAX_LENGTH),
             ("a-b-c", 1),
-            ("a-b-c", (20 // len("a-b-c"))),
+            ("a-b-c", (USER_NAME_MAX_LENGTH // len("a-b-c"))),
             ("123", 1),
             ("with123numbers", 1),
             ("with123nums-and-dash", 1),
@@ -148,8 +150,8 @@ class TestUserNameValidator:
             ("-abc", 1),
             ("a", 1),
             ("a", 2),
-            ("a", 21),
-            ("too_long-string", 1000),
+            ("a", (USER_NAME_MAX_LENGTH + 1)),
+            ("too-long-string", 1000),
             ("a-b-c.com", 1),
             ("a_b_c", 1),
             ("a-b-c.bla_bla.com", 1),
