@@ -9,7 +9,7 @@ install_requires = (
     "async-generator==1.9",
     "dataclasses==0.6",  # backport from 3.7 stdlib
     "iso8601==0.1.12",
-    "trafaret==1.1.1",
+    "trafaret==1.2.0",  # minimal requirement for python 3.7
     "neuro_auth_client==1.0.5",
     # Circle CI fails on the latest cryptography version
     # because the server has too old OpenSSL version

@@ -106,6 +106,7 @@ class IngressConfig:
     storage_url: URL
     users_url: URL
     monitoring_url: URL
+    headless_callback_url: URL
 
 
 @dataclass(frozen=True)

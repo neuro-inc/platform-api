@@ -103,3 +103,8 @@ NP_OAUTH_SUCCESS_REDIRECT_URL:
   dev: https://neu.ro/#running-your-first-job
   staging: https://neu.ro/#running-your-first-job
   prod: https://neu.ro/#running-your-first-job
+NP_HEADLESS_CALLBACK_URL:
+  _default: https://staging.neu.ro/oauth/show-code
+  dev: https://dev.neu.ro/oauth/show-code
+  staging: https://staging.neu.ro/oauth/show-code
+  prod: https://prod.neu.ro/oauth/show-code

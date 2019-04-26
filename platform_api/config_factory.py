@@ -273,4 +273,5 @@ class EnvironConfigFactory:
             storage_url=base_url / "storage",
             users_url=base_url / "users",
             monitoring_url=base_url / "jobs",
+            headless_callback_url=URL(self._environ["NP_HEADLESS_CALLBACK_URL"]),
         )

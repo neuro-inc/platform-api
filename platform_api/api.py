@@ -42,6 +42,7 @@ class ApiHandler:
             "storage_url": str(self._config.ingress.storage_url),
             "users_url": str(self._config.ingress.users_url),
             "monitoring_url": str(self._config.ingress.monitoring_url),
+            "headless_callback_url": str(self._config.ingress.headless_callback_url),
         }
         if self._config.oauth:
             data["auth_url"] = str(self._config.oauth.auth_url)
