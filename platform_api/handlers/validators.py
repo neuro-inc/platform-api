@@ -21,7 +21,7 @@ def create_job_name_validator(max_length: Optional[int] = 35) -> t.Trafaret:
 def create_user_name_validator() -> t.Trafaret:
     """ Completely the same validator as the one used in platform-auth
     """
-    return t.String(min_length=3, max_length=25) & t.Regexp(USER_NAME_PATTERN)
+    return t.String(min_length=3, max_length=20) & t.Regexp(USER_NAME_PATTERN)
 
 
 def create_job_status_validator() -> t.Trafaret:
