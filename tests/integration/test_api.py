@@ -245,6 +245,7 @@ class TestApi:
                 "storage_url": "https://neu.ro/api/v1/storage",
                 "users_url": "https://neu.ro/api/v1/users",
                 "monitoring_url": "https://neu.ro/api/v1/monitoring",
+                "headless_callback_url"="https://dev.neu.ro/oauth/show-code",
             }
 
     @pytest.mark.asyncio
@@ -265,6 +266,7 @@ class TestApi:
                 "client_id": "client_id",
                 "audience": "https://platform-dev-url",
                 "success_redirect_url": "https://platform-default-url",
+                "headless_callback_url"="https://dev.neu.ro/oauth/show-code",
                 "callback_urls": [
                     "http://127.0.0.1:54540",
                     "http://127.0.0.1:54541",
