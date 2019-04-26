@@ -649,7 +649,6 @@ class TestRedisJobsStorage:
             "filtering jobs by name is allowed only together with owner"
         )
         with pytest.raises(JobsStorageException, match=invalid_operation_error):
-            job_filter = JobFilter(name="job-first")
             await storage.get_all_jobs(job_filter)
 
     @pytest.mark.asyncio
