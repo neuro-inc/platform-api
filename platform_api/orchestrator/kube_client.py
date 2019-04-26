@@ -1062,10 +1062,6 @@ class KubeClient:
         all_nps_url = self._generate_all_network_policies_url(namespace_name)
         return f"{all_nps_url}/{name}"
 
-    @property
-    def _endpoints_url(self) -> str:
-        return f"{self._namespace_url}/endpoints"
-
     def _generate_endpoint_url(self, name: str, namespace: str) -> str:
         return f"{self._generate_namespace_url(namespace)}/endpoints/{name}"
 
