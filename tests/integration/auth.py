@@ -1,5 +1,4 @@
 import asyncio
-import uuid
 from dataclasses import asdict, dataclass
 from typing import (
     AsyncGenerator,
@@ -156,13 +155,16 @@ class _User(User):
 
 @pytest.fixture
 async def regular_user_factory(
-    auth_client: _AuthClient, token_factory: Callable[[str], str], admin_token: str
+    auth_client: _AuthClient,
+    token_factory: Callable[[str], str],
+    admin_token: str,
+    random_str_factory: Callable[[], str],
 ) -> Callable[[Optional[str], Optional[Quota]], Awaitable[_User]]:
     async def _factory(
         name: Optional[str] = None, quota: Optional[Quota] = None
     ) -> _User:
         if not name:
-            name = str(uuid.uuid4())
+            name = random_str_factory()
         quota = quota or Quota()
         user = AuthClientUser(name=name, quota=quota)
         await auth_client.add_user(user, token=admin_token)

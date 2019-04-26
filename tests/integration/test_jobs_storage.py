@@ -1,6 +1,5 @@
 from datetime import datetime, timedelta, timezone
-from typing import Any, Dict, List, Optional, Tuple
-from uuid import uuid4
+from typing import Any, Dict, List, Optional, Tuple, Callable
 
 import aioredis
 import pytest
@@ -1119,7 +1118,7 @@ class TestRedisJobsStorage:
 
     @pytest.mark.asyncio
     async def test_get_aggregated_run_time_for_user(
-        self, redis_client: aioredis.Redis, kube_orchestrator: KubeOrchestrator
+        self, redis_client: aioredis.Redis, kube_orchestrator: KubeOrchestrator, random_str_factory: Callable[[], str]
     ) -> None:
         def current_time() -> datetime:
             return datetime.now(tz=timezone.utc)
@@ -1127,7 +1126,7 @@ class TestRedisJobsStorage:
         job_started_at = current_time()
         job_finished_at = datetime(year=2099, month=1, day=1, tzinfo=timezone.utc)
 
-        owner = f"test-user-{uuid4()}"
+        owner = f"test-user-{random_str_factory()}"
 
         def create_job(status: JobStatus, with_gpu: bool, finished: bool) -> Job:
             status_history = [

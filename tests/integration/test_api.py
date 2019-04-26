@@ -14,7 +14,6 @@ from typing import (
     Tuple,
 )
 from unittest import mock
-from uuid import uuid4
 
 import aiohttp
 import aiohttp.web
@@ -728,8 +727,9 @@ class TestJobs:
         job_submit: Dict[str, Any],
         jobs_client: JobsClient,
         regular_user: _User,
+        random_str_factory: Callable[[], str]
     ) -> None:
-        job_name = f"test-job-name-{uuid4()}"
+        job_name = f"test-job-name-{random_str_factory()}"
         url = api.jobs_base_url
         job_submit["is_preemptible"] = True
         job_submit["name"] = job_name
@@ -1539,10 +1539,9 @@ class TestJobs:
     @pytest.mark.parametrize(
         "filters",
         [
-            multidict.MultiDict([("name", f"test-job-{uuid4()}")]),
+            multidict.MultiDict([]),
             multidict.MultiDict(
                 [
-                    ("name", f"test-job-{uuid4()}"),
                     ("status", "running"),
                     ("status", "pending"),
                     ("status", "failed"),
@@ -1559,8 +1558,10 @@ class TestJobs:
         job_submit: Dict[str, Any],
         regular_user: _User,
         filters: Dict[str, Any],
+        random_str_factory: Callable[[], str]
     ) -> None:
         # unique job name generated per test-run is stored in "filters"
+        filters["name"] = f"test-job-{random_str_factory()}"
         job_submit["name"] = filters.get("name")
         job_submit["container"]["command"] = "sleep 30m"
 

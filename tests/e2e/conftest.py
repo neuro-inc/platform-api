@@ -1,6 +1,5 @@
 import os
 import time
-import uuid
 from dataclasses import dataclass
 from typing import AsyncIterator, Awaitable, Callable, Optional
 
@@ -118,11 +117,13 @@ class _User:
 
 @pytest.fixture
 async def regular_user_factory(
-    auth_client: AuthClient, token_factory: Callable[[str], str]
+    auth_client: AuthClient,
+    token_factory: Callable[[str], str],
+    random_str_factory: Callable[[], str],
 ) -> Callable[[Optional[str]], Awaitable[_User]]:
     async def _factory(name: Optional[str] = None) -> _User:
         if not name:
-            name = str(uuid.uuid4())
+            name = random_str_factory()
         user = User(name=name)
         await auth_client.add_user(user)
         return _User(name=user.name, token=token_factory(user.name))

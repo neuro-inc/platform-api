@@ -525,6 +525,7 @@ class TestKubeOrchestrator:
         kube_orchestrator: KubeOrchestrator,
         kube_ingress_ip: str,
         kube_client: KubeClient,
+        random_str_factory: Callable[[], str]
     ) -> None:
         container = Container(
             image="python",
@@ -535,7 +536,7 @@ class TestKubeOrchestrator:
         job = MyJob(
             orchestrator=kube_orchestrator,
             job_request=JobRequest.create(container),
-            name=f"test-job-name-{uuid4()}",
+            name=f"test-job-name-{random_str_factory}",
             owner="owner",
         )
         try:
@@ -599,6 +600,7 @@ class TestKubeOrchestrator:
         kube_orchestrator: KubeOrchestrator,
         kube_ingress_ip: str,
         kube_client: KubeClient,
+        random_str_factory: Callable[[], str]
     ) -> None:
         container = Container(
             image="python",
@@ -609,7 +611,7 @@ class TestKubeOrchestrator:
         job = MyJob(
             orchestrator=kube_orchestrator,
             job_request=JobRequest.create(container),
-            name=f"test-job-name-{uuid4()}",
+            name=f"test-job-name-{random_str_factory()}",
             owner="owner",
         )
         try:
@@ -722,8 +724,9 @@ class TestKubeOrchestrator:
         create_client_job: Callable[[str], MyJob],
         kube_ingress_ip: str,
         delete_job_later: Callable[[Job], Awaitable[None]],
+        random_str_factory: Callable[[], str]
     ) -> None:
-        server_job_name = f"server-job-{uuid4()}"
+        server_job_name = f"server-job-{random_str_factory()}"
         server_job = create_server_job(job_name=server_job_name)
         await delete_job_later(server_job)
         await server_job.start()
