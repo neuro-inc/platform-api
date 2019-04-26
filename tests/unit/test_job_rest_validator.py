@@ -5,11 +5,11 @@ import trafaret as t
 
 from platform_api.handlers.jobs_handler import create_job_response_validator
 from platform_api.handlers.validators import (
+    JOB_NAME_MAX_LENGTH,
+    USER_NAME_MAX_LENGTH,
     create_job_name_validator,
     create_user_name_validator,
     create_volumes_validator,
-USER_NAME_MAX_LENGTH,
-JOB_NAME_MAX_LENGTH,
 )
 
 
@@ -49,7 +49,9 @@ class TestJobNameValidator:
     def test_invalid_job_names__too_long(self) -> None:
         value = "a" * (JOB_NAME_MAX_LENGTH + 1)
         validator = create_job_name_validator()
-        with pytest.raises(t.DataError, match=f"String is longer than {JOB_NAME_MAX_LENGTH} characters"):
+        with pytest.raises(
+            t.DataError, match=f"String is longer than {JOB_NAME_MAX_LENGTH} characters"
+        ):
             assert validator.check(value)
 
     @pytest.mark.parametrize(

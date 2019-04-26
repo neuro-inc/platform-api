@@ -21,7 +21,9 @@ USER_NAME_MAX_LENGTH = 63 - 1 - JOB_NAME_MAX_LENGTH
 OptionalString = t.String | t.Null
 
 
-def create_job_name_validator(max_length: Optional[int] = JOB_NAME_MAX_LENGTH) -> t.Trafaret:
+def create_job_name_validator(
+    max_length: Optional[int] = JOB_NAME_MAX_LENGTH
+) -> t.Trafaret:
     return t.Null | t.String(min_length=3, max_length=max_length) & t.Regexp(
         JOB_NAME_PATTERN
     )
