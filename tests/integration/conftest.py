@@ -172,7 +172,7 @@ class MyKubeClient(KubeClient):
 
 
 @pytest.fixture(scope="session")
-async def kube_client(kube_config: KubeConfig) -> AsyncIterator[TestKubeClient]:
+async def kube_client(kube_config: KubeConfig) -> AsyncIterator[MyKubeClient]:
     config = kube_config
     # TODO (A Danshyn 06/06/18): create a factory method
     client = MyKubeClient(
@@ -191,7 +191,7 @@ async def kube_client(kube_config: KubeConfig) -> AsyncIterator[TestKubeClient]:
 
 
 @pytest.fixture(scope="session")
-async def nfs_volume_server(kube_client: TestKubeClient) -> Any:
+async def nfs_volume_server(kube_client: MyKubeClient) -> Any:
     payload = await kube_client.get_endpoint("platformstoragenfs", namespace="default")
     return payload["subsets"][0]["addresses"][0]["ip"]
 
