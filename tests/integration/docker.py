@@ -22,6 +22,6 @@ def reuse_docker(request: Any) -> Any:
 
 @pytest.fixture(scope="session")
 async def docker() -> AsyncIterator[aiodocker.Docker]:
-    client = aiodocker.Docker(api_version='v1.34')
+    client = aiodocker.Docker(api_version="v1.34")
     yield client
     await client.close()
