@@ -1,10 +1,12 @@
 import asyncio
 import json
+import time
 import uuid
 from pathlib import PurePath
 from typing import Any, AsyncIterator, Awaitable, Callable, Dict, Iterator, Optional
 from urllib.parse import urlsplit
 
+import aiohttp
 import pytest
 from aioelasticsearch import Elasticsearch
 from async_timeout import timeout
@@ -23,8 +25,9 @@ from platform_api.config import (
     StorageConfig,
 )
 from platform_api.elasticsearch import ElasticsearchConfig
+from platform_api.orchestrator import Job
 from platform_api.orchestrator.job_request import JobNotFoundException
-from platform_api.orchestrator.kube_client import KubeClient, NodeTaint
+from platform_api.orchestrator.kube_client import KubeClient, NodeTaint, PodDescriptor
 from platform_api.orchestrator.kube_orchestrator import KubeConfig, KubeOrchestrator
 from platform_api.redis import RedisConfig
 from platform_api.resource import GPUModel, ResourcePoolType
@@ -347,3 +350,68 @@ def config_with_oauth(
     config_factory: Callable[..., Config], oauth_config_dev: Optional[OAuthConfig]
 ) -> Config:
     return config_factory(oauth=oauth_config_dev)
+
+
+@pytest.fixture
+@pytest.mark.asyncio
+async def wait_for_job_service() -> AsyncIterator[Callable[..., Awaitable[None]]]:
+    async def _wait_for_job_service(
+        kube_ingress_ip: str,
+        host: str,
+        job_id: str,
+        interval_s: float = 0.5,
+        max_time: float = 180,
+    ) -> None:
+        url = f"http://{kube_ingress_ip}"
+        headers = {"Host": host}
+        t0 = time.monotonic()
+        async with aiohttp.ClientSession() as client:
+            while True:
+                try:
+                    async with client.get(url, headers=headers) as response:
+                        if response.status == 200:
+                            break
+                except (OSError, aiohttp.ClientError) as exc:
+                    print(exc)
+                await asyncio.sleep(max(interval_s, time.monotonic() - t0))
+                if time.monotonic() - t0 > max_time:
+                    pytest.fail(f"Failed to connect to job service {job_id}")
+                interval_s *= 1.5
+
+    yield _wait_for_job_service
+
+
+@pytest.fixture
+async def delete_pod_later(
+    kube_client: KubeClient
+) -> AsyncIterator[Callable[[PodDescriptor], Awaitable[None]]]:
+    pods = []
+
+    async def _add_pod(pod: PodDescriptor) -> None:
+        pods.append(pod)
+
+    yield _add_pod
+
+    for pod in pods:
+        try:
+            await kube_client.delete_pod(pod.name)
+        except Exception:
+            pass
+
+
+@pytest.fixture
+async def delete_job_later(
+    kube_orchestrator: KubeOrchestrator
+) -> AsyncIterator[Callable[[Job], Awaitable[None]]]:
+    jobs = []
+
+    async def _add_job(job: Job) -> None:
+        jobs.append(job)
+
+    yield _add_job
+
+    for job in jobs:
+        try:
+            await kube_orchestrator.delete_job(job)
+        except Exception:
+            pass

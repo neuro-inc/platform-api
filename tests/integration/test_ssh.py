@@ -54,24 +54,6 @@ async def ssh_server(
         await srv.stop()
 
 
-@pytest.fixture
-async def delete_pod_later(
-    kube_client: KubeClient
-) -> AsyncIterator[Callable[[PodDescriptor], Awaitable[None]]]:
-    pods = []
-
-    async def _add_pod(pod: PodDescriptor) -> None:
-        pods.append(pod)
-
-    yield _add_pod
-
-    for pod in pods:
-        try:
-            await kube_client.delete_pod(pod.name)
-        except Exception:
-            pass
-
-
 DOCKERFILE = """
 FROM ubuntu
 RUN apt-get update
