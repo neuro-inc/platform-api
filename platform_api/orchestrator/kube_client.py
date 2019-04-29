@@ -1137,6 +1137,7 @@ class KubeClient:
             "metadata": {"name": name, "labels": labels or {}},
             "spec": {"taints": [taint.to_primitive() for taint in taints]},
             "status": {
+                # TODO (ajuszkowski, 29-0-2019) add enum for capacity
                 "capacity": capacity,
                 "conditions": [{"status": "True", "type": "Ready"}],
             },
