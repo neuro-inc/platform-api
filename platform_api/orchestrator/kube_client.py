@@ -1367,57 +1367,10 @@ class KubeClient:
             payload = await response.text()
             raise KubeClientException(payload)
 
-    async def create_default_network_policy(
-        self,
-        name: str,
-        pod_labels: Dict[str, str],
-        namespace_name: Optional[str] = None,
+    async def create_network_policy(
+        self, request_payload: Dict[str, Any], namespace_name: Optional[str] = None
     ) -> Dict[str, Any]:
-        assert pod_labels
-        # https://tools.ietf.org/html/rfc1918#section-3
-        request_payload = {
-            "apiVersion": "networking.k8s.io/v1",
-            "kind": "NetworkPolicy",
-            "metadata": {"name": name},
-            "spec": {
-                # applying the rules below to labeled pods
-                "podSelector": {"matchLabels": pod_labels},
-                "policyTypes": ["Egress"],
-                "egress": [
-                    # allowing pods to connect to public networks only
-                    {
-                        "to": [
-                            {
-                                "ipBlock": {
-                                    "cidr": "0.0.0.0/0",
-                                    "except": [
-                                        "10.0.0.0/8",
-                                        "172.16.0.0/12",
-                                        "192.168.0.0/16",
-                                    ],
-                                }
-                            }
-                        ]
-                    },
-                    # allowing labeled pods to make DNS queries in our private
-                    # networks, because pods' /etc/resolv.conf files still
-                    # point to the internal DNS
-                    {
-                        "to": [
-                            {"ipBlock": {"cidr": "10.0.0.0/8"}},
-                            {"ipBlock": {"cidr": "172.16.0.0/12"}},
-                            {"ipBlock": {"cidr": "192.168.0.0/16"}},
-                        ],
-                        "ports": [
-                            {"port": 53, "protocol": "UDP"},
-                            {"port": 53, "protocol": "TCP"},
-                        ],
-                    },
-                    # allowing labeled pods to connect to each other
-                    {"to": [{"podSelector": {"matchLabels": pod_labels}}]},
-                ],
-            },
-        }
+        # TODO (ajuszkowski, 29-04-2019) Add an abstraction of network policy rules
         url = self._generate_all_network_policies_url(namespace_name)
         payload = await self._request(method="POST", url=url, json=request_payload)
         self._check_status_payload(payload)

@@ -347,3 +347,15 @@ def config_with_oauth(
     config_factory: Callable[..., Config], oauth_config_dev: Optional[OAuthConfig]
 ) -> Config:
     return config_factory(oauth=oauth_config_dev)
+
+
+@pytest.fixture
+def default_network_policy_payload_factory(
+    kube_orchestrator: KubeOrchestrator
+) -> Iterator[Callable[[str, Dict[str, str]], Dict[str, Any]]]:
+    def _impl(name: str, pod_labels: Dict[str, str]) -> Dict[str, Any]:
+        # TODO (ajuszkowski, 29-04-2019) Once we abstract the network policy
+        #  rules away, we can remove private method access from here
+        return kube_orchestrator._generate_default_user_network_policy(name, pod_labels)
+
+    yield _impl

@@ -3,7 +3,16 @@ import io
 import time
 import uuid
 from pathlib import PurePath
-from typing import Any, AsyncIterator, Awaitable, Callable, Iterator, Optional, Sequence
+from typing import (
+    Any,
+    AsyncIterator,
+    Awaitable,
+    Callable,
+    Dict,
+    Iterator,
+    Optional,
+    Sequence,
+)
 from unittest import mock
 
 import aiohttp
@@ -1075,11 +1084,17 @@ class TestKubeClient:
         kube_config: KubeConfig,
         kube_client: KubeClient,
         delete_network_policy_later: Callable[[str], Awaitable[None]],
+        default_network_policy_payload_factory: Callable[
+            [str, Dict[str, str]], Dict[str, Any]
+        ],
     ) -> None:
         name = str(uuid.uuid4())
         await delete_network_policy_later(name)
-        payload = await kube_client.create_default_network_policy(
-            name, {"testlabel": name}, namespace_name=kube_config.namespace
+        network_policy_payload = default_network_policy_payload_factory(
+            name, {"testlabel": name}
+        )
+        payload = await kube_client.create_network_policy(
+            network_policy_payload, namespace_name=kube_config.namespace
         )
         assert payload["metadata"]["name"] == name
 
@@ -1089,16 +1104,23 @@ class TestKubeClient:
         kube_config: KubeConfig,
         kube_client: KubeClient,
         delete_network_policy_later: Callable[[str], Awaitable[None]],
+        default_network_policy_payload_factory: Callable[
+            [str, Dict[str, str]], Dict[str, Any]
+        ],
     ) -> None:
         name = str(uuid.uuid4())
         await delete_network_policy_later(name)
-        payload = await kube_client.create_default_network_policy(
-            name, {"testlabel": name}, namespace_name=kube_config.namespace
+        network_policy_payload = default_network_policy_payload_factory(
+            name, {"testlabel": name}
+        )
+
+        payload = await kube_client.create_network_policy(
+            network_policy_payload, namespace_name=kube_config.namespace
         )
         assert payload["metadata"]["name"] == name
         with pytest.raises(AlreadyExistsException):
-            await kube_client.create_default_network_policy(
-                name, {"testlabel": name}, namespace_name=kube_config.namespace
+            await kube_client.create_network_policy(
+                network_policy_payload, namespace_name=kube_config.namespace
             )
 
     @pytest.mark.asyncio

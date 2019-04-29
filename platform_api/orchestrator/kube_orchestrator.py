@@ -202,12 +202,62 @@ class KubeOrchestrator(Orchestrator):
         await self._client.update_docker_secret(secret, create_non_existent=True)
         return secret
 
+    def _generate_default_user_network_policy(
+        self, name: str, pod_labels: Dict[str, str]
+    ) -> Dict[str, Any]:
+        assert pod_labels
+        # https://tools.ietf.org/html/rfc1918#section-3
+        return {
+            "apiVersion": "networking.k8s.io/v1",
+            "kind": "NetworkPolicy",
+            "metadata": {"name": name},
+            "spec": {
+                # applying the rules below to labeled pods
+                "podSelector": {"matchLabels": pod_labels},
+                "policyTypes": ["Egress"],
+                "egress": [
+                    # allowing pods to connect to public networks only
+                    {
+                        "to": [
+                            {
+                                "ipBlock": {
+                                    "cidr": "0.0.0.0/0",
+                                    "except": [
+                                        "10.0.0.0/8",
+                                        "172.16.0.0/12",
+                                        "192.168.0.0/16",
+                                    ],
+                                }
+                            }
+                        ]
+                    },
+                    # allowing labeled pods to make DNS queries in our private
+                    # networks, because pods' /etc/resolv.conf files still
+                    # point to the internal DNS
+                    {
+                        "to": [
+                            {"ipBlock": {"cidr": "10.0.0.0/8"}},
+                            {"ipBlock": {"cidr": "172.16.0.0/12"}},
+                            {"ipBlock": {"cidr": "192.168.0.0/16"}},
+                        ],
+                        "ports": [
+                            {"port": 53, "protocol": "UDP"},
+                            {"port": 53, "protocol": "TCP"},
+                        ],
+                    },
+                    # allowing labeled pods to connect to each other
+                    {"to": [{"podSelector": {"matchLabels": pod_labels}}]},
+                ],
+            },
+        }
+
     async def _create_user_network_policy(self, job: Job) -> None:
         name = self._get_user_resource_name(job)
         pod_labels = self._get_user_pod_labels(job)
+        payload = self._generate_default_user_network_policy(name, pod_labels)
         try:
-            await self._client.create_default_network_policy(
-                name, pod_labels, namespace_name=self._config.namespace
+            await self._client.create_network_policy(
+                payload, namespace_name=self._config.namespace
             )
             logger.info(f"Created default network policy for user '{job.owner}'")
         except AlreadyExistsException:
