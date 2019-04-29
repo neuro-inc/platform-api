@@ -34,7 +34,7 @@ async def _redis_server(
             pass
 
     try:
-        await docker.images.get(image_name)
+        await docker.images.inspect(image_name)
     except aiodocker.exceptions.DockerError:
         await docker.images.pull(image_name)
 
