@@ -36,7 +36,7 @@ from platform_api.config import Config
 from tests.conftest import random_str
 
 from .auth import _AuthClient, _User
-from .conftest import TestKubeClient
+from .conftest import MyKubeClient
 
 
 class ApiConfig(NamedTuple):
@@ -506,7 +506,7 @@ class TestModels:
         client: aiohttp.ClientSession,
         regular_user: _User,
         kube_node_gpu: str,
-        kube_client: TestKubeClient,
+        kube_client: MyKubeClient,
     ) -> None:
         request_payload = {
             "container": {
@@ -1868,7 +1868,7 @@ class TestJobs:
         client: aiohttp.ClientSession,
         regular_user: _User,
         kube_node_gpu: str,
-        kube_client: TestKubeClient,
+        kube_client: MyKubeClient,
     ) -> None:
         request_payload = {
             "container": {

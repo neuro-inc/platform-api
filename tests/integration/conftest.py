@@ -119,7 +119,7 @@ async def kube_ingress_ip(kube_config_cluster_payload: Dict[str, Any]) -> str:
     return urlsplit(cluster["server"]).hostname
 
 
-class TestKubeClient(KubeClient):
+class MyKubeClient(KubeClient):
     async def wait_pod_scheduled(
         self,
         pod_name: str,
@@ -172,10 +172,10 @@ class TestKubeClient(KubeClient):
 
 
 @pytest.fixture(scope="session")
-async def kube_client(kube_config: KubeConfig) -> AsyncIterator[TestKubeClient]:
+async def kube_client(kube_config: KubeConfig) -> AsyncIterator[MyKubeClient]:
     config = kube_config
     # TODO (A Danshyn 06/06/18): create a factory method
-    client = TestKubeClient(
+    client = MyKubeClient(
         base_url=config.endpoint_url,
         cert_authority_path=config.cert_authority_path,
         auth_type=config.auth_type,
@@ -191,7 +191,7 @@ async def kube_client(kube_config: KubeConfig) -> AsyncIterator[TestKubeClient]:
 
 
 @pytest.fixture(scope="session")
-async def nfs_volume_server(kube_client: TestKubeClient) -> Any:
+async def nfs_volume_server(kube_client: MyKubeClient) -> Any:
     payload = await kube_client.get_endpoint("platformstoragenfs", namespace="default")
     return payload["subsets"][0]["addresses"][0]["ip"]
 
@@ -250,7 +250,7 @@ async def kube_orchestrator_nfs(
 
 @pytest.fixture
 async def delete_node_later(
-    kube_client: TestKubeClient
+    kube_client: MyKubeClient
 ) -> AsyncIterator[Callable[[str], Awaitable[None]]]:
     nodes = []
 
@@ -274,7 +274,7 @@ def kube_node() -> str:
 @pytest.fixture
 async def kube_node_gpu(
     kube_config: KubeConfig,
-    kube_client: TestKubeClient,
+    kube_client: MyKubeClient,
     delete_node_later: Callable[[str], Awaitable[None]],
 ) -> AsyncIterator[str]:
     node_name = str(uuid.uuid4())
@@ -290,7 +290,7 @@ async def kube_node_gpu(
 @pytest.fixture
 async def kube_node_preemptible(
     kube_config: KubeConfig,
-    kube_client: TestKubeClient,
+    kube_client: MyKubeClient,
     delete_node_later: Callable[[str], Awaitable[None]],
 ) -> AsyncIterator[str]:
     node_name = str(uuid.uuid4())
