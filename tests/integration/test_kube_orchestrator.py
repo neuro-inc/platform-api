@@ -3,7 +3,16 @@ import io
 import time
 import uuid
 from pathlib import PurePath
-from typing import Any, AsyncIterator, Awaitable, Callable, Iterator, Optional, Sequence
+from typing import (
+    Any,
+    AsyncIterator,
+    Awaitable,
+    Callable,
+    Dict,
+    Iterator,
+    Optional,
+    Sequence,
+)
 from unittest import mock
 
 import aiohttp
@@ -1715,12 +1724,15 @@ class TestNodeSelector:
         kube_client: MyKubeClient,
         delete_pod_later: Callable[[PodDescriptor], Awaitable[None]],
         delete_node_later: Callable[[str], Awaitable[None]],
+        default_node_capacity: Dict[str, Any],
     ) -> None:
         node_name = str(uuid.uuid4())
         await delete_node_later(node_name)
 
         labels = {"gpu": f"{node_name}-gpu"}
-        await kube_client.create_node(node_name, labels=labels)
+        await kube_client.create_node(
+            node_name, capacity=default_node_capacity, labels=labels
+        )
 
         pod_name = str(uuid.uuid4())
         pod = PodDescriptor(name=pod_name, image="ubuntu:latest", node_selector=labels)

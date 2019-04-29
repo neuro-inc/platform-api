@@ -272,17 +272,25 @@ def kube_node() -> str:
 
 
 @pytest.fixture
+def default_node_capacity() -> Dict[str, Any]:
+    return {"pods": "110", "memory": "1Gi", "cpu": 2, "nvidia.com/gpu": 1}
+
+
+@pytest.fixture
 async def kube_node_gpu(
     kube_config: KubeConfig,
     kube_client: MyKubeClient,
     delete_node_later: Callable[[str], Awaitable[None]],
+    default_node_capacity: Dict[str, Any],
 ) -> AsyncIterator[str]:
     node_name = str(uuid.uuid4())
     await delete_node_later(node_name)
 
     assert kube_config.node_label_gpu is not None
     labels = {kube_config.node_label_gpu: "gpumodel"}
-    await kube_client.create_node(node_name, labels=labels)
+    await kube_client.create_node(
+        node_name, capacity=default_node_capacity, labels=labels
+    )
 
     yield node_name
 
@@ -292,6 +300,7 @@ async def kube_node_preemptible(
     kube_config: KubeConfig,
     kube_client: MyKubeClient,
     delete_node_later: Callable[[str], Awaitable[None]],
+    default_node_capacity: Dict[str, Any],
 ) -> AsyncIterator[str]:
     node_name = str(uuid.uuid4())
     await delete_node_later(node_name)
@@ -299,7 +308,9 @@ async def kube_node_preemptible(
     assert kube_config.node_label_preemptible is not None
     labels = {kube_config.node_label_preemptible: "true"}
     taints = [NodeTaint(key=kube_config.node_label_preemptible, value="true")]
-    await kube_client.create_node(node_name, labels=labels, taints=taints)
+    await kube_client.create_node(
+        node_name, capacity=default_node_capacity, labels=labels, taints=taints
+    )
 
     yield node_name
 
