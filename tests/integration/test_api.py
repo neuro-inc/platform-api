@@ -36,7 +36,7 @@ from platform_api.config import Config
 from tests.conftest import random_str
 
 from .auth import _AuthClient, _User
-from .conftest import MyKubeClient
+from .conftest import KubeClient
 
 
 class ApiConfig(NamedTuple):
@@ -506,7 +506,8 @@ class TestModels:
         client: aiohttp.ClientSession,
         regular_user: _User,
         kube_node_gpu: str,
-        kube_client: MyKubeClient,
+        kube_client: KubeClient,
+        wait_pod_scheduled: Callable[..., Awaitable[None]],
     ) -> None:
         request_payload = {
             "container": {
@@ -530,7 +531,7 @@ class TestModels:
             result = await response.json()
             job_id = result["job_id"]
 
-        await kube_client.wait_pod_scheduled(job_id, kube_node_gpu)
+        await wait_pod_scheduled(job_id, kube_node_gpu)
 
     @pytest.mark.asyncio
     async def test_env_var_sourcing(
@@ -1868,7 +1869,8 @@ class TestJobs:
         client: aiohttp.ClientSession,
         regular_user: _User,
         kube_node_gpu: str,
-        kube_client: MyKubeClient,
+        kube_client: KubeClient,
+        wait_pod_scheduled: Callable[..., Awaitable[None]],
     ) -> None:
         request_payload = {
             "container": {
@@ -1917,7 +1919,7 @@ class TestJobs:
                 "is_preemptible": False,
             }
 
-        await kube_client.wait_pod_scheduled(job_id, kube_node_gpu)
+        await wait_pod_scheduled(job_id, kube_node_gpu)
 
     @pytest.mark.asyncio
     async def test_job_top(

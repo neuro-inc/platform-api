@@ -34,7 +34,6 @@ from platform_api.orchestrator.job_request import (
     ContainerVolume,
 )
 from platform_api.orchestrator.kube_client import (
-    KubeClient,
     PodDescriptor,
     PodStatus,
     SecretRef,
@@ -44,7 +43,7 @@ from platform_api.orchestrator.kube_orchestrator import JobStatusItemFactory
 from platform_api.orchestrator.logs import ElasticsearchLogReader, PodContainerLogReader
 from tests.conftest import random_str
 
-from .conftest import MyKubeClient
+from .conftest import KubeClient
 
 
 class MyJob(Job):
@@ -723,9 +722,10 @@ class TestLogReader:
     async def test_elasticsearch_log_reader(
         self,
         kube_config: KubeConfig,
-        kube_client: MyKubeClient,
+        kube_client: KubeClient,
         delete_pod_later: Callable[[PodDescriptor], Awaitable[None]],
         es_client: Elasticsearch,
+        wait_pod_is_terminated: Callable[..., Awaitable[None]],
     ) -> None:
         command = 'bash -c "for i in {1..5}; do echo $i; sleep 1; done"'
         expected_payload = ("\n".join(str(i) for i in range(1, 6)) + "\n").encode()
@@ -740,7 +740,7 @@ class TestLogReader:
         )
         await delete_pod_later(pod)
         await kube_client.create_pod(pod)
-        await kube_client.wait_pod_is_terminated(pod.name)
+        await wait_pod_is_terminated(pod.name)
 
         await self._check_kube_logs(
             kube_client,
@@ -818,8 +818,9 @@ class TestLogReader:
         self,
         kube_config: KubeConfig,
         kube_orchestrator: KubeOrchestrator,
-        kube_client: MyKubeClient,
+        kube_client: KubeClient,
         delete_job_later: Callable[[Job], Awaitable[None]],
+        wait_pod_is_terminated: Callable[..., Awaitable[None]],
     ) -> None:
         command = 'bash -c "for i in {1..5}; do echo $i; sleep 1; done"'
         expected_payload = ("\n".join(str(i) for i in range(1, 6)) + "\n").encode()
@@ -835,7 +836,7 @@ class TestLogReader:
         await kube_orchestrator.start_job(job, token="test-token")
         pod_name = job.id
 
-        await kube_client.wait_pod_is_terminated(pod_name)
+        await wait_pod_is_terminated(pod_name)
 
         log_reader = await kube_orchestrator.get_job_log_reader(job)
         assert isinstance(log_reader, PodContainerLogReader)
@@ -1028,9 +1029,10 @@ class TestNodeSelector:
     async def test_pod_node_selector(
         self,
         kube_config: KubeConfig,
-        kube_client: MyKubeClient,
+        kube_client: KubeClient,
         delete_pod_later: Callable[[PodDescriptor], Awaitable[None]],
         delete_node_later: Callable[[str], Awaitable[None]],
+        wait_pod_scheduled: Callable[..., Awaitable[None]],
     ) -> None:
         node_name = str(uuid.uuid4())
         await delete_node_later(node_name)
@@ -1044,16 +1046,17 @@ class TestNodeSelector:
         await delete_pod_later(pod)
         await kube_client.create_pod(pod)
 
-        await kube_client.wait_pod_scheduled(pod_name, node_name)
+        await wait_pod_scheduled(pod_name, node_name)
 
     @pytest.mark.asyncio
     async def test_gpu(
         self,
         kube_config: KubeConfig,
-        kube_client: MyKubeClient,
+        kube_client: KubeClient,
         delete_job_later: Callable[[Job], Awaitable[None]],
         kube_orchestrator: KubeOrchestrator,
         kube_node_gpu: str,
+        wait_pod_scheduled: Callable[..., Awaitable[None]],
     ) -> None:
         node_name = kube_node_gpu
         container = Container(
@@ -1068,7 +1071,7 @@ class TestNodeSelector:
         await kube_orchestrator.start_job(job, token="test-token")
         pod_name = job.id
 
-        await kube_client.wait_pod_scheduled(pod_name, node_name)
+        await wait_pod_scheduled(pod_name, node_name)
 
 
 class TestPreemption:
@@ -1113,10 +1116,12 @@ class TestPreemption:
     async def test_preemptible_job_lost_node_lost_pod(
         self,
         kube_config: KubeConfig,
-        kube_client: MyKubeClient,
+        kube_client: KubeClient,
         delete_job_later: Callable[[Job], Awaitable[None]],
         kube_orchestrator: KubeOrchestrator,
         kube_node_preemptible: str,
+        wait_pod_scheduled: Callable[..., Awaitable[None]],
+        wait_pod_non_existent: Callable[..., Awaitable[None]],
     ) -> None:
         node_name = kube_node_preemptible
         container = Container(
@@ -1135,11 +1140,11 @@ class TestPreemption:
         await kube_orchestrator.start_job(job, token="test-token")
         pod_name = job.id
 
-        await kube_client.wait_pod_scheduled(pod_name, node_name)
+        await wait_pod_scheduled(pod_name, node_name)
 
         await kube_client.delete_node(node_name)
         # deleting node initiates it's pods deletion
-        await kube_client.wait_pod_non_existent(pod_name, timeout_s=60.0)
+        await wait_pod_non_existent(pod_name, timeout_s=60.0)
 
         # triggering pod recreation
         job_status = await kube_orchestrator.get_job_status(job)
@@ -1149,10 +1154,11 @@ class TestPreemption:
     async def test_preemptible_job_pending_pod_node_not_ready(
         self,
         kube_config: KubeConfig,
-        kube_client: MyKubeClient,
+        kube_client: KubeClient,
         delete_job_later: Callable[[Job], Awaitable[None]],
         kube_orchestrator: KubeOrchestrator,
         kube_node_preemptible: str,
+        wait_pod_scheduled: Callable[..., Awaitable[None]],
     ) -> None:
         node_name = kube_node_preemptible
         container = Container(
@@ -1171,7 +1177,7 @@ class TestPreemption:
         await kube_orchestrator.start_job(job, token="test-token")
         pod_name = job.id
 
-        await kube_client.wait_pod_scheduled(pod_name, node_name)
+        await wait_pod_scheduled(pod_name, node_name)
 
         raw_pod = await kube_client.get_raw_pod(pod_name)
 
@@ -1185,7 +1191,7 @@ class TestPreemption:
         job_status = await kube_orchestrator.get_job_status(job)
         assert job_status.is_pending
 
-        await kube_client.wait_pod_scheduled(pod_name, node_name)
+        await wait_pod_scheduled(pod_name, node_name)
 
         raw_pod = await kube_client.get_raw_pod(pod_name)
         assert not raw_pod["status"].get("reason")
@@ -1194,10 +1200,11 @@ class TestPreemption:
     async def test_preemptible_job_recreation_failed(
         self,
         kube_config: KubeConfig,
-        kube_client: MyKubeClient,
+        kube_client: KubeClient,
         delete_job_later: Callable[[Job], Awaitable[None]],
         kube_orchestrator: KubeOrchestrator,
         kube_node_preemptible: str,
+        wait_pod_scheduled: Callable[..., Awaitable[None]],
     ) -> None:
         node_name = kube_node_preemptible
         container = Container(
@@ -1216,7 +1223,7 @@ class TestPreemption:
         await kube_orchestrator.start_job(job, token="test-token")
         pod_name = job.id
 
-        await kube_client.wait_pod_scheduled(pod_name, node_name)
+        await wait_pod_scheduled(pod_name, node_name)
 
         await kube_client.delete_pod(pod_name, force=True)
 

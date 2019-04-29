@@ -122,63 +122,11 @@ async def kube_ingress_ip(kube_config_cluster_payload: Dict[str, Any]) -> str:
     return urlsplit(cluster["server"]).hostname
 
 
-class MyKubeClient(KubeClient):
-    async def wait_pod_scheduled(
-        self,
-        pod_name: str,
-        node_name: str,
-        timeout_s: float = 5.0,
-        interval_s: float = 1.0,
-    ) -> None:
-        try:
-            async with timeout(timeout_s):
-                while True:
-                    raw_pod = await self.get_raw_pod(pod_name)
-                    pod_has_node = raw_pod["spec"].get("nodeName") == node_name
-                    pod_is_scheduled = "PodScheduled" in [
-                        cond["type"]
-                        for cond in raw_pod["status"].get("conditions", [])
-                        if cond["status"]
-                    ]
-                    if pod_has_node and pod_is_scheduled:
-                        return
-                    await asyncio.sleep(interval_s)
-        except asyncio.TimeoutError:
-            pytest.fail("Pod unscheduled")
-
-    async def wait_pod_non_existent(
-        self, pod_name: str, timeout_s: float = 5.0, interval_s: float = 1.0
-    ) -> None:
-        try:
-            async with timeout(timeout_s):
-                while True:
-                    try:
-                        await self.get_pod(pod_name)
-                    except JobNotFoundException:
-                        return
-                    await asyncio.sleep(interval_s)
-        except asyncio.TimeoutError:
-            pytest.fail("Pod still exists")
-
-    async def wait_pod_is_terminated(
-        self, pod_name: str, timeout_s: float = 10.0 * 60, interval_s: float = 1.0
-    ) -> None:
-        try:
-            async with timeout(timeout_s):
-                while True:
-                    pod_status = await self.get_pod_status(pod_name)
-                    if pod_status.container_status.is_terminated:
-                        return
-                    await asyncio.sleep(interval_s)
-        except asyncio.TimeoutError:
-            pytest.fail("Pod has not terminated yet")
-
-
 @pytest.fixture(scope="session")
-async def kube_client(kube_config: KubeConfig) -> AsyncIterator[MyKubeClient]:
+async def kube_client(kube_config: KubeConfig) -> AsyncIterator[KubeClient]:
     config = kube_config
     # TODO (A Danshyn 06/06/18): create a factory method
-    client = MyKubeClient(
+    client = KubeClient(
         base_url=config.endpoint_url,
         cert_authority_path=config.cert_authority_path,
         auth_type=config.auth_type,
@@ -194,7 +142,7 @@ async def kube_client(kube_config: KubeConfig) -> AsyncIterator[MyKubeClient]:
 
 
 @pytest.fixture(scope="session")
-async def nfs_volume_server(kube_client: MyKubeClient) -> Any:
+async def nfs_volume_server(kube_client: KubeClient) -> Any:
     payload = await kube_client.get_endpoint("platformstoragenfs", namespace="default")
     return payload["subsets"][0]["addresses"][0]["ip"]
 
@@ -253,7 +201,7 @@ async def kube_orchestrator_nfs(
 
 @pytest.fixture
 async def delete_node_later(
-    kube_client: MyKubeClient
+    kube_client: KubeClient
 ) -> AsyncIterator[Callable[[str], Awaitable[None]]]:
     nodes = []
 
@@ -277,7 +225,7 @@ def kube_node() -> str:
 @pytest.fixture
 async def kube_node_gpu(
     kube_config: KubeConfig,
-    kube_client: MyKubeClient,
+    kube_client: KubeClient,
     delete_node_later: Callable[[str], Awaitable[None]],
 ) -> AsyncIterator[str]:
     node_name = str(uuid.uuid4())
@@ -293,7 +241,7 @@ async def kube_node_gpu(
 @pytest.fixture
 async def kube_node_preemptible(
     kube_config: KubeConfig,
-    kube_client: MyKubeClient,
+    kube_client: KubeClient,
     delete_node_later: Callable[[str], Awaitable[None]],
 ) -> AsyncIterator[str]:
     node_name = str(uuid.uuid4())
@@ -415,3 +363,71 @@ async def delete_job_later(
             await kube_orchestrator.delete_job(job)
         except Exception:
             pass
+
+
+@pytest.fixture
+async def wait_pod_scheduled(
+    kube_client: KubeClient
+) -> AsyncIterator[Callable[..., Awaitable[None]]]:
+    async def _wait_pod_scheduled(
+        pod_name: str, node_name: str, timeout_s: float = 5.0, interval_s: float = 1.0
+    ) -> None:
+        try:
+            async with timeout(timeout_s):
+                while True:
+                    raw_pod = await kube_client.get_raw_pod(pod_name)
+                    pod_has_node = raw_pod["spec"].get("nodeName") == node_name
+                    pod_is_scheduled = "PodScheduled" in [
+                        cond["type"]
+                        for cond in raw_pod["status"].get("conditions", [])
+                        if cond["status"]
+                    ]
+                    if pod_has_node and pod_is_scheduled:
+                        return
+                    await asyncio.sleep(interval_s)
+        except asyncio.TimeoutError:
+            pytest.fail("Pod unscheduled")
+
+    yield _wait_pod_scheduled
+
+
+@pytest.fixture
+async def wait_pod_non_existent(
+    kube_client: KubeClient
+) -> AsyncIterator[Callable[..., Awaitable[None]]]:
+    async def _wait_pod_non_existent(
+        pod_name: str, timeout_s: float = 5.0, interval_s: float = 1.0
+    ) -> None:
+
+        try:
+            async with timeout(timeout_s):
+                while True:
+                    try:
+                        await kube_client.get_pod(pod_name)
+                    except JobNotFoundException:
+                        return
+                    await asyncio.sleep(interval_s)
+        except asyncio.TimeoutError:
+            pytest.fail("Pod still exists")
+
+    yield _wait_pod_non_existent
+
+
+@pytest.fixture
+async def wait_pod_is_terminated(
+    kube_client: KubeClient
+) -> AsyncIterator[Callable[..., Awaitable[None]]]:
+    async def _wait_pod_is_terminated(
+        pod_name: str, timeout_s: float = 10.0 * 60, interval_s: float = 1.0
+    ) -> None:
+        try:
+            async with timeout(timeout_s):
+                while True:
+                    pod_status = await kube_client.get_pod_status(pod_name)
+                    if pod_status.container_status.is_terminated:
+                        return
+                    await asyncio.sleep(interval_s)
+        except asyncio.TimeoutError:
+            pytest.fail("Pod has not terminated yet")
+
+    yield _wait_pod_is_terminated

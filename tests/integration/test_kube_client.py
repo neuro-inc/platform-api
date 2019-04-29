@@ -30,7 +30,6 @@ from platform_api.orchestrator.kube_client import (
     Service,
     StatusException,
 )
-from tests.integration.conftest import MyKubeClient
 from tests.integration.test_kube_orchestrator import MyJob
 
 
@@ -313,8 +312,9 @@ class TestKubeClient(KubeClient):
     async def test_get_pod_events(
         self,
         kube_config: KubeConfig,
-        kube_client: MyKubeClient,
+        kube_client: KubeClient,
         delete_pod_later: Callable[[PodDescriptor], Awaitable[None]],
+        wait_pod_is_terminated: Callable[..., Awaitable[None]],
     ) -> None:
         container = Container(
             image="ubuntu",
@@ -327,7 +327,7 @@ class TestKubeClient(KubeClient):
         )
         await delete_pod_later(pod)
         await kube_client.create_pod(pod)
-        await kube_client.wait_pod_is_terminated(pod.name)
+        await wait_pod_is_terminated(pod.name)
 
         events = await kube_client.get_pod_events(pod.name, kube_config.namespace)
 
@@ -628,7 +628,7 @@ class MyKubeClientService:
         self,
         kube_config: KubeConfig,
         kube_orchestrator: KubeOrchestrator,
-        kube_client: MyKubeClient,
+        kube_client: KubeClient,
         delete_job_later: Callable[[Job], Awaitable[None]],
     ) -> None:
         container = Container(
