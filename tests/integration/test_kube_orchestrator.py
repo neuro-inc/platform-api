@@ -27,13 +27,10 @@ from platform_api.orchestrator import (
     Orchestrator,
 )
 from platform_api.orchestrator.job import JobStatusItem
-from platform_api.orchestrator.job_request import (
-    Container,
+from platform_api.orchestrator.job_request import Container, ContainerVolume
+from platform_api.orchestrator.kube_client import (
     ContainerHTTPServer,
     ContainerResources,
-    ContainerVolume,
-)
-from platform_api.orchestrator.kube_client import (
     KubeClient,
     PodDescriptor,
     PodStatus,

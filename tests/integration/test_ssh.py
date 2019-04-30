@@ -11,8 +11,12 @@ from aioelasticsearch import Elasticsearch
 
 from platform_api.config import Config
 from platform_api.orchestrator.job import JobRequest
-from platform_api.orchestrator.job_request import Container, ContainerResources
-from platform_api.orchestrator.kube_client import KubeClient, PodDescriptor
+from platform_api.orchestrator.job_request import Container
+from platform_api.orchestrator.kube_client import (
+    ContainerResources,
+    KubeClient,
+    PodDescriptor,
+)
 from platform_api.orchestrator.kube_orchestrator import (
     KubeConfig,
     KubeOrchestrator,

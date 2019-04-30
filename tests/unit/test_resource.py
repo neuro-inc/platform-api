@@ -1,6 +1,6 @@
 import pytest
 
-from platform_api.orchestrator.job_request import ContainerResources
+from platform_api.orchestrator.kube_client import ContainerResources
 from platform_api.resource import GPUModel, ResourcePoolType
 
 

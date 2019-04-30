@@ -23,14 +23,9 @@ from platform_api.handlers.validators import (
     create_container_request_validator,
     create_container_response_validator,
 )
-from platform_api.orchestrator.job_request import (
-    Container,
-    ContainerResources,
-    ContainerSSHServer,
-    ContainerVolume,
-    JobStatus,
-)
+from platform_api.orchestrator.job_request import Container, ContainerVolume, JobStatus
 from platform_api.orchestrator.jobs_storage import JobFilter
+from platform_api.orchestrator.kube_client import ContainerResources, ContainerSSHServer
 from platform_api.resource import GPUModel
 from platform_api.user import User
 

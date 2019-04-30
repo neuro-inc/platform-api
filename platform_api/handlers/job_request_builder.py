@@ -2,12 +2,11 @@ from pathlib import PurePath
 from typing import Any, Dict, List, Optional
 
 from platform_api.config import StorageConfig
-from platform_api.orchestrator.job_request import (
-    Container,
+from platform_api.orchestrator.job_request import Container, ContainerVolume
+from platform_api.orchestrator.kube_client import (
     ContainerHTTPServer,
     ContainerResources,
     ContainerSSHServer,
-    ContainerVolume,
 )
 
 

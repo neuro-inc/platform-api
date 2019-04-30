@@ -19,11 +19,12 @@ from platform_api.orchestrator import (
     Telemetry,
 )
 from platform_api.orchestrator.job import AggregatedRunTime, JobStatusItem
-from platform_api.orchestrator.job_request import Container, ContainerResources
+from platform_api.orchestrator.job_request import Container
 from platform_api.orchestrator.jobs_storage import (
     InMemoryJobsStorage,
     JobStorageTransactionError,
 )
+from platform_api.orchestrator.kube_client import ContainerResources
 from platform_api.resource import ResourcePoolType
 
 

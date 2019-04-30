@@ -8,7 +8,6 @@ from platform_api.orchestrator import KubeOrchestrator
 from platform_api.orchestrator.job import Job, JobStatusHistory, JobStatusItem
 from platform_api.orchestrator.job_request import (
     Container,
-    ContainerResources,
     JobError,
     JobRequest,
     JobStatus,
@@ -20,6 +19,7 @@ from platform_api.orchestrator.jobs_storage import (
     JobStorageTransactionError,
     RedisJobsStorage,
 )
+from platform_api.orchestrator.kube_client import ContainerResources
 from tests.conftest import not_raises, random_str
 
 

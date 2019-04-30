@@ -8,12 +8,12 @@ from async_timeout import timeout
 
 from platform_api.orchestrator.job_request import (
     Container,
-    ContainerResources,
     JobNotFoundException,
     JobRequest,
 )
 from platform_api.orchestrator.kube_client import (
     AlreadyExistsException,
+    ContainerResources,
     DockerRegistrySecret,
     Ingress,
     IngressRule,

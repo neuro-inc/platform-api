@@ -25,6 +25,10 @@ from platform_api.orchestrator.job_request import (
 from platform_api.orchestrator.jobs_storage import JobFilter
 from platform_api.resource import GPUModel
 from platform_api.user import User, authorized_user, untrusted_user
+from platform_api.utils.kube_utils import (
+    container_belongs_to_registry,
+    container_to_image_uri,
+)
 
 from .job_request_builder import ContainerBuilder
 from .validators import (
@@ -181,10 +185,9 @@ def infer_permissions_from_container(
     user: User, container: Container, registry_config: RegistryConfig
 ) -> List[Permission]:
     permissions = [Permission(uri=str(user.to_job_uri()), action="write")]
-    if container.belongs_to_registry(registry_config):
-        permissions.append(
-            Permission(uri=str(container.to_image_uri(registry_config)), action="read")
-        )
+    if container_belongs_to_registry(container, registry_config):
+        uri = str(container_to_image_uri(container, registry_config))
+        permissions.append(Permission(uri=uri, action="read"))
     for volume in container.volumes:
         action = "read" if volume.read_only else "write"
         permission = Permission(uri=str(volume.uri), action=action)

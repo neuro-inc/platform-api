@@ -8,13 +8,14 @@ import pytest
 from platform_api.handlers.jobs_handler import convert_job_to_job_response
 from platform_api.orchestrator import Job, JobRequest, JobsService, JobStatus
 from platform_api.orchestrator.job import AggregatedRunTime, JobStatusItem
-from platform_api.orchestrator.job_request import Container, ContainerResources
+from platform_api.orchestrator.job_request import Container
 from platform_api.orchestrator.jobs_service import (
     GpuQuotaExceededError,
     JobsServiceException,
     NonGpuQuotaExceededError,
 )
 from platform_api.orchestrator.jobs_storage import JobFilter, JobStorageJobFoundError
+from platform_api.orchestrator.kube_client import ContainerResources
 from platform_api.user import User
 
 from .conftest import MockJobsStorage, MockOrchestrator, create_quota

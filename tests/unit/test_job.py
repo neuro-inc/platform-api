@@ -8,7 +8,7 @@ import pytest
 from neuro_auth_client.client import Quota
 from yarl import URL
 
-from platform_api.config import RegistryConfig, StorageConfig
+from platform_api.config import StorageConfig
 from platform_api.handlers.job_request_builder import ContainerBuilder
 from platform_api.handlers.models_handler import ModelRequest
 from platform_api.orchestrator.job import (
@@ -19,83 +19,19 @@ from platform_api.orchestrator.job import (
 )
 from platform_api.orchestrator.job_request import (
     Container,
-    ContainerHTTPServer,
-    ContainerResources,
-    ContainerSSHServer,
-    ContainerVolume,
     ContainerVolumeFactory,
     JobRequest,
     JobStatus,
 )
+from platform_api.orchestrator.kube_client import (
+    ContainerHTTPServer,
+    ContainerResources,
+    ContainerSSHServer,
+    ContainerVolume,
+)
 from platform_api.user import User
 
 from .conftest import MockOrchestrator
-
-
-class TestContainer:
-    def test_command_list_empty(self) -> None:
-        container = Container(
-            image="testimage", resources=ContainerResources(cpu=1, memory_mb=128)
-        )
-        assert container.command_list == []
-
-    def test_command_list(self) -> None:
-        container = Container(
-            image="testimage",
-            command="bash -c date",
-            resources=ContainerResources(cpu=1, memory_mb=128),
-        )
-        assert container.command_list == ["bash", "-c", "date"]
-
-    def test_belongs_to_registry_no_host(self) -> None:
-        container = Container(
-            image="testimage", resources=ContainerResources(cpu=1, memory_mb=128)
-        )
-        registry_config = RegistryConfig(host="example.com")
-        assert not container.belongs_to_registry(registry_config)
-
-    def test_belongs_to_registry_different_host(self) -> None:
-        container = Container(
-            image="registry.com/project/testimage",
-            resources=ContainerResources(cpu=1, memory_mb=128),
-        )
-        registry_config = RegistryConfig(host="example.com")
-        assert not container.belongs_to_registry(registry_config)
-
-    def test_belongs_to_registry(self) -> None:
-        container = Container(
-            image="example.com/project/testimage",
-            resources=ContainerResources(cpu=1, memory_mb=128),
-        )
-        registry_config = RegistryConfig(host="example.com")
-        assert container.belongs_to_registry(registry_config)
-
-    def test_to_image_uri_failure(self) -> None:
-        container = Container(
-            image="registry.com/project/testimage",
-            resources=ContainerResources(cpu=1, memory_mb=128),
-        )
-        registry_config = RegistryConfig(host="example.com")
-        with pytest.raises(AssertionError, match="Unknown registry"):
-            container.to_image_uri(registry_config)
-
-    def test_to_image_uri(self) -> None:
-        container = Container(
-            image="example.com/project/testimage",
-            resources=ContainerResources(cpu=1, memory_mb=128),
-        )
-        registry_config = RegistryConfig(host="example.com")
-        uri = container.to_image_uri(registry_config)
-        assert uri == URL("image://project/testimage")
-
-    def test_to_image_uri_ignore_tag(self) -> None:
-        container = Container(
-            image="example.com/project/testimage:latest",
-            resources=ContainerResources(cpu=1, memory_mb=128),
-        )
-        registry_config = RegistryConfig(host="example.com")
-        uri = container.to_image_uri(registry_config)
-        assert uri == URL("image://project/testimage")
 
 
 class TestContainerVolumeFactory:

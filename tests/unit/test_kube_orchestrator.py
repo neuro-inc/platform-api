@@ -9,13 +9,13 @@ from yarl import URL
 from platform_api.orchestrator.job import JobStatusItem
 from platform_api.orchestrator.job_request import (
     Container,
-    ContainerResources,
     ContainerVolume,
     JobError,
     JobRequest,
     JobStatus,
 )
 from platform_api.orchestrator.kube_client import (
+    ContainerResources,
     ContainerStatus,
     Ingress,
     Resources,
