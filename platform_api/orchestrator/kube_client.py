@@ -1126,6 +1126,7 @@ class KubeClient:
     async def create_node(
         self,
         name: str,
+        capacity: Dict[str, Any],
         labels: Optional[Dict[str, str]] = None,
         taints: Optional[Sequence[NodeTaint]] = None,
     ) -> None:
@@ -1136,12 +1137,8 @@ class KubeClient:
             "metadata": {"name": name, "labels": labels or {}},
             "spec": {"taints": [taint.to_primitive() for taint in taints]},
             "status": {
-                "capacity": {
-                    "pods": "110",
-                    "memory": "1Gi",
-                    "cpu": 2,
-                    "nvidia.com/gpu": 1,
-                },
+                # TODO (ajuszkowski, 29-0-2019) add enum for capacity
+                "capacity": capacity,
                 "conditions": [{"status": "True", "type": "Ready"}],
             },
         }
