@@ -13,7 +13,11 @@ from platform_api.config import Config
 from platform_api.orchestrator.job import JobRequest
 from platform_api.orchestrator.job_request import Container, ContainerResources
 from platform_api.orchestrator.kube_client import KubeClient, PodDescriptor
-from platform_api.orchestrator.kube_orchestrator import KubeConfig, KubeOrchestrator
+from platform_api.orchestrator.kube_orchestrator import (
+    KubeConfig,
+    KubeOrchestrator,
+    build_pod_descriptior,
+)
 from platform_api.ssh.server import SSHServer
 
 
@@ -91,9 +95,7 @@ async def test_simple(
         resources=ContainerResources(cpu=0.1, memory_mb=16),
     )
     job_request = JobRequest.create(container)
-    pod = PodDescriptor.from_job_request(
-        kube_config.create_storage_volume(), job_request
-    )
+    pod = build_pod_descriptior(kube_config.create_storage_volume(), job_request)
     await delete_pod_later(pod)
     await kube_client.create_pod(pod)
     await kube_client.wait_pod_is_running(pod_name=pod.name, timeout_s=60.0)
@@ -119,9 +121,7 @@ async def test_shell(
         resources=ContainerResources(cpu=0.1, memory_mb=16),
     )
     job_request = JobRequest.create(container)
-    pod = PodDescriptor.from_job_request(
-        kube_config.create_storage_volume(), job_request
-    )
+    pod = build_pod_descriptior(kube_config.create_storage_volume(), job_request)
     await delete_pod_later(pod)
     await kube_client.create_pod(pod)
     await kube_client.wait_pod_is_running(pod_name=pod.name, timeout_s=60.0)
@@ -150,9 +150,7 @@ async def test_shell_with_args(
         resources=ContainerResources(cpu=0.1, memory_mb=16),
     )
     job_request = JobRequest.create(container)
-    pod = PodDescriptor.from_job_request(
-        kube_config.create_storage_volume(), job_request
-    )
+    pod = build_pod_descriptior(kube_config.create_storage_volume(), job_request)
     await delete_pod_later(pod)
     await kube_client.create_pod(pod)
     await kube_client.wait_pod_is_running(pod_name=pod.name, timeout_s=60.0)
@@ -177,9 +175,7 @@ async def test_exit_code(
         resources=ContainerResources(cpu=0.1, memory_mb=16),
     )
     job_request = JobRequest.create(container)
-    pod = PodDescriptor.from_job_request(
-        kube_config.create_storage_volume(), job_request
-    )
+    pod = build_pod_descriptior(kube_config.create_storage_volume(), job_request)
     await delete_pod_later(pod)
     await kube_client.create_pod(pod)
     await kube_client.wait_pod_is_running(pod_name=pod.name, timeout_s=60.0)
@@ -207,9 +203,7 @@ async def test_pass_env(
         resources=ContainerResources(cpu=0.1, memory_mb=16),
     )
     job_request = JobRequest.create(container)
-    pod = PodDescriptor.from_job_request(
-        kube_config.create_storage_volume(), job_request
-    )
+    pod = build_pod_descriptior(kube_config.create_storage_volume(), job_request)
     await delete_pod_later(pod)
     await kube_client.create_pod(pod)
     await kube_client.wait_pod_is_running(pod_name=pod.name, timeout_s=60.0)
@@ -237,9 +231,7 @@ async def test_sftp_basic(
         resources=ContainerResources(cpu=0.1, memory_mb=16),
     )
     job_request = JobRequest.create(container)
-    pod = PodDescriptor.from_job_request(
-        kube_config.create_storage_volume(), job_request
-    )
+    pod = build_pod_descriptior(kube_config.create_storage_volume(), job_request)
     await delete_pod_later(pod)
     await kube_client.create_pod(pod)
     await kube_client.wait_pod_is_running(pod_name=pod.name, timeout_s=60.0)

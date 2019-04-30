@@ -36,6 +36,7 @@ from platform_api.orchestrator.kube_orchestrator import (
     Service,
     Toleration,
     Volume,
+    build_pod_descriptior,
 )
 from platform_api.orchestrator.logs import FilteredStreamWrapper
 
@@ -399,7 +400,7 @@ class TestPodDescriptor:
         )
         volume = HostVolume(name="testvolume", path=PurePath("/tmp"))
         job_request = JobRequest.create(container)
-        pod = PodDescriptor.from_job_request(volume, job_request)
+        pod = build_pod_descriptior(volume, job_request)
         assert pod.name == job_request.job_id
         assert pod.image == "testimage"
         assert pod.args == ["testcommand", "123"]

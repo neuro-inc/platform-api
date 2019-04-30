@@ -40,7 +40,6 @@ from .job_request import (
     ContainerVolume,
     JobError,
     JobNotFoundException,
-    JobRequest,
 )
 
 
@@ -526,58 +525,6 @@ class PodDescriptor:
     readiness_probe: bool = False
 
     node_name: Optional[str] = None
-
-    @classmethod
-    def from_job_request(
-        cls,
-        volume: Volume,
-        job_request: JobRequest,
-        secret_names: Optional[List[str]] = None,
-        node_selector: Optional[Dict[str, str]] = None,
-        tolerations: Optional[List[Toleration]] = None,
-        node_affinity: Optional[NodeAffinity] = None,
-        labels: Optional[Dict[str, str]] = None,
-    ) -> "PodDescriptor":
-        container = job_request.container
-        volume_mounts = [
-            volume.create_mount(container_volume)
-            for container_volume in container.volumes
-        ]
-        volumes = [volume]
-
-        if job_request.container.resources.shm:
-            dev_shm_volume = SharedMemoryVolume(name="dshm")
-            container_volume = ContainerVolume(
-                URL(""),
-                dst_path=PurePath("/dev/shm"),
-                src_path=PurePath(""),
-                read_only=False,
-            )
-            volume_mounts.append(dev_shm_volume.create_mount(container_volume))
-            volumes.append(dev_shm_volume)
-
-        resources = Resources.from_container_resources(container.resources)
-        if secret_names is not None:
-            image_pull_secrets = [SecretRef(name) for name in secret_names]
-        else:
-            image_pull_secrets = []
-        return cls(
-            name=job_request.job_id,
-            image=container.image,
-            args=container.command_list,
-            env=container.env.copy(),
-            volume_mounts=volume_mounts,
-            volumes=volumes,
-            resources=resources,
-            port=container.port,
-            ssh_port=container.ssh_port,
-            health_check_path=container.health_check_path,
-            image_pull_secrets=image_pull_secrets,
-            node_selector=node_selector or {},
-            tolerations=tolerations or [],
-            node_affinity=node_affinity,
-            labels=labels or {},
-        )
 
     @property
     def env_list(self) -> List[Dict[str, str]]:

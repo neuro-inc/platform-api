@@ -5,12 +5,19 @@ from pathlib import PurePath
 from typing import Any, Dict, Iterable, List, Optional, Union
 
 from aioelasticsearch import Elasticsearch
+from yarl import URL
 
 from platform_api.cluster_config import OrchestratorConfig
 
 from .base import LogReader, Orchestrator, Telemetry
 from .job import Job, JobStatusItem
-from .job_request import JobError, JobNotFoundException, JobStatus
+from .job_request import (
+    ContainerVolume,
+    JobError,
+    JobNotFoundException,
+    JobRequest,
+    JobStatus,
+)
 from .jobs_telemetry import KubeTelemetry
 from .kube_client import (
     AlreadyExistsException,
@@ -27,7 +34,10 @@ from .kube_client import (
     PodDescriptor,
     PodExec,
     PodStatus,
+    Resources,
+    SecretRef,
     Service,
+    SharedMemoryVolume,
     Toleration,
     Volume,
 )
@@ -137,6 +147,56 @@ def convert_pod_status_to_job_status(pod_status: PodStatus) -> JobStatusItem:
     return JobStatusItemFactory(pod_status).create()
 
 
+def build_pod_descriptior(
+    volume: Volume,
+    job_request: JobRequest,
+    secret_names: Optional[List[str]] = None,
+    node_selector: Optional[Dict[str, str]] = None,
+    tolerations: Optional[List[Toleration]] = None,
+    node_affinity: Optional[NodeAffinity] = None,
+    labels: Optional[Dict[str, str]] = None,
+) -> PodDescriptor:
+    container = job_request.container
+    volume_mounts = [
+        volume.create_mount(container_volume) for container_volume in container.volumes
+    ]
+    volumes = [volume]
+
+    if job_request.container.resources.shm:
+        dev_shm_volume = SharedMemoryVolume(name="dshm")
+        container_volume = ContainerVolume(
+            URL(""),
+            dst_path=PurePath("/dev/shm"),
+            src_path=PurePath(""),
+            read_only=False,
+        )
+        volume_mounts.append(dev_shm_volume.create_mount(container_volume))
+        volumes.append(dev_shm_volume)
+
+    resources = Resources.from_container_resources(container.resources)
+    if secret_names is not None:
+        image_pull_secrets = [SecretRef(name) for name in secret_names]
+    else:
+        image_pull_secrets = []
+    return PodDescriptor(
+        name=job_request.job_id,
+        image=container.image,
+        args=container.command_list,
+        env=container.env.copy(),
+        volume_mounts=volume_mounts,
+        volumes=volumes,
+        resources=resources,
+        port=container.port,
+        ssh_port=container.ssh_port,
+        health_check_path=container.health_check_path,
+        image_pull_secrets=image_pull_secrets,
+        node_selector=node_selector or {},
+        tolerations=tolerations or [],
+        node_affinity=node_affinity,
+        labels=labels or {},
+    )
+
+
 class KubeOrchestrator(Orchestrator):
     def __init__(
         self, *, config: KubeConfig, es_client: Optional[Elasticsearch] = None
@@ -221,7 +281,7 @@ class KubeOrchestrator(Orchestrator):
         tolerations = self._get_pod_tolerations(job)
         node_affinity = self._get_pod_node_affinity(job)
         labels = self._get_pod_labels(job)
-        return PodDescriptor.from_job_request(
+        return build_pod_descriptior(
             self._storage_volume,
             job.request,
             secret_names,

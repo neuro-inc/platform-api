@@ -40,7 +40,10 @@ from platform_api.orchestrator.kube_client import (
     SecretRef,
     StatusException,
 )
-from platform_api.orchestrator.kube_orchestrator import JobStatusItemFactory
+from platform_api.orchestrator.kube_orchestrator import (
+    JobStatusItemFactory,
+    build_pod_descriptior,
+)
 from platform_api.orchestrator.logs import ElasticsearchLogReader, PodContainerLogReader
 from tests.conftest import random_str
 
@@ -752,9 +755,7 @@ class TestLogReader:
             resources=ContainerResources(cpu=0.1, memory_mb=128),
         )
         job_request = JobRequest.create(container)
-        pod = PodDescriptor.from_job_request(
-            kube_config.create_storage_volume(), job_request
-        )
+        pod = build_pod_descriptior(kube_config.create_storage_volume(), job_request)
         await delete_pod_later(pod)
         await kube_client.create_pod(pod)
         log_reader = PodContainerLogReader(
@@ -777,9 +778,7 @@ class TestLogReader:
             resources=ContainerResources(cpu=0.1, memory_mb=128),
         )
         job_request = JobRequest.create(container)
-        pod = PodDescriptor.from_job_request(
-            kube_config.create_storage_volume(), job_request
-        )
+        pod = build_pod_descriptior(kube_config.create_storage_volume(), job_request)
         await delete_pod_later(pod)
         await kube_client.create_pod(pod)
         log_reader = PodContainerLogReader(
@@ -802,9 +801,7 @@ class TestLogReader:
             resources=ContainerResources(cpu=0.1, memory_mb=128),
         )
         job_request = JobRequest.create(container)
-        pod = PodDescriptor.from_job_request(
-            kube_config.create_storage_volume(), job_request
-        )
+        pod = build_pod_descriptior(kube_config.create_storage_volume(), job_request)
         await delete_pod_later(pod)
         await kube_client.create_pod(pod)
         log_reader = PodContainerLogReader(
@@ -830,9 +827,7 @@ class TestLogReader:
             resources=ContainerResources(cpu=0.1, memory_mb=128),
         )
         job_request = JobRequest.create(container)
-        pod = PodDescriptor.from_job_request(
-            kube_config.create_storage_volume(), job_request
-        )
+        pod = build_pod_descriptior(kube_config.create_storage_volume(), job_request)
         await delete_pod_later(pod)
         await kube_client.create_pod(pod)
         log_reader = PodContainerLogReader(
@@ -856,9 +851,7 @@ class TestLogReader:
             resources=ContainerResources(cpu=0.1, memory_mb=128),
         )
         job_request = JobRequest.create(container)
-        pod = PodDescriptor.from_job_request(
-            kube_config.create_storage_volume(), job_request
-        )
+        pod = build_pod_descriptior(kube_config.create_storage_volume(), job_request)
         await delete_pod_later(pod)
         await kube_client.create_pod(pod)
         await kube_client.wait_pod_is_running(pod_name=pod.name, timeout_s=60.0)
@@ -918,9 +911,7 @@ class TestLogReader:
             resources=ContainerResources(cpu=0.1, memory_mb=128),
         )
         job_request = JobRequest.create(container)
-        pod = PodDescriptor.from_job_request(
-            kube_config.create_storage_volume(), job_request
-        )
+        pod = build_pod_descriptior(kube_config.create_storage_volume(), job_request)
         await delete_pod_later(pod)
         await kube_client.create_pod(pod)
         await kube_client.wait_pod_is_terminated(pod.name)
@@ -1070,9 +1061,7 @@ class TestPodContainerDevShmSettings:
         command = "/bin/df --block-size M --output=avail /dev/shm"
         container = Container(image="ubuntu", command=command, resources=resources)
         job_request = JobRequest.create(container)
-        pod = PodDescriptor.from_job_request(
-            kube_config.create_storage_volume(), job_request
-        )
+        pod = build_pod_descriptior(kube_config.create_storage_volume(), job_request)
         await delete_pod_later(pod)
         await kube_client.create_pod(pod)
         await kube_client.wait_pod_is_running(pod_name=pod.name, timeout_s=60.0)
@@ -1108,9 +1097,7 @@ class TestPodContainerDevShmSettings:
     ) -> JobStatusItem:
         container = Container(image="ubuntu", command=command, resources=resources)
         job_request = JobRequest.create(container)
-        pod = PodDescriptor.from_job_request(
-            kube_config.create_storage_volume(), job_request
-        )
+        pod = build_pod_descriptior(kube_config.create_storage_volume(), job_request)
         await delete_pod_later(pod)
         await kube_client.create_pod(pod)
         await kube_client.wait_pod_is_running(pod_name=pod.name, timeout_s=60.0)
