@@ -206,6 +206,7 @@ class JobRecord:
         *,
         status: JobStatus = JobStatus.PENDING,
         current_datetime_factory: Callable[[], datetime] = current_datetime_factory,
+        orphaned_job_owner: str = DEFAULT_ORPHANED_JOB_OWNER,
         **kwargs: Any,
     ) -> "JobRecord":
         if not kwargs.get("status_history"):
@@ -218,7 +219,7 @@ class JobRecord:
             )
             kwargs["status_history"] = status_history
         if not kwargs.get("owner"):
-            kwargs["owner"] = DEFAULT_ORPHANED_JOB_OWNER
+            kwargs["owner"] = orphaned_job_owner
         return cls(**kwargs)
 
     @property
@@ -386,6 +387,7 @@ class Job:
                 is_preemptible=is_preemptible,
                 is_deleted=is_deleted,
                 current_datetime_factory=current_datetime_factory,
+                orphaned_job_owner=self._orchestrator_config.orphaned_job_owner,
             )
 
         self._record = record
