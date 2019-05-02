@@ -208,7 +208,7 @@ class JobRecord:
         current_datetime_factory: Callable[[], datetime] = current_datetime_factory,
         **kwargs: Any,
     ) -> "JobRecord":
-        if "status_history" not in kwargs:
+        if not kwargs.get("status_history"):
             status_history = JobStatusHistory(
                 [
                     JobStatusItem.create(
@@ -377,21 +377,15 @@ class Job:
 
         if not record:
             assert job_request
-            if not status_history:
-                status_history = JobStatusHistory(
-                    [
-                        JobStatusItem.create(
-                            status, current_datetime_factory=current_datetime_factory
-                        )
-                    ]
-                )
-            record = JobRecord(
+            record = JobRecord.create(
                 request=job_request,
                 owner=owner,
+                status=status,
                 status_history=status_history,
                 name=name,
                 is_preemptible=is_preemptible,
                 is_deleted=is_deleted,
+                current_datetime_factory=current_datetime_factory,
             )
 
         self._record = record
