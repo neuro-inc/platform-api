@@ -27,8 +27,7 @@ import aioredis
 from aioredis.commands import Pipeline
 from async_generator import asynccontextmanager
 
-from .base import OrchestratorConfig
-from .job import AggregatedRunTime, Job
+from .job import AggregatedRunTime, JobRecord
 from .job_request import JobError, JobStatus
 
 
@@ -59,7 +58,7 @@ class JobFilter:
     owners: AbstractSet[str] = field(default_factory=cast(Type[Set[str]], set))
     name: Optional[str] = None
 
-    def check(self, job: Job) -> bool:
+    def check(self, job: JobRecord) -> bool:
         if self.statuses and job.status not in self.statuses:
             return False
         if self.owners and job.owner not in self.owners:
@@ -71,40 +70,44 @@ class JobFilter:
 
 class JobsStorage(ABC):
     @abstractmethod
-    def try_create_job(self, job: Job) -> AsyncContextManager[Job]:
+    def try_create_job(self, job: JobRecord) -> AsyncContextManager[JobRecord]:
         pass
 
     @abstractmethod
-    async def set_job(self, job: Job) -> None:
+    async def set_job(self, job: JobRecord) -> None:
         pass
 
     @abstractmethod
-    async def get_job(self, job_id: str) -> Job:
+    async def get_job(self, job_id: str) -> JobRecord:
         pass
 
     @abstractmethod
-    def try_update_job(self, job_id: str) -> AsyncContextManager[Job]:
+    def try_update_job(self, job_id: str) -> AsyncContextManager[JobRecord]:
         pass
 
     @abstractmethod
-    async def get_all_jobs(self, job_filter: Optional[JobFilter] = None) -> List[Job]:
+    async def get_all_jobs(
+        self, job_filter: Optional[JobFilter] = None
+    ) -> List[JobRecord]:
         pass
 
     @abstractmethod
     async def get_jobs_by_ids(
         self, job_ids: Iterable[str], job_filter: Optional[JobFilter] = None
-    ) -> List[Job]:
+    ) -> List[JobRecord]:
         pass
 
-    async def get_running_jobs(self) -> List[Job]:
+    async def get_running_jobs(self) -> List[JobRecord]:
         filt = JobFilter(statuses={JobStatus.RUNNING})
         return await self.get_all_jobs(filt)
 
     @abstractmethod
-    async def get_jobs_for_deletion(self) -> List[Job]:
+    async def get_jobs_for_deletion(
+        self, *, delay: timedelta = timedelta()
+    ) -> List[JobRecord]:
         pass
 
-    async def get_unfinished_jobs(self) -> List[Job]:
+    async def get_unfinished_jobs(self) -> List[JobRecord]:
         filt = JobFilter(statuses={JobStatus.PENDING, JobStatus.RUNNING})
         return await self.get_all_jobs(filt)
 
@@ -117,15 +120,14 @@ class JobsStorage(ABC):
 
 
 class InMemoryJobsStorage(JobsStorage):
-    def __init__(self, orchestrator_config: OrchestratorConfig) -> None:
-        self._orchestrator_config = orchestrator_config
+    def __init__(self) -> None:
         # job_id to job mapping:
         self._job_records: Dict[str, str] = {}
         # job_name+owner to job_id mapping:
         self._last_alive_job_records: Dict[Tuple[str, str], str] = {}
 
     @asynccontextmanager
-    async def try_create_job(self, job: Job) -> AsyncIterator[Job]:
+    async def try_create_job(self, job: JobRecord) -> AsyncIterator[JobRecord]:
         if job.name is not None:
             key = (job.owner, job.name)
             same_name_job_id = self._last_alive_job_records.get(key)
@@ -137,27 +139,28 @@ class InMemoryJobsStorage(JobsStorage):
         yield job
         await self.set_job(job)
 
-    async def set_job(self, job: Job) -> None:
+    async def set_job(self, job: JobRecord) -> None:
         payload = json.dumps(job.to_primitive())
         self._job_records[job.id] = payload
 
-    def _parse_job_payload(self, payload: str) -> Job:
-        job_record = json.loads(payload)
-        return Job.from_primitive(self._orchestrator_config, job_record)
+    def _parse_job_payload(self, payload: str) -> JobRecord:
+        return JobRecord.from_primitive(json.loads(payload))
 
-    async def get_job(self, job_id: str) -> Job:
+    async def get_job(self, job_id: str) -> JobRecord:
         payload = self._job_records.get(job_id)
         if payload is None:
             raise JobError(f"no such job {job_id}")
         return self._parse_job_payload(payload)
 
     @asynccontextmanager
-    async def try_update_job(self, job_id: str) -> AsyncIterator[Job]:
+    async def try_update_job(self, job_id: str) -> AsyncIterator[JobRecord]:
         job = await self.get_job(job_id)
         yield job
         await self.set_job(job)
 
-    async def get_all_jobs(self, job_filter: Optional[JobFilter] = None) -> List[Job]:
+    async def get_all_jobs(
+        self, job_filter: Optional[JobFilter] = None
+    ) -> List[JobRecord]:
         jobs = []
         for payload in self._job_records.values():
             job = self._parse_job_payload(payload)
@@ -168,7 +171,7 @@ class InMemoryJobsStorage(JobsStorage):
 
     async def get_jobs_by_ids(
         self, job_ids: Iterable[str], job_filter: Optional[JobFilter] = None
-    ) -> List[Job]:
+    ) -> List[JobRecord]:
         jobs = []
         for job_id in job_ids:
             try:
@@ -195,19 +198,19 @@ class InMemoryJobsStorage(JobsStorage):
             total_non_gpu_run_time_delta=non_gpu_run_time_delta,
         )
 
-    async def get_jobs_for_deletion(self) -> List[Job]:
-        return [job for job in await self.get_all_jobs() if job.should_be_deleted]
+    async def get_jobs_for_deletion(
+        self, *, delay: timedelta = timedelta()
+    ) -> List[JobRecord]:
+        return [
+            job
+            for job in await self.get_all_jobs()
+            if job.should_be_deleted(delay=delay)
+        ]
 
 
 class RedisJobsStorage(JobsStorage):
-    def __init__(
-        self,
-        client: aioredis.Redis,
-        orchestrator_config: OrchestratorConfig,
-        encoding: str = "utf8",
-    ) -> None:
+    def __init__(self, client: aioredis.Redis, encoding: str = "utf8") -> None:
         self._client = client
-        self._orchestrator_config = orchestrator_config
         # TODO (ajuszkowski 1-mar-2019) I think it's better to somehow get encoding
         # from redis configuration (client or server?), e.g. 'self._client.encoding'
         self._encoding = encoding
@@ -260,9 +263,7 @@ class RedisJobsStorage(JobsStorage):
             try:
                 await client.watch(key, *other_keys)
 
-                yield type(self)(
-                    client=client, orchestrator_config=self._orchestrator_config
-                )
+                yield type(self)(client=client)
             except (aioredis.errors.MultiExecError, aioredis.errors.WatchVariableError):
                 raise JobStorageTransactionError(
                     "Job {" + description + "} has changed"
@@ -287,7 +288,7 @@ class RedisJobsStorage(JobsStorage):
             yield storage
 
     @asynccontextmanager
-    async def try_update_job(self, job_id: str) -> AsyncIterator[Job]:
+    async def try_update_job(self, job_id: str) -> AsyncIterator[JobRecord]:
         """ NOTE: this method yields the job retrieved from the database
         """
         async with self._watch_job_id_key(job_id) as storage:
@@ -299,8 +300,8 @@ class RedisJobsStorage(JobsStorage):
 
     @asynccontextmanager
     async def try_create_job(
-        self, job: Job, skip_owner_index: bool = False
-    ) -> AsyncIterator[Job]:
+        self, job: JobRecord, skip_owner_index: bool = False
+    ) -> AsyncIterator[JobRecord]:
         """ NOTE: this method yields the job, the same object as it came as an argument
 
         :param bool skip_owner_index:
@@ -330,13 +331,13 @@ class RedisJobsStorage(JobsStorage):
                     job, is_job_creation=True, skip_owner_index=skip_owner_index
                 )
 
-    async def set_job(self, job: Job) -> None:
+    async def set_job(self, job: JobRecord) -> None:
         # TODO (ajuszkowski, 4-feb-2019) remove this method from interface as well
         # because it does not watch keys that it updates AND it does not update
         # the 'last-job-created' key!
         await self.update_job_atomic(job, is_job_creation=True)
 
-    def _update_owner_index(self, tr: Pipeline, job: Job) -> None:
+    def _update_owner_index(self, tr: Pipeline, job: JobRecord) -> None:
         owner_key = self._generate_jobs_owner_index_key(job.owner)
         tr.zadd(
             owner_key,
@@ -345,13 +346,13 @@ class RedisJobsStorage(JobsStorage):
             exist=tr.ZSET_IF_NOT_EXIST,
         )
 
-    def _update_name_index(self, tr: Pipeline, job: Job) -> None:
+    def _update_name_index(self, tr: Pipeline, job: JobRecord) -> None:
         assert job.name
         name_key = self._generate_jobs_name_index_zset_key(job.owner, job.name)
         tr.zadd(name_key, job.status_history.created_at_timestamp, job.id)
 
     async def update_job_atomic(
-        self, job: Job, is_job_creation: bool, skip_owner_index: bool = False
+        self, job: JobRecord, is_job_creation: bool, skip_owner_index: bool = False
     ) -> None:
         payload = json.dumps(job.to_primitive())
 
@@ -373,11 +374,10 @@ class RedisJobsStorage(JobsStorage):
             tr.sadd(self._generate_jobs_deleted_index_key(), job.id)
         await tr.execute()
 
-    def _parse_job_payload(self, payload: str) -> Job:
-        job_record = json.loads(payload)
-        return Job.from_primitive(self._orchestrator_config, job_record)
+    def _parse_job_payload(self, payload: str) -> JobRecord:
+        return JobRecord.from_primitive(json.loads(payload))
 
-    async def get_job(self, job_id: str) -> Job:
+    async def get_job(self, job_id: str) -> JobRecord:
         payload = await self._client.get(self._generate_job_key(job_id))
         if payload is None:
             raise JobError(f"no such job {job_id}")
@@ -393,8 +393,8 @@ class RedisJobsStorage(JobsStorage):
             return last_job_id
         return None
 
-    async def _get_jobs(self, ids: Iterable[str]) -> List[Job]:
-        jobs: List[Job] = []
+    async def _get_jobs(self, ids: Iterable[str]) -> List[JobRecord]:
+        jobs: List[JobRecord] = []
         if not ids:
             return jobs
         keys = [self._generate_job_key(id_) for id_ in ids]
@@ -471,7 +471,9 @@ class RedisJobsStorage(JobsStorage):
         failed, succeeded = await tr.execute()
         return [id_.decode() for id_ in itertools.chain(failed, succeeded)]
 
-    async def get_all_jobs(self, job_filter: Optional[JobFilter] = None) -> List[Job]:
+    async def get_all_jobs(
+        self, job_filter: Optional[JobFilter] = None
+    ) -> List[JobRecord]:
         if not job_filter:
             job_filter = JobFilter()
         job_ids = await self._get_job_ids(
@@ -481,16 +483,18 @@ class RedisJobsStorage(JobsStorage):
 
     async def get_jobs_by_ids(
         self, job_ids: Iterable[str], job_filter: Optional[JobFilter] = None
-    ) -> List[Job]:
+    ) -> List[JobRecord]:
         jobs = await self._get_jobs(job_ids)
         if job_filter:
             jobs = [job for job in jobs if job_filter.check(job)]
         return jobs
 
-    async def get_jobs_for_deletion(self) -> List[Job]:
+    async def get_jobs_for_deletion(
+        self, *, delay: timedelta = timedelta()
+    ) -> List[JobRecord]:
         job_ids = await self._get_job_ids_for_deletion()
         jobs = await self._get_jobs(job_ids)
-        return [job for job in jobs if job.should_be_deleted]
+        return [job for job in jobs if job.should_be_deleted(delay=delay)]
 
     async def get_aggregated_run_time(self, job_filter: JobFilter) -> AggregatedRunTime:
         # NOTE (ajuszkowski 4-Apr-2019): because of possible high number of jobs
