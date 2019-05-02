@@ -5,7 +5,7 @@ from typing import Callable, Iterator, List, Optional
 
 import pytest
 
-from platform_api.config import OrchestratorConfig, RegistryConfig, StorageConfig
+from platform_api.config import RegistryConfig, StorageConfig
 from platform_api.orchestrator import (
     Job,
     JobError,
@@ -18,7 +18,7 @@ from platform_api.orchestrator import (
     Orchestrator,
     Telemetry,
 )
-from platform_api.orchestrator.job import AggregatedRunTime, JobStatusItem
+from platform_api.orchestrator.job import AggregatedRunTime, JobRecord, JobStatusItem
 from platform_api.orchestrator.job_request import Container, ContainerResources
 from platform_api.orchestrator.jobs_storage import (
     InMemoryJobsStorage,
@@ -78,24 +78,14 @@ class MockOrchestrator(Orchestrator):
 
 
 class MockJobsStorage(InMemoryJobsStorage):
-    # TODO (ajuszkowski, 7-mar-2019) get rid of InMemoryJobsStorage, keep only
-    # this mocked jobs storage
-    def __init__(self, orchestrator_config: OrchestratorConfig) -> None:
-        super().__init__(orchestrator_config)
+    def __init__(self) -> None:
+        super().__init__()
         self.fail_set_job_transaction = False
 
-    async def set_job(self, job: Job) -> None:
+    async def set_job(self, job: JobRecord) -> None:
         if self.fail_set_job_transaction:
             raise JobStorageTransactionError("transaction failed")
         await super().set_job(job)
-
-    @property
-    def orchestrator_config(self) -> OrchestratorConfig:
-        return self._orchestrator_config
-
-    @orchestrator_config.setter
-    def orchestrator_config(self, config: KubeConfig) -> None:
-        self._orchestrator_config = config
 
 
 @pytest.fixture
@@ -134,12 +124,12 @@ def mock_orchestrator() -> MockOrchestrator:
     return MockOrchestrator(config=config)
 
 
-@pytest.fixture(scope="function")
-def mock_jobs_storage(mock_orchestrator: MockOrchestrator) -> MockJobsStorage:
-    return MockJobsStorage(mock_orchestrator.config)
+@pytest.fixture
+def mock_jobs_storage() -> MockJobsStorage:
+    return MockJobsStorage()
 
 
-@pytest.fixture(scope="function")
+@pytest.fixture
 def jobs_service(
     mock_orchestrator: MockOrchestrator, mock_jobs_storage: MockJobsStorage
 ) -> JobsService:

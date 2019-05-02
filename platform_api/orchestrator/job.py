@@ -33,6 +33,7 @@ class AggregatedRunTime:
 
 
 DEFAULT_QUOTA_NO_RESTRICTIONS: AggregatedRunTime = AggregatedRunTime.from_quota(Quota())
+DEFAULT_ORPHANED_JOB_OWNER = "compute"
 
 # TODO: consider adding JobStatusReason Enum
 
@@ -199,6 +200,28 @@ class JobRecord:
     is_deleted: bool = False
     internal_hostname: Optional[str] = None
 
+    @classmethod
+    def create(
+        cls,
+        *,
+        status: JobStatus = JobStatus.PENDING,
+        current_datetime_factory: Callable[[], datetime] = current_datetime_factory,
+        orphaned_job_owner: str = DEFAULT_ORPHANED_JOB_OWNER,
+        **kwargs: Any,
+    ) -> "JobRecord":
+        if not kwargs.get("status_history"):
+            status_history = JobStatusHistory(
+                [
+                    JobStatusItem.create(
+                        status, current_datetime_factory=current_datetime_factory
+                    )
+                ]
+            )
+            kwargs["status_history"] = status_history
+        if not kwargs.get("owner"):
+            kwargs["owner"] = orphaned_job_owner
+        return cls(**kwargs)
+
     @property
     def id(self) -> str:
         return self.request.job_id
@@ -207,9 +230,69 @@ class JobRecord:
     def status(self) -> JobStatus:
         return self.status_history.current.status
 
+    @status.setter
+    def status(self, value: JobStatus) -> None:
+        self.set_status(value)
+
+    def set_status(
+        self,
+        value: JobStatus,
+        *,
+        current_datetime_factory: Callable[[], datetime] = current_datetime_factory,
+    ) -> None:
+        item = JobStatusItem.create(
+            value, current_datetime_factory=current_datetime_factory
+        )
+        self.status_history.current = item
+
+    @property
+    def is_finished(self) -> bool:
+        return self.status_history.is_finished
+
+    @property
+    def finished_at(self) -> Optional[datetime]:
+        return self.status_history.finished_at
+
     @property
     def finished_at_str(self) -> Optional[str]:
         return self.status_history.finished_at_str
+
+    @property
+    def has_gpu(self) -> bool:
+        return bool(self.request.container.resources.gpu)
+
+    def get_run_time(
+        self,
+        *,
+        current_datetime_factory: Callable[[], datetime] = current_datetime_factory,
+    ) -> timedelta:
+        end_time = self.finished_at or current_datetime_factory()
+        start_time = self.status_history.created_at
+        return end_time - start_time
+
+    def _is_time_for_deletion(
+        self, delay: timedelta, current_datetime_factory: Callable[[], datetime]
+    ) -> bool:
+        assert self.finished_at
+        deletion_planned_at = self.finished_at + delay
+        return deletion_planned_at <= current_datetime_factory()
+
+    def should_be_deleted(
+        self,
+        *,
+        delay: timedelta = timedelta(),
+        current_datetime_factory: Callable[[], datetime] = current_datetime_factory,
+    ) -> bool:
+        return (
+            self.is_finished
+            and not self.is_deleted
+            and (
+                self._is_time_for_deletion(
+                    delay=delay, current_datetime_factory=current_datetime_factory
+                )
+                or self.status_history.current.reason == "Collected"
+            )
+        )
 
     def to_primitive(self) -> Dict[str, Any]:
         statuses = [item.to_primitive() for item in self.status_history.all]
@@ -231,7 +314,11 @@ class JobRecord:
         return result
 
     @classmethod
-    def from_primitive(cls, payload: Dict[str, Any]) -> "JobRecord":
+    def from_primitive(
+        cls,
+        payload: Dict[str, Any],
+        orphaned_job_owner: str = DEFAULT_ORPHANED_JOB_OWNER,
+    ) -> "JobRecord":
         request = JobRequest.from_primitive(payload["request"])
         status_history = cls.create_status_history_from_primitive(
             request.job_id, payload
@@ -240,7 +327,7 @@ class JobRecord:
             request=request,
             status_history=status_history,
             is_deleted=payload.get("is_deleted", False),
-            owner=payload.get("owner", ""),
+            owner=payload.get("owner", "") or orphaned_job_owner,
             name=payload.get("name"),
             is_preemptible=payload.get("is_preemptible", False),
             internal_hostname=payload.get("internal_hostname", None),
@@ -291,21 +378,16 @@ class Job:
 
         if not record:
             assert job_request
-            if not status_history:
-                status_history = JobStatusHistory(
-                    [
-                        JobStatusItem.create(
-                            status, current_datetime_factory=current_datetime_factory
-                        )
-                    ]
-                )
-            record = JobRecord(
+            record = JobRecord.create(
                 request=job_request,
                 owner=owner,
+                status=status,
                 status_history=status_history,
                 name=name,
                 is_preemptible=is_preemptible,
                 is_deleted=is_deleted,
+                current_datetime_factory=current_datetime_factory,
+                orphaned_job_owner=self._orchestrator_config.orphaned_job_owner,
             )
 
         self._record = record
@@ -348,7 +430,7 @@ class Job:
 
     @property
     def has_gpu(self) -> bool:
-        return bool(self._job_request.container.resources.gpu)
+        return self._record.has_gpu
 
     @property
     def status(self) -> JobStatus:
@@ -356,10 +438,9 @@ class Job:
 
     @status.setter
     def status(self, value: JobStatus) -> None:
-        item = JobStatusItem.create(
+        self._record.set_status(
             value, current_datetime_factory=self._current_datetime_factory
         )
-        self._status_history.current = item
 
     @property
     def status_history(self) -> JobStatusHistory:
@@ -386,22 +467,10 @@ class Job:
         self._record.is_deleted = value
 
     @property
-    def _is_time_for_deletion(self) -> bool:
-        assert self.finished_at
-        deletion_planned_at = (
-            self.finished_at + self._orchestrator_config.job_deletion_delay
-        )
-        return deletion_planned_at <= self._current_datetime_factory()
-
-    @property
     def should_be_deleted(self) -> bool:
-        return (
-            self.is_finished
-            and not self.is_deleted
-            and (
-                self._is_time_for_deletion
-                or self.status_history.current.reason == "Collected"
-            )
+        return self._record.should_be_deleted(
+            delay=self._orchestrator_config.job_deletion_delay,
+            current_datetime_factory=self._current_datetime_factory,
         )
 
     @property
@@ -506,9 +575,9 @@ class Job:
         return self.is_preemptible and self._is_forced_to_preemptible_pool
 
     def get_run_time(self) -> timedelta:
-        end_time = self.finished_at or self._current_datetime_factory()
-        start_time = self.status_history.created_at
-        return end_time - start_time
+        return self._record.get_run_time(
+            current_datetime_factory=self._current_datetime_factory
+        )
 
     def to_primitive(self) -> Dict[str, Any]:
         return self._record.to_primitive()
