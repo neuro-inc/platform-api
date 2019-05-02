@@ -4,7 +4,7 @@ from typing import Iterable, List, Optional, Tuple
 from platform_api.user import User
 
 from .base import LogReader, Orchestrator, Telemetry
-from .job import Job, JobStatusItem
+from .job import Job, JobRecord, JobStatusItem
 from .job_request import JobException, JobNotFoundException, JobRequest, JobStatus
 from .jobs_storage import (
     JobFilter,
@@ -47,9 +47,12 @@ class JobsService:
         # TODO (A Danshyn 02/17/19): instead of returning `Job` objects,
         # it makes sense to just return their IDs.
 
-        for job in await self._jobs_storage.get_unfinished_jobs():
+        for record in await self._jobs_storage.get_unfinished_jobs():
             try:
-                async with self._jobs_storage.try_update_job(job.id) as job:
+                async with self._jobs_storage.try_update_job(record.id) as record:
+                    job = Job(
+                        orchestrator_config=self._orchestrator.config, record=record
+                    )
                     await self._update_job_status(job)
                     job.collect_if_needed()
             except JobStorageTransactionError:
@@ -57,11 +60,16 @@ class JobsService:
                 # the job may have been changed and a retry is needed.
                 pass
 
-        for job in await self._jobs_storage.get_jobs_for_deletion():
+        for record in await self._jobs_storage.get_jobs_for_deletion(
+            delay=self._orchestrator.config.job_deletion_delay
+        ):
             # finished, but not yet deleted jobs
             # assert job.is_finished and not job.is_deleted
             try:
-                async with self._jobs_storage.try_update_job(job.id) as job:
+                async with self._jobs_storage.try_update_job(record.id) as record:
+                    job = Job(
+                        orchestrator_config=self._orchestrator.config, record=record
+                    )
                     await self._delete_job(job)
             except JobStorageTransactionError:
                 # intentionally ignoring any transaction failures here because
@@ -124,18 +132,19 @@ class JobsService:
     ) -> Tuple[Job, Status]:
 
         await self._raise_for_run_time_quota(user)
-        job = Job(
-            orchestrator_config=self._orchestrator.config,
-            job_request=job_request,
+        record = JobRecord.create(
+            request=job_request,
             owner=user.name,
+            status=JobStatus.PENDING,
             name=job_name,
             is_preemptible=is_preemptible,
         )
         job_id = job_request.job_id
         try:
-            async with self._jobs_storage.try_create_job(job) as new_job:
-                await self._orchestrator.start_job(new_job, user.token)
-            return new_job, Status.create(job.status)
+            async with self._jobs_storage.try_create_job(record) as record:
+                job = Job(orchestrator_config=self._orchestrator.config, record=record)
+                await self._orchestrator.start_job(job, user.token)
+            return job, Status.create(job.status)
 
         except JobsStorageException as transaction_err:
             logger.error(f"Failed to create job {job_id}: {transaction_err}")
@@ -154,7 +163,8 @@ class JobsService:
         return job.status
 
     async def get_job(self, job_id: str) -> Job:
-        return await self._jobs_storage.get_job(job_id)
+        record = await self._jobs_storage.get_job(job_id)
+        return Job(orchestrator_config=self._orchestrator.config, record=record)
 
     async def get_job_log_reader(self, job_id: str) -> LogReader:
         job = await self.get_job(job_id)
@@ -180,18 +190,31 @@ class JobsService:
     async def delete_job(self, job_id: str) -> None:
         for _ in range(self._max_deletion_attempts):
             try:
-                async with self._jobs_storage.try_update_job(job_id) as job:
+                async with self._jobs_storage.try_update_job(job_id) as record:
+                    job = Job(
+                        orchestrator_config=self._orchestrator.config, record=record
+                    )
                     if not job.is_finished:
                         await self._delete_job(job)
                 return
             except JobStorageTransactionError:
-                logger.warning("Failed to mark a job %s as deleted. Retrying.", job.id)
-        logger.warning("Failed to mark a job %s as deleted. Giving up.", job.id)
+                logger.warning("Failed to mark a job %s as deleted. Retrying.", job_id)
+        logger.warning("Failed to mark a job %s as deleted. Giving up.", job_id)
 
     async def get_all_jobs(self, job_filter: Optional[JobFilter] = None) -> List[Job]:
-        return await self._jobs_storage.get_all_jobs(job_filter)
+        records = await self._jobs_storage.get_all_jobs(job_filter)
+        return [
+            Job(orchestrator_config=self._orchestrator.config, record=record)
+            for record in records
+        ]
 
     async def get_jobs_by_ids(
         self, job_ids: Iterable[str], job_filter: Optional[JobFilter] = None
     ) -> List[Job]:
-        return await self._jobs_storage.get_jobs_by_ids(job_ids, job_filter=job_filter)
+        records = await self._jobs_storage.get_jobs_by_ids(
+            job_ids, job_filter=job_filter
+        )
+        return [
+            Job(orchestrator_config=self._orchestrator.config, record=record)
+            for record in records
+        ]
