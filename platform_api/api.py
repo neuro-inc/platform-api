@@ -152,9 +152,7 @@ async def create_app(config: Config) -> aiohttp.web.Application:
             app["jobs_app"]["orchestrator"] = orchestrator
 
             logger.info("Initializing JobsStorage")
-            jobs_storage = RedisJobsStorage(
-                redis_client, orchestrator_config=config.orchestrator
-            )
+            jobs_storage = RedisJobsStorage(redis_client)
             await jobs_storage.migrate()
 
             logger.info("Initializing JobsService")
