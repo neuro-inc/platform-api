@@ -1,11 +1,8 @@
 from typing import Callable
-from unittest import mock
-from unittest.mock import MagicMock
 
 import pytest
 
 from platform_api.config import JobsConfig
-from platform_api.handlers.jobs_handler import convert_job_to_job_response
 from platform_api.orchestrator import Job, JobRequest, JobsService, JobStatus
 from platform_api.orchestrator.job import AggregatedRunTime, JobRecord, JobStatusItem
 from platform_api.orchestrator.job_request import Container, ContainerResources
@@ -14,125 +11,10 @@ from platform_api.orchestrator.jobs_service import (
     JobsServiceException,
     NonGpuQuotaExceededError,
 )
-from platform_api.orchestrator.jobs_storage import JobFilter, JobStorageJobFoundError
+from platform_api.orchestrator.jobs_storage import JobFilter
 from platform_api.user import User
 
 from .conftest import MockJobsStorage, MockOrchestrator, create_quota
-
-
-class TestInMemoryJobsStorage:
-    @pytest.mark.asyncio
-    async def test_get_all_jobs_empty(
-        self, mock_orchestrator: MockOrchestrator
-    ) -> None:
-        jobs_storage = MockJobsStorage()
-        jobs = await jobs_storage.get_all_jobs()
-        assert not jobs
-
-    def _create_job_request(self) -> JobRequest:
-        return JobRequest.create(
-            Container(
-                image="testimage", resources=ContainerResources(cpu=1, memory_mb=128)
-            )
-        )
-
-    def _create_job_request_with_description(self) -> JobRequest:
-        return JobRequest.create(
-            Container(
-                image="testimage", resources=ContainerResources(cpu=1, memory_mb=128)
-            ),
-            description="test test description",
-        )
-
-    # TODO (A Danshyn 04/30/19): this test should be moved from this module.
-    @pytest.mark.asyncio
-    async def test_job_to_job_response(
-        self, mock_orchestrator: MockOrchestrator
-    ) -> None:
-        job = Job(
-            orchestrator_config=mock_orchestrator.config,
-            job_request=self._create_job_request_with_description(),
-            name="test-job-name",
-        )
-        response = convert_job_to_job_response(job, MagicMock())
-        assert response == {
-            "id": job.id,
-            "owner": "compute",
-            "status": "pending",
-            "history": {
-                "status": "pending",
-                "reason": None,
-                "description": None,
-                "created_at": mock.ANY,
-            },
-            "container": {
-                "image": "testimage",
-                "env": {},
-                "volumes": [],
-                "resources": {"cpu": 1, "memory_mb": 128},
-            },
-            "name": "test-job-name",
-            "description": "test test description",
-            "ssh_auth_server": "ssh://nobody@ssh-auth:22",
-            "is_preemptible": False,
-        }
-
-    @pytest.mark.asyncio
-    async def test_set_get_job(self) -> None:
-        jobs_storage = MockJobsStorage()
-
-        pending_job = JobRecord.create(request=self._create_job_request())
-        await jobs_storage.set_job(pending_job)
-
-        running_job = JobRecord.create(
-            request=self._create_job_request(), status=JobStatus.RUNNING
-        )
-        await jobs_storage.set_job(running_job)
-
-        succeeded_job = JobRecord.create(
-            request=self._create_job_request(), status=JobStatus.SUCCEEDED
-        )
-        await jobs_storage.set_job(succeeded_job)
-
-        job = await jobs_storage.get_job(pending_job.id)
-        assert job.id == pending_job.id
-        assert job.request == pending_job.request
-
-        jobs = await jobs_storage.get_all_jobs()
-        assert {job.id for job in jobs} == {
-            pending_job.id,
-            running_job.id,
-            succeeded_job.id,
-        }
-
-        job_filter = JobFilter(statuses={JobStatus.PENDING, JobStatus.RUNNING})
-        jobs = await jobs_storage.get_all_jobs(job_filter)
-        assert {job.id for job in jobs} == {running_job.id, pending_job.id}
-
-        jobs = await jobs_storage.get_running_jobs()
-        assert {job.id for job in jobs} == {running_job.id}
-
-        jobs = await jobs_storage.get_unfinished_jobs()
-        assert {job.id for job in jobs} == {pending_job.id, running_job.id}
-
-        jobs = await jobs_storage.get_jobs_for_deletion()
-        assert {job.id for job in jobs} == {succeeded_job.id}
-
-    @pytest.mark.asyncio
-    async def test_try_create_job(self) -> None:
-        jobs_storage = MockJobsStorage()
-
-        job = JobRecord.create(request=self._create_job_request(), name="job-name")
-
-        async with jobs_storage.try_create_job(job):
-            pass
-
-        retrieved_job = await jobs_storage.get_job(job.id)
-        assert retrieved_job.id == job.id
-
-        with pytest.raises(JobStorageJobFoundError):
-            async with jobs_storage.try_create_job(job):
-                pass
 
 
 class TestJobsService:
