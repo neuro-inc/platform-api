@@ -1,4 +1,3 @@
-import dataclasses
 from typing import Callable
 from unittest import mock
 from unittest.mock import MagicMock
@@ -415,12 +414,10 @@ class TestJobsService:
         mock_jobs_storage: MockJobsStorage,
         job_request_factory: Callable[[], JobRequest],
     ) -> None:
-        config = dataclasses.replace(mock_orchestrator.config, job_deletion_delay_s=0)
-        mock_orchestrator.config = config
         service = JobsService(
             orchestrator=mock_orchestrator,
             jobs_storage=mock_jobs_storage,
-            jobs_config=JobsConfig(),
+            jobs_config=JobsConfig(deletion_delay_s=0),
         )
 
         user = User(name="testuser", token="")
@@ -444,13 +441,11 @@ class TestJobsService:
         mock_jobs_storage: MockJobsStorage,
         job_request_factory: Callable[[], JobRequest],
     ) -> None:
-        config = dataclasses.replace(mock_orchestrator.config, job_deletion_delay_s=0)
-        mock_orchestrator.config = config
         mock_orchestrator.raise_on_get_job_status = True
         service = JobsService(
             orchestrator=mock_orchestrator,
             jobs_storage=mock_jobs_storage,
-            jobs_config=JobsConfig(),
+            jobs_config=JobsConfig(deletion_delay_s=0),
         )
 
         user = User(name="testuser", token="")
@@ -534,12 +529,10 @@ class TestJobsService:
         mock_jobs_storage: MockJobsStorage,
         job_request_factory: Callable[[], JobRequest],
     ) -> None:
-        config = dataclasses.replace(mock_orchestrator.config, job_deletion_delay_s=0)
-        mock_orchestrator.config = config
         service = JobsService(
             orchestrator=mock_orchestrator,
             jobs_storage=mock_jobs_storage,
-            jobs_config=JobsConfig(),
+            jobs_config=JobsConfig(deletion_delay_s=0),
         )
 
         user = User(name="testuser", token="")

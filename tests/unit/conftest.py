@@ -5,7 +5,7 @@ from typing import Callable, Iterator, List, Optional
 
 import pytest
 
-from platform_api.config import RegistryConfig, StorageConfig
+from platform_api.config import JobsConfig, RegistryConfig, StorageConfig
 from platform_api.orchestrator import (
     Job,
     JobError,
@@ -130,10 +130,21 @@ def mock_jobs_storage() -> MockJobsStorage:
 
 
 @pytest.fixture
+def jobs_config() -> JobsConfig:
+    return JobsConfig()
+
+
+@pytest.fixture
 def jobs_service(
-    mock_orchestrator: MockOrchestrator, mock_jobs_storage: MockJobsStorage
+    mock_orchestrator: MockOrchestrator,
+    mock_jobs_storage: MockJobsStorage,
+    jobs_config: JobsConfig,
 ) -> JobsService:
-    return JobsService(orchestrator=mock_orchestrator, jobs_storage=mock_jobs_storage)
+    return JobsService(
+        orchestrator=mock_orchestrator,
+        jobs_storage=mock_jobs_storage,
+        jobs_config=jobs_config,
+    )
 
 
 @pytest.fixture(scope="session")
