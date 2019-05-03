@@ -14,6 +14,7 @@ from platform_api.handlers.models_handler import ModelRequest
 from platform_api.orchestrator.job import (
     AggregatedRunTime,
     Job,
+    JobRecord,
     JobStatusHistory,
     JobStatusItem,
 )
@@ -399,20 +400,33 @@ def job_request_payload_with_shm(job_request_payload: Dict[str, Any]) -> Dict[st
     return data
 
 
-class TestJob:
-    @pytest.fixture
-    def job_request(self) -> JobRequest:
-        container = Container(
-            image="testimage",
-            resources=ContainerResources(cpu=1, memory_mb=128),
-            http_server=ContainerHTTPServer(port=1234),
-        )
-        return JobRequest(
-            job_id="testjob",
-            container=container,
-            description="Description of the testjob",
-        )
+@pytest.fixture
+def job_request() -> JobRequest:
+    container = Container(
+        image="testimage",
+        resources=ContainerResources(cpu=1, memory_mb=128),
+        http_server=ContainerHTTPServer(port=1234),
+    )
+    return JobRequest(
+        job_id="testjob", container=container, description="Description of the testjob"
+    )
 
+
+class TestJobRecord:
+    def test_should_be_deleted_pending(self, job_request: JobRequest) -> None:
+        record = JobRecord.create(request=job_request)
+        assert not record.finished_at
+        assert not record.should_be_deleted(delay=timedelta(60))
+
+    def test_should_be_deleted_finished(
+        self, mock_orchestrator: MockOrchestrator, job_request: JobRequest
+    ) -> None:
+        record = JobRecord.create(status=JobStatus.FAILED, request=job_request)
+        assert record.finished_at
+        assert record.should_be_deleted(delay=timedelta(0))
+
+
+class TestJob:
     @pytest.fixture
     def job_request_with_gpu(self) -> JobRequest:
         container = Container(
@@ -615,22 +629,6 @@ class TestJob:
         assert job.http_url_named == "http://test-job-name-owner.jobs"
         assert job.ssh_server == "ssh://testjob.ssh:22"
 
-    def test_should_be_deleted_pending(
-        self, mock_orchestrator: MockOrchestrator, job_request: JobRequest
-    ) -> None:
-        job = Job(orchestrator_config=mock_orchestrator.config, job_request=job_request)
-        assert not job.finished_at
-        assert not job.should_be_deleted
-
-    def test_should_be_deleted_finished(
-        self, mock_orchestrator: MockOrchestrator, job_request: JobRequest
-    ) -> None:
-        config = dataclasses.replace(mock_orchestrator.config, job_deletion_delay_s=0)
-        job = Job(orchestrator_config=config, job_request=job_request)
-        job.status = JobStatus.FAILED
-        assert job.finished_at
-        assert job.should_be_deleted
-
     def test_to_primitive(
         self, mock_orchestrator: MockOrchestrator, job_request: JobRequest
     ) -> None:
@@ -744,8 +742,7 @@ class TestJob:
     def test_to_uri_no_owner(
         self, mock_orchestrator: MockOrchestrator, job_request: JobRequest
     ) -> None:
-        config = dataclasses.replace(mock_orchestrator.config, orphaned_job_owner="")
-        job = Job(config, job_request)
+        job = Job(mock_orchestrator.config, job_request, orphaned_job_owner="")
         assert job.to_uri() == URL(f"job:/{job.id}")
 
     def test_to_and_from_primitive(

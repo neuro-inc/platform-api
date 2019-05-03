@@ -3,6 +3,7 @@ from typing import Any, Callable, Tuple
 
 import pytest
 
+from platform_api.config import JobsConfig
 from platform_api.orchestrator import (
     JobRequest,
     JobsService,
@@ -31,7 +32,9 @@ class TestJobsStatusPooling:
         self, mock_orchestrator: MockOrchestrator, mock_jobs_storage: MockJobsStorage
     ) -> Tuple[JobsStatusPooling, JobsService]:
         jobs_service = JobsService(
-            orchestrator=mock_orchestrator, jobs_storage=mock_jobs_storage
+            orchestrator=mock_orchestrator,
+            jobs_storage=mock_jobs_storage,
+            jobs_config=JobsConfig(),
         )
         jobs_status_pooling = JobsStatusPooling(jobs_service=jobs_service, interval_s=1)
         await jobs_status_pooling.start()

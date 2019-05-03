@@ -16,6 +16,7 @@ from platform_api.config import (
     Config,
     DatabaseConfig,
     IngressConfig,
+    JobsConfig,
     LoggingConfig,
     OAuthConfig,
     RegistryConfig,
@@ -101,13 +102,11 @@ async def kube_config(
         cert_authority_path=cluster["certificate-authority"],
         auth_cert_path=user["client-certificate"],
         auth_cert_key_path=user["client-key"],
-        job_deletion_delay_s=0,
         node_label_gpu="gpu",
         resource_pool_types=[
             ResourcePoolType(),
             ResourcePoolType(gpu=1, gpu_model=GPUModel(id="gpumodel")),
         ],
-        orphaned_job_owner="compute",
         node_label_preemptible="preemptible",
         namespace="platformapi-tests",
     )
@@ -225,7 +224,6 @@ async def kube_config_nfs(
         ssh_auth_domain_name="ssh-auth.platform.neuromation.io",
         node_label_gpu="gpu",
         resource_pool_types=[ResourcePoolType()],
-        orphaned_job_owner="compute",
         namespace="platformapi-tests",
     )
 
@@ -316,11 +314,17 @@ async def kube_node_preemptible(
 
 
 @pytest.fixture
+def jobs_config() -> JobsConfig:
+    return JobsConfig(orphaned_job_owner="compute", deletion_delay_s=0)
+
+
+@pytest.fixture
 def config_factory(
     kube_config: KubeConfig,
     redis_config: RedisConfig,
     auth_config: AuthConfig,
     es_config: ElasticsearchConfig,
+    jobs_config: JobsConfig,
 ) -> Callable[..., Config]:
     def _factory(**kwargs: Any) -> Config:
         server_config = ServerConfig()
@@ -342,6 +346,7 @@ def config_factory(
             cluster=cluster_config,
             database=database_config,
             auth=auth_config,
+            jobs=jobs_config,
             **kwargs,
         )
 

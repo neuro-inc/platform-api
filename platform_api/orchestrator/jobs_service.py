@@ -1,6 +1,7 @@
 import logging
 from typing import Iterable, List, Optional, Tuple
 
+from platform_api.config import JobsConfig
 from platform_api.user import User
 
 from .base import LogReader, Orchestrator, Telemetry
@@ -37,8 +38,14 @@ class NonGpuQuotaExceededError(QuotaException):
 
 
 class JobsService:
-    def __init__(self, orchestrator: Orchestrator, jobs_storage: JobsStorage) -> None:
+    def __init__(
+        self,
+        orchestrator: Orchestrator,
+        jobs_storage: JobsStorage,
+        jobs_config: JobsConfig,
+    ) -> None:
         self._jobs_storage = jobs_storage
+        self._jobs_config = jobs_config
         self._orchestrator = orchestrator
 
         self._max_deletion_attempts = 3
@@ -61,7 +68,7 @@ class JobsService:
                 pass
 
         for record in await self._jobs_storage.get_jobs_for_deletion(
-            delay=self._orchestrator.config.job_deletion_delay
+            delay=self._jobs_config.deletion_delay
         ):
             # finished, but not yet deleted jobs
             # assert job.is_finished and not job.is_deleted

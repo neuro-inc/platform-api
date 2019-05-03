@@ -1,5 +1,4 @@
 from dataclasses import dataclass
-from datetime import timedelta
 from enum import Enum
 from pathlib import PurePath
 from typing import Any, Optional, Sequence
@@ -85,15 +84,7 @@ class OrchestratorConfig:
 
     resource_pool_types: Sequence[ResourcePoolType]
 
-    job_deletion_delay_s: int = 0
-
-    orphaned_job_owner: str = ""
-
     is_http_ingress_secure: bool = False
-
-    @property
-    def job_deletion_delay(self) -> timedelta:
-        return timedelta(seconds=self.job_deletion_delay_s)
 
 
 @dataclass(frozen=True)

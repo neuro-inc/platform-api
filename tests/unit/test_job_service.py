@@ -1,10 +1,10 @@
-import dataclasses
 from typing import Callable
 from unittest import mock
 from unittest.mock import MagicMock
 
 import pytest
 
+from platform_api.config import JobsConfig
 from platform_api.handlers.jobs_handler import convert_job_to_job_response
 from platform_api.orchestrator import Job, JobRequest, JobsService, JobStatus
 from platform_api.orchestrator.job import AggregatedRunTime, JobRecord, JobStatusItem
@@ -177,7 +177,11 @@ class TestJobsService:
         job_request_factory: Callable[[], JobRequest],
     ) -> None:
         storage = MockJobsStorage()
-        jobs_service = JobsService(orchestrator=mock_orchestrator, jobs_storage=storage)
+        jobs_service = JobsService(
+            orchestrator=mock_orchestrator,
+            jobs_storage=storage,
+            jobs_config=JobsConfig(),
+        )
         user = User(name="testuser", token="")
         job_name = "test-Job_name"
         request = job_request_factory()
@@ -210,7 +214,11 @@ class TestJobsService:
         first_job_status: JobStatus,
     ) -> None:
         storage = MockJobsStorage()
-        jobs_service = JobsService(orchestrator=mock_orchestrator, jobs_storage=storage)
+        jobs_service = JobsService(
+            orchestrator=mock_orchestrator,
+            jobs_storage=storage,
+            jobs_config=JobsConfig(),
+        )
         user = User(name="testuser", token="")
         job_name = "test-Job_name"
         request = job_request_factory()
@@ -244,7 +252,11 @@ class TestJobsService:
 
         storage = MockJobsStorage()
         storage.fail_set_job_transaction = True
-        jobs_service = JobsService(orchestrator=mock_orchestrator, jobs_storage=storage)
+        jobs_service = JobsService(
+            orchestrator=mock_orchestrator,
+            jobs_storage=storage,
+            jobs_config=JobsConfig(),
+        )
 
         user = User(name="testuser", token="")
         job_name = "test-Job_name"
@@ -268,7 +280,11 @@ class TestJobsService:
 
         storage = MockJobsStorage()
         storage.fail_set_job_transaction = True
-        jobs_service = JobsService(orchestrator=mock_orchestrator, jobs_storage=storage)
+        jobs_service = JobsService(
+            orchestrator=mock_orchestrator,
+            jobs_storage=storage,
+            jobs_config=JobsConfig(),
+        )
 
         user = User(name="testuser", token="")
         job_name = "test-Job_name"
@@ -313,7 +329,11 @@ class TestJobsService:
         job_request_factory: Callable[[], JobRequest],
     ) -> None:
         storage = MockJobsStorage()
-        service = JobsService(orchestrator=mock_orchestrator, jobs_storage=storage)
+        service = JobsService(
+            orchestrator=mock_orchestrator,
+            jobs_storage=storage,
+            jobs_config=JobsConfig(),
+        )
         user = User(name="testuser", token="")
 
         async def create_job() -> Job:
@@ -366,7 +386,11 @@ class TestJobsService:
         mock_jobs_storage: MockJobsStorage,
         job_request_factory: Callable[[], JobRequest],
     ) -> None:
-        service = JobsService(mock_orchestrator, mock_jobs_storage)
+        service = JobsService(
+            orchestrator=mock_orchestrator,
+            jobs_storage=mock_jobs_storage,
+            jobs_config=JobsConfig(deletion_delay_s=60),
+        )
 
         user = User(name="testuser", token="")
         original_job, _ = await service.create_job(
@@ -390,9 +414,11 @@ class TestJobsService:
         mock_jobs_storage: MockJobsStorage,
         job_request_factory: Callable[[], JobRequest],
     ) -> None:
-        config = dataclasses.replace(mock_orchestrator.config, job_deletion_delay_s=0)
-        mock_orchestrator.config = config
-        service = JobsService(mock_orchestrator, mock_jobs_storage)
+        service = JobsService(
+            orchestrator=mock_orchestrator,
+            jobs_storage=mock_jobs_storage,
+            jobs_config=JobsConfig(deletion_delay_s=0),
+        )
 
         user = User(name="testuser", token="")
         original_job, _ = await service.create_job(
@@ -415,10 +441,12 @@ class TestJobsService:
         mock_jobs_storage: MockJobsStorage,
         job_request_factory: Callable[[], JobRequest],
     ) -> None:
-        config = dataclasses.replace(mock_orchestrator.config, job_deletion_delay_s=0)
-        mock_orchestrator.config = config
         mock_orchestrator.raise_on_get_job_status = True
-        service = JobsService(mock_orchestrator, mock_jobs_storage)
+        service = JobsService(
+            orchestrator=mock_orchestrator,
+            jobs_storage=mock_jobs_storage,
+            jobs_config=JobsConfig(deletion_delay_s=0),
+        )
 
         user = User(name="testuser", token="")
         original_job, _ = await service.create_job(
@@ -445,7 +473,11 @@ class TestJobsService:
         mock_jobs_storage: MockJobsStorage,
         job_request_factory: Callable[[], JobRequest],
     ) -> None:
-        service = JobsService(mock_orchestrator, mock_jobs_storage)
+        service = JobsService(
+            orchestrator=mock_orchestrator,
+            jobs_storage=mock_jobs_storage,
+            jobs_config=JobsConfig(),
+        )
 
         user = User(name="testuser", token="")
         original_job, _ = await service.create_job(
@@ -469,7 +501,11 @@ class TestJobsService:
         mock_jobs_storage: MockJobsStorage,
         job_request_factory: Callable[[], JobRequest],
     ) -> None:
-        service = JobsService(mock_orchestrator, mock_jobs_storage)
+        service = JobsService(
+            orchestrator=mock_orchestrator,
+            jobs_storage=mock_jobs_storage,
+            jobs_config=JobsConfig(),
+        )
 
         user = User(name="testuser", token="")
         original_job, _ = await service.create_job(
@@ -493,9 +529,11 @@ class TestJobsService:
         mock_jobs_storage: MockJobsStorage,
         job_request_factory: Callable[[], JobRequest],
     ) -> None:
-        config = dataclasses.replace(mock_orchestrator.config, job_deletion_delay_s=0)
-        mock_orchestrator.config = config
-        service = JobsService(mock_orchestrator, mock_jobs_storage)
+        service = JobsService(
+            orchestrator=mock_orchestrator,
+            jobs_storage=mock_jobs_storage,
+            jobs_config=JobsConfig(deletion_delay_s=0),
+        )
 
         user = User(name="testuser", token="")
         original_job, _ = await service.create_job(
@@ -518,7 +556,11 @@ class TestJobsService:
         mock_jobs_storage: MockJobsStorage,
         job_request_factory: Callable[[], JobRequest],
     ) -> None:
-        service = JobsService(mock_orchestrator, mock_jobs_storage)
+        service = JobsService(
+            orchestrator=mock_orchestrator,
+            jobs_storage=mock_jobs_storage,
+            jobs_config=JobsConfig(),
+        )
 
         user = User(name="testuser", token="")
         original_job, _ = await service.create_job(
@@ -552,7 +594,11 @@ class TestJobsService:
         quota: AggregatedRunTime,
     ) -> None:
         storage = MockJobsStorage()
-        jobs_service = JobsService(orchestrator=mock_orchestrator, jobs_storage=storage)
+        jobs_service = JobsService(
+            orchestrator=mock_orchestrator,
+            jobs_storage=storage,
+            jobs_config=JobsConfig(),
+        )
         user = User(name="testuser", token="token", quota=quota)
         request = job_request_factory()
 
@@ -575,7 +621,11 @@ class TestJobsService:
         quota: AggregatedRunTime,
     ) -> None:
         storage = MockJobsStorage()
-        jobs_service = JobsService(orchestrator=mock_orchestrator, jobs_storage=storage)
+        jobs_service = JobsService(
+            orchestrator=mock_orchestrator,
+            jobs_storage=storage,
+            jobs_config=JobsConfig(),
+        )
         user = User(name="testuser", token="token", quota=quota)
         request = job_request_factory()
 
@@ -598,7 +648,11 @@ class TestJobsService:
         quota: AggregatedRunTime,
     ) -> None:
         storage = MockJobsStorage()
-        jobs_service = JobsService(orchestrator=mock_orchestrator, jobs_storage=storage)
+        jobs_service = JobsService(
+            orchestrator=mock_orchestrator,
+            jobs_storage=storage,
+            jobs_config=JobsConfig(),
+        )
         user = User(name="testuser", token="token", quota=quota)
         request = job_request_factory()
 

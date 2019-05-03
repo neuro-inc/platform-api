@@ -366,6 +366,8 @@ class Job:
         name: Optional[str] = None,
         is_preemptible: bool = False,
         is_forced_to_preemptible_pool: bool = False,
+        # leaving for backward compat with tests
+        orphaned_job_owner: str = DEFAULT_ORPHANED_JOB_OWNER,
         *,
         record: Optional[JobRecord] = None,
     ) -> None:
@@ -377,6 +379,7 @@ class Job:
         self._orchestrator_config = orchestrator_config
 
         if not record:
+            # NOTE: this branch is left for backward compat reasons
             assert job_request
             record = JobRecord.create(
                 request=job_request,
@@ -387,7 +390,7 @@ class Job:
                 is_preemptible=is_preemptible,
                 is_deleted=is_deleted,
                 current_datetime_factory=current_datetime_factory,
-                orphaned_job_owner=self._orchestrator_config.orphaned_job_owner,
+                orphaned_job_owner=orphaned_job_owner,
             )
 
         self._record = record
@@ -416,7 +419,7 @@ class Job:
 
     @property
     def owner(self) -> str:
-        return self._owner or self._orchestrator_config.orphaned_job_owner
+        return self._owner
 
     def to_uri(self) -> URL:
         base_uri = "job:"
@@ -465,13 +468,6 @@ class Job:
     @is_deleted.setter
     def is_deleted(self, value: bool) -> None:
         self._record.is_deleted = value
-
-    @property
-    def should_be_deleted(self) -> bool:
-        return self._record.should_be_deleted(
-            delay=self._orchestrator_config.job_deletion_delay,
-            current_datetime_factory=self._current_datetime_factory,
-        )
 
     @property
     def _collection_reason(self) -> Optional[str]:

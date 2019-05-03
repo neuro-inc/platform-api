@@ -106,8 +106,6 @@ class KubeConfig(OrchestratorConfig):
 
     storage_volume_name: str = "storage"
 
-    job_deletion_delay_s: int = 60 * 60 * 24
-
     node_label_gpu: Optional[str] = None
     node_label_preemptible: Optional[str] = None
 

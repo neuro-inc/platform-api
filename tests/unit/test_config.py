@@ -119,6 +119,10 @@ class TestEnvironConfigFactory:
         assert config.storage.container_mount_path == PurePath("/var/storage")
         assert config.storage.uri_scheme == "storage"
 
+        assert config.jobs.deletion_delay_s == 86400
+        assert config.jobs.deletion_delay == timedelta(days=1)
+        assert config.jobs.orphaned_job_owner == "compute"
+
         assert isinstance(config.orchestrator, KubeConfig)
         assert config.orchestrator.storage_mount_path == PurePath("/tmp")
         assert config.orchestrator.endpoint_url == "https://localhost:8443"
@@ -135,14 +139,9 @@ class TestEnvironConfigFactory:
         assert config.orchestrator.jobs_domain_name_template == "{job_id}.jobs.domain"
         assert config.orchestrator.ssh_ingress_domain_name == "ssh.domain"
 
-        assert config.orchestrator.job_deletion_delay_s == 86400
-        assert config.orchestrator.job_deletion_delay == timedelta(days=1)
-
         assert config.orchestrator.resource_pool_types == [ResourcePoolType()]
         assert config.orchestrator.node_label_gpu is None
         assert config.orchestrator.node_label_preemptible is None
-
-        assert config.orchestrator.orphaned_job_owner == "compute"
 
         assert config.database.redis is None
 
@@ -237,6 +236,10 @@ class TestEnvironConfigFactory:
         assert config.ingress.users_url == URL("https://neu.ro/api/v1/users")
         assert config.ingress.monitoring_url == URL("https://neu.ro/api/v1/jobs")
 
+        assert config.jobs.deletion_delay_s == 3600
+        assert config.jobs.deletion_delay == timedelta(seconds=3600)
+        assert config.jobs.orphaned_job_owner == "servicename"
+
         assert isinstance(config.orchestrator, KubeConfig)
         assert config.orchestrator.storage_mount_path == PurePath("/tmp")
         assert config.orchestrator.endpoint_url == "https://localhost:8443"
@@ -253,9 +256,6 @@ class TestEnvironConfigFactory:
         assert config.orchestrator.jobs_domain_name_template == "{job_id}.jobs.domain"
         assert config.orchestrator.ssh_ingress_domain_name == "ssh.domain"
 
-        assert config.orchestrator.job_deletion_delay_s == 3600
-        assert config.orchestrator.job_deletion_delay == timedelta(seconds=3600)
-
         assert config.orchestrator.resource_pool_types == [
             ResourcePoolType(),
             ResourcePoolType(gpu=1, gpu_model=GKEGPUModels.K80.value),
@@ -263,8 +263,6 @@ class TestEnvironConfigFactory:
         ]
         assert config.orchestrator.node_label_gpu == "testlabel"
         assert config.orchestrator.node_label_preemptible == "testpreempt"
-
-        assert config.orchestrator.orphaned_job_owner == "servicename"
 
         assert config.database.redis is not None
         assert config.database.redis.uri == "redis://localhost:6379/0"
