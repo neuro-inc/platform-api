@@ -8,7 +8,7 @@ from .jobs_service import JobsService
 logger = logging.getLogger(__name__)
 
 
-class JobsStatusPooling:
+class JobsPoller:
     def __init__(self, *, jobs_service: JobsService, interval_s: int = 1) -> None:
         self._loop = asyncio.get_event_loop()
 
@@ -19,10 +19,10 @@ class JobsStatusPooling:
         self._task: Optional[asyncio.Future[None]] = None
 
     async def start(self) -> None:
-        logger.info("Start jobs status pooling")
+        logger.info("Starting jobs polling")
         await self._init_task()
 
-    async def __aenter__(self) -> "JobsStatusPooling":
+    async def __aenter__(self) -> "JobsPoller":
         await self.start()
         return self
 
@@ -39,7 +39,7 @@ class JobsStatusPooling:
         await asyncio.sleep(0)
 
     async def stop(self) -> None:
-        logger.info("Stopping jobs status pooling")
+        logger.info("Stopping jobs polling")
         assert self._is_active is not None
         self._is_active.set_result(None)
 
