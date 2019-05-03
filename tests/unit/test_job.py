@@ -742,8 +742,7 @@ class TestJob:
     def test_to_uri_no_owner(
         self, mock_orchestrator: MockOrchestrator, job_request: JobRequest
     ) -> None:
-        config = dataclasses.replace(mock_orchestrator.config, orphaned_job_owner="")
-        job = Job(config, job_request)
+        job = Job(mock_orchestrator.config, job_request, orphaned_job_owner="")
         assert job.to_uri() == URL(f"job:/{job.id}")
 
     def test_to_and_from_primitive(

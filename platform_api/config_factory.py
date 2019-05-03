@@ -47,7 +47,7 @@ class EnvironConfigFactory:
         jobs = self.create_jobs(orphaned_job_owner=auth.service_name)
         return Config(
             server=self.create_server(),
-            cluster=self.create_cluster(orphaned_job_owner=jobs.orphaned_job_owner),
+            cluster=self.create_cluster(),
             database=self.create_database(),
             auth=auth,
             oauth=self.try_create_oauth(),
@@ -55,9 +55,9 @@ class EnvironConfigFactory:
             jobs=jobs,
         )
 
-    def create_cluster(self, *, orphaned_job_owner: str) -> ClusterConfig:
+    def create_cluster(self) -> ClusterConfig:
         orchestrator = self.create_orchestrator(
-            self.create_storage(), self.create_registry(), orphaned_job_owner
+            self.create_storage(), self.create_registry()
         )
         return ClusterConfig(
             name=JobsConfig.default_cluster_name,
@@ -83,7 +83,7 @@ class EnvironConfigFactory:
         return SSHConfig(
             server=self.create_ssh_server(),
             storage=storage,
-            orchestrator=self.create_orchestrator(storage, registry, auth.service_name),
+            orchestrator=self.create_orchestrator(storage, registry),
             database=database,
             auth=auth,
             registry=registry,
@@ -147,7 +147,7 @@ class EnvironConfigFactory:
         )
 
     def create_orchestrator(
-        self, storage: StorageConfig, registry: RegistryConfig, orphaned_job_owner: str
+        self, storage: StorageConfig, registry: RegistryConfig
     ) -> KubeConfig:
         endpoint_url = self._environ["NP_K8S_API_URL"]
         auth_type = KubeClientAuthType(
@@ -200,7 +200,6 @@ class EnvironConfigFactory:
             resource_pool_types=pool_types,
             node_label_gpu=self._environ.get("NP_K8S_NODE_LABEL_GPU"),
             node_label_preemptible=self._environ.get("NP_K8S_NODE_LABEL_PREEMPTIBLE"),
-            orphaned_job_owner=orphaned_job_owner,
         )
 
     def create_resource_pool_types(self) -> List[ResourcePoolType]:

@@ -119,7 +119,6 @@ def mock_orchestrator() -> MockOrchestrator:
         ssh_auth_domain_name="ssh-auth",
         endpoint_url="http://k8s:1234",
         resource_pool_types=[ResourcePoolType()],
-        orphaned_job_owner="compute",
     )
     return MockOrchestrator(config=config)
 
@@ -131,7 +130,7 @@ def mock_jobs_storage() -> MockJobsStorage:
 
 @pytest.fixture
 def jobs_config() -> JobsConfig:
-    return JobsConfig()
+    return JobsConfig(orphaned_job_owner="compute")
 
 
 @pytest.fixture

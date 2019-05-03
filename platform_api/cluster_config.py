@@ -84,8 +84,6 @@ class OrchestratorConfig:
 
     resource_pool_types: Sequence[ResourcePoolType]
 
-    orphaned_job_owner: str = ""
-
     is_http_ingress_secure: bool = False
 
 
