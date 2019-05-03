@@ -1,4 +1,5 @@
 from dataclasses import dataclass, field
+from datetime import timedelta
 from pathlib import Path
 from typing import Container, Optional, Sequence
 
@@ -57,6 +58,17 @@ class DatabaseConfig:
 
 
 @dataclass(frozen=True)
+class JobsConfig:
+    default_cluster_name: str = "default"
+    deletion_delay_s: int = 0
+    orphaned_job_owner: str = ""
+
+    @property
+    def deletion_delay(self) -> timedelta:
+        return timedelta(seconds=self.deletion_delay_s)
+
+
+@dataclass(frozen=True)
 class Config:
     server: ServerConfig
 
@@ -65,6 +77,8 @@ class Config:
     database: DatabaseConfig
     auth: AuthConfig
     oauth: Optional[OAuthConfig] = None
+
+    jobs: JobsConfig = JobsConfig()
 
     # used for generating environment variable names and
     # sourcing them inside containers.
