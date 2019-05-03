@@ -146,10 +146,6 @@ async def create_app(config: Config) -> aiohttp.web.Application:
             cluster = await exit_stack.enter_async_context(
                 cluster_registry.get(config.cluster.name)
             )
-            orchestrator = cluster.orchestrator
-
-            app["models_app"]["orchestrator"] = orchestrator
-            app["jobs_app"]["orchestrator"] = orchestrator
 
             logger.info("Initializing JobsStorage")
             jobs_storage = RedisJobsStorage(redis_client)
@@ -157,7 +153,7 @@ async def create_app(config: Config) -> aiohttp.web.Application:
 
             logger.info("Initializing JobsService")
             jobs_service = JobsService(
-                orchestrator=orchestrator,
+                orchestrator=cluster.orchestrator,
                 jobs_storage=jobs_storage,
                 jobs_config=config.jobs,
             )

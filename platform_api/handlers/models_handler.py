@@ -6,7 +6,7 @@ import trafaret as t
 from aiohttp_security import check_permission
 
 from platform_api.config import Config
-from platform_api.orchestrator import JobRequest, JobsService, Orchestrator
+from platform_api.orchestrator import JobRequest, JobsService
 from platform_api.orchestrator.job_request import Container
 from platform_api.resource import GPUModel
 from platform_api.user import User, authorized_user
@@ -70,10 +70,6 @@ class ModelsHandler:
     def _jobs_service(self) -> JobsService:
         return self._app["jobs_service"]
 
-    @property
-    def _orchestrator(self) -> Orchestrator:
-        return self._app["orchestrator"]
-
     def register(self, app: aiohttp.web.Application) -> None:
         app.add_routes(
             (
@@ -82,8 +78,8 @@ class ModelsHandler:
             )
         )
 
-    async def _create_model_request_validator(self) -> t.Trafaret:
-        gpu_models = await self._orchestrator.get_available_gpu_models()
+    async def _create_model_request_validator(self, user: User) -> t.Trafaret:
+        gpu_models = await self._jobs_service.get_available_gpu_models(user)
         return create_model_request_validator(allowed_gpu_models=gpu_models)
 
     async def _create_job(
@@ -123,7 +119,7 @@ class ModelsHandler:
         user = await authorized_user(request)
 
         orig_payload = await request.json()
-        model_request_validator = await self._create_model_request_validator()
+        model_request_validator = await self._create_model_request_validator(user)
         request_payload = model_request_validator.check(orig_payload)
 
         container = ModelRequest(

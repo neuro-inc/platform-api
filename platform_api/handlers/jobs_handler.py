@@ -14,7 +14,7 @@ from yarl import URL
 
 from platform_api.config import Config, RegistryConfig, StorageConfig
 from platform_api.log import log_debug_time
-from platform_api.orchestrator import JobsService, Orchestrator
+from platform_api.orchestrator import JobsService
 from platform_api.orchestrator.job import Job, JobStats
 from platform_api.orchestrator.job_request import (
     Container,
@@ -209,10 +209,6 @@ class JobsHandler:
         return self._app["jobs_service"]
 
     @property
-    def _orchestrator(self) -> Orchestrator:
-        return self._app["orchestrator"]
-
-    @property
     def _auth_client(self) -> AuthClient:
         return self._app["auth_client"]
 
@@ -228,8 +224,8 @@ class JobsHandler:
             )
         )
 
-    async def _create_job_request_validator(self) -> t.Trafaret:
-        gpu_models = await self._orchestrator.get_available_gpu_models()
+    async def _create_job_request_validator(self, user: User) -> t.Trafaret:
+        gpu_models = await self._jobs_service.get_available_gpu_models(user)
         return create_job_request_validator(allowed_gpu_models=gpu_models)
 
     async def create_job(self, request: aiohttp.web.Request) -> aiohttp.web.Response:
@@ -237,7 +233,7 @@ class JobsHandler:
 
         orig_payload = await request.json()
 
-        job_request_validator = await self._create_job_request_validator()
+        job_request_validator = await self._create_job_request_validator(user)
         request_payload = job_request_validator.check(orig_payload)
 
         container = ContainerBuilder.from_container_payload(

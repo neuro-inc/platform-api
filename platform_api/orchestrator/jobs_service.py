@@ -1,7 +1,8 @@
 import logging
-from typing import Iterable, List, Optional, Tuple
+from typing import Iterable, List, Optional, Sequence, Tuple
 
 from platform_api.config import JobsConfig
+from platform_api.resource import GPUModel
 from platform_api.user import User
 
 from .base import LogReader, Orchestrator, Telemetry
@@ -225,3 +226,7 @@ class JobsService:
             Job(orchestrator_config=self._orchestrator.config, record=record)
             for record in records
         ]
+
+    async def get_available_gpu_models(self, user: User) -> Sequence[GPUModel]:
+        assert user
+        return await self._orchestrator.get_available_gpu_models()
