@@ -3,7 +3,9 @@ from typing import Any, AsyncIterator, Callable
 
 import pytest
 
-from platform_api.orchestrator import JobRequest, JobsPoller, JobsService, JobStatus
+from platform_api.orchestrator import JobRequest, JobStatus
+from platform_api.orchestrator.jobs_poller import JobsPoller
+from platform_api.orchestrator.jobs_service import JobsService
 from platform_api.user import User
 
 from .conftest import MockOrchestrator

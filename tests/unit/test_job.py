@@ -647,6 +647,7 @@ class TestJob:
             "id": job.id,
             "name": "test-job-name",
             "owner": "testuser",
+            "cluster_name": "",
             "request": job_request.to_primitive(),
             "status": "failed",
             "is_deleted": True,
@@ -727,6 +728,29 @@ class TestJob:
         assert job.owner == "compute"
         assert job.is_preemptible
 
+    def test_from_primitive_with_cluster_name(
+        self, mock_orchestrator: MockOrchestrator, job_request_payload: Dict[str, Any]
+    ) -> None:
+        payload = {
+            "id": "testjob",
+            "owner": "testuser",
+            "cluster_name": "testcluster",
+            "request": job_request_payload,
+            "status": "succeeded",
+            "is_deleted": True,
+            "finished_at": datetime.now(timezone.utc).isoformat(),
+        }
+        job = Job.from_primitive(mock_orchestrator.config, payload)
+        assert job.id == "testjob"
+        assert job.status == JobStatus.SUCCEEDED
+        assert job.is_deleted
+        assert job.finished_at
+        assert job.description == "Description of the testjob"
+        assert job.name is None
+        assert job.owner == "testuser"
+        assert job.cluster_name == "testcluster"
+        assert not job.is_preemptible
+
     def test_to_uri(
         self, mock_orchestrator: MockOrchestrator, job_request: JobRequest
     ) -> None:
@@ -759,6 +783,7 @@ class TestJob:
             "id": job_request_payload["job_id"],
             "request": job_request_payload,
             "owner": "user",
+            "cluster_name": "testcluster",
             "status": current_status_item["status"],
             "statuses": [current_status_item],
             "is_deleted": "False",

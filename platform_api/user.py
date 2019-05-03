@@ -15,6 +15,7 @@ class User:
     name: str
     token: str = field(repr=False)
     quota: AggregatedRunTime = field(default=DEFAULT_QUOTA_NO_RESTRICTIONS)
+    cluster_name: str = ""
 
     def has_quota(self) -> bool:
         return self.quota != DEFAULT_QUOTA_NO_RESTRICTIONS

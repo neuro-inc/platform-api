@@ -1,6 +1,9 @@
 import logging
-from typing import Iterable, List, Optional, Sequence, Tuple
+from typing import AsyncContextManager, Iterable, List, Optional, Sequence, Tuple
 
+from async_generator import asynccontextmanager
+
+from platform_api.cluster import Cluster, ClusterRegistry
 from platform_api.config import JobsConfig
 from platform_api.resource import GPUModel
 from platform_api.user import User
@@ -41,50 +44,51 @@ class NonGpuQuotaExceededError(QuotaException):
 class JobsService:
     def __init__(
         self,
-        orchestrator: Orchestrator,
+        cluster_registry: ClusterRegistry,
         jobs_storage: JobsStorage,
         jobs_config: JobsConfig,
     ) -> None:
+        self._cluster_registry = cluster_registry
         self._jobs_storage = jobs_storage
         self._jobs_config = jobs_config
-        self._orchestrator = orchestrator
 
         self._max_deletion_attempts = 3
+
+    @asynccontextmanager
+    async def _get_cluster(self, name: str) -> AsyncContextManager[Cluster]:
+        name = name or self._jobs_config.default_cluster_name
+        async with self._cluster_registry.get(name) as cluster:
+            yield cluster
 
     async def update_jobs_statuses(self) -> None:
         # TODO (A Danshyn 02/17/19): instead of returning `Job` objects,
         # it makes sense to just return their IDs.
 
         for record in await self._jobs_storage.get_unfinished_jobs():
-            try:
-                async with self._jobs_storage.try_update_job(record.id) as record:
-                    job = Job(
-                        orchestrator_config=self._orchestrator.config, record=record
-                    )
-                    await self._update_job_status(job)
-                    job.collect_if_needed()
-            except JobStorageTransactionError:
-                # intentionally ignoring any transaction failures here because
-                # the job may have been changed and a retry is needed.
-                pass
+            await self._update_job_status_by_id(record.id)
 
         for record in await self._jobs_storage.get_jobs_for_deletion(
             delay=self._jobs_config.deletion_delay
         ):
             # finished, but not yet deleted jobs
             # assert job.is_finished and not job.is_deleted
-            try:
-                async with self._jobs_storage.try_update_job(record.id) as record:
-                    job = Job(
-                        orchestrator_config=self._orchestrator.config, record=record
-                    )
-                    await self._delete_job(job)
-            except JobStorageTransactionError:
-                # intentionally ignoring any transaction failures here because
-                # the job may have been changed and a retry is needed.
-                pass
+            await self._delete_job_by_id(record.id)
 
-    async def _update_job_status(self, job: Job) -> None:
+    async def _update_job_status_by_id(self, job_id: str) -> None:
+        try:
+            async with self._jobs_storage.try_update_job(job_id) as record:
+                async with self._get_cluster(record.cluster_name) as cluster:
+                    job = Job(
+                        orchestrator_config=cluster.orchestrator.config, record=record
+                    )
+                    await self._update_job_status(cluster.orchestrator, job)
+                    job.collect_if_needed()
+        except JobStorageTransactionError:
+            # intentionally ignoring any transaction failures here because
+            # the job may have been changed and a retry is needed.
+            pass
+
+    async def _update_job_status(self, orchestrator: Orchestrator, job: Job) -> None:
         if job.is_finished:
             logger.warning("Ignoring an attempt to update a finished job %s", job.id)
             return
@@ -94,7 +98,7 @@ class JobsService:
         old_status_item = job.status_history.current
 
         try:
-            status_item = await self._orchestrator.get_job_status(job)
+            status_item = await orchestrator.get_job_status(job)
             # TODO: In case job is found, but container is not in state Pending
             # We shall go and check for the events assigned to the pod
             # "pod didn't trigger scale-up (it wouldn't fit if a new node is added)"
@@ -120,6 +124,19 @@ class JobsService:
                 status_item.status.name,
             )
 
+    async def _delete_job_by_id(self, job_id: str) -> None:
+        try:
+            async with self._jobs_storage.try_update_job(job_id) as record:
+                async with self._get_cluster(record.cluster_name) as cluster:
+                    job = Job(
+                        orchestrator_config=cluster.orchestrator.config, record=record
+                    )
+                    await self._delete_job(cluster.orchestrator, job)
+        except JobStorageTransactionError:
+            # intentionally ignoring any transaction failures here because
+            # the job may have been changed and a retry is needed.
+            pass
+
     async def _raise_for_run_time_quota(self, user: User) -> None:
         if not user.has_quota():
             return
@@ -143,6 +160,7 @@ class JobsService:
         record = JobRecord.create(
             request=job_request,
             owner=user.name,
+            cluster_name=user.cluster_name,
             status=JobStatus.PENDING,
             name=job_name,
             is_preemptible=is_preemptible,
@@ -150,14 +168,21 @@ class JobsService:
         job_id = job_request.job_id
         try:
             async with self._jobs_storage.try_create_job(record) as record:
-                job = Job(orchestrator_config=self._orchestrator.config, record=record)
-                await self._orchestrator.start_job(job, user.token)
+                async with self._get_cluster(record.cluster_name) as cluster:
+                    job = Job(
+                        orchestrator_config=cluster.orchestrator.config, record=record
+                    )
+                    await cluster.orchestrator.start_job(job, user.token)
             return job, Status.create(job.status)
 
         except JobsStorageException as transaction_err:
             logger.error(f"Failed to create job {job_id}: {transaction_err}")
             try:
-                await self._orchestrator.delete_job(job)
+                async with self._get_cluster(record.cluster_name) as cluster:
+                    job = Job(
+                        orchestrator_config=cluster.orchestrator.config, record=record
+                    )
+                    await cluster.orchestrator.delete_job(job)
             except Exception as cleanup_exc:
                 # ignore exceptions
                 logger.warning(
@@ -172,20 +197,25 @@ class JobsService:
 
     async def get_job(self, job_id: str) -> Job:
         record = await self._jobs_storage.get_job(job_id)
-        return Job(orchestrator_config=self._orchestrator.config, record=record)
+        async with self._get_cluster(record.cluster_name) as cluster:
+            return Job(orchestrator_config=cluster.orchestrator.config, record=record)
 
     async def get_job_log_reader(self, job_id: str) -> LogReader:
-        job = await self.get_job(job_id)
-        return await self._orchestrator.get_job_log_reader(job)
+        record = await self._jobs_storage.get_job(job_id)
+        async with self._get_cluster(record.cluster_name) as cluster:
+            job = Job(orchestrator_config=cluster.orchestrator.config, record=record)
+            return await cluster.orchestrator.get_job_log_reader(job)
 
     async def get_job_telemetry(self, job_id: str) -> Telemetry:
-        job = await self.get_job(job_id)
-        return await self._orchestrator.get_job_telemetry(job)
+        record = await self._jobs_storage.get_job(job_id)
+        async with self._get_cluster(record.cluster_name) as cluster:
+            job = Job(orchestrator_config=cluster.orchestrator.config, record=record)
+            return await cluster.orchestrator.get_job_telemetry(job)
 
-    async def _delete_job(self, job: Job) -> None:
+    async def _delete_job(self, orchestrator: Orchestrator, job: Job) -> None:
         logger.info("Deleting job %s", job.id)
         try:
-            await self._orchestrator.delete_job(job)
+            await orchestrator.delete_job(job)
         except JobException as exc:
             # if the job is missing, we still want to mark it as deleted
             logger.warning("Could not delete job %s. Reason: %s", job.id, exc)
@@ -199,11 +229,13 @@ class JobsService:
         for _ in range(self._max_deletion_attempts):
             try:
                 async with self._jobs_storage.try_update_job(job_id) as record:
-                    job = Job(
-                        orchestrator_config=self._orchestrator.config, record=record
-                    )
-                    if not job.is_finished:
-                        await self._delete_job(job)
+                    async with self._get_cluster(record.cluster_name) as cluster:
+                        job = Job(
+                            orchestrator_config=cluster.orchestrator.config,
+                            record=record,
+                        )
+                        if not job.is_finished:
+                            await self._delete_job(cluster.orchestrator, job)
                 return
             except JobStorageTransactionError:
                 logger.warning("Failed to mark a job %s as deleted. Retrying.", job_id)
@@ -211,10 +243,13 @@ class JobsService:
 
     async def get_all_jobs(self, job_filter: Optional[JobFilter] = None) -> List[Job]:
         records = await self._jobs_storage.get_all_jobs(job_filter)
-        return [
-            Job(orchestrator_config=self._orchestrator.config, record=record)
-            for record in records
-        ]
+        jobs = []
+        for record in records:
+            async with self._get_cluster(record.cluster_name) as cluster:
+                jobs.append(
+                    Job(orchestrator_config=cluster.orchestrator.config, record=record)
+                )
+        return jobs
 
     async def get_jobs_by_ids(
         self, job_ids: Iterable[str], job_filter: Optional[JobFilter] = None
@@ -222,11 +257,14 @@ class JobsService:
         records = await self._jobs_storage.get_jobs_by_ids(
             job_ids, job_filter=job_filter
         )
-        return [
-            Job(orchestrator_config=self._orchestrator.config, record=record)
-            for record in records
-        ]
+        jobs = []
+        for record in records:
+            async with self._get_cluster(record.cluster_name) as cluster:
+                jobs.append(
+                    Job(orchestrator_config=cluster.orchestrator.config, record=record)
+                )
+        return jobs
 
     async def get_available_gpu_models(self, user: User) -> Sequence[GPUModel]:
-        assert user
-        return await self._orchestrator.get_available_gpu_models()
+        async with self._get_cluster(user.cluster_name) as cluster:
+            return await cluster.orchestrator.get_available_gpu_models()

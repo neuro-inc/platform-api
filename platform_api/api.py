@@ -12,8 +12,9 @@ from .config import Config
 from .config_factory import EnvironConfigFactory
 from .handlers import JobsHandler, ModelsHandler
 from .kube_cluster import KubeCluster
-from .orchestrator import JobException, JobsPoller, JobsService
-from .orchestrator.jobs_service import JobsServiceException
+from .orchestrator import JobException
+from .orchestrator.jobs_poller import JobsPoller
+from .orchestrator.jobs_service import JobsService, JobsServiceException
 from .orchestrator.jobs_storage import RedisJobsStorage
 from .redis import create_redis_client
 
@@ -143,17 +144,13 @@ async def create_app(config: Config) -> aiohttp.web.Application:
 
             await cluster_registry.add(config.cluster)
 
-            cluster = await exit_stack.enter_async_context(
-                cluster_registry.get(config.cluster.name)
-            )
-
             logger.info("Initializing JobsStorage")
             jobs_storage = RedisJobsStorage(redis_client)
             await jobs_storage.migrate()
 
             logger.info("Initializing JobsService")
             jobs_service = JobsService(
-                orchestrator=cluster.orchestrator,
+                cluster_registry=cluster_registry,
                 jobs_storage=jobs_storage,
                 jobs_config=config.jobs,
             )

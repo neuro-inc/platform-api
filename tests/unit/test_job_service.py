@@ -2,11 +2,13 @@ from typing import Callable
 
 import pytest
 
+from platform_api.cluster import ClusterRegistry
 from platform_api.config import JobsConfig
-from platform_api.orchestrator import Job, JobRequest, JobsService, JobStatus
+from platform_api.orchestrator import Job, JobRequest, JobStatus
 from platform_api.orchestrator.job import AggregatedRunTime, JobStatusItem
 from platform_api.orchestrator.jobs_service import (
     GpuQuotaExceededError,
+    JobsService,
     JobsServiceException,
     NonGpuQuotaExceededError,
 )
@@ -19,11 +21,11 @@ from .conftest import MockJobsStorage, MockOrchestrator, create_quota
 class TestJobsService:
     @pytest.fixture
     def jobs_service_factory(
-        self, mock_orchestrator: MockOrchestrator, mock_jobs_storage: MockJobsStorage
+        self, cluster_registry: ClusterRegistry, mock_jobs_storage: MockJobsStorage
     ) -> Callable[..., JobsService]:
         def _factory(deletion_delay_s: int = 0) -> JobsService:
             return JobsService(
-                orchestrator=mock_orchestrator,
+                cluster_registry=cluster_registry,
                 jobs_storage=mock_jobs_storage,
                 jobs_config=JobsConfig(deletion_delay_s=deletion_delay_s),
             )
