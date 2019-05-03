@@ -157,7 +157,9 @@ async def create_app(config: Config) -> aiohttp.web.Application:
 
             logger.info("Initializing JobsService")
             jobs_service = JobsService(
-                orchestrator=orchestrator, jobs_storage=jobs_storage
+                orchestrator=orchestrator,
+                jobs_storage=jobs_storage,
+                jobs_config=config.jobs,
             )
 
             logger.info("Initializing JobsStatusPolling")
