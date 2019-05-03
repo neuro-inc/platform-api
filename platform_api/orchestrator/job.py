@@ -467,13 +467,6 @@ class Job:
         self._record.is_deleted = value
 
     @property
-    def should_be_deleted(self) -> bool:
-        return self._record.should_be_deleted(
-            delay=self._orchestrator_config.job_deletion_delay,
-            current_datetime_factory=self._current_datetime_factory,
-        )
-
-    @property
     def _collection_reason(self) -> Optional[str]:
         status_item = self._status_history.current
         if status_item.status == JobStatus.PENDING and (
