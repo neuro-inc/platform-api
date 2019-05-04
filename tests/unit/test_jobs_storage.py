@@ -87,3 +87,45 @@ class TestInMemoryJobsStorage:
         with pytest.raises(JobStorageJobFoundError):
             async with jobs_storage.try_create_job(job):
                 pass
+
+
+class TestJobFilter:
+    def _create_job_request(self) -> JobRequest:
+        return JobRequest.create(
+            Container(
+                image="testimage", resources=ContainerResources(cpu=1, memory_mb=128)
+            )
+        )
+
+    def test_check_empty_filter(self) -> None:
+        job = JobRecord.create(request=self._create_job_request(), owner="testuser")
+        assert JobFilter().check(job)
+
+    def test_check_statuses(self) -> None:
+        job = JobRecord.create(
+            request=self._create_job_request(),
+            owner="testuser",
+            status=JobStatus.PENDING,
+        )
+        assert not JobFilter(statuses={JobStatus.RUNNING}).check(job)
+
+    def test_check_owners(self) -> None:
+        job = JobRecord.create(request=self._create_job_request(), owner="testuser")
+        assert not JobFilter(owners={"anotheruser"}).check(job)
+
+    def test_check_name(self) -> None:
+        job = JobRecord.create(
+            request=self._create_job_request(), owner="testuser", name="testname"
+        )
+        assert not JobFilter(name="anothername").check(job)
+
+    def test_check_all(self) -> None:
+        job = JobRecord.create(
+            request=self._create_job_request(),
+            status=JobStatus.PENDING,
+            owner="testuser",
+            name="testname",
+        )
+        assert JobFilter(
+            statuses={JobStatus.PENDING}, owners={"testuser"}, name="testname"
+        ).check(job)
