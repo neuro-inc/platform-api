@@ -4,8 +4,7 @@ import pytest
 
 from platform_api.config import JobsConfig
 from platform_api.orchestrator import Job, JobRequest, JobsService, JobStatus
-from platform_api.orchestrator.job import AggregatedRunTime, JobRecord, JobStatusItem
-from platform_api.orchestrator.job_request import Container, ContainerResources
+from platform_api.orchestrator.job import AggregatedRunTime, JobStatusItem
 from platform_api.orchestrator.jobs_service import (
     GpuQuotaExceededError,
     JobsServiceException,
@@ -18,6 +17,25 @@ from .conftest import MockJobsStorage, MockOrchestrator, create_quota
 
 
 class TestJobsService:
+    @pytest.fixture
+    def jobs_service_factory(
+        self, mock_orchestrator: MockOrchestrator, mock_jobs_storage: MockJobsStorage
+    ) -> Callable[..., JobsService]:
+        def _factory(deletion_delay_s: int = 0) -> JobsService:
+            return JobsService(
+                orchestrator=mock_orchestrator,
+                jobs_storage=mock_jobs_storage,
+                jobs_config=JobsConfig(deletion_delay_s=deletion_delay_s),
+            )
+
+        return _factory
+
+    @pytest.fixture
+    def jobs_service(
+        self, jobs_service_factory: Callable[..., JobsService]
+    ) -> JobsService:
+        return jobs_service_factory()
+
     @pytest.mark.asyncio
     async def test_create_job(
         self, jobs_service: JobsService, mock_job_request: JobRequest
@@ -56,14 +74,9 @@ class TestJobsService:
     async def test_create_job__name_conflict_with_running(
         self,
         mock_orchestrator: MockOrchestrator,
+        jobs_service: JobsService,
         job_request_factory: Callable[[], JobRequest],
     ) -> None:
-        storage = MockJobsStorage()
-        jobs_service = JobsService(
-            orchestrator=mock_orchestrator,
-            jobs_storage=storage,
-            jobs_config=JobsConfig(),
-        )
         user = User(name="testuser", token="")
         job_name = "test-Job_name"
         request = job_request_factory()
@@ -92,15 +105,10 @@ class TestJobsService:
     async def test_create_job__name_no_conflict_with_another_in_terminal_status(
         self,
         mock_orchestrator: MockOrchestrator,
+        jobs_service: JobsService,
         job_request_factory: Callable[[], JobRequest],
         first_job_status: JobStatus,
     ) -> None:
-        storage = MockJobsStorage()
-        jobs_service = JobsService(
-            orchestrator=mock_orchestrator,
-            jobs_storage=storage,
-            jobs_config=JobsConfig(),
-        )
         user = User(name="testuser", token="")
         job_name = "test-Job_name"
         request = job_request_factory()
@@ -127,18 +135,13 @@ class TestJobsService:
     @pytest.mark.asyncio
     async def test_create_job__clean_up_the_job_on_transaction_error__ok(
         self,
+        jobs_service: JobsService,
         mock_orchestrator: MockOrchestrator,
+        mock_jobs_storage: MockJobsStorage,
         job_request_factory: Callable[[], JobRequest],
     ) -> None:
         mock_orchestrator.raise_on_delete = False
-
-        storage = MockJobsStorage()
-        storage.fail_set_job_transaction = True
-        jobs_service = JobsService(
-            orchestrator=mock_orchestrator,
-            jobs_storage=storage,
-            jobs_config=JobsConfig(),
-        )
+        mock_jobs_storage.fail_set_job_transaction = True
 
         user = User(name="testuser", token="")
         job_name = "test-Job_name"
@@ -155,18 +158,13 @@ class TestJobsService:
     @pytest.mark.asyncio
     async def test_create_job__clean_up_the_job_on_transaction_error__fail(
         self,
+        jobs_service: JobsService,
         mock_orchestrator: MockOrchestrator,
+        mock_jobs_storage: MockJobsStorage,
         job_request_factory: Callable[[], JobRequest],
     ) -> None:
         mock_orchestrator.raise_on_delete = True
-
-        storage = MockJobsStorage()
-        storage.fail_set_job_transaction = True
-        jobs_service = JobsService(
-            orchestrator=mock_orchestrator,
-            jobs_storage=storage,
-            jobs_config=JobsConfig(),
-        )
+        mock_jobs_storage.fail_set_job_transaction = True
 
         user = User(name="testuser", token="")
         job_name = "test-Job_name"
@@ -207,37 +205,33 @@ class TestJobsService:
     @pytest.mark.asyncio
     async def test_get_all_filter_by_status(
         self,
+        jobs_service: JobsService,
         mock_orchestrator: MockOrchestrator,
+        mock_jobs_storage: MockJobsStorage,
         job_request_factory: Callable[[], JobRequest],
     ) -> None:
-        storage = MockJobsStorage()
-        service = JobsService(
-            orchestrator=mock_orchestrator,
-            jobs_storage=storage,
-            jobs_config=JobsConfig(),
-        )
         user = User(name="testuser", token="")
 
         async def create_job() -> Job:
             job_request = job_request_factory()
-            job, _ = await service.create_job(job_request=job_request, user=user)
+            job, _ = await jobs_service.create_job(job_request=job_request, user=user)
             return job
 
         job_pending = await create_job()
 
         job_running = await create_job()
-        async with storage.try_update_job(job_running.id) as record:
+        async with mock_jobs_storage.try_update_job(job_running.id) as record:
             record.status = JobStatus.RUNNING
 
         job_succeeded = await create_job()
-        async with storage.try_update_job(job_succeeded.id) as record:
+        async with mock_jobs_storage.try_update_job(job_succeeded.id) as record:
             record.status = JobStatus.SUCCEEDED
 
         job_failed = await create_job()
-        async with storage.try_update_job(job_failed.id) as record:
+        async with mock_jobs_storage.try_update_job(job_failed.id) as record:
             record.status = JobStatus.FAILED
 
-        jobs = await service.get_all_jobs()
+        jobs = await jobs_service.get_all_jobs()
         job_ids = {job.id for job in jobs}
         assert job_ids == {
             job_pending.id,
@@ -247,43 +241,39 @@ class TestJobsService:
         }
 
         job_filter = JobFilter(statuses={JobStatus.SUCCEEDED, JobStatus.RUNNING})
-        jobs = await service.get_all_jobs(job_filter)
+        jobs = await jobs_service.get_all_jobs(job_filter)
         job_ids = {job.id for job in jobs}
         assert job_ids == {job_succeeded.id, job_running.id}
 
         job_filter = JobFilter(statuses={JobStatus.FAILED, JobStatus.PENDING})
-        jobs = await service.get_all_jobs(job_filter)
+        jobs = await jobs_service.get_all_jobs(job_filter)
         job_ids = {job.id for job in jobs}
         assert job_ids == {job_failed.id, job_pending.id}
 
         job_filter = JobFilter(statuses={JobStatus.RUNNING})
-        jobs = await service.get_all_jobs(job_filter)
+        jobs = await jobs_service.get_all_jobs(job_filter)
         job_ids = {job.id for job in jobs}
         assert job_ids == {job_running.id}
 
     @pytest.mark.asyncio
     async def test_update_jobs_statuses_running(
         self,
+        jobs_service_factory: Callable[..., JobsService],
         mock_orchestrator: MockOrchestrator,
-        mock_jobs_storage: MockJobsStorage,
         job_request_factory: Callable[[], JobRequest],
     ) -> None:
-        service = JobsService(
-            orchestrator=mock_orchestrator,
-            jobs_storage=mock_jobs_storage,
-            jobs_config=JobsConfig(deletion_delay_s=60),
-        )
+        jobs_service = jobs_service_factory(deletion_delay_s=60)
 
         user = User(name="testuser", token="")
-        original_job, _ = await service.create_job(
+        original_job, _ = await jobs_service.create_job(
             job_request=job_request_factory(), user=user
         )
         assert original_job.status == JobStatus.PENDING
 
         mock_orchestrator.update_status_to_return(JobStatus.SUCCEEDED)
-        await service.update_jobs_statuses()
+        await jobs_service.update_jobs_statuses()
 
-        job = await service.get_job(job_id=original_job.id)
+        job = await jobs_service.get_job(job_id=original_job.id)
         assert job.status == JobStatus.SUCCEEDED
         assert job.is_finished
         assert job.finished_at
@@ -292,25 +282,21 @@ class TestJobsService:
     @pytest.mark.asyncio
     async def test_update_jobs_statuses_for_deletion(
         self,
+        jobs_service_factory: Callable[..., JobsService],
         mock_orchestrator: MockOrchestrator,
-        mock_jobs_storage: MockJobsStorage,
         job_request_factory: Callable[[], JobRequest],
     ) -> None:
-        service = JobsService(
-            orchestrator=mock_orchestrator,
-            jobs_storage=mock_jobs_storage,
-            jobs_config=JobsConfig(deletion_delay_s=0),
-        )
+        jobs_service = jobs_service_factory(deletion_delay_s=0)
 
         user = User(name="testuser", token="")
-        original_job, _ = await service.create_job(
+        original_job, _ = await jobs_service.create_job(
             job_request=job_request_factory(), user=user
         )
 
         mock_orchestrator.update_status_to_return(JobStatus.SUCCEEDED)
-        await service.update_jobs_statuses()
+        await jobs_service.update_jobs_statuses()
 
-        job = await service.get_job(job_id=original_job.id)
+        job = await jobs_service.get_job(job_id=original_job.id)
         assert job.status == JobStatus.SUCCEEDED
         assert job.is_finished
         assert job.finished_at
@@ -319,25 +305,21 @@ class TestJobsService:
     @pytest.mark.asyncio
     async def test_update_jobs_statuses_pending_missing(
         self,
+        jobs_service_factory: Callable[..., JobsService],
         mock_orchestrator: MockOrchestrator,
-        mock_jobs_storage: MockJobsStorage,
         job_request_factory: Callable[[], JobRequest],
     ) -> None:
         mock_orchestrator.raise_on_get_job_status = True
-        service = JobsService(
-            orchestrator=mock_orchestrator,
-            jobs_storage=mock_jobs_storage,
-            jobs_config=JobsConfig(deletion_delay_s=0),
-        )
+        jobs_service = jobs_service_factory(deletion_delay_s=0)
 
         user = User(name="testuser", token="")
-        original_job, _ = await service.create_job(
+        original_job, _ = await jobs_service.create_job(
             job_request=job_request_factory(), user=user
         )
 
-        await service.update_jobs_statuses()
+        await jobs_service.update_jobs_statuses()
 
-        job = await service.get_job(job_id=original_job.id)
+        job = await jobs_service.get_job(job_id=original_job.id)
         assert job.status == JobStatus.FAILED
         assert job.is_finished
         assert job.finished_at
@@ -351,26 +333,20 @@ class TestJobsService:
     @pytest.mark.asyncio
     async def test_update_jobs_statuses_pending_errimagepull(
         self,
+        jobs_service: JobsService,
         mock_orchestrator: MockOrchestrator,
-        mock_jobs_storage: MockJobsStorage,
         job_request_factory: Callable[[], JobRequest],
     ) -> None:
-        service = JobsService(
-            orchestrator=mock_orchestrator,
-            jobs_storage=mock_jobs_storage,
-            jobs_config=JobsConfig(),
-        )
-
         user = User(name="testuser", token="")
-        original_job, _ = await service.create_job(
+        original_job, _ = await jobs_service.create_job(
             job_request=job_request_factory(), user=user
         )
         assert original_job.status == JobStatus.PENDING
 
         mock_orchestrator.update_reason_to_return("ErrImagePull")
-        await service.update_jobs_statuses()
+        await jobs_service.update_jobs_statuses()
 
-        job = await service.get_job(job_id=original_job.id)
+        job = await jobs_service.get_job(job_id=original_job.id)
         assert job.status == JobStatus.FAILED
         assert job.is_finished
         assert job.finished_at
@@ -379,26 +355,20 @@ class TestJobsService:
     @pytest.mark.asyncio
     async def test_update_jobs_statuses_pending_imagepullbackoff(
         self,
+        jobs_service: JobsService,
         mock_orchestrator: MockOrchestrator,
-        mock_jobs_storage: MockJobsStorage,
         job_request_factory: Callable[[], JobRequest],
     ) -> None:
-        service = JobsService(
-            orchestrator=mock_orchestrator,
-            jobs_storage=mock_jobs_storage,
-            jobs_config=JobsConfig(),
-        )
-
         user = User(name="testuser", token="")
-        original_job, _ = await service.create_job(
+        original_job, _ = await jobs_service.create_job(
             job_request=job_request_factory(), user=user
         )
         assert original_job.status == JobStatus.PENDING
 
         mock_orchestrator.update_reason_to_return("ImagePullBackOff")
-        await service.update_jobs_statuses()
+        await jobs_service.update_jobs_statuses()
 
-        job = await service.get_job(job_id=original_job.id)
+        job = await jobs_service.get_job(job_id=original_job.id)
         assert job.status == JobStatus.FAILED
         assert job.is_finished
         assert job.finished_at
@@ -407,25 +377,21 @@ class TestJobsService:
     @pytest.mark.asyncio
     async def test_update_jobs_statuses_succeeded_missing(
         self,
+        jobs_service_factory: Callable[..., JobsService],
         mock_orchestrator: MockOrchestrator,
-        mock_jobs_storage: MockJobsStorage,
         job_request_factory: Callable[[], JobRequest],
     ) -> None:
-        service = JobsService(
-            orchestrator=mock_orchestrator,
-            jobs_storage=mock_jobs_storage,
-            jobs_config=JobsConfig(deletion_delay_s=0),
-        )
+        jobs_service = jobs_service_factory(deletion_delay_s=0)
 
         user = User(name="testuser", token="")
-        original_job, _ = await service.create_job(
+        original_job, _ = await jobs_service.create_job(
             job_request=job_request_factory(), user=user
         )
 
         mock_orchestrator.update_status_to_return(JobStatus.SUCCEEDED)
-        await service.update_jobs_statuses()
+        await jobs_service.update_jobs_statuses()
 
-        job = await service.get_job(job_id=original_job.id)
+        job = await jobs_service.get_job(job_id=original_job.id)
         assert job.status == JobStatus.SUCCEEDED
         assert job.is_finished
         assert job.finished_at
@@ -433,26 +399,17 @@ class TestJobsService:
 
     @pytest.mark.asyncio
     async def test_delete_running(
-        self,
-        mock_orchestrator: MockOrchestrator,
-        mock_jobs_storage: MockJobsStorage,
-        job_request_factory: Callable[[], JobRequest],
+        self, jobs_service: JobsService, job_request_factory: Callable[[], JobRequest]
     ) -> None:
-        service = JobsService(
-            orchestrator=mock_orchestrator,
-            jobs_storage=mock_jobs_storage,
-            jobs_config=JobsConfig(),
-        )
-
         user = User(name="testuser", token="")
-        original_job, _ = await service.create_job(
+        original_job, _ = await jobs_service.create_job(
             job_request=job_request_factory(), user=user
         )
         assert original_job.status == JobStatus.PENDING
 
-        await service.delete_job(original_job.id)
+        await jobs_service.delete_job(original_job.id)
 
-        job = await service.get_job(original_job.id)
+        job = await jobs_service.get_job(original_job.id)
         assert job.status == JobStatus.SUCCEEDED
         assert job.is_finished
         assert job.finished_at
@@ -470,17 +427,10 @@ class TestJobsService:
     )
     async def test_create_job_quota_allows(
         self,
-        mock_orchestrator: MockOrchestrator,
-        mock_jobs_storage: MockJobsStorage,
+        jobs_service: JobsService,
         job_request_factory: Callable[[], JobRequest],
         quota: AggregatedRunTime,
     ) -> None:
-        storage = MockJobsStorage()
-        jobs_service = JobsService(
-            orchestrator=mock_orchestrator,
-            jobs_storage=storage,
-            jobs_config=JobsConfig(),
-        )
         user = User(name="testuser", token="token", quota=quota)
         request = job_request_factory()
 
@@ -497,17 +447,10 @@ class TestJobsService:
     )
     async def test_raise_for_quota_raise_for_gpu(
         self,
-        mock_orchestrator: MockOrchestrator,
-        mock_jobs_storage: MockJobsStorage,
+        jobs_service: JobsService,
         job_request_factory: Callable[[], JobRequest],
         quota: AggregatedRunTime,
     ) -> None:
-        storage = MockJobsStorage()
-        jobs_service = JobsService(
-            orchestrator=mock_orchestrator,
-            jobs_storage=storage,
-            jobs_config=JobsConfig(),
-        )
         user = User(name="testuser", token="token", quota=quota)
         request = job_request_factory()
 
@@ -524,61 +467,12 @@ class TestJobsService:
     )
     async def test_raise_for_quota_raise_for_non_gpu(
         self,
-        mock_orchestrator: MockOrchestrator,
-        mock_jobs_storage: MockJobsStorage,
+        jobs_service: JobsService,
         job_request_factory: Callable[[], JobRequest],
         quota: AggregatedRunTime,
     ) -> None:
-        storage = MockJobsStorage()
-        jobs_service = JobsService(
-            orchestrator=mock_orchestrator,
-            jobs_storage=storage,
-            jobs_config=JobsConfig(),
-        )
         user = User(name="testuser", token="token", quota=quota)
         request = job_request_factory()
 
         with pytest.raises(NonGpuQuotaExceededError, match="non-GPU quota exceeded"):
             await jobs_service.create_job(request, user)
-
-
-class TestJobFilter:
-    def _create_job_request(self) -> JobRequest:
-        return JobRequest.create(
-            Container(
-                image="testimage", resources=ContainerResources(cpu=1, memory_mb=128)
-            )
-        )
-
-    def test_check_empty_filter(self) -> None:
-        job = JobRecord.create(request=self._create_job_request(), owner="testuser")
-        assert JobFilter().check(job)
-
-    def test_check_statuses(self) -> None:
-        job = JobRecord.create(
-            request=self._create_job_request(),
-            owner="testuser",
-            status=JobStatus.PENDING,
-        )
-        assert not JobFilter(statuses={JobStatus.RUNNING}).check(job)
-
-    def test_check_owners(self) -> None:
-        job = JobRecord.create(request=self._create_job_request(), owner="testuser")
-        assert not JobFilter(owners={"anotheruser"}).check(job)
-
-    def test_check_name(self) -> None:
-        job = JobRecord.create(
-            request=self._create_job_request(), owner="testuser", name="testname"
-        )
-        assert not JobFilter(name="anothername").check(job)
-
-    def test_check_all(self) -> None:
-        job = JobRecord.create(
-            request=self._create_job_request(),
-            status=JobStatus.PENDING,
-            owner="testuser",
-            name="testname",
-        )
-        assert JobFilter(
-            statuses={JobStatus.PENDING}, owners={"testuser"}, name="testname"
-        ).check(job)
