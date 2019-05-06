@@ -151,7 +151,9 @@ class TestClusterConfigFactory:
         assert result.password == docker_registry_config["password"]
         assert result.email == docker_registry_config["email"]
 
-    def test_valid_auth_config(self, helm_repository_config: Dict[str, str]) -> None:
+    def test_valid_helm_repository_config(
+        self, helm_repository_config: Dict[str, str]
+    ) -> None:
         factory = ClusterConfigFactory()
         result = factory.helm_repository_config_from_primitive(helm_repository_config)
 
