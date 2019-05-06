@@ -1,5 +1,5 @@
 import logging
-from typing import AsyncContextManager, Iterable, List, Optional, Sequence, Tuple
+from typing import AsyncIterator, Iterable, List, Optional, Sequence, Tuple
 
 from async_generator import asynccontextmanager
 
@@ -55,7 +55,7 @@ class JobsService:
         self._max_deletion_attempts = 3
 
     @asynccontextmanager
-    async def _get_cluster(self, name: str) -> AsyncContextManager[Cluster]:
+    async def _get_cluster(self, name: str) -> AsyncIterator[Cluster]:
         name = name or self._jobs_config.default_cluster_name
         async with self._cluster_registry.get(name) as cluster:
             yield cluster

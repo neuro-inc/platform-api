@@ -85,10 +85,6 @@ class Config:
     env_prefix: str = "NP"  # stands for Neuromation Platform
 
     @property
-    def job_deletion_delay(self) -> timedelta:
-        return self.jobs.deletion_delay
-
-    @property
     def storage(self) -> StorageConfig:
         return self.cluster.storage
 
