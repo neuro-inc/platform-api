@@ -126,7 +126,7 @@ def cluster_config(
 class TestClusterConfigFactory:
     def test_valid_cluster_config(self, cluster_config: Dict[str, Any]) -> None:
         factory = ClusterConfigFactory()
-        results = factory.from_primitive([cluster_config])
+        results = factory.cluster_configs([cluster_config])
 
         assert len(results) == 1
 
@@ -147,7 +147,7 @@ class TestClusterConfigFactory:
         self, docker_registry_config: Dict[str, str]
     ) -> None:
         factory = ClusterConfigFactory()
-        result = factory.docker_registry_from_primitive(docker_registry_config)
+        result = factory.docker_registry_config(docker_registry_config)
 
         assert result.url == URL(docker_registry_config["url"])
         assert result.user_name == docker_registry_config["user_name"]
@@ -158,7 +158,7 @@ class TestClusterConfigFactory:
         self, helm_repository_config: Dict[str, str]
     ) -> None:
         factory = ClusterConfigFactory()
-        result = factory.helm_repository_config_from_primitive(helm_repository_config)
+        result = factory.helm_repository_config(helm_repository_config)
 
         assert result.url == URL(helm_repository_config["url"])
         assert result.user_name == helm_repository_config["user_name"]
@@ -166,7 +166,7 @@ class TestClusterConfigFactory:
 
     def test_valid_auth_config(self, auth_config: Dict[str, str]) -> None:
         factory = ClusterConfigFactory()
-        result = factory.auth_config_from_primitive(auth_config)
+        result = factory.auth_config(auth_config)
 
         assert result.url == URL(auth_config["url"])
         assert result.storage_token == auth_config["storage_token"]
@@ -175,7 +175,7 @@ class TestClusterConfigFactory:
 
     def test_valid_logging_config(self, logging_config: Dict[str, Any]) -> None:
         factory = ClusterConfigFactory()
-        result = factory.logging_config_from_primitive(logging_config)
+        result = factory.logging_config(logging_config)
 
         assert result.elasticsearch.hosts == logging_config["elasticsearch"]["hosts"]
         assert result.elasticsearch.user == logging_config["elasticsearch"]["user"]
@@ -185,7 +185,7 @@ class TestClusterConfigFactory:
 
     def test_valid_ingress_config(self, ingress_config: Dict[str, str]) -> None:
         factory = ClusterConfigFactory()
-        result = factory.ingress_config_from_primitive(ingress_config)
+        result = factory.ingress_config(ingress_config)
 
         assert result.storage_url == URL(ingress_config["storage_url"])
         assert result.users_url == URL(ingress_config["users_url"])
@@ -193,7 +193,7 @@ class TestClusterConfigFactory:
 
     def test_valid_registry_config(self, registry_config: Dict[str, Any]) -> None:
         factory = ClusterConfigFactory()
-        result = factory.registry_config_from_primitive(registry_config)
+        result = factory.registry_config(registry_config)
 
         assert result.host == registry_config["host"]
         assert result.email == registry_config["email"]
@@ -201,7 +201,7 @@ class TestClusterConfigFactory:
 
     def test_valid_nfs_storage_config(self, nfs_storage_config: Dict[str, Any]) -> None:
         factory = ClusterConfigFactory()
-        result = factory.storage_config_from_primitive(nfs_storage_config)
+        result = factory.storage_config(nfs_storage_config)
 
         assert result.type == StorageType.NFS
         assert result.uri_scheme == "storage"
@@ -220,7 +220,7 @@ class TestClusterConfigFactory:
         factory = ClusterConfigFactory()
 
         with pytest.raises(ValueError, match="Missing NFS settings"):
-            factory.storage_config_from_primitive(nfs_storage_config)
+            factory.storage_config(nfs_storage_config)
 
     def test_nfs_storage_config_with_redundant_host_settings__fails(
         self, nfs_storage_config: Dict[str, Any]
@@ -230,13 +230,13 @@ class TestClusterConfigFactory:
         factory = ClusterConfigFactory()
 
         with pytest.raises(ValueError, match="Redundant host settings"):
-            factory.storage_config_from_primitive(nfs_storage_config)
+            factory.storage_config(nfs_storage_config)
 
     def test_valid_host_storage_config(
         self, host_storage_config: Dict[str, Any]
     ) -> None:
         factory = ClusterConfigFactory()
-        result = factory.storage_config_from_primitive(host_storage_config)
+        result = factory.storage_config(host_storage_config)
 
         assert result.type == StorageType.HOST
         assert result.uri_scheme == "storage"
@@ -255,7 +255,7 @@ class TestClusterConfigFactory:
         factory = ClusterConfigFactory()
 
         with pytest.raises(ValueError, match="Missing host settings"):
-            factory.storage_config_from_primitive(host_storage_config)
+            factory.storage_config(host_storage_config)
 
     def test_host_storage_config_with_redundant_nfs_settings__fails(
         self, host_storage_config: Dict[str, Any]
@@ -266,4 +266,4 @@ class TestClusterConfigFactory:
         factory = ClusterConfigFactory()
 
         with pytest.raises(ValueError, match="Redundant NFS settings"):
-            factory.storage_config_from_primitive(host_storage_config)
+            factory.storage_config(host_storage_config)

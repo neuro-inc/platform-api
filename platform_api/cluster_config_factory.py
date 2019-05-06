@@ -209,31 +209,27 @@ _cluster_config_validator = t.Dict(
 
 
 class ClusterConfigFactory:
-    def from_primitive(self, data: Sequence[Dict[str, Any]]) -> Sequence[ClusterConfig]:
-        return [self.cluster_config_from_primitive(d) for d in data]
+    def cluster_configs(
+        self, data: Sequence[Dict[str, Any]]
+    ) -> Sequence[ClusterConfig]:
+        return [self.cluster_config(d) for d in data]
 
-    def cluster_config_from_primitive(self, data: Dict[str, Any]) -> ClusterConfig:
+    def cluster_config(self, data: Dict[str, Any]) -> ClusterConfig:
         _cluster_config_validator.check(data)
         return ClusterConfig(
             name=data["name"],
             type=data["type"],
-            docker_registry=self.docker_registry_from_primitive(
-                data["docker_registry"]
-            ),
-            helm_repository=self.helm_repository_config_from_primitive(
-                data["helm_repository"]
-            ),
-            auth=self.auth_config_from_primitive(data["auth"]),
-            storage=self.storage_config_from_primitive(data["storage"]),
-            registry=self.registry_config_from_primitive(data["registry"]),
-            orchestrator=self.orchestrator_config_from_primitive(data["orchestrator"]),
-            logging=self.logging_config_from_primitive(data["logging"]),
-            ingress=self.ingress_config_from_primitive(data["ingress"]),
+            docker_registry=self.docker_registry_config(data["docker_registry"]),
+            helm_repository=self.helm_repository_config(data["helm_repository"]),
+            auth=self.auth_config(data["auth"]),
+            storage=self.storage_config(data["storage"]),
+            registry=self.registry_config(data["registry"]),
+            orchestrator=self.orchestrator_config(data["orchestrator"]),
+            logging=self.logging_config(data["logging"]),
+            ingress=self.ingress_config(data["ingress"]),
         )
 
-    def docker_registry_from_primitive(
-        self, data: Dict[str, str]
-    ) -> DockerRegistryConfig:
+    def docker_registry_config(self, data: Dict[str, str]) -> DockerRegistryConfig:
         _docker_registry_config_validator.check(data)
         return DockerRegistryConfig(
             url=URL(data["url"]),
@@ -242,15 +238,13 @@ class ClusterConfigFactory:
             email=data["email"],
         )
 
-    def helm_repository_config_from_primitive(
-        self, data: Dict[str, str]
-    ) -> HelmRepositoryConfig:
+    def helm_repository_config(self, data: Dict[str, str]) -> HelmRepositoryConfig:
         _helm_repository_config_validator.check(data)
         return HelmRepositoryConfig(
             url=URL(data["url"]), user_name=data["user_name"], token=data["token"]
         )
 
-    def auth_config_from_primitive(self, data: Dict[str, str]) -> AuthConfig:
+    def auth_config(self, data: Dict[str, str]) -> AuthConfig:
         _auth_config_validator.check(data)
         return AuthConfig(
             url=URL(data["url"]),
@@ -259,7 +253,7 @@ class ClusterConfigFactory:
             cluster_token=data["cluster_token"],
         )
 
-    def ingress_config_from_primitive(self, data: Dict[str, str]) -> IngressConfig:
+    def ingress_config(self, data: Dict[str, str]) -> IngressConfig:
         _ingress_config_validator.check(data)
         return IngressConfig(
             storage_url=URL(data["storage_url"]),
@@ -267,7 +261,7 @@ class ClusterConfigFactory:
             monitoring_url=URL(data["monitoring_url"]),
         )
 
-    def logging_config_from_primitive(self, data: Dict[str, Any]) -> LoggingConfig:
+    def logging_config(self, data: Dict[str, Any]) -> LoggingConfig:
         _logging_config_validator.check(data)
         return LoggingConfig(
             elasticsearch=self._elasticsearch_config(data["elasticsearch"])
@@ -278,9 +272,7 @@ class ClusterConfigFactory:
             hosts=data["hosts"], user=data.get("user"), password=data.get("password")
         )
 
-    def orchestrator_config_from_primitive(
-        self, data: Dict[str, Any]
-    ) -> OrchestratorConfig:
+    def orchestrator_config(self, data: Dict[str, Any]) -> OrchestratorConfig:
         _orchestrator_config_validator.check(data)
         return OrchestratorConfig(
             jobs_domain_name_template=data["jobs_domain_name_template"],
@@ -298,13 +290,13 @@ class ClusterConfigFactory:
             gpu=data.get("gpu"), gpu_model=self._gpu_model(data.get("gpu_model"))
         )
 
-    def registry_config_from_primitive(self, data: Dict[str, Any]) -> RegistryConfig:
+    def registry_config(self, data: Dict[str, Any]) -> RegistryConfig:
         _registry_config_validator.check(data)
         return RegistryConfig(
             host=data["host"], email=data["email"], is_secure=data["is_secure"]
         )
 
-    def storage_config_from_primitive(self, data: Dict[str, str]) -> StorageConfig:
+    def storage_config(self, data: Dict[str, str]) -> StorageConfig:
         _storage_config_validator.check(data)
         return StorageConfig(
             type=StorageType(data["type"]),
