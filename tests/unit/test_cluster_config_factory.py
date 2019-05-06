@@ -55,7 +55,7 @@ def ingress_config() -> Dict[str, Any]:
 @pytest.fixture
 def registry_config() -> Dict[str, Any]:
     return {
-        "host": "http://registry_host",
+        "host": "http://registry-host",
         "email": "test@email.com",
         "is_secure": True,
     }
@@ -66,6 +66,7 @@ def nfs_storage_config() -> Dict[str, Any]:
     return {
         "type": "nfs",
         "container_mount_path": "/container/path",
+        "host_mount_path": None,
         "nfs_server": "127.0.0.1",
         "nfs_export_path": "/nfs/export/path",
     }
@@ -77,6 +78,8 @@ def host_storage_config() -> Dict[str, Any]:
         "type": "host",
         "container_mount_path": "/container/path",
         "host_mount_path": "/host/mount/path",
+        "nfs_server": None,
+        "nfs_export_path": None,
     }
 
 
@@ -211,8 +214,8 @@ class TestClusterConfigFactory:
     def test_nfs_storage_config_without_nfs_settings__fails(
         self, nfs_storage_config: Dict[str, Any]
     ) -> None:
-        del nfs_storage_config["nfs_server"]
-        del nfs_storage_config["nfs_export_path"]
+        nfs_storage_config["nfs_server"] = None
+        nfs_storage_config["nfs_export_path"] = None
 
         factory = ClusterConfigFactory()
 
@@ -247,7 +250,7 @@ class TestClusterConfigFactory:
     def test_host_storage_config_without_host_settings__fails(
         self, host_storage_config: Dict[str, Any]
     ) -> None:
-        del host_storage_config["host_mount_path"]
+        host_storage_config["host_mount_path"] = None
 
         factory = ClusterConfigFactory()
 
