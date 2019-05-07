@@ -200,11 +200,7 @@ class JobsService:
         except JobsStorageException as transaction_err:
             logger.error(f"Failed to create job {job_id}: {transaction_err}")
             try:
-                async with self._get_cluster(record.cluster_name) as cluster:
-                    job = Job(
-                        orchestrator_config=cluster.orchestrator.config, record=record
-                    )
-                    await cluster.orchestrator.delete_job(job)
+                await self._delete_cluster_job(record)
             except Exception as cleanup_exc:
                 # ignore exceptions
                 logger.warning(
