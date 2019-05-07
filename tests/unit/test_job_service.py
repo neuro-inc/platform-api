@@ -1,9 +1,9 @@
-from typing import Callable
+from typing import AsyncIterator, Callable
 
 import pytest
 
-from platform_api.cluster import ClusterRegistry
-from platform_api.config import JobsConfig
+from platform_api.cluster import Cluster, ClusterRegistry
+from platform_api.config import ClusterConfig, JobsConfig
 from platform_api.orchestrator import Job, JobRequest, JobStatus
 from platform_api.orchestrator.job import AggregatedRunTime, JobStatusItem
 from platform_api.orchestrator.jobs_service import (
@@ -15,7 +15,7 @@ from platform_api.orchestrator.jobs_service import (
 from platform_api.orchestrator.jobs_storage import JobFilter
 from platform_api.user import User
 
-from .conftest import MockJobsStorage, MockOrchestrator, create_quota
+from .conftest import MockCluster, MockJobsStorage, MockOrchestrator, create_quota
 
 
 class TestJobsService:
@@ -478,3 +478,76 @@ class TestJobsService:
 
         with pytest.raises(NonGpuQuotaExceededError, match="non-GPU quota exceeded"):
             await jobs_service.create_job(request, user)
+
+
+class TestJobsServiceCluster:
+    @pytest.fixture
+    async def cluster_registry(self) -> AsyncIterator[ClusterRegistry]:
+        def _cluster_factory(config: ClusterConfig) -> Cluster:
+            orchestrator = MockOrchestrator(config.orchestrator)
+            return MockCluster(config.name, orchestrator)
+
+        async with ClusterRegistry(factory=_cluster_factory) as registry:
+            yield registry
+
+    @pytest.fixture
+    def jobs_service(
+        self, cluster_registry: ClusterRegistry, mock_jobs_storage: MockJobsStorage
+    ) -> JobsService:
+        return JobsService(
+            cluster_registry=cluster_registry,
+            jobs_storage=mock_jobs_storage,
+            jobs_config=JobsConfig(default_cluster_name="default"),
+        )
+
+    @pytest.mark.asyncio
+    async def test_create_job_missing_cluster(
+        self, jobs_service: JobsService, mock_job_request: JobRequest
+    ) -> None:
+        user = User(name="testuser", token="testtoken", cluster_name="missing")
+
+        with pytest.raises(JobsServiceException, match="Cluster 'missing' not found"):
+            await jobs_service.create_job(mock_job_request, user)
+
+    @pytest.mark.asyncio
+    async def test_create_job_user_cluster_name_fallback(
+        self, jobs_service: JobsService, mock_job_request: JobRequest
+    ) -> None:
+        user = User(name="testuser", token="testtoken")
+
+        with pytest.raises(JobsServiceException, match="Cluster 'default' not found"):
+            await jobs_service.create_job(mock_job_request, user)
+
+    @pytest.mark.asyncio
+    async def test_update_jobs_missing_cluster(
+        self,
+        cluster_registry: ClusterRegistry,
+        cluster_config: ClusterConfig,
+        mock_jobs_storage: MockJobsStorage,
+        mock_job_request: JobRequest,
+        jobs_config: JobsConfig,
+    ) -> None:
+        jobs_service = JobsService(
+            cluster_registry=cluster_registry,
+            jobs_storage=mock_jobs_storage,
+            jobs_config=jobs_config,
+        )
+        await cluster_registry.add(cluster_config)
+
+        user = User(name="testuser", token="testtoken", cluster_name="default")
+        job, _ = await jobs_service.create_job(mock_job_request, user)
+
+        status = await jobs_service.get_job_status(job.id)
+        assert status == JobStatus.PENDING
+
+        await cluster_registry.remove(cluster_config.name)
+
+        await jobs_service.update_jobs_statuses()
+
+        record = await mock_jobs_storage.get_job(job.id)
+        assert record.status_history.current == JobStatusItem.create(
+            JobStatus.FAILED,
+            reason="Missing",
+            description="Cluster 'default' not found",
+        )
+        assert record.is_deleted
