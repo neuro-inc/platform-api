@@ -1,3 +1,4 @@
+from dataclasses import replace
 from typing import AsyncIterator, Callable
 
 import pytest
@@ -519,7 +520,7 @@ class TestJobsServiceCluster:
             await jobs_service.create_job(mock_job_request, user)
 
     @pytest.mark.asyncio
-    async def test_update_jobs_missing_cluster(
+    async def test_update_pending_job_missing_cluster(
         self,
         cluster_registry: ClusterRegistry,
         cluster_config: ClusterConfig,
@@ -550,4 +551,92 @@ class TestJobsServiceCluster:
             reason="Missing",
             description="Cluster 'default' not found",
         )
+        assert record.is_deleted
+
+    @pytest.mark.asyncio
+    async def test_update_succeeded_job_missing_cluster(
+        self,
+        cluster_registry: ClusterRegistry,
+        cluster_config: ClusterConfig,
+        mock_jobs_storage: MockJobsStorage,
+        mock_job_request: JobRequest,
+        jobs_config: JobsConfig,
+    ) -> None:
+        jobs_service = JobsService(
+            cluster_registry=cluster_registry,
+            jobs_storage=mock_jobs_storage,
+            jobs_config=jobs_config,
+        )
+        await cluster_registry.add(cluster_config)
+
+        user = User(name="testuser", token="testtoken", cluster_name="default")
+        job, _ = await jobs_service.create_job(mock_job_request, user)
+
+        async with mock_jobs_storage.try_update_job(job.id) as record:
+            record.status = JobStatus.SUCCEEDED
+
+        status = await jobs_service.get_job_status(job.id)
+        assert status == JobStatus.SUCCEEDED
+
+        await cluster_registry.remove(cluster_config.name)
+
+        await jobs_service.update_jobs_statuses()
+
+        record = await mock_jobs_storage.get_job(job.id)
+        assert record.status == JobStatus.SUCCEEDED
+        assert record.is_deleted
+
+    @pytest.mark.asyncio
+    async def test_get_job_fallback(
+        self,
+        cluster_registry: ClusterRegistry,
+        cluster_config: ClusterConfig,
+        mock_jobs_storage: MockJobsStorage,
+        mock_job_request: JobRequest,
+        jobs_config: JobsConfig,
+    ) -> None:
+        jobs_service = JobsService(
+            cluster_registry=cluster_registry,
+            jobs_storage=mock_jobs_storage,
+            jobs_config=jobs_config,
+        )
+        await cluster_registry.add(cluster_config)  # "default"
+        await cluster_registry.add(replace(cluster_config, name="missing"))
+
+        user = User(name="testuser", token="testtoken", cluster_name="missing")
+        job, _ = await jobs_service.create_job(mock_job_request, user)
+
+        job = await jobs_service.get_job(job.id)
+        assert job.cluster_name == "missing"
+
+        await cluster_registry.remove("missing")
+
+        job = await jobs_service.get_job(job.id)
+        assert job.cluster_name == "missing"
+
+    @pytest.mark.asyncio
+    async def test_delete_missing_cluster(
+        self,
+        cluster_registry: ClusterRegistry,
+        cluster_config: ClusterConfig,
+        mock_jobs_storage: MockJobsStorage,
+        mock_job_request: JobRequest,
+        jobs_config: JobsConfig,
+    ) -> None:
+        jobs_service = JobsService(
+            cluster_registry=cluster_registry,
+            jobs_storage=mock_jobs_storage,
+            jobs_config=jobs_config,
+        )
+        await cluster_registry.add(cluster_config)
+
+        user = User(name="testuser", token="testtoken")
+        job, _ = await jobs_service.create_job(mock_job_request, user)
+
+        await cluster_registry.remove(cluster_config.name)
+
+        await jobs_service.delete_job(job.id)
+
+        record = await mock_jobs_storage.get_job(job.id)
+        assert record.status == JobStatus.SUCCEEDED
         assert record.is_deleted

@@ -108,7 +108,7 @@ def job_request_factory() -> Callable[[], JobRequest]:
     return factory
 
 
-@pytest.fixture(scope="function")
+@pytest.fixture
 def mock_job_request(job_request_factory: Callable[[], JobRequest]) -> JobRequest:
     return job_request_factory()
 
