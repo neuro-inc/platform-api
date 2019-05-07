@@ -4,8 +4,15 @@ from pathlib import PurePath
 from typing import AsyncIterator, Callable, Iterator, List, Optional
 
 import pytest
+from yarl import URL
 
 from platform_api.cluster import Cluster, ClusterConfig, ClusterRegistry
+from platform_api.cluster_config import (
+    ElasticsearchConfig,
+    IngressConfig,
+    LoggingConfig,
+    OrchestratorConfig,
+)
 from platform_api.config import JobsConfig, RegistryConfig, StorageConfig
 from platform_api.orchestrator import (
     Job,
@@ -29,7 +36,7 @@ from platform_api.resource import ResourcePoolType
 
 
 class MockOrchestrator(Orchestrator):
-    def __init__(self, config: KubeConfig) -> None:
+    def __init__(self, config: OrchestratorConfig) -> None:
         self._config = config
         self._mock_status_to_return = JobStatus.PENDING
         self._mock_reason_to_return = "Initializing"
@@ -38,11 +45,11 @@ class MockOrchestrator(Orchestrator):
         self._successfully_deleted_jobs: List[Job] = []
 
     @property
-    def config(self) -> KubeConfig:
+    def config(self) -> OrchestratorConfig:
         return self._config
 
     @config.setter
-    def config(self, config: KubeConfig) -> None:
+    def config(self, config: OrchestratorConfig) -> None:
         self._config = config
 
     async def start_job(self, job: Job, token: str) -> JobStatus:
@@ -141,14 +148,17 @@ def cluster_config() -> ClusterConfig:
         endpoint_url="http://k8s:1234",
         resource_pool_types=[ResourcePoolType()],
     )
-    return ClusterConfig(  # type: ignore
-        name="default", orchestrator=orchestrator_config, logging=None, ingress=None
+    return ClusterConfig(
+        name="default",
+        orchestrator=orchestrator_config,
+        logging=LoggingConfig(elasticsearch=ElasticsearchConfig(hosts=[])),
+        ingress=IngressConfig(storage_url=URL(), users_url=URL(), monitoring_url=URL()),
     )
 
 
 @pytest.fixture
 def mock_orchestrator(cluster_config: ClusterConfig) -> MockOrchestrator:
-    return MockOrchestrator(config=cluster_config.orchestrator)  # type: ignore
+    return MockOrchestrator(config=cluster_config.orchestrator)
 
 
 @pytest.fixture
