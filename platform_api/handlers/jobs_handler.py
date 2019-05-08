@@ -14,7 +14,6 @@ from yarl import URL
 
 from platform_api.config import Config, RegistryConfig, StorageConfig
 from platform_api.log import log_debug_time
-from platform_api.orchestrator import JobsService
 from platform_api.orchestrator.job import Job, JobStats
 from platform_api.orchestrator.job_request import (
     Container,
@@ -22,6 +21,7 @@ from platform_api.orchestrator.job_request import (
     JobRequest,
     JobStatus,
 )
+from platform_api.orchestrator.jobs_service import JobsService
 from platform_api.orchestrator.jobs_storage import JobFilter
 from platform_api.resource import GPUModel
 from platform_api.user import User, authorized_user, untrusted_user
