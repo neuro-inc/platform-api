@@ -235,9 +235,21 @@ class TestApi:
             assert response.status == HTTPOk.status_code
 
     @pytest.mark.asyncio
-    async def test_config(self, api: ApiConfig, client: aiohttp.ClientSession) -> None:
+    async def test_config_unauthorized(
+        self, api: ApiConfig, client: aiohttp.ClientSession
+    ) -> None:
         url = api.config_url
         async with client.get(url) as resp:
+            assert resp.status == HTTPOk.status_code
+            result = await resp.json()
+            assert result == {}
+
+    @pytest.mark.asyncio
+    async def test_config(
+        self, api: ApiConfig, client: aiohttp.ClientSession, regular_user: _User
+    ) -> None:
+        url = api.config_url
+        async with client.get(url, headers=regular_user.headers) as resp:
             assert resp.status == HTTPOk.status_code
             result = await resp.json()
             assert result == {
@@ -249,10 +261,13 @@ class TestApi:
 
     @pytest.mark.asyncio
     async def test_config_with_oauth(
-        self, api_with_oauth: ApiConfig, client: aiohttp.ClientSession
+        self,
+        api_with_oauth: ApiConfig,
+        client: aiohttp.ClientSession,
+        regular_user: _User,
     ) -> None:
         url = api_with_oauth.config_url
-        async with client.get(url) as resp:
+        async with client.get(url, headers=regular_user.headers) as resp:
             assert resp.status == HTTPOk.status_code
             result = await resp.json()
             assert result == {
