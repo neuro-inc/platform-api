@@ -3,6 +3,7 @@ import logging
 from typing import Any, AsyncIterator, Awaitable, Callable, Dict
 
 import aiohttp.web
+from aiohttp.web import HTTPUnauthorized
 from async_exit_stack import AsyncExitStack
 from neuro_auth_client import AuthClient
 from neuro_auth_client.security import AuthScheme, setup_security
@@ -17,13 +18,15 @@ from .orchestrator.jobs_poller import JobsPoller
 from .orchestrator.jobs_service import JobsService, JobsServiceException
 from .orchestrator.jobs_storage import RedisJobsStorage
 from .redis import create_redis_client
+from .user import authorized_user
 
 
 logger = logging.getLogger(__name__)
 
 
 class ApiHandler:
-    def __init__(self, config: Config):
+    def __init__(self, *, app: aiohttp.web.Application, config: Config):
+        self._app = app
         self._config = config
 
     def register(self, app: aiohttp.web.Application) -> None:
@@ -34,16 +37,30 @@ class ApiHandler:
             )
         )
 
+    @property
+    def _jobs_service(self) -> JobsService:
+        return self._app["jobs_service"]
+
     async def handle_ping(self, request: aiohttp.web.Request) -> aiohttp.web.Response:
         return aiohttp.web.Response()
 
     async def handle_config(self, request: aiohttp.web.Request) -> aiohttp.web.Response:
-        data: Dict[str, Any] = {
-            "registry_url": str(self._config.registry.url),
-            "storage_url": str(self._config.ingress.storage_url),
-            "users_url": str(self._config.ingress.users_url),
-            "monitoring_url": str(self._config.ingress.monitoring_url),
-        }
+        data: Dict[str, Any] = {}
+
+        try:
+            user = await authorized_user(request)
+            cluster_config = await self._jobs_service.get_cluster_config(user)
+            data.update(
+                {
+                    "registry_url": str(cluster_config.registry.url),
+                    "storage_url": str(cluster_config.ingress.storage_url),
+                    "users_url": str(cluster_config.ingress.users_url),
+                    "monitoring_url": str(cluster_config.ingress.monitoring_url),
+                }
+            )
+        except HTTPUnauthorized:
+            pass
+
         if self._config.oauth:
             data["auth_url"] = str(self._config.oauth.auth_url)
             data["token_url"] = str(self._config.oauth.token_url)
@@ -102,7 +119,7 @@ async def handle_exceptions(
 
 async def create_api_v1_app(config: Config) -> aiohttp.web.Application:
     api_v1_app = aiohttp.web.Application()
-    api_v1_handler = ApiHandler(config=config)
+    api_v1_handler = ApiHandler(app=api_v1_app, config=config)
     api_v1_handler.register(api_v1_app)
     return api_v1_app
 
@@ -159,6 +176,7 @@ async def create_app(config: Config) -> aiohttp.web.Application:
             jobs_poller = JobsPoller(jobs_service=jobs_service)
             await exit_stack.enter_async_context(jobs_poller)
 
+            app["api_v1_app"]["jobs_service"] = jobs_service
             app["models_app"]["jobs_service"] = jobs_service
             app["jobs_app"]["jobs_service"] = jobs_service
 
@@ -178,6 +196,7 @@ async def create_app(config: Config) -> aiohttp.web.Application:
     app.cleanup_ctx.append(_init_app)
 
     api_v1_app = await create_api_v1_app(config)
+    app["api_v1_app"] = api_v1_app
 
     models_app = await create_models_app(config=config)
     app["models_app"] = models_app

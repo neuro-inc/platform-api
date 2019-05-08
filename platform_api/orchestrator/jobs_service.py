@@ -3,7 +3,12 @@ from typing import AsyncIterator, Iterable, List, Optional, Sequence, Tuple
 
 from async_generator import asynccontextmanager
 
-from platform_api.cluster import Cluster, ClusterNotFound, ClusterRegistry
+from platform_api.cluster import (
+    Cluster,
+    ClusterConfig,
+    ClusterNotFound,
+    ClusterRegistry,
+)
 from platform_api.config import JobsConfig
 from platform_api.resource import GPUModel
 from platform_api.user import User
@@ -304,3 +309,7 @@ class JobsService:
     async def get_available_gpu_models(self, user: User) -> Sequence[GPUModel]:
         async with self._get_cluster(user.cluster_name) as cluster:
             return await cluster.orchestrator.get_available_gpu_models()
+
+    async def get_cluster_config(self, user: User) -> ClusterConfig:
+        async with self._get_cluster(user.cluster_name) as cluster:
+            return cluster.config
