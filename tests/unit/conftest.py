@@ -114,8 +114,8 @@ def mock_job_request(job_request_factory: Callable[[], JobRequest]) -> JobReques
 
 
 class MockCluster(Cluster):
-    def __init__(self, name: str, orchestrator: Orchestrator) -> None:
-        self._name = name
+    def __init__(self, config: ClusterConfig, orchestrator: Orchestrator) -> None:
+        self._config = config
         self._orchestrator = orchestrator
 
     async def init(self) -> None:
@@ -125,8 +125,8 @@ class MockCluster(Cluster):
         pass
 
     @property
-    def name(self) -> str:
-        return self._name
+    def config(self) -> ClusterConfig:
+        return self._config
 
     @property
     def orchestrator(self) -> Orchestrator:
@@ -166,7 +166,7 @@ async def cluster_registry(
     cluster_config: ClusterConfig, mock_orchestrator: MockOrchestrator
 ) -> AsyncIterator[ClusterRegistry]:
     def _cluster_factory(config: ClusterConfig) -> Cluster:
-        return MockCluster(config.name, mock_orchestrator)
+        return MockCluster(config, mock_orchestrator)
 
     async with ClusterRegistry(factory=_cluster_factory) as registry:
         await registry.add(cluster_config)
