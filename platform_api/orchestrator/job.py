@@ -9,7 +9,8 @@ import iso8601
 from neuro_auth_client.client import Quota
 from yarl import URL
 
-from ..config import OrchestratorConfig  # noqa
+from platform_api.cluster_config import OrchestratorConfig, StorageConfig
+
 from .job_request import JobRequest, JobStatus
 
 
@@ -427,6 +428,10 @@ class Job:
     @property
     def cluster_name(self) -> str:
         return self._record.cluster_name
+
+    @property
+    def storage_config(self) -> StorageConfig:
+        return self._orchestrator_config.storage
 
     def to_uri(self) -> URL:
         base_uri = "job:"
