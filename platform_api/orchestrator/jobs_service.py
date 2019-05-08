@@ -284,11 +284,10 @@ class JobsService:
 
                     record.status = JobStatus.SUCCEEDED
                     record.is_deleted = True
-
+                    return
             except JobStorageTransactionError:
                 logger.warning("Failed to mark a job %s as deleted. Retrying.", job_id)
-        else:
-            logger.warning("Failed to mark a job %s as deleted. Giving up.", job_id)
+        logger.warning("Failed to mark a job %s as deleted. Giving up.", job_id)
 
     async def get_all_jobs(self, job_filter: Optional[JobFilter] = None) -> List[Job]:
         records = await self._jobs_storage.get_all_jobs(job_filter)
