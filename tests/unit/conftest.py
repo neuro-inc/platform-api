@@ -1,11 +1,11 @@
 import asyncio
 from datetime import timedelta
-from pathlib import PurePath
 from typing import Callable, Iterator, List, Optional
 
 import pytest
 
-from platform_api.config import JobsConfig, RegistryConfig, StorageConfig
+from platform_api.cluster_config import OrchestratorConfig
+from platform_api.config import JobsConfig
 from platform_api.orchestrator import (
     Job,
     JobError,
@@ -37,12 +37,8 @@ class MockOrchestrator(Orchestrator):
         self._successfully_deleted_jobs: List[Job] = []
 
     @property
-    def config(self) -> KubeConfig:
+    def config(self) -> OrchestratorConfig:
         return self._config
-
-    @config.setter
-    def config(self, config: KubeConfig) -> None:
-        self._config = config
 
     async def start_job(self, job: Job, token: str) -> JobStatus:
         job.status = JobStatus.PENDING
@@ -107,11 +103,7 @@ def mock_job_request(job_request_factory: Callable[[], JobRequest]) -> JobReques
 
 @pytest.fixture(scope="function")
 def mock_orchestrator() -> MockOrchestrator:
-    storage_config = StorageConfig(host_mount_path=PurePath("/tmp"))
-    registry_config = RegistryConfig()
     config = KubeConfig(
-        storage=storage_config,
-        registry=registry_config,
         jobs_ingress_name="platformjobsingress",
         jobs_domain_name_template="{job_id}.jobs",
         named_jobs_domain_name_template="{job_name}-{job_owner}.jobs",

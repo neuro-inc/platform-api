@@ -5,11 +5,16 @@ from typing import Dict
 import pytest
 from yarl import URL
 
-from platform_api.cluster_config import RegistryConfig, StorageConfig, StorageType
+from platform_api.cluster_config import (
+    KubeConfig,
+    RegistryConfig,
+    StorageConfig,
+    StorageType,
+)
 from platform_api.config_factory import EnvironConfigFactory
 from platform_api.orchestrator.kube_orchestrator import (
     HostVolume,
-    KubeConfig,
+    KubeOrchestrator,
     NfsVolume,
 )
 from platform_api.resource import GKEGPUModels, ResourcePoolType
@@ -38,7 +43,7 @@ class TestStorageConfig:
         assert config.is_nfs
 
 
-class TestKubeConfig:
+class TestStorageVolume:
     def test_create_storage_volume_nfs(self) -> None:
         storage_config = StorageConfig(
             host_mount_path=PurePath("/tmp"),
@@ -48,8 +53,6 @@ class TestKubeConfig:
         )
         registry_config = RegistryConfig()
         kube_config = KubeConfig(
-            storage=storage_config,
-            registry=registry_config,
             jobs_domain_name_template="{job_id}.testdomain",
             named_jobs_domain_name_template="{job_name}-{job_owner}.testdomain",
             jobs_ingress_name="testingress",
@@ -58,7 +61,12 @@ class TestKubeConfig:
             endpoint_url="http://1.2.3.4",
             resource_pool_types=[ResourcePoolType()],
         )
-        volume = kube_config.create_storage_volume()
+        kube_orchestrator = KubeOrchestrator(
+            storage_config=storage_config,
+            registry_config=registry_config,
+            kube_config=kube_config,
+        )
+        volume = kube_orchestrator.create_storage_volume()
         assert volume == NfsVolume(
             name="storage", path=PurePath("/tmp"), server="4.3.2.1"
         )
@@ -69,8 +77,6 @@ class TestKubeConfig:
         )
         registry_config = RegistryConfig()
         kube_config = KubeConfig(
-            storage=storage_config,
-            registry=registry_config,
             jobs_domain_name_template="{job_id}.testdomain",
             named_jobs_domain_name_template="{job_name}-{job_owner}.testdomain",
             ssh_domain_name="ssh.domain",
@@ -79,7 +85,12 @@ class TestKubeConfig:
             endpoint_url="http://1.2.3.4",
             resource_pool_types=[ResourcePoolType()],
         )
-        volume = kube_config.create_storage_volume()
+        kube_orchestrator = KubeOrchestrator(
+            storage_config=storage_config,
+            registry_config=registry_config,
+            kube_config=kube_config,
+        )
+        volume = kube_orchestrator.create_storage_volume()
         assert volume == HostVolume(name="storage", path=PurePath("/tmp"))
 
 
@@ -124,7 +135,6 @@ class TestEnvironConfigFactory:
         assert config.jobs.orphaned_job_owner == "compute"
 
         assert isinstance(config.orchestrator, KubeConfig)
-        assert config.orchestrator.storage_mount_path == PurePath("/tmp")
         assert config.orchestrator.endpoint_url == "https://localhost:8443"
         assert not config.orchestrator.cert_authority_path
         assert not config.orchestrator.auth_cert_path
@@ -137,7 +147,7 @@ class TestEnvironConfigFactory:
         assert config.orchestrator.jobs_ingress_auth_name == "testingress"
         assert not config.orchestrator.is_http_ingress_secure
         assert config.orchestrator.jobs_domain_name_template == "{job_id}.jobs.domain"
-        assert config.orchestrator.ssh_ingress_domain_name == "ssh.domain"
+        assert config.orchestrator.ssh_domain_name == "ssh.domain"
 
         assert config.orchestrator.resource_pool_types == [ResourcePoolType()]
         assert config.orchestrator.node_label_gpu is None
@@ -182,7 +192,6 @@ class TestEnvironConfigFactory:
             "NP_API_PORT": "1111",
             "NP_STORAGE_HOST_MOUNT_PATH": "/tmp",
             "NP_STORAGE_CONTAINER_MOUNT_PATH": "/opt/storage",
-            "NP_STORAGE_URI_SCHEME": "something",
             "NP_K8S_API_URL": "https://localhost:8443",
             "NP_K8S_CA_PATH": "/ca_path",
             "NP_K8S_AUTH_CERT_PATH": "/cert_path",
@@ -230,7 +239,7 @@ class TestEnvironConfigFactory:
 
         assert config.storage.host_mount_path == PurePath("/tmp")
         assert config.storage.container_mount_path == PurePath("/opt/storage")
-        assert config.storage.uri_scheme == "something"
+        assert config.storage.uri_scheme == "storage"
 
         assert config.ingress.storage_url == URL("https://neu.ro/api/v1/storage")
         assert config.ingress.users_url == URL("https://neu.ro/api/v1/users")
@@ -241,7 +250,6 @@ class TestEnvironConfigFactory:
         assert config.jobs.orphaned_job_owner == "servicename"
 
         assert isinstance(config.orchestrator, KubeConfig)
-        assert config.orchestrator.storage_mount_path == PurePath("/tmp")
         assert config.orchestrator.endpoint_url == "https://localhost:8443"
         assert config.orchestrator.cert_authority_path == "/ca_path"
         assert config.orchestrator.auth_cert_path == "/cert_path"
@@ -254,7 +262,7 @@ class TestEnvironConfigFactory:
         assert config.orchestrator.jobs_ingress_auth_name == "testingressauth"
         assert config.orchestrator.is_http_ingress_secure
         assert config.orchestrator.jobs_domain_name_template == "{job_id}.jobs.domain"
-        assert config.orchestrator.ssh_ingress_domain_name == "ssh.domain"
+        assert config.orchestrator.ssh_domain_name == "ssh.domain"
 
         assert config.orchestrator.resource_pool_types == [
             ResourcePoolType(),

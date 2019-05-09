@@ -4,13 +4,13 @@ import pathlib
 import weakref
 from contextlib import suppress
 from functools import partial
-from typing import Any, Awaitable, Container, Dict, MutableSet, Optional, Tuple, cast
+from typing import Any, Awaitable, Container, Dict, MutableSet, Optional, Tuple
 
 import asyncssh
 from asyncssh.stream import SSHReader, SSHServerSession, SSHStreamSession, SSHWriter
 
 from platform_api.config_factory import EnvironConfigFactory
-from platform_api.orchestrator.kube_orchestrator import KubeConfig, KubeOrchestrator
+from platform_api.orchestrator.kube_orchestrator import KubeOrchestrator
 
 
 logger = logging.getLogger(__name__)
@@ -192,18 +192,23 @@ def init_logging() -> None:
 
 
 async def run() -> None:
-    config = EnvironConfigFactory().create_ssh()
-    logging.info("Loaded config: %r", config)
+    config_factory = EnvironConfigFactory()
+    cluster_config = config_factory.create_cluster()
+    logging.info("Loaded cluster config: %r", cluster_config)
+    ssh_config = config_factory.create_ssh()
+    logging.info("Loaded ssh config: %r", ssh_config)
 
     logger.info("Initializing Orchestrator")
     async with KubeOrchestrator(
-        config=cast(KubeConfig, config.orchestrator)  # noqa
+        storage_config=cluster_config.storage,
+        registry_config=cluster_config.registry,
+        kube_config=cluster_config.orchestrator,
     ) as orchestrator:
         srv = SSHServer(
-            config.server.host,
-            config.server.port,
+            ssh_config.server.host,
+            ssh_config.server.port,
             orchestrator,
-            config.server.ssh_host_keys,
+            ssh_config.server.ssh_host_keys,
         )
         await srv.start()
         print("Start SSH server on localhost:8022")

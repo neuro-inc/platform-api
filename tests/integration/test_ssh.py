@@ -2,18 +2,19 @@ import asyncio
 import io
 from pathlib import Path
 from textwrap import dedent
-from typing import AsyncIterator, Awaitable, Callable, NamedTuple, Optional, cast
+from typing import AsyncIterator, Awaitable, Callable, NamedTuple, Optional
 
 import aiodocker.utils
 import asyncssh
 import pytest
 from aioelasticsearch import Elasticsearch
 
+from platform_api.cluster_config import KubeConfig
 from platform_api.config import Config
 from platform_api.orchestrator.job import JobRequest
 from platform_api.orchestrator.job_request import Container, ContainerResources
 from platform_api.orchestrator.kube_client import KubeClient, PodDescriptor
-from platform_api.orchestrator.kube_orchestrator import KubeConfig, KubeOrchestrator
+from platform_api.orchestrator.kube_orchestrator import KubeOrchestrator
 from platform_api.ssh.server import SSHServer
 
 
@@ -46,7 +47,10 @@ async def ssh_server(
     config: Config, es_client: Optional[Elasticsearch]
 ) -> AsyncIterator[SSHServer]:
     async with KubeOrchestrator(
-        config=cast(KubeConfig, config.orchestrator), es_client=es_client  # noqa
+        storage_config=config.storage,
+        registry_config=config.registry,
+        kube_config=config.orchestrator,
+        es_client=es_client,  # noqa
     ) as orchestrator:
         srv = SSHServer("0.0.0.0", 8022, orchestrator)
         await srv.start()
@@ -101,6 +105,7 @@ async def test_simple(
     ssh_server: SSHServer,
     kube_client: KubeClient,
     kube_config: KubeConfig,
+    kube_orchestrator: KubeOrchestrator,
     delete_pod_later: Callable[[PodDescriptor], Awaitable[None]],
 ) -> None:
     container = Container(
@@ -110,7 +115,7 @@ async def test_simple(
     )
     job_request = JobRequest.create(container)
     pod = PodDescriptor.from_job_request(
-        kube_config.create_storage_volume(), job_request
+        kube_orchestrator.create_storage_volume(), job_request
     )
     await delete_pod_later(pod)
     await kube_client.create_pod(pod)
@@ -129,6 +134,7 @@ async def test_shell(
     ssh_server: SSHServer,
     kube_client: KubeClient,
     kube_config: KubeConfig,
+    kube_orchestrator: KubeOrchestrator,
     delete_pod_later: Callable[[PodDescriptor], Awaitable[None]],
 ) -> None:
     container = Container(
@@ -138,7 +144,7 @@ async def test_shell(
     )
     job_request = JobRequest.create(container)
     pod = PodDescriptor.from_job_request(
-        kube_config.create_storage_volume(), job_request
+        kube_orchestrator.create_storage_volume(), job_request
     )
     await delete_pod_later(pod)
     await kube_client.create_pod(pod)
@@ -160,6 +166,7 @@ async def test_shell_with_args(
     ssh_server: SSHServer,
     kube_client: KubeClient,
     kube_config: KubeConfig,
+    kube_orchestrator: KubeOrchestrator,
     delete_pod_later: Callable[[PodDescriptor], Awaitable[None]],
 ) -> None:
     container = Container(
@@ -169,7 +176,7 @@ async def test_shell_with_args(
     )
     job_request = JobRequest.create(container)
     pod = PodDescriptor.from_job_request(
-        kube_config.create_storage_volume(), job_request
+        kube_orchestrator.create_storage_volume(), job_request
     )
     await delete_pod_later(pod)
     await kube_client.create_pod(pod)
@@ -187,6 +194,7 @@ async def test_exit_code(
     ssh_server: SSHServer,
     kube_client: KubeClient,
     kube_config: KubeConfig,
+    kube_orchestrator: KubeOrchestrator,
     delete_pod_later: Callable[[PodDescriptor], Awaitable[None]],
 ) -> None:
     container = Container(
@@ -196,7 +204,7 @@ async def test_exit_code(
     )
     job_request = JobRequest.create(container)
     pod = PodDescriptor.from_job_request(
-        kube_config.create_storage_volume(), job_request
+        kube_orchestrator.create_storage_volume(), job_request
     )
     await delete_pod_later(pod)
     await kube_client.create_pod(pod)
@@ -217,6 +225,7 @@ async def test_pass_env(
     ssh_server: SSHServer,
     kube_client: KubeClient,
     kube_config: KubeConfig,
+    kube_orchestrator: KubeOrchestrator,
     delete_pod_later: Callable[[PodDescriptor], Awaitable[None]],
 ) -> None:
     container = Container(
@@ -226,7 +235,7 @@ async def test_pass_env(
     )
     job_request = JobRequest.create(container)
     pod = PodDescriptor.from_job_request(
-        kube_config.create_storage_volume(), job_request
+        kube_orchestrator.create_storage_volume(), job_request
     )
     await delete_pod_later(pod)
     await kube_client.create_pod(pod)
@@ -246,6 +255,7 @@ async def test_sftp_basic(
     ssh_server: SSHServer,
     kube_client: KubeClient,
     kube_config: KubeConfig,
+    kube_orchestrator: KubeOrchestrator,
     delete_pod_later: Callable[[PodDescriptor], Awaitable[None]],
     tmpdir: Path,
 ) -> None:
@@ -256,7 +266,7 @@ async def test_sftp_basic(
     )
     job_request = JobRequest.create(container)
     pod = PodDescriptor.from_job_request(
-        kube_config.create_storage_volume(), job_request
+        kube_orchestrator.create_storage_volume(), job_request
     )
     await delete_pod_later(pod)
     await kube_client.create_pod(pod)

@@ -1,12 +1,15 @@
 import asyncio
 import logging
-from dataclasses import dataclass
-from pathlib import PurePath
 from typing import Any, Dict, Iterable, List, Optional, Union
 
 from aioelasticsearch import Elasticsearch
 
-from platform_api.cluster_config import OrchestratorConfig
+from platform_api.cluster_config import (
+    KubeConfig,
+    OrchestratorConfig,
+    RegistryConfig,
+    StorageConfig,
+)
 
 from .base import LogReader, Orchestrator, Telemetry
 from .job import Job, JobStatusItem
@@ -18,7 +21,6 @@ from .kube_client import (
     HostVolume,
     IngressRule,
     KubeClient,
-    KubeClientAuthType,
     NfsVolume,
     NodeAffinity,
     NodePreferredSchedulingTerm,
@@ -85,81 +87,44 @@ class JobStatusItemFactory:
         )
 
 
-@dataclass(frozen=True)
-class KubeConfig(OrchestratorConfig):
-    jobs_ingress_name: str = ""
-    jobs_ingress_auth_name: str = ""
-
-    endpoint_url: str = ""
-    cert_authority_path: Optional[str] = None
-
-    auth_type: KubeClientAuthType = KubeClientAuthType.CERTIFICATE
-    auth_cert_path: Optional[str] = None
-    auth_cert_key_path: Optional[str] = None
-    token_path: Optional[str] = None
-
-    namespace: str = "default"
-
-    client_conn_timeout_s: int = 300
-    client_read_timeout_s: int = 300
-    client_conn_pool_size: int = 100
-
-    storage_volume_name: str = "storage"
-
-    node_label_gpu: Optional[str] = None
-    node_label_preemptible: Optional[str] = None
-
-    def __post_init__(self) -> None:
-        if not all((self.jobs_ingress_name, self.endpoint_url)):
-            raise ValueError("Missing required settings")
-
-    @property
-    def storage_mount_path(self) -> PurePath:
-        return self.storage.host_mount_path
-
-    @property
-    def ssh_ingress_domain_name(self) -> str:
-        return self.ssh_domain_name
-
-    def create_storage_volume(self) -> Volume:
-        if self.storage.is_nfs:
-            return NfsVolume(  # type: ignore # noqa
-                name=self.storage_volume_name,
-                server=self.storage.nfs_server,
-                path=self.storage.nfs_export_path,
-            )
-        return HostVolume(name=self.storage_volume_name, path=self.storage_mount_path)
-
-
 def convert_pod_status_to_job_status(pod_status: PodStatus) -> JobStatusItem:
     return JobStatusItemFactory(pod_status).create()
 
 
 class KubeOrchestrator(Orchestrator):
     def __init__(
-        self, *, config: KubeConfig, es_client: Optional[Elasticsearch] = None
+        self,
+        *,
+        storage_config: StorageConfig,
+        registry_config: RegistryConfig,
+        kube_config: OrchestratorConfig,
+        es_client: Optional[Elasticsearch] = None,
     ) -> None:
         self._loop = asyncio.get_event_loop()
 
-        self._config = config
+        assert isinstance(kube_config, KubeConfig)
+
+        self._storage_config = storage_config
+        self._registry_config = registry_config
+        self._kube_config: KubeConfig = kube_config
 
         # TODO (A Danshyn 05/21/18): think of the namespace life-time;
         # should we ensure it does exist before continuing
 
         self._client = KubeClient(
-            base_url=config.endpoint_url,
-            cert_authority_path=config.cert_authority_path,
-            auth_type=config.auth_type,
-            auth_cert_path=config.auth_cert_path,
-            auth_cert_key_path=config.auth_cert_key_path,
-            token_path=config.token_path,
-            namespace=config.namespace,
-            conn_timeout_s=config.client_conn_timeout_s,
-            read_timeout_s=config.client_read_timeout_s,
-            conn_pool_size=config.client_conn_pool_size,
+            base_url=kube_config.endpoint_url,
+            cert_authority_path=kube_config.cert_authority_path,
+            auth_type=kube_config.auth_type,
+            auth_cert_path=kube_config.auth_cert_path,
+            auth_cert_key_path=kube_config.auth_cert_key_path,
+            token_path=kube_config.token_path,
+            namespace=kube_config.namespace,
+            conn_timeout_s=kube_config.client_conn_timeout_s,
+            read_timeout_s=kube_config.client_read_timeout_s,
+            conn_pool_size=kube_config.client_conn_pool_size,
         )
 
-        self._storage_volume = self._config.create_storage_volume()
+        self._storage_volume = self.create_storage_volume()
 
         # TODO (A Danshyn 11/16/18): make this configurable at some point
         self._docker_secret_name_prefix = "neurouser-"
@@ -167,8 +132,8 @@ class KubeOrchestrator(Orchestrator):
         self._es_client = es_client
 
     @property
-    def config(self) -> KubeConfig:
-        return self._config
+    def config(self) -> OrchestratorConfig:
+        return self._kube_config
 
     async def __aenter__(self) -> "KubeOrchestrator":
         await self._client.init()
@@ -178,9 +143,21 @@ class KubeOrchestrator(Orchestrator):
         if self._client:
             await self._client.close()
 
+    def create_storage_volume(self) -> Volume:
+        if self._storage_config.is_nfs:
+            return NfsVolume(  # type: ignore # noqa
+                name=self._kube_config.storage_volume_name,
+                server=self._storage_config.nfs_server,
+                path=self._storage_config.nfs_export_path,
+            )
+        return HostVolume(  # type: ignore # noqa
+            name=self._kube_config.storage_volume_name,
+            path=self._storage_config.host_mount_path,
+        )
+
     def _get_pod_namespace(self, descriptor: PodDescriptor) -> str:
         # TODO (A Yushkovskiy 31.10.2018): get namespace for the pod, not statically
-        return self._config.namespace
+        return self._kube_config.namespace
 
     def _get_user_resource_name(self, job: Job) -> str:
         return (self._docker_secret_name_prefix + job.owner).lower()
@@ -191,11 +168,11 @@ class KubeOrchestrator(Orchestrator):
     async def _create_docker_secret(self, job: Job, token: str) -> DockerRegistrySecret:
         secret = DockerRegistrySecret(
             name=self._get_docker_secret_name(job),
-            namespace=self._config.namespace,
+            namespace=self._kube_config.namespace,
             username=job.owner,
             password=token,
-            email=self._config.registry.email,
-            registry_server=self._config.registry.host,
+            email=self._registry_config.email,
+            registry_server=self._registry_config.host,
         )
         await self._client.update_docker_secret(secret, create_non_existent=True)
         return secret
@@ -205,7 +182,7 @@ class KubeOrchestrator(Orchestrator):
         pod_labels = self._get_user_pod_labels(job)
         try:
             await self._client.create_default_network_policy(
-                name, pod_labels, namespace_name=self._config.namespace
+                name, pod_labels, namespace_name=self._kube_config.namespace
             )
             logger.info(f"Created default network policy for user '{job.owner}'")
         except AlreadyExistsException:
@@ -262,10 +239,10 @@ class KubeOrchestrator(Orchestrator):
 
     def _get_pod_tolerations(self, job: Job) -> List[Toleration]:
         tolerations = []
-        if self._config.node_label_preemptible and job.is_preemptible:
+        if self._kube_config.node_label_preemptible and job.is_preemptible:
             tolerations.append(
                 Toleration(
-                    key=self._config.node_label_preemptible,
+                    key=self._kube_config.node_label_preemptible,
                     operator="Exists",
                     effect="NoSchedule",
                 )
@@ -273,7 +250,7 @@ class KubeOrchestrator(Orchestrator):
         return tolerations
 
     def _get_pod_node_affinity(self, job: Job) -> Optional[NodeAffinity]:
-        if not self._config.node_label_preemptible:
+        if not self._kube_config.node_label_preemptible:
             return None
 
         required_terms = []
@@ -283,7 +260,7 @@ class KubeOrchestrator(Orchestrator):
             node_selector_term = NodeSelectorTerm(
                 [
                     NodeSelectorRequirement.create_exists(
-                        self._config.node_label_preemptible
+                        self._kube_config.node_label_preemptible
                     )
                 ]
             )
@@ -295,7 +272,7 @@ class KubeOrchestrator(Orchestrator):
             node_selector_term = NodeSelectorTerm(
                 [
                     NodeSelectorRequirement.create_does_not_exist(
-                        self._config.node_label_preemptible
+                        self._kube_config.node_label_preemptible
                     )
                 ]
             )
@@ -307,14 +284,14 @@ class KubeOrchestrator(Orchestrator):
         container = job.request.container
         selector: Dict[str, str] = {}
 
-        if not self._config.node_label_gpu:
+        if not self._kube_config.node_label_gpu:
             return selector
 
         pool_types = await self.get_resource_pool_types()
         for pool_type in pool_types:
             if container.resources.check_fit_into_pool_type(pool_type):
                 if pool_type.gpu_model:
-                    selector[self._config.node_label_gpu] = pool_type.gpu_model.id
+                    selector[self._kube_config.node_label_gpu] = pool_type.gpu_model.id
                 break
 
         return selector
@@ -394,7 +371,9 @@ class KubeOrchestrator(Orchestrator):
         return pod_status
 
     async def _check_pod_is_schedulable(self, pod_name: str) -> bool:
-        pod_events = await self._client.get_pod_events(pod_name, self._config.namespace)
+        pod_events = await self._client.get_pod_events(
+            pod_name, self._kube_config.namespace
+        )
         if not pod_events:
             return True
 
@@ -427,7 +406,7 @@ class KubeOrchestrator(Orchestrator):
             )
         return ElasticsearchLogReader(
             es_client=self._es_client,
-            namespace_name=self._config.namespace,
+            namespace_name=self._kube_config.namespace,
             pod_name=pod_name,
             container_name=pod_name,
         )
@@ -436,7 +415,7 @@ class KubeOrchestrator(Orchestrator):
         pod_name = self._get_job_pod_name(job)
         return KubeTelemetry(
             self._client,
-            namespace_name=self._config.namespace,
+            namespace_name=self._kube_config.namespace,
             pod_name=pod_name,
             container_name=pod_name,
         )
@@ -483,6 +462,6 @@ class KubeOrchestrator(Orchestrator):
                 logger.exception(f"Failed to remove ingress rule {host}")
 
     def _get_ingress_name(self, job: Job) -> str:
-        if job.requires_http_auth and self._config.jobs_ingress_auth_name:
-            return self._config.jobs_ingress_auth_name
-        return self._config.jobs_ingress_name
+        if job.requires_http_auth and self._kube_config.jobs_ingress_auth_name:
+            return self._kube_config.jobs_ingress_auth_name
+        return self._kube_config.jobs_ingress_name
