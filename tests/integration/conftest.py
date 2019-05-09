@@ -266,7 +266,7 @@ async def kube_orchestrator_nfs(
     orchestrator = KubeOrchestrator(
         storage_config=storage_config_nfs,
         registry_config=registry_config,
-        kube_config=kube_config,
+        kube_config=kube_config_nfs,
         es_client=es_client,
     )
     async with orchestrator:
