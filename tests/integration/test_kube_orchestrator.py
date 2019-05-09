@@ -21,7 +21,7 @@ from async_timeout import timeout
 from elasticsearch import AuthenticationException
 from yarl import URL
 
-from platform_api.cluster_config import KubeConfig, StorageConfig
+from platform_api.cluster_config import StorageConfig
 from platform_api.elasticsearch import (
     Elasticsearch,
     ElasticsearchConfig,
@@ -58,7 +58,7 @@ from platform_api.orchestrator.kube_client import (
     Service,
     StatusException,
 )
-from platform_api.orchestrator.kube_orchestrator import JobStatusItemFactory
+from platform_api.orchestrator.kube_orchestrator import JobStatusItemFactory, KubeConfig
 from platform_api.orchestrator.logs import ElasticsearchLogReader, PodContainerLogReader
 from tests.conftest import random_str
 

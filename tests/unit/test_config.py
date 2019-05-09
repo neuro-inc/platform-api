@@ -5,15 +5,11 @@ from typing import Dict
 import pytest
 from yarl import URL
 
-from platform_api.cluster_config import (
-    KubeConfig,
-    RegistryConfig,
-    StorageConfig,
-    StorageType,
-)
+from platform_api.cluster_config import RegistryConfig, StorageConfig, StorageType
 from platform_api.config_factory import EnvironConfigFactory
 from platform_api.orchestrator.kube_orchestrator import (
     HostVolume,
+    KubeConfig,
     KubeOrchestrator,
     NfsVolume,
 )

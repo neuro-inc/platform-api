@@ -6,8 +6,6 @@ from yarl import URL
 
 from .cluster_config import (
     ClusterConfig,
-    KubeClientAuthType,
-    KubeConfig,
     LoggingConfig,
     RegistryConfig,
     StorageConfig,
@@ -27,6 +25,8 @@ from .config import (
     SSHServerConfig,
 )
 from .elasticsearch import ElasticsearchConfig
+from .orchestrator.kube_client import KubeClientAuthType
+from .orchestrator.kube_orchestrator import KubeConfig
 from .redis import RedisConfig
 from .resource import GKEGPUModels, ResourcePoolType
 

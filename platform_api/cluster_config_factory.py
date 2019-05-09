@@ -7,14 +7,14 @@ from yarl import URL
 from .cluster_config import (
     ClusterConfig,
     IngressConfig,
-    KubeClientAuthType,
-    KubeConfig,
     LoggingConfig,
     OrchestratorConfig,
     RegistryConfig,
     StorageConfig,
 )
 from .elasticsearch import ElasticsearchConfig
+from .orchestrator.kube_client import KubeClientAuthType
+from .orchestrator.kube_orchestrator import KubeConfig
 from .resource import GKEGPUModels, GPUModel, ResourcePoolType
 
 

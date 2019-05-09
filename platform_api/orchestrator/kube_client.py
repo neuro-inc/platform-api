@@ -33,7 +33,6 @@ from async_timeout import timeout
 from multidict import MultiDict
 from yarl import URL
 
-from platform_api.cluster_config import KubeClientAuthType
 from platform_api.utils.stream import Stream
 
 from .job_request import (
@@ -935,6 +934,12 @@ class PodExec:
 
     async def read_error(self) -> bytes:
         return await self._channels[ExecChannel.ERROR].read()
+
+
+class KubeClientAuthType(str, Enum):
+    NONE = "none"
+    TOKEN = "token"
+    CERTIFICATE = "certificate"
 
 
 @dataclass(frozen=True)

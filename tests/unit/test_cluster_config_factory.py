@@ -4,8 +4,10 @@ from typing import Any, Dict
 import pytest
 from yarl import URL
 
-from platform_api.cluster_config import KubeClientAuthType, KubeConfig, StorageType
+from platform_api.cluster_config import StorageType
 from platform_api.cluster_config_factory import ClusterConfigFactory
+from platform_api.orchestrator.kube_client import KubeClientAuthType
+from platform_api.orchestrator.kube_orchestrator import KubeConfig
 from platform_api.resource import GKEGPUModels
 
 
