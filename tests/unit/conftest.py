@@ -1,17 +1,24 @@
 import asyncio
 from datetime import timedelta
-from typing import Callable, Iterator, List, Optional
+from pathlib import PurePath
+from typing import AsyncIterator, Callable, Iterator, List, Optional
 
 import pytest
+from yarl import URL
 
-from platform_api.cluster_config import OrchestratorConfig
-from platform_api.config import JobsConfig
+from platform_api.cluster import Cluster, ClusterConfig, ClusterRegistry
+from platform_api.cluster_config import (
+    ElasticsearchConfig,
+    IngressConfig,
+    LoggingConfig,
+    OrchestratorConfig,
+)
+from platform_api.config import JobsConfig, RegistryConfig, StorageConfig
 from platform_api.orchestrator import (
     Job,
     JobError,
     JobNotFoundException,
     JobRequest,
-    JobsService,
     JobStatus,
     KubeConfig,
     LogReader,
@@ -20,6 +27,7 @@ from platform_api.orchestrator import (
 )
 from platform_api.orchestrator.job import AggregatedRunTime, JobRecord, JobStatusItem
 from platform_api.orchestrator.job_request import Container, ContainerResources
+from platform_api.orchestrator.jobs_service import JobsService
 from platform_api.orchestrator.jobs_storage import (
     InMemoryJobsStorage,
     JobStorageTransactionError,
@@ -28,7 +36,7 @@ from platform_api.resource import ResourcePoolType
 
 
 class MockOrchestrator(Orchestrator):
-    def __init__(self, config: KubeConfig) -> None:
+    def __init__(self, config: OrchestratorConfig) -> None:
         self._config = config
         self._mock_status_to_return = JobStatus.PENDING
         self._mock_reason_to_return = "Initializing"
@@ -96,14 +104,36 @@ def job_request_factory() -> Callable[[], JobRequest]:
     return factory
 
 
-@pytest.fixture(scope="function")
+@pytest.fixture
 def mock_job_request(job_request_factory: Callable[[], JobRequest]) -> JobRequest:
     return job_request_factory()
 
 
-@pytest.fixture(scope="function")
-def mock_orchestrator() -> MockOrchestrator:
-    config = KubeConfig(
+class MockCluster(Cluster):
+    def __init__(self, name: str, orchestrator: Orchestrator) -> None:
+        self._name = name
+        self._orchestrator = orchestrator
+
+    async def init(self) -> None:
+        pass
+
+    async def close(self) -> None:
+        pass
+
+    @property
+    def name(self) -> str:
+        return self._name
+
+    @property
+    def orchestrator(self) -> Orchestrator:
+        return self._orchestrator
+
+
+@pytest.fixture
+def cluster_config() -> ClusterConfig:
+    storage_config = StorageConfig(host_mount_path=PurePath("/tmp"))
+    registry_config = RegistryConfig()
+    orchestrator_config = KubeConfig(
         jobs_ingress_name="platformjobsingress",
         jobs_domain_name_template="{job_id}.jobs",
         named_jobs_domain_name_template="{job_name}-{job_owner}.jobs",
@@ -112,7 +142,31 @@ def mock_orchestrator() -> MockOrchestrator:
         endpoint_url="http://k8s:1234",
         resource_pool_types=[ResourcePoolType()],
     )
-    return MockOrchestrator(config=config)
+    return ClusterConfig(
+        name="default",
+        storage=storage_config,
+        registry=registry_config,
+        orchestrator=orchestrator_config,
+        logging=LoggingConfig(elasticsearch=ElasticsearchConfig(hosts=[])),
+        ingress=IngressConfig(storage_url=URL(), users_url=URL(), monitoring_url=URL()),
+    )
+
+
+@pytest.fixture
+def mock_orchestrator(cluster_config: ClusterConfig) -> MockOrchestrator:
+    return MockOrchestrator(config=cluster_config.orchestrator)
+
+
+@pytest.fixture
+async def cluster_registry(
+    cluster_config: ClusterConfig, mock_orchestrator: MockOrchestrator
+) -> AsyncIterator[ClusterRegistry]:
+    def _cluster_factory(config: ClusterConfig) -> Cluster:
+        return MockCluster(config.name, mock_orchestrator)
+
+    async with ClusterRegistry(factory=_cluster_factory) as registry:
+        await registry.add(cluster_config)
+        yield registry
 
 
 @pytest.fixture
@@ -127,12 +181,12 @@ def jobs_config() -> JobsConfig:
 
 @pytest.fixture
 def jobs_service(
-    mock_orchestrator: MockOrchestrator,
+    cluster_registry: ClusterRegistry,
     mock_jobs_storage: MockJobsStorage,
     jobs_config: JobsConfig,
 ) -> JobsService:
     return JobsService(
-        orchestrator=mock_orchestrator,
+        cluster_registry=cluster_registry,
         jobs_storage=mock_jobs_storage,
         jobs_config=jobs_config,
     )

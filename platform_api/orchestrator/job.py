@@ -195,6 +195,7 @@ class JobRecord:
     request: JobRequest
     owner: str
     status_history: JobStatusHistory
+    cluster_name: str = ""
     name: Optional[str] = None
     is_preemptible: bool = False
     is_deleted: bool = False
@@ -300,6 +301,7 @@ class JobRecord:
         result = {
             "id": self.id,
             "owner": self.owner,
+            "cluster_name": self.cluster_name,
             "request": self.request.to_primitive(),
             "status": self.status.value,
             "statuses": statuses,
@@ -327,7 +329,8 @@ class JobRecord:
             request=request,
             status_history=status_history,
             is_deleted=payload.get("is_deleted", False),
-            owner=payload.get("owner", "") or orphaned_job_owner,
+            owner=payload.get("owner") or orphaned_job_owner,
+            cluster_name=payload.get("cluster_name") or cls.cluster_name,
             name=payload.get("name"),
             is_preemptible=payload.get("is_preemptible", False),
             internal_hostname=payload.get("internal_hostname", None),
@@ -420,6 +423,10 @@ class Job:
     @property
     def owner(self) -> str:
         return self._owner
+
+    @property
+    def cluster_name(self) -> str:
+        return self._record.cluster_name
 
     def to_uri(self) -> URL:
         base_uri = "job:"
