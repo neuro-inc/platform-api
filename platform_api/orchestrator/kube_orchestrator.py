@@ -88,10 +88,6 @@ class JobStatusItemFactory:
         )
 
 
-def convert_pod_status_to_job_status(pod_status: PodStatus) -> JobStatusItem:
-    return JobStatusItemFactory(pod_status).create()
-
-
 @dataclass(frozen=True)
 class KubeConfig(OrchestratorConfig):
     jobs_ingress_name: str = ""
@@ -119,6 +115,10 @@ class KubeConfig(OrchestratorConfig):
     def __post_init__(self) -> None:
         if not all((self.jobs_ingress_name, self.endpoint_url)):
             raise ValueError("Missing required settings")
+
+
+def convert_pod_status_to_job_status(pod_status: PodStatus) -> JobStatusItem:
+    return JobStatusItemFactory(pod_status).create()
 
 
 class KubeOrchestrator(Orchestrator):

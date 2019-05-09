@@ -936,7 +936,7 @@ class PodExec:
         return await self._channels[ExecChannel.ERROR].read()
 
 
-class KubeClientAuthType(str, Enum):
+class KubeClientAuthType(str, enum.Enum):
     NONE = "none"
     TOKEN = "token"
     CERTIFICATE = "certificate"
