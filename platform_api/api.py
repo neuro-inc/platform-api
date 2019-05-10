@@ -142,7 +142,9 @@ def create_cluster(config: ClusterConfig) -> Cluster:
     return KubeCluster(config)
 
 
-async def create_app(config: Config) -> aiohttp.web.Application:
+async def create_app(
+    config: Config, cluster_config: ClusterConfig
+) -> aiohttp.web.Application:
     app = aiohttp.web.Application(middlewares=[handle_exceptions])
     app["config"] = config
 
@@ -159,7 +161,7 @@ async def create_app(config: Config) -> aiohttp.web.Application:
                 ClusterRegistry(factory=create_cluster)
             )
 
-            await cluster_registry.add(config.cluster)
+            await cluster_registry.add(cluster_config)
 
             logger.info("Initializing JobsStorage")
             jobs_storage = RedisJobsStorage(redis_client)
@@ -213,9 +215,10 @@ async def create_app(config: Config) -> aiohttp.web.Application:
 def main() -> None:
     init_logging()
     config = EnvironConfigFactory().create()
+    cluster_config = EnvironConfigFactory().create_cluster()
     logging.info("Loaded config: %r", config)
 
     loop = asyncio.get_event_loop()
 
-    app = loop.run_until_complete(create_app(config))
+    app = loop.run_until_complete(create_app(config, cluster_config))
     aiohttp.web.run_app(app, host=config.server.host, port=config.server.port)
