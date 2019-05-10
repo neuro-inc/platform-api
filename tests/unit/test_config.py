@@ -253,7 +253,7 @@ class TestEnvironConfigFactory:
 
         assert isinstance(config.orchestrator, KubeConfig)
         assert config.orchestrator.endpoint_url == "https://localhost:8443"
-        assert config.orchestrator.cert_authority_path is not None
+        assert config.orchestrator.cert_authority_path is None  # field is disabled
         assert config.orchestrator.cert_authority_data == CA_TEXT.encode("utf-8")
         assert config.orchestrator.auth_cert_path == "/cert_path"
         assert config.orchestrator.auth_cert_key_path == "/cert_key_path"

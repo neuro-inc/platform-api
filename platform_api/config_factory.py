@@ -160,7 +160,7 @@ class EnvironConfigFactory:
 
         return KubeConfig(
             endpoint_url=endpoint_url,
-            cert_authority_path=self._environ.get("NP_K8S_CA_PATH"),
+            cert_authority_path=None,
             cert_authority_data=ca_data,
             auth_type=auth_type,
             auth_cert_path=self._environ.get("NP_K8S_AUTH_CERT_PATH"),

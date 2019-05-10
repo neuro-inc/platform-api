@@ -995,7 +995,7 @@ class KubeClient:
         if not self._is_ssl:
             return None
         ssl_context = ssl.create_default_context(  # type: ignore
-            cafile=self._cert_authority_path, cadata=self._cert_authority_data
+            cadata=self._cert_authority_data
         )
         if self._auth_type == KubeClientAuthType.CERTIFICATE:
             ssl_context.load_cert_chain(  # type: ignore
