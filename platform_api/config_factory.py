@@ -4,8 +4,6 @@ from typing import Any, Dict, List, Optional
 
 from yarl import URL
 
-from platform_api.utils.file import read_certificate_file
-
 from .cluster_config import (
     ClusterConfig,
     LoggingConfig,
@@ -31,6 +29,7 @@ from .orchestrator.kube_client import KubeClientAuthType
 from .orchestrator.kube_orchestrator import KubeConfig
 from .redis import RedisConfig
 from .resource import GKEGPUModels, ResourcePoolType
+from .utils.file import read_certificate_file
 
 
 class EnvironConfigFactory:
