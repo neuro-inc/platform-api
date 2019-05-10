@@ -95,7 +95,6 @@ class KubeConfig(OrchestratorConfig):
 
     endpoint_url: str = ""
     ca_data_pem: Optional[str] = None
-    cert_authority_path: Optional[str] = None  # TODO: redundant field, to be removed
 
     auth_type: KubeClientAuthType = KubeClientAuthType.CERTIFICATE
     auth_cert_path: Optional[str] = None
@@ -145,7 +144,6 @@ class KubeOrchestrator(Orchestrator):
         self._client = KubeClient(
             base_url=config.endpoint_url,
             ca_data_pem=config.ca_data_pem,
-            cert_authority_path=config.cert_authority_path,
             auth_type=config.auth_type,
             auth_cert_path=config.auth_cert_path,
             auth_cert_key_path=config.auth_cert_key_path,

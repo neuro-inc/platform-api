@@ -188,7 +188,6 @@ async def kube_client(kube_config: KubeConfig) -> AsyncIterator[MyKubeClient]:
     # TODO (A Danshyn 06/06/18): create a factory method
     client = MyKubeClient(
         base_url=config.endpoint_url,
-        cert_authority_path=config.cert_authority_path,
         auth_type=config.auth_type,
         auth_cert_path=config.auth_cert_path,
         auth_cert_key_path=config.auth_cert_key_path,
@@ -224,9 +223,19 @@ async def kube_config_nfs(
 ) -> KubeConfig:
     cluster = kube_config_cluster_payload
     user = kube_config_user_payload
-    kube_config = KubeConfig(
+    storage_config = StorageConfig.create_nfs(
+        host_mount_path=PurePath("/var/storage"),
+        nfs_server=nfs_volume_server,
+        nfs_export_path=PurePath("/var/storage"),
+    )
+    registry_config = RegistryConfig()
+    ca_path = cluster["certificate-authority"]
+    ca_data = read_certificate_file(ca_path) if ca_path else None
+    return KubeConfig(
+        storage=storage_config,
+        registry=registry_config,
         endpoint_url=cluster["server"],
-        cert_authority_path=cluster["certificate-authority"],
+        ca_data_pem=ca_data,
         auth_cert_path=user["client-certificate"],
         auth_cert_key_path=user["client-key"],
         jobs_ingress_name="platformjobsingress",

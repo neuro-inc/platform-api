@@ -35,7 +35,7 @@ from platform_api.orchestrator.jobs_storage import (
 from platform_api.resource import ResourcePoolType
 
 
-CA_TEXT = "this-is-certificate-authority-public-key"
+CA_DATA_PEM = "this-is-certificate-authority-public-key"
 
 
 class MockOrchestrator(Orchestrator):
@@ -114,7 +114,7 @@ def job_request_factory() -> Callable[[], JobRequest]:
 @pytest.fixture()
 def cert_authority_path(tmp_path: Path) -> str:
     ca_path = tmp_path / "ca.crt"
-    ca_path.write_text(CA_TEXT)
+    ca_path.write_text(CA_DATA_PEM)
     return str(ca_path)
 
 

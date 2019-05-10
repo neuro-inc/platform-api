@@ -959,7 +959,6 @@ class KubeClient:
         base_url: str,
         namespace: str,
         ca_data_pem: Optional[str] = None,
-        cert_authority_path: Optional[str] = None,
         auth_type: KubeClientAuthType = KubeClientAuthType.CERTIFICATE,
         auth_cert_path: Optional[str] = None,
         auth_cert_key_path: Optional[str] = None,
@@ -972,8 +971,6 @@ class KubeClient:
         self._namespace = namespace
 
         self._ca_data_pem = ca_data_pem
-        # TODO (artem May-10): `self._cert_authority_path` is redundant, to be removed:
-        self._cert_authority_path = cert_authority_path
 
         self._auth_type = auth_type
         self._auth_cert_path = auth_cert_path
