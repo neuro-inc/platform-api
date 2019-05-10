@@ -48,10 +48,6 @@ class MockOrchestrator(Orchestrator):
     def config(self) -> OrchestratorConfig:
         return self._config
 
-    @config.setter
-    def config(self, config: OrchestratorConfig) -> None:
-        self._config = config
-
     async def start_job(self, job: Job, token: str) -> JobStatus:
         job.status = JobStatus.PENDING
         return JobStatus.PENDING
@@ -138,8 +134,6 @@ def cluster_config() -> ClusterConfig:
     storage_config = StorageConfig(host_mount_path=PurePath("/tmp"))
     registry_config = RegistryConfig()
     orchestrator_config = KubeConfig(
-        storage=storage_config,
-        registry=registry_config,
         jobs_ingress_name="platformjobsingress",
         jobs_domain_name_template="{job_id}.jobs",
         named_jobs_domain_name_template="{job_name}-{job_owner}.jobs",
@@ -150,6 +144,8 @@ def cluster_config() -> ClusterConfig:
     )
     return ClusterConfig(
         name="default",
+        storage=storage_config,
+        registry=registry_config,
         orchestrator=orchestrator_config,
         logging=LoggingConfig(elasticsearch=ElasticsearchConfig(hosts=[])),
         ingress=IngressConfig(storage_url=URL(), users_url=URL(), monitoring_url=URL()),

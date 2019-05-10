@@ -25,8 +25,8 @@ from .config import (
     SSHServerConfig,
 )
 from .elasticsearch import ElasticsearchConfig
-from .orchestrator import KubeConfig
-from .orchestrator.kube_orchestrator import KubeClientAuthType
+from .orchestrator.kube_client import KubeClientAuthType
+from .orchestrator.kube_orchestrator import KubeConfig
 from .redis import RedisConfig
 from .resource import GKEGPUModels, ResourcePoolType
 
@@ -56,12 +56,11 @@ class EnvironConfigFactory:
         )
 
     def create_cluster(self) -> ClusterConfig:
-        orchestrator = self.create_orchestrator(
-            self.create_storage(), self.create_registry()
-        )
         return ClusterConfig(
             name=JobsConfig.default_cluster_name,
-            orchestrator=orchestrator,
+            storage=self.create_storage(),
+            registry=self.create_registry(),
+            orchestrator=self.create_orchestrator(),
             ingress=self.create_ingress(),
             logging=self.create_logging(),
         )
@@ -83,7 +82,7 @@ class EnvironConfigFactory:
         return SSHConfig(
             server=self.create_ssh_server(),
             storage=storage,
-            orchestrator=self.create_orchestrator(storage, registry),
+            orchestrator=self.create_orchestrator(),
             database=database,
             auth=auth,
             registry=registry,
@@ -129,9 +128,6 @@ class EnvironConfigFactory:
         storage_type = StorageType(
             self._environ.get("NP_STORAGE_TYPE", StorageConfig.type)
         )
-        uri_scheme = self._environ.get(
-            "NP_STORAGE_URI_SCHEME", StorageConfig.uri_scheme
-        )
         kwargs: Dict[str, Any] = {}
         if storage_type == StorageType.NFS:
             kwargs.update(
@@ -142,13 +138,10 @@ class EnvironConfigFactory:
             host_mount_path=host_mount_path,
             container_mount_path=container_mount_path,
             type=storage_type,
-            uri_scheme=uri_scheme,
-            **kwargs,
+            **kwargs
         )
 
-    def create_orchestrator(
-        self, storage: StorageConfig, registry: RegistryConfig
-    ) -> KubeConfig:
+    def create_orchestrator(self) -> KubeConfig:
         endpoint_url = self._environ["NP_K8S_API_URL"]
         auth_type = KubeClientAuthType(
             self._environ.get("NP_K8S_AUTH_TYPE", KubeConfig.auth_type.value)
@@ -162,8 +155,6 @@ class EnvironConfigFactory:
         )
 
         return KubeConfig(
-            storage=storage,
-            registry=registry,
             endpoint_url=endpoint_url,
             cert_authority_path=self._environ.get("NP_K8S_CA_PATH"),
             auth_type=auth_type,
