@@ -1,7 +1,7 @@
 from dataclasses import dataclass
 from enum import Enum
 from pathlib import PurePath
-from typing import Optional, Sequence
+from typing import Any, Optional, Sequence
 
 from yarl import URL
 
@@ -16,7 +16,7 @@ class StorageType(str, Enum):
 
 @dataclass(frozen=True)
 class StorageConfig:
-    host_mount_path: Optional[PurePath] = None
+    host_mount_path: PurePath
     container_mount_path: PurePath = PurePath("/var/storage")
 
     type: StorageType = StorageType.HOST
@@ -45,28 +45,18 @@ class StorageConfig:
     @classmethod
     def create_nfs(
         cls,
-        *,
+        host_mount_path: PurePath,
         container_mount_path: PurePath = container_mount_path,
-        host_mount_path: Optional[PurePath] = host_mount_path,
-        nfs_server: str,
-        nfs_export_path: PurePath,
+        *args: Any,
+        **kwargs: Any,
     ) -> "StorageConfig":
         return cls(
-            host_mount_path,
-            container_mount_path,
-            StorageType.NFS,
-            nfs_server=nfs_server,
-            nfs_export_path=nfs_export_path,
+            host_mount_path, container_mount_path, StorageType.NFS, *args, **kwargs
         )
 
     @classmethod
-    def create_host(
-        cls,
-        *,
-        container_mount_path: PurePath = container_mount_path,
-        host_mount_path: PurePath,
-    ) -> "StorageConfig":
-        return cls(host_mount_path, container_mount_path, StorageType.HOST)
+    def create_host(cls, *args: Any, **kwargs: Any) -> "StorageConfig":
+        return cls(*args, **kwargs)
 
 
 @dataclass(frozen=True)
@@ -83,6 +73,9 @@ class RegistryConfig:
 
 @dataclass(frozen=True)
 class OrchestratorConfig:
+    storage: StorageConfig
+    registry: RegistryConfig
+
     jobs_domain_name_template: str
     named_jobs_domain_name_template: str
 
@@ -109,8 +102,15 @@ class IngressConfig:
 @dataclass(frozen=True)
 class ClusterConfig:
     name: str
-    storage: StorageConfig
-    registry: RegistryConfig
+
     orchestrator: OrchestratorConfig
     logging: LoggingConfig
     ingress: IngressConfig
+
+    @property
+    def storage(self) -> StorageConfig:
+        return self.orchestrator.storage
+
+    @property
+    def registry(self) -> RegistryConfig:
+        return self.orchestrator.registry
