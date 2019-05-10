@@ -425,18 +425,6 @@ class TestJobRecord:
         assert record.finished_at
         assert record.should_be_deleted(delay=timedelta(0))
 
-    def test_from_primitive_too_long_name_is_removed(
-        self, mock_orchestrator: MockOrchestrator, job_request: JobRequest
-    ) -> None:
-        record_deserialized = JobRecord.from_primitive(
-            {
-                "request": job_request.to_primitive(),
-                "status": "pending",
-                "name": "a" * 100,
-            }
-        )
-        assert record_deserialized.name is None
-
 
 class TestJob:
     @pytest.fixture
@@ -515,6 +503,7 @@ class TestJob:
         # Let job name to be of max length as it's allowed:
         job_name = "b" * (max_dns_label_len - len(owner_name) - delim_len)
         job = Job(
+            storage_config=mock_orchestrator.storage_config,
             orchestrator_config=mock_orchestrator.config,
             job_request=job_request,
             owner=owner_name,
@@ -535,6 +524,7 @@ class TestJob:
         # Let job name to be 1 char longer than it's allowed:
         job_name = "b" * (max_dns_label_len - len(owner_name) - delim_len + 1)
         job = Job(
+            storage_config=mock_orchestrator.storage_config,
             orchestrator_config=mock_orchestrator.config,
             job_request=job_request,
             owner=owner_name,
@@ -554,7 +544,7 @@ class TestJob:
         )
         assert job.name == "test-job-name-123"
 
-    def test_job_has_gpu_False(
+    def test_job_has_gpu_false(
         self, mock_orchestrator: MockOrchestrator, job_request: JobRequest
     ) -> None:
         job = Job(
@@ -1255,11 +1245,11 @@ class TestUser:
             ),
         ],
     )
-    def test_user_has_quota_true(self, quota: Quota) -> None:
+    def test_user_has_quota_true(self, quota: AggregatedRunTime) -> None:
         user = User(name="name", token="token", quota=quota)
         assert user.has_quota()
 
-    def test_user_has_quota_False(self) -> None:
+    def test_user_has_quota_false(self) -> None:
         quota = AggregatedRunTime(
             total_gpu_run_time_delta=self.q_max, total_non_gpu_run_time_delta=self.q_max
         )
