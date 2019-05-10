@@ -23,8 +23,8 @@ class _TestCluster(Cluster):
         pass
 
     @property
-    def name(self) -> str:
-        return self._config.name
+    def config(self) -> ClusterConfig:
+        return self._config
 
     @property
     def orchestrator(self) -> Orchestrator:

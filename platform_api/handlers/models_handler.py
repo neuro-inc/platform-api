@@ -63,7 +63,6 @@ class ModelsHandler:
     def __init__(self, *, app: aiohttp.web.Application, config: Config) -> None:
         self._app = app
         self._config = config
-        self._storage_config = config.storage
 
         self._model_response_validator = create_model_response_validator()
 
@@ -123,14 +122,16 @@ class ModelsHandler:
         model_request_validator = await self._create_model_request_validator(user)
         request_payload = model_request_validator.check(orig_payload)
 
+        cluster_config = await self._jobs_service.get_cluster_config(user)
+
         container = ModelRequest(
             request_payload,
-            storage_config=self._storage_config,
+            storage_config=cluster_config.storage,
             env_prefix=self._config.env_prefix,
         ).to_container()
 
         permissions = infer_permissions_from_container(
-            user, container, self._config.registry
+            user, container, cluster_config.registry
         )
         logger.info("Checking whether %r has %r", user, permissions)
         await check_permission(request, permissions[0].action, permissions)

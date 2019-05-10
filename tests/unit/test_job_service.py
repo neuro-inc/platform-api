@@ -486,7 +486,7 @@ class TestJobsServiceCluster:
     async def cluster_registry(self) -> AsyncIterator[ClusterRegistry]:
         def _cluster_factory(config: ClusterConfig) -> Cluster:
             orchestrator = MockOrchestrator(config.orchestrator)
-            return MockCluster(config.name, orchestrator)
+            return MockCluster(config, orchestrator)
 
         async with ClusterRegistry(factory=_cluster_factory) as registry:
             yield registry
