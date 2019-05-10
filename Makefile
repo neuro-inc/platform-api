@@ -63,6 +63,7 @@ run_api_k8s_container:
 	    -e NP_STORAGE_HOST_MOUNT_PATH=/tmp \
 	    -e NP_K8S_API_URL=https://$$(minikube ip):8443 \
 	    -e NP_K8S_CA_PATH=$$HOME/.minikube/ca.crt \
+	    -e NP_K8S_CA_DATA=`cat $$HOME/.minikube/ca.crt | base64` \ \
 	    -e NP_K8S_AUTH_CERT_PATH=$$HOME/.minikube/client.crt \
 	    -e NP_K8S_AUTH_CERT_KEY_PATH=$$HOME/.minikube/client.key \
 	    $(IMAGE_K8S):latest
