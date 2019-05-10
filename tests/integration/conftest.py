@@ -106,7 +106,8 @@ async def kube_config(
         ssh_domain_name="ssh.platform.neuromation.io",
         ssh_auth_domain_name="ssh-auth.platform.neuromation.io",
         endpoint_url=cluster["server"],
-        ca_data_pem=read_certificate_file(cluster["certificate-authority"]),
+        cert_authority_data_pem=read_certificate_file(cluster["certificate-authority"]),
+        cert_authority_path=None,  # disable so that `cert_authority_data_pem` works
         auth_cert_path=user["client-certificate"],
         auth_cert_key_path=user["client-key"],
         node_label_gpu="gpu",
@@ -185,7 +186,8 @@ async def kube_client(kube_config: KubeConfig) -> AsyncIterator[MyKubeClient]:
     client = MyKubeClient(
         base_url=config.endpoint_url,
         auth_type=config.auth_type,
-        ca_data_pem=config.ca_data_pem,
+        cert_authority_data_pem=config.cert_authority_data_pem,
+        cert_authority_path=config.cert_authority_path,
         auth_cert_path=config.auth_cert_path,
         auth_cert_key_path=config.auth_cert_key_path,
         namespace=config.namespace,
@@ -224,7 +226,8 @@ async def kube_config_nfs(
     ca_data = read_certificate_file(ca_path) if ca_path else None
     kube_config = KubeConfig(
         endpoint_url=cluster["server"],
-        ca_data_pem=ca_data,
+        cert_authority_data_pem=ca_data,
+        cert_authority_path=None,  # disable so that `cert_authority_data_pem` works
         auth_cert_path=user["client-certificate"],
         auth_cert_key_path=user["client-key"],
         jobs_ingress_name="platformjobsingress",

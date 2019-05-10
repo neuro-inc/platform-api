@@ -133,7 +133,8 @@ class TestEnvironConfigFactory:
 
         assert isinstance(config.orchestrator, KubeConfig)
         assert config.orchestrator.endpoint_url == "https://localhost:8443"
-        assert not config.orchestrator.ca_data_pem
+        assert not config.orchestrator.cert_authority_data_pem
+        assert not config.orchestrator.cert_authority_path
         assert not config.orchestrator.auth_cert_path
         assert not config.orchestrator.auth_cert_key_path
         assert config.orchestrator.namespace == "default"
@@ -248,7 +249,8 @@ class TestEnvironConfigFactory:
 
         assert isinstance(config.orchestrator, KubeConfig)
         assert config.orchestrator.endpoint_url == "https://localhost:8443"
-        assert config.orchestrator.ca_data_pem == CA_DATA_PEM
+        assert config.orchestrator.cert_authority_data_pem == CA_DATA_PEM
+        assert config.orchestrator.cert_authority_path is None  # disabled
         assert config.orchestrator.auth_cert_path == "/cert_path"
         assert config.orchestrator.auth_cert_key_path == "/cert_key_path"
         assert config.orchestrator.namespace == "other"
