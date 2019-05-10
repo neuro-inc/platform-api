@@ -6,6 +6,7 @@ from yarl import URL
 
 from .cluster_config import (
     ClusterConfig,
+    IngressConfig,
     LoggingConfig,
     RegistryConfig,
     StorageConfig,
@@ -15,7 +16,6 @@ from .config import (
     AuthConfig,
     Config,
     DatabaseConfig,
-    IngressConfig,
     JobsConfig,
     OAuthConfig,
     PlatformConfig,
@@ -47,7 +47,6 @@ class EnvironConfigFactory:
         jobs = self.create_jobs(orphaned_job_owner=auth.service_name)
         return Config(
             server=self.create_server(),
-            cluster=self.create_cluster(),
             database=self.create_database(),
             auth=auth,
             oauth=self.try_create_oauth(),
