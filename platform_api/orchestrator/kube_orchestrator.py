@@ -142,16 +142,16 @@ class KubeOrchestrator(Orchestrator):
         # should we ensure it does exist before continuing
 
         self._client = KubeClient(
-            base_url=config.endpoint_url,
-            ca_data_pem=config.ca_data_pem,
-            auth_type=config.auth_type,
-            auth_cert_path=config.auth_cert_path,
-            auth_cert_key_path=config.auth_cert_key_path,
-            token_path=config.token_path,
-            namespace=config.namespace,
-            conn_timeout_s=config.client_conn_timeout_s,
-            read_timeout_s=config.client_read_timeout_s,
-            conn_pool_size=config.client_conn_pool_size,
+            base_url=kube_config.endpoint_url,
+            ca_data_pem=kube_config.ca_data_pem,
+            auth_type=kube_config.auth_type,
+            auth_cert_path=kube_config.auth_cert_path,
+            auth_cert_key_path=kube_config.auth_cert_key_path,
+            token_path=kube_config.token_path,
+            namespace=kube_config.namespace,
+            conn_timeout_s=kube_config.client_conn_timeout_s,
+            read_timeout_s=kube_config.client_read_timeout_s,
+            conn_pool_size=kube_config.client_conn_pool_size,
         )
 
         self._storage_volume = self.create_storage_volume()

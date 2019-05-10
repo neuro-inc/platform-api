@@ -98,11 +98,7 @@ async def kube_config(
 ) -> KubeConfig:
     cluster = kube_config_cluster_payload
     user = kube_config_user_payload
-    storage_config = StorageConfig.create_host(host_mount_path=PurePath("/tmp"))
-    registry_config = RegistryConfig()
-    return KubeConfig(
-        storage=storage_config,
-        registry=registry_config,
+    kube_config = KubeConfig(
         jobs_ingress_name="platformjobsingress",
         jobs_ingress_auth_name="platformjobsingressauth",
         jobs_domain_name_template="{job_id}.jobs.neu.ro",
@@ -189,6 +185,7 @@ async def kube_client(kube_config: KubeConfig) -> AsyncIterator[MyKubeClient]:
     client = MyKubeClient(
         base_url=config.endpoint_url,
         auth_type=config.auth_type,
+        ca_data_pem=config.ca_data_pem,
         auth_cert_path=config.auth_cert_path,
         auth_cert_key_path=config.auth_cert_key_path,
         namespace=config.namespace,
@@ -223,17 +220,9 @@ async def kube_config_nfs(
 ) -> KubeConfig:
     cluster = kube_config_cluster_payload
     user = kube_config_user_payload
-    storage_config = StorageConfig.create_nfs(
-        host_mount_path=PurePath("/var/storage"),
-        nfs_server=nfs_volume_server,
-        nfs_export_path=PurePath("/var/storage"),
-    )
-    registry_config = RegistryConfig()
     ca_path = cluster["certificate-authority"]
     ca_data = read_certificate_file(ca_path) if ca_path else None
-    return KubeConfig(
-        storage=storage_config,
-        registry=registry_config,
+    kube_config = KubeConfig(
         endpoint_url=cluster["server"],
         ca_data_pem=ca_data,
         auth_cert_path=user["client-certificate"],
