@@ -9,7 +9,7 @@ import asyncssh
 import pytest
 from aioelasticsearch import Elasticsearch
 
-from platform_api.config import Config
+from platform_api.cluster import ClusterConfig
 from platform_api.orchestrator.job import JobRequest
 from platform_api.orchestrator.job_request import Container, ContainerResources
 from platform_api.orchestrator.kube_client import KubeClient, PodDescriptor
@@ -43,10 +43,11 @@ class ApiConfig(NamedTuple):
 
 @pytest.fixture
 async def ssh_server(
-    config: Config, es_client: Optional[Elasticsearch]
+    cluster_config: ClusterConfig, es_client: Optional[Elasticsearch]
 ) -> AsyncIterator[SSHServer]:
     async with KubeOrchestrator(
-        config=cast(KubeConfig, config.orchestrator), es_client=es_client  # noqa
+        config=cast(KubeConfig, cluster_config.orchestrator),  # noqa
+        es_client=es_client,  # noqa
     ) as orchestrator:
         srv = SSHServer("0.0.0.0", 8022, orchestrator)
         await srv.start()

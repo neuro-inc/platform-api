@@ -111,37 +111,37 @@ class TestEnvironConfigFactory:
             "NP_API_URL": "https://neu.ro/api/v1",
         }
         config = EnvironConfigFactory(environ=environ).create()
+        cluster = EnvironConfigFactory(environ=environ).create_cluster()
 
         assert config.server.host == "0.0.0.0"
         assert config.server.port == 8080
 
-        assert config.storage.host_mount_path == PurePath("/tmp")
-        assert config.storage.container_mount_path == PurePath("/var/storage")
-        assert config.storage.uri_scheme == "storage"
+        assert cluster.storage.host_mount_path == PurePath("/tmp")
+        assert cluster.storage.container_mount_path == PurePath("/var/storage")
+        assert cluster.storage.uri_scheme == "storage"
 
         assert config.jobs.deletion_delay_s == 86400
         assert config.jobs.deletion_delay == timedelta(days=1)
         assert config.jobs.orphaned_job_owner == "compute"
 
-        assert isinstance(config.orchestrator, KubeConfig)
-        assert config.orchestrator.storage_mount_path == PurePath("/tmp")
-        assert config.orchestrator.endpoint_url == "https://localhost:8443"
-        assert not config.orchestrator.cert_authority_path
-        assert not config.orchestrator.auth_cert_path
-        assert not config.orchestrator.auth_cert_key_path
-        assert config.orchestrator.namespace == "default"
-        assert config.orchestrator.client_conn_timeout_s == 300
-        assert config.orchestrator.client_read_timeout_s == 300
-        assert config.orchestrator.client_conn_pool_size == 100
-        assert config.orchestrator.jobs_ingress_name == "testingress"
-        assert config.orchestrator.jobs_ingress_auth_name == "testingress"
-        assert not config.orchestrator.is_http_ingress_secure
-        assert config.orchestrator.jobs_domain_name_template == "{job_id}.jobs.domain"
-        assert config.orchestrator.ssh_ingress_domain_name == "ssh.domain"
-
-        assert config.orchestrator.resource_pool_types == [ResourcePoolType()]
-        assert config.orchestrator.node_label_gpu is None
-        assert config.orchestrator.node_label_preemptible is None
+        assert isinstance(cluster.orchestrator, KubeConfig)
+        assert cluster.orchestrator.storage_mount_path == PurePath("/tmp")
+        assert cluster.orchestrator.endpoint_url == "https://localhost:8443"
+        assert not cluster.orchestrator.cert_authority_path
+        assert not cluster.orchestrator.auth_cert_path
+        assert not cluster.orchestrator.auth_cert_key_path
+        assert cluster.orchestrator.namespace == "default"
+        assert cluster.orchestrator.client_conn_timeout_s == 300
+        assert cluster.orchestrator.client_read_timeout_s == 300
+        assert cluster.orchestrator.client_conn_pool_size == 100
+        assert cluster.orchestrator.jobs_ingress_name == "testingress"
+        assert cluster.orchestrator.jobs_ingress_auth_name == "testingress"
+        assert not cluster.orchestrator.is_http_ingress_secure
+        assert cluster.orchestrator.jobs_domain_name_template == "{job_id}.jobs.domain"
+        assert cluster.orchestrator.ssh_ingress_domain_name == "ssh.domain"
+        assert cluster.orchestrator.resource_pool_types == [ResourcePoolType()]
+        assert cluster.orchestrator.node_label_gpu is None
+        assert cluster.orchestrator.node_label_preemptible is None
 
         assert config.database.redis is None
 
@@ -157,11 +157,11 @@ class TestEnvironConfigFactory:
         assert config.oauth.audience == "https://platform-url"
         assert config.oauth.success_redirect_url == URL("https://platform-default-url")
 
-        assert config.registry.host == "registry.dev.neuromation.io"
+        assert cluster.registry.host == "registry.dev.neuromation.io"
 
-        assert config.logging.elasticsearch.hosts == ["http://es"]
-        assert config.logging.elasticsearch.user == "test-user"
-        assert config.logging.elasticsearch.password == "test-password"
+        assert cluster.logging.elasticsearch.hosts == ["http://es"]
+        assert cluster.logging.elasticsearch.user == "test-user"
+        assert cluster.logging.elasticsearch.password == "test-password"
 
     def test_create_value_error_invalid_port(self) -> None:
         environ = {
@@ -224,45 +224,46 @@ class TestEnvironConfigFactory:
             "NP_API_URL": "https://neu.ro/api/v1",
         }
         config = EnvironConfigFactory(environ=environ).create()
+        cluster = EnvironConfigFactory(environ=environ).create_cluster()
 
         assert config.server.host == "0.0.0.0"
         assert config.server.port == 1111
 
-        assert config.storage.host_mount_path == PurePath("/tmp")
-        assert config.storage.container_mount_path == PurePath("/opt/storage")
-        assert config.storage.uri_scheme == "something"
+        assert cluster.storage.host_mount_path == PurePath("/tmp")
+        assert cluster.storage.container_mount_path == PurePath("/opt/storage")
+        assert cluster.storage.uri_scheme == "something"
 
-        assert config.ingress.storage_url == URL("https://neu.ro/api/v1/storage")
-        assert config.ingress.users_url == URL("https://neu.ro/api/v1/users")
-        assert config.ingress.monitoring_url == URL("https://neu.ro/api/v1/jobs")
+        assert cluster.ingress.storage_url == URL("https://neu.ro/api/v1/storage")
+        assert cluster.ingress.users_url == URL("https://neu.ro/api/v1/users")
+        assert cluster.ingress.monitoring_url == URL("https://neu.ro/api/v1/jobs")
 
         assert config.jobs.deletion_delay_s == 3600
         assert config.jobs.deletion_delay == timedelta(seconds=3600)
         assert config.jobs.orphaned_job_owner == "servicename"
 
-        assert isinstance(config.orchestrator, KubeConfig)
-        assert config.orchestrator.storage_mount_path == PurePath("/tmp")
-        assert config.orchestrator.endpoint_url == "https://localhost:8443"
-        assert config.orchestrator.cert_authority_path == "/ca_path"
-        assert config.orchestrator.auth_cert_path == "/cert_path"
-        assert config.orchestrator.auth_cert_key_path == "/cert_key_path"
-        assert config.orchestrator.namespace == "other"
-        assert config.orchestrator.client_conn_timeout_s == 111
-        assert config.orchestrator.client_read_timeout_s == 222
-        assert config.orchestrator.client_conn_pool_size == 333
-        assert config.orchestrator.jobs_ingress_name == "testingress"
-        assert config.orchestrator.jobs_ingress_auth_name == "testingressauth"
-        assert config.orchestrator.is_http_ingress_secure
-        assert config.orchestrator.jobs_domain_name_template == "{job_id}.jobs.domain"
-        assert config.orchestrator.ssh_ingress_domain_name == "ssh.domain"
+        assert isinstance(cluster.orchestrator, KubeConfig)
+        assert cluster.orchestrator.storage_mount_path == PurePath("/tmp")
+        assert cluster.orchestrator.endpoint_url == "https://localhost:8443"
+        assert cluster.orchestrator.cert_authority_path == "/ca_path"
+        assert cluster.orchestrator.auth_cert_path == "/cert_path"
+        assert cluster.orchestrator.auth_cert_key_path == "/cert_key_path"
+        assert cluster.orchestrator.namespace == "other"
+        assert cluster.orchestrator.client_conn_timeout_s == 111
+        assert cluster.orchestrator.client_read_timeout_s == 222
+        assert cluster.orchestrator.client_conn_pool_size == 333
+        assert cluster.orchestrator.jobs_ingress_name == "testingress"
+        assert cluster.orchestrator.jobs_ingress_auth_name == "testingressauth"
+        assert cluster.orchestrator.is_http_ingress_secure
+        assert cluster.orchestrator.jobs_domain_name_template == "{job_id}.jobs.domain"
+        assert cluster.orchestrator.ssh_ingress_domain_name == "ssh.domain"
 
-        assert config.orchestrator.resource_pool_types == [
+        assert cluster.orchestrator.resource_pool_types == [
             ResourcePoolType(),
             ResourcePoolType(gpu=1, gpu_model=GKEGPUModels.K80.value),
             ResourcePoolType(gpu=1, gpu_model=GKEGPUModels.V100.value),
         ]
-        assert config.orchestrator.node_label_gpu == "testlabel"
-        assert config.orchestrator.node_label_preemptible == "testpreempt"
+        assert cluster.orchestrator.node_label_gpu == "testlabel"
+        assert cluster.orchestrator.node_label_preemptible == "testpreempt"
 
         assert config.database.redis is not None
         assert config.database.redis.uri == "redis://localhost:6379/0"
@@ -275,14 +276,14 @@ class TestEnvironConfigFactory:
         assert config.auth.service_token == "token"
         assert config.auth.service_name == "servicename"
 
-        assert config.registry.email == "registry@neuromation.io"
-        assert config.registry.host == "testregistry:5000"
-        assert config.registry.is_secure is True
-        assert config.registry.url == URL("https://testregistry:5000")
+        assert cluster.registry.email == "registry@neuromation.io"
+        assert cluster.registry.host == "testregistry:5000"
+        assert cluster.registry.is_secure is True
+        assert cluster.registry.url == URL("https://testregistry:5000")
 
-        assert config.logging.elasticsearch.hosts == ["http://es"]
-        assert config.logging.elasticsearch.user == "test-user"
-        assert config.logging.elasticsearch.password == "test-password"
+        assert cluster.logging.elasticsearch.hosts == ["http://es"]
+        assert cluster.logging.elasticsearch.user == "test-user"
+        assert cluster.logging.elasticsearch.password == "test-password"
 
     def test_create_nfs(self) -> None:
         named_host_template = "{job_name}-{job_owner}.jobs.domain"
@@ -302,6 +303,6 @@ class TestEnvironConfigFactory:
             "NP_AUTH_TOKEN": "token",
             "NP_ES_HOSTS": "http://es",
         }
-        config = EnvironConfigFactory(environ=environ).create()
-        assert config.storage.nfs_server == "1.2.3.4"
-        assert config.storage.nfs_export_path == PurePath("/tmp")
+        cluster = EnvironConfigFactory(environ=environ).create_cluster()
+        assert cluster.storage.nfs_server == "1.2.3.4"
+        assert cluster.storage.nfs_export_path == PurePath("/tmp")

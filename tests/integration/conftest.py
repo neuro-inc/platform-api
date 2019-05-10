@@ -10,14 +10,12 @@ from aioelasticsearch import Elasticsearch
 from async_timeout import timeout
 from yarl import URL
 
+from platform_api.cluster_config import ClusterConfig, IngressConfig, LoggingConfig
 from platform_api.config import (
     AuthConfig,
-    ClusterConfig,
     Config,
     DatabaseConfig,
-    IngressConfig,
     JobsConfig,
-    LoggingConfig,
     OAuthConfig,
     RegistryConfig,
     ServerConfig,
@@ -329,21 +327,8 @@ def config_factory(
     def _factory(**kwargs: Any) -> Config:
         server_config = ServerConfig()
         database_config = DatabaseConfig(redis=redis_config)
-        logging_config = LoggingConfig(elasticsearch=es_config)
-        ingress_config = IngressConfig(
-            storage_url=URL("https://neu.ro/api/v1/storage"),
-            users_url=URL("https://neu.ro/api/v1/users"),
-            monitoring_url=URL("https://neu.ro/api/v1/monitoring"),
-        )
-        cluster_config = ClusterConfig(
-            name="default",
-            orchestrator=kube_config,
-            logging=logging_config,
-            ingress=ingress_config,
-        )
         return Config(
             server=server_config,
-            cluster=cluster_config,
             database=database_config,
             auth=auth_config,
             jobs=jobs_config,
@@ -363,3 +348,19 @@ def config_with_oauth(
     config_factory: Callable[..., Config], oauth_config_dev: Optional[OAuthConfig]
 ) -> Config:
     return config_factory(oauth=oauth_config_dev)
+
+
+@pytest.fixture
+def cluster_config(es_config: ElasticsearchConfig,) -> ClusterConfig:
+    logging_config = LoggingConfig(elasticsearch=es_config)
+    ingress_config = IngressConfig(
+        storage_url=URL("https://neu.ro/api/v1/storage"),
+        users_url=URL("https://neu.ro/api/v1/users"),
+        monitoring_url=URL("https://neu.ro/api/v1/monitoring"),
+    )
+    return ClusterConfig(
+        name="default",
+        orchestrator=kube_config,
+        logging=logging_config,
+        ingress=ingress_config,
+    )

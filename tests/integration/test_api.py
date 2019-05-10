@@ -32,6 +32,7 @@ from neuro_auth_client import Permission
 from neuro_auth_client.client import Quota
 
 from platform_api.api import create_app
+from platform_api.cluster import ClusterConfig
 from platform_api.config import Config
 from tests.conftest import random_str
 
@@ -69,9 +70,9 @@ class ApiConfig(NamedTuple):
 
 @asynccontextmanager
 async def create_local_app_server(
-    config: Config, port: int = 8080
+    config: Config, cluster_config: ClusterConfig, port: int = 8080
 ) -> AsyncIterator[ApiConfig]:
-    app = await create_app(config)
+    app = await create_app(config, cluster_config)
     runner = aiohttp.web.AppRunner(app)
     try:
         await runner.setup()
