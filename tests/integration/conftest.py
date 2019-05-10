@@ -29,7 +29,7 @@ from platform_api.orchestrator.kube_client import KubeClient, NodeTaint
 from platform_api.orchestrator.kube_orchestrator import KubeConfig, KubeOrchestrator
 from platform_api.redis import RedisConfig
 from platform_api.resource import GPUModel, ResourcePoolType
-from platform_api.utils.file import read_certificate_file
+from platform_api.utils.file import read_file
 
 
 pytest_plugins = [
@@ -106,7 +106,7 @@ async def kube_config(
         ssh_domain_name="ssh.platform.neuromation.io",
         ssh_auth_domain_name="ssh-auth.platform.neuromation.io",
         endpoint_url=cluster["server"],
-        cert_authority_data_pem=read_certificate_file(cluster["certificate-authority"]),
+        cert_authority_data_pem=read_file(cluster["certificate-authority"]),
         cert_authority_path=None,  # disable so that `cert_authority_data_pem` works
         auth_cert_path=user["client-certificate"],
         auth_cert_key_path=user["client-key"],
@@ -223,7 +223,7 @@ async def kube_config_nfs(
     cluster = kube_config_cluster_payload
     user = kube_config_user_payload
     ca_path = cluster["certificate-authority"]
-    ca_data = read_certificate_file(ca_path) if ca_path else None
+    ca_data = read_file(ca_path) if ca_path else None
     kube_config = KubeConfig(
         endpoint_url=cluster["server"],
         cert_authority_data_pem=ca_data,

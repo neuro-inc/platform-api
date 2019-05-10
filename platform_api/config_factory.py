@@ -29,7 +29,7 @@ from .orchestrator.kube_client import KubeClientAuthType
 from .orchestrator.kube_orchestrator import KubeConfig
 from .redis import RedisConfig
 from .resource import GKEGPUModels, ResourcePoolType
-from .utils.file import read_certificate_file
+from .utils.file import read_file
 
 
 class EnvironConfigFactory:
@@ -156,7 +156,7 @@ class EnvironConfigFactory:
         )
 
         ca_path = self._environ.get("NP_K8S_CA_PATH")
-        ca_data = read_certificate_file(ca_path) if ca_path else None
+        ca_data = read_file(ca_path) if ca_path else None
 
         return KubeConfig(
             endpoint_url=endpoint_url,
