@@ -235,7 +235,6 @@ class JobRecord:
             kwargs["status_history"] = status_history
         if not kwargs.get("owner"):
             kwargs["owner"] = orphaned_job_owner
-
         return cls(**kwargs)
 
     @property
@@ -340,7 +339,6 @@ class JobRecord:
         status_history = cls.create_status_history_from_primitive(
             request.job_id, payload
         )
-
         return cls(
             request=request,
             status_history=status_history,

@@ -272,7 +272,7 @@ class TestContainerBuilder:
             ssh_server=ContainerSSHServer(port=22),
         )
 
-    def test_from_payload_build_with_shm_False(self) -> None:
+    def test_from_payload_build_with_shm_false(self) -> None:
         storage_config = StorageConfig(host_mount_path=PurePath("/tmp"))
         payload = {
             "image": "testimage",
