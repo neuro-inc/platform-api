@@ -272,7 +272,7 @@ class TestContainerBuilder:
             ssh_server=ContainerSSHServer(port=22),
         )
 
-    def test_from_payload_build_with_shm_false(self) -> None:
+    def test_from_payload_build_with_shm_False(self) -> None:
         storage_config = StorageConfig(host_mount_path=PurePath("/tmp"))
         payload = {
             "image": "testimage",
@@ -425,6 +425,18 @@ class TestJobRecord:
         assert record.finished_at
         assert record.should_be_deleted(delay=timedelta(0))
 
+    def test_from_primitive_too_long_name_is_removed(
+        self, mock_orchestrator: MockOrchestrator, job_request: JobRequest
+    ) -> None:
+        record_deserialized = JobRecord.from_primitive(
+            {
+                "request": job_request.to_primitive(),
+                "status": "pending",
+                "name": "a" * 100,
+            }
+        )
+        assert record_deserialized.name is None
+
 
 class TestJob:
     @pytest.fixture
@@ -491,6 +503,46 @@ class TestJob:
         assert job.http_host == "testjob.jobs"
         assert job.http_host_named == "test-job-name-owner.jobs"
 
+    def test_http_host_named_job_name_is_of_maximum_length(
+        self, mock_orchestrator: MockOrchestrator, job_request: JobRequest
+    ) -> None:
+        """ This test checks if the job's DNS name `{name}-{owner}.jobs.neu.ro`
+        does not have too long DNS label (max length is 63 chars), see issue #642
+        """
+        max_dns_label_len = 63
+        delim_len = 1  # dash in `{name}-{owner}`
+        owner_name = "a" * 15
+        # Let job name to be of max length as it's allowed:
+        job_name = "b" * (max_dns_label_len - len(owner_name) - delim_len)
+        job = Job(
+            orchestrator_config=mock_orchestrator.config,
+            job_request=job_request,
+            owner=owner_name,
+            name=job_name,
+        )
+        assert job.http_host == "testjob.jobs"
+        assert job.http_host_named == f"{job_name}-{owner_name}.jobs"
+
+    def test_http_host_named_too_long_job_name(
+        self, mock_orchestrator: MockOrchestrator, job_request: JobRequest
+    ) -> None:
+        """ This test checks if the job's DNS name `{name}-{owner}.jobs.neu.ro`
+        does not have too long DNS label (max length is 63 chars), see issue #642
+        """
+        max_dns_label_len = 63
+        delim_len = 1  # dash in `{name}-{owner}`
+        owner_name = "a" * 15
+        # Let job name to be 1 char longer than it's allowed:
+        job_name = "b" * (max_dns_label_len - len(owner_name) - delim_len + 1)
+        job = Job(
+            orchestrator_config=mock_orchestrator.config,
+            job_request=job_request,
+            owner=owner_name,
+            name=job_name,
+        )
+        assert job.http_host == "testjob.jobs"
+        assert job.http_host_named is None  # no DNS name
+
     def test_job_name(
         self, mock_orchestrator: MockOrchestrator, job_request: JobRequest
     ) -> None:
@@ -502,7 +554,7 @@ class TestJob:
         )
         assert job.name == "test-job-name-123"
 
-    def test_job_has_gpu_false(
+    def test_job_has_gpu_False(
         self, mock_orchestrator: MockOrchestrator, job_request: JobRequest
     ) -> None:
         job = Job(
@@ -1207,7 +1259,7 @@ class TestUser:
         user = User(name="name", token="token", quota=quota)
         assert user.has_quota()
 
-    def test_user_has_quota_false(self) -> None:
+    def test_user_has_quota_False(self) -> None:
         quota = AggregatedRunTime(
             total_gpu_run_time_delta=self.q_max, total_non_gpu_run_time_delta=self.q_max
         )

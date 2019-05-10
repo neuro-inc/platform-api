@@ -18,6 +18,19 @@ logger = logging.getLogger(__name__)
 current_datetime_factory = partial(datetime.now, timezone.utc)
 
 
+JOB_NAME_PATTERN = "^[a-z][-a-z0-9]*[a-z0-9]$"
+USER_NAME_PATTERN = "^[a-z0-9]([a-z0-9]|(-[a-z0-9]))*$"
+
+# Since the client supports job-names to be interchangeable with job-IDs
+# (see PR https://github.com/neuromation/platform-client-python/pull/648)
+# therefore job-ID has to conform job-name validator; all job-IDs are
+# of the form `job-{uuid4()}` of length 40.
+JOB_NAME_MAX_LENGTH = 40
+# For named jobs, their hostname is of the form of `{job-id}-{job-owner}.jobs.neu.ro`.
+# The length limit for DNS label is 63 chars, minus 1 char for the dash.
+USER_NAME_MAX_LENGTH = 63 - 1 - JOB_NAME_MAX_LENGTH
+
+
 @dataclass(frozen=True)
 class AggregatedRunTime:
     total_gpu_run_time_delta: timedelta
@@ -222,6 +235,7 @@ class JobRecord:
             kwargs["status_history"] = status_history
         if not kwargs.get("owner"):
             kwargs["owner"] = orphaned_job_owner
+
         return cls(**kwargs)
 
     @property
@@ -326,6 +340,7 @@ class JobRecord:
         status_history = cls.create_status_history_from_primitive(
             request.job_id, payload
         )
+
         return cls(
             request=request,
             status_history=status_history,
@@ -531,6 +546,12 @@ class Job:
     def http_host_named(self) -> Optional[str]:
         if not self.name:
             return None
+
+        # TEMPORARY FIX (ayushkovskiy, May 10): Too long DNS label (longer than 63
+        # chars) is invalid, therefore we don't send it back to user (see issue #642)
+        if len(self.name) + len(self.owner) + 1 > 63:
+            return None
+
         return self._orchestrator_config.named_jobs_domain_name_template.format(
             job_name=self.name, job_owner=self.owner
         )
@@ -616,3 +637,9 @@ class JobStats:
     gpu_memory: Optional[float] = None
 
     timestamp: float = field(default_factory=time.time)
+
+
+def _normalize_job_name_length(name: str) -> Optional[str]:
+    if len(name) > JOB_NAME_MAX_LENGTH:
+        return None
+    return name
