@@ -81,23 +81,17 @@ async def kube_config_user_payload(kube_config_payload: Dict[str, Any]) -> Any:
 
 
 @pytest.fixture(scope="session")
-def storage_config_host() -> StorageConfig:
-    return StorageConfig.create_host(host_mount_path=PurePath("/tmp"))
-
-
-@pytest.fixture(scope="session")
-def registry_config() -> RegistryConfig:
-    return RegistryConfig()
-
-
-@pytest.fixture(scope="session")
 async def kube_config(
     kube_config_cluster_payload: Dict[str, Any],
     kube_config_user_payload: Dict[str, Any],
 ) -> KubeConfig:
     cluster = kube_config_cluster_payload
     user = kube_config_user_payload
-    kube_config = KubeConfig(
+    storage_config = StorageConfig.create_host(host_mount_path=PurePath("/tmp"))
+    registry_config = RegistryConfig()
+    return KubeConfig(
+        storage=storage_config,
+        registry=registry_config,
         jobs_ingress_name="platformjobsingress",
         jobs_ingress_auth_name="platformjobsingressauth",
         jobs_domain_name_template="{job_id}.jobs.neu.ro",
@@ -116,7 +110,6 @@ async def kube_config(
         node_label_preemptible="preemptible",
         namespace="platformapi-tests",
     )
-    return kube_config
 
 
 @pytest.fixture(scope="session")
@@ -203,23 +196,22 @@ async def nfs_volume_server(kube_client: MyKubeClient) -> Any:
 
 
 @pytest.fixture(scope="session")
-def storage_config_nfs(nfs_volume_server: Optional[str]) -> StorageConfig:
-    assert nfs_volume_server
-    return StorageConfig.create_nfs(
+async def kube_config_nfs(
+    kube_config_cluster_payload: Dict[str, Any],
+    kube_config_user_payload: Dict[str, Any],
+    nfs_volume_server: Optional[str],
+) -> KubeConfig:
+    cluster = kube_config_cluster_payload
+    user = kube_config_user_payload
+    storage_config = StorageConfig.create_nfs(
         host_mount_path=PurePath("/var/storage"),
         nfs_server=nfs_volume_server,
         nfs_export_path=PurePath("/var/storage"),
     )
-
-
-@pytest.fixture(scope="session")
-async def kube_config_nfs(
-    kube_config_cluster_payload: Dict[str, Any],
-    kube_config_user_payload: Dict[str, Any],
-) -> KubeConfig:
-    cluster = kube_config_cluster_payload
-    user = kube_config_user_payload
-    kube_config = KubeConfig(
+    registry_config = RegistryConfig()
+    return KubeConfig(
+        storage=storage_config,
+        registry=registry_config,
         endpoint_url=cluster["server"],
         cert_authority_path=cluster["certificate-authority"],
         auth_cert_path=user["client-certificate"],
@@ -234,41 +226,22 @@ async def kube_config_nfs(
         resource_pool_types=[ResourcePoolType()],
         namespace="platformapi-tests",
     )
-    return kube_config
 
 
 @pytest.fixture
 async def kube_orchestrator(
-    storage_config_host: StorageConfig,
-    registry_config: RegistryConfig,
-    kube_config: KubeConfig,
-    es_client: Optional[Elasticsearch],
-    event_loop: Any,
+    kube_config: KubeConfig, es_client: Optional[Elasticsearch], event_loop: Any
 ) -> AsyncIterator[KubeOrchestrator]:
-    orchestrator = KubeOrchestrator(
-        storage_config=storage_config_host,
-        registry_config=registry_config,
-        kube_config=kube_config,
-        es_client=es_client,
-    )
+    orchestrator = KubeOrchestrator(config=kube_config, es_client=es_client)
     async with orchestrator:
         yield orchestrator
 
 
 @pytest.fixture
 async def kube_orchestrator_nfs(
-    storage_config_nfs: StorageConfig,
-    registry_config: RegistryConfig,
-    kube_config_nfs: KubeConfig,
-    es_client: Optional[Elasticsearch],
-    event_loop: Any,
+    kube_config_nfs: KubeConfig, es_client: Optional[Elasticsearch], event_loop: Any
 ) -> AsyncIterator[KubeOrchestrator]:
-    orchestrator = KubeOrchestrator(
-        storage_config=storage_config_nfs,
-        registry_config=registry_config,
-        kube_config=kube_config_nfs,
-        es_client=es_client,
-    )
+    orchestrator = KubeOrchestrator(config=kube_config_nfs, es_client=es_client)
     async with orchestrator:
         yield orchestrator
 
@@ -347,8 +320,6 @@ def jobs_config() -> JobsConfig:
 
 @pytest.fixture
 def config_factory(
-    storage_config_host: StorageConfig,
-    registry_config: RegistryConfig,
     kube_config: KubeConfig,
     redis_config: RedisConfig,
     auth_config: AuthConfig,
@@ -366,8 +337,6 @@ def config_factory(
         )
         cluster_config = ClusterConfig(
             name="default",
-            storage=storage_config_host,
-            registry=registry_config,
             orchestrator=kube_config,
             logging=logging_config,
             ingress=ingress_config,
