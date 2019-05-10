@@ -1,3 +1,4 @@
+from base64 import b64encode
 from datetime import timedelta
 from pathlib import PurePath
 from typing import Dict
@@ -14,6 +15,7 @@ from platform_api.orchestrator.kube_orchestrator import (
     NfsVolume,
 )
 from platform_api.resource import GKEGPUModels, ResourcePoolType
+from tests.unit.conftest import CA_TEXT
 
 
 class TestStorageConfig:
@@ -132,6 +134,7 @@ class TestEnvironConfigFactory:
 
         assert isinstance(config.orchestrator, KubeConfig)
         assert config.orchestrator.endpoint_url == "https://localhost:8443"
+        assert not config.orchestrator.cert_authority_data
         assert not config.orchestrator.cert_authority_path
         assert not config.orchestrator.auth_cert_path
         assert not config.orchestrator.auth_cert_key_path
@@ -181,7 +184,9 @@ class TestEnvironConfigFactory:
         with pytest.raises(ValueError):
             EnvironConfigFactory(environ=environ).create()
 
-    def test_create_custom(self) -> None:
+    def test_create_custom(
+        self, cert_authority_path: str, cert_authority_data: bytes
+    ) -> None:
         named_host_template = "{job_name}-{job_owner}.jobs.domain"
         environ = {
             "NP_ENV_PREFIX": "TEST",
@@ -189,7 +194,8 @@ class TestEnvironConfigFactory:
             "NP_STORAGE_HOST_MOUNT_PATH": "/tmp",
             "NP_STORAGE_CONTAINER_MOUNT_PATH": "/opt/storage",
             "NP_K8S_API_URL": "https://localhost:8443",
-            "NP_K8S_CA_PATH": "/ca_path",
+            "NP_K8S_CA_PATH": cert_authority_path,
+            "NP_K8S_CA_DATA": b64encode(cert_authority_data).decode(),
             "NP_K8S_AUTH_CERT_PATH": "/cert_path",
             "NP_K8S_AUTH_CERT_KEY_PATH": "/cert_key_path",
             "NP_K8S_NS": "other",
@@ -247,7 +253,8 @@ class TestEnvironConfigFactory:
 
         assert isinstance(config.orchestrator, KubeConfig)
         assert config.orchestrator.endpoint_url == "https://localhost:8443"
-        assert config.orchestrator.cert_authority_path == "/ca_path"
+        assert config.orchestrator.cert_authority_path is not None
+        assert config.orchestrator.cert_authority_data == CA_TEXT.encode("utf-8")
         assert config.orchestrator.auth_cert_path == "/cert_path"
         assert config.orchestrator.auth_cert_key_path == "/cert_key_path"
         assert config.orchestrator.namespace == "other"

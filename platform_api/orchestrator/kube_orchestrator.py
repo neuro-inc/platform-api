@@ -94,7 +94,8 @@ class KubeConfig(OrchestratorConfig):
     jobs_ingress_auth_name: str = ""
 
     endpoint_url: str = ""
-    cert_authority_path: Optional[str] = None
+    cert_authority_data: Optional[bytes] = None
+    cert_authority_path: Optional[str] = None  # TODO: redundant field, to be removed
 
     auth_type: KubeClientAuthType = KubeClientAuthType.CERTIFICATE
     auth_cert_path: Optional[str] = None
@@ -142,16 +143,17 @@ class KubeOrchestrator(Orchestrator):
         # should we ensure it does exist before continuing
 
         self._client = KubeClient(
-            base_url=kube_config.endpoint_url,
-            cert_authority_path=kube_config.cert_authority_path,
-            auth_type=kube_config.auth_type,
-            auth_cert_path=kube_config.auth_cert_path,
-            auth_cert_key_path=kube_config.auth_cert_key_path,
-            token_path=kube_config.token_path,
-            namespace=kube_config.namespace,
-            conn_timeout_s=kube_config.client_conn_timeout_s,
-            read_timeout_s=kube_config.client_read_timeout_s,
-            conn_pool_size=kube_config.client_conn_pool_size,
+            base_url=config.endpoint_url,
+            cert_authority_data=config.cert_authority_data,
+            cert_authority_path=config.cert_authority_path,
+            auth_type=config.auth_type,
+            auth_cert_path=config.auth_cert_path,
+            auth_cert_key_path=config.auth_cert_key_path,
+            token_path=config.token_path,
+            namespace=config.namespace,
+            conn_timeout_s=config.client_conn_timeout_s,
+            read_timeout_s=config.client_read_timeout_s,
+            conn_pool_size=config.client_conn_pool_size,
         )
 
         self._storage_volume = self.create_storage_volume()

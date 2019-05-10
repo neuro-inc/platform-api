@@ -29,6 +29,7 @@ from platform_api.orchestrator.kube_client import KubeClient, NodeTaint
 from platform_api.orchestrator.kube_orchestrator import KubeConfig, KubeOrchestrator
 from platform_api.redis import RedisConfig
 from platform_api.resource import GPUModel, ResourcePoolType
+from tests.conftest import read_file_binary
 
 
 pytest_plugins = [
@@ -97,7 +98,12 @@ async def kube_config(
 ) -> KubeConfig:
     cluster = kube_config_cluster_payload
     user = kube_config_user_payload
-    kube_config = KubeConfig(
+    storage_config = StorageConfig.create_host(host_mount_path=PurePath("/tmp"))
+    registry_config = RegistryConfig()
+    ca_data = read_file_binary(cluster["certificate-authority"].encode("utf-8"))
+    return KubeConfig(
+        storage=storage_config,
+        registry=registry_config,
         jobs_ingress_name="platformjobsingress",
         jobs_ingress_auth_name="platformjobsingressauth",
         jobs_domain_name_template="{job_id}.jobs.neu.ro",
@@ -105,7 +111,8 @@ async def kube_config(
         ssh_domain_name="ssh.platform.neuromation.io",
         ssh_auth_domain_name="ssh-auth.platform.neuromation.io",
         endpoint_url=cluster["server"],
-        cert_authority_path=cluster["certificate-authority"],
+        cert_authority_data=ca_data,
+        cert_authority_path=None,
         auth_cert_path=user["client-certificate"],
         auth_cert_key_path=user["client-key"],
         node_label_gpu="gpu",

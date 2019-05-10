@@ -1,6 +1,6 @@
 import asyncio
 from datetime import timedelta
-from pathlib import PurePath
+from pathlib import Path, PurePath
 from typing import AsyncIterator, Callable, Iterator, List, Optional
 
 import pytest
@@ -33,6 +33,10 @@ from platform_api.orchestrator.jobs_storage import (
     JobStorageTransactionError,
 )
 from platform_api.resource import ResourcePoolType
+from tests.conftest import read_file_binary
+
+
+CA_TEXT = "this-is-certificate-authority-public-key"
 
 
 class MockOrchestrator(Orchestrator):
@@ -106,6 +110,18 @@ def job_request_factory() -> Callable[[], JobRequest]:
         )
 
     return factory
+
+
+@pytest.fixture()
+def cert_authority_path(tmp_path: Path) -> str:
+    ca_path = tmp_path / "ca.crt"
+    ca_path.write_text(CA_TEXT)
+    return str(ca_path)
+
+
+@pytest.fixture()
+def cert_authority_data(cert_authority_path: str) -> bytes:
+    return read_file_binary(cert_authority_path)
 
 
 @pytest.fixture
