@@ -590,7 +590,7 @@ async def test_job_to_job_response(mock_orchestrator: MockOrchestrator) -> None:
         ),
         name="test-job-name",
     )
-    response = convert_job_to_job_response(job, mock.MagicMock())
+    response = convert_job_to_job_response(job)
     assert response == {
         "id": job.id,
         "owner": "compute",

@@ -137,9 +137,7 @@ def convert_container_volume_to_json(
     }
 
 
-def convert_job_to_job_response(
-    job: Job, storage_config: StorageConfig
-) -> Dict[str, Any]:
+def convert_job_to_job_response(job: Job) -> Dict[str, Any]:
     history = job.status_history
     current_status = history.current
     response_payload: Dict[str, Any] = {
@@ -153,7 +151,7 @@ def convert_job_to_job_response(
             "created_at": history.created_at_str,
         },
         "container": convert_job_container_to_json(
-            job.request.container, storage_config
+            job.request.container, job.storage_config
         ),
         "ssh_auth_server": job.ssh_auth_server,
         "is_preemptible": job.is_preemptible,
@@ -196,7 +194,6 @@ class JobsHandler:
     def __init__(self, *, app: aiohttp.web.Application, config: Config) -> None:
         self._app = app
         self._config = config
-        self._storage_config = config.storage
 
         self._job_filter_factory = JobFilterFactory()
         self._job_response_validator = create_job_response_validator()
@@ -236,12 +233,14 @@ class JobsHandler:
         job_request_validator = await self._create_job_request_validator(user)
         request_payload = job_request_validator.check(orig_payload)
 
+        cluster_config = await self._jobs_service.get_cluster_config(user)
+
         container = ContainerBuilder.from_container_payload(
-            request_payload["container"], storage_config=self._storage_config
+            request_payload["container"], storage_config=cluster_config.storage
         ).build()
 
         permissions = infer_permissions_from_container(
-            user, container, self._config.registry
+            user, container, cluster_config.registry
         )
         logger.info("Checking whether %r has %r", user, permissions)
         await check_permission(request, permissions[0].action, permissions)
@@ -253,7 +252,7 @@ class JobsHandler:
         job, _ = await self._jobs_service.create_job(
             job_request, user=user, job_name=name, is_preemptible=is_preemptible
         )
-        response_payload = convert_job_to_job_response(job, self._storage_config)
+        response_payload = convert_job_to_job_response(job)
         self._job_response_validator.check(response_payload)
         return aiohttp.web.json_response(
             data=response_payload, status=aiohttp.web.HTTPAccepted.status_code
@@ -268,7 +267,7 @@ class JobsHandler:
         logger.info("Checking whether %r has %r", user, permission)
         await check_permission(request, permission.action, [permission])
 
-        response_payload = convert_job_to_job_response(job, self._storage_config)
+        response_payload = convert_job_to_job_response(job)
         self._job_response_validator.check(response_payload)
         return aiohttp.web.json_response(
             data=response_payload, status=aiohttp.web.HTTPOk.status_code
@@ -316,11 +315,7 @@ class JobsHandler:
         except JobFilterException:
             pass
 
-        response_payload = {
-            "jobs": [
-                convert_job_to_job_response(job, self._storage_config) for job in jobs
-            ]
-        }
+        response_payload = {"jobs": [convert_job_to_job_response(job) for job in jobs]}
         self._bulk_jobs_response_validator.check(response_payload)
         return aiohttp.web.json_response(
             data=response_payload, status=aiohttp.web.HTTPOk.status_code
