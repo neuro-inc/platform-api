@@ -94,7 +94,7 @@ class KubeConfig(OrchestratorConfig):
     jobs_ingress_auth_name: str = ""
 
     endpoint_url: str = ""
-    cert_authority_data: Optional[bytes] = None
+    ca_data_pem: Optional[str] = None
     cert_authority_path: Optional[str] = None  # TODO: redundant field, to be removed
 
     auth_type: KubeClientAuthType = KubeClientAuthType.CERTIFICATE
@@ -144,7 +144,7 @@ class KubeOrchestrator(Orchestrator):
 
         self._client = KubeClient(
             base_url=config.endpoint_url,
-            cert_authority_data=config.cert_authority_data,
+            ca_data_pem=config.ca_data_pem,
             cert_authority_path=config.cert_authority_path,
             auth_type=config.auth_type,
             auth_cert_path=config.auth_cert_path,

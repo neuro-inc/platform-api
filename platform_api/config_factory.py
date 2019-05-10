@@ -4,7 +4,7 @@ from typing import Any, Dict, List, Optional
 
 from yarl import URL
 
-from platform_api.utils.file import read_file_binary
+from platform_api.utils.file import read_certificate_file
 
 from .cluster_config import (
     ClusterConfig,
@@ -157,12 +157,12 @@ class EnvironConfigFactory:
         )
 
         ca_path = self._environ.get("NP_K8S_CA_PATH")
-        ca_data = read_file_binary(ca_path) if ca_path else None
+        ca_data = read_certificate_file(ca_path) if ca_path else None
 
         return KubeConfig(
             endpoint_url=endpoint_url,
             cert_authority_path=None,
-            cert_authority_data=ca_data,
+            ca_data_pem=ca_data,
             auth_type=auth_type,
             auth_cert_path=self._environ.get("NP_K8S_AUTH_CERT_PATH"),
             auth_cert_key_path=self._environ.get("NP_K8S_AUTH_CERT_KEY_PATH"),

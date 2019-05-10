@@ -29,7 +29,7 @@ from platform_api.orchestrator.kube_client import KubeClient, NodeTaint
 from platform_api.orchestrator.kube_orchestrator import KubeConfig, KubeOrchestrator
 from platform_api.redis import RedisConfig
 from platform_api.resource import GPUModel, ResourcePoolType
-from platform_api.utils.file import read_file_binary
+from platform_api.utils.file import read_certificate_file
 
 
 pytest_plugins = [
@@ -110,8 +110,7 @@ async def kube_config(
         ssh_domain_name="ssh.platform.neuromation.io",
         ssh_auth_domain_name="ssh-auth.platform.neuromation.io",
         endpoint_url=cluster["server"],
-        cert_authority_data=read_file_binary(cluster["certificate-authority"]),
-        cert_authority_path=None,
+        ca_data_pem=read_certificate_file(cluster["certificate-authority"]),
         auth_cert_path=user["client-certificate"],
         auth_cert_key_path=user["client-key"],
         node_label_gpu="gpu",
