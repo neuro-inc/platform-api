@@ -24,14 +24,14 @@ spec:
         imagePullPolicy: Always
         env:
         - name: NP_AUTH_URL
-          value: http://platformauthapi:8080
+          value: {{ printf "%s" (pluck .Values.global.env .Values.NP_AUTH_URL | first | default .Values.NP_AUTH_URL._default) }}
         - name: NP_AUTH_TOKEN
           valueFrom:
             secretKeyRef:
               name: platformservices-secret
               key: compute_token
         - name: NP_PLATFORM_API_URL
-          value: http://platformapi:8080/api/v1
+          value: {{ printf "%s" (pluck .Values.global.env .Values.NP_PLATFORM_API_URL | first | default .Values.NP_PLATFORM_API_URL._default) }}
         - name: NP_LOG_FIFO
           value: /authorization.log
         - name: NP_SSH_PORT
