@@ -35,7 +35,6 @@ from platform_api.orchestrator import (
     JobStatus,
     KubeOrchestrator,
     LogReader,
-    Orchestrator,
 )
 from platform_api.orchestrator.job import JobStatusItem
 from platform_api.orchestrator.job_request import (
@@ -66,13 +65,21 @@ from .conftest import MyKubeClient
 
 
 class MyJob(Job):
-    def __init__(self, orchestrator: Orchestrator, *args: Any, **kwargs: Any) -> None:
+    def __init__(
+        self, orchestrator: KubeOrchestrator, *args: Any, **kwargs: Any
+    ) -> None:
         self._orchestrator = orchestrator
         kwargs.setdefault("owner", "test-owner")
         if args:
-            super().__init__(orchestrator.config, *args, **kwargs)
+            super().__init__(
+                orchestrator.storage_config, orchestrator.config, *args, **kwargs
+            )
         else:
-            super().__init__(orchestrator_config=orchestrator.config, **kwargs)
+            super().__init__(
+                storage_config=orchestrator.storage_config,
+                orchestrator_config=orchestrator.config,
+                **kwargs,
+            )
 
     async def start(self) -> JobStatus:
         status = await self._orchestrator.start_job(self, "test-token")

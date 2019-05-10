@@ -165,6 +165,10 @@ class KubeOrchestrator(Orchestrator):
     def config(self) -> OrchestratorConfig:
         return self._kube_config
 
+    @property
+    def storage_config(self) -> StorageConfig:
+        return self._storage_config
+
     async def __aenter__(self) -> "KubeOrchestrator":
         await self._client.init()
         return self

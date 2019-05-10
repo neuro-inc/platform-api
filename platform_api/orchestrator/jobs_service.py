@@ -87,6 +87,7 @@ class JobsService:
                 try:
                     async with self._get_cluster(record.cluster_name) as cluster:
                         job = Job(
+                            storage_config=cluster.config.storage,
                             orchestrator_config=cluster.orchestrator.config,
                             record=record,
                         )
@@ -190,7 +191,9 @@ class JobsService:
             async with self._jobs_storage.try_create_job(record) as record:
                 async with self._get_cluster(record.cluster_name) as cluster:
                     job = Job(
-                        orchestrator_config=cluster.orchestrator.config, record=record
+                        storage_config=cluster.config.storage,
+                        orchestrator_config=cluster.orchestrator.config,
+                        record=record,
                     )
                     await cluster.orchestrator.start_job(job, user.token)
             return job, Status.create(job.status)
@@ -222,7 +225,9 @@ class JobsService:
         try:
             async with self._get_cluster(record.cluster_name) as cluster:
                 return Job(
-                    orchestrator_config=cluster.orchestrator.config, record=record
+                    storage_config=cluster.config.storage,
+                    orchestrator_config=cluster.orchestrator.config,
+                    record=record,
                 )
         except ClusterNotFound:
             # in case the cluster is missing, we still want to return the job
@@ -239,7 +244,9 @@ class JobsService:
                 self._jobs_config.default_cluster_name
             ) as cluster:
                 return Job(
-                    orchestrator_config=cluster.orchestrator.config, record=record
+                    storage_config=cluster.config.storage,
+                    orchestrator_config=cluster.orchestrator.config,
+                    record=record,
                 )
 
     async def get_job(self, job_id: str) -> Job:
@@ -252,7 +259,11 @@ class JobsService:
         # migration to a dedicated microservice
         record = await self._jobs_storage.get_job(job_id)
         async with self._get_cluster(record.cluster_name) as cluster:
-            job = Job(orchestrator_config=cluster.orchestrator.config, record=record)
+            job = Job(
+                storage_config=cluster.config.storage,
+                orchestrator_config=cluster.orchestrator.config,
+                record=record,
+            )
             return await cluster.orchestrator.get_job_log_reader(job)
 
     async def get_job_telemetry(self, job_id: str) -> Telemetry:
@@ -261,14 +272,20 @@ class JobsService:
         # migration to a dedicated microservice
         record = await self._jobs_storage.get_job(job_id)
         async with self._get_cluster(record.cluster_name) as cluster:
-            job = Job(orchestrator_config=cluster.orchestrator.config, record=record)
+            job = Job(
+                storage_config=cluster.config.storage,
+                orchestrator_config=cluster.orchestrator.config,
+                record=record,
+            )
             return await cluster.orchestrator.get_job_telemetry(job)
 
     async def _delete_cluster_job(self, record: JobRecord) -> None:
         try:
             async with self._get_cluster(record.cluster_name) as cluster:
                 job = Job(
-                    orchestrator_config=cluster.orchestrator.config, record=record
+                    storage_config=cluster.config.storage,
+                    orchestrator_config=cluster.orchestrator.config,
+                    record=record,
                 )
                 await cluster.orchestrator.delete_job(job)
         except (ClusterNotFound, JobException) as exc:

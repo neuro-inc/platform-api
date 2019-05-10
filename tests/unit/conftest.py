@@ -36,7 +36,7 @@ from platform_api.resource import ResourcePoolType
 
 
 class MockOrchestrator(Orchestrator):
-    def __init__(self, config: OrchestratorConfig) -> None:
+    def __init__(self, config: ClusterConfig) -> None:
         self._config = config
         self._mock_status_to_return = JobStatus.PENDING
         self._mock_reason_to_return = "Initializing"
@@ -46,7 +46,11 @@ class MockOrchestrator(Orchestrator):
 
     @property
     def config(self) -> OrchestratorConfig:
-        return self._config
+        return self._config.orchestrator
+
+    @property
+    def storage_config(self) -> StorageConfig:
+        return self._config.storage
 
     async def start_job(self, job: Job, token: str) -> JobStatus:
         job.status = JobStatus.PENDING
@@ -154,7 +158,7 @@ def cluster_config() -> ClusterConfig:
 
 @pytest.fixture
 def mock_orchestrator(cluster_config: ClusterConfig) -> MockOrchestrator:
-    return MockOrchestrator(config=cluster_config.orchestrator)
+    return MockOrchestrator(config=cluster_config)
 
 
 @pytest.fixture

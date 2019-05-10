@@ -485,7 +485,7 @@ class TestJobsServiceCluster:
     @pytest.fixture
     async def cluster_registry(self) -> AsyncIterator[ClusterRegistry]:
         def _cluster_factory(config: ClusterConfig) -> Cluster:
-            orchestrator = MockOrchestrator(config.orchestrator)
+            orchestrator = MockOrchestrator(config)
             return MockCluster(config, orchestrator)
 
         async with ClusterRegistry(factory=_cluster_factory) as registry:
