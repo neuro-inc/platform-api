@@ -1,9 +1,10 @@
 import os
-from base64 import b64decode
 from pathlib import Path, PurePath
 from typing import Any, Dict, List, Optional
 
 from yarl import URL
+
+from platform_api.utils.file import read_file_binary
 
 from .cluster_config import (
     ClusterConfig,
@@ -155,8 +156,8 @@ class EnvironConfigFactory:
             "NP_K8S_JOBS_INGRESS_AUTH_NAME", jobs_ingress_name
         )
 
-        ca_data_b64 = self._environ.get("NP_K8S_CA_DATA")
-        ca_data = b64decode(ca_data_b64) if ca_data_b64 else None
+        ca_path = self._environ.get("NP_K8S_CA_PATH")
+        ca_data = read_file_binary(ca_path) if ca_path else None
 
         return KubeConfig(
             endpoint_url=endpoint_url,

@@ -1,4 +1,3 @@
-from base64 import b64encode
 from datetime import timedelta
 from pathlib import PurePath
 from typing import Dict
@@ -184,9 +183,7 @@ class TestEnvironConfigFactory:
         with pytest.raises(ValueError):
             EnvironConfigFactory(environ=environ).create()
 
-    def test_create_custom(
-        self, cert_authority_path: str, cert_authority_data: bytes
-    ) -> None:
+    def test_create_custom(self, cert_authority_path: str) -> None:
         named_host_template = "{job_name}-{job_owner}.jobs.domain"
         environ = {
             "NP_ENV_PREFIX": "TEST",
@@ -195,7 +192,6 @@ class TestEnvironConfigFactory:
             "NP_STORAGE_CONTAINER_MOUNT_PATH": "/opt/storage",
             "NP_K8S_API_URL": "https://localhost:8443",
             "NP_K8S_CA_PATH": cert_authority_path,
-            "NP_K8S_CA_DATA": b64encode(cert_authority_data).decode(),
             "NP_K8S_AUTH_CERT_PATH": "/cert_path",
             "NP_K8S_AUTH_CERT_KEY_PATH": "/cert_key_path",
             "NP_K8S_NS": "other",
