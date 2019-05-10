@@ -471,13 +471,18 @@ class TestJob:
     def test_http_host(
         self, mock_orchestrator: MockOrchestrator, job_request: JobRequest
     ) -> None:
-        job = Job(orchestrator_config=mock_orchestrator.config, job_request=job_request)
+        job = Job(
+            storage_config=mock_orchestrator.storage_config,
+            orchestrator_config=mock_orchestrator.config,
+            job_request=job_request,
+        )
         assert job.http_host == "testjob.jobs"
 
     def test_http_host_named(
         self, mock_orchestrator: MockOrchestrator, job_request: JobRequest
     ) -> None:
         job = Job(
+            storage_config=mock_orchestrator.storage_config,
             orchestrator_config=mock_orchestrator.config,
             job_request=job_request,
             name="test-job-name",
@@ -490,6 +495,7 @@ class TestJob:
         self, mock_orchestrator: MockOrchestrator, job_request: JobRequest
     ) -> None:
         job = Job(
+            storage_config=mock_orchestrator.storage_config,
             orchestrator_config=mock_orchestrator.config,
             job_request=job_request,
             name="test-job-name-123",
@@ -499,13 +505,18 @@ class TestJob:
     def test_job_has_gpu_false(
         self, mock_orchestrator: MockOrchestrator, job_request: JobRequest
     ) -> None:
-        job = Job(orchestrator_config=mock_orchestrator.config, job_request=job_request)
+        job = Job(
+            storage_config=mock_orchestrator.storage_config,
+            orchestrator_config=mock_orchestrator.config,
+            job_request=job_request,
+        )
         assert not job.has_gpu
 
     def test_job_has_gpu_true(
         self, mock_orchestrator: MockOrchestrator, job_request_with_gpu: JobRequest
     ) -> None:
         job = Job(
+            storage_config=mock_orchestrator.storage_config,
             orchestrator_config=mock_orchestrator.config,
             job_request=job_request_with_gpu,
         )
@@ -520,6 +531,7 @@ class TestJob:
         started_at = datetime(year=2019, month=1, day=1)
         first_item = JobStatusItem.create(JobStatus.PENDING, transition_time=started_at)
         job = Job(
+            storage_config=mock_orchestrator.storage_config,
             orchestrator_config=mock_orchestrator.config,
             job_request=job_request,
             status_history=JobStatusHistory(items=[first_item]),
@@ -536,6 +548,7 @@ class TestJob:
         first_item = JobStatusItem.create(JobStatus.PENDING, transition_time=started_at)
         last_item = JobStatusItem.create(JobStatus.FAILED, transition_time=finished_at)
         job = Job(
+            storage_config=mock_orchestrator.storage_config,
             orchestrator_config=mock_orchestrator.config,
             job_request=job_request,
             status_history=JobStatusHistory(items=[first_item, last_item]),
@@ -546,13 +559,18 @@ class TestJob:
     def test_http_url(
         self, mock_orchestrator: MockOrchestrator, job_request: JobRequest
     ) -> None:
-        job = Job(orchestrator_config=mock_orchestrator.config, job_request=job_request)
+        job = Job(
+            storage_config=mock_orchestrator.storage_config,
+            orchestrator_config=mock_orchestrator.config,
+            job_request=job_request,
+        )
         assert job.http_url == "http://testjob.jobs"
 
     def test_http_urls_named(
         self, mock_orchestrator: MockOrchestrator, job_request: JobRequest
     ) -> None:
         job = Job(
+            storage_config=mock_orchestrator.storage_config,
             orchestrator_config=mock_orchestrator.config,
             job_request=job_request,
             name="test-job-name",
@@ -567,7 +585,11 @@ class TestJob:
         config = dataclasses.replace(
             mock_orchestrator.config, is_http_ingress_secure=True
         )
-        job = Job(orchestrator_config=config, job_request=job_request)
+        job = Job(
+            storage_config=mock_orchestrator.storage_config,
+            orchestrator_config=config,
+            job_request=job_request,
+        )
         assert job.http_url == "https://testjob.jobs"
 
     def test_https_urls_named(
@@ -577,6 +599,7 @@ class TestJob:
             mock_orchestrator.config, is_http_ingress_secure=True
         )
         job = Job(
+            storage_config=mock_orchestrator.storage_config,
             orchestrator_config=config,
             job_request=job_request,
             name="test-job-name",
@@ -589,6 +612,7 @@ class TestJob:
         self, mock_orchestrator: MockOrchestrator, job_request_with_ssh: JobRequest
     ) -> None:
         job = Job(
+            storage_config=mock_orchestrator.storage_config,
             orchestrator_config=mock_orchestrator.config,
             job_request=job_request_with_ssh,
         )
@@ -597,7 +621,11 @@ class TestJob:
     def test_no_ssh(
         self, mock_orchestrator: MockOrchestrator, job_request: JobRequest
     ) -> None:
-        job = Job(orchestrator_config=mock_orchestrator.config, job_request=job_request)
+        job = Job(
+            storage_config=mock_orchestrator.storage_config,
+            orchestrator_config=mock_orchestrator.config,
+            job_request=job_request,
+        )
         assert not job.has_ssh_server_exposed
         with pytest.raises(AssertionError):
             assert job.ssh_server
@@ -608,6 +636,7 @@ class TestJob:
         job_request_with_ssh_and_http: JobRequest,
     ) -> None:
         job = Job(
+            storage_config=mock_orchestrator.storage_config,
             orchestrator_config=mock_orchestrator.config,
             job_request=job_request_with_ssh_and_http,
         )
@@ -620,6 +649,7 @@ class TestJob:
         job_request_with_ssh_and_http: JobRequest,
     ) -> None:
         job = Job(
+            storage_config=mock_orchestrator.storage_config,
             orchestrator_config=mock_orchestrator.config,
             job_request=job_request_with_ssh_and_http,
             name="test-job-name",
@@ -633,6 +663,7 @@ class TestJob:
         self, mock_orchestrator: MockOrchestrator, job_request: JobRequest
     ) -> None:
         job = Job(
+            storage_config=mock_orchestrator.storage_config,
             orchestrator_config=mock_orchestrator.config,
             job_request=job_request,
             owner="testuser",
@@ -680,7 +711,9 @@ class TestJob:
             "is_deleted": True,
             "finished_at": datetime.now(timezone.utc).isoformat(),
         }
-        job = Job.from_primitive(mock_orchestrator.config, payload)
+        job = Job.from_primitive(
+            mock_orchestrator.storage_config, mock_orchestrator.config, payload
+        )
         assert job.id == "testjob"
         assert job.status == JobStatus.SUCCEEDED
         assert job.is_deleted
@@ -702,7 +735,9 @@ class TestJob:
             "is_deleted": True,
             "finished_at": datetime.now(timezone.utc).isoformat(),
         }
-        job = Job.from_primitive(mock_orchestrator.config, payload)
+        job = Job.from_primitive(
+            mock_orchestrator.storage_config, mock_orchestrator.config, payload
+        )
         assert job.id == "testjob"
         assert job.name == "test-job-name"
 
@@ -719,7 +754,9 @@ class TestJob:
             "statuses": [{"status": "failed", "transition_time": finished_at_str}],
             "is_preemptible": True,
         }
-        job = Job.from_primitive(mock_orchestrator.config, payload)
+        job = Job.from_primitive(
+            mock_orchestrator.storage_config, mock_orchestrator.config, payload
+        )
         assert job.id == "testjob"
         assert job.status == JobStatus.FAILED
         assert job.is_deleted
@@ -740,7 +777,9 @@ class TestJob:
             "is_deleted": True,
             "finished_at": datetime.now(timezone.utc).isoformat(),
         }
-        job = Job.from_primitive(mock_orchestrator.config, payload)
+        job = Job.from_primitive(
+            mock_orchestrator.storage_config, mock_orchestrator.config, payload
+        )
         assert job.id == "testjob"
         assert job.status == JobStatus.SUCCEEDED
         assert job.is_deleted
@@ -754,19 +793,31 @@ class TestJob:
     def test_to_uri(
         self, mock_orchestrator: MockOrchestrator, job_request: JobRequest
     ) -> None:
-        job = Job(mock_orchestrator.config, job_request, owner="testuser")
+        job = Job(
+            mock_orchestrator.storage_config,
+            mock_orchestrator.config,
+            job_request,
+            owner="testuser",
+        )
         assert job.to_uri() == URL(f"job://testuser/{job.id}")
 
     def test_to_uri_orphaned(
         self, mock_orchestrator: MockOrchestrator, job_request: JobRequest
     ) -> None:
-        job = Job(mock_orchestrator.config, job_request)
+        job = Job(
+            mock_orchestrator.storage_config, mock_orchestrator.config, job_request
+        )
         assert job.to_uri() == URL(f"job://compute/{job.id}")
 
     def test_to_uri_no_owner(
         self, mock_orchestrator: MockOrchestrator, job_request: JobRequest
     ) -> None:
-        job = Job(mock_orchestrator.config, job_request, orphaned_job_owner="")
+        job = Job(
+            mock_orchestrator.storage_config,
+            mock_orchestrator.config,
+            job_request,
+            orphaned_job_owner="",
+        )
         assert job.to_uri() == URL(f"job:/{job.id}")
 
     def test_to_and_from_primitive(
@@ -791,7 +842,9 @@ class TestJob:
             "is_preemptible": False,
         }
         actual = Job.to_primitive(
-            Job.from_primitive(mock_orchestrator.config, expected)
+            Job.from_primitive(
+                mock_orchestrator.storage_config, mock_orchestrator.config, expected
+            )
         )
         assert actual == expected
 

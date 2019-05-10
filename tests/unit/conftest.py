@@ -36,7 +36,7 @@ from platform_api.resource import ResourcePoolType
 
 
 class MockOrchestrator(Orchestrator):
-    def __init__(self, config: OrchestratorConfig) -> None:
+    def __init__(self, config: ClusterConfig) -> None:
         self._config = config
         self._mock_status_to_return = JobStatus.PENDING
         self._mock_reason_to_return = "Initializing"
@@ -46,11 +46,11 @@ class MockOrchestrator(Orchestrator):
 
     @property
     def config(self) -> OrchestratorConfig:
-        return self._config
+        return self._config.orchestrator
 
-    @config.setter
-    def config(self, config: OrchestratorConfig) -> None:
-        self._config = config
+    @property
+    def storage_config(self) -> StorageConfig:
+        return self._config.storage
 
     async def start_job(self, job: Job, token: str) -> JobStatus:
         job.status = JobStatus.PENDING
@@ -138,8 +138,6 @@ def cluster_config() -> ClusterConfig:
     storage_config = StorageConfig(host_mount_path=PurePath("/tmp"))
     registry_config = RegistryConfig()
     orchestrator_config = KubeConfig(
-        storage=storage_config,
-        registry=registry_config,
         jobs_ingress_name="platformjobsingress",
         jobs_domain_name_template="{job_id}.jobs",
         named_jobs_domain_name_template="{job_name}-{job_owner}.jobs",
@@ -150,6 +148,8 @@ def cluster_config() -> ClusterConfig:
     )
     return ClusterConfig(
         name="default",
+        storage=storage_config,
+        registry=registry_config,
         orchestrator=orchestrator_config,
         logging=LoggingConfig(elasticsearch=ElasticsearchConfig(hosts=[])),
         ingress=IngressConfig(storage_url=URL(), users_url=URL(), monitoring_url=URL()),
@@ -158,7 +158,7 @@ def cluster_config() -> ClusterConfig:
 
 @pytest.fixture
 def mock_orchestrator(cluster_config: ClusterConfig) -> MockOrchestrator:
-    return MockOrchestrator(config=cluster_config.orchestrator)
+    return MockOrchestrator(config=cluster_config)
 
 
 @pytest.fixture

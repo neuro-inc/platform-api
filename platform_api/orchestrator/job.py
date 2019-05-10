@@ -359,6 +359,7 @@ class JobRecord:
 class Job:
     def __init__(
         self,
+        storage_config: StorageConfig,
         orchestrator_config: OrchestratorConfig,
         job_request: Optional[JobRequest] = None,
         status_history: Optional[JobStatusHistory] = None,
@@ -380,6 +381,7 @@ class Job:
             used in tests only
         """
 
+        self._storage_config = storage_config
         self._orchestrator_config = orchestrator_config
 
         if not record:
@@ -431,7 +433,7 @@ class Job:
 
     @property
     def storage_config(self) -> StorageConfig:
-        return self._orchestrator_config.storage
+        return self._storage_config
 
     def to_uri(self) -> URL:
         base_uri = "job:"
@@ -592,10 +594,17 @@ class Job:
 
     @classmethod
     def from_primitive(
-        cls, orchestrator_config: OrchestratorConfig, payload: Dict[str, Any]
+        cls,
+        storage_config: StorageConfig,
+        orchestrator_config: OrchestratorConfig,
+        payload: Dict[str, Any],
     ) -> "Job":
         record = JobRecord.from_primitive(payload)
-        return cls(orchestrator_config=orchestrator_config, record=record)
+        return cls(
+            storage_config=storage_config,
+            orchestrator_config=orchestrator_config,
+            record=record,
+        )
 
 
 @dataclass(frozen=True)

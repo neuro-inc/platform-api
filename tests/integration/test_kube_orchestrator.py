@@ -21,6 +21,7 @@ from async_timeout import timeout
 from elasticsearch import AuthenticationException
 from yarl import URL
 
+from platform_api.cluster_config import StorageConfig
 from platform_api.elasticsearch import (
     Elasticsearch,
     ElasticsearchConfig,
@@ -32,10 +33,8 @@ from platform_api.orchestrator import (
     JobNotFoundException,
     JobRequest,
     JobStatus,
-    KubeConfig,
     KubeOrchestrator,
     LogReader,
-    Orchestrator,
 )
 from platform_api.orchestrator.job import JobStatusItem
 from platform_api.orchestrator.job_request import (
@@ -58,7 +57,7 @@ from platform_api.orchestrator.kube_client import (
     Service,
     StatusException,
 )
-from platform_api.orchestrator.kube_orchestrator import JobStatusItemFactory
+from platform_api.orchestrator.kube_orchestrator import JobStatusItemFactory, KubeConfig
 from platform_api.orchestrator.logs import ElasticsearchLogReader, PodContainerLogReader
 from tests.conftest import random_str
 
@@ -66,13 +65,21 @@ from .conftest import MyKubeClient
 
 
 class MyJob(Job):
-    def __init__(self, orchestrator: Orchestrator, *args: Any, **kwargs: Any) -> None:
+    def __init__(
+        self, orchestrator: KubeOrchestrator, *args: Any, **kwargs: Any
+    ) -> None:
         self._orchestrator = orchestrator
         kwargs.setdefault("owner", "test-owner")
         if args:
-            super().__init__(orchestrator.config, *args, **kwargs)
+            super().__init__(
+                orchestrator.storage_config, orchestrator.config, *args, **kwargs
+            )
         else:
-            super().__init__(orchestrator_config=orchestrator.config, **kwargs)
+            super().__init__(
+                storage_config=orchestrator.storage_config,
+                orchestrator_config=orchestrator.config,
+                **kwargs,
+            )
 
     async def start(self) -> JobStatus:
         status = await self._orchestrator.start_job(self, "test-token")
@@ -323,27 +330,39 @@ class TestKubeOrchestrator:
 
     @pytest.mark.asyncio
     async def test_volumes(
-        self, kube_config: KubeConfig, kube_orchestrator: KubeOrchestrator
+        self,
+        storage_config_host: StorageConfig,
+        kube_config: KubeConfig,
+        kube_orchestrator: KubeOrchestrator,
     ) -> None:
-        await self._test_volumes(kube_config, kube_orchestrator)
+        await self._test_volumes(storage_config_host, kube_config, kube_orchestrator)
 
     @pytest.mark.asyncio
     async def test_volumes_nfs(
-        self, kube_config_nfs: KubeConfig, kube_orchestrator_nfs: KubeOrchestrator
+        self,
+        storage_config_nfs: StorageConfig,
+        kube_config_nfs: KubeConfig,
+        kube_orchestrator_nfs: KubeOrchestrator,
     ) -> None:
-        await self._test_volumes(kube_config_nfs, kube_orchestrator_nfs)
+        await self._test_volumes(
+            storage_config_nfs, kube_config_nfs, kube_orchestrator_nfs
+        )
 
     async def _test_volumes(
-        self, kube_config: KubeConfig, kube_orchestrator: KubeOrchestrator
+        self,
+        storage_config: StorageConfig,
+        kube_config: KubeConfig,
+        kube_orchestrator: KubeOrchestrator,
     ) -> None:
+        assert storage_config.host_mount_path
         volumes = [
             ContainerVolume(
                 uri=URL(
-                    kube_config.storage.uri_scheme
+                    storage_config.uri_scheme
                     + "://"
-                    + str(kube_config.storage_mount_path)
+                    + str(storage_config.host_mount_path)
                 ),
-                src_path=PurePath(kube_config.storage_mount_path),
+                src_path=storage_config.host_mount_path,
                 dst_path=PurePath("/storage"),
             )
         ]
@@ -862,6 +881,7 @@ class TestKubeClient:
         self,
         kube_config: KubeConfig,
         kube_client: KubeClient,
+        kube_orchestrator: KubeOrchestrator,
         delete_pod_later: Callable[[PodDescriptor], Awaitable[None]],
     ) -> None:
         container = Container(
@@ -871,7 +891,7 @@ class TestKubeClient:
         )
         job_request = JobRequest.create(container)
         pod = PodDescriptor.from_job_request(
-            kube_config.create_storage_volume(), job_request
+            kube_orchestrator.create_storage_volume(), job_request
         )
         await delete_pod_later(pod)
         await kube_client.create_pod(pod)
@@ -883,6 +903,7 @@ class TestKubeClient:
         self,
         kube_config: KubeConfig,
         kube_client: KubeClient,
+        kube_orchestrator: KubeOrchestrator,
         delete_pod_later: Callable[[PodDescriptor], Awaitable[None]],
     ) -> None:
         container = Container(
@@ -892,7 +913,7 @@ class TestKubeClient:
         )
         job_request = JobRequest.create(container)
         pod = PodDescriptor.from_job_request(
-            kube_config.create_storage_volume(), job_request
+            kube_orchestrator.create_storage_volume(), job_request
         )
         await delete_pod_later(pod)
         await kube_client.create_pod(pod)
@@ -913,6 +934,7 @@ class TestKubeClient:
         self,
         kube_config: KubeConfig,
         kube_client: KubeClient,
+        kube_orchestrator: KubeOrchestrator,
         delete_pod_later: Callable[[PodDescriptor], Awaitable[None]],
     ) -> None:
         container = Container(
@@ -922,7 +944,7 @@ class TestKubeClient:
         )
         job_request = JobRequest.create(container)
         pod = PodDescriptor.from_job_request(
-            kube_config.create_storage_volume(), job_request
+            kube_orchestrator.create_storage_volume(), job_request
         )
         await delete_pod_later(pod)
         await kube_client.create_pod(pod)
@@ -947,6 +969,7 @@ class TestKubeClient:
         self,
         kube_config: KubeConfig,
         kube_client: KubeClient,
+        kube_orchestrator: KubeOrchestrator,
         delete_pod_later: Callable[[PodDescriptor], Awaitable[None]],
     ) -> None:
         container = Container(
@@ -956,7 +979,7 @@ class TestKubeClient:
         )
         job_request = JobRequest.create(container)
         pod = PodDescriptor.from_job_request(
-            kube_config.create_storage_volume(), job_request
+            kube_orchestrator.create_storage_volume(), job_request
         )
         await delete_pod_later(pod)
         await kube_client.create_pod(pod)
@@ -1131,6 +1154,7 @@ class TestKubeClient:
         self,
         kube_config: KubeConfig,
         kube_client: MyKubeClient,
+        kube_orchestrator: KubeOrchestrator,
         delete_pod_later: Callable[[PodDescriptor], Awaitable[None]],
     ) -> None:
         container = Container(
@@ -1140,7 +1164,7 @@ class TestKubeClient:
         )
         job_request = JobRequest.create(container)
         pod = PodDescriptor.from_job_request(
-            kube_config.create_storage_volume(), job_request
+            kube_orchestrator.create_storage_volume(), job_request
         )
         await delete_pod_later(pod)
         await kube_client.create_pod(pod)
@@ -1169,6 +1193,7 @@ class TestKubeClient:
         self,
         kube_config: KubeConfig,
         kube_client: KubeClient,
+        kube_orchestrator: KubeOrchestrator,
         delete_pod_later: Callable[[PodDescriptor], Awaitable[None]],
     ) -> None:
         command = 'bash -c "for i in {1..5}; do echo $i; sleep 1; done"'
@@ -1179,7 +1204,7 @@ class TestKubeClient:
         )
         job_request = JobRequest.create(container)
         pod = PodDescriptor.from_job_request(
-            kube_config.create_storage_volume(), job_request
+            kube_orchestrator.create_storage_volume(), job_request
         )
         await delete_pod_later(pod)
         await kube_client.create_pod(pod)
@@ -1212,6 +1237,7 @@ class TestKubeClient:
         self,
         kube_config: KubeConfig,
         kube_client: KubeClient,
+        kube_orchestrator: KubeOrchestrator,
         delete_pod_later: Callable[[PodDescriptor], Awaitable[None]],
     ) -> None:
         container = Container(
@@ -1221,7 +1247,7 @@ class TestKubeClient:
         )
         job_request = JobRequest.create(container)
         pod = PodDescriptor.from_job_request(
-            kube_config.create_storage_volume(), job_request
+            kube_orchestrator.create_storage_volume(), job_request
         )
         await delete_pod_later(pod)
         await kube_client.create_pod(pod)
@@ -1254,6 +1280,7 @@ class TestLogReader:
         self,
         kube_config: KubeConfig,
         kube_client: KubeClient,
+        kube_orchestrator: KubeOrchestrator,
         delete_pod_later: Callable[[PodDescriptor], Awaitable[None]],
     ) -> None:
         container = Container(
@@ -1263,7 +1290,7 @@ class TestLogReader:
         )
         job_request = JobRequest.create(container)
         pod = PodDescriptor.from_job_request(
-            kube_config.create_storage_volume(), job_request
+            kube_orchestrator.create_storage_volume(), job_request
         )
         await delete_pod_later(pod)
         await kube_client.create_pod(pod)
@@ -1278,6 +1305,7 @@ class TestLogReader:
         self,
         kube_config: KubeConfig,
         kube_client: KubeClient,
+        kube_orchestrator: KubeOrchestrator,
         delete_pod_later: Callable[[PodDescriptor], Awaitable[None]],
     ) -> None:
         command = 'bash -c "echo -n Failure!; false"'
@@ -1288,7 +1316,7 @@ class TestLogReader:
         )
         job_request = JobRequest.create(container)
         pod = PodDescriptor.from_job_request(
-            kube_config.create_storage_volume(), job_request
+            kube_orchestrator.create_storage_volume(), job_request
         )
         await delete_pod_later(pod)
         await kube_client.create_pod(pod)
@@ -1303,6 +1331,7 @@ class TestLogReader:
         self,
         kube_config: KubeConfig,
         kube_client: KubeClient,
+        kube_orchestrator: KubeOrchestrator,
         delete_pod_later: Callable[[PodDescriptor], Awaitable[None]],
     ) -> None:
         command = 'bash -c "sleep 5; echo -n Success!"'
@@ -1313,7 +1342,7 @@ class TestLogReader:
         )
         job_request = JobRequest.create(container)
         pod = PodDescriptor.from_job_request(
-            kube_config.create_storage_volume(), job_request
+            kube_orchestrator.create_storage_volume(), job_request
         )
         await delete_pod_later(pod)
         await kube_client.create_pod(pod)
@@ -1331,6 +1360,7 @@ class TestLogReader:
         self,
         kube_config: KubeConfig,
         kube_client: KubeClient,
+        kube_orchestrator: KubeOrchestrator,
         delete_pod_later: Callable[[PodDescriptor], Awaitable[None]],
     ) -> None:
         command = 'bash -c "for i in {1..5}; do echo $i; sleep 1; done"'
@@ -1341,7 +1371,7 @@ class TestLogReader:
         )
         job_request = JobRequest.create(container)
         pod = PodDescriptor.from_job_request(
-            kube_config.create_storage_volume(), job_request
+            kube_orchestrator.create_storage_volume(), job_request
         )
         await delete_pod_later(pod)
         await kube_client.create_pod(pod)
@@ -1357,6 +1387,7 @@ class TestLogReader:
         self,
         kube_config: KubeConfig,
         kube_client: KubeClient,
+        kube_orchestrator: KubeOrchestrator,
         delete_pod_later: Callable[[PodDescriptor], Awaitable[None]],
     ) -> None:
         command = 'bash -c "for i in {1..60}; do echo $i; sleep 1; done"'
@@ -1367,7 +1398,7 @@ class TestLogReader:
         )
         job_request = JobRequest.create(container)
         pod = PodDescriptor.from_job_request(
-            kube_config.create_storage_volume(), job_request
+            kube_orchestrator.create_storage_volume(), job_request
         )
         await delete_pod_later(pod)
         await kube_client.create_pod(pod)
@@ -1417,6 +1448,7 @@ class TestLogReader:
         self,
         kube_config: KubeConfig,
         kube_client: MyKubeClient,
+        kube_orchestrator: KubeOrchestrator,
         delete_pod_later: Callable[[PodDescriptor], Awaitable[None]],
         es_client: Elasticsearch,
     ) -> None:
@@ -1429,7 +1461,7 @@ class TestLogReader:
         )
         job_request = JobRequest.create(container)
         pod = PodDescriptor.from_job_request(
-            kube_config.create_storage_volume(), job_request
+            kube_orchestrator.create_storage_volume(), job_request
         )
         await delete_pod_later(pod)
         await kube_client.create_pod(pod)
@@ -1574,6 +1606,7 @@ class TestPodContainerDevShmSettings:
         self,
         kube_config: KubeConfig,
         kube_client: KubeClient,
+        kube_orchestrator: KubeOrchestrator,
         delete_pod_later: Callable[[PodDescriptor], Awaitable[None]],
         resources: ContainerResources,
     ) -> bytes:
@@ -1581,7 +1614,7 @@ class TestPodContainerDevShmSettings:
         container = Container(image="ubuntu", command=command, resources=resources)
         job_request = JobRequest.create(container)
         pod = PodDescriptor.from_job_request(
-            kube_config.create_storage_volume(), job_request
+            kube_orchestrator.create_storage_volume(), job_request
         )
         await delete_pod_later(pod)
         await kube_client.create_pod(pod)
@@ -1612,6 +1645,7 @@ class TestPodContainerDevShmSettings:
         self,
         kube_config: KubeConfig,
         kube_client: KubeClient,
+        kube_orchestrator: KubeOrchestrator,
         delete_pod_later: Callable[[PodDescriptor], Awaitable[None]],
         resources: ContainerResources,
         command: str,
@@ -1619,7 +1653,7 @@ class TestPodContainerDevShmSettings:
         container = Container(image="ubuntu", command=command, resources=resources)
         job_request = JobRequest.create(container)
         pod = PodDescriptor.from_job_request(
-            kube_config.create_storage_volume(), job_request
+            kube_orchestrator.create_storage_volume(), job_request
         )
         await delete_pod_later(pod)
         await kube_client.create_pod(pod)
@@ -1636,11 +1670,12 @@ class TestPodContainerDevShmSettings:
         self,
         kube_config: KubeConfig,
         kube_client: KubeClient,
+        kube_orchestrator: KubeOrchestrator,
         delete_pod_later: Callable[[PodDescriptor], Awaitable[None]],
     ) -> None:
         resources = ContainerResources(cpu=0.1, memory_mb=128)
         run_output = await self.run_command_get_logs(
-            kube_config, kube_client, delete_pod_later, resources
+            kube_config, kube_client, kube_orchestrator, delete_pod_later, resources
         )
         assert b"64M" in run_output
 
@@ -1649,11 +1684,12 @@ class TestPodContainerDevShmSettings:
         self,
         kube_config: KubeConfig,
         kube_client: KubeClient,
+        kube_orchestrator: KubeOrchestrator,
         delete_pod_later: Callable[[PodDescriptor], Awaitable[None]],
     ) -> None:
         resources = ContainerResources(cpu=0.1, memory_mb=128, shm=False)
         run_output = await self.run_command_get_logs(
-            kube_config, kube_client, delete_pod_later, resources
+            kube_config, kube_client, kube_orchestrator, delete_pod_later, resources
         )
         assert b"64M" in run_output
 
@@ -1662,11 +1698,12 @@ class TestPodContainerDevShmSettings:
         self,
         kube_config: KubeConfig,
         kube_client: KubeClient,
+        kube_orchestrator: KubeOrchestrator,
         delete_pod_later: Callable[[PodDescriptor], Awaitable[None]],
     ) -> None:
         resources = ContainerResources(cpu=0.1, memory_mb=128, shm=True)
         run_output = await self.run_command_get_logs(
-            kube_config, kube_client, delete_pod_later, resources
+            kube_config, kube_client, kube_orchestrator, delete_pod_later, resources
         )
         assert b"64M" not in run_output
 
@@ -1675,12 +1712,18 @@ class TestPodContainerDevShmSettings:
         self,
         kube_config: KubeConfig,
         kube_client: KubeClient,
+        kube_orchestrator: KubeOrchestrator,
         delete_pod_later: Callable[[PodDescriptor], Awaitable[None]],
     ) -> None:
         command = "dd if=/dev/zero of=/dev/zero  bs=999999M  count=1"
         resources = ContainerResources(cpu=0.1, memory_mb=128, shm=False)
         run_output = await self.run_command_get_status(
-            kube_config, kube_client, delete_pod_later, resources, command
+            kube_config,
+            kube_client,
+            kube_orchestrator,
+            delete_pod_later,
+            resources,
+            command,
         )
         job_status = JobStatusItem.create(
             status=JobStatus.FAILED, reason="OOMKilled", description="\nExit code: 137"
@@ -1692,12 +1735,18 @@ class TestPodContainerDevShmSettings:
         self,
         kube_config: KubeConfig,
         kube_client: KubeClient,
+        kube_orchestrator: KubeOrchestrator,
         delete_pod_later: Callable[[PodDescriptor], Awaitable[None]],
     ) -> None:
         command = "dd if=/dev/zero of=/dev/shm/test bs=256M  count=1"
         resources = ContainerResources(cpu=0.1, memory_mb=1024, shm=True)
         run_output = await self.run_command_get_status(
-            kube_config, kube_client, delete_pod_later, resources, command
+            kube_config,
+            kube_client,
+            kube_orchestrator,
+            delete_pod_later,
+            resources,
+            command,
         )
         assert JobStatusItem.create(status=JobStatus.SUCCEEDED) == run_output
 
@@ -1706,12 +1755,18 @@ class TestPodContainerDevShmSettings:
         self,
         kube_config: KubeConfig,
         kube_client: KubeClient,
+        kube_orchestrator: KubeOrchestrator,
         delete_pod_later: Callable[[PodDescriptor], Awaitable[None]],
     ) -> None:
         command = "dd if=/dev/zero of=/dev/shm/test  bs=32M  count=1"
         resources = ContainerResources(cpu=0.1, memory_mb=128, shm=False)
         run_output = await self.run_command_get_status(
-            kube_config, kube_client, delete_pod_later, resources, command
+            kube_config,
+            kube_client,
+            kube_orchestrator,
+            delete_pod_later,
+            resources,
+            command,
         )
         assert JobStatusItem.create(status=JobStatus.SUCCEEDED) == run_output
 
