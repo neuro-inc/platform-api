@@ -54,12 +54,9 @@ _orchestrator_config_validator = t.Dict(
         "named_job_domain_name_template": t.String,
         "resource_pool_types": t.List(
             t.Dict(
-                {
-                    "gpu": t.Null | t.Int,
-                    "gpu_model": t.Null | t.Enum(*[m.value.id for m in GKEGPUModels]),
-                }
+                {"gpu": t.Int, "gpu_model": t.Enum(*[m.value.id for m in GKEGPUModels])}
             )
-            | t.Dict({"gpu": t.Null | t.Int})
+            | t.Dict({"gpu": t.Int})
             | t.Dict({})
         ),
     }
@@ -89,11 +86,13 @@ _cluster_config_validator = t.Dict(
 
 class ClusterConfigFactory:
     def create_cluster_configs(
-        self, payload: Sequence[Dict[str, Any]]
+        self, payload: Sequence[Dict[str, Any]], users_url: URL
     ) -> Sequence[ClusterConfig]:
-        return [self._create_cluster_config(p) for p in payload]
+        return [self._create_cluster_config(p, users_url) for p in payload]
 
-    def _create_cluster_config(self, payload: Dict[str, Any]) -> ClusterConfig:
+    def _create_cluster_config(
+        self, payload: Dict[str, Any], users_url: URL
+    ) -> ClusterConfig:
         _cluster_config_validator.check(payload)
         return ClusterConfig(
             name=payload["name"],
@@ -101,14 +100,16 @@ class ClusterConfigFactory:
             registry=self._create_registry_config(payload),
             orchestrator=self._create_orchestrator_config(payload),
             logging=self._create_logging_config(payload),
-            ingress=self._create_ingress_config(payload),
+            ingress=self._create_ingress_config(payload, users_url),
         )
 
-    def _create_ingress_config(self, payload: Dict[str, Any]) -> IngressConfig:
+    def _create_ingress_config(
+        self, payload: Dict[str, Any], users_url: URL
+    ) -> IngressConfig:
         return IngressConfig(
             storage_url=URL(payload["storage"]["url"]),
             monitoring_url=URL(payload["monitoring"]["url"]),
-            users_url=URL(),
+            users_url=users_url,
         )
 
     def _create_logging_config(self, payload: Dict[str, Any]) -> LoggingConfig:

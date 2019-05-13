@@ -59,9 +59,14 @@ def clusters_payload() -> Sequence[Dict[str, Any]]:
     ]
 
 
+@pytest.fixture
+def users_url() -> URL:
+    return URL("https://dev.neu.ro/api/v1/users")
+
+
 class TestClusterConfigFactory:
     def test_valid_cluster_config(
-        self, clusters_payload: Sequence[Dict[str, Any]]
+        self, clusters_payload: Sequence[Dict[str, Any]], users_url: URL
     ) -> None:
         storage_payload = clusters_payload[0]["storage"]
         registry_payload = clusters_payload[0]["registry"]
@@ -72,7 +77,7 @@ class TestClusterConfigFactory:
         elasticsearch_payload = monitoring_payload["elasticsearch"]
 
         factory = ClusterConfigFactory()
-        clusters = factory.create_cluster_configs(clusters_payload)
+        clusters = factory.create_cluster_configs(clusters_payload, users_url)
 
         assert len(clusters) == 1
 
@@ -144,7 +149,7 @@ class TestClusterConfigFactory:
         )
 
     def test_valid_elasticsearch_config_without_user(
-        self, clusters_payload: Sequence[Dict[str, Any]]
+        self, clusters_payload: Sequence[Dict[str, Any]], users_url: URL
     ) -> None:
         elasticsearch_payload = clusters_payload[0]["monitoring"]["elasticsearch"]
 
@@ -152,7 +157,7 @@ class TestClusterConfigFactory:
         del elasticsearch_payload["password"]
 
         factory = ClusterConfigFactory()
-        clusters = factory.create_cluster_configs(clusters_payload)
+        clusters = factory.create_cluster_configs(clusters_payload, users_url)
         cluster = clusters[0]
 
         logging = cluster.logging
@@ -161,14 +166,14 @@ class TestClusterConfigFactory:
         assert logging.elasticsearch.password is None
 
     def test_valid_storage_config_nfs(
-        self, clusters_payload: Sequence[Dict[str, Any]]
+        self, clusters_payload: Sequence[Dict[str, Any]], users_url: URL
     ) -> None:
         storage_payload = clusters_payload[0]["storage"]
 
         del storage_payload["host"]
 
         factory = ClusterConfigFactory()
-        clusters = factory.create_cluster_configs(clusters_payload)
+        clusters = factory.create_cluster_configs(clusters_payload, users_url)
         cluster = clusters[0]
 
         storage = cluster.storage
@@ -180,14 +185,14 @@ class TestClusterConfigFactory:
         )
 
     def test_valid_storage_config_host(
-        self, clusters_payload: Sequence[Dict[str, Any]]
+        self, clusters_payload: Sequence[Dict[str, Any]], users_url: URL
     ) -> None:
         storage_payload = clusters_payload[0]["storage"]
 
         del storage_payload["nfs"]
 
         factory = ClusterConfigFactory()
-        clusters = factory.create_cluster_configs(clusters_payload)
+        clusters = factory.create_cluster_configs(clusters_payload, users_url)
         cluster = clusters[0]
 
         storage = cluster.storage
