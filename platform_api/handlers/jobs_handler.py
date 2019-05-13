@@ -34,6 +34,7 @@ from .validators import (
     create_job_name_validator,
     create_job_status_validator,
     create_user_name_validator,
+    sanitize_dns_name,
 )
 
 
@@ -163,7 +164,10 @@ def convert_job_to_job_response(job: Job) -> Dict[str, Any]:
     if job.has_http_server_exposed:
         response_payload["http_url"] = job.http_url
         if job.http_url_named:
-            response_payload["http_url_named"] = job.http_url_named
+            # TEMPORARY FIX (ayushkovskiy, May 10): Too long DNS label (longer than 63
+            # chars) is invalid, therefore we don't send it back to user (issue #642)
+            http_url_named_sanitized = sanitize_dns_name(job.http_url_named)
+            response_payload["http_url_named"] = http_url_named_sanitized
     if job.has_ssh_server_exposed:
         response_payload["ssh_server"] = job.ssh_server
     if job.internal_hostname:

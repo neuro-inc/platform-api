@@ -1,6 +1,7 @@
 from typing import Any, Dict, Optional, Sequence, Set
 
 import trafaret as t
+from yarl import URL
 
 from platform_api.orchestrator.job_request import JobStatus
 from platform_api.resource import GPUModel
@@ -167,3 +168,16 @@ def create_container_request_validator(
 
 def create_container_response_validator() -> t.Trafaret:
     return create_container_validator(allow_volumes=True, allow_any_gpu_models=True)
+
+
+def sanitize_dns_name(value: str) -> Optional[str]:
+    """ This is a TEMPORARY METHOD used to sanitize DNS names so that they are parseable
+    by the client (issue #642).
+    :param value: String representing a DNS name
+    :return: `value` if it can be parsed by `yarl.URL`, `None` otherwise
+    """
+    try:
+        URL(value)
+        return value
+    except ValueError:
+        return None

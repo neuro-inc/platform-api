@@ -22,12 +22,15 @@ from platform_api.handlers.models_handler import (
     create_model_response_validator,
 )
 from platform_api.handlers.validators import (
+    JOB_NAME_MAX_LENGTH,
+    USER_NAME_MAX_LENGTH,
     create_container_request_validator,
     create_container_response_validator,
 )
 from platform_api.orchestrator.job import Job
 from platform_api.orchestrator.job_request import (
     Container,
+    ContainerHTTPServer,
     ContainerResources,
     ContainerSSHServer,
     ContainerVolume,
@@ -610,6 +613,96 @@ async def test_job_to_job_response(mock_orchestrator: MockOrchestrator) -> None:
         },
         "name": "test-job-name",
         "description": "test test description",
+        "ssh_auth_server": "ssh://nobody@ssh-auth:22",
+        "is_preemptible": False,
+    }
+
+
+@pytest.mark.asyncio
+async def test_job_to_job_response_with_job_name_and_http_exposed(
+    mock_orchestrator: MockOrchestrator
+) -> None:
+    owner_name = "a" * USER_NAME_MAX_LENGTH
+    job_name = "b" * JOB_NAME_MAX_LENGTH
+    job = Job(
+        storage_config=mock_orchestrator.storage_config,
+        orchestrator_config=mock_orchestrator.config,
+        job_request=JobRequest.create(
+            Container(
+                image="testimage",
+                resources=ContainerResources(cpu=1, memory_mb=128),
+                http_server=ContainerHTTPServer(port=80),
+            )
+        ),
+        owner=owner_name,
+        name=job_name,
+    )
+    response = convert_job_to_job_response(job)
+    assert response == {
+        "id": job.id,
+        "owner": owner_name,
+        "name": job_name,
+        "http_url": f"http://{job.id}.jobs",
+        "http_url_named": f"http://{job_name}-{owner_name}.jobs",
+        "status": "pending",
+        "history": {
+            "status": "pending",
+            "reason": None,
+            "description": None,
+            "created_at": mock.ANY,
+        },
+        "container": {
+            "image": "testimage",
+            "env": {},
+            "volumes": [],
+            "resources": {"cpu": 1, "memory_mb": 128},
+            "http": {"port": 80, "health_check_path": "/", "requires_auth": False},
+        },
+        "ssh_auth_server": "ssh://nobody@ssh-auth:22",
+        "is_preemptible": False,
+    }
+
+
+@pytest.mark.asyncio
+async def test_job_to_job_response_with_job_name_and_http_exposed_too_long_name(
+    mock_orchestrator: MockOrchestrator
+) -> None:
+    owner_name = "a" * USER_NAME_MAX_LENGTH
+    job_name = "b" * (JOB_NAME_MAX_LENGTH + 1)
+    job = Job(
+        storage_config=mock_orchestrator.storage_config,
+        orchestrator_config=mock_orchestrator.config,
+        job_request=JobRequest.create(
+            Container(
+                image="testimage",
+                resources=ContainerResources(cpu=1, memory_mb=128),
+                http_server=ContainerHTTPServer(port=80),
+            )
+        ),
+        owner=owner_name,
+        name=job_name,
+    )
+    response = convert_job_to_job_response(job)
+    assert response == {
+        "id": job.id,
+        "owner": owner_name,
+        "name": job_name,
+        "http_url": f"http://{job.id}.jobs",
+        "http_url_named": None,  # NOTE: `http_url_named` is cut off when it is invalid
+        "status": "pending",
+        "history": {
+            "status": "pending",
+            "reason": None,
+            "description": None,
+            "created_at": mock.ANY,
+        },
+        "container": {
+            "image": "testimage",
+            "env": {},
+            "volumes": [],
+            "resources": {"cpu": 1, "memory_mb": 128},
+            "http": {"port": 80, "health_check_path": "/", "requires_auth": False},
+        },
         "ssh_auth_server": "ssh://nobody@ssh-auth:22",
         "is_preemptible": False,
     }
