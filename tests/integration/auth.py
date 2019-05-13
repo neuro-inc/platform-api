@@ -184,5 +184,6 @@ def oauth_config_dev() -> OAuthConfig:
         base_url=URL("https://platform-auth0-url"),
         client_id="client_id",
         audience="https://platform-dev-url",
+        headless_callback_url=URL("https://oauth/show-code"),
         success_redirect_url=URL("https://platform-default-url"),
     )
