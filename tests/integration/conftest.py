@@ -1,7 +1,7 @@
 import asyncio
 import json
 import uuid
-from pathlib import PurePath
+from pathlib import Path, PurePath
 from typing import Any, AsyncIterator, Awaitable, Callable, Dict, Iterator, Optional
 from urllib.parse import urlsplit
 
@@ -74,6 +74,16 @@ async def kube_config_cluster_payload(kube_config_payload: Dict[str, Any]) -> An
 
 
 @pytest.fixture(scope="session")
+def cert_authority_data_pem(
+    kube_config_cluster_payload: Dict[str, Any]
+) -> Optional[str]:
+    ca_path = kube_config_cluster_payload["certificate-authority"]
+    if ca_path:
+        return Path(ca_path).read_text()
+    return None
+
+
+@pytest.fixture(scope="session")
 async def kube_config_user_payload(kube_config_payload: Dict[str, Any]) -> Any:
     user_name = "minikube"
     users = {user["name"]: user["user"] for user in kube_config_payload["users"]}
@@ -94,6 +104,7 @@ def registry_config() -> RegistryConfig:
 async def kube_config(
     kube_config_cluster_payload: Dict[str, Any],
     kube_config_user_payload: Dict[str, Any],
+    cert_authority_data_pem: Optional[str],
 ) -> KubeConfig:
     cluster = kube_config_cluster_payload
     user = kube_config_user_payload
@@ -105,7 +116,8 @@ async def kube_config(
         ssh_domain_name="ssh.platform.neuromation.io",
         ssh_auth_domain_name="ssh-auth.platform.neuromation.io",
         endpoint_url=cluster["server"],
-        cert_authority_path=cluster["certificate-authority"],
+        cert_authority_data_pem=cert_authority_data_pem,
+        cert_authority_path=None,  # disable, so only `cert_authority_data_pem` works
         auth_cert_path=user["client-certificate"],
         auth_cert_key_path=user["client-key"],
         node_label_gpu="gpu",
@@ -183,8 +195,9 @@ async def kube_client(kube_config: KubeConfig) -> AsyncIterator[MyKubeClient]:
     # TODO (A Danshyn 06/06/18): create a factory method
     client = MyKubeClient(
         base_url=config.endpoint_url,
-        cert_authority_path=config.cert_authority_path,
         auth_type=config.auth_type,
+        cert_authority_data_pem=config.cert_authority_data_pem,
+        cert_authority_path=config.cert_authority_path,
         auth_cert_path=config.auth_cert_path,
         auth_cert_key_path=config.auth_cert_key_path,
         namespace=config.namespace,
@@ -216,12 +229,14 @@ def storage_config_nfs(nfs_volume_server: Optional[str]) -> StorageConfig:
 async def kube_config_nfs(
     kube_config_cluster_payload: Dict[str, Any],
     kube_config_user_payload: Dict[str, Any],
+    cert_authority_data_pem: Optional[str],
 ) -> KubeConfig:
     cluster = kube_config_cluster_payload
     user = kube_config_user_payload
     kube_config = KubeConfig(
         endpoint_url=cluster["server"],
-        cert_authority_path=cluster["certificate-authority"],
+        cert_authority_data_pem=cert_authority_data_pem,
+        cert_authority_path=None,  # disable so that `cert_authority_data_pem` works
         auth_cert_path=user["client-certificate"],
         auth_cert_key_path=user["client-key"],
         jobs_ingress_name="platformjobsingress",
