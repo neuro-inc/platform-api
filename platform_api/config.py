@@ -34,6 +34,7 @@ class OAuthConfig:
     base_url: URL
     client_id: str = field(repr=False)
     audience: str = field(repr=False)
+    headless_callback_url: URL
 
     callback_urls: Sequence[URL] = (
         URL("http://127.0.0.1:54540"),
@@ -41,7 +42,6 @@ class OAuthConfig:
         URL("http://127.0.0.1:54542"),
     )
 
-    headless_callback_url: URL
     success_redirect_url: Optional[URL] = None
 
     @property
