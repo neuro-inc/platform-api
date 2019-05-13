@@ -74,6 +74,16 @@ async def kube_config_cluster_payload(kube_config_payload: Dict[str, Any]) -> An
 
 
 @pytest.fixture(scope="session")
+def cert_authority_data_pem(
+    kube_config_cluster_payload: Dict[str, Any]
+) -> Optional[str]:
+    ca_path = kube_config_cluster_payload["certificate-authority"]
+    if ca_path:
+        return Path(ca_path).read_text()
+    return None
+
+
+@pytest.fixture(scope="session")
 async def kube_config_user_payload(kube_config_payload: Dict[str, Any]) -> Any:
     user_name = "minikube"
     users = {user["name"]: user["user"] for user in kube_config_payload["users"]}
@@ -94,6 +104,7 @@ def registry_config() -> RegistryConfig:
 async def kube_config(
     kube_config_cluster_payload: Dict[str, Any],
     kube_config_user_payload: Dict[str, Any],
+    cert_authority_data_pem: Optional[str],
 ) -> KubeConfig:
     cluster = kube_config_cluster_payload
     user = kube_config_user_payload
@@ -105,8 +116,8 @@ async def kube_config(
         ssh_domain_name="ssh.platform.neuromation.io",
         ssh_auth_domain_name="ssh-auth.platform.neuromation.io",
         endpoint_url=cluster["server"],
-        cert_authority_data_pem=Path(cluster["certificate-authority"]).read_text(),
-        cert_authority_path=None,  # disable so that `cert_authority_data_pem` works
+        cert_authority_data_pem=cert_authority_data_pem,
+        cert_authority_path=None,  # disable, so only `cert_authority_data_pem` works
         auth_cert_path=user["client-certificate"],
         auth_cert_key_path=user["client-key"],
         node_label_gpu="gpu",
@@ -218,14 +229,13 @@ def storage_config_nfs(nfs_volume_server: Optional[str]) -> StorageConfig:
 async def kube_config_nfs(
     kube_config_cluster_payload: Dict[str, Any],
     kube_config_user_payload: Dict[str, Any],
+    cert_authority_data_pem: Optional[str],
 ) -> KubeConfig:
     cluster = kube_config_cluster_payload
     user = kube_config_user_payload
-    ca_path = cluster["certificate-authority"]
-    ca_data = Path(ca_path).read_text() if ca_path else None
     kube_config = KubeConfig(
         endpoint_url=cluster["server"],
-        cert_authority_data_pem=ca_data,
+        cert_authority_data_pem=cert_authority_data_pem,
         cert_authority_path=None,  # disable so that `cert_authority_data_pem` works
         auth_cert_path=user["client-certificate"],
         auth_cert_key_path=user["client-key"],
