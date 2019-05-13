@@ -149,6 +149,7 @@ def convert_job_to_job_response(job: Job) -> Dict[str, Any]:
             "status": current_status.status,
             "reason": current_status.reason,
             "description": current_status.description,
+            "exit_code": current_status.exit_code,
             "created_at": history.created_at_str,
         },
         "container": convert_job_container_to_json(

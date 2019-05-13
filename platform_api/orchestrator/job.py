@@ -45,6 +45,7 @@ class JobStatusItem:
     transition_time: datetime = field(compare=False)
     reason: Optional[str] = None
     description: Optional[str] = None
+    exit_code: Optional[int] = None
 
     @property
     def is_pending(self) -> bool:
@@ -79,6 +80,7 @@ class JobStatusItem:
             transition_time=transition_time,
             reason=payload.get("reason"),
             description=payload.get("description"),
+            exit_code=payload.get("exit_code"),
         )
 
     def to_primitive(self) -> Dict[str, Any]:
@@ -87,6 +89,7 @@ class JobStatusItem:
             "transition_time": self.transition_time.isoformat(),
             "reason": self.reason,
             "description": self.description,
+            "exit_code": self.exit_code,
         }
 
 

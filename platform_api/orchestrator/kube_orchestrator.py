@@ -83,6 +83,7 @@ class JobStatusItemFactory:
             self._status,
             reason=self._parse_reason(),
             description=self._compose_description(),
+            exit_code=self._container_status.exit_code
         )
 
 
