@@ -163,7 +163,9 @@ class TestEnvironConfigFactory:
         assert config.oauth.client_id == "oauth_client_id"
         assert config.oauth.audience == "https://platform-url"
         assert config.oauth.success_redirect_url == URL("https://platform-default-url")
-        assert config.oauth.headless_callback_url == URL("https://oauth/show-code")
+        assert config.oauth.headless_callback_url == URL(
+            "https://dev.neu.ro/oauth/show-code"
+        )
 
         assert config.registry.host == "registry.dev.neuromation.io"
 
