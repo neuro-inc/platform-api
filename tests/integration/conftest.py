@@ -363,7 +363,6 @@ def config_factory(
             storage_url=URL("https://neu.ro/api/v1/storage"),
             users_url=URL("https://neu.ro/api/v1/users"),
             monitoring_url=URL("https://neu.ro/api/v1/monitoring"),
-            headless_callback_url=URL("https://dev.neu.ro/oauth/show-code"),
         )
         cluster_config = ClusterConfig(
             name="default",
