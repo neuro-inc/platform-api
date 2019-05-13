@@ -16,6 +16,7 @@ from .config import (
     Config,
     DatabaseConfig,
     IngressConfig,
+    JobsConfig,
     OAuthConfig,
     PlatformConfig,
     ServerConfig,
@@ -24,8 +25,8 @@ from .config import (
     SSHServerConfig,
 )
 from .elasticsearch import ElasticsearchConfig
-from .orchestrator import KubeConfig
-from .orchestrator.kube_orchestrator import KubeClientAuthType
+from .orchestrator.kube_client import KubeClientAuthType
+from .orchestrator.kube_orchestrator import KubeConfig
 from .redis import RedisConfig
 from .resource import GKEGPUModels, ResourcePoolType
 
@@ -43,24 +44,33 @@ class EnvironConfigFactory:
     def create(self) -> Config:
         env_prefix = self._environ.get("NP_ENV_PREFIX", Config.env_prefix)
         auth = self.create_auth()
+        jobs = self.create_jobs(orphaned_job_owner=auth.service_name)
         return Config(
             server=self.create_server(),
-            cluster=self.create_cluster(orphaned_job_owner=auth.service_name),
+            cluster=self.create_cluster(),
             database=self.create_database(),
             auth=auth,
             oauth=self.try_create_oauth(),
             env_prefix=env_prefix,
+            jobs=jobs,
         )
 
-    def create_cluster(self, *, orphaned_job_owner: str) -> ClusterConfig:
-        orchestrator = self.create_orchestrator(
-            self.create_storage(), self.create_registry(), orphaned_job_owner
-        )
+    def create_cluster(self) -> ClusterConfig:
         return ClusterConfig(
-            name="default",
-            orchestrator=orchestrator,
+            name=JobsConfig.default_cluster_name,
+            storage=self.create_storage(),
+            registry=self.create_registry(),
+            orchestrator=self.create_orchestrator(),
             ingress=self.create_ingress(),
             logging=self.create_logging(),
+        )
+
+    def create_jobs(self, *, orphaned_job_owner: str) -> JobsConfig:
+        return JobsConfig(
+            deletion_delay_s=int(
+                self._environ.get("NP_K8S_JOB_DELETION_DELAY", 60 * 60 * 24)  # one day
+            ),
+            orphaned_job_owner=orphaned_job_owner,
         )
 
     def create_ssh(self) -> SSHConfig:
@@ -72,7 +82,7 @@ class EnvironConfigFactory:
         return SSHConfig(
             server=self.create_ssh_server(),
             storage=storage,
-            orchestrator=self.create_orchestrator(storage, registry, auth.service_name),
+            orchestrator=self.create_orchestrator(),
             database=database,
             auth=auth,
             registry=registry,
@@ -118,9 +128,6 @@ class EnvironConfigFactory:
         storage_type = StorageType(
             self._environ.get("NP_STORAGE_TYPE", StorageConfig.type)
         )
-        uri_scheme = self._environ.get(
-            "NP_STORAGE_URI_SCHEME", StorageConfig.uri_scheme
-        )
         kwargs: Dict[str, Any] = {}
         if storage_type == StorageType.NFS:
             kwargs.update(
@@ -131,13 +138,10 @@ class EnvironConfigFactory:
             host_mount_path=host_mount_path,
             container_mount_path=container_mount_path,
             type=storage_type,
-            uri_scheme=uri_scheme,
-            **kwargs,
+            **kwargs
         )
 
-    def create_orchestrator(
-        self, storage: StorageConfig, registry: RegistryConfig, orphaned_job_owner: str
-    ) -> KubeConfig:
+    def create_orchestrator(self) -> KubeConfig:
         endpoint_url = self._environ["NP_K8S_API_URL"]
         auth_type = KubeClientAuthType(
             self._environ.get("NP_K8S_AUTH_TYPE", KubeConfig.auth_type.value)
@@ -151,8 +155,6 @@ class EnvironConfigFactory:
         )
 
         return KubeConfig(
-            storage=storage,
-            registry=registry,
             endpoint_url=endpoint_url,
             cert_authority_path=self._environ.get("NP_K8S_CA_PATH"),
             auth_type=auth_type,
@@ -186,15 +188,9 @@ class EnvironConfigFactory:
             ],
             ssh_domain_name=self._environ["NP_K8S_SSH_INGRESS_DOMAIN_NAME"],
             ssh_auth_domain_name=self._environ["NP_K8S_SSH_AUTH_INGRESS_DOMAIN_NAME"],
-            job_deletion_delay_s=int(
-                self._environ.get(
-                    "NP_K8S_JOB_DELETION_DELAY", KubeConfig.job_deletion_delay_s
-                )
-            ),
             resource_pool_types=pool_types,
             node_label_gpu=self._environ.get("NP_K8S_NODE_LABEL_GPU"),
             node_label_preemptible=self._environ.get("NP_K8S_NODE_LABEL_PREEMPTIBLE"),
-            orphaned_job_owner=orphaned_job_owner,
         )
 
     def create_resource_pool_types(self) -> List[ResourcePoolType]:

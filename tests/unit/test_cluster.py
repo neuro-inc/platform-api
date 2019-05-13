@@ -23,8 +23,8 @@ class _TestCluster(Cluster):
         pass
 
     @property
-    def name(self) -> str:
-        return self._config.name
+    def config(self) -> ClusterConfig:
+        return self._config
 
     @property
     def orchestrator(self) -> Orchestrator:
@@ -33,7 +33,12 @@ class _TestCluster(Cluster):
 
 def create_cluster_config(name: str) -> ClusterConfig:
     return ClusterConfig(  # type: ignore  # noqa
-        name=name, orchestrator=None, logging=None, ingress=None
+        name=name,
+        storage=None,
+        registry=None,
+        orchestrator=None,
+        logging=None,
+        ingress=None,
     )
 
 

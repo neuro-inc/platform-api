@@ -3,7 +3,7 @@ from typing import Any, Optional, Sequence
 
 from platform_api.resource import GPUModel, ResourcePoolType
 
-from ..config import OrchestratorConfig  # noqa
+from ..config import OrchestratorConfig, StorageConfig  # noqa
 from .job import Job, JobStats, JobStatusItem
 from .job_request import JobStatus
 
@@ -36,6 +36,11 @@ class Orchestrator(ABC):
     @property
     @abstractmethod
     def config(self) -> OrchestratorConfig:
+        pass
+
+    @property
+    @abstractmethod
+    def storage_config(self) -> StorageConfig:
         pass
 
     @abstractmethod

@@ -14,7 +14,6 @@ from yarl import URL
 
 from platform_api.config import Config, RegistryConfig, StorageConfig
 from platform_api.log import log_debug_time
-from platform_api.orchestrator import JobsService, Orchestrator
 from platform_api.orchestrator.job import Job, JobStats
 from platform_api.orchestrator.job_request import (
     Container,
@@ -22,6 +21,7 @@ from platform_api.orchestrator.job_request import (
     JobRequest,
     JobStatus,
 )
+from platform_api.orchestrator.jobs_service import JobsService
 from platform_api.orchestrator.jobs_storage import JobFilter
 from platform_api.resource import GPUModel
 from platform_api.user import User, authorized_user, untrusted_user
@@ -75,7 +75,7 @@ def create_job_response_validator() -> t.Trafaret:
             "container": create_container_response_validator(),
             "is_preemptible": t.Bool,
             t.Key("internal_hostname", optional=True): t.String,
-            t.Key("name", optional=True): create_job_name_validator(),
+            t.Key("name", optional=True): create_job_name_validator(max_length=None),
             t.Key("description", optional=True): t.String,
         }
     )
@@ -137,9 +137,7 @@ def convert_container_volume_to_json(
     }
 
 
-def convert_job_to_job_response(
-    job: Job, storage_config: StorageConfig
-) -> Dict[str, Any]:
+def convert_job_to_job_response(job: Job) -> Dict[str, Any]:
     history = job.status_history
     current_status = history.current
     response_payload: Dict[str, Any] = {
@@ -153,7 +151,7 @@ def convert_job_to_job_response(
             "created_at": history.created_at_str,
         },
         "container": convert_job_container_to_json(
-            job.request.container, storage_config
+            job.request.container, job.storage_config
         ),
         "ssh_auth_server": job.ssh_auth_server,
         "is_preemptible": job.is_preemptible,
@@ -196,7 +194,6 @@ class JobsHandler:
     def __init__(self, *, app: aiohttp.web.Application, config: Config) -> None:
         self._app = app
         self._config = config
-        self._storage_config = config.storage
 
         self._job_filter_factory = JobFilterFactory()
         self._job_response_validator = create_job_response_validator()
@@ -207,10 +204,6 @@ class JobsHandler:
     @property
     def _jobs_service(self) -> JobsService:
         return self._app["jobs_service"]
-
-    @property
-    def _orchestrator(self) -> Orchestrator:
-        return self._app["orchestrator"]
 
     @property
     def _auth_client(self) -> AuthClient:
@@ -228,8 +221,8 @@ class JobsHandler:
             )
         )
 
-    async def _create_job_request_validator(self) -> t.Trafaret:
-        gpu_models = await self._orchestrator.get_available_gpu_models()
+    async def _create_job_request_validator(self, user: User) -> t.Trafaret:
+        gpu_models = await self._jobs_service.get_available_gpu_models(user)
         return create_job_request_validator(allowed_gpu_models=gpu_models)
 
     async def create_job(self, request: aiohttp.web.Request) -> aiohttp.web.Response:
@@ -237,15 +230,17 @@ class JobsHandler:
 
         orig_payload = await request.json()
 
-        job_request_validator = await self._create_job_request_validator()
+        job_request_validator = await self._create_job_request_validator(user)
         request_payload = job_request_validator.check(orig_payload)
 
+        cluster_config = await self._jobs_service.get_cluster_config(user)
+
         container = ContainerBuilder.from_container_payload(
-            request_payload["container"], storage_config=self._storage_config
+            request_payload["container"], storage_config=cluster_config.storage
         ).build()
 
         permissions = infer_permissions_from_container(
-            user, container, self._config.registry
+            user, container, cluster_config.registry
         )
         logger.info("Checking whether %r has %r", user, permissions)
         await check_permission(request, permissions[0].action, permissions)
@@ -257,7 +252,7 @@ class JobsHandler:
         job, _ = await self._jobs_service.create_job(
             job_request, user=user, job_name=name, is_preemptible=is_preemptible
         )
-        response_payload = convert_job_to_job_response(job, self._storage_config)
+        response_payload = convert_job_to_job_response(job)
         self._job_response_validator.check(response_payload)
         return aiohttp.web.json_response(
             data=response_payload, status=aiohttp.web.HTTPAccepted.status_code
@@ -272,7 +267,7 @@ class JobsHandler:
         logger.info("Checking whether %r has %r", user, permission)
         await check_permission(request, permission.action, [permission])
 
-        response_payload = convert_job_to_job_response(job, self._storage_config)
+        response_payload = convert_job_to_job_response(job)
         self._job_response_validator.check(response_payload)
         return aiohttp.web.json_response(
             data=response_payload, status=aiohttp.web.HTTPOk.status_code
@@ -320,11 +315,7 @@ class JobsHandler:
         except JobFilterException:
             pass
 
-        response_payload = {
-            "jobs": [
-                convert_job_to_job_response(job, self._storage_config) for job in jobs
-            ]
-        }
+        response_payload = {"jobs": [convert_job_to_job_response(job) for job in jobs]}
         self._bulk_jobs_response_validator.check(response_payload)
         return aiohttp.web.json_response(
             data=response_payload, status=aiohttp.web.HTTPOk.status_code

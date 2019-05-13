@@ -9,7 +9,8 @@ import iso8601
 from neuro_auth_client.client import Quota
 from yarl import URL
 
-from ..config import OrchestratorConfig  # noqa
+from platform_api.cluster_config import OrchestratorConfig, StorageConfig
+
 from .job_request import JobRequest, JobStatus
 
 
@@ -33,6 +34,7 @@ class AggregatedRunTime:
 
 
 DEFAULT_QUOTA_NO_RESTRICTIONS: AggregatedRunTime = AggregatedRunTime.from_quota(Quota())
+DEFAULT_ORPHANED_JOB_OWNER = "compute"
 
 # TODO: consider adding JobStatusReason Enum
 
@@ -189,15 +191,177 @@ class JobStatusHistory:
         return None
 
 
-class Job:
-    @dataclass()
-    class OrchestratorInfo:
-        job_hostname: Optional[str] = None
+@dataclass
+class JobRecord:
+    request: JobRequest
+    owner: str
+    status_history: JobStatusHistory
+    cluster_name: str = ""
+    name: Optional[str] = None
+    is_preemptible: bool = False
+    is_deleted: bool = False
+    internal_hostname: Optional[str] = None
 
+    @classmethod
+    def create(
+        cls,
+        *,
+        status: JobStatus = JobStatus.PENDING,
+        current_datetime_factory: Callable[[], datetime] = current_datetime_factory,
+        orphaned_job_owner: str = DEFAULT_ORPHANED_JOB_OWNER,
+        **kwargs: Any,
+    ) -> "JobRecord":
+        if not kwargs.get("status_history"):
+            status_history = JobStatusHistory(
+                [
+                    JobStatusItem.create(
+                        status, current_datetime_factory=current_datetime_factory
+                    )
+                ]
+            )
+            kwargs["status_history"] = status_history
+        if not kwargs.get("owner"):
+            kwargs["owner"] = orphaned_job_owner
+        return cls(**kwargs)
+
+    @property
+    def id(self) -> str:
+        return self.request.job_id
+
+    @property
+    def status(self) -> JobStatus:
+        return self.status_history.current.status
+
+    @status.setter
+    def status(self, value: JobStatus) -> None:
+        self.set_status(value)
+
+    def set_status(
+        self,
+        value: JobStatus,
+        *,
+        current_datetime_factory: Callable[[], datetime] = current_datetime_factory,
+    ) -> None:
+        item = JobStatusItem.create(
+            value, current_datetime_factory=current_datetime_factory
+        )
+        self.status_history.current = item
+
+    @property
+    def is_finished(self) -> bool:
+        return self.status_history.is_finished
+
+    @property
+    def finished_at(self) -> Optional[datetime]:
+        return self.status_history.finished_at
+
+    @property
+    def finished_at_str(self) -> Optional[str]:
+        return self.status_history.finished_at_str
+
+    @property
+    def has_gpu(self) -> bool:
+        return bool(self.request.container.resources.gpu)
+
+    def get_run_time(
+        self,
+        *,
+        current_datetime_factory: Callable[[], datetime] = current_datetime_factory,
+    ) -> timedelta:
+        end_time = self.finished_at or current_datetime_factory()
+        start_time = self.status_history.created_at
+        return end_time - start_time
+
+    def _is_time_for_deletion(
+        self, delay: timedelta, current_datetime_factory: Callable[[], datetime]
+    ) -> bool:
+        assert self.finished_at
+        deletion_planned_at = self.finished_at + delay
+        return deletion_planned_at <= current_datetime_factory()
+
+    def should_be_deleted(
+        self,
+        *,
+        delay: timedelta = timedelta(),
+        current_datetime_factory: Callable[[], datetime] = current_datetime_factory,
+    ) -> bool:
+        return (
+            self.is_finished
+            and not self.is_deleted
+            and (
+                self._is_time_for_deletion(
+                    delay=delay, current_datetime_factory=current_datetime_factory
+                )
+                or self.status_history.current.reason == "Collected"
+            )
+        )
+
+    def to_primitive(self) -> Dict[str, Any]:
+        statuses = [item.to_primitive() for item in self.status_history.all]
+        # preserving `status` and `finished_at` for forward compat
+        result = {
+            "id": self.id,
+            "owner": self.owner,
+            "cluster_name": self.cluster_name,
+            "request": self.request.to_primitive(),
+            "status": self.status.value,
+            "statuses": statuses,
+            "is_deleted": self.is_deleted,
+            "finished_at": self.finished_at_str,
+            "is_preemptible": self.is_preemptible,
+        }
+        if self.internal_hostname:
+            result["internal_hostname"] = self.internal_hostname
+        if self.name:
+            result["name"] = self.name
+        return result
+
+    @classmethod
+    def from_primitive(
+        cls,
+        payload: Dict[str, Any],
+        orphaned_job_owner: str = DEFAULT_ORPHANED_JOB_OWNER,
+    ) -> "JobRecord":
+        request = JobRequest.from_primitive(payload["request"])
+        status_history = cls.create_status_history_from_primitive(
+            request.job_id, payload
+        )
+        return cls(
+            request=request,
+            status_history=status_history,
+            is_deleted=payload.get("is_deleted", False),
+            owner=payload.get("owner") or orphaned_job_owner,
+            cluster_name=payload.get("cluster_name") or cls.cluster_name,
+            name=payload.get("name"),
+            is_preemptible=payload.get("is_preemptible", False),
+            internal_hostname=payload.get("internal_hostname", None),
+        )
+
+    @staticmethod
+    def create_status_history_from_primitive(
+        job_id: str, payload: Dict[str, Any]
+    ) -> JobStatusHistory:
+        if "statuses" in payload:
+            # already migrated to history
+            items = [JobStatusItem.from_primitive(item) for item in payload["statuses"]]
+        else:
+            logger.info(f"Migrating job {job_id} to status history")
+            status = JobStatus(payload["status"])
+            transition_time = None
+            if status.is_finished:
+                finished_at = payload.get("finished_at")
+                if finished_at:
+                    transition_time = iso8601.parse_date(finished_at)
+            items = [JobStatusItem.create(status, transition_time=transition_time)]
+        return JobStatusHistory(items)
+
+
+class Job:
     def __init__(
         self,
+        storage_config: StorageConfig,
         orchestrator_config: OrchestratorConfig,
-        job_request: JobRequest,
+        job_request: Optional[JobRequest] = None,
         status_history: Optional[JobStatusHistory] = None,
         # leaving `status` for backward compat with tests
         status: JobStatus = JobStatus.PENDING,
@@ -207,35 +371,44 @@ class Job:
         name: Optional[str] = None,
         is_preemptible: bool = False,
         is_forced_to_preemptible_pool: bool = False,
+        # leaving for backward compat with tests
+        orphaned_job_owner: str = DEFAULT_ORPHANED_JOB_OWNER,
+        *,
+        record: Optional[JobRecord] = None,
     ) -> None:
         """
         :param bool is_forced_to_preemptible_pool:
             used in tests only
         """
 
+        self._storage_config = storage_config
         self._orchestrator_config = orchestrator_config
-        self._job_request = job_request
 
-        if status_history:
-            self._status_history = status_history
-        else:
-            self._status_history = JobStatusHistory(
-                [
-                    JobStatusItem.create(
-                        status, current_datetime_factory=current_datetime_factory
-                    )
-                ]
+        if not record:
+            # NOTE: this branch is left for backward compat reasons
+            assert job_request
+            record = JobRecord.create(
+                request=job_request,
+                owner=owner,
+                status=status,
+                status_history=status_history,
+                name=name,
+                is_preemptible=is_preemptible,
+                is_deleted=is_deleted,
+                current_datetime_factory=current_datetime_factory,
+                orphaned_job_owner=orphaned_job_owner,
             )
 
-        self._is_deleted = is_deleted
+        self._record = record
+        self._job_request = record.request
+        self._status_history = record.status_history
 
         self._current_datetime_factory = current_datetime_factory
 
-        self._owner = owner
-        self._name = name
+        self._owner = record.owner
+        self._name = record.name
 
-        self._internal_orchestrator_info: Job.OrchestratorInfo = Job.OrchestratorInfo()
-        self._is_preemptible = is_preemptible
+        self._is_preemptible = record.is_preemptible
         self._is_forced_to_preemptible_pool = is_forced_to_preemptible_pool
 
     @property
@@ -252,7 +425,15 @@ class Job:
 
     @property
     def owner(self) -> str:
-        return self._owner or self._orchestrator_config.orphaned_job_owner
+        return self._owner
+
+    @property
+    def cluster_name(self) -> str:
+        return self._record.cluster_name
+
+    @property
+    def storage_config(self) -> StorageConfig:
+        return self._storage_config
 
     def to_uri(self) -> URL:
         base_uri = "job:"
@@ -266,7 +447,7 @@ class Job:
 
     @property
     def has_gpu(self) -> bool:
-        return bool(self._job_request.container.resources.gpu)
+        return self._record.has_gpu
 
     @property
     def status(self) -> JobStatus:
@@ -274,10 +455,9 @@ class Job:
 
     @status.setter
     def status(self, value: JobStatus) -> None:
-        item = JobStatusItem.create(
+        self._record.set_status(
             value, current_datetime_factory=self._current_datetime_factory
         )
-        self._status_history.current = item
 
     @property
     def status_history(self) -> JobStatusHistory:
@@ -297,30 +477,11 @@ class Job:
 
     @property
     def is_deleted(self) -> bool:
-        return self._is_deleted
+        return self._record.is_deleted
 
     @is_deleted.setter
     def is_deleted(self, value: bool) -> None:
-        self._is_deleted = value
-
-    @property
-    def _is_time_for_deletion(self) -> bool:
-        assert self.finished_at
-        deletion_planned_at = (
-            self.finished_at + self._orchestrator_config.job_deletion_delay
-        )
-        return deletion_planned_at <= self._current_datetime_factory()
-
-    @property
-    def should_be_deleted(self) -> bool:
-        return (
-            self.is_finished
-            and not self.is_deleted
-            and (
-                self._is_time_for_deletion
-                or self.status_history.current.reason == "Collected"
-            )
-        )
+        self._record.is_deleted = value
 
     @property
     def _collection_reason(self) -> Optional[str]:
@@ -409,11 +570,11 @@ class Job:
 
     @property
     def internal_hostname(self) -> Optional[str]:
-        return self._internal_orchestrator_info.job_hostname
+        return self._record.internal_hostname
 
     @internal_hostname.setter
     def internal_hostname(self, value: Optional[str]) -> None:
-        self._internal_orchestrator_info.job_hostname = value
+        self._record.internal_hostname = value
 
     @property
     def is_preemptible(self) -> bool:
@@ -424,70 +585,26 @@ class Job:
         return self.is_preemptible and self._is_forced_to_preemptible_pool
 
     def get_run_time(self) -> timedelta:
-        end_time = self.finished_at or self._current_datetime_factory()
-        start_time = self.status_history.created_at
-        return end_time - start_time
+        return self._record.get_run_time(
+            current_datetime_factory=self._current_datetime_factory
+        )
 
     def to_primitive(self) -> Dict[str, Any]:
-        statuses = [item.to_primitive() for item in self._status_history.all]
-        # preserving `status` and `finished_at` for forward compat
-        result = {
-            "id": self.id,
-            "owner": self._owner,
-            "request": self.request.to_primitive(),
-            "status": self.status.value,
-            "statuses": statuses,
-            "is_deleted": self.is_deleted,
-            "finished_at": self.finished_at_str,
-            "is_preemptible": self.is_preemptible,
-        }
-        if self.internal_hostname:
-            result["internal_hostname"] = self.internal_hostname
-        if self.name:
-            result["name"] = self.name
-        return result
+        return self._record.to_primitive()
 
     @classmethod
     def from_primitive(
-        cls, orchestrator_config: OrchestratorConfig, payload: Dict[str, Any]
+        cls,
+        storage_config: StorageConfig,
+        orchestrator_config: OrchestratorConfig,
+        payload: Dict[str, Any],
     ) -> "Job":
-        job_request = JobRequest.from_primitive(payload["request"])
-        status_history = cls.create_status_history_from_primitive(
-            job_request.job_id, payload
-        )
-        is_deleted = payload.get("is_deleted", False)
-        owner = payload.get("owner", "")
-        name = payload.get("name")
-        is_preemptible = payload.get("is_preemptible", False)
-        job = cls(
+        record = JobRecord.from_primitive(payload)
+        return cls(
+            storage_config=storage_config,
             orchestrator_config=orchestrator_config,
-            job_request=job_request,
-            status_history=status_history,
-            is_deleted=is_deleted,
-            owner=owner,
-            name=name,
-            is_preemptible=is_preemptible,
+            record=record,
         )
-        job.internal_hostname = payload.get("internal_hostname", None)
-        return job
-
-    @staticmethod
-    def create_status_history_from_primitive(
-        job_id: str, payload: Dict[str, Any]
-    ) -> JobStatusHistory:
-        if "statuses" in payload:
-            # already migrated to history
-            items = [JobStatusItem.from_primitive(item) for item in payload["statuses"]]
-        else:
-            logger.info(f"Migrating job {job_id} to status history")
-            status = JobStatus(payload["status"])
-            transition_time = None
-            if status.is_finished:
-                finished_at = payload.get("finished_at")
-                if finished_at:
-                    transition_time = iso8601.parse_date(finished_at)
-            items = [JobStatusItem.create(status, transition_time=transition_time)]
-        return JobStatusHistory(items)
 
 
 @dataclass(frozen=True)

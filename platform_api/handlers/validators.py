@@ -9,17 +9,31 @@ from platform_api.resource import GPUModel
 JOB_NAME_PATTERN = "^[a-z][-a-z0-9]*[a-z0-9]$"
 USER_NAME_PATTERN = "^[a-z0-9]([a-z0-9]|(-[a-z0-9]))*$"
 
+# Since the client supports job-names to be interchangeable with job-IDs
+# (see PR https://github.com/neuromation/platform-client-python/pull/648)
+# therefore job-ID has to conform job-name validator; all job-IDs are
+# of the form `job-{uuid4()}` of length 40.
+JOB_NAME_MAX_LENGTH = 40
+# For named jobs, their hostname is of the form of `{job-id}-{job-owner}.jobs.neu.ro`.
+# The length limit for DNS label is 63 chars, minus 1 char for the dash.
+USER_NAME_MAX_LENGTH = 63 - 1 - JOB_NAME_MAX_LENGTH
+
 OptionalString = t.String | t.Null
 
 
-def create_job_name_validator() -> t.Trafaret:
-    return t.Null | t.String(min_length=3, max_length=35) & t.Regexp(JOB_NAME_PATTERN)
+def create_job_name_validator(
+    max_length: Optional[int] = JOB_NAME_MAX_LENGTH
+) -> t.Trafaret:
+    return t.Null | t.String(min_length=3, max_length=max_length) & t.Regexp(
+        JOB_NAME_PATTERN
+    )
 
 
 def create_user_name_validator() -> t.Trafaret:
-    """ Completely the same validator as the one used in platform-auth
-    """
-    return t.String(min_length=3, max_length=25) & t.Regexp(USER_NAME_PATTERN)
+    # NOTE: this validator is almost the same as the one used in platform-auth
+    return t.String(min_length=3, max_length=USER_NAME_MAX_LENGTH) & t.Regexp(
+        USER_NAME_PATTERN
+    )
 
 
 def create_job_status_validator() -> t.Trafaret:

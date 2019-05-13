@@ -135,6 +135,11 @@ workflows:
     jobs:
       - test:
           context: org-global
+          filters:
+            branches:
+              ignore:
+                - master
+                - /release.*/
 
   dev:
     jobs:

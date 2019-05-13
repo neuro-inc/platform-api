@@ -1,10 +1,20 @@
 import logging
-from typing import Iterable, List, Optional, Tuple
+from typing import AsyncIterator, Iterable, List, Optional, Sequence, Tuple
 
+from async_generator import asynccontextmanager
+
+from platform_api.cluster import (
+    Cluster,
+    ClusterConfig,
+    ClusterNotFound,
+    ClusterRegistry,
+)
+from platform_api.config import JobsConfig
+from platform_api.resource import GPUModel
 from platform_api.user import User
 
 from .base import LogReader, Orchestrator, Telemetry
-from .job import Job, JobStatusItem
+from .job import Job, JobRecord, JobStatusItem
 from .job_request import JobException, JobNotFoundException, JobRequest, JobStatus
 from .jobs_storage import (
     JobFilter,
@@ -37,38 +47,69 @@ class NonGpuQuotaExceededError(QuotaException):
 
 
 class JobsService:
-    def __init__(self, orchestrator: Orchestrator, jobs_storage: JobsStorage) -> None:
+    def __init__(
+        self,
+        cluster_registry: ClusterRegistry,
+        jobs_storage: JobsStorage,
+        jobs_config: JobsConfig,
+    ) -> None:
+        self._cluster_registry = cluster_registry
         self._jobs_storage = jobs_storage
-        self._orchestrator = orchestrator
+        self._jobs_config = jobs_config
 
         self._max_deletion_attempts = 3
+
+    def _get_cluster_name(self, name: str) -> str:
+        return name or self._jobs_config.default_cluster_name
+
+    @asynccontextmanager
+    async def _get_cluster(self, name: str) -> AsyncIterator[Cluster]:
+        async with self._cluster_registry.get(self._get_cluster_name(name)) as cluster:
+            yield cluster
 
     async def update_jobs_statuses(self) -> None:
         # TODO (A Danshyn 02/17/19): instead of returning `Job` objects,
         # it makes sense to just return their IDs.
 
-        for job in await self._jobs_storage.get_unfinished_jobs():
-            try:
-                async with self._jobs_storage.try_update_job(job.id) as job:
-                    await self._update_job_status(job)
-                    job.collect_if_needed()
-            except JobStorageTransactionError:
-                # intentionally ignoring any transaction failures here because
-                # the job may have been changed and a retry is needed.
-                pass
+        for record in await self._jobs_storage.get_unfinished_jobs():
+            await self._update_job_status_by_id(record.id)
 
-        for job in await self._jobs_storage.get_jobs_for_deletion():
+        for record in await self._jobs_storage.get_jobs_for_deletion(
+            delay=self._jobs_config.deletion_delay
+        ):
             # finished, but not yet deleted jobs
             # assert job.is_finished and not job.is_deleted
-            try:
-                async with self._jobs_storage.try_update_job(job.id) as job:
-                    await self._delete_job(job)
-            except JobStorageTransactionError:
-                # intentionally ignoring any transaction failures here because
-                # the job may have been changed and a retry is needed.
-                pass
+            await self._delete_job_by_id(record.id)
 
-    async def _update_job_status(self, job: Job) -> None:
+    async def _update_job_status_by_id(self, job_id: str) -> None:
+        try:
+            async with self._jobs_storage.try_update_job(job_id) as record:
+                try:
+                    async with self._get_cluster(record.cluster_name) as cluster:
+                        job = Job(
+                            storage_config=cluster.config.storage,
+                            orchestrator_config=cluster.orchestrator.config,
+                            record=record,
+                        )
+                        await self._update_job_status(cluster.orchestrator, job)
+                        job.collect_if_needed()
+                except ClusterNotFound as cluster_err:
+                    # marking PENDING/RUNNING job as FAILED
+                    logger.warning(
+                        "Failed to get job '%s' status. Reason: %s",
+                        record.id,
+                        cluster_err,
+                    )
+                    record.status_history.current = JobStatusItem.create(
+                        JobStatus.FAILED, reason="Missing", description=str(cluster_err)
+                    )
+                    record.is_deleted = True
+        except JobStorageTransactionError:
+            # intentionally ignoring any transaction failures here because
+            # the job may have been changed and a retry is needed.
+            pass
+
+    async def _update_job_status(self, orchestrator: Orchestrator, job: Job) -> None:
         if job.is_finished:
             logger.warning("Ignoring an attempt to update a finished job %s", job.id)
             return
@@ -78,7 +119,7 @@ class JobsService:
         old_status_item = job.status_history.current
 
         try:
-            status_item = await self._orchestrator.get_job_status(job)
+            status_item = await orchestrator.get_job_status(job)
             # TODO: In case job is found, but container is not in state Pending
             # We shall go and check for the events assigned to the pod
             # "pod didn't trigger scale-up (it wouldn't fit if a new node is added)"
@@ -104,6 +145,19 @@ class JobsService:
                 status_item.status.name,
             )
 
+    async def _delete_job_by_id(self, job_id: str) -> None:
+        try:
+            async with self._jobs_storage.try_update_job(job_id) as record:
+                await self._delete_cluster_job(record)
+
+                # marking finished job as deleted
+                record.is_deleted = True
+
+        except JobStorageTransactionError:
+            # intentionally ignoring any transaction failures here because
+            # the job may have been changed and a retry is needed.
+            pass
+
     async def _raise_for_run_time_quota(self, user: User) -> None:
         if not user.has_quota():
             return
@@ -124,23 +178,37 @@ class JobsService:
     ) -> Tuple[Job, Status]:
 
         await self._raise_for_run_time_quota(user)
-        job = Job(
-            orchestrator_config=self._orchestrator.config,
-            job_request=job_request,
+        record = JobRecord.create(
+            request=job_request,
             owner=user.name,
+            cluster_name=user.cluster_name,
+            status=JobStatus.PENDING,
             name=job_name,
             is_preemptible=is_preemptible,
         )
         job_id = job_request.job_id
         try:
-            async with self._jobs_storage.try_create_job(job) as new_job:
-                await self._orchestrator.start_job(new_job, user.token)
-            return new_job, Status.create(job.status)
+            async with self._jobs_storage.try_create_job(record) as record:
+                async with self._get_cluster(record.cluster_name) as cluster:
+                    job = Job(
+                        storage_config=cluster.config.storage,
+                        orchestrator_config=cluster.orchestrator.config,
+                        record=record,
+                    )
+                    await cluster.orchestrator.start_job(job, user.token)
+            return job, Status.create(job.status)
 
+        except ClusterNotFound as cluster_err:
+            # NOTE: this will result in 400 HTTP response which may not be
+            # what we want to convey really
+            cluster_name = self._get_cluster_name(record.cluster_name)
+            raise JobsServiceException(
+                f"Cluster '{cluster_name}' not found"
+            ) from cluster_err
         except JobsStorageException as transaction_err:
             logger.error(f"Failed to create job {job_id}: {transaction_err}")
             try:
-                await self._orchestrator.delete_job(job)
+                await self._delete_cluster_job(record)
             except Exception as cleanup_exc:
                 # ignore exceptions
                 logger.warning(
@@ -153,45 +221,112 @@ class JobsService:
         job = await self._jobs_storage.get_job(job_id)
         return job.status
 
+    async def _get_cluster_job(self, record: JobRecord) -> Job:
+        try:
+            async with self._get_cluster(record.cluster_name) as cluster:
+                return Job(
+                    storage_config=cluster.config.storage,
+                    orchestrator_config=cluster.orchestrator.config,
+                    record=record,
+                )
+        except ClusterNotFound:
+            # in case the cluster is missing, we still want to return the job
+            # to be able to render a proper HTTP response, therefore we have
+            # the fallback logic that uses the default cluster instead.
+            logger.warning(
+                "Falling back to cluster '%s' to retrieve job '%s'",
+                self._jobs_config.default_cluster_name,
+                record.id,
+            )
+            # NOTE: we may rather want to fall back to some dummy
+            # OrchestratorConfig instead.
+            async with self._get_cluster(
+                self._jobs_config.default_cluster_name
+            ) as cluster:
+                return Job(
+                    storage_config=cluster.config.storage,
+                    orchestrator_config=cluster.orchestrator.config,
+                    record=record,
+                )
+
     async def get_job(self, job_id: str) -> Job:
-        return await self._jobs_storage.get_job(job_id)
+        record = await self._jobs_storage.get_job(job_id)
+        return await self._get_cluster_job(record)
 
     async def get_job_log_reader(self, job_id: str) -> LogReader:
-        job = await self.get_job(job_id)
-        return await self._orchestrator.get_job_log_reader(job)
+        # NOTE: deliberately leaving this code without ClusterNotFound
+        # exception handling, because this method will be removed soon due to
+        # migration to a dedicated microservice
+        record = await self._jobs_storage.get_job(job_id)
+        async with self._get_cluster(record.cluster_name) as cluster:
+            job = Job(
+                storage_config=cluster.config.storage,
+                orchestrator_config=cluster.orchestrator.config,
+                record=record,
+            )
+            return await cluster.orchestrator.get_job_log_reader(job)
 
     async def get_job_telemetry(self, job_id: str) -> Telemetry:
-        job = await self.get_job(job_id)
-        return await self._orchestrator.get_job_telemetry(job)
+        # NOTE: deliberately leaving this code without ClusterNotFound
+        # exception handling, because this method will be removed soon due to
+        # migration to a dedicated microservice
+        record = await self._jobs_storage.get_job(job_id)
+        async with self._get_cluster(record.cluster_name) as cluster:
+            job = Job(
+                storage_config=cluster.config.storage,
+                orchestrator_config=cluster.orchestrator.config,
+                record=record,
+            )
+            return await cluster.orchestrator.get_job_telemetry(job)
 
-    async def _delete_job(self, job: Job) -> None:
-        logger.info("Deleting job %s", job.id)
+    async def _delete_cluster_job(self, record: JobRecord) -> None:
         try:
-            await self._orchestrator.delete_job(job)
-        except JobException as exc:
-            # if the job is missing, we still want to mark it as deleted
-            logger.warning("Could not delete job %s. Reason: %s", job.id, exc)
-        if not job.is_finished:
-            # explicitly setting the job status as succeeded due to manual
-            # deletion of a still running job
-            job.status = JobStatus.SUCCEEDED
-        job.is_deleted = True
+            async with self._get_cluster(record.cluster_name) as cluster:
+                job = Job(
+                    storage_config=cluster.config.storage,
+                    orchestrator_config=cluster.orchestrator.config,
+                    record=record,
+                )
+                await cluster.orchestrator.delete_job(job)
+        except (ClusterNotFound, JobException) as exc:
+            # if the cluster or the job is missing, we still want to mark
+            # the job as deleted. suppressing.
+            logger.warning("Could not delete job '%s'. Reason: '%s'", record.id, exc)
 
     async def delete_job(self, job_id: str) -> None:
         for _ in range(self._max_deletion_attempts):
             try:
-                async with self._jobs_storage.try_update_job(job_id) as job:
-                    if not job.is_finished:
-                        await self._delete_job(job)
-                return
+                async with self._jobs_storage.try_update_job(job_id) as record:
+                    if record.is_finished:
+                        # the job has already finished. nothing to do here.
+                        return
+
+                    logger.info("Deleting job %s", job_id)
+                    await self._delete_cluster_job(record)
+
+                    record.status = JobStatus.SUCCEEDED
+                    record.is_deleted = True
+                    return
             except JobStorageTransactionError:
-                logger.warning("Failed to mark a job %s as deleted. Retrying.", job.id)
-        logger.warning("Failed to mark a job %s as deleted. Giving up.", job.id)
+                logger.warning("Failed to mark a job %s as deleted. Retrying.", job_id)
+        logger.warning("Failed to mark a job %s as deleted. Giving up.", job_id)
 
     async def get_all_jobs(self, job_filter: Optional[JobFilter] = None) -> List[Job]:
-        return await self._jobs_storage.get_all_jobs(job_filter)
+        records = await self._jobs_storage.get_all_jobs(job_filter)
+        return [await self._get_cluster_job(record) for record in records]
 
     async def get_jobs_by_ids(
         self, job_ids: Iterable[str], job_filter: Optional[JobFilter] = None
     ) -> List[Job]:
-        return await self._jobs_storage.get_jobs_by_ids(job_ids, job_filter=job_filter)
+        records = await self._jobs_storage.get_jobs_by_ids(
+            job_ids, job_filter=job_filter
+        )
+        return [await self._get_cluster_job(record) for record in records]
+
+    async def get_available_gpu_models(self, user: User) -> Sequence[GPUModel]:
+        async with self._get_cluster(user.cluster_name) as cluster:
+            return await cluster.orchestrator.get_available_gpu_models()
+
+    async def get_cluster_config(self, user: User) -> ClusterConfig:
+        async with self._get_cluster(user.cluster_name) as cluster:
+            return cluster.config

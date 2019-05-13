@@ -1,5 +1,6 @@
 from pathlib import PurePath
 from typing import Any, Dict
+from unittest import mock
 
 import pytest
 from neuro_auth_client import Permission
@@ -13,6 +14,7 @@ from platform_api.handlers.jobs_handler import (
     JobFilterException,
     convert_container_volume_to_json,
     convert_job_container_to_json,
+    convert_job_to_job_response,
     infer_permissions_from_container,
 )
 from platform_api.handlers.models_handler import (
@@ -23,16 +25,20 @@ from platform_api.handlers.validators import (
     create_container_request_validator,
     create_container_response_validator,
 )
+from platform_api.orchestrator.job import Job
 from platform_api.orchestrator.job_request import (
     Container,
     ContainerResources,
     ContainerSSHServer,
     ContainerVolume,
+    JobRequest,
     JobStatus,
 )
 from platform_api.orchestrator.jobs_storage import JobFilter
 from platform_api.resource import GPUModel
 from platform_api.user import User
+
+from .conftest import MockOrchestrator
 
 
 class TestContainerRequestValidator:
@@ -570,3 +576,40 @@ class TestInferPermissionsFromContainer:
             Permission(uri="job://testuser", action="write"),
             Permission(uri="image://testuser/image", action="read"),
         ]
+
+
+@pytest.mark.asyncio
+async def test_job_to_job_response(mock_orchestrator: MockOrchestrator) -> None:
+    job = Job(
+        storage_config=mock_orchestrator.storage_config,
+        orchestrator_config=mock_orchestrator.config,
+        job_request=JobRequest.create(
+            Container(
+                image="testimage", resources=ContainerResources(cpu=1, memory_mb=128)
+            ),
+            description="test test description",
+        ),
+        name="test-job-name",
+    )
+    response = convert_job_to_job_response(job)
+    assert response == {
+        "id": job.id,
+        "owner": "compute",
+        "status": "pending",
+        "history": {
+            "status": "pending",
+            "reason": None,
+            "description": None,
+            "created_at": mock.ANY,
+        },
+        "container": {
+            "image": "testimage",
+            "env": {},
+            "volumes": [],
+            "resources": {"cpu": 1, "memory_mb": 128},
+        },
+        "name": "test-job-name",
+        "description": "test test description",
+        "ssh_auth_server": "ssh://nobody@ssh-auth:22",
+        "is_preemptible": False,
+    }

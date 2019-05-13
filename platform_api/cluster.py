@@ -34,8 +34,12 @@ class Cluster(ABC):
 
     @property
     @abstractmethod
-    def name(self) -> str:  # pragma: no cover
+    def config(self) -> ClusterConfig:  # pragma: no cover
         pass
+
+    @property
+    def name(self) -> str:
+        return self.config.name
 
     @property
     @abstractmethod

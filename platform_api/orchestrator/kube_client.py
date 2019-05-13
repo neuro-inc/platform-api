@@ -20,6 +20,7 @@ from typing import (
     List,
     NoReturn,
     Optional,
+    Sequence,
     Type,
     Union,
 )
@@ -941,6 +942,16 @@ class KubeClientAuthType(str, enum.Enum):
     CERTIFICATE = "certificate"
 
 
+@dataclass(frozen=True)
+class NodeTaint:
+    key: str
+    value: str
+    effect: str = "NoSchedule"
+
+    def to_primitive(self) -> Dict[str, Any]:
+        return {"key": self.key, "value": self.value, "effect": self.effect}
+
+
 class KubeClient:
     def __init__(
         self,
@@ -1051,6 +1062,16 @@ class KubeClient:
         all_nps_url = self._generate_all_network_policies_url(namespace_name)
         return f"{all_nps_url}/{name}"
 
+    def _generate_endpoint_url(self, name: str, namespace: str) -> str:
+        return f"{self._generate_namespace_url(namespace)}/endpoints/{name}"
+
+    @property
+    def _nodes_url(self) -> str:
+        return f"{self._api_v1_url}/nodes"
+
+    def _generate_node_url(self, name: str) -> str:
+        return f"{self._nodes_url}/{name}"
+
     @property
     def _v1beta1_namespace_url(self) -> str:
         return (
@@ -1096,21 +1117,69 @@ class KubeClient:
             logging.debug("k8s response payload: %s", payload)
             return payload
 
+    async def get_endpoint(
+        self, name: str, namespace: Optional[str] = None
+    ) -> Dict[str, Any]:
+        url = self._generate_endpoint_url(name, namespace or self._namespace)
+        return await self._request(method="GET", url=url)
+
+    async def create_node(
+        self,
+        name: str,
+        capacity: Dict[str, Any],
+        labels: Optional[Dict[str, str]] = None,
+        taints: Optional[Sequence[NodeTaint]] = None,
+    ) -> None:
+        taints = taints or []
+        payload = {
+            "apiVersion": "v1",
+            "kind": "Node",
+            "metadata": {"name": name, "labels": labels or {}},
+            "spec": {"taints": [taint.to_primitive() for taint in taints]},
+            "status": {
+                # TODO (ajuszkowski, 29-0-2019) add enum for capacity
+                "capacity": capacity,
+                "conditions": [{"status": "True", "type": "Ready"}],
+            },
+        }
+        url = self._nodes_url
+        result = await self._request(method="POST", url=url, json=payload)
+        self._check_status_payload(result)
+
+    async def delete_node(self, name: str) -> None:
+        url = self._generate_node_url(name)
+        result = await self._request(method="DELETE", url=url)
+        self._check_status_payload(result)
+
     async def create_pod(self, descriptor: PodDescriptor) -> PodStatus:
         payload = await self._request(
             method="POST", url=self._pods_url, json=descriptor.to_primitive()
         )
         pod = PodDescriptor.from_primitive(payload)
-        return pod.status  # type: ignore
+        if pod.status is None:
+            raise ValueError("Missing pod status")
+        return pod.status
+
+    async def set_raw_pod_status(
+        self, name: str, payload: Dict[str, Any]
+    ) -> Dict[str, Any]:
+        url = self._generate_pod_url(name) + "/status"
+        return await self._request(method="PUT", url=url, json=payload)
 
     async def get_pod(self, pod_name: str) -> PodDescriptor:
         url = self._generate_pod_url(pod_name)
         payload = await self._request(method="GET", url=url)
         return PodDescriptor.from_primitive(payload)
 
+    async def get_raw_pod(self, name: str) -> Dict[str, Any]:
+        url = self._generate_pod_url(name)
+        return await self._request(method="GET", url=url)
+
     async def get_pod_status(self, pod_id: str) -> PodStatus:
         pod = await self.get_pod(pod_id)
-        return pod.status  # type: ignore
+        if pod.status is None:
+            raise ValueError("Missing pod status")
+        return pod.status
 
     async def delete_pod(self, pod_name: str, force: bool = False) -> PodStatus:
         url = self._generate_pod_url(pod_name)

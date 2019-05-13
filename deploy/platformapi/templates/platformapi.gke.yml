@@ -65,8 +65,8 @@ spec:
           value: "{{ printf "%s" (pluck .Values.global.env .Values.NP_OAUTH_AUDIENCE | first | default .Values.NP_OAUTH_AUDIENCE._default) }}"
         - name: NP_OAUTH_SUCCESS_REDIRECT_URL
           value: "{{ printf "%s" (pluck .Values.global.env .Values.NP_OAUTH_SUCCESS_REDIRECT_URL | first | default .Values.NP_OAUTH_SUCCESS_REDIRECT_URL._default) }}"
-        - name: NP_HEADLESS_CALLBACK_URL
-          value: "{{ printf "%s" (pluck .Values.global.env .Values.NP_HEADLESS_CALLBACK_URL | first | default .Values.NP_HEADLESS_CALLBACK_URL._default) }}"
+        - name: NP_OAUTH_HEADLESS_CALLBACK_URL
+          value: "{{ printf "%s" (pluck .Values.global.env .Values.NP_HEADLESS_CALLBACK_URL | first | default .Values.NP_OAUTH_HEADLESS_CALLBACK_URL._default) }}"
         - name: NP_REGISTRY_HOST
           value: "{{ printf "%s" (pluck .Values.global.env .Values.NP_REGISTRY_HOST | first | default .Values.NP_REGISTRY_HOST._default) }}"
         - name: NP_REGISTRY_HTTPS

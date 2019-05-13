@@ -1,20 +1,17 @@
 import asyncio
-from typing import Any, Callable, Tuple
+from typing import Any, AsyncIterator, Callable
 
 import pytest
 
-from platform_api.orchestrator import (
-    JobRequest,
-    JobsService,
-    JobsStatusPooling,
-    JobStatus,
-)
+from platform_api.orchestrator import JobRequest, JobStatus
+from platform_api.orchestrator.jobs_poller import JobsPoller
+from platform_api.orchestrator.jobs_service import JobsService
 from platform_api.user import User
 
-from .conftest import MockJobsStorage, MockOrchestrator
+from .conftest import MockOrchestrator
 
 
-class TestJobsStatusPooling:
+class TestJobsPoller:
     async def wait_for_job_status(
         self, jobs_service: JobsService, num: int = 10, interval: int = 1
     ) -> None:
@@ -27,27 +24,21 @@ class TestJobsStatusPooling:
         else:
             pytest.fail("Not all jobs have succeeded")
 
-    async def create_job_pooling(
-        self, mock_orchestrator: MockOrchestrator, mock_jobs_storage: MockJobsStorage
-    ) -> Tuple[JobsStatusPooling, JobsService]:
-        jobs_service = JobsService(
-            orchestrator=mock_orchestrator, jobs_storage=mock_jobs_storage
-        )
-        jobs_status_pooling = JobsStatusPooling(jobs_service=jobs_service, interval_s=1)
-        await jobs_status_pooling.start()
-        return jobs_status_pooling, jobs_service
+    @pytest.fixture
+    async def jobs_poller(self, jobs_service: JobsService) -> AsyncIterator[JobsPoller]:
+        poller = JobsPoller(jobs_service=jobs_service, interval_s=1)
+        await poller.start()
+        yield poller
+        await poller.stop()
 
     @pytest.mark.asyncio
     async def test_polling(
         self,
+        jobs_poller: JobsPoller,
+        jobs_service: JobsService,
         mock_orchestrator: MockOrchestrator,
-        mock_jobs_storage: MockJobsStorage,
         job_request_factory: Callable[[], JobRequest],
     ) -> None:
-        jobs_status_pooling, jobs_service = await self.create_job_pooling(
-            mock_orchestrator, mock_jobs_storage
-        )
-
         user = User(name="testuser", token="")
         await jobs_service.create_job(job_request_factory(), user=user)
         await jobs_service.create_job(job_request_factory(), user=user)
@@ -57,19 +48,15 @@ class TestJobsStatusPooling:
 
         mock_orchestrator.update_status_to_return(JobStatus.SUCCEEDED)
         await self.wait_for_job_status(jobs_service=jobs_service)
-        await jobs_status_pooling.stop()
 
     @pytest.mark.asyncio
     async def test_polling_exception(
         self,
+        jobs_poller: JobsPoller,
+        jobs_service: JobsService,
         mock_orchestrator: MockOrchestrator,
-        mock_jobs_storage: MockJobsStorage,
         job_request_factory: Callable[[], JobRequest],
     ) -> None:
-        jobs_status_pooling, jobs_service = await self.create_job_pooling(
-            mock_orchestrator, mock_jobs_storage
-        )
-
         user = User(name="testuser", token="")
         await jobs_service.create_job(job_request_factory(), user=user)
         await jobs_service.create_job(job_request_factory(), user=user)
@@ -86,4 +73,3 @@ class TestJobsStatusPooling:
 
         mock_orchestrator.update_status_to_return(JobStatus.SUCCEEDED)
         await self.wait_for_job_status(jobs_service=jobs_service)
-        await jobs_status_pooling.stop()
