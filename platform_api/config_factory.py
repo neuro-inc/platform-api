@@ -154,9 +154,13 @@ class EnvironConfigFactory:
             "NP_K8S_JOBS_INGRESS_AUTH_NAME", jobs_ingress_name
         )
 
+        ca_path = self._environ.get("NP_K8S_CA_PATH")
+        ca_data = Path(ca_path).read_text() if ca_path else None
+
         return KubeConfig(
             endpoint_url=endpoint_url,
-            cert_authority_path=self._environ.get("NP_K8S_CA_PATH"),
+            cert_authority_data_pem=ca_data,
+            cert_authority_path=None,  # disable it so that only `ca_data` works here
             auth_type=auth_type,
             auth_cert_path=self._environ.get("NP_K8S_AUTH_CERT_PATH"),
             auth_cert_key_path=self._environ.get("NP_K8S_AUTH_CERT_KEY_PATH"),

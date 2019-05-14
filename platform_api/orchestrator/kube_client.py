@@ -959,6 +959,7 @@ class KubeClient:
         base_url: str,
         namespace: str,
         cert_authority_path: Optional[str] = None,
+        cert_authority_data_pem: Optional[str] = None,
         auth_type: KubeClientAuthType = KubeClientAuthType.CERTIFICATE,
         auth_cert_path: Optional[str] = None,
         auth_cert_key_path: Optional[str] = None,
@@ -970,6 +971,7 @@ class KubeClient:
         self._base_url = base_url
         self._namespace = namespace
 
+        self._cert_authority_data_pem = cert_authority_data_pem
         self._cert_authority_path = cert_authority_path
 
         self._auth_type = auth_type
@@ -991,7 +993,9 @@ class KubeClient:
     def _create_ssl_context(self) -> Optional[ssl.SSLContext]:
         if not self._is_ssl:
             return None
-        ssl_context = ssl.create_default_context(cafile=self._cert_authority_path)
+        ssl_context = ssl.create_default_context(
+            cafile=self._cert_authority_path, cadata=self._cert_authority_data_pem
+        )
         if self._auth_type == KubeClientAuthType.CERTIFICATE:
             ssl_context.load_cert_chain(  # type: ignore
                 self._auth_cert_path, self._auth_cert_key_path

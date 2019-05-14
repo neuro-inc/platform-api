@@ -94,6 +94,7 @@ class KubeConfig(OrchestratorConfig):
     jobs_ingress_auth_name: str = ""
 
     endpoint_url: str = ""
+    cert_authority_data_pem: Optional[str] = None
     cert_authority_path: Optional[str] = None
 
     auth_type: KubeClientAuthType = KubeClientAuthType.CERTIFICATE
@@ -143,6 +144,7 @@ class KubeOrchestrator(Orchestrator):
 
         self._client = KubeClient(
             base_url=kube_config.endpoint_url,
+            cert_authority_data_pem=kube_config.cert_authority_data_pem,
             cert_authority_path=kube_config.cert_authority_path,
             auth_type=kube_config.auth_type,
             auth_cert_path=kube_config.auth_cert_path,
