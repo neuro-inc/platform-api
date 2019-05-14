@@ -98,6 +98,8 @@ spec:
           value: ssh.platform.dev.neuromation.io
         - name: NP_DB_REDIS_URI
           value: redis://platformredis:6379/0
+        - name: NP_OAUTH_HEADLESS_CALLBACK_URL
+          value: https://dev.neu.ro/oauth/show-code
         - name: NP_AUTH_URL
           value: http://platformauthapi:8080
         - name: NP_AUTH_TOKEN
