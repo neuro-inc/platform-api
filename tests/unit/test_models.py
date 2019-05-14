@@ -604,6 +604,7 @@ async def test_job_to_job_response(mock_orchestrator: MockOrchestrator) -> None:
             "reason": None,
             "description": None,
             "created_at": mock.ANY,
+            "exit_code": None,
         },
         "container": {
             "image": "testimage",
@@ -650,6 +651,7 @@ async def test_job_to_job_response_with_job_name_and_http_exposed(
             "reason": None,
             "description": None,
             "created_at": mock.ANY,
+            "exit_code": None,
         },
         "container": {
             "image": "testimage",
@@ -695,6 +697,7 @@ async def test_job_to_job_response_with_job_name_and_http_exposed_too_long_name(
             "reason": None,
             "description": None,
             "created_at": mock.ANY,
+            "exit_code": None,
         },
         "container": {
             "image": "testimage",

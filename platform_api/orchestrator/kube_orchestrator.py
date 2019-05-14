@@ -72,10 +72,7 @@ class JobStatusItemFactory:
                 self._container_status.is_terminated
                 and self._container_status.exit_code
             ):
-                description = self._container_status.message or ""
-                return description + (
-                    f"\nExit code: {self._container_status.exit_code}"
-                )
+                return self._container_status.message or ""
         return None
 
     def create(self) -> JobStatusItem:
@@ -83,7 +80,11 @@ class JobStatusItemFactory:
             self._status,
             reason=self._parse_reason(),
             description=self._compose_description(),
-            exit_code=self._container_status.exit_code,
+            exit_code=(
+                self._container_status.is_terminated
+                and self._container_status.exit_code
+                or None
+            ),
         )
 
 
