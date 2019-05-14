@@ -167,7 +167,8 @@ def convert_job_to_job_response(job: Job) -> Dict[str, Any]:
             # TEMPORARY FIX (ayushkovskiy, May 10): Too long DNS label (longer than 63
             # chars) is invalid, therefore we don't send it back to user (issue #642)
             http_url_named_sanitized = sanitize_dns_name(job.http_url_named)
-            response_payload["http_url_named"] = http_url_named_sanitized
+            if http_url_named_sanitized is not None:
+                response_payload["http_url_named"] = http_url_named_sanitized
     if job.has_ssh_server_exposed:
         response_payload["ssh_server"] = job.ssh_server
     if job.internal_hostname:
