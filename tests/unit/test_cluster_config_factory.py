@@ -111,8 +111,8 @@ class TestClusterConfigFactory:
         assert ingress.monitoring_url == URL(monitoring_payload["url"])
 
         registry = cluster.registry
-        assert registry.host is registry_payload["url"]
-        assert registry.email is registry_payload["email"]
+        assert registry.url == URL(registry_payload["url"])
+        assert registry.email == registry_payload["email"]
 
         storage = cluster.storage
         assert storage.type == StorageType.NFS

@@ -298,7 +298,6 @@ class TestEnvironConfigFactory:
 
         assert config.registry.email == "registry@neuromation.io"
         assert config.registry.host == "testregistry:5000"
-        assert config.registry.is_secure is True
         assert config.registry.url == URL("https://testregistry:5000")
 
         assert config.logging.elasticsearch.hosts == ["http://es"]
@@ -327,3 +326,19 @@ class TestEnvironConfigFactory:
         config = EnvironConfigFactory(environ=environ).create()
         assert config.storage.nfs_server == "1.2.3.4"
         assert config.storage.nfs_export_path == PurePath("/tmp")
+
+    def test_registry_config_invalid_missing_host(self) -> None:
+        with pytest.raises(ValueError, match="missing url hostname"):
+            RegistryConfig(url=URL("registry.com"))
+
+    def test_registry_config_host_default_port(self) -> None:
+        config = RegistryConfig(url=URL("http://registry.com"))
+        assert config.host == "registry.com"
+
+    def test_registry_config_host_default_port_explicit(self) -> None:
+        config = RegistryConfig(url=URL("http://registry.com:80"))
+        assert config.host == "registry.com"
+
+    def test_registry_config_host_custom_port(self) -> None:
+        config = RegistryConfig(url=URL("http://registry.com:5000"))
+        assert config.host == "registry.com:5000"

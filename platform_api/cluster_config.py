@@ -76,14 +76,21 @@ class StorageConfig:
 
 @dataclass(frozen=True)
 class RegistryConfig:
-    host: str = "registry.dev.neuromation.io"
+    url: URL = URL("https://registry.dev.neuromation.io")
     email: str = "registry@neuromation.io"
-    is_secure: bool = True
+
+    def __post_init__(self) -> None:
+        if not self.url.host:
+            raise ValueError("Invalid registry config: missing url hostname")
 
     @property
-    def url(self) -> URL:
-        scheme = "https" if self.is_secure else "http"
-        return URL(f"{scheme}://{self.host}")
+    def host(self) -> str:
+        """Returns registry hostname with port (if specified)
+        """
+        suffix = ""
+        if not self.url.is_default_port():
+            suffix = f":{self.url.port}"
+        return f"{self.url.host}{suffix}"
 
 
 @dataclass(frozen=True)
