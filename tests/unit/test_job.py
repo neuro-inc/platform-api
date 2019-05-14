@@ -1044,14 +1044,16 @@ class TestJobStatusItem:
 
     def test_to_primitive(self) -> None:
         item = JobStatusItem(
-            status=JobStatus.SUCCEEDED, transition_time=datetime.now(timezone.utc), exit_code=321
+            status=JobStatus.SUCCEEDED,
+            transition_time=datetime.now(timezone.utc),
+            exit_code=321,
         )
         assert item.to_primitive() == {
             "status": "succeeded",
             "transition_time": item.transition_time.isoformat(),
             "reason": None,
             "description": None,
-            "exit_code": 321
+            "exit_code": 321,
         }
 
     def test_eq_defaults(self) -> None:
