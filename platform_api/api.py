@@ -67,6 +67,9 @@ class ApiHandler:
             data["client_id"] = self._config.oauth.client_id
             data["audience"] = self._config.oauth.audience
             data["callback_urls"] = [str(u) for u in self._config.oauth.callback_urls]
+            data["headless_callback_url"] = str(
+                self._config.oauth.headless_callback_url
+            )
             redirect_url = self._config.oauth.success_redirect_url
             if redirect_url:
                 data["success_redirect_url"] = str(redirect_url)
