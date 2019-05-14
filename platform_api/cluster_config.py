@@ -16,7 +16,7 @@ class StorageType(str, Enum):
 
 @dataclass(frozen=True)
 class StorageConfig:
-    host_mount_path: Optional[PurePath] = None
+    host_mount_path: PurePath
     container_mount_path: PurePath = PurePath("/var/storage")
 
     type: StorageType = StorageType.HOST
@@ -34,6 +34,11 @@ class StorageConfig:
         if self.is_nfs:
             if not all(nfs_attrs):
                 raise ValueError("Missing NFS settings")
+            if self.host_mount_path != self.nfs_export_path:
+                # NOTE (ayushkovskiy 14-May-2019) this is a TEMPORARY PATCH: even for
+                # StorageType.NFS, `host_mount_path` must be non-null as it is used
+                # in `ContainerVolumeFactory.__init__`, who assumes that it's not None
+                raise ValueError("Invalid host mount path")
         else:
             if any(nfs_attrs):
                 raise ValueError("Redundant NFS settings")
@@ -47,7 +52,7 @@ class StorageConfig:
         cls,
         *,
         container_mount_path: PurePath = container_mount_path,
-        host_mount_path: Optional[PurePath] = host_mount_path,
+        host_mount_path: PurePath,
         nfs_server: str,
         nfs_export_path: PurePath,
     ) -> "StorageConfig":

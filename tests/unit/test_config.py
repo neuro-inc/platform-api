@@ -22,6 +22,15 @@ class TestStorageConfig:
         with pytest.raises(ValueError, match="Missing NFS settings"):
             StorageConfig(host_mount_path=PurePath("/tmp"), type=StorageType.NFS)
 
+    def test_nfs_invalid_host_mount_path(self) -> None:
+        with pytest.raises(ValueError, match="Invalid host mount path"):
+            StorageConfig(
+                host_mount_path=PurePath("/path1"),
+                nfs_export_path=PurePath("/path2"),
+                nfs_server="http://1.2.3.4",
+                type=StorageType.NFS,
+            )
+
     def test_redundant_nfs_settings(self) -> None:
         with pytest.raises(ValueError, match="Redundant NFS settings"):
             StorageConfig(
