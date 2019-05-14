@@ -135,6 +135,8 @@ class TestClusterConfigFactory:
         assert orchestrator.resource_pool_types[2].gpu_model == GKEGPUModels.V100.value
 
         assert orchestrator.endpoint_url == kube_payload["url"]
+        assert orchestrator.cert_authority_data_pem == kube_payload["ca_data"]
+        assert orchestrator.cert_authority_path is None
         assert orchestrator.auth_type == KubeClientAuthType.TOKEN
         assert orchestrator.namespace == kube_payload["namespace"]
         assert orchestrator.jobs_ingress_name == kube_payload["jobs_ingress_name"]
