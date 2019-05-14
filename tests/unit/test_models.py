@@ -688,7 +688,7 @@ async def test_job_to_job_response_with_job_name_and_http_exposed_too_long_name(
         "owner": owner_name,
         "name": job_name,
         "http_url": f"http://{job.id}.jobs",
-        "http_url_named": None,  # NOTE: `http_url_named` is cut off when it is invalid
+        # NOTE: field `http_url_named` is cut off when it is invalid
         "status": "pending",
         "history": {
             "status": "pending",
