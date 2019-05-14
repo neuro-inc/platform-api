@@ -151,7 +151,8 @@ class ClusterConfigFactory:
             auth_type=KubeClientAuthType(kube["auth_type"]),
             auth_cert_path=None,
             auth_cert_key_path=None,
-            token_path=None,
+            token=kube["token"],
+            token_path=None,  # not initialized, see field `token`
             namespace=kube["namespace"],
             jobs_ingress_name=kube["jobs_ingress_name"],
             jobs_ingress_auth_name=kube["jobs_ingress_auth_name"],
