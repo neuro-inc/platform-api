@@ -146,7 +146,8 @@ class ClusterConfigFactory:
                 for r in orchestrator["resource_pool_types"]
             ],
             endpoint_url=kube["url"],
-            cert_authority_path=None,
+            cert_authority_data_pem=kube["ca_data"],
+            cert_authority_path=None,  # not initialized, see `cert_authority_data_pem`
             auth_type=KubeClientAuthType(kube["auth_type"]),
             auth_cert_path=None,
             auth_cert_key_path=None,
