@@ -20,6 +20,7 @@ JOB_NAME_MAX_LENGTH = 40
 USER_NAME_MAX_LENGTH = 63 - 1 - JOB_NAME_MAX_LENGTH
 
 OptionalString = t.String | t.Null
+OptionalInt = t.Int | t.Null
 
 
 def create_job_name_validator(
@@ -48,7 +49,7 @@ def create_job_history_validator() -> t.Trafaret:
             "reason": OptionalString,
             "description": OptionalString,
             "created_at": t.String,
-            "exit_code": t.Int,
+            "exit_code": OptionalInt,
             t.Key("started_at", optional=True): t.String,
             t.Key("finished_at", optional=True): t.String,
         }
