@@ -536,7 +536,7 @@ class TestInferPermissionsFromContainer:
         container = Container(
             image="image", resources=ContainerResources(cpu=0.1, memory_mb=16)
         )
-        registry_config = RegistryConfig(host="example.com")
+        registry_config = RegistryConfig(url=URL("http://example.com"))
         permissions = infer_permissions_from_container(user, container, registry_config)
         assert permissions == [Permission(uri="job://testuser", action="write")]
 
@@ -559,7 +559,7 @@ class TestInferPermissionsFromContainer:
                 ),
             ],
         )
-        registry_config = RegistryConfig(host="example.com")
+        registry_config = RegistryConfig(url=URL("http://example.com"))
         permissions = infer_permissions_from_container(user, container, registry_config)
         assert permissions == [
             Permission(uri="job://testuser", action="write"),
@@ -573,7 +573,7 @@ class TestInferPermissionsFromContainer:
             image="example.com/testuser/image",
             resources=ContainerResources(cpu=0.1, memory_mb=16),
         )
-        registry_config = RegistryConfig(host="example.com")
+        registry_config = RegistryConfig(url=URL("http://example.com"))
         permissions = infer_permissions_from_container(user, container, registry_config)
         assert permissions == [
             Permission(uri="job://testuser", action="write"),
