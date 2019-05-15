@@ -52,7 +52,7 @@ class TestContainer:
         container = Container(
             image="testimage", resources=ContainerResources(cpu=1, memory_mb=128)
         )
-        registry_config = RegistryConfig(host="example.com")
+        registry_config = RegistryConfig(url=URL("http://example.com"))
         assert not container.belongs_to_registry(registry_config)
 
     def test_belongs_to_registry_different_host(self) -> None:
@@ -60,7 +60,7 @@ class TestContainer:
             image="registry.com/project/testimage",
             resources=ContainerResources(cpu=1, memory_mb=128),
         )
-        registry_config = RegistryConfig(host="example.com")
+        registry_config = RegistryConfig(url=URL("http://example.com"))
         assert not container.belongs_to_registry(registry_config)
 
     def test_belongs_to_registry(self) -> None:
@@ -68,7 +68,7 @@ class TestContainer:
             image="example.com/project/testimage",
             resources=ContainerResources(cpu=1, memory_mb=128),
         )
-        registry_config = RegistryConfig(host="example.com")
+        registry_config = RegistryConfig(url=URL("http://example.com"))
         assert container.belongs_to_registry(registry_config)
 
     def test_to_image_uri_failure(self) -> None:
@@ -76,7 +76,7 @@ class TestContainer:
             image="registry.com/project/testimage",
             resources=ContainerResources(cpu=1, memory_mb=128),
         )
-        registry_config = RegistryConfig(host="example.com")
+        registry_config = RegistryConfig(url=URL("http://example.com"))
         with pytest.raises(AssertionError, match="Unknown registry"):
             container.to_image_uri(registry_config)
 
@@ -85,7 +85,16 @@ class TestContainer:
             image="example.com/project/testimage",
             resources=ContainerResources(cpu=1, memory_mb=128),
         )
-        registry_config = RegistryConfig(host="example.com")
+        registry_config = RegistryConfig(url=URL("http://example.com"))
+        uri = container.to_image_uri(registry_config)
+        assert uri == URL("image://project/testimage")
+
+    def test_to_image_uri_registry_with_custom_port(self) -> None:
+        container = Container(
+            image="example.com:5000/project/testimage",
+            resources=ContainerResources(cpu=1, memory_mb=128),
+        )
+        registry_config = RegistryConfig(url=URL("http://example.com:5000"))
         uri = container.to_image_uri(registry_config)
         assert uri == URL("image://project/testimage")
 
@@ -94,7 +103,7 @@ class TestContainer:
             image="example.com/project/testimage:latest",
             resources=ContainerResources(cpu=1, memory_mb=128),
         )
-        registry_config = RegistryConfig(host="example.com")
+        registry_config = RegistryConfig(url=URL("http://example.com"))
         uri = container.to_image_uri(registry_config)
         assert uri == URL("image://project/testimage")
 

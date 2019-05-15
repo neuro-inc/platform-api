@@ -144,7 +144,7 @@ class EnvironConfigFactory:
             host_mount_path=host_mount_path,
             container_mount_path=container_mount_path,
             type=storage_type,
-            **kwargs
+            **kwargs,
         )
 
     def create_orchestrator(self) -> KubeConfig:
@@ -281,9 +281,14 @@ class EnvironConfigFactory:
         )
 
     def create_registry(self) -> RegistryConfig:
-        host = self._environ.get("NP_REGISTRY_HOST", RegistryConfig.host)
-        is_https = self._get_bool("NP_REGISTRY_HTTPS", default=RegistryConfig.is_secure)
-        return RegistryConfig(host=host, is_secure=is_https)
+        host = self._environ.get("NP_REGISTRY_HOST")
+        if host:
+            is_https = self._get_bool("NP_REGISTRY_HTTPS", True)
+            scheme = "https" if is_https else "http"
+            url = URL(f"{scheme}://{host}")
+        else:
+            url = RegistryConfig.url
+        return RegistryConfig(url=url)
 
     def create_ingress(self) -> IngressConfig:
         base_url = URL(self._environ["NP_API_URL"])

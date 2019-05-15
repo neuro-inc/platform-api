@@ -111,16 +111,15 @@ class TestClusterConfigFactory:
         assert ingress.monitoring_url == URL(monitoring_payload["url"])
 
         registry = cluster.registry
-        assert registry.host is registry_payload["url"]
-        assert registry.email is registry_payload["email"]
+        assert registry.url == URL(registry_payload["url"])
+        assert registry.email == registry_payload["email"]
 
         storage = cluster.storage
         assert storage.type == StorageType.NFS
-        assert storage.host_mount_path is None
+        nfs_mount_point = PurePath(storage_payload["nfs"]["export_path"])
+        assert storage.host_mount_path == nfs_mount_point
         assert storage.nfs_server == storage_payload["nfs"]["server"]
-        assert storage.nfs_export_path == PurePath(
-            storage_payload["nfs"]["export_path"]
-        )
+        assert storage.nfs_export_path == nfs_mount_point
 
         orchestrator = cluster.orchestrator
         assert isinstance(orchestrator, KubeConfig)
@@ -193,7 +192,7 @@ class TestClusterConfigFactory:
         storage = cluster.storage
         assert storage.type == StorageType.NFS
         nfs_mount_point = PurePath(storage_payload["nfs"]["export_path"])
-        assert storage.host_mount_path is None
+        assert storage.host_mount_path == nfs_mount_point
         assert storage.nfs_server == storage_payload["nfs"]["server"]
         assert storage.nfs_export_path == nfs_mount_point
 
@@ -219,7 +218,7 @@ class TestClusterConfigFactory:
         # initialized fields:
         assert config.nfs_server == "127.0.0.1"
         assert config.nfs_export_path == PurePath("/nfs/export/path")
-        assert config.host_mount_path is None
+        assert config.host_mount_path == PurePath("/nfs/export/path")
         assert config.type == StorageType.NFS
         # default fields:
         assert config.container_mount_path == PurePath("/var/storage")

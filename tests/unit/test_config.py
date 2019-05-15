@@ -22,6 +22,15 @@ class TestStorageConfig:
         with pytest.raises(ValueError, match="Missing NFS settings"):
             StorageConfig(host_mount_path=PurePath("/tmp"), type=StorageType.NFS)
 
+    def test_nfs_invalid_host_mount_path(self) -> None:
+        with pytest.raises(ValueError, match="Invalid host mount path"):
+            StorageConfig(
+                host_mount_path=PurePath("/path1"),
+                nfs_export_path=PurePath("/path2"),
+                nfs_server="http://1.2.3.4",
+                type=StorageType.NFS,
+            )
+
     def test_redundant_nfs_settings(self) -> None:
         with pytest.raises(ValueError, match="Redundant NFS settings"):
             StorageConfig(
@@ -289,7 +298,6 @@ class TestEnvironConfigFactory:
 
         assert config.registry.email == "registry@neuromation.io"
         assert config.registry.host == "testregistry:5000"
-        assert config.registry.is_secure is True
         assert config.registry.url == URL("https://testregistry:5000")
 
         assert config.logging.elasticsearch.hosts == ["http://es"]
@@ -336,3 +344,19 @@ class TestEnvironConfigFactory:
         assert config.log_fifo == PurePath("log.txt")
         assert config.env_prefix == "NP"  # default
         assert config.jobs_namespace == "other"
+
+    def test_registry_config_invalid_missing_host(self) -> None:
+        with pytest.raises(ValueError, match="missing url hostname"):
+            RegistryConfig(url=URL("registry.com"))
+
+    def test_registry_config_host_default_port(self) -> None:
+        config = RegistryConfig(url=URL("http://registry.com"))
+        assert config.host == "registry.com"
+
+    def test_registry_config_host_default_port_explicit(self) -> None:
+        config = RegistryConfig(url=URL("http://registry.com:80"))
+        assert config.host == "registry.com:80"
+
+    def test_registry_config_host_custom_port(self) -> None:
+        config = RegistryConfig(url=URL("http://registry.com:5000"))
+        assert config.host == "registry.com:5000"
