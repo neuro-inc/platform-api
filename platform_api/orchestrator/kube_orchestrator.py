@@ -100,6 +100,7 @@ class KubeConfig(OrchestratorConfig):
     auth_type: KubeClientAuthType = KubeClientAuthType.CERTIFICATE
     auth_cert_path: Optional[str] = None
     auth_cert_key_path: Optional[str] = None
+    token: Optional[str] = None
     token_path: Optional[str] = None
 
     namespace: str = "default"
@@ -149,6 +150,7 @@ class KubeOrchestrator(Orchestrator):
             auth_type=kube_config.auth_type,
             auth_cert_path=kube_config.auth_cert_path,
             auth_cert_key_path=kube_config.auth_cert_key_path,
+            token=kube_config.token,
             token_path=kube_config.token_path,
             namespace=kube_config.namespace,
             conn_timeout_s=kube_config.client_conn_timeout_s,
