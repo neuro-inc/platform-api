@@ -36,6 +36,8 @@ spec:
           value: /authorization.log
         - name: NP_SSH_PORT
           value: "22"
+        - name: NP_K8S_NS
+          value: "default"
 ---
 apiVersion: v1
 kind: Service
