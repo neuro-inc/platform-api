@@ -1,7 +1,9 @@
-from typing import Any, AsyncIterator, Dict, Sequence
+from typing import Any, AsyncIterator, Dict, List
 
 import aiohttp
 import pytest
+import trafaret as t
+from async_generator import asynccontextmanager
 from yarl import URL
 
 from platform_api.config_client import ConfigClient
@@ -10,7 +12,7 @@ from .conftest import ApiRunner
 
 
 @pytest.fixture
-def cluster_configs_payload() -> Sequence[Dict[str, Any]]:
+def cluster_configs_payload() -> List[Dict[str, Any]]:
     return [
         {
             "name": "cluster_name",
@@ -57,9 +59,7 @@ def cluster_configs_payload() -> Sequence[Dict[str, Any]]:
     ]
 
 
-async def create_config_app(
-    payload: Sequence[Dict[str, Any]]
-) -> aiohttp.web.Application:
+async def create_config_app(payload: List[Dict[str, Any]]) -> aiohttp.web.Application:
     app = aiohttp.web.Application()
 
     async def handle(request: aiohttp.web.Request) -> aiohttp.web.Response:
@@ -70,9 +70,9 @@ async def create_config_app(
     return app
 
 
-@pytest.fixture
-async def config_api_url(
-    cluster_configs_payload: Sequence[Dict[str, Any]]
+@asynccontextmanager
+async def create_config_api(
+    cluster_configs_payload: List[Dict[str, Any]]
 ) -> AsyncIterator[URL]:
     app = await create_config_app(cluster_configs_payload)
     runner = ApiRunner(app, port=8082)
@@ -83,10 +83,21 @@ async def config_api_url(
 
 class TestConfigClient:
     @pytest.mark.asyncio
-    async def test_valid_cluster_config(
-        self, config_api_url: URL, users_url: URL
+    async def test_valid_cluster_configs(
+        self, cluster_configs_payload: List[Dict[str, Any]], users_url: URL
     ) -> None:
-        async with ConfigClient(base_url=config_api_url) as client:
-            result = await client.get_clusters(users_url)
+        async with create_config_api(cluster_configs_payload) as url:
+            async with ConfigClient(base_url=url) as client:
+                result = await client.get_clusters(users_url)
 
-            assert len(result) == 1
+                assert len(result) == 1
+
+    @pytest.mark.asyncio
+    async def test_cluster_configs_with_some_invalid__fails(
+        self, cluster_configs_payload: List[Dict[str, Any]], users_url: URL
+    ) -> None:
+        cluster_configs_payload.append({})
+        async with create_config_api(cluster_configs_payload) as url:
+            async with ConfigClient(base_url=url) as client:
+                with pytest.raises(t.DataError):
+                    await client.get_clusters(users_url)
