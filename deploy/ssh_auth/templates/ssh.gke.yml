@@ -37,7 +37,7 @@ spec:
         - name: NP_SSH_PORT
           value: "22"
         - name: NP_K8S_NS
-          value: {{ printf "%s" (pluck .Values.global.env .Values. NP_K8S_NS | first | default .Values. NP_K8S_NS._default) }}
+          value: {{ printf "%s" (pluck .Values.global.env .Values.NP_K8S_NS | first | default .Values.NP_K8S_NS._default) }}
 ---
 apiVersion: v1
 kind: Service
