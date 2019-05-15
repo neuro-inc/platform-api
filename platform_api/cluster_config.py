@@ -52,14 +52,13 @@ class StorageConfig:
         cls,
         *,
         container_mount_path: PurePath = container_mount_path,
-        host_mount_path: PurePath,
         nfs_server: str,
         nfs_export_path: PurePath,
     ) -> "StorageConfig":
         return cls(
-            host_mount_path,
-            container_mount_path,
-            StorageType.NFS,
+            host_mount_path=nfs_export_path,
+            container_mount_path=container_mount_path,
+            type=StorageType.NFS,
             nfs_server=nfs_server,
             nfs_export_path=nfs_export_path,
         )
@@ -71,7 +70,11 @@ class StorageConfig:
         container_mount_path: PurePath = container_mount_path,
         host_mount_path: PurePath,
     ) -> "StorageConfig":
-        return cls(host_mount_path, container_mount_path, StorageType.HOST)
+        return cls(
+            host_mount_path=host_mount_path,
+            container_mount_path=container_mount_path,
+            type=StorageType.HOST,
+        )
 
 
 @dataclass(frozen=True)
