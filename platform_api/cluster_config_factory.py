@@ -176,11 +176,11 @@ class ClusterConfigFactory:
     def _create_storage_config(self, payload: Dict[str, Any]) -> StorageConfig:
         storage = payload["storage"]
         if storage.get("nfs"):
-            host = storage.get("host") or {}
+            path = PurePath(storage["nfs"]["export_path"])
             return StorageConfig.create_nfs(
-                host_mount_path=self._create_optional_path(host.get("mount_path")),
+                host_mount_path=path,
                 nfs_server=storage["nfs"]["server"],
-                nfs_export_path=PurePath(storage["nfs"]["export_path"]),
+                nfs_export_path=path,
             )
         return StorageConfig.create_host(
             host_mount_path=PurePath(storage["host"]["mount_path"])
