@@ -406,6 +406,11 @@ def config_factory(
 
 
 @pytest.fixture
+def users_url() -> URL:
+    return URL("https://neu.ro/api/v1/users")
+
+
+@pytest.fixture
 def config(config_factory: Callable[..., Config]) -> Config:
     return config_factory()
 

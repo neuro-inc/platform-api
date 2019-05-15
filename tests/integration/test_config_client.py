@@ -4,11 +4,57 @@ import aiohttp
 import pytest
 from yarl import URL
 
-from platform_api.cluster_config import ClusterConfig
-from platform_api.config import Config
 from platform_api.config_client import ConfigClient
 
 from .conftest import ApiRunner
+
+
+@pytest.fixture
+def cluster_configs_payload() -> Sequence[Dict[str, Any]]:
+    return [
+        {
+            "name": "cluster_name",
+            "storage": {
+                "host": {"mount_path": "/host/mount/path"},
+                "nfs": {"server": "127.0.0.1", "export_path": "/nfs/export/path"},
+                "url": "https://dev.neu.ro/api/v1/storage",
+            },
+            "registry": {
+                "url": "https://registry-dev.neu.ro",
+                "email": "registry@neuromation.io",
+            },
+            "orchestrator": {
+                "kubernetes": {
+                    "url": "https://1.2.3.4:8443",
+                    "ca_data": "certificate",
+                    "auth_type": "token",
+                    "token": "auth_token",
+                    "namespace": "default",
+                    "jobs_ingress_name": "platformjobsingress",
+                    "jobs_ingress_auth_name": "platformjobsingressauth",
+                    "node_label_gpu": "cloud.google.com/gke-accelerator",
+                    "node_label_preemptible": "cloud.google.com/gke-preemptible",
+                },
+                "job_domain_name_template": "{job_id}.jobs.neu.ro",
+                "named_job_domain_name_template": "{job_name}-{job_owner}.jobs.neu.ro",
+                "resource_pool_types": [
+                    {},
+                    {"gpu": 0},
+                    {"gpu": 1, "gpu_model": "nvidia-tesla-v100"},
+                ],
+                "is_http_ingress_secure": True,
+            },
+            "ssh": {"server": "ssh-auth-dev.neu.ro"},
+            "monitoring": {
+                "url": "https://dev.neu.ro/api/v1/jobs",
+                "elasticsearch": {
+                    "hosts": ["http://logging-elasticsearch:9200"],
+                    "user": "es_user_name",
+                    "password": "es_assword",
+                },
+            },
+        }
+    ]
 
 
 async def create_config_app(
@@ -35,56 +81,12 @@ async def config_api_url(
     await runner.close()
 
 
-@pytest.fixture
-def cluster_configs_payload() -> Sequence[Dict[str, Any]]:
-    return [{}]
-
-
-@pytest.fixture
-def users_url() -> URL:
-    return URL("https://dev.neu.ro/api/v1/users")
-
-
-class _ConfigClient(ConfigClient):
-    def __init__(
-        self,
-        base_url: URL,
-        *,
-        expected_payload: Sequence[Dict[str, Any]],
-        expected_users_url: URL,
-        expected_cluster_configs: Sequence[ClusterConfig],
-    ):
-        super().__init__(base_url=base_url)
-
-        self._expected_payload = expected_payload
-        self._expected_users_url = expected_users_url
-        self._expected_cluster_configs = expected_cluster_configs
-
-    def create_cluster_configs(
-        self, payload: Sequence[Dict[str, Any]], users_url: URL
-    ) -> Sequence[ClusterConfig]:
-        assert payload == self._expected_payload
-        assert users_url == self._expected_users_url
-
-        return self._expected_cluster_configs
-
-
 class TestConfigClient:
     @pytest.mark.asyncio
     async def test_valid_cluster_config(
-        self,
-        config_api_url: URL,
-        cluster_configs_payload: Sequence[Dict[str, Any]],
-        users_url: URL,
-        config: Config,
+        self, config_api_url: URL, users_url: URL
     ) -> None:
-        cluster_configs = [config.cluster]
-        async with _ConfigClient(
-            base_url=config_api_url,
-            expected_payload=cluster_configs_payload,
-            expected_users_url=users_url,
-            expected_cluster_configs=cluster_configs,
-        ) as client:
+        async with ConfigClient(base_url=config_api_url) as client:
             result = await client.get_clusters(users_url)
 
-            assert cluster_configs == result
+            assert len(result) == 1

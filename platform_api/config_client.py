@@ -1,5 +1,4 @@
-import logging
-from typing import Any, Dict, Sequence
+from typing import Any, AsyncIterator, Sequence
 
 import aiohttp
 from async_generator import asynccontextmanager
@@ -33,21 +32,15 @@ class ConfigClient:
         del self._client
 
     @asynccontextmanager
-    async def _request(self, method: str, path: str, **kwargs: Any) -> Any:
+    async def _request(
+        self, method: str, path: str, **kwargs: Any
+    ) -> AsyncIterator[aiohttp.ClientResponse]:
         url = self._base_url / path
         async with self._client.request(method, url, **kwargs) as response:
-            if logging.getLogger().isEnabledFor(logging.DEBUG):
-                payload = await response.text()
-                logging.debug("%s %s response payload: %s", method, url, payload)
             response.raise_for_status()
             yield response
 
     async def get_clusters(self, users_url: URL) -> Sequence[ClusterConfig]:
         async with self._request("GET", "clusters") as response:
             payload = await response.json()
-            return self.create_cluster_configs(payload, users_url)
-
-    def create_cluster_configs(
-        self, payload: Sequence[Dict[str, Any]], users_url: URL
-    ) -> Sequence[ClusterConfig]:
-        return ClusterConfigFactory().create_cluster_configs(payload, users_url)
+            return ClusterConfigFactory().create_cluster_configs(payload, users_url)
