@@ -12,15 +12,30 @@ from platform_api.resource import GKEGPUModels
 
 
 @pytest.fixture
-def clusters_payload() -> Sequence[Dict[str, Any]]:
+def host_storage_payload() -> Dict[str, Any]:
+    return {
+        "storage": {
+            "host": {"mount_path": "/host/mount/path"},
+            "url": "https://dev.neu.ro/api/v1/storage",
+        }
+    }
+
+
+@pytest.fixture
+def nfs_storage_payload() -> Dict[str, Any]:
+    return {
+        "storage": {
+            "nfs": {"server": "127.0.0.1", "export_path": "/nfs/export/path"},
+            "url": "https://dev.neu.ro/api/v1/storage",
+        }
+    }
+
+
+@pytest.fixture
+def clusters_payload(nfs_storage_payload: Dict[str, Any]) -> Sequence[Dict[str, Any]]:
     return [
         {
             "name": "cluster_name",
-            "storage": {
-                "host": {"mount_path": "/host/mount/path"},
-                "nfs": {"server": "127.0.0.1", "export_path": "/nfs/export/path"},
-                "url": "https://dev.neu.ro/api/v1/storage",
-            },
             "registry": {
                 "url": "https://registry-dev.neu.ro",
                 "email": "registry@neuromation.io",
@@ -55,6 +70,7 @@ def clusters_payload() -> Sequence[Dict[str, Any]]:
                     "password": "es_assword",
                 },
             },
+            **nfs_storage_payload,
         }
     ]
 
@@ -100,9 +116,7 @@ class TestClusterConfigFactory:
 
         storage = cluster.storage
         assert storage.type == StorageType.NFS
-        assert storage.host_mount_path == PurePath(
-            storage_payload["host"]["mount_path"]
-        )
+        assert storage.host_mount_path is None
         assert storage.nfs_server == storage_payload["nfs"]["server"]
         assert storage.nfs_export_path == PurePath(
             storage_payload["nfs"]["export_path"]
@@ -172,35 +186,41 @@ class TestClusterConfigFactory:
     ) -> None:
         storage_payload = clusters_payload[0]["storage"]
 
-        del storage_payload["host"]
-
         factory = ClusterConfigFactory()
         clusters = factory.create_cluster_configs(clusters_payload, users_url)
         cluster = clusters[0]
 
         storage = cluster.storage
         assert storage.type == StorageType.NFS
+        nfs_mount_point = PurePath(storage_payload["nfs"]["export_path"])
         assert storage.host_mount_path is None
         assert storage.nfs_server == storage_payload["nfs"]["server"]
-        assert storage.nfs_export_path == PurePath(
-            storage_payload["nfs"]["export_path"]
-        )
+        assert storage.nfs_export_path == nfs_mount_point
 
-    def test_valid_storage_config_host(
-        self, clusters_payload: Sequence[Dict[str, Any]], users_url: URL
+    def test_create_storage_config_host(
+        self, host_storage_payload: Dict[str, Any]
     ) -> None:
-        storage_payload = clusters_payload[0]["storage"]
-
-        del storage_payload["nfs"]
-
         factory = ClusterConfigFactory()
-        clusters = factory.create_cluster_configs(clusters_payload, users_url)
-        cluster = clusters[0]
+        config = factory._create_storage_config(payload=host_storage_payload)
+        # initialized fields:
+        assert config.host_mount_path == PurePath("/host/mount/path")
+        assert config.type == StorageType.HOST
+        # default fields:
+        assert config.container_mount_path == PurePath("/var/storage")
+        assert config.nfs_server is None
+        assert config.nfs_export_path is None
+        assert config.uri_scheme == "storage"
 
-        storage = cluster.storage
-        assert storage.type == StorageType.HOST
-        assert storage.host_mount_path == PurePath(
-            storage_payload["host"]["mount_path"]
-        )
-        assert storage.nfs_server is None
-        assert storage.nfs_export_path is None
+    def test_create_storage_config_nfs(
+        self, nfs_storage_payload: Dict[str, Any]
+    ) -> None:
+        factory = ClusterConfigFactory()
+        config = factory._create_storage_config(payload=nfs_storage_payload)
+        # initialized fields:
+        assert config.nfs_server == "127.0.0.1"
+        assert config.nfs_export_path == PurePath("/nfs/export/path")
+        assert config.host_mount_path is None
+        assert config.type == StorageType.NFS
+        # default fields:
+        assert config.container_mount_path == PurePath("/var/storage")
+        assert config.uri_scheme == "storage"

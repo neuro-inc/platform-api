@@ -18,19 +18,15 @@ from .orchestrator.kube_orchestrator import KubeConfig
 from .resource import GKEGPUModels, GPUModel, ResourcePoolType
 
 
-_storage_config_validator = (
-    t.Dict(
-        {
-            "url": t.String,
-            "host": t.Dict({"mount_path": t.String}),
-            "nfs": t.Null | t.Dict({"server": t.String, "export_path": t.String}),
-        }
-    )
-    | t.Dict({"url": t.String, "host": t.Dict({"mount_path": t.String})})
-    | t.Dict(
-        {"url": t.String, "nfs": t.Dict({"server": t.String, "export_path": t.String})}
-    )
+_nfs_storage_cfg_validator = t.Dict(
+    {"url": t.String, "host": t.Dict({"mount_path": t.String})}
 )
+
+_host_storage_cfg_validator = t.Dict(
+    {"url": t.String, "nfs": t.Dict({"server": t.String, "export_path": t.String})}
+)
+
+_storage_config_validator = _nfs_storage_cfg_validator | _host_storage_cfg_validator
 
 _registry_config_validator = t.Dict({"url": t.String, "email": t.Email})
 
