@@ -963,6 +963,7 @@ class KubeClient:
         auth_type: KubeClientAuthType = KubeClientAuthType.CERTIFICATE,
         auth_cert_path: Optional[str] = None,
         auth_cert_key_path: Optional[str] = None,
+        token: Optional[str] = None,
         token_path: Optional[str] = None,
         conn_timeout_s: int = 300,
         read_timeout_s: int = 100,
@@ -977,6 +978,7 @@ class KubeClient:
         self._auth_type = auth_type
         self._auth_cert_path = auth_cert_path
         self._auth_cert_key_path = auth_cert_key_path
+        self._token = token
         self._token_path = token_path
 
         self._conn_timeout_s = conn_timeout_s
@@ -1007,8 +1009,10 @@ class KubeClient:
             limit=self._conn_pool_size, ssl=self._create_ssl_context()
         )
         if self._auth_type == KubeClientAuthType.TOKEN:
-            assert self._token_path is not None
-            token = Path(self._token_path).read_text()
+            token = self._token
+            if not token:
+                assert self._token_path is not None
+                token = Path(self._token_path).read_text()
             headers = {"Authorization": "Bearer " + token}
         else:
             headers = {}
