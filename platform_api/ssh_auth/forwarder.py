@@ -20,7 +20,7 @@ class Forwarder(ABC):
         pass
 
 
-def try_kill(proc) -> None:
+def try_kill(proc):  # type: ignore
     try:
         proc.kill()
     except ProcessLookupError:
