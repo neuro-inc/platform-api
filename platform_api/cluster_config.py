@@ -87,7 +87,7 @@ class RegistryConfig:
     def host(self) -> str:
         """Returns registry hostname with port (if specified)
         """
-        port = self.url.explicit_port
+        port = self.url.explicit_port  # type: ignore
         suffix = f":{port}" if port is not None else ""
         return f"{self.url.host}{suffix}"
 
