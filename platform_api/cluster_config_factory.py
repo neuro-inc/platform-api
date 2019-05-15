@@ -1,3 +1,4 @@
+import logging
 from pathlib import PurePath
 from typing import Any, Dict, Optional, Sequence
 
@@ -88,20 +89,25 @@ class ClusterConfigFactory:
     def create_cluster_configs(
         self, payload: Sequence[Dict[str, Any]], users_url: URL
     ) -> Sequence[ClusterConfig]:
-        return [self._create_cluster_config(p, users_url) for p in payload]
+        configs = (self._create_cluster_config(p, users_url) for p in payload)
+        return [c for c in configs if c]
 
     def _create_cluster_config(
         self, payload: Dict[str, Any], users_url: URL
-    ) -> ClusterConfig:
-        _cluster_config_validator.check(payload)
-        return ClusterConfig(
-            name=payload["name"],
-            storage=self._create_storage_config(payload),
-            registry=self._create_registry_config(payload),
-            orchestrator=self._create_orchestrator_config(payload),
-            logging=self._create_logging_config(payload),
-            ingress=self._create_ingress_config(payload, users_url),
-        )
+    ) -> Optional[ClusterConfig]:
+        try:
+            _cluster_config_validator.check(payload)
+            return ClusterConfig(
+                name=payload["name"],
+                storage=self._create_storage_config(payload),
+                registry=self._create_registry_config(payload),
+                orchestrator=self._create_orchestrator_config(payload),
+                logging=self._create_logging_config(payload),
+                ingress=self._create_ingress_config(payload, users_url),
+            )
+        except t.DataError:
+            logging.warning(f"failed to parse cluster config {payload.get('name')}")
+            return None
 
     def _create_ingress_config(
         self, payload: Dict[str, Any], users_url: URL

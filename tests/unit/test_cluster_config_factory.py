@@ -1,5 +1,5 @@
 from pathlib import PurePath
-from typing import Any, Dict, Sequence
+from typing import Any, Dict, List, Sequence
 
 import pytest
 from yarl import URL
@@ -12,7 +12,7 @@ from platform_api.resource import GKEGPUModels
 
 
 @pytest.fixture
-def clusters_payload() -> Sequence[Dict[str, Any]]:
+def clusters_payload() -> List[Dict[str, Any]]:
     return [
         {
             "name": "cluster_name",
@@ -204,3 +204,12 @@ class TestClusterConfigFactory:
         )
         assert storage.nfs_server is None
         assert storage.nfs_export_path is None
+
+    def test_factory_skips_invalid_cluster_configs(
+        self, clusters_payload: List[Dict[str, Any]], users_url: URL
+    ) -> None:
+        clusters_payload.append({})
+        factory = ClusterConfigFactory()
+        clusters = factory.create_cluster_configs(clusters_payload, users_url)
+
+        assert len(clusters) == 1
