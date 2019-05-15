@@ -337,7 +337,7 @@ class TestEnvironConfigFactory:
 
     def test_registry_config_host_default_port_explicit(self) -> None:
         config = RegistryConfig(url=URL("http://registry.com:80"))
-        assert config.host == "registry.com"
+        assert config.host == "registry.com:80"
 
     def test_registry_config_host_custom_port(self) -> None:
         config = RegistryConfig(url=URL("http://registry.com:5000"))
