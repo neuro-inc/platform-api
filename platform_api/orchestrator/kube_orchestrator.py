@@ -3,13 +3,12 @@ import logging
 from dataclasses import dataclass
 from typing import Any, Dict, Iterable, List, Optional, Union
 
-from aioelasticsearch import Elasticsearch
-
 from platform_api.cluster_config import (
     OrchestratorConfig,
     RegistryConfig,
     StorageConfig,
 )
+from platform_api.elasticsearch import Elasticsearch
 
 from .base import LogReader, Orchestrator, Telemetry
 from .job import Job, JobStatusItem

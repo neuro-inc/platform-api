@@ -9,7 +9,6 @@ from urllib.parse import urlsplit
 import aiohttp
 import aiohttp.web
 import pytest
-from aioelasticsearch import Elasticsearch
 from async_generator import asynccontextmanager
 from async_timeout import timeout
 from yarl import URL
@@ -29,7 +28,7 @@ from platform_api.config import (
     OAuthConfig,
     ServerConfig,
 )
-from platform_api.elasticsearch import ElasticsearchConfig
+from platform_api.elasticsearch import Elasticsearch, ElasticsearchConfig
 from platform_api.orchestrator.job_request import JobNotFoundException
 from platform_api.orchestrator.kube_client import KubeClient, NodeTaint
 from platform_api.orchestrator.kube_orchestrator import KubeConfig, KubeOrchestrator
@@ -224,9 +223,8 @@ async def nfs_volume_server(kube_client: MyKubeClient) -> Any:
 @pytest.fixture(scope="session")
 def storage_config_nfs(nfs_volume_server: Optional[str]) -> StorageConfig:
     assert nfs_volume_server
-    path = PurePath("/var/storage")
     return StorageConfig.create_nfs(
-        host_mount_path=path, nfs_server=nfs_volume_server, nfs_export_path=path
+        nfs_server=nfs_volume_server, nfs_export_path=PurePath("/var/storage")
     )
 
 

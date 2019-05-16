@@ -1,11 +1,14 @@
 import subprocess
 import time
-from typing import List
+from typing import AsyncIterator, List
 
 import pytest
-from aioelasticsearch import Elasticsearch
 
-from platform_api.elasticsearch import ElasticsearchConfig, create_elasticsearch_client
+from platform_api.elasticsearch import (
+    Elasticsearch,
+    ElasticsearchConfig,
+    create_elasticsearch_client,
+)
 
 
 def wait_for_service(service_name: str) -> List[str]:  # type: ignore
@@ -62,7 +65,7 @@ def es_config_with_auth(es_hosts_auth: List[str]) -> ElasticsearchConfig:
 
 
 @pytest.fixture
-async def es_client(es_config: ElasticsearchConfig) -> Elasticsearch:
+async def es_client(es_config: ElasticsearchConfig) -> AsyncIterator[Elasticsearch]:
     """ Elasticsearch client that goes directly to elasticsearch-logging service
     without any authentication.
     """
@@ -73,7 +76,7 @@ async def es_client(es_config: ElasticsearchConfig) -> Elasticsearch:
 @pytest.fixture
 async def es_client_with_auth(
     es_config_with_auth: ElasticsearchConfig
-) -> Elasticsearch:
+) -> AsyncIterator[Elasticsearch]:
     """ Elasticsearch client that goes through elasticsearch-auth proxy.
     """
     async with create_elasticsearch_client(es_config_with_auth) as es_client_with_auth:
