@@ -82,8 +82,9 @@ async def create_config_api(
 class TestConfigClient:
     @pytest.mark.asyncio
     async def test_valid_cluster_configs(
-        self, cluster_configs_payload: List[Dict[str, Any]], users_url: URL
+        self, cluster_configs_payload: List[Dict[str, Any]]
     ) -> None:
+        users_url = URL("https://neu.ro/api/v1/users")
         async with create_config_api(cluster_configs_payload) as url:
             async with ConfigClient(base_url=url) as client:
                 result = await client.get_clusters(users_url)
@@ -92,9 +93,10 @@ class TestConfigClient:
 
     @pytest.mark.asyncio
     async def test_client_skips_invalid_cluster_configs(
-        self, cluster_configs_payload: List[Dict[str, Any]], users_url: URL
+        self, cluster_configs_payload: List[Dict[str, Any]]
     ) -> None:
         cluster_configs_payload.append({})
+        users_url = URL("https://neu.ro/api/v1/users")
         async with create_config_api(cluster_configs_payload) as url:
             async with ConfigClient(base_url=url) as client:
                 result = await client.get_clusters(users_url)
