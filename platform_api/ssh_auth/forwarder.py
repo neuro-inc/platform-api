@@ -2,6 +2,7 @@ import asyncio
 import logging
 import random
 from abc import ABC, abstractmethod
+from asyncio.subprocess import Process
 
 
 log = logging.getLogger(__name__)
@@ -20,7 +21,7 @@ class Forwarder(ABC):
         pass
 
 
-def try_kill(proc):  # type: ignore
+def try_kill(proc: Process) -> None:
     try:
         proc.kill()
     except ProcessLookupError:
