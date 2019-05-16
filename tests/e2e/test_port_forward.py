@@ -51,6 +51,54 @@ async def alice_job(
 
 @pytest.mark.usefixtures("api")
 @pytest.mark.asyncio
+async def test_port_forward_no_job_namespace(
+    ssh_auth_config: SSHAuthConfig,
+    api_config: PlatformConfig,
+    alice: _User,
+    alice_job: str,
+    client: aiohttp.ClientSession,
+) -> None:
+    # TODO (artem 16-May-2019) this is temporary test, remove after port-forwarding
+    #  for the jobs without namespace is disabled (see issue #700)
+    retries = 5
+    for i in range(retries):
+        port = random.randint(MIN_PORT, MAX_PORT)
+        command = [
+            "ssh",
+            "-NL",
+            f"{port}:{alice_job}:80",
+            "-o",
+            f"ProxyCommand=ssh -o StrictHostKeyChecking=no -p "
+            f"{str(ssh_auth_config.port)} nobody@{ssh_auth_config.ip} "
+            f'\'{{"method": "job_port_forward", "token": "{alice.token}",'
+            f'"params": {{"job": "{alice_job}", "port": 80}}}}\'',
+            "-o",
+            "ExitOnForwardFailure=yes",
+            "nobody@127.0.0.1",
+        ]
+        proc = await asyncio.create_subprocess_exec(
+            *command, stdout=asyncio.subprocess.PIPE, stderr=asyncio.subprocess.PIPE
+        )
+        assert proc.stderr
+        try:
+            line = await asyncio.wait_for(proc.stderr.readline(), 30)
+            if b"Warning: Permanently added" in line:
+                line = await asyncio.wait_for(proc.stderr.readline(), 30)
+            if b"Warning: Permanently added" in line:
+                line = await asyncio.wait_for(proc.stderr.readline(), 30)
+            assert b"in use" in line
+            continue
+        except asyncio.TimeoutError:
+            break
+    response = await client.get(f"http://{LOCALHOST}:{port}")
+    assert response.status == 200
+    text = await response.text()
+    assert "Welcome to nginx!" in text
+    proc.kill()
+
+
+@pytest.mark.usefixtures("api")
+@pytest.mark.asyncio
 async def test_port_forward(
     ssh_auth_config: SSHAuthConfig,
     api_config: PlatformConfig,
@@ -59,12 +107,13 @@ async def test_port_forward(
     client: aiohttp.ClientSession,
 ) -> None:
     retries = 5
+    job_domain_name = f"{alice_job}.{ssh_auth_config.jobs_namespace}"
     for i in range(retries):
         port = random.randint(MIN_PORT, MAX_PORT)
         command = [
             "ssh",
             "-NL",
-            f"{port}:{alice_job}:80",
+            f"{port}:{job_domain_name}:80",
             "-o",
             f"ProxyCommand=ssh -o StrictHostKeyChecking=no -p "
             f"{str(ssh_auth_config.port)} nobody@{ssh_auth_config.ip} "
