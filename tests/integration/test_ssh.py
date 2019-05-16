@@ -7,9 +7,9 @@ from typing import AsyncIterator, Awaitable, Callable, NamedTuple, Optional
 import aiodocker.utils
 import asyncssh
 import pytest
-from aioelasticsearch import Elasticsearch
 
 from platform_api.config import Config
+from platform_api.elasticsearch import Elasticsearch
 from platform_api.orchestrator.job import JobRequest
 from platform_api.orchestrator.job_request import Container, ContainerResources
 from platform_api.orchestrator.kube_client import KubeClient, PodDescriptor
