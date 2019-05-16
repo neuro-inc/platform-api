@@ -5,6 +5,7 @@ import pytest
 from async_generator import asynccontextmanager
 from yarl import URL
 
+from platform_api.cluster_config_source import ClusterConfigFromPlatformConfig
 from platform_api.config_client import ConfigClient
 
 from .conftest import ApiRunner
@@ -108,3 +109,21 @@ class TestConfigClient:
                 )
 
                 assert len(result) == 1
+
+
+class TestClusterConfigFromPlatformConfig:
+    @pytest.mark.asyncio
+    async def test_valid_cluster_configs(
+        self, cluster_configs_payload: List[Dict[str, Any]]
+    ) -> None:
+        users_url = URL("https://neu.ro/api/v1/users")
+        ssh_domain_name = "ssh.domain"
+        async with create_config_api(cluster_configs_payload) as url:
+            source = ClusterConfigFromPlatformConfig(
+                platform_config_url=url,
+                users_url=users_url,
+                ssh_domain_name=ssh_domain_name,
+            )
+            result = await source.get_cluster_configs()
+
+            assert len(result) == 1

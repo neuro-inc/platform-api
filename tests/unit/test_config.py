@@ -6,6 +6,7 @@ import pytest
 from yarl import URL
 
 from platform_api.cluster_config import RegistryConfig, StorageConfig, StorageType
+from platform_api.cluster_config_source import ClusterConfigFromPlatformConfig
 from platform_api.config_factory import EnvironConfigFactory
 from platform_api.orchestrator.kube_orchestrator import (
     HostVolume,
@@ -342,3 +343,16 @@ class TestEnvironConfigFactory:
     def test_registry_config_host_custom_port(self) -> None:
         config = RegistryConfig(url=URL("http://registry.com:5000"))
         assert config.host == "registry.com:5000"
+
+    def test_create_cluster_config_source(self) -> None:
+        environ = {
+            "NP_API_URL": "https://neu.ro/api/v1",
+            "NP_PLATFORM_CONFIG_URI": "http://platformconfig:8080/api/v1",
+            "NP_K8S_SSH_INGRESS_DOMAIN_NAME": "ssh.domain",
+        }
+        source = EnvironConfigFactory(environ=environ).create_cluster_config_source()
+
+        assert isinstance(source, ClusterConfigFromPlatformConfig)
+        assert source.platform_config_url == URL("http://platformconfig:8080/api/v1")
+        assert source.users_url == URL("https://neu.ro/api/v1/users")
+        assert source.ssh_domain_name == "ssh.domain"

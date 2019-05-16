@@ -6,16 +6,17 @@ from yarl import URL
 
 from .cluster_config import (
     ClusterConfig,
+    IngressConfig,
     LoggingConfig,
     RegistryConfig,
     StorageConfig,
     StorageType,
 )
+from .cluster_config_source import ClusterConfigFromPlatformConfig, ClusterConfigSource
 from .config import (
     AuthConfig,
     Config,
     DatabaseConfig,
-    IngressConfig,
     JobsConfig,
     OAuthConfig,
     PlatformConfig,
@@ -290,4 +291,12 @@ class EnvironConfigFactory:
             storage_url=base_url / "storage",
             users_url=base_url / "users",
             monitoring_url=base_url / "jobs",
+        )
+
+    def create_cluster_config_source(self) -> ClusterConfigSource:
+        base_url = URL(self._environ["NP_API_URL"])
+        return ClusterConfigFromPlatformConfig(
+            platform_config_url=URL(self._environ["NP_PLATFORM_CONFIG_URI"]),
+            users_url=base_url / "users",
+            ssh_domain_name=self._environ["NP_K8S_SSH_INGRESS_DOMAIN_NAME"],
         )
