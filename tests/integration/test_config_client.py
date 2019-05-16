@@ -16,7 +16,6 @@ def cluster_configs_payload() -> List[Dict[str, Any]]:
         {
             "name": "cluster_name",
             "storage": {
-                "host": {"mount_path": "/host/mount/path"},
                 "nfs": {"server": "127.0.0.1", "export_path": "/nfs/export/path"},
                 "url": "https://dev.neu.ro/api/v1/storage",
             },
