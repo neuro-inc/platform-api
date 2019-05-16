@@ -40,7 +40,11 @@ class ConfigClient:
             response.raise_for_status()
             yield response
 
-    async def get_clusters(self, users_url: URL) -> Sequence[ClusterConfig]:
+    async def get_clusters(
+        self, *, users_url: URL, ssh_domain_name: str
+    ) -> Sequence[ClusterConfig]:
         async with self._request("GET", "clusters") as response:
             payload = await response.json()
-            return ClusterConfigFactory().create_cluster_configs(payload, users_url)
+            return ClusterConfigFactory().create_cluster_configs(
+                payload, users_url=users_url, ssh_domain_name=ssh_domain_name
+            )

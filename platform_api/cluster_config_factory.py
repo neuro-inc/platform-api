@@ -83,13 +83,18 @@ _cluster_config_validator = t.Dict(
 
 class ClusterConfigFactory:
     def create_cluster_configs(
-        self, payload: Sequence[Dict[str, Any]], users_url: URL
+        self, payload: Sequence[Dict[str, Any]], *, users_url: URL, ssh_domain_name: str
     ) -> Sequence[ClusterConfig]:
-        configs = (self._create_cluster_config(p, users_url) for p in payload)
+        configs = (
+            self._create_cluster_config(
+                p, users_url=users_url, ssh_domain_name=ssh_domain_name
+            )
+            for p in payload
+        )
         return [c for c in configs if c]
 
     def _create_cluster_config(
-        self, payload: Dict[str, Any], users_url: URL
+        self, payload: Dict[str, Any], *, users_url: URL, ssh_domain_name: str
     ) -> Optional[ClusterConfig]:
         try:
             _cluster_config_validator.check(payload)
@@ -97,7 +102,9 @@ class ClusterConfigFactory:
                 name=payload["name"],
                 storage=self._create_storage_config(payload),
                 registry=self._create_registry_config(payload),
-                orchestrator=self._create_orchestrator_config(payload),
+                orchestrator=self._create_orchestrator_config(
+                    payload=payload, ssh_domain_name=ssh_domain_name
+                ),
                 logging=self._create_logging_config(payload),
                 ingress=self._create_ingress_config(payload, users_url),
             )
@@ -130,13 +137,13 @@ class ClusterConfigFactory:
         )
 
     def _create_orchestrator_config(
-        self, payload: Dict[str, Any]
+        self, payload: Dict[str, Any], ssh_domain_name: str
     ) -> OrchestratorConfig:
         orchestrator = payload["orchestrator"]
         kube = orchestrator["kubernetes"]
         ssh = payload["ssh"]
         return KubeConfig(
-            ssh_domain_name=ssh["server"],
+            ssh_domain_name=ssh_domain_name,
             ssh_auth_domain_name=ssh["server"],
             is_http_ingress_secure=orchestrator["is_http_ingress_secure"],
             jobs_domain_name_template=orchestrator["job_domain_name_template"],
