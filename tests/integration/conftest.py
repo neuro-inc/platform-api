@@ -218,9 +218,8 @@ async def nfs_volume_server(kube_client: MyKubeClient) -> Any:
 @pytest.fixture(scope="session")
 def storage_config_nfs(nfs_volume_server: Optional[str]) -> StorageConfig:
     assert nfs_volume_server
-    path = PurePath("/var/storage")
     return StorageConfig.create_nfs(
-        host_mount_path=path, nfs_server=nfs_volume_server, nfs_export_path=path
+        nfs_server=nfs_volume_server, nfs_export_path=PurePath("/var/storage")
     )
 
 
