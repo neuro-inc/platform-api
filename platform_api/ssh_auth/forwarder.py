@@ -42,7 +42,9 @@ class NCForwarder(Forwarder):
                 "-f",
                 "/etc/ssh/sshd_config_portforward",
                 "-o",
-                f"PermitOpen={job_domain}:{job_port}",
+                # TODO: since all jobs have a namespace, we should get rid
+                #  of legacy '{job_id}:{job_port}'
+                f"PermitOpen={job_id}:{job_port} {job_domain}:{job_port}",
                 "-o",
                 f"PidFile=/nonexistent/sshd.{port}.pid",
                 "-p",
