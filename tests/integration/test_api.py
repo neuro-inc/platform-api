@@ -10,6 +10,7 @@ from typing import (
     Iterator,
     List,
     NamedTuple,
+    Sequence,
 )
 from unittest import mock
 
@@ -30,6 +31,7 @@ from neuro_auth_client import Permission
 from neuro_auth_client.client import Quota
 
 from platform_api.api import create_app
+from platform_api.cluster_config import ClusterConfig
 from platform_api.config import Config
 from tests.conftest import random_str
 
@@ -65,9 +67,15 @@ class ApiConfig(NamedTuple):
         return self.endpoint + "/config"
 
 
+async def get_cluster_configs(
+    cluster_configs: Sequence[ClusterConfig]
+) -> Sequence[ClusterConfig]:
+    return cluster_configs
+
+
 @pytest.fixture
 async def api(config: Config) -> AsyncIterator[ApiConfig]:
-    app = await create_app(config)
+    app = await create_app(config, get_cluster_configs([config.cluster]))
     runner = ApiRunner(app, port=8080)
     api_address = await runner.run()
     api_config = ApiConfig(host=api_address.host, port=api_address.port)
@@ -77,7 +85,9 @@ async def api(config: Config) -> AsyncIterator[ApiConfig]:
 
 @pytest.fixture
 async def api_with_oauth(config_with_oauth: Config) -> AsyncIterator[ApiConfig]:
-    app = await create_app(config_with_oauth)
+    app = await create_app(
+        config_with_oauth, get_cluster_configs([config_with_oauth.cluster])
+    )
     runner = ApiRunner(app, port=8081)
     api_address = await runner.run()
     api_config = ApiConfig(host=api_address.host, port=api_address.port)

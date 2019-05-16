@@ -1,22 +1,28 @@
 #!/usr/bin/env bash
 set -o verbose
 docker tag $(cat AUTH_SERVER_IMAGE_NAME) platformauthapi:latest
+docker tag $GKE_DOCKER_REGISTRY/$GKE_PROJECT_ID/platformconfig:latest platformconfig:latest
 
 if [ ! "$CI" = true ]; then
     echo "Setting up external services"
     docker save -o /tmp/platformauthapi.image platformauthapi:latest
     docker save -o /tmp/platformapi.image platformapi-k8s:latest
     docker save -o /tmp/ssh-auth.image ssh-auth:latest
+    docker save -o /tmp/platformconfig.image platformconfig:latest
+
     eval $(minikube docker-env)
     docker load -i /tmp/platformauthapi.image
     docker load -i /tmp/platformapi.image
     docker load -i /tmp/ssh-auth.image
+    docker load -i /tmp/platformconfig.image
     kubectl delete -f deploy/platformapi/templates/rb.default.gke.yml
     kubectl delete -f tests/k8s/platformapi.yml
+    kubectl delete -f tests/k8s/platformconfig.yml
     echo "Services set up"
 fi
 
 kubectl create -f deploy/platformapi/templates/rb.default.gke.yml
+kubectl create -f tests/k8s/platformconfig.yml
 kubectl create -f tests/k8s/platformapi.yml
 
 # wait for containers to start

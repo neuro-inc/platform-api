@@ -1,15 +1,18 @@
 import asyncio
 import logging
-from typing import Any, AsyncIterator, Awaitable, Callable, Dict
+import os
+from typing import Any, AsyncIterator, Awaitable, Callable, Dict, Sequence
 
 import aiohttp.web
 from aiohttp.web import HTTPUnauthorized
 from async_exit_stack import AsyncExitStack
 from neuro_auth_client import AuthClient
 from neuro_auth_client.security import AuthScheme, setup_security
+from yarl import URL
 
 from .cluster import Cluster, ClusterConfig, ClusterRegistry
 from .config import Config
+from .config_client import ConfigClient
 from .config_factory import EnvironConfigFactory
 from .handlers import JobsHandler, ModelsHandler
 from .kube_cluster import KubeCluster
@@ -145,7 +148,9 @@ def create_cluster(config: ClusterConfig) -> Cluster:
     return KubeCluster(config)
 
 
-async def create_app(config: Config) -> aiohttp.web.Application:
+async def create_app(
+    config: Config, cluster_configs_future: Awaitable[Sequence[ClusterConfig]]
+) -> aiohttp.web.Application:
     app = aiohttp.web.Application(middlewares=[handle_exceptions])
     app["config"] = config
 
@@ -162,7 +167,10 @@ async def create_app(config: Config) -> aiohttp.web.Application:
                 ClusterRegistry(factory=create_cluster)
             )
 
-            await cluster_registry.add(config.cluster)
+            [
+                await cluster_registry.add(cluster_config)
+                for cluster_config in await cluster_configs_future
+            ]
 
             logger.info("Initializing JobsStorage")
             jobs_storage = RedisJobsStorage(redis_client)
@@ -213,6 +221,16 @@ async def create_app(config: Config) -> aiohttp.web.Application:
     return app
 
 
+async def get_cluster_configs() -> Sequence[ClusterConfig]:
+    environ = os.environ
+    config_client = ConfigClient(base_url=URL(environ["NP_PLATFORM_CONFIG_URI"]))
+    api_url = URL(environ["NP_API_URL"])
+    return await config_client.get_clusters(
+        users_url=api_url / "users",
+        ssh_domain_name=environ["NP_K8S_SSH_INGRESS_DOMAIN_NAME"],
+    )
+
+
 def main() -> None:
     init_logging()
     config = EnvironConfigFactory().create()
@@ -220,5 +238,5 @@ def main() -> None:
 
     loop = asyncio.get_event_loop()
 
-    app = loop.run_until_complete(create_app(config))
+    app = loop.run_until_complete(create_app(config, get_cluster_configs()))
     aiohttp.web.run_app(app, host=config.server.host, port=config.server.port)

@@ -1,0 +1,100 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: platformconfig
+data:
+  clusters.json: |-
+    [
+        {
+            "name": "default",
+
+            "storage": {
+                "host": {"mount_path": "/tmp"},
+                "url": "http://platformapi/api/v1/storage"
+            },
+
+            "registry": {
+                "url": "registry.dev.neuromation.io",
+                "email": "registry@neuromation.io"
+            },
+
+            "orchestrator": {
+                "kubernetes": {
+                    "url": "http://localhost:8001",
+                    "ca_data": "certificate",
+                    "auth_type": "none",
+                    "token": "token",
+                    "namespace": "default",
+
+                    "jobs_ingress_name": "platformjobsingress",
+                    "jobs_ingress_auth_name": "platformjobsingressauth",
+
+                    "node_label_gpu": "cloud.google.com/gke-accelerator",
+                    "node_label_preemptible": "cloud.google.com/gke-preemptible"
+                },
+
+                "is_http_ingress_secure": true,
+                "job_domain_name_template": "{job_id}.jobs.platform.dev.neuromation.io",
+                "named_job_domain_name_template": "{job_name}-{job_owner}.jobs.platform.dev.neuromation.io",
+
+                "resource_pool_types": [
+                    {}
+                ]
+            },
+
+            "ssh": {
+                "server": "ssh.platform.dev.neuromation.io"
+            },
+
+            "monitoring": {
+                "url": "http://platformapi/api/v1/jobs",
+
+                "elasticsearch": {
+                    "hosts": ["http://elasticsearch-logging.kube-system:9200"]
+                }
+            }
+        }
+    ]
+---
+apiVersion: extensions/v1beta1
+kind: Deployment
+metadata:
+  name: platformconfig
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      service: platformconfig
+  strategy:
+    rollingUpdate:
+      maxSurge: 1
+      maxUnavailable: 0
+    type: RollingUpdate
+  template:
+    metadata:
+      labels:
+        service: platformconfig
+    spec:
+      containers:
+      - name: platformconfig
+        image: platformconfig:latest
+        imagePullPolicy: Never
+        volumeMounts:
+        - name: config-volume
+          mountPath: /var/storage/neuromation/clusters
+      volumes:
+        - name: config-volume
+          configMap:
+            name: platformconfig
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: platformconfig
+spec:
+  type: ClusterIP
+  ports:
+  - port: 8080
+    targetPort: 8080
+  selector:
+    service: platformconfig
