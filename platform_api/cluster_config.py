@@ -16,7 +16,7 @@ class StorageType(str, Enum):
 
 @dataclass(frozen=True)
 class StorageConfig:
-    host_mount_path: Optional[PurePath] = None
+    host_mount_path: PurePath
     container_mount_path: PurePath = PurePath("/var/storage")
 
     type: StorageType = StorageType.HOST
@@ -34,6 +34,11 @@ class StorageConfig:
         if self.is_nfs:
             if not all(nfs_attrs):
                 raise ValueError("Missing NFS settings")
+            if self.host_mount_path != self.nfs_export_path:
+                # NOTE (ayushkovskiy 14-May-2019) this is a TEMPORARY PATCH: even for
+                # StorageType.NFS, `host_mount_path` must be non-null as it is used
+                # in `ContainerVolumeFactory.__init__`, who assumes that it's not None
+                raise ValueError("Invalid host mount path")
         else:
             if any(nfs_attrs):
                 raise ValueError("Redundant NFS settings")
@@ -47,7 +52,7 @@ class StorageConfig:
         cls,
         *,
         container_mount_path: PurePath = container_mount_path,
-        host_mount_path: Optional[PurePath] = host_mount_path,
+        host_mount_path: PurePath,
         nfs_server: str,
         nfs_export_path: PurePath,
     ) -> "StorageConfig":
@@ -71,14 +76,20 @@ class StorageConfig:
 
 @dataclass(frozen=True)
 class RegistryConfig:
-    host: str = "registry.dev.neuromation.io"
+    url: URL = URL("https://registry.dev.neuromation.io")
     email: str = "registry@neuromation.io"
-    is_secure: bool = True
+
+    def __post_init__(self) -> None:
+        if not self.url.host:
+            raise ValueError("Invalid registry config: missing url hostname")
 
     @property
-    def url(self) -> URL:
-        scheme = "https" if self.is_secure else "http"
-        return URL(f"{scheme}://{self.host}")
+    def host(self) -> str:
+        """Returns registry hostname with port (if specified)
+        """
+        port = self.url.explicit_port  # type: ignore
+        suffix = f":{port}" if port is not None else ""
+        return f"{self.url.host}{suffix}"
 
 
 @dataclass(frozen=True)

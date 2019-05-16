@@ -188,7 +188,7 @@ class KubeOrchestrator(Orchestrator):
                 server=self._storage_config.nfs_server,
                 path=self._storage_config.nfs_export_path,
             )
-        return HostVolume(  # type: ignore # noqa
+        return HostVolume(
             name=self._kube_config.storage_volume_name,
             path=self._storage_config.host_mount_path,
         )
