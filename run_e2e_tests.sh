@@ -2,6 +2,8 @@
 set -o verbose
 docker tag $(cat AUTH_SERVER_IMAGE_NAME) platformauthapi:latest
 
+kubectl config use-context minikube
+
 if [ ! "$CI" = true ]; then
     echo "Setting up external services"
     docker save -o /tmp/platformauthapi.image platformauthapi:latest
