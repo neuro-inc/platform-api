@@ -4,8 +4,9 @@ import warnings
 from typing import Any, Dict, Optional
 
 import aiohttp
-from aioelasticsearch import Elasticsearch
 from aioelasticsearch.helpers import Scan
+
+from platform_api.elasticsearch import Elasticsearch
 
 from .base import LogReader
 from .kube_client import KubeClient

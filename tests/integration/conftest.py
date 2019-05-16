@@ -6,7 +6,6 @@ from typing import Any, AsyncIterator, Awaitable, Callable, Dict, Iterator, Opti
 from urllib.parse import urlsplit
 
 import pytest
-from aioelasticsearch import Elasticsearch
 from async_timeout import timeout
 from yarl import URL
 
@@ -23,7 +22,7 @@ from platform_api.config import (
     ServerConfig,
     StorageConfig,
 )
-from platform_api.elasticsearch import ElasticsearchConfig
+from platform_api.elasticsearch import Elasticsearch, ElasticsearchConfig
 from platform_api.orchestrator.job_request import JobNotFoundException
 from platform_api.orchestrator.kube_client import KubeClient, NodeTaint
 from platform_api.orchestrator.kube_orchestrator import KubeConfig, KubeOrchestrator

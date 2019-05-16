@@ -1,11 +1,10 @@
 import logging
 
-from aioelasticsearch import Elasticsearch
 from async_exit_stack import AsyncExitStack
 
 from .cluster import Cluster
 from .cluster_config import ClusterConfig
-from .elasticsearch import create_elasticsearch_client
+from .elasticsearch import Elasticsearch, create_elasticsearch_client
 from .orchestrator import KubeOrchestrator, Orchestrator
 
 
