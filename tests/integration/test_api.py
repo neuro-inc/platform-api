@@ -1699,7 +1699,8 @@ class TestJobs:
                         }
                     ],
                 },
-                "ssh_auth_server": "ssh://nobody@ssh-auth.platform.neuromation.io:22",
+                "ssh_server": f"ssh://{job_id}@ssh.platform.neuromation.io:22",
+                "ssh_auth_server": f"ssh://{job_id}@ssh.platform.neuromation.io:22",
                 "is_preemptible": True,
             }
 
@@ -1733,7 +1734,8 @@ class TestJobs:
                     }
                 ],
             },
-            "ssh_auth_server": "ssh://nobody@ssh-auth.platform.neuromation.io:22",
+            "ssh_server": f"ssh://{job_id}@ssh.platform.neuromation.io:22",
+            "ssh_auth_server": f"ssh://{job_id}@ssh.platform.neuromation.io:22",
             "is_preemptible": True,
         }
 
@@ -1802,7 +1804,8 @@ class TestJobs:
                     },
                 ],
             },
-            "ssh_auth_server": "ssh://nobody@ssh-auth.platform.neuromation.io:22",
+            "ssh_server": f"ssh://{job_id}@ssh.platform.neuromation.io:22",
+            "ssh_auth_server": f"ssh://{job_id}@ssh.platform.neuromation.io:22",
             "is_preemptible": False,
         }
 
@@ -1889,7 +1892,8 @@ class TestJobs:
                     },
                     "volumes": [],
                 },
-                "ssh_auth_server": "ssh://nobody@ssh-auth.platform.neuromation.io:22",
+                "ssh_server": f"ssh://{job_id}@ssh.platform.neuromation.io:22",
+                "ssh_auth_server": f"ssh://{job_id}@ssh.platform.neuromation.io:22",
                 "is_preemptible": False,
             }
 

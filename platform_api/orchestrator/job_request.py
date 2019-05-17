@@ -177,10 +177,6 @@ class Container:
         return bool(self.http_server)
 
     @property
-    def has_ssh_server_exposed(self) -> bool:
-        return bool(self.ssh_server)
-
-    @property
     def requires_http_auth(self) -> bool:
         return bool(self.http_server and self.http_server.requires_auth)
 

@@ -93,7 +93,6 @@ class TestClusterConfigFactory:
         registry_payload = clusters_payload[0]["registry"]
         orchestrator_payload = clusters_payload[0]["orchestrator"]
         kube_payload = orchestrator_payload["kubernetes"]
-        ssh_payload = clusters_payload[0]["ssh"]
         monitoring_payload = clusters_payload[0]["monitoring"]
         elasticsearch_payload = monitoring_payload["elasticsearch"]
 
@@ -133,7 +132,6 @@ class TestClusterConfigFactory:
         assert isinstance(orchestrator, KubeConfig)
 
         assert orchestrator.ssh_domain_name == ssh_domain_name
-        assert orchestrator.ssh_auth_domain_name == ssh_payload["server"]
         assert (
             orchestrator.is_http_ingress_secure
             == orchestrator_payload["is_http_ingress_secure"]

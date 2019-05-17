@@ -70,8 +70,8 @@ def create_job_response_validator() -> t.Trafaret:
             "status": create_job_status_validator(),
             t.Key("http_url", optional=True): t.String,
             t.Key("http_url_named", optional=True): t.String,
-            t.Key("ssh_server", optional=True): t.String,
-            "ssh_auth_server": t.String,
+            "ssh_server": t.String,
+            "ssh_auth_server": t.String,  # deprecated
             "history": create_job_history_validator(),
             "container": create_container_response_validator(),
             "is_preemptible": t.Bool,
@@ -154,7 +154,8 @@ def convert_job_to_job_response(job: Job) -> Dict[str, Any]:
         "container": convert_job_container_to_json(
             job.request.container, job.storage_config
         ),
-        "ssh_auth_server": job.ssh_auth_server,
+        "ssh_server": job.ssh_server,
+        "ssh_auth_server": job.ssh_server,  # deprecated
         "is_preemptible": job.is_preemptible,
     }
     if job.name:
@@ -169,8 +170,6 @@ def convert_job_to_job_response(job: Job) -> Dict[str, Any]:
             http_url_named_sanitized = sanitize_dns_name(job.http_url_named)
             if http_url_named_sanitized is not None:
                 response_payload["http_url_named"] = http_url_named_sanitized
-    if job.has_ssh_server_exposed:
-        response_payload["ssh_server"] = job.ssh_server
     if job.internal_hostname:
         response_payload["internal_hostname"] = job.internal_hostname
     if history.started_at:

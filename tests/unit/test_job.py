@@ -635,9 +635,7 @@ class TestJob:
             orchestrator_config=mock_orchestrator.config,
             job_request=job_request,
         )
-        assert not job.has_ssh_server_exposed
-        with pytest.raises(AssertionError):
-            assert job.ssh_server
+        assert job.ssh_server == "ssh://testjob.ssh:22"
 
     def test_http_url_and_ssh(
         self,

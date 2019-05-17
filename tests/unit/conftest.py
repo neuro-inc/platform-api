@@ -152,7 +152,6 @@ def cluster_config() -> ClusterConfig:
         jobs_domain_name_template="{job_id}.jobs",
         named_jobs_domain_name_template="{job_name}-{job_owner}.jobs",
         ssh_domain_name="ssh",
-        ssh_auth_domain_name="ssh-auth",
         endpoint_url="http://k8s:1234",
         resource_pool_types=[ResourcePoolType()],
     )

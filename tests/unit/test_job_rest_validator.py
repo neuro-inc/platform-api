@@ -212,7 +212,8 @@ class TestJobResponseValidator:
                 "created_at": "now",
             },
             "container": container,
-            "ssh_auth_server": "ssh-auth",
+            "ssh_server": "ssh",
+            "ssh_auth_server": "ssh",
             "is_preemptible": False,
         }
         validator = create_job_response_validator()
@@ -235,7 +236,8 @@ class TestJobResponseValidator:
                 "created_at": "now",
             },
             "container": container,
-            "ssh_auth_server": "ssh-auth",
+            "ssh_server": "ssh",
+            "ssh_auth_server": "ssh",
             "is_preemptible": False,
         }
         validator = create_job_response_validator()
