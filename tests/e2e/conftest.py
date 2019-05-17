@@ -35,6 +35,7 @@ class PlatformConfig:
 class SSHAuthConfig:
     ip: str
     port: int
+    jobs_namespace: str = "default"
 
 
 @pytest.fixture(scope="session")
@@ -56,7 +57,8 @@ def ssh_auth_config() -> SSHAuthConfig:
     url = URL(os.environ["SSH_AUTH_URL"])
     assert url.host
     assert url.port
-    return SSHAuthConfig(url.host, url.port)
+    namespace = os.environ.get("NP_K8S_NS", SSHAuthConfig.jobs_namespace)
+    return SSHAuthConfig(url.host, url.port, jobs_namespace=namespace)
 
 
 @pytest.fixture(scope="session")

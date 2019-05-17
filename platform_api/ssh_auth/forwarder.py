@@ -2,6 +2,7 @@ import asyncio
 import logging
 import random
 from abc import ABC, abstractmethod
+from asyncio.subprocess import Process
 
 
 log = logging.getLogger(__name__)
@@ -12,12 +13,15 @@ MAX_ATTEMPT = 10
 
 
 class Forwarder(ABC):
+    def __init__(self, jobs_namespace: str) -> None:
+        self._jobs_namespace = jobs_namespace
+
     @abstractmethod
     async def forward(self, job_id: str, job_port: int) -> int:
         pass
 
 
-def try_kill(proc):
+def try_kill(proc: Process) -> None:
     try:
         proc.kill()
     except ProcessLookupError:
@@ -27,6 +31,7 @@ def try_kill(proc):
 class NCForwarder(Forwarder):
     async def forward(self, job_id: str, job_port: int) -> int:
         log.debug(f"Forwarding")
+        job_domain = f"{job_id}.{self._jobs_namespace}"
         for i in range(MAX_ATTEMPT):
             port = random.randint(MIN_PORT, MAX_PORT)
             log.debug(f"Trying port: {port}")
@@ -37,7 +42,9 @@ class NCForwarder(Forwarder):
                 "-f",
                 "/etc/ssh/sshd_config_portforward",
                 "-o",
-                f"PermitOpen={job_id}:{job_port}",
+                # TODO: since all jobs have a namespace, we should get rid
+                #  of legacy '{job_id}:{job_port}'
+                f"PermitOpen={job_id}:{job_port} {job_domain}:{job_port}",
                 "-o",
                 f"PidFile=/nonexistent/sshd.{port}.pid",
                 "-p",

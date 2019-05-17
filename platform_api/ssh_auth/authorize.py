@@ -33,8 +33,8 @@ async def run(config: SSHAuthConfig) -> int:
     async with AuthClient(
         url=config.auth.server_endpoint_url, token=config.auth.service_token
     ) as auth_client:
-        forwarder = NCForwarder()
-        executor = KubeCTLExecutor(tty)
+        forwarder = NCForwarder(jobs_namespace=config.jobs_namespace)
+        executor = KubeCTLExecutor(tty, jobs_namespace=config.jobs_namespace)
         proxy = ExecProxy(
             auth_client=auth_client,
             platform_url=config.platform.server_endpoint_url,

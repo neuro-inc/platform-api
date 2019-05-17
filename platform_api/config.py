@@ -141,3 +141,4 @@ class SSHAuthConfig:
     auth: AuthConfig
     log_fifo: Path
     env_prefix: str = "NP"
+    jobs_namespace: str = "default"
