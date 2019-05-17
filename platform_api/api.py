@@ -1,6 +1,5 @@
 import asyncio
 import logging
-import os
 from typing import Any, AsyncIterator, Awaitable, Callable, Dict, Sequence
 
 import aiohttp.web
@@ -8,11 +7,9 @@ from aiohttp.web import HTTPUnauthorized
 from async_exit_stack import AsyncExitStack
 from neuro_auth_client import AuthClient
 from neuro_auth_client.security import AuthScheme, setup_security
-from yarl import URL
 
 from .cluster import Cluster, ClusterConfig, ClusterRegistry
 from .config import Config
-from .config_client import ConfigClient
 from .config_factory import EnvironConfigFactory
 from .handlers import JobsHandler, ModelsHandler
 from .kube_cluster import KubeCluster
@@ -221,13 +218,10 @@ async def create_app(
     return app
 
 
-async def get_cluster_configs() -> Sequence[ClusterConfig]:
-    environ = os.environ
-    config_client = ConfigClient(base_url=URL(environ["NP_PLATFORM_CONFIG_URI"]))
-    api_url = URL(environ["NP_API_URL"])
-    return await config_client.get_clusters(
-        users_url=api_url / "users",
-        ssh_domain_name=environ["NP_K8S_SSH_INGRESS_DOMAIN_NAME"],
+async def get_cluster_configs(config: Config) -> Sequence[ClusterConfig]:
+    return await config.config_client.get_clusters(
+        users_url=config.cluster.ingress.users_url,
+        ssh_domain_name=config.cluster.orchestrator.ssh_domain_name,
     )
 
 
@@ -238,5 +232,5 @@ def main() -> None:
 
     loop = asyncio.get_event_loop()
 
-    app = loop.run_until_complete(create_app(config, get_cluster_configs()))
+    app = loop.run_until_complete(create_app(config, get_cluster_configs(config)))
     aiohttp.web.run_app(app, host=config.server.host, port=config.server.port)

@@ -13,6 +13,7 @@ from .cluster_config import (
     RegistryConfig,
     StorageConfig,
 )
+from .config_client import ConfigClient
 from .redis import RedisConfig
 
 
@@ -71,6 +72,8 @@ class JobsConfig:
 
 @dataclass(frozen=True)
 class Config:
+    config_client: ConfigClient
+
     server: ServerConfig
 
     cluster: ClusterConfig

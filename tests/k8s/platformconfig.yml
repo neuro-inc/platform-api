@@ -34,8 +34,8 @@ data:
                 },
 
                 "is_http_ingress_secure": true,
-                "job_domain_name_template": "{job_id}.jobs.platform.dev.neuromation.io",
-                "named_job_domain_name_template": "{job_name}-{job_owner}.jobs.platform.dev.neuromation.io",
+                "job_hostname_template": "{job_id}.jobs.platform.dev.neuromation.io",
+                "named_job_hostname_template": "{job_name}-{job_owner}.jobs.platform.dev.neuromation.io",
 
                 "resource_pool_types": [
                     {}

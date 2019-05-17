@@ -127,6 +127,7 @@ class TestEnvironConfigFactory:
             "NP_OAUTH_SUCCESS_REDIRECT_URL": "https://platform-default-url",
             "NP_OAUTH_HEADLESS_CALLBACK_URL": "https://dev.neu.ro/oauth/show-code",
             "NP_API_URL": "https://neu.ro/api/v1",
+            "NP_PLATFORM_CONFIG_URI": "http://platformconfig:8080/api/v1",
         }
         config = EnvironConfigFactory(environ=environ).create()
 
@@ -183,6 +184,8 @@ class TestEnvironConfigFactory:
         assert config.logging.elasticsearch.hosts == ["http://es"]
         assert config.logging.elasticsearch.user == "test-user"
         assert config.logging.elasticsearch.password == "test-password"
+
+        assert config.config_client is not None
 
     def test_create_value_error_invalid_port(self) -> None:
         environ = {
@@ -243,6 +246,7 @@ class TestEnvironConfigFactory:
             "NP_ES_AUTH_PASSWORD": "test-password",
             "NP_API_URL": "https://neu.ro/api/v1",
             "NP_OAUTH_HEADLESS_CALLBACK_URL": "https://oauth/show-code",
+            "NP_PLATFORM_CONFIG_URI": "http://platformconfig:8080/api/v1",
         }
         config = EnvironConfigFactory(environ=environ).create()
 
@@ -304,6 +308,8 @@ class TestEnvironConfigFactory:
         assert config.logging.elasticsearch.user == "test-user"
         assert config.logging.elasticsearch.password == "test-password"
 
+        assert config.config_client is not None
+
     def test_create_nfs(self) -> None:
         named_host_template = "{job_name}-{job_owner}.jobs.domain"
         environ = {
@@ -322,6 +328,7 @@ class TestEnvironConfigFactory:
             "NP_AUTH_TOKEN": "token",
             "NP_ES_HOSTS": "http://es",
             "NP_OAUTH_HEADLESS_CALLBACK_URL": "https://oauth/show-code",
+            "NP_PLATFORM_CONFIG_URI": "http://platformconfig:8080/api/v1",
         }
         config = EnvironConfigFactory(environ=environ).create()
         assert config.storage.nfs_server == "1.2.3.4"
