@@ -44,8 +44,8 @@ spec:
           value: "{{ printf "%s" (pluck .Values.global.env .Values.NP_K8S_JOBS_INGRESS_DOMAIN_NAME_TEMPLATE | first | default .Values.NP_K8S_JOBS_INGRESS_DOMAIN_NAME_TEMPLATE._default) }}"
         - name: NP_K8S_NAMED_JOBS_INGRESS_DOMAIN_NAME_TEMPLATE
           value: "{{ printf "%s" (pluck .Values.global.env .Values.NP_K8S_NAMED_JOBS_INGRESS_DOMAIN_NAME_TEMPLATE | first | default .Values.NP_K8S_NAMED_JOBS_INGRESS_DOMAIN_NAME_TEMPLATE._default) }}"
-        - name: NP_K8S_SSH_INGRESS_DOMAIN_NAME
-          value: "{{ printf "%s" (pluck .Values.global.env .Values.NP_K8S_SSH_INGRESS_DOMAIN_NAME | first | default .Values.NP_K8S_SSH_INGRESS_DOMAIN_NAME._default) }}"
+        - name: NP_K8S_SSH_AUTH_INGRESS_DOMAIN_NAME
+          value: "{{ printf "%s" (pluck .Values.global.env .Values.NP_K8S_SSH_AUTH_INGRESS_DOMAIN_NAME | first | default .Values.NP_K8S_SSH_AUTH_INGRESS_DOMAIN_NAME._default) }}"
         - name: NP_DB_REDIS_URI
           value: "{{ printf "%s" (pluck .Values.global.env .Values.NP_DB_REDIS_URI | first | default .Values.NP_DB_REDIS_URI._default) }}"
         - name: NP_AUTH_URL

@@ -62,7 +62,7 @@ class TestStorageVolume:
             jobs_domain_name_template="{job_id}.testdomain",
             named_jobs_domain_name_template="{job_name}-{job_owner}.testdomain",
             jobs_ingress_name="testingress",
-            ssh_domain_name="ssh.domain",
+            ssh_auth_domain_name="ssh-auth.domain",
             endpoint_url="http://1.2.3.4",
             resource_pool_types=[ResourcePoolType()],
         )
@@ -84,7 +84,7 @@ class TestStorageVolume:
         kube_config = KubeConfig(
             jobs_domain_name_template="{job_id}.testdomain",
             named_jobs_domain_name_template="{job_name}-{job_owner}.testdomain",
-            ssh_domain_name="ssh.domain",
+            ssh_auth_domain_name="ssh-auth.domain",
             jobs_ingress_name="testingress",
             endpoint_url="http://1.2.3.4",
             resource_pool_types=[ResourcePoolType()],
@@ -112,7 +112,7 @@ class TestEnvironConfigFactory:
             "NP_K8S_JOBS_INGRESS_NAME": "testingress",
             "NP_K8S_JOBS_INGRESS_DOMAIN_NAME_TEMPLATE": "{job_id}.jobs.domain",
             "NP_K8S_NAMED_JOBS_INGRESS_DOMAIN_NAME_TEMPLATE": named_host_template,
-            "NP_K8S_SSH_INGRESS_DOMAIN_NAME": "ssh.domain",
+            "NP_K8S_SSH_AUTH_INGRESS_DOMAIN_NAME": "ssh-auth.domain",
             "NP_AUTH_URL": "https://auth",
             "NP_AUTH_TOKEN": "token",
             "NP_ES_HOSTS": "http://es",
@@ -152,7 +152,7 @@ class TestEnvironConfigFactory:
         assert config.orchestrator.jobs_ingress_auth_name == "testingress"
         assert not config.orchestrator.is_http_ingress_secure
         assert config.orchestrator.jobs_domain_name_template == "{job_id}.jobs.domain"
-        assert config.orchestrator.ssh_domain_name == "ssh.domain"
+        assert config.orchestrator.ssh_auth_domain_name == "ssh-auth.domain"
 
         assert config.orchestrator.resource_pool_types == [ResourcePoolType()]
         assert config.orchestrator.node_label_gpu is None
@@ -213,7 +213,7 @@ class TestEnvironConfigFactory:
             "NP_K8S_JOBS_INGRESS_HTTPS": "True",
             "NP_K8S_JOBS_INGRESS_DOMAIN_NAME_TEMPLATE": "{job_id}.jobs.domain",
             "NP_K8S_NAMED_JOBS_INGRESS_DOMAIN_NAME_TEMPLATE": named_host_template,
-            "NP_K8S_SSH_INGRESS_DOMAIN_NAME": "ssh.domain",
+            "NP_K8S_SSH_AUTH_INGRESS_DOMAIN_NAME": "ssh-auth.domain",
             "NP_K8S_JOB_DELETION_DELAY": "3600",
             "NP_DB_REDIS_URI": "redis://localhost:6379/0",
             "NP_DB_REDIS_CONN_POOL_SIZE": "444",
@@ -271,7 +271,7 @@ class TestEnvironConfigFactory:
         assert config.orchestrator.jobs_ingress_auth_name == "testingressauth"
         assert config.orchestrator.is_http_ingress_secure
         assert config.orchestrator.jobs_domain_name_template == "{job_id}.jobs.domain"
-        assert config.orchestrator.ssh_domain_name == "ssh.domain"
+        assert config.orchestrator.ssh_auth_domain_name == "ssh-auth.domain"
 
         assert config.orchestrator.resource_pool_types == [
             ResourcePoolType(),
@@ -311,7 +311,7 @@ class TestEnvironConfigFactory:
             "NP_K8S_JOBS_INGRESS_NAME": "testingress",
             "NP_K8S_JOBS_INGRESS_DOMAIN_NAME_TEMPLATE": "{job_id}.jobs.domain",
             "NP_K8S_NAMED_JOBS_INGRESS_DOMAIN_NAME_TEMPLATE": named_host_template,
-            "NP_K8S_SSH_INGRESS_DOMAIN_NAME": "ssh.domain",
+            "NP_K8S_SSH_AUTH_INGRESS_DOMAIN_NAME": "ssh-auth.domain",
             "NP_API_URL": "https://neu.ro/api/v1",
             "NP_AUTH_URL": "https://auth",
             "NP_AUTH_TOKEN": "token",

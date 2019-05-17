@@ -100,7 +100,7 @@ class OrchestratorConfig:
     jobs_domain_name_template: str
     named_jobs_domain_name_template: str
 
-    ssh_domain_name: str
+    ssh_auth_domain_name: str
 
     resource_pool_types: Sequence[ResourcePoolType]
 

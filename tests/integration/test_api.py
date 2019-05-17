@@ -408,7 +408,7 @@ class TestModels:
             result = await response.json()
             assert result["status"] in ["pending"]
             job_id = result["job_id"]
-            expected_url = f"ssh://{job_id}.ssh.platform.neuromation.io:22"
+            expected_url = f"ssh://{job_id}.ssh-auth.platform.neuromation.io:22"
             assert result["ssh_server"] == expected_url
 
         retrieved_job = await jobs_client.get_job_by_id(job_id=job_id)
@@ -436,7 +436,7 @@ class TestModels:
             result = await response.json()
             assert result["status"] in ["pending"]
             job_id = result["job_id"]
-            expected_url = f"ssh://{job_id}.ssh.platform.neuromation.io:22"
+            expected_url = f"ssh://{job_id}.ssh-auth.platform.neuromation.io:22"
             assert result["ssh_server"] == expected_url
 
         await jobs_client.long_polling_by_job_id(job_id=job_id, status="succeeded")
@@ -1699,8 +1699,8 @@ class TestJobs:
                         }
                     ],
                 },
-                "ssh_server": f"ssh://{job_id}@ssh.platform.neuromation.io:22",
-                "ssh_auth_server": f"ssh://{job_id}@ssh.platform.neuromation.io:22",
+                "ssh_server": "ssh://nobody@ssh-auth.platform.neuromation.io:22",
+                "ssh_auth_server": "ssh://nobody@ssh-auth.platform.neuromation.io:22",
                 "is_preemptible": True,
             }
 
@@ -1734,8 +1734,8 @@ class TestJobs:
                     }
                 ],
             },
-            "ssh_server": f"ssh://{job_id}@ssh.platform.neuromation.io:22",
-            "ssh_auth_server": f"ssh://{job_id}@ssh.platform.neuromation.io:22",
+            "ssh_server": "ssh://nobody@ssh-auth.platform.neuromation.io:22",
+            "ssh_auth_server": "ssh://nobody@ssh-auth.platform.neuromation.io:22",
             "is_preemptible": True,
         }
 
@@ -1804,8 +1804,8 @@ class TestJobs:
                     },
                 ],
             },
-            "ssh_server": f"ssh://{job_id}@ssh.platform.neuromation.io:22",
-            "ssh_auth_server": f"ssh://{job_id}@ssh.platform.neuromation.io:22",
+            "ssh_server": "ssh://nobody@ssh-auth.platform.neuromation.io:22",
+            "ssh_auth_server": "ssh://nobody@ssh-auth.platform.neuromation.io:22",
             "is_preemptible": False,
         }
 
@@ -1892,8 +1892,8 @@ class TestJobs:
                     },
                     "volumes": [],
                 },
-                "ssh_server": f"ssh://{job_id}@ssh.platform.neuromation.io:22",
-                "ssh_auth_server": f"ssh://{job_id}@ssh.platform.neuromation.io:22",
+                "ssh_server": "ssh://nobody@ssh-auth.platform.neuromation.io:22",
+                "ssh_auth_server": "ssh://nobody@ssh-auth.platform.neuromation.io:22",
                 "is_preemptible": False,
             }
 

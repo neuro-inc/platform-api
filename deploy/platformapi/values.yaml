@@ -28,11 +28,11 @@ NP_K8S_NAMED_JOBS_INGRESS_DOMAIN_NAME_TEMPLATE:
   dev: '{job_name}-{job_owner}.jobs-dev.neu.ro'
   staging: '{job_name}-{job_owner}.jobs-staging.neu.ro'
   prod: '{job_name}-{job_owner}.jobs.neu.ro'
-NP_K8S_SSH_INGRESS_DOMAIN_NAME:
-  _default: ssh-dev.neu.ro
-  dev: ssh-dev.neu.ro
-  staging: ssh-staging.neu.ro
-  prod: ssh.neu.ro
+NP_K8S_SSH_AUTH_INGRESS_DOMAIN_NAME:
+  _default: ssh-auth-dev.neu.ro
+  dev: ssh-auth-dev.neu.ro
+  staging: ssh-auth-staging.neu.ro
+  prod: ssh-auth.neu.ro
 NP_API_URL:
   _default: https://dev.neu.ro/api/v1
   dev: https://dev.neu.ro/api/v1

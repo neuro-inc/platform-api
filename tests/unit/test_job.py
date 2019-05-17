@@ -625,7 +625,7 @@ class TestJob:
             orchestrator_config=mock_orchestrator.config,
             job_request=job_request_with_ssh,
         )
-        assert job.ssh_server == "ssh://testjob.ssh:22"
+        assert job.ssh_server == "ssh://nobody@ssh-auth:22"
 
     def test_no_ssh(
         self, mock_orchestrator: MockOrchestrator, job_request: JobRequest
@@ -635,7 +635,7 @@ class TestJob:
             orchestrator_config=mock_orchestrator.config,
             job_request=job_request,
         )
-        assert job.ssh_server == "ssh://testjob.ssh:22"
+        assert job.ssh_server == "ssh://nobody@ssh-auth:22"
 
     def test_http_url_and_ssh(
         self,
@@ -648,7 +648,7 @@ class TestJob:
             job_request=job_request_with_ssh_and_http,
         )
         assert job.http_url == "http://testjob.jobs"
-        assert job.ssh_server == "ssh://testjob.ssh:22"
+        assert job.ssh_server == "ssh://nobody@ssh-auth:22"
 
     def test_http_url_and_ssh_named(
         self,
@@ -664,7 +664,7 @@ class TestJob:
         )
         assert job.http_url == "http://testjob.jobs"
         assert job.http_url_named == "http://test-job-name-owner.jobs"
-        assert job.ssh_server == "ssh://testjob.ssh:22"
+        assert job.ssh_server == "ssh://nobody@ssh-auth:22"
 
     def test_to_primitive(
         self, mock_orchestrator: MockOrchestrator, job_request: JobRequest

@@ -118,7 +118,7 @@ async def kube_config(
         jobs_ingress_auth_name="platformjobsingressauth",
         jobs_domain_name_template="{job_id}.jobs.neu.ro",
         named_jobs_domain_name_template="{job_name}-{job_owner}.jobs.neu.ro",
-        ssh_domain_name="ssh.platform.neuromation.io",
+        ssh_auth_domain_name="ssh-auth.platform.neuromation.io",
         endpoint_url=cluster["server"],
         cert_authority_data_pem=cert_authority_data_pem,
         cert_authority_path=None,  # disable, so only `cert_authority_data_pem` works
@@ -245,7 +245,7 @@ async def kube_config_nfs(
         jobs_ingress_auth_name="platformjobsingressauth",
         jobs_domain_name_template="{job_id}.jobs.neu.ro",
         named_jobs_domain_name_template="{job_name}-{job_owner}.jobs.neu.ro",
-        ssh_domain_name="ssh.platform.neuromation.io",
+        ssh_auth_domain_name="ssh-auth.platform.neuromation.io",
         node_label_gpu="gpu",
         resource_pool_types=[ResourcePoolType()],
         namespace="platformapi-tests",
