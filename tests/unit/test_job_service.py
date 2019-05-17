@@ -5,8 +5,8 @@ import pytest
 
 from platform_api.cluster import Cluster, ClusterRegistry
 from platform_api.config import ClusterConfig, JobsConfig
-from platform_api.orchestrator import Job, JobRequest, JobStatus
-from platform_api.orchestrator.job import AggregatedRunTime, JobStatusItem
+from platform_api.orchestrator.job import AggregatedRunTime, Job, JobStatusItem
+from platform_api.orchestrator.job_request import JobRequest, JobStatus
 from platform_api.orchestrator.jobs_service import (
     GpuQuotaExceededError,
     JobsService,

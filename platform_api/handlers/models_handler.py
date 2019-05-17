@@ -6,8 +6,7 @@ import trafaret as t
 from aiohttp_security import check_permission
 
 from platform_api.config import Config
-from platform_api.orchestrator import JobRequest
-from platform_api.orchestrator.job_request import Container
+from platform_api.orchestrator.job_request import Container, JobRequest
 from platform_api.orchestrator.jobs_service import JobsService
 from platform_api.resource import GPUModel
 from platform_api.user import User, authorized_user

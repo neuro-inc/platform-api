@@ -9,7 +9,7 @@ from platform_api.cluster import (
     ClusterNotFound,
     ClusterRegistry,
 )
-from platform_api.orchestrator import Orchestrator
+from platform_api.orchestrator.base import Orchestrator
 
 
 class _TestCluster(Cluster):
