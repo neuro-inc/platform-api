@@ -299,9 +299,11 @@ class TestKubeOrchestrator:
 
             status_item = await kube_orchestrator.get_job_status(job)
             expected_description = "".join(f"{i}\n" for i in reversed(range(1, 81)))
-            expected_description += "\nExit code: 1"
             assert status_item == JobStatusItem.create(
-                JobStatus.FAILED, reason="Error", description=expected_description
+                JobStatus.FAILED,
+                reason="Error",
+                description=expected_description,
+                exit_code=1,
             )
         finally:
             await job.delete()
@@ -1726,7 +1728,7 @@ class TestPodContainerDevShmSettings:
             command,
         )
         job_status = JobStatusItem.create(
-            status=JobStatus.FAILED, reason="OOMKilled", description="\nExit code: 137"
+            status=JobStatus.FAILED, reason="OOMKilled", exit_code=137
         )
         assert job_status == run_output, f"actual: '{run_output}'"
 
