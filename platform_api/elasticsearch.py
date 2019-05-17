@@ -180,6 +180,37 @@ class Elasticsearch(_Elasticsearch):
             body=body,
         )
 
+    @elasticsearch.client.utils.query_params("scroll")
+    def scroll(
+        self,
+        scroll_id: Optional[str] = None,
+        body: Any = None,
+        *,
+        params: Dict[str, Any]
+    ) -> Any:
+        """
+        Scroll a search request created by specifying the scroll parameter.
+        `<http://www.elastic.co/guide/en/elasticsearch/reference/current/search-request-scroll.html>`_
+
+        :arg scroll_id: The scroll ID
+        :arg body: The scroll ID if not passed by URL or query parameter.
+        :arg scroll: Specify how long a consistent view of the index should be
+            maintained for scrolled search
+        """
+        if (
+            scroll_id in elasticsearch.client.utils.SKIP_IN_PATH
+            and body in elasticsearch.client.utils.SKIP_IN_PATH
+        ):
+            raise ValueError("You need to supply scroll_id or body.")
+        elif scroll_id and not body:
+            body = {"scroll_id": scroll_id}
+        elif scroll_id:
+            params["scroll_id"] = scroll_id
+
+        return self.transport.perform_request(
+            "POST", "/_search/scroll", params=params, body=body
+        )
+
 
 @asynccontextmanager
 async def create_elasticsearch_client(

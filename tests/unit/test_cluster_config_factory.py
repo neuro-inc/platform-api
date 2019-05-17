@@ -52,8 +52,8 @@ def clusters_payload(nfs_storage_payload: Dict[str, Any]) -> List[Dict[str, Any]
                     "node_label_gpu": "cloud.google.com/gke-accelerator",
                     "node_label_preemptible": "cloud.google.com/gke-preemptible",
                 },
-                "job_domain_name_template": "{job_id}.jobs.neu.ro",
-                "named_job_domain_name_template": "{job_name}-{job_owner}.jobs.neu.ro",
+                "job_hostname_template": "{job_id}.jobs.neu.ro",
+                "named_job_hostname_template": "{job_name}-{job_owner}.jobs.neu.ro",
                 "resource_pool_types": [
                     {},
                     {"gpu": 0},
@@ -66,7 +66,7 @@ def clusters_payload(nfs_storage_payload: Dict[str, Any]) -> List[Dict[str, Any]
                 "url": "https://dev.neu.ro/api/v1/jobs",
                 "elasticsearch": {
                     "hosts": ["http://logging-elasticsearch:9200"],
-                    "user": "es_user_name",
+                    "username": "es_user_name",
                     "password": "es_assword",
                 },
             },
@@ -110,7 +110,7 @@ class TestClusterConfigFactory:
 
         logging = cluster.logging
         assert logging.elasticsearch.hosts == elasticsearch_payload["hosts"]
-        assert logging.elasticsearch.user == elasticsearch_payload["user"]
+        assert logging.elasticsearch.user == elasticsearch_payload["username"]
         assert logging.elasticsearch.password == elasticsearch_payload["password"]
 
         ingress = cluster.ingress
@@ -140,11 +140,11 @@ class TestClusterConfigFactory:
         )
         assert (
             orchestrator.jobs_domain_name_template
-            == orchestrator_payload["job_domain_name_template"]
+            == orchestrator_payload["job_hostname_template"]
         )
         assert (
             orchestrator.named_jobs_domain_name_template
-            == orchestrator_payload["named_job_domain_name_template"]
+            == orchestrator_payload["named_job_hostname_template"]
         )
 
         assert len(orchestrator.resource_pool_types) == 3
@@ -179,7 +179,7 @@ class TestClusterConfigFactory:
     ) -> None:
         elasticsearch_payload = clusters_payload[0]["monitoring"]["elasticsearch"]
 
-        del elasticsearch_payload["user"]
+        del elasticsearch_payload["username"]
         del elasticsearch_payload["password"]
 
         factory = ClusterConfigFactory()
