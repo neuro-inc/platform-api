@@ -47,8 +47,8 @@ _orchestrator_config_validator = t.Dict(
             }
         ),
         "is_http_ingress_secure": t.Bool,
-        "job_domain_name_template": t.String,
-        "named_job_domain_name_template": t.String,
+        "job_hostname_template": t.String,
+        "named_job_hostname_template": t.String,
         "resource_pool_types": t.List(
             t.Dict(
                 {"gpu": t.Int, "gpu_model": t.Enum(*[m.value.id for m in GKEGPUModels])}
@@ -63,7 +63,9 @@ _monitoring_config_validator = t.Dict(
     {
         "url": t.String,
         "elasticsearch": t.Dict({"hosts": t.List(t.String)})
-        | t.Dict({"hosts": t.List(t.String), "user": t.String, "password": t.String}),
+        | t.Dict(
+            {"hosts": t.List(t.String), "username": t.String, "password": t.String}
+        ),
     }
 )
 
@@ -108,8 +110,8 @@ class ClusterConfigFactory:
                 logging=self._create_logging_config(payload),
                 ingress=self._create_ingress_config(payload, users_url),
             )
-        except t.DataError:
-            logging.warning(f"failed to parse cluster config {payload.get('name')}")
+        except t.DataError as err:
+            logging.warning(f"failed to parse cluster config: {err}")
             return None
 
     def _create_ingress_config(
@@ -132,7 +134,7 @@ class ClusterConfigFactory:
     ) -> ElasticsearchConfig:
         return ElasticsearchConfig(
             hosts=payload["hosts"],
-            user=payload.get("user"),
+            user=payload.get("username"),
             password=payload.get("password"),
         )
 
@@ -146,10 +148,8 @@ class ClusterConfigFactory:
             ssh_domain_name=ssh_domain_name,
             ssh_auth_domain_name=ssh["server"],
             is_http_ingress_secure=orchestrator["is_http_ingress_secure"],
-            jobs_domain_name_template=orchestrator["job_domain_name_template"],
-            named_jobs_domain_name_template=orchestrator[
-                "named_job_domain_name_template"
-            ],
+            jobs_domain_name_template=orchestrator["job_hostname_template"],
+            named_jobs_domain_name_template=orchestrator["named_job_hostname_template"],
             resource_pool_types=[
                 self._create_resource_pool_type(r)
                 for r in orchestrator["resource_pool_types"]

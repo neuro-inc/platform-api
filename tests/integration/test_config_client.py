@@ -35,8 +35,8 @@ def cluster_configs_payload() -> List[Dict[str, Any]]:
                     "node_label_gpu": "cloud.google.com/gke-accelerator",
                     "node_label_preemptible": "cloud.google.com/gke-preemptible",
                 },
-                "job_domain_name_template": "{job_id}.jobs.neu.ro",
-                "named_job_domain_name_template": "{job_name}-{job_owner}.jobs.neu.ro",
+                "job_hostname_template": "{job_id}.jobs.neu.ro",
+                "named_job_hostname_template": "{job_name}-{job_owner}.jobs.neu.ro",
                 "resource_pool_types": [
                     {},
                     {"gpu": 0},
@@ -49,7 +49,7 @@ def cluster_configs_payload() -> List[Dict[str, Any]]:
                 "url": "https://dev.neu.ro/api/v1/jobs",
                 "elasticsearch": {
                     "hosts": ["http://logging-elasticsearch:9200"],
-                    "user": "es_user_name",
+                    "username": "es_user_name",
                     "password": "es_assword",
                 },
             },
