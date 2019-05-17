@@ -1,6 +1,5 @@
 import asyncio
 import logging
-from dataclasses import dataclass
 from typing import Any, Dict, Iterable, List, Optional, Union
 
 from platform_api.cluster_config import (
@@ -20,7 +19,6 @@ from .kube_client import (
     HostVolume,
     IngressRule,
     KubeClient,
-    KubeClientAuthType,
     NfsVolume,
     NodeAffinity,
     NodePreferredSchedulingTerm,
@@ -33,6 +31,7 @@ from .kube_client import (
     Toleration,
     Volume,
 )
+from .kube_config import KubeConfig
 from .logs import ElasticsearchLogReader, PodContainerLogReader
 
 
@@ -85,37 +84,6 @@ class JobStatusItemFactory:
             reason=self._parse_reason(),
             description=self._compose_description(),
         )
-
-
-@dataclass(frozen=True)
-class KubeConfig(OrchestratorConfig):
-    jobs_ingress_name: str = ""
-    jobs_ingress_auth_name: str = ""
-
-    endpoint_url: str = ""
-    cert_authority_data_pem: Optional[str] = None
-    cert_authority_path: Optional[str] = None
-
-    auth_type: KubeClientAuthType = KubeClientAuthType.CERTIFICATE
-    auth_cert_path: Optional[str] = None
-    auth_cert_key_path: Optional[str] = None
-    token: Optional[str] = None
-    token_path: Optional[str] = None
-
-    namespace: str = "default"
-
-    client_conn_timeout_s: int = 300
-    client_read_timeout_s: int = 300
-    client_conn_pool_size: int = 100
-
-    storage_volume_name: str = "storage"
-
-    node_label_gpu: Optional[str] = None
-    node_label_preemptible: Optional[str] = None
-
-    def __post_init__(self) -> None:
-        if not all((self.jobs_ingress_name, self.endpoint_url)):
-            raise ValueError("Missing required settings")
 
 
 def convert_pod_status_to_job_status(pod_status: PodStatus) -> JobStatusItem:

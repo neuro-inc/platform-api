@@ -7,7 +7,7 @@ from aiorwlock import RWLock
 from async_generator import asynccontextmanager
 
 from .cluster_config import ClusterConfig
-from .orchestrator import Orchestrator
+from .orchestrator.base import Orchestrator
 
 
 logger = logging.getLogger(__name__)

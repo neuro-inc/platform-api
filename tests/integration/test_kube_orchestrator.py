@@ -27,21 +27,17 @@ from platform_api.elasticsearch import (
     ElasticsearchConfig,
     create_elasticsearch_client,
 )
-from platform_api.orchestrator import (
-    Job,
-    JobError,
-    JobNotFoundException,
-    JobRequest,
-    JobStatus,
-    KubeOrchestrator,
-    LogReader,
-)
-from platform_api.orchestrator.job import JobStatusItem
+from platform_api.orchestrator.base import LogReader
+from platform_api.orchestrator.job import Job, JobStatusItem
 from platform_api.orchestrator.job_request import (
     Container,
     ContainerHTTPServer,
     ContainerResources,
     ContainerVolume,
+    JobError,
+    JobNotFoundException,
+    JobRequest,
+    JobStatus,
 )
 from platform_api.orchestrator.kube_client import (
     AlreadyExistsException,
@@ -57,7 +53,11 @@ from platform_api.orchestrator.kube_client import (
     Service,
     StatusException,
 )
-from platform_api.orchestrator.kube_orchestrator import JobStatusItemFactory, KubeConfig
+from platform_api.orchestrator.kube_orchestrator import (
+    JobStatusItemFactory,
+    KubeConfig,
+    KubeOrchestrator,
+)
 from platform_api.orchestrator.logs import ElasticsearchLogReader, PodContainerLogReader
 from tests.conftest import random_str
 

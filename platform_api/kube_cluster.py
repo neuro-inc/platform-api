@@ -5,7 +5,7 @@ from async_exit_stack import AsyncExitStack
 from .cluster import Cluster
 from .cluster_config import ClusterConfig
 from .elasticsearch import Elasticsearch, create_elasticsearch_client
-from .orchestrator import KubeOrchestrator, Orchestrator
+from .orchestrator.kube_orchestrator import KubeOrchestrator, Orchestrator
 
 
 logger = logging.getLogger(__name__)

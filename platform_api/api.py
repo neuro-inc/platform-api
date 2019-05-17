@@ -13,7 +13,7 @@ from .config import Config
 from .config_factory import EnvironConfigFactory
 from .handlers import JobsHandler, ModelsHandler
 from .kube_cluster import KubeCluster
-from .orchestrator import JobException
+from .orchestrator.job_request import JobException
 from .orchestrator.jobs_poller import JobsPoller
 from .orchestrator.jobs_service import JobsService, JobsServiceException
 from .orchestrator.jobs_storage import RedisJobsStorage
