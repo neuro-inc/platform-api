@@ -42,6 +42,7 @@ from .job_request import (
     JobNotFoundException,
     JobRequest,
 )
+from .kube_config import KubeClientAuthType
 
 
 logger = logging.getLogger(__name__)
@@ -934,12 +935,6 @@ class PodExec:
 
     async def read_error(self) -> bytes:
         return await self._channels[ExecChannel.ERROR].read()
-
-
-class KubeClientAuthType(str, enum.Enum):
-    NONE = "none"
-    TOKEN = "token"
-    CERTIFICATE = "certificate"
 
 
 @dataclass(frozen=True)

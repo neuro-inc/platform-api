@@ -14,24 +14,27 @@ from platform_api.cluster_config import (
     OrchestratorConfig,
 )
 from platform_api.config import JobsConfig, RegistryConfig, StorageConfig
-from platform_api.orchestrator import (
+from platform_api.orchestrator.base import LogReader, Orchestrator, Telemetry
+from platform_api.orchestrator.job import (
+    AggregatedRunTime,
     Job,
+    JobRecord,
+    JobStatusItem,
+)
+from platform_api.orchestrator.job_request import (
+    Container,
+    ContainerResources,
     JobError,
     JobNotFoundException,
     JobRequest,
     JobStatus,
-    KubeConfig,
-    LogReader,
-    Orchestrator,
-    Telemetry,
 )
-from platform_api.orchestrator.job import AggregatedRunTime, JobRecord, JobStatusItem
-from platform_api.orchestrator.job_request import Container, ContainerResources
 from platform_api.orchestrator.jobs_service import JobsService
 from platform_api.orchestrator.jobs_storage import (
     InMemoryJobsStorage,
     JobStorageTransactionError,
 )
+from platform_api.orchestrator.kube_orchestrator import KubeConfig
 from platform_api.resource import ResourcePoolType
 
 

@@ -14,8 +14,7 @@ from .cluster_config import (
     StorageConfig,
 )
 from .elasticsearch import ElasticsearchConfig
-from .orchestrator.kube_client import KubeClientAuthType
-from .orchestrator.kube_orchestrator import KubeConfig
+from .orchestrator.kube_config import KubeClientAuthType, KubeConfig
 from .resource import GKEGPUModels, GPUModel, ResourcePoolType
 
 

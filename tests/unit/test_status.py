@@ -1,4 +1,5 @@
-from platform_api.orchestrator import JobStatus, Status
+from platform_api.orchestrator.job import JobStatus
+from platform_api.orchestrator.status import Status
 
 
 class TestStatus:
