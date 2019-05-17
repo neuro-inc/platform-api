@@ -1695,6 +1695,7 @@ class TestJobs:
                     "reason": None,
                     "description": None,
                     "created_at": mock.ANY,
+                    "exit_code": None,
                 },
                 "container": {
                     "command": "true",
@@ -1729,6 +1730,7 @@ class TestJobs:
                 "created_at": mock.ANY,
                 "started_at": mock.ANY,
                 "finished_at": mock.ANY,
+                "exit_code": 0,
             },
             "container": {
                 "command": "true",
@@ -1786,10 +1788,11 @@ class TestJobs:
             "history": {
                 "status": "failed",
                 "reason": "Error",
-                "description": "Failed!\n\nExit code: 1",
+                "description": "Failed!\n",
                 "created_at": mock.ANY,
                 "started_at": mock.ANY,
                 "finished_at": mock.ANY,
+                "exit_code": 1,
             },
             "container": {
                 "command": 'bash -c "echo Failed!; false"',
@@ -1886,6 +1889,7 @@ class TestJobs:
                     "reason": None,
                     "description": None,
                     "created_at": mock.ANY,
+                    "exit_code": None,
                 },
                 "container": {
                     "command": "true",
