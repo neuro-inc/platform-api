@@ -17,11 +17,12 @@ class ConfigClient:
         conn_pool_size: int = 100,
     ):
         self._base_url = base_url
-        connector = aiohttp.TCPConnector(limit=conn_pool_size)
-        timeout = aiohttp.ClientTimeout(connect=conn_timeout_s, total=read_timeout_s)
-        self._client = aiohttp.ClientSession(connector=connector, timeout=timeout)
+        self._conn_timeout_s = conn_timeout_s
+        self._read_timeout_s = read_timeout_s
+        self._conn_pool_size = conn_pool_size
 
     async def __aenter__(self) -> "ConfigClient":
+        self._init()
         return self
 
     async def __aexit__(self, *args: Any) -> None:
@@ -30,6 +31,13 @@ class ConfigClient:
     async def aclose(self) -> None:
         await self._client.close()
         del self._client
+
+    def _init(self) -> None:
+        connector = aiohttp.TCPConnector(limit=self._conn_pool_size)
+        timeout = aiohttp.ClientTimeout(
+            connect=self._conn_timeout_s, total=self._read_timeout_s
+        )
+        self._client = aiohttp.ClientSession(connector=connector, timeout=timeout)
 
     @asynccontextmanager
     async def _request(

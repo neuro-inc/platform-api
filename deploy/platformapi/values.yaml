@@ -108,3 +108,8 @@ NP_OAUTH_HEADLESS_CALLBACK_URL:
   dev: https://dev.neu.ro/oauth/show-code
   staging: https://staging.neu.ro/oauth/show-code
   prod: https://prod.neu.ro/oauth/show-code
+NP_PLATFORM_CONFIG_URI:
+  _default: http://platformconfig:8080/api/v1
+  dev: http://platformconfig:8080/api/v1
+  staging: http://platformconfig:8080/api/v1
+  prod: http://platformconfig:8080/api/v1

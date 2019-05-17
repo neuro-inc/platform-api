@@ -4,6 +4,8 @@ from typing import Any, Dict, List, Optional
 
 from yarl import URL
 
+import platform_api
+
 from .cluster_config import (
     ClusterConfig,
     LoggingConfig,
@@ -53,6 +55,7 @@ class EnvironConfigFactory:
             oauth=self.try_create_oauth(),
             env_prefix=env_prefix,
             jobs=jobs,
+            config_client=self.create_config_client(),
         )
 
     def create_cluster(self) -> ClusterConfig:
@@ -291,3 +294,7 @@ class EnvironConfigFactory:
             users_url=base_url / "users",
             monitoring_url=base_url / "jobs",
         )
+
+    def create_config_client(self) -> platform_api.config_client.ConfigClient:
+        platform_config_url = URL(self._environ["NP_PLATFORM_CONFIG_URI"])
+        return platform_api.config_client.ConfigClient(base_url=platform_config_url)

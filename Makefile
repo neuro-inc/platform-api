@@ -78,7 +78,8 @@ gke_login:
 	gcloud auth configure-docker
 
 gke_docker_pull_test:
-	-docker pull $$(cat AUTH_SERVER_IMAGE_NAME)
+	docker pull $$(cat AUTH_SERVER_IMAGE_NAME)
+	docker pull $(GKE_DOCKER_REGISTRY)/$(GKE_PROJECT_ID)/platformconfig:latest
 
 _helm:
 	curl https://raw.githubusercontent.com/kubernetes/helm/master/scripts/get | bash -s -- -v v2.11.0

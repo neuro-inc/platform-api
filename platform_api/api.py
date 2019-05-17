@@ -1,6 +1,6 @@
 import asyncio
 import logging
-from typing import Any, AsyncIterator, Awaitable, Callable, Dict
+from typing import Any, AsyncIterator, Awaitable, Callable, Dict, Sequence
 
 import aiohttp.web
 from aiohttp.web import HTTPUnauthorized
@@ -145,7 +145,9 @@ def create_cluster(config: ClusterConfig) -> Cluster:
     return KubeCluster(config)
 
 
-async def create_app(config: Config) -> aiohttp.web.Application:
+async def create_app(
+    config: Config, cluster_configs_future: Awaitable[Sequence[ClusterConfig]]
+) -> aiohttp.web.Application:
     app = aiohttp.web.Application(middlewares=[handle_exceptions])
     app["config"] = config
 
@@ -162,7 +164,10 @@ async def create_app(config: Config) -> aiohttp.web.Application:
                 ClusterRegistry(factory=create_cluster)
             )
 
-            await cluster_registry.add(config.cluster)
+            [
+                await cluster_registry.add(cluster_config)
+                for cluster_config in await cluster_configs_future
+            ]
 
             logger.info("Initializing JobsStorage")
             jobs_storage = RedisJobsStorage(redis_client)
@@ -213,6 +218,14 @@ async def create_app(config: Config) -> aiohttp.web.Application:
     return app
 
 
+async def get_cluster_configs(config: Config) -> Sequence[ClusterConfig]:
+    async with config.config_client as client:
+        return await client.get_clusters(
+            users_url=config.cluster.ingress.users_url,
+            ssh_domain_name=config.cluster.orchestrator.ssh_domain_name,
+        )
+
+
 def main() -> None:
     init_logging()
     config = EnvironConfigFactory().create()
@@ -220,5 +233,5 @@ def main() -> None:
 
     loop = asyncio.get_event_loop()
 
-    app = loop.run_until_complete(create_app(config))
+    app = loop.run_until_complete(create_app(config, get_cluster_configs(config)))
     aiohttp.web.run_app(app, host=config.server.host, port=config.server.port)
