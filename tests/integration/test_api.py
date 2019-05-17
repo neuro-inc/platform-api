@@ -1695,7 +1695,7 @@ class TestJobs:
                     "reason": None,
                     "description": None,
                     "created_at": mock.ANY,
-                    "exit_code": 0,  # todo: is this valid?
+                    "exit_code": None,
                 },
                 "container": {
                     "command": "true",
