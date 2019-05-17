@@ -28,6 +28,7 @@ from platform_api.config import (
     OAuthConfig,
     ServerConfig,
 )
+from platform_api.config_client import ConfigClient
 from platform_api.elasticsearch import Elasticsearch, ElasticsearchConfig
 from platform_api.orchestrator.job_request import JobNotFoundException
 from platform_api.orchestrator.kube_client import KubeClient, NodeTaint
@@ -390,12 +391,14 @@ def config_factory(
             logging=logging_config,
             ingress=ingress_config,
         )
+        config_client = ConfigClient(base_url=URL("http://platformconfig/api/v1"))
         return Config(
             server=server_config,
             cluster=cluster_config,
             database=database_config,
             auth=auth_config,
             jobs=jobs_config,
+            config_client=config_client,
             **kwargs,
         )
 

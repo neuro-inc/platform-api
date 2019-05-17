@@ -219,10 +219,11 @@ async def create_app(
 
 
 async def get_cluster_configs(config: Config) -> Sequence[ClusterConfig]:
-    return await config.config_client.get_clusters(
-        users_url=config.cluster.ingress.users_url,
-        ssh_domain_name=config.cluster.orchestrator.ssh_domain_name,
-    )
+    async with config.config_client as client:
+        return await client.get_clusters(
+            users_url=config.cluster.ingress.users_url,
+            ssh_domain_name=config.cluster.orchestrator.ssh_domain_name,
+        )
 
 
 def main() -> None:

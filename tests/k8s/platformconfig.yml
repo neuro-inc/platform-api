@@ -14,7 +14,7 @@ data:
             },
 
             "registry": {
-                "url": "registry.dev.neuromation.io",
+                "url": "https://registry.dev.neuromation.io",
                 "email": "registry@neuromation.io"
             },
 
