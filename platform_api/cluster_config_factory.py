@@ -87,12 +87,7 @@ class ClusterConfigFactory:
     def create_cluster_configs(
         self, payload: Sequence[Dict[str, Any]], *, users_url: URL
     ) -> Sequence[ClusterConfig]:
-        configs = (
-            self._create_cluster_config(
-                p, users_url=users_url
-            )
-            for p in payload
-        )
+        configs = (self._create_cluster_config(p, users_url=users_url) for p in payload)
         return [c for c in configs if c]
 
     def _create_cluster_config(
@@ -136,7 +131,9 @@ class ClusterConfigFactory:
             password=payload.get("password"),
         )
 
-    def _create_orchestrator_config(self, payload: Dict[str, Any]) -> OrchestratorConfig:
+    def _create_orchestrator_config(
+        self, payload: Dict[str, Any]
+    ) -> OrchestratorConfig:
         orchestrator = payload["orchestrator"]
         kube = orchestrator["kubernetes"]
         ssh = payload["ssh"]

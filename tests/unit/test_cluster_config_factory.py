@@ -93,9 +93,7 @@ class TestClusterConfigFactory:
         ssh_payload = clusters_payload[0]["ssh"]
 
         factory = ClusterConfigFactory()
-        clusters = factory.create_cluster_configs(
-            clusters_payload, users_url=users_url
-        )
+        clusters = factory.create_cluster_configs(clusters_payload, users_url=users_url)
 
         assert len(clusters) == 1
 
@@ -166,9 +164,7 @@ class TestClusterConfigFactory:
         )
 
     def test_valid_elasticsearch_config_without_user(
-        self,
-        clusters_payload: Sequence[Dict[str, Any]],
-        users_url: URL,
+        self, clusters_payload: Sequence[Dict[str, Any]], users_url: URL
     ) -> None:
         elasticsearch_payload = clusters_payload[0]["monitoring"]["elasticsearch"]
 
@@ -176,9 +172,7 @@ class TestClusterConfigFactory:
         del elasticsearch_payload["password"]
 
         factory = ClusterConfigFactory()
-        clusters = factory.create_cluster_configs(
-            clusters_payload, users_url=users_url
-        )
+        clusters = factory.create_cluster_configs(clusters_payload, users_url=users_url)
         cluster = clusters[0]
 
         logging = cluster.logging
@@ -187,16 +181,12 @@ class TestClusterConfigFactory:
         assert logging.elasticsearch.password is None
 
     def test_valid_storage_config_nfs(
-        self,
-        clusters_payload: Sequence[Dict[str, Any]],
-        users_url: URL,
+        self, clusters_payload: Sequence[Dict[str, Any]], users_url: URL
     ) -> None:
         storage_payload = clusters_payload[0]["storage"]
 
         factory = ClusterConfigFactory()
-        clusters = factory.create_cluster_configs(
-            clusters_payload, users_url=users_url
-        )
+        clusters = factory.create_cluster_configs(clusters_payload, users_url=users_url)
         cluster = clusters[0]
 
         storage = cluster.storage
@@ -239,8 +229,6 @@ class TestClusterConfigFactory:
     ) -> None:
         clusters_payload.append({})
         factory = ClusterConfigFactory()
-        clusters = factory.create_cluster_configs(
-            clusters_payload, users_url=users_url
-        )
+        clusters = factory.create_cluster_configs(clusters_payload, users_url=users_url)
 
         assert len(clusters) == 1
