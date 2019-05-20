@@ -495,7 +495,6 @@ class TestJobStatusItemFactory:
             JobStatus.PENDING, reason="SomeWeirdReason"
         )
 
-
     def test_status_failure(self) -> None:
         payload = {
             "phase": "Failed",
@@ -517,7 +516,6 @@ class TestJobStatusItemFactory:
             JobStatus.FAILED, reason="Error", description="Failed!", exit_code=123
         )
 
-
     def test_status_success(self) -> None:
         payload = {
             "phase": "Succeeded",
@@ -535,9 +533,7 @@ class TestJobStatusItemFactory:
         }
         pod_status = PodStatus.from_primitive(payload)
         job_status_item = JobStatusItemFactory(pod_status).create()
-        assert job_status_item == JobStatusItem.create(
-            JobStatus.SUCCEEDED, exit_code=0
-        )
+        assert job_status_item == JobStatusItem.create(JobStatus.SUCCEEDED, exit_code=0)
 
 
 class TestPodStatus:
