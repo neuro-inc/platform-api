@@ -149,7 +149,6 @@ def convert_job_to_job_response(job: Job) -> Dict[str, Any]:
             "status": current_status.status,
             "reason": current_status.reason,
             "description": current_status.description,
-            "exit_code": current_status.exit_code,
             "created_at": history.created_at_str,
         },
         "container": convert_job_container_to_json(
@@ -178,6 +177,8 @@ def convert_job_to_job_response(job: Job) -> Dict[str, Any]:
         response_payload["history"]["started_at"] = history.started_at_str
     if history.is_finished:
         response_payload["history"]["finished_at"] = history.finished_at_str
+    if current_status.exit_code:
+        response_payload["history"]["exit_code"] = current_status.exit_code
     return response_payload
 
 

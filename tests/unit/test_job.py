@@ -698,14 +698,12 @@ class TestJob:
                     "transition_time": mock.ANY,
                     "reason": None,
                     "description": None,
-                    "exit_code": None,
                 },
                 {
                     "status": "failed",
                     "transition_time": expected_finished_at,
                     "reason": None,
                     "description": None,
-                    "exit_code": None,
                 },
             ],
             "is_preemptible": True,
@@ -840,7 +838,6 @@ class TestJob:
             "transition_time": finished_at_str,
             "reason": None,
             "description": None,
-            "exit_code": None,
         }
         expected = {
             "id": job_request_payload["job_id"],

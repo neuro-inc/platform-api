@@ -76,16 +76,19 @@ class JobStatusItemFactory:
         return None
 
     def create(self) -> JobStatusItem:
-        return JobStatusItem.create(
-            self._status,
-            reason=self._parse_reason(),
-            description=self._compose_description(),
-            exit_code=(
-                self._container_status.exit_code
-                if self._container_status.is_terminated
-                else None
-            ),
-        )
+        if self._container_status.is_terminated:
+            return JobStatusItem.create(
+                self._status,
+                reason=self._parse_reason(),
+                description=self._compose_description(),
+                exit_code=(self._container_status.exit_code),
+            )
+        else:
+            return JobStatusItem.create(
+                self._status,
+                reason=self._parse_reason(),
+                description=self._compose_description(),
+            )
 
 
 def convert_pod_status_to_job_status(pod_status: PodStatus) -> JobStatusItem:
