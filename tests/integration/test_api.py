@@ -23,6 +23,7 @@ from aiohttp.web import (
     HTTPAccepted,
     HTTPBadRequest,
     HTTPForbidden,
+    HTTPInternalServerError,
     HTTPNoContent,
     HTTPOk,
     HTTPUnauthorized,
@@ -734,6 +735,31 @@ class TestJobs:
             e = (
                 "{'name': DataError({0: DataError(value should be None), "
                 "1: DataError(does not match pattern ^[a-z][-a-z0-9]*[a-z0-9]$)})}"
+            )
+            assert payload == {"error": e}
+
+    @pytest.mark.asyncio
+    async def test_create_job_missing_cluster_name(
+        self,
+        api: ApiConfig,
+        client: aiohttp.ClientSession,
+        job_submit: Dict[str, Any],
+        jobs_client: JobsClient,
+        regular_user_with_missing_cluster_name: _User,
+    ) -> None:
+        job_name = f"test-job-name-{random_str()}"
+        url = api.jobs_base_url
+        job_submit["is_preemptible"] = True
+        job_submit["name"] = job_name
+        user = regular_user_with_missing_cluster_name
+        async with client.post(
+            url, headers=user.headers, json=job_submit
+        ) as response:
+            assert response.status == HTTPInternalServerError.status_code
+            payload = await response.json()
+            e = (
+                f"Unexpected exception: Cluster '{user.cluster_name}' not found. "
+                "Path with query: /api/v1/jobs."
             )
             assert payload == {"error": e}
 
