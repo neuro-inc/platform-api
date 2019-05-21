@@ -227,6 +227,22 @@ class TestApi:
                 "storage_url": "https://neu.ro/api/v1/storage",
                 "users_url": "https://neu.ro/api/v1/users",
                 "monitoring_url": "https://neu.ro/api/v1/monitoring",
+                "resource_presets": {
+                    "gpu-small": {
+                        "gpu": 1,
+                        "cpu": 7,
+                        "memory": 30720,
+                        "gpu_model": "nvidia-tesla-k80",
+                    },
+                    "gpu-large": {
+                        "gpu": 1,
+                        "cpu": 7,
+                        "memory": 61440,
+                        "gpu_model": "nvidia-tesla-v100",
+                    },
+                    "cpu-small": {"cpu": 2, "memory": 2048},
+                    "cpu-large": {"cpu": 3, "memory": 14336},
+                },
             }
 
     @pytest.mark.asyncio
@@ -245,6 +261,22 @@ class TestApi:
                 "storage_url": "https://neu.ro/api/v1/storage",
                 "users_url": "https://neu.ro/api/v1/users",
                 "monitoring_url": "https://neu.ro/api/v1/monitoring",
+                "resource_presets": {
+                    "gpu-small": {
+                        "gpu": 1,
+                        "cpu": 7,
+                        "memory": 30720,
+                        "gpu_model": "nvidia-tesla-k80",
+                    },
+                    "gpu-large": {
+                        "gpu": 1,
+                        "cpu": 7,
+                        "memory": 61440,
+                        "gpu_model": "nvidia-tesla-v100",
+                    },
+                    "cpu-small": {"cpu": 2, "memory": 2048},
+                    "cpu-large": {"cpu": 3, "memory": 14336},
+                },
                 "auth_url": "https://platform-auth0-url/authorize",
                 "token_url": "https://platform-auth0-url/oauth/token",
                 "client_id": "client_id",
