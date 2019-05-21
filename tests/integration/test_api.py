@@ -1695,7 +1695,6 @@ class TestJobs:
                     "reason": None,
                     "description": None,
                     "created_at": mock.ANY,
-                    "exit_code": None,
                 },
                 "container": {
                     "command": "true",
@@ -1730,7 +1729,6 @@ class TestJobs:
                 "created_at": mock.ANY,
                 "started_at": mock.ANY,
                 "finished_at": mock.ANY,
-                "exit_code": None,
             },
             "container": {
                 "command": "true",
@@ -1889,7 +1887,6 @@ class TestJobs:
                     "reason": None,
                     "description": None,
                     "created_at": mock.ANY,
-                    "exit_code": None,
                 },
                 "container": {
                     "command": "true",

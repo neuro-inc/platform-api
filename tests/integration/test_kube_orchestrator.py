@@ -1750,7 +1750,10 @@ class TestPodContainerDevShmSettings:
             resources,
             command,
         )
-        assert JobStatusItem.create(status=JobStatus.SUCCEEDED) == run_output
+        assert (
+            JobStatusItem.create(status=JobStatus.SUCCEEDED, exit_code=None)
+            == run_output
+        )
 
     @pytest.mark.asyncio
     async def test_shm_extended_not_requested_try_create_small_file(
