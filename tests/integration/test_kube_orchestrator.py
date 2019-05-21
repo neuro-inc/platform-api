@@ -1772,7 +1772,9 @@ class TestPodContainerDevShmSettings:
             resources,
             command,
         )
-        assert JobStatusItem.create(status=JobStatus.SUCCEEDED) == run_output
+        assert (
+            JobStatusItem.create(status=JobStatus.SUCCEEDED, exit_code=0) == run_output
+        )
 
 
 class TestNodeSelector:
