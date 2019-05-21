@@ -7,6 +7,7 @@ from aiohttp.web import HTTPUnauthorized
 from async_exit_stack import AsyncExitStack
 from neuro_auth_client import AuthClient
 from neuro_auth_client.security import AuthScheme, setup_security
+from notifications_client import Client as NotificationClient
 
 from .cluster import Cluster, ClusterConfig, ClusterRegistry
 from .config import Config
@@ -19,7 +20,6 @@ from .orchestrator.jobs_service import JobsService, JobsServiceException
 from .orchestrator.jobs_storage import RedisJobsStorage
 from .redis import create_redis_client
 from .user import authorized_user
-from notifications_client import Client as NotificationClient
 
 
 logger = logging.getLogger(__name__)

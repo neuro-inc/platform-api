@@ -28,7 +28,7 @@ lint:
 
 format:
 	isort -rc platform_api tests setup.py
-	black .
+	black platform_api tests setup.py
 
 test_unit:
 	pytest -vv --cov-config=setup.cfg --cov platform_api tests/unit
