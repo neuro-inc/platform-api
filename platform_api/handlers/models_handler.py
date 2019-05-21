@@ -97,13 +97,12 @@ class ModelsHandler:
             "job_id": job.id,
             "status": status.value,
             "is_preemptible": job.is_preemptible,
+            "ssh_server": job.ssh_server,
         }
         if container.has_http_server_exposed:
             payload["http_url"] = job.http_url
             if job.http_url_named:
                 payload["http_url_named"] = job.http_url_named
-        if container.has_ssh_server_exposed:
-            payload["ssh_server"] = job.ssh_server
         if job.internal_hostname:
             payload["internal_hostname"] = job.internal_hostname
         if job.name:

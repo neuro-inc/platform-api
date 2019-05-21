@@ -85,12 +85,9 @@ class TestConfigClient:
         self, cluster_configs_payload: List[Dict[str, Any]]
     ) -> None:
         users_url = URL("https://neu.ro/api/v1/users")
-        ssh_domain_name = "ssh.domain"
         async with create_config_api(cluster_configs_payload) as url:
             async with ConfigClient(base_url=url) as client:
-                result = await client.get_clusters(
-                    users_url=users_url, ssh_domain_name=ssh_domain_name
-                )
+                result = await client.get_clusters(users_url=users_url)
 
                 assert len(result) == 1
 
@@ -100,11 +97,8 @@ class TestConfigClient:
     ) -> None:
         cluster_configs_payload.append({})
         users_url = URL("https://neu.ro/api/v1/users")
-        ssh_domain_name = "ssh.domain"
         async with create_config_api(cluster_configs_payload) as url:
             async with ConfigClient(base_url=url) as client:
-                result = await client.get_clusters(
-                    users_url=users_url, ssh_domain_name=ssh_domain_name
-                )
+                result = await client.get_clusters(users_url=users_url)
 
                 assert len(result) == 1

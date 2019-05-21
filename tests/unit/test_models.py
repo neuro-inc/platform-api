@@ -613,6 +613,7 @@ async def test_job_to_job_response(mock_orchestrator: MockOrchestrator) -> None:
         },
         "name": "test-job-name",
         "description": "test test description",
+        "ssh_server": "ssh://nobody@ssh-auth:22",
         "ssh_auth_server": "ssh://nobody@ssh-auth:22",
         "is_preemptible": False,
     }
@@ -658,6 +659,7 @@ async def test_job_to_job_response_with_job_name_and_http_exposed(
             "resources": {"cpu": 1, "memory_mb": 128},
             "http": {"port": 80, "health_check_path": "/", "requires_auth": False},
         },
+        "ssh_server": "ssh://nobody@ssh-auth:22",
         "ssh_auth_server": "ssh://nobody@ssh-auth:22",
         "is_preemptible": False,
     }
@@ -703,6 +705,7 @@ async def test_job_to_job_response_with_job_name_and_http_exposed_too_long_name(
             "resources": {"cpu": 1, "memory_mb": 128},
             "http": {"port": 80, "health_check_path": "/", "requires_auth": False},
         },
+        "ssh_server": "ssh://nobody@ssh-auth:22",
         "ssh_auth_server": "ssh://nobody@ssh-auth:22",
         "is_preemptible": False,
     }

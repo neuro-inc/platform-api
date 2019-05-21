@@ -508,10 +508,6 @@ class Job:
         return self._job_request.container.has_http_server_exposed
 
     @property
-    def has_ssh_server_exposed(self) -> bool:
-        return self._job_request.container.has_ssh_server_exposed
-
-    @property
     def requires_http_auth(self) -> bool:
         return self._job_request.container.requires_http_auth
 
@@ -555,12 +551,6 @@ class Job:
 
     @property
     def ssh_server(self) -> str:
-        assert self.has_ssh_server_exposed
-        ssh_domain_name = self._orchestrator_config.ssh_domain_name
-        return f"ssh://{self.id}.{ssh_domain_name}:22"
-
-    @property
-    def ssh_auth_server(self) -> str:
         ssh_auth_domain_name = self._orchestrator_config.ssh_auth_domain_name
         return f"ssh://nobody@{ssh_auth_domain_name}:22"
 
