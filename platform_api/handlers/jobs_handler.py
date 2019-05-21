@@ -177,7 +177,7 @@ def convert_job_to_job_response(job: Job) -> Dict[str, Any]:
         response_payload["history"]["started_at"] = history.started_at_str
     if history.is_finished:
         response_payload["history"]["finished_at"] = history.finished_at_str
-    if current_status.exit_code:
+    if current_status.exit_code is not None:
         response_payload["history"]["exit_code"] = current_status.exit_code
     return response_payload
 

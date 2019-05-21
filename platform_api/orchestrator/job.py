@@ -75,39 +75,24 @@ class JobStatusItem:
     def from_primitive(cls, payload: Dict[str, Any]) -> "JobStatusItem":
         status = JobStatus(payload["status"])
         transition_time = iso8601.parse_date(payload["transition_time"])
-        payload_exit_code = payload.get("exit_code")
-        if payload_exit_code is not None:
-            return cls(
-                status=status,
-                transition_time=transition_time,
-                reason=payload.get("reason"),
-                description=payload.get("description"),
-                exit_code=payload_exit_code,
-            )
-        else:
-            return cls(
-                status=status,
-                transition_time=transition_time,
-                reason=payload.get("reason"),
-                description=payload.get("description"),
-            )
+        return cls(
+            status=status,
+            transition_time=transition_time,
+            reason=payload.get("reason"),
+            description=payload.get("description"),
+            exit_code=payload.get("exit_code"),
+        )
 
     def to_primitive(self) -> Dict[str, Any]:
+        result: Dict[str, Any] = {
+            "status": str(self.status.value),
+            "transition_time": self.transition_time.isoformat(),
+            "reason": self.reason,
+            "description": self.description,
+        }
         if self.exit_code is not None:
-            return {
-                "status": str(self.status.value),
-                "transition_time": self.transition_time.isoformat(),
-                "reason": self.reason,
-                "description": self.description,
-                "exit_code": self.exit_code,
-            }
-        else:
-            return {
-                "status": str(self.status.value),
-                "transition_time": self.transition_time.isoformat(),
-                "reason": self.reason,
-                "description": self.description,
-            }
+            result["exit_code"] = self.exit_code
+        return result
 
 
 class JobStatusHistory:
