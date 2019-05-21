@@ -1759,6 +1759,7 @@ class TestJobs:
                 "status": "succeeded",
                 "reason": None,
                 "description": None,
+                "exit_code": 0,
                 "created_at": mock.ANY,
                 "started_at": mock.ANY,
                 "finished_at": mock.ANY,
@@ -1820,10 +1821,11 @@ class TestJobs:
             "history": {
                 "status": "failed",
                 "reason": "Error",
-                "description": "Failed!\n\nExit code: 1",
+                "description": "Failed!\n",
                 "created_at": mock.ANY,
                 "started_at": mock.ANY,
                 "finished_at": mock.ANY,
+                "exit_code": 1,
             },
             "container": {
                 "command": 'bash -c "echo Failed!; false"',

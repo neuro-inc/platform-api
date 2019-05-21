@@ -1030,6 +1030,7 @@ class TestJobStatusItem:
             "transition_time": transition_time.isoformat(),
             "reason": "test reason",
             "description": "test description",
+            "exit_code": 0,
         }
         item = JobStatusItem.from_primitive(payload)
         assert item.status == JobStatus.SUCCEEDED
@@ -1037,16 +1038,36 @@ class TestJobStatusItem:
         assert item.transition_time == transition_time
         assert item.reason == "test reason"
         assert item.description == "test description"
+        assert item.exit_code == 0
+
+    def test_from_primitive_without_exit_code(self) -> None:
+        transition_time = datetime.now(timezone.utc)
+        payload = {
+            "status": "succeeded",
+            "transition_time": transition_time.isoformat(),
+            "reason": "test reason",
+            "description": "test description",
+        }
+        item = JobStatusItem.from_primitive(payload)
+        assert item.status == JobStatus.SUCCEEDED
+        assert item.is_finished
+        assert item.transition_time == transition_time
+        assert item.reason == "test reason"
+        assert item.description == "test description"
+        assert item.exit_code is None
 
     def test_to_primitive(self) -> None:
         item = JobStatusItem(
-            status=JobStatus.SUCCEEDED, transition_time=datetime.now(timezone.utc)
+            status=JobStatus.SUCCEEDED,
+            transition_time=datetime.now(timezone.utc),
+            exit_code=321,
         )
         assert item.to_primitive() == {
             "status": "succeeded",
             "transition_time": item.transition_time.isoformat(),
             "reason": None,
             "description": None,
+            "exit_code": 321,
         }
 
     def test_eq_defaults(self) -> None:
