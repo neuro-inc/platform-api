@@ -25,6 +25,7 @@ from platform_api.config import (
     Config,
     DatabaseConfig,
     JobsConfig,
+    NotificationsConfig,
     OAuthConfig,
     ServerConfig,
 )
@@ -365,6 +366,11 @@ def jobs_config() -> JobsConfig:
 
 
 @pytest.fixture
+def notifications_config() -> NotificationsConfig:
+    return NotificationsConfig(url=URL("http://localhost:1234"))
+
+
+@pytest.fixture
 def config_factory(
     storage_config_host: StorageConfig,
     registry_config: RegistryConfig,
@@ -373,6 +379,7 @@ def config_factory(
     auth_config: AuthConfig,
     es_config: ElasticsearchConfig,
     jobs_config: JobsConfig,
+    notifications_config: NotificationsConfig,
 ) -> Callable[..., Config]:
     def _factory(**kwargs: Any) -> Config:
         server_config = ServerConfig()
@@ -399,6 +406,7 @@ def config_factory(
             auth=auth_config,
             jobs=jobs_config,
             config_client=config_client,
+            notifications=notifications_config,
             **kwargs,
         )
 

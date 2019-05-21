@@ -1,4 +1,4 @@
-#!/bin/bash -x
+#!/usr/bin/env bash
 
 # based on
 # https://github.com/kubernetes/minikube#linux-continuous-integration-without-vm-support
