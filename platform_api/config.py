@@ -71,6 +71,11 @@ class JobsConfig:
 
 
 @dataclass(frozen=True)
+class NotificationsConfig:
+    url: URL
+
+
+@dataclass(frozen=True)
 class Config:
     config_client: ConfigClient
 
@@ -80,9 +85,12 @@ class Config:
 
     database: DatabaseConfig
     auth: AuthConfig
+    notifications: NotificationsConfig
+
     oauth: Optional[OAuthConfig] = None
 
     jobs: JobsConfig = JobsConfig()
+
 
     # used for generating environment variable names and
     # sourcing them inside containers.

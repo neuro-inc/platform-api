@@ -19,6 +19,7 @@ from .orchestrator.jobs_service import JobsService, JobsServiceException
 from .orchestrator.jobs_storage import RedisJobsStorage
 from .redis import create_redis_client
 from .user import authorized_user
+from notifications_client import Client as NotificationClient
 
 
 logger = logging.getLogger(__name__)
@@ -198,6 +199,10 @@ async def create_app(
             await setup_security(
                 app=app, auth_client=auth_client, auth_scheme=AuthScheme.BEARER
             )
+
+            notifications = NotificationClient(config.notifications.url)
+            await exit_stack.enter_async_context(notifications)
+            app["jobs_app"]["notifications"] = notifications
 
             yield
 
