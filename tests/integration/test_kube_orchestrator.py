@@ -1751,8 +1751,7 @@ class TestPodContainerDevShmSettings:
             command,
         )
         assert (
-            JobStatusItem.create(status=JobStatus.SUCCEEDED, exit_code=None)
-            == run_output
+            JobStatusItem.create(status=JobStatus.SUCCEEDED, exit_code=0) == run_output
         )
 
     @pytest.mark.asyncio

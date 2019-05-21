@@ -1726,6 +1726,7 @@ class TestJobs:
                 "status": "succeeded",
                 "reason": None,
                 "description": None,
+                "exit_code": 0,
                 "created_at": mock.ANY,
                 "started_at": mock.ANY,
                 "finished_at": mock.ANY,
