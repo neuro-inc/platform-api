@@ -752,9 +752,7 @@ class TestJobs:
         job_submit["is_preemptible"] = True
         job_submit["name"] = job_name
         user = regular_user_with_missing_cluster_name
-        async with client.post(
-            url, headers=user.headers, json=job_submit
-        ) as response:
+        async with client.post(url, headers=user.headers, json=job_submit) as response:
             assert response.status == HTTPInternalServerError.status_code
             payload = await response.json()
             e = (

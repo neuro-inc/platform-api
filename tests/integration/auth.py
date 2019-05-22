@@ -170,7 +170,7 @@ async def regular_user_factory(
         await auth_client.add_user(user, token=admin_token)
         user_token = token_factory(user.name)
         user_quota = AggregatedRunTime.from_quota(user.quota)
-        return _User(
+        return _User(  # noqa
             name=user.name,
             token=user_token,
             quota=user_quota,
