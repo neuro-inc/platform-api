@@ -1595,7 +1595,9 @@ class TestJobs:
                 if i < n_jobs - 1:
                     await jobs_client.delete_job(job_id)
                     try:
-                        await jobs_client.long_polling_by_job_id(job_id, status="succeeded")
+                        await jobs_client.long_polling_by_job_id(
+                            job_id, status="succeeded"
+                        )
                     except Exception:
                         job_payload = await jobs_client.get_job_by_id(job_id)
                         assert job_payload is None
