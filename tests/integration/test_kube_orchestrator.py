@@ -2,7 +2,7 @@ import asyncio
 import io
 import time
 import uuid
-from pathlib import PurePath
+from pathlib import PurePath, Path
 from typing import (
     Any,
     AsyncIterator,
@@ -1256,6 +1256,11 @@ class TestKubeClient:
 
         stats = await kube_client.get_pod_container_stats(pod.name, pod.name)
         assert stats is None
+
+    @pytest.mark.asyncio
+    async def test_service_account_not_available(self, kube_client: KubeClient) -> None:
+        service_account_token = Path('/var/run/secrets/kubernetes.io/serviceaccount/token')
+        assert not service_account_token.exists()
 
 
 class TestLogReader:
