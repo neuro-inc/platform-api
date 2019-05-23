@@ -1597,7 +1597,7 @@ class TestJobs:
                     try:
                         await jobs_client.long_polling_by_job_id(job_id, status="succeeded")
                     except Exception:
-                        job_payload = jobs_client.get_job_by_id(job_id)
+                        job_payload = await jobs_client.get_job_by_id(job_id)
                         assert job_payload is None
 
         jobs_ls = await jobs_client.get_all_jobs(params=filters)
