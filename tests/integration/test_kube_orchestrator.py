@@ -2,7 +2,7 @@ import asyncio
 import io
 import time
 import uuid
-from pathlib import PurePath, Path
+from pathlib import PurePath
 from typing import (
     Any,
     AsyncIterator,
@@ -1258,9 +1258,27 @@ class TestKubeClient:
         assert stats is None
 
     @pytest.mark.asyncio
-    async def test_service_account_not_available(self, kube_client: KubeClient) -> None:
-        service_account_token = Path('/var/run/secrets/kubernetes.io/serviceaccount/token')
-        assert not service_account_token.exists()
+    async def test_service_account_not_available(
+        self,
+        kube_config: KubeConfig,
+        kube_client: KubeClient,
+        kube_orchestrator: KubeOrchestrator,
+        delete_pod_later: Callable[[PodDescriptor], Awaitable[None]],
+    ) -> None:
+        container = Container(
+            image="lachlanevenson/k8s-kubectl:v1.10.3",
+            command="get pods",
+            resources=ContainerResources(cpu=100, memory_mb=128),
+        )
+        job_request = JobRequest.create(container)
+        pod = PodDescriptor.from_job_request(
+            kube_orchestrator.create_storage_volume(), job_request
+        )
+        await delete_pod_later(pod)
+        await kube_client.create_pod(pod)
+        await kube_client.wait_pod_is_running(pod_name=pod.name, timeout_s=60.0)
+        pod_status = await kube_client.get_pod_status(pod.name)
+        assert pod_status.phase in ("Running", "Succeeded")
 
 
 class TestLogReader:
