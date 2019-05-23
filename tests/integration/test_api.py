@@ -1594,7 +1594,11 @@ class TestJobs:
                 # let only the last job be running
                 if i < n_jobs - 1:
                     await jobs_client.delete_job(job_id)
-                    await jobs_client.long_polling_by_job_id(job_id, status="succeeded")
+                    try:
+                        await jobs_client.long_polling_by_job_id(job_id, status="succeeded")
+                    except Exception:
+                        job_payload = jobs_client.get_job_by_id(job_id)
+                        assert job_payload is None
 
         jobs_ls = await jobs_client.get_all_jobs(params=filters)
         jobs_ls = [job["id"] for job in jobs_ls]
