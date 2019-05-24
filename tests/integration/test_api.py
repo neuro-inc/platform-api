@@ -135,7 +135,7 @@ class JobsClient:
         return result
 
     async def long_polling_by_job_id(
-        self, job_id: str, status: str, interval_s: float = 0.5, max_time: float = 180
+        self, job_id: str, status: str, interval_s: float = 0.5, max_time: float = 300
     ) -> Dict[str, Any]:
         t0 = time.monotonic()
         while True:
