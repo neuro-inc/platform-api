@@ -136,7 +136,12 @@ class JobsClient:
         return result
 
     async def long_polling_by_job_id(
-        self, job_id: str, status: str, interval_s: float = 0.5, max_time: float = 300
+        self,
+        job_id: str,
+        status: str,
+        interval_s: float = 0.5,
+        max_time: float = 300,
+        unreachable_optimization: bool = True,
     ) -> Dict[str, Any]:
 
         # A little optimization with unreachable statuses
@@ -145,16 +150,17 @@ class JobsClient:
                 JobStatus.RUNNING.value,
                 JobStatus.SUCCEEDED.value,
                 JobStatus.PENDING.value,
+                JobStatus.FAILED.value,
             ],
             JobStatus.RUNNING.value: [
                 JobStatus.SUCCEEDED.value,
                 JobStatus.FAILED.value,
             ],
             JobStatus.SUCCEEDED.value: [JobStatus.FAILED.value],
-            JobStatus.FAILED.value: [],
+            JobStatus.FAILED.value: [JobStatus.SUCCEEDED],
         }
         stop_statuses: List[str] = []
-        if status in unreachable_statuses_map:
+        if unreachable_optimization and status in unreachable_statuses_map:
             stop_statuses = unreachable_statuses_map[status]
 
         t0 = time.monotonic()
