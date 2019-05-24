@@ -72,7 +72,7 @@ class JobStatusItemFactory:
                 self._container_status.is_terminated
                 and self._container_status.exit_code
             ):
-                return self._container_status.message or ""
+                return self._container_status.message
         return None
 
     def create(self) -> JobStatusItem:

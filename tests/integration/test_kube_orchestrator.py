@@ -1728,7 +1728,7 @@ class TestPodContainerDevShmSettings:
             command,
         )
         job_status = JobStatusItem.create(
-            status=JobStatus.FAILED, reason="OOMKilled", exit_code=137, description=""
+            status=JobStatus.FAILED, reason="OOMKilled", exit_code=137, description=None
         )
         assert job_status == run_output, f"actual: '{run_output}'"
 
