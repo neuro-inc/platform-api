@@ -34,6 +34,7 @@ from neuro_auth_client.client import Quota
 from platform_api.api import create_app
 from platform_api.cluster_config import ClusterConfig
 from platform_api.config import Config
+from platform_api.orchestrator.job import JobStatus
 from tests.conftest import random_str
 
 from .auth import _AuthClient, _User
@@ -137,11 +138,32 @@ class JobsClient:
     async def long_polling_by_job_id(
         self, job_id: str, status: str, interval_s: float = 0.5, max_time: float = 300
     ) -> Dict[str, Any]:
+
+        # A little optimization with unreachable statuses
+        unreachable_statuses_map = {
+            JobStatus.PENDING.value: [
+                JobStatus.RUNNING.value,
+                JobStatus.SUCCEEDED.value,
+                JobStatus.PENDING.value,
+            ],
+            JobStatus.RUNNING.value: [
+                JobStatus.SUCCEEDED.value,
+                JobStatus.FAILED.value,
+            ],
+            JobStatus.SUCCEEDED.value: [JobStatus.FAILED.value],
+            JobStatus.FAILED.value: [],
+        }
+        stop_statuses: List[str] = []
+        if status in unreachable_statuses_map:
+            stop_statuses = unreachable_statuses_map[status]
+
         t0 = time.monotonic()
         while True:
             response = await self.get_job_by_id(job_id)
             if response["status"] == status:
                 return response
+            if response["status"] in stop_statuses:
+                pytest.fail(f"Status {status} cannot be reached, resp: {response}")
             await asyncio.sleep(max(interval_s, time.monotonic() - t0))
             current_time = time.monotonic() - t0
             if current_time > max_time:
