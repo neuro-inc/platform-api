@@ -23,6 +23,7 @@ from aiohttp.web import (
     HTTPAccepted,
     HTTPBadRequest,
     HTTPForbidden,
+    HTTPInternalServerError,
     HTTPNoContent,
     HTTPOk,
     HTTPUnauthorized,
@@ -227,6 +228,22 @@ class TestApi:
                 "storage_url": "https://neu.ro/api/v1/storage",
                 "users_url": "https://neu.ro/api/v1/users",
                 "monitoring_url": "https://neu.ro/api/v1/monitoring",
+                "resource_presets": {
+                    "gpu-small": {
+                        "gpu": 1,
+                        "cpu": 7,
+                        "memory": 30720,
+                        "gpu_model": "nvidia-tesla-k80",
+                    },
+                    "gpu-large": {
+                        "gpu": 1,
+                        "cpu": 7,
+                        "memory": 61440,
+                        "gpu_model": "nvidia-tesla-v100",
+                    },
+                    "cpu-small": {"cpu": 2, "memory": 2048},
+                    "cpu-large": {"cpu": 3, "memory": 14336},
+                },
             }
 
     @pytest.mark.asyncio
@@ -245,6 +262,22 @@ class TestApi:
                 "storage_url": "https://neu.ro/api/v1/storage",
                 "users_url": "https://neu.ro/api/v1/users",
                 "monitoring_url": "https://neu.ro/api/v1/monitoring",
+                "resource_presets": {
+                    "gpu-small": {
+                        "gpu": 1,
+                        "cpu": 7,
+                        "memory": 30720,
+                        "gpu_model": "nvidia-tesla-k80",
+                    },
+                    "gpu-large": {
+                        "gpu": 1,
+                        "cpu": 7,
+                        "memory": 61440,
+                        "gpu_model": "nvidia-tesla-v100",
+                    },
+                    "cpu-small": {"cpu": 2, "memory": 2048},
+                    "cpu-large": {"cpu": 3, "memory": 14336},
+                },
                 "auth_url": "https://platform-auth0-url/authorize",
                 "token_url": "https://platform-auth0-url/oauth/token",
                 "client_id": "client_id",
@@ -418,7 +451,7 @@ class TestModels:
             result = await response.json()
             assert result["status"] in ["pending"]
             job_id = result["job_id"]
-            expected_url = f"ssh://{job_id}.ssh.platform.neuromation.io:22"
+            expected_url = "ssh://nobody@ssh-auth.platform.neuromation.io:22"
             assert result["ssh_server"] == expected_url
 
         retrieved_job = await jobs_client.get_job_by_id(job_id=job_id)
@@ -446,7 +479,7 @@ class TestModels:
             result = await response.json()
             assert result["status"] in ["pending"]
             job_id = result["job_id"]
-            expected_url = f"ssh://{job_id}.ssh.platform.neuromation.io:22"
+            expected_url = "ssh://nobody@ssh-auth.platform.neuromation.io:22"
             assert result["ssh_server"] == expected_url
 
         await jobs_client.long_polling_by_job_id(job_id=job_id, status="succeeded")
@@ -702,6 +735,29 @@ class TestJobs:
             e = (
                 "{'name': DataError({0: DataError(value should be None), "
                 "1: DataError(does not match pattern ^[a-z][-a-z0-9]*[a-z0-9]$)})}"
+            )
+            assert payload == {"error": e}
+
+    @pytest.mark.asyncio
+    async def test_create_job_missing_cluster_name(
+        self,
+        api: ApiConfig,
+        client: aiohttp.ClientSession,
+        job_submit: Dict[str, Any],
+        jobs_client: JobsClient,
+        regular_user_with_missing_cluster_name: _User,
+    ) -> None:
+        job_name = f"test-job-name-{random_str()}"
+        url = api.jobs_base_url
+        job_submit["is_preemptible"] = True
+        job_submit["name"] = job_name
+        user = regular_user_with_missing_cluster_name
+        async with client.post(url, headers=user.headers, json=job_submit) as response:
+            assert response.status == HTTPInternalServerError.status_code
+            payload = await response.json()
+            e = (
+                f"Unexpected exception: Cluster '{user.cluster_name}' not found. "
+                "Path with query: /api/v1/jobs."
             )
             assert payload == {"error": e}
 
@@ -1709,6 +1765,7 @@ class TestJobs:
                         }
                     ],
                 },
+                "ssh_server": "ssh://nobody@ssh-auth.platform.neuromation.io:22",
                 "ssh_auth_server": "ssh://nobody@ssh-auth.platform.neuromation.io:22",
                 "is_preemptible": True,
             }
@@ -1726,6 +1783,7 @@ class TestJobs:
                 "status": "succeeded",
                 "reason": None,
                 "description": None,
+                "exit_code": 0,
                 "created_at": mock.ANY,
                 "started_at": mock.ANY,
                 "finished_at": mock.ANY,
@@ -1743,6 +1801,7 @@ class TestJobs:
                     }
                 ],
             },
+            "ssh_server": "ssh://nobody@ssh-auth.platform.neuromation.io:22",
             "ssh_auth_server": "ssh://nobody@ssh-auth.platform.neuromation.io:22",
             "is_preemptible": True,
         }
@@ -1786,10 +1845,11 @@ class TestJobs:
             "history": {
                 "status": "failed",
                 "reason": "Error",
-                "description": "Failed!\n\nExit code: 1",
+                "description": "Failed!\n",
                 "created_at": mock.ANY,
                 "started_at": mock.ANY,
                 "finished_at": mock.ANY,
+                "exit_code": 1,
             },
             "container": {
                 "command": 'bash -c "echo Failed!; false"',
@@ -1812,6 +1872,7 @@ class TestJobs:
                     },
                 ],
             },
+            "ssh_server": "ssh://nobody@ssh-auth.platform.neuromation.io:22",
             "ssh_auth_server": "ssh://nobody@ssh-auth.platform.neuromation.io:22",
             "is_preemptible": False,
         }
@@ -1899,6 +1960,7 @@ class TestJobs:
                     },
                     "volumes": [],
                 },
+                "ssh_server": "ssh://nobody@ssh-auth.platform.neuromation.io:22",
                 "ssh_auth_server": "ssh://nobody@ssh-auth.platform.neuromation.io:22",
                 "is_preemptible": False,
             }

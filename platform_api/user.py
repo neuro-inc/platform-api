@@ -53,7 +53,12 @@ async def authorized_user(request: Request) -> User:
         raise HTTPUnauthorized()
     quota = AggregatedRunTime.from_quota(autz_user.quota)
 
-    return User(name=autz_user.name, token=identity, quota=quota)
+    return User(
+        name=autz_user.name,
+        cluster_name=autz_user.cluster_name,
+        token=identity,
+        quota=quota,
+    )
 
 
 async def _get_identity(request: Request) -> str:

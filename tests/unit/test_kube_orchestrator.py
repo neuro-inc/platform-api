@@ -503,7 +503,7 @@ class TestJobStatusItemFactory:
                     "state": {
                         "terminated": {
                             "reason": "Error",
-                            "message": "Failed!\n",
+                            "message": "Failed!",
                             "exitCode": 123,
                         }
                     }
@@ -513,8 +513,41 @@ class TestJobStatusItemFactory:
         pod_status = PodStatus.from_primitive(payload)
         job_status_item = JobStatusItemFactory(pod_status).create()
         assert job_status_item == JobStatusItem.create(
-            JobStatus.FAILED, reason="Error", description="Failed!\n\nExit code: 123"
+            JobStatus.FAILED, reason="Error", description="Failed!", exit_code=123
         )
+
+    def test_status_failure_no_message(self) -> None:
+        payload = {
+            "phase": "Failed",
+            "containerStatuses": [
+                {"state": {"terminated": {"reason": "Error", "exitCode": 1}}}
+            ],
+        }
+
+        pod_status = PodStatus.from_primitive(payload)
+        job_status_item = JobStatusItemFactory(pod_status).create()
+        assert job_status_item == JobStatusItem.create(
+            JobStatus.FAILED, reason="Error", description=None, exit_code=1
+        )
+
+    def test_status_success(self) -> None:
+        payload = {
+            "phase": "Succeeded",
+            "containerStatuses": [
+                {
+                    "state": {
+                        "terminated": {
+                            "reason": "Succeeded",
+                            "message": "Everything is ok!",
+                            "exitCode": 0,
+                        }
+                    }
+                }
+            ],
+        }
+        pod_status = PodStatus.from_primitive(payload)
+        job_status_item = JobStatusItemFactory(pod_status).create()
+        assert job_status_item == JobStatusItem.create(JobStatus.SUCCEEDED, exit_code=0)
 
 
 class TestPodStatus:

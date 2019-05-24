@@ -157,18 +157,25 @@ class _User(User):
 @pytest.fixture
 async def regular_user_factory(
     auth_client: _AuthClient, token_factory: Callable[[str], str], admin_token: str
-) -> Callable[[Optional[str], Optional[Quota]], Awaitable[_User]]:
+) -> Callable[[Optional[str], Optional[Quota], Optional[str]], Awaitable[_User]]:
     async def _factory(
-        name: Optional[str] = None, quota: Optional[Quota] = None
+        name: Optional[str] = None,
+        quota: Optional[Quota] = None,
+        cluster_name: Optional[str] = None,
     ) -> _User:
         if not name:
             name = random_str()
         quota = quota or Quota()
-        user = AuthClientUser(name=name, quota=quota)
+        user = AuthClientUser(name=name, quota=quota, cluster_name=cluster_name)
         await auth_client.add_user(user, token=admin_token)
         user_token = token_factory(user.name)
         user_quota = AggregatedRunTime.from_quota(user.quota)
-        return _User(name=user.name, token=user_token, quota=user_quota)  # noqa
+        return _User(  # noqa
+            name=user.name,
+            token=user_token,
+            quota=user_quota,
+            cluster_name=cluster_name or "",
+        )
 
     return _factory
 
@@ -176,6 +183,15 @@ async def regular_user_factory(
 @pytest.fixture
 async def regular_user(regular_user_factory: Callable[[], Awaitable[_User]]) -> _User:
     return await regular_user_factory()
+
+
+@pytest.fixture
+async def regular_user_with_missing_cluster_name(
+    regular_user_factory: Callable[
+        [Optional[str], Optional[Quota], Optional[str]], Awaitable[_User]
+    ],
+) -> _User:
+    return await regular_user_factory(None, None, "missing")
 
 
 @pytest.fixture

@@ -19,10 +19,22 @@ from .orchestrator.jobs_poller import JobsPoller
 from .orchestrator.jobs_service import JobsService, JobsServiceException
 from .orchestrator.jobs_storage import RedisJobsStorage
 from .redis import create_redis_client
+from .resource import GKEGPUModels
 from .user import authorized_user
 
 
 logger = logging.getLogger(__name__)
+
+RESOURCE_PRESETS = {
+    "gpu-small": dict(
+        gpu=1, cpu=7, memory=30 * 1024, gpu_model=next(iter(GKEGPUModels)).value.id
+    ),
+    "gpu-large": dict(
+        gpu=1, cpu=7, memory=60 * 1024, gpu_model=next(reversed(GKEGPUModels)).value.id
+    ),
+    "cpu-small": dict(cpu=2, memory=2 * 1024),
+    "cpu-large": dict(cpu=3, memory=14 * 1024),
+}
 
 
 class ApiHandler:
@@ -57,6 +69,7 @@ class ApiHandler:
                     "storage_url": str(cluster_config.ingress.storage_url),
                     "users_url": str(cluster_config.ingress.users_url),
                     "monitoring_url": str(cluster_config.ingress.monitoring_url),
+                    "resource_presets": RESOURCE_PRESETS,
                 }
             )
         except HTTPUnauthorized:
@@ -225,10 +238,7 @@ async def create_app(
 
 async def get_cluster_configs(config: Config) -> Sequence[ClusterConfig]:
     async with config.config_client as client:
-        return await client.get_clusters(
-            users_url=config.cluster.ingress.users_url,
-            ssh_domain_name=config.cluster.orchestrator.ssh_domain_name,
-        )
+        return await client.get_clusters(users_url=config.cluster.ingress.users_url)
 
 
 def main() -> None:

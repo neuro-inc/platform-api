@@ -80,11 +80,6 @@ def users_url() -> URL:
     return URL("https://dev.neu.ro/api/v1/users")
 
 
-@pytest.fixture
-def ssh_domain_name() -> str:
-    return "ssh-dev.neu.ro"
-
-
 class TestClusterConfigFactory:
     def test_valid_cluster_config(
         self, clusters_payload: Sequence[Dict[str, Any]], users_url: URL
@@ -93,14 +88,12 @@ class TestClusterConfigFactory:
         registry_payload = clusters_payload[0]["registry"]
         orchestrator_payload = clusters_payload[0]["orchestrator"]
         kube_payload = orchestrator_payload["kubernetes"]
-        ssh_payload = clusters_payload[0]["ssh"]
         monitoring_payload = clusters_payload[0]["monitoring"]
         elasticsearch_payload = monitoring_payload["elasticsearch"]
+        ssh_payload = clusters_payload[0]["ssh"]
 
         factory = ClusterConfigFactory()
-        clusters = factory.create_cluster_configs(
-            clusters_payload, users_url=users_url, ssh_domain_name=ssh_domain_name
-        )
+        clusters = factory.create_cluster_configs(clusters_payload, users_url=users_url)
 
         assert len(clusters) == 1
 
@@ -132,7 +125,6 @@ class TestClusterConfigFactory:
         orchestrator = cluster.orchestrator
         assert isinstance(orchestrator, KubeConfig)
 
-        assert orchestrator.ssh_domain_name == ssh_domain_name
         assert orchestrator.ssh_auth_domain_name == ssh_payload["server"]
         assert (
             orchestrator.is_http_ingress_secure
@@ -172,10 +164,7 @@ class TestClusterConfigFactory:
         )
 
     def test_valid_elasticsearch_config_without_user(
-        self,
-        clusters_payload: Sequence[Dict[str, Any]],
-        users_url: URL,
-        ssh_domain_name: str,
+        self, clusters_payload: Sequence[Dict[str, Any]], users_url: URL
     ) -> None:
         elasticsearch_payload = clusters_payload[0]["monitoring"]["elasticsearch"]
 
@@ -183,9 +172,7 @@ class TestClusterConfigFactory:
         del elasticsearch_payload["password"]
 
         factory = ClusterConfigFactory()
-        clusters = factory.create_cluster_configs(
-            clusters_payload, users_url=users_url, ssh_domain_name=ssh_domain_name
-        )
+        clusters = factory.create_cluster_configs(clusters_payload, users_url=users_url)
         cluster = clusters[0]
 
         logging = cluster.logging
@@ -194,17 +181,12 @@ class TestClusterConfigFactory:
         assert logging.elasticsearch.password is None
 
     def test_valid_storage_config_nfs(
-        self,
-        clusters_payload: Sequence[Dict[str, Any]],
-        users_url: URL,
-        ssh_domain_name: str,
+        self, clusters_payload: Sequence[Dict[str, Any]], users_url: URL
     ) -> None:
         storage_payload = clusters_payload[0]["storage"]
 
         factory = ClusterConfigFactory()
-        clusters = factory.create_cluster_configs(
-            clusters_payload, users_url=users_url, ssh_domain_name=ssh_domain_name
-        )
+        clusters = factory.create_cluster_configs(clusters_payload, users_url=users_url)
         cluster = clusters[0]
 
         storage = cluster.storage
@@ -247,8 +229,6 @@ class TestClusterConfigFactory:
     ) -> None:
         clusters_payload.append({})
         factory = ClusterConfigFactory()
-        clusters = factory.create_cluster_configs(
-            clusters_payload, users_url=users_url, ssh_domain_name=ssh_domain_name
-        )
+        clusters = factory.create_cluster_configs(clusters_payload, users_url=users_url)
 
         assert len(clusters) == 1
