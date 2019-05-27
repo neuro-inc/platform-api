@@ -149,7 +149,6 @@ class JobsClient:
             JobStatus.PENDING.value: [
                 JobStatus.RUNNING.value,
                 JobStatus.SUCCEEDED.value,
-                JobStatus.PENDING.value,
                 JobStatus.FAILED.value,
             ],
             JobStatus.RUNNING.value: [
