@@ -1268,7 +1268,7 @@ class TestKubeClient:
         container = Container(
             image="lachlanevenson/k8s-kubectl:v1.10.3",
             command="get pods",
-            resources=ContainerResources(cpu=0.1, memory_mb=128),
+            resources=ContainerResources(cpu=0.2, memory_mb=128),
         )
         job_request = JobRequest.create(container)
         pod = PodDescriptor.from_job_request(
