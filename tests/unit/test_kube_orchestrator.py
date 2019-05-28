@@ -115,6 +115,7 @@ class TestPodDescriptor:
         assert pod.to_primitive() == {
             "kind": "Pod",
             "apiVersion": "v1",
+            "automountServiceAccountToken": "false",
             "metadata": {"name": "testname", "labels": {"job": "testname"}},
             "spec": {
                 "containers": [
@@ -159,6 +160,7 @@ class TestPodDescriptor:
         assert pod.to_primitive() == {
             "kind": "Pod",
             "apiVersion": "v1",
+            "automountServiceAccountToken": "false",
             "metadata": {
                 "name": "testname",
                 "labels": {"job": "testname", "testlabel": "testvalue"},
@@ -217,6 +219,7 @@ class TestPodDescriptor:
             "kind": "Pod",
             "apiVersion": "v1",
             "metadata": {"name": "testname", "labels": {"job": "testname"}},
+            "automountServiceAccountToken": "false",
             "spec": {
                 "containers": [
                     {
@@ -262,6 +265,7 @@ class TestPodDescriptor:
             "kind": "Pod",
             "apiVersion": "v1",
             "metadata": {"name": "testname", "labels": {"job": "testname"}},
+            "automountServiceAccountToken": "false",
             "spec": {
                 "containers": [
                     {
@@ -305,6 +309,7 @@ class TestPodDescriptor:
             "kind": "Pod",
             "apiVersion": "v1",
             "metadata": {"name": "testname", "labels": {"job": "testname"}},
+            "automountServiceAccountToken": "false",
             "spec": {
                 "containers": [
                     {
@@ -351,6 +356,7 @@ class TestPodDescriptor:
             "kind": "Pod",
             "apiVersion": "v1",
             "metadata": {"name": "testname", "labels": {"job": "testname"}},
+            "automountServiceAccountToken": "false",
             "spec": {
                 "containers": [
                     {
