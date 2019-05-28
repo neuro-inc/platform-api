@@ -1268,7 +1268,7 @@ class TestKubeClient:
         container = Container(
             image="lachlanevenson/k8s-kubectl:v1.10.3",
             command="get pods",
-            resources=ContainerResources(cpu=100, memory_mb=128),
+            resources=ContainerResources(cpu=0.1, memory_mb=128),
         )
         job_request = JobRequest.create(container)
         pod = PodDescriptor.from_job_request(
@@ -1276,9 +1276,10 @@ class TestKubeClient:
         )
         await delete_pod_later(pod)
         await kube_client.create_pod(pod)
-        await kube_client.wait_pod_is_running(pod_name=pod.name, timeout_s=60.0)
+        await kube_client.wait_pod_is_terminated(pod_name=pod.name, timeout_s=60.0)
         pod_status = await kube_client.get_pod_status(pod.name)
-        assert pod_status.phase in ("Running", "Succeeded")
+        assert pod_status.phase in ("Failed")
+        assert pod_status.container_status.exit_code != 0
 
 
 class TestLogReader:
