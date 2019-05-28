@@ -2,7 +2,7 @@ apiVersion: rbac.authorization.k8s.io/v1beta1
 kind: ClusterRoleBinding
 metadata:
   name: default-cluster-admin-binding
-automountServiceAccountToken: true
+automountServiceAccountToken: false
 subjects:
   - kind: ServiceAccount
     # Reference to upper's `metadata.name`
