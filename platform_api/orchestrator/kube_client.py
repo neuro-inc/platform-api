@@ -1355,7 +1355,7 @@ class KubeClient:
         async with timeout(timeout_s):
             while True:
                 pod_status = await self.get_pod_status(pod_name)
-                if not pod_status.container_status.is_terminated:
+                if pod_status.container_status.is_terminated:
                     return
                 await asyncio.sleep(interval_s)
 
