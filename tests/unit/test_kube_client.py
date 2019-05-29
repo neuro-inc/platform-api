@@ -83,6 +83,11 @@ class TestNodeAffinity:
 
 
 class TestPodContainerStats:
+    def test_from_primitive_no_cpu(self) -> None:
+        payload: Dict[str, Any] = {"memory": {}}
+        stats = PodContainerStats.from_primitive(payload)
+        assert stats == PodContainerStats(cpu=0.0, memory=0.0)
+
     def test_from_primitive_empty(self) -> None:
         payload: Dict[str, Any] = {"cpu": {}, "memory": {}}
         stats = PodContainerStats.from_primitive(payload)

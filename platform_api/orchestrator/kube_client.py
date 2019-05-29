@@ -1472,7 +1472,7 @@ class PodContainerStats:
 
     @classmethod
     def from_primitive(cls, payload: Dict[str, Any]) -> "PodContainerStats":
-        cpu = payload["cpu"].get("usageNanoCores", 0) / (10 ** 9)
+        cpu = payload.get("cpu", {}).get("usageNanoCores", 0) / (10 ** 9)
         memory = payload["memory"].get("workingSetBytes", 0) / (2 ** 20)  # MB
         gpu_memory = None
         gpu_duty_cycle = None
