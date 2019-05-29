@@ -7,7 +7,7 @@ if [ ! "$CI" = true ]; then
     kubectl config use-context minikube
     echo "Setting up external services"
     docker save -o /tmp/platformauthapi.image platformauthapi:latest
-    docker save -o /tmp/platformapi.image platformapi-k8s:latest
+    docker save -o /tmp/platformapi.image platformapi:latest
     docker save -o /tmp/ssh-auth.image ssh-auth:latest
     docker save -o /tmp/platformconfig.image platformconfig:latest
 
