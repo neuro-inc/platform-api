@@ -1279,9 +1279,12 @@ class TestKubeClient:
         await kube_client.wait_pod_is_terminated(pod_name=pod.name, timeout_s=60.0)
         pod_status = await kube_client.get_pod_status(pod.name)
 
-        print(pod)
-        print(pod_status)
-        print(kube_orchestrator.config)
+        print("pod: " + str(pod))
+        print("pod.name: " + str(pod.name))
+        print("container status: " + str(pod_status.container_status))
+        print("message: " + str(pod_status.message))
+        print("reason: " + str(pod_status.reason))
+        # print(kube_orchestrator.config)
 
         assert pod_status.container_status.exit_code != 0
 
