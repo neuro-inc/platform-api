@@ -1,7 +1,6 @@
 IMAGE_NAME ?= platformapi
 IMAGE_TAG ?= latest
-IMAGE_NAME_K8S ?= $(IMAGE_NAME)-k8s
-IMAGE_K8S ?= $(GKE_DOCKER_REGISTRY)/$(GKE_PROJECT_ID)/$(IMAGE_NAME_K8S)
+IMAGE_K8S ?= $(GKE_DOCKER_REGISTRY)/$(GKE_PROJECT_ID)/$(IMAGE_NAME)
 SSH_IMAGE_NAME ?= ssh-auth
 SSH_IMAGE_TAG ?= latest
 SSH_K8S ?= $(GKE_DOCKER_REGISTRY)/$(GKE_PROJECT_ID)/$(SSH_IMAGE_NAME)
@@ -45,7 +44,7 @@ build_ssh_auth_k8s:
 
 build_api_k8s:
 	@docker build --build-arg PIP_INDEX_URL="$(PIP_INDEX_URL)" \
-	    -f Dockerfile.k8s -t $(IMAGE_NAME_K8S):$(IMAGE_TAG) .
+	    -f Dockerfile.k8s -t $(IMAGE_NAME):$(IMAGE_TAG) .
 
 run_api_k8s:
 	NP_STORAGE_HOST_MOUNT_PATH=/tmp \
@@ -86,8 +85,8 @@ _helm:
 	curl https://raw.githubusercontent.com/kubernetes/helm/master/scripts/get | bash -s -- -v v2.11.0
 
 gke_docker_push: build_api_k8s build_ssh_auth_k8s
-	docker tag $(IMAGE_NAME_K8S):$(IMAGE_TAG) $(IMAGE_K8S):latest
-	docker tag $(IMAGE_NAME_K8S):$(IMAGE_TAG) $(IMAGE_K8S):$(CIRCLE_SHA1)
+	docker tag $(IMAGE_NAME):$(IMAGE_TAG) $(IMAGE_K8S):latest
+	docker tag $(IMAGE_NAME):$(IMAGE_TAG) $(IMAGE_K8S):$(CIRCLE_SHA1)
 	docker tag $(SSH_IMAGE_NAME):$(SSH_IMAGE_TAG) $(SSH_K8S):latest
 	docker tag $(SSH_IMAGE_NAME):$(SSH_IMAGE_TAG) $(SSH_K8S):$(CIRCLE_SHA1)
 

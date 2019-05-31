@@ -27,13 +27,16 @@ logger = logging.getLogger(__name__)
 
 RESOURCE_PRESETS = {
     "gpu-small": dict(
-        gpu=1, cpu=7, memory=30 * 1024, gpu_model=next(iter(GKEGPUModels)).value.id
+        cpu=7, memory_mb=30 * 1024, gpu=1, gpu_model=next(iter(GKEGPUModels)).value.id
     ),
     "gpu-large": dict(
-        gpu=1, cpu=7, memory=60 * 1024, gpu_model=next(reversed(GKEGPUModels)).value.id
+        cpu=7,
+        memory_mb=60 * 1024,
+        gpu=1,
+        gpu_model=next(reversed(GKEGPUModels)).value.id,
     ),
-    "cpu-small": dict(cpu=2, memory=2 * 1024),
-    "cpu-large": dict(cpu=3, memory=14 * 1024),
+    "cpu-small": dict(cpu=2, memory_mb=2 * 1024),
+    "cpu-large": dict(cpu=3, memory_mb=14 * 1024),
 }
 
 
@@ -69,7 +72,10 @@ class ApiHandler:
                     "storage_url": str(cluster_config.ingress.storage_url),
                     "users_url": str(cluster_config.ingress.users_url),
                     "monitoring_url": str(cluster_config.ingress.monitoring_url),
-                    "resource_presets": RESOURCE_PRESETS,
+                    "resource_presets": [
+                        {"name": name, **preset}
+                        for name, preset in RESOURCE_PRESETS.items()
+                    ],
                 }
             )
         except HTTPUnauthorized:
