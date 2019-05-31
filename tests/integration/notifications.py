@@ -42,8 +42,8 @@ async def notifications_server(
     await container.start()
     # TODO: add ping here
     yield
-    # try:
-    #     await container.kill()
-    #     await container.delete(force=True)
-    # except aiodocker.exceptions.DockerError:
-    #     pass
+    try:
+        await container.kill()
+        await container.delete(force=True)
+    except aiodocker.exceptions.DockerError:
+        pass
