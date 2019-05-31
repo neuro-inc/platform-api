@@ -1675,10 +1675,10 @@ class TestJobs:
         assert job_ids == {job1_usr2}
 
         # unshared job of another owner
-        # XXX Should raise exception?
         hostname = f"{job_name2}-{usr2.name}.jobs.neu.ro"
-        with pytest.raises(ValueError):  # XXX What exception?
-            await jobs_client_usr1.get_all_jobs({"hostname": hostname})
+        jobs = await jobs_client_usr1.get_all_jobs({"hostname": hostname})
+        job_ids = {job["id"] for job in jobs}
+        assert job_ids == {}
 
         # invalid requests
         hostname = f"{job_name}-{usr1.name}.jobs.neu.ro"
