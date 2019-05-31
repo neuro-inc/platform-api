@@ -6,9 +6,19 @@ import asyncio
 from typing import List, Any
 from aiodocker.containers import DockerContainer
 from yarl import URL
+import hashlib
 
-IMAGE_NAME = "proxy:latest"
 IMAGE_ASSET = Path(__file__).parent / "assets/proxy.tar"
+IMAGE_NAME = "proxy:latest"
+
+sha1sum = hashlib.sha1()
+with open(IMAGE_ASSET, 'rb') as source:
+  block = source.read(2**16)
+  while len(block) != 0:
+    sha1sum.update(block)
+    block = source.read(2**16)
+IMAGE_NAME = 'proxy:' + sha1sum.hexdigest()
+
 SSH_KEY_ASSET = Path(__file__).parent / "assets/root_rsa"
 CONTAINER_NAME = "proxy"
 FORWARDED_API_PORT = 8080
@@ -71,10 +81,9 @@ async def forwarded_api(
         "-p",
         port_number,
         "-R",
-        f"{api.port}:0.0.0.0:{FORWARDED_API_PORT}",
+        f"0.0.0.0:{FORWARDED_API_PORT}:{api.host}:{api.port}",
         "-i",
-        f"{SSH_KEY_ASSET}",
-        "-o",
+        f"{SSH_KEY_ASSET}",        "-o",
         "StrictHostKeyChecking=no",
         "-o",
         f"UserKnownHostsFile={tmp_path / 'known_hosts'}",
