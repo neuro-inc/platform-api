@@ -192,9 +192,8 @@ class JobsService:
                     await self._raise_for_run_time_quota(user)
                 except QuotaException as error:
                     record.status_history.current = JobStatusItem.create(
-                        JobStatus.FAILED, reason=f"error"
+                        JobStatus.FAILED, reason=f"{error}"
                     )
-                    await self._jobs_storage.set_job(record)
                     raise
                 async with self._get_cluster(record.cluster_name) as cluster:
                     job = Job(

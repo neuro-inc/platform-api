@@ -71,7 +71,7 @@ async def forwarder_container(
 
 @pytest.fixture
 async def forwarded_api(
-    api: ApiConfig, forwarder_container: DockerContainer, tmp_path
+    api_with_oauth: ApiConfig, forwarder_container: DockerContainer, tmp_path
 ) -> URL:
     """
     ssh -p 32801 -R 8080:localhost:2080 root@localhost -i root_rsa  -o "StrictHostKeyChecking=no" sleep 1h
@@ -84,7 +84,7 @@ async def forwarded_api(
         "-p",
         port_number,
         "-R",
-        f"0.0.0.0:{FORWARDED_API_PORT}:{api.host}:{api.port}",
+        f"0.0.0.0:{FORWARDED_API_PORT}:{api_with_oauth.host}:{api_with_oauth.port}",
         "-i",
         f"{SSH_KEY_ASSET}",
         "-o",
@@ -96,7 +96,7 @@ async def forwarded_api(
         "1h",
     ]
     process = await asyncio.create_subprocess_exec(*cmd)
-    await asyncio.sleep(5)  # TODO Remove
+    await asyncio.sleep(1)  # TODO Remove
     yield URL(f"http://{CONTAINER_NAME}:{FORWARDED_API_PORT}")
     try:
         process.kill()

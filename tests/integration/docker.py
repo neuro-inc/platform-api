@@ -35,6 +35,11 @@ async def network(docker: aiodocker.Docker, reuse_docker: bool) -> str:
     if exists:
         network = aiodocker.docker.DockerNetwork(docker, exists[0]["Id"])
         if not reuse_docker:
+            network_info = await network.show()
+            for container_id in network_info["Containers"]:
+                container = docker.containers.container(container_id)
+                await container.kill()
+                await container.delete()
             await network.delete()
             exists = False
 
