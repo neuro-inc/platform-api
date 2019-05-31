@@ -177,7 +177,6 @@ class JobsService:
         is_preemptible: bool = False,
     ) -> Tuple[Job, Status]:
 
-        await self._raise_for_run_time_quota(user)
         record = JobRecord.create(
             request=job_request,
             owner=user.name,
@@ -189,6 +188,14 @@ class JobsService:
         job_id = job_request.job_id
         try:
             async with self._jobs_storage.try_create_job(record) as record:
+                try:
+                    await self._raise_for_run_time_quota(user)
+                except QuotaException as error:
+                    record.status_history.current = JobStatusItem.create(
+                        JobStatus.FAILED, reason=f"error"
+                    )
+                    await self._jobs_storage.set_job(record)
+                    raise
                 async with self._get_cluster(record.cluster_name) as cluster:
                     job = Job(
                         storage_config=cluster.config.storage,

@@ -1,11 +1,11 @@
-import pytest
-
-from .test_api import ApiConfig
-from .auth import AuthConfig, create_token, CONTAINER_NAME as AUTH_CONTAINER_NAME
-
-from yarl import URL
 import aiodocker
+import pytest
+from yarl import URL
+
+from .auth import CONTAINER_NAME as AUTH_CONTAINER_NAME, AuthConfig, create_token
 from .conftest import NOTIFICATIONS_CONTAINER_NAME as CONTAINER_NAME
+from .test_api import ApiConfig
+
 
 IMAGE_NAME = "gcr.io/light-reality-205619/platformnotificationsapi:latest"
 

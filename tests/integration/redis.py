@@ -8,6 +8,7 @@ from async_timeout import timeout
 
 from platform_api.redis import RedisConfig, create_redis_client
 
+
 IMAGE_NAME = "redis:4"
 CONTAINER_NAME = "redis"
 

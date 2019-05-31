@@ -1,23 +1,26 @@
-import pytest
-import aiodocker
-from pathlib import Path
-from .test_api import api, ApiConfig
 import asyncio
-from typing import List, Any
+import hashlib
+from pathlib import Path
+from typing import Any, List
+
+import aiodocker
+import pytest
 from aiodocker.containers import DockerContainer
 from yarl import URL
-import hashlib
+
+from .test_api import ApiConfig, api
+
 
 IMAGE_ASSET = Path(__file__).parent / "assets/proxy.tar"
 IMAGE_NAME = "proxy:latest"
 
 sha1sum = hashlib.sha1()
-with open(IMAGE_ASSET, 'rb') as source:
-  block = source.read(2**16)
-  while len(block) != 0:
-    sha1sum.update(block)
-    block = source.read(2**16)
-IMAGE_NAME = 'proxy:' + sha1sum.hexdigest()
+with open(IMAGE_ASSET, "rb") as source:
+    block = source.read(2 ** 16)
+    while len(block) != 0:
+        sha1sum.update(block)
+        block = source.read(2 ** 16)
+IMAGE_NAME = "proxy:" + sha1sum.hexdigest()
 
 SSH_KEY_ASSET = Path(__file__).parent / "assets/root_rsa"
 CONTAINER_NAME = "proxy"
@@ -83,7 +86,8 @@ async def forwarded_api(
         "-R",
         f"0.0.0.0:{FORWARDED_API_PORT}:{api.host}:{api.port}",
         "-i",
-        f"{SSH_KEY_ASSET}",        "-o",
+        f"{SSH_KEY_ASSET}",
+        "-o",
         "StrictHostKeyChecking=no",
         "-o",
         f"UserKnownHostsFile={tmp_path / 'known_hosts'}",
@@ -92,7 +96,7 @@ async def forwarded_api(
         "1h",
     ]
     process = await asyncio.create_subprocess_exec(*cmd)
-    await asyncio.sleep(5) # TODO Remove
+    await asyncio.sleep(5)  # TODO Remove
     yield URL(f"http://{CONTAINER_NAME}:{FORWARDED_API_PORT}")
     try:
         process.kill()

@@ -27,6 +27,7 @@ from platform_api.orchestrator.job import AggregatedRunTime
 from platform_api.user import User
 from tests.conftest import random_str
 
+
 IMAGE_NAME = "gcr.io/light-reality-205619/platformauthapi:latest"
 CONTAINER_NAME = "auth_server"
 
