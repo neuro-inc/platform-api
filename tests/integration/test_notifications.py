@@ -1,2 +1,4 @@
+import asyncio
 async def test_one(notifications_server):
-    pass
+    while True:
+        await asyncio.sleep(1)

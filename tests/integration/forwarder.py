@@ -11,7 +11,7 @@ IMAGE_NAME = "proxy:latest"
 IMAGE_ASSET = Path(__file__).parent / "assets/proxy.tar"
 SSH_KEY_ASSET = Path(__file__).parent / "assets/root_rsa"
 CONTAINER_NAME = "proxy"
-FORWARDED_API_PORT = 80
+FORWARDED_API_PORT = 8080
 
 
 @pytest.fixture(scope="session")
@@ -49,7 +49,9 @@ async def forwarder_container(
         name=CONTAINER_NAME, config=container_config
     )
     await container.start()
+
     yield container
+
     await container.kill()
     await container.delete(force=True)
 
@@ -69,7 +71,7 @@ async def forwarded_api(
         "-p",
         port_number,
         "-R",
-        f"{api.port}:0.0.0.0:8080",
+        f"{api.port}:0.0.0.0:{FORWARDED_API_PORT}",
         "-i",
         f"{SSH_KEY_ASSET}",
         "-o",
@@ -81,7 +83,7 @@ async def forwarded_api(
         "1h",
     ]
     process = await asyncio.create_subprocess_exec(*cmd)
-
+    await asyncio.sleep(5) # TODO Remove
     yield URL(f"http://{CONTAINER_NAME}:{FORWARDED_API_PORT}")
     try:
         process.kill()

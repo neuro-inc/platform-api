@@ -43,11 +43,5 @@ async def network(docker: aiodocker.Docker, reuse_docker: bool) -> str:
         network = await docker.networks.create(network_config)
 
     yield NETWORK_NAME
-    #
-    # filtered = list(filter(lambda n: n["Name"] == NETWORK_NAME, networks))
-    # if filtered:
-    #     network = aiodocker.docker.DockerNetwork(filtered.pop())
-    # else:
-    #
-    # yield network["Name"]
+
     await network.delete()
