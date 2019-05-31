@@ -368,7 +368,7 @@ def jobs_config() -> JobsConfig:
 
 @pytest.fixture
 def notifications_config() -> NotificationsConfig:
-    return NotificationsConfig(url=URL(f"http://{NOTIFICATIONS_CONTAINER_NAME}:8080"))
+    return NotificationsConfig(url=URL(f"http://0.0.0.0:9000"))
 
 
 @pytest.fixture

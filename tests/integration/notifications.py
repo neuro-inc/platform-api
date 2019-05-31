@@ -2,7 +2,7 @@ import aiodocker
 import pytest
 from yarl import URL
 
-from .auth import CONTAINER_NAME as AUTH_CONTAINER_NAME, AuthConfig, create_token
+from .auth import CONTAINER_NAME as AUTH_CONTAINER_NAME, create_token
 from .conftest import NOTIFICATIONS_CONTAINER_NAME as CONTAINER_NAME
 from .test_api import ApiConfig, api_with_oauth
 
@@ -15,9 +15,9 @@ async def notifications_server(
     docker: aiodocker.Docker,
     reuse_docker: bool,
     api_with_oauth: ApiConfig,
-    auth_config: AuthConfig,
     forwarded_api: URL,
     network: str,
+    forwarded_notifications_server: URL,
 ) -> None:
     container_config = {
         "Image": IMAGE_NAME,

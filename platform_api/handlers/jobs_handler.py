@@ -260,7 +260,7 @@ class JobsHandler:
             job, _ = await self._jobs_service.create_job(
                 job_request, user=user, job_name=name, is_preemptible=is_preemptible
             )
-        except:
+        except QuotaException:
             notification = JobCannotStartQuotaReached(job_request.job_id)
             await self._app["notifications"].notify(notification)
             raise

@@ -69,20 +69,25 @@ async def forwarder_container(
     await container.delete(force=True)
 
 
+@pytest.fixture(scope="session")
+async def forwarder_ssh_port(forwarder_container: DockerContainer) -> int:
+    port_info: List[Any] = await forwarder_container.port(22)
+    port_number = port_info.pop()["HostPort"]
+    return port_number
+
+
 @pytest.fixture
 async def forwarded_api(
-    api_with_oauth: ApiConfig, forwarder_container: DockerContainer, tmp_path
+    api_with_oauth: ApiConfig, forwarder_ssh_port: int, tmp_path
 ) -> URL:
     """
     ssh -p 32801 -R 8080:localhost:2080 root@localhost -i root_rsa  -o "StrictHostKeyChecking=no" sleep 1h
     """
-    port_info: List[Any] = await forwarder_container.port(22)
-    port_number = port_info.pop()["HostPort"]
 
     cmd = [
         "ssh",
         "-p",
-        port_number,
+        forwarder_ssh_port,
         "-R",
         f"0.0.0.0:{FORWARDED_API_PORT}:{api_with_oauth.host}:{api_with_oauth.port}",
         "-i",
@@ -98,6 +103,34 @@ async def forwarded_api(
     process = await asyncio.create_subprocess_exec(*cmd)
     await asyncio.sleep(1)  # TODO Remove
     yield URL(f"http://{CONTAINER_NAME}:{FORWARDED_API_PORT}")
+    try:
+        process.kill()
+    except ProcessLookupError:
+        pass
+
+
+@pytest.fixture
+async def forwarded_notifications_server(forwarder_ssh_port: int, tmp_path) -> URL:
+
+    cmd = [
+        "ssh",
+        "-p",
+        forwarder_ssh_port,
+        "-L",
+        f"0.0.0.0:9000:notifications_server:8080",
+        "-i",
+        f"{SSH_KEY_ASSET}",
+        "-o",
+        "StrictHostKeyChecking=no",
+        "-o",
+        f"UserKnownHostsFile={tmp_path / 'known_hosts'}",
+        "root@localhost",
+        "sleep",
+        "1h",
+    ]
+    process = await asyncio.create_subprocess_exec(*cmd)
+    await asyncio.sleep(1)  # TODO Remove
+    yield URL(f"http://0.0.0.0:9000")
     try:
         process.kill()
     except ProcessLookupError:
