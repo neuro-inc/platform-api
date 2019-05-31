@@ -87,7 +87,7 @@ function k8s::setup_ingress {
     sudo -E minikube addons enable ingress
     # NOTE: minikube --vm-driver=none --kubernetes-version=v1.10.0 stopped
     # launching the ingress services for some unknown reason!
-    find /etc/kubernetes/addons/ -name ingress* | xargs -L 1 sudo -E kubectl -n kube-sydockstem apply -f
+    find /etc/kubernetes/addons/ -name ingress* | xargs -L 1 sudo -E kubectl -n kube-system apply -f
     find /etc/kubernetes/addons/ -name kube-dns* | xargs -L 1 sudo -E kubectl -n kube-system apply -f
     kubectl create -f tests/k8s/platformjobsingress.yml --namespace=platformapi-tests
 }
