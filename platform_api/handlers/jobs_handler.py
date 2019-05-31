@@ -2,7 +2,17 @@ import asyncio
 import logging
 from dataclasses import dataclass, replace
 from pathlib import PurePath
-from typing import Any, Dict, List, Optional, Sequence, Set
+from typing import (
+    Any,
+    AsyncIterator,
+    Dict,
+    Iterator,
+    List,
+    Optional,
+    Sequence,
+    Set,
+    Tuple,
+)
 
 import aiohttp.web
 import trafaret as t
@@ -25,6 +35,7 @@ from platform_api.orchestrator.jobs_service import JobsService
 from platform_api.orchestrator.jobs_storage import JobFilter
 from platform_api.resource import GPUModel
 from platform_api.user import User, authorized_user, untrusted_user
+from platform_api.utils.template_parse import create_template_parser
 
 from .job_request_builder import ContainerBuilder
 from .validators import (
@@ -201,6 +212,11 @@ class JobsHandler:
         self._app = app
         self._config = config
 
+        self._named_jobs_domain_name_parser = create_template_parser(
+            config.orchestrator.named_jobs_domain_name_template
+        )
+        self._job_name_validator = create_job_name_validator()
+        self._user_name_validator = create_user_name_validator()
         self._job_filter_factory = JobFilterFactory()
         self._job_response_validator = create_job_response_validator()
         self._bulk_jobs_response_validator = t.Dict(
@@ -293,9 +309,24 @@ class JobsHandler:
         jobs: List[Job] = []
 
         try:
+            filters: List[JobFilter]
+            hostname = request.query.get("hostname")
+            if hostname is not None:
+                if (
+                    "name" in request.query
+                    or "owner" in request.query
+                    or "status" in request.query
+                ):
+                    raise ValueError("Invalid request")
+                vars = self._named_jobs_domain_name_parser(hostname)
+                job_name = self._job_name_validator.check(vars["job_name"])
+                job_owner = self._user_name_validator.check(vars["job_owner"])
+                filter = JobFilter(owners={job_owner}, name=job_name)
+            else:
+                filter = self._job_filter_factory.create_from_query(request.query)
+
             bulk_job_filter = BulkJobFilterBuilder(
-                query_filter=self._job_filter_factory.create_from_query(request.query),
-                access_tree=tree,
+                query_filter=filter, access_tree=tree
             ).build()
 
             if bulk_job_filter.bulk_filter:
@@ -326,6 +357,14 @@ class JobsHandler:
         return aiohttp.web.json_response(
             data=response_payload, status=aiohttp.web.HTTPOk.status_code
         )
+
+    def _iter_job_name_owner(self, job_name_owner: str) -> Iterator[Tuple[str, str]]:
+        i = 0
+        while True:
+            i = job_name_owner.find(".", i) + 1
+            if i <= 0:
+                break
+            yield job_name_owner[: i - 1], job_name_owner[i:]
 
     async def handle_delete(
         self, request: aiohttp.web.Request
@@ -534,5 +573,6 @@ class BulkJobFilterBuilder:
         # `self._query_filter.owners`.
         # if `self._owners_shared_all` is empty, we still want to try to limit
         # the scope to the owners passed in the query, otherwise pull all.
-        owners = set(self._owners_shared_all or self._query_filter.owners)
-        return replace(self._query_filter, owners=owners)
+        if not self._owners_shared_all:
+            return self._query_filter
+        return replace(self._query_filter, owners=self._owners_shared_all)

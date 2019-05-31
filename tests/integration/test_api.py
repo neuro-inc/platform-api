@@ -1289,6 +1289,63 @@ class TestJobs:
         assert job_ids == {job_usr1_with_name_killed}
 
     @pytest.mark.asyncio
+    async def test_get_job_by_hostname(
+        self,
+        api: ApiConfig,
+        client: aiohttp.ClientSession,
+        regular_user_factory: Callable[[], Any],
+        jobs_client_factory: Callable[[_User], JobsClient],
+        job_request_factory: Callable[[], Dict[str, Any]],
+        run_job: Callable[..., Awaitable[None]],
+        share_job: Callable[[_User, _User, Any], Awaitable[None]],
+        create_job_request_no_name: Callable[[], Dict[str, Any]],
+        create_job_request_with_name: Callable[[str], Dict[str, Any]],
+    ) -> None:
+        job_name = "test-job-name"
+        job_req_no_name = create_job_request_no_name()
+        job_req_with_name = create_job_request_with_name(job_name)
+        usr1 = await regular_user_factory()
+        usr2 = await regular_user_factory()
+
+        jobs_client_usr1 = jobs_client_factory(usr1)
+
+        job_usr1_with_name = await run_job(usr1, job_req_with_name)
+        job_usr1_no_name = await run_job(usr1, job_req_no_name)
+
+        job_usr2_with_name = await run_job(usr2, job_req_with_name)
+        job_usr2_no_name = await run_job(usr2, job_req_no_name)
+
+        # usr2 shares their jobs with usr1
+        await share_job(usr2, usr1, job_usr2_with_name)
+        await share_job(usr2, usr1, job_usr2_no_name)
+
+        # filter: self owner
+        filters = [("owner", usr1.name)]
+        jobs = await jobs_client_usr1.get_all_jobs(filters)
+        print(jobs)
+        job_ids = {job["id"] for job in jobs}
+        assert job_ids == {job_usr1_with_name, job_usr1_no_name}
+
+        # filter: self owner + job name
+        filters = [("name", job_name), ("owner", usr1.name)]
+        jobs = await jobs_client_usr1.get_all_jobs(filters)
+        job_ids = {job["id"] for job in jobs}
+        assert job_ids == {job_usr1_with_name}
+
+        # filter: self owner + status
+        filters = [("owner", usr1.name), ("status", "running")]
+        jobs = await jobs_client_usr1.get_all_jobs(filters)
+        job_ids = {job["id"] for job in jobs}
+        assert job_ids == {job_usr1_with_name, job_usr1_no_name}
+
+        # filter: self owner + name + status
+        filters = [("owner", usr1.name), ("name", job_name), ("status", "succeeded")]
+        jobs = await jobs_client_usr1.get_all_jobs(filters)
+        job_ids = {job["id"] for job in jobs}
+        assert job_ids == {}
+        1 / 0
+
+    @pytest.mark.asyncio
     async def test_get_all_jobs_filter_by_job_name_another_owner_and_statuses(
         self,
         api: ApiConfig,
@@ -1635,6 +1692,65 @@ class TestJobs:
         # cleanup all:
         for job_id in jobs_ids:
             await jobs_client.delete_job(job_id=job_id)
+
+    @pytest.mark.asyncio
+    async def test_get_job_by_hostname(
+        self,
+        api: ApiConfig,
+        client: aiohttp.ClientSession,
+        regular_user_factory: Callable[[], Any],
+        jobs_client_factory: Callable[[_User], JobsClient],
+        run_job: Callable[..., Awaitable[None]],
+        share_job: Callable[[_User, _User, Any], Awaitable[None]],
+        create_job_request_with_name: Callable[[str], Dict[str, Any]],
+    ) -> None:
+        job_name = "test-job-name"
+        job_name2 = "test-job-name2"
+        usr1 = await regular_user_factory()
+        usr2 = await regular_user_factory()
+        jobs_client_usr1 = jobs_client_factory(usr1)
+
+        job1_usr1 = await run_job(usr1, create_job_request_with_name(job_name))
+        job2_usr1 = await run_job(usr1, create_job_request_with_name(job_name2))
+
+        job1_usr2 = await run_job(usr2, create_job_request_with_name(job_name))
+        job2_usr2 = await run_job(usr2, create_job_request_with_name(job_name2))
+
+        # usr2 shares a job with usr1
+        await share_job(usr2, usr1, job1_usr2)
+
+        # same owner
+        hostname = f"{job_name}-{usr1.name}.jobs.neu.ro"
+        jobs = await jobs_client_usr1.get_all_jobs({"hostname": hostname})
+        job_ids = {job["id"] for job in jobs}
+        assert job_ids == {job1_usr1}
+
+        # shared job of another owner
+        hostname = f"{job_name}-{usr2.name}.jobs.neu.ro"
+        jobs = await jobs_client_usr1.get_all_jobs({"hostname": hostname})
+        job_ids = {job["id"] for job in jobs}
+        assert job_ids == {job1_usr2}
+
+        # unshared job of another owner
+        # XXX Should raise exception?
+        hostname = f"{job_name2}-{usr2.name}.jobs.neu.ro"
+        with pytest.raises(ValueError):  # XXX What exception?
+            await jobs_client_usr1.get_all_jobs({"hostname": hostname})
+
+        # invalid requests
+        hostname = f"{job_name}-{usr1.name}.jobs.neu.ro"
+        with pytest.raises(ValueError):  # XXX What exception?
+            await jobs_client_usr1.get_all_jobs(
+                {"hostname": hostname, "name": job_name}
+            )
+        with pytest.raises(ValueError):  # XXX What exception?
+            await jobs_client_usr1.get_all_jobs(
+                {"hostname": hostname, "owner": usr1.name}
+            )
+        with pytest.raises(ValueError):  # XXX What exception?
+            await jobs_client_usr1.get_all_jobs(
+                {"hostname": hostname, "status": "pending"}
+            )
 
     @pytest.mark.asyncio
     async def test_delete_job(
