@@ -616,8 +616,8 @@ class PodDescriptor:
             "kind": "Pod",
             "apiVersion": "v1",
             "metadata": {"name": self.name, "labels": labels},
-            "automountServiceAccountToken": "false",
             "spec": {
+                "automountServiceAccountToken": False,
                 "containers": [container_payload],
                 "volumes": volumes,
                 "restartPolicy": "Never",
