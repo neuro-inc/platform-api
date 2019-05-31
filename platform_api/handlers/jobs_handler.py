@@ -2,17 +2,7 @@ import asyncio
 import logging
 from dataclasses import dataclass, replace
 from pathlib import PurePath
-from typing import (
-    Any,
-    AsyncIterator,
-    Dict,
-    Iterator,
-    List,
-    Optional,
-    Sequence,
-    Set,
-    Tuple,
-)
+from typing import Any, Dict, List, Optional, Sequence, Set
 
 import aiohttp.web
 import trafaret as t
@@ -357,14 +347,6 @@ class JobsHandler:
         return aiohttp.web.json_response(
             data=response_payload, status=aiohttp.web.HTTPOk.status_code
         )
-
-    def _iter_job_name_owner(self, job_name_owner: str) -> Iterator[Tuple[str, str]]:
-        i = 0
-        while True:
-            i = job_name_owner.find(".", i) + 1
-            if i <= 0:
-                break
-            yield job_name_owner[: i - 1], job_name_owner[i:]
 
     async def handle_delete(
         self, request: aiohttp.web.Request

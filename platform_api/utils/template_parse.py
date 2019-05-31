@@ -13,7 +13,7 @@ def create_template_parser(template: str) -> Callable[[str], Dict[str, str]]:
             chunks.append("(.*)")
     p = re.compile("".join(chunks))
 
-    def parse(s):
+    def parse(s: str) -> Dict[str, str]:
         m = p.fullmatch(s)
         if not m:
             raise ValueError(f"Value doesn't match template {template!r}")
