@@ -1678,7 +1678,7 @@ class TestJobs:
         hostname = f"{job_name2}-{usr2.name}.jobs.neu.ro"
         jobs = await jobs_client_usr1.get_all_jobs({"hostname": hostname})
         job_ids = {job["id"] for job in jobs}
-        assert job_ids == {}
+        assert job_ids == set()
 
         # invalid requests
         hostname = f"{job_name}-{usr1.name}.jobs.neu.ro"
