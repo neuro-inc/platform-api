@@ -1471,11 +1471,15 @@ class KubeClient:
         if not pod.node_name:
             return None
         url = self._generate_node_stats_summary_url(pod.node_name)
-        payload = await self._request(method="GET", url=url)
-        summary = StatsSummary(payload)
-        return summary.get_pod_container_stats(
-            self._namespace, pod_name, container_name
-        )
+        try:
+            payload = await self._request(method="GET", url=url)
+            summary = StatsSummary(payload)
+            return summary.get_pod_container_stats(
+                self._namespace, pod_name, container_name
+            )
+        except Exception as e:
+            logger.info("Failed to parse response", exc_info=True)
+            return None
 
 
 @dataclass(frozen=True)

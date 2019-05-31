@@ -1,8 +1,12 @@
 import asyncio
 import io
+import json
+import socket
 import time
 import uuid
+from http.server import HTTPServer, SimpleHTTPRequestHandler
 from pathlib import PurePath
+from threading import Thread
 from typing import (
     Any,
     AsyncIterator,
@@ -17,6 +21,7 @@ from unittest import mock
 
 import aiohttp
 import pytest
+import requests
 from async_timeout import timeout
 from elasticsearch import AuthenticationException
 from yarl import URL
@@ -1279,6 +1284,65 @@ class TestKubeClient:
         pod_status = await kube_client.get_pod_status(pod.name)
 
         assert pod_status.container_status.exit_code != 0
+
+    @pytest.mark.asyncio
+    async def test_get_pod_container_stats_error_json_response_parsing(self,) -> None:
+        mock_http_server = MockHTTPServer()
+        client = KubeClient(
+            base_url=f"http://{mock_http_server.host}:{mock_http_server.port}",
+            namespace="mock",
+        )
+        try:
+            await client.init()
+            stats = await client.get_pod_container_stats("whatever", "whenever")
+            assert stats is None
+        finally:
+            await client.close()
+
+
+class MockHTTPServer:
+    def __init__(self) -> None:
+        self.host = "localhost"
+        self.port = self._find_available_port()
+        self._mock_server = HTTPServer((self.host, self.port), MockServerRequestHandler)
+        self._mock_server_thread = Thread(target=self._mock_server.serve_forever)
+        self._mock_server_thread.setDaemon(True)
+        self._mock_server_thread.start()
+
+    def _find_available_port(self) -> int:
+        s = socket.socket(socket.AF_INET, type=socket.SOCK_STREAM)
+        s.bind((self.host, 0))
+        address, port = s.getsockname()
+        s.close()
+        return port
+
+
+class MockServerRequestHandler(SimpleHTTPRequestHandler):
+    def do_GET(self) -> None:
+        if self.path == "/api/v1/namespaces/mock/pods/whatever":
+            self.send_response(requests.codes.ok)
+            self.send_header("Content-Type", "application/json; charset=utf-8")
+            self.end_headers()
+
+            payload = {
+                "kind": "Pod",
+                "metadata": {"name": "testname"},
+                "spec": {
+                    "containers": [{"name": "testname", "image": "testimage"}],
+                    "nodeName": "whatever",
+                },
+                "status": {"phase": "Running"},
+            }
+
+            self.wfile.write(json.dumps(payload).encode("utf-8"))
+        elif self.path == "/api/v1/nodes/whatever:10255/proxy/stats/summary":
+            self.send_response(requests.codes.ok)
+            self.send_header("Content-Type", "text/plain")
+            self.end_headers()
+        else:
+            self.send_response(requests.codes.not_found)
+            self.end_headers()
+        return
 
 
 class TestLogReader:
