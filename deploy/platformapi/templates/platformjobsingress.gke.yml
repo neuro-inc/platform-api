@@ -10,8 +10,8 @@ metadata:
         - "500-600"
         backend: error-pages
         query: /
-automountServiceAccountToken: false
 spec:
+  automountServiceAccountToken: false
   rules:
   - host: error-pages
     http:

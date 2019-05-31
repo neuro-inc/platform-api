@@ -2,8 +2,8 @@ apiVersion: extensions/v1beta1
 kind: Deployment
 metadata:
   name: platformingressfallback
-automountServiceAccountToken: false
 spec:
+  automountServiceAccountToken: false
   replicas: 1
   selector:
     matchLabels:

@@ -115,9 +115,9 @@ class TestPodDescriptor:
         assert pod.to_primitive() == {
             "kind": "Pod",
             "apiVersion": "v1",
-            "automountServiceAccountToken": "false",
             "metadata": {"name": "testname", "labels": {"job": "testname"}},
             "spec": {
+                "automountServiceAccountToken": False,
                 "containers": [
                     {
                         "name": "testname",
@@ -160,12 +160,12 @@ class TestPodDescriptor:
         assert pod.to_primitive() == {
             "kind": "Pod",
             "apiVersion": "v1",
-            "automountServiceAccountToken": "false",
             "metadata": {
                 "name": "testname",
                 "labels": {"job": "testname", "testlabel": "testvalue"},
             },
             "spec": {
+                "automountServiceAccountToken": False,
                 "containers": [
                     {
                         "name": "testname",
@@ -219,8 +219,8 @@ class TestPodDescriptor:
             "kind": "Pod",
             "apiVersion": "v1",
             "metadata": {"name": "testname", "labels": {"job": "testname"}},
-            "automountServiceAccountToken": "false",
             "spec": {
+                "automountServiceAccountToken": False,
                 "containers": [
                     {
                         "name": "testname",
@@ -265,8 +265,8 @@ class TestPodDescriptor:
             "kind": "Pod",
             "apiVersion": "v1",
             "metadata": {"name": "testname", "labels": {"job": "testname"}},
-            "automountServiceAccountToken": "false",
             "spec": {
+                "automountServiceAccountToken": False,
                 "containers": [
                     {
                         "name": "testname",
@@ -309,8 +309,8 @@ class TestPodDescriptor:
             "kind": "Pod",
             "apiVersion": "v1",
             "metadata": {"name": "testname", "labels": {"job": "testname"}},
-            "automountServiceAccountToken": "false",
             "spec": {
+                "automountServiceAccountToken": False,
                 "containers": [
                     {
                         "name": "testname",
@@ -356,8 +356,8 @@ class TestPodDescriptor:
             "kind": "Pod",
             "apiVersion": "v1",
             "metadata": {"name": "testname", "labels": {"job": "testname"}},
-            "automountServiceAccountToken": "false",
             "spec": {
+                "automountServiceAccountToken": False,
                 "containers": [
                     {
                         "name": "testname",

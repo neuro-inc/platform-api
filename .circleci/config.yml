@@ -91,9 +91,6 @@ jobs:
             sudo mount --make-rshared /var/lib/docker
 
             make start_k8s
-            kubectl version
-            kubectl cluster-info
-            kubectl get serviceAccounts
 
 # below rule cleans out hiredis, this is due to circle ci issue, to be resolved by moving to dockerized test execution
       - run:
