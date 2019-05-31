@@ -27,6 +27,9 @@ from platform_api.orchestrator.job import AggregatedRunTime
 from platform_api.user import User
 from tests.conftest import random_str
 
+IMAGE_NAME = "gcr.io/light-reality-205619/platformauthapi:latest"
+CONTAINER_NAME = "auth_server"
+
 
 @pytest.fixture(scope="session")
 def auth_server_image_name() -> str:
@@ -36,21 +39,26 @@ def auth_server_image_name() -> str:
 
 @pytest.fixture(scope="session")
 async def auth_server(
-    docker: aiodocker.Docker, reuse_docker: bool, auth_server_image_name: str
+    docker: aiodocker.Docker,
+    reuse_docker: bool,
+    auth_server_image_name: str,
+    network: str,
 ) -> AsyncIterator[AuthConfig]:
-    image_name = "gcr.io/light-reality-205619/platformauthapi:latest"
-    container_name = "auth_server"
+
     container_config = {
-        "Image": image_name,
+        "Image": IMAGE_NAME,
         "AttachStdout": False,
         "AttachStderr": False,
         "HostConfig": {"PublishAllPorts": True},
         "Env": ["NP_JWT_SECRET=secret"],
+        "NetworkingConfig": {
+            "EndpointsConfig": {network: {"Aliases": [CONTAINER_NAME]}}
+        },
     }
 
     if reuse_docker:
         try:
-            container = await docker.containers.get(container_name)
+            container = await docker.containers.get(CONTAINER_NAME)
             if container["State"]["Running"]:
                 auth_config = await create_auth_config(container)
                 await wait_for_auth_server(auth_config)
@@ -60,12 +68,12 @@ async def auth_server(
             pass
 
     try:
-        await docker.images.inspect(image_name)
+        await docker.images.inspect(IMAGE_NAME)
     except aiodocker.exceptions.DockerError:
-        await docker.images.pull(image_name)
+        await docker.images.pull(IMAGE_NAME)
 
     container = await docker.containers.create_or_replace(
-        name=container_name, config=container_config
+        name=CONTAINER_NAME, config=container_config
     )
     await container.start()
 

@@ -8,23 +8,27 @@ from async_timeout import timeout
 
 from platform_api.redis import RedisConfig, create_redis_client
 
+IMAGE_NAME = "redis:4"
+CONTAINER_NAME = "redis"
+
 
 @pytest.fixture(scope="session")
 async def _redis_server(
-    docker: aiodocker.Docker, reuse_docker: bool
+    docker: aiodocker.Docker, reuse_docker: bool, network: str
 ) -> AsyncIterator[RedisConfig]:
-    image_name = "redis:4"
-    container_name = "redis"
     container_config = {
-        "Image": image_name,
+        "Image": IMAGE_NAME,
         "AttachStdout": False,
         "AttachStderr": False,
         "HostConfig": {"PublishAllPorts": True},
+        "NetworkingConfig": {
+            "EndpointsConfig": {network: {"Aliases": [CONTAINER_NAME]}}
+        },
     }
 
     if reuse_docker:
         try:
-            container = await docker.containers.get(container_name)
+            container = await docker.containers.get(CONTAINER_NAME)
             if container["State"]["Running"]:
                 redis_config = await create_redis_config(container)
                 await wait_for_redis_server(redis_config)
@@ -34,12 +38,12 @@ async def _redis_server(
             pass
 
     try:
-        await docker.images.inspect(image_name)
+        await docker.images.inspect(IMAGE_NAME)
     except aiodocker.exceptions.DockerError:
-        await docker.images.pull(image_name)
+        await docker.images.pull(IMAGE_NAME)
 
     container = await docker.containers.create_or_replace(
-        name=container_name, config=container_config
+        name=CONTAINER_NAME, config=container_config
     )
     await container.start()
 

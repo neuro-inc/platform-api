@@ -38,11 +38,14 @@ from platform_api.redis import RedisConfig
 from platform_api.resource import GPUModel, ResourcePoolType
 
 
+NOTIFICATIONS_CONTAINER_NAME = "notifications_server"
 pytest_plugins = [
     "tests.integration.docker",
     "tests.integration.redis",
     "tests.integration.auth",
     "tests.integration.elasticsearch",
+    "tests.integration.forwarder",
+    "tests.integration.notifications",
 ]
 
 
@@ -365,7 +368,7 @@ def jobs_config() -> JobsConfig:
 
 @pytest.fixture
 def notifications_config() -> NotificationsConfig:
-    return NotificationsConfig(url=URL("http://localhost:1234"))
+    return NotificationsConfig(url=URL(f"http://{NOTIFICATIONS_CONTAINER_NAME}:8080"))
 
 
 @pytest.fixture
