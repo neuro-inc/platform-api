@@ -27,7 +27,7 @@ from typing import (
 from urllib.parse import urlsplit
 
 import aiohttp
-from aiohttp import WSMsgType
+from aiohttp import WSMsgType, ContentTypeError
 from async_generator import asynccontextmanager
 from async_timeout import timeout
 from multidict import MultiDict
@@ -1477,7 +1477,7 @@ class KubeClient:
             return summary.get_pod_container_stats(
                 self._namespace, pod_name, container_name
             )
-        except Exception as e:
+        except ContentTypeError as e:
             logger.info("Failed to parse response", exc_info=True)
             return None
 

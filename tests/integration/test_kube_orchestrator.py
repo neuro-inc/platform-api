@@ -16,10 +16,12 @@ from typing import (
     Iterator,
     Optional,
     Sequence,
-)
+    AsyncGenerator)
 from unittest import mock
 
 import aiohttp
+from aiohttp.pytest_plugin import aiohttp_server
+from aiohttp.test_utils import TestServer as AioHTTPTestServer
 import pytest
 import requests
 from async_timeout import timeout
@@ -1246,6 +1248,7 @@ class TestKubeClient:
         kube_client: KubeClient,
         kube_orchestrator: KubeOrchestrator,
         delete_pod_later: Callable[[PodDescriptor], Awaitable[None]],
+        mock_kubernetes_server: AioHTTPTestServer,
     ) -> None:
         container = Container(
             image="ubuntu",
@@ -1286,10 +1289,13 @@ class TestKubeClient:
         assert pod_status.container_status.exit_code != 0
 
     @pytest.mark.asyncio
-    async def test_get_pod_container_stats_error_json_response_parsing(self,) -> None:
-        mock_http_server = MockHTTPServer()
+    async def test_get_pod_container_stats_error_json_response_parsing(self,
+                                                                       mock_kubernetes_server: AioHTTPTestServer) -> None:
+        app = aiohttp.web.Application()
+        server: AioHTTPTestServer = await mock_kubernetes_server(app)
+
         client = KubeClient(
-            base_url=f"http://{mock_http_server.host}:{mock_http_server.port}",
+            base_url=str(server.make_url("")),
             namespace="mock",
         )
         try:
@@ -1300,21 +1306,31 @@ class TestKubeClient:
             await client.close()
 
 
-class MockHTTPServer:
-    def __init__(self) -> None:
-        self.host = "localhost"
-        self.port = self._find_available_port()
-        self._mock_server = HTTPServer((self.host, self.port), MockServerRequestHandler)
-        self._mock_server_thread = Thread(target=self._mock_server.serve_forever)
-        self._mock_server_thread.setDaemon(True)
-        self._mock_server_thread.start()
+@pytest.fixture
+def event_loop(loop: asyncio.AbstractEventLoop) -> asyncio.AbstractEventLoop:
+    """
+    This fixture mitigates the compatibility issues between
+    pytest-asyncio and pytest-aiohttp.
+    """
+    return loop
 
-    def _find_available_port(self) -> int:
-        s = socket.socket(socket.AF_INET, type=socket.SOCK_STREAM)
-        s.bind((self.host, 0))
-        address, port = s.getsockname()
-        s.close()
-        return port
+@pytest.fixture
+async def mock_kubernetes_server(aiohttp_client: Any) -> AsyncGenerator[AioHTTPTestServer, None]:
+    async def _get_pod(request: aiohttp.web.Request) -> aiohttp.web.Response:
+        return aiohttp.web.HTTPOk()
+
+    async def _stats_summary(request: aiohttp.web.Request) -> aiohttp.web.Response:
+        return aiohttp.web.HTTPOk()
+
+    app = aiohttp.web.Application()
+    app.add_routes(
+        [aiohttp.web.get("/api/v1/namespaces/mock/pods/whatever", _get_pod)]
+    )
+    app.add_routes(
+        [aiohttp.web.get("/api/v1/nodes/whatever:10255/proxy/stats/summary", _stats_summary)]
+    )
+    server = await aiohttp_server(app)
+    yield server
 
 
 class MockServerRequestHandler(SimpleHTTPRequestHandler):
