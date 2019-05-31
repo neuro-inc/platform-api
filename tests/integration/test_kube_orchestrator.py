@@ -1260,14 +1260,11 @@ class TestKubeClient:
     @pytest.mark.asyncio
     async def test_service_account_not_available(
         self,
-        kube_config: KubeConfig,
         kube_client: KubeClient,
         kube_orchestrator: KubeOrchestrator,
         delete_pod_later: Callable[[PodDescriptor], Awaitable[None]],
     ) -> None:
         container = Container(
-            # image="ubuntu",
-            # command="stat /var/run/secrets/kubernetes.io/serviceaccount",
             image="lachlanevenson/k8s-kubectl:v1.10.3",
             command="get pods",
             resources=ContainerResources(cpu=0.2, memory_mb=128),
