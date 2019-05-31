@@ -111,6 +111,14 @@ class JobsClient:
         self._client = client
         self._headers = headers
 
+    async def bad_request(self, url: str, params: Any = None) -> Dict[str, Any]:
+        async with self._client.get(
+            url, headers=self._headers, params=params
+        ) as response:
+            response_text = await response.text()
+            assert response.status == HTTPBadRequest.status_code, response_text
+            return await response.json()
+
     async def get_all_jobs(self, params: Any = None) -> List[Dict[str, Any]]:
         url = self._api_config.jobs_base_url
         async with self._client.get(
@@ -1682,18 +1690,19 @@ class TestJobs:
 
         # invalid requests
         hostname = f"{job_name}-{usr1.name}.jobs.neu.ro"
-        with pytest.raises(ValueError):  # XXX What exception?
-            await jobs_client_usr1.get_all_jobs(
-                {"hostname": hostname, "name": job_name}
-            )
-        with pytest.raises(ValueError):  # XXX What exception?
-            await jobs_client_usr1.get_all_jobs(
-                {"hostname": hostname, "owner": usr1.name}
-            )
-        with pytest.raises(ValueError):  # XXX What exception?
-            await jobs_client_usr1.get_all_jobs(
-                {"hostname": hostname, "status": "pending"}
-            )
+        url = jobs_client_usr1._api_config.jobs_base_url
+        result = await jobs_client_usr1.bad_request(
+            url, {"hostname": hostname, "name": job_name}
+        )
+        assert result["error"] == "Invalid request"
+        result = await jobs_client_usr1.bad_request(
+            url, {"hostname": hostname, "owner": usr1.name}
+        )
+        assert result["error"] == "Invalid request"
+        result = await jobs_client_usr1.bad_request(
+            url, {"hostname": hostname, "status": "pending"}
+        )
+        assert result["error"] == "Invalid request"
 
     @pytest.mark.asyncio
     async def test_delete_job(
