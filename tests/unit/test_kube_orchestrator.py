@@ -117,6 +117,7 @@ class TestPodDescriptor:
             "apiVersion": "v1",
             "metadata": {"name": "testname", "labels": {"job": "testname"}},
             "spec": {
+                "automountServiceAccountToken": False,
                 "containers": [
                     {
                         "name": "testname",
@@ -164,6 +165,7 @@ class TestPodDescriptor:
                 "labels": {"job": "testname", "testlabel": "testvalue"},
             },
             "spec": {
+                "automountServiceAccountToken": False,
                 "containers": [
                     {
                         "name": "testname",
@@ -218,6 +220,7 @@ class TestPodDescriptor:
             "apiVersion": "v1",
             "metadata": {"name": "testname", "labels": {"job": "testname"}},
             "spec": {
+                "automountServiceAccountToken": False,
                 "containers": [
                     {
                         "name": "testname",
@@ -263,6 +266,7 @@ class TestPodDescriptor:
             "apiVersion": "v1",
             "metadata": {"name": "testname", "labels": {"job": "testname"}},
             "spec": {
+                "automountServiceAccountToken": False,
                 "containers": [
                     {
                         "name": "testname",
@@ -306,6 +310,7 @@ class TestPodDescriptor:
             "apiVersion": "v1",
             "metadata": {"name": "testname", "labels": {"job": "testname"}},
             "spec": {
+                "automountServiceAccountToken": False,
                 "containers": [
                     {
                         "name": "testname",
@@ -352,6 +357,7 @@ class TestPodDescriptor:
             "apiVersion": "v1",
             "metadata": {"name": "testname", "labels": {"job": "testname"}},
             "spec": {
+                "automountServiceAccountToken": False,
                 "containers": [
                     {
                         "name": "testname",

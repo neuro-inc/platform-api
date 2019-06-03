@@ -617,6 +617,7 @@ class PodDescriptor:
             "apiVersion": "v1",
             "metadata": {"name": self.name, "labels": labels},
             "spec": {
+                "automountServiceAccountToken": False,
                 "containers": [container_payload],
                 "volumes": volumes,
                 "restartPolicy": "Never",
@@ -1341,6 +1342,21 @@ class KubeClient:
             while True:
                 pod_status = await self.get_pod_status(pod_name)
                 if not pod_status.container_status.is_waiting:
+                    return
+                await asyncio.sleep(interval_s)
+
+    async def wait_pod_is_terminated(
+        self, pod_name: str, timeout_s: float = 10.0 * 60, interval_s: float = 1.0
+    ) -> None:
+        """Wait until the pod transitions to the terminated state.
+
+        Raise JobError if there is no such pod.
+        Raise asyncio.TimeoutError if it takes too long for the pod.
+        """
+        async with timeout(timeout_s):
+            while True:
+                pod_status = await self.get_pod_status(pod_name)
+                if pod_status.container_status.is_terminated:
                     return
                 await asyncio.sleep(interval_s)
 
