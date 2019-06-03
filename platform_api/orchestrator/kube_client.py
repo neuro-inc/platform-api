@@ -27,7 +27,7 @@ from typing import (
 from urllib.parse import urlsplit
 
 import aiohttp
-from aiohttp import WSMsgType, ContentTypeError
+from aiohttp import ContentTypeError, WSMsgType
 from async_generator import asynccontextmanager
 from async_timeout import timeout
 from multidict import MultiDict

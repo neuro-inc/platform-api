@@ -1,12 +1,8 @@
 import asyncio
 import io
-import json
-import socket
 import time
 import uuid
-from http.server import HTTPServer, SimpleHTTPRequestHandler
 from pathlib import PurePath
-from threading import Thread
 from typing import (
     Any,
     AsyncIterator,
@@ -16,14 +12,12 @@ from typing import (
     Iterator,
     Optional,
     Sequence,
-    AsyncGenerator)
+)
 from unittest import mock
 
 import aiohttp
-from aiohttp.pytest_plugin import aiohttp_server, loop
-from aiohttp.test_utils import TestServer as AioHTTPTestServer, TestServer
 import pytest
-import requests
+from aiohttp import web
 from async_timeout import timeout
 from elasticsearch import AuthenticationException
 from yarl import URL
@@ -67,8 +61,9 @@ from platform_api.orchestrator.kube_orchestrator import (
 )
 from platform_api.orchestrator.logs import ElasticsearchLogReader, PodContainerLogReader
 from tests.conftest import random_str
+from tests.integration.test_api import ApiConfig
 
-from .conftest import MyKubeClient
+from .conftest import ApiRunner, MyKubeClient
 
 
 class MyJob(Job):
@@ -880,366 +875,366 @@ async def delete_pod_later(
 
 
 class TestKubeClient:
-    # @pytest.mark.asyncio
-    # async def test_wait_pod_is_running_not_found(self, kube_client: KubeClient) -> None:
-    #     with pytest.raises(JobNotFoundException):
-    #         await kube_client.wait_pod_is_running(pod_name="unknown")
-    #
-    # @pytest.mark.asyncio
-    # async def test_wait_pod_is_running_timed_out(
-    #     self,
-    #     kube_config: KubeConfig,
-    #     kube_client: KubeClient,
-    #     kube_orchestrator: KubeOrchestrator,
-    #     delete_pod_later: Callable[[PodDescriptor], Awaitable[None]],
-    # ) -> None:
-    #     container = Container(
-    #         image="ubuntu",
-    #         command="true",
-    #         resources=ContainerResources(cpu=0.1, memory_mb=128),
-    #     )
-    #     job_request = JobRequest.create(container)
-    #     pod = PodDescriptor.from_job_request(
-    #         kube_orchestrator.create_storage_volume(), job_request
-    #     )
-    #     await delete_pod_later(pod)
-    #     await kube_client.create_pod(pod)
-    #     with pytest.raises(asyncio.TimeoutError):
-    #         await kube_client.wait_pod_is_running(pod_name=pod.name, timeout_s=0.1)
-    #
-    # @pytest.mark.asyncio
-    # async def test_wait_pod_is_running(
-    #     self,
-    #     kube_config: KubeConfig,
-    #     kube_client: KubeClient,
-    #     kube_orchestrator: KubeOrchestrator,
-    #     delete_pod_later: Callable[[PodDescriptor], Awaitable[None]],
-    # ) -> None:
-    #     container = Container(
-    #         image="ubuntu",
-    #         command="true",
-    #         resources=ContainerResources(cpu=0.1, memory_mb=128),
-    #     )
-    #     job_request = JobRequest.create(container)
-    #     pod = PodDescriptor.from_job_request(
-    #         kube_orchestrator.create_storage_volume(), job_request
-    #     )
-    #     await delete_pod_later(pod)
-    #     await kube_client.create_pod(pod)
-    #     await kube_client.wait_pod_is_running(pod_name=pod.name, timeout_s=60.0)
-    #     pod_status = await kube_client.get_pod_status(pod.name)
-    #     assert pod_status.phase in ("Running", "Succeeded")
-    #
-    # @pytest.mark.asyncio
-    # async def test_create_log_stream_not_found(self, kube_client: KubeClient) -> None:
-    #     with pytest.raises(KubeClientException):
-    #         async with kube_client.create_pod_container_logs_stream(
-    #             pod_name="unknown", container_name="unknown"
-    #         ):
-    #             pass
-    #
-    # @pytest.mark.asyncio
-    # async def test_create_log_stream_creating(
-    #     self,
-    #     kube_config: KubeConfig,
-    #     kube_client: KubeClient,
-    #     kube_orchestrator: KubeOrchestrator,
-    #     delete_pod_later: Callable[[PodDescriptor], Awaitable[None]],
-    # ) -> None:
-    #     container = Container(
-    #         image="ubuntu",
-    #         command="true",
-    #         resources=ContainerResources(cpu=0.1, memory_mb=128),
-    #     )
-    #     job_request = JobRequest.create(container)
-    #     pod = PodDescriptor.from_job_request(
-    #         kube_orchestrator.create_storage_volume(), job_request
-    #     )
-    #     await delete_pod_later(pod)
-    #     await kube_client.create_pod(pod)
-    #
-    #     async with timeout(5.0):
-    #         while True:
-    #             try:
-    #                 stream_cm = kube_client.create_pod_container_logs_stream(
-    #                     pod_name=pod.name, container_name=pod.name
-    #                 )
-    #                 with pytest.raises(KubeClientException, match="ContainerCreating"):
-    #                     async with stream_cm:
-    #                         pass
-    #                 break
-    #             except AssertionError as exc:
-    #                 if "Pattern" not in str(exc):
-    #                     raise
-    #             await asyncio.sleep(0.1)
-    #
-    # @pytest.mark.asyncio
-    # async def test_create_log_stream(
-    #     self,
-    #     kube_config: KubeConfig,
-    #     kube_client: KubeClient,
-    #     kube_orchestrator: KubeOrchestrator,
-    #     delete_pod_later: Callable[[PodDescriptor], Awaitable[None]],
-    # ) -> None:
-    #     container = Container(
-    #         image="ubuntu",
-    #         command="true",
-    #         resources=ContainerResources(cpu=0.1, memory_mb=128),
-    #     )
-    #     job_request = JobRequest.create(container)
-    #     pod = PodDescriptor.from_job_request(
-    #         kube_orchestrator.create_storage_volume(), job_request
-    #     )
-    #     await delete_pod_later(pod)
-    #     await kube_client.create_pod(pod)
-    #     await kube_client.wait_pod_is_running(pod_name=pod.name, timeout_s=60.0)
-    #     stream_cm = kube_client.create_pod_container_logs_stream(
-    #         pod_name=pod.name, container_name=pod.name
-    #     )
-    #     async with stream_cm as stream:
-    #         payload = await stream.read()
-    #         assert payload == b""
-    #
-    # @pytest.mark.asyncio
-    # async def test_create_docker_secret_non_existent_namespace(
-    #     self, kube_config: KubeConfig, kube_client: KubeClient
-    # ) -> None:
-    #     name = str(uuid.uuid4())
-    #     docker_secret = DockerRegistrySecret(
-    #         name=name,
-    #         namespace=name,
-    #         username="testuser",
-    #         password="testpassword",
-    #         email="testuser@example.com",
-    #         registry_server="registry.example.com",
-    #     )
-    #
-    #     with pytest.raises(StatusException, match="NotFound"):
-    #         await kube_client.create_docker_secret(docker_secret)
-    #
-    # @pytest.mark.asyncio
-    # async def test_create_docker_secret_already_exists(
-    #     self, kube_config: KubeConfig, kube_client: KubeClient
-    # ) -> None:
-    #     name = str(uuid.uuid4())
-    #     docker_secret = DockerRegistrySecret(
-    #         name=name,
-    #         namespace=kube_config.namespace,
-    #         username="testuser",
-    #         password="testpassword",
-    #         email="testuser@example.com",
-    #         registry_server="registry.example.com",
-    #     )
-    #
-    #     try:
-    #         await kube_client.create_docker_secret(docker_secret)
-    #
-    #         with pytest.raises(StatusException, match="AlreadyExists"):
-    #             await kube_client.create_docker_secret(docker_secret)
-    #     finally:
-    #         await kube_client.delete_secret(name, kube_config.namespace)
-    #
-    # @pytest.mark.asyncio
-    # async def test_update_docker_secret_already_exists(
-    #     self, kube_config: KubeConfig, kube_client: KubeClient
-    # ) -> None:
-    #     name = str(uuid.uuid4())
-    #     docker_secret = DockerRegistrySecret(
-    #         name=name,
-    #         namespace=kube_config.namespace,
-    #         username="testuser",
-    #         password="testpassword",
-    #         email="testuser@example.com",
-    #         registry_server="registry.example.com",
-    #     )
-    #
-    #     try:
-    #         await kube_client.create_docker_secret(docker_secret)
-    #         await kube_client.update_docker_secret(docker_secret)
-    #     finally:
-    #         await kube_client.delete_secret(name, kube_config.namespace)
-    #
-    # @pytest.mark.asyncio
-    # async def test_update_docker_secret_non_existent(
-    #     self, kube_config: KubeConfig, kube_client: KubeClient
-    # ) -> None:
-    #     name = str(uuid.uuid4())
-    #     docker_secret = DockerRegistrySecret(
-    #         name=name,
-    #         namespace=kube_config.namespace,
-    #         username="testuser",
-    #         password="testpassword",
-    #         email="testuser@example.com",
-    #         registry_server="registry.example.com",
-    #     )
-    #
-    #     with pytest.raises(StatusException, match="NotFound"):
-    #         await kube_client.update_docker_secret(docker_secret)
-    #
-    # @pytest.mark.asyncio
-    # async def test_update_docker_secret_create_non_existent(
-    #     self, kube_config: KubeConfig, kube_client: KubeClient
-    # ) -> None:
-    #     name = str(uuid.uuid4())
-    #     docker_secret = DockerRegistrySecret(
-    #         name=name,
-    #         namespace=kube_config.namespace,
-    #         username="testuser",
-    #         password="testpassword",
-    #         email="testuser@example.com",
-    #         registry_server="registry.example.com",
-    #     )
-    #
-    #     await kube_client.update_docker_secret(docker_secret, create_non_existent=True)
-    #     await kube_client.update_docker_secret(docker_secret)
-    #
-    # @pytest.fixture
-    # async def delete_network_policy_later(
-    #     self, kube_client: KubeClient
-    # ) -> AsyncIterator[Callable[[str], Awaitable[None]]]:
-    #     names = []
-    #
-    #     async def _add_name(name: str) -> None:
-    #         names.append(name)
-    #
-    #     yield _add_name
-    #
-    #     for name in names:
-    #         try:
-    #             await kube_client.delete_network_policy(name)
-    #         except Exception:
-    #             pass
-    #
-    # @pytest.mark.asyncio
-    # async def test_create_default_network_policy(
-    #     self,
-    #     kube_config: KubeConfig,
-    #     kube_client: KubeClient,
-    #     delete_network_policy_later: Callable[[str], Awaitable[None]],
-    # ) -> None:
-    #     name = str(uuid.uuid4())
-    #     await delete_network_policy_later(name)
-    #     payload = await kube_client.create_default_network_policy(
-    #         name, {"testlabel": name}, namespace_name=kube_config.namespace
-    #     )
-    #     assert payload["metadata"]["name"] == name
-    #
-    # @pytest.mark.asyncio
-    # async def test_create_default_network_policy_twice(
-    #     self,
-    #     kube_config: KubeConfig,
-    #     kube_client: KubeClient,
-    #     delete_network_policy_later: Callable[[str], Awaitable[None]],
-    # ) -> None:
-    #     name = str(uuid.uuid4())
-    #     await delete_network_policy_later(name)
-    #     payload = await kube_client.create_default_network_policy(
-    #         name, {"testlabel": name}, namespace_name=kube_config.namespace
-    #     )
-    #     assert payload["metadata"]["name"] == name
-    #     with pytest.raises(AlreadyExistsException):
-    #         await kube_client.create_default_network_policy(
-    #             name, {"testlabel": name}, namespace_name=kube_config.namespace
-    #         )
-    #
-    # @pytest.mark.asyncio
-    # async def test_get_network_policy_not_found(
-    #     self, kube_config: KubeConfig, kube_client: KubeClient
-    # ) -> None:
-    #     name = str(uuid.uuid4())
-    #     with pytest.raises(StatusException, match="NotFound"):
-    #         await kube_client.get_network_policy(name)
-    #
-    # @pytest.mark.asyncio
-    # async def test_delete_network_policy_not_found(
-    #     self, kube_config: KubeConfig, kube_client: KubeClient
-    # ) -> None:
-    #     name = str(uuid.uuid4())
-    #     with pytest.raises(StatusException, match="NotFound"):
-    #         await kube_client.delete_network_policy(name)
-    #
-    # @pytest.mark.asyncio
-    # async def test_get_pod_events(
-    #     self,
-    #     kube_config: KubeConfig,
-    #     kube_client: MyKubeClient,
-    #     kube_orchestrator: KubeOrchestrator,
-    #     delete_pod_later: Callable[[PodDescriptor], Awaitable[None]],
-    # ) -> None:
-    #     container = Container(
-    #         image="ubuntu",
-    #         command="true",
-    #         resources=ContainerResources(cpu=0.1, memory_mb=128),
-    #     )
-    #     job_request = JobRequest.create(container)
-    #     pod = PodDescriptor.from_job_request(
-    #         kube_orchestrator.create_storage_volume(), job_request
-    #     )
-    #     await delete_pod_later(pod)
-    #     await kube_client.create_pod(pod)
-    #     await kube_client.wait_pod_is_terminated(pod.name)
-    #
-    #     events = await kube_client.get_pod_events(pod.name, kube_config.namespace)
-    #
-    #     assert events
-    #     for event in events:
-    #         involved_object = event.involved_object
-    #         assert involved_object["kind"] == "Pod"
-    #         assert involved_object["namespace"] == kube_config.namespace
-    #         assert involved_object["name"] == pod.name
-    #
-    # @pytest.mark.asyncio
-    # async def test_get_pod_events_empty(
-    #     self, kube_config: KubeConfig, kube_client: KubeClient
-    # ) -> None:
-    #     pod_name = str(uuid.uuid4())
-    #     events = await kube_client.get_pod_events(pod_name, kube_config.namespace)
-    #
-    #     assert not events
-    #
-    # @pytest.mark.asyncio
-    # async def test_get_pod_container_stats(
-    #     self,
-    #     kube_config: KubeConfig,
-    #     kube_client: KubeClient,
-    #     kube_orchestrator: KubeOrchestrator,
-    #     delete_pod_later: Callable[[PodDescriptor], Awaitable[None]],
-    # ) -> None:
-    #     command = 'bash -c "for i in {1..5}; do echo $i; sleep 1; done"'
-    #     container = Container(
-    #         image="ubuntu",
-    #         command=command,
-    #         resources=ContainerResources(cpu=0.1, memory_mb=128),
-    #     )
-    #     job_request = JobRequest.create(container)
-    #     pod = PodDescriptor.from_job_request(
-    #         kube_orchestrator.create_storage_volume(), job_request
-    #     )
-    #     await delete_pod_later(pod)
-    #     await kube_client.create_pod(pod)
-    #     await kube_client.wait_pod_is_running(pod_name=pod.name, timeout_s=60.0)
-    #
-    #     pod_metrics = []
-    #     while True:
-    #         stats = await kube_client.get_pod_container_stats(pod.name, pod.name)
-    #         if stats:
-    #             pod_metrics.append(stats)
-    #         else:
-    #             break
-    #         await asyncio.sleep(1)
-    #
-    #     assert pod_metrics
-    #     assert pod_metrics[0] == PodContainerStats(cpu=mock.ANY, memory=mock.ANY)
-    #     assert pod_metrics[0].cpu >= 0.0
-    #     assert pod_metrics[0].memory > 0.0
-    #
-    # @pytest.mark.asyncio
-    # async def test_get_pod_container_stats_no_pod(
-    #     self, kube_config: KubeConfig, kube_client: KubeClient
-    # ) -> None:
-    #     pod_name = str(uuid.uuid4())
-    #     with pytest.raises(JobNotFoundException):
-    #         await kube_client.get_pod_container_stats(pod_name, pod_name)
+    @pytest.mark.asyncio
+    async def test_wait_pod_is_running_not_found(self, kube_client: KubeClient) -> None:
+        with pytest.raises(JobNotFoundException):
+            await kube_client.wait_pod_is_running(pod_name="unknown")
+
+    @pytest.mark.asyncio
+    async def test_wait_pod_is_running_timed_out(
+        self,
+        kube_config: KubeConfig,
+        kube_client: KubeClient,
+        kube_orchestrator: KubeOrchestrator,
+        delete_pod_later: Callable[[PodDescriptor], Awaitable[None]],
+    ) -> None:
+        container = Container(
+            image="ubuntu",
+            command="true",
+            resources=ContainerResources(cpu=0.1, memory_mb=128),
+        )
+        job_request = JobRequest.create(container)
+        pod = PodDescriptor.from_job_request(
+            kube_orchestrator.create_storage_volume(), job_request
+        )
+        await delete_pod_later(pod)
+        await kube_client.create_pod(pod)
+        with pytest.raises(asyncio.TimeoutError):
+            await kube_client.wait_pod_is_running(pod_name=pod.name, timeout_s=0.1)
+
+    @pytest.mark.asyncio
+    async def test_wait_pod_is_running(
+        self,
+        kube_config: KubeConfig,
+        kube_client: KubeClient,
+        kube_orchestrator: KubeOrchestrator,
+        delete_pod_later: Callable[[PodDescriptor], Awaitable[None]],
+    ) -> None:
+        container = Container(
+            image="ubuntu",
+            command="true",
+            resources=ContainerResources(cpu=0.1, memory_mb=128),
+        )
+        job_request = JobRequest.create(container)
+        pod = PodDescriptor.from_job_request(
+            kube_orchestrator.create_storage_volume(), job_request
+        )
+        await delete_pod_later(pod)
+        await kube_client.create_pod(pod)
+        await kube_client.wait_pod_is_running(pod_name=pod.name, timeout_s=60.0)
+        pod_status = await kube_client.get_pod_status(pod.name)
+        assert pod_status.phase in ("Running", "Succeeded")
+
+    @pytest.mark.asyncio
+    async def test_create_log_stream_not_found(self, kube_client: KubeClient) -> None:
+        with pytest.raises(KubeClientException):
+            async with kube_client.create_pod_container_logs_stream(
+                pod_name="unknown", container_name="unknown"
+            ):
+                pass
+
+    @pytest.mark.asyncio
+    async def test_create_log_stream_creating(
+        self,
+        kube_config: KubeConfig,
+        kube_client: KubeClient,
+        kube_orchestrator: KubeOrchestrator,
+        delete_pod_later: Callable[[PodDescriptor], Awaitable[None]],
+    ) -> None:
+        container = Container(
+            image="ubuntu",
+            command="true",
+            resources=ContainerResources(cpu=0.1, memory_mb=128),
+        )
+        job_request = JobRequest.create(container)
+        pod = PodDescriptor.from_job_request(
+            kube_orchestrator.create_storage_volume(), job_request
+        )
+        await delete_pod_later(pod)
+        await kube_client.create_pod(pod)
+
+        async with timeout(5.0):
+            while True:
+                try:
+                    stream_cm = kube_client.create_pod_container_logs_stream(
+                        pod_name=pod.name, container_name=pod.name
+                    )
+                    with pytest.raises(KubeClientException, match="ContainerCreating"):
+                        async with stream_cm:
+                            pass
+                    break
+                except AssertionError as exc:
+                    if "Pattern" not in str(exc):
+                        raise
+                await asyncio.sleep(0.1)
+
+    @pytest.mark.asyncio
+    async def test_create_log_stream(
+        self,
+        kube_config: KubeConfig,
+        kube_client: KubeClient,
+        kube_orchestrator: KubeOrchestrator,
+        delete_pod_later: Callable[[PodDescriptor], Awaitable[None]],
+    ) -> None:
+        container = Container(
+            image="ubuntu",
+            command="true",
+            resources=ContainerResources(cpu=0.1, memory_mb=128),
+        )
+        job_request = JobRequest.create(container)
+        pod = PodDescriptor.from_job_request(
+            kube_orchestrator.create_storage_volume(), job_request
+        )
+        await delete_pod_later(pod)
+        await kube_client.create_pod(pod)
+        await kube_client.wait_pod_is_running(pod_name=pod.name, timeout_s=60.0)
+        stream_cm = kube_client.create_pod_container_logs_stream(
+            pod_name=pod.name, container_name=pod.name
+        )
+        async with stream_cm as stream:
+            payload = await stream.read()
+            assert payload == b""
+
+    @pytest.mark.asyncio
+    async def test_create_docker_secret_non_existent_namespace(
+        self, kube_config: KubeConfig, kube_client: KubeClient
+    ) -> None:
+        name = str(uuid.uuid4())
+        docker_secret = DockerRegistrySecret(
+            name=name,
+            namespace=name,
+            username="testuser",
+            password="testpassword",
+            email="testuser@example.com",
+            registry_server="registry.example.com",
+        )
+
+        with pytest.raises(StatusException, match="NotFound"):
+            await kube_client.create_docker_secret(docker_secret)
+
+    @pytest.mark.asyncio
+    async def test_create_docker_secret_already_exists(
+        self, kube_config: KubeConfig, kube_client: KubeClient
+    ) -> None:
+        name = str(uuid.uuid4())
+        docker_secret = DockerRegistrySecret(
+            name=name,
+            namespace=kube_config.namespace,
+            username="testuser",
+            password="testpassword",
+            email="testuser@example.com",
+            registry_server="registry.example.com",
+        )
+
+        try:
+            await kube_client.create_docker_secret(docker_secret)
+
+            with pytest.raises(StatusException, match="AlreadyExists"):
+                await kube_client.create_docker_secret(docker_secret)
+        finally:
+            await kube_client.delete_secret(name, kube_config.namespace)
+
+    @pytest.mark.asyncio
+    async def test_update_docker_secret_already_exists(
+        self, kube_config: KubeConfig, kube_client: KubeClient
+    ) -> None:
+        name = str(uuid.uuid4())
+        docker_secret = DockerRegistrySecret(
+            name=name,
+            namespace=kube_config.namespace,
+            username="testuser",
+            password="testpassword",
+            email="testuser@example.com",
+            registry_server="registry.example.com",
+        )
+
+        try:
+            await kube_client.create_docker_secret(docker_secret)
+            await kube_client.update_docker_secret(docker_secret)
+        finally:
+            await kube_client.delete_secret(name, kube_config.namespace)
+
+    @pytest.mark.asyncio
+    async def test_update_docker_secret_non_existent(
+        self, kube_config: KubeConfig, kube_client: KubeClient
+    ) -> None:
+        name = str(uuid.uuid4())
+        docker_secret = DockerRegistrySecret(
+            name=name,
+            namespace=kube_config.namespace,
+            username="testuser",
+            password="testpassword",
+            email="testuser@example.com",
+            registry_server="registry.example.com",
+        )
+
+        with pytest.raises(StatusException, match="NotFound"):
+            await kube_client.update_docker_secret(docker_secret)
+
+    @pytest.mark.asyncio
+    async def test_update_docker_secret_create_non_existent(
+        self, kube_config: KubeConfig, kube_client: KubeClient
+    ) -> None:
+        name = str(uuid.uuid4())
+        docker_secret = DockerRegistrySecret(
+            name=name,
+            namespace=kube_config.namespace,
+            username="testuser",
+            password="testpassword",
+            email="testuser@example.com",
+            registry_server="registry.example.com",
+        )
+
+        await kube_client.update_docker_secret(docker_secret, create_non_existent=True)
+        await kube_client.update_docker_secret(docker_secret)
+
+    @pytest.fixture
+    async def delete_network_policy_later(
+        self, kube_client: KubeClient
+    ) -> AsyncIterator[Callable[[str], Awaitable[None]]]:
+        names = []
+
+        async def _add_name(name: str) -> None:
+            names.append(name)
+
+        yield _add_name
+
+        for name in names:
+            try:
+                await kube_client.delete_network_policy(name)
+            except Exception:
+                pass
+
+    @pytest.mark.asyncio
+    async def test_create_default_network_policy(
+        self,
+        kube_config: KubeConfig,
+        kube_client: KubeClient,
+        delete_network_policy_later: Callable[[str], Awaitable[None]],
+    ) -> None:
+        name = str(uuid.uuid4())
+        await delete_network_policy_later(name)
+        payload = await kube_client.create_default_network_policy(
+            name, {"testlabel": name}, namespace_name=kube_config.namespace
+        )
+        assert payload["metadata"]["name"] == name
+
+    @pytest.mark.asyncio
+    async def test_create_default_network_policy_twice(
+        self,
+        kube_config: KubeConfig,
+        kube_client: KubeClient,
+        delete_network_policy_later: Callable[[str], Awaitable[None]],
+    ) -> None:
+        name = str(uuid.uuid4())
+        await delete_network_policy_later(name)
+        payload = await kube_client.create_default_network_policy(
+            name, {"testlabel": name}, namespace_name=kube_config.namespace
+        )
+        assert payload["metadata"]["name"] == name
+        with pytest.raises(AlreadyExistsException):
+            await kube_client.create_default_network_policy(
+                name, {"testlabel": name}, namespace_name=kube_config.namespace
+            )
+
+    @pytest.mark.asyncio
+    async def test_get_network_policy_not_found(
+        self, kube_config: KubeConfig, kube_client: KubeClient
+    ) -> None:
+        name = str(uuid.uuid4())
+        with pytest.raises(StatusException, match="NotFound"):
+            await kube_client.get_network_policy(name)
+
+    @pytest.mark.asyncio
+    async def test_delete_network_policy_not_found(
+        self, kube_config: KubeConfig, kube_client: KubeClient
+    ) -> None:
+        name = str(uuid.uuid4())
+        with pytest.raises(StatusException, match="NotFound"):
+            await kube_client.delete_network_policy(name)
+
+    @pytest.mark.asyncio
+    async def test_get_pod_events(
+        self,
+        kube_config: KubeConfig,
+        kube_client: MyKubeClient,
+        kube_orchestrator: KubeOrchestrator,
+        delete_pod_later: Callable[[PodDescriptor], Awaitable[None]],
+    ) -> None:
+        container = Container(
+            image="ubuntu",
+            command="true",
+            resources=ContainerResources(cpu=0.1, memory_mb=128),
+        )
+        job_request = JobRequest.create(container)
+        pod = PodDescriptor.from_job_request(
+            kube_orchestrator.create_storage_volume(), job_request
+        )
+        await delete_pod_later(pod)
+        await kube_client.create_pod(pod)
+        await kube_client.wait_pod_is_terminated(pod.name)
+
+        events = await kube_client.get_pod_events(pod.name, kube_config.namespace)
+
+        assert events
+        for event in events:
+            involved_object = event.involved_object
+            assert involved_object["kind"] == "Pod"
+            assert involved_object["namespace"] == kube_config.namespace
+            assert involved_object["name"] == pod.name
+
+    @pytest.mark.asyncio
+    async def test_get_pod_events_empty(
+        self, kube_config: KubeConfig, kube_client: KubeClient
+    ) -> None:
+        pod_name = str(uuid.uuid4())
+        events = await kube_client.get_pod_events(pod_name, kube_config.namespace)
+
+        assert not events
+
+    @pytest.mark.asyncio
+    async def test_get_pod_container_stats(
+        self,
+        kube_config: KubeConfig,
+        kube_client: KubeClient,
+        kube_orchestrator: KubeOrchestrator,
+        delete_pod_later: Callable[[PodDescriptor], Awaitable[None]],
+    ) -> None:
+        command = 'bash -c "for i in {1..5}; do echo $i; sleep 1; done"'
+        container = Container(
+            image="ubuntu",
+            command=command,
+            resources=ContainerResources(cpu=0.1, memory_mb=128),
+        )
+        job_request = JobRequest.create(container)
+        pod = PodDescriptor.from_job_request(
+            kube_orchestrator.create_storage_volume(), job_request
+        )
+        await delete_pod_later(pod)
+        await kube_client.create_pod(pod)
+        await kube_client.wait_pod_is_running(pod_name=pod.name, timeout_s=60.0)
+
+        pod_metrics = []
+        while True:
+            stats = await kube_client.get_pod_container_stats(pod.name, pod.name)
+            if stats:
+                pod_metrics.append(stats)
+            else:
+                break
+            await asyncio.sleep(1)
+
+        assert pod_metrics
+        assert pod_metrics[0] == PodContainerStats(cpu=mock.ANY, memory=mock.ANY)
+        assert pod_metrics[0].cpu >= 0.0
+        assert pod_metrics[0].memory > 0.0
+
+    @pytest.mark.asyncio
+    async def test_get_pod_container_stats_no_pod(
+        self, kube_config: KubeConfig, kube_client: KubeClient
+    ) -> None:
+        pod_name = str(uuid.uuid4())
+        with pytest.raises(JobNotFoundException):
+            await kube_client.get_pod_container_stats(pod_name, pod_name)
 
     @pytest.mark.asyncio
     async def test_get_pod_container_stats_not_scheduled_yet(
@@ -1248,7 +1243,6 @@ class TestKubeClient:
         kube_client: KubeClient,
         kube_orchestrator: KubeOrchestrator,
         delete_pod_later: Callable[[PodDescriptor], Awaitable[None]],
-        mock_kubernetes_server: AioHTTPTestServer,
     ) -> None:
         container = Container(
             image="ubuntu",
@@ -1289,72 +1283,54 @@ class TestKubeClient:
         assert pod_status.container_status.exit_code != 0
 
     @pytest.mark.asyncio
-    async def test_get_pod_container_stats_error_json_response_parsing(self,
-                                                                       mock_kubernetes_server: AioHTTPTestServer) -> None:
-        client = KubeClient(
-            base_url=str(mock_kubernetes_server.make_url("")),
+    async def test_get_pod_container_stats_error_json_response_parsing(
+        self, mock_kubernetes_server: ApiConfig
+    ) -> None:
+        async with KubeClient(
+            base_url=str(f"http://localhost:{mock_kubernetes_server.port}"),
             namespace="mock",
-        )
-        try:
-            await client.init()
+        ) as client:
             stats = await client.get_pod_container_stats("whatever", "whenever")
             assert stats is None
-        finally:
-            await client.close()
 
 
 @pytest.fixture
-async def mock_kubernetes_server(aiohttp_server: AioHTTPTestServer) -> AioHTTPTestServer:
-    async def _get_pod(request: aiohttp.web.Request) -> aiohttp.web.Response:
-        return aiohttp.web.HTTPOk()
+async def mock_kubernetes_server() -> AsyncIterator[ApiConfig]:
+    async def _get_pod(request: web.Request) -> web.Response:
+        payload: Dict[str, Any] = {
+            "kind": "Pod",
+            "metadata": {"name": "testname"},
+            "spec": {
+                "containers": [{"name": "testname", "image": "testimage"}],
+                "nodeName": "whatever",
+            },
+            "status": {"phase": "Running"},
+        }
 
-    async def _stats_summary(request: aiohttp.web.Request) -> aiohttp.web.Response:
-        return aiohttp.web.HTTPOk()
+        return web.json_response(payload)
 
-    def _create_app():
-        app = aiohttp.web.Application()
+    async def _stats_summary(request: web.Request) -> web.Response:
+        # Explicitly return plain text to trigger ContentTypeError
+        return web.Response(content_type="text/plain")
+
+    def _create_app() -> web.Application:
+        app = web.Application()
         app.add_routes(
-            [aiohttp.web.get("/api/v1/namespaces/mock/pods/whatever", _get_pod)]
-        )
-        app.add_routes(
-            [aiohttp.web.get("/api/v1/nodes/whatever:10255/proxy/stats/summary", _stats_summary)]
+            [
+                web.get("/api/v1/namespaces/mock/pods/whatever", _get_pod),
+                web.get(
+                    "/api/v1/nodes/whatever:10255/proxy/stats/summary", _stats_summary
+                ),
+            ]
         )
         return app
 
-    app = aiohttp.web.Application()
-    server = await aiohttp_server(app)
-    yield server
-    # app = _create_app()
-    # server = await aiohttp_server(app)
-    # yield server
-
-
-class MockServerRequestHandler(SimpleHTTPRequestHandler):
-    def do_GET(self) -> None:
-        if self.path == "/api/v1/namespaces/mock/pods/whatever":
-            self.send_response(requests.codes.ok)
-            self.send_header("Content-Type", "application/json; charset=utf-8")
-            self.end_headers()
-
-            payload = {
-                "kind": "Pod",
-                "metadata": {"name": "testname"},
-                "spec": {
-                    "containers": [{"name": "testname", "image": "testimage"}],
-                    "nodeName": "whatever",
-                },
-                "status": {"phase": "Running"},
-            }
-
-            self.wfile.write(json.dumps(payload).encode("utf-8"))
-        elif self.path == "/api/v1/nodes/whatever:10255/proxy/stats/summary":
-            self.send_response(requests.codes.ok)
-            self.send_header("Content-Type", "text/plain")
-            self.end_headers()
-        else:
-            self.send_response(requests.codes.not_found)
-            self.end_headers()
-        return
+    app = _create_app()
+    runner = ApiRunner(app, port=8080)
+    api_address = await runner.run()
+    api_config = ApiConfig(host=api_address.host, port=api_address.port)
+    yield api_config
+    await runner.close()
 
 
 class TestLogReader:
