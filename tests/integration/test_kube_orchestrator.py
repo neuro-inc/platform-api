@@ -20,7 +20,7 @@ from typing import (
 from unittest import mock
 
 import aiohttp
-from aiohttp.pytest_plugin import aiohttp_server
+from aiohttp.pytest_plugin import aiohttp_server, loop
 from aiohttp.test_utils import TestServer as AioHTTPTestServer, TestServer
 import pytest
 import requests
@@ -1291,11 +1291,8 @@ class TestKubeClient:
     @pytest.mark.asyncio
     async def test_get_pod_container_stats_error_json_response_parsing(self,
                                                                        mock_kubernetes_server: AioHTTPTestServer) -> None:
-
-        server: AioHTTPTestServer = await mock_kubernetes_server().start_server()
-
         client = KubeClient(
-            base_url=str(server.make_url("")),
+            base_url=str(mock_kubernetes_server.make_url("")),
             namespace="mock",
         )
         try:
@@ -1307,7 +1304,7 @@ class TestKubeClient:
 
 
 @pytest.fixture
-async def mock_kubernetes_server(aiohttp_server: AioHTTPTestServer) -> TestServer:
+async def mock_kubernetes_server(aiohttp_server: AioHTTPTestServer) -> AioHTTPTestServer:
     async def _get_pod(request: aiohttp.web.Request) -> aiohttp.web.Response:
         return aiohttp.web.HTTPOk()
 
@@ -1324,9 +1321,12 @@ async def mock_kubernetes_server(aiohttp_server: AioHTTPTestServer) -> TestServe
         )
         return app
 
-    app = _create_app()
+    app = aiohttp.web.Application()
     server = await aiohttp_server(app)
-    return server
+    yield server
+    # app = _create_app()
+    # server = await aiohttp_server(app)
+    # yield server
 
 
 class MockServerRequestHandler(SimpleHTTPRequestHandler):
