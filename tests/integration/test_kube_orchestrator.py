@@ -1257,6 +1257,29 @@ class TestKubeClient:
         stats = await kube_client.get_pod_container_stats(pod.name, pod.name)
         assert stats is None
 
+    @pytest.mark.asyncio
+    async def test_service_account_not_available(
+        self,
+        kube_client: KubeClient,
+        kube_orchestrator: KubeOrchestrator,
+        delete_pod_later: Callable[[PodDescriptor], Awaitable[None]],
+    ) -> None:
+        container = Container(
+            image="lachlanevenson/k8s-kubectl:v1.10.3",
+            command="get pods",
+            resources=ContainerResources(cpu=0.2, memory_mb=128),
+        )
+        job_request = JobRequest.create(container)
+        pod = PodDescriptor.from_job_request(
+            kube_orchestrator.create_storage_volume(), job_request
+        )
+        await delete_pod_later(pod)
+        await kube_client.create_pod(pod)
+        await kube_client.wait_pod_is_terminated(pod_name=pod.name, timeout_s=60.0)
+        pod_status = await kube_client.get_pod_status(pod.name)
+
+        assert pod_status.container_status.exit_code != 0
+
 
 class TestLogReader:
     async def _consume_log_reader(
