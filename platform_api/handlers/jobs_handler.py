@@ -18,6 +18,7 @@ from platform_api.orchestrator.job import Job, JobStats
 from platform_api.orchestrator.job_request import (
     Container,
     ContainerVolume,
+    JobError,
     JobRequest,
     JobStatus,
 )
@@ -25,7 +26,6 @@ from platform_api.orchestrator.jobs_service import JobsService
 from platform_api.orchestrator.jobs_storage import JobFilter
 from platform_api.resource import GPUModel
 from platform_api.user import User, authorized_user, untrusted_user
-from platform_api.utils.template_parse import create_template_parser
 
 from .job_request_builder import ContainerBuilder
 from .validators import (
@@ -202,9 +202,11 @@ class JobsHandler:
         self._app = app
         self._config = config
 
-        self._named_jobs_domain_name_parser = create_template_parser(
-            config.orchestrator.named_jobs_domain_name_template
-        )
+        o = config.orchestrator
+        self._job_base_domain = o.jobs_domain_name_template.partition(".")[2]
+        self._named_job_base_domain = o.named_jobs_domain_name_template.partition(".")[
+            2
+        ]
         self._job_name_validator = create_job_name_validator()
         self._user_name_validator = create_user_name_validator()
         self._job_filter_factory = JobFilterFactory()
@@ -293,60 +295,74 @@ class JobsHandler:
         await check_authorized(request)
         user = await untrusted_user(request)
 
-        with log_debug_time(f"Retrieved job access tree for user '{user.name}'"):
-            tree = await self._auth_client.get_permissions_tree(user.name, "job:")
-
         jobs: List[Job] = []
 
-        try:
-            filters: List[JobFilter]
-            hostname = request.query.get("hostname")
-            if hostname is not None:
-                if (
-                    "name" in request.query
-                    or "owner" in request.query
-                    or "status" in request.query
-                ):
-                    raise ValueError("Invalid request")
-                vars = self._named_jobs_domain_name_parser(hostname)
-                job_name = self._job_name_validator.check(vars["job_name"])
-                job_owner = self._user_name_validator.check(vars["job_owner"])
-                filter = JobFilter(owners={job_owner}, name=job_name)
-            else:
+        hostname = request.query.get("hostname")
+        if hostname is not None:
+            if (
+                "name" in request.query
+                or "owner" in request.query
+                or "status" in request.query
+            ):
+                raise ValueError("Invalid request")
+            job = await self._get_job_by_hostname(hostname)
+            permission = Permission(uri=str(job.to_uri()), action="read")
+            logger.info("Checking whether %r has %r", user, permission)
+            await check_permission(request, permission.action, [permission])
+            jobs.append(job)
+        else:
+            with log_debug_time(f"Retrieved job access tree for user '{user.name}'"):
+                tree = await self._auth_client.get_permissions_tree(user.name, "job:")
+
+            try:
                 filter = self._job_filter_factory.create_from_query(request.query)
+                bulk_job_filter = BulkJobFilterBuilder(
+                    query_filter=filter, access_tree=tree
+                ).build()
 
-            bulk_job_filter = BulkJobFilterBuilder(
-                query_filter=filter, access_tree=tree
-            ).build()
-
-            if bulk_job_filter.bulk_filter:
-                with log_debug_time(
-                    f"Read bulk jobs with {bulk_job_filter.bulk_filter}"
-                ):
-                    jobs.extend(
-                        await self._jobs_service.get_all_jobs(
-                            bulk_job_filter.bulk_filter
+                if bulk_job_filter.bulk_filter:
+                    with log_debug_time(
+                        f"Read bulk jobs with {bulk_job_filter.bulk_filter}"
+                    ):
+                        jobs.extend(
+                            await self._jobs_service.get_all_jobs(
+                                bulk_job_filter.bulk_filter
+                            )
                         )
-                    )
 
-            if bulk_job_filter.shared_ids:
-                with log_debug_time(
-                    f"Read shared jobs with {bulk_job_filter.shared_ids_filter}"
-                ):
-                    jobs.extend(
-                        await self._jobs_service.get_jobs_by_ids(
-                            bulk_job_filter.shared_ids,
-                            job_filter=bulk_job_filter.shared_ids_filter,
+                if bulk_job_filter.shared_ids:
+                    with log_debug_time(
+                        f"Read shared jobs with {bulk_job_filter.shared_ids_filter}"
+                    ):
+                        jobs.extend(
+                            await self._jobs_service.get_jobs_by_ids(
+                                bulk_job_filter.shared_ids,
+                                job_filter=bulk_job_filter.shared_ids_filter,
+                            )
                         )
-                    )
-        except JobFilterException:
-            pass
+            except JobFilterException:
+                pass
 
         response_payload = {"jobs": [convert_job_to_job_response(job) for job in jobs]}
         self._bulk_jobs_response_validator.check(response_payload)
         return aiohttp.web.json_response(
             data=response_payload, status=aiohttp.web.HTTPOk.status_code
         )
+
+    async def _get_job_by_hostname(self, hostname: str) -> Job:
+        label, _, base_domain = hostname.partition(".")
+        if base_domain == self._job_base_domain:
+            try:
+                return await self._jobs_service.get_job(label)
+            except JobError:
+                if base_domain == self._named_job_base_domain:
+                    return await self._jobs_service.get_job_by_label(label)
+                else:
+                    raise
+        elif base_domain == self._named_job_base_domain:
+            return await self._jobs_service.get_job_by_label(label)
+        else:
+            raise JobError(f"no job for hostname {hostname}")
 
     async def handle_delete(
         self, request: aiohttp.web.Request

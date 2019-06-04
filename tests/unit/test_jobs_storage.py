@@ -1,7 +1,11 @@
 import pytest
 
 from platform_api.orchestrator.job import JobRecord, JobRequest, JobStatus
-from platform_api.orchestrator.job_request import Container, ContainerResources
+from platform_api.orchestrator.job_request import (
+    Container,
+    ContainerResources,
+    JobError,
+)
 from platform_api.orchestrator.jobs_storage import (
     InMemoryJobsStorage,
     JobFilter,
@@ -87,6 +91,22 @@ class TestInMemoryJobsStorage:
         with pytest.raises(JobStorageJobFoundError):
             async with jobs_storage.try_create_job(job):
                 pass
+
+    @pytest.mark.asyncio
+    async def test_label(self) -> None:
+        jobs_storage = InMemoryJobsStorage()
+
+        job = JobRecord.create(request=self._create_job_request(), name="job-name")
+        label = "job-name-john-doe"
+
+        async with jobs_storage.try_create_job(job):
+            await jobs_storage.set_label(label, job.id)
+
+        retrieved_job = await jobs_storage.get_job_by_label(label)
+        assert retrieved_job.id == job.id
+
+        with pytest.raises(JobError):
+            await jobs_storage.get_job_by_label("no-such-job")
 
 
 class TestJobFilter:

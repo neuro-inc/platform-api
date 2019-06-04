@@ -337,6 +337,22 @@ class TestRedisJobsStorage:
         assert job.status == JobStatus.PENDING
 
     @pytest.mark.asyncio
+    async def test_label(self, redis_client: aioredis.Redis) -> None:
+        storage = RedisJobsStorage(redis_client)
+
+        job = self._create_pending_job()
+        label = "job-name-john-doe"
+
+        async with storage.try_create_job(job):
+            await storage.set_label(label, job.id)
+
+        retrieved_job = await storage.get_job_by_label(label)
+        assert retrieved_job.id == job.id
+
+        with pytest.raises(JobError):
+            await storage.get_job_by_label("no-such-job")
+
+    @pytest.mark.asyncio
     async def test_get_non_existent(self, redis_client: aioredis.Redis) -> None:
         storage = RedisJobsStorage(redis_client)
         with pytest.raises(JobError, match="no such job unknown"):
