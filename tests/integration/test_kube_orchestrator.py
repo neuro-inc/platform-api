@@ -17,6 +17,7 @@ from unittest import mock
 
 import aiohttp
 import pytest
+from aiohttp import web
 from async_timeout import timeout
 from elasticsearch import AuthenticationException
 from yarl import URL
@@ -60,8 +61,9 @@ from platform_api.orchestrator.kube_orchestrator import (
 )
 from platform_api.orchestrator.logs import ElasticsearchLogReader, PodContainerLogReader
 from tests.conftest import random_str
+from tests.integration.test_api import ApiConfig
 
-from .conftest import MyKubeClient
+from .conftest import ApiRunner, MyKubeClient
 
 
 class MyJob(Job):
@@ -1279,6 +1281,56 @@ class TestKubeClient:
         pod_status = await kube_client.get_pod_status(pod.name)
 
         assert pod_status.container_status.exit_code != 0
+
+    @pytest.mark.asyncio
+    async def test_get_pod_container_stats_error_json_response_parsing(
+        self, mock_kubernetes_server: ApiConfig
+    ) -> None:
+        async with KubeClient(
+            base_url=str(f"http://localhost:{mock_kubernetes_server.port}"),
+            namespace="mock",
+        ) as client:
+            stats = await client.get_pod_container_stats("whatever", "whenever")
+            assert stats is None
+
+
+@pytest.fixture
+async def mock_kubernetes_server() -> AsyncIterator[ApiConfig]:
+    async def _get_pod(request: web.Request) -> web.Response:
+        payload: Dict[str, Any] = {
+            "kind": "Pod",
+            "metadata": {"name": "testname"},
+            "spec": {
+                "containers": [{"name": "testname", "image": "testimage"}],
+                "nodeName": "whatever",
+            },
+            "status": {"phase": "Running"},
+        }
+
+        return web.json_response(payload)
+
+    async def _stats_summary(request: web.Request) -> web.Response:
+        # Explicitly return plain text to trigger ContentTypeError
+        return web.Response(content_type="text/plain")
+
+    def _create_app() -> web.Application:
+        app = web.Application()
+        app.add_routes(
+            [
+                web.get("/api/v1/namespaces/mock/pods/whatever", _get_pod),
+                web.get(
+                    "/api/v1/nodes/whatever:10255/proxy/stats/summary", _stats_summary
+                ),
+            ]
+        )
+        return app
+
+    app = _create_app()
+    runner = ApiRunner(app, port=8080)
+    api_address = await runner.run()
+    api_config = ApiConfig(host=api_address.host, port=api_address.port)
+    yield api_config
+    await runner.close()
 
 
 class TestLogReader:
