@@ -43,6 +43,7 @@ pytest_plugins = [
     "tests.integration.redis",
     "tests.integration.auth",
     "tests.integration.elasticsearch",
+    "tests.integration.api",
     "tests.integration.notifications",
 ]
 
@@ -398,6 +399,8 @@ def config_factory(
             ingress=ingress_config,
         )
         config_client = ConfigClient(base_url=URL("http://platformconfig/api/v1"))
+        if "notifications" not in kwargs:
+            kwargs["notifications"] = notifications_config
         return Config(
             server=server_config,
             cluster=cluster_config,
@@ -405,7 +408,6 @@ def config_factory(
             auth=auth_config,
             jobs=jobs_config,
             config_client=config_client,
-            notifications=notifications_config,
             **kwargs,
         )
 
