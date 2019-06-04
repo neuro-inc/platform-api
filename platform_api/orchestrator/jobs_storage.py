@@ -133,7 +133,7 @@ class InMemoryJobsStorage(JobsStorage):
         self._job_records: Dict[str, str] = {}
         # job_name+owner to job_id mapping:
         self._last_alive_job_records: Dict[Tuple[str, str], str] = {}
-        # job label to to job_id mapping:
+        # job label to job_id mapping:
         self._jobs_by_label: Dict[str, str] = {}
 
     @asynccontextmanager
@@ -414,7 +414,7 @@ class RedisJobsStorage(JobsStorage):
             self._generate_jobs_label_index_key(label)
         )
         job_id = self._decode(job_id_bytes)
-        return self.get_job(job_id)
+        return await self.get_job(job_id)
 
     async def get_last_created_job_id(self, owner: str, job_name: str) -> Optional[str]:
         job_ids_key = self._generate_jobs_name_index_zset_key(owner, job_name)
