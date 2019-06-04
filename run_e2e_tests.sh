@@ -16,9 +16,6 @@ if [ ! "$CI" = true ]; then
     docker load -i /tmp/platformapi.image
     docker load -i /tmp/ssh-auth.image
     docker load -i /tmp/platformconfig.image
-    kubectl delete -f deploy/platformapi/templates/rb.default.gke.yml
-    kubectl delete -f tests/k8s/platformapi.yml
-    kubectl delete -f tests/k8s/platformconfig.yml
     echo "Services set up"
 fi
 
