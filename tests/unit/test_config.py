@@ -125,6 +125,7 @@ class TestEnvironConfigFactory:
             "NP_OAUTH_HEADLESS_CALLBACK_URL": "https://dev.neu.ro/oauth/show-code",
             "NP_API_URL": "https://neu.ro/api/v1",
             "NP_PLATFORM_CONFIG_URI": "http://platformconfig:8080/api/v1",
+            "NP_NOTIFICATIONS_URL": "http://notifications"
         }
         config = EnvironConfigFactory(environ=environ).create()
 
@@ -243,6 +244,7 @@ class TestEnvironConfigFactory:
             "NP_API_URL": "https://neu.ro/api/v1",
             "NP_OAUTH_HEADLESS_CALLBACK_URL": "https://oauth/show-code",
             "NP_PLATFORM_CONFIG_URI": "http://platformconfig:8080/api/v1",
+            "NP_NOTIFICATIONS_URL": "http://notifications"
         }
         config = EnvironConfigFactory(environ=environ).create()
 
@@ -324,6 +326,7 @@ class TestEnvironConfigFactory:
             "NP_ES_HOSTS": "http://es",
             "NP_OAUTH_HEADLESS_CALLBACK_URL": "https://oauth/show-code",
             "NP_PLATFORM_CONFIG_URI": "http://platformconfig:8080/api/v1",
+            "NP_NOTIFICATIONS_URL": "http://notifications"
         }
         config = EnvironConfigFactory(environ=environ).create()
         assert config.storage.nfs_server == "1.2.3.4"

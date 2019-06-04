@@ -10,6 +10,10 @@ from aiohttp_security import check_authorized, check_permission
 from multidict import MultiDictProxy
 from neuro_auth_client import AuthClient, Permission
 from neuro_auth_client.client import ClientSubTreeViewRoot
+from notifications_client import (
+    Client as NotificationsClient,
+    JobCannotStartQuotaReached,
+)
 from yarl import URL
 
 from platform_api.config import Config, RegistryConfig, StorageConfig
@@ -21,7 +25,7 @@ from platform_api.orchestrator.job_request import (
     JobRequest,
     JobStatus,
 )
-from platform_api.orchestrator.jobs_service import JobsService
+from platform_api.orchestrator.jobs_service import JobsService, QuotaException
 from platform_api.orchestrator.jobs_storage import JobFilter
 from platform_api.resource import GPUModel
 from platform_api.user import User, authorized_user, untrusted_user
@@ -215,6 +219,10 @@ class JobsHandler:
     def _auth_client(self) -> AuthClient:
         return self._app["auth_client"]
 
+    @property
+    def _notifications_client(self) -> NotificationsClient:
+        return self._app["notifications_client"]
+
     def register(self, app: aiohttp.web.Application) -> None:
         app.add_routes(
             (
@@ -255,9 +263,15 @@ class JobsHandler:
         description = request_payload.get("description")
         is_preemptible = request_payload["is_preemptible"]
         job_request = JobRequest.create(container, description)
-        job, _ = await self._jobs_service.create_job(
-            job_request, user=user, job_name=name, is_preemptible=is_preemptible
-        )
+        try:
+            job, _ = await self._jobs_service.create_job(
+                job_request, user=user, job_name=name, is_preemptible=is_preemptible
+            )
+        except QuotaException:
+            await self._notifications_client.notify(
+                JobCannotStartQuotaReached(user.name)
+            )
+            raise
         response_payload = convert_job_to_job_response(job)
         self._job_response_validator.check(response_payload)
         return aiohttp.web.json_response(

@@ -22,6 +22,12 @@ if [ ! "$CI" = true ]; then
     echo "Services set up"
 fi
 
+echo "Remove artifacts"
+kubectl delete -f deploy/platformapi/templates/rb.default.gke.yml 2>/dev/null
+kubectl delete -f tests/k8s/platformapi.yml 2>/dev/null
+kubectl delete -f tests/k8s/platformconfig.yml 2>/dev/null
+
+echo "Deploy services"
 kubectl create -f deploy/platformapi/templates/rb.default.gke.yml
 kubectl create -f tests/k8s/platformconfig.yml
 kubectl create -f tests/k8s/platformapi.yml

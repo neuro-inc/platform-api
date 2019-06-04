@@ -108,6 +108,8 @@ spec:
           value: http://platformapi/api/v1
         - name: NP_PLATFORM_CONFIG_URI
           value: http://platformconfig:8080/api/v1
+        - name: NP_NOTIFICATIONS_URL
+          value: http://platformnotificationsapi:8080/
       - name: kubeproxy
         image: lachlanevenson/k8s-kubectl:v1.10.3
         args: [proxy]
