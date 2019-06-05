@@ -195,10 +195,6 @@ class JobsService:
                         orchestrator_config=cluster.orchestrator.config,
                         record=record,
                     )
-                    if job.name:
-                        assert job.http_host_named
-                        label = job.http_host_named.partition(".")[0]
-                        await self._jobs_storage.set_label(label, job.id)
                     await cluster.orchestrator.start_job(job, user.token)
             return job, Status.create(job.status)
 
@@ -255,10 +251,6 @@ class JobsService:
 
     async def get_job(self, job_id: str) -> Job:
         record = await self._jobs_storage.get_job(job_id)
-        return await self._get_cluster_job(record)
-
-    async def get_job_by_label(self, label: str) -> Job:
-        record = await self._jobs_storage.get_job_by_label(label)
         return await self._get_cluster_job(record)
 
     async def get_job_log_reader(self, job_id: str) -> LogReader:

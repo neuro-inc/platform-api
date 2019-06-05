@@ -324,7 +324,6 @@ class JobsHandler:
                 tree = await self._auth_client.get_permissions_tree(user.name, "job:")
 
             try:
-                filter = self._job_filter_factory.create_from_query(request.query)
                 bulk_job_filter = BulkJobFilterBuilder(
                     query_filter=filter, access_tree=tree
                 ).build()
@@ -575,6 +574,5 @@ class BulkJobFilterBuilder:
         # `self._query_filter.owners`.
         # if `self._owners_shared_all` is empty, we still want to try to limit
         # the scope to the owners passed in the query, otherwise pull all.
-        if not self._owners_shared_all:
-            return self._query_filter
-        return replace(self._query_filter, owners=self._owners_shared_all)
+        owners = set(self._owners_shared_all or self._query_filter.owners)
+        return replace(self._query_filter, owners=owners)

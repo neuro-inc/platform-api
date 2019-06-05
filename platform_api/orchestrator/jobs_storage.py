@@ -78,15 +78,7 @@ class JobsStorage(ABC):
         pass
 
     @abstractmethod
-    async def set_label(self, label: str, job_id: str) -> None:
-        pass
-
-    @abstractmethod
     async def get_job(self, job_id: str) -> JobRecord:
-        pass
-
-    @abstractmethod
-    async def get_job_by_label(self, label: str) -> JobRecord:
         pass
 
     @abstractmethod
@@ -133,8 +125,6 @@ class InMemoryJobsStorage(JobsStorage):
         self._job_records: Dict[str, str] = {}
         # job_name+owner to job_id mapping:
         self._last_alive_job_records: Dict[Tuple[str, str], str] = {}
-        # job label to job_id mapping:
-        self._jobs_by_label: Dict[str, str] = {}
 
     @asynccontextmanager
     async def try_create_job(self, job: JobRecord) -> AsyncIterator[JobRecord]:
@@ -153,9 +143,6 @@ class InMemoryJobsStorage(JobsStorage):
         payload = json.dumps(job.to_primitive())
         self._job_records[job.id] = payload
 
-    async def set_label(self, label: str, job_id: str) -> None:
-        self._jobs_by_label[label] = job_id
-
     def _parse_job_payload(self, payload: str) -> JobRecord:
         return JobRecord.from_primitive(json.loads(payload))
 
@@ -164,12 +151,6 @@ class InMemoryJobsStorage(JobsStorage):
         if payload is None:
             raise JobError(f"no such job {job_id}")
         return self._parse_job_payload(payload)
-
-    async def get_job_by_label(self, label: str) -> JobRecord:
-        job_id = self._jobs_by_label.get(label)
-        if job_id is None:
-            raise JobError(f"no job for label {label}")
-        return await self.get_job(job_id)
 
     @asynccontextmanager
     async def try_update_job(self, job_id: str) -> AsyncIterator[JobRecord]:
@@ -245,9 +226,6 @@ class RedisJobsStorage(JobsStorage):
 
     def _generate_jobs_owner_index_key(self, owner: str) -> str:
         return f"jobs.owner.{owner}"
-
-    def _generate_jobs_label_index_key(self, label: str) -> str:
-        return f"jobs.label.{label}"
 
     def _generate_jobs_name_index_zset_key(self, owner: str, job_name: str) -> str:
         assert owner, "job owner is not defined"
@@ -359,10 +337,6 @@ class RedisJobsStorage(JobsStorage):
         # the 'last-job-created' key!
         await self.update_job_atomic(job, is_job_creation=True)
 
-    async def set_label(self, label: str, job_id: str) -> None:
-        label_key = self._generate_jobs_label_index_key(label)
-        await self._client.set(label_key, job_id)
-
     def _update_owner_index(self, tr: Pipeline, job: JobRecord) -> None:
         owner_key = self._generate_jobs_owner_index_key(job.owner)
         tr.zadd(
@@ -408,15 +382,6 @@ class RedisJobsStorage(JobsStorage):
         if payload is None:
             raise JobError(f"no such job {job_id}")
         return self._parse_job_payload(payload)
-
-    async def get_job_by_label(self, label: str) -> JobRecord:
-        job_id_bytes = await self._client.get(
-            self._generate_jobs_label_index_key(label)
-        )
-        if not job_id_bytes:
-            raise JobError(f"no job for label {label}")
-        job_id = self._decode(job_id_bytes)
-        return await self.get_job(job_id)
 
     async def get_last_created_job_id(self, owner: str, job_name: str) -> Optional[str]:
         job_ids_key = self._generate_jobs_name_index_zset_key(owner, job_name)
