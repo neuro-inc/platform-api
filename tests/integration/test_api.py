@@ -1686,15 +1686,6 @@ class TestJobs:
         jobs = await jobs_client.get_all_jobs({"hostname": hostname})
         assert not jobs
 
-        # invalid names
-        hostname = f"!@#$--{usr.name}.jobs.neu.ro"
-        jobs = await jobs_client.get_all_jobs({"hostname": hostname})
-        assert not jobs
-
-        hostname = f"{job_name}--!@#$.jobs.neu.ro"
-        jobs = await jobs_client.get_all_jobs({"hostname": hostname})
-        assert not jobs
-
     @pytest.mark.asyncio
     async def test_get_job_by_hostname_another_owner(
         self,
@@ -1760,6 +1751,14 @@ class TestJobs:
                 assert response.status == HTTPBadRequest.status_code, response_text
                 result = await response.json()
                 assert result["error"] == "Invalid request"
+
+        for params in (
+            {"hostname": f"!@#$--{usr.name}.jobs.neu.ro"},
+            {"hostname": f"{job_name}--!@#$.jobs.neu.ro"},
+        ):
+            async with client.get(url, headers=usr.headers, params=params) as response:
+                response_text = await response.text()
+                assert response.status == HTTPBadRequest.status_code, response_text
 
     @pytest.mark.asyncio
     async def test_delete_job(
