@@ -37,8 +37,8 @@ from platform_api.orchestrator.kube_orchestrator import KubeConfig, KubeOrchestr
 from platform_api.redis import RedisConfig
 from platform_api.resource import GPUModel, ResourcePoolType
 
-
 pytest_plugins = [
+    "aiohttp.pytest_plugin",
     "tests.integration.docker",
     "tests.integration.redis",
     "tests.integration.auth",
