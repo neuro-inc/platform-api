@@ -413,6 +413,8 @@ class RedisJobsStorage(JobsStorage):
         job_id_bytes = await self._client.get(
             self._generate_jobs_label_index_key(label)
         )
+        if not job_id_bytes:
+            raise JobError(f"no job for label {label}")
         job_id = self._decode(job_id_bytes)
         return await self.get_job(job_id)
 
