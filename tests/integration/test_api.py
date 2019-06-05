@@ -1667,33 +1667,33 @@ class TestJobs:
         # wrond base domain name
         hostname = f"{job_name}--{usr.name}.example.org"
         jobs = await jobs_client.get_all_jobs({"hostname": hostname})
-        assert jobs == {}
+        assert not jobs
 
         hostname = f"{job_id}.example.org"
         jobs = await jobs_client.get_all_jobs({"hostname": hostname})
-        assert jobs == {}
+        assert not jobs
 
         # non-existing names
         hostname = f"nonexisting--{usr.name}.jobs.neu.ro"
         jobs = await jobs_client.get_all_jobs({"hostname": hostname})
-        assert jobs == {}
+        assert not jobs
 
         hostname = f"{job_name}--nonexisting.jobs.neu.ro"
         jobs = await jobs_client.get_all_jobs({"hostname": hostname})
-        assert jobs == {}
+        assert not jobs
 
         hostname = "nonexisting.jobs.neu.ro"
         jobs = await jobs_client.get_all_jobs({"hostname": hostname})
-        assert jobs == {}
+        assert not jobs
 
         # invalid names
         hostname = f"!@#$--{usr.name}.jobs.neu.ro"
         jobs = await jobs_client.get_all_jobs({"hostname": hostname})
-        assert jobs == {}
+        assert not jobs
 
         hostname = f"{job_name}--!@#$.jobs.neu.ro"
         jobs = await jobs_client.get_all_jobs({"hostname": hostname})
-        assert jobs == {}
+        assert not jobs
 
     @pytest.mark.asyncio
     async def test_get_job_by_hostname_another_owner(
@@ -1727,12 +1727,12 @@ class TestJobs:
         # unshared job of another owner
         hostname = f"{job_name2}--{usr2.name}.jobs.neu.ro"
         jobs = await jobs_client_usr1.get_all_jobs({"hostname": hostname})
-        assert jobs == {}
+        assert not jobs
 
-        # nonexisting job of another owner
+        # non-existing job of another owner
         hostname = f"nonexisting--{usr2.name}.jobs.neu.ro"
         jobs = await jobs_client_usr1.get_all_jobs({"hostname": hostname})
-        assert jobs == {}
+        assert not jobs
 
     @pytest.mark.asyncio
     async def test_get_job_by_hostname_invalid_request(
