@@ -532,8 +532,8 @@ class Job:
     def http_host_named(self) -> Optional[str]:
         if not self.name:
             return None
-        return self._orchestrator_config.named_jobs_domain_name_template.format(
-            job_name=self.name, job_owner=self.owner
+        return self._orchestrator_config.jobs_domain_name_template.format(
+            job_id=f"{self.name}--{self.owner}"
         )
 
     @property

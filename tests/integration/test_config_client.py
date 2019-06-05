@@ -36,7 +36,6 @@ def cluster_configs_payload() -> List[Dict[str, Any]]:
                     "node_label_preemptible": "cloud.google.com/gke-preemptible",
                 },
                 "job_hostname_template": "{job_id}.jobs.neu.ro",
-                "named_job_hostname_template": "{job_name}-{job_owner}.jobs.neu.ro",
                 "resource_pool_types": [
                     {},
                     {"gpu": 0},

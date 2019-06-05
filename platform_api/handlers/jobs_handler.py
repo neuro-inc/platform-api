@@ -6,7 +6,7 @@ from typing import Any, Dict, List, Optional, Sequence, Set
 
 import aiohttp.web
 import trafaret as t
-from aiohttp_security import check_authorized, check_permission
+from aiohttp_security import check_authorized, check_permission, permits
 from multidict import MultiDictProxy
 from neuro_auth_client import AuthClient, Permission
 from neuro_auth_client.client import ClientSubTreeViewRoot
@@ -202,13 +202,9 @@ class JobsHandler:
         self._app = app
         self._config = config
 
-        o = config.orchestrator
-        self._job_base_domain = o.jobs_domain_name_template.partition(".")[2]
-        self._named_job_base_domain = o.named_jobs_domain_name_template.partition(".")[
-            2
-        ]
-        self._job_name_validator = create_job_name_validator()
-        self._user_name_validator = create_user_name_validator()
+        self._job_base_domain = config.orchestrator.jobs_domain_name_template.partition(
+            "."
+        )[2]
         self._job_filter_factory = JobFilterFactory()
         self._job_response_validator = create_job_response_validator()
         self._bulk_jobs_response_validator = t.Dict(
@@ -295,22 +291,35 @@ class JobsHandler:
         await check_authorized(request)
         user = await untrusted_user(request)
 
+        filter: Optional[JobFilter] = None
         jobs: List[Job] = []
 
         hostname = request.query.get("hostname")
-        if hostname is not None:
+        if hostname is None:
+            filter = self._job_filter_factory.create_from_query(request.query)
+        else:
             if (
                 "name" in request.query
                 or "owner" in request.query
                 or "status" in request.query
             ):
                 raise ValueError("Invalid request")
-            job = await self._get_job_by_hostname(hostname)
-            permission = Permission(uri=str(job.to_uri()), action="read")
-            logger.info("Checking whether %r has %r", user, permission)
-            await check_permission(request, permission.action, [permission])
-            jobs.append(job)
-        else:
+
+            label, _, base_domain = hostname.partition(".")
+            if base_domain == self._job_base_domain:
+                filter = self._job_filter_factory.create_from_label(label)
+                if filter is None:
+                    try:
+                        job = await self._jobs_service.get_job(label)
+                    except JobError:
+                        pass
+                    else:
+                        permission = Permission(uri=str(job.to_uri()), action="read")
+                        logger.info("Checking whether %r has %r", user, permission)
+                        if await permits(request, permission.action, [permission]):
+                            jobs.append(job)
+
+        if filter is not None:
             with log_debug_time(f"Retrieved job access tree for user '{user.name}'"):
                 tree = await self._auth_client.get_permissions_tree(user.name, "job:")
 
@@ -348,21 +357,6 @@ class JobsHandler:
         return aiohttp.web.json_response(
             data=response_payload, status=aiohttp.web.HTTPOk.status_code
         )
-
-    async def _get_job_by_hostname(self, hostname: str) -> Job:
-        label, _, base_domain = hostname.partition(".")
-        if base_domain == self._job_base_domain:
-            try:
-                return await self._jobs_service.get_job(label)
-            except JobError:
-                if base_domain == self._named_job_base_domain:
-                    return await self._jobs_service.get_job_by_label(label)
-                else:
-                    raise
-        elif base_domain == self._named_job_base_domain:
-            return await self._jobs_service.get_job_by_label(label)
-        else:
-            raise JobError(f"no job for hostname {hostname}")
 
     async def handle_delete(
         self, request: aiohttp.web.Request
@@ -492,6 +486,16 @@ class JobFilterFactory:
             for owner in query.getall("owner", [])
         }
         return JobFilter(statuses=statuses, owners=owners, name=job_name)
+
+    def create_from_label(self, label: str) -> Optional[JobFilter]:
+        job_name, _, owner = label.partition("--")
+        if not owner:
+            return None
+        job_name = self._job_name_validator.check(job_name)
+        owner = self._user_name_validator.check(owner)
+        if not job_name or not owner:
+            return None
+        return JobFilter(owners={owner}, name=job_name)
 
 
 @dataclass(frozen=True)

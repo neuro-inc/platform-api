@@ -15,9 +15,9 @@ USER_NAME_PATTERN = "^[a-z0-9]([a-z0-9]|(-[a-z0-9]))*$"
 # therefore job-ID has to conform job-name validator; all job-IDs are
 # of the form `job-{uuid4()}` of length 40.
 JOB_NAME_MAX_LENGTH = 40
-# For named jobs, their hostname is of the form of `{job-id}-{job-owner}.jobs.neu.ro`.
-# The length limit for DNS label is 63 chars, minus 1 char for the dash.
-USER_NAME_MAX_LENGTH = 63 - 1 - JOB_NAME_MAX_LENGTH
+# For named jobs, their hostname is of the form of `{job-id}--{job-owner}.jobs.neu.ro`.
+# The length limit for DNS label is 63 chars, minus 2 chars for the dash.
+USER_NAME_MAX_LENGTH = 63 - 2 - JOB_NAME_MAX_LENGTH
 
 OptionalString = t.String | t.Null
 

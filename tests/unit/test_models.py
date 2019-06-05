@@ -644,7 +644,7 @@ async def test_job_to_job_response_with_job_name_and_http_exposed(
         "owner": owner_name,
         "name": job_name,
         "http_url": f"http://{job.id}.jobs",
-        "http_url_named": f"http://{job_name}-{owner_name}.jobs",
+        "http_url_named": f"http://{job_name}--{owner_name}.jobs",
         "status": "pending",
         "history": {
             "status": "pending",

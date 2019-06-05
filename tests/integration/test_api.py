@@ -427,7 +427,7 @@ class TestModels:
             assert result["status"] in ["pending"]
             assert result["http_url"] == f"http://{job_id}.jobs.neu.ro"
             assert result["http_url_named"] == (
-                f"http://{job_name}-{regular_user.name}.jobs.neu.ro"
+                f"http://{job_name}--{regular_user.name}.jobs.neu.ro"
             )
             expected_internal_hostname = f"{job_id}.platformapi-tests"
             assert result["internal_hostname"] == expected_internal_hostname
@@ -817,7 +817,7 @@ class TestJobs:
             assert payload["http_url"] == f"http://{job_id}.jobs.neu.ro"
             assert (
                 payload["http_url_named"]
-                == f"http://{job_name}-{regular_user.name}.jobs.neu.ro"
+                == f"http://{job_name}--{regular_user.name}.jobs.neu.ro"
             )
             expected_internal_hostname = f"{job_id}.platformapi-tests"
             assert payload["internal_hostname"] == expected_internal_hostname
@@ -1646,7 +1646,6 @@ class TestJobs:
         run_job: Callable[..., Awaitable[None]],
         create_job_request_with_name: Callable[[str], Dict[str, Any]],
     ) -> None:
-        url = api.jobs_base_url
         job_name = "test-job-name"
         job_name2 = "test-job-name2"
         usr = await regular_user_factory()
@@ -1655,7 +1654,7 @@ class TestJobs:
         job_id = await run_job(usr, create_job_request_with_name(job_name))
         await run_job(usr, create_job_request_with_name(job_name2))
 
-        hostname = f"{job_name}-{usr.name}.jobs.neu.ro"
+        hostname = f"{job_name}--{usr.name}.jobs.neu.ro"
         jobs = await jobs_client.get_all_jobs({"hostname": hostname})
         job_ids = {job["id"] for job in jobs}
         assert job_ids == {job_id}
@@ -1666,27 +1665,35 @@ class TestJobs:
         assert job_ids == {job_id}
 
         # wrond base domain name
-        hostname = f"{job_name}-{usr.name}.example.org"
-        async with client.get(
-            url, headers=usr.headers, params={"hostname": hostname}
-        ) as response:
-            response_text = await response.text()
-            assert response.status == HTTPBadRequest.status_code, response_text
+        hostname = f"{job_name}--{usr.name}.example.org"
+        jobs = await jobs_client.get_all_jobs({"hostname": hostname})
+        assert jobs == {}
 
         hostname = f"{job_id}.example.org"
-        async with client.get(
-            url, headers=usr.headers, params={"hostname": hostname}
-        ) as response:
-            response_text = await response.text()
-            assert response.status == HTTPBadRequest.status_code, response_text
+        jobs = await jobs_client.get_all_jobs({"hostname": hostname})
+        assert jobs == {}
 
-        # wrond label
+        # non-existing names
+        hostname = f"nonexisting--{usr.name}.jobs.neu.ro"
+        jobs = await jobs_client.get_all_jobs({"hostname": hostname})
+        assert jobs == {}
+
+        hostname = f"{job_name}--nonexisting.jobs.neu.ro"
+        jobs = await jobs_client.get_all_jobs({"hostname": hostname})
+        assert jobs == {}
+
         hostname = "nonexisting.jobs.neu.ro"
-        async with client.get(
-            url, headers=usr.headers, params={"hostname": hostname}
-        ) as response:
-            response_text = await response.text()
-            assert response.status == HTTPBadRequest.status_code, response_text
+        jobs = await jobs_client.get_all_jobs({"hostname": hostname})
+        assert jobs == {}
+
+        # invalid names
+        hostname = f"!@#$--{usr.name}.jobs.neu.ro"
+        jobs = await jobs_client.get_all_jobs({"hostname": hostname})
+        assert jobs == {}
+
+        hostname = f"{job_name}--!@#$.jobs.neu.ro"
+        jobs = await jobs_client.get_all_jobs({"hostname": hostname})
+        assert jobs == {}
 
     @pytest.mark.asyncio
     async def test_get_job_by_hostname_another_owner(
@@ -1699,7 +1706,6 @@ class TestJobs:
         share_job: Callable[[_User, _User, Any], Awaitable[None]],
         create_job_request_with_name: Callable[[str], Dict[str, Any]],
     ) -> None:
-        url = api.jobs_base_url
         job_name = "test-job-name"
         job_name2 = "test-job-name2"
         usr1 = await regular_user_factory()
@@ -1713,18 +1719,20 @@ class TestJobs:
         await share_job(usr2, usr1, job_id)
 
         # shared job of another owner
-        hostname = f"{job_name}-{usr2.name}.jobs.neu.ro"
+        hostname = f"{job_name}--{usr2.name}.jobs.neu.ro"
         jobs = await jobs_client_usr1.get_all_jobs({"hostname": hostname})
         job_ids = {job["id"] for job in jobs}
         assert job_ids == {job_id}
 
         # unshared job of another owner
-        hostname = f"{job_name2}-{usr2.name}.jobs.neu.ro"
-        async with client.get(
-            url, headers=usr1.headers, params={"hostname": hostname}
-        ) as response:
-            response_text = await response.text()
-            assert response.status == HTTPForbidden.status_code, response_text
+        hostname = f"{job_name2}--{usr2.name}.jobs.neu.ro"
+        jobs = await jobs_client_usr1.get_all_jobs({"hostname": hostname})
+        assert jobs == {}
+
+        # nonexisting job of another owner
+        hostname = f"nonexisting--{usr2.name}.jobs.neu.ro"
+        jobs = await jobs_client_usr1.get_all_jobs({"hostname": hostname})
+        assert jobs == {}
 
     @pytest.mark.asyncio
     async def test_get_job_by_hostname_invalid_request(
@@ -1741,7 +1749,7 @@ class TestJobs:
 
         await run_job(usr, create_job_request_with_name(job_name))
 
-        hostname = f"{job_name}-{usr.name}.jobs.neu.ro"
+        hostname = f"{job_name}--{usr.name}.jobs.neu.ro"
         for params in (
             {"hostname": hostname, "name": job_name},
             {"hostname": hostname, "owner": usr.name},

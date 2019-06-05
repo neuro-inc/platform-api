@@ -98,7 +98,6 @@ class RegistryConfig:
 @dataclass(frozen=True)
 class OrchestratorConfig:
     jobs_domain_name_template: str
-    named_jobs_domain_name_template: str
 
     ssh_auth_domain_name: str
 
