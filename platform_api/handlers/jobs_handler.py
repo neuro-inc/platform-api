@@ -239,7 +239,7 @@ class JobsHandler:
         app.cleanup_ctx.append(self._context)
 
     async def _context(self, app: aiohttp.web.Application) -> AsyncIterator[None]:
-        with NotificationClient(url=self._config.notifications.url) as client:
+        async with NotificationClient(url=self._config.notifications.url) as client:
             self._notifications_client_instance = client
             yield
 
