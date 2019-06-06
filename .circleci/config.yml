@@ -1,3 +1,7 @@
+version: 2.1
+orbs:
+  codecov: codecov/codecov@1.0.4
+
 defaults: &defaults
   machine:
     image: circleci/classic:201711-01
@@ -5,7 +9,7 @@ defaults: &defaults
   working_directory: ~/platform-api
 
 
-version: 2
+
 jobs:
 
   gke_deploy:
@@ -52,13 +56,7 @@ jobs:
     steps:
       - checkout
 
-      - run:
-          name: Configuring Docker Client
-          command: |
-            make -s gke_login
-            # docker-credential-gcloud still relies on Python 2.7,
-            # thus we'd better pull testing images before we set up Python 3
-            make gke_docker_pull_test
+
 
       - run:
           name: Installing Dependencies
@@ -71,6 +69,40 @@ jobs:
             sudo apt-get install nfs-common
             export DEBIAN_FRONTEND="noninteractive"
             sudo apt-get install -y -q openssl
+
+# below rule cleans out hiredis, this is due to circle ci issue, to be resolved by moving to dockerized test execution
+      - run:
+          name: Setting Up Python Virtual Environment
+          command: |
+            python -m venv venv
+            source venv/bin/activate
+            pip install -U pip
+            make setup
+            pip uninstall -y hiredis
+
+      - run:
+          name: Running Static Code Analysis
+          command: |
+            source venv/bin/activate
+            make lint
+
+      - run:
+          name: Make Unit Tests
+          command: |
+            source venv/bin/activate
+            make test_unit
+
+      - codecov/upload:
+          file: .coverage.xml
+          flags: unit
+
+      - run:
+          name: Configuring Docker Client
+          command: |
+            make -s gke_login
+            # docker-credential-gcloud still relies on Python 2.7,
+            # thus we'd better pull testing images before we set up Python 3
+            make gke_docker_pull_test
 
       - run:
           name: Running Kubernetes
@@ -92,27 +124,15 @@ jobs:
 
             make start_k8s
 
-# below rule cleans out hiredis, this is due to circle ci issue, to be resolved by moving to dockerized test execution
       - run:
-          name: Setting Up Python Virtual Environment
+          name: Run Integration Tests
           command: |
-            python -m venv venv
             source venv/bin/activate
-            pip install -U pip
-            make setup
-            pip uninstall -y hiredis
+            make test_integration
 
-      - run:
-          name: Running Static Code Analysis
-          command: |
-            source venv/bin/activate
-            make lint
-
-      - run:
-          name: Run Platform Tests
-          command: |
-            source venv/bin/activate
-            make test_k8s_platform_api
+      - codecov/upload:
+          file: .coverage.xml
+          flags: integration
 
       - run:
           name: Running E2E Test Suite
