@@ -2,7 +2,7 @@ import asyncio
 import logging
 from dataclasses import dataclass, replace
 from pathlib import PurePath
-from typing import Any, Dict, List, Optional, Sequence, Set
+from typing import Any, AsyncIterator, Dict, List, Optional, Sequence, Set
 
 import aiohttp.web
 import trafaret as t
@@ -210,7 +210,7 @@ class JobsHandler:
         self._bulk_jobs_response_validator = t.Dict(
             {"jobs": t.List(self._job_response_validator)}
         )
-        self._notifications_client: Optional[NotificationClient] = None
+        self._notifications_client_instance: Optional[NotificationClient] = None
 
     @property
     def _jobs_service(self) -> JobsService:
@@ -219,6 +219,11 @@ class JobsHandler:
     @property
     def _auth_client(self) -> AuthClient:
         return self._app["auth_client"]
+
+    @property
+    def _notifications_client(self) -> NotificationClient:
+        assert self._notifications_client_instance
+        return self._notifications_client_instance
 
     def register(self, app: aiohttp.web.Application) -> None:
         app.add_routes(
@@ -233,10 +238,10 @@ class JobsHandler:
         )
         app.cleanup_ctx.append(self._context)
 
-    async def _context(self):
-        self._notifications_client = NotificationClient()
-        yield
-        await self._notifications_client.close()
+    async def _context(self, app: aiohttp.web.Application) -> AsyncIterator[None]:
+        with NotificationClient(url=self._config.notifications.url) as client:
+            self._notifications_client_instance = client
+            yield
 
     async def _create_job_request_validator(self, user: User) -> t.Trafaret:
         gpu_models = await self._jobs_service.get_available_gpu_models(user)

@@ -3,12 +3,23 @@ import json
 import uuid
 from dataclasses import dataclass
 from pathlib import Path, PurePath
-from typing import Any, AsyncIterator, Awaitable, Callable, Dict, Iterator, Optional
+from typing import (
+    Any,
+    AsyncIterator,
+    Awaitable,
+    Callable,
+    Dict,
+    Iterator,
+    List,
+    Optional,
+    Tuple,
+)
 from urllib.parse import urlsplit
 
 import aiohttp
 import aiohttp.web
 import pytest
+from aiohttp.test_utils import unused_port
 from async_generator import asynccontextmanager
 from async_timeout import timeout
 from yarl import URL
@@ -25,6 +36,7 @@ from platform_api.config import (
     Config,
     DatabaseConfig,
     JobsConfig,
+    NotificationsConfig,
     OAuthConfig,
     ServerConfig,
 )
@@ -363,6 +375,52 @@ def jobs_config() -> JobsConfig:
     return JobsConfig(orphaned_job_owner="compute", deletion_delay_s=0)
 
 
+class FakeNotificationsServer:
+    def __init__(self) -> None:
+        self.app = aiohttp.web.Application()
+        self.app.router.add_routes(
+            [aiohttp.web.post("/api/v1/notifications/{type}", self._notify)]
+        )
+        self.runner: Optional[aiohttp.web.AppRunner] = None
+        self.requests: List[Tuple[str, Dict[str, Any]]] = []
+
+    async def start(self) -> URL:
+        port = unused_port()
+        host = "127.0.0.1"
+        self.runner = aiohttp.web.AppRunner(self.app)
+        await self.runner.setup()
+        site = aiohttp.web.TCPSite(self.runner, host, port)
+        await site.start()
+        return URL(f"http://{host}:{port}")
+
+    async def stop(self) -> None:
+        assert self.runner is not None
+        await self.runner.cleanup()
+
+    async def _notify(self, request: aiohttp.web.Request) -> aiohttp.web.Response:
+        type = request.match_info["type"]
+        payload = await request.json()
+        self.requests.append((type, payload))
+        raise aiohttp.web.HTTPCreated
+
+
+@pytest.fixture()
+async def fake_notifications_server() -> AsyncIterator[
+    Tuple[URL, FakeNotificationsServer]
+]:
+    server = FakeNotificationsServer()
+    url = await server.start()
+    yield url, server
+    await server.stop()
+
+
+@pytest.fixture
+def notifications_config(
+    fake_notifications_server: Tuple[URL, FakeNotificationsServer]
+) -> NotificationsConfig:
+    return NotificationsConfig(url=fake_notifications_server[0])
+
+
 @pytest.fixture
 def config_factory(
     storage_config_host: StorageConfig,
@@ -372,6 +430,7 @@ def config_factory(
     auth_config: AuthConfig,
     es_config: ElasticsearchConfig,
     jobs_config: JobsConfig,
+    notifications_config: NotificationsConfig,
 ) -> Callable[..., Config]:
     def _factory(**kwargs: Any) -> Config:
         server_config = ServerConfig()
@@ -397,6 +456,7 @@ def config_factory(
             database=database_config,
             auth=auth_config,
             jobs=jobs_config,
+            notifications=notifications_config,
             config_client=config_client,
             **kwargs,
         )
