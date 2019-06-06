@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 set -o verbose
 docker tag $(cat AUTH_SERVER_IMAGE_NAME) platformauthapi:latest
-docker tag $GKE_DOCKER_REGISTRY/$GKE_PROJECT_ID/platformconfig:latest platformconfig:latest
+docker tag $GKE_DOCKER_REGISTRY/$GKE_PROJECT_ID/platformconfig:9d7cea532a7ab0e45871cb48cf355427a274dbd9 platformconfig:latest
 
 if [ ! "$CI" = true ]; then
     kubectl config use-context minikube
