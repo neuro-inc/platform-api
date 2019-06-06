@@ -7,6 +7,7 @@ from aiohttp.web import HTTPUnauthorized
 from async_exit_stack import AsyncExitStack
 from neuro_auth_client import AuthClient
 from neuro_auth_client.security import AuthScheme, setup_security
+from notifications_client import Client as NotificationClient
 
 from .cluster import Cluster, ClusterConfig, ClusterRegistry
 from .config import Config
