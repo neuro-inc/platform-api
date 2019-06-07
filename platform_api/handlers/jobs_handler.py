@@ -6,7 +6,7 @@ from typing import Any, Dict, List, Optional, Sequence, Set
 
 import aiohttp.web
 import trafaret as t
-from aiohttp_security import check_authorized, check_permission, permits
+from aiohttp_security import check_authorized, check_permission
 from multidict import MultiDictProxy
 from neuro_auth_client import AuthClient, Permission
 from neuro_auth_client.client import ClientSubTreeViewRoot
@@ -18,7 +18,6 @@ from platform_api.orchestrator.job import Job, JobStats
 from platform_api.orchestrator.job_request import (
     Container,
     ContainerVolume,
-    JobError,
     JobRequest,
     JobStatus,
 )
@@ -289,64 +288,39 @@ class JobsHandler:
         await check_authorized(request)
         user = await untrusted_user(request)
 
-        filter: Optional[JobFilter] = None
+        with log_debug_time(f"Retrieved job access tree for user '{user.name}'"):
+            tree = await self._auth_client.get_permissions_tree(user.name, "job:")
+
         jobs: List[Job] = []
 
-        hostname = request.query.get("hostname")
-        if hostname is None:
-            filter = self._job_filter_factory.create_from_query(request.query)
-        else:
-            if (
-                "name" in request.query
-                or "owner" in request.query
-                or "status" in request.query
-            ):
-                raise ValueError("Invalid request")
+        try:
+            bulk_job_filter = BulkJobFilterBuilder(
+                query_filter=self._job_filter_factory.create_from_query(request.query),
+                access_tree=tree,
+            ).build()
 
-            label, _, base_domain = hostname.partition(".")
-            filter = self._job_filter_factory.create_from_label(label)
-            if filter is None:
-                try:
-                    job = await self._jobs_service.get_job(label)
-                except JobError:
-                    pass
-                else:
-                    permission = Permission(uri=str(job.to_uri()), action="read")
-                    logger.info("Checking whether %r has %r", user, permission)
-                    if await permits(request, permission.action, [permission]):
-                        jobs.append(job)
-
-        if filter is not None:
-            with log_debug_time(f"Retrieved job access tree for user '{user.name}'"):
-                tree = await self._auth_client.get_permissions_tree(user.name, "job:")
-
-            try:
-                bulk_job_filter = BulkJobFilterBuilder(
-                    query_filter=filter, access_tree=tree
-                ).build()
-
-                if bulk_job_filter.bulk_filter:
-                    with log_debug_time(
-                        f"Read bulk jobs with {bulk_job_filter.bulk_filter}"
-                    ):
-                        jobs.extend(
-                            await self._jobs_service.get_all_jobs(
-                                bulk_job_filter.bulk_filter
-                            )
+            if bulk_job_filter.bulk_filter:
+                with log_debug_time(
+                    f"Read bulk jobs with {bulk_job_filter.bulk_filter}"
+                ):
+                    jobs.extend(
+                        await self._jobs_service.get_all_jobs(
+                            bulk_job_filter.bulk_filter
                         )
+                    )
 
-                if bulk_job_filter.shared_ids:
-                    with log_debug_time(
-                        f"Read shared jobs with {bulk_job_filter.shared_ids_filter}"
-                    ):
-                        jobs.extend(
-                            await self._jobs_service.get_jobs_by_ids(
-                                bulk_job_filter.shared_ids,
-                                job_filter=bulk_job_filter.shared_ids_filter,
-                            )
+            if bulk_job_filter.shared_ids:
+                with log_debug_time(
+                    f"Read shared jobs with {bulk_job_filter.shared_ids_filter}"
+                ):
+                    jobs.extend(
+                        await self._jobs_service.get_jobs_by_ids(
+                            bulk_job_filter.shared_ids,
+                            job_filter=bulk_job_filter.shared_ids_filter,
                         )
-            except JobFilterException:
-                pass
+                    )
+        except JobFilterException:
+            pass
 
         response_payload = {"jobs": [convert_job_to_job_response(job) for job in jobs]}
         self._bulk_jobs_response_validator.check(response_payload)
@@ -475,22 +449,27 @@ class JobFilterFactory:
         self._user_name_validator = create_user_name_validator()
 
     def create_from_query(self, query: MultiDictProxy) -> JobFilter:  # type: ignore
-        job_name = self._job_name_validator.check(query.get("name"))
-        statuses = {JobStatus(s) for s in query.getall("status", [])}
-        owners = {
-            self._user_name_validator.check(owner)
-            for owner in query.getall("owner", [])
-        }
-        return JobFilter(statuses=statuses, owners=owners, name=job_name)
+        hostname = query.get("hostname")
+        if hostname is None:
+            job_name = self._job_name_validator.check(query.get("name"))
+            statuses = {JobStatus(s) for s in query.getall("status", [])}
+            owners = {
+                self._user_name_validator.check(owner)
+                for owner in query.getall("owner", [])
+            }
+            return JobFilter(statuses=statuses, owners=owners, name=job_name)
 
-    def create_from_label(self, label: str) -> Optional[JobFilter]:
+        if "name" in query or "owner" in query or "status" in query:
+            raise ValueError("Invalid request")
+
+        label = hostname.partition(".")[0]
         job_name, _, owner = label.partition(JOB_USER_NAMES_SEPARATOR)
         if not owner:
-            return None
+            return JobFilter(id=label)
         job_name = self._job_name_validator.check(job_name)
         owner = self._user_name_validator.check(owner)
         if not job_name or not owner:
-            return None
+            raise ValueError("Invalid domain name")
         return JobFilter(owners={owner}, name=job_name)
 
 

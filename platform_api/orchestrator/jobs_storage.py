@@ -57,6 +57,7 @@ class JobFilter:
     )
     owners: AbstractSet[str] = field(default_factory=cast(Type[Set[str]], set))
     name: Optional[str] = None
+    id: Optional[str] = None
 
     def check(self, job: JobRecord) -> bool:
         if self.statuses and job.status not in self.statuses:
@@ -64,6 +65,8 @@ class JobFilter:
         if self.owners and job.owner not in self.owners:
             return False
         if self.name and self.name != job.name:
+            return False
+        if self.id and self.id != job.id:
             return False
         return True
 
