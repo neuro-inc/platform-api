@@ -1,4 +1,3 @@
-import asyncio
 from typing import Any, Callable, Dict, Tuple
 
 import aiohttp.web
@@ -28,7 +27,8 @@ class TestCannotStartJobQuotaReached:
         job_request = job_request_factory()
         async with client.post(url, headers=user.headers, json=job_request) as response:
             await response.read()
-        await api.runner.close()  #  Notification will be sent in graceful app shutdown
+        # Notification will be sent in graceful app shutdown
+        await api.runner.close()
         assert notifications_app["requests"] == []
 
     @pytest.mark.asyncio
@@ -48,6 +48,7 @@ class TestCannotStartJobQuotaReached:
         job_request = job_request_factory()
         async with client.post(url, headers=user.headers, json=job_request) as response:
             await response.read()
+        # Notification will be sent in graceful app shutdown
         await api.runner.close()
         assert (
             "job-cannot-start-quota-reached",
@@ -72,6 +73,7 @@ class TestCannotStartJobQuotaReached:
         job_request["container"]["resources"]["gpu"] = 1
         async with client.post(url, headers=user.headers, json=job_request) as response:
             await response.read()
+        # Notification will be sent in graceful app shutdown
         await api.runner.close()
         assert (
             "job-cannot-start-quota-reached",
