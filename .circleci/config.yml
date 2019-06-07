@@ -66,6 +66,7 @@ jobs:
       - run:
           name: Setting Up Python Virtual Environment
           command: |
+            pyenv local 3.6.5
             python -m venv venv
             source venv/bin/activate
             pip install -U pip
