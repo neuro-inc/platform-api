@@ -29,6 +29,7 @@ from platform_api.user import User, authorized_user, untrusted_user
 
 from .job_request_builder import ContainerBuilder
 from .validators import (
+    JOB_USER_NAMES_SEPARATOR,
     create_container_request_validator,
     create_container_response_validator,
     create_job_history_validator,
@@ -202,9 +203,6 @@ class JobsHandler:
         self._app = app
         self._config = config
 
-        self._job_base_domain = config.orchestrator.jobs_domain_name_template.partition(
-            "."
-        )[2]
         self._job_filter_factory = JobFilterFactory()
         self._job_response_validator = create_job_response_validator()
         self._bulk_jobs_response_validator = t.Dict(
@@ -306,18 +304,17 @@ class JobsHandler:
                 raise ValueError("Invalid request")
 
             label, _, base_domain = hostname.partition(".")
-            if base_domain == self._job_base_domain:
-                filter = self._job_filter_factory.create_from_label(label)
-                if filter is None:
-                    try:
-                        job = await self._jobs_service.get_job(label)
-                    except JobError:
-                        pass
-                    else:
-                        permission = Permission(uri=str(job.to_uri()), action="read")
-                        logger.info("Checking whether %r has %r", user, permission)
-                        if await permits(request, permission.action, [permission]):
-                            jobs.append(job)
+            filter = self._job_filter_factory.create_from_label(label)
+            if filter is None:
+                try:
+                    job = await self._jobs_service.get_job(label)
+                except JobError:
+                    pass
+                else:
+                    permission = Permission(uri=str(job.to_uri()), action="read")
+                    logger.info("Checking whether %r has %r", user, permission)
+                    if await permits(request, permission.action, [permission]):
+                        jobs.append(job)
 
         if filter is not None:
             with log_debug_time(f"Retrieved job access tree for user '{user.name}'"):
@@ -487,7 +484,7 @@ class JobFilterFactory:
         return JobFilter(statuses=statuses, owners=owners, name=job_name)
 
     def create_from_label(self, label: str) -> Optional[JobFilter]:
-        job_name, _, owner = label.partition("--")
+        job_name, _, owner = label.partition(JOB_USER_NAMES_SEPARATOR)
         if not owner:
             return None
         job_name = self._job_name_validator.check(job_name)

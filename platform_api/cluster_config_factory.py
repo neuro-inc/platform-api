@@ -47,6 +47,7 @@ _orchestrator_config_validator = t.Dict(
         ),
         "is_http_ingress_secure": t.Bool,
         "job_hostname_template": t.String,
+        t.Key("named_job_hostname_template", optional=True): t.String,  # deprecated
         "resource_pool_types": t.List(
             t.Dict(
                 {"gpu": t.Int, "gpu_model": t.Enum(*[m.value.id for m in GKEGPUModels])}

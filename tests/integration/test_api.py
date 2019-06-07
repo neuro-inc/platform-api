@@ -1664,14 +1664,16 @@ class TestJobs:
         job_ids = {job["id"] for job in jobs}
         assert job_ids == {job_id}
 
-        # wrond base domain name
+        # other base domain name
         hostname = f"{job_name}--{usr.name}.example.org"
         jobs = await jobs_client.get_all_jobs({"hostname": hostname})
-        assert not jobs
+        job_ids = {job["id"] for job in jobs}
+        assert job_ids == {job_id}
 
         hostname = f"{job_id}.example.org"
         jobs = await jobs_client.get_all_jobs({"hostname": hostname})
-        assert not jobs
+        job_ids = {job["id"] for job in jobs}
+        assert job_ids == {job_id}
 
         # non-existing names
         hostname = f"nonexisting--{usr.name}.jobs.neu.ro"
