@@ -38,6 +38,7 @@ from platform_api.resource import GPUModel, ResourcePoolType
 
 
 pytest_plugins = [
+    "tests.integration.api",
     "tests.integration.docker",
     "tests.integration.redis",
     "tests.integration.auth",
