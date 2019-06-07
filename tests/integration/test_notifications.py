@@ -10,14 +10,6 @@ from .api import ApiConfig
 from .conftest import ApiAddress
 
 
-async def _wait_for_notifications() -> None:
-    """
-    TODO find better way than sleep
-    :return:
-    """
-    await asyncio.sleep(0.2)
-
-
 class TestCannotStartJobQuotaReached:
     @pytest.mark.asyncio
     async def test_not_sent_if_quota_not_reached(
@@ -36,7 +28,7 @@ class TestCannotStartJobQuotaReached:
         job_request = job_request_factory()
         async with client.post(url, headers=user.headers, json=job_request) as response:
             await response.read()
-        await _wait_for_notifications()
+        await api.runner.close()  #  Notification will be sent in graceful app shutdown
         assert notifications_app["requests"] == []
 
     @pytest.mark.asyncio
@@ -56,7 +48,7 @@ class TestCannotStartJobQuotaReached:
         job_request = job_request_factory()
         async with client.post(url, headers=user.headers, json=job_request) as response:
             await response.read()
-        await _wait_for_notifications()
+        await api.runner.close()
         assert (
             "job-cannot-start-quota-reached",
             {"user_id": user.name},
@@ -80,7 +72,7 @@ class TestCannotStartJobQuotaReached:
         job_request["container"]["resources"]["gpu"] = 1
         async with client.post(url, headers=user.headers, json=job_request) as response:
             await response.read()
-        await _wait_for_notifications()
+        await api.runner.close()
         assert (
             "job-cannot-start-quota-reached",
             {"user_id": user.name},
