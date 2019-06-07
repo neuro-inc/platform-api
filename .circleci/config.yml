@@ -81,10 +81,7 @@ jobs:
       - run:
           name: Configuring Docker Client
           command: |
-            export CLOUDSDK_PYTHON=/usr/bin/python2
             make -s gke_login
-            # docker-credential-gcloud still relies on Python 2.7,
-            # thus we'd better pull testing images before we set up Python 3
             make gke_docker_pull_test
 
       - run:
