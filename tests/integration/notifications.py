@@ -1,4 +1,4 @@
-from typing import AsyncIterator, Tuple
+from typing import Any, AsyncIterator, NamedTuple, Tuple
 
 import aiohttp.web
 import pytest
@@ -10,10 +10,21 @@ from .api import ApiRunner
 from .conftest import ApiAddress
 
 
+class NotificationsServer(NamedTuple):
+    address: ApiAddress
+    app: aiohttp.web.Application
+
+    @property
+    def url(self) -> URL:
+        return URL(f"http://{self.address.host}:{self.address.port}")
+
+    @property
+    def requests(self) -> Tuple[Tuple[str, Any]]:
+        return tuple(request for request in self.app["requests"])  # type: ignore
+
+
 @pytest.fixture
-async def mock_notifications_server() -> AsyncIterator[
-    Tuple[ApiAddress, aiohttp.web.Application]
-]:
+async def mock_notifications_server() -> AsyncIterator[NotificationsServer]:
     async def _notify(request: aiohttp.web.Request) -> aiohttp.web.Response:
         type = request.match_info["type"]
         payload = await request.json()
@@ -31,13 +42,12 @@ async def mock_notifications_server() -> AsyncIterator[
     app = _create_app()
     runner = ApiRunner(app, port=8083)
     api_address = await runner.run()
-    yield api_address, app
+    yield NotificationsServer(address=api_address, app=app)
     await runner.close()
 
 
 @pytest.fixture
 def notifications_config(
-    mock_notifications_server: Tuple[ApiAddress, aiohttp.web.Application]
+    mock_notifications_server: NotificationsServer
 ) -> NotificationsConfig:
-    api_address = mock_notifications_server[0]
-    return NotificationsConfig(url=URL(f"http://{api_address.host}:{api_address.port}"))
+    return NotificationsConfig(url=mock_notifications_server.url)

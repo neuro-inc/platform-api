@@ -1,4 +1,4 @@
-from typing import Any, Callable, Dict, Tuple
+from typing import Any, Callable, Dict
 
 import aiohttp.web
 import pytest
@@ -6,7 +6,7 @@ import pytest
 from platform_api.orchestrator.job import Quota
 
 from .api import ApiConfig
-from .conftest import ApiAddress
+from .notifications import NotificationsServer
 
 
 class TestCannotStartJobQuotaReached:
@@ -18,9 +18,8 @@ class TestCannotStartJobQuotaReached:
         job_request_factory: Callable[[], Dict[str, Any]],
         jobs_client: Callable[[], Any],
         regular_user_factory: Callable[..., Any],
-        mock_notifications_server: Tuple[ApiAddress, aiohttp.web.Application],
+        mock_notifications_server: NotificationsServer,
     ) -> None:
-        notifications_app = mock_notifications_server[1]
         quota = Quota(total_non_gpu_run_time_minutes=100)
         user = await regular_user_factory(quota=quota)
         url = api.jobs_base_url
@@ -29,7 +28,7 @@ class TestCannotStartJobQuotaReached:
             await response.read()
         # Notification will be sent in graceful app shutdown
         await api.runner.close()
-        assert notifications_app["requests"] == []
+        assert len(mock_notifications_server.requests) == 0
 
     @pytest.mark.asyncio
     async def test_sent_if_non_gpu_quota_reached(
@@ -39,9 +38,8 @@ class TestCannotStartJobQuotaReached:
         job_request_factory: Callable[[], Dict[str, Any]],
         jobs_client: Callable[[], Any],
         regular_user_factory: Callable[..., Any],
-        mock_notifications_server: Tuple[ApiAddress, aiohttp.web.Application],
+        mock_notifications_server: NotificationsServer,
     ) -> None:
-        notifications_app = mock_notifications_server[1]
         quota = Quota(total_non_gpu_run_time_minutes=0)
         user = await regular_user_factory(quota=quota)
         url = api.jobs_base_url
@@ -53,7 +51,7 @@ class TestCannotStartJobQuotaReached:
         assert (
             "job-cannot-start-quota-reached",
             {"user_id": user.name},
-        ) in notifications_app["requests"]
+        ) in mock_notifications_server.requests
 
     @pytest.mark.asyncio
     async def test_sent_if_gpu_quota_reached(
@@ -63,9 +61,8 @@ class TestCannotStartJobQuotaReached:
         job_request_factory: Callable[[], Dict[str, Any]],
         jobs_client: Callable[[], Any],
         regular_user_factory: Callable[..., Any],
-        mock_notifications_server: Tuple[ApiAddress, aiohttp.web.Application],
+        mock_notifications_server: NotificationsServer,
     ) -> None:
-        notifications_app = mock_notifications_server[1]
         quota = Quota(total_gpu_run_time_minutes=0)
         user = await regular_user_factory(quota=quota)
         url = api.jobs_base_url
@@ -78,4 +75,4 @@ class TestCannotStartJobQuotaReached:
         assert (
             "job-cannot-start-quota-reached",
             {"user_id": user.name},
-        ) in notifications_app["requests"]
+        ) in mock_notifications_server.requests
