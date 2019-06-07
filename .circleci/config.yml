@@ -1,6 +1,4 @@
-version: 2.1
-orbs:
-  codecov: codecov/codecov@1.0.4
+version: 2.0
 
 defaults: &defaults
   machine:
@@ -91,10 +89,7 @@ jobs:
           command: |
             source venv/bin/activate
             make test_unit
-
-      - codecov/upload:
-          file: .coverage.xml
-          flags: unit
+            codecov -F test_unit
 
       - run:
           name: Configuring Docker Client
@@ -129,16 +124,14 @@ jobs:
           command: |
             source venv/bin/activate
             make test_integration
-
-      - codecov/upload:
-          file: .coverage.xml
-          flags: integration
+            codecov -F integration
 
       - run:
           name: Running E2E Test Suite
           command: |
             source venv/bin/activate
             make test_k8s_platform_api_e2e
+            codecov -F e2e
 
       - run:
           name: Stopping Kubernetes

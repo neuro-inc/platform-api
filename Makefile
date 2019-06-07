@@ -38,7 +38,7 @@ test_integration:
 	pytest -vv --maxfail=3 --cov-config=setup.cfg --cov platform_api tests/integration
 
 test_e2e:
-	pytest -vv tests/e2e
+	pytest -vv --cov-config=setup.cfg --cov platform_api tests/e2e
 
 build_ssh_auth_k8s:
 	docker build --build-arg PIP_EXTRA_INDEX_URL \
