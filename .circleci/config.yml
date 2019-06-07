@@ -56,7 +56,6 @@ jobs:
     steps:
       - checkout
 
-# below rule cleans out hiredis, this is due to circle ci issue, to be resolved by moving to dockerized test execution
       - run:
           name: Setting Up Python Virtual Environment
           command: |
@@ -65,7 +64,6 @@ jobs:
             source venv/bin/activate
             pip install -U pip
             make setup
-#            pip uninstall -y hiredis
 
       - run:
           name: Running Static Code Analysis
@@ -98,21 +96,6 @@ jobs:
       - run:
           name: Running Kubernetes
           command: |
-            # https://github.com/kubernetes/kubernetes/blob/master/CHANGELOG-1.10.md#before-upgrading
-            #
-            # MountPropagation feature is now beta. As a consequence, all
-            # volume mounts in containers are now rslave on Linux by default.
-            # To make this default work in all Linux environments the entire
-            # mount tree should be marked as shareable, e.g. via mount
-            # --make-rshared /. All Linux distributions that use systemd
-            # already have the root directory mounted as rshared and hence
-            # they need not do anything. In Linux environments without systemd
-            # we recommend running mount --make-rshared / during boot before
-            # docker is started.
-            sudo mount --make-rshared /
-            sudo mount --make-rshared /run
-            sudo mount --make-rshared /var/lib/docker
-
             make start_k8s
 
       - run:
