@@ -6,8 +6,8 @@ from yarl import URL
 
 from platform_api.config import NotificationsConfig
 
+from .api import ApiRunner
 from .conftest import ApiAddress
-from .test_api import ApiRunner
 
 
 @pytest.fixture
