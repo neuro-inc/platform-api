@@ -56,14 +56,6 @@ jobs:
     steps:
       - checkout
 
-
-
-      - run:
-          name: Installing Dependencies
-          command: |
-            sudo apt-get install nfs-common
-            sudo modprobe nfsd nfs
-
 # below rule cleans out hiredis, this is due to circle ci issue, to be resolved by moving to dockerized test execution
       - run:
           name: Setting Up Python Virtual Environment
@@ -96,6 +88,12 @@ jobs:
             # docker-credential-gcloud still relies on Python 2.7,
             # thus we'd better pull testing images before we set up Python 3
             make gke_docker_pull_test
+
+      - run:
+          name: Installing NFS-related stuff
+          command: |
+            sudo apt-get install nfs-common
+            sudo modprobe nfsd nfs
 
       - run:
           name: Running Kubernetes
