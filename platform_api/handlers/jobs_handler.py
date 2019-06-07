@@ -321,13 +321,7 @@ class JobsHandler:
 
         if filter is not None:
             with log_debug_time(f"Retrieved job access tree for user '{user.name}'"):
-                if len(filter.owners) == 1:
-                    tree_root_uri = "job://" + list(filter.owners)[0]
-                else:
-                    tree_root_uri = "job://"
-                tree = await self._auth_client.get_permissions_tree(
-                    user.name, tree_root_uri
-                )
+                tree = await self._auth_client.get_permissions_tree(user.name, "job:")
 
             try:
                 bulk_job_filter = BulkJobFilterBuilder(
