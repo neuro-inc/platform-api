@@ -479,6 +479,15 @@ class RedisJobsStorage(JobsStorage):
     ) -> List[JobRecord]:
         if not job_filter:
             job_filter = JobFilter()
+        elif job_filter.id:
+            try:
+                job = await self.get_job(job_filter.id)
+            except JobError:
+                return []
+            if job_filter.check(job):
+                return [job]
+            else:
+                return []
         job_ids = await self._get_job_ids(
             statuses=job_filter.statuses, owners=job_filter.owners, name=job_filter.name
         )
