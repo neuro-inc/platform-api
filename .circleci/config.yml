@@ -62,7 +62,7 @@ jobs:
           name: Installing Dependencies
           command: |
             sudo apt-get install nfs-common
-            sudo modprobe nfsd
+            sudo modprobe nfsd nfs
 
 # below rule cleans out hiredis, this is due to circle ci issue, to be resolved by moving to dockerized test execution
       - run:
