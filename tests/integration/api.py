@@ -29,6 +29,7 @@ from .conftest import ApiRunner
 class ApiConfig(NamedTuple):
     host: str
     port: int
+    runner: ApiRunner
 
     @property
     def endpoint(self) -> str:
@@ -65,7 +66,7 @@ async def api(config: Config) -> AsyncIterator[ApiConfig]:
     app = await create_app(config, get_cluster_configs([config.cluster]))
     runner = ApiRunner(app, port=8080)
     api_address = await runner.run()
-    api_config = ApiConfig(host=api_address.host, port=api_address.port)
+    api_config = ApiConfig(host=api_address.host, port=api_address.port, runner=runner)
     yield api_config
     await runner.close()
 
@@ -77,7 +78,7 @@ async def api_with_oauth(config_with_oauth: Config) -> AsyncIterator[ApiConfig]:
     )
     runner = ApiRunner(app, port=8081)
     api_address = await runner.run()
-    api_config = ApiConfig(host=api_address.host, port=api_address.port)
+    api_config = ApiConfig(host=api_address.host, port=api_address.port, runner=runner)
     yield api_config
     await runner.close()
 
