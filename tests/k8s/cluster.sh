@@ -36,7 +36,7 @@ function k8s::start {
     sudo -E mkdir -p ~/.minikube/files/files
 
     sudo -E minikube config set WantReportErrorPrompt false
-    sudo -E minikube start --vm-driver=none --kubernetes-version=v1.10.0
+    sudo -E minikube start --vm-driver=none --kubernetes-version=v1.14.3
 
     k8s::wait k8s::setup_namespace
     k8s::wait "kubectl get po --all-namespaces"
