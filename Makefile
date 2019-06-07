@@ -78,7 +78,8 @@ gke_login:
 
 gke_docker_pull_test:
 	docker pull $$(cat AUTH_SERVER_IMAGE_NAME)
-	docker pull $(GKE_DOCKER_REGISTRY)/$(GKE_PROJECT_ID)/platformconfig:latest
+	# use old platformconfig image that supports loading of config from storage
+	docker pull $(GKE_DOCKER_REGISTRY)/$(GKE_PROJECT_ID)/platformconfig:9d7cea532a7ab0e45871cb48cf355427a274dbd9
 
 _helm:
 	curl https://raw.githubusercontent.com/kubernetes/helm/master/scripts/get | bash -s -- -v v2.11.0
