@@ -7,6 +7,7 @@ from aiohttp.web import HTTPUnauthorized
 from async_exit_stack import AsyncExitStack
 from neuro_auth_client import AuthClient
 from neuro_auth_client.security import AuthScheme, setup_security
+from notifications_client import Client as NotificationsClient
 
 from .cluster import Cluster, ClusterConfig, ClusterRegistry
 from .config import Config
@@ -173,6 +174,10 @@ async def create_app(
     async def _init_app(app: aiohttp.web.Application) -> AsyncIterator[None]:
         async with AsyncExitStack() as exit_stack:
 
+            logger.info("Initializing Notifications client")
+            notifications_client = NotificationsClient(url=config.notifications.url)
+            await exit_stack.enter_async_context(notifications_client)
+
             logger.info("Initializing Redis client")
             redis_client = await exit_stack.enter_async_context(
                 create_redis_client(config.database.redis)
@@ -197,6 +202,7 @@ async def create_app(
                 cluster_registry=cluster_registry,
                 jobs_storage=jobs_storage,
                 jobs_config=config.jobs,
+                notifications_client=notifications_client,
             )
 
             logger.info("Initializing JobsPoller")
