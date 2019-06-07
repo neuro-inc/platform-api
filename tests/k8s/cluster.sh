@@ -12,7 +12,7 @@ function k8s::install_kubectl {
 function k8s::install_minikube {
     # we have to pin this version in order to run minikube on CircleCI
     # Ubuntu 14 VMs. The newer versions depend on systemd.
-    local minikube_version="1.1.0"
+    local minikube_version="v1.1.0"
     curl -Lo minikube https://storage.googleapis.com/minikube/releases/${minikube_version}/minikube-linux-amd64
     chmod +x minikube
     sudo mv minikube /usr/local/bin/
