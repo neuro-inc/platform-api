@@ -480,7 +480,7 @@ class RedisJobsStorage(JobsStorage):
         if not job_filter:
             job_filter = JobFilter()
         elif job_filter.ids:
-            return await self.get_jobs_by_ids(job_filter.ids)
+            return await self.get_jobs_by_ids(job_filter.ids, job_filter)
         job_ids = await self._get_job_ids(
             statuses=job_filter.statuses, owners=job_filter.owners, name=job_filter.name
         )
