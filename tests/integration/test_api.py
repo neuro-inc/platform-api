@@ -1728,6 +1728,47 @@ class TestJobs:
         assert not jobs
 
     @pytest.mark.asyncio
+    async def test_get_job_by_hostname_and_status(
+        self,
+        api: ApiConfig,
+        client: aiohttp.ClientSession,
+        regular_user_factory: Callable[[], Any],
+        jobs_client_factory: Callable[[_User], JobsClient],
+        run_job: Callable[..., Awaitable[None]],
+        create_job_request_with_name: Callable[[str], Dict[str, Any]],
+    ) -> None:
+        job_name = "test-job-name"
+        job_name2 = "test-job-name2"
+        usr = await regular_user_factory()
+        jobs_client = jobs_client_factory(usr)
+
+        job_id = await run_job(usr, create_job_request_with_name(job_name))
+        await run_job(usr, create_job_request_with_name(job_name2))
+
+        for hostname in (
+            f"{job_name}--{usr.name}.jobs.neu.ro",
+            f"{job_id}.jobs.neu.ro",
+        ):
+            filters = [("hostname", hostname), ("status", "running")]
+            jobs = await jobs_client.get_all_jobs(filters)
+            job_ids = {job["id"] for job in jobs}
+            assert job_ids == {job_id}
+
+            filters = [("hostname", hostname), ("status", "succeeded")]
+            jobs = await jobs_client.get_all_jobs(filters)
+            job_ids = {job["id"] for job in jobs}
+            assert job_ids == set()
+
+            filters = [
+                ("hostname", hostname),
+                ("status", "running"),
+                ("status", "succeeded"),
+            ]
+            jobs = await jobs_client.get_all_jobs(filters)
+            job_ids = {job["id"] for job in jobs}
+            assert job_ids == {job_id}
+
+    @pytest.mark.asyncio
     async def test_get_job_by_hostname_invalid_request(
         self,
         api: ApiConfig,
@@ -1746,7 +1787,6 @@ class TestJobs:
         for params in (
             {"hostname": hostname, "name": job_name},
             {"hostname": hostname, "owner": usr.name},
-            {"hostname": hostname, "status": "pending"},
         ):
             async with client.get(url, headers=usr.headers, params=params) as response:
                 response_text = await response.text()
@@ -1755,8 +1795,8 @@ class TestJobs:
                 assert result["error"] == "Invalid request"
 
         for params in (
-            {"hostname": f"!@#$--{usr.name}.jobs.neu.ro"},
-            {"hostname": f"{job_name}--!@#$.jobs.neu.ro"},
+            {"hostname": f"test_job--{usr.name}.jobs.neu.ro"},
+            {"hostname": f"{job_name}--test_user.jobs.neu.ro"},
         ):
             async with client.get(url, headers=usr.headers, params=params) as response:
                 response_text = await response.text()

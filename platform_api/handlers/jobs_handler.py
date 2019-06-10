@@ -449,28 +449,34 @@ class JobFilterFactory:
         self._user_name_validator = create_user_name_validator()
 
     def create_from_query(self, query: MultiDictProxy) -> JobFilter:  # type: ignore
+        statuses = {JobStatus(s) for s in query.getall("status", [])}
         hostname = query.get("hostname")
         if hostname is None:
-            job_name = self._job_name_validator.check(query.get("name"))
-            statuses = {JobStatus(s) for s in query.getall("status", [])}
+            job_name = query.get("name")
+            if job_name is not None:
+                job_name = self._job_name_validator.check(job_name)
+                if not job_name:
+                    raise ValueError("Invalid request")
             owners = {
                 self._user_name_validator.check(owner)
                 for owner in query.getall("owner", [])
             }
+            if None in owners:
+                raise ValueError("Invalid request")
             return JobFilter(statuses=statuses, owners=owners, name=job_name)
 
-        if "name" in query or "owner" in query or "status" in query:
+        if "name" in query or "owner" in query:
             raise ValueError("Invalid request")
 
         label = hostname.partition(".")[0]
-        job_name, _, owner = label.partition(JOB_USER_NAMES_SEPARATOR)
-        if not owner:
-            return JobFilter(id=label)
+        job_name, sep, owner = label.rpartition(JOB_USER_NAMES_SEPARATOR)
+        if not sep:
+            return JobFilter(statuses=statuses, ids={label})
         job_name = self._job_name_validator.check(job_name)
         owner = self._user_name_validator.check(owner)
         if not job_name or not owner:
             raise ValueError("Invalid domain name")
-        return JobFilter(owners={owner}, name=job_name)
+        return JobFilter(statuses=statuses, owners={owner}, name=job_name)
 
 
 @dataclass(frozen=True)

@@ -532,8 +532,10 @@ class Job:
     def http_host_named(self) -> Optional[str]:
         if not self.name:
             return None
+        from platform_api.handlers.validators import JOB_USER_NAMES_SEPARATOR
+
         return self._orchestrator_config.jobs_domain_name_template.format(
-            job_id=f"{self.name}--{self.owner}"
+            job_id=f"{self.name}{JOB_USER_NAMES_SEPARATOR}{self.owner}"
         )
 
     @property
