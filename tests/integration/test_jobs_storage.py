@@ -644,12 +644,12 @@ class TestRedisJobsStorage:
         job1, job2 = islice(jobs, 2)
 
         job_filter = JobFilter(ids={job1.id})
-        result = await storage.get_all_jobs(job_filter)
-        assert result == {job1}
+        job_ids = {job.id for job in await storage.get_all_jobs(job_filter)}
+        assert job_ids == {job1.id}
 
         job_filter = JobFilter(ids={job1.id, job2.id})
-        result = await storage.get_all_jobs(job_filter)
-        assert result == {job1, job2}
+        job_ids = {job.id for job in await storage.get_all_jobs(job_filter)}
+        assert job_ids == {job1.id, job2.id}
 
     @pytest.mark.asyncio
     async def test_get_all_filter_by_hostname_and_status(
@@ -657,43 +657,47 @@ class TestRedisJobsStorage:
     ) -> None:
         storage, jobs = await self.prepare_filtering_test(redis_client)
 
-        running_jobs = set(
-            islice((job for job in jobs if job.status == JobStatus.RUNNING), 2)
-        )
-        succeeded_jobs = set(
-            islice((job for job in jobs if job.status == JobStatus.SUCCEEDED), 2)
-        )
-        running_job_ids = {job.id for job in running_jobs}
-        succeeded_job_ids = {job.id for job in succeeded_jobs}
+        running_job_ids = {
+            job.id
+            for job in islice(
+                (job for job in jobs if job.status == JobStatus.RUNNING), 2
+            )
+        }
+        succeeded_job_ids = {
+            job.id
+            for job in islice(
+                (job for job in jobs if job.status == JobStatus.SUCCEEDED), 2
+            )
+        }
 
         statuses = {JobStatus.RUNNING}
         job_filter = JobFilter(ids=running_job_ids, statuses=statuses)
-        result = await storage.get_all_jobs(job_filter)
-        assert result == running_jobs
+        job_ids = {job.id for job in await storage.get_all_jobs(job_filter)}
+        assert job_ids == running_job_ids
 
         statuses = {JobStatus.SUCCEEDED, JobStatus.RUNNING}
         job_filter = JobFilter(ids=running_job_ids, statuses=statuses)
-        result = await storage.get_all_jobs(job_filter)
-        assert result == running_jobs
+        job_ids = {job.id for job in await storage.get_all_jobs(job_filter)}
+        assert job_ids == running_job_ids
 
         statuses = {JobStatus.SUCCEEDED}
         job_filter = JobFilter(ids=running_job_ids, statuses=statuses)
-        result = await storage.get_all_jobs(job_filter)
-        assert result == set()
+        job_ids = {job.id for job in await storage.get_all_jobs(job_filter)}
+        assert job_ids == set()
 
         statuses = {JobStatus.FAILED, JobStatus.RUNNING}
         job_filter = JobFilter(
             ids=running_job_ids | succeeded_job_ids, statuses=statuses
         )
-        result = await storage.get_all_jobs(job_filter)
-        assert result == running_jobs
+        job_ids = {job.id for job in await storage.get_all_jobs(job_filter)}
+        assert job_ids == running_job_ids
 
         statuses = {JobStatus.SUCCEEDED, JobStatus.FAILED, JobStatus.RUNNING}
         job_filter = JobFilter(
             ids=running_job_ids | succeeded_job_ids, statuses=statuses
         )
-        result = await storage.get_all_jobs(job_filter)
-        assert result == running_jobs | succeeded_jobs
+        job_ids = {job.id for job in await storage.get_all_jobs(job_filter)}
+        assert job_ids == running_job_ids | succeeded_job_ids
 
     @pytest.mark.asyncio
     async def test_get_running_empty(self, redis_client: aioredis.Redis) -> None:
