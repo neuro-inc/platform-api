@@ -304,7 +304,9 @@ class EnvironConfigFactory:
 
     def create_config_client(self) -> platform_api.config_client.ConfigClient:
         platform_config_url = URL(self._environ["NP_PLATFORM_CONFIG_URI"])
-        return platform_api.config_client.ConfigClient(base_url=platform_config_url)
+        return platform_api.config_client.ConfigClient(
+            base_url=platform_config_url, service_token=self._environ["NP_AUTH_TOKEN"]
+        )
 
     def create_notifications(self) -> NotificationsConfig:
         url = URL(self._environ["NP_NOTIFICATIONS_URL"])
