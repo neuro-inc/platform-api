@@ -467,8 +467,6 @@ class JobFilterFactory:
             return JobFilter(statuses=statuses, ids={label})
         job_name = self._job_name_validator.check(job_name)
         owner = self._user_name_validator.check(owner)
-        if not job_name or not owner:
-            raise ValueError("Invalid domain name")
         return JobFilter(statuses=statuses, owners={owner}, name=job_name)
 
 
