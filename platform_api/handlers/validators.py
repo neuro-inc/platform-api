@@ -19,7 +19,7 @@ JOB_NAME_MAX_LENGTH = 40
 # The length limit for DNS label is 63 chars, minus 1 char for the dash.
 USER_NAME_MAX_LENGTH = 63 - 1 - JOB_NAME_MAX_LENGTH
 
-OptionalString = t.String | t.Null
+OptionalString = t.String(allow_blank=True) | t.Null
 
 
 def create_job_name_validator(
