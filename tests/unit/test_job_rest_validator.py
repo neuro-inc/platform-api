@@ -219,6 +219,32 @@ class TestJobResponseValidator:
         validator = create_job_response_validator()
         assert validator.check(response)
 
+    def test_job_empty_description(self) -> None:
+        container = {
+            "image": "testimage",
+            "resources": {"cpu": 0.1, "memory_mb": 16, "shm": True},
+            "ssh": {"port": 666},
+        }
+        response = {
+            "id": "test-job-id",
+            "owner": "tests",
+            "status": "pending",
+            "name": "test-job-name",
+            "description": "test-job",
+            "history": {
+                "status": "pending",
+                "reason": None,
+                "description": "",
+                "created_at": "now",
+            },
+            "container": container,
+            "ssh_server": "nobody@ssh-auth",
+            "ssh_auth_server": "nobody@ssh-auth",
+            "is_preemptible": False,
+        }
+        validator = create_job_response_validator()
+        assert validator.check(response)
+
     def test_job_details_without_name(self) -> None:
         container = {
             "image": "testimage",
