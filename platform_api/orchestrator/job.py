@@ -14,6 +14,11 @@ from platform_api.cluster_config import OrchestratorConfig, StorageConfig
 from .job_request import JobRequest, JobStatus
 
 
+# For named jobs, their hostname is of the form of
+# `{job-id}{JOB_USER_NAMES_SEPARATOR}{job-owner}.jobs.neu.ro`.
+JOB_USER_NAMES_SEPARATOR = "--"
+
+
 logger = logging.getLogger(__name__)
 current_datetime_factory = partial(datetime.now, timezone.utc)
 

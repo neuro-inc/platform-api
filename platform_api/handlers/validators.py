@@ -3,6 +3,7 @@ from typing import Any, Dict, Optional, Sequence, Set
 import trafaret as t
 from yarl import URL
 
+from platform_api.orchestrator.job import JOB_USER_NAMES_SEPARATOR
 from platform_api.orchestrator.job_request import JobStatus
 from platform_api.resource import GPUModel
 
@@ -15,7 +16,6 @@ USER_NAME_PATTERN = "^[a-z0-9]([a-z0-9]|(-[a-z0-9]))*$"
 # therefore job-ID has to conform job-name validator; all job-IDs are
 # of the form `job-{uuid4()}` of length 40.
 JOB_NAME_MAX_LENGTH = 40
-JOB_USER_NAMES_SEPARATOR = "--"
 # For named jobs, their hostname is of the form of
 # `{job-id}{JOB_USER_NAMES_SEPARATOR}{job-owner}.jobs.neu.ro`.
 # The length limit for DNS label is 63 chars.

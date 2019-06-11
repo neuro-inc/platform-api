@@ -14,7 +14,7 @@ from yarl import URL
 
 from platform_api.config import Config, RegistryConfig, StorageConfig
 from platform_api.log import log_debug_time
-from platform_api.orchestrator.job import Job, JobStats
+from platform_api.orchestrator.job import JOB_USER_NAMES_SEPARATOR, Job, JobStats
 from platform_api.orchestrator.job_request import (
     Container,
     ContainerVolume,
@@ -28,7 +28,6 @@ from platform_api.user import User, authorized_user, untrusted_user
 
 from .job_request_builder import ContainerBuilder
 from .validators import (
-    JOB_USER_NAMES_SEPARATOR,
     create_container_request_validator,
     create_container_response_validator,
     create_job_history_validator,
@@ -452,17 +451,11 @@ class JobFilterFactory:
         statuses = {JobStatus(s) for s in query.getall("status", [])}
         hostname = query.get("hostname")
         if hostname is None:
-            job_name = query.get("name")
-            if job_name is not None:
-                job_name = self._job_name_validator.check(job_name)
-                if not job_name:
-                    raise ValueError("Invalid request")
+            job_name = self._job_name_validator.check(query.get("name"))
             owners = {
                 self._user_name_validator.check(owner)
                 for owner in query.getall("owner", [])
             }
-            if None in owners:
-                raise ValueError("Invalid request")
             return JobFilter(statuses=statuses, owners=owners, name=job_name)
 
         if "name" in query or "owner" in query:
