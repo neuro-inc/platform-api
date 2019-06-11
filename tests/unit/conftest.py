@@ -4,6 +4,8 @@ from pathlib import Path, PurePath
 from typing import AsyncIterator, Callable, Iterator, List, Optional
 
 import pytest
+from notifications_client import Client as NotificationsClient
+from notifications_client.notification import AbstractNotification
 from yarl import URL
 
 from platform_api.cluster import Cluster, ClusterConfig, ClusterRegistry
@@ -102,6 +104,20 @@ class MockJobsStorage(InMemoryJobsStorage):
         await super().set_job(job)
 
 
+class MockNotificationsClient(NotificationsClient):
+    def __init__(self) -> None:
+        pass
+
+    async def notify(self, notification: AbstractNotification) -> None:
+        pass
+
+    def init(self) -> None:
+        pass
+
+    def close(self) -> None:
+        pass
+
+
 @pytest.fixture
 def job_request_factory() -> Callable[[], JobRequest]:
     def factory() -> JobRequest:
@@ -190,6 +206,11 @@ def mock_jobs_storage() -> MockJobsStorage:
 
 
 @pytest.fixture
+def mock_notifications_client() -> NotificationsClient:
+    return MockNotificationsClient()
+
+
+@pytest.fixture
 def jobs_config() -> JobsConfig:
     return JobsConfig(orphaned_job_owner="compute")
 
@@ -199,11 +220,13 @@ def jobs_service(
     cluster_registry: ClusterRegistry,
     mock_jobs_storage: MockJobsStorage,
     jobs_config: JobsConfig,
+    mock_notifications_client: NotificationsClient,
 ) -> JobsService:
     return JobsService(
         cluster_registry=cluster_registry,
         jobs_storage=mock_jobs_storage,
         jobs_config=jobs_config,
+        notifications_client=mock_notifications_client,
     )
 
 

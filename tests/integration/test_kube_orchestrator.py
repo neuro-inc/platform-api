@@ -1328,7 +1328,7 @@ async def mock_kubernetes_server() -> AsyncIterator[ApiConfig]:
     app = _create_app()
     runner = ApiRunner(app, port=8080)
     api_address = await runner.run()
-    api_config = ApiConfig(host=api_address.host, port=api_address.port)
+    api_config = ApiConfig(host=api_address.host, port=api_address.port, runner=runner)
     yield api_config
     await runner.close()
 

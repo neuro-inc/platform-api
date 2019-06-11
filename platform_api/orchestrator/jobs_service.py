@@ -2,6 +2,10 @@ import logging
 from typing import AsyncIterator, Iterable, List, Optional, Sequence, Tuple
 
 from async_generator import asynccontextmanager
+from notifications_client import (
+    Client as NotificationsClient,
+    JobCannotStartQuotaReached,
+)
 
 from platform_api.cluster import (
     Cluster,
@@ -52,10 +56,12 @@ class JobsService:
         cluster_registry: ClusterRegistry,
         jobs_storage: JobsStorage,
         jobs_config: JobsConfig,
+        notifications_client: NotificationsClient,
     ) -> None:
         self._cluster_registry = cluster_registry
         self._jobs_storage = jobs_storage
         self._jobs_config = jobs_config
+        self._notifications_client = notifications_client
 
         self._max_deletion_attempts = 3
 
@@ -177,7 +183,13 @@ class JobsService:
         is_preemptible: bool = False,
     ) -> Tuple[Job, Status]:
 
-        await self._raise_for_run_time_quota(user)
+        try:
+            await self._raise_for_run_time_quota(user)
+        except QuotaException:
+            await self._notifications_client.notify(
+                JobCannotStartQuotaReached(user.name)
+            )
+            raise
         record = JobRecord.create(
             request=job_request,
             owner=user.name,

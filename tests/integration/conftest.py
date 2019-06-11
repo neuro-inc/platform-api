@@ -7,6 +7,7 @@ from typing import Any, AsyncIterator, Awaitable, Callable, Dict, Iterator, Opti
 from urllib.parse import urlsplit
 
 import aiohttp
+import aiohttp.pytest_plugin
 import aiohttp.web
 import pytest
 from async_generator import asynccontextmanager
@@ -25,6 +26,7 @@ from platform_api.config import (
     Config,
     DatabaseConfig,
     JobsConfig,
+    NotificationsConfig,
     OAuthConfig,
     ServerConfig,
 )
@@ -38,10 +40,12 @@ from platform_api.resource import GPUModel, ResourcePoolType
 
 
 pytest_plugins = [
+    "tests.integration.api",
     "tests.integration.docker",
     "tests.integration.redis",
     "tests.integration.auth",
     "tests.integration.elasticsearch",
+    "tests.integration.notifications",
 ]
 
 
@@ -369,6 +373,7 @@ def config_factory(
     auth_config: AuthConfig,
     es_config: ElasticsearchConfig,
     jobs_config: JobsConfig,
+    notifications_config: NotificationsConfig,
 ) -> Callable[..., Config]:
     def _factory(**kwargs: Any) -> Config:
         server_config = ServerConfig()
@@ -394,6 +399,7 @@ def config_factory(
             database=database_config,
             auth=auth_config,
             jobs=jobs_config,
+            notifications=notifications_config,
             config_client=config_client,
             **kwargs,
         )

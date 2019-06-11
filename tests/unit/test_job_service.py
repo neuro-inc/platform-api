@@ -2,6 +2,7 @@ from dataclasses import replace
 from typing import AsyncIterator, Callable
 
 import pytest
+from notifications_client import Client as NotificationsClient
 
 from platform_api.cluster import Cluster, ClusterRegistry
 from platform_api.config import ClusterConfig, JobsConfig
@@ -22,13 +23,17 @@ from .conftest import MockCluster, MockJobsStorage, MockOrchestrator, create_quo
 class TestJobsService:
     @pytest.fixture
     def jobs_service_factory(
-        self, cluster_registry: ClusterRegistry, mock_jobs_storage: MockJobsStorage
+        self,
+        cluster_registry: ClusterRegistry,
+        mock_jobs_storage: MockJobsStorage,
+        mock_notifications_client: NotificationsClient,
     ) -> Callable[..., JobsService]:
         def _factory(deletion_delay_s: int = 0) -> JobsService:
             return JobsService(
                 cluster_registry=cluster_registry,
                 jobs_storage=mock_jobs_storage,
                 jobs_config=JobsConfig(deletion_delay_s=deletion_delay_s),
+                notifications_client=mock_notifications_client,
             )
 
         return _factory
@@ -493,12 +498,16 @@ class TestJobsServiceCluster:
 
     @pytest.fixture
     def jobs_service(
-        self, cluster_registry: ClusterRegistry, mock_jobs_storage: MockJobsStorage
+        self,
+        cluster_registry: ClusterRegistry,
+        mock_jobs_storage: MockJobsStorage,
+        mock_notifications_client: NotificationsClient,
     ) -> JobsService:
         return JobsService(
             cluster_registry=cluster_registry,
             jobs_storage=mock_jobs_storage,
             jobs_config=JobsConfig(default_cluster_name="default"),
+            notifications_client=mock_notifications_client,
         )
 
     @pytest.mark.asyncio
@@ -527,11 +536,13 @@ class TestJobsServiceCluster:
         mock_jobs_storage: MockJobsStorage,
         mock_job_request: JobRequest,
         jobs_config: JobsConfig,
+        mock_notifications_client: NotificationsClient,
     ) -> None:
         jobs_service = JobsService(
             cluster_registry=cluster_registry,
             jobs_storage=mock_jobs_storage,
             jobs_config=jobs_config,
+            notifications_client=mock_notifications_client,
         )
         await cluster_registry.add(cluster_config)
 
@@ -561,11 +572,13 @@ class TestJobsServiceCluster:
         mock_jobs_storage: MockJobsStorage,
         mock_job_request: JobRequest,
         jobs_config: JobsConfig,
+        mock_notifications_client: NotificationsClient,
     ) -> None:
         jobs_service = JobsService(
             cluster_registry=cluster_registry,
             jobs_storage=mock_jobs_storage,
             jobs_config=jobs_config,
+            notifications_client=mock_notifications_client,
         )
         await cluster_registry.add(cluster_config)
 
@@ -594,11 +607,13 @@ class TestJobsServiceCluster:
         mock_jobs_storage: MockJobsStorage,
         mock_job_request: JobRequest,
         jobs_config: JobsConfig,
+        mock_notifications_client: NotificationsClient,
     ) -> None:
         jobs_service = JobsService(
             cluster_registry=cluster_registry,
             jobs_storage=mock_jobs_storage,
             jobs_config=jobs_config,
+            notifications_client=mock_notifications_client,
         )
         await cluster_registry.add(cluster_config)  # "default"
         await cluster_registry.add(replace(cluster_config, name="missing"))
@@ -622,11 +637,13 @@ class TestJobsServiceCluster:
         mock_jobs_storage: MockJobsStorage,
         mock_job_request: JobRequest,
         jobs_config: JobsConfig,
+        mock_notifications_client: NotificationsClient,
     ) -> None:
         jobs_service = JobsService(
             cluster_registry=cluster_registry,
             jobs_storage=mock_jobs_storage,
             jobs_config=jobs_config,
+            notifications_client=mock_notifications_client,
         )
         await cluster_registry.add(cluster_config)
 

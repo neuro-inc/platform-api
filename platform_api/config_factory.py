@@ -19,6 +19,7 @@ from .config import (
     DatabaseConfig,
     IngressConfig,
     JobsConfig,
+    NotificationsConfig,
     OAuthConfig,
     PlatformConfig,
     ServerConfig,
@@ -56,6 +57,7 @@ class EnvironConfigFactory:
             env_prefix=env_prefix,
             jobs=jobs,
             config_client=self.create_config_client(),
+            notifications=self.create_notifications(),
         )
 
     def create_cluster(self) -> ClusterConfig:
@@ -300,3 +302,7 @@ class EnvironConfigFactory:
     def create_config_client(self) -> platform_api.config_client.ConfigClient:
         platform_config_url = URL(self._environ["NP_PLATFORM_CONFIG_URI"])
         return platform_api.config_client.ConfigClient(base_url=platform_config_url)
+
+    def create_notifications(self) -> NotificationsConfig:
+        url = URL(self._environ["NP_NOTIFICATIONS_URL"])
+        return NotificationsConfig(url=url)
