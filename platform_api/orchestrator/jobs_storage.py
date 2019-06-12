@@ -57,6 +57,7 @@ class JobFilter:
     )
     owners: AbstractSet[str] = field(default_factory=cast(Type[Set[str]], set))
     name: Optional[str] = None
+    ids: AbstractSet[str] = field(default_factory=cast(Type[Set[str]], set))
 
     def check(self, job: JobRecord) -> bool:
         if self.statuses and job.status not in self.statuses:
@@ -64,6 +65,8 @@ class JobFilter:
         if self.owners and job.owner not in self.owners:
             return False
         if self.name and self.name != job.name:
+            return False
+        if self.ids and job.id not in self.ids:
             return False
         return True
 
@@ -476,6 +479,8 @@ class RedisJobsStorage(JobsStorage):
     ) -> List[JobRecord]:
         if not job_filter:
             job_filter = JobFilter()
+        elif job_filter.ids:
+            return await self.get_jobs_by_ids(job_filter.ids, job_filter)
         job_ids = await self._get_job_ids(
             statuses=job_filter.statuses, owners=job_filter.owners, name=job_filter.name
         )

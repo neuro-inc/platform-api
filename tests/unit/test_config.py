@@ -60,7 +60,6 @@ class TestStorageVolume:
         registry_config = RegistryConfig()
         kube_config = KubeConfig(
             jobs_domain_name_template="{job_id}.testdomain",
-            named_jobs_domain_name_template="{job_name}-{job_owner}.testdomain",
             jobs_ingress_name="testingress",
             ssh_auth_domain_name="ssh-auth.domain",
             endpoint_url="http://1.2.3.4",
@@ -83,7 +82,6 @@ class TestStorageVolume:
         registry_config = RegistryConfig()
         kube_config = KubeConfig(
             jobs_domain_name_template="{job_id}.testdomain",
-            named_jobs_domain_name_template="{job_name}-{job_owner}.testdomain",
             ssh_auth_domain_name="ssh-auth.domain",
             jobs_ingress_name="testingress",
             endpoint_url="http://1.2.3.4",
@@ -105,13 +103,11 @@ class TestEnvironConfigFactory:
             EnvironConfigFactory(environ=environ).create()
 
     def test_create_defaults(self) -> None:
-        named_host_template = "{job_name}-{job_owner}.jobs.domain"
         environ = {
             "NP_STORAGE_HOST_MOUNT_PATH": "/tmp",
             "NP_K8S_API_URL": "https://localhost:8443",
             "NP_K8S_JOBS_INGRESS_NAME": "testingress",
             "NP_K8S_JOBS_INGRESS_DOMAIN_NAME_TEMPLATE": "{job_id}.jobs.domain",
-            "NP_K8S_NAMED_JOBS_INGRESS_DOMAIN_NAME_TEMPLATE": named_host_template,
             "NP_K8S_SSH_AUTH_INGRESS_DOMAIN_NAME": "ssh-auth.domain",
             "NP_AUTH_URL": "https://auth",
             "NP_AUTH_TOKEN": "token",
@@ -200,7 +196,6 @@ class TestEnvironConfigFactory:
             EnvironConfigFactory(environ=environ).create()
 
     def test_create_custom(self, cert_authority_path: str) -> None:
-        named_host_template = "{job_name}-{job_owner}.jobs.domain"
         environ = {
             "NP_ENV_PREFIX": "TEST",
             "NP_API_PORT": "1111",
@@ -218,7 +213,6 @@ class TestEnvironConfigFactory:
             "NP_K8S_JOBS_INGRESS_AUTH_NAME": "testingressauth",
             "NP_K8S_JOBS_INGRESS_HTTPS": "True",
             "NP_K8S_JOBS_INGRESS_DOMAIN_NAME_TEMPLATE": "{job_id}.jobs.domain",
-            "NP_K8S_NAMED_JOBS_INGRESS_DOMAIN_NAME_TEMPLATE": named_host_template,
             "NP_K8S_SSH_AUTH_INGRESS_DOMAIN_NAME": "ssh-auth.domain",
             "NP_K8S_JOB_DELETION_DELAY": "3600",
             "NP_DB_REDIS_URI": "redis://localhost:6379/0",
@@ -313,7 +307,6 @@ class TestEnvironConfigFactory:
         assert config.config_client is not None
 
     def test_create_nfs(self) -> None:
-        named_host_template = "{job_name}-{job_owner}.jobs.domain"
         environ = {
             "NP_STORAGE_TYPE": "nfs",
             "NP_STORAGE_NFS_SERVER": "1.2.3.4",
@@ -322,7 +315,6 @@ class TestEnvironConfigFactory:
             "NP_K8S_API_URL": "https://localhost:8443",
             "NP_K8S_JOBS_INGRESS_NAME": "testingress",
             "NP_K8S_JOBS_INGRESS_DOMAIN_NAME_TEMPLATE": "{job_id}.jobs.domain",
-            "NP_K8S_NAMED_JOBS_INGRESS_DOMAIN_NAME_TEMPLATE": named_host_template,
             "NP_K8S_SSH_AUTH_INGRESS_DOMAIN_NAME": "ssh-auth.domain",
             "NP_API_URL": "https://neu.ro/api/v1",
             "NP_AUTH_URL": "https://auth",

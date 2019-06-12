@@ -119,6 +119,28 @@ class TestJobFilter:
         )
         assert not JobFilter(name="anothername").check(job)
 
+    def test_check_ids(self) -> None:
+        job = JobRecord.create(
+            request=self._create_job_request(), owner="testuser", name="testname"
+        )
+        job2 = JobRecord.create(request=self._create_job_request(), owner="testuser")
+        assert JobFilter(ids={job.id}).check(job)
+        assert JobFilter(ids={job2.id}).check(job2)
+        assert not JobFilter(ids={job.id}).check(job2)
+        assert not JobFilter(ids={job2.id}).check(job)
+        assert JobFilter(ids={job.id, job2.id}).check(job)
+        assert JobFilter(ids={job.id, job2.id}).check(job2)
+
+    def test_check_ids_status(self) -> None:
+        job = JobRecord.create(
+            request=self._create_job_request(),
+            owner="testuser",
+            name="testname",
+            status=JobStatus.PENDING,
+        )
+        assert JobFilter(ids={job.id}, statuses={JobStatus.PENDING}).check(job)
+        assert not JobFilter(ids={job.id}, statuses={JobStatus.RUNNING}).check(job)
+
     def test_check_all(self) -> None:
         job = JobRecord.create(
             request=self._create_job_request(),

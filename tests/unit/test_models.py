@@ -3,8 +3,10 @@ from typing import Any, Dict
 from unittest import mock
 
 import pytest
+from multidict import MultiDict
 from neuro_auth_client import Permission
 from neuro_auth_client.client import ClientAccessSubTreeView, ClientSubTreeViewRoot
+from trafaret import DataError
 from yarl import URL
 
 from platform_api.config import RegistryConfig, StorageConfig
@@ -12,6 +14,7 @@ from platform_api.handlers.jobs_handler import (
     BulkJobFilter,
     BulkJobFilterBuilder,
     JobFilterException,
+    JobFilterFactory,
     convert_container_volume_to_json,
     convert_job_container_to_json,
     convert_job_to_job_response,
@@ -362,6 +365,143 @@ class TestJobContainerToJson:
         }
 
 
+class TestJobFilterFactory:
+    def test_create_from_query(self) -> None:
+        factory = JobFilterFactory().create_from_query
+
+        query: Any = MultiDict()
+        assert factory(query) == JobFilter()
+
+        query = MultiDict([("name", "test-job")])
+        assert factory(query) == JobFilter(name="test-job")
+
+        query = MultiDict([("name", "test-job"), ("name", "other-job")])
+        assert factory(query) == JobFilter(name="test-job")
+
+        query = MultiDict([("owner", "alice"), ("owner", "bob")])
+        assert factory(query) == JobFilter(owners={"bob", "alice"})
+
+        query = MultiDict([("name", "test-job"), ("owner", "alice"), ("owner", "bob")])
+        assert factory(query) == JobFilter(owners={"bob", "alice"}, name="test-job")
+
+    def test_create_from_query_with_status(self) -> None:
+        factory = JobFilterFactory().create_from_query
+
+        query: Any = MultiDict(
+            [
+                ("name", "test-job"),
+                ("status", "running"),
+                ("status", "pending"),
+                ("status", "failed"),
+                ("status", "succeeded"),
+            ]
+        )
+        assert factory(query) == JobFilter(
+            statuses={
+                JobStatus.FAILED,
+                JobStatus.PENDING,
+                JobStatus.SUCCEEDED,
+                JobStatus.RUNNING,
+            },
+            name="test-job",
+        )
+
+        query = MultiDict(
+            [
+                ("name", "test-job"),
+                ("owner", "alice"),
+                ("owner", "bob"),
+                ("status", "failed"),
+                ("status", "succeeded"),
+            ]
+        )
+        assert factory(query) == JobFilter(
+            statuses={JobStatus.FAILED, JobStatus.SUCCEEDED},
+            owners={"bob", "alice"},
+            name="test-job",
+        )
+
+    def test_create_from_query_by_hostname(self) -> None:
+        factory = JobFilterFactory().create_from_query
+
+        query: Any = MultiDict([("hostname", "test-job--john-doe.example.org")])
+        assert factory(query) == JobFilter(name="test-job", owners={"john-doe"})
+
+        query = MultiDict([("hostname", "test-job-id.example.org")])
+        assert factory(query) == JobFilter(ids={"test-job-id"})
+
+        query = MultiDict(
+            [
+                ("hostname", "test-job--john-doe.example.org"),
+                ("hostname", "test-job-id.example.org"),
+            ]
+        )
+        assert factory(query) == JobFilter(name="test-job", owners={"john-doe"})
+
+        query = MultiDict(
+            [
+                ("hostname", "test-job-id.example.org"),
+                ("hostname", "test-job--john-doe.example.org"),
+            ]
+        )
+        assert factory(query) == JobFilter(name=None, ids={"test-job-id"})
+
+    def test_create_from_query_by_hostname_with_status(self) -> None:
+        factory = JobFilterFactory().create_from_query
+
+        query: Any = MultiDict(
+            [
+                ("hostname", "test-job--john-doe.example.org"),
+                ("status", "failed"),
+                ("status", "succeeded"),
+            ]
+        )
+        assert factory(query) == JobFilter(
+            statuses={JobStatus.FAILED, JobStatus.SUCCEEDED},
+            name="test-job",
+            owners={"john-doe"},
+        )
+
+        query = MultiDict(
+            [
+                ("hostname", "test-job-id.example.org"),
+                ("status", "failed"),
+                ("status", "succeeded"),
+            ]
+        )
+        assert factory(query) == JobFilter(
+            statuses={JobStatus.FAILED, JobStatus.SUCCEEDED}, ids={"test-job-id"}
+        )
+
+    @pytest.mark.parametrize(
+        "query",
+        [
+            [("name", "jt")],
+            [("name", "test_job")],
+            [("name", "test.job")],
+            [("name", "0testjob")],
+            [("owner", "jd")],
+            [("owner", "john.doe")],
+            [("owner", "john_doe")],
+            [("owner", "john--doe")],
+            [("status", "unknown")],
+            [("hostname", "testjob--.example.org")],
+            [("hostname", "--johndoe.example.org")],
+            [("hostname", "testjob--john_doe.example.org")],
+            [("hostname", "test_job--johndoe.example.org")],
+            [("hostname", "xn--johndoe.example.org")],
+            [("hostname", "testjob--johndoe.example.org"), ("name", "testjob")],
+            [("hostname", "testjob--johndoe.example.org"), ("owner", "johndoe")],
+            [("hostname", "TESTJOB--johndoe.example.org")],
+            [("hostname", "testjob--JOHNDOE.example.org")],
+        ],
+    )
+    def test_create_from_query_fail(self, query: Any) -> None:
+        factory = JobFilterFactory().create_from_query
+        with pytest.raises((ValueError, DataError)):
+            factory(MultiDict(query))  # type: ignore # noqa
+
+
 class TestBulkJobFilterBuilder:
     def test_no_access(self) -> None:
         query_filter = JobFilter()
@@ -644,7 +784,7 @@ async def test_job_to_job_response_with_job_name_and_http_exposed(
         "owner": owner_name,
         "name": job_name,
         "http_url": f"http://{job.id}.jobs",
-        "http_url_named": f"http://{job_name}-{owner_name}.jobs",
+        "http_url_named": f"http://{job_name}--{owner_name}.jobs",
         "status": "pending",
         "history": {
             "status": "pending",

@@ -276,6 +276,12 @@ class JobStatus(str, enum.Enum):
     def values(cls) -> List[str]:
         return [item.value for item in cls]
 
+    def __repr__(self) -> str:
+        return f"JobStatus.{self.name}"
+
+    def __str__(self) -> str:
+        return self.value
+
 
 class ContainerVolumeFactory:
     """A factory class for :class:`ContainerVolume`.

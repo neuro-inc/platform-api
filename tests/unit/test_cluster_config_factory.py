@@ -53,7 +53,6 @@ def clusters_payload(nfs_storage_payload: Dict[str, Any]) -> List[Dict[str, Any]
                     "node_label_preemptible": "cloud.google.com/gke-preemptible",
                 },
                 "job_hostname_template": "{job_id}.jobs.neu.ro",
-                "named_job_hostname_template": "{job_name}-{job_owner}.jobs.neu.ro",
                 "resource_pool_types": [
                     {},
                     {"gpu": 0},
@@ -133,10 +132,6 @@ class TestClusterConfigFactory:
         assert (
             orchestrator.jobs_domain_name_template
             == orchestrator_payload["job_hostname_template"]
-        )
-        assert (
-            orchestrator.named_jobs_domain_name_template
-            == orchestrator_payload["named_job_hostname_template"]
         )
 
         assert len(orchestrator.resource_pool_types) == 3

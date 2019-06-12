@@ -14,7 +14,7 @@ from yarl import URL
 
 from platform_api.config import Config, RegistryConfig, StorageConfig
 from platform_api.log import log_debug_time
-from platform_api.orchestrator.job import Job, JobStats
+from platform_api.orchestrator.job import JOB_USER_NAMES_SEPARATOR, Job, JobStats
 from platform_api.orchestrator.job_request import (
     Container,
     ContainerVolume,
@@ -448,13 +448,26 @@ class JobFilterFactory:
         self._user_name_validator = create_user_name_validator()
 
     def create_from_query(self, query: MultiDictProxy) -> JobFilter:  # type: ignore
-        job_name = self._job_name_validator.check(query.get("name"))
         statuses = {JobStatus(s) for s in query.getall("status", [])}
-        owners = {
-            self._user_name_validator.check(owner)
-            for owner in query.getall("owner", [])
-        }
-        return JobFilter(statuses=statuses, owners=owners, name=job_name)
+        hostname = query.get("hostname")
+        if hostname is None:
+            job_name = self._job_name_validator.check(query.get("name"))
+            owners = {
+                self._user_name_validator.check(owner)
+                for owner in query.getall("owner", [])
+            }
+            return JobFilter(statuses=statuses, owners=owners, name=job_name)
+
+        if "name" in query or "owner" in query:
+            raise ValueError("Invalid request")
+
+        label = hostname.partition(".")[0]
+        job_name, sep, owner = label.rpartition(JOB_USER_NAMES_SEPARATOR)
+        if not sep:
+            return JobFilter(statuses=statuses, ids={label})
+        job_name = self._job_name_validator.check(job_name)
+        owner = self._user_name_validator.check(owner)
+        return JobFilter(statuses=statuses, owners={owner}, name=job_name)
 
 
 @dataclass(frozen=True)

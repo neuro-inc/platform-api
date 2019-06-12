@@ -149,7 +149,7 @@ class TestModels:
             payload = await response.json()
             e = (
                 "{'name': DataError({0: DataError(value should be None), "
-                "1: DataError(does not match pattern ^[a-z][-a-z0-9]*[a-z0-9]$)})}"
+                "1: DataError(does not match pattern ^[a-z](?:-?[a-z0-9])*$)})}"
             )
             assert payload == {"error": e}
 
@@ -176,7 +176,7 @@ class TestModels:
             assert result["status"] in ["pending"]
             assert result["http_url"] == f"http://{job_id}.jobs.neu.ro"
             assert result["http_url_named"] == (
-                f"http://{job_name}-{regular_user.name}.jobs.neu.ro"
+                f"http://{job_name}--{regular_user.name}.jobs.neu.ro"
             )
             expected_internal_hostname = f"{job_id}.platformapi-tests"
             assert result["internal_hostname"] == expected_internal_hostname
@@ -514,7 +514,7 @@ class TestJobs:
             payload = await response.json()
             e = (
                 "{'name': DataError({0: DataError(value should be None), "
-                "1: DataError(does not match pattern ^[a-z][-a-z0-9]*[a-z0-9]$)})}"
+                "1: DataError(does not match pattern ^[a-z](?:-?[a-z0-9])*$)})}"
             )
             assert payload == {"error": e}
 
@@ -566,7 +566,7 @@ class TestJobs:
             assert payload["http_url"] == f"http://{job_id}.jobs.neu.ro"
             assert (
                 payload["http_url_named"]
-                == f"http://{job_name}-{regular_user.name}.jobs.neu.ro"
+                == f"http://{job_name}--{regular_user.name}.jobs.neu.ro"
             )
             expected_internal_hostname = f"{job_id}.platformapi-tests"
             assert payload["internal_hostname"] == expected_internal_hostname
@@ -1384,6 +1384,172 @@ class TestJobs:
         # cleanup all:
         for job_id in jobs_ids:
             await jobs_client.delete_job(job_id=job_id)
+
+    @pytest.mark.asyncio
+    async def test_get_job_by_hostname_self_owner(
+        self,
+        api: ApiConfig,
+        client: aiohttp.ClientSession,
+        regular_user_factory: Callable[[], Any],
+        jobs_client_factory: Callable[[_User], JobsClient],
+        run_job: Callable[..., Awaitable[None]],
+        create_job_request_with_name: Callable[[str], Dict[str, Any]],
+    ) -> None:
+        job_name = "test-job-name"
+        job_name2 = "test-job-name2"
+        usr = await regular_user_factory()
+        jobs_client = jobs_client_factory(usr)
+
+        job_id = await run_job(usr, create_job_request_with_name(job_name))
+        await run_job(usr, create_job_request_with_name(job_name2))
+
+        hostname = f"{job_name}--{usr.name}.jobs.neu.ro"
+        jobs = await jobs_client.get_all_jobs({"hostname": hostname})
+        job_ids = {job["id"] for job in jobs}
+        assert job_ids == {job_id}
+
+        hostname = f"{job_id}.jobs.neu.ro"
+        jobs = await jobs_client.get_all_jobs({"hostname": hostname})
+        job_ids = {job["id"] for job in jobs}
+        assert job_ids == {job_id}
+
+        # other base domain name
+        hostname = f"{job_name}--{usr.name}.example.org"
+        jobs = await jobs_client.get_all_jobs({"hostname": hostname})
+        job_ids = {job["id"] for job in jobs}
+        assert job_ids == {job_id}
+
+        hostname = f"{job_id}.example.org"
+        jobs = await jobs_client.get_all_jobs({"hostname": hostname})
+        job_ids = {job["id"] for job in jobs}
+        assert job_ids == {job_id}
+
+        # non-existing names
+        hostname = f"nonexisting--{usr.name}.jobs.neu.ro"
+        jobs = await jobs_client.get_all_jobs({"hostname": hostname})
+        assert not jobs
+
+        hostname = f"{job_name}--nonexisting.jobs.neu.ro"
+        jobs = await jobs_client.get_all_jobs({"hostname": hostname})
+        assert not jobs
+
+        hostname = "nonexisting.jobs.neu.ro"
+        jobs = await jobs_client.get_all_jobs({"hostname": hostname})
+        assert not jobs
+
+    @pytest.mark.asyncio
+    async def test_get_job_by_hostname_another_owner(
+        self,
+        api: ApiConfig,
+        client: aiohttp.ClientSession,
+        regular_user_factory: Callable[[], Any],
+        jobs_client_factory: Callable[[_User], JobsClient],
+        run_job: Callable[..., Awaitable[None]],
+        share_job: Callable[[_User, _User, Any], Awaitable[None]],
+        create_job_request_with_name: Callable[[str], Dict[str, Any]],
+    ) -> None:
+        job_name = "test-job-name"
+        job_name2 = "test-job-name2"
+        usr1 = await regular_user_factory()
+        usr2 = await regular_user_factory()
+        jobs_client_usr1 = jobs_client_factory(usr1)
+
+        job_id = await run_job(usr2, create_job_request_with_name(job_name))
+        await run_job(usr2, create_job_request_with_name(job_name2))
+
+        # usr2 shares a job with usr1
+        await share_job(usr2, usr1, job_id)
+
+        # shared job of another owner
+        hostname = f"{job_name}--{usr2.name}.jobs.neu.ro"
+        jobs = await jobs_client_usr1.get_all_jobs({"hostname": hostname})
+        job_ids = {job["id"] for job in jobs}
+        assert job_ids == {job_id}
+
+        # unshared job of another owner
+        hostname = f"{job_name2}--{usr2.name}.jobs.neu.ro"
+        jobs = await jobs_client_usr1.get_all_jobs({"hostname": hostname})
+        assert not jobs
+
+        # non-existing job of another owner
+        hostname = f"nonexisting--{usr2.name}.jobs.neu.ro"
+        jobs = await jobs_client_usr1.get_all_jobs({"hostname": hostname})
+        assert not jobs
+
+    @pytest.mark.asyncio
+    async def test_get_job_by_hostname_and_status(
+        self,
+        api: ApiConfig,
+        client: aiohttp.ClientSession,
+        regular_user_factory: Callable[[], Any],
+        jobs_client_factory: Callable[[_User], JobsClient],
+        run_job: Callable[..., Awaitable[None]],
+        create_job_request_with_name: Callable[[str], Dict[str, Any]],
+    ) -> None:
+        job_name = "test-job-name"
+        job_name2 = "test-job-name2"
+        usr = await regular_user_factory()
+        jobs_client = jobs_client_factory(usr)
+
+        job_id = await run_job(usr, create_job_request_with_name(job_name))
+        await run_job(usr, create_job_request_with_name(job_name2))
+
+        for hostname in (
+            f"{job_name}--{usr.name}.jobs.neu.ro",
+            f"{job_id}.jobs.neu.ro",
+        ):
+            filters = [("hostname", hostname), ("status", "running")]
+            jobs = await jobs_client.get_all_jobs(filters)
+            job_ids = {job["id"] for job in jobs}
+            assert job_ids == {job_id}
+
+            filters = [("hostname", hostname), ("status", "succeeded")]
+            jobs = await jobs_client.get_all_jobs(filters)
+            job_ids = {job["id"] for job in jobs}
+            assert job_ids == set()
+
+            filters = [
+                ("hostname", hostname),
+                ("status", "running"),
+                ("status", "succeeded"),
+            ]
+            jobs = await jobs_client.get_all_jobs(filters)
+            job_ids = {job["id"] for job in jobs}
+            assert job_ids == {job_id}
+
+    @pytest.mark.asyncio
+    async def test_get_job_by_hostname_invalid_request(
+        self,
+        api: ApiConfig,
+        client: aiohttp.ClientSession,
+        regular_user_factory: Callable[[], Any],
+        run_job: Callable[..., Awaitable[None]],
+        create_job_request_with_name: Callable[[str], Dict[str, Any]],
+    ) -> None:
+        url = api.jobs_base_url
+        job_name = "test-job-name"
+        usr = await regular_user_factory()
+
+        await run_job(usr, create_job_request_with_name(job_name))
+
+        hostname = f"{job_name}--{usr.name}.jobs.neu.ro"
+        for params in (
+            {"hostname": hostname, "name": job_name},
+            {"hostname": hostname, "owner": usr.name},
+        ):
+            async with client.get(url, headers=usr.headers, params=params) as response:
+                response_text = await response.text()
+                assert response.status == HTTPBadRequest.status_code, response_text
+                result = await response.json()
+                assert result["error"] == "Invalid request"
+
+        for params in (
+            {"hostname": f"test_job--{usr.name}.jobs.neu.ro"},
+            {"hostname": f"{job_name}--test_user.jobs.neu.ro"},
+        ):
+            async with client.get(url, headers=usr.headers, params=params) as response:
+                response_text = await response.text()
+                assert response.status == HTTPBadRequest.status_code, response_text
 
     @pytest.mark.asyncio
     async def test_delete_job(

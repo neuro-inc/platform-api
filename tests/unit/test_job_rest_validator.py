@@ -90,6 +90,12 @@ class TestJobNameValidator:
         with pytest.raises(t.DataError, match="does not match pattern"):
             assert validator.check(value)
 
+    def test_invalid_job_names__contains_doubledash(self) -> None:
+        value = "abc--d"
+        validator = create_job_name_validator()
+        with pytest.raises(t.DataError, match="does not match pattern"):
+            assert validator.check(value)
+
     def test_invalid_job_names__startswith_number(self) -> None:
         value = "5abc"
         validator = create_job_name_validator()
