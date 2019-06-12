@@ -149,7 +149,7 @@ class TestModels:
             payload = await response.json()
             e = (
                 "{'name': DataError({0: DataError(value should be None), "
-                "1: DataError(does not match pattern ^[a-z][-a-z0-9]*[a-z0-9]$)})}"
+                "1: DataError(does not match pattern ^[a-z](?:-?[a-z0-9])*$)})}"
             )
             assert payload == {"error": e}
 
@@ -514,7 +514,7 @@ class TestJobs:
             payload = await response.json()
             e = (
                 "{'name': DataError({0: DataError(value should be None), "
-                "1: DataError(does not match pattern ^[a-z][-a-z0-9]*[a-z0-9]$)})}"
+                "1: DataError(does not match pattern ^[a-z](?:-?[a-z0-9])*$)})}"
             )
             assert payload == {"error": e}
 
