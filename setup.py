@@ -14,7 +14,7 @@ install_requires = (
     # Circle CI fails on the latest cryptography version
     # because the server has too old OpenSSL version
     "cryptography==2.4.2",
-    "asyncssh==1.14.0",
+    "asyncssh==1.17.0",
     "aioelasticsearch==0.5.2",
     "aiorwlock==0.6.0",
     "notifications-client==0.2",
