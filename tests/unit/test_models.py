@@ -427,9 +427,6 @@ class TestJobFilterFactory:
         query: Any = MultiDict([("hostname", "test-job--john-doe.example.org")])
         assert factory(query) == JobFilter(name="test-job", owners={"john-doe"})
 
-        query = MultiDict([("hostname", "test--job--john-doe.example.org")])
-        assert factory(query) == JobFilter(name="test--job", owners={"john-doe"})
-
         query = MultiDict([("hostname", "test-job-id.example.org")])
         assert factory(query) == JobFilter(ids={"test-job-id"})
 
