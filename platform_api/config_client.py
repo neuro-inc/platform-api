@@ -1,7 +1,8 @@
-from typing import Any, AsyncIterator, Sequence
+from typing import Any, AsyncIterator, Optional, Sequence
 
 import aiohttp
 from async_generator import asynccontextmanager
+from multidict import CIMultiDict
 from yarl import URL
 
 from .cluster_config_factory import ClusterConfig, ClusterConfigFactory
@@ -12,11 +13,13 @@ class ConfigClient:
         self,
         *,
         base_url: URL,
+        service_token: Optional[str] = None,
         conn_timeout_s: int = 300,
         read_timeout_s: int = 100,
         conn_pool_size: int = 100,
     ):
         self._base_url = base_url
+        self._service_token = service_token
         self._conn_timeout_s = conn_timeout_s
         self._read_timeout_s = read_timeout_s
         self._conn_pool_size = conn_pool_size
@@ -37,7 +40,17 @@ class ConfigClient:
         timeout = aiohttp.ClientTimeout(
             connect=self._conn_timeout_s, total=self._read_timeout_s
         )
-        self._client = aiohttp.ClientSession(connector=connector, timeout=timeout)
+        self._client = aiohttp.ClientSession(
+            headers=self._generate_headers(self._service_token),
+            connector=connector,
+            timeout=timeout,
+        )
+
+    def _generate_headers(self, token: Optional[str] = None) -> "CIMultiDict[str]":
+        headers: "CIMultiDict[str]" = CIMultiDict()
+        if token:
+            headers["Authorization"] = f"Bearer {token}"
+        return headers
 
     @asynccontextmanager
     async def _request(
