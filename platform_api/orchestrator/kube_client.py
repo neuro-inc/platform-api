@@ -1477,7 +1477,7 @@ class KubeClient:
             return summary.get_pod_container_stats(
                 self._namespace, pod_name, container_name
             )
-        except ContentTypeError as e:
+        except ContentTypeError:
             logger.info("Failed to parse response", exc_info=True)
             return None
 
