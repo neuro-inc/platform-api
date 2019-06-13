@@ -6,7 +6,7 @@ install_requires = (
     # WARN: aioredis does not support Redis Cluster yet
     "aioredis==1.2.0",
     "async-exit-stack==1.0.1",  # backport from 3.7 stdlib
-    "async-generator==1.9",
+    "async-generator==1.10",
     "dataclasses==0.6",  # backport from 3.7 stdlib
     "iso8601==0.1.12",
     "trafaret==1.2.0",

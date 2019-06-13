@@ -3,21 +3,23 @@ from typing import Any, Dict, Optional, Sequence, Set
 import trafaret as t
 from yarl import URL
 
+from platform_api.orchestrator.job import JOB_USER_NAMES_SEPARATOR
 from platform_api.orchestrator.job_request import JobStatus
 from platform_api.resource import GPUModel
 
 
-JOB_NAME_PATTERN = "^[a-z][-a-z0-9]*[a-z0-9]$"
-USER_NAME_PATTERN = "^[a-z0-9]([a-z0-9]|(-[a-z0-9]))*$"
+JOB_NAME_PATTERN = "^[a-z](?:-?[a-z0-9])*$"
+USER_NAME_PATTERN = "^[a-z0-9](?:-?[a-z0-9])*$"
 
 # Since the client supports job-names to be interchangeable with job-IDs
 # (see PR https://github.com/neuromation/platform-client-python/pull/648)
 # therefore job-ID has to conform job-name validator; all job-IDs are
 # of the form `job-{uuid4()}` of length 40.
 JOB_NAME_MAX_LENGTH = 40
-# For named jobs, their hostname is of the form of `{job-id}-{job-owner}.jobs.neu.ro`.
-# The length limit for DNS label is 63 chars, minus 1 char for the dash.
-USER_NAME_MAX_LENGTH = 63 - 1 - JOB_NAME_MAX_LENGTH
+# For named jobs, their hostname is of the form of
+# `{job-id}{JOB_USER_NAMES_SEPARATOR}{job-owner}.jobs.neu.ro`.
+# The length limit for DNS label is 63 chars.
+USER_NAME_MAX_LENGTH = 63 - len(JOB_USER_NAMES_SEPARATOR) - JOB_NAME_MAX_LENGTH
 
 OptionalString = t.String(allow_blank=True) | t.Null
 

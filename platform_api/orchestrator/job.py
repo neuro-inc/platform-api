@@ -14,6 +14,11 @@ from platform_api.cluster_config import OrchestratorConfig, StorageConfig
 from .job_request import JobRequest, JobStatus
 
 
+# For named jobs, their hostname is of the form of
+# `{job-id}{JOB_USER_NAMES_SEPARATOR}{job-owner}.jobs.neu.ro`.
+JOB_USER_NAMES_SEPARATOR = "--"
+
+
 logger = logging.getLogger(__name__)
 current_datetime_factory = partial(datetime.now, timezone.utc)
 
@@ -532,8 +537,10 @@ class Job:
     def http_host_named(self) -> Optional[str]:
         if not self.name:
             return None
-        return self._orchestrator_config.named_jobs_domain_name_template.format(
-            job_name=self.name, job_owner=self.owner
+        from platform_api.handlers.validators import JOB_USER_NAMES_SEPARATOR
+
+        return self._orchestrator_config.jobs_domain_name_template.format(
+            job_id=f"{self.name}{JOB_USER_NAMES_SEPARATOR}{self.owner}"
         )
 
     @property
