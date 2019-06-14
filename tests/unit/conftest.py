@@ -47,7 +47,8 @@ class MockOrchestrator(Orchestrator):
     def __init__(self, config: ClusterConfig) -> None:
         self._config = config
         self._mock_status_to_return = JobStatus.PENDING
-        self._mock_reason_to_return = "Initializing"
+        self._mock_reason_to_return: Optional[str] = "Initializing"
+        self._mock_exit_code_to_return: Optional[int] = None
         self.raise_on_get_job_status = False
         self.raise_on_delete = False
         self._successfully_deleted_jobs: List[Job] = []
@@ -68,7 +69,9 @@ class MockOrchestrator(Orchestrator):
         if self.raise_on_get_job_status:
             raise JobNotFoundException(f"job {job.id} was not found")
         return JobStatusItem.create(
-            self._mock_status_to_return, reason=self._mock_reason_to_return
+            self._mock_status_to_return,
+            reason=self._mock_reason_to_return,
+            exit_code=self._mock_exit_code_to_return,
         )
 
     async def delete_job(self, job: Job) -> JobStatus:
@@ -80,8 +83,11 @@ class MockOrchestrator(Orchestrator):
     def update_status_to_return(self, new_status: JobStatus) -> None:
         self._mock_status_to_return = new_status
 
-    def update_reason_to_return(self, new_reason: str) -> None:
+    def update_reason_to_return(self, new_reason: Optional[str]) -> None:
         self._mock_reason_to_return = new_reason
+
+    def update_exit_code_to_return(self, new_exit_code: Optional[int]) -> None:
+        self._mock_exit_code_to_return = new_exit_code
 
     def get_successfully_deleted_jobs(self) -> List[Job]:
         return self._successfully_deleted_jobs
@@ -106,16 +112,21 @@ class MockJobsStorage(InMemoryJobsStorage):
 
 class MockNotificationsClient(NotificationsClient):
     def __init__(self) -> None:
+        self._sent_notifications: List[AbstractNotification] = []
         pass
 
     async def notify(self, notification: AbstractNotification) -> None:
-        pass
+        self._sent_notifications.append(notification)
 
     def init(self) -> None:
         pass
 
     def close(self) -> None:
         pass
+
+    @property
+    def sent_notifications(self) -> List[AbstractNotification]:
+        return self._sent_notifications
 
 
 @pytest.fixture
