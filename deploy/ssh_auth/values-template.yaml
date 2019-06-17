@@ -1,0 +1,5 @@
+IMAGE: neuro-docker-local-public.jfrog.io/ssh-auth:IMAGE_TAG
+NP_AUTH_URL: http://platformauthapi:8080
+NP_PLATFORM_API_URL: http://platformapi:8080/api/v1
+NP_K8S_NS: ''
+DOCKER_LOGIN_ARTIFACTORY_SECRET_NAME: "artifactory-regcred"

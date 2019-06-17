@@ -1,4 +1,5 @@
 IMAGE_NAME ?= platformapi
+ARTIFACTORY_TAG ?=$(shell echo "$(CIRCLE_TAG)" | awk -F/ '{print $$2}')
 IMAGE_TAG ?= latest
 IMAGE_K8S ?= $(GKE_DOCKER_REGISTRY)/$(GKE_PROJECT_ID)/$(IMAGE_NAME)
 SSH_IMAGE_NAME ?= ssh-auth
@@ -110,4 +111,21 @@ gke_k8s_deploy: _helm
 
 gke_k8s_deploy_ssh_auth: _helm
 	gcloud --quiet container clusters get-credentials $(GKE_CLUSTER_NAME) $(CLUSTER_ZONE_REGION)
-	helm --set "global.env=$(HELM_ENV)" --set "IMAGE.$(HELM_ENV)=$(SSH_K8S):$(CIRCLE_SHA1)" upgrade --install ssh-auth deploy/ssh_auth/ --wait --timeout 600
+	helm -f deploy/ssh_auth/values-$(HELM_ENV).yaml --set "IMAGE=$(SSH_K8S):$(CIRCLE_SHA1)" upgrade --install ssh-auth deploy/ssh_auth/ --wait --timeout 600
+
+artifactory_ssh_auth_docker_push: build_ssh_auth_k8s
+	docker tag $(SSH_IMAGE_NAME):$(SSH_IMAGE_TAG) $(ARTIFACTORY_DOCKER_REPO)/$(SSH_IMAGE_NAME):$(ARTIFACTORY_TAG)
+	docker login $(ARTIFACTORY_DOCKER_REPO) --username=$(ARTIFACTORY_USERNAME) --password=$(ARTIFACTORY_PASSWORD)
+	docker push $(ARTIFACTORY_DOCKER_REPO)/$(IMAGE_NAME):$(ARTIFACTORY_TAG)
+
+artifactory_ssh_auth_helm_push: _helm
+	mkdir -p temp_deploy/$(SSH_IMAGE_NAME)
+	cp -Rf deploy/ssh_auth/.  temp_deploy/$(SSH_IMAGE_NAME)
+	cp temp_deploy/$(SSH_IMAGE_NAME)/values-template.yaml temp_deploy/$(SSH_IMAGE_NAME)/values.yaml
+	sed -i "s/IMAGE_TAG/$(ARTIFACTORY_TAG)/g" temp_deploy/$(SSH_IMAGE_NAME)/values.yaml
+	find temp_deploy/$(SSH_IMAGE_NAME) -type f -name 'values-*' -delete
+	helm init --client-only
+	helm package --app-version=$(ARTIFACTORY_TAG) --version=$(ARTIFACTORY_TAG) temp_deploy/$(SSH_IMAGE_NAME)/
+	helm plugin install https://github.com/belitre/helm-push-artifactory-plugin
+	helm push-artifactory $(SSH_IMAGE_NAME)-$(ARTIFACTORY_TAG).tgz $(ARTIFACTORY_HELM_REPO) --username $(ARTIFACTORY_USERNAME) --password $(ARTIFACTORY_PASSWORD)
+
