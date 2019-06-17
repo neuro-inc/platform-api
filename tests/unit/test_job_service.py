@@ -711,6 +711,35 @@ class TestJobServiceNotification:
         assert notification in mock_notifications_client.sent_notifications
 
     @pytest.mark.asyncio
+    async def test_status_update_didnt_send_notification(
+        self,
+        jobs_service: JobsService,
+        mock_orchestrator: MockOrchestrator,
+        mock_job_request: JobRequest,
+        mock_notifications_client: MockNotificationsClient,
+    ) -> None:
+        user = User(name="testuser", token="")
+        original_job, _ = await jobs_service.create_job(
+            job_request=mock_job_request, user=user
+        )
+
+        mock_orchestrator.update_reason_to_return("ContainerCreating")
+        mock_orchestrator.update_status_to_return(JobStatus.PENDING)
+        await jobs_service.update_jobs_statuses()
+
+        notification = JobTransition(
+            job_id=original_job.id,
+            status=JobStatus.PENDING,
+            transition_time=original_job.status_history.current.transition_time,
+            reason=None,
+            description=None,
+            exit_code=None,
+            prev_status=None,
+        )
+        assert len(mock_notifications_client.sent_notifications) == 1
+        assert notification in mock_notifications_client.sent_notifications
+
+    @pytest.mark.asyncio
     async def test_job_failed_errimagepull(
         self,
         jobs_service: JobsService,
