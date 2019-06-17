@@ -116,7 +116,7 @@ gke_k8s_deploy_ssh_auth: _helm
 artifactory_ssh_auth_docker_push: build_ssh_auth_k8s
 	docker tag $(SSH_IMAGE_NAME):$(SSH_IMAGE_TAG) $(ARTIFACTORY_DOCKER_REPO)/$(SSH_IMAGE_NAME):$(ARTIFACTORY_TAG)
 	docker login $(ARTIFACTORY_DOCKER_REPO) --username=$(ARTIFACTORY_USERNAME) --password=$(ARTIFACTORY_PASSWORD)
-	docker push $(ARTIFACTORY_DOCKER_REPO)/$(IMAGE_NAME):$(ARTIFACTORY_TAG)
+	docker push $(ARTIFACTORY_DOCKER_REPO)/$(SSH_IMAGE_NAME):$(ARTIFACTORY_TAG)
 
 artifactory_ssh_auth_helm_push: _helm
 	mkdir -p temp_deploy/$(SSH_IMAGE_NAME)
