@@ -74,7 +74,7 @@ gke_login:
 	gcloud config set project $(GKE_PROJECT_ID)
 	gcloud --quiet config set container/cluster $(GKE_CLUSTER_NAME)
 	gcloud config set $(SET_CLUSTER_ZONE_REGION)
-	gcloud auth configure-docker
+	gcloud auth configure-docker --quiet
 
 gke_docker_pull_test:
 	docker pull $$(cat AUTH_SERVER_IMAGE_NAME)
