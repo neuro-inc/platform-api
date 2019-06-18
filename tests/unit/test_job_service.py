@@ -698,20 +698,21 @@ class TestJobServiceNotification:
     ) -> None:
         user = User(name="testuser", token="")
         job, _ = await jobs_service.create_job(job_request=mock_job_request, user=user)
-        notification = JobTransition(
-            job_id=job.id,
-            status=JobStatus.PENDING,
-            transition_time=job.status_history.current.transition_time,
-            reason=None,
-            description=None,
-            exit_code=None,
-            prev_status=None,
-        )
-        assert len(mock_notifications_client.sent_notifications) == 1
-        assert notification in mock_notifications_client.sent_notifications
+        notifications = [
+            JobTransition(
+                job_id=job.id,
+                status=JobStatus.PENDING,
+                transition_time=job.status_history.current.transition_time,
+                reason=None,
+                description=None,
+                exit_code=None,
+                prev_status=None,
+            )
+        ]
+        assert notifications == mock_notifications_client.sent_notifications
 
     @pytest.mark.asyncio
-    async def test_status_update_didnt_send_notification(
+    async def test_status_update_same_status_will_send_notification(
         self,
         jobs_service: JobsService,
         mock_orchestrator: MockOrchestrator,
@@ -719,28 +720,40 @@ class TestJobServiceNotification:
         mock_notifications_client: MockNotificationsClient,
     ) -> None:
         user = User(name="testuser", token="")
-        original_job, _ = await jobs_service.create_job(
-            job_request=mock_job_request, user=user
-        )
+        job, _ = await jobs_service.create_job(job_request=mock_job_request, user=user)
+
+        notifications = [
+            JobTransition(
+                job_id=job.id,
+                status=JobStatus.PENDING,
+                transition_time=job.status_history.current.transition_time,
+                reason=None,
+                description=None,
+                exit_code=None,
+                prev_status=None,
+            )
+        ]
 
         mock_orchestrator.update_reason_to_return("ContainerCreating")
         mock_orchestrator.update_status_to_return(JobStatus.PENDING)
         await jobs_service.update_jobs_statuses()
+        job = await jobs_service.get_job(job.id)
 
-        notification = JobTransition(
-            job_id=original_job.id,
-            status=JobStatus.PENDING,
-            transition_time=original_job.status_history.current.transition_time,
-            reason=None,
-            description=None,
-            exit_code=None,
-            prev_status=None,
+        notifications.append(
+            JobTransition(
+                job_id=job.id,
+                status=JobStatus.PENDING,
+                transition_time=job.status_history.current.transition_time,
+                reason="ContainerCreating",
+                description=None,
+                exit_code=None,
+                prev_status=JobStatus.PENDING,
+            )
         )
-        assert len(mock_notifications_client.sent_notifications) == 1
-        assert notification in mock_notifications_client.sent_notifications
+        assert notifications == mock_notifications_client.sent_notifications
 
     @pytest.mark.asyncio
-    async def test_job_failed_errimagepull(
+    async def test_job_failed_errimagepull_workflow(
         self,
         jobs_service: JobsService,
         mock_orchestrator: MockOrchestrator,
@@ -748,27 +761,41 @@ class TestJobServiceNotification:
         mock_notifications_client: MockNotificationsClient,
     ) -> None:
         user = User(name="testuser", token="")
-        original_job, _ = await jobs_service.create_job(
+        job, _ = await jobs_service.create_job(
             job_request=job_request_factory(), user=user
         )
+        notifications = [
+            JobTransition(
+                job_id=job.id,
+                status=JobStatus.PENDING,
+                transition_time=job.status_history.current.transition_time,
+                reason=None,
+                description=None,
+                exit_code=None,
+                prev_status=None,
+            )
+        ]
+
         mock_orchestrator.update_reason_to_return("ErrImagePull")
         await jobs_service.update_jobs_statuses()
-        job = await jobs_service.get_job(job_id=original_job.id)
+        job = await jobs_service.get_job(job.id)
 
-        notification = JobTransition(
-            job_id=original_job.id,
-            status=JobStatus.FAILED,
-            transition_time=job.status_history.current.transition_time,
-            reason="Collected",
-            description="Image can not be pulled",
-            exit_code=None,
-            prev_status=JobStatus.PENDING,
+        notifications.append(
+            JobTransition(
+                job_id=job.id,
+                status=JobStatus.FAILED,
+                transition_time=job.status_history.current.transition_time,
+                reason="Collected",
+                description="Image can not be pulled",
+                exit_code=None,
+                prev_status=JobStatus.PENDING,
+            )
         )
-        assert len(mock_notifications_client.sent_notifications) == 2
-        assert notification in mock_notifications_client.sent_notifications
+
+        assert notifications == mock_notifications_client.sent_notifications
 
     @pytest.mark.asyncio
-    async def test_job_come_running_state(
+    async def test_job_succeeded_workflow(
         self,
         jobs_service: JobsService,
         mock_orchestrator: MockOrchestrator,
@@ -776,57 +803,72 @@ class TestJobServiceNotification:
         mock_notifications_client: MockNotificationsClient,
     ) -> None:
         user = User(name="testuser", token="")
-        original_job, _ = await jobs_service.create_job(
+        job, _ = await jobs_service.create_job(
             job_request=job_request_factory(), user=user
         )
+        notifications = [
+            JobTransition(
+                job_id=job.id,
+                status=JobStatus.PENDING,
+                transition_time=job.status_history.current.transition_time,
+                reason=None,
+                description=None,
+                exit_code=None,
+                prev_status=None,
+            )
+        ]
+
+        mock_orchestrator.update_reason_to_return("ContainerCreating")
+        mock_orchestrator.update_status_to_return(JobStatus.PENDING)
+        await jobs_service.update_jobs_statuses()
+        job = await jobs_service.get_job(job.id)
+
+        notifications.append(
+            JobTransition(
+                job_id=job.id,
+                status=JobStatus.PENDING,
+                transition_time=job.status_history.current.transition_time,
+                reason="ContainerCreating",
+                description=None,
+                exit_code=None,
+                prev_status=JobStatus.PENDING,
+            )
+        )
+
         mock_orchestrator.update_status_to_return(JobStatus.RUNNING)
         mock_orchestrator.update_reason_to_return(None)
         await jobs_service.update_jobs_statuses()
-        job = await jobs_service.get_job(job_id=original_job.id)
+        job = await jobs_service.get_job(job.id)
 
-        notification = JobTransition(
-            job_id=original_job.id,
-            status=JobStatus.RUNNING,
-            transition_time=job.status_history.current.transition_time,
-            reason=None,
-            description=None,
-            exit_code=None,
-            prev_status=JobStatus.PENDING,
+        notifications.append(
+            JobTransition(
+                job_id=job.id,
+                status=JobStatus.RUNNING,
+                transition_time=job.status_history.current.transition_time,
+                reason=None,
+                description=None,
+                exit_code=None,
+                prev_status=JobStatus.PENDING,
+            )
         )
-        assert len(mock_notifications_client.sent_notifications) == 2
-        assert notification in mock_notifications_client.sent_notifications
-
-    @pytest.mark.asyncio
-    async def test_job_finished(
-        self,
-        jobs_service: JobsService,
-        mock_orchestrator: MockOrchestrator,
-        job_request_factory: Callable[[], JobRequest],
-        mock_notifications_client: MockNotificationsClient,
-    ) -> None:
-        user = User(name="testuser", token="")
-        original_job, _ = await jobs_service.create_job(
-            job_request=job_request_factory(), user=user
-        )
-        mock_orchestrator.update_status_to_return(JobStatus.RUNNING)
-        mock_orchestrator.update_reason_to_return(None)
-        await jobs_service.update_jobs_statuses()
 
         mock_orchestrator.update_status_to_return(JobStatus.SUCCEEDED)
         mock_orchestrator.update_reason_to_return(None)
         mock_orchestrator.update_exit_code_to_return(0)
         await jobs_service.update_jobs_statuses()
 
-        job = await jobs_service.get_job(job_id=original_job.id)
+        job = await jobs_service.get_job(job.id)
 
-        notification = JobTransition(
-            job_id=original_job.id,
-            status=JobStatus.SUCCEEDED,
-            transition_time=job.status_history.current.transition_time,
-            reason=None,
-            description=None,
-            exit_code=0,
-            prev_status=JobStatus.RUNNING,
+        notifications.append(
+            JobTransition(
+                job_id=job.id,
+                status=JobStatus.SUCCEEDED,
+                transition_time=job.status_history.current.transition_time,
+                reason=None,
+                description=None,
+                exit_code=0,
+                prev_status=JobStatus.RUNNING,
+            )
         )
-        assert len(mock_notifications_client.sent_notifications) == 3
-        assert notification in mock_notifications_client.sent_notifications
+
+        assert notifications == mock_notifications_client.sent_notifications

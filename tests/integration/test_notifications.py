@@ -1,4 +1,3 @@
-import asyncio
 from typing import Any, AsyncIterator, Awaitable, Callable, Dict, Set
 
 import aiohttp.web
@@ -185,7 +184,6 @@ class TestJobTransition:
         job_request["container"]["command"] = "sleep 15m"
 
         job_id = await run_job(user, job_request, do_kill=False)
-        await asyncio.sleep(2)
         await jobs_client.delete_job(job_id)
         await api.runner.close()
 
@@ -194,17 +192,20 @@ class TestJobTransition:
             if slug != "job-transition":
                 raise AssertionError(f"Unexpected Notification: {slug} : {payload}")
 
-            assert payload["status"] not in states
+            if payload["status"] != "pending":
+                assert payload["status"] not in states
             states.add(payload["status"])
 
             if payload["status"] == "pending":
-                assert "prev_status" not in payload
+                assert (
+                    "prev_status" not in payload or payload["prev_status"] == "pending"
+                )
             elif payload["status"] == "running":
                 assert payload["prev_status"] == "pending"
             elif payload["status"] == "succeeded":
                 assert payload["prev_status"] == "running"
             else:
-                raise AssertionError(f"Unexpected JobTransition patload: {payload}")
+                raise AssertionError(f"Unexpected JobTransition payload: {payload}")
         assert states == {"pending", "running", "succeeded"}
 
     @pytest.mark.asyncio
@@ -231,13 +232,16 @@ class TestJobTransition:
             if slug != "job-transition":
                 raise AssertionError(f"Unexpected Notification: {slug} : {payload}")
 
-            assert payload["status"] not in states
+            if payload["status"] != "pending":
+                assert payload["status"] not in states
             states.add(payload["status"])
 
             if payload["status"] == "pending":
-                assert "prev_status" not in payload
+                assert (
+                    "prev_status" not in payload or payload["prev_status"] == "pending"
+                )
             elif payload["status"] == "failed":
                 assert payload["prev_status"] == "pending"
             else:
-                raise AssertionError(f"Unexpected JobTransition patload: {payload}")
+                raise AssertionError(f"Unexpected JobTransition payload: {payload}")
         assert states == {"pending", "failed"}

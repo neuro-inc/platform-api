@@ -368,7 +368,7 @@ class JobsService:
         async with self._jobs_storage.try_update_job(job_id) as record:
             initial_status = record.status_history.current
             yield record
-        if initial_status.status != record.status_history.current.status:
+        if initial_status != record.status_history.current:
             await self._notifications_client.notify(
                 JobTransition(
                     job_id=record.id,
