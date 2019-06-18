@@ -707,7 +707,7 @@ class TestJobServiceNotification:
             exit_code=None,
             prev_status=None,
         )
-
+        assert len(mock_notifications_client.sent_notifications) == 1
         assert notification in mock_notifications_client.sent_notifications
 
     @pytest.mark.asyncio
@@ -764,7 +764,7 @@ class TestJobServiceNotification:
             exit_code=None,
             prev_status=JobStatus.PENDING,
         )
-
+        assert len(mock_notifications_client.sent_notifications) == 2
         assert notification in mock_notifications_client.sent_notifications
 
     @pytest.mark.asyncio
@@ -793,7 +793,7 @@ class TestJobServiceNotification:
             exit_code=None,
             prev_status=JobStatus.PENDING,
         )
-
+        assert len(mock_notifications_client.sent_notifications) == 2
         assert notification in mock_notifications_client.sent_notifications
 
     @pytest.mark.asyncio
@@ -828,5 +828,5 @@ class TestJobServiceNotification:
             exit_code=0,
             prev_status=JobStatus.RUNNING,
         )
-
+        assert len(mock_notifications_client.sent_notifications) == 3
         assert notification in mock_notifications_client.sent_notifications
