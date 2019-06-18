@@ -12,7 +12,7 @@ function k8s::install_kubectl {
 function k8s::install_minikube {
     # we have to pin this version in order to run minikube on CircleCI
     # Ubuntu 14 VMs. The newer versions depend on systemd.
-    local minikube_version="v1.1.0"
+    local minikube_version="v1.1.1"
     curl -Lo minikube https://storage.googleapis.com/minikube/releases/${minikube_version}/minikube-linux-amd64
     chmod +x minikube
     sudo mv minikube /usr/local/bin/
@@ -27,22 +27,20 @@ function k8s::start {
     export KUBECONFIG=$HOME/.kube/config
     mkdir -p $(dirname $KUBECONFIG)
 
-    export MINIKUBE_WANTUPDATENOTIFICATION=false
-    export MINIKUBE_WANTREPORTERRORPROMPT=false
     export MINIKUBE_HOME=$HOME
     export CHANGE_MINIKUBE_NONE_USER=true
 
     sudo -E mkdir -p ~/.minikube/files/files
 
     sudo -E minikube config set WantReportErrorPrompt false
-    sudo -E minikube start --vm-driver=none --kubernetes-version=v1.14.3
+    sudo -E minikube config set WantUpdateNotification false
+    sudo -E minikube start --vm-driver=none --kubernetes-version=v1.14.3 --memory=4096
     sudo chown -R $USER $HOME/.kube $HOME/.minikube
     k8s::wait k8s::setup_namespace
-    k8s::wait "kubectl get po --all-namespaces"
     k8s::wait k8s::start_nfs
     k8s::wait k8s::setup_ingress
     k8s::wait k8s::setup_logging
-    k8s::wait "kubectl get po --all-namespaces"
+    kubectl get po --all-namespaces
 
 }
 
@@ -85,8 +83,8 @@ function k8s::setup_ingress {
     sudo -E minikube addons enable ingress
     # NOTE: minikube --vm-driver=none --kubernetes-version=v1.10.0 stopped
     # launching the ingress services for some unknown reason!
-#    find /etc/kubernetes/addons/ -name ingress* | xargs -L 1 sudo kubectl -n kube-system apply -f
-#    find /etc/kubernetes/addons/ -name kube-dns* | xargs -L 1 sudo kubectl -n kube-system apply -f
+    find /etc/kubernetes/addons/ -name ingress* | xargs -L 1 sudo kubectl -n kube-system apply -f
+    find /etc/kubernetes/addons/ -name kube-dns* | xargs -L 1 sudo kubectl -n kube-system apply -f
     kubectl create -f tests/k8s/platformjobsingress.yml --namespace=platformapi-tests
 }
 
