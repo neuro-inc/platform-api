@@ -81,7 +81,11 @@ jobs:
           command: |
             # upgrade docker engine, https://github.com/docker/for-linux/issues/597
             sudo apt update -q
-            sudo apt install docker-ce=5:18.09.4~3-0~ubuntu-xenial docker-ce-cli== 5:18.09.4~3-0~ubuntu-xenial
+            echo 'Policy docker-ce'
+            apt policy docker-ce
+            apt policy docker-ce-cli
+            echo 'Policy docker-ce-cli'
+            sudo apt install docker-ce=5:18.09.4~3-0~ubuntu-xenial docker-ce-cli=5:18.09.4~3-0~ubuntu-xenial
             make -s gke_login
             make gke_docker_pull_test
 
