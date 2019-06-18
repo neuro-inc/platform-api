@@ -16,7 +16,6 @@ function k8s::install_minikube {
     curl -Lo minikube https://storage.googleapis.com/minikube/releases/${minikube_version}/minikube-linux-amd64
     chmod +x minikube
     sudo mv minikube /usr/local/bin/
-    sudo -E minikube config set WantReportErrorPrompt false
 }
 
 function k8s::install {
@@ -37,11 +36,14 @@ function k8s::start {
 
     sudo -E minikube config set WantReportErrorPrompt false
     sudo -E minikube start --vm-driver=none --kubernetes-version=v1.14.3
-
+    sudo chown -R $USER $HOME/.kube $HOME/.minikube
     k8s::wait k8s::setup_namespace
     k8s::wait "kubectl get po --all-namespaces"
     k8s::wait k8s::start_nfs
     k8s::wait k8s::setup_ingress
+    k8s::wait k8s::setup_logging
+    k8s::wait "kubectl get po --all-namespaces"
+
 }
 
 function k8s::wait {
