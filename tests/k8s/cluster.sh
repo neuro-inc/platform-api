@@ -32,7 +32,7 @@ function k8s::start {
 
     sudo -E minikube config set WantReportErrorPrompt false
     sudo -E minikube config set WantUpdateNotification false
-    sudo -E minikube start --vm-driver=none --kubernetes-version=v1.14.3 --memory=4096
+    sudo -E minikube start --vm-driver=none --kubernetes-version=v1.14.3 --memory=5120
     sudo chown -R $USER $HOME/.kube $HOME/.minikube
     k8s::wait k8s::setup_namespace
     k8s::wait k8s::start_nfs
