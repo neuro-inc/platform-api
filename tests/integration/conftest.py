@@ -466,3 +466,7 @@ class ApiRunner:
             self._task = None
             self._cleanup_future.set_result(None)
             await task
+
+    @property
+    def closed(self) -> bool:
+        return not bool(self._task)

@@ -5,6 +5,7 @@ from async_generator import asynccontextmanager
 from notifications_client import (
     Client as NotificationsClient,
     JobCannotStartQuotaReached,
+    JobTransition,
 )
 
 from platform_api.cluster import (
@@ -89,7 +90,7 @@ class JobsService:
 
     async def _update_job_status_by_id(self, job_id: str) -> None:
         try:
-            async with self._jobs_storage.try_update_job(job_id) as record:
+            async with self._update_job_in_storage(job_id) as record:
                 try:
                     async with self._get_cluster(record.cluster_name) as cluster:
                         job = Job(
@@ -153,12 +154,11 @@ class JobsService:
 
     async def _delete_job_by_id(self, job_id: str) -> None:
         try:
-            async with self._jobs_storage.try_update_job(job_id) as record:
+            async with self._update_job_in_storage(job_id) as record:
                 await self._delete_cluster_job(record)
 
                 # marking finished job as deleted
                 record.is_deleted = True
-
         except JobStorageTransactionError:
             # intentionally ignoring any transaction failures here because
             # the job may have been changed and a retry is needed.
@@ -200,7 +200,7 @@ class JobsService:
         )
         job_id = job_request.job_id
         try:
-            async with self._jobs_storage.try_create_job(record) as record:
+            async with self._create_job_in_storage(record) as record:
                 async with self._get_cluster(record.cluster_name) as cluster:
                     job = Job(
                         storage_config=cluster.config.storage,
@@ -308,7 +308,7 @@ class JobsService:
     async def delete_job(self, job_id: str) -> None:
         for _ in range(self._max_deletion_attempts):
             try:
-                async with self._jobs_storage.try_update_job(job_id) as record:
+                async with self._update_job_in_storage(job_id) as record:
                     if record.is_finished:
                         # the job has already finished. nothing to do here.
                         return
@@ -318,7 +318,7 @@ class JobsService:
 
                     record.status = JobStatus.SUCCEEDED
                     record.is_deleted = True
-                    return
+                return
             except JobStorageTransactionError:
                 logger.warning("Failed to mark a job %s as deleted. Retrying.", job_id)
         logger.warning("Failed to mark a job %s as deleted. Giving up.", job_id)
@@ -342,3 +342,41 @@ class JobsService:
     async def get_cluster_config(self, user: User) -> ClusterConfig:
         async with self._get_cluster(user.cluster_name) as cluster:
             return cluster.config
+
+    @asynccontextmanager
+    async def _create_job_in_storage(
+        self, record: JobRecord
+    ) -> AsyncIterator[JobRecord]:
+        """
+        Wrapper around self._jobs_storage.try_create_job() with notification
+        """
+        async with self._jobs_storage.try_create_job(record) as record:
+            yield record
+        await self._notifications_client.notify(
+            JobTransition(
+                job_id=record.id,
+                status=record.status,
+                transition_time=record.status_history.current.transition_time,
+            )
+        )
+
+    @asynccontextmanager
+    async def _update_job_in_storage(self, job_id: str) -> AsyncIterator[JobRecord]:
+        """
+        Wrapper around self._jobs_storage.try_update_job() with notification
+        """
+        async with self._jobs_storage.try_update_job(job_id) as record:
+            initial_status = record.status_history.current
+            yield record
+        if initial_status != record.status_history.current:
+            await self._notifications_client.notify(
+                JobTransition(
+                    job_id=record.id,
+                    status=record.status_history.current.status,
+                    transition_time=record.status_history.current.transition_time,
+                    reason=record.status_history.current.reason,
+                    description=record.status_history.current.description,
+                    exit_code=record.status_history.current.exit_code,
+                    prev_status=initial_status.status,
+                )
+            )
