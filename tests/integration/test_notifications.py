@@ -123,30 +123,6 @@ class TestJobTransition:
                 await jobs_client.delete_job(job_id=job_id, assert_success=False)
 
     @pytest.mark.asyncio
-    async def test_sent_job_created(
-        self,
-        api: ApiConfig,
-        client: aiohttp.ClientSession,
-        job_request_factory: Callable[[], Dict[str, Any]],
-        regular_user_factory: Callable[..., Any],
-        mock_notifications_server: NotificationsServer,
-    ) -> None:
-        user = await regular_user_factory()
-        url = api.jobs_base_url
-        job_request = job_request_factory()
-        async with client.post(url, headers=user.headers, json=job_request) as response:
-            response_payload = await response.json()
-        # Notification will be sent in graceful app shutdown
-        await api.runner.close()
-
-        for (slug, payload) in mock_notifications_server.requests:
-            if slug == "job-transition":
-                assert payload["job_id"] == response_payload["id"]
-                assert payload["status"] == "pending"
-                assert "transition_time" in payload
-                assert len(payload) == 3
-
-    @pytest.mark.asyncio
     async def test_not_sent_job_creating_failed(
         self,
         api: ApiConfig,
