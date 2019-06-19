@@ -10,8 +10,6 @@ function k8s::install_kubectl {
     sudo mv kubectl /usr/local/bin/
 }
 function k8s::install_minikube {
-    # we have to pin this version in order to run minikube on CircleCI
-    # Ubuntu 14 VMs. The newer versions depend on systemd.
     local minikube_version="v1.1.1"
     curl -Lo minikube https://storage.googleapis.com/minikube/releases/${minikube_version}/minikube-linux-amd64
     chmod +x minikube
@@ -40,12 +38,12 @@ function k8s::start {
     k8s::wait k8s::start_nfs
     k8s::wait k8s::setup_ingress
     k8s::wait k8s::setup_logging
-    kubectl get po --all-namespaces
-
+    kubectl wait --for=condition=Ready  pod -l service=platformstoragenfs --timeout=2m
+    kubectl get all --all-namespaces
 }
 
 function k8s::wait {
-    local cmd=$1
+    local cmd=$@
     set +e
     # this for loop waits until kubectl can access the api server that Minikube has created
     for i in {1..150}; do # timeout for 5 minutes
