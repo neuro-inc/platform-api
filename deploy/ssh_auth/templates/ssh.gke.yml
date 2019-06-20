@@ -20,24 +20,28 @@ spec:
       containers:
       - name: ssh-auth
         # TODO: do this right way
-        image: {{ printf "%s" (pluck .Values.global.env .Values.IMAGE | first | default .Values.IMAGE._default) }}
+        image: {{ .Values.IMAGE }}
         imagePullPolicy: Always
         env:
         - name: NP_AUTH_URL
-          value: {{ printf "%s" (pluck .Values.global.env .Values.NP_AUTH_URL | first | default .Values.NP_AUTH_URL._default) }}
+          value: {{ .Values.NP_AUTH_URL }}
         - name: NP_AUTH_TOKEN
           valueFrom:
             secretKeyRef:
               name: platformservices-secret
               key: compute_token
         - name: NP_PLATFORM_API_URL
-          value: {{ printf "%s" (pluck .Values.global.env .Values.NP_PLATFORM_API_URL | first | default .Values.NP_PLATFORM_API_URL._default) }}
+          value: {{ .Values.NP_PLATFORM_API_URL }}
         - name: NP_LOG_FIFO
           value: /authorization.log
         - name: NP_SSH_PORT
           value: "22"
         - name: NP_K8S_NS
-          value: {{ printf "%s" (pluck .Values.global.env .Values.NP_K8S_NS | first | default .Values.NP_K8S_NS._default) }}
+          value: {{ .Values.NP_K8S_NS }}
+      {{- if .Values.DOCKER_LOGIN_ARTIFACTORY_SECRET_NAME }}
+      imagePullSecrets:
+        - name: {{ .Values.DOCKER_LOGIN_ARTIFACTORY_SECRET_NAME }}
+      {{- end }}
 ---
 apiVersion: v1
 kind: Service

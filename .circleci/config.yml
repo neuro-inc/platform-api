@@ -127,6 +127,24 @@ jobs:
           when: always
 
 
+  artifactory_ssh_auth_deploy:
+    <<: *defaults
+
+    steps:
+      - checkout
+
+      - run:
+          name: Artifactory ssh-auth Docker Push
+          command: |
+            make artifactory_ssh_auth_docker_push
+
+      - run:
+          name: Artifactory ssh-auth Helm Push
+          command: |
+            make artifactory_ssh_auth_helm_push
+
+
+
 workflows:
   version: 2
 
@@ -221,3 +239,25 @@ workflows:
             tags:
               only:
                 - /release.*/
+
+  artifactory:
+    jobs:
+      - test:
+          context: org-global
+          filters:
+            branches:
+              ignore: /.*/
+            tags:
+              only:
+                - /artifactory.*/
+      - artifactory_ssh_auth_deploy:
+          context: org-global
+          requires:
+            - test
+          filters:
+            branches:
+              ignore: /.*/
+            tags:
+              only:
+                - /artifactory.*/
+
