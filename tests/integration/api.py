@@ -131,7 +131,7 @@ class JobsClient:
     ) -> Dict[str, Any]:
 
         # A little optimization with unreachable statuses
-        unreachable_statuses_map = {
+        unreachable_statuses_map: Dict[str, List[str]] = {
             JobStatus.PENDING.value: [
                 JobStatus.RUNNING.value,
                 JobStatus.SUCCEEDED.value,
