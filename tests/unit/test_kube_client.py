@@ -9,6 +9,7 @@ from platform_api.orchestrator.kube_client import (
     NodeSelectorOperator,
     NodeSelectorRequirement,
     NodeSelectorTerm,
+    PodCondition,
     PodConditionType,
     PodContainerStats,
     PodStatus,
@@ -216,3 +217,10 @@ class TestPodStatus:
         assert cond.message == ""
         assert cond.status == False
         assert cond.type == PodConditionType.READY
+
+
+class TestPodCondition:
+    def test_unknown_type(self):
+        payload = {"lastTransitionTime": "2019-06-20T11:03:32Z", "type": "Invalid"}
+        cond = PodCondition(payload)
+        assert cond.type == PodConditionType.UNKNOWN

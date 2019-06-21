@@ -762,10 +762,10 @@ class ContainerStatus:
 
 
 class PodConditionType(enum.Enum):
+    UNKNOWN = "Unknown"
     POD_SCHEDULED = "PodScheduled"
     READY = "Ready"
     INITIALIZED = "Initialized"
-    UNSCHEDULABLE = "Unschedulable"
     CONTAINERS_READY = "ContainersReady"
 
 
@@ -800,7 +800,10 @@ class PodCondition:
 
     @property
     def type(self) -> PodConditionType:
-        return PodConditionType(self._payload["type"])
+        try:
+            return PodConditionType(self._payload["type"])
+        except (KeyError, ValueError):
+            return PodConditionType.UNKNOWN
 
 
 class KubernetesEvent:
