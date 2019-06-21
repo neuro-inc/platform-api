@@ -332,7 +332,7 @@ class KubeOrchestrator(Orchestrator):
         now = datetime.now(timezone.utc)
         delta = now - pod_status.created_at
 
-        if delta.seconds < 3 * 60:
+        if delta.seconds < self._kube_config.job_schedule_timeout:
             # Wait for scheduling for 3 minute at least
             return job_status
 
@@ -342,7 +342,7 @@ class KubeOrchestrator(Orchestrator):
         )
         triggered_scaleup = any(e for e in pod_events if e.reason == "TriggeredScaleUp")
         if triggered_scaleup:
-            if delta.seconds < 15 * 60:
+            if delta.seconds < self._kube_config.job_schedule_scaleup_timeout:
                 # waiting for cluster scaleup
                 return JobStatusItem.create(
                     JobStatus.PENDING,
