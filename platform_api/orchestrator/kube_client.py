@@ -530,6 +530,8 @@ class PodDescriptor:
 
     node_name: Optional[str] = None
 
+    created_at: Optional[datetime] = None
+
     @classmethod
     def from_job_request(
         cls,
@@ -695,6 +697,7 @@ class PodDescriptor:
             secrets = []
         return cls(
             name=metadata["name"],
+            created_at=iso8601.parse_date(metadata["creationTimestamp"]),
             image=container_payload["image"],
             status=status,
             image_pull_secrets=secrets,
@@ -829,14 +832,6 @@ class PodStatus:
         if "containerStatuses" in self._payload:
             payload = self._payload["containerStatuses"][0]
         return ContainerStatus(payload=payload)
-
-    @property
-    def name(self) -> str:
-        return self._payload["metadata"]["name"]
-
-    @property
-    def created_at(self) -> datetime:
-        return iso8601.parse_date(self._payload["metadata"]["creationTimestamp"])
 
     @property
     def phase(self) -> str:
@@ -1213,14 +1208,12 @@ class KubeClient:
         result = await self._request(method="DELETE", url=url)
         self._check_status_payload(result)
 
-    async def create_pod(self, descriptor: PodDescriptor) -> PodStatus:
+    async def create_pod(self, descriptor: PodDescriptor) -> PodDescriptor:
         payload = await self._request(
             method="POST", url=self._pods_url, json=descriptor.to_primitive()
         )
         pod = PodDescriptor.from_primitive(payload)
-        if pod.status is None:
-            raise ValueError("Missing pod status")
-        return pod.status
+        return pod
 
     async def set_raw_pod_status(
         self, name: str, payload: Dict[str, Any]

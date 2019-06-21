@@ -227,7 +227,9 @@ class KubeOrchestrator(Orchestrator):
         await self._create_user_network_policy(job)
 
         descriptor = await self._create_pod_descriptor(job)
-        status = await self._client.create_pod(descriptor)
+        pod = await self._client.create_pod(descriptor)
+        status = pod.status
+        assert status is not None
 
         logger.info(f"Starting Service for {job.id}.")
         service = await self._create_service(descriptor)
@@ -317,10 +319,12 @@ class KubeOrchestrator(Orchestrator):
 
         pod_name = self._get_job_pod_name(job)
         if job.is_preemptible:
-            pod_status = await self._check_preemptible_job_pod(job)
+            pod = await self._check_preemptible_job_pod(job)
         else:
-            pod_status = await self._client.get_pod_status(pod_name)
+            pod = await self._client.get_pod(pod_name)
 
+        pod_status = pod.status
+        assert pod_status is not None  # should always be present
         job_status = convert_pod_status_to_job_status(pod_status)
 
         if pod_status.is_scheduled:
@@ -330,7 +334,8 @@ class KubeOrchestrator(Orchestrator):
         # Possible we are observing the case when Container requested
         # too much resources, check events for NotTriggerScaleUp event
         now = datetime.now(timezone.utc)
-        delta = now - pod_status.created_at
+        assert pod.created_at is not None
+        delta = now - pod.created_at
 
         if delta.seconds < self._kube_config.job_schedule_timeout:
             # Wait for scheduling for 3 minute at least
@@ -357,13 +362,15 @@ class KubeOrchestrator(Orchestrator):
             description=job_status.description,
         )
 
-    async def _check_preemptible_job_pod(self, job: Job) -> PodStatus:
+    async def _check_preemptible_job_pod(self, job: Job) -> PodDescriptor:
         assert job.is_preemptible
 
         pod_name = self._get_job_pod_name(job)
         do_recreate_pod = False
         try:
-            pod_status = await self._client.get_pod_status(pod_name)
+            pod = await self._client.get_pod(pod_name)
+            pod_status = pod.status
+            assert pod_status is not None
             if pod_status.is_node_lost:
                 logger.info(f"Detected NodeLost in pod '{pod_name}'. Job '{job.id}'")
                 # if the pod's status reason is `NodeLost` regardless of
@@ -385,14 +392,14 @@ class KubeOrchestrator(Orchestrator):
             logger.info(f"Recreating preempted pod '{pod_name}'. Job '{job.id}'")
             descriptor = await self._create_pod_descriptor(job)
             try:
-                pod_status = await self._client.create_pod(descriptor)
+                pod = await self._client.create_pod(descriptor)
             except JobError:
                 # handing possible 422 and other failures
                 raise JobNotFoundException(
                     f"Pod '{pod_name}' not found. Job '{job.id}'"
                 )
 
-        return pod_status
+        return pod
 
     async def _check_pod_exists(self, pod_name: str) -> bool:
         try:
