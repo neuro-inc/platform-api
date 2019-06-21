@@ -8,6 +8,7 @@ import ssl
 from base64 import b64encode
 from contextlib import suppress
 from dataclasses import dataclass, field
+from datetime import datetime
 from enum import Enum
 from pathlib import Path, PurePath
 from types import TracebackType
@@ -27,6 +28,7 @@ from typing import (
 from urllib.parse import urlsplit
 
 import aiohttp
+import iso8601
 from aiohttp import ContentTypeError, WSMsgType
 from async_generator import asynccontextmanager
 from async_timeout import timeout
@@ -759,6 +761,48 @@ class ContainerStatus:
         return self.is_waiting and self.reason in (None, "ContainerCreating")
 
 
+class PodConditionType(enum.Enum):
+    POD_SCHEDULED = "PodScheduled"
+    READY = "Ready"
+    INITIALIZED = "Initialized"
+    UNSCHEDULABLE = "Unschedulable"
+    CONTAINERS_READY = "ContainersReady"
+
+
+class PodCondition:
+    # https://kubernetes.io/docs/concepts/workloads/pods/pod-lifecycle/#pod-conditions
+
+    def __init__(self, payload: Dict[str, Any]) -> None:
+        self._payload = payload
+
+    @property
+    def transition_time(self) -> datetime:
+        return iso8601.parse_date(self._payload["lastTransitionTime"])
+
+    @property
+    def reason(self) -> str:
+        return self._payload.get("reason", "")
+
+    @property
+    def message(self) -> str:
+        return self._payload.get("message", "")
+
+    @property
+    def status(self) -> Optional[bool]:
+        val = self._payload["status"]
+        if val == "Unknown":
+            return None
+        elif val == "True":
+            return True
+        elif val == "False":
+            return False
+        assert False, f"Invalid status {val!r}"
+
+    @property
+    def type(self) -> PodConditionType:
+        return PodConditionType(self._payload["type"])
+
+
 class KubernetesEvent:
     def __init__(self, payload: Dict[str, Any]) -> None:
         self._payload = payload or {}
@@ -833,6 +877,10 @@ class PodStatus:
     @property
     def is_node_lost(self) -> bool:
         return self.reason == "NodeLost"
+
+    @property
+    def conditions(self) -> List[PodCondition]:
+        return [PodCondition(val) for val in self._payload.get("conditions", [])]
 
     @classmethod
     def from_primitive(cls, payload: Dict[str, Any]) -> "PodStatus":

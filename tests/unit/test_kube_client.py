@@ -1,3 +1,4 @@
+from datetime import datetime, timezone
 from typing import Any, Dict
 
 import pytest
@@ -8,7 +9,9 @@ from platform_api.orchestrator.kube_client import (
     NodeSelectorOperator,
     NodeSelectorRequirement,
     NodeSelectorTerm,
+    PodConditionType,
     PodContainerStats,
+    PodStatus,
     StatsSummary,
 )
 
@@ -143,3 +146,73 @@ class TestStatsSummary:
             "namespace", "pod", "container"
         )
         assert stats
+
+
+class TestPodStatus:
+    def test_from_primitive(self) -> None:
+        payload = {"phase": "Running", "containerStatuses": [{"ready": True}]}
+        status = PodStatus.from_primitive(payload)
+        assert status.phase == "Running"
+        assert len(status.conditions) == 0
+
+    def test_from_primitive_with_conditions(self) -> None:
+        payload = {
+            "conditions": [
+                {
+                    "lastProbeTime": None,
+                    "lastTransitionTime": "2019-06-20T11:03:32Z",
+                    "reason": "PodCompleted",
+                    "status": "True",
+                    "type": "Initialized",
+                },
+                {
+                    "lastProbeTime": None,
+                    "lastTransitionTime": "2019-06-20T11:13:37Z",
+                    "reason": "PodCompleted",
+                    "status": "False",
+                    "type": "Ready",
+                },
+                {
+                    "lastProbeTime": None,
+                    "lastTransitionTime": "2019-06-20T11:03:32Z",
+                    "status": "True",
+                    "type": "PodScheduled",
+                },
+            ],
+            "containerStatuses": [
+                {
+                    "containerID": "docker://cf4061683a6d7",
+                    "image": "ubuntu:latest",
+                    "imageID": "docker-pullable://ubuntu@sha256:eb70667a8016",
+                    "lastState": {},
+                    "name": "job-fce70f73-4a6e-45f6-ba20-b338ea9a5609",
+                    "ready": False,
+                    "restartCount": 0,
+                    "state": {
+                        "terminated": {
+                            "containerID": "docker://cf4061683a6d7",
+                            "exitCode": 0,
+                            "finishedAt": "2019-06-20T11:13:36Z",
+                            "reason": "Completed",
+                            "startedAt": "2019-06-20T11:03:36Z",
+                        }
+                    },
+                }
+            ],
+            "hostIP": "10.128.0.27",
+            "phase": "Succeeded",
+            "podIP": "10.44.4.175",
+            "qosClass": "Guaranteed",
+            "startTime": "2019-06-20T11:03:32Z",
+        }
+
+        status = PodStatus.from_primitive(payload)
+        assert len(status.conditions) == 3
+        cond = status.conditions[1]
+        assert cond.transition_time == datetime(
+            2019, 6, 20, 11, 13, 37, tzinfo=timezone.utc
+        )
+        assert cond.reason == "PodCompleted"
+        assert cond.message == ""
+        assert cond.status == False
+        assert cond.type == PodConditionType.READY

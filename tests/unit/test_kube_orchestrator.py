@@ -556,13 +556,6 @@ class TestJobStatusItemFactory:
         assert job_status_item == JobStatusItem.create(JobStatus.SUCCEEDED, exit_code=0)
 
 
-class TestPodStatus:
-    def test_from_primitive(self) -> None:
-        payload = {"phase": "Running", "containerStatuses": [{"ready": True}]}
-        status = PodStatus.from_primitive(payload)
-        assert status.phase == "Running"
-
-
 class TestResources:
     def test_to_primitive(self) -> None:
         resources = Resources(cpu=0.5, memory=1024)
