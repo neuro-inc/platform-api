@@ -1,5 +1,6 @@
 import asyncio
 import logging
+from dataclasses import replace
 from datetime import datetime, timezone
 from typing import Any, Dict, Iterable, List, Optional, Union
 
@@ -340,7 +341,7 @@ class KubeOrchestrator(Orchestrator):
         if delta.seconds < self._kube_config.job_schedule_timeout:
             # Wait for scheduling for 3 minute at least
             if job_status.reason is None:
-                job_status.reason = "Scheduling a job."
+                job_status = replace(job_status, reason="Scheduling a job.")
             return job_status
 
         logger.info(f"Found pod that requested too much resources. Job '{job.id}'")
