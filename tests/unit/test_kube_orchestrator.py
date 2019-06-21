@@ -422,7 +422,10 @@ class TestPodDescriptor:
     def test_from_primitive(self) -> None:
         payload = {
             "kind": "Pod",
-            "metadata": {"name": "testname"},
+            "metadata": {
+                "name": "testname",
+                "creationTimestamp": "2019-06-20T11:03:32Z",
+            },
             "spec": {"containers": [{"name": "testname", "image": "testimage"}]},
             "status": {"phase": "Running"},
         }
