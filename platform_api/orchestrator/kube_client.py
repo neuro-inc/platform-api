@@ -831,6 +831,14 @@ class PodStatus:
         return ContainerStatus(payload=payload)
 
     @property
+    def name(self) -> str:
+        return self._payload["metadata"]["name"]
+
+    @property
+    def created_at(self) -> datetime:
+        return iso8601.parse_date(self._payload["metadata"]["creationTimestamp"])
+
+    @property
     def phase(self) -> str:
         """
         "Pending", "Running", "Succeeded", "Failed", "Unknown"

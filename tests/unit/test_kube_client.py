@@ -212,9 +212,8 @@ class TestPodStatus:
         )
         assert cond.reason == "PodCompleted"
         assert cond.message == ""
-        assert cond.status == False
+        assert cond.status is False
         assert cond.type == PodConditionType.READY
-
 
     def test_is_sceduled_true_1(self) -> None:
         payload = {
@@ -264,12 +263,8 @@ class TestPodStatus:
         status = PodStatus.from_primitive(payload)
         assert status.is_scheduled
 
-
     def test_is_sceduled_false_1(self) -> None:
-        payload = {
-            "phase": "Pending",
-            "startTime": "2019-06-20T11:03:32Z",
-        }
+        payload = {"phase": "Pending", "startTime": "2019-06-20T11:03:32Z"}
 
         status = PodStatus.from_primitive(payload)
         assert not status.is_scheduled
@@ -282,7 +277,7 @@ class TestPodStatus:
                     "lastTransitionTime": "2019-06-20T11:03:32Z",
                     "status": "False",
                     "type": "PodScheduled",
-                },
+                }
             ],
             "phase": "Pending",
             "startTime": "2019-06-20T11:03:32Z",
@@ -293,7 +288,7 @@ class TestPodStatus:
 
 
 class TestPodCondition:
-    def test_unknown_type(self):
+    def test_unknown_type(self) -> None:
         payload = {"lastTransitionTime": "2019-06-20T11:03:32Z", "type": "Invalid"}
         cond = PodCondition(payload)
         assert cond.type == PodConditionType.UNKNOWN

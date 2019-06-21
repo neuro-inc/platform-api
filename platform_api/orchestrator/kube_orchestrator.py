@@ -1,5 +1,6 @@
 import asyncio
 import logging
+from datetime import datetime, timezone
 from typing import Any, Dict, Iterable, List, Optional, Union
 
 from platform_api.cluster_config import (
@@ -322,23 +323,39 @@ class KubeOrchestrator(Orchestrator):
 
         job_status = convert_pod_status_to_job_status(pod_status)
 
-        # Pod in pending state, and no container information available
-        # possible we are observing the case when Container requested
+        if pod_status.is_scheduled:
+            return job_status
+
+        # Pod in pending state, and not scheduled yet.
+        # Possible we are observing the case when Container requested
         # too much resources, check events for NotTriggerScaleUp event
-        if not pod_status.is_scheduled:
-            if not await self._check_pod_is_schedulable(pod_name):
-                logger.info(
-                    f"Found pod that requested too much resources. Job '{job.id}'"
-                )
-                # Update the reason field of the job to Too Much Requested
-                job_status = JobStatusItem.create(
-                    job_status.status,
-                    transition_time=job_status.transition_time,
-                    reason="Cluster doesn't have resources to fulfill request.",
+        now = datetime.now(timezone.utc)
+        delta = now - pod_status.created_at
+
+        if delta.seconds < 3 * 60:
+            # Wait for scheduling for 3 minute at least
+            return job_status
+
+        logger.info(f"Found pod that requested too much resources. Job '{job.id}'")
+        pod_events = await self._client.get_pod_events(
+            pod_name, self._kube_config.namespace
+        )
+        triggered_scaleup = any(e for e in pod_events if e.reason == "TriggeredScaleUp")
+        if triggered_scaleup:
+            if delta.seconds < 15 * 60:
+                # waiting for cluster scaleup
+                return JobStatusItem.create(
+                    JobStatus.PENDING,
+                    transition_time=now,
+                    reason="Scaling up the cluster to get more resources.",
                     description=job_status.description,
                 )
-
-        return job_status
+        return JobStatusItem.create(
+            JobStatus.FAILED,
+            transition_time=now,
+            reason="Cannot scaleup the cluster to get more resources.",
+            description=job_status.description,
+        )
 
     async def _check_preemptible_job_pod(self, job: Job) -> PodStatus:
         assert job.is_preemptible
@@ -376,26 +393,6 @@ class KubeOrchestrator(Orchestrator):
                 )
 
         return pod_status
-
-    async def _check_pod_is_schedulable(self, pod_name: str) -> bool:
-        pod_events = await self._client.get_pod_events(
-            pod_name, self._kube_config.namespace
-        )
-        if not pod_events:
-            return True
-
-        # TODO (A Danshyn 11/17/18): note that "FailedScheduling" goes prior
-        # "TriggerScaleUp" as well. seems unclear whether this condition is
-        # correct. In other words, regardless of presence of any of
-        # "TriggerScaleUp"/"NotTriggerScaleUp", we could just look for
-        # "FailedScheduling" and get the same result.
-        # Instead, for clusters without autoscalers, we could just query all
-        # nodes (cache) and check job a job's container resources against the
-        # nodes' capacities.
-        return not any(
-            event.reason == "NotTriggerScaleUp" or event.reason == "FailedScheduling"
-            for event in pod_events
-        )
 
     async def _check_pod_exists(self, pod_name: str) -> bool:
         try:
