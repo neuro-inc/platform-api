@@ -843,9 +843,12 @@ class PodStatus:
 
     @property
     def is_scheduled(self) -> bool:
-        # TODO (A Danshyn 11/16/18): we should consider using "conditions"
-        # type="PodScheduled" reason="unschedulable" instead.
-        return not self.is_phase_pending or self.is_container_status_available
+        if not self.is_phase_pending:
+            return True
+        for cond in self.conditions:
+            if cond.type == PodConditionType.POD_SCHEDULED:
+                return bool(cond.status)
+        return False
 
     @property
     def reason(self) -> Optional[str]:
@@ -872,10 +875,6 @@ class PodStatus:
     @property
     def is_container_creating(self) -> bool:
         return self._container_status.is_creating
-
-    @property
-    def is_container_status_available(self) -> bool:
-        return "containerStatuses" in self._payload
 
     @property
     def is_node_lost(self) -> bool:

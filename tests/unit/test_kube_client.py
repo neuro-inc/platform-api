@@ -200,10 +200,7 @@ class TestPodStatus:
                     },
                 }
             ],
-            "hostIP": "10.128.0.27",
             "phase": "Succeeded",
-            "podIP": "10.44.4.175",
-            "qosClass": "Guaranteed",
             "startTime": "2019-06-20T11:03:32Z",
         }
 
@@ -217,6 +214,82 @@ class TestPodStatus:
         assert cond.message == ""
         assert cond.status == False
         assert cond.type == PodConditionType.READY
+
+
+    def test_is_sceduled_true_1(self) -> None:
+        payload = {
+            "conditions": [
+                {
+                    "lastProbeTime": None,
+                    "lastTransitionTime": "2019-06-20T11:13:37Z",
+                    "reason": "PodCompleted",
+                    "status": "False",
+                    "type": "Ready",
+                },
+                {
+                    "lastProbeTime": None,
+                    "lastTransitionTime": "2019-06-20T11:03:32Z",
+                    "status": "True",
+                    "type": "PodScheduled",
+                },
+            ],
+            "phase": "Running",
+            "startTime": "2019-06-20T11:03:32Z",
+        }
+
+        status = PodStatus.from_primitive(payload)
+        assert status.is_scheduled
+
+    def test_is_sceduled_true_2(self) -> None:
+        payload = {
+            "conditions": [
+                {
+                    "lastProbeTime": None,
+                    "lastTransitionTime": "2019-06-20T11:13:37Z",
+                    "reason": "PodCompleted",
+                    "status": "False",
+                    "type": "Ready",
+                },
+                {
+                    "lastProbeTime": None,
+                    "lastTransitionTime": "2019-06-20T11:03:32Z",
+                    "status": "True",
+                    "type": "PodScheduled",
+                },
+            ],
+            "phase": "Pending",
+            "startTime": "2019-06-20T11:03:32Z",
+        }
+
+        status = PodStatus.from_primitive(payload)
+        assert status.is_scheduled
+
+
+    def test_is_sceduled_false_1(self) -> None:
+        payload = {
+            "phase": "Pending",
+            "startTime": "2019-06-20T11:03:32Z",
+        }
+
+        status = PodStatus.from_primitive(payload)
+        assert not status.is_scheduled
+
+    def test_is_sceduled_false_2(self) -> None:
+        payload = {
+            "conditions": [
+                {
+                    "lastProbeTime": None,
+                    "lastTransitionTime": "2019-06-20T11:03:32Z",
+                    "status": "False",
+                    "type": "PodScheduled",
+                },
+            ],
+            "phase": "Pending",
+            "startTime": "2019-06-20T11:03:32Z",
+        }
+
+        status = PodStatus.from_primitive(payload)
+        assert not status.is_scheduled
 
 
 class TestPodCondition:
