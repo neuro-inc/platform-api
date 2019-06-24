@@ -1298,7 +1298,10 @@ async def mock_kubernetes_server() -> AsyncIterator[ApiConfig]:
     async def _get_pod(request: web.Request) -> web.Response:
         payload: Dict[str, Any] = {
             "kind": "Pod",
-            "metadata": {"name": "testname"},
+            "metadata": {
+                "name": "testname",
+                "creationTimestamp": "2019-06-20T11:03:32Z",
+            },
             "spec": {
                 "containers": [{"name": "testname", "image": "testimage"}],
                 "nodeName": "whatever",
