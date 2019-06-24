@@ -26,10 +26,6 @@ class ApiConfig(NamedTuple):
         return f"http://{self.host}:{self.port}/api/v1"
 
     @property
-    def model_base_url(self) -> str:
-        return self.endpoint + "/models"
-
-    @property
     def jobs_base_url(self) -> str:
         return self.endpoint + "/jobs"
 

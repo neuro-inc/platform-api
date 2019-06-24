@@ -26,10 +26,6 @@ class PlatformConfig:
     def jobs_url(self) -> str:
         return self.endpoint_url + "/jobs"
 
-    @property
-    def models_url(self) -> str:
-        return self.endpoint_url + "/models"
-
 
 @dataclass
 class SSHAuthConfig:

@@ -17,12 +17,11 @@ async def test_basic_command(
             "command": "true",
             "resources": {"cpu": 0.1, "memory_mb": 16},
         },
-        "dataset_storage_uri": f"storage://{alice.name}",
-        "result_storage_uri": f"storage://{alice.name}/result",
+        "is_preemptible": False,
     }
     headers = {"Authorization": f"Bearer {alice.token}"}
     response = await client.post(
-        api_config.models_url, headers=headers, json=model_request_payload
+        api_config.jobs_url, headers=headers, json=model_request_payload
     )
     model_payload = await response.json()
     job_id = model_payload["job_id"]
