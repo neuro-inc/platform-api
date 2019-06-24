@@ -688,9 +688,10 @@ class TestKubeOrchestrator:
         self, kube_orchestrator: KubeOrchestrator
     ) -> Iterator[Callable[[str], MyJob]]:
         def impl(server_hostname: str) -> MyJob:
+            cmd = f"curl --fail --retry 15 --retry-delay 1 http://{server_hostname}/"
             client_cont = Container(
                 image="python",
-                command=f"curl --fail http://{server_hostname}/",
+                command=cmd,
                 resources=ContainerResources(cpu=0.1, memory_mb=128),
             )
             return MyJob(
