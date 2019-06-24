@@ -338,7 +338,11 @@ class KubeOrchestrator(Orchestrator):
         assert pod.created_at is not None
         delta = now - pod.created_at
 
-        if delta.seconds < self._kube_config.job_schedule_timeout:
+        schedule_timeout = (
+            job.schedule_timeout or self._kube_config.job_schedule_timeout
+        )
+
+        if delta.seconds < schedule_timeout:
             # Wait for scheduling for 3 minute at least
             if job_status.reason is None:
                 job_status = replace(job_status, reason="Scheduling a job.")
@@ -350,7 +354,10 @@ class KubeOrchestrator(Orchestrator):
         )
         triggered_scaleup = any(e for e in pod_events if e.reason == "TriggeredScaleUp")
         if triggered_scaleup:
-            if delta.seconds < self._kube_config.job_schedule_scaleup_timeout:
+            if (
+                delta.seconds
+                < self._kube_config.job_schedule_scaleup_timeout + schedule_timeout
+            ):
                 # waiting for cluster scaleup
                 return JobStatusItem.create(
                     JobStatus.PENDING,

@@ -211,6 +211,7 @@ class JobRecord:
     is_preemptible: bool = False
     is_deleted: bool = False
     internal_hostname: Optional[str] = None
+    schedule_timeout: Optional[float] = None
 
     @classmethod
     def create(
@@ -319,6 +320,7 @@ class JobRecord:
             "is_deleted": self.is_deleted,
             "finished_at": self.finished_at_str,
             "is_preemptible": self.is_preemptible,
+            "schedule_timeout": self.schedule_timeout,
         }
         if self.internal_hostname:
             result["internal_hostname"] = self.internal_hostname
@@ -345,6 +347,7 @@ class JobRecord:
             name=payload.get("name"),
             is_preemptible=payload.get("is_preemptible", False),
             internal_hostname=payload.get("internal_hostname", None),
+            schedule_timeout=payload.get("schedule_timeout", None),
         )
 
     @staticmethod
