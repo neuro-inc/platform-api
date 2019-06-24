@@ -124,10 +124,10 @@ class TestApi:
 class TestModels:
     @pytest.mark.asyncio
     async def test_create_model_unauthorized(
-        self, api: ApiConfig, client: aiohttp.ClientSession, model_train: Dict[str, Any]
+        self, api: ApiConfig, client: aiohttp.ClientSession, job_submit: Dict[str, Any]
     ) -> None:
-        url = api.model_base_url
-        async with client.post(url, json=model_train) as response:
+        url = api.jobs_base_url
+        async with client.post(url, json=job_submit) as response:
             assert response.status == HTTPUnauthorized.status_code
 
     @pytest.mark.asyncio
@@ -135,15 +135,15 @@ class TestModels:
         self,
         api: ApiConfig,
         client: aiohttp.ClientSession,
-        model_train: Dict[str, Any],
+        job_submit: Dict[str, Any],
         jobs_client: JobsClient,
         regular_user: _User,
     ) -> None:
-        url = api.model_base_url
-        model_train["is_preemptible"] = True
-        model_train["name"] = "Invalid_job_name!"
+        url = api.jobs_base_url
+        job_submit["is_preemptible"] = True
+        job_submit["name"] = "Invalid_job_name!"
         async with client.post(
-            url, headers=regular_user.headers, json=model_train
+            url, headers=regular_user.headers, json=job_submit
         ) as response:
             assert response.status == HTTPBadRequest.status_code
             payload = await response.json()
@@ -158,17 +158,17 @@ class TestModels:
         self,
         api: ApiConfig,
         client: aiohttp.ClientSession,
-        model_train: Dict[str, Any],
+        job_submit: Dict[str, Any],
         jobs_client: JobsClient,
         regular_user: _User,
     ) -> None:
-        url = api.model_base_url
-        model_train["is_preemptible"] = True
-        model_train["container"]["http"]["requires_auth"] = True
+        url = api.jobs_base_url
+        job_submit["is_preemptible"] = True
+        job_submit["container"]["http"]["requires_auth"] = True
         job_name = "some-test-job-name"
-        model_train["name"] = job_name
+        job_submit["name"] = job_name
         async with client.post(
-            url, headers=regular_user.headers, json=model_train
+            url, headers=regular_user.headers, json=job_submit
         ) as response:
             assert response.status == HTTPAccepted.status_code
             result = await response.json()
@@ -197,13 +197,13 @@ class TestModels:
         self,
         api: ApiConfig,
         client: aiohttp.ClientSession,
-        model_train: Dict[str, Any],
+        job_submit: Dict[str, Any],
         jobs_client: JobsClient,
         regular_user: _User,
     ) -> None:
-        url = api.model_base_url
+        url = api.jobs_base_url
         async with client.post(
-            url, headers=regular_user.headers, json=model_train
+            url, headers=regular_user.headers, json=job_submit
         ) as response:
             assert response.status == HTTPAccepted.status_code
             result = await response.json()
@@ -218,14 +218,14 @@ class TestModels:
         self,
         api: ApiConfig,
         client: aiohttp.ClientSession,
-        model_train: Dict[str, Any],
+        job_submit: Dict[str, Any],
         jobs_client: JobsClient,
         regular_user: _User,
     ) -> None:
-        url = api.model_base_url
-        model_train["container"]["ssh"] = {"port": 7867}
+        url = api.jobs_base_url
+        job_submit["container"]["ssh"] = {"port": 7867}
         async with client.post(
-            url, headers=regular_user.headers, json=model_train
+            url, headers=regular_user.headers, json=job_submit
         ) as response:
             assert response.status == HTTPAccepted.status_code
             result = await response.json()
@@ -245,15 +245,15 @@ class TestModels:
         self,
         api: ApiConfig,
         client: aiohttp.ClientSession,
-        model_train: Dict[str, Any],
+        job_submit: Dict[str, Any],
         jobs_client: JobsClient,
         regular_user: _User,
     ) -> None:
-        url = api.model_base_url
-        model_train["container"]["ssh"] = {"port": 7867}
-        model_train["container"].pop("http", None)
+        url = api.jobs_base_url
+        job_submit["container"]["ssh"] = {"port": 7867}
+        job_submit["container"].pop("http", None)
         async with client.post(
-            url, headers=regular_user.headers, json=model_train
+            url, headers=regular_user.headers, json=job_submit
         ) as response:
             assert response.status == HTTPAccepted.status_code
             result = await response.json()
@@ -290,7 +290,7 @@ class TestModels:
         }
 
         async with client.post(
-            api.model_base_url, headers=regular_user.headers, json=request_payload
+            api.jobs_base_url, headers=regular_user.headers, json=request_payload
         ) as response:
             response_text = await response.text()
             assert response.status == HTTPBadRequest.status_code, response_text
@@ -323,7 +323,7 @@ class TestModels:
         }
 
         async with client.post(
-            api.model_base_url, headers=regular_user.headers, json=request_payload
+            api.jobs_base_url, headers=regular_user.headers, json=request_payload
         ) as response:
             assert response.status == HTTPAccepted.status_code, await response.text()
             result = await response.json()
@@ -350,7 +350,7 @@ class TestModels:
             "dataset_storage_uri": f"storage://{regular_user.name}",
             "result_storage_uri": f"storage://{regular_user.name}/result",
         }
-        url = api.model_base_url
+        url = api.jobs_base_url
         async with client.post(
             url, headers=regular_user.headers, json=payload
         ) as response:
@@ -365,10 +365,10 @@ class TestModels:
     async def test_incorrect_request(
         self, api: ApiConfig, client: aiohttp.ClientSession, regular_user: _User
     ) -> None:
-        json_model_train = {"wrong_key": "wrong_value"}
-        url = api.model_base_url
+        json_job_submit = {"wrong_key": "wrong_value"}
+        url = api.jobs_base_url
         async with client.post(
-            url, headers=regular_user.headers, json=json_model_train
+            url, headers=regular_user.headers, json=json_job_submit
         ) as response:
             assert response.status == HTTPBadRequest.status_code
             data = await response.json()
@@ -392,7 +392,7 @@ class TestModels:
             "result_storage_uri": f"storage://{regular_user.name}/result",
         }
 
-        url = api.model_base_url
+        url = api.jobs_base_url
         async with client.post(
             url, headers=regular_user.headers, json=payload
         ) as response:
@@ -419,7 +419,7 @@ class TestModels:
             "result_storage_uri": f"storage://result",
         }
 
-        url = api.model_base_url
+        url = api.jobs_base_url
         async with client.post(
             url, headers=regular_user.headers, json=payload
         ) as response:
@@ -443,7 +443,7 @@ class TestModels:
             "result_storage_uri": f"storage://{regular_user.name}/result",
         }
 
-        url = api.model_base_url
+        url = api.jobs_base_url
         async with client.post(
             url, headers=regular_user.headers, json=payload
         ) as response:
@@ -467,7 +467,7 @@ class TestModels:
             "result_storage_uri": f"storage://{regular_user.name}/result",
         }
 
-        url = api.model_base_url
+        url = api.jobs_base_url
         async with client.post(
             url, headers=regular_user.headers, json=payload
         ) as response:
@@ -480,19 +480,19 @@ class TestModels:
 class TestJobs:
     @pytest.mark.asyncio
     async def test_create_job_unauthorized_no_token(
-        self, api: ApiConfig, client: aiohttp.ClientSession, model_train: Dict[str, Any]
+        self, api: ApiConfig, client: aiohttp.ClientSession, job_submit: Dict[str, Any]
     ) -> None:
         url = api.jobs_base_url
-        async with client.post(url, json=model_train) as response:
+        async with client.post(url, json=job_submit) as response:
             assert response.status == HTTPUnauthorized.status_code
 
     @pytest.mark.asyncio
     async def test_create_job_unauthorized_invalid_token(
-        self, api: ApiConfig, client: aiohttp.ClientSession, model_train: Dict[str, Any]
+        self, api: ApiConfig, client: aiohttp.ClientSession, job_submit: Dict[str, Any]
     ) -> None:
         url = api.jobs_base_url
         headers = {"Authorization": "Bearer INVALID"}
-        async with client.post(url, headers=headers, json=model_train) as response:
+        async with client.post(url, headers=headers, json=job_submit) as response:
             assert response.status == HTTPUnauthorized.status_code
 
     @pytest.mark.asyncio
@@ -767,7 +767,7 @@ class TestJobs:
         regular_user: _User,
         model_request_factory: Callable[[str], Dict[str, Any]],
     ) -> None:
-        url = api.model_base_url
+        url = api.jobs_base_url
         headers = regular_user.headers
         model_request = model_request_factory(regular_user.name)
         model_request["container"]["resources"]["memory_mb"] = 100_500
@@ -797,7 +797,7 @@ class TestJobs:
         regular_user: _User,
         model_request_factory: Callable[[str], Dict[str, Any]],
     ) -> None:
-        url = api.model_base_url
+        url = api.jobs_base_url
         headers = regular_user.headers
         model_request = model_request_factory(regular_user.name)
         model_request["container"]["command"] = "sleep 20m"
@@ -1233,7 +1233,7 @@ class TestJobs:
         owner = await regular_user_factory()
         follower = await regular_user_factory()
 
-        url = api.model_base_url
+        url = api.jobs_base_url
         model_request = model_request_factory(owner.name)
         async with client.post(
             url, headers=owner.headers, json=model_request
@@ -1275,7 +1275,7 @@ class TestJobs:
         owner = await regular_user_factory()
         follower = await regular_user_factory()
 
-        url = api.model_base_url
+        url = api.jobs_base_url
         model_request = model_request_factory(owner.name)
         async with client.post(
             url, headers=owner.headers, json=model_request
@@ -1305,15 +1305,15 @@ class TestJobs:
         jobs_client: JobsClient,
         api: ApiConfig,
         client: aiohttp.ClientSession,
-        model_train: Dict[str, Any],
+        job_submit: Dict[str, Any],
         regular_user: _User,
     ) -> None:
         jobs_ids = []
         n_jobs = 2
         for _ in range(n_jobs):
-            url = api.model_base_url
+            url = api.jobs_base_url
             async with client.post(
-                url, headers=regular_user.headers, json=model_train
+                url, headers=regular_user.headers, json=job_submit
             ) as response:
                 assert response.status == HTTPAccepted.status_code
                 result = await response.json()
@@ -1556,13 +1556,13 @@ class TestJobs:
         self,
         api: ApiConfig,
         client: aiohttp.ClientSession,
-        model_train: Dict[str, Any],
+        job_submit: Dict[str, Any],
         jobs_client: JobsClient,
         regular_user: _User,
     ) -> None:
-        url = api.model_base_url
+        url = api.jobs_base_url
         async with client.post(
-            url, headers=regular_user.headers, json=model_train
+            url, headers=regular_user.headers, json=job_submit
         ) as response:
             assert response.status == HTTPAccepted.status_code
             result = await response.json()
@@ -1581,14 +1581,14 @@ class TestJobs:
         self,
         api: ApiConfig,
         client: aiohttp.ClientSession,
-        model_train: Dict[str, Any],
+        job_submit: Dict[str, Any],
         jobs_client: JobsClient,
         regular_user: _User,
     ) -> None:
-        url = api.model_base_url
-        model_train["container"]["command"] = "sleep 1000000000"
+        url = api.jobs_base_url
+        job_submit["container"]["command"] = "sleep 1000000000"
         async with client.post(
-            url, headers=regular_user.headers, json=model_train
+            url, headers=regular_user.headers, json=job_submit
         ) as response:
             assert response.status == HTTPAccepted.status_code
             result = await response.json()
@@ -1624,7 +1624,7 @@ class TestJobs:
             "dataset_storage_uri": f"storage://{regular_user.name}",
             "result_storage_uri": f"storage://{regular_user.name}/result",
         }
-        url = api.model_base_url
+        url = api.jobs_base_url
         async with client.post(
             url, headers=regular_user.headers, json=payload
         ) as response:
@@ -1770,7 +1770,7 @@ class TestJobs:
             "dataset_storage_uri": f"storage://{regular_user.name}",
             "result_storage_uri": f"storage://{regular_user.name}/result",
         }
-        url = api.model_base_url
+        url = api.jobs_base_url
         async with client.post(
             url, headers=regular_user.headers, json=payload
         ) as response:
@@ -1958,13 +1958,13 @@ class TestJobs:
         client: aiohttp.ClientSession,
         regular_user: _User,
         jobs_client: JobsClient,
-        model_train: Dict[str, Any],
+        job_submit: Dict[str, Any],
     ) -> None:
         command = 'bash -c "for i in {1..10}; do echo $i; sleep 1; done"'
-        model_train["container"]["command"] = command
-        url = api.model_base_url
+        job_submit["container"]["command"] = command
+        url = api.jobs_base_url
         async with client.post(
-            url, headers=regular_user.headers, json=model_train
+            url, headers=regular_user.headers, json=job_submit
         ) as response:
             assert response.status == HTTPAccepted.status_code
             result = await response.json()
@@ -1994,14 +1994,14 @@ class TestJobs:
         client: aiohttp.ClientSession,
         regular_user: _User,
         jobs_client: JobsClient,
-        model_train: Dict[str, Any],
+        job_submit: Dict[str, Any],
     ) -> None:
 
         command = 'bash -c "for i in {1..2}; do echo $i; sleep 1; done"'
-        model_train["container"]["command"] = command
-        url = api.model_base_url
+        job_submit["container"]["command"] = command
+        url = api.jobs_base_url
         async with client.post(
-            url, headers=regular_user.headers, json=model_train
+            url, headers=regular_user.headers, json=job_submit
         ) as response:
             assert response.status == HTTPAccepted.status_code
             result = await response.json()
