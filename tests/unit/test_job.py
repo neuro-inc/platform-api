@@ -705,6 +705,7 @@ class TestJob:
                 },
             ],
             "is_preemptible": True,
+            "schedule_timeout": None,
         }
 
     def test_from_primitive(
@@ -847,6 +848,7 @@ class TestJob:
             "is_deleted": "False",
             "finished_at": finished_at_str,
             "is_preemptible": False,
+            "schedule_timeout": None,
         }
         actual = Job.to_primitive(
             Job.from_primitive(
