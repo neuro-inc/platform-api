@@ -14,6 +14,7 @@ from types import TracebackType
 from typing import (
     Any,
     AsyncIterator,
+    ClassVar,
     DefaultDict,
     Dict,
     Iterable,
@@ -159,6 +160,8 @@ class Resources:
     gpu: Optional[int] = None
     shm: Optional[bool] = None
 
+    gpu_key: ClassVar[str] = "nvidia.com/gpu"
+
     @property
     def cpu_mcores(self) -> str:
         mcores = int(self.cpu * 1000)
@@ -173,7 +176,7 @@ class Resources:
             "limits": {"cpu": self.cpu_mcores, "memory": self.memory_mib}
         }
         if self.gpu:
-            payload["limits"]["nvidia.com/gpu"] = self.gpu
+            payload["limits"][self.gpu_key] = self.gpu
         return payload
 
     @classmethod
@@ -612,6 +615,14 @@ class PodDescriptor:
         # compatibility
         labels["job"] = self.name
 
+        tolerations = self.tolerations.copy()
+        if self.resources and self.resources.gpu:
+            tolerations.append(
+                Toleration(
+                    key=self.resources.gpu_key, operator="Exists", effect="NoSchedule"
+                )
+            )
+
         payload: Dict[str, Any] = {
             "kind": "Pod",
             "apiVersion": "v1",
@@ -625,7 +636,7 @@ class PodDescriptor:
                     secret.to_primitive() for secret in self.image_pull_secrets
                 ],
                 "tolerations": [
-                    toleration.to_primitive() for toleration in self.tolerations
+                    toleration.to_primitive() for toleration in tolerations
                 ],
             },
         }
