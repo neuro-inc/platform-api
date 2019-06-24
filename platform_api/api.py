@@ -12,7 +12,7 @@ from notifications_client import Client as NotificationsClient
 from .cluster import Cluster, ClusterConfig, ClusterRegistry
 from .config import Config
 from .config_factory import EnvironConfigFactory
-from .handlers import JobsHandler, ModelsHandler
+from .handlers import JobsHandler
 from .kube_cluster import KubeCluster
 from .orchestrator.job_request import JobException
 from .orchestrator.jobs_poller import JobsPoller
@@ -147,13 +147,6 @@ async def create_api_v1_app(config: Config) -> aiohttp.web.Application:
     return api_v1_app
 
 
-async def create_models_app(config: Config) -> aiohttp.web.Application:
-    models_app = aiohttp.web.Application()
-    models_handler = ModelsHandler(app=models_app, config=config)
-    models_handler.register(models_app)
-    return models_app
-
-
 async def create_jobs_app(config: Config) -> aiohttp.web.Application:
     jobs_app = aiohttp.web.Application()
     jobs_handler = JobsHandler(app=jobs_app, config=config)
@@ -230,10 +223,6 @@ async def create_app(
 
     api_v1_app = await create_api_v1_app(config)
     app["api_v1_app"] = api_v1_app
-
-    models_app = await create_models_app(config=config)
-    app["models_app"] = models_app
-    api_v1_app.add_subapp("/models", models_app)
 
     jobs_app = await create_jobs_app(config=config)
     app["jobs_app"] = jobs_app

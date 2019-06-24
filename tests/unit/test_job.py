@@ -10,7 +10,6 @@ from yarl import URL
 
 from platform_api.config import RegistryConfig, StorageConfig
 from platform_api.handlers.job_request_builder import ContainerBuilder
-from platform_api.handlers.models_handler import ModelRequest
 from platform_api.orchestrator.job import (
     AggregatedRunTime,
     Job,
@@ -313,48 +312,6 @@ class TestContainerBuilder:
                 )
             ],
             resources=ContainerResources(cpu=0.1, memory_mb=128, gpu=1, shm=True),
-            http_server=ContainerHTTPServer(port=80, health_check_path="/"),
-        )
-
-
-class TestModelRequest:
-    def test_to_container(self) -> None:
-        storage_config = StorageConfig(host_mount_path=PurePath("/tmp"))
-        payload = {
-            "container": {
-                "image": "testimage",
-                "command": "testcommand",
-                "env": {"TESTVAR": "testvalue"},
-                "resources": {"cpu": 0.1, "memory_mb": 128, "gpu": 1},
-                "http": {"port": 80},
-            },
-            "dataset_storage_uri": "storage://path/to/dir",
-            "result_storage_uri": "storage://path/to/another/dir",
-        }
-        request = ModelRequest(payload, storage_config=storage_config, env_prefix="NP")
-        assert request.to_container() == Container(
-            image="testimage",
-            command="testcommand",
-            env={
-                "TESTVAR": "testvalue",
-                "NP_DATASET_PATH": "/var/storage/path/to/dir",
-                "NP_RESULT_PATH": "/var/storage/path/to/another/dir",
-            },
-            volumes=[
-                ContainerVolume(
-                    uri=URL("storage://path/to/dir"),
-                    src_path=PurePath("/tmp/path/to/dir"),
-                    dst_path=PurePath("/var/storage/path/to/dir"),
-                    read_only=True,
-                ),
-                ContainerVolume(
-                    uri=URL("storage://path/to/another/dir"),
-                    src_path=PurePath("/tmp/path/to/another/dir"),
-                    dst_path=PurePath("/var/storage/path/to/another/dir"),
-                    read_only=False,
-                ),
-            ],
-            resources=ContainerResources(cpu=0.1, memory_mb=128, gpu=1),
             http_server=ContainerHTTPServer(port=80, health_check_path="/"),
         )
 
