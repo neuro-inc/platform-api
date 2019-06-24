@@ -785,9 +785,13 @@ class TestKubeOrchestrator:
             )
 
         def create_client_job(server_hostname: str) -> MyJob:
+            cmd = (
+                "curl --fail --retry 15 --retry-delay 1"
+                f"http://{server_hostname}:12345/"
+            )
             client_cont = Container(
                 image="python",
-                command=f"curl --fail http://{server_hostname}:12345/",
+                command=cmd,
                 resources=ContainerResources(cpu=0.1, memory_mb=128),
             )
             return MyJob(
