@@ -497,6 +497,10 @@ class Job:
         self._record.is_deleted = value
 
     @property
+    def schedule_timeout(self) -> Optional[float]:
+        return self._record.schedule_timeout
+
+    @property
     def _collection_reason(self) -> Optional[str]:
         status_item = self._status_history.current
         if status_item.status == JobStatus.PENDING and (
