@@ -333,7 +333,7 @@ class TestKubeOrchestrator:
 
     @pytest.mark.asyncio
     async def test_job_no_memory(self, kube_orchestrator: KubeOrchestrator) -> None:
-        command = 'true"'
+        command = "true"
         container = Container(
             image="ubuntu",
             command=command,
