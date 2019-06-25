@@ -345,7 +345,7 @@ class KubeOrchestrator(Orchestrator):
         if delta.seconds < schedule_timeout:
             # Wait for scheduling for 3 minute at least
             if job_status.reason is None:
-                job_status = replace(job_status, reason="Scheduling a job.")
+                job_status = replace(job_status, reason="Scheduling the job.")
             return job_status
 
         logger.info(f"Found pod that requested too much resources. Job '{job.id}'")
