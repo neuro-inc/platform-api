@@ -343,7 +343,7 @@ class KubeOrchestrator(Orchestrator):
         )
 
         if delta.seconds < schedule_timeout:
-            # Wait for scheduling for 3 minute at least
+            # Wait for scheduling for 3 minute at least by default
             if job_status.reason is None:
                 job_status = replace(job_status, reason="Scheduling the job.")
             return job_status
