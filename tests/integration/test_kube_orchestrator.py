@@ -326,7 +326,7 @@ class TestKubeOrchestrator:
 
             status_item = await kube_orchestrator.get_job_status(job)
             assert status_item == JobStatusItem.create(
-                JobStatus.PENDING, reason="Scheduling a job."
+                JobStatus.PENDING, reason="Scheduling the job."
             )
         finally:
             await job.delete()
