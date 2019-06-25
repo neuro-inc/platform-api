@@ -79,7 +79,7 @@ def create_job_response_validator() -> t.Trafaret:
             t.Key("internal_hostname", optional=True): t.String,
             t.Key("name", optional=True): create_job_name_validator(max_length=None),
             t.Key("description", optional=True): t.String,
-            t.Key("schedule_timeout", optional=True, default=False): t.Float,
+            t.Key("schedule_timeout", optional=True): t.Float,
         }
     )
 
