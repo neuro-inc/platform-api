@@ -387,6 +387,7 @@ class Job:
         # leaving for backward compat with tests
         orphaned_job_owner: str = DEFAULT_ORPHANED_JOB_OWNER,
         *,
+        schedule_timeout: Optional[float] = None,
         record: Optional[JobRecord] = None,
     ) -> None:
         """
@@ -410,6 +411,7 @@ class Job:
                 is_deleted=is_deleted,
                 current_datetime_factory=current_datetime_factory,
                 orphaned_job_owner=orphaned_job_owner,
+                schedule_timeout=schedule_timeout,
             )
 
         self._record = record

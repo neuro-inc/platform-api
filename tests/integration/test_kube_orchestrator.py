@@ -332,6 +332,29 @@ class TestKubeOrchestrator:
             await job.delete()
 
     @pytest.mark.asyncio
+    async def test_job_no_memory(self, kube_orchestrator: KubeOrchestrator) -> None:
+        command = 'true"'
+        container = Container(
+            image="ubuntu",
+            command=command,
+            resources=ContainerResources(cpu=1, memory_mb=500_000),
+        )
+        job = MyJob(
+            orchestrator=kube_orchestrator,
+            job_request=JobRequest.create(container),
+            schedule_timeout=15,
+        )
+        try:
+            await job.start()
+
+            status_item = await kube_orchestrator.get_job_status(job)
+            assert status_item == JobStatusItem.create(
+                JobStatus.PENDING, reason="Scheduling the job."
+            )
+        finally:
+            await job.delete()
+
+    @pytest.mark.asyncio
     async def test_volumes(
         self,
         storage_config_host: StorageConfig,
