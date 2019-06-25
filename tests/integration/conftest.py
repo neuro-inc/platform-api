@@ -33,7 +33,7 @@ from platform_api.config import (
 from platform_api.config_client import ConfigClient
 from platform_api.elasticsearch import Elasticsearch, ElasticsearchConfig
 from platform_api.orchestrator.job_request import JobNotFoundException
-from platform_api.orchestrator.kube_client import KubeClient, NodeTaint
+from platform_api.orchestrator.kube_client import KubeClient, NodeTaint, Resources
 from platform_api.orchestrator.kube_orchestrator import KubeConfig, KubeOrchestrator
 from platform_api.redis import RedisConfig
 from platform_api.resource import GPUModel, ResourcePoolType
@@ -332,8 +332,9 @@ async def kube_node_gpu(
 
     assert kube_config.node_label_gpu is not None
     labels = {kube_config.node_label_gpu: "gpumodel"}
+    taints = [NodeTaint(key=Resources.gpu_key, value="present")]
     await kube_client.create_node(
-        node_name, capacity=default_node_capacity, labels=labels
+        node_name, capacity=default_node_capacity, labels=labels, taints=taints
     )
 
     yield node_name
