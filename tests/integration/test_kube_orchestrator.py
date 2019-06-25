@@ -351,7 +351,7 @@ class TestKubeOrchestrator:
             JobStatus.PENDING, reason="Scheduling the job."
         )
         t0 = time.time()
-        while status_item.status.is_finished:
+        while not status_item.status.is_finished:
             t1 = time.time()
             assert t1 - t0 < 30, f"Wait for job failure is timed out after {t1-t0} secs"
             await asyncio.sleep(1)
