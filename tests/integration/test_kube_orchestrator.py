@@ -344,15 +344,21 @@ class TestKubeOrchestrator:
             job_request=JobRequest.create(container),
             schedule_timeout=15,
         )
-        try:
-            await job.start()
+        await job.start()
 
-            status_item = await kube_orchestrator.get_job_status(job)
-            assert status_item == JobStatusItem.create(
-                JobStatus.PENDING, reason="Scheduling the job."
-            )
-        finally:
-            await job.delete()
+        status_item = await kube_orchestrator.get_job_status(job)
+        assert status_item == JobStatusItem.create(
+            JobStatus.PENDING, reason="Scheduling the job."
+        )
+        t0 = time.time()
+        while state_item.status.is_finished:
+            t1 = time.time()
+            assert t1 - t0 < 30, f"Wait for job failure is timed out after {t1-t0} secs"
+            await asyncio.sleep(1)
+
+        assert status_item == JobStatusItem.create(
+            JobStatus.FAILED, reason="Cannot scaleup the cluster to get more resources."
+        )
 
     @pytest.mark.asyncio
     async def test_volumes(
