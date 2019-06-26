@@ -320,8 +320,9 @@ class JobRecord:
             "is_deleted": self.is_deleted,
             "finished_at": self.finished_at_str,
             "is_preemptible": self.is_preemptible,
-            "schedule_timeout": self.schedule_timeout,
         }
+        if self.schedule_timeout:
+            result["schedule_timeout"] = self.schedule_timeout
         if self.internal_hostname:
             result["internal_hostname"] = self.internal_hostname
         if self.name:

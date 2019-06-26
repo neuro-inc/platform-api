@@ -336,13 +336,12 @@ class KubeOrchestrator(Orchestrator):
         # too much resources, check events for NotTriggerScaleUp event
         now = datetime.now(timezone.utc)
         assert pod.created_at is not None
-        delta = now - pod.created_at
 
         schedule_timeout = (
             job.schedule_timeout or self._kube_config.job_schedule_timeout
         )
 
-        if delta.seconds < schedule_timeout:
+        if (now - pod.created_at).seconds < schedule_timeout:
             # Wait for scheduling for 3 minute at least by default
             if job_status.reason is None:
                 job_status = replace(job_status, reason="Scheduling the job.")
@@ -352,10 +351,11 @@ class KubeOrchestrator(Orchestrator):
         pod_events = await self._client.get_pod_events(
             pod_name, self._kube_config.namespace
         )
-        triggered_scaleup = any(e for e in pod_events if e.reason == "TriggeredScaleUp")
-        if triggered_scaleup:
+        scaleup_events = [e for e in pod_events if e.reason == "TriggeredScaleUp"]
+        scaleup_events.sort(key=operator.attrgetter("last_timestamp"))
+        if scaleup_events:
             if (
-                delta.seconds
+                (now - scaleup_events[-1].last_timestamp).seconds
                 < self._kube_config.job_schedule_scaleup_timeout + schedule_timeout
             ):
                 # waiting for cluster scaleup

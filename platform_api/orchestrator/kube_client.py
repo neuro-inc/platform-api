@@ -821,6 +821,18 @@ class KubernetesEvent:
     def reason(self) -> Optional[str]:
         return self._payload.get("reason", None)
 
+    @property
+    def first_timestamp(self) -> datetime:
+        return iso8601.parse_date(self._payload["firstTimestamp"])
+
+    @property
+    def last_timestamp(self) -> datetime:
+        return iso8601.parse_date(self._payload["lastTimestamp"])
+
+    @property
+    def count(self) -> int:
+        return self._payload["count"]
+
 
 class PodStatus:
     def __init__(self, payload: Dict[str, Any]) -> None:
