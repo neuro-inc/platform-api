@@ -353,11 +353,11 @@ class TestKubeOrchestrator:
         t0 = time.time()
         while not status_item.status.is_finished:
             t1 = time.time()
-            assert t1 - t0 < 90, (
+            assert t1 - t0 < 30, (
                 f"Wait for job failure is timed out "
                 f"after {t1-t0} secs [{status_item}]"
             )
-            await asyncio.sleep(1)
+            status_item = await kube_orchestrator.get_job_status(job)
 
         assert status_item == JobStatusItem.create(
             JobStatus.FAILED, reason="Cannot scaleup the cluster to get more resources."
