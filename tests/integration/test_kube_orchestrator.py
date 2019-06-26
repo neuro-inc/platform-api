@@ -353,7 +353,7 @@ class TestKubeOrchestrator:
         t0 = time.time()
         while not status_item.status.is_finished:
             t1 = time.time()
-            assert t1 - t0 < 30, (
+            assert t1 - t0 < 90, (
                 f"Wait for job failure is timed out "
                 f"after {t1-t0} secs [{status_item}]"
             )
