@@ -342,7 +342,7 @@ class TestKubeOrchestrator:
         job = MyJob(
             orchestrator=kube_orchestrator,
             job_request=JobRequest.create(container),
-            schedule_timeout=15,
+            schedule_timeout=1,
         )
         await job.start()
 
