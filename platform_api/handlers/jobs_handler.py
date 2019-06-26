@@ -52,7 +52,7 @@ def create_job_request_validator(
             t.Key("name", optional=True): create_job_name_validator(),
             t.Key("description", optional=True): t.String,
             t.Key("is_preemptible", optional=True, default=False): t.Bool,
-            t.Key("schedule_timeout", optional=True): t.Float(gte=1, lt=30*24*3600),
+            t.Key("schedule_timeout", optional=True): t.Float(gte=1, lt=30 * 24 * 3600),
         }
     )
 
