@@ -401,6 +401,7 @@ class TestKubeOrchestrator:
         assert status_item == JobStatusItem.create(
             JobStatus.FAILED, reason="Cannot scaleup the cluster to get more resources."
         )
+        assert found_scaleup
 
     @pytest.mark.asyncio
     async def test_volumes(
