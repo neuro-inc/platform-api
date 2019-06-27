@@ -347,11 +347,11 @@ class TestKubeOrchestrator:
         await job.start()
 
         status_item = await kube_orchestrator.get_job_status(job)
-        assert status_item == JobStatusItem.create(
-            JobStatus.PENDING, reason="Scheduling the job."
-        )
+        assert status_item.status == JobStatus.PENDING
+
         t0 = time.time()
         while not status_item.status.is_finished:
+            assert status_item.reason == "Scheduling the job."
             t1 = time.time()
             assert t1 - t0 < 30, (
                 f"Wait for job failure is timed out "
@@ -382,12 +382,16 @@ class TestKubeOrchestrator:
         await kube_client.create_triggered_scaleup_event(job.id)
 
         status_item = await kube_orchestrator.get_job_status(job)
-        assert status_item == JobStatusItem.create(
-            JobStatus.PENDING, reason="Scheduling the job."
-        )
+        assert status_item.status == JobStatus.PENDING
+
         t0 = time.time()
+        found_scaleup = False
         while not status_item.status.is_finished:
             t1 = time.time()
+            if status_item.reason == "Scaling up the cluster to get more resources.":
+                found_scaleup = True
+            else:
+                assert status_item.reason == "Scheduling the job."
             assert t1 - t0 < 30, (
                 f"Wait for job failure is timed out "
                 f"after {t1-t0} secs [{status_item}]"
