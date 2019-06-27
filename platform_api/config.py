@@ -73,6 +73,7 @@ class JobsConfig:
 @dataclass(frozen=True)
 class NotificationsConfig:
     url: URL
+    token: str
 
 
 @dataclass(frozen=True)

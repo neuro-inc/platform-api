@@ -307,4 +307,5 @@ class EnvironConfigFactory:
 
     def create_notifications(self) -> NotificationsConfig:
         url = URL(self._environ["NP_NOTIFICATIONS_URL"])
-        return NotificationsConfig(url=url)
+        token = self._environ["NP_NOTIFICATIONS_TOKEN"]
+        return NotificationsConfig(url=url, token=token)

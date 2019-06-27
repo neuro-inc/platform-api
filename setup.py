@@ -17,7 +17,7 @@ install_requires = (
     "asyncssh==1.17.0",
     "aioelasticsearch==0.5.2",
     "aiorwlock==0.6.0",
-    "notifications-client==0.3",
+    "notifications-client==0.4rc1",
 )
 
 setup(
