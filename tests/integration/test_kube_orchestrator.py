@@ -364,7 +364,9 @@ class TestKubeOrchestrator:
         )
 
     @pytest.mark.asyncio
-    async def test_job_no_memory_after_scaleup(self, kube_orchestrator: KubeOrchestrator, kube_client: MyKubeClient) -> None:
+    async def test_job_no_memory_after_scaleup(
+        self, kube_orchestrator: KubeOrchestrator, kube_client: MyKubeClient
+    ) -> None:
         command = "true"
         container = Container(
             image="ubuntu",
