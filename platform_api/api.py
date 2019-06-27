@@ -182,7 +182,7 @@ async def create_app(
 
             try:
                 await notifications_client.secured_ping()
-            except HTTPError as error:
+            except HTTPError:
                 logger.exception(
                     "Notifications server ping validation failed.", exc_info=True
                 )
