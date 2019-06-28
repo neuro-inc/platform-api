@@ -774,12 +774,14 @@ class TestKubeOrchestrator:
         )
 
     @pytest.mark.asyncio
+    @pytest.mark.parametrize("iteration", list(range(100)))
     async def test_job_check_dns_hostname_undeclared_port(
         self,
         kube_config: KubeConfig,
         kube_orchestrator: KubeOrchestrator,
         kube_ingress_ip: str,
         delete_job_later: Callable[[Job], Awaitable[None]],
+        iteration: int,
     ) -> None:
         def create_server_job() -> MyJob:
             server_cont = Container(
