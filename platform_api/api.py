@@ -180,12 +180,13 @@ async def create_app(
             )
             await exit_stack.enter_async_context(notifications_client)
 
-            try:
-                await notifications_client.secured_ping()
-            except HTTPError:
-                logger.exception(
-                    "Notifications server ping validation failed.", exc_info=True
-                )
+            if config.notifications.healthcheck:
+                try:
+                    await notifications_client.secured_ping()
+                except HTTPError:
+                    logger.exception(
+                        "Notifications server ping validation failed.", exc_info=True
+                    )
 
             logger.info("Initializing Redis client")
             redis_client = await exit_stack.enter_async_context(
