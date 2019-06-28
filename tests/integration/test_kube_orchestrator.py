@@ -137,7 +137,12 @@ class TestKubeOrchestrator:
         t0 = time.monotonic()
         while True:
             status = await job.query_status()
-            if status_predicate(status):
+            try:
+                b = status_predicate(status)
+            except AssertionError as e:
+                print(await job._orchestrator.get_job_status(job))
+                raise e
+            if b:
                 return status
             else:
                 await asyncio.sleep(max(interval_s, time.monotonic() - t0))
