@@ -137,12 +137,7 @@ class TestKubeOrchestrator:
         t0 = time.monotonic()
         while True:
             status = await job.query_status()
-            try:
-                b = status_predicate(status)
-            except AssertionError as e:
-                print(await job._orchestrator.get_job_status(job))
-                raise e
-            if b:
+            if status_predicate(status):
                 return status
             else:
                 await asyncio.sleep(max(interval_s, time.monotonic() - t0))
@@ -774,7 +769,6 @@ class TestKubeOrchestrator:
         )
 
     @pytest.mark.asyncio
-    @pytest.mark.parametrize("iteration", list(range(100)))
     async def test_job_check_dns_hostname_undeclared_port(
         self,
         kube_config: KubeConfig,
