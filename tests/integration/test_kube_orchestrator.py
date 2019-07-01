@@ -775,7 +775,6 @@ class TestKubeOrchestrator:
         kube_orchestrator: KubeOrchestrator,
         kube_ingress_ip: str,
         delete_job_later: Callable[[Job], Awaitable[None]],
-        iteration: int,
     ) -> None:
         def create_server_job() -> MyJob:
             server_cont = Container(
