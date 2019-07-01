@@ -22,6 +22,7 @@ from platform_api.orchestrator.job import (
     Job,
     JobRecord,
     JobStatusItem,
+    JobStatusReason,
 )
 from platform_api.orchestrator.job_request import (
     Container,
@@ -47,7 +48,8 @@ class MockOrchestrator(Orchestrator):
     def __init__(self, config: ClusterConfig) -> None:
         self._config = config
         self._mock_status_to_return = JobStatus.PENDING
-        self._mock_reason_to_return: Optional[str] = "Initializing"
+        self._mock_reason_to_return: Optional[JobStatusReason]
+        self._mock_reason_to_return = JobStatusReason.K8S_CONTAINER_CREATING
         self._mock_exit_code_to_return: Optional[int] = None
         self.raise_on_get_job_status = False
         self.raise_on_delete = False
@@ -83,7 +85,7 @@ class MockOrchestrator(Orchestrator):
     def update_status_to_return(self, new_status: JobStatus) -> None:
         self._mock_status_to_return = new_status
 
-    def update_reason_to_return(self, new_reason: Optional[str]) -> None:
+    def update_reason_to_return(self, new_reason: Optional[JobStatusReason]) -> None:
         self._mock_reason_to_return = new_reason
 
     def update_exit_code_to_return(self, new_exit_code: Optional[int]) -> None:

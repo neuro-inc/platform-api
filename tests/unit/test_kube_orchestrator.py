@@ -6,7 +6,7 @@ import aiohttp
 import pytest
 from yarl import URL
 
-from platform_api.orchestrator.job import JobStatusItem
+from platform_api.orchestrator.job import JobStatusItem, JobStatusReason
 from platform_api.orchestrator.job_request import (
     Container,
     ContainerResources,
@@ -513,7 +513,7 @@ class TestJobStatusItemFactory:
         pod_status = PodStatus.from_primitive(payload)
         job_status_item = JobStatusItemFactory(pod_status).create()
         assert job_status_item == JobStatusItem.create(
-            JobStatus.PENDING, reason="ContainerCreating"
+            JobStatus.PENDING, reason=JobStatusReason.K8S_CONTAINER_CREATING
         )
 
     def test_status_pending_running_no_reason(self) -> None:
@@ -533,10 +533,10 @@ class TestJobStatusItemFactory:
             ],
         }
         pod_status = PodStatus.from_primitive(payload)
-        job_status_item = JobStatusItemFactory(pod_status).create()
-        assert job_status_item == JobStatusItem.create(
-            JobStatus.PENDING, reason="SomeWeirdReason"
-        )
+        with pytest.raises(
+            ValueError, match="'SomeWeirdReason' is not a valid JobStatusReason"
+        ):
+            JobStatusItemFactory(pod_status).create()
 
     def test_status_failure(self) -> None:
         payload = {
@@ -556,7 +556,10 @@ class TestJobStatusItemFactory:
         pod_status = PodStatus.from_primitive(payload)
         job_status_item = JobStatusItemFactory(pod_status).create()
         assert job_status_item == JobStatusItem.create(
-            JobStatus.FAILED, reason="Error", description="Failed!", exit_code=123
+            JobStatus.FAILED,
+            reason=JobStatusReason.K8S_ERROR,
+            description="Failed!",
+            exit_code=123,
         )
 
     def test_status_failure_no_message(self) -> None:
@@ -570,7 +573,10 @@ class TestJobStatusItemFactory:
         pod_status = PodStatus.from_primitive(payload)
         job_status_item = JobStatusItemFactory(pod_status).create()
         assert job_status_item == JobStatusItem.create(
-            JobStatus.FAILED, reason="Error", description=None, exit_code=1
+            JobStatus.FAILED,
+            reason=JobStatusReason.K8S_ERROR,
+            description=None,
+            exit_code=1,
         )
 
     def test_status_success(self) -> None:

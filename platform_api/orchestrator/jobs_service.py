@@ -19,7 +19,7 @@ from platform_api.resource import GPUModel
 from platform_api.user import User
 
 from .base import LogReader, Orchestrator, Telemetry
-from .job import Job, JobRecord, JobStatusItem
+from .job import Job, JobRecord, JobStatusItem, JobStatusReason
 from .job_request import JobException, JobNotFoundException, JobRequest, JobStatus
 from .jobs_storage import (
     JobFilter,
@@ -108,7 +108,9 @@ class JobsService:
                         cluster_err,
                     )
                     record.status_history.current = JobStatusItem.create(
-                        JobStatus.FAILED, reason="Missing", description=str(cluster_err)
+                        JobStatus.FAILED,
+                        reason=JobStatusReason.NM_CLUSTER_NOT_FOUND,
+                        description=str(cluster_err),
                     )
                     record.is_deleted = True
         except JobStorageTransactionError:
@@ -138,8 +140,8 @@ class JobsService:
             logger.warning("Failed to get job %s status. Reason: %s", job.id, exc)
             status_item = JobStatusItem.create(
                 JobStatus.FAILED,
-                reason="Missing",
-                description=("The job could not be scheduled or was preempted."),
+                reason=JobStatusReason.NM_JOB_NOT_FOUND,
+                description="The job could not be scheduled or was preempted.",
             )
             job.is_deleted = True
 
@@ -371,12 +373,14 @@ class JobsService:
             initial_status = record.status_history.current
             yield record
         if initial_status != record.status_history.current:
+            reason = record.status_history.current.reason
+            reason_str = reason.value if reason is not None else None
             await self._notifications_client.notify(
                 JobTransition(
                     job_id=record.id,
                     status=record.status_history.current.status,
                     transition_time=record.status_history.current.transition_time,
-                    reason=record.status_history.current.reason,
+                    reason=reason_str,
                     description=record.status_history.current.description,
                     exit_code=record.status_history.current.exit_code,
                     prev_status=initial_status.status,

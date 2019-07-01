@@ -13,7 +13,7 @@ from platform_api.cluster_config import (
 from platform_api.elasticsearch import Elasticsearch
 
 from .base import LogReader, Orchestrator, Telemetry
-from .job import Job, JobStatusItem
+from .job import Job, JobStatusItem, JobStatusReason
 from .job_request import JobError, JobNotFoundException, JobStatus
 from .jobs_telemetry import KubeTelemetry
 from .kube_client import (
@@ -64,9 +64,11 @@ class JobStatusItemFactory:
         else:
             return JobStatus.PENDING
 
-    def _parse_reason(self) -> Optional[str]:
+    def _parse_reason(self) -> Optional[JobStatusReason]:
         if self._status in (JobStatus.PENDING, JobStatus.FAILED):
-            return self._container_status.reason
+            k8s_reason = self._container_status.reason
+            if k8s_reason is not None:
+                return JobStatusReason(k8s_reason)
         return None
 
     def _compose_description(self) -> Optional[str]:
@@ -345,7 +347,9 @@ class KubeOrchestrator(Orchestrator):
         if (now - pod.created_at).seconds < schedule_timeout:
             # Wait for scheduling for 3 minute at least by default
             if job_status.reason is None:
-                job_status = replace(job_status, reason="Scheduling the job.")
+                job_status = replace(
+                    job_status, reason=JobStatusReason.NM_SCHEDULING_THE_JOB
+                )
             return job_status
 
         logger.info(f"Found pod that requested too much resources. Job '{job.id}'")
@@ -363,13 +367,13 @@ class KubeOrchestrator(Orchestrator):
                 return JobStatusItem.create(
                     JobStatus.PENDING,
                     transition_time=now,
-                    reason="Scaling up the cluster to get more resources.",
+                    reason=JobStatusReason.NM_CLUSTER_SCALING_UP,
                     description=job_status.description,
                 )
         return JobStatusItem.create(
             JobStatus.FAILED,
             transition_time=now,
-            reason="Cannot scaleup the cluster to get more resources.",
+            reason=JobStatusReason.NM_CLUSTER_SCALING_UP_FAILED,
             description=job_status.description,
         )
 

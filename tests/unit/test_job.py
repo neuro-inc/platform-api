@@ -16,6 +16,7 @@ from platform_api.orchestrator.job import (
     JobRecord,
     JobStatusHistory,
     JobStatusItem,
+    JobStatusReason,
 )
 from platform_api.orchestrator.job_request import (
     Container,
@@ -987,7 +988,7 @@ class TestJobStatusItem:
         payload = {
             "status": "succeeded",
             "transition_time": transition_time.isoformat(),
-            "reason": "test reason",
+            "reason": "Completed",
             "description": "test description",
             "exit_code": 0,
         }
@@ -995,7 +996,7 @@ class TestJobStatusItem:
         assert item.status == JobStatus.SUCCEEDED
         assert item.is_finished
         assert item.transition_time == transition_time
-        assert item.reason == "test reason"
+        assert item.reason == JobStatusReason.K8S_COMPLETED
         assert item.description == "test description"
         assert item.exit_code == 0
 
@@ -1004,14 +1005,14 @@ class TestJobStatusItem:
         payload = {
             "status": "succeeded",
             "transition_time": transition_time.isoformat(),
-            "reason": "test reason",
+            "reason": "Completed",
             "description": "test description",
         }
         item = JobStatusItem.from_primitive(payload)
         assert item.status == JobStatus.SUCCEEDED
         assert item.is_finished
         assert item.transition_time == transition_time
-        assert item.reason == "test reason"
+        assert item.reason == JobStatusReason.K8S_COMPLETED
         assert item.description == "test description"
         assert item.exit_code is None
 
@@ -1045,8 +1046,12 @@ class TestJobStatusItem:
         assert old_item == new_item
 
     def test_not_eq(self) -> None:
-        old_item = JobStatusItem.create(JobStatus.RUNNING)
-        new_item = JobStatusItem.create(JobStatus.RUNNING, reason="Whatever")
+        old_item = JobStatusItem.create(
+            JobStatus.FAILED, reason=JobStatusReason.K8S_ERR_IMAGE_PULL
+        )
+        new_item = JobStatusItem.create(
+            JobStatus.FAILED, reason=JobStatusReason.K8S_OOM_KILLED
+        )
         assert old_item != new_item
 
 

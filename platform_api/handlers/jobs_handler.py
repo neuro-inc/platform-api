@@ -143,13 +143,14 @@ def convert_container_volume_to_json(
 def convert_job_to_job_response(job: Job) -> Dict[str, Any]:
     history = job.status_history
     current_status = history.current
+    reason = current_status.reason.value if current_status.reason is not None else None
     response_payload: Dict[str, Any] = {
         "id": job.id,
         "owner": job.owner,
         "status": current_status.status,
         "history": {
             "status": current_status.status,
-            "reason": current_status.reason,
+            "reason": reason,
             "description": current_status.description,
             "created_at": history.created_at_str,
         },

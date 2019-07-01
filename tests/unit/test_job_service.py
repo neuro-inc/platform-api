@@ -6,7 +6,12 @@ from notifications_client import Client as NotificationsClient, JobTransition
 
 from platform_api.cluster import Cluster, ClusterRegistry
 from platform_api.config import ClusterConfig, JobsConfig
-from platform_api.orchestrator.job import AggregatedRunTime, Job, JobStatusItem
+from platform_api.orchestrator.job import (
+    AggregatedRunTime,
+    Job,
+    JobStatusItem,
+    JobStatusReason,
+)
 from platform_api.orchestrator.job_request import JobRequest, JobStatus
 from platform_api.orchestrator.jobs_service import (
     GpuQuotaExceededError,
@@ -340,7 +345,7 @@ class TestJobsService:
         assert job.is_deleted
         assert job.status_history.current == JobStatusItem.create(
             JobStatus.FAILED,
-            reason="Missing",
+            reason=JobStatusReason.NM_JOB_NOT_FOUND,
             description="The job could not be scheduled or was preempted.",
         )
 
@@ -348,9 +353,9 @@ class TestJobsService:
     @pytest.mark.parametrize(
         "reason,description",
         [
-            ("ErrImagePull", "Image can not be pulled"),
-            ("ImagePullBackOff", "Image can not be pulled"),
-            ("InvalidImageName", "Invalid image name"),
+            (JobStatusReason.K8S_ERR_IMAGE_PULL, "Image can not be pulled"),
+            (JobStatusReason.K8S_IMAGE_PULL_BACK_OFF, "Image can not be pulled"),
+            (JobStatusReason.K8S_INVALID_IMAGE_NAME, "Invalid image name"),
         ],
     )
     async def test_update_jobs_statuses_pending_errimagepull(
@@ -358,7 +363,7 @@ class TestJobsService:
         jobs_service: JobsService,
         mock_orchestrator: MockOrchestrator,
         job_request_factory: Callable[[], JobRequest],
-        reason: str,
+        reason: JobStatusReason,
         description: str,
     ) -> None:
         user = User(name="testuser", token="")
@@ -556,7 +561,7 @@ class TestJobsServiceCluster:
         record = await mock_jobs_storage.get_job(job.id)
         assert record.status_history.current == JobStatusItem.create(
             JobStatus.FAILED,
-            reason="Missing",
+            reason=JobStatusReason.NM_CLUSTER_NOT_FOUND,
             description="Cluster 'default' not found",
         )
         assert record.is_deleted
@@ -725,7 +730,9 @@ class TestJobServiceNotification:
             )
         ]
 
-        mock_orchestrator.update_reason_to_return("ContainerCreating")
+        mock_orchestrator.update_reason_to_return(
+            JobStatusReason.K8S_CONTAINER_CREATING
+        )
         mock_orchestrator.update_status_to_return(JobStatus.PENDING)
         await jobs_service.update_jobs_statuses()
         job = await jobs_service.get_job(job.id)
@@ -735,7 +742,7 @@ class TestJobServiceNotification:
                 job_id=job.id,
                 status=JobStatus.PENDING,
                 transition_time=job.status_history.current.transition_time,
-                reason="ContainerCreating",
+                reason=JobStatusReason.K8S_CONTAINER_CREATING,
                 description=None,
                 exit_code=None,
                 prev_status=JobStatus.PENDING,
@@ -767,7 +774,7 @@ class TestJobServiceNotification:
             )
         ]
 
-        mock_orchestrator.update_reason_to_return("ErrImagePull")
+        mock_orchestrator.update_reason_to_return(JobStatusReason.K8S_ERR_IMAGE_PULL)
         await jobs_service.update_jobs_statuses()
         job = await jobs_service.get_job(job.id)
 
@@ -776,7 +783,7 @@ class TestJobServiceNotification:
                 job_id=job.id,
                 status=JobStatus.FAILED,
                 transition_time=job.status_history.current.transition_time,
-                reason="Collected",
+                reason=JobStatusReason.NM_COLLECTED,
                 description="Image can not be pulled",
                 exit_code=None,
                 prev_status=JobStatus.PENDING,
@@ -809,7 +816,9 @@ class TestJobServiceNotification:
             )
         ]
 
-        mock_orchestrator.update_reason_to_return("ContainerCreating")
+        mock_orchestrator.update_reason_to_return(
+            JobStatusReason.K8S_CONTAINER_CREATING
+        )
         mock_orchestrator.update_status_to_return(JobStatus.PENDING)
         await jobs_service.update_jobs_statuses()
         job = await jobs_service.get_job(job.id)
@@ -819,7 +828,7 @@ class TestJobServiceNotification:
                 job_id=job.id,
                 status=JobStatus.PENDING,
                 transition_time=job.status_history.current.transition_time,
-                reason="ContainerCreating",
+                reason=JobStatusReason.K8S_CONTAINER_CREATING,
                 description=None,
                 exit_code=None,
                 prev_status=JobStatus.PENDING,

@@ -29,7 +29,7 @@ from platform_api.elasticsearch import (
     create_elasticsearch_client,
 )
 from platform_api.orchestrator.base import LogReader
-from platform_api.orchestrator.job import Job, JobStatusItem
+from platform_api.orchestrator.job import Job, JobStatusItem, JobStatusReason
 from platform_api.orchestrator.job_request import (
     Container,
     ContainerHTTPServer,
@@ -303,7 +303,7 @@ class TestKubeOrchestrator:
             expected_description = "".join(f"{i}\n" for i in reversed(range(1, 81)))
             assert status_item == JobStatusItem.create(
                 JobStatus.FAILED,
-                reason="Error",
+                reason=JobStatusReason.K8S_ERROR,
                 description=expected_description,
                 exit_code=1,
             )
@@ -326,7 +326,7 @@ class TestKubeOrchestrator:
 
             status_item = await kube_orchestrator.get_job_status(job)
             assert status_item == JobStatusItem.create(
-                JobStatus.PENDING, reason="Scheduling the job."
+                JobStatus.PENDING, reason=JobStatusReason.NM_SCHEDULING_THE_JOB
             )
         finally:
             await job.delete()
@@ -360,7 +360,7 @@ class TestKubeOrchestrator:
             status_item = await kube_orchestrator.get_job_status(job)
 
         assert status_item == JobStatusItem.create(
-            JobStatus.FAILED, reason="Cannot scaleup the cluster to get more resources."
+            JobStatus.FAILED, reason=JobStatusReason.NM_CLUSTER_SCALING_UP_FAILED
         )
 
     @pytest.mark.asyncio
@@ -399,7 +399,7 @@ class TestKubeOrchestrator:
             status_item = await kube_orchestrator.get_job_status(job)
 
         assert status_item == JobStatusItem.create(
-            JobStatus.FAILED, reason="Cannot scaleup the cluster to get more resources."
+            JobStatus.FAILED, reason=JobStatusReason.NM_CLUSTER_SCALING_UP
         )
         assert found_scaleup
 
@@ -1828,7 +1828,10 @@ class TestPodContainerDevShmSettings:
             command,
         )
         job_status = JobStatusItem.create(
-            status=JobStatus.FAILED, reason="OOMKilled", exit_code=137, description=None
+            status=JobStatus.FAILED,
+            reason=JobStatusReason.K8S_OOM_KILLED,
+            exit_code=137,
+            description=None,
         )
         assert job_status == run_output, f"actual: '{run_output}'"
 

@@ -1,3 +1,4 @@
+import enum
 import logging
 import time
 from dataclasses import dataclass, field
@@ -41,14 +42,35 @@ class AggregatedRunTime:
 DEFAULT_QUOTA_NO_RESTRICTIONS: AggregatedRunTime = AggregatedRunTime.from_quota(Quota())
 DEFAULT_ORPHANED_JOB_OWNER = "compute"
 
-# TODO: consider adding JobStatusReason Enum
+
+class JobStatusReason(str, enum.Enum):
+    # TODO (A.Yushkovskiy) Re-work these job status reasons to be narrow and concise
+    # k8s reasons:
+    # - 'waiting' reasons:
+    K8S_POD_INITIALIZING = "PodInitializing"
+    K8S_CONTAINER_CREATING = "ContainerCreating"
+    K8S_ERR_IMAGE_PULL = "ErrImagePull"
+    K8S_IMAGE_PULL_BACK_OFF = "ImagePullBackOff"
+    K8S_INVALID_IMAGE_NAME = "InvalidImageName"
+    # - 'terminated' reasons:
+    K8S_OOM_KILLED = "OOMKilled"
+    K8S_COMPLETED = "Completed"
+    K8S_ERROR = "Error"
+    K8S_CONTAINER_CANNOT_RUN = "ContainerCannotRun"
+    # neuromation custom reasons:
+    NM_COLLECTED = "Collected"
+    NM_SCHEDULING_THE_JOB = "Scheduling the job."
+    NM_JOB_NOT_FOUND = "Missing"  # "The job could not be scheduled or was preempted."
+    NM_CLUSTER_NOT_FOUND = "Missing"  # TODO: should be "ClusterNotFound"
+    NM_CLUSTER_SCALING_UP = "Scaling up the cluster to get more resources."
+    NM_CLUSTER_SCALING_UP_FAILED = "Cannot scaleup the cluster to get more resources."
 
 
 @dataclass(frozen=True)
 class JobStatusItem:
     status: JobStatus
     transition_time: datetime = field(compare=False)
-    reason: Optional[str] = None
+    reason: Optional[JobStatusReason] = None
     description: Optional[str] = None
     exit_code: Optional[int] = None
 
@@ -74,16 +96,22 @@ class JobStatusItem:
         **kwargs: Any,
     ) -> "JobStatusItem":
         transition_time = transition_time or current_datetime_factory()
+        if "reason" in kwargs:
+            reason = kwargs["reason"]
+            if reason is not None and not isinstance(reason, JobStatusReason):
+                raise Exception(f"{reason} of type {type(reason)}")
         return cls(status=status, transition_time=transition_time, **kwargs)
 
     @classmethod
     def from_primitive(cls, payload: Dict[str, Any]) -> "JobStatusItem":
         status = JobStatus(payload["status"])
         transition_time = iso8601.parse_date(payload["transition_time"])
+        reason_str = payload.get("reason")
+        reason = JobStatusReason(reason_str) if reason_str else None
         return cls(
             status=status,
             transition_time=transition_time,
-            reason=payload.get("reason"),
+            reason=reason,
             description=payload.get("description"),
             exit_code=payload.get("exit_code"),
         )
@@ -303,7 +331,7 @@ class JobRecord:
                 self._is_time_for_deletion(
                     delay=delay, current_datetime_factory=current_datetime_factory
                 )
-                or self.status_history.current.reason == "Collected"
+                or self.status_history.current.reason == JobStatusReason.NM_COLLECTED
             )
         )
 
@@ -506,11 +534,14 @@ class Job:
     @property
     def _collection_reason(self) -> Optional[str]:
         status_item = self._status_history.current
-        if status_item.status == JobStatus.PENDING:
+        if status_item.status == JobStatus.PENDING and status_item.reason:
             # collect jobs stuck in ErrImagePull loop
-            if status_item.reason in ("ErrImagePull", "ImagePullBackOff"):
+            if status_item.reason in (
+                JobStatusReason.K8S_ERR_IMAGE_PULL,
+                JobStatusReason.K8S_IMAGE_PULL_BACK_OFF,
+            ):
                 return "Image can not be pulled"
-            if status_item.reason == "InvalidImageName":
+            if status_item.reason == JobStatusReason.K8S_INVALID_IMAGE_NAME:
                 return "Invalid image name"
         return None
 
@@ -519,7 +550,9 @@ class Job:
         if reason:
             logger.info("Collecting job %s. Reason: %s", self.id, reason)
             status_item = JobStatusItem.create(
-                JobStatus.FAILED, reason="Collected", description=reason
+                JobStatus.FAILED,
+                reason=JobStatusReason.NM_COLLECTED,
+                description=reason,
             )
             self.status_history.current = status_item
 
