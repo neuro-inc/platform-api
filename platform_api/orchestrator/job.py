@@ -496,12 +496,12 @@ class Job:
     @property
     def _collection_reason(self) -> Optional[str]:
         status_item = self._status_history.current
-        if status_item.status == JobStatus.PENDING and (
-            status_item.reason == "ErrImagePull"
-            or status_item.reason == "ImagePullBackOff"
-        ):
+        if status_item.status == JobStatus.PENDING:
             # collect jobs stuck in ErrImagePull loop
-            return "Image can not be pulled"
+            if status_item.reason in ("ErrImagePull", "ImagePullBackOff"):
+                return "Image can not be pulled"
+            if status_item.reason == "InvalidImageName":
+                return "Invalid image name"
         return None
 
     def collect_if_needed(self) -> None:

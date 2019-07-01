@@ -345,11 +345,21 @@ class TestJobsService:
         )
 
     @pytest.mark.asyncio
+    @pytest.mark.parametrize(
+        "reason,description",
+        [
+            ("ErrImagePull", "Image can not be pulled"),
+            ("ImagePullBackOff", "Image can not be pulled"),
+            ("InvalidImageName", "Invalid image name"),
+        ],
+    )
     async def test_update_jobs_statuses_pending_errimagepull(
         self,
         jobs_service: JobsService,
         mock_orchestrator: MockOrchestrator,
         job_request_factory: Callable[[], JobRequest],
+        reason: str,
+        description: str,
     ) -> None:
         user = User(name="testuser", token="")
         original_job, _ = await jobs_service.create_job(
@@ -357,7 +367,7 @@ class TestJobsService:
         )
         assert original_job.status == JobStatus.PENDING
 
-        mock_orchestrator.update_reason_to_return("ErrImagePull")
+        mock_orchestrator.update_reason_to_return(reason)
         await jobs_service.update_jobs_statuses()
 
         job = await jobs_service.get_job(job_id=original_job.id)
@@ -365,28 +375,9 @@ class TestJobsService:
         assert job.is_finished
         assert job.finished_at
         assert job.is_deleted
-
-    @pytest.mark.asyncio
-    async def test_update_jobs_statuses_pending_imagepullbackoff(
-        self,
-        jobs_service: JobsService,
-        mock_orchestrator: MockOrchestrator,
-        job_request_factory: Callable[[], JobRequest],
-    ) -> None:
-        user = User(name="testuser", token="")
-        original_job, _ = await jobs_service.create_job(
-            job_request=job_request_factory(), user=user
-        )
-        assert original_job.status == JobStatus.PENDING
-
-        mock_orchestrator.update_reason_to_return("ImagePullBackOff")
-        await jobs_service.update_jobs_statuses()
-
-        job = await jobs_service.get_job(job_id=original_job.id)
-        assert job.status == JobStatus.FAILED
-        assert job.is_finished
-        assert job.finished_at
-        assert job.is_deleted
+        status_item = job.status_history.last
+        assert status_item.reason == "Collected"
+        assert status_item.description == description
 
     @pytest.mark.asyncio
     async def test_update_jobs_statuses_succeeded_missing(
