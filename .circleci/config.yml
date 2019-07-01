@@ -133,11 +133,11 @@ jobs:
 
 
   test:
-    <<: *defaults
+    <<: *defaults_dlc
     <<: *test_job_steps
 
-  test_dlc:
-    <<: *defaults_dlc
+  test_no_dlc:
+    <<: *defaults
     <<: *test_job_steps
 
   artifactory_ssh_auth_deploy:
@@ -164,7 +164,7 @@ workflows:
 
   main:
     jobs:
-      - test_dlc:
+      - test:
           context: org-global
           filters:
             branches:
@@ -174,7 +174,7 @@ workflows:
 
   dev:
     jobs:
-      - test:
+      - test_no_dlc:
           context: org-dev
           filters:
             branches:
@@ -183,7 +183,7 @@ workflows:
       - gke_deploy:
           context: org-dev
           requires:
-            - test
+            - test_no_dlc
           filters:
             branches:
               only:
@@ -191,7 +191,7 @@ workflows:
       - gke_ssh_auth_deploy:
           context: org-dev
           requires:
-            - test
+            - test_no_dlc
           filters:
             branches:
               only:
@@ -199,7 +199,7 @@ workflows:
 
   staging:
     jobs:
-      - test:
+      - test_no_dlc:
           context: org-staging
           filters:
             branches:
@@ -208,7 +208,7 @@ workflows:
       - gke_deploy:
           context: org-staging
           requires:
-            - test
+            - test_no_dlc
           filters:
             branches:
               only:
@@ -216,7 +216,7 @@ workflows:
       - gke_ssh_auth_deploy:
           context: org-staging
           requires:
-            - test
+            - test_no_dlc
           filters:
             branches:
               only:
@@ -224,7 +224,7 @@ workflows:
 
   prod:
     jobs:
-      - test:
+      - test_no_dlc:
           context: org-prod
           filters:
             branches:
@@ -235,7 +235,7 @@ workflows:
       - gke_deploy:
           context: org-prod
           requires:
-            - test
+            - test_no_dlc
           filters:
             branches:
               ignore: /.*/
@@ -245,7 +245,7 @@ workflows:
       - gke_ssh_auth_deploy:
           context: org-prod
           requires:
-            - test
+            - test_no_dlc
           filters:
             branches:
               ignore: /.*/
@@ -255,7 +255,7 @@ workflows:
 
   artifactory:
     jobs:
-      - test:
+      - test_no_dlc:
           context: org-global
           filters:
             branches:
@@ -266,7 +266,7 @@ workflows:
       - artifactory_ssh_auth_deploy:
           context: org-global
           requires:
-            - test
+            - test_no_dlc
           filters:
             branches:
               ignore: /.*/
