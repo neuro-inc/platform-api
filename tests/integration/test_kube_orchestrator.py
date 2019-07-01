@@ -379,7 +379,6 @@ class TestKubeOrchestrator:
             schedule_timeout=10,
         )
         await job.start()
-        import pdb;pdb.set_trace()
         await kube_client.create_triggered_scaleup_event(job.id)
 
         status_item = await kube_orchestrator.get_job_status(job)

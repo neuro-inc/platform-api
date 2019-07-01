@@ -221,8 +221,7 @@ class MyKubeClient(KubeClient):
             "metadata": {
                 "creationTimestamp": now_str,
                 "name": "job-cd109c3b-c36e-47d4-b3d6-8bb05a5e63ab.15a870d7e2bb228b",
-                "namespace": "default",
-                "resourceVersion": "2449449",
+                "namespace": self._namespace,
                 "selfLink": (
                     f"/api/v1/namespaces/{self._namespace}"
                     "/events/{pod_id}.15a870d7e2bb228b"
