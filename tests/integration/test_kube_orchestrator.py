@@ -384,10 +384,10 @@ class TestKubeOrchestrator:
         status_item = await kube_orchestrator.get_job_status(job)
         assert status_item.status == JobStatus.PENDING
 
-        t0 = time.time()
+        t0 = time.monotonic()
         found_scaleup = False
         while not status_item.status.is_finished:
-            t1 = time.time()
+            t1 = time.monotonic()
             if status_item.reason == "Scaling up the cluster to get more resources.":
                 found_scaleup = True
             else:
