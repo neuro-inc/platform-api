@@ -759,9 +759,13 @@ class TestKubeOrchestrator:
         self, kube_orchestrator: KubeOrchestrator
     ) -> Iterator[Callable[[str], MyJob]]:
         def impl(server_hostname: str) -> MyJob:
+            cmd = (
+                "curl --fail --connect-timeout 5 --retry 20 --retry-connrefuse "
+                f"http://{server_hostname}/"
+            )
             client_cont = Container(
-                image="ubuntu",
-                command=f"curl --silent --fail http://{server_hostname}/",
+                image="python",
+                command=cmd,
                 resources=ContainerResources(cpu=0.1, memory_mb=128),
             )
             return MyJob(
@@ -792,64 +796,7 @@ class TestKubeOrchestrator:
         client_job = create_client_job(server_hostname)
         await delete_job_later(client_job)
         await client_job.start()
-        assert self.wait_for_success(job=client_job)
-
-    @pytest.mark.asyncio
-    async def test_job_check_http_hostname_no_job_name(
-        self,
-        kube_config: KubeConfig,
-        create_server_job: Callable[..., MyJob],
-        create_client_job: Callable[[str], MyJob],
-        kube_ingress_ip: str,
-        delete_job_later: Callable[[Job], Awaitable[None]],
-    ) -> None:
-        server_job = create_server_job()
-        await delete_job_later(server_job)
-        await server_job.start()
-
-        http_host = server_job.http_host
-        await self._wait_for_job_service(
-            kube_ingress_ip, host=http_host, job_id=server_job.id
-        )
-        client_job = create_client_job(http_host)
-        await delete_job_later(client_job)
-        await client_job.start()
-        assert self.wait_for_success(job=client_job)
-
-        assert server_job.http_host_named is None
-
-    @pytest.mark.asyncio
-    async def test_job_check_http_hostname_with_job_name(
-        self,
-        kube_config: KubeConfig,
-        create_server_job: Callable[..., MyJob],
-        create_client_job: Callable[[str], MyJob],
-        kube_ingress_ip: str,
-        delete_job_later: Callable[[Job], Awaitable[None]],
-    ) -> None:
-        server_job_name = f"server-job-{random_str()}"
-        server_job = create_server_job(job_name=server_job_name)
-        await delete_job_later(server_job)
-        await server_job.start()
-
-        http_host = server_job.http_host
-        await self._wait_for_job_service(
-            kube_ingress_ip, host=http_host, job_id=server_job.id
-        )
-        client_job = create_client_job(http_host)
-        await delete_job_later(client_job)
-        await client_job.start()
-        assert self.wait_for_success(job=client_job)
-
-        assert server_job.http_host_named
-        http_host = server_job.http_host_named
-        await self._wait_for_job_service(
-            kube_ingress_ip, host=http_host, job_id=server_job.id
-        )
-        client_job = create_client_job(http_host)
-        await delete_job_later(client_job)
-        await client_job.start()
-        assert self.wait_for_success(job=client_job)
+        await self.wait_for_success(job=client_job)
 
     @pytest.mark.asyncio
     async def test_job_check_dns_hostname_undeclared_port(
@@ -871,9 +818,13 @@ class TestKubeOrchestrator:
             )
 
         def create_client_job(server_hostname: str) -> MyJob:
+            cmd = (
+                "curl --fail --connect-timeout 5 --retry 20 --retry-connrefuse "
+                f"http://{server_hostname}:12345/"
+            )
             client_cont = Container(
-                image="ubuntu",
-                command=f"curl --silent --fail http://{server_hostname}:12345/",
+                image="python",
+                command=cmd,
                 resources=ContainerResources(cpu=0.1, memory_mb=128),
             )
             return MyJob(
@@ -890,7 +841,7 @@ class TestKubeOrchestrator:
         client_job = create_client_job(server_job.internal_hostname)
         await delete_job_later(client_job)
         await client_job.start()
-        assert self.wait_for_success(client_job)
+        await self.wait_for_success(client_job)
 
     @pytest.mark.asyncio
     async def test_job_pod_labels_and_network_policy(
