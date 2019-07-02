@@ -2,6 +2,7 @@ import asyncio
 import json
 import uuid
 from dataclasses import dataclass
+from datetime import datetime, timezone
 from pathlib import Path, PurePath
 from typing import Any, AsyncIterator, Awaitable, Callable, Dict, Iterator, Optional
 from urllib.parse import urlsplit
@@ -135,6 +136,7 @@ async def kube_config(
         ],
         node_label_preemptible="preemptible",
         namespace="platformapi-tests",
+        job_schedule_scaleup_timeout=5,
     )
     return kube_config
 
@@ -195,6 +197,45 @@ class MyKubeClient(KubeClient):
                     await asyncio.sleep(interval_s)
         except asyncio.TimeoutError:
             pytest.fail("Pod has not terminated yet")
+
+    async def create_triggered_scaleup_event(self, pod_id: str) -> None:
+        url = f"{self._namespace_url}/events"
+        now = datetime.now(timezone.utc)
+        now_str = now.strftime("%Y-%m-%dT%H:%M:%SZ")
+        data = {
+            "apiVersion": "v1",
+            "count": 1,
+            "eventTime": None,
+            "firstTimestamp": now_str,
+            "involvedObject": {
+                "apiVersion": "v1",
+                "kind": "Pod",
+                "name": pod_id,
+                "namespace": self._namespace,
+                "resourceVersion": "48102193",
+                "uid": "eddfe678-86e9-11e9-9d65-42010a800018",
+            },
+            "kind": "Event",
+            "lastTimestamp": now_str,
+            "message": "TriggeredScaleUp",
+            "metadata": {
+                "creationTimestamp": now_str,
+                "name": "job-cd109c3b-c36e-47d4-b3d6-8bb05a5e63ab.15a870d7e2bb228b",
+                "namespace": self._namespace,
+                "selfLink": (
+                    f"/api/v1/namespaces/{self._namespace}"
+                    "/events/{pod_id}.15a870d7e2bb228b"
+                ),
+                "uid": "cb886f64-8f96-11e9-9251-42010a800038",
+            },
+            "reason": "TriggeredScaleUp",
+            "reportingComponent": "",
+            "reportingInstance": "",
+            "source": {"component": "cluster-autoscaler"},
+            "type": "Normal",
+        }
+
+        await self._request(method="POST", url=url, json=data)
 
 
 @pytest.fixture(scope="session")

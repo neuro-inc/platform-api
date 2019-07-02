@@ -211,6 +211,7 @@ class JobRecord:
     is_preemptible: bool = False
     is_deleted: bool = False
     internal_hostname: Optional[str] = None
+    schedule_timeout: Optional[float] = None
 
     @classmethod
     def create(
@@ -320,6 +321,8 @@ class JobRecord:
             "finished_at": self.finished_at_str,
             "is_preemptible": self.is_preemptible,
         }
+        if self.schedule_timeout:
+            result["schedule_timeout"] = self.schedule_timeout
         if self.internal_hostname:
             result["internal_hostname"] = self.internal_hostname
         if self.name:
@@ -345,6 +348,7 @@ class JobRecord:
             name=payload.get("name"),
             is_preemptible=payload.get("is_preemptible", False),
             internal_hostname=payload.get("internal_hostname", None),
+            schedule_timeout=payload.get("schedule_timeout", None),
         )
 
     @staticmethod
@@ -384,6 +388,7 @@ class Job:
         # leaving for backward compat with tests
         orphaned_job_owner: str = DEFAULT_ORPHANED_JOB_OWNER,
         *,
+        schedule_timeout: Optional[float] = None,
         record: Optional[JobRecord] = None,
     ) -> None:
         """
@@ -407,6 +412,7 @@ class Job:
                 is_deleted=is_deleted,
                 current_datetime_factory=current_datetime_factory,
                 orphaned_job_owner=orphaned_job_owner,
+                schedule_timeout=schedule_timeout,
             )
 
         self._record = record
@@ -492,6 +498,10 @@ class Job:
     @is_deleted.setter
     def is_deleted(self, value: bool) -> None:
         self._record.is_deleted = value
+
+    @property
+    def schedule_timeout(self) -> Optional[float]:
+        return self._record.schedule_timeout
 
     @property
     def _collection_reason(self) -> Optional[str]:

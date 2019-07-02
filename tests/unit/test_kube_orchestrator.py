@@ -456,7 +456,10 @@ class TestPodDescriptor:
     def test_from_primitive(self) -> None:
         payload = {
             "kind": "Pod",
-            "metadata": {"name": "testname"},
+            "metadata": {
+                "name": "testname",
+                "creationTimestamp": "2019-06-20T11:03:32Z",
+            },
             "spec": {"containers": [{"name": "testname", "image": "testimage"}]},
             "status": {"phase": "Running"},
         }
@@ -588,13 +591,6 @@ class TestJobStatusItemFactory:
         pod_status = PodStatus.from_primitive(payload)
         job_status_item = JobStatusItemFactory(pod_status).create()
         assert job_status_item == JobStatusItem.create(JobStatus.SUCCEEDED, exit_code=0)
-
-
-class TestPodStatus:
-    def test_from_primitive(self) -> None:
-        payload = {"phase": "Running", "containerStatuses": [{"ready": True}]}
-        status = PodStatus.from_primitive(payload)
-        assert status.phase == "Running"
 
 
 class TestResources:

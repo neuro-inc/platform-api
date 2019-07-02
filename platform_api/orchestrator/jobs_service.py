@@ -181,6 +181,7 @@ class JobsService:
         user: User,
         job_name: Optional[str] = None,
         is_preemptible: bool = False,
+        schedule_timeout: Optional[float] = None,
     ) -> Tuple[Job, Status]:
 
         try:
@@ -197,6 +198,7 @@ class JobsService:
             status=JobStatus.PENDING,
             name=job_name,
             is_preemptible=is_preemptible,
+            schedule_timeout=schedule_timeout,
         )
         job_id = job_request.job_id
         try:

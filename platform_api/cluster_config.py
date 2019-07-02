@@ -105,6 +105,9 @@ class OrchestratorConfig:
 
     is_http_ingress_secure: bool = False
 
+    job_schedule_timeout: float = 3 * 60
+    job_schedule_scaleup_timeout: float = 15 * 60
+
 
 @dataclass(frozen=True)
 class LoggingConfig:

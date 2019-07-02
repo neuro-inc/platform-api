@@ -326,11 +326,82 @@ class TestKubeOrchestrator:
 
             status_item = await kube_orchestrator.get_job_status(job)
             assert status_item == JobStatusItem.create(
-                JobStatus.PENDING,
-                reason="Cluster doesn't have resources to fulfill request.",
+                JobStatus.PENDING, reason="Scheduling the job."
             )
         finally:
             await job.delete()
+
+    @pytest.mark.asyncio
+    async def test_job_no_memory(self, kube_orchestrator: KubeOrchestrator) -> None:
+        command = "true"
+        container = Container(
+            image="ubuntu",
+            command=command,
+            resources=ContainerResources(cpu=1, memory_mb=500_000),
+        )
+        job = MyJob(
+            orchestrator=kube_orchestrator,
+            job_request=JobRequest.create(container),
+            schedule_timeout=10,
+        )
+        await job.start()
+
+        status_item = await kube_orchestrator.get_job_status(job)
+        assert status_item.status == JobStatus.PENDING
+
+        t0 = time.time()
+        while not status_item.status.is_finished:
+            assert status_item.reason == "Scheduling the job."
+            t1 = time.time()
+            assert t1 - t0 < 30, (
+                f"Wait for job failure is timed out "
+                f"after {t1-t0} secs [{status_item}]"
+            )
+            status_item = await kube_orchestrator.get_job_status(job)
+
+        assert status_item == JobStatusItem.create(
+            JobStatus.FAILED, reason="Cannot scaleup the cluster to get more resources."
+        )
+
+    @pytest.mark.asyncio
+    async def test_job_no_memory_after_scaleup(
+        self, kube_orchestrator: KubeOrchestrator, kube_client: MyKubeClient
+    ) -> None:
+        command = "true"
+        container = Container(
+            image="ubuntu",
+            command=command,
+            resources=ContainerResources(cpu=1, memory_mb=500_000),
+        )
+        job = MyJob(
+            orchestrator=kube_orchestrator,
+            job_request=JobRequest.create(container),
+            schedule_timeout=10,
+        )
+        await job.start()
+        await kube_client.create_triggered_scaleup_event(job.id)
+
+        status_item = await kube_orchestrator.get_job_status(job)
+        assert status_item.status == JobStatus.PENDING
+
+        t0 = time.monotonic()
+        found_scaleup = False
+        while not status_item.status.is_finished:
+            t1 = time.monotonic()
+            if status_item.reason == "Scaling up the cluster to get more resources.":
+                found_scaleup = True
+            else:
+                assert status_item.reason == "Scheduling the job."
+            assert t1 - t0 < 30, (
+                f"Wait for job failure is timed out "
+                f"after {t1-t0} secs [{status_item}]"
+            )
+            status_item = await kube_orchestrator.get_job_status(job)
+
+        assert status_item == JobStatusItem.create(
+            JobStatus.FAILED, reason="Cannot scaleup the cluster to get more resources."
+        )
+        assert found_scaleup
 
     @pytest.mark.asyncio
     async def test_volumes(
@@ -1299,7 +1370,10 @@ async def mock_kubernetes_server() -> AsyncIterator[ApiConfig]:
     async def _get_pod(request: web.Request) -> web.Response:
         payload: Dict[str, Any] = {
             "kind": "Pod",
-            "metadata": {"name": "testname"},
+            "metadata": {
+                "name": "testname",
+                "creationTimestamp": "2019-06-20T11:03:32Z",
+            },
             "spec": {
                 "containers": [{"name": "testname", "image": "testimage"}],
                 "nodeName": "whatever",
