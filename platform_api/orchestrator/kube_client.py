@@ -799,7 +799,7 @@ class PodCondition:
             return True
         elif val == "False":
             return False
-        assert False, f"Invalid status {val!r}"
+        raise ValueError(f"Invalid status {val!r}")
 
     @property
     def type(self) -> PodConditionType:
