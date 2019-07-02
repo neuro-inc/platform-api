@@ -1,8 +1,7 @@
-from dataclasses import dataclass
+from dataclasses import asdict, dataclass
 from typing import Dict, List, Optional, Sequence
 
 from aiohttp.hdrs import AUTHORIZATION
-from attr import asdict
 from neuro_auth_client import AuthClient, Permission
 
 from platform_api.user import User
