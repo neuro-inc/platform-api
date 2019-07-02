@@ -68,6 +68,7 @@ def create_job_response_validator() -> t.Trafaret:
             "owner": t.String(allow_blank=True),
             # `status` is left for backward compat. the python client/cli still
             # relies on it.
+            "cluster": t.String(allow_blank=False),
             "status": create_job_status_validator(),
             t.Key("http_url", optional=True): t.String,
             t.Key("http_url_named", optional=True): t.String,
@@ -140,12 +141,13 @@ def convert_container_volume_to_json(
     }
 
 
-def convert_job_to_job_response(job: Job) -> Dict[str, Any]:
+def convert_job_to_job_response(job: Job, cluster_name: str) -> Dict[str, Any]:
     history = job.status_history
     current_status = history.current
     response_payload: Dict[str, Any] = {
         "id": job.id,
         "owner": job.owner,
+        "cluster": cluster_name,
         "status": current_status.status,
         "history": {
             "status": current_status.status,
@@ -267,7 +269,8 @@ class JobsHandler:
             is_preemptible=is_preemptible,
             schedule_timeout=schedule_timeout,
         )
-        response_payload = convert_job_to_job_response(job)
+        cluster_name=cluster_config.name
+        response_payload = convert_job_to_job_response(job, cluster_name)
         self._job_response_validator.check(response_payload)
         return aiohttp.web.json_response(
             data=response_payload, status=aiohttp.web.HTTPAccepted.status_code
@@ -282,7 +285,8 @@ class JobsHandler:
         logger.info("Checking whether %r has %r", user, permission)
         await check_permission(request, permission.action, [permission])
 
-        response_payload = convert_job_to_job_response(job)
+        cluster_name = self._jobs_service.get_cluster_name(job.cluster_name)
+        response_payload = convert_job_to_job_response(job, cluster_name)
         self._job_response_validator.check(response_payload)
         return aiohttp.web.json_response(
             data=response_payload, status=aiohttp.web.HTTPOk.status_code
@@ -330,7 +334,7 @@ class JobsHandler:
         except JobFilterException:
             pass
 
-        response_payload = {"jobs": [convert_job_to_job_response(job) for job in jobs]}
+        response_payload = {"jobs": [convert_job_to_job_response(job, cluster_name=self._jobs_service.get_cluster_name(job.cluster_name)) for job in jobs]}
         self._bulk_jobs_response_validator.check(response_payload)
         return aiohttp.web.json_response(
             data=response_payload, status=aiohttp.web.HTTPOk.status_code

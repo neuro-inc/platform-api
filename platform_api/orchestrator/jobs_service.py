@@ -66,12 +66,12 @@ class JobsService:
 
         self._max_deletion_attempts = 3
 
-    def _get_cluster_name(self, name: str) -> str:
-        return name or self._jobs_config.default_cluster_name
+    def get_cluster_name(self, cluster_name: str) -> str:
+        return cluster_name or self._jobs_config.default_cluster_name
 
     @asynccontextmanager
     async def _get_cluster(self, name: str) -> AsyncIterator[Cluster]:
-        async with self._cluster_registry.get(self._get_cluster_name(name)) as cluster:
+        async with self._cluster_registry.get(self.get_cluster_name(name)) as cluster:
             yield cluster
 
     async def update_jobs_statuses(self) -> None:
@@ -215,7 +215,7 @@ class JobsService:
         except ClusterNotFound as cluster_err:
             # NOTE: this will result in 400 HTTP response which may not be
             # what we want to convey really
-            cluster_name = self._get_cluster_name(record.cluster_name)
+            cluster_name = self.get_cluster_name(record.cluster_name)
             raise JobsServiceException(
                 f"Cluster '{cluster_name}' not found"
             ) from cluster_err
