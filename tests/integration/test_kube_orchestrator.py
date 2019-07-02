@@ -728,47 +728,6 @@ class TestKubeOrchestrator:
         await self.wait_for_success(job=client_job)
 
     @pytest.mark.asyncio
-    async def test_job_check_http_hostname_no_job_name(
-        self,
-        kube_config: KubeConfig,
-        create_server_job: Callable[..., MyJob],
-        kube_ingress_ip: str,
-        delete_job_later: Callable[[Job], Awaitable[None]],
-    ) -> None:
-        server_job = create_server_job()
-        await delete_job_later(server_job)
-        await server_job.start()
-
-        assert server_job.http_host is not None
-        assert server_job.http_host_named is None
-
-        http_host = server_job.http_host
-        await self._wait_for_job_service(
-            kube_ingress_ip, host=http_host, job_id=server_job.id
-        )
-
-    @pytest.mark.asyncio
-    async def test_job_check_http_hostname_with_job_name(
-        self,
-        kube_config: KubeConfig,
-        create_server_job: Callable[..., MyJob],
-        kube_ingress_ip: str,
-        delete_job_later: Callable[[Job], Awaitable[None]],
-    ) -> None:
-        server_job_name = f"server-job-{random_str()}"
-        server_job = create_server_job(job_name=server_job_name)
-        await delete_job_later(server_job)
-        await server_job.start()
-
-        assert server_job.http_host is not None
-        assert server_job.http_host_named is not None
-
-        http_host = server_job.http_host_named
-        await self._wait_for_job_service(
-            kube_ingress_ip, host=http_host, job_id=server_job.id
-        )
-
-    @pytest.mark.asyncio
     async def test_job_check_dns_hostname_undeclared_port(
         self,
         kube_config: KubeConfig,
