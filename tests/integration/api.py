@@ -22,7 +22,7 @@ from platform_api.cluster_config import ClusterConfig
 from platform_api.config import Config
 from platform_api.orchestrator.job import JobStatus
 
-from .auth import _User
+from .auth_conftest import _User
 from .conftest import ApiRunner
 
 

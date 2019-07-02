@@ -20,7 +20,7 @@ from neuro_auth_client.client import Quota
 from tests.conftest import random_str
 
 from .api import ApiConfig, JobsClient
-from .auth import _AuthClient, _User
+from .auth_conftest import _AuthClient, _User
 from .conftest import MyKubeClient
 
 

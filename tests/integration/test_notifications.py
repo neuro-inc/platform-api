@@ -7,7 +7,7 @@ from notifications_client.notification import JobCannotStartQuotaReached
 from platform_api.orchestrator.job import Quota
 
 from .api import ApiConfig, JobsClient
-from .auth import _User
+from .auth_conftest import _User
 from .notifications import NotificationsServer
 
 

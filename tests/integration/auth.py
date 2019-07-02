@@ -1,31 +1,20 @@
 import asyncio
-from dataclasses import asdict, dataclass
-from typing import (
-    AsyncGenerator,
-    AsyncIterator,
-    Awaitable,
-    Callable,
-    Dict,
-    List,
-    Optional,
-    Sequence,
-)
+from typing import AsyncGenerator, AsyncIterator, Awaitable, Callable, Optional
 
 import aiodocker
 import pytest
 from aiohttp import ClientError
-from aiohttp.hdrs import AUTHORIZATION
 from async_generator import asynccontextmanager
 from async_timeout import timeout
 from jose import jwt
-from neuro_auth_client import AuthClient, Permission, User as AuthClientUser
+from neuro_auth_client import User as AuthClientUser
 from neuro_auth_client.client import Quota
 from yarl import URL
 
 from platform_api.config import AuthConfig, OAuthConfig
 from platform_api.orchestrator.job import AggregatedRunTime
-from platform_api.user import User
 from tests.conftest import random_str
+from tests.integration.auth_conftest import _AuthClient, _User
 
 
 @pytest.fixture(scope="session")
@@ -108,17 +97,6 @@ async def auth_config(auth_server: AuthConfig) -> AsyncIterator[AuthConfig]:
     yield auth_server
 
 
-class _AuthClient(AuthClient):
-    async def grant_user_permissions(
-        self, name: str, permissions: Sequence[Permission], token: Optional[str] = None
-    ) -> None:
-        assert permissions, "No permissions passed"
-        path = "/api/v1/users/{name}/permissions".format(name=name)
-        headers = self._generate_headers(token)
-        payload: List[Dict[str, str]] = [asdict(p) for p in permissions]
-        await self._request("POST", path, headers=headers, json=payload)
-
-
 @asynccontextmanager
 async def create_auth_client(config: AuthConfig) -> AsyncGenerator[_AuthClient, None]:
     async with _AuthClient(
@@ -145,13 +123,6 @@ async def wait_for_auth_server(
             except (AssertionError, ClientError):
                 pass
             await asyncio.sleep(interval_s)
-
-
-@dataclass(frozen=True)
-class _User(User):
-    @property
-    def headers(self) -> Dict[str, str]:
-        return {AUTHORIZATION: f"Bearer {self.token}"}
 
 
 @pytest.fixture
