@@ -112,8 +112,6 @@ spec:
           value: http://platformnotificationsapi:8080/
         - name: NP_NOTIFICATIONS_TOKEN
           value: eyJ0eXAiOiJKV1QiLCJhbGciOiJIUzI1NiJ9.eyJpZGVudGl0eSI6ImNvbXB1dGUifQ.IJDlKCfbiuNGZH9Sh6p-CdUL5KxEK5JStqzfDk4-RAA
-        - name: NP_NOTIFICATIONS_HEALTHCHECK
-          value: "false"
       - name: kubeproxy
         image: lachlanevenson/k8s-kubectl:v1.10.3
         args: [proxy]
