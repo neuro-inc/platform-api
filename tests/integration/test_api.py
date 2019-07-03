@@ -567,7 +567,7 @@ class TestJobs:
         client: aiohttp.ClientSession,
         jobs_client: JobsClient,
         regular_user: _User,
-        job_request_factory: Callable[[str], Dict[str, Any]],
+        job_request_factory: Callable[[], Dict[str, Any]],
     ) -> None:
         headers = regular_user.headers
         url = api.jobs_base_url
@@ -587,7 +587,7 @@ class TestJobs:
         client: aiohttp.ClientSession,
         jobs_client: JobsClient,
         regular_user: _User,
-        job_request_factory: Callable[[str], Dict[str, Any]],
+        job_request_factory: Callable[[], Dict[str, Any]],
     ) -> None:
         url = api.jobs_base_url
         headers = regular_user.headers
@@ -617,7 +617,7 @@ class TestJobs:
         client: aiohttp.ClientSession,
         jobs_client: JobsClient,
         regular_user: _User,
-        job_request_factory: Callable[[str], Dict[str, Any]],
+        job_request_factory: Callable[[], Dict[str, Any]],
     ) -> None:
         url = api.jobs_base_url
         headers = regular_user.headers
@@ -1048,7 +1048,7 @@ class TestJobs:
         jobs_client: JobsClient,
         api: ApiConfig,
         client: aiohttp.ClientSession,
-        job_request_factory: Callable[[str], Dict[str, Any]],
+        job_request_factory: Callable[[], Dict[str, Any]],
         regular_user_factory: Callable[[], Any],
         auth_client: _AuthClient,
     ) -> None:
@@ -1090,7 +1090,7 @@ class TestJobs:
         jobs_client: JobsClient,
         api: ApiConfig,
         client: aiohttp.ClientSession,
-        job_request_factory: Callable[[str], Dict[str, Any]],
+        job_request_factory: Callable[[], Dict[str, Any]],
         regular_user_factory: Callable[[], Any],
         auth_client: _AuthClient,
     ) -> None:
