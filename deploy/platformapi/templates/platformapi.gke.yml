@@ -88,6 +88,8 @@ spec:
             secretKeyRef:
               name: platformservices-secret
               key: compute_token
+        - name: NP_NOTIFICATIONS_HEALTHCHECK
+          value: "true"
       - name: kubeproxy
         image: lachlanevenson/k8s-kubectl:v1.10.3
         args: [proxy]
