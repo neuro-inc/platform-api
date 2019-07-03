@@ -1148,7 +1148,7 @@ class TestJobs:
 
         jobs = await jobs_client.get_all_jobs()
         assert set(jobs_ids) <= {x["id"] for x in jobs}
-        # clean
+        # clean:test_job_log
         for job in jobs:
             await jobs_client.delete_job(job_id=job["id"])
 
@@ -1442,9 +1442,7 @@ class TestJobs:
                 "image": "ubuntu",
                 "command": command,
                 "resources": {"cpu": 0.1, "memory_mb": 16},
-            },
-            "dataset_storage_uri": f"storage://{regular_user.name}",
-            "result_storage_uri": f"storage://{regular_user.name}/result",
+            }
         }
         url = api.jobs_base_url
         async with client.post(
@@ -1588,9 +1586,19 @@ class TestJobs:
                 "image": "ubuntu",
                 "command": command,
                 "resources": {"cpu": 0.1, "memory_mb": 16},
-            },
-            "dataset_storage_uri": f"storage://{regular_user.name}",
-            "result_storage_uri": f"storage://{regular_user.name}/result",
+                "volumes": [
+                    {
+                        "dst_path": f"/var/storage/{regular_user.name}",
+                        "read_only": True,
+                        "src_storage_uri": f"storage://{regular_user.name}",
+                    },
+                    {
+                        "dst_path": f"/var/storage/{regular_user.name}/result",
+                        "read_only": False,
+                        "src_storage_uri": f"storage://{regular_user.name}/result",
+                    },
+                ],
+            }
         }
         url = api.jobs_base_url
         async with client.post(
@@ -1621,12 +1629,9 @@ class TestJobs:
             },
             "container": {
                 "command": 'bash -c "echo Failed!; false"',
-                "env": {
-                    "NP_DATASET_PATH": f"/var/storage/{regular_user.name}",
-                    "NP_RESULT_PATH": f"/var/storage/{regular_user.name}/result",
-                },
                 "image": "ubuntu",
                 "resources": {"cpu": 0.1, "memory_mb": 16},
+                "env": {},
                 "volumes": [
                     {
                         "dst_path": f"/var/storage/{regular_user.name}",
