@@ -482,12 +482,13 @@ class TestJobsService:
         with pytest.raises(NonGpuQuotaExceededError, match="non-GPU quota exceeded"):
             await jobs_service.create_job(request, user)
 
-    def test_get_cluster_name_non_empty(self, jobs_service: JobsService,) -> None:
+    def test_get_cluster_name_non_empty(self, jobs_service: JobsService) -> None:
         assert jobs_service.get_cluster_name("cluster-name") == "cluster-name"
 
-    def test_get_cluster_name_empty(self, jobs_service: JobsService,) -> None:
+    def test_get_cluster_name_empty(self, jobs_service: JobsService) -> None:
         default_cluster_name = jobs_service._jobs_config.default_cluster_name
         assert jobs_service.get_cluster_name("") == default_cluster_name
+
 
 class TestJobsServiceCluster:
     @pytest.fixture
