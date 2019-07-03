@@ -795,7 +795,7 @@ class TestJob:
             "description": None,
         }
         expected = {
-            "id": job_request_payload["job_id"],
+            "id": job_request_payload["id"],
             "request": job_request_payload,
             "owner": "user",
             "cluster_name": "testcluster",

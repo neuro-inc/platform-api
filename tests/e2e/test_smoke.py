@@ -11,7 +11,7 @@ from .conftest import PlatformConfig, _User
 async def test_basic_command(
     api_config: PlatformConfig, alice: _User, client: aiohttp.ClientSession
 ) -> None:
-    model_request_payload = {
+    job_request_payload = {
         "container": {
             "image": "ubuntu",
             "command": "true",
@@ -21,10 +21,10 @@ async def test_basic_command(
     }
     headers = {"Authorization": f"Bearer {alice.token}"}
     response = await client.post(
-        api_config.jobs_url, headers=headers, json=model_request_payload
+        api_config.jobs_url, headers=headers, json=job_request_payload
     )
-    model_payload = await response.json()
-    job_id = model_payload["job_id"]
+    job_payload = await response.json()
+    job_id = job_payload["id"]
     job_url = f"{api_config.jobs_url}/{job_id}"
 
     for i in range(30):
