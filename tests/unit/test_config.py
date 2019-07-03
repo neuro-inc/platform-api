@@ -139,7 +139,6 @@ class TestEnvironConfigFactory:
 
         assert config.notifications.url == URL("http://notifications:8080")
         assert config.notifications.token == "token"
-        assert config.notifications.healthcheck is False
 
         assert isinstance(config.orchestrator, KubeConfig)
         assert config.orchestrator.endpoint_url == "https://localhost:8443"
@@ -245,7 +244,6 @@ class TestEnvironConfigFactory:
             "NP_PLATFORM_CONFIG_URI": "http://platformconfig:8080/api/v1",
             "NP_NOTIFICATIONS_URL": "http://notifications:8080",
             "NP_NOTIFICATIONS_TOKEN": "token",
-            "NP_NOTIFICATIONS_HEALTHCHECK": "yes",
         }
         config = EnvironConfigFactory(environ=environ).create()
 
@@ -266,7 +264,6 @@ class TestEnvironConfigFactory:
 
         assert config.notifications.url == URL("http://notifications:8080")
         assert config.notifications.token == "token"
-        assert config.notifications.healthcheck is True
 
         assert isinstance(config.orchestrator, KubeConfig)
         assert config.orchestrator.endpoint_url == "https://localhost:8443"

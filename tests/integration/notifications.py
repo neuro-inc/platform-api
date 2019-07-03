@@ -50,6 +50,4 @@ async def mock_notifications_server() -> AsyncIterator[NotificationsServer]:
 def notifications_config(
     mock_notifications_server: NotificationsServer
 ) -> NotificationsConfig:
-    return NotificationsConfig(
-        url=mock_notifications_server.url, token="token", healthcheck=False
-    )
+    return NotificationsConfig(url=mock_notifications_server.url, token="token")

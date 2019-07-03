@@ -74,7 +74,6 @@ class JobsConfig:
 class NotificationsConfig:
     url: URL
     token: str
-    healthcheck: bool = False
 
 
 @dataclass(frozen=True)

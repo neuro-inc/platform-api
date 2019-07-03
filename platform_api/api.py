@@ -3,7 +3,7 @@ import logging
 from typing import Any, AsyncIterator, Awaitable, Callable, Dict, Sequence
 
 import aiohttp.web
-from aiohttp.web import HTTPError, HTTPUnauthorized
+from aiohttp.web import HTTPUnauthorized
 from async_exit_stack import AsyncExitStack
 from neuro_auth_client import AuthClient
 from neuro_auth_client.security import AuthScheme, setup_security
@@ -179,14 +179,6 @@ async def create_app(
                 url=config.notifications.url, token=config.notifications.token
             )
             await exit_stack.enter_async_context(notifications_client)
-
-            if config.notifications.healthcheck:
-                try:
-                    await notifications_client.secured_ping()
-                except HTTPError:
-                    logger.exception(
-                        "Notifications server ping validation failed.", exc_info=True
-                    )
 
             logger.info("Initializing Redis client")
             redis_client = await exit_stack.enter_async_context(
