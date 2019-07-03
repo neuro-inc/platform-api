@@ -567,7 +567,7 @@ class TestJobs:
         client: aiohttp.ClientSession,
         jobs_client: JobsClient,
         regular_user: _User,
-        model_request_factory: Callable[[str], Dict[str, Any]],
+        job_request_factory: Callable[[str], Dict[str, Any]],
     ) -> None:
         headers = regular_user.headers
         url = api.jobs_base_url
@@ -587,13 +587,13 @@ class TestJobs:
         client: aiohttp.ClientSession,
         jobs_client: JobsClient,
         regular_user: _User,
-        model_request_factory: Callable[[str], Dict[str, Any]],
+        job_request_factory: Callable[[str], Dict[str, Any]],
     ) -> None:
         url = api.jobs_base_url
         headers = regular_user.headers
-        model_request = model_request_factory(regular_user.name)
-        model_request["container"]["resources"]["memory_mb"] = 100_500
-        async with client.post(url, headers=headers, json=model_request) as resp:
+        job_request = job_request_factory()
+        job_request["container"]["resources"]["memory_mb"] = 100_500
+        async with client.post(url, headers=headers, json=job_request) as resp:
             assert resp.status == HTTPAccepted.status_code
             result = await resp.json()
             job_id = result["id"]
@@ -617,15 +617,15 @@ class TestJobs:
         client: aiohttp.ClientSession,
         jobs_client: JobsClient,
         regular_user: _User,
-        model_request_factory: Callable[[str], Dict[str, Any]],
+        job_request_factory: Callable[[str], Dict[str, Any]],
     ) -> None:
         url = api.jobs_base_url
         headers = regular_user.headers
-        model_request = model_request_factory(regular_user.name)
-        model_request["container"]["command"] = "sleep 20m"
+        job_request = job_request_factory()
+        job_request["container"]["command"] = "sleep 20m"
         job_ids_list = []
         for _ in range(5):
-            async with client.post(url, headers=headers, json=model_request) as resp:
+            async with client.post(url, headers=headers, json=job_request) as resp:
                 assert resp.status == HTTPAccepted.status_code
                 result = await resp.json()
                 job_ids_list.append(result["id"])
@@ -1048,7 +1048,7 @@ class TestJobs:
         jobs_client: JobsClient,
         api: ApiConfig,
         client: aiohttp.ClientSession,
-        model_request_factory: Callable[[str], Dict[str, Any]],
+        job_request_factory: Callable[[str], Dict[str, Any]],
         regular_user_factory: Callable[[], Any],
         auth_client: _AuthClient,
     ) -> None:
@@ -1056,9 +1056,9 @@ class TestJobs:
         follower = await regular_user_factory()
 
         url = api.jobs_base_url
-        model_request = model_request_factory(owner.name)
+        job_request = job_request_factory()
         async with client.post(
-            url, headers=owner.headers, json=model_request
+            url, headers=owner.headers, json=job_request
         ) as response:
             assert response.status == HTTPAccepted.status_code
             result = await response.json()
@@ -1090,7 +1090,7 @@ class TestJobs:
         jobs_client: JobsClient,
         api: ApiConfig,
         client: aiohttp.ClientSession,
-        model_request_factory: Callable[[str], Dict[str, Any]],
+        job_request_factory: Callable[[str], Dict[str, Any]],
         regular_user_factory: Callable[[], Any],
         auth_client: _AuthClient,
     ) -> None:
@@ -1098,9 +1098,9 @@ class TestJobs:
         follower = await regular_user_factory()
 
         url = api.jobs_base_url
-        model_request = model_request_factory(owner.name)
+        job_request = job_request_factory()
         async with client.post(
-            url, headers=owner.headers, json=model_request
+            url, headers=owner.headers, json=job_request
         ) as response:
             assert response.status == HTTPAccepted.status_code
             result = await response.json()
