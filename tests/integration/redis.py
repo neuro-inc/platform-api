@@ -11,10 +11,10 @@ from platform_api.redis import RedisConfig, create_redis_client
 
 @pytest.fixture(scope="session")
 async def _redis_server(
-    docker: aiodocker.Docker, reuse_docker: bool
+    docker: aiodocker.Docker, reuse_docker: bool, minikube_profile: str
 ) -> AsyncIterator[RedisConfig]:
     image_name = "redis:4"
-    container_name = "redis"
+    container_name = f"{minikube_profile}--redis"
     container_config = {
         "Image": image_name,
         "AttachStdout": False,

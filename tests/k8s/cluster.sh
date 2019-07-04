@@ -46,7 +46,7 @@ function k8s::start {
     k8s::wait k8s::setup_ingress
     k8s::wait k8s::setup_logging
 
-    tools::kubectl wait --for=condition=Ready  pod -l service=platformstoragenfs --timeout=2m
+    tools::kubectl wait --for=condition=Ready  pod -l service=platformstoragenfs --timeout=5m
 
     tools::kubectl get all --all-namespaces
 }
@@ -68,6 +68,12 @@ function k8s::wait {
 function k8s::stop {
     tools::minikube stop || :
     tools::minikube delete || :
+
+    orphans=`docker ps -q --filter "name=${CONTEXT}--"`
+    if [ -n "$orphans" ]
+    then
+        docker kill $orphans || :
+    fi
 }
 
 function k8s::setup_namespace {

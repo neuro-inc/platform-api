@@ -27,10 +27,13 @@ def auth_server_image_name() -> str:
 
 @pytest.fixture(scope="session")
 async def auth_server(
-    docker: aiodocker.Docker, reuse_docker: bool, auth_server_image_name: str
+    docker: aiodocker.Docker,
+    reuse_docker: bool,
+    auth_server_image_name: str,
+    minikube_profile: str,
 ) -> AsyncIterator[AuthConfig]:
     image_name = "gcr.io/light-reality-205619/platformauthapi:latest"
-    container_name = "auth_server"
+    container_name = f"{minikube_profile}--auth_server"
     container_config = {
         "Image": image_name,
         "AttachStdout": False,
