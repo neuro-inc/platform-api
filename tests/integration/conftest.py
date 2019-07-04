@@ -80,7 +80,7 @@ async def kube_config_payload() -> Dict[str, Any]:
 
 @pytest.fixture(scope="session")
 async def kube_config_cluster_payload(kube_config_payload: Dict[str, Any]) -> Any:
-    cluster_name = "minikube"
+    cluster_name = "platform-api"
     clusters = {
         cluster["name"]: cluster["cluster"]
         for cluster in kube_config_payload["clusters"]
@@ -100,7 +100,7 @@ def cert_authority_data_pem(
 
 @pytest.fixture(scope="session")
 async def kube_config_user_payload(kube_config_payload: Dict[str, Any]) -> Any:
-    user_name = "minikube"
+    user_name = "platform-api"
     users = {user["name"]: user["user"] for user in kube_config_payload["users"]}
     return users[user_name]
 
@@ -412,7 +412,7 @@ async def delete_node_later(
 
 @pytest.fixture
 def kube_node() -> str:
-    return "minikube"
+    return "platform-api"
 
 
 @pytest.fixture
