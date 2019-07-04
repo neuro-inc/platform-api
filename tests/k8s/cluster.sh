@@ -3,6 +3,9 @@
 # based on
 # https://github.com/kubernetes/minikube#linux-continuous-integration-without-vm-support
 
+DIR=`dirname $0`
+source $DIR/tools.sh
+
 function k8s::install_kubectl {
     local kubectl_version=$(curl -s https://storage.googleapis.com/kubernetes-release/release/stable.txt)
     curl -Lo kubectl https://storage.googleapis.com/kubernetes-release/release/${kubectl_version}/bin/linux/amd64/kubectl
@@ -10,7 +13,7 @@ function k8s::install_kubectl {
     sudo mv kubectl /usr/local/bin/
 }
 function k8s::install_minikube {
-    local minikube_version="v1.1.1"
+    local minikube_version="latest"
     curl -Lo minikube https://storage.googleapis.com/minikube/releases/${minikube_version}/minikube-linux-amd64
     chmod +x minikube
     sudo mv minikube /usr/local/bin/
@@ -30,16 +33,22 @@ function k8s::start {
 
     sudo -E mkdir -p ~/.minikube/files/files
 
-    sudo -E minikube config set WantReportErrorPrompt false
-    sudo -E minikube config set WantUpdateNotification false
-    sudo -E minikube start --vm-driver=none --kubernetes-version=v1.14.3
+    tools::minikube config set WantReportErrorPrompt false
+    tools::minikube config set WantUpdateNotification false
+    tools::minikube config set WantNoneDriverWarning false
+    tools::minikube config set WantKubectlDownloadMsg false
+
+    tools::minikube start --vm-driver=none
+
     sudo chown -R $USER $HOME/.kube $HOME/.minikube
     k8s::wait k8s::setup_namespace
     k8s::wait k8s::start_nfs
     k8s::wait k8s::setup_ingress
     k8s::wait k8s::setup_logging
-    kubectl wait --for=condition=Ready  pod -l service=platformstoragenfs --timeout=2m
-    kubectl get all --all-namespaces
+
+    tools::kubectl wait --for=condition=Ready  pod -l service=platformstoragenfs --timeout=2m
+
+    tools::kubectl get all --all-namespaces
 }
 
 function k8s::wait {
@@ -57,20 +66,18 @@ function k8s::wait {
 }
 
 function k8s::stop {
-    sudo -E minikube stop || :
-    sudo -E minikube delete || :
-    sudo -E rm -rf ~/.minikube
-    sudo rm -rf /root/.minikube
+    tools::minikube stop || :
+    tools::minikube delete || :
 }
 
 function k8s::setup_namespace {
-    kubectl apply -f tests/k8s/namespace.yml
+    tools::kubectl apply -f tests/k8s/namespace.yml
 }
 
 function k8s::setup_registry {
     local DOCKER_REGISTRY=registry.neuromation.io
-    kubectl delete secret np-docker-reg-secret || :
-    kubectl create secret docker-registry np-docker-reg-secret \
+    tools::kubectl delete secret np-docker-reg-secret || :
+    tools::kubectl create secret docker-registry np-docker-reg-secret \
         --docker-server $DOCKER_REGISTRY \
         --docker-username $DOCKER_USER \
         --docker-password $DOCKER_PASS \
@@ -78,35 +85,29 @@ function k8s::setup_registry {
 }
 
 function k8s::setup_ingress {
-    sudo -E minikube addons enable ingress
-    kubectl create -f tests/k8s/platformjobsingress.yml --namespace=platformapi-tests
+    tools::minikube addons enable ingress
+    tools::kubectl create -f tests/k8s/platformjobsingress.yml --namespace=platformapi-tests
 }
 
 function k8s::setup_logging {
-    kubectl apply -f tests/k8s/logging.yml
+    tools::kubectl apply -f tests/k8s/logging.yml
 }
 
 function k8s::test {
-    kubectl delete jobs testjob1 || :
-    kubectl create -f tests/k8s/pod.yml
-    for _ in {1..300}; do
-        if [ "$(kubectl get job testjob1 --template {{.status.succeeded}})" == "1" ]; then
-            exit 0
-        fi
-        if [ "$(kubectl get job testjob1 --template {{.status.failed}})" == "1" ]; then
-            exit 1
-        fi
-        sleep 1
-    done
-    exit 1
+    tools::kubectl delete jobs testjob1 || :
+    tools::kubectl create -f tests/k8s/pod.yml
+    tools::kubectl wait --for=condition=Ready  pod -l name=testjob1 --timeout=5m
+    exit $?
 }
 
 function k8s::start_nfs {
-    kubectl apply -f tests/k8s/nfs.yml
+    sudo modprobe nfs || :
+    sudo modprobe nfs || :
+    tools::kubectl apply -f tests/k8s/nfs.yml
 }
 
 function k8s::stop_nfs {
-    kubectl delete -f tests/k8s/nfs.yml
+    tools::kubectl delete -f tests/k8s/nfs.yml
 }
 
 
