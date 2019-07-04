@@ -69,10 +69,11 @@ function k8s::stop {
     tools::minikube stop || :
     tools::minikube delete || :
 
-    orphans=`docker ps -q --filter "name=${CONTEXT}--"`
+    orphans=`docker ps -a -q --filter "name=${CONTEXT}--"`
     if [ -n "$orphans" ]
     then
         docker kill $orphans || :
+        docker rm $orphans || :
     fi
 }
 
