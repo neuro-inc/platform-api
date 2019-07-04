@@ -74,7 +74,7 @@ class JobStatusItem:
     description: Optional[str] = None
     exit_code: Optional[int] = None
 
-    def __post_init__(self):
+    def __post_init__(self) -> None:
         # TODO (A.Yushkovskiy) TEMPORARY CHECK FOR DEBUGGING PURPOSES ONLY (see PR#786)
         assert isinstance(self.reason, JobStatusReason) or self.reason is None
 
