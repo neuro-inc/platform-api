@@ -36,10 +36,6 @@ class ApiConfig(NamedTuple):
         return f"http://{self.host}:{self.port}/api/v1"
 
     @property
-    def model_base_url(self) -> str:
-        return self.endpoint + "/models"
-
-    @property
     def jobs_base_url(self) -> str:
         return self.endpoint + "/jobs"
 
@@ -213,27 +209,9 @@ async def infinite_job(
 
 
 @pytest.fixture
-async def model_request_factory() -> Callable[[str], Dict[str, Any]]:
-    def _factory(owner: str) -> Dict[str, Any]:
-        return {
-            "container": {
-                "image": "ubuntu",
-                "command": "true",
-                "resources": {"cpu": 0.1, "memory_mb": 16},
-                "http": {"port": 1234},
-            },
-            "dataset_storage_uri": f"storage://{owner}",
-            "result_storage_uri": f"storage://{owner}/result",
-            "description": "test job submitted by neuro model train",
-        }
-
-    return _factory
-
-
-@pytest.fixture
 def job_request_factory() -> Callable[[], Dict[str, Any]]:
     def _factory() -> Dict[str, Any]:
-        # TODO(ajuszkowski) Optional fields (as "name") should not have a value here
+        # Note: Optional fields (as "name") should not have a value here
         return {
             "container": {
                 "image": "ubuntu",
@@ -245,13 +223,6 @@ def job_request_factory() -> Callable[[], Dict[str, Any]]:
         }
 
     return _factory
-
-
-@pytest.fixture
-async def model_train(
-    model_request_factory: Callable[[str], Dict[str, Any]], regular_user: _User
-) -> Dict[str, Any]:
-    return model_request_factory(regular_user.name)
 
 
 @pytest.fixture

@@ -121,116 +121,25 @@ class TestApi:
             }
 
 
-class TestModels:
+class TestJobs:
     @pytest.mark.asyncio
-    async def test_create_model_unauthorized(
-        self, api: ApiConfig, client: aiohttp.ClientSession, model_train: Dict[str, Any]
-    ) -> None:
-        url = api.model_base_url
-        async with client.post(url, json=model_train) as response:
-            assert response.status == HTTPUnauthorized.status_code
-
-    @pytest.mark.asyncio
-    async def test_create_model_invalid_job_name(
+    async def test_create_job_with_ssh_and_http(
         self,
         api: ApiConfig,
         client: aiohttp.ClientSession,
-        model_train: Dict[str, Any],
+        job_submit: Dict[str, Any],
         jobs_client: JobsClient,
         regular_user: _User,
     ) -> None:
-        url = api.model_base_url
-        model_train["is_preemptible"] = True
-        model_train["name"] = "Invalid_job_name!"
+        url = api.jobs_base_url
+        job_submit["container"]["ssh"] = {"port": 7867}
         async with client.post(
-            url, headers=regular_user.headers, json=model_train
-        ) as response:
-            assert response.status == HTTPBadRequest.status_code
-            payload = await response.json()
-            e = (
-                "{'name': DataError({0: DataError(value should be None), "
-                "1: DataError(does not match pattern ^[a-z](?:-?[a-z0-9])*$)})}"
-            )
-            assert payload == {"error": e}
-
-    @pytest.mark.asyncio
-    async def test_create_model(
-        self,
-        api: ApiConfig,
-        client: aiohttp.ClientSession,
-        model_train: Dict[str, Any],
-        jobs_client: JobsClient,
-        regular_user: _User,
-    ) -> None:
-        url = api.model_base_url
-        model_train["is_preemptible"] = True
-        model_train["container"]["http"]["requires_auth"] = True
-        job_name = "some-test-job-name"
-        model_train["name"] = job_name
-        async with client.post(
-            url, headers=regular_user.headers, json=model_train
-        ) as response:
-            assert response.status == HTTPAccepted.status_code
-            result = await response.json()
-            job_id = result["job_id"]
-            assert result["status"] in ["pending"]
-            assert result["http_url"] == f"http://{job_id}.jobs.neu.ro"
-            assert result["http_url_named"] == (
-                f"http://{job_name}--{regular_user.name}.jobs.neu.ro"
-            )
-            expected_internal_hostname = f"{job_id}.platformapi-tests"
-            assert result["internal_hostname"] == expected_internal_hostname
-            assert result["is_preemptible"]
-            assert result["name"] == job_name
-            assert result["description"] == "test job submitted by neuro model train"
-
-        retrieved_job = await jobs_client.get_job_by_id(job_id=job_id)
-        assert retrieved_job["internal_hostname"] == expected_internal_hostname
-        assert retrieved_job["name"] == job_name
-        assert retrieved_job["container"]["http"]["requires_auth"]
-
-        await jobs_client.long_polling_by_job_id(job_id=job_id, status="succeeded")
-        await jobs_client.delete_job(job_id=job_id)
-
-    @pytest.mark.asyncio
-    async def test_create_model_without_name_http_url_named_not_sent(
-        self,
-        api: ApiConfig,
-        client: aiohttp.ClientSession,
-        model_train: Dict[str, Any],
-        jobs_client: JobsClient,
-        regular_user: _User,
-    ) -> None:
-        url = api.model_base_url
-        async with client.post(
-            url, headers=regular_user.headers, json=model_train
-        ) as response:
-            assert response.status == HTTPAccepted.status_code
-            result = await response.json()
-            job_id = result["job_id"]
-            assert result["http_url"] == f"http://{job_id}.jobs.neu.ro"
-            assert "http_url_named" not in result
-
-        await jobs_client.delete_job(job_id=job_id)
-
-    @pytest.mark.asyncio
-    async def test_create_model_with_ssh_and_http(
-        self,
-        api: ApiConfig,
-        client: aiohttp.ClientSession,
-        model_train: Dict[str, Any],
-        jobs_client: JobsClient,
-        regular_user: _User,
-    ) -> None:
-        url = api.model_base_url
-        model_train["container"]["ssh"] = {"port": 7867}
-        async with client.post(
-            url, headers=regular_user.headers, json=model_train
+            url, headers=regular_user.headers, json=job_submit
         ) as response:
             assert response.status == HTTPAccepted.status_code
             result = await response.json()
             assert result["status"] in ["pending"]
-            job_id = result["job_id"]
+            job_id = result["id"]
             expected_url = "ssh://nobody@ssh-auth.platform.neuromation.io:22"
             assert result["ssh_server"] == expected_url
 
@@ -241,24 +150,24 @@ class TestModels:
         await jobs_client.delete_job(job_id=job_id)
 
     @pytest.mark.asyncio
-    async def test_create_model_with_ssh_only(
+    async def test_create_job_with_ssh_only(
         self,
         api: ApiConfig,
         client: aiohttp.ClientSession,
-        model_train: Dict[str, Any],
+        job_submit: Dict[str, Any],
         jobs_client: JobsClient,
         regular_user: _User,
     ) -> None:
-        url = api.model_base_url
-        model_train["container"]["ssh"] = {"port": 7867}
-        model_train["container"].pop("http", None)
+        url = api.jobs_base_url
+        job_submit["container"]["ssh"] = {"port": 7867}
+        job_submit["container"].pop("http", None)
         async with client.post(
-            url, headers=regular_user.headers, json=model_train
+            url, headers=regular_user.headers, json=job_submit
         ) as response:
             assert response.status == HTTPAccepted.status_code
             result = await response.json()
             assert result["status"] in ["pending"]
-            job_id = result["job_id"]
+            job_id = result["id"]
             expected_url = "ssh://nobody@ssh-auth.platform.neuromation.io:22"
             assert result["ssh_server"] == expected_url
 
@@ -266,109 +175,13 @@ class TestModels:
         await jobs_client.delete_job(job_id=job_id)
 
     @pytest.mark.asyncio
-    async def test_model_create_unknown_gpu_model(
-        self,
-        jobs_client: JobsClient,
-        api: ApiConfig,
-        client: aiohttp.ClientSession,
-        regular_user: _User,
-        kube_node_gpu: str,
-    ) -> None:
-        request_payload = {
-            "container": {
-                "image": "ubuntu",
-                "command": "true",
-                "resources": {
-                    "cpu": 0.1,
-                    "memory_mb": 16,
-                    "gpu": 1,
-                    "gpu_model": "unknown",
-                },
-            },
-            "dataset_storage_uri": f"storage://{regular_user.name}",
-            "result_storage_uri": f"storage://{regular_user.name}/result",
-        }
-
-        async with client.post(
-            api.model_base_url, headers=regular_user.headers, json=request_payload
-        ) as response:
-            response_text = await response.text()
-            assert response.status == HTTPBadRequest.status_code, response_text
-            data = await response.json()
-            assert """'gpu_model': DataError(value doesn't match""" in data["error"]
-
-    @pytest.mark.asyncio
-    async def test_create_gpu_model(
-        self,
-        jobs_client: JobsClient,
-        api: ApiConfig,
-        client: aiohttp.ClientSession,
-        regular_user: _User,
-        kube_node_gpu: str,
-        kube_client: MyKubeClient,
-    ) -> None:
-        request_payload = {
-            "container": {
-                "image": "ubuntu",
-                "command": "true",
-                "resources": {
-                    "cpu": 0.1,
-                    "memory_mb": 16,
-                    "gpu": 1,
-                    "gpu_model": "gpumodel",
-                },
-            },
-            "dataset_storage_uri": f"storage://{regular_user.name}",
-            "result_storage_uri": f"storage://{regular_user.name}/result",
-        }
-
-        async with client.post(
-            api.model_base_url, headers=regular_user.headers, json=request_payload
-        ) as response:
-            assert response.status == HTTPAccepted.status_code, await response.text()
-            result = await response.json()
-            job_id = result["job_id"]
-
-        await kube_client.wait_pod_scheduled(job_id, kube_node_gpu)
-
-    @pytest.mark.asyncio
-    async def test_env_var_sourcing(
-        self,
-        api: ApiConfig,
-        client: aiohttp.ClientSession,
-        jobs_client: JobsClient,
-        regular_user: _User,
-    ) -> None:
-        np_result_path = f"/var/storage/{regular_user.name}/result"
-        cmd = f'bash -c \'[ "$NP_RESULT_PATH" == "{np_result_path}" ]\''
-        payload = {
-            "container": {
-                "image": "ubuntu",
-                "command": cmd,
-                "resources": {"cpu": 0.1, "memory_mb": 16},
-            },
-            "dataset_storage_uri": f"storage://{regular_user.name}",
-            "result_storage_uri": f"storage://{regular_user.name}/result",
-        }
-        url = api.model_base_url
-        async with client.post(
-            url, headers=regular_user.headers, json=payload
-        ) as response:
-            assert response.status == HTTPAccepted.status_code
-            result = await response.json()
-            assert result["status"] in ["pending"]
-            job_id = result["job_id"]
-        await jobs_client.long_polling_by_job_id(job_id=job_id, status="succeeded")
-        await jobs_client.delete_job(job_id=job_id)
-
-    @pytest.mark.asyncio
     async def test_incorrect_request(
         self, api: ApiConfig, client: aiohttp.ClientSession, regular_user: _User
     ) -> None:
-        json_model_train = {"wrong_key": "wrong_value"}
-        url = api.model_base_url
+        json_job_submit = {"wrong_key": "wrong_value"}
+        url = api.jobs_base_url
         async with client.post(
-            url, headers=regular_user.headers, json=json_model_train
+            url, headers=regular_user.headers, json=json_job_submit
         ) as response:
             assert response.status == HTTPBadRequest.status_code
             data = await response.json()
@@ -387,22 +200,32 @@ class TestModels:
                 "image": "some_broken_image",
                 "command": "true",
                 "resources": {"cpu": 0.1, "memory_mb": 16},
-            },
-            "dataset_storage_uri": f"storage://{regular_user.name}",
-            "result_storage_uri": f"storage://{regular_user.name}/result",
+                "volumes": [
+                    {
+                        "src_storage_uri": f"storage://{regular_user.name}",
+                        "dst_path": "/var/storage",
+                        "read_only": False,
+                    },
+                    {
+                        "src_storage_uri": f"storage://{regular_user.name}/result",
+                        "dst_path": "/var/storage/result",
+                        "read_only": True,
+                    },
+                ],
+            }
         }
 
-        url = api.model_base_url
+        url = api.jobs_base_url
         async with client.post(
             url, headers=regular_user.headers, json=payload
         ) as response:
             assert response.status == HTTPAccepted.status_code
             data = await response.json()
-            job_id = data["job_id"]
+            job_id = data["id"]
         await jobs_client.long_polling_by_job_id(job_id=job_id, status="failed")
 
     @pytest.mark.asyncio
-    async def test_forbidden_storage_uris(
+    async def test_forbidden_storage_uri(
         self,
         api: ApiConfig,
         client: aiohttp.ClientSession,
@@ -414,12 +237,17 @@ class TestModels:
                 "image": "ubuntu",
                 "command": "true",
                 "resources": {"cpu": 0.1, "memory_mb": 16},
-            },
-            "dataset_storage_uri": f"storage://",
-            "result_storage_uri": f"storage://result",
+                "volumes": [
+                    {
+                        "src_storage_uri": f"storage://",
+                        "dst_path": "/var/storage",
+                        "read_only": False,
+                    }
+                ],
+            }
         }
 
-        url = api.model_base_url
+        url = api.jobs_base_url
         async with client.post(
             url, headers=regular_user.headers, json=payload
         ) as response:
@@ -438,12 +266,10 @@ class TestModels:
                 "image": f"registry.dev.neuromation.io/anotheruser/image:tag",
                 "command": "true",
                 "resources": {"cpu": 0.1, "memory_mb": 16},
-            },
-            "dataset_storage_uri": f"storage://{regular_user.name}",
-            "result_storage_uri": f"storage://{regular_user.name}/result",
+            }
         }
 
-        url = api.model_base_url
+        url = api.jobs_base_url
         async with client.post(
             url, headers=regular_user.headers, json=payload
         ) as response:
@@ -462,37 +288,33 @@ class TestModels:
                 "image": f"registry.dev.neuromation.io/{regular_user.name}/image:tag",
                 "command": "true",
                 "resources": {"cpu": 0.1, "memory_mb": 16},
-            },
-            "dataset_storage_uri": f"storage://{regular_user.name}",
-            "result_storage_uri": f"storage://{regular_user.name}/result",
+            }
         }
 
-        url = api.model_base_url
+        url = api.jobs_base_url
         async with client.post(
             url, headers=regular_user.headers, json=payload
         ) as response:
             assert response.status == HTTPAccepted.status_code, await response.text()
             result = await response.json()
-            job_id = result["job_id"]
+            job_id = result["id"]
         await jobs_client.delete_job(job_id=job_id)
 
-
-class TestJobs:
     @pytest.mark.asyncio
     async def test_create_job_unauthorized_no_token(
-        self, api: ApiConfig, client: aiohttp.ClientSession, model_train: Dict[str, Any]
+        self, api: ApiConfig, client: aiohttp.ClientSession, job_submit: Dict[str, Any]
     ) -> None:
         url = api.jobs_base_url
-        async with client.post(url, json=model_train) as response:
+        async with client.post(url, json=job_submit) as response:
             assert response.status == HTTPUnauthorized.status_code
 
     @pytest.mark.asyncio
     async def test_create_job_unauthorized_invalid_token(
-        self, api: ApiConfig, client: aiohttp.ClientSession, model_train: Dict[str, Any]
+        self, api: ApiConfig, client: aiohttp.ClientSession, job_submit: Dict[str, Any]
     ) -> None:
         url = api.jobs_base_url
         headers = {"Authorization": "Bearer INVALID"}
-        async with client.post(url, headers=headers, json=model_train) as response:
+        async with client.post(url, headers=headers, json=job_submit) as response:
             assert response.status == HTTPUnauthorized.status_code
 
     @pytest.mark.asyncio
@@ -748,7 +570,7 @@ class TestJobs:
         client: aiohttp.ClientSession,
         jobs_client: JobsClient,
         regular_user: _User,
-        model_request_factory: Callable[[str], Dict[str, Any]],
+        job_request_factory: Callable[[], Dict[str, Any]],
     ) -> None:
         headers = regular_user.headers
         url = api.jobs_base_url
@@ -768,16 +590,16 @@ class TestJobs:
         client: aiohttp.ClientSession,
         jobs_client: JobsClient,
         regular_user: _User,
-        model_request_factory: Callable[[str], Dict[str, Any]],
+        job_request_factory: Callable[[], Dict[str, Any]],
     ) -> None:
-        url = api.model_base_url
+        url = api.jobs_base_url
         headers = regular_user.headers
-        model_request = model_request_factory(regular_user.name)
-        model_request["container"]["resources"]["memory_mb"] = 100_500
-        async with client.post(url, headers=headers, json=model_request) as resp:
+        job_request = job_request_factory()
+        job_request["container"]["resources"]["memory_mb"] = 100_500
+        async with client.post(url, headers=headers, json=job_request) as resp:
             assert resp.status == HTTPAccepted.status_code
             result = await resp.json()
-            job_id = result["job_id"]
+            job_id = result["id"]
 
         await jobs_client.long_polling_by_job_id(job_id, status="pending")
 
@@ -798,18 +620,18 @@ class TestJobs:
         client: aiohttp.ClientSession,
         jobs_client: JobsClient,
         regular_user: _User,
-        model_request_factory: Callable[[str], Dict[str, Any]],
+        job_request_factory: Callable[[], Dict[str, Any]],
     ) -> None:
-        url = api.model_base_url
+        url = api.jobs_base_url
         headers = regular_user.headers
-        model_request = model_request_factory(regular_user.name)
-        model_request["container"]["command"] = "sleep 20m"
+        job_request = job_request_factory()
+        job_request["container"]["command"] = "sleep 20m"
         job_ids_list = []
         for _ in range(5):
-            async with client.post(url, headers=headers, json=model_request) as resp:
+            async with client.post(url, headers=headers, json=job_request) as resp:
                 assert resp.status == HTTPAccepted.status_code
                 result = await resp.json()
-                job_ids_list.append(result["job_id"])
+                job_ids_list.append(result["id"])
 
         job_ids_killed = set(job_ids_list[:2])
         job_ids_alive = set(job_ids_list[2:])
@@ -1229,21 +1051,21 @@ class TestJobs:
         jobs_client: JobsClient,
         api: ApiConfig,
         client: aiohttp.ClientSession,
-        model_request_factory: Callable[[str], Dict[str, Any]],
+        job_request_factory: Callable[[], Dict[str, Any]],
         regular_user_factory: Callable[[], Any],
         auth_client: _AuthClient,
     ) -> None:
         owner = await regular_user_factory()
         follower = await regular_user_factory()
 
-        url = api.model_base_url
-        model_request = model_request_factory(owner.name)
+        url = api.jobs_base_url
+        job_request = job_request_factory()
         async with client.post(
-            url, headers=owner.headers, json=model_request
+            url, headers=owner.headers, json=job_request
         ) as response:
             assert response.status == HTTPAccepted.status_code
             result = await response.json()
-            job_id = result["job_id"]
+            job_id = result["id"]
 
         url = api.jobs_base_url
         async with client.get(url, headers=owner.headers) as response:
@@ -1271,21 +1093,21 @@ class TestJobs:
         jobs_client: JobsClient,
         api: ApiConfig,
         client: aiohttp.ClientSession,
-        model_request_factory: Callable[[str], Dict[str, Any]],
+        job_request_factory: Callable[[], Dict[str, Any]],
         regular_user_factory: Callable[[], Any],
         auth_client: _AuthClient,
     ) -> None:
         owner = await regular_user_factory()
         follower = await regular_user_factory()
 
-        url = api.model_base_url
-        model_request = model_request_factory(owner.name)
+        url = api.jobs_base_url
+        job_request = job_request_factory()
         async with client.post(
-            url, headers=owner.headers, json=model_request
+            url, headers=owner.headers, json=job_request
         ) as response:
             assert response.status == HTTPAccepted.status_code
             result = await response.json()
-            job_id = result["job_id"]
+            job_id = result["id"]
 
         url = f"{api.jobs_base_url}/{job_id}"
         async with client.get(url, headers=owner.headers) as response:
@@ -1308,20 +1130,20 @@ class TestJobs:
         jobs_client: JobsClient,
         api: ApiConfig,
         client: aiohttp.ClientSession,
-        model_train: Dict[str, Any],
+        job_submit: Dict[str, Any],
         regular_user: _User,
     ) -> None:
         jobs_ids = []
         n_jobs = 2
         for _ in range(n_jobs):
-            url = api.model_base_url
+            url = api.jobs_base_url
             async with client.post(
-                url, headers=regular_user.headers, json=model_train
+                url, headers=regular_user.headers, json=job_submit
             ) as response:
                 assert response.status == HTTPAccepted.status_code
                 result = await response.json()
                 assert result["status"] in ["pending"]
-                job_id = result["job_id"]
+                job_id = result["id"]
                 await jobs_client.long_polling_by_job_id(
                     job_id=job_id, status="succeeded"
                 )
@@ -1329,7 +1151,7 @@ class TestJobs:
 
         jobs = await jobs_client.get_all_jobs()
         assert set(jobs_ids) <= {x["id"] for x in jobs}
-        # clean
+        # clean:test_job_log
         for job in jobs:
             await jobs_client.delete_job(job_id=job["id"])
 
@@ -1559,18 +1381,18 @@ class TestJobs:
         self,
         api: ApiConfig,
         client: aiohttp.ClientSession,
-        model_train: Dict[str, Any],
+        job_submit: Dict[str, Any],
         jobs_client: JobsClient,
         regular_user: _User,
     ) -> None:
-        url = api.model_base_url
+        url = api.jobs_base_url
         async with client.post(
-            url, headers=regular_user.headers, json=model_train
+            url, headers=regular_user.headers, json=job_submit
         ) as response:
             assert response.status == HTTPAccepted.status_code
             result = await response.json()
             assert result["status"] in ["pending"]
-            job_id = result["job_id"]
+            job_id = result["id"]
             await jobs_client.long_polling_by_job_id(job_id=job_id, status="succeeded")
         await jobs_client.delete_job(job_id=job_id)
 
@@ -1584,19 +1406,19 @@ class TestJobs:
         self,
         api: ApiConfig,
         client: aiohttp.ClientSession,
-        model_train: Dict[str, Any],
+        job_submit: Dict[str, Any],
         jobs_client: JobsClient,
         regular_user: _User,
     ) -> None:
-        url = api.model_base_url
-        model_train["container"]["command"] = "sleep 1000000000"
+        url = api.jobs_base_url
+        job_submit["container"]["command"] = "sleep 1000000000"
         async with client.post(
-            url, headers=regular_user.headers, json=model_train
+            url, headers=regular_user.headers, json=job_submit
         ) as response:
             assert response.status == HTTPAccepted.status_code
             result = await response.json()
             assert result["status"] in ["pending"]
-            job_id = result["job_id"]
+            job_id = result["id"]
             await jobs_client.long_polling_by_job_id(job_id=job_id, status="running")
         await jobs_client.delete_job(job_id=job_id)
         # delete again (same result expected)
@@ -1623,18 +1445,16 @@ class TestJobs:
                 "image": "ubuntu",
                 "command": command,
                 "resources": {"cpu": 0.1, "memory_mb": 16},
-            },
-            "dataset_storage_uri": f"storage://{regular_user.name}",
-            "result_storage_uri": f"storage://{regular_user.name}/result",
+            }
         }
-        url = api.model_base_url
+        url = api.jobs_base_url
         async with client.post(
             url, headers=regular_user.headers, json=payload
         ) as response:
             assert response.status == HTTPAccepted.status_code
             result = await response.json()
             assert result["status"] in ["pending"]
-            job_id = result["job_id"]
+            job_id = result["id"]
 
         job_log_url = api.jobs_base_url + f"/{job_id}/log"
         async with client.get(job_log_url, headers=regular_user.headers) as response:
@@ -1769,18 +1589,28 @@ class TestJobs:
                 "image": "ubuntu",
                 "command": command,
                 "resources": {"cpu": 0.1, "memory_mb": 16},
-            },
-            "dataset_storage_uri": f"storage://{regular_user.name}",
-            "result_storage_uri": f"storage://{regular_user.name}/result",
+                "volumes": [
+                    {
+                        "dst_path": f"/var/storage/{regular_user.name}",
+                        "read_only": True,
+                        "src_storage_uri": f"storage://{regular_user.name}",
+                    },
+                    {
+                        "dst_path": f"/var/storage/{regular_user.name}/result",
+                        "read_only": False,
+                        "src_storage_uri": f"storage://{regular_user.name}/result",
+                    },
+                ],
+            }
         }
-        url = api.model_base_url
+        url = api.jobs_base_url
         async with client.post(
             url, headers=regular_user.headers, json=payload
         ) as response:
             assert response.status == HTTPAccepted.status_code
             result = await response.json()
             assert result["status"] == "pending"
-            job_id = result["job_id"]
+            job_id = result["id"]
 
         response_payload = await jobs_client.long_polling_by_job_id(
             job_id=job_id, status="failed"
@@ -1802,12 +1632,9 @@ class TestJobs:
             },
             "container": {
                 "command": 'bash -c "echo Failed!; false"',
-                "env": {
-                    "NP_DATASET_PATH": f"/var/storage/{regular_user.name}",
-                    "NP_RESULT_PATH": f"/var/storage/{regular_user.name}/result",
-                },
                 "image": "ubuntu",
                 "resources": {"cpu": 0.1, "memory_mb": 16},
+                "env": {},
                 "volumes": [
                     {
                         "dst_path": f"/var/storage/{regular_user.name}",
@@ -1961,18 +1788,18 @@ class TestJobs:
         client: aiohttp.ClientSession,
         regular_user: _User,
         jobs_client: JobsClient,
-        model_train: Dict[str, Any],
+        job_submit: Dict[str, Any],
     ) -> None:
         command = 'bash -c "for i in {1..10}; do echo $i; sleep 1; done"'
-        model_train["container"]["command"] = command
-        url = api.model_base_url
+        job_submit["container"]["command"] = command
+        url = api.jobs_base_url
         async with client.post(
-            url, headers=regular_user.headers, json=model_train
+            url, headers=regular_user.headers, json=job_submit
         ) as response:
             assert response.status == HTTPAccepted.status_code
             result = await response.json()
             assert result["status"] in ["pending"]
-            job_id = result["job_id"]
+            job_id = result["id"]
 
         job_top_url = api.jobs_base_url + f"/{job_id}/top"
         async with client.ws_connect(job_top_url, headers=regular_user.headers) as ws:
@@ -1997,19 +1824,19 @@ class TestJobs:
         client: aiohttp.ClientSession,
         regular_user: _User,
         jobs_client: JobsClient,
-        model_train: Dict[str, Any],
+        job_submit: Dict[str, Any],
     ) -> None:
 
         command = 'bash -c "for i in {1..2}; do echo $i; sleep 1; done"'
-        model_train["container"]["command"] = command
-        url = api.model_base_url
+        job_submit["container"]["command"] = command
+        url = api.jobs_base_url
         async with client.post(
-            url, headers=regular_user.headers, json=model_train
+            url, headers=regular_user.headers, json=job_submit
         ) as response:
             assert response.status == HTTPAccepted.status_code
             result = await response.json()
             assert result["status"] in ["pending"]
-            job_id = result["job_id"]
+            job_id = result["id"]
 
         await jobs_client.long_polling_by_job_id(job_id=job_id, status="succeeded")
 

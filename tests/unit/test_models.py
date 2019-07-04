@@ -20,10 +20,6 @@ from platform_api.handlers.jobs_handler import (
     convert_job_to_job_response,
     infer_permissions_from_container,
 )
-from platform_api.handlers.models_handler import (
-    create_model_request_validator,
-    create_model_response_validator,
-)
 from platform_api.handlers.validators import (
     JOB_NAME_MAX_LENGTH,
     USER_NAME_MAX_LENGTH,
@@ -193,40 +189,6 @@ class TestContainerRequestValidator:
         assert result["resources"]["gpu_model"] == "unknown"
 
 
-class TestModelRequestValidator:
-    def test_model_without_name(self) -> None:
-        container = {
-            "image": "testimage",
-            "resources": {"cpu": 0.1, "memory_mb": 16, "shm": True},
-            "ssh": {"port": 666},
-        }
-        validator = create_model_request_validator(allowed_gpu_models=[])
-        assert validator.check(
-            {
-                "container": container,
-                "dataset_storage_uri": "dataset",
-                "result_storage_uri": "result",
-            }
-        )
-
-    def test_model_with_name(self) -> None:
-        container = {
-            "image": "testimage",
-            "resources": {"cpu": 0.1, "memory_mb": 16, "shm": True},
-            "ssh": {"port": 666},
-        }
-        validator = create_model_request_validator(allowed_gpu_models=[])
-        assert validator.check(
-            {
-                "container": container,
-                "name": "test-job-name",
-                "description": "test-job",
-                "dataset_storage_uri": "dataset",
-                "result_storage_uri": "result",
-            }
-        )
-
-
 class TestContainerResponseValidator:
     def test_gpu_model(self) -> None:
         payload = {
@@ -242,43 +204,6 @@ class TestContainerResponseValidator:
         result = validator.check(payload)
         assert result["resources"]["gpu"] == 1
         assert result["resources"]["gpu_model"] == "unknown"
-
-
-class TestModelResponseValidator:
-    def test_empty(self) -> None:
-        validator = create_model_response_validator()
-        with pytest.raises(ValueError, match="is required"):
-            validator.check({})
-
-    def test_failure(self) -> None:
-        validator = create_model_response_validator()
-        with pytest.raises(ValueError, match="doesn't match any variant"):
-            validator.check({"job_id": "testjob", "status": "INVALID"})
-
-    def test_success(self) -> None:
-        validator = create_model_response_validator()
-        assert validator.check(
-            {
-                "job_id": "testjob",
-                "status": "pending",
-                "http_url": "http://testjob",
-                "http_url_named": "http://test-job-owner",
-                "name": "test-job-name",
-                "description": "test-job",
-                "is_preemptible": False,
-            }
-        )
-
-    def test_success_without_name_label(self) -> None:
-        validator = create_model_response_validator()
-        assert validator.check(
-            {
-                "job_id": "testjob",
-                "status": "pending",
-                "http_url": "http://testjob",
-                "is_preemptible": False,
-            }
-        )
 
 
 class TestJobContainerToJson:
