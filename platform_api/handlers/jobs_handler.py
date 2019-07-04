@@ -142,6 +142,7 @@ def convert_container_volume_to_json(
 
 
 def convert_job_to_job_response(job: Job, cluster_name: str) -> Dict[str, Any]:
+    assert cluster_name, "empty cluster name must be already replaced with `default`"
     history = job.status_history
     current_status = history.current
     response_payload: Dict[str, Any] = {

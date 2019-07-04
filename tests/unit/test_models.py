@@ -659,10 +659,11 @@ async def test_job_to_job_response(mock_orchestrator: MockOrchestrator) -> None:
         ),
         name="test-job-name",
     )
-    response = convert_job_to_job_response(job)
+    response = convert_job_to_job_response(job, cluster_name="my-cluster")
     assert response == {
         "id": job.id,
         "owner": "compute",
+        "cluster": "my-cluster",
         "status": "pending",
         "history": {
             "status": "pending",
@@ -684,6 +685,7 @@ async def test_job_to_job_response(mock_orchestrator: MockOrchestrator) -> None:
     }
 
 
+
 @pytest.mark.asyncio
 async def test_job_to_job_response_with_job_name_and_http_exposed(
     mock_orchestrator: MockOrchestrator
@@ -703,10 +705,11 @@ async def test_job_to_job_response_with_job_name_and_http_exposed(
         owner=owner_name,
         name=job_name,
     )
-    response = convert_job_to_job_response(job)
+    response = convert_job_to_job_response(job,cluster_name="my-cluster")
     assert response == {
         "id": job.id,
         "owner": owner_name,
+        "cluster": "my-cluster",
         "name": job_name,
         "http_url": f"http://{job.id}.jobs",
         "http_url_named": f"http://{job_name}--{owner_name}.jobs",
@@ -749,10 +752,11 @@ async def test_job_to_job_response_with_job_name_and_http_exposed_too_long_name(
         owner=owner_name,
         name=job_name,
     )
-    response = convert_job_to_job_response(job)
+    response = convert_job_to_job_response(job,cluster_name="my-cluster")
     assert response == {
         "id": job.id,
         "owner": owner_name,
+        "cluster": "my-cluster",
         "name": job_name,
         "http_url": f"http://{job.id}.jobs",
         # NOTE: field `http_url_named` is cut off when it is invalid
@@ -774,3 +778,18 @@ async def test_job_to_job_response_with_job_name_and_http_exposed_too_long_name(
         "ssh_auth_server": "ssh://nobody@ssh-auth:22",
         "is_preemptible": False,
     }
+
+
+@pytest.mark.asyncio
+async def test_job_to_job_response_assert_non_empty_cluster_name(mock_orchestrator: MockOrchestrator) -> None:
+    job = Job(
+        storage_config=mock_orchestrator.storage_config,
+        orchestrator_config=mock_orchestrator.config,
+        job_request=JobRequest.create(
+            Container(
+                image="testimage", resources=ContainerResources(cpu=1, memory_mb=128)
+            ),
+        ),
+    )
+    with pytest.raises(AssertionError, match="must be already replaced"):
+        convert_job_to_job_response(job, cluster_name="")
