@@ -22,8 +22,6 @@ stop_k8s:
 
 clean_k8s: stop_k8s
 	$(K8S_CLUSTER_CMD) clean
-	-docker stop $$(docker ps -a -q)
-	-docker rm $$(docker ps -a -q)
 
 test_k8s_platform_api:
 	kubectl config view

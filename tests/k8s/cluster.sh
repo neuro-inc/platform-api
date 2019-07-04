@@ -67,6 +67,9 @@ function k8s::wait {
 
 function k8s::stop {
     tools::minikube stop || :
+}
+
+function k8s::clean  {
     tools::minikube delete || :
 
     orphans=`docker ps -a -q --filter "name=${CONTEXT}--"`
@@ -81,15 +84,6 @@ function k8s::setup_namespace {
     tools::kubectl apply -f tests/k8s/namespace.yml
 }
 
-function k8s::setup_registry {
-    local DOCKER_REGISTRY=registry.neuromation.io
-    tools::kubectl delete secret np-docker-reg-secret || :
-    tools::kubectl create secret docker-registry np-docker-reg-secret \
-        --docker-server $DOCKER_REGISTRY \
-        --docker-username $DOCKER_USER \
-        --docker-password $DOCKER_PASS \
-        --docker-email $DOCKER_EMAIL
-}
 
 function k8s::setup_ingress {
     tools::minikube addons enable ingress
@@ -129,7 +123,7 @@ case "${1:-}" in
         k8s::stop
         ;;
     clean)
-        k8s::stop
+        k8s::clean
         ;;
     test)
         k8s::test
@@ -139,9 +133,6 @@ case "${1:-}" in
         ;;
     stop-nfs)
         k8s::stop_nfs
-        ;;
-    setup-registry)
-        k8s::setup_registry
         ;;
     *)
         exit 1
