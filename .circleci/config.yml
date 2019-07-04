@@ -95,8 +95,6 @@ jobs:
           name: Installing NFS-related stuff
           command: |
             sudo apt-get install nfs-common
-            sudo modprobe nfsd
-            sudo modprobe nfs
 
       - run:
           name: Running Kubernetes
