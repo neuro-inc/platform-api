@@ -685,7 +685,6 @@ async def test_job_to_job_response(mock_orchestrator: MockOrchestrator) -> None:
     }
 
 
-
 @pytest.mark.asyncio
 async def test_job_to_job_response_with_job_name_and_http_exposed(
     mock_orchestrator: MockOrchestrator
@@ -705,7 +704,7 @@ async def test_job_to_job_response_with_job_name_and_http_exposed(
         owner=owner_name,
         name=job_name,
     )
-    response = convert_job_to_job_response(job,cluster_name="my-cluster")
+    response = convert_job_to_job_response(job, cluster_name="my-cluster")
     assert response == {
         "id": job.id,
         "owner": owner_name,
@@ -752,7 +751,7 @@ async def test_job_to_job_response_with_job_name_and_http_exposed_too_long_name(
         owner=owner_name,
         name=job_name,
     )
-    response = convert_job_to_job_response(job,cluster_name="my-cluster")
+    response = convert_job_to_job_response(job, cluster_name="my-cluster")
     assert response == {
         "id": job.id,
         "owner": owner_name,
@@ -781,14 +780,16 @@ async def test_job_to_job_response_with_job_name_and_http_exposed_too_long_name(
 
 
 @pytest.mark.asyncio
-async def test_job_to_job_response_assert_non_empty_cluster_name(mock_orchestrator: MockOrchestrator) -> None:
+async def test_job_to_job_response_assert_non_empty_cluster_name(
+    mock_orchestrator: MockOrchestrator
+) -> None:
     job = Job(
         storage_config=mock_orchestrator.storage_config,
         orchestrator_config=mock_orchestrator.config,
         job_request=JobRequest.create(
             Container(
                 image="testimage", resources=ContainerResources(cpu=1, memory_mb=128)
-            ),
+            )
         ),
     )
     with pytest.raises(AssertionError, match="must be already replaced"):
