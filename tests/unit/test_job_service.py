@@ -381,7 +381,7 @@ class TestJobsService:
         assert job.finished_at
         assert job.is_deleted
         status_item = job.status_history.last
-        assert status_item.reason == "Collected"
+        assert status_item.reason == JobStatusReason.NM_COLLECTED
         assert status_item.description == description
 
     @pytest.mark.asyncio
