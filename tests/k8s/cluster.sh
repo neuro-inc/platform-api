@@ -108,7 +108,7 @@ function k8s::test {
 
 function k8s::start_nfs {
     sudo modprobe nfs || :
-    sudo modprobe nfs || :
+    sudo modprobe nfsd || :
     tools::kubectl apply -f tests/k8s/nfs.yml
 }
 
