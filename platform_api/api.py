@@ -168,7 +168,9 @@ async def create_app(
         async with AsyncExitStack() as exit_stack:
 
             logger.info("Initializing Notifications client")
-            notifications_client = NotificationsClient(url=config.notifications.url)
+            notifications_client = NotificationsClient(
+                url=config.notifications.url, token=config.notifications.token
+            )
             await exit_stack.enter_async_context(notifications_client)
 
             logger.info("Initializing Redis client")
