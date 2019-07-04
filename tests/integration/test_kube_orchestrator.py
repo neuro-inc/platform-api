@@ -371,7 +371,7 @@ class TestKubeOrchestrator:
         container = Container(
             image="ubuntu",
             command=command,
-            resources=ContainerResources(cpu=1, memory_mb=500_000),
+            resources=ContainerResources(cpu=1, memory_mb=500_000_000),
         )
         job = MyJob(
             orchestrator=kube_orchestrator,
@@ -388,10 +388,11 @@ class TestKubeOrchestrator:
         found_scaleup = False
         while not status_item.status.is_finished:
             t1 = time.monotonic()
-            if status_item.reason == "Scaling up the cluster to get more resources.":
+            print(repr(status_item.reason))
+            if status_item.reason == JobStatusReason.NM_CLUSTER_SCALING_UP:
                 found_scaleup = True
             else:
-                assert status_item.reason == "Scheduling the job."
+                assert status_item.reason == JobStatusReason.NM_SCHEDULING_THE_JOB
             assert t1 - t0 < 30, (
                 f"Wait for job failure is timed out "
                 f"after {t1-t0} secs [{status_item}]"
@@ -399,7 +400,7 @@ class TestKubeOrchestrator:
             status_item = await kube_orchestrator.get_job_status(job)
 
         assert status_item == JobStatusItem.create(
-            JobStatus.FAILED, reason=JobStatusReason.NM_CLUSTER_SCALING_UP
+            JobStatus.FAILED, reason=JobStatusReason.NM_CLUSTER_SCALING_UP_FAILED
         )
         assert found_scaleup
 
