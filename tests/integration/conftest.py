@@ -2,6 +2,7 @@ import asyncio
 import json
 import uuid
 from dataclasses import dataclass
+from datetime import datetime, timezone
 from pathlib import Path, PurePath
 from typing import Any, AsyncIterator, Awaitable, Callable, Dict, Iterator, Optional
 from urllib.parse import urlsplit
@@ -33,7 +34,7 @@ from platform_api.config import (
 from platform_api.config_client import ConfigClient
 from platform_api.elasticsearch import Elasticsearch, ElasticsearchConfig
 from platform_api.orchestrator.job_request import JobNotFoundException
-from platform_api.orchestrator.kube_client import KubeClient, NodeTaint
+from platform_api.orchestrator.kube_client import KubeClient, NodeTaint, Resources
 from platform_api.orchestrator.kube_orchestrator import KubeConfig, KubeOrchestrator
 from platform_api.redis import RedisConfig
 from platform_api.resource import GPUModel, ResourcePoolType
@@ -135,6 +136,7 @@ async def kube_config(
         ],
         node_label_preemptible="preemptible",
         namespace="platformapi-tests",
+        job_schedule_scaleup_timeout=5,
     )
     return kube_config
 
@@ -195,6 +197,45 @@ class MyKubeClient(KubeClient):
                     await asyncio.sleep(interval_s)
         except asyncio.TimeoutError:
             pytest.fail("Pod has not terminated yet")
+
+    async def create_triggered_scaleup_event(self, pod_id: str) -> None:
+        url = f"{self._namespace_url}/events"
+        now = datetime.now(timezone.utc)
+        now_str = now.strftime("%Y-%m-%dT%H:%M:%SZ")
+        data = {
+            "apiVersion": "v1",
+            "count": 1,
+            "eventTime": None,
+            "firstTimestamp": now_str,
+            "involvedObject": {
+                "apiVersion": "v1",
+                "kind": "Pod",
+                "name": pod_id,
+                "namespace": self._namespace,
+                "resourceVersion": "48102193",
+                "uid": "eddfe678-86e9-11e9-9d65-42010a800018",
+            },
+            "kind": "Event",
+            "lastTimestamp": now_str,
+            "message": "TriggeredScaleUp",
+            "metadata": {
+                "creationTimestamp": now_str,
+                "name": "job-cd109c3b-c36e-47d4-b3d6-8bb05a5e63ab.15a870d7e2bb228b",
+                "namespace": self._namespace,
+                "selfLink": (
+                    f"/api/v1/namespaces/{self._namespace}"
+                    "/events/{pod_id}.15a870d7e2bb228b"
+                ),
+                "uid": "cb886f64-8f96-11e9-9251-42010a800038",
+            },
+            "reason": "TriggeredScaleUp",
+            "reportingComponent": "",
+            "reportingInstance": "",
+            "source": {"component": "cluster-autoscaler"},
+            "type": "Normal",
+        }
+
+        await self._request(method="POST", url=url, json=data)
 
 
 @pytest.fixture(scope="session")
@@ -332,8 +373,9 @@ async def kube_node_gpu(
 
     assert kube_config.node_label_gpu is not None
     labels = {kube_config.node_label_gpu: "gpumodel"}
+    taints = [NodeTaint(key=Resources.gpu_key, value="present")]
     await kube_client.create_node(
-        node_name, capacity=default_node_capacity, labels=labels
+        node_name, capacity=default_node_capacity, labels=labels, taints=taints
     )
 
     yield node_name

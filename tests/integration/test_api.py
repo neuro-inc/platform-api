@@ -377,6 +377,7 @@ class TestJobs:
         job_submit["is_preemptible"] = True
         job_submit["name"] = job_name
         job_submit["container"]["http"]["requires_auth"] = True
+        job_submit["schedule_timeout"] = 90
         async with client.post(
             url, headers=regular_user.headers, json=job_submit
         ) as resp:
@@ -394,11 +395,13 @@ class TestJobs:
             assert payload["internal_hostname"] == expected_internal_hostname
             assert payload["is_preemptible"]
             assert payload["description"] == "test job submitted by neuro job submit"
+            assert payload["schedule_timeout"] == 90
 
         retrieved_job = await jobs_client.get_job_by_id(job_id=job_id)
         assert retrieved_job["internal_hostname"] == expected_internal_hostname
         assert retrieved_job["name"] == job_name
         assert retrieved_job["container"]["http"]["requires_auth"]
+        assert retrieved_job["schedule_timeout"] == 90
 
         await jobs_client.long_polling_by_job_id(job_id=job_id, status="succeeded")
         await jobs_client.delete_job(job_id=job_id)

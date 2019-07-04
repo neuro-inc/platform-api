@@ -633,6 +633,7 @@ class TestJob:
             owner="testuser",
             name="test-job-name",
             is_preemptible=True,
+            schedule_timeout=15,
         )
         job.status = JobStatus.FAILED
         job.is_deleted = True
@@ -662,6 +663,7 @@ class TestJob:
                 },
             ],
             "is_preemptible": True,
+            "schedule_timeout": 15,
         }
 
     def test_from_primitive(

@@ -8,12 +8,14 @@ import ssl
 from base64 import b64encode
 from contextlib import suppress
 from dataclasses import dataclass, field
+from datetime import datetime
 from enum import Enum
 from pathlib import Path, PurePath
 from types import TracebackType
 from typing import (
     Any,
     AsyncIterator,
+    ClassVar,
     DefaultDict,
     Dict,
     Iterable,
@@ -27,6 +29,7 @@ from typing import (
 from urllib.parse import urlsplit
 
 import aiohttp
+import iso8601
 from aiohttp import ContentTypeError, WSMsgType
 from async_generator import asynccontextmanager
 from async_timeout import timeout
@@ -159,6 +162,8 @@ class Resources:
     gpu: Optional[int] = None
     shm: Optional[bool] = None
 
+    gpu_key: ClassVar[str] = "nvidia.com/gpu"
+
     @property
     def cpu_mcores(self) -> str:
         mcores = int(self.cpu * 1000)
@@ -173,7 +178,7 @@ class Resources:
             "limits": {"cpu": self.cpu_mcores, "memory": self.memory_mib}
         }
         if self.gpu:
-            payload["limits"]["nvidia.com/gpu"] = self.gpu
+            payload["limits"][self.gpu_key] = self.gpu
         return payload
 
     @classmethod
@@ -528,6 +533,8 @@ class PodDescriptor:
 
     node_name: Optional[str] = None
 
+    created_at: Optional[datetime] = None
+
     @classmethod
     def from_job_request(
         cls,
@@ -612,6 +619,14 @@ class PodDescriptor:
         # compatibility
         labels["job"] = self.name
 
+        tolerations = self.tolerations.copy()
+        if self.resources and self.resources.gpu:
+            tolerations.append(
+                Toleration(
+                    key=self.resources.gpu_key, operator="Exists", effect="NoSchedule"
+                )
+            )
+
         payload: Dict[str, Any] = {
             "kind": "Pod",
             "apiVersion": "v1",
@@ -625,7 +640,7 @@ class PodDescriptor:
                     secret.to_primitive() for secret in self.image_pull_secrets
                 ],
                 "tolerations": [
-                    toleration.to_primitive() for toleration in self.tolerations
+                    toleration.to_primitive() for toleration in tolerations
                 ],
             },
         }
@@ -693,6 +708,7 @@ class PodDescriptor:
             secrets = []
         return cls(
             name=metadata["name"],
+            created_at=iso8601.parse_date(metadata["creationTimestamp"]),
             image=container_payload["image"],
             status=status,
             image_pull_secrets=secrets,
@@ -759,6 +775,51 @@ class ContainerStatus:
         return self.is_waiting and self.reason in (None, "ContainerCreating")
 
 
+class PodConditionType(enum.Enum):
+    UNKNOWN = "Unknown"
+    POD_SCHEDULED = "PodScheduled"
+    READY = "Ready"
+    INITIALIZED = "Initialized"
+    CONTAINERS_READY = "ContainersReady"
+
+
+class PodCondition:
+    # https://kubernetes.io/docs/concepts/workloads/pods/pod-lifecycle/#pod-conditions
+
+    def __init__(self, payload: Dict[str, Any]) -> None:
+        self._payload = payload
+
+    @property
+    def transition_time(self) -> datetime:
+        return iso8601.parse_date(self._payload["lastTransitionTime"])
+
+    @property
+    def reason(self) -> str:
+        return self._payload.get("reason", "")
+
+    @property
+    def message(self) -> str:
+        return self._payload.get("message", "")
+
+    @property
+    def status(self) -> Optional[bool]:
+        val = self._payload["status"]
+        if val == "Unknown":
+            return None
+        elif val == "True":
+            return True
+        elif val == "False":
+            return False
+        raise ValueError(f"Invalid status {val!r}")
+
+    @property
+    def type(self) -> PodConditionType:
+        try:
+            return PodConditionType(self._payload["type"])
+        except (KeyError, ValueError):
+            return PodConditionType.UNKNOWN
+
+
 class KubernetesEvent:
     def __init__(self, payload: Dict[str, Any]) -> None:
         self._payload = payload or {}
@@ -770,6 +831,18 @@ class KubernetesEvent:
     @property
     def reason(self) -> Optional[str]:
         return self._payload.get("reason", None)
+
+    @property
+    def first_timestamp(self) -> datetime:
+        return iso8601.parse_date(self._payload["firstTimestamp"])
+
+    @property
+    def last_timestamp(self) -> datetime:
+        return iso8601.parse_date(self._payload["lastTimestamp"])
+
+    @property
+    def count(self) -> int:
+        return self._payload["count"]
 
 
 class PodStatus:
@@ -796,9 +869,12 @@ class PodStatus:
 
     @property
     def is_scheduled(self) -> bool:
-        # TODO (A Danshyn 11/16/18): we should consider using "conditions"
-        # type="PodScheduled" reason="unschedulable" instead.
-        return not self.is_phase_pending or self.is_container_status_available
+        if not self.is_phase_pending:
+            return True
+        for cond in self.conditions:
+            if cond.type == PodConditionType.POD_SCHEDULED:
+                return bool(cond.status)
+        return False
 
     @property
     def reason(self) -> Optional[str]:
@@ -827,12 +903,12 @@ class PodStatus:
         return self._container_status.is_creating
 
     @property
-    def is_container_status_available(self) -> bool:
-        return "containerStatuses" in self._payload
-
-    @property
     def is_node_lost(self) -> bool:
         return self.reason == "NodeLost"
+
+    @property
+    def conditions(self) -> List[PodCondition]:
+        return [PodCondition(val) for val in self._payload.get("conditions", [])]
 
     @classmethod
     def from_primitive(cls, payload: Dict[str, Any]) -> "PodStatus":
@@ -1155,14 +1231,12 @@ class KubeClient:
         result = await self._request(method="DELETE", url=url)
         self._check_status_payload(result)
 
-    async def create_pod(self, descriptor: PodDescriptor) -> PodStatus:
+    async def create_pod(self, descriptor: PodDescriptor) -> PodDescriptor:
         payload = await self._request(
             method="POST", url=self._pods_url, json=descriptor.to_primitive()
         )
         pod = PodDescriptor.from_primitive(payload)
-        if pod.status is None:
-            raise ValueError("Missing pod status")
-        return pod.status
+        return pod
 
     async def set_raw_pod_status(
         self, name: str, payload: Dict[str, Any]

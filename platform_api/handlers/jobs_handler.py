@@ -52,6 +52,7 @@ def create_job_request_validator(
             t.Key("name", optional=True): create_job_name_validator(),
             t.Key("description", optional=True): t.String,
             t.Key("is_preemptible", optional=True, default=False): t.Bool,
+            t.Key("schedule_timeout", optional=True): t.Float(gte=1, lt=30 * 24 * 3600),
         }
     )
 
@@ -78,6 +79,7 @@ def create_job_response_validator() -> t.Trafaret:
             t.Key("internal_hostname", optional=True): t.String,
             t.Key("name", optional=True): create_job_name_validator(max_length=None),
             t.Key("description", optional=True): t.String,
+            t.Key("schedule_timeout", optional=True): t.Float,
         }
     )
 
@@ -172,6 +174,8 @@ def convert_job_to_job_response(job: Job) -> Dict[str, Any]:
                 response_payload["http_url_named"] = http_url_named_sanitized
     if job.internal_hostname:
         response_payload["internal_hostname"] = job.internal_hostname
+    if job.schedule_timeout is not None:
+        response_payload["schedule_timeout"] = job.schedule_timeout
     if history.started_at:
         response_payload["history"]["started_at"] = history.started_at_str
     if history.is_finished:
@@ -254,9 +258,14 @@ class JobsHandler:
         name = request_payload.get("name")
         description = request_payload.get("description")
         is_preemptible = request_payload["is_preemptible"]
+        schedule_timeout = request_payload.get("schedule_timeout")
         job_request = JobRequest.create(container, description)
         job, _ = await self._jobs_service.create_job(
-            job_request, user=user, job_name=name, is_preemptible=is_preemptible
+            job_request,
+            user=user,
+            job_name=name,
+            is_preemptible=is_preemptible,
+            schedule_timeout=schedule_timeout,
         )
         response_payload = convert_job_to_job_response(job)
         self._job_response_validator.check(response_payload)

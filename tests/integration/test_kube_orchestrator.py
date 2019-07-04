@@ -326,11 +326,82 @@ class TestKubeOrchestrator:
 
             status_item = await kube_orchestrator.get_job_status(job)
             assert status_item == JobStatusItem.create(
-                JobStatus.PENDING,
-                reason="Cluster doesn't have resources to fulfill request.",
+                JobStatus.PENDING, reason="Scheduling the job."
             )
         finally:
             await job.delete()
+
+    @pytest.mark.asyncio
+    async def test_job_no_memory(self, kube_orchestrator: KubeOrchestrator) -> None:
+        command = "true"
+        container = Container(
+            image="ubuntu",
+            command=command,
+            resources=ContainerResources(cpu=1, memory_mb=500_000),
+        )
+        job = MyJob(
+            orchestrator=kube_orchestrator,
+            job_request=JobRequest.create(container),
+            schedule_timeout=10,
+        )
+        await job.start()
+
+        status_item = await kube_orchestrator.get_job_status(job)
+        assert status_item.status == JobStatus.PENDING
+
+        t0 = time.time()
+        while not status_item.status.is_finished:
+            assert status_item.reason == "Scheduling the job."
+            t1 = time.time()
+            assert t1 - t0 < 30, (
+                f"Wait for job failure is timed out "
+                f"after {t1-t0} secs [{status_item}]"
+            )
+            status_item = await kube_orchestrator.get_job_status(job)
+
+        assert status_item == JobStatusItem.create(
+            JobStatus.FAILED, reason="Cannot scaleup the cluster to get more resources."
+        )
+
+    @pytest.mark.asyncio
+    async def test_job_no_memory_after_scaleup(
+        self, kube_orchestrator: KubeOrchestrator, kube_client: MyKubeClient
+    ) -> None:
+        command = "true"
+        container = Container(
+            image="ubuntu",
+            command=command,
+            resources=ContainerResources(cpu=1, memory_mb=500_000),
+        )
+        job = MyJob(
+            orchestrator=kube_orchestrator,
+            job_request=JobRequest.create(container),
+            schedule_timeout=10,
+        )
+        await job.start()
+        await kube_client.create_triggered_scaleup_event(job.id)
+
+        status_item = await kube_orchestrator.get_job_status(job)
+        assert status_item.status == JobStatus.PENDING
+
+        t0 = time.monotonic()
+        found_scaleup = False
+        while not status_item.status.is_finished:
+            t1 = time.monotonic()
+            if status_item.reason == "Scaling up the cluster to get more resources.":
+                found_scaleup = True
+            else:
+                assert status_item.reason == "Scheduling the job."
+            assert t1 - t0 < 30, (
+                f"Wait for job failure is timed out "
+                f"after {t1-t0} secs [{status_item}]"
+            )
+            status_item = await kube_orchestrator.get_job_status(job)
+
+        assert status_item == JobStatusItem.create(
+            JobStatus.FAILED, reason="Cannot scaleup the cluster to get more resources."
+        )
+        assert found_scaleup
 
     @pytest.mark.asyncio
     async def test_volumes(
@@ -688,9 +759,13 @@ class TestKubeOrchestrator:
         self, kube_orchestrator: KubeOrchestrator
     ) -> Iterator[Callable[[str], MyJob]]:
         def impl(server_hostname: str) -> MyJob:
+            cmd = (
+                "curl --fail --connect-timeout 5 --retry 20 --retry-connrefuse "
+                f"http://{server_hostname}/"
+            )
             client_cont = Container(
-                image="ubuntu",
-                command=f"curl --silent --fail http://{server_hostname}/",
+                image="python",
+                command=cmd,
                 resources=ContainerResources(cpu=0.1, memory_mb=128),
             )
             return MyJob(
@@ -721,64 +796,7 @@ class TestKubeOrchestrator:
         client_job = create_client_job(server_hostname)
         await delete_job_later(client_job)
         await client_job.start()
-        assert self.wait_for_success(job=client_job)
-
-    @pytest.mark.asyncio
-    async def test_job_check_http_hostname_no_job_name(
-        self,
-        kube_config: KubeConfig,
-        create_server_job: Callable[..., MyJob],
-        create_client_job: Callable[[str], MyJob],
-        kube_ingress_ip: str,
-        delete_job_later: Callable[[Job], Awaitable[None]],
-    ) -> None:
-        server_job = create_server_job()
-        await delete_job_later(server_job)
-        await server_job.start()
-
-        http_host = server_job.http_host
-        await self._wait_for_job_service(
-            kube_ingress_ip, host=http_host, job_id=server_job.id
-        )
-        client_job = create_client_job(http_host)
-        await delete_job_later(client_job)
-        await client_job.start()
-        assert self.wait_for_success(job=client_job)
-
-        assert server_job.http_host_named is None
-
-    @pytest.mark.asyncio
-    async def test_job_check_http_hostname_with_job_name(
-        self,
-        kube_config: KubeConfig,
-        create_server_job: Callable[..., MyJob],
-        create_client_job: Callable[[str], MyJob],
-        kube_ingress_ip: str,
-        delete_job_later: Callable[[Job], Awaitable[None]],
-    ) -> None:
-        server_job_name = f"server-job-{random_str()}"
-        server_job = create_server_job(job_name=server_job_name)
-        await delete_job_later(server_job)
-        await server_job.start()
-
-        http_host = server_job.http_host
-        await self._wait_for_job_service(
-            kube_ingress_ip, host=http_host, job_id=server_job.id
-        )
-        client_job = create_client_job(http_host)
-        await delete_job_later(client_job)
-        await client_job.start()
-        assert self.wait_for_success(job=client_job)
-
-        assert server_job.http_host_named
-        http_host = server_job.http_host_named
-        await self._wait_for_job_service(
-            kube_ingress_ip, host=http_host, job_id=server_job.id
-        )
-        client_job = create_client_job(http_host)
-        await delete_job_later(client_job)
-        await client_job.start()
-        assert self.wait_for_success(job=client_job)
+        await self.wait_for_success(job=client_job)
 
     @pytest.mark.asyncio
     async def test_job_check_dns_hostname_undeclared_port(
@@ -800,9 +818,13 @@ class TestKubeOrchestrator:
             )
 
         def create_client_job(server_hostname: str) -> MyJob:
+            cmd = (
+                "curl --fail --connect-timeout 5 --retry 20 --retry-connrefuse "
+                f"http://{server_hostname}:12345/"
+            )
             client_cont = Container(
-                image="ubuntu",
-                command=f"curl --silent --fail http://{server_hostname}:12345/",
+                image="python",
+                command=cmd,
                 resources=ContainerResources(cpu=0.1, memory_mb=128),
             )
             return MyJob(
@@ -819,7 +841,7 @@ class TestKubeOrchestrator:
         client_job = create_client_job(server_job.internal_hostname)
         await delete_job_later(client_job)
         await client_job.start()
-        assert self.wait_for_success(client_job)
+        await self.wait_for_success(client_job)
 
     @pytest.mark.asyncio
     async def test_job_pod_labels_and_network_policy(
@@ -1299,7 +1321,10 @@ async def mock_kubernetes_server() -> AsyncIterator[ApiConfig]:
     async def _get_pod(request: web.Request) -> web.Response:
         payload: Dict[str, Any] = {
             "kind": "Pod",
-            "metadata": {"name": "testname"},
+            "metadata": {
+                "name": "testname",
+                "creationTimestamp": "2019-06-20T11:03:32Z",
+            },
             "spec": {
                 "containers": [{"name": "testname", "image": "testimage"}],
                 "nodeName": "whatever",
