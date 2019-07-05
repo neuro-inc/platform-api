@@ -1,4 +1,3 @@
-import enum
 import logging
 import time
 from dataclasses import dataclass, field
@@ -43,7 +42,8 @@ DEFAULT_QUOTA_NO_RESTRICTIONS: AggregatedRunTime = AggregatedRunTime.from_quota(
 DEFAULT_ORPHANED_JOB_OWNER = "compute"
 
 
-class JobStatusReason(str, enum.Enum):
+class JobStatusReason:
+    # TODO (A.Yushkovskiy) Convert to enum to use as a type of `JobStatusItem.reason`
     # TODO (A.Yushkovskiy) Refactor job status reasons taxonomy (issue #796)
     # k8s reasons:
     # - 'waiting' reasons:
