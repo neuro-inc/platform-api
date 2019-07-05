@@ -66,9 +66,9 @@ def create_job_response_validator() -> t.Trafaret:
             # on the dev and staging envs. we may want to change this once the
             # prod env is there.
             "owner": t.String(allow_blank=True),
+            "cluster": t.String(allow_blank=False),
             # `status` is left for backward compat. the python client/cli still
             # relies on it.
-            "cluster": t.String(allow_blank=False),
             "status": create_job_status_validator(),
             t.Key("http_url", optional=True): t.String,
             t.Key("http_url_named", optional=True): t.String,
