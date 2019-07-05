@@ -1,5 +1,6 @@
 from dataclasses import replace
 from typing import AsyncIterator, Callable
+from unittest.mock import MagicMock
 
 import pytest
 from notifications_client import Client as NotificationsClient, JobTransition
@@ -481,6 +482,15 @@ class TestJobsService:
 
         with pytest.raises(NonGpuQuotaExceededError, match="non-GPU quota exceeded"):
             await jobs_service.create_job(request, user)
+
+    def test_get_cluster_name_non_empty(self, jobs_service: JobsService) -> None:
+        mocked_job = MagicMock(cluster_name="my-cluster")
+        assert jobs_service.get_cluster_name(mocked_job) == "my-cluster"
+
+    def test_get_cluster_name_empty(self, jobs_service: JobsService) -> None:
+        mocked_job = MagicMock(cluster_name="")
+        default_cluster_name = jobs_service._jobs_config.default_cluster_name
+        assert jobs_service.get_cluster_name(mocked_job) == default_cluster_name
 
 
 class TestJobsServiceCluster:

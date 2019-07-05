@@ -66,8 +66,11 @@ class JobsService:
 
         self._max_deletion_attempts = 3
 
-    def _get_cluster_name(self, name: str) -> str:
-        return name or self._jobs_config.default_cluster_name
+    def get_cluster_name(self, job: Job) -> str:
+        return self._get_cluster_name(job.cluster_name)
+
+    def _get_cluster_name(self, cluster_name: str) -> str:
+        return cluster_name or self._jobs_config.default_cluster_name
 
     @asynccontextmanager
     async def _get_cluster(self, name: str) -> AsyncIterator[Cluster]:
