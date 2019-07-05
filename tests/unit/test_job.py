@@ -16,7 +16,6 @@ from platform_api.orchestrator.job import (
     JobRecord,
     JobStatusHistory,
     JobStatusItem,
-    JobStatusReason,
 )
 from platform_api.orchestrator.job_request import (
     Container,
@@ -1046,12 +1045,8 @@ class TestJobStatusItem:
         assert old_item == new_item
 
     def test_not_eq(self) -> None:
-        old_item = JobStatusItem.create(
-            JobStatus.FAILED, reason=JobStatusReason.ERR_IMAGE_PULL
-        )
-        new_item = JobStatusItem.create(
-            JobStatus.FAILED, reason=JobStatusReason.OOM_KILLED
-        )
+        old_item = JobStatusItem.create(JobStatus.RUNNING)
+        new_item = JobStatusItem.create(JobStatus.RUNNING, reason="Whatever")
         assert old_item != new_item
 
 

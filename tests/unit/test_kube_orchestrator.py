@@ -532,11 +532,12 @@ class TestJobStatusItemFactory:
                 {"state": {"waiting": {"reason": "SomeWeirdReason"}}}
             ],
         }
+
         pod_status = PodStatus.from_primitive(payload)
-        with pytest.raises(
-            ValueError, match="'SomeWeirdReason' is not a valid JobStatusReason"
-        ):
-            JobStatusItemFactory(pod_status).create()
+        job_status_item = JobStatusItemFactory(pod_status).create()
+        assert job_status_item == JobStatusItem.create(
+            JobStatus.PENDING, reason="SomeWeirdReason"
+        )
 
     def test_status_failure(self) -> None:
         payload = {

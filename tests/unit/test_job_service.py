@@ -363,7 +363,7 @@ class TestJobsService:
         jobs_service: JobsService,
         mock_orchestrator: MockOrchestrator,
         job_request_factory: Callable[[], JobRequest],
-        reason: JobStatusReason,
+        reason: str,
     ) -> None:
         user = User(name="testuser", token="")
         original_job, _ = await jobs_service.create_job(
