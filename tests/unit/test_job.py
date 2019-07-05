@@ -988,7 +988,7 @@ class TestJobStatusItem:
         payload = {
             "status": "succeeded",
             "transition_time": transition_time.isoformat(),
-            "reason": "Completed",
+            "reason": "test reason",
             "description": "test description",
             "exit_code": 0,
         }
@@ -996,7 +996,7 @@ class TestJobStatusItem:
         assert item.status == JobStatus.SUCCEEDED
         assert item.is_finished
         assert item.transition_time == transition_time
-        assert item.reason == JobStatusReason.COMPLETED
+        assert item.reason == "test reason"
         assert item.description == "test description"
         assert item.exit_code == 0
 
@@ -1005,14 +1005,14 @@ class TestJobStatusItem:
         payload = {
             "status": "succeeded",
             "transition_time": transition_time.isoformat(),
-            "reason": "Completed",
+            "reason": "test reason",
             "description": "test description",
         }
         item = JobStatusItem.from_primitive(payload)
         assert item.status == JobStatus.SUCCEEDED
         assert item.is_finished
         assert item.transition_time == transition_time
-        assert item.reason == JobStatusReason.COMPLETED
+        assert item.reason == "test reason"
         assert item.description == "test description"
         assert item.exit_code is None
 

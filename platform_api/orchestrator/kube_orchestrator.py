@@ -64,11 +64,9 @@ class JobStatusItemFactory:
         else:
             return JobStatus.PENDING
 
-    def _parse_reason(self) -> Optional[JobStatusReason]:
+    def _parse_reason(self) -> Optional[str]:
         if self._status in (JobStatus.PENDING, JobStatus.FAILED):
-            k8s_reason = self._container_status.reason
-            if k8s_reason is not None:
-                return JobStatusReason(k8s_reason)
+            return self._container_status.reason
         return None
 
     def _compose_description(self) -> Optional[str]:

@@ -70,6 +70,7 @@ class JobStatusReason(str, enum.Enum):
 class JobStatusItem:
     status: JobStatus
     transition_time: datetime = field(compare=False)
+    # TODO (A.Yushkovskiy) it's better to have `reason: Optional[JobStatusReason]`
     reason: Optional[str] = None
     description: Optional[str] = None
     exit_code: Optional[int] = None
@@ -96,22 +97,16 @@ class JobStatusItem:
         **kwargs: Any,
     ) -> "JobStatusItem":
         transition_time = transition_time or current_datetime_factory()
-        if "reason" in kwargs:
-            reason = kwargs["reason"]
-            if reason is not None and not isinstance(reason, JobStatusReason):
-                raise Exception(f"{reason} of type {type(reason)}")
         return cls(status=status, transition_time=transition_time, **kwargs)
 
     @classmethod
     def from_primitive(cls, payload: Dict[str, Any]) -> "JobStatusItem":
         status = JobStatus(payload["status"])
         transition_time = iso8601.parse_date(payload["transition_time"])
-        reason_str = payload.get("reason")
-        reason = JobStatusReason(reason_str) if reason_str else None
         return cls(
             status=status,
             transition_time=transition_time,
-            reason=reason,
+            reason=payload.get("reason"),
             description=payload.get("description"),
             exit_code=payload.get("exit_code"),
         )
