@@ -513,7 +513,7 @@ class TestJobStatusItemFactory:
         pod_status = PodStatus.from_primitive(payload)
         job_status_item = JobStatusItemFactory(pod_status).create()
         assert job_status_item == JobStatusItem.create(
-            JobStatus.PENDING, reason=JobStatusReason.K8S_CONTAINER_CREATING
+            JobStatus.PENDING, reason=JobStatusReason.CONTAINER_CREATING
         )
 
     def test_status_pending_running_no_reason(self) -> None:
@@ -557,7 +557,7 @@ class TestJobStatusItemFactory:
         job_status_item = JobStatusItemFactory(pod_status).create()
         assert job_status_item == JobStatusItem.create(
             JobStatus.FAILED,
-            reason=JobStatusReason.K8S_ERROR,
+            reason=JobStatusReason.ERROR,
             description="Failed!",
             exit_code=123,
         )
@@ -574,7 +574,7 @@ class TestJobStatusItemFactory:
         job_status_item = JobStatusItemFactory(pod_status).create()
         assert job_status_item == JobStatusItem.create(
             JobStatus.FAILED,
-            reason=JobStatusReason.K8S_ERROR,
+            reason=JobStatusReason.ERROR,
             description=None,
             exit_code=1,
         )

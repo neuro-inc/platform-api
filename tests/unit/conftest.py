@@ -49,7 +49,7 @@ class MockOrchestrator(Orchestrator):
         self._config = config
         self._mock_status_to_return = JobStatus.PENDING
         self._mock_reason_to_return: Optional[JobStatusReason]
-        self._mock_reason_to_return = JobStatusReason.K8S_CONTAINER_CREATING
+        self._mock_reason_to_return = JobStatusReason.CONTAINER_CREATING
         self._mock_exit_code_to_return: Optional[int] = None
         self.raise_on_get_job_status = False
         self.raise_on_delete = False

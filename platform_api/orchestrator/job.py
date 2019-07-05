@@ -44,26 +44,26 @@ DEFAULT_ORPHANED_JOB_OWNER = "compute"
 
 
 class JobStatusReason(str, enum.Enum):
-    # TODO (A.Yushkovskiy) Re-work these job status reasons to be narrow and concise
+    # TODO (A.Yushkovskiy) Refactor job status reasons taxonomy (issue #796)
     # k8s reasons:
     # - 'waiting' reasons:
-    K8S_POD_INITIALIZING = "PodInitializing"
-    K8S_CONTAINER_CREATING = "ContainerCreating"
-    K8S_ERR_IMAGE_PULL = "ErrImagePull"
-    K8S_IMAGE_PULL_BACK_OFF = "ImagePullBackOff"
-    K8S_INVALID_IMAGE_NAME = "InvalidImageName"
+    POD_INITIALIZING = "PodInitializing"
+    CONTAINER_CREATING = "ContainerCreating"
+    ERR_IMAGE_PULL = "ErrImagePull"
+    IMAGE_PULL_BACK_OFF = "ImagePullBackOff"
+    INVALID_IMAGE_NAME = "InvalidImageName"
     # - 'terminated' reasons:
-    K8S_OOM_KILLED = "OOMKilled"
-    K8S_COMPLETED = "Completed"
-    K8S_ERROR = "Error"
-    K8S_CONTAINER_CANNOT_RUN = "ContainerCannotRun"
+    OOM_KILLED = "OOMKilled"
+    COMPLETED = "Completed"
+    ERROR = "Error"
+    CONTAINER_CANNOT_RUN = "ContainerCannotRun"
     # neuromation custom reasons:
-    NM_COLLECTED = "Collected"
-    NM_SCHEDULING_THE_JOB = "Scheduling the job."
-    NM_JOB_NOT_FOUND = "Missing"  # "The job could not be scheduled or was preempted."
-    NM_CLUSTER_NOT_FOUND = "Missing"  # TODO: should be "ClusterNotFound"
-    NM_CLUSTER_SCALING_UP = "Scaling up the cluster to get more resources."
-    NM_CLUSTER_SCALING_UP_FAILED = "Cannot scaleup the cluster to get more resources."
+    JOB_COLLECTED = "JobCollected"
+    JOB_SCHEDULING = "JobScheduling"
+    JOB_NOT_FOUND = "JobMissing"  # "The job could not be scheduled or was preempted."
+    CLUSTER_NOT_FOUND = "ClusterNotFound"
+    CLUSTER_SCALING_UP = "ClusterScalingUp"
+    CLUSTER_SCALE_UP_FAILED = "ClusterScaleUpFailed"
 
 
 @dataclass(frozen=True)
@@ -73,10 +73,6 @@ class JobStatusItem:
     reason: Optional[JobStatusReason] = None
     description: Optional[str] = None
     exit_code: Optional[int] = None
-
-    def __post_init__(self) -> None:
-        # TODO (A.Yushkovskiy) TEMPORARY CHECK FOR DEBUGGING PURPOSES ONLY (see PR#786)
-        assert isinstance(self.reason, JobStatusReason) or self.reason is None
 
     @property
     def is_pending(self) -> bool:
@@ -335,7 +331,7 @@ class JobRecord:
                 self._is_time_for_deletion(
                     delay=delay, current_datetime_factory=current_datetime_factory
                 )
-                or self.status_history.current.reason == JobStatusReason.NM_COLLECTED
+                or self.status_history.current.reason == JobStatusReason.JOB_COLLECTED
             )
         )
 
@@ -536,17 +532,16 @@ class Job:
         return self._record.schedule_timeout
 
     @property
-    def _collection_reason(self) -> Optional[str]:
+    def _collection_reason(self) -> Optional[JobStatusReason]:
         status_item = self._status_history.current
+        reason = status_item.reason
         if status_item.status == JobStatus.PENDING and status_item.reason:
-            # collect jobs stuck in ErrImagePull loop
-            if status_item.reason in (
-                JobStatusReason.K8S_ERR_IMAGE_PULL,
-                JobStatusReason.K8S_IMAGE_PULL_BACK_OFF,
+            if reason in (
+                JobStatusReason.ERR_IMAGE_PULL,
+                JobStatusReason.IMAGE_PULL_BACK_OFF,
+                JobStatusReason.INVALID_IMAGE_NAME,
             ):
-                return "Image can not be pulled"
-            if status_item.reason == JobStatusReason.K8S_INVALID_IMAGE_NAME:
-                return "Invalid image name"
+                return reason
         return None
 
     def collect_if_needed(self) -> None:
@@ -555,7 +550,7 @@ class Job:
             logger.info("Collecting job %s. Reason: %s", self.id, reason)
             status_item = JobStatusItem.create(
                 JobStatus.FAILED,
-                reason=JobStatusReason.NM_COLLECTED,
+                reason=JobStatusReason.JOB_COLLECTED,
                 description=reason,
             )
             self.status_history.current = status_item

@@ -347,9 +347,7 @@ class KubeOrchestrator(Orchestrator):
         if (now - pod.created_at).seconds < schedule_timeout:
             # Wait for scheduling for 3 minute at least by default
             if job_status.reason is None:
-                job_status = replace(
-                    job_status, reason=JobStatusReason.NM_SCHEDULING_THE_JOB
-                )
+                job_status = replace(job_status, reason=JobStatusReason.JOB_SCHEDULING)
             return job_status
 
         logger.info(f"Found pod that requested too much resources. Job '{job.id}'")
@@ -367,13 +365,13 @@ class KubeOrchestrator(Orchestrator):
                 return JobStatusItem.create(
                     JobStatus.PENDING,
                     transition_time=now,
-                    reason=JobStatusReason.NM_CLUSTER_SCALING_UP,
+                    reason=JobStatusReason.CLUSTER_SCALING_UP,
                     description=job_status.description,
                 )
         return JobStatusItem.create(
             JobStatus.FAILED,
             transition_time=now,
-            reason=JobStatusReason.NM_CLUSTER_SCALING_UP_FAILED,
+            reason=JobStatusReason.CLUSTER_SCALE_UP_FAILED,
             description=job_status.description,
         )
 

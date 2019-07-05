@@ -996,7 +996,7 @@ class TestJobStatusItem:
         assert item.status == JobStatus.SUCCEEDED
         assert item.is_finished
         assert item.transition_time == transition_time
-        assert item.reason == JobStatusReason.K8S_COMPLETED
+        assert item.reason == JobStatusReason.COMPLETED
         assert item.description == "test description"
         assert item.exit_code == 0
 
@@ -1012,7 +1012,7 @@ class TestJobStatusItem:
         assert item.status == JobStatus.SUCCEEDED
         assert item.is_finished
         assert item.transition_time == transition_time
-        assert item.reason == JobStatusReason.K8S_COMPLETED
+        assert item.reason == JobStatusReason.COMPLETED
         assert item.description == "test description"
         assert item.exit_code is None
 
@@ -1047,10 +1047,10 @@ class TestJobStatusItem:
 
     def test_not_eq(self) -> None:
         old_item = JobStatusItem.create(
-            JobStatus.FAILED, reason=JobStatusReason.K8S_ERR_IMAGE_PULL
+            JobStatus.FAILED, reason=JobStatusReason.ERR_IMAGE_PULL
         )
         new_item = JobStatusItem.create(
-            JobStatus.FAILED, reason=JobStatusReason.K8S_OOM_KILLED
+            JobStatus.FAILED, reason=JobStatusReason.OOM_KILLED
         )
         assert old_item != new_item
 
