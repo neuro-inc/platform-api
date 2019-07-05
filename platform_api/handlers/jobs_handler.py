@@ -270,7 +270,7 @@ class JobsHandler:
             is_preemptible=is_preemptible,
             schedule_timeout=schedule_timeout,
         )
-        cluster_name = cluster_config.name
+        cluster_name = self._jobs_service.get_cluster_name(job)
         response_payload = convert_job_to_job_response(job, cluster_name)
         self._job_response_validator.check(response_payload)
         return aiohttp.web.json_response(
@@ -286,7 +286,7 @@ class JobsHandler:
         logger.info("Checking whether %r has %r", user, permission)
         await check_permission(request, permission.action, [permission])
 
-        cluster_name = self._jobs_service.get_cluster_name(job.cluster_name)
+        cluster_name = self._jobs_service.get_cluster_name(job)
         response_payload = convert_job_to_job_response(job, cluster_name)
         self._job_response_validator.check(response_payload)
         return aiohttp.web.json_response(
@@ -338,8 +338,7 @@ class JobsHandler:
         response_payload = {
             "jobs": [
                 convert_job_to_job_response(
-                    job,
-                    cluster_name=self._jobs_service.get_cluster_name(job.cluster_name),
+                    job, cluster_name=self._jobs_service.get_cluster_name(job)
                 )
                 for job in jobs
             ]
