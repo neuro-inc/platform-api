@@ -388,7 +388,6 @@ class TestKubeOrchestrator:
         found_scaleup = False
         while not status_item.status.is_finished:
             t1 = time.monotonic()
-            print(repr(status_item.reason))
             if status_item.reason == JobStatusReason.CLUSTER_SCALING_UP:
                 found_scaleup = True
             else:

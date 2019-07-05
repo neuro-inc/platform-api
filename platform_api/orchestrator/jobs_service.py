@@ -373,14 +373,12 @@ class JobsService:
             initial_status = record.status_history.current
             yield record
         if initial_status != record.status_history.current:
-            reason = record.status_history.current.reason
-            reason_str = reason.value if reason is not None else None
             await self._notifications_client.notify(
                 JobTransition(
                     job_id=record.id,
                     status=record.status_history.current.status,
                     transition_time=record.status_history.current.transition_time,
-                    reason=reason_str,
+                    reason=record.status_history.current.reason,
                     description=record.status_history.current.description,
                     exit_code=record.status_history.current.exit_code,
                     prev_status=initial_status.status,

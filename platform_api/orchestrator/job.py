@@ -70,7 +70,7 @@ class JobStatusReason(str, enum.Enum):
 class JobStatusItem:
     status: JobStatus
     transition_time: datetime = field(compare=False)
-    reason: Optional[JobStatusReason] = None
+    reason: Optional[str] = None
     description: Optional[str] = None
     exit_code: Optional[int] = None
 
@@ -532,7 +532,7 @@ class Job:
         return self._record.schedule_timeout
 
     @property
-    def _collection_reason(self) -> Optional[JobStatusReason]:
+    def _collection_reason(self) -> Optional[str]:
         status_item = self._status_history.current
         reason = status_item.reason
         if status_item.status == JobStatus.PENDING and status_item.reason:
