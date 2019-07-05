@@ -66,7 +66,7 @@ def create_job_response_validator() -> t.Trafaret:
             # on the dev and staging envs. we may want to change this once the
             # prod env is there.
             "owner": t.String(allow_blank=True),
-            "cluster": t.String(allow_blank=False),
+            "cluster_name": t.String(allow_blank=False),
             # `status` is left for backward compat. the python client/cli still
             # relies on it.
             "status": create_job_status_validator(),
@@ -148,7 +148,7 @@ def convert_job_to_job_response(job: Job, cluster_name: str) -> Dict[str, Any]:
     response_payload: Dict[str, Any] = {
         "id": job.id,
         "owner": job.owner,
-        "cluster": cluster_name,
+        "cluster_name": cluster_name,
         "status": current_status.status,
         "history": {
             "status": current_status.status,

@@ -663,7 +663,7 @@ async def test_job_to_job_response(mock_orchestrator: MockOrchestrator) -> None:
     assert response == {
         "id": job.id,
         "owner": "compute",
-        "cluster": "my-cluster",
+        "cluster_name": "my-cluster",
         "status": "pending",
         "history": {
             "status": "pending",
@@ -708,7 +708,7 @@ async def test_job_to_job_response_with_job_name_and_http_exposed(
     assert response == {
         "id": job.id,
         "owner": owner_name,
-        "cluster": "my-cluster",
+        "cluster_name": "my-cluster",
         "name": job_name,
         "http_url": f"http://{job.id}.jobs",
         "http_url_named": f"http://{job_name}--{owner_name}.jobs",
@@ -755,7 +755,7 @@ async def test_job_to_job_response_with_job_name_and_http_exposed_too_long_name(
     assert response == {
         "id": job.id,
         "owner": owner_name,
-        "cluster": "my-cluster",
+        "cluster_name": "my-cluster",
         "name": job_name,
         "http_url": f"http://{job.id}.jobs",
         # NOTE: field `http_url_named` is cut off when it is invalid

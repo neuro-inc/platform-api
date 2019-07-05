@@ -1513,7 +1513,7 @@ class TestJobs:
             assert response_payload == {
                 "id": mock.ANY,
                 "owner": regular_user.name,
-                "cluster": "default",
+                "cluster_name": "default",
                 "internal_hostname": f"{job_id}.platformapi-tests",
                 "status": "pending",
                 "history": {
@@ -1547,7 +1547,7 @@ class TestJobs:
         assert response_payload == {
             "id": job_id,
             "owner": regular_user.name,
-            "cluster": "default",
+            "cluster_name": "default",
             "internal_hostname": f"{job_id}.platformapi-tests",
             "status": "succeeded",
             "history": {
@@ -1621,7 +1621,7 @@ class TestJobs:
         assert response_payload == {
             "id": job_id,
             "owner": regular_user.name,
-            "cluster": "default",
+            "cluster_name": "default",
             "status": "failed",
             "internal_hostname": f"{job_id}.platformapi-tests",
             "history": {
@@ -1719,7 +1719,7 @@ class TestJobs:
             assert response_payload == {
                 "id": mock.ANY,
                 "owner": regular_user.name,
-                "cluster": "default",
+                "cluster_name": "default",
                 "internal_hostname": f"{job_id}.platformapi-tests",
                 "status": "pending",
                 "history": {

@@ -208,7 +208,7 @@ class TestJobResponseValidator:
         response = {
             "id": "test-job-id",
             "owner": "tests",
-            "cluster": "cluster-name",
+            "cluster_name": "cluster-name",
             "status": "pending",
             "name": "test-job-name",
             "description": "test-job",
@@ -235,7 +235,7 @@ class TestJobResponseValidator:
         response = {
             "id": "test-job-id",
             "owner": "tests",
-            "cluster": "cluster-name",
+            "cluster_name": "cluster-name",
             "status": "pending",
             "name": "test-job-name",
             "description": "test-job",
@@ -262,7 +262,7 @@ class TestJobResponseValidator:
         response = {
             "id": "test-job-id",
             "owner": "tests",
-            "cluster": "cluster-name",
+            "cluster_name": "cluster-name",
             "status": "pending",
             "history": {
                 "status": "pending",
