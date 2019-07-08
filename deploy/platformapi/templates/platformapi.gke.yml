@@ -163,6 +163,13 @@ spec:
         backend:
           serviceName: platformapi
           servicePort: 8080
+  - host: {{ printf "%s" (pluck .Values.global.env .Values.INGRESS_PLATFORM_MONITORING_URI | first | default .Values.INGRESS_PLATFORM_MONITORING_URI._default) }}
+    http:
+      paths:
+      - path: /api/v1/jobs
+        backend:
+          serviceName: platformmonitoringapi
+          servicePort: 8080
 {{- if eq .Values.global.env "staging" }}
   - host: {{ printf "%s" (pluck .Values.global.env .Values.INGRESS_MAIN_SITE_HOST | first | default .Values.INGRESS_MAIN_SITE_HOST._default) }}
     http:
