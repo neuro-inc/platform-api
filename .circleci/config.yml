@@ -151,7 +151,7 @@ workflows:
 
   main:
     jobs:
-      - test:
+      - gke_deploy:
           context: org-global
           filters:
             branches:
@@ -169,6 +169,8 @@ workflows:
                 - master
       - gke_deploy:
           context: org-dev
+          requires:
+            - test
           filters:
             branches:
               only:
