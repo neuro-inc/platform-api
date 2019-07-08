@@ -169,8 +169,6 @@ workflows:
                 - master
       - gke_deploy:
           context: org-dev
-          requires:
-            - test
           filters:
             branches:
               only:
