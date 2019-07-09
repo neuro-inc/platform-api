@@ -545,9 +545,7 @@ class Job:
         if reason:
             logger.info("Collecting job %s. Reason: %s", self.id, reason)
             status_item = JobStatusItem.create(
-                JobStatus.FAILED,
-                reason=JobStatusReason.COLLECTED,
-                description=reason,
+                JobStatus.FAILED, reason=JobStatusReason.COLLECTED, description=reason
             )
             self.status_history.current = status_item
 
