@@ -351,7 +351,7 @@ class TestJobsService:
 
     @pytest.mark.asyncio
     @pytest.mark.parametrize(
-        "reason, description",
+        "reason,description",
         [
             (JobStatusReason.ERR_IMAGE_PULL, "Image can not be pulled"),
             (JobStatusReason.IMAGE_PULL_BACK_OFF, "Image can not be pulled"),
