@@ -151,7 +151,7 @@ workflows:
 
   main:
     jobs:
-      - gke_deploy:
+      - test:
           context: org-global
           filters:
             branches:
