@@ -60,7 +60,7 @@ INGRESS_PLATFORM_MONITORING_DOMAIN_NAME:
   prod: monitoring-neu.ro
 INGRESS_MAIN_SITE_HOST:
   _default: neu.ro
-  dev:;
+  dev:
   staging: neu.ro
   prod:
 INGRESS_FALLBACK_HOST:
