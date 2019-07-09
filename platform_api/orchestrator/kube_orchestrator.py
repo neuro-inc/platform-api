@@ -364,13 +364,13 @@ class KubeOrchestrator(Orchestrator):
                     JobStatus.PENDING,
                     transition_time=now,
                     reason=JobStatusReason.CLUSTER_SCALING_UP,
-                    description=job_status.description,
+                    description="Scaling up the cluster to get more resources",
                 )
         return JobStatusItem.create(
             JobStatus.FAILED,
             transition_time=now,
             reason=JobStatusReason.CLUSTER_SCALE_UP_FAILED,
-            description=job_status.description,
+            description="Failed to scale up the cluster to get more resources",
         )
 
     async def _check_preemptible_job_pod(self, job: Job) -> PodDescriptor:
