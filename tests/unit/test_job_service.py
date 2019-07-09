@@ -345,7 +345,7 @@ class TestJobsService:
         assert job.is_deleted
         assert job.status_history.current == JobStatusItem.create(
             JobStatus.FAILED,
-            reason=JobStatusReason.JOB_NOT_FOUND,
+            reason=JobStatusReason.NOT_FOUND,
             description="The job could not be scheduled or was preempted.",
         )
 
@@ -381,7 +381,7 @@ class TestJobsService:
         assert job.finished_at
         assert job.is_deleted
         status_item = job.status_history.last
-        assert status_item.reason == JobStatusReason.JOB_COLLECTED
+        assert status_item.reason == JobStatusReason.COLLECTED
         assert status_item.description == description
 
     @pytest.mark.asyncio
@@ -781,8 +781,8 @@ class TestJobServiceNotification:
                 job_id=job.id,
                 status=JobStatus.FAILED,
                 transition_time=job.status_history.current.transition_time,
-                reason=JobStatusReason.JOB_COLLECTED,
-                description=JobStatusReason.ERR_IMAGE_PULL,
+                reason=JobStatusReason.COLLECTED,
+                description="Image can not be pulled",
                 exit_code=None,
                 prev_status=JobStatus.PENDING,
             )

@@ -326,7 +326,7 @@ class TestKubeOrchestrator:
 
             status_item = await kube_orchestrator.get_job_status(job)
             assert status_item == JobStatusItem.create(
-                JobStatus.PENDING, reason=JobStatusReason.JOB_SCHEDULING
+                JobStatus.PENDING, reason=JobStatusReason.SCHEDULING
             )
         finally:
             await job.delete()
@@ -351,7 +351,7 @@ class TestKubeOrchestrator:
 
         t0 = time.time()
         while not status_item.status.is_finished:
-            assert status_item.reason == JobStatusReason.JOB_SCHEDULING
+            assert status_item.reason == JobStatusReason.SCHEDULING
             t1 = time.time()
             assert t1 - t0 < 30, (
                 f"Wait for job failure is timed out "
@@ -391,7 +391,7 @@ class TestKubeOrchestrator:
             if status_item.reason == JobStatusReason.CLUSTER_SCALING_UP:
                 found_scaleup = True
             else:
-                assert status_item.reason == JobStatusReason.JOB_SCHEDULING
+                assert status_item.reason == JobStatusReason.SCHEDULING
             assert t1 - t0 < 30, (
                 f"Wait for job failure is timed out "
                 f"after {t1-t0} secs [{status_item}]"

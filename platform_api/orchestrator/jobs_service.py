@@ -140,7 +140,7 @@ class JobsService:
             logger.warning("Failed to get job %s status. Reason: %s", job.id, exc)
             status_item = JobStatusItem.create(
                 JobStatus.FAILED,
-                reason=JobStatusReason.JOB_NOT_FOUND,
+                reason=JobStatusReason.NOT_FOUND,
                 description="The job could not be scheduled or was preempted.",
             )
             job.is_deleted = True

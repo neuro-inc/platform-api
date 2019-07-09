@@ -58,9 +58,9 @@ class JobStatusReason:
     ERROR = "Error"
     CONTAINER_CANNOT_RUN = "ContainerCannotRun"
     # neuromation custom reasons:
-    JOB_COLLECTED = "JobCollected"
-    JOB_SCHEDULING = "JobScheduling"
-    JOB_NOT_FOUND = "JobMissing"  # "The job could not be scheduled or was preempted."
+    COLLECTED = "Collected"
+    SCHEDULING = "Scheduling"
+    NOT_FOUND = "NotFound"  # "The job could not be scheduled or was preempted."
     CLUSTER_NOT_FOUND = "ClusterNotFound"
     CLUSTER_SCALING_UP = "ClusterScalingUp"
     CLUSTER_SCALE_UP_FAILED = "ClusterScaleUpFailed"
@@ -326,7 +326,7 @@ class JobRecord:
                 self._is_time_for_deletion(
                     delay=delay, current_datetime_factory=current_datetime_factory
                 )
-                or self.status_history.current.reason == JobStatusReason.JOB_COLLECTED
+                or self.status_history.current.reason == JobStatusReason.COLLECTED
             )
         )
 
@@ -546,7 +546,7 @@ class Job:
             logger.info("Collecting job %s. Reason: %s", self.id, reason)
             status_item = JobStatusItem.create(
                 JobStatus.FAILED,
-                reason=JobStatusReason.JOB_COLLECTED,
+                reason=JobStatusReason.COLLECTED,
                 description=reason,
             )
             self.status_history.current = status_item
