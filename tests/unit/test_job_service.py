@@ -351,11 +351,11 @@ class TestJobsService:
 
     @pytest.mark.asyncio
     @pytest.mark.parametrize(
-        "reason",
+        "reason, description",
         [
-            JobStatusReason.ERR_IMAGE_PULL,
-            JobStatusReason.IMAGE_PULL_BACK_OFF,
-            JobStatusReason.INVALID_IMAGE_NAME,
+            (JobStatusReason.ERR_IMAGE_PULL, "Image can not be pulled"),
+            (JobStatusReason.IMAGE_PULL_BACK_OFF, "Image can not be pulled"),
+            (JobStatusReason.INVALID_IMAGE_NAME, "Invalid image name"),
         ],
     )
     async def test_update_jobs_statuses_pending_errimagepull(
@@ -364,6 +364,7 @@ class TestJobsService:
         mock_orchestrator: MockOrchestrator,
         job_request_factory: Callable[[], JobRequest],
         reason: str,
+        description: str,
     ) -> None:
         user = User(name="testuser", token="")
         original_job, _ = await jobs_service.create_job(
@@ -381,7 +382,7 @@ class TestJobsService:
         assert job.is_deleted
         status_item = job.status_history.last
         assert status_item.reason == JobStatusReason.JOB_COLLECTED
-        assert status_item.description == reason
+        assert status_item.description == description
 
     @pytest.mark.asyncio
     async def test_update_jobs_statuses_succeeded_missing(
