@@ -399,7 +399,9 @@ class TestKubeOrchestrator:
             status_item = await kube_orchestrator.get_job_status(job)
 
         assert status_item == JobStatusItem.create(
-            JobStatus.FAILED, reason=JobStatusReason.CLUSTER_SCALE_UP_FAILED
+            JobStatus.FAILED,
+            reason=JobStatusReason.CLUSTER_SCALE_UP_FAILED,
+            description="Failed to scale up the cluster to get more resources",
         )
         assert found_scaleup
 
