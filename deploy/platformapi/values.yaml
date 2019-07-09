@@ -53,14 +53,14 @@ INGRESS_HOST_TEMPORARY_NEW_DOMAIN:
   dev: dev.neu.ro
   staging: staging.neu.ro
   prod: neu.ro
-INGRESS_PLATFORM_MONITORING_URI:
+INGRESS_PLATFORM_MONITORING_DOMAIN_NAME:
   _default: monitoring-dev.neu.ro
   dev: monitoring-dev.neu.ro
   staging: monitoring-staging.neu.ro
   prod: monitoring-neu.ro
 INGRESS_MAIN_SITE_HOST:
   _default: neu.ro
-  dev:
+  dev:;
   staging: neu.ro
   prod:
 INGRESS_FALLBACK_HOST:
