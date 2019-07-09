@@ -371,7 +371,7 @@ class TestKubeOrchestrator:
         container = Container(
             image="ubuntu",
             command=command,
-            resources=ContainerResources(cpu=1, memory_mb=500_000_000),
+            resources=ContainerResources(cpu=1, memory_mb=500_000),
         )
         job = MyJob(
             orchestrator=kube_orchestrator,
