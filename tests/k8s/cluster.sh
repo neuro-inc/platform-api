@@ -44,6 +44,7 @@ function k8s::start {
     k8s::wait k8s::setup_namespace
     k8s::wait "kubectl get po --all-namespaces"
     k8s::wait k8s::start_nfs
+    k8s::wait k8s::setup_ingress
     k8s::wait k8s::setup_logging
 }
 
