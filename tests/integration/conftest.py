@@ -82,9 +82,9 @@ async def kube_config_payload(kube_config_payload_DEBUG) -> Dict[str, Any]:
     )
     output, _ = await process.communicate()
     payload_str = output.decode().rstrip()
-    print()
+    print("-- KUBECTL CONFIG VIEW --")
     print(json.dumps(json.loads(payload_str), indent=4))
-    print()
+    print("--------------------------")
     return json.loads(payload_str)
 
 

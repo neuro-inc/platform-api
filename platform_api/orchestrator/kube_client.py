@@ -1295,6 +1295,9 @@ class KubeClient:
         payload = await self._request(
             method="POST", url=self._ingresses_url, json=ingress.to_primitive()
         )
+        print("-- CREATING INGRESS --")
+        print(json.dumps(payload, indent=4))
+        print("----------------------")
         return Ingress.from_primitive(payload)
 
     async def get_ingress(self, name: str) -> Ingress:
@@ -1347,6 +1350,9 @@ class KubeClient:
         payload = await self._request(
             method="POST", url=url, json=service.to_primitive()
         )
+        print("-- CREATING SERVICE --")
+        print(json.dumps(payload, indent=4))
+        print("----------------------")
         return Service.from_primitive(payload)
 
     async def delete_service(self, name: str) -> None:
