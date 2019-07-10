@@ -120,6 +120,7 @@ async def kube_config(
     cluster = kube_config_cluster_payload
     user = kube_config_user_payload
     kube_config = KubeConfig(
+        ingress_class="nginx",
         jobs_domain_name_template="{job_id}.jobs.neu.ro",
         ssh_auth_domain_name="ssh-auth.platform.neuromation.io",
         endpoint_url=cluster["server"],
