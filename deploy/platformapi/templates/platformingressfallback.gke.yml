@@ -43,14 +43,12 @@ metadata:
   name: platformingressfallback
 spec:
   rules:
-  # TODO: THIS ?
   - host: error-pages
     http:
       paths:
       - backend:
           serviceName: platformingressfallback
           servicePort: 80
-  # TODO: OR THIS ?
   - host: {{ printf "%s" (pluck .Values.global.env .Values.INGRESS_FALLBACK_HOST | first | default .Values.INGRESS_FALLBACK_HOST._default) }}
     http:
       paths:
