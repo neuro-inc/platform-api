@@ -39,10 +39,9 @@ _orchestrator_config_validator = t.Dict(
                 "auth_type": t.Enum(*[s.value for s in KubeClientAuthType]),
                 "token": t.String | t.Null,
                 "namespace": t.String,
-                "jobs_ingress_name": t.String,
-                "jobs_ingress_auth_name": t.String,
                 "node_label_gpu": t.String,
                 "node_label_preemptible": t.String,
+                "ingress_class": t.Atom("traefik") | t.Atom("nginx"),
             }
         ),
         "is_http_ingress_secure": t.Bool,
@@ -153,10 +152,9 @@ class ClusterConfigFactory:
             token=kube["token"],
             token_path=None,  # not initialized, see field `token`
             namespace=kube["namespace"],
-            jobs_ingress_name=kube["jobs_ingress_name"],
-            jobs_ingress_auth_name=kube["jobs_ingress_auth_name"],
             node_label_gpu=kube["node_label_gpu"],
             node_label_preemptible=kube["node_label_preemptible"],
+            ingress_class=kube["ingress_class"],
         )
 
     def _create_resource_pool_type(self, payload: Dict[str, Any]) -> ResourcePoolType:

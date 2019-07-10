@@ -320,10 +320,14 @@ class IngressRule:
 class Ingress:
     name: str
     rules: List[IngressRule] = field(default_factory=list)
+    annotations: Dict[str, str] = field(default_factory=dict)
 
     def to_primitive(self) -> Dict[str, Any]:
         rules: List[Any] = [rule.to_primitive() for rule in self.rules] or [None]
-        return {"metadata": {"name": self.name}, "spec": {"rules": rules}}
+        return {
+            "metadata": {"name": self.name, "annotations": self.annotations},
+            "spec": {"rules": rules},
+        }
 
     @classmethod
     def from_primitive(cls, payload: Dict[str, Any]) -> "Ingress":
@@ -333,8 +337,15 @@ class Ingress:
             rules = [
                 IngressRule.from_primitive(rule) for rule in payload["spec"]["rules"]
             ]
-            return cls(name=payload["metadata"]["name"], rules=rules)
+            payload_metadata = payload["metadata"]
+            return cls(
+                name=payload_metadata["name"],
+                rules=rules,
+                annotations=payload_metadata.get("annotations", {}),
+            )
         elif kind == "Status":
+            # TODO (A.Yushkovskiy, 28-Jun-2019) patch this method to raise a proper
+            #  error, not always `JobNotFoundException` (see issue #792)
             _raise_status_job_exception(payload, job_id=None)
         else:
             raise ValueError(f"unknown kind: {kind}")
@@ -1272,8 +1283,15 @@ class KubeClient:
         pod = PodDescriptor.from_primitive(payload)
         return pod.status  # type: ignore
 
-    async def create_ingress(self, name: str) -> Ingress:
-        ingress = Ingress(name=name)
+    async def create_ingress(
+        self,
+        name: str,
+        rules: Optional[List[IngressRule]] = None,
+        annotations: Optional[Dict[str, str]] = None,
+    ) -> Ingress:
+        rules = rules or []
+        annotations = annotations or {}
+        ingress = Ingress(name=name, rules=rules, annotations=annotations)
         payload = await self._request(
             method="POST", url=self._ingresses_url, json=ingress.to_primitive()
         )

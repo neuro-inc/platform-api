@@ -25,12 +25,9 @@ data:
                     "auth_type": "none",
                     "token": "token",
                     "namespace": "default",
-
-                    "jobs_ingress_name": "platformjobsingress",
-                    "jobs_ingress_auth_name": "platformjobsingressauth",
-
                     "node_label_gpu": "cloud.google.com/gke-accelerator",
-                    "node_label_preemptible": "cloud.google.com/gke-preemptible"
+                    "node_label_preemptible": "cloud.google.com/gke-preemptible",
+                    "ingress_class": "nginx"
                 },
 
                 "is_http_ingress_secure": true,

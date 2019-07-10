@@ -13,8 +13,7 @@ class KubeClientAuthType(str, enum.Enum):
 
 @dataclass(frozen=True)
 class KubeConfig(OrchestratorConfig):
-    jobs_ingress_name: str = ""
-    jobs_ingress_auth_name: str = ""
+    ingress_class: str = "traefik"
 
     endpoint_url: str = ""
     cert_authority_data_pem: Optional[str] = None
@@ -38,5 +37,5 @@ class KubeConfig(OrchestratorConfig):
     node_label_preemptible: Optional[str] = None
 
     def __post_init__(self) -> None:
-        if not all((self.jobs_ingress_name, self.endpoint_url)):
+        if not self.endpoint_url:
             raise ValueError("Missing required settings")

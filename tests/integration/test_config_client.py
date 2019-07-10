@@ -30,8 +30,6 @@ def cluster_configs_payload() -> List[Dict[str, Any]]:
                     "auth_type": "token",
                     "token": "auth_token",
                     "namespace": "default",
-                    "jobs_ingress_name": "platformjobsingress",
-                    "jobs_ingress_auth_name": "platformjobsingressauth",
                     "node_label_gpu": "cloud.google.com/gke-accelerator",
                     "node_label_preemptible": "cloud.google.com/gke-preemptible",
                 },

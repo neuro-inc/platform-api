@@ -706,7 +706,7 @@ class TestIngress:
     def test_to_primitive_no_rules(self) -> None:
         ingress = Ingress(name="testingress")
         assert ingress.to_primitive() == {
-            "metadata": {"name": "testingress"},
+            "metadata": {"name": "testingress", "annotations": {}},
             "spec": {"rules": [None]},
         }
 
@@ -718,7 +718,36 @@ class TestIngress:
             ],
         )
         assert ingress.to_primitive() == {
-            "metadata": {"name": "testingress"},
+            "metadata": {"name": "testingress", "annotations": {}},
+            "spec": {
+                "rules": [
+                    {
+                        "host": "host1",
+                        "http": {
+                            "paths": [
+                                {
+                                    "backend": {
+                                        "serviceName": "testservice",
+                                        "servicePort": 1234,
+                                    }
+                                }
+                            ]
+                        },
+                    }
+                ]
+            },
+        }
+
+    def test_to_primitive_with_annotations(self) -> None:
+        ingress = Ingress(
+            name="testingress",
+            rules=[
+                IngressRule(host="host1", service_name="testservice", service_port=1234)
+            ],
+            annotations={"key1": "value1"},
+        )
+        assert ingress.to_primitive() == {
+            "metadata": {"name": "testingress", "annotations": {"key1": "value1"}},
             "spec": {
                 "rules": [
                     {

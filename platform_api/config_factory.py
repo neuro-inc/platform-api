@@ -160,11 +160,6 @@ class EnvironConfigFactory:
 
         pool_types = self.create_resource_pool_types()
 
-        jobs_ingress_name = self._environ["NP_K8S_JOBS_INGRESS_NAME"]
-        jobs_ingress_auth_name = self._environ.get(
-            "NP_K8S_JOBS_INGRESS_AUTH_NAME", jobs_ingress_name
-        )
-
         ca_path = self._environ.get("NP_K8S_CA_PATH")
         ca_data = Path(ca_path).read_text() if ca_path else None
 
@@ -196,8 +191,6 @@ class EnvironConfigFactory:
                     "NP_K8S_CLIENT_CONN_POOL_SIZE", KubeConfig.client_conn_pool_size
                 )
             ),
-            jobs_ingress_name=jobs_ingress_name,
-            jobs_ingress_auth_name=jobs_ingress_auth_name,
             is_http_ingress_secure=self._get_bool("NP_K8S_JOBS_INGRESS_HTTPS"),
             jobs_domain_name_template=self._environ[
                 "NP_K8S_JOBS_INGRESS_DOMAIN_NAME_TEMPLATE"

@@ -120,8 +120,6 @@ async def kube_config(
     cluster = kube_config_cluster_payload
     user = kube_config_user_payload
     kube_config = KubeConfig(
-        jobs_ingress_name="platformjobsingress",
-        jobs_ingress_auth_name="platformjobsingressauth",
         jobs_domain_name_template="{job_id}.jobs.neu.ro",
         ssh_auth_domain_name="ssh-auth.platform.neuromation.io",
         endpoint_url=cluster["server"],
@@ -286,8 +284,6 @@ async def kube_config_nfs(
         cert_authority_path=None,  # disable so that `cert_authority_data_pem` works
         auth_cert_path=user["client-certificate"],
         auth_cert_key_path=user["client-key"],
-        jobs_ingress_name="platformjobsingress",
-        jobs_ingress_auth_name="platformjobsingressauth",
         jobs_domain_name_template="{job_id}.jobs.neu.ro",
         ssh_auth_domain_name="ssh-auth.platform.neuromation.io",
         node_label_gpu="gpu",

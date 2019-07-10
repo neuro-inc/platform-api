@@ -44,7 +44,6 @@ function k8s::start {
     k8s::wait k8s::setup_namespace
     k8s::wait "kubectl get po --all-namespaces"
     k8s::wait k8s::start_nfs
-    k8s::wait k8s::setup_ingress
     k8s::wait k8s::setup_logging
 }
 
@@ -89,7 +88,6 @@ function k8s::setup_ingress {
     # launching the ingress services for some unknown reason!
     find /etc/kubernetes/addons/ -name ingress* | xargs -L 1 sudo kubectl -n kube-system apply -f
     find /etc/kubernetes/addons/ -name kube-dns* | xargs -L 1 sudo kubectl -n kube-system apply -f
-    kubectl create -f tests/k8s/platformjobsingress.yml --namespace=platformapi-tests
 }
 
 function k8s::setup_logging {
