@@ -32,6 +32,7 @@ def cluster_configs_payload() -> List[Dict[str, Any]]:
                     "namespace": "default",
                     "node_label_gpu": "cloud.google.com/gke-accelerator",
                     "node_label_preemptible": "cloud.google.com/gke-preemptible",
+                    "ingress_class": "traefik",
                 },
                 "job_hostname_template": "{job_id}.jobs.neu.ro",
                 "resource_pool_types": [
