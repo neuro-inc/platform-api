@@ -65,12 +65,26 @@ def event_loop() -> Iterator[asyncio.AbstractEventLoop]:
 
 
 @pytest.fixture(scope="session")
-async def kube_config_payload() -> Dict[str, Any]:
+async def kube_config_payload_DEBUG() -> None:
+    process = await asyncio.create_subprocess_exec(
+        "kubectl", "get", "all", "--all-namespaces", stdout=asyncio.subprocess.PIPE
+    )
+    output, _ = await process.communicate()
+    payload_str = output.decode().rstrip()
+    print()
+    print(payload_str)
+    print()
+
+@pytest.fixture(scope="session")
+async def kube_config_payload(kube_config_payload_DEBUG) -> Dict[str, Any]:
     process = await asyncio.create_subprocess_exec(
         "kubectl", "config", "view", "-o", "json", stdout=asyncio.subprocess.PIPE
     )
     output, _ = await process.communicate()
     payload_str = output.decode().rstrip()
+    print()
+    print(json.dumps(json.loads(payload_str), indent=4))
+    print()
     return json.loads(payload_str)
 
 
