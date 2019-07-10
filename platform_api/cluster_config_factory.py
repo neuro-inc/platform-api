@@ -41,7 +41,6 @@ _orchestrator_config_validator = t.Dict(
                 "namespace": t.String,
                 "node_label_gpu": t.String,
                 "node_label_preemptible": t.String,
-                "ingress_class": t.Atom("traefik") | t.Atom("nginx"),
             }
         ),
         "is_http_ingress_secure": t.Bool,
@@ -154,7 +153,6 @@ class ClusterConfigFactory:
             namespace=kube["namespace"],
             node_label_gpu=kube["node_label_gpu"],
             node_label_preemptible=kube["node_label_preemptible"],
-            ingress_class=kube["ingress_class"],
         )
 
     def _create_resource_pool_type(self, payload: Dict[str, Any]) -> ResourcePoolType:

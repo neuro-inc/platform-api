@@ -13,9 +13,8 @@ class KubeClientAuthType(str, enum.Enum):
 
 @dataclass(frozen=True)
 class KubeConfig(OrchestratorConfig):
-    ingress_class: str = "traefik"
-
     endpoint_url: str = ""
+    ingress_class: str = "traefik"
     cert_authority_data_pem: Optional[str] = None
     cert_authority_path: Optional[str] = None
 
