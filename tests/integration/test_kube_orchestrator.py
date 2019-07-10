@@ -574,19 +574,15 @@ class TestKubeOrchestrator:
     ) -> None:
         url = f"http://{kube_ingress_ip}"
         headers = {"Host": host}
-        print()
-        print(url)
-        print(headers)
         t0 = time.monotonic()
         async with aiohttp.ClientSession() as client:
             while True:
                 try:
                     async with client.get(url, headers=headers) as response:
-                        print(response)
                         if response.status == 200:
                             break
                 except (OSError, aiohttp.ClientError) as exc:
-                    print(f"ERROR: {type(exc)}: {exc}")
+                    print(exc)
                 await asyncio.sleep(max(interval_s, time.monotonic() - t0))
                 if time.monotonic() - t0 > max_time:
                     pytest.fail(f"Failed to connect to job service {job_id}")
