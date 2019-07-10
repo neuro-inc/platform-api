@@ -154,9 +154,6 @@ class EnvironConfigFactory:
 
     def create_orchestrator(self) -> KubeConfig:
         endpoint_url = self._environ["NP_K8S_API_URL"]
-        ingress_class = self._environ.get(
-            "NP_K8S_INGRESS_CLASS", KubeConfig.ingress_class
-        )
         auth_type = KubeClientAuthType(
             self._environ.get("NP_K8S_AUTH_TYPE", KubeConfig.auth_type.value)
         )
@@ -171,7 +168,6 @@ class EnvironConfigFactory:
 
         return KubeConfig(
             endpoint_url=endpoint_url,
-            ingress_class=ingress_class,
             cert_authority_data_pem=ca_data,
             cert_authority_path=None,  # disable it so that only `ca_data` works here
             auth_type=auth_type,

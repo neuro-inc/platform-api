@@ -82,8 +82,6 @@ spec:
         env:
         - name: NP_K8S_API_URL
           value: http://localhost:8001
-        - name: NP_K8S_INGRESS_CLASS
-          value: nginx
         - name: NP_K8S_AUTH_TYPE
           value: none
         - name: NP_STORAGE_HOST_MOUNT_PATH

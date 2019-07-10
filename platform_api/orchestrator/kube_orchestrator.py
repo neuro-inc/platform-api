@@ -472,7 +472,7 @@ class KubeOrchestrator(Orchestrator):
 
     def _get_ingress_annotations(self, job: Job) -> Dict[str, str]:
         annotations: Dict[str, str] = {}
-        ingress_class = self._kube_config.ingress_class
+        ingress_class = self._kube_config.jobs_ingress_class
         if ingress_class == "traefik":
             annotations = {
                 "kubernetes.io/ingress.class": "traefik",
