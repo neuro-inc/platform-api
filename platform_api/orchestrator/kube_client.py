@@ -510,6 +510,7 @@ class NodeAffinity:
 class PodDescriptor:
     name: str
     image: str
+    command: List[str] = field(default_factory=list)  # entrypoint
     args: List[str] = field(default_factory=list)
     env: Dict[str, str] = field(default_factory=dict)
     volume_mounts: List[VolumeMount] = field(default_factory=list)
@@ -572,6 +573,7 @@ class PodDescriptor:
         return cls(
             name=job_request.job_id,
             image=container.image,
+            command=container.entrypoint_list,
             args=container.command_list,
             env=container.env.copy(),
             volume_mounts=volume_mounts,
@@ -602,8 +604,10 @@ class PodDescriptor:
             "volumeMounts": volume_mounts,
             "terminationMessagePolicy": "FallbackToLogsOnError",
         }
+        if self.command:
+            container_payload["command"] = self.command  # pod entrypoint
         if self.args:
-            container_payload["args"] = self.args
+            container_payload["args"] = self.args  # pod arguments
         if self.resources:
             container_payload["resources"] = self.resources.to_primitive()
 

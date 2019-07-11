@@ -130,7 +130,8 @@ class ContainerSSHServer:
 class Container:
     image: str
     resources: ContainerResources
-    command: Optional[str] = None
+    entrypoint: Optional[str] = None  # docker's ENTRYPOINT, k8s' command
+    command: Optional[str] = None  # docker's CMD, k8s' args
     env: Dict[str, str] = field(default_factory=dict)
     volumes: List[ContainerVolume] = field(default_factory=list)
     http_server: Optional[ContainerHTTPServer] = None
@@ -167,7 +168,15 @@ class Container:
         return ContainerHTTPServer.health_check_path
 
     @property
+    def entrypoint_list(self) -> List[str]:
+        # docker's ENTRYPOINT, k8s' command
+        if self.entrypoint:
+            return shlex.split(self.entrypoint)
+        return []
+
+    @property
     def command_list(self) -> List[str]:
+        # docker's CMD, k8s' args
         if self.command:
             return shlex.split(self.command)
         return []
