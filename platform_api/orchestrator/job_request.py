@@ -169,14 +169,12 @@ class Container:
 
     @property
     def entrypoint_list(self) -> List[str]:
-        # docker's ENTRYPOINT, k8s' command
         if self.entrypoint:
             return shlex.split(self.entrypoint)
         return []
 
     @property
     def command_list(self) -> List[str]:
-        # docker's CMD, k8s' args
         if self.command:
             return shlex.split(self.command)
         return []
