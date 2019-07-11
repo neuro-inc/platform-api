@@ -188,6 +188,14 @@ class TestContainerRequestValidator:
         assert result["resources"]["gpu"] == 1
         assert result["resources"]["gpu_model"] == "unknown"
 
+    def test_with_entrypoint_and_cmd(self, payload: Dict[str, Any]) -> None:
+        payload["entrypoint"] = "/script.sh"
+        payload["command"] = "arg1 arg2 arg3"
+        validator = create_container_request_validator(allow_volumes=True)
+        result = validator.check(payload)
+        assert result["entrypoint"] == "/script.sh"
+        assert result["command"] == "arg1 arg2 arg3"
+
 
 class TestContainerResponseValidator:
     def test_gpu_model(self) -> None:
