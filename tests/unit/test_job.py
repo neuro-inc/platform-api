@@ -33,19 +33,38 @@ from .conftest import MockOrchestrator
 
 
 class TestContainer:
-    def test_command_list_empty(self) -> None:
+    def test_command_entrypoint_list_command_list_empty(self) -> None:
         container = Container(
             image="testimage", resources=ContainerResources(cpu=1, memory_mb=128)
         )
+        assert container.entrypoint_list == []
         assert container.command_list == []
 
-    def test_command_list(self) -> None:
+    def test_command_list_non_empty(self) -> None:
         container = Container(
             image="testimage",
             command="bash -c date",
             resources=ContainerResources(cpu=1, memory_mb=128),
         )
         assert container.command_list == ["bash", "-c", "date"]
+
+    def test_entrypoint_list_non_empty(self) -> None:
+        container = Container(
+            image="testimage",
+            entrypoint="bash -c date",
+            resources=ContainerResources(cpu=1, memory_mb=128),
+        )
+        assert container.entrypoint_list == ["bash", "-c", "date"]
+
+    def test_command_list_entrypoint_list_non_empty(self) -> None:
+        container = Container(
+            image="testimage",
+            entrypoint="/script.sh",
+            command="arg1 arg2 arg3",
+            resources=ContainerResources(cpu=1, memory_mb=128),
+        )
+        assert container.entrypoint_list == ["/script.sh"]
+        assert container.command_list == ["arg1", "arg2", "arg3"]
 
     def test_belongs_to_registry_no_host(self) -> None:
         container = Container(
@@ -330,6 +349,7 @@ def job_request_payload() -> Dict[str, Any]:
                 "gpu_model_id": None,
                 "shm": None,
             },
+            "entrypoint": None,
             "command": None,
             "env": {"testvar": "testval"},
             "volumes": [
@@ -755,6 +775,86 @@ class TestJob:
         assert job.owner == "testuser"
         assert job.cluster_name == "testcluster"
         assert not job.is_preemptible
+
+    def test_from_primitive_with_entrypoint_without_command(
+        self, mock_orchestrator: MockOrchestrator, job_request_payload: Dict[str, Any]
+    ) -> None:
+        job_request_payload["container"]["entrypoint"] = "/script.sh"
+        job_request_payload["container"].pop("command", None)
+        payload = {
+            "id": "testjob",
+            "name": "test-job-name",
+            "owner": "testuser",
+            "request": job_request_payload,
+            "status": "succeeded",
+            "is_deleted": True,
+            "finished_at": datetime.now(timezone.utc).isoformat(),
+        }
+        job = Job.from_primitive(
+            mock_orchestrator.storage_config, mock_orchestrator.config, payload
+        )
+        assert job.request.container.command is None
+        assert job.request.container.entrypoint == "/script.sh"
+
+    def test_from_primitive_without_entrypoint_with_command(
+        self, mock_orchestrator: MockOrchestrator, job_request_payload: Dict[str, Any]
+    ) -> None:
+        job_request_payload["container"].pop("entrypoint", None)
+        job_request_payload["container"]["command"] = "arg1 arg2 arg3"
+        payload = {
+            "id": "testjob",
+            "name": "test-job-name",
+            "owner": "testuser",
+            "request": job_request_payload,
+            "status": "succeeded",
+            "is_deleted": True,
+            "finished_at": datetime.now(timezone.utc).isoformat(),
+        }
+        job = Job.from_primitive(
+            mock_orchestrator.storage_config, mock_orchestrator.config, payload
+        )
+        assert job.request.container.command == "arg1 arg2 arg3"
+        assert job.request.container.entrypoint is None
+
+    def test_from_primitive_without_entrypoint_without_command(
+        self, mock_orchestrator: MockOrchestrator, job_request_payload: Dict[str, Any]
+    ) -> None:
+        job_request_payload["container"].pop("entrypoint", None)
+        job_request_payload["container"].pop("command", None)
+        payload = {
+            "id": "testjob",
+            "name": "test-job-name",
+            "owner": "testuser",
+            "request": job_request_payload,
+            "status": "succeeded",
+            "is_deleted": True,
+            "finished_at": datetime.now(timezone.utc).isoformat(),
+        }
+        job = Job.from_primitive(
+            mock_orchestrator.storage_config, mock_orchestrator.config, payload
+        )
+        assert job.request.container.command is None
+        assert job.request.container.entrypoint is None
+
+    def test_from_primitive_with_entrypoint_with_command(
+        self, mock_orchestrator: MockOrchestrator, job_request_payload: Dict[str, Any]
+    ) -> None:
+        job_request_payload["container"]["entrypoint"] = "/script.sh"
+        job_request_payload["container"]["command"] = "arg1 arg2 arg3"
+        payload = {
+            "id": "testjob",
+            "name": "test-job-name",
+            "owner": "testuser",
+            "request": job_request_payload,
+            "status": "succeeded",
+            "is_deleted": True,
+            "finished_at": datetime.now(timezone.utc).isoformat(),
+        }
+        job = Job.from_primitive(
+            mock_orchestrator.storage_config, mock_orchestrator.config, payload
+        )
+        assert job.request.container.command == "arg1 arg2 arg3"
+        assert job.request.container.entrypoint == "/script.sh"
 
     def test_to_uri(
         self, mock_orchestrator: MockOrchestrator, job_request: JobRequest

@@ -710,6 +710,7 @@ class PodDescriptor:
             ]
         else:
             secrets = []
+
         return cls(
             name=metadata["name"],
             created_at=iso8601.parse_date(metadata["creationTimestamp"]),
@@ -717,6 +718,8 @@ class PodDescriptor:
             status=status,
             image_pull_secrets=secrets,
             node_name=payload["spec"].get("nodeName"),
+            command=container_payload.get("command"),
+            args=container_payload.get("args"),
         )
 
 
