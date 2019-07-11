@@ -26,7 +26,7 @@ data:
                     "token": "token",
                     "namespace": "default",
                     "node_label_gpu": "cloud.google.com/gke-accelerator",
-                    "node_label_preemptible": "cloud.google.com/gke-preemptible",
+                    "node_label_preemptible": "cloud.google.com/gke-preemptible"
                 },
 
                 "is_http_ingress_secure": true,
