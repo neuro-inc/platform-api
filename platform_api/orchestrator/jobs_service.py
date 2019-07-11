@@ -19,7 +19,7 @@ from platform_api.resource import GPUModel
 from platform_api.user import User
 
 from .base import LogReader, Orchestrator, Telemetry
-from .job import Job, JobRecord, JobStatusItem
+from .job import Job, JobRecord, JobStatusItem, JobStatusReason
 from .job_request import JobException, JobNotFoundException, JobRequest, JobStatus
 from .jobs_storage import (
     JobFilter,
@@ -111,7 +111,9 @@ class JobsService:
                         cluster_err,
                     )
                     record.status_history.current = JobStatusItem.create(
-                        JobStatus.FAILED, reason="Missing", description=str(cluster_err)
+                        JobStatus.FAILED,
+                        reason=JobStatusReason.CLUSTER_NOT_FOUND,
+                        description=str(cluster_err),
                     )
                     record.is_deleted = True
         except JobStorageTransactionError:
@@ -141,8 +143,8 @@ class JobsService:
             logger.warning("Failed to get job %s status. Reason: %s", job.id, exc)
             status_item = JobStatusItem.create(
                 JobStatus.FAILED,
-                reason="Missing",
-                description=("The job could not be scheduled or was preempted."),
+                reason=JobStatusReason.NOT_FOUND,
+                description="The job could not be scheduled or was preempted.",
             )
             job.is_deleted = True
 

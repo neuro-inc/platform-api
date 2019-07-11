@@ -29,7 +29,7 @@ from platform_api.elasticsearch import (
     create_elasticsearch_client,
 )
 from platform_api.orchestrator.base import LogReader
-from platform_api.orchestrator.job import Job, JobStatusItem
+from platform_api.orchestrator.job import Job, JobStatusItem, JobStatusReason
 from platform_api.orchestrator.job_request import (
     Container,
     ContainerHTTPServer,
@@ -303,7 +303,7 @@ class TestKubeOrchestrator:
             expected_description = "".join(f"{i}\n" for i in reversed(range(1, 81)))
             assert status_item == JobStatusItem.create(
                 JobStatus.FAILED,
-                reason="Error",
+                reason=JobStatusReason.ERROR,
                 description=expected_description,
                 exit_code=1,
             )
@@ -326,7 +326,7 @@ class TestKubeOrchestrator:
 
             status_item = await kube_orchestrator.get_job_status(job)
             assert status_item == JobStatusItem.create(
-                JobStatus.PENDING, reason="Scheduling the job."
+                JobStatus.PENDING, reason=JobStatusReason.SCHEDULING
             )
         finally:
             await job.delete()
@@ -351,7 +351,7 @@ class TestKubeOrchestrator:
 
         t0 = time.time()
         while not status_item.status.is_finished:
-            assert status_item.reason == "Scheduling the job."
+            assert status_item.reason == JobStatusReason.SCHEDULING
             t1 = time.time()
             assert t1 - t0 < 30, (
                 f"Wait for job failure is timed out "
@@ -360,7 +360,9 @@ class TestKubeOrchestrator:
             status_item = await kube_orchestrator.get_job_status(job)
 
         assert status_item == JobStatusItem.create(
-            JobStatus.FAILED, reason="Cannot scaleup the cluster to get more resources."
+            JobStatus.FAILED,
+            reason=JobStatusReason.CLUSTER_SCALE_UP_FAILED,
+            description="Failed to scale up the cluster to get more resources",
         )
 
     @pytest.mark.asyncio
@@ -388,10 +390,10 @@ class TestKubeOrchestrator:
         found_scaleup = False
         while not status_item.status.is_finished:
             t1 = time.monotonic()
-            if status_item.reason == "Scaling up the cluster to get more resources.":
+            if status_item.reason == JobStatusReason.CLUSTER_SCALING_UP:
                 found_scaleup = True
             else:
-                assert status_item.reason == "Scheduling the job."
+                assert status_item.reason == JobStatusReason.SCHEDULING
             assert t1 - t0 < 30, (
                 f"Wait for job failure is timed out "
                 f"after {t1-t0} secs [{status_item}]"
@@ -399,7 +401,9 @@ class TestKubeOrchestrator:
             status_item = await kube_orchestrator.get_job_status(job)
 
         assert status_item == JobStatusItem.create(
-            JobStatus.FAILED, reason="Cannot scaleup the cluster to get more resources."
+            JobStatus.FAILED,
+            reason=JobStatusReason.CLUSTER_SCALE_UP_FAILED,
+            description="Failed to scale up the cluster to get more resources",
         )
         assert found_scaleup
 
@@ -1828,7 +1832,10 @@ class TestPodContainerDevShmSettings:
             command,
         )
         job_status = JobStatusItem.create(
-            status=JobStatus.FAILED, reason="OOMKilled", exit_code=137, description=None
+            status=JobStatus.FAILED,
+            reason=JobStatusReason.OOM_KILLED,
+            exit_code=137,
+            description=None,
         )
         assert job_status == run_output, f"actual: '{run_output}'"
 

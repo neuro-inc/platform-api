@@ -13,7 +13,7 @@ from platform_api.cluster_config import (
 from platform_api.elasticsearch import Elasticsearch
 
 from .base import LogReader, Orchestrator, Telemetry
-from .job import Job, JobStatusItem
+from .job import Job, JobStatusItem, JobStatusReason
 from .job_request import JobError, JobNotFoundException, JobStatus
 from .jobs_telemetry import KubeTelemetry
 from .kube_client import (
@@ -345,7 +345,7 @@ class KubeOrchestrator(Orchestrator):
         if (now - pod.created_at).seconds < schedule_timeout:
             # Wait for scheduling for 3 minute at least by default
             if job_status.reason is None:
-                job_status = replace(job_status, reason="Scheduling the job.")
+                job_status = replace(job_status, reason=JobStatusReason.SCHEDULING)
             return job_status
 
         logger.info(f"Found pod that requested too much resources. Job '{job.id}'")
@@ -363,14 +363,14 @@ class KubeOrchestrator(Orchestrator):
                 return JobStatusItem.create(
                     JobStatus.PENDING,
                     transition_time=now,
-                    reason="Scaling up the cluster to get more resources.",
-                    description=job_status.description,
+                    reason=JobStatusReason.CLUSTER_SCALING_UP,
+                    description="Scaling up the cluster to get more resources",
                 )
         return JobStatusItem.create(
             JobStatus.FAILED,
             transition_time=now,
-            reason="Cannot scaleup the cluster to get more resources.",
-            description=job_status.description,
+            reason=JobStatusReason.CLUSTER_SCALE_UP_FAILED,
+            description="Failed to scale up the cluster to get more resources",
         )
 
     async def _check_preemptible_job_pod(self, job: Job) -> PodDescriptor:
