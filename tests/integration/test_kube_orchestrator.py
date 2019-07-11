@@ -518,7 +518,35 @@ class TestKubeOrchestrator:
         await kube_client.delete_ingress(ingress.name)
 
     @pytest.mark.asyncio
-    async def test_ingress(self, kube_client: KubeClient, ingress: Ingress) -> None:
+    async def test_ingress_create_delete(self, kube_client: KubeClient) -> None:
+        name = str(uuid.uuid4())
+        rules = [
+            IngressRule(host=""),
+            IngressRule(host="host1", service_name="service1", service_port=81),
+            IngressRule(host="host2", service_name="service2", service_port=82),
+            IngressRule(host="host3", service_name="service3", service_port=83),
+        ]
+        annotations = {"key/1": "value 1", "key/2": "value 2"}
+        expected_ingress = Ingress(name=name, rules=rules, annotations=annotations)
+
+        created_ingress = await kube_client.create_ingress(
+            name=name, rules=rules, annotations=annotations
+        )
+        assert created_ingress == expected_ingress
+
+        requested_ingress = await kube_client.get_ingress(name)
+        assert requested_ingress == expected_ingress
+
+        await kube_client.delete_ingress(name)
+        # NOTE: should be another exception, see issue #792
+        with pytest.raises(JobNotFoundException, match="not found"):
+            await kube_client.get_ingress(name)
+
+    @pytest.mark.asyncio
+    async def test_ingress_add_rules(
+        self, kube_client: KubeClient, ingress: Ingress
+    ) -> None:
+
         await kube_client.add_ingress_rule(ingress.name, IngressRule(host="host1"))
         await kube_client.add_ingress_rule(ingress.name, IngressRule(host="host2"))
         await kube_client.add_ingress_rule(ingress.name, IngressRule(host="host3"))
