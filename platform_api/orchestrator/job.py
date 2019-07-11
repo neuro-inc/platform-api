@@ -41,13 +41,36 @@ class AggregatedRunTime:
 DEFAULT_QUOTA_NO_RESTRICTIONS: AggregatedRunTime = AggregatedRunTime.from_quota(Quota())
 DEFAULT_ORPHANED_JOB_OWNER = "compute"
 
-# TODO: consider adding JobStatusReason Enum
+
+class JobStatusReason:
+    # TODO (A.Yushkovskiy) Convert to enum to use as a type of `JobStatusItem.reason`
+    # TODO (A.Yushkovskiy) Refactor job status reasons taxonomy (issue #796)
+    # k8s reasons:
+    # - 'waiting' reasons:
+    POD_INITIALIZING = "PodInitializing"
+    CONTAINER_CREATING = "ContainerCreating"
+    ERR_IMAGE_PULL = "ErrImagePull"
+    IMAGE_PULL_BACK_OFF = "ImagePullBackOff"
+    INVALID_IMAGE_NAME = "InvalidImageName"
+    # - 'terminated' reasons:
+    OOM_KILLED = "OOMKilled"
+    COMPLETED = "Completed"
+    ERROR = "Error"
+    CONTAINER_CANNOT_RUN = "ContainerCannotRun"
+    # neuromation custom reasons:
+    COLLECTED = "Collected"
+    SCHEDULING = "Scheduling"
+    NOT_FOUND = "NotFound"  # "The job could not be scheduled or was preempted."
+    CLUSTER_NOT_FOUND = "ClusterNotFound"
+    CLUSTER_SCALING_UP = "ClusterScalingUp"
+    CLUSTER_SCALE_UP_FAILED = "ClusterScaleUpFailed"
 
 
 @dataclass(frozen=True)
 class JobStatusItem:
     status: JobStatus
     transition_time: datetime = field(compare=False)
+    # TODO (A.Yushkovskiy) it's better to have `reason: Optional[JobStatusReason]`
     reason: Optional[str] = None
     description: Optional[str] = None
     exit_code: Optional[int] = None
@@ -303,7 +326,7 @@ class JobRecord:
                 self._is_time_for_deletion(
                     delay=delay, current_datetime_factory=current_datetime_factory
                 )
-                or self.status_history.current.reason == "Collected"
+                or self.status_history.current.reason == JobStatusReason.COLLECTED
             )
         )
 
@@ -508,9 +531,12 @@ class Job:
         status_item = self._status_history.current
         if status_item.status == JobStatus.PENDING:
             # collect jobs stuck in ErrImagePull loop
-            if status_item.reason in ("ErrImagePull", "ImagePullBackOff"):
+            if status_item.reason in (
+                JobStatusReason.ERR_IMAGE_PULL,
+                JobStatusReason.IMAGE_PULL_BACK_OFF,
+            ):
                 return "Image can not be pulled"
-            if status_item.reason == "InvalidImageName":
+            if status_item.reason == JobStatusReason.INVALID_IMAGE_NAME:
                 return "Invalid image name"
         return None
 
@@ -519,7 +545,7 @@ class Job:
         if reason:
             logger.info("Collecting job %s. Reason: %s", self.id, reason)
             status_item = JobStatusItem.create(
-                JobStatus.FAILED, reason="Collected", description=reason
+                JobStatus.FAILED, reason=JobStatusReason.COLLECTED, description=reason
             )
             self.status_history.current = status_item
 
