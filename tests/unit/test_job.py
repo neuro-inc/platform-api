@@ -351,7 +351,6 @@ def job_request_payload() -> Dict[str, Any]:
                 "gpu_model_id": None,
                 "shm": None,
             },
-            "entrypoint": None,
             "command": None,
             "env": {"testvar": "testval"},
             "volumes": [
@@ -921,6 +920,30 @@ class TestJobRequest:
     def test_to_primitive(self, job_request_payload: Dict[str, Any]) -> None:
         container = Container(
             image="testimage",
+            env={"testvar": "testval"},
+            resources=ContainerResources(cpu=1, memory_mb=128),
+            volumes=[
+                ContainerVolume(
+                    uri=URL("storage://path"),
+                    src_path=PurePath("/src/path"),
+                    dst_path=PurePath("/dst/path"),
+                )
+            ],
+        )
+        request = JobRequest(
+            job_id="testjob",
+            description="Description of the testjob",
+            container=container,
+        )
+        assert request.to_primitive() == job_request_payload
+
+    def test_to_primitive_with_entrypoint(
+        self, job_request_payload: Dict[str, Any]
+    ) -> None:
+        job_request_payload["container"]["entrypoint"] = "/bin/ls"
+        container = Container(
+            image="testimage",
+            entrypoint="/bin/ls",
             env={"testvar": "testval"},
             resources=ContainerResources(cpu=1, memory_mb=128),
             volumes=[
