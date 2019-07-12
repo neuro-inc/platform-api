@@ -130,7 +130,6 @@ class ContainerSSHServer:
 class Container:
     image: str
     resources: ContainerResources
-    # TODO: test this with disabling default value
     entrypoint: Optional[str] = None
     command: Optional[str] = None
     env: Dict[str, str] = field(default_factory=dict)
