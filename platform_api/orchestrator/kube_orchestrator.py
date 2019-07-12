@@ -342,30 +342,30 @@ class KubeOrchestrator(Orchestrator):
             job.schedule_timeout or self._kube_config.job_schedule_timeout
         )
 
-        if (now - pod.created_at).seconds < schedule_timeout:
-            # Wait for scheduling for 3 minute at least by default
-            if job_status.reason is None:
-                job_status = replace(job_status, reason=JobStatusReason.SCHEDULING)
-            return job_status
-
         logger.info(f"Found pod that requested too much resources. Job '{job.id}'")
         pod_events = await self._client.get_pod_events(
             pod_name, self._kube_config.namespace
         )
         scaleup_events = [e for e in pod_events if e.reason == "TriggeredScaleUp"]
         scaleup_events.sort(key=operator.attrgetter("last_timestamp"))
-        if scaleup_events:
-            if (
-                (now - scaleup_events[-1].last_timestamp).seconds
-                < self._kube_config.job_schedule_scaleup_timeout + schedule_timeout
-            ):
-                # waiting for cluster scaleup
-                return JobStatusItem.create(
-                    JobStatus.PENDING,
-                    transition_time=now,
-                    reason=JobStatusReason.CLUSTER_SCALING_UP,
-                    description="Scaling up the cluster to get more resources",
-                )
+        if scaleup_events and (
+            (now - scaleup_events[-1].last_timestamp).seconds
+            < self._kube_config.job_schedule_scaleup_timeout + schedule_timeout
+        ):
+            # waiting for cluster scaleup
+            return JobStatusItem.create(
+                JobStatus.PENDING,
+                transition_time=now,
+                reason=JobStatusReason.CLUSTER_SCALING_UP,
+                description="Scaling up the cluster to get more resources",
+            )
+
+        if (now - pod.created_at).seconds < schedule_timeout:
+            # Wait for scheduling for 3 minutes at least by default
+            if job_status.reason is None:
+                job_status = replace(job_status, reason=JobStatusReason.SCHEDULING)
+            return job_status
+
         return JobStatusItem.create(
             JobStatus.FAILED,
             transition_time=now,
