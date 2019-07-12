@@ -93,6 +93,8 @@ def convert_job_container_to_json(
         "env": container.env,
         "volumes": [],
     }
+    if container.entrypoint is not None:
+        ret["entrypoint"] = container.entrypoint
     if container.command is not None:
         ret["command"] = container.command
 

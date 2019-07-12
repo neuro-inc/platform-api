@@ -16,6 +16,7 @@ class ContainerBuilder:
         self._storage_config = storage_config
 
         self._image: str = ""
+        self._entrypoint: Optional[str] = None
         self._command: Optional[str] = None
         self._env: Dict[str, str] = {}
         self._resources: Optional[ContainerResources] = None
@@ -25,6 +26,10 @@ class ContainerBuilder:
 
     def set_image(self, image: str) -> "ContainerBuilder":
         self._image = image
+        return self
+
+    def set_entrypoint(self, entrypoint: str) -> "ContainerBuilder":
+        self._entrypoint = entrypoint
         return self
 
     def set_command(self, command: str) -> "ContainerBuilder":
@@ -60,6 +65,8 @@ class ContainerBuilder:
     ) -> "ContainerBuilder":
         builder = cls(storage_config=storage_config)
         builder.set_image(payload["image"])
+        if "entrypoint" in payload:
+            builder.set_entrypoint(payload["entrypoint"])
         if "command" in payload:
             builder.set_command(payload["command"])
         builder.update_env(payload.get("env", {}))
@@ -121,6 +128,7 @@ class ContainerBuilder:
     def build(self) -> Container:
         return Container(  # type: ignore  # noqa
             image=self._image,
+            entrypoint=self._entrypoint,
             command=self._command,
             env=self._env,
             volumes=self._volumes,

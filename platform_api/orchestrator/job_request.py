@@ -130,6 +130,7 @@ class ContainerSSHServer:
 class Container:
     image: str
     resources: ContainerResources
+    entrypoint: Optional[str] = None
     command: Optional[str] = None
     env: Dict[str, str] = field(default_factory=dict)
     volumes: List[ContainerVolume] = field(default_factory=list)
@@ -165,6 +166,12 @@ class Container:
         if self.http_server:
             return self.http_server.health_check_path
         return ContainerHTTPServer.health_check_path
+
+    @property
+    def entrypoint_list(self) -> List[str]:
+        if self.entrypoint:
+            return shlex.split(self.entrypoint)
+        return []
 
     @property
     def command_list(self) -> List[str]:
@@ -203,6 +210,10 @@ class Container:
         kwargs.pop("port", None)
         kwargs.pop("health_check_path", None)
 
+        # NOTE: `entrypoint` is not not serialized if it's `None` (see issue #804)
+        if "entrypoint" not in kwargs:
+            kwargs["entrypoint"] = None
+
         return cls(**kwargs)
 
     def to_primitive(self) -> Dict[str, Any]:
@@ -213,6 +224,12 @@ class Container:
             payload["http_server"] = self.http_server.to_primitive()
         if self.ssh_server:
             payload["ssh_server"] = self.ssh_server.to_primitive()
+
+        # NOTE: not to serialize `entrypoint` if it's `None` (see issue #804)
+        entrypoint = payload.get("entrypoint", None)
+        if entrypoint is None:
+            payload.pop("entrypoint", None)
+
         return payload
 
 
