@@ -386,6 +386,8 @@ class TestJobs:
             job_id = payload["id"]
             assert payload["status"] in ["pending"]
             assert payload["name"] == job_name
+            assert payload["container"]["entrypoint"] == "/bin/echo"
+            assert payload["container"]["command"] == "1 2 3"
             assert payload["http_url"] == f"http://{job_id}.jobs.neu.ro"
             assert (
                 payload["http_url_named"]
