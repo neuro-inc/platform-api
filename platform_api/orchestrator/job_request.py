@@ -130,6 +130,7 @@ class ContainerSSHServer:
 class Container:
     image: str
     resources: ContainerResources
+    # TODO: test this with disabling default value
     entrypoint: Optional[str] = None
     command: Optional[str] = None
     env: Dict[str, str] = field(default_factory=dict)
@@ -220,6 +221,12 @@ class Container:
             payload["http_server"] = self.http_server.to_primitive()
         if self.ssh_server:
             payload["ssh_server"] = self.ssh_server.to_primitive()
+
+        # NOTE: not to serialize `entrypoint` if it's `None` (see issue #804)
+        entrypoint = payload.get("entrypoint", None)
+        if entrypoint is None:
+            payload.pop("entrypoint", None)
+
         return payload
 
 
