@@ -510,7 +510,7 @@ class NodeAffinity:
 class PodDescriptor:
     name: str
     image: str
-    command: List[str] = field(default_factory=list)  # entrypoint
+    command: List[str] = field(default_factory=list)
     args: List[str] = field(default_factory=list)
     env: Dict[str, str] = field(default_factory=dict)
     volume_mounts: List[VolumeMount] = field(default_factory=list)
