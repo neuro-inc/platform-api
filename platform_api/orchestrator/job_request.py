@@ -211,6 +211,10 @@ class Container:
         kwargs.pop("port", None)
         kwargs.pop("health_check_path", None)
 
+        # NOTE: `entrypoint` is not not serialized if it's `None` (see issue #804)
+        if "entrypoint" not in kwargs:
+            kwargs["entrypoint"] = None
+
         return cls(**kwargs)
 
     def to_primitive(self) -> Dict[str, Any]:
