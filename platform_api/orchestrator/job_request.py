@@ -130,8 +130,8 @@ class ContainerSSHServer:
 class Container:
     image: str
     resources: ContainerResources
-    entrypoint: Optional[str] = None  # docker's ENTRYPOINT, k8s' command
-    command: Optional[str] = None  # docker's CMD, k8s' args
+    entrypoint: Optional[str] = None
+    command: Optional[str] = None
     env: Dict[str, str] = field(default_factory=dict)
     volumes: List[ContainerVolume] = field(default_factory=list)
     http_server: Optional[ContainerHTTPServer] = None

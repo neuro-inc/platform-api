@@ -605,9 +605,9 @@ class PodDescriptor:
             "terminationMessagePolicy": "FallbackToLogsOnError",
         }
         if self.command:
-            container_payload["command"] = self.command  # pod entrypoint
+            container_payload["command"] = self.command
         if self.args:
-            container_payload["args"] = self.args  # pod arguments
+            container_payload["args"] = self.args
         if self.resources:
             container_payload["resources"] = self.resources.to_primitive()
 
