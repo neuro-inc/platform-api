@@ -710,7 +710,6 @@ class PodDescriptor:
             ]
         else:
             secrets = []
-
         return cls(
             name=metadata["name"],
             created_at=iso8601.parse_date(metadata["creationTimestamp"]),
