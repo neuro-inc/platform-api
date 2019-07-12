@@ -376,6 +376,8 @@ class TestJobs:
         url = api.jobs_base_url
         job_submit["is_preemptible"] = True
         job_submit["name"] = job_name
+        job_submit["container"]["entrypoint"] = "/bin/echo"
+        job_submit["container"]["command"] = "false"
         job_submit["container"]["http"]["requires_auth"] = True
         job_submit["schedule_timeout"] = 90
         async with client.post(
@@ -387,7 +389,7 @@ class TestJobs:
             assert payload["status"] in ["pending"]
             assert payload["name"] == job_name
             assert payload["container"]["entrypoint"] == "/bin/echo"
-            assert payload["container"]["command"] == "1 2 3"
+            assert payload["container"]["command"] == "false"
             assert payload["http_url"] == f"http://{job_id}.jobs.neu.ro"
             assert (
                 payload["http_url_named"]

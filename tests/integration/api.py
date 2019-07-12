@@ -215,8 +215,7 @@ def job_request_factory() -> Callable[[], Dict[str, Any]]:
         return {
             "container": {
                 "image": "ubuntu",
-                "entrypoint": "/bin/echo",
-                "command": "1 2 3",
+                "command": "true",
                 "resources": {"cpu": 0.1, "memory_mb": 16},
                 "http": {"port": 1234},
             },
