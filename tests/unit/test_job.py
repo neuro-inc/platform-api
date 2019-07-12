@@ -209,6 +209,7 @@ class TestContainerBuilder:
         storage_config = StorageConfig(host_mount_path=PurePath("/tmp"))
         payload = {
             "image": "testimage",
+            "entrypoint": "testentrypoint",
             "command": "testcommand",
             "env": {"TESTVAR": "testvalue"},
             "resources": {"cpu": 0.1, "memory_mb": 128, "gpu": 1},
@@ -226,6 +227,7 @@ class TestContainerBuilder:
         ).build()
         assert container == Container(
             image="testimage",
+            entrypoint="testentrypoint",
             command="testcommand",
             env={"TESTVAR": "testvalue"},
             volumes=[
