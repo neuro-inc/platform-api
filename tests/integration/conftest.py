@@ -435,6 +435,7 @@ def config_factory(
 @pytest.fixture
 def cluster_config(
     es_config: ElasticsearchConfig,
+    kube_config: KubeConfig,
     storage_config_host: StorageConfig,
     registry_config: RegistryConfig,
 ) -> ClusterConfig:
