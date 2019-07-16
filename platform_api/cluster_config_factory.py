@@ -72,7 +72,7 @@ _monitoring_config_validator = t.Dict(
         "elasticsearch": t.Dict({"hosts": t.List(t.String)})
         | t.Dict(
             {"hosts": t.List(t.String), "username": t.String, "password": t.String}
-        ),
+        ).allow_extra("*"),
     }
 ).allow_extra("*")
 
