@@ -408,8 +408,6 @@ def jobs_config() -> JobsConfig:
 
 @pytest.fixture
 def config_factory(
-    storage_config_host: StorageConfig,
-    registry_config: RegistryConfig,
     kube_config: KubeConfig,
     redis_config: RedisConfig,
     auth_config: AuthConfig,
@@ -420,24 +418,9 @@ def config_factory(
     def _factory(**kwargs: Any) -> Config:
         server_config = ServerConfig()
         database_config = DatabaseConfig(redis=redis_config)
-        logging_config = LoggingConfig(elasticsearch=es_config)
-        ingress_config = IngressConfig(
-            storage_url=URL("https://neu.ro/api/v1/storage"),
-            users_url=URL("https://neu.ro/api/v1/users"),
-            monitoring_url=URL("https://neu.ro/api/v1/monitoring"),
-        )
-        cluster_config = ClusterConfig(
-            name="default",
-            storage=storage_config_host,
-            registry=registry_config,
-            orchestrator=kube_config,
-            logging=logging_config,
-            ingress=ingress_config,
-        )
         config_client = ConfigClient(base_url=URL("http://platformconfig/api/v1"))
         return Config(
             server=server_config,
-            cluster=cluster_config,
             database=database_config,
             auth=auth_config,
             jobs=jobs_config,
@@ -447,6 +430,28 @@ def config_factory(
         )
 
     return _factory
+
+
+@pytest.fixture
+def cluster_config(
+    es_config: ElasticsearchConfig,
+    storage_config_host: StorageConfig,
+    registry_config: RegistryConfig,
+) -> ClusterConfig:
+    logging_config = LoggingConfig(elasticsearch=es_config)
+    ingress_config = IngressConfig(
+        storage_url=URL("https://neu.ro/api/v1/storage"),
+        users_url=URL("https://neu.ro/api/v1/users"),
+        monitoring_url=URL("https://neu.ro/api/v1/monitoring"),
+    )
+    return ClusterConfig(
+        name="default",
+        orchestrator=kube_config,
+        logging=logging_config,
+        ingress=ingress_config,
+        storage=storage_config_host,
+        registry=registry_config,
+    )
 
 
 @pytest.fixture

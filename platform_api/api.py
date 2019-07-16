@@ -234,8 +234,9 @@ async def create_app(
 
 
 async def get_cluster_configs(config: Config) -> Sequence[ClusterConfig]:
+    cluster_config = EnvironConfigFactory().create_cluster()
     async with config.config_client as client:
-        return await client.get_clusters(users_url=config.cluster.ingress.users_url)
+        return await client.get_clusters(users_url=cluster_config.ingress.users_url)
 
 
 def main() -> None:

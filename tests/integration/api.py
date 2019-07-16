@@ -58,8 +58,10 @@ async def get_cluster_configs(
 
 
 @pytest.fixture
-async def api(config: Config) -> AsyncIterator[ApiConfig]:
-    app = await create_app(config, get_cluster_configs([config.cluster]))
+async def api(
+    config: Config, cluster_config: ClusterConfig
+) -> AsyncIterator[ApiConfig]:
+    app = await create_app(config, get_cluster_configs([cluster_config]))
     runner = ApiRunner(app, port=8080)
     api_address = await runner.run()
     api_config = ApiConfig(host=api_address.host, port=api_address.port, runner=runner)
@@ -68,10 +70,10 @@ async def api(config: Config) -> AsyncIterator[ApiConfig]:
 
 
 @pytest.fixture
-async def api_with_oauth(config_with_oauth: Config) -> AsyncIterator[ApiConfig]:
-    app = await create_app(
-        config_with_oauth, get_cluster_configs([config_with_oauth.cluster])
-    )
+async def api_with_oauth(
+    config_with_oauth: Config, cluster_config: ClusterConfig
+) -> AsyncIterator[ApiConfig]:
+    app = await create_app(config_with_oauth, get_cluster_configs([cluster_config]))
     runner = ApiRunner(app, port=8081)
     api_address = await runner.run()
     api_config = ApiConfig(host=api_address.host, port=api_address.port, runner=runner)
