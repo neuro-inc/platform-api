@@ -472,8 +472,7 @@ class KubeOrchestrator(Orchestrator):
 
     def _get_ingress_annotations(self, job: Job) -> Dict[str, str]:
         annotations: Dict[str, str] = {}
-        ingress_class = self._kube_config.jobs_ingress_class
-        if ingress_class == "traefik":
+        if self._kube_config.jobs_ingress_class == "traefik":
             annotations = {
                 "kubernetes.io/ingress.class": "traefik",
                 "traefik.ingress.kubernetes.io/error-pages": (
@@ -485,15 +484,20 @@ class KubeOrchestrator(Orchestrator):
                 ),
             }
             if job.requires_http_auth:
-                annotations.update(
-                    {
-                        "ingress.kubernetes.io/auth-type": "forward",
-                        "ingress.kubernetes.io/auth-trust-headers": "true",
-                        "ingress.kubernetes.io/auth-url": (
-                            "http://platformingressauth:8080/oauth/authorize"
-                        ),
-                    }
-                )
+                oauth_url = self._kube_config.jobs_ingress_oauth_url
+                if oauth_url:
+                    annotations.update(
+                        {
+                            "ingress.kubernetes.io/auth-type": "forward",
+                            "ingress.kubernetes.io/auth-trust-headers": "true",
+                            "ingress.kubernetes.io/auth-url": str(oauth_url),
+                        }
+                    )
+                else:
+                    logging.warning(
+                        "Job ingress oauth URL is not defined, "
+                        f"http auth is NOT enabled for job {job.id}"
+                    )
         return annotations
 
     async def _create_ingress(self, job: Job, service: Service) -> None:
