@@ -5,8 +5,8 @@ from unittest.mock import MagicMock
 import pytest
 from notifications_client import Client as NotificationsClient, JobTransition
 
-from platform_api.cluster import Cluster, ClusterRegistry
-from platform_api.config import ClusterConfig, JobsConfig
+from platform_api.cluster import Cluster, ClusterConfig, ClusterRegistry
+from platform_api.config import JobsConfig
 from platform_api.orchestrator.job import (
     AggregatedRunTime,
     Job,

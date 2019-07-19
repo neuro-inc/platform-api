@@ -8,7 +8,7 @@ import aiodocker.utils
 import asyncssh
 import pytest
 
-from platform_api.config import Config
+from platform_api.cluster_config import ClusterConfig
 from platform_api.elasticsearch import Elasticsearch
 from platform_api.orchestrator.job import JobRequest
 from platform_api.orchestrator.job_request import Container, ContainerResources
@@ -39,12 +39,12 @@ class ApiConfig(NamedTuple):
 
 @pytest.fixture
 async def ssh_server(
-    config: Config, es_client: Optional[Elasticsearch]
+    cluster_config: ClusterConfig, es_client: Optional[Elasticsearch]
 ) -> AsyncIterator[SSHServer]:
     async with KubeOrchestrator(
-        storage_config=config.storage,
-        registry_config=config.registry,
-        kube_config=config.orchestrator,
+        storage_config=cluster_config.storage,
+        registry_config=cluster_config.registry,
+        kube_config=cluster_config.orchestrator,
         es_client=es_client,  # noqa
     ) as orchestrator:
         srv = SSHServer("0.0.0.0", 8022, orchestrator)
