@@ -148,14 +148,14 @@ class TestEnvironConfigFactory:
         assert cluster.orchestrator.namespace == "default"
         assert cluster.orchestrator.client_conn_timeout_s == 300
         assert cluster.orchestrator.client_read_timeout_s == 300
-        assert cluster.orchestrator.client_conn_pool_size == 100
-        assert not cluster.orchestrator.is_http_ingress_secure
-        assert cluster.orchestrator.jobs_domain_name_template == "{job_id}.jobs.domain"
-        assert cluster.orchestrator.ssh_auth_domain_name == "ssh-auth.domain"
         assert cluster.orchestrator.jobs_ingress_class == "traefik"
         assert cluster.orchestrator.jobs_ingress_oauth_url == URL(
             "http://neu.ro/oauth/authorize"
         )
+        assert cluster.orchestrator.client_conn_pool_size == 100
+        assert not cluster.orchestrator.is_http_ingress_secure
+        assert cluster.orchestrator.jobs_domain_name_template == "{job_id}.jobs.domain"
+        assert cluster.orchestrator.ssh_auth_domain_name == "ssh-auth.domain"
 
         assert cluster.orchestrator.resource_pool_types == [ResourcePoolType()]
         assert cluster.orchestrator.node_label_gpu is None
