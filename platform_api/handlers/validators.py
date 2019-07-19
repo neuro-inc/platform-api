@@ -132,6 +132,7 @@ def create_container_validator(
     validator = t.Dict(
         {
             "image": t.String,
+            t.Key("entrypoint", optional=True): t.String,
             t.Key("command", optional=True): t.String,
             t.Key("env", optional=True): t.Mapping(
                 t.String, t.String(allow_blank=True)

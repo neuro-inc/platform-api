@@ -5,14 +5,7 @@ from typing import Container, Optional, Sequence
 
 from yarl import URL
 
-from .cluster_config import (
-    ClusterConfig,
-    IngressConfig,
-    LoggingConfig,
-    OrchestratorConfig,
-    RegistryConfig,
-    StorageConfig,
-)
+from .cluster_config import OrchestratorConfig, RegistryConfig, StorageConfig
 from .config_client import ConfigClient
 from .redis import RedisConfig
 
@@ -82,8 +75,6 @@ class Config:
 
     server: ServerConfig
 
-    cluster: ClusterConfig
-
     database: DatabaseConfig
     auth: AuthConfig
     notifications: NotificationsConfig
@@ -95,26 +86,6 @@ class Config:
     # used for generating environment variable names and
     # sourcing them inside containers.
     env_prefix: str = "NP"  # stands for Neuromation Platform
-
-    @property
-    def storage(self) -> StorageConfig:
-        return self.cluster.storage
-
-    @property
-    def registry(self) -> RegistryConfig:
-        return self.cluster.registry
-
-    @property
-    def orchestrator(self) -> OrchestratorConfig:
-        return self.cluster.orchestrator
-
-    @property
-    def logging(self) -> LoggingConfig:
-        return self.cluster.logging
-
-    @property
-    def ingress(self) -> IngressConfig:
-        return self.cluster.ingress
 
 
 @dataclass(frozen=True)

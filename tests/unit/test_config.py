@@ -122,13 +122,14 @@ class TestEnvironConfigFactory:
             "NP_NOTIFICATIONS_TOKEN": "token",
         }
         config = EnvironConfigFactory(environ=environ).create()
+        cluster = EnvironConfigFactory(environ=environ).create_cluster()
 
         assert config.server.host == "0.0.0.0"
         assert config.server.port == 8080
 
-        assert config.storage.host_mount_path == PurePath("/tmp")
-        assert config.storage.container_mount_path == PurePath("/var/storage")
-        assert config.storage.uri_scheme == "storage"
+        assert cluster.storage.host_mount_path == PurePath("/tmp")
+        assert cluster.storage.container_mount_path == PurePath("/var/storage")
+        assert cluster.storage.uri_scheme == "storage"
 
         assert config.jobs.deletion_delay_s == 86400
         assert config.jobs.deletion_delay == timedelta(days=1)
@@ -151,9 +152,9 @@ class TestEnvironConfigFactory:
         assert config.orchestrator.jobs_domain_name_template == "{job_id}.jobs.domain"
         assert config.orchestrator.ssh_auth_domain_name == "ssh-auth.domain"
 
-        assert config.orchestrator.resource_pool_types == [ResourcePoolType()]
-        assert config.orchestrator.node_label_gpu is None
-        assert config.orchestrator.node_label_preemptible is None
+        assert cluster.orchestrator.resource_pool_types == [ResourcePoolType()]
+        assert cluster.orchestrator.node_label_gpu is None
+        assert cluster.orchestrator.node_label_preemptible is None
 
         assert config.database.redis is None
 
@@ -172,11 +173,11 @@ class TestEnvironConfigFactory:
             "https://dev.neu.ro/oauth/show-code"
         )
 
-        assert config.registry.host == "registry.dev.neuromation.io"
+        assert cluster.registry.host == "registry.dev.neuromation.io"
 
-        assert config.logging.elasticsearch.hosts == ["http://es"]
-        assert config.logging.elasticsearch.user == "test-user"
-        assert config.logging.elasticsearch.password == "test-password"
+        assert cluster.logging.elasticsearch.hosts == ["http://es"]
+        assert cluster.logging.elasticsearch.user == "test-user"
+        assert cluster.logging.elasticsearch.password == "test-password"
 
         assert config.config_client is not None
 
@@ -239,17 +240,18 @@ class TestEnvironConfigFactory:
             "NP_NOTIFICATIONS_TOKEN": "token",
         }
         config = EnvironConfigFactory(environ=environ).create()
+        cluster = EnvironConfigFactory(environ=environ).create_cluster()
 
         assert config.server.host == "0.0.0.0"
         assert config.server.port == 1111
 
-        assert config.storage.host_mount_path == PurePath("/tmp")
-        assert config.storage.container_mount_path == PurePath("/opt/storage")
-        assert config.storage.uri_scheme == "storage"
+        assert cluster.storage.host_mount_path == PurePath("/tmp")
+        assert cluster.storage.container_mount_path == PurePath("/opt/storage")
+        assert cluster.storage.uri_scheme == "storage"
 
-        assert config.ingress.storage_url == URL("https://neu.ro/api/v1/storage")
-        assert config.ingress.users_url == URL("https://neu.ro/api/v1/users")
-        assert config.ingress.monitoring_url == URL("https://neu.ro/api/v1/jobs")
+        assert cluster.ingress.storage_url == URL("https://neu.ro/api/v1/storage")
+        assert cluster.ingress.users_url == URL("https://neu.ro/api/v1/users")
+        assert cluster.ingress.monitoring_url == URL("https://neu.ro/api/v1/jobs")
 
         assert config.jobs.deletion_delay_s == 3600
         assert config.jobs.deletion_delay == timedelta(seconds=3600)
@@ -268,17 +270,19 @@ class TestEnvironConfigFactory:
         assert config.orchestrator.client_conn_timeout_s == 111
         assert config.orchestrator.client_read_timeout_s == 222
         assert config.orchestrator.client_conn_pool_size == 333
+        assert config.orchestrator.jobs_ingress_name == "testingress"
+        assert config.orchestrator.jobs_ingress_auth_name == "testingressauth"
         assert config.orchestrator.is_http_ingress_secure
         assert config.orchestrator.jobs_domain_name_template == "{job_id}.jobs.domain"
         assert config.orchestrator.ssh_auth_domain_name == "ssh-auth.domain"
 
-        assert config.orchestrator.resource_pool_types == [
+        assert cluster.orchestrator.resource_pool_types == [
             ResourcePoolType(),
             ResourcePoolType(gpu=1, gpu_model=GKEGPUModels.K80.value),
             ResourcePoolType(gpu=1, gpu_model=GKEGPUModels.V100.value),
         ]
-        assert config.orchestrator.node_label_gpu == "testlabel"
-        assert config.orchestrator.node_label_preemptible == "testpreempt"
+        assert cluster.orchestrator.node_label_gpu == "testlabel"
+        assert cluster.orchestrator.node_label_preemptible == "testpreempt"
 
         assert config.database.redis is not None
         assert config.database.redis.uri == "redis://localhost:6379/0"
@@ -291,13 +295,13 @@ class TestEnvironConfigFactory:
         assert config.auth.service_token == "token"
         assert config.auth.service_name == "servicename"
 
-        assert config.registry.email == "registry@neuromation.io"
-        assert config.registry.host == "testregistry:5000"
-        assert config.registry.url == URL("https://testregistry:5000")
+        assert cluster.registry.email == "registry@neuromation.io"
+        assert cluster.registry.host == "testregistry:5000"
+        assert cluster.registry.url == URL("https://testregistry:5000")
 
-        assert config.logging.elasticsearch.hosts == ["http://es"]
-        assert config.logging.elasticsearch.user == "test-user"
-        assert config.logging.elasticsearch.password == "test-password"
+        assert cluster.logging.elasticsearch.hosts == ["http://es"]
+        assert cluster.logging.elasticsearch.user == "test-user"
+        assert cluster.logging.elasticsearch.password == "test-password"
 
         assert config.config_client is not None
 
@@ -319,9 +323,9 @@ class TestEnvironConfigFactory:
             "NP_NOTIFICATIONS_URL": "http://notifications:8080",
             "NP_NOTIFICATIONS_TOKEN": "token",
         }
-        config = EnvironConfigFactory(environ=environ).create()
-        assert config.storage.nfs_server == "1.2.3.4"
-        assert config.storage.nfs_export_path == PurePath("/tmp")
+        cluster = EnvironConfigFactory(environ=environ).create_cluster()
+        assert cluster.storage.nfs_server == "1.2.3.4"
+        assert cluster.storage.nfs_export_path == PurePath("/tmp")
 
     def test_create_ssh_auth(self) -> None:
         environ = {

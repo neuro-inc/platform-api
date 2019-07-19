@@ -19,16 +19,21 @@ from .resource import GKEGPUModels, GPUModel, ResourcePoolType
 
 
 _nfs_storage_cfg_validator = t.Dict(
-    {"url": t.String, "host": t.Dict({"mount_path": t.String})}
-)
+    {"url": t.String, "host": t.Dict({"mount_path": t.String}).allow_extra("*")}
+).allow_extra("*")
 
 _host_storage_cfg_validator = t.Dict(
-    {"url": t.String, "nfs": t.Dict({"server": t.String, "export_path": t.String})}
-)
+    {
+        "url": t.String,
+        "nfs": t.Dict({"server": t.String, "export_path": t.String}).allow_extra("*"),
+    }
+).allow_extra("*")
 
 _storage_config_validator = _nfs_storage_cfg_validator | _host_storage_cfg_validator
 
-_registry_config_validator = t.Dict({"url": t.String, "email": t.Email})
+_registry_config_validator = t.Dict({"url": t.String, "email": t.Email}).allow_extra(
+    "*"
+)
 
 _orchestrator_config_validator = t.Dict(
     {
@@ -42,19 +47,22 @@ _orchestrator_config_validator = t.Dict(
                 "node_label_gpu": t.String,
                 "node_label_preemptible": t.String,
             }
-        ),
+        ).allow_extra("*"),
         "is_http_ingress_secure": t.Bool,
         "job_hostname_template": t.String,
-        t.Key("named_job_hostname_template", optional=True): t.String,  # deprecated
         "resource_pool_types": t.List(
             t.Dict(
-                {"gpu": t.Int, "gpu_model": t.Enum(*[m.value.id for m in GKEGPUModels])}
-            )
-            | t.Dict({"gpu": t.Int})
+                {
+                    "gpu": t.Int,
+                    t.Key("gpu_model", optional=True): t.Enum(
+                        *[m.value.id for m in GKEGPUModels]
+                    ),
+                }
+            ).allow_extra("*")
             | t.Dict({})
         ),
     }
-)
+).allow_extra("*")
 
 _monitoring_config_validator = t.Dict(
     {
@@ -62,11 +70,11 @@ _monitoring_config_validator = t.Dict(
         "elasticsearch": t.Dict({"hosts": t.List(t.String)})
         | t.Dict(
             {"hosts": t.List(t.String), "username": t.String, "password": t.String}
-        ),
+        ).allow_extra("*"),
     }
-)
+).allow_extra("*")
 
-_ssh_config_validator = t.Dict({"server": t.String})
+_ssh_config_validator = t.Dict({"server": t.String}).allow_extra("*")
 
 _cluster_config_validator = t.Dict(
     {
@@ -77,7 +85,7 @@ _cluster_config_validator = t.Dict(
         "ssh": _ssh_config_validator,
         "monitoring": _monitoring_config_validator,
     }
-)
+).allow_extra("*")
 
 
 class ClusterConfigFactory:
