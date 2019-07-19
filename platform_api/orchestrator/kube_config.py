@@ -2,6 +2,8 @@ import enum
 from dataclasses import dataclass
 from typing import Optional
 
+from yarl import URL
+
 from platform_api.config import OrchestratorConfig
 
 
@@ -14,6 +16,7 @@ class KubeClientAuthType(str, enum.Enum):
 @dataclass(frozen=True)
 class KubeConfig(OrchestratorConfig):
     jobs_ingress_class: str = "traefik"
+    jobs_ingress_oauth_url: URL = URL()
 
     endpoint_url: str = ""
     cert_authority_data_pem: Optional[str] = None
@@ -37,5 +40,7 @@ class KubeConfig(OrchestratorConfig):
     node_label_preemptible: Optional[str] = None
 
     def __post_init__(self) -> None:
-        if not self.endpoint_url:
+        if not self.endpoint_url or (
+            self.jobs_ingress_class == "traefik" and not self.jobs_ingress_oauth_url
+        ):
             raise ValueError("Missing required settings")

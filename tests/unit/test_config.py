@@ -356,3 +356,64 @@ class TestEnvironConfigFactory:
     def test_registry_config_host_custom_port(self) -> None:
         config = RegistryConfig(url=URL("http://registry.com:5000"))
         assert config.host == "registry.com:5000"
+
+
+class TestKubeConfig:
+    def test_missing_api_url(self) -> None:
+        with pytest.raises(ValueError, match="Missing required settings"):
+            KubeConfig(
+                endpoint_url="",
+                cert_authority_data_pem="value",
+                cert_authority_path="value",
+                auth_cert_path="value",
+                auth_cert_key_path="value",
+                token="value",
+                token_path="value",
+                namespace="value",
+                jobs_domain_name_template="value",
+                ssh_auth_domain_name="value",
+                resource_pool_types=[],
+                node_label_gpu="value",
+                node_label_preemptible="value",
+                jobs_ingress_oauth_url=URL("value"),
+            )
+
+    def test_with_traefik_missing_jobs_ingress_oauth_url(self) -> None:
+        with pytest.raises(ValueError, match="Missing required settings"):
+            KubeConfig(
+                jobs_ingress_class="traefik",
+                jobs_ingress_oauth_url=URL(""),
+                endpoint_url="value",
+                cert_authority_data_pem="value",
+                cert_authority_path="value",
+                auth_cert_path="value",
+                auth_cert_key_path="value",
+                token="value",
+                token_path="value",
+                namespace="value",
+                jobs_domain_name_template="value",
+                ssh_auth_domain_name="value",
+                resource_pool_types=[],
+                node_label_gpu="value",
+                node_label_preemptible="value",
+            )
+
+    def test_with_nginx_jobs_ingress_oauth_url_not_required(self) -> None:
+        # does not raise ValueError on __post_init__
+        KubeConfig(
+            jobs_ingress_class="nginx",
+            jobs_ingress_oauth_url=URL(""),
+            endpoint_url="value",
+            cert_authority_data_pem="value",
+            cert_authority_path="value",
+            auth_cert_path="value",
+            auth_cert_key_path="value",
+            token="value",
+            token_path="value",
+            namespace="value",
+            jobs_domain_name_template="value",
+            ssh_auth_domain_name="value",
+            resource_pool_types=[],
+            node_label_gpu="value",
+            node_label_preemptible="value",
+        )

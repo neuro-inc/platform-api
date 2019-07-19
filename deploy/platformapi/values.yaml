@@ -38,6 +38,11 @@ NP_API_URL:
   dev: https://dev.neu.ro/api/v1
   staging: https://staging.neu.ro/api/v1
   prod: https://neu.ro/api/v1
+NP_JOBS_INGRESS_OAUTH_AUTHORIZE_URL:
+  _default: https://dev.neu.ro/oauth/authorize
+  dev: https://dev.neu.ro/oauth/authorize
+  staging: https://staging.neu.ro/oauth/authorize
+  prod: https://neu.ro/oauth/authorize
 INGRESS_HOST:
   _default: platform.dev.neuromation.io
   dev: platform.dev.neuromation.io
