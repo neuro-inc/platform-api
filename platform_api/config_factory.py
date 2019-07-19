@@ -193,6 +193,7 @@ class EnvironConfigFactory:
                     "NP_K8S_CLIENT_CONN_POOL_SIZE", KubeConfig.client_conn_pool_size
                 )
             ),
+            jobs_ingress_oauth_url=jobs_ingress_oauth_url,
             is_http_ingress_secure=self._get_bool("NP_K8S_JOBS_INGRESS_HTTPS"),
             jobs_domain_name_template=self._environ[
                 "NP_K8S_JOBS_INGRESS_DOMAIN_NAME_TEMPLATE"
@@ -201,7 +202,6 @@ class EnvironConfigFactory:
             resource_pool_types=pool_types,
             node_label_gpu=self._environ.get("NP_K8S_NODE_LABEL_GPU"),
             node_label_preemptible=self._environ.get("NP_K8S_NODE_LABEL_PREEMPTIBLE"),
-            jobs_ingress_oauth_url=jobs_ingress_oauth_url,
         )
 
     def create_resource_pool_types(self) -> List[ResourcePoolType]:

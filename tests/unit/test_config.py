@@ -138,19 +138,19 @@ class TestEnvironConfigFactory:
         assert config.notifications.url == URL("http://notifications:8080")
         assert config.notifications.token == "token"
 
-        assert isinstance(config.orchestrator, KubeConfig)
-        assert config.orchestrator.endpoint_url == "https://localhost:8443"
-        assert not config.orchestrator.cert_authority_data_pem
-        assert not config.orchestrator.cert_authority_path
-        assert not config.orchestrator.auth_cert_path
-        assert not config.orchestrator.auth_cert_key_path
-        assert config.orchestrator.namespace == "default"
-        assert config.orchestrator.client_conn_timeout_s == 300
-        assert config.orchestrator.client_read_timeout_s == 300
-        assert config.orchestrator.client_conn_pool_size == 100
-        assert not config.orchestrator.is_http_ingress_secure
-        assert config.orchestrator.jobs_domain_name_template == "{job_id}.jobs.domain"
-        assert config.orchestrator.ssh_auth_domain_name == "ssh-auth.domain"
+        assert isinstance(cluster.orchestrator, KubeConfig)
+        assert cluster.orchestrator.endpoint_url == "https://localhost:8443"
+        assert not cluster.orchestrator.cert_authority_data_pem
+        assert not cluster.orchestrator.cert_authority_path
+        assert not cluster.orchestrator.auth_cert_path
+        assert not cluster.orchestrator.auth_cert_key_path
+        assert cluster.orchestrator.namespace == "default"
+        assert cluster.orchestrator.client_conn_timeout_s == 300
+        assert cluster.orchestrator.client_read_timeout_s == 300
+        assert cluster.orchestrator.client_conn_pool_size == 100
+        assert not cluster.orchestrator.is_http_ingress_secure
+        assert cluster.orchestrator.jobs_domain_name_template == "{job_id}.jobs.domain"
+        assert cluster.orchestrator.ssh_auth_domain_name == "ssh-auth.domain"
 
         assert cluster.orchestrator.resource_pool_types == [ResourcePoolType()]
         assert cluster.orchestrator.node_label_gpu is None
