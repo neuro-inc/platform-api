@@ -104,6 +104,7 @@ class TestEnvironConfigFactory:
         environ = {
             "NP_STORAGE_HOST_MOUNT_PATH": "/tmp",
             "NP_K8S_API_URL": "https://localhost:8443",
+            "NP_JOBS_INGRESS_OAUTH_AUTHORIZE_URL": "http://neu.ro/oauth/authorize",
             "NP_K8S_JOBS_INGRESS_DOMAIN_NAME_TEMPLATE": "{job_id}.jobs.domain",
             "NP_K8S_SSH_AUTH_INGRESS_DOMAIN_NAME": "ssh-auth.domain",
             "NP_AUTH_URL": "https://auth",
@@ -120,7 +121,6 @@ class TestEnvironConfigFactory:
             "NP_PLATFORM_CONFIG_URI": "http://platformconfig:8080/api/v1",
             "NP_NOTIFICATIONS_URL": "http://notifications:8080",
             "NP_NOTIFICATIONS_TOKEN": "token",
-            "NP_JOBS_INGRESS_OAUTH_AUTHORIZE_URL": "https://dev.neu.ro/oauth/authorize",
         }
         config = EnvironConfigFactory(environ=environ).create()
         cluster = EnvironConfigFactory(environ=environ).create_cluster()
@@ -154,7 +154,7 @@ class TestEnvironConfigFactory:
         assert cluster.orchestrator.ssh_auth_domain_name == "ssh-auth.domain"
         assert cluster.orchestrator.jobs_ingress_class == "traefik"
         assert cluster.orchestrator.jobs_ingress_oauth_url == URL(
-            "https://dev.neu.ro/oauth/authorize"
+            "http://neu.ro/oauth/authorize"
         )
 
         assert cluster.orchestrator.resource_pool_types == [ResourcePoolType()]
@@ -212,6 +212,7 @@ class TestEnvironConfigFactory:
             "NP_K8S_CLIENT_CONN_TIMEOUT": "111",
             "NP_K8S_CLIENT_READ_TIMEOUT": "222",
             "NP_K8S_CLIENT_CONN_POOL_SIZE": "333",
+            "NP_JOBS_INGRESS_OAUTH_AUTHORIZE_URL": "http://neu.ro/oauth/authorize",
             "NP_K8S_JOBS_INGRESS_HTTPS": "True",
             "NP_K8S_JOBS_INGRESS_DOMAIN_NAME_TEMPLATE": "{job_id}.jobs.domain",
             "NP_K8S_SSH_AUTH_INGRESS_DOMAIN_NAME": "ssh-auth.domain",
@@ -243,7 +244,6 @@ class TestEnvironConfigFactory:
             "NP_PLATFORM_CONFIG_URI": "http://platformconfig:8080/api/v1",
             "NP_NOTIFICATIONS_URL": "http://notifications:8080",
             "NP_NOTIFICATIONS_TOKEN": "token",
-            "NP_JOBS_INGRESS_OAUTH_AUTHORIZE_URL": "https://dev.neu.ro/oauth/authorize",
         }
         config = EnvironConfigFactory(environ=environ).create()
         cluster = EnvironConfigFactory(environ=environ).create_cluster()
@@ -276,13 +276,13 @@ class TestEnvironConfigFactory:
         assert cluster.orchestrator.client_conn_timeout_s == 111
         assert cluster.orchestrator.client_read_timeout_s == 222
         assert cluster.orchestrator.client_conn_pool_size == 333
+        assert cluster.orchestrator.jobs_ingress_class == "traefik"
+        assert cluster.orchestrator.jobs_ingress_oauth_url == URL(
+            "http://neu.ro/oauth/authorize"
+        )
         assert cluster.orchestrator.is_http_ingress_secure
         assert cluster.orchestrator.jobs_domain_name_template == "{job_id}.jobs.domain"
         assert cluster.orchestrator.ssh_auth_domain_name == "ssh-auth.domain"
-        assert cluster.orchestrator.jobs_ingress_class == "traefik"
-        assert cluster.orchestrator.jobs_ingress_oauth_url == URL(
-            "https://dev.neu.ro/oauth/authorize"
-        )
 
         assert cluster.orchestrator.resource_pool_types == [
             ResourcePoolType(),
