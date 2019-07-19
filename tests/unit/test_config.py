@@ -120,6 +120,7 @@ class TestEnvironConfigFactory:
             "NP_PLATFORM_CONFIG_URI": "http://platformconfig:8080/api/v1",
             "NP_NOTIFICATIONS_URL": "http://notifications:8080",
             "NP_NOTIFICATIONS_TOKEN": "token",
+            "NP_JOBS_INGRESS_OAUTH_AUTHORIZE_URL": "https://dev.neu.ro/oauth/authorize",
         }
         config = EnvironConfigFactory(environ=environ).create()
         cluster = EnvironConfigFactory(environ=environ).create_cluster()
@@ -151,6 +152,10 @@ class TestEnvironConfigFactory:
         assert not cluster.orchestrator.is_http_ingress_secure
         assert cluster.orchestrator.jobs_domain_name_template == "{job_id}.jobs.domain"
         assert cluster.orchestrator.ssh_auth_domain_name == "ssh-auth.domain"
+        assert cluster.orchestrator.jobs_ingress_class == "traefik"
+        assert cluster.orchestrator.jobs_ingress_oauth_url == URL(
+            "https://dev.neu.ro/oauth/authorize"
+        )
 
         assert cluster.orchestrator.resource_pool_types == [ResourcePoolType()]
         assert cluster.orchestrator.node_label_gpu is None
@@ -238,6 +243,7 @@ class TestEnvironConfigFactory:
             "NP_PLATFORM_CONFIG_URI": "http://platformconfig:8080/api/v1",
             "NP_NOTIFICATIONS_URL": "http://notifications:8080",
             "NP_NOTIFICATIONS_TOKEN": "token",
+            "NP_JOBS_INGRESS_OAUTH_AUTHORIZE_URL": "https://dev.neu.ro/oauth/authorize",
         }
         config = EnvironConfigFactory(environ=environ).create()
         cluster = EnvironConfigFactory(environ=environ).create_cluster()
@@ -260,21 +266,23 @@ class TestEnvironConfigFactory:
         assert config.notifications.url == URL("http://notifications:8080")
         assert config.notifications.token == "token"
 
-        assert isinstance(config.orchestrator, KubeConfig)
-        assert config.orchestrator.endpoint_url == "https://localhost:8443"
-        assert config.orchestrator.cert_authority_data_pem == CA_DATA_PEM
-        assert config.orchestrator.cert_authority_path is None  # disabled
-        assert config.orchestrator.auth_cert_path == "/cert_path"
-        assert config.orchestrator.auth_cert_key_path == "/cert_key_path"
-        assert config.orchestrator.namespace == "other"
-        assert config.orchestrator.client_conn_timeout_s == 111
-        assert config.orchestrator.client_read_timeout_s == 222
-        assert config.orchestrator.client_conn_pool_size == 333
-        assert config.orchestrator.jobs_ingress_name == "testingress"
-        assert config.orchestrator.jobs_ingress_auth_name == "testingressauth"
-        assert config.orchestrator.is_http_ingress_secure
-        assert config.orchestrator.jobs_domain_name_template == "{job_id}.jobs.domain"
-        assert config.orchestrator.ssh_auth_domain_name == "ssh-auth.domain"
+        assert isinstance(cluster.orchestrator, KubeConfig)
+        assert cluster.orchestrator.endpoint_url == "https://localhost:8443"
+        assert cluster.orchestrator.cert_authority_data_pem == CA_DATA_PEM
+        assert cluster.orchestrator.cert_authority_path is None  # disabled
+        assert cluster.orchestrator.auth_cert_path == "/cert_path"
+        assert cluster.orchestrator.auth_cert_key_path == "/cert_key_path"
+        assert cluster.orchestrator.namespace == "other"
+        assert cluster.orchestrator.client_conn_timeout_s == 111
+        assert cluster.orchestrator.client_read_timeout_s == 222
+        assert cluster.orchestrator.client_conn_pool_size == 333
+        assert cluster.orchestrator.is_http_ingress_secure
+        assert cluster.orchestrator.jobs_domain_name_template == "{job_id}.jobs.domain"
+        assert cluster.orchestrator.ssh_auth_domain_name == "ssh-auth.domain"
+        assert cluster.orchestrator.jobs_ingress_class == "traefik"
+        assert cluster.orchestrator.jobs_ingress_oauth_url == URL(
+            "https://dev.neu.ro/oauth/authorize"
+        )
 
         assert cluster.orchestrator.resource_pool_types == [
             ResourcePoolType(),
