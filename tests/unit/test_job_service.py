@@ -386,6 +386,31 @@ class TestJobsService:
         assert status_item.description == description
 
     @pytest.mark.asyncio
+    async def test_update_jobs_statuses_pending_scale_up(
+        self,
+        jobs_service: JobsService,
+        mock_orchestrator: MockOrchestrator,
+        job_request_factory: Callable[[], JobRequest],
+    ) -> None:
+        user = User(name="testuser", token="")
+        original_job, _ = await jobs_service.create_job(
+            job_request=job_request_factory(), user=user
+        )
+        assert original_job.status == JobStatus.PENDING
+
+        mock_orchestrator.update_status_to_return(JobStatus.FAILED)
+        mock_orchestrator.update_reason_to_return(
+            JobStatusReason.CLUSTER_SCALE_UP_FAILED
+        )
+        await jobs_service.update_jobs_statuses()
+
+        job = await jobs_service.get_job(job_id=original_job.id)
+        assert job.status == JobStatus.FAILED
+        assert job.is_finished
+        assert job.finished_at
+        assert job.is_deleted
+
+    @pytest.mark.asyncio
     async def test_update_jobs_statuses_succeeded_missing(
         self,
         jobs_service_factory: Callable[..., JobsService],
