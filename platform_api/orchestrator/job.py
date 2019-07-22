@@ -313,6 +313,12 @@ class JobRecord:
         deletion_planned_at = self.finished_at + delay
         return deletion_planned_at <= current_datetime_factory()
 
+    def _is_reason_for_deletion(self) -> bool:
+        return self.status_history.current.reason in (
+            JobStatusReason.COLLECTED,
+            JobStatusReason.CLUSTER_SCALE_UP_FAILED,
+        )
+
     def should_be_deleted(
         self,
         *,
@@ -326,7 +332,7 @@ class JobRecord:
                 self._is_time_for_deletion(
                     delay=delay, current_datetime_factory=current_datetime_factory
                 )
-                or self.status_history.current.reason == JobStatusReason.COLLECTED
+                or self._is_reason_for_deletion()
             )
         )
 
