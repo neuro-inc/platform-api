@@ -361,12 +361,14 @@ class TestJobsService:
     )
     async def test_update_jobs_statuses_pending_errimagepull(
         self,
-        jobs_service: JobsService,
+        jobs_service_factory: Callable[..., JobsService],
         mock_orchestrator: MockOrchestrator,
         job_request_factory: Callable[[], JobRequest],
         reason: str,
         description: str,
     ) -> None:
+        jobs_service = jobs_service_factory(deletion_delay_s=60)
+
         user = User(name="testuser", token="")
         original_job, _ = await jobs_service.create_job(
             job_request=job_request_factory(), user=user
@@ -388,10 +390,12 @@ class TestJobsService:
     @pytest.mark.asyncio
     async def test_update_jobs_statuses_pending_scale_up(
         self,
-        jobs_service: JobsService,
+        jobs_service_factory: Callable[..., JobsService],
         mock_orchestrator: MockOrchestrator,
         job_request_factory: Callable[[], JobRequest],
     ) -> None:
+        jobs_service = jobs_service_factory(deletion_delay_s=60)
+
         user = User(name="testuser", token="")
         original_job, _ = await jobs_service.create_job(
             job_request=job_request_factory(), user=user
