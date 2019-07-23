@@ -146,7 +146,12 @@ def clusters_payload(nfs_storage_payload: Dict[str, Any]) -> List[Dict[str, Any]
                         "gpu": 4,
                         "gpu_model": "nvidia-tesla-k80",
                         "presets": [
-                            {"name": "gpu-small-p", "cpu": 7.0, "memory_mb": 52224, "gpu": 1}
+                            {
+                                "name": "gpu-small-p",
+                                "cpu": 7.0,
+                                "memory_mb": 52224,
+                                "gpu": 1,
+                            }
                         ],
                     },
                     {
@@ -159,7 +164,12 @@ def clusters_payload(nfs_storage_payload: Dict[str, Any]) -> List[Dict[str, Any]
                         "gpu": 4,
                         "gpu_model": "nvidia-tesla-k80",
                         "presets": [
-                            {"name": "gpu-small", "cpu": 7.0, "memory_mb": 52224, "gpu": 1}
+                            {
+                                "name": "gpu-small",
+                                "cpu": 7.0,
+                                "memory_mb": 52224,
+                                "gpu": 1,
+                            }
                         ],
                     },
                     {
@@ -172,7 +182,12 @@ def clusters_payload(nfs_storage_payload: Dict[str, Any]) -> List[Dict[str, Any]
                         "gpu": 1,
                         "gpu_model": "nvidia-tesla-v100",
                         "presets": [
-                            {"name": "gpu-large-p", "cpu": 7.0, "memory_mb": 52224, "gpu": 1}
+                            {
+                                "name": "gpu-large-p",
+                                "cpu": 7.0,
+                                "memory_mb": 52224,
+                                "gpu": 1,
+                            }
                         ],
                     },
                     {
@@ -185,7 +200,12 @@ def clusters_payload(nfs_storage_payload: Dict[str, Any]) -> List[Dict[str, Any]
                         "gpu": 1,
                         "gpu_model": "nvidia-tesla-v100",
                         "presets": [
-                            {"name": "gpu-large", "cpu": 0.1, "memory_mb": 52224, "gpu": 1}
+                            {
+                                "name": "gpu-large",
+                                "cpu": 0.1,
+                                "memory_mb": 52224,
+                                "gpu": 1,
+                            }
                         ],
                     },
                 ],
@@ -212,7 +232,7 @@ def users_url() -> URL:
 
 class TestClusterConfigFactory:
     def test_valid_cluster_config(
-            self, clusters_payload: Sequence[Dict[str, Any]], users_url: URL
+        self, clusters_payload: Sequence[Dict[str, Any]], users_url: URL
     ) -> None:
         storage_payload = clusters_payload[0]["storage"]
         registry_payload = clusters_payload[0]["registry"]
@@ -257,21 +277,34 @@ class TestClusterConfigFactory:
 
         assert orchestrator.ssh_auth_domain_name == ssh_payload["server"]
         assert (
-                orchestrator.is_http_ingress_secure
-                == orchestrator_payload["is_http_ingress_secure"]
+            orchestrator.is_http_ingress_secure
+            == orchestrator_payload["is_http_ingress_secure"]
         )
         assert (
-                orchestrator.jobs_domain_name_template
-                == orchestrator_payload["job_hostname_template"]
+            orchestrator.jobs_domain_name_template
+            == orchestrator_payload["job_hostname_template"]
         )
 
-        assert len(orchestrator.resource_pool_types) == 3
+        assert len(orchestrator.resource_pool_types) == 5
         assert orchestrator.resource_pool_types[0].gpu is None
         assert orchestrator.resource_pool_types[0].gpu_model is None
-        assert orchestrator.resource_pool_types[1].gpu == 0
-        assert orchestrator.resource_pool_types[1].gpu_model is None
-        assert orchestrator.resource_pool_types[2].gpu == 1
-        assert orchestrator.resource_pool_types[2].gpu_model == GKEGPUModels.V100.value
+        assert orchestrator.resource_pool_types[1].gpu == 4
+        assert orchestrator.resource_pool_types[1].gpu_model == GKEGPUModels.K80.value
+        assert orchestrator.resource_pool_types[3].gpu == 1
+        assert orchestrator.resource_pool_types[3].gpu_model == GKEGPUModels.V100.value
+
+        assert orchestrator.resource_pool_types[0].presets[1].cpu == 7.0
+        assert orchestrator.resource_pool_types[0].presets[1].memory_mb == 49152
+        assert orchestrator.resource_pool_types[0].presets[1].gpu_model is None
+        assert orchestrator.resource_pool_types[2].presets[0].cpu == 7.0
+        assert orchestrator.resource_pool_types[2].presets[0].gpu == 1
+        assert (
+            orchestrator.resource_pool_types[2].presets[0].gpu_model
+            == "nvidia-tesla-k80"
+        )
+        assert orchestrator.resource_pool_types[2].presets[0].memory_mb == 52224
+        # elif preset.name == "gpu-large":
+        #     assert preset.cpu == 0.1
 
         assert orchestrator.endpoint_url == kube_payload["url"]
         assert orchestrator.cert_authority_data_pem == kube_payload["ca_data"]
@@ -280,17 +313,17 @@ class TestClusterConfigFactory:
         assert orchestrator.namespace == kube_payload["namespace"]
         assert orchestrator.jobs_ingress_name == kube_payload["jobs_ingress_name"]
         assert (
-                orchestrator.jobs_ingress_auth_name
-                == kube_payload["jobs_ingress_auth_name"]
+            orchestrator.jobs_ingress_auth_name
+            == kube_payload["jobs_ingress_auth_name"]
         )
         assert orchestrator.node_label_gpu == kube_payload["node_label_gpu"]
         assert (
-                orchestrator.node_label_preemptible
-                == kube_payload["node_label_preemptible"]
+            orchestrator.node_label_preemptible
+            == kube_payload["node_label_preemptible"]
         )
 
     def test_valid_elasticsearch_config_without_user(
-            self, clusters_payload: Sequence[Dict[str, Any]], users_url: URL
+        self, clusters_payload: Sequence[Dict[str, Any]], users_url: URL
     ) -> None:
         elasticsearch_payload = clusters_payload[0]["monitoring"]["elasticsearch"]
 
@@ -307,7 +340,7 @@ class TestClusterConfigFactory:
         assert logging.elasticsearch.password is None
 
     def test_valid_storage_config_nfs(
-            self, clusters_payload: Sequence[Dict[str, Any]], users_url: URL
+        self, clusters_payload: Sequence[Dict[str, Any]], users_url: URL
     ) -> None:
         storage_payload = clusters_payload[0]["storage"]
 
@@ -323,7 +356,7 @@ class TestClusterConfigFactory:
         assert storage.nfs_export_path == nfs_mount_point
 
     def test_create_storage_config_host(
-            self, host_storage_payload: Dict[str, Any]
+        self, host_storage_payload: Dict[str, Any]
     ) -> None:
         factory = ClusterConfigFactory()
         config = factory._create_storage_config(payload=host_storage_payload)
@@ -337,7 +370,7 @@ class TestClusterConfigFactory:
         assert config.uri_scheme == "storage"
 
     def test_create_storage_config_nfs(
-            self, nfs_storage_payload: Dict[str, Any]
+        self, nfs_storage_payload: Dict[str, Any]
     ) -> None:
         factory = ClusterConfigFactory()
         config = factory._create_storage_config(payload=nfs_storage_payload)
@@ -351,41 +384,10 @@ class TestClusterConfigFactory:
         assert config.uri_scheme == "storage"
 
     def test_factory_skips_invalid_cluster_configs(
-            self, clusters_payload: List[Dict[str, Any]], users_url: URL
+        self, clusters_payload: List[Dict[str, Any]], users_url: URL
     ) -> None:
         clusters_payload.append({})
         factory = ClusterConfigFactory()
         clusters = factory.create_cluster_configs(clusters_payload, users_url=users_url)
 
         assert len(clusters) == 1
-
-    def test_create_presets_with_data(
-            self, resource_pools_payload: Dict[str, Any]
-    ) -> None:
-        factory = ClusterConfigFactory()
-        config = factory._create_presets(resource_pools_payload)
-        assert len(config) == 6
-        for preset in config:
-            if preset.name == "cpu-large":
-                assert preset.cpu == 7.0
-                assert preset.memory_mb == 49152
-                assert preset.gpu_model is None
-            elif preset.name == "gpu-small":
-                assert preset.cpu == 7.0
-                assert preset.gpu == 1
-                assert preset.gpu_model == "nvidia-tesla-k80"
-                assert preset.memory_mb == 52224
-            elif preset.name == "gpu-large":
-                assert preset.cpu == 0.1
-
-    def test_create_presets_no_data(self) -> None:
-        empty_resource_pools_payload: Dict[str, Any] = {}
-        factory = ClusterConfigFactory()
-        config = factory._create_presets(empty_resource_pools_payload)
-
-        # config should use the defaults
-        assert len(config) == 4
-        for preset in config:
-            if preset.name == "gpu-large":
-                assert preset.gpu == 1
-                assert preset.cpu == 7.0
