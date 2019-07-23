@@ -1,9 +1,11 @@
 from dataclasses import dataclass
 from enum import Enum
 from pathlib import PurePath
-from typing import Optional, Sequence
+from typing import Dict, Optional, Sequence
 
 from yarl import URL
+
+from platform_api.resource import GKEGPUModels
 
 from .elasticsearch import ElasticsearchConfig
 from .resource import ResourcePoolType
@@ -122,6 +124,29 @@ class IngressConfig:
 
 
 @dataclass(frozen=True)
+class Preset:
+    cpu: Optional[float] = None
+    gpu: Optional[int] = None
+    memory_mb: Optional[int] = None
+    gpu_model: Optional[str] = None
+
+
+DEFAULT_PRESETS = {
+    "gpu-small": Preset(
+        cpu=7, memory_mb=30 * 1024, gpu=1, gpu_model=next(iter(GKEGPUModels)).value.id
+    ),
+    "gpu-large": Preset(
+        cpu=7,
+        memory_mb=60 * 1024,
+        gpu=1,
+        gpu_model=next(reversed(GKEGPUModels)).value.id,
+    ),
+    "cpu-small": Preset(cpu=2, memory_mb=2 * 1024),
+    "cpu-large": Preset(cpu=3, memory_mb=14 * 1024),
+}
+
+
+@dataclass(frozen=True)
 class ClusterConfig:
     name: str
     storage: StorageConfig
@@ -129,3 +154,4 @@ class ClusterConfig:
     orchestrator: OrchestratorConfig
     logging: LoggingConfig
     ingress: IngressConfig
+    presets: Dict[str, Preset]

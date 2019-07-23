@@ -1,5 +1,6 @@
 import asyncio
 import logging
+from dataclasses import asdict
 from typing import Any, AsyncIterator, Awaitable, Callable, Dict, Sequence
 
 import aiohttp.web
@@ -19,25 +20,10 @@ from .orchestrator.jobs_poller import JobsPoller
 from .orchestrator.jobs_service import JobsService, JobsServiceException
 from .orchestrator.jobs_storage import RedisJobsStorage
 from .redis import create_redis_client
-from .resource import GKEGPUModels
 from .user import authorized_user
 
 
 logger = logging.getLogger(__name__)
-
-RESOURCE_PRESETS = {
-    "gpu-small": dict(
-        cpu=7, memory_mb=30 * 1024, gpu=1, gpu_model=next(iter(GKEGPUModels)).value.id
-    ),
-    "gpu-large": dict(
-        cpu=7,
-        memory_mb=60 * 1024,
-        gpu=1,
-        gpu_model=next(reversed(GKEGPUModels)).value.id,
-    ),
-    "cpu-small": dict(cpu=2, memory_mb=2 * 1024),
-    "cpu-large": dict(cpu=3, memory_mb=14 * 1024),
-}
 
 
 class ApiHandler:
@@ -73,8 +59,8 @@ class ApiHandler:
                     "users_url": str(cluster_config.ingress.users_url),
                     "monitoring_url": str(cluster_config.ingress.monitoring_url),
                     "resource_presets": [
-                        {"name": name, **preset}
-                        for name, preset in RESOURCE_PRESETS.items()
+                        {"name": name, **asdict(preset)}
+                        for name, preset in cluster_config.presets
                     ],
                 }
             )

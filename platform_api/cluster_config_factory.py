@@ -6,10 +6,12 @@ import trafaret as t
 from yarl import URL
 
 from .cluster_config import (
+    DEFAULT_PRESETS,
     ClusterConfig,
     IngressConfig,
     LoggingConfig,
     OrchestratorConfig,
+    Preset,
     RegistryConfig,
     StorageConfig,
 )
@@ -40,6 +42,7 @@ class ClusterConfigFactory:
                 orchestrator=self._create_orchestrator_config(payload),
                 logging=self._create_logging_config(payload),
                 ingress=self._create_ingress_config(payload, users_url),
+                presets=self._create_presets(payload),
             )
         except t.DataError as err:
             logging.warning(f"failed to parse cluster config: {err}")
@@ -59,6 +62,21 @@ class ClusterConfigFactory:
         return LoggingConfig(
             elasticsearch=self._create_elasticsearch_config(monitoring["elasticsearch"])
         )
+
+    def _create_presets(self, payload: Dict[str, Any]) -> Dict[str, Preset]:
+        result = {}
+        for resource_pool in payload.get("resource_pools", []):
+            for preset in resource_pool.get("presets", []):
+                result[preset["name"]] = Preset(
+                    cpu=preset.get("cpu") or resource_pool.get("cpu"),
+                    gpu=preset.get("gpu") or resource_pool.get("gpu"),
+                    memory_mb=preset.get("memory_mb") or resource_pool.get("memory_mb"),
+                    gpu_model=preset.get("gpu_model") or resource_pool.get("gpu_model"),
+                )
+        # default fallback
+        if len(result) == 0:
+            return DEFAULT_PRESETS
+        return result
 
     def _create_elasticsearch_config(
         self, payload: Dict[str, Any]

@@ -39,6 +39,7 @@ def create_cluster_config(name: str) -> ClusterConfig:
         orchestrator=None,
         logging=None,
         ingress=None,
+        presets=None,
     )
 
 

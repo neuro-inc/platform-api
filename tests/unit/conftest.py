@@ -10,6 +10,7 @@ from yarl import URL
 
 from platform_api.cluster import Cluster, ClusterConfig, ClusterRegistry
 from platform_api.cluster_config import (
+    DEFAULT_PRESETS,
     ElasticsearchConfig,
     IngressConfig,
     LoggingConfig,
@@ -192,6 +193,7 @@ def cluster_config() -> ClusterConfig:
         orchestrator=orchestrator_config,
         logging=LoggingConfig(elasticsearch=ElasticsearchConfig(hosts=[])),
         ingress=IngressConfig(storage_url=URL(), users_url=URL(), monitoring_url=URL()),
+        presets=DEFAULT_PRESETS,
     )
 
 

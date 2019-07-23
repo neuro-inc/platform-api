@@ -10,6 +10,7 @@ from .cluster_config import (
     ClusterConfig,
     IngressConfig,
     LoggingConfig,
+    Preset,
     RegistryConfig,
     StorageConfig,
     StorageType,
@@ -67,6 +68,7 @@ class EnvironConfigFactory:
             orchestrator=self.create_orchestrator(),
             ingress=self.create_ingress(),
             logging=self.create_logging(),
+            presets=self.create_presets(),
         )
 
     def create_jobs(self, *, orphaned_job_owner: str) -> JobsConfig:
@@ -76,6 +78,9 @@ class EnvironConfigFactory:
             ),
             orphaned_job_owner=orphaned_job_owner,
         )
+
+    def create_presets(self) -> Dict[str, Preset]:
+        pass
 
     def create_ssh(self) -> SSHConfig:
         env_prefix = self._environ.get("NP_ENV_PREFIX", SSHConfig.env_prefix)

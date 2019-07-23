@@ -32,6 +32,78 @@ def nfs_storage_payload() -> Dict[str, Any]:
 
 
 @pytest.fixture
+def resource_pools_payload() -> Dict[str, Any]:
+    return {
+        "resource_pools": [
+            {
+                "is_preemptible": False,
+                "min_size": 1,
+                "max_size": 16,
+                "cpu": 8.0,
+                "memory_mb": 53248,
+                "disk_gb": 150,
+                "presets": [
+                    {"name": "cpu-small", "cpu": 1, "memory_mb": 2048},
+                    {"name": "cpu-large", "cpu": 7, "memory_mb": 49152},
+                ],
+            },
+            {
+                "is_preemptible": True,
+                "min_size": 1,
+                "max_size": 16,
+                "cpu": 32.0,
+                "memory_mb": 212992,
+                "disk_gb": 150,
+                "gpu": 4,
+                "gpu_model": "nvidia-tesla-k80",
+                "presets": [
+                    {"name": "gpu-small-p", "cpu": 7.0, "memory_mb": 52224, "gpu": 1}
+                ],
+            },
+            {
+                "is_preemptible": False,
+                "min_size": 1,
+                "max_size": 8,
+                "cpu": 32.0,
+                "memory_mb": 212992,
+                "disk_gb": 150,
+                "gpu": 4,
+                "gpu_model": "nvidia-tesla-k80",
+                "presets": [
+                    {"name": "gpu-small", "cpu": 7.0, "memory_mb": 52224, "gpu": 1}
+                ],
+            },
+            {
+                "is_preemptible": True,
+                "min_size": 0,
+                "max_size": 5,
+                "cpu": 8.0,
+                "memory_mb": 53248,
+                "disk_gb": 150,
+                "gpu": 1,
+                "gpu_model": "nvidia-tesla-v100",
+                "presets": [
+                    {"name": "gpu-large-p", "cpu": 7.0, "memory_mb": 52224, "gpu": 1}
+                ],
+            },
+            {
+                "is_preemptible": False,
+                "min_size": 0,
+                "max_size": 2,
+                "cpu": 8.0,
+                "memory_mb": 53248,
+                "disk_gb": 150,
+                "gpu": 1,
+                "gpu_model": "nvidia-tesla-v100",
+                "presets": [
+                    {"name": "gpu-large", "cpu": 0.1, "memory_mb": 52224, "gpu": 1}
+                ],
+            },
+        ]
+    }
+
+
+@pytest.fixture
 def clusters_payload(nfs_storage_payload: Dict[str, Any]) -> List[Dict[str, Any]]:
     return [
         {
@@ -227,3 +299,30 @@ class TestClusterConfigFactory:
         clusters = factory.create_cluster_configs(clusters_payload, users_url=users_url)
 
         assert len(clusters) == 1
+
+    def test_create_presets_with_data(
+        self, resource_pools_payload: Dict[str, Any]
+    ) -> None:
+        factory = ClusterConfigFactory()
+        config = factory._create_presets(resource_pools_payload)
+        assert len(config) == 6
+        assert config["cpu-large"].cpu == 7.0
+        assert config["cpu-large"].memory_mb == 49152
+        assert config["cpu-large"].gpu_model is None
+
+        assert config["gpu-small"].cpu == 7.0
+        assert config["gpu-small"].gpu == 1
+        assert config["gpu-small"].gpu_model == "nvidia-tesla-k80"
+        assert config["gpu-small"].memory_mb == 52224
+
+        assert config["gpu-large"].cpu == 0.1
+
+    def test_create_presets_no_data(self) -> None:
+        empty_resource_pools_payload: Dict[str, Any] = {}
+        factory = ClusterConfigFactory()
+        config = factory._create_presets(empty_resource_pools_payload)
+
+        # config should use the defaults
+        assert len(config) == 4
+        assert config["gpu-large"].gpu == 1
+        assert config["gpu-large"].cpu == 7.0
