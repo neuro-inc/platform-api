@@ -7,6 +7,7 @@ from yarl import URL
 import platform_api
 
 from .cluster_config import (
+    DEFAULT_PRESETS,
     ClusterConfig,
     IngressConfig,
     LoggingConfig,
@@ -80,7 +81,7 @@ class EnvironConfigFactory:
         )
 
     def create_presets(self) -> Dict[str, Preset]:
-        pass
+        return DEFAULT_PRESETS
 
     def create_ssh(self) -> SSHConfig:
         env_prefix = self._environ.get("NP_ENV_PREFIX", SSHConfig.env_prefix)

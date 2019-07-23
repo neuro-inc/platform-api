@@ -60,7 +60,7 @@ class ApiHandler:
                     "monitoring_url": str(cluster_config.ingress.monitoring_url),
                     "resource_presets": [
                         {"name": name, **asdict(preset)}
-                        for name, preset in cluster_config.presets
+                        for name, preset in cluster_config.presets.items()
                     ],
                 }
             )
