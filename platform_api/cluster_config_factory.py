@@ -1,17 +1,17 @@
 import logging
 from pathlib import PurePath
-from typing import Any, Dict, Optional, Sequence
+from typing import Any, Dict, List, Optional, Sequence
 
 import trafaret as t
 from yarl import URL
 
+from platform_api.resource import DEFAULT_PRESETS, Preset
+
 from .cluster_config import (
-    DEFAULT_PRESETS,
     ClusterConfig,
     IngressConfig,
     LoggingConfig,
     OrchestratorConfig,
-    Preset,
     RegistryConfig,
     StorageConfig,
 )
@@ -42,7 +42,6 @@ class ClusterConfigFactory:
                 orchestrator=self._create_orchestrator_config(payload),
                 logging=self._create_logging_config(payload),
                 ingress=self._create_ingress_config(payload, users_url),
-                presets=self._create_presets(payload),
             )
         except t.DataError as err:
             logging.warning(f"failed to parse cluster config: {err}")
@@ -63,16 +62,19 @@ class ClusterConfigFactory:
             elasticsearch=self._create_elasticsearch_config(monitoring["elasticsearch"])
         )
 
-    def _create_presets(self, payload: Dict[str, Any]) -> Dict[str, Preset]:
-        result = {}
-        for resource_pool in payload.get("resource_pools", []):
-            for preset in resource_pool.get("presets", []):
-                result[preset["name"]] = Preset(
-                    cpu=preset.get("cpu") or resource_pool.get("cpu"),
-                    gpu=preset.get("gpu") or resource_pool.get("gpu"),
-                    memory_mb=preset.get("memory_mb") or resource_pool.get("memory_mb"),
-                    gpu_model=preset.get("gpu_model") or resource_pool.get("gpu_model"),
+    def _create_presets(self, payload: Dict[str, Any]) -> List[Preset]:
+        result = []
+        for preset in payload.get("presets", []):
+            result.append(
+                Preset(
+                    name=preset["name"],
+                    cpu=preset.get("cpu") or payload.get("cpu"),
+                    gpu=preset.get("gpu") or payload.get("gpu"),
+                    memory_mb=preset.get("memory_mb") or payload.get("memory_mb"),
+                    gpu_model=self._create_gpu_model(preset.get("gpu_model"))
+                    or payload.get("gpu_model"),
                 )
+            )
         # default fallback
         if len(result) == 0:
             return DEFAULT_PRESETS
@@ -120,6 +122,13 @@ class ClusterConfigFactory:
         return ResourcePoolType(
             gpu=payload.get("gpu"),
             gpu_model=self._create_gpu_model(payload.get("gpu_model")),
+            is_preemptible=payload.get("is_preemptible"),
+            cpu=payload.get("cpu"),
+            memory_mb=payload.get("memory_mb"),
+            disk_gb=payload.get("disk_gb"),
+            min_size=payload.get("min_size"),
+            max_size=payload.get("max_size"),
+            presets=self._create_presets(payload),
         )
 
     def _create_gpu_model(self, gpu_model_id: Optional[str]) -> Optional[GPUModel]:

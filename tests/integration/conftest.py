@@ -16,7 +16,6 @@ from async_timeout import timeout
 from yarl import URL
 
 from platform_api.cluster_config import (
-    DEFAULT_PRESETS,
     ClusterConfig,
     IngressConfig,
     LoggingConfig,
@@ -453,7 +452,6 @@ def cluster_config(
         ingress=ingress_config,
         storage=storage_config_host,
         registry=registry_config,
-        presets=DEFAULT_PRESETS,
     )
 
 

@@ -5,13 +5,12 @@ from typing import Any, Dict, List, Optional
 from yarl import URL
 
 import platform_api
+from platform_api.resource import DEFAULT_PRESETS, Preset
 
 from .cluster_config import (
-    DEFAULT_PRESETS,
     ClusterConfig,
     IngressConfig,
     LoggingConfig,
-    Preset,
     RegistryConfig,
     StorageConfig,
     StorageType,
@@ -69,7 +68,6 @@ class EnvironConfigFactory:
             orchestrator=self.create_orchestrator(),
             ingress=self.create_ingress(),
             logging=self.create_logging(),
-            presets=self.create_presets(),
         )
 
     def create_jobs(self, *, orphaned_job_owner: str) -> JobsConfig:
@@ -80,7 +78,7 @@ class EnvironConfigFactory:
             orphaned_job_owner=orphaned_job_owner,
         )
 
-    def create_presets(self) -> Dict[str, Preset]:
+    def create_presets(self) -> List[Preset]:
         return DEFAULT_PRESETS
 
     def create_ssh(self) -> SSHConfig:

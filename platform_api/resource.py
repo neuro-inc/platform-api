@@ -1,6 +1,6 @@
 from dataclasses import dataclass
 from enum import Enum
-from typing import Optional
+from typing import List, Optional
 
 
 @dataclass(frozen=True)
@@ -31,13 +31,48 @@ class GKEGPUModels(Enum):
 
 
 @dataclass(frozen=True)
+class Preset:
+    name: str
+    cpu: Optional[float] = None
+    gpu: Optional[int] = None
+    memory_mb: Optional[int] = None
+    gpu_model: Optional[GPUModel] = None
+
+
+@dataclass(frozen=True)
 class ResourcePoolType:
     """Represents an infrastructure instance/node template."""
 
-    # TODO (A Danshyn 10/23/18): add cpu, memory, local drives etc
+    is_preemptible: Optional[bool] = False
+    presets: Optional[List[Preset]] = None
+    cpu: Optional[float] = None
+    memory_mb: Optional[int] = None
     gpu: Optional[int] = None
     gpu_model: Optional[GPUModel] = None
+    disk_gb: Optional[int] = None
+    min_size: Optional[int] = None
+    max_size: Optional[int] = None
 
     def __post_init__(self) -> None:
         if self.gpu and not self.gpu_model:
             raise ValueError("GPU model unspecified")
+
+
+DEFAULT_PRESETS = [
+    Preset(
+        name="gpu-small",
+        cpu=7,
+        memory_mb=30 * 1024,
+        gpu=1,
+        gpu_model=next(iter(GKEGPUModels)).value.id,
+    ),
+    Preset(
+        name="gpu-large",
+        cpu=7,
+        memory_mb=60 * 1024,
+        gpu=1,
+        gpu_model=next(reversed(GKEGPUModels)).value.id,
+    ),
+    Preset(name="cpu-small", cpu=2, memory_mb=2 * 1024),
+    Preset(name="cpu-large", cpu=3, memory_mb=14 * 1024),
+]

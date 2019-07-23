@@ -1,14 +1,12 @@
 from dataclasses import dataclass
 from enum import Enum
 from pathlib import PurePath
-from typing import Dict, Optional, Sequence
+from typing import List, Optional, Sequence
 
 from yarl import URL
 
-from platform_api.resource import GKEGPUModels
-
 from .elasticsearch import ElasticsearchConfig
-from .resource import ResourcePoolType
+from .resource import Preset, ResourcePoolType
 
 
 class StorageType(str, Enum):
@@ -110,6 +108,13 @@ class OrchestratorConfig:
     job_schedule_timeout: float = 3 * 60
     job_schedule_scaleup_timeout: float = 15 * 60
 
+    @property
+    def presets(self) -> Sequence[Preset]:
+        result: List[Preset] = []
+        for resource_pool_type in self.resource_pool_types:
+            result.extend(resource_pool_type.presets)
+        return result
+
 
 @dataclass(frozen=True)
 class LoggingConfig:
@@ -124,29 +129,6 @@ class IngressConfig:
 
 
 @dataclass(frozen=True)
-class Preset:
-    cpu: Optional[float] = None
-    gpu: Optional[int] = None
-    memory_mb: Optional[int] = None
-    gpu_model: Optional[str] = None
-
-
-DEFAULT_PRESETS = {
-    "gpu-small": Preset(
-        cpu=7, memory_mb=30 * 1024, gpu=1, gpu_model=next(iter(GKEGPUModels)).value.id
-    ),
-    "gpu-large": Preset(
-        cpu=7,
-        memory_mb=60 * 1024,
-        gpu=1,
-        gpu_model=next(reversed(GKEGPUModels)).value.id,
-    ),
-    "cpu-small": Preset(cpu=2, memory_mb=2 * 1024),
-    "cpu-large": Preset(cpu=3, memory_mb=14 * 1024),
-}
-
-
-@dataclass(frozen=True)
 class ClusterConfig:
     name: str
     storage: StorageConfig
@@ -154,4 +136,3 @@ class ClusterConfig:
     orchestrator: OrchestratorConfig
     logging: LoggingConfig
     ingress: IngressConfig
-    presets: Dict[str, Preset]
