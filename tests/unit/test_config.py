@@ -212,6 +212,7 @@ class TestEnvironConfigFactory:
             "NP_K8S_CLIENT_CONN_TIMEOUT": "111",
             "NP_K8S_CLIENT_READ_TIMEOUT": "222",
             "NP_K8S_CLIENT_CONN_POOL_SIZE": "333",
+            "NP_K8S_JOBS_INGRESS_CLASS": "nginx",
             "NP_JOBS_INGRESS_OAUTH_AUTHORIZE_URL": "http://neu.ro/oauth/authorize",
             "NP_K8S_JOBS_INGRESS_HTTPS": "True",
             "NP_K8S_JOBS_INGRESS_DOMAIN_NAME_TEMPLATE": "{job_id}.jobs.domain",
@@ -276,7 +277,7 @@ class TestEnvironConfigFactory:
         assert cluster.orchestrator.client_conn_timeout_s == 111
         assert cluster.orchestrator.client_read_timeout_s == 222
         assert cluster.orchestrator.client_conn_pool_size == 333
-        assert cluster.orchestrator.jobs_ingress_class == "traefik"
+        assert cluster.orchestrator.jobs_ingress_class == "nginx"
         assert cluster.orchestrator.jobs_ingress_oauth_url == URL(
             "http://neu.ro/oauth/authorize"
         )

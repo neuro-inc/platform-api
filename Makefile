@@ -23,10 +23,9 @@ setup:
 	pip install --no-binary cryptography -r requirements/test.txt
 
 lint:
-	echo "OK"
-	# black --check platform_api tests setup.py
-	# flake8 platform_api tests setup.py
-	# mypy platform_api tests setup.py
+	black --check platform_api tests setup.py
+	flake8 platform_api tests setup.py
+	mypy platform_api tests setup.py
 
 format:
 	isort -rc platform_api tests setup.py

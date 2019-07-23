@@ -15,9 +15,6 @@ class KubeClientAuthType(str, enum.Enum):
 
 @dataclass(frozen=True)
 class KubeConfig(OrchestratorConfig):
-    jobs_ingress_class: str = "traefik"
-    jobs_ingress_oauth_url: URL = URL()
-
     endpoint_url: str = ""
     cert_authority_data_pem: Optional[str] = None
     cert_authority_path: Optional[str] = None
@@ -33,6 +30,9 @@ class KubeConfig(OrchestratorConfig):
     client_conn_timeout_s: int = 300
     client_read_timeout_s: int = 300
     client_conn_pool_size: int = 100
+
+    jobs_ingress_class: str = "traefik"
+    jobs_ingress_oauth_url: URL = URL()
 
     storage_volume_name: str = "storage"
 

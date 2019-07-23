@@ -194,6 +194,9 @@ class EnvironConfigFactory:
                     "NP_K8S_CLIENT_CONN_POOL_SIZE", KubeConfig.client_conn_pool_size
                 )
             ),
+            jobs_ingress_class=self._environ.get(
+                "NP_K8S_JOBS_INGRESS_CLASS", KubeConfig.jobs_ingress_class
+            ),
             jobs_ingress_oauth_url=jobs_ingress_oauth_url,
             is_http_ingress_secure=self._get_bool("NP_K8S_JOBS_INGRESS_HTTPS"),
             jobs_domain_name_template=self._environ[
