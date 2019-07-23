@@ -280,6 +280,7 @@ async def kube_config_nfs(
     cluster = kube_config_cluster_payload
     user = kube_config_user_payload
     kube_config = KubeConfig(
+        jobs_ingress_class="nginx",
         endpoint_url=cluster["server"],
         cert_authority_data_pem=cert_authority_data_pem,
         cert_authority_path=None,  # disable so that `cert_authority_data_pem` works
