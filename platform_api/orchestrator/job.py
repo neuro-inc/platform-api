@@ -660,3 +660,7 @@ class JobStats:
     gpu_memory: Optional[float] = None
 
     timestamp: float = field(default_factory=time.time)
+
+
+class JobStatusException(Exception):
+    pass

@@ -1,6 +1,7 @@
 import logging
 from typing import AsyncIterator, Iterable, List, Optional, Sequence, Tuple
 
+from aiohttp import ClientConnectorError
 from async_generator import asynccontextmanager
 from notifications_client import (
     Client as NotificationsClient,
@@ -18,7 +19,7 @@ from platform_api.config import JobsConfig
 from platform_api.user import User
 
 from .base import Orchestrator
-from .job import Job, JobRecord, JobStatusItem, JobStatusReason
+from .job import Job, JobRecord, JobStatusItem, JobStatusReason, JobStatusException
 from .job_request import JobException, JobNotFoundException, JobRequest, JobStatus
 from .jobs_storage import (
     JobFilter,
@@ -80,8 +81,13 @@ class JobsService:
         # TODO (A Danshyn 02/17/19): instead of returning `Job` objects,
         # it makes sense to just return their IDs.
 
-        for record in await self._jobs_storage.get_unfinished_jobs():
-            await self._update_job_status_by_id(record.id)
+        unfinished_jobs = await self._jobs_storage.get_unfinished_jobs()
+        failure_count = 0
+        for record in unfinished_jobs:
+            if not await self._update_job_status_by_id(record.id):
+                failure_count += 1
+        if failure_count == len(unfinished_jobs):
+            pass
 
         for record in await self._jobs_storage.get_jobs_for_deletion(
             delay=self._jobs_config.deletion_delay
@@ -90,7 +96,7 @@ class JobsService:
             # assert job.is_finished and not job.is_deleted
             await self._delete_job_by_id(record.id)
 
-    async def _update_job_status_by_id(self, job_id: str) -> None:
+    async def _update_job_status_by_id(self, job_id: str) -> bool:
         try:
             async with self._update_job_in_storage(job_id) as record:
                 try:
@@ -115,10 +121,20 @@ class JobsService:
                         description=str(cluster_err),
                     )
                     record.is_deleted = True
+                    return False
+                except JobStatusException as job_err:
+                    logger.warning(
+                        "Failed to get job '%s' status. Reason: %s",
+                        record.id,
+                        job_err,
+                    )
+                    return False
+
         except JobStorageTransactionError:
             # intentionally ignoring any transaction failures here because
             # the job may have been changed and a retry is needed.
             pass
+        return True
 
     async def _update_job_status(self, orchestrator: Orchestrator, job: Job) -> None:
         if job.is_finished:
@@ -146,6 +162,8 @@ class JobsService:
                 description="The job could not be scheduled or was preempted.",
             )
             job.is_deleted = True
+        except ClientConnectorError as exc:
+            raise JobStatusException("Failed to get job %s status", job.id) from exc
 
         if old_status_item != status_item:
             job.status_history.current = status_item
