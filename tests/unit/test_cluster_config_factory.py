@@ -47,8 +47,6 @@ def clusters_payload(nfs_storage_payload: Dict[str, Any]) -> List[Dict[str, Any]
                     "auth_type": "token",
                     "token": "auth_token",
                     "namespace": "default",
-                    "jobs_ingress_class": "nginx",
-                    "jobs_ingress_oauth_url": "https://neu.ro/oauth/authorize",
                     "node_label_gpu": "cloud.google.com/gke-accelerator",
                     "node_label_preemptible": "cloud.google.com/gke-preemptible",
                 },

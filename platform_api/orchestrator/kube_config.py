@@ -40,5 +40,7 @@ class KubeConfig(OrchestratorConfig):
     node_label_preemptible: Optional[str] = None
 
     def __post_init__(self) -> None:
-        if not all((self.jobs_ingress_oauth_url, self.endpoint_url)):
+        if not self.endpoint_url or (
+            self.jobs_ingress_class == "traefik" and not self.jobs_ingress_oauth_url
+        ):
             raise ValueError("Missing required settings")

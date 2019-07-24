@@ -179,7 +179,6 @@ def cluster_config() -> ClusterConfig:
     storage_config = StorageConfig(host_mount_path=PurePath("/tmp"))
     registry_config = RegistryConfig()
     orchestrator_config = KubeConfig(
-        jobs_ingress_oauth_url=URL("https://neu.ro/oauth/authorize"),
         jobs_domain_name_template="{job_id}.jobs",
         ssh_auth_domain_name="ssh-auth",
         endpoint_url="http://k8s:1234",

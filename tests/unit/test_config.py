@@ -392,3 +392,43 @@ class TestKubeConfig:
                 node_label_preemptible="value",
                 jobs_ingress_oauth_url=URL("value"),
             )
+
+    def test_traefik_missing_jobs_ingress_oauth_url(self) -> None:
+        with pytest.raises(ValueError, match="Missing required settings"):
+            KubeConfig(
+                endpoint_url="value",
+                cert_authority_data_pem="value",
+                cert_authority_path="value",
+                auth_cert_path="value",
+                auth_cert_key_path="value",
+                token="value",
+                token_path="value",
+                namespace="value",
+                jobs_domain_name_template="value",
+                ssh_auth_domain_name="value",
+                resource_pool_types=[],
+                node_label_gpu="value",
+                node_label_preemptible="value",
+                jobs_ingress_class="traefik",
+                jobs_ingress_oauth_url=URL(""),
+            )
+
+    def test_non_traefik_missing_jobs_ingress_oauth_url(self) -> None:
+        # does not raise ValueError
+        KubeConfig(
+            endpoint_url="value",
+            cert_authority_data_pem="value",
+            cert_authority_path="value",
+            auth_cert_path="value",
+            auth_cert_key_path="value",
+            token="value",
+            token_path="value",
+            namespace="value",
+            jobs_domain_name_template="value",
+            ssh_auth_domain_name="value",
+            resource_pool_types=[],
+            node_label_gpu="value",
+            node_label_preemptible="value",
+            jobs_ingress_class="nginx",
+            jobs_ingress_oauth_url=URL(""),
+        )
