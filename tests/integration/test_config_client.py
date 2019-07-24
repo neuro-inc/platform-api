@@ -86,7 +86,11 @@ class TestConfigClient:
         users_url = URL("https://neu.ro/api/v1/users")
         async with create_config_api(cluster_configs_payload) as url:
             async with ConfigClient(base_url=url) as client:
-                result = await client.get_clusters(users_url=users_url)
+                result = await client.get_clusters(
+                    users_url=users_url,
+                    jobs_ingress_class="nginx",
+                    jobs_ingress_oauth_url=URL("https://neu.ro/oauth/authorize"),
+                )
 
                 assert len(result) == 1
 
@@ -98,6 +102,10 @@ class TestConfigClient:
         users_url = URL("https://neu.ro/api/v1/users")
         async with create_config_api(cluster_configs_payload) as url:
             async with ConfigClient(base_url=url) as client:
-                result = await client.get_clusters(users_url=users_url)
+                result = await client.get_clusters(
+                    users_url=users_url,
+                    jobs_ingress_class="nginx",
+                    jobs_ingress_oauth_url=URL("https://neu.ro/oauth/authorize"),
+                )
 
                 assert len(result) == 1

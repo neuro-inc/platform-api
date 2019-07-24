@@ -5,7 +5,8 @@ from async_generator import asynccontextmanager
 from multidict import CIMultiDict
 from yarl import URL
 
-from .cluster_config_factory import ClusterConfig, ClusterConfigFactory
+from .cluster_config import ClusterConfig
+from .cluster_config_factory import ClusterConfigFactory
 
 
 class ConfigClient:
@@ -61,9 +62,14 @@ class ConfigClient:
             response.raise_for_status()
             yield response
 
-    async def get_clusters(self, *, users_url: URL) -> Sequence[ClusterConfig]:
+    async def get_clusters(
+        self, *, users_url: URL, jobs_ingress_class: str, jobs_ingress_oauth_url: URL
+    ) -> Sequence[ClusterConfig]:
         async with self._request("GET", "clusters") as response:
             payload = await response.json()
             return ClusterConfigFactory().create_cluster_configs(
-                payload, users_url=users_url
+                payload,
+                users_url=users_url,
+                jobs_ingress_class=jobs_ingress_class,
+                jobs_ingress_oauth_url=jobs_ingress_oauth_url,
             )

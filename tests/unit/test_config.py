@@ -194,6 +194,7 @@ class TestEnvironConfigFactory:
             "NP_AUTH_URL": "https://auth",
             "NP_AUTH_TOKEN": "token",
             "NP_API_URL": "https://neu.ro/api/v1",
+            "NP_JOBS_INGRESS_OAUTH_AUTHORIZE_URL": "http://neu.ro/oauth/authorize",
         }
         with pytest.raises(ValueError):
             EnvironConfigFactory(environ=environ).create()

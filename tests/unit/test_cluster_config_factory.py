@@ -79,9 +79,23 @@ def users_url() -> URL:
     return URL("https://dev.neu.ro/api/v1/users")
 
 
+@pytest.fixture
+def jobs_ingress_class() -> str:
+    return "nginx"
+
+
+@pytest.fixture
+def jobs_ingress_oauth_url() -> URL:
+    return URL("https://neu.ro/oauth/authorize")
+
+
 class TestClusterConfigFactory:
     def test_valid_cluster_config(
-        self, clusters_payload: Sequence[Dict[str, Any]], users_url: URL
+        self,
+        clusters_payload: Sequence[Dict[str, Any]],
+        users_url: URL,
+        jobs_ingress_class: str,
+        jobs_ingress_oauth_url: URL,
     ) -> None:
         storage_payload = clusters_payload[0]["storage"]
         registry_payload = clusters_payload[0]["registry"]
@@ -92,7 +106,12 @@ class TestClusterConfigFactory:
         ssh_payload = clusters_payload[0]["ssh"]
 
         factory = ClusterConfigFactory()
-        clusters = factory.create_cluster_configs(clusters_payload, users_url=users_url)
+        clusters = factory.create_cluster_configs(
+            clusters_payload,
+            users_url=users_url,
+            jobs_ingress_class=jobs_ingress_class,
+            jobs_ingress_oauth_url=jobs_ingress_oauth_url,
+        )
 
         assert len(clusters) == 1
 
@@ -158,7 +177,11 @@ class TestClusterConfigFactory:
         )
 
     def test_valid_elasticsearch_config_without_user(
-        self, clusters_payload: Sequence[Dict[str, Any]], users_url: URL
+        self,
+        clusters_payload: Sequence[Dict[str, Any]],
+        users_url: URL,
+        jobs_ingress_class: str,
+        jobs_ingress_oauth_url: URL,
     ) -> None:
         elasticsearch_payload = clusters_payload[0]["monitoring"]["elasticsearch"]
 
@@ -166,7 +189,12 @@ class TestClusterConfigFactory:
         del elasticsearch_payload["password"]
 
         factory = ClusterConfigFactory()
-        clusters = factory.create_cluster_configs(clusters_payload, users_url=users_url)
+        clusters = factory.create_cluster_configs(
+            clusters_payload,
+            users_url=users_url,
+            jobs_ingress_class=jobs_ingress_class,
+            jobs_ingress_oauth_url=jobs_ingress_oauth_url,
+        )
         cluster = clusters[0]
 
         logging = cluster.logging
@@ -175,12 +203,21 @@ class TestClusterConfigFactory:
         assert logging.elasticsearch.password is None
 
     def test_valid_storage_config_nfs(
-        self, clusters_payload: Sequence[Dict[str, Any]], users_url: URL
+        self,
+        clusters_payload: Sequence[Dict[str, Any]],
+        users_url: URL,
+        jobs_ingress_class: str,
+        jobs_ingress_oauth_url: URL,
     ) -> None:
         storage_payload = clusters_payload[0]["storage"]
 
         factory = ClusterConfigFactory()
-        clusters = factory.create_cluster_configs(clusters_payload, users_url=users_url)
+        clusters = factory.create_cluster_configs(
+            clusters_payload,
+            users_url=users_url,
+            jobs_ingress_class=jobs_ingress_class,
+            jobs_ingress_oauth_url=jobs_ingress_oauth_url,
+        )
         cluster = clusters[0]
 
         storage = cluster.storage
@@ -219,10 +256,19 @@ class TestClusterConfigFactory:
         assert config.uri_scheme == "storage"
 
     def test_factory_skips_invalid_cluster_configs(
-        self, clusters_payload: List[Dict[str, Any]], users_url: URL
+        self,
+        clusters_payload: List[Dict[str, Any]],
+        users_url: URL,
+        jobs_ingress_class: str,
+        jobs_ingress_oauth_url: URL,
     ) -> None:
         clusters_payload.append({})
         factory = ClusterConfigFactory()
-        clusters = factory.create_cluster_configs(clusters_payload, users_url=users_url)
+        clusters = factory.create_cluster_configs(
+            clusters_payload,
+            users_url=users_url,
+            jobs_ingress_class=jobs_ingress_class,
+            jobs_ingress_oauth_url=jobs_ingress_oauth_url,
+        )
 
         assert len(clusters) == 1

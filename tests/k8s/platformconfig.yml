@@ -25,8 +25,6 @@ data:
                     "auth_type": "none",
                     "token": "token",
                     "namespace": "default",
-                    "jobs_ingress_class": "nginx",
-                    "jobs_ingress_oauth_url": "https://neu.ro/oauth/authorize",
                     "node_label_gpu": "cloud.google.com/gke-accelerator",
                     "node_label_preemptible": "cloud.google.com/gke-preemptible"
                 },

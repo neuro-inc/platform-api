@@ -23,13 +23,31 @@ _cluster_config_validator = t.Dict({"name": t.String}).allow_extra("*")
 
 class ClusterConfigFactory:
     def create_cluster_configs(
-        self, payload: Sequence[Dict[str, Any]], *, users_url: URL
+        self,
+        payload: Sequence[Dict[str, Any]],
+        *,
+        users_url: URL,
+        jobs_ingress_class: str,
+        jobs_ingress_oauth_url: URL,
     ) -> Sequence[ClusterConfig]:
-        configs = (self._create_cluster_config(p, users_url=users_url) for p in payload)
+        configs = (
+            self._create_cluster_config(
+                p,
+                users_url=users_url,
+                jobs_ingress_class=jobs_ingress_class,
+                jobs_ingress_oauth_url=jobs_ingress_oauth_url,
+            )
+            for p in payload
+        )
         return [c for c in configs if c]
 
     def _create_cluster_config(
-        self, payload: Dict[str, Any], *, users_url: URL
+        self,
+        payload: Dict[str, Any],
+        *,
+        users_url: URL,
+        jobs_ingress_class: str,
+        jobs_ingress_oauth_url: URL,
     ) -> Optional[ClusterConfig]:
         try:
             _cluster_config_validator.check(payload)
@@ -37,7 +55,11 @@ class ClusterConfigFactory:
                 name=payload["name"],
                 storage=self._create_storage_config(payload),
                 registry=self._create_registry_config(payload),
-                orchestrator=self._create_orchestrator_config(payload),
+                orchestrator=self._create_orchestrator_config(
+                    payload,
+                    jobs_ingress_class=jobs_ingress_class,
+                    jobs_ingress_oauth_url=jobs_ingress_oauth_url,
+                ),
                 logging=self._create_logging_config(payload),
                 ingress=self._create_ingress_config(payload, users_url),
             )
@@ -70,7 +92,10 @@ class ClusterConfigFactory:
         )
 
     def _create_orchestrator_config(
-        self, payload: Dict[str, Any]
+        self,
+        payload: Dict[str, Any],
+        jobs_ingress_class: str,
+        jobs_ingress_oauth_url: URL,
     ) -> OrchestratorConfig:
         orchestrator = payload["orchestrator"]
         kube = orchestrator["kubernetes"]
@@ -92,8 +117,8 @@ class ClusterConfigFactory:
             token=kube["token"],
             token_path=None,  # not initialized, see field `token`
             namespace=kube["namespace"],
-            jobs_ingress_class=kube["jobs_ingress_class"],
-            jobs_ingress_oauth_url=URL(kube["jobs_ingress_oauth_url"]),
+            jobs_ingress_class=jobs_ingress_class,
+            jobs_ingress_oauth_url=jobs_ingress_oauth_url,
             node_label_gpu=kube["node_label_gpu"],
             node_label_preemptible=kube["node_label_preemptible"],
         )

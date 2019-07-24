@@ -57,6 +57,8 @@ class JobsConfig:
     default_cluster_name: str = "default"
     deletion_delay_s: int = 0
     orphaned_job_owner: str = ""
+    jobs_ingress_class: str = "traefik"
+    jobs_ingress_oauth_url: URL = URL("https://neu.ro/oauth/authorize")
 
     @property
     def deletion_delay(self) -> timedelta:
