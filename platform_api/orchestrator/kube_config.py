@@ -40,5 +40,5 @@ class KubeConfig(OrchestratorConfig):
     node_label_preemptible: Optional[str] = None
 
     def __post_init__(self) -> None:
-        if not all((self.endpoint_url, self.jobs_ingress_oauth_url)):
+        if not all((self.jobs_ingress_oauth_url, self.endpoint_url)):
             raise ValueError("Missing required settings")
