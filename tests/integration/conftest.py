@@ -37,7 +37,7 @@ from platform_api.orchestrator.job_request import JobNotFoundException
 from platform_api.orchestrator.kube_client import KubeClient, NodeTaint, Resources
 from platform_api.orchestrator.kube_orchestrator import KubeConfig, KubeOrchestrator
 from platform_api.redis import RedisConfig
-from platform_api.resource import GPUModel, ResourcePoolType
+from platform_api.resource import GKEGPUModels, Preset, ResourcePoolType
 
 
 pytest_plugins = [
@@ -131,8 +131,31 @@ async def kube_config(
         auth_cert_key_path=user["client-key"],
         node_label_gpu="gpu",
         resource_pool_types=[
-            ResourcePoolType(),
-            ResourcePoolType(gpu=1, gpu_model=GPUModel(id="gpumodel")),
+            ResourcePoolType(
+                presets=[
+                    Preset(
+                        name="gpu-small",
+                        gpu=1,
+                        cpu=7,
+                        memory_mb=30720,
+                        gpu_model=GKEGPUModels.K80.value,
+                    ),
+                    Preset(
+                        name="gpu-large",
+                        gpu=1,
+                        cpu=7,
+                        memory_mb=61440,
+                        gpu_model=GKEGPUModels.V100.value,
+                    ),
+                ]
+            ),
+            ResourcePoolType(
+                presets=[
+                    Preset(name="cpu-small", cpu=2, memory_mb=2048),
+                    Preset(name="cpu-large", cpu=3, memory_mb=14336),
+                ]
+            ),
+            # ResourcePoolType(gpu=1, gpu_model=GPUModel(id="gpumodel")),
         ],
         node_label_preemptible="preemptible",
         namespace="platformapi-tests",

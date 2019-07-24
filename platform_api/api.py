@@ -1,6 +1,5 @@
 import asyncio
 import logging
-from dataclasses import asdict
 from typing import Any, AsyncIterator, Awaitable, Callable, Dict, Sequence
 
 import aiohttp.web
@@ -52,16 +51,25 @@ class ApiHandler:
         try:
             user = await authorized_user(request)
             cluster_config = await self._jobs_service.get_cluster_config(user)
+            presets = []
+            for preset in cluster_config.orchestrator.presets:
+                preset_dict = {"name": preset.name}
+                if preset.gpu is not None:
+                    preset_dict["gpu"] = str(preset.gpu)
+                if preset.gpu_model is not None:
+                    preset_dict["gpu_model"] = preset.gpu_model.id
+                if preset.memory_mb is not None:
+                    preset_dict["memory_mb"] = str(preset.memory_mb)
+                if preset.cpu is not None:
+                    preset_dict["cpu"] = str(preset.cpu)
+                presets.append(preset_dict)
             data.update(
                 {
                     "registry_url": str(cluster_config.registry.url),
                     "storage_url": str(cluster_config.ingress.storage_url),
                     "users_url": str(cluster_config.ingress.users_url),
                     "monitoring_url": str(cluster_config.ingress.monitoring_url),
-                    "resource_presets": [
-                        {"name": preset.name, **asdict(preset)}
-                        for preset in cluster_config.orchestrator.presets
-                    ],
+                    "resource_presets": presets,
                 }
             )
         except HTTPUnauthorized:

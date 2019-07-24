@@ -32,76 +32,6 @@ def nfs_storage_payload() -> Dict[str, Any]:
 
 
 @pytest.fixture
-def resource_pools_payload() -> List[Any]:
-    return [
-        {
-            "is_preemptible": False,
-            "min_size": 1,
-            "max_size": 16,
-            "cpu": 8.0,
-            "memory_mb": 53248,
-            "disk_gb": 150,
-            "presets": [
-                {"name": "cpu-small", "cpu": 1, "memory_mb": 2048},
-                {"name": "cpu-large", "cpu": 7, "memory_mb": 49152},
-            ],
-        },
-        {
-            "is_preemptible": True,
-            "min_size": 1,
-            "max_size": 16,
-            "cpu": 32.0,
-            "memory_mb": 212992,
-            "disk_gb": 150,
-            "gpu": 4,
-            "gpu_model": "nvidia-tesla-k80",
-            "presets": [
-                {"name": "gpu-small-p", "cpu": 7.0, "memory_mb": 52224, "gpu": 1}
-            ],
-        },
-        {
-            "is_preemptible": False,
-            "min_size": 1,
-            "max_size": 8,
-            "cpu": 32.0,
-            "memory_mb": 212992,
-            "disk_gb": 150,
-            "gpu": 4,
-            "gpu_model": "nvidia-tesla-k80",
-            "presets": [
-                {"name": "gpu-small", "cpu": 7.0, "memory_mb": 52224, "gpu": 1}
-            ],
-        },
-        {
-            "is_preemptible": True,
-            "min_size": 0,
-            "max_size": 5,
-            "cpu": 8.0,
-            "memory_mb": 53248,
-            "disk_gb": 150,
-            "gpu": 1,
-            "gpu_model": "nvidia-tesla-v100",
-            "presets": [
-                {"name": "gpu-large-p", "cpu": 7.0, "memory_mb": 52224, "gpu": 1}
-            ],
-        },
-        {
-            "is_preemptible": False,
-            "min_size": 0,
-            "max_size": 2,
-            "cpu": 8.0,
-            "memory_mb": 53248,
-            "disk_gb": 150,
-            "gpu": 1,
-            "gpu_model": "nvidia-tesla-v100",
-            "presets": [
-                {"name": "gpu-large", "cpu": 0.1, "memory_mb": 52224, "gpu": 1}
-            ],
-        },
-    ]
-
-
-@pytest.fixture
 def clusters_payload(nfs_storage_payload: Dict[str, Any]) -> List[Dict[str, Any]]:
     return [
         {
@@ -288,23 +218,35 @@ class TestClusterConfigFactory:
         assert len(orchestrator.resource_pool_types) == 5
         assert orchestrator.resource_pool_types[0].gpu is None
         assert orchestrator.resource_pool_types[0].gpu_model is None
+
         assert orchestrator.resource_pool_types[1].gpu == 4
         assert orchestrator.resource_pool_types[1].gpu_model == GKEGPUModels.K80.value
+
         assert orchestrator.resource_pool_types[3].gpu == 1
         assert orchestrator.resource_pool_types[3].gpu_model == GKEGPUModels.V100.value
 
+        assert orchestrator.resource_pool_types[0].presets is not None
         assert orchestrator.resource_pool_types[0].presets[1].cpu == 7.0
         assert orchestrator.resource_pool_types[0].presets[1].memory_mb == 49152
         assert orchestrator.resource_pool_types[0].presets[1].gpu_model is None
+
+        assert orchestrator.resource_pool_types[1].presets is not None
+        assert (
+            orchestrator.resource_pool_types[1].presets[0].gpu_model
+            == GKEGPUModels.K80.value
+        )
+
+        assert orchestrator.resource_pool_types[2].presets is not None
         assert orchestrator.resource_pool_types[2].presets[0].cpu == 7.0
         assert orchestrator.resource_pool_types[2].presets[0].gpu == 1
         assert (
             orchestrator.resource_pool_types[2].presets[0].gpu_model
-            == "nvidia-tesla-k80"
+            == GKEGPUModels.K80.value
         )
         assert orchestrator.resource_pool_types[2].presets[0].memory_mb == 52224
-        # elif preset.name == "gpu-large":
-        #     assert preset.cpu == 0.1
+
+        assert orchestrator.resource_pool_types[4].presets is not None
+        assert orchestrator.resource_pool_types[4].presets[0].cpu == 0.1
 
         assert orchestrator.endpoint_url == kube_payload["url"]
         assert orchestrator.cert_authority_data_pem == kube_payload["ca_data"]
@@ -391,3 +333,8 @@ class TestClusterConfigFactory:
         clusters = factory.create_cluster_configs(clusters_payload, users_url=users_url)
 
         assert len(clusters) == 1
+
+    def test_presets_use_defauls_when_none_provided(self) -> None:
+        factory = ClusterConfigFactory()
+        presets = factory._create_presets({})
+        assert len(presets) == 4

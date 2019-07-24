@@ -112,7 +112,8 @@ class OrchestratorConfig:
     def presets(self) -> Sequence[Preset]:
         result: List[Preset] = []
         for resource_pool_type in self.resource_pool_types:
-            result.extend(resource_pool_type.presets)
+            if resource_pool_type.presets is not None:
+                result.extend(resource_pool_type.presets)
         return result
 
 

@@ -72,7 +72,7 @@ class ClusterConfigFactory:
                     gpu=preset.get("gpu") or payload.get("gpu"),
                     memory_mb=preset.get("memory_mb") or payload.get("memory_mb"),
                     gpu_model=self._create_gpu_model(preset.get("gpu_model"))
-                    or payload.get("gpu_model"),
+                    or self._create_gpu_model(payload.get("gpu_model")),
                 )
             )
         # default fallback
