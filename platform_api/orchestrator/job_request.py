@@ -93,7 +93,7 @@ class ContainerResources:
             return True
 
         assert pool_type.gpu_model
-        return self.gpu_model_id == pool_type.gpu_model.id
+        return self.gpu_model_id == pool_type.gpu_model
 
 
 @dataclass(frozen=True)

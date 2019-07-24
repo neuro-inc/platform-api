@@ -1,9 +1,11 @@
 import logging
 from pathlib import PurePath
-from typing import Any, Dict, Optional, Sequence
+from typing import Any, Dict, List, Optional, Sequence
 
 import trafaret as t
 from yarl import URL
+
+from platform_api.resource import DEFAULT_PRESETS, Preset
 
 from .cluster_config import (
     ClusterConfig,
@@ -15,7 +17,7 @@ from .cluster_config import (
 )
 from .elasticsearch import ElasticsearchConfig
 from .orchestrator.kube_config import KubeClientAuthType, KubeConfig
-from .resource import GKEGPUModels, GPUModel, ResourcePoolType
+from .resource import ResourcePoolType
 
 
 _cluster_config_validator = t.Dict({"name": t.String}).allow_extra("*")
@@ -60,6 +62,24 @@ class ClusterConfigFactory:
             elasticsearch=self._create_elasticsearch_config(monitoring["elasticsearch"])
         )
 
+    def _create_presets(self, payload: Dict[str, Any]) -> List[Preset]:
+        result = []
+        for preset in payload.get("presets", []):
+            result.append(
+                Preset(
+                    name=preset["name"],
+                    cpu=preset.get("cpu") or payload["cpu"],
+                    memory_mb=preset.get("memory_mb") or payload["memory_mb"],
+                    is_preemptible=payload.get("is_preemptible", False),
+                    gpu=preset.get("gpu") or payload.get("gpu"),
+                    gpu_model=preset.get("gpu_model") or payload.get("gpu_model"),
+                )
+            )
+        # default fallback
+        if len(result) == 0:
+            return DEFAULT_PRESETS
+        return result
+
     def _create_elasticsearch_config(
         self, payload: Dict[str, Any]
     ) -> ElasticsearchConfig:
@@ -101,14 +121,14 @@ class ClusterConfigFactory:
     def _create_resource_pool_type(self, payload: Dict[str, Any]) -> ResourcePoolType:
         return ResourcePoolType(
             gpu=payload.get("gpu"),
-            gpu_model=self._create_gpu_model(payload.get("gpu_model")),
-        )
-
-    def _create_gpu_model(self, gpu_model_id: Optional[str]) -> Optional[GPUModel]:
-        return (
-            None
-            if gpu_model_id is None
-            else GKEGPUModels.find_model_by_id(gpu_model_id)
+            gpu_model=payload.get("gpu_model"),
+            is_preemptible=payload.get("is_preemptible"),
+            cpu=payload.get("cpu"),
+            memory_mb=payload.get("memory_mb"),
+            disk_gb=payload.get("disk_gb"),
+            min_size=payload.get("min_size"),
+            max_size=payload.get("max_size"),
+            presets=self._create_presets(payload),
         )
 
     def _create_registry_config(self, payload: Dict[str, Any]) -> RegistryConfig:

@@ -1,7 +1,7 @@
 import pytest
 
 from platform_api.orchestrator.job_request import ContainerResources
-from platform_api.resource import GPUModel, ResourcePoolType
+from platform_api.resource import ResourcePoolType
 
 
 class TestResourcePoolType:
@@ -12,11 +12,7 @@ class TestResourcePoolType:
 
 class TestContainerResourcesFit:
     @pytest.mark.parametrize(
-        "pool_type",
-        (
-            ResourcePoolType(),
-            ResourcePoolType(gpu=1, gpu_model=GPUModel(id="gpumodel")),
-        ),
+        "pool_type", (ResourcePoolType(), ResourcePoolType(gpu=1, gpu_model="gpumodel"))
     )
     def test_container_requires_no_gpu(self, pool_type: ResourcePoolType) -> None:
         resources = ContainerResources(cpu=1, memory_mb=32)
@@ -28,24 +24,24 @@ class TestContainerResourcesFit:
         assert not resources.check_fit_into_pool_type(pool_type)
 
     def test_container_requires_any_gpu(self) -> None:
-        pool_type = ResourcePoolType(gpu=1, gpu_model=GPUModel(id="gpumodel"))
+        pool_type = ResourcePoolType(gpu=1, gpu_model="gpumodel")
         resources = ContainerResources(cpu=1, memory_mb=32, gpu=1)
         assert resources.check_fit_into_pool_type(pool_type)
 
     def test_container_requires_too_many_gpu(self) -> None:
-        pool_type = ResourcePoolType(gpu=1, gpu_model=GPUModel(id="gpumodel"))
+        pool_type = ResourcePoolType(gpu=1, gpu_model="gpumodel")
         resources = ContainerResources(cpu=1, memory_mb=32, gpu=2)
         assert not resources.check_fit_into_pool_type(pool_type)
 
     def test_container_requires_unknown_gpu(self) -> None:
-        pool_type = ResourcePoolType(gpu=1, gpu_model=GPUModel(id="gpumodel"))
+        pool_type = ResourcePoolType(gpu=1, gpu_model="gpumodel")
         resources = ContainerResources(
             cpu=1, memory_mb=32, gpu=1, gpu_model_id="unknown"
         )
         assert not resources.check_fit_into_pool_type(pool_type)
 
     def test_container_requires_specific_gpu(self) -> None:
-        pool_type = ResourcePoolType(gpu=1, gpu_model=GPUModel(id="gpumodel"))
+        pool_type = ResourcePoolType(gpu=1, gpu_model="gpumodel")
         resources = ContainerResources(
             cpu=1, memory_mb=32, gpu=1, gpu_model_id="gpumodel"
         )

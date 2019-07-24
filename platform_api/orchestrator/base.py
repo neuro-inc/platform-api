@@ -1,7 +1,7 @@
 from abc import ABC, abstractmethod
 from typing import Any, Optional, Sequence
 
-from platform_api.resource import GPUModel, ResourcePoolType
+from platform_api.resource import ResourcePoolType
 
 from ..config import OrchestratorConfig, StorageConfig  # noqa
 from .job import Job, JobStats, JobStatusItem
@@ -66,7 +66,7 @@ class Orchestrator(ABC):
     async def get_resource_pool_types(self) -> Sequence[ResourcePoolType]:
         return self.config.resource_pool_types
 
-    async def get_available_gpu_models(self) -> Sequence[GPUModel]:
+    async def get_available_gpu_models(self) -> Sequence[str]:
         pool_types = await self.get_resource_pool_types()
         return list(
             dict.fromkeys(

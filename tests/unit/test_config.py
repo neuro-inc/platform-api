@@ -285,8 +285,9 @@ class TestEnvironConfigFactory:
 
         assert cluster.orchestrator.resource_pool_types == [
             ResourcePoolType(),
-            ResourcePoolType(gpu=1, gpu_model=GKEGPUModels.K80.value),
-            ResourcePoolType(gpu=1, gpu_model=GKEGPUModels.V100.value),
+            ResourcePoolType(gpu=1, gpu_model=GKEGPUModels.K80.value.id),
+            ResourcePoolType(gpu=1, gpu_model="unknown"),
+            ResourcePoolType(gpu=1, gpu_model=GKEGPUModels.V100.value.id),
         ]
         assert cluster.orchestrator.node_label_gpu == "testlabel"
         assert cluster.orchestrator.node_label_preemptible == "testpreempt"

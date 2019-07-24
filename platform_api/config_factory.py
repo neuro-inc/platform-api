@@ -31,7 +31,7 @@ from .elasticsearch import ElasticsearchConfig
 from .orchestrator.kube_client import KubeClientAuthType
 from .orchestrator.kube_orchestrator import KubeConfig
 from .redis import RedisConfig
-from .resource import GKEGPUModels, ResourcePoolType
+from .resource import ResourcePoolType
 
 
 class EnvironConfigFactory:
@@ -216,10 +216,8 @@ class EnvironConfigFactory:
         # removing duplicates, but preserving the order
         model_ids = list(dict.fromkeys(model_ids))
         for model_id in model_ids:
-            model = GKEGPUModels.find_model_by_id(model_id)
-            if model:
-                # TODO (A Danshyn 10/23/18): drop the hardcoded number of GPUs
-                types.append(ResourcePoolType(gpu=1, gpu_model=model))
+            # TODO (A Danshyn 10/23/18): drop the hardcoded number of GPUs
+            types.append(ResourcePoolType(gpu=1, gpu_model=model_id))
         return types
 
     def create_database(self) -> DatabaseConfig:

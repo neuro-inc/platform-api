@@ -5,7 +5,6 @@ from yarl import URL
 
 from platform_api.orchestrator.job import JOB_USER_NAMES_SEPARATOR
 from platform_api.orchestrator.job_request import JobStatus
-from platform_api.resource import GPUModel
 
 
 JOB_NAME_PATTERN = "^[a-z](?:-?[a-z0-9])*$"
@@ -87,7 +86,7 @@ def create_volumes_validator() -> t.Trafaret:
 def create_resources_validator(
     *,
     allow_any_gpu_models: bool = False,
-    allowed_gpu_models: Optional[Sequence[GPUModel]] = None,
+    allowed_gpu_models: Optional[Sequence[str]] = None,
 ) -> t.Trafaret:
     MAX_GPU_COUNT = 128
     MAX_CPU_COUNT = 128.0
@@ -103,9 +102,7 @@ def create_resources_validator(
     if allow_any_gpu_models:
         gpu_model_validator = t.String
     else:
-        gpu_model_validator = t.Enum(
-            *(gpu_model.id for gpu_model in allowed_gpu_models or [])
-        )
+        gpu_model_validator = t.Enum(*(allowed_gpu_models or []))
 
     resources_gpu_validator = common_resources_validator + t.Dict(
         {t.Key("gpu", optional=True): gpu_validator}
@@ -121,7 +118,7 @@ def create_container_validator(
     *,
     allow_volumes: bool = False,
     allow_any_gpu_models: bool = False,
-    allowed_gpu_models: Optional[Sequence[GPUModel]] = None,
+    allowed_gpu_models: Optional[Sequence[str]] = None,
 ) -> t.Trafaret:
     """Create a validator for primitive container objects.
 
@@ -161,9 +158,7 @@ def create_container_validator(
 
 
 def create_container_request_validator(
-    *,
-    allow_volumes: bool = False,
-    allowed_gpu_models: Optional[Sequence[GPUModel]] = None,
+    *, allow_volumes: bool = False, allowed_gpu_models: Optional[Sequence[str]] = None
 ) -> t.Trafaret:
     return create_container_validator(
         allow_volumes=allow_volumes, allowed_gpu_models=allowed_gpu_models

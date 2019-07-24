@@ -1,6 +1,6 @@
 from dataclasses import dataclass
 from enum import Enum
-from typing import Optional
+from typing import Optional, Sequence
 
 
 @dataclass(frozen=True)
@@ -22,22 +22,51 @@ class GKEGPUModels(Enum):
     P100 = GPUModel(id="nvidia-tesla-p100")
     V100 = GPUModel(id="nvidia-tesla-v100")
 
-    @classmethod
-    def find_model_by_id(cls, id_: str) -> Optional["GPUModel"]:
-        for model in cls:
-            if model.value.id == id_:
-                return model.value
-        return None
+
+@dataclass(frozen=True)
+class Preset:
+    name: str
+    cpu: float
+    memory_mb: int
+    is_preemptible: bool = False
+    gpu: Optional[int] = None
+    gpu_model: Optional[str] = None
 
 
 @dataclass(frozen=True)
 class ResourcePoolType:
     """Represents an infrastructure instance/node template."""
 
-    # TODO (A Danshyn 10/23/18): add cpu, memory, local drives etc
+    is_preemptible: Optional[bool] = False
+    presets: Sequence[Preset] = ()
+    cpu: Optional[float] = None
+    memory_mb: Optional[int] = None
     gpu: Optional[int] = None
-    gpu_model: Optional[GPUModel] = None
+    gpu_model: Optional[str] = None
+    disk_gb: Optional[int] = None
+    min_size: Optional[int] = None
+    max_size: Optional[int] = None
 
     def __post_init__(self) -> None:
         if self.gpu and not self.gpu_model:
             raise ValueError("GPU model unspecified")
+
+
+DEFAULT_PRESETS = [
+    Preset(
+        name="gpu-small",
+        cpu=7,
+        memory_mb=30 * 1024,
+        gpu=1,
+        gpu_model=next(iter(GKEGPUModels)).value,
+    ),
+    Preset(
+        name="gpu-large",
+        cpu=7,
+        memory_mb=60 * 1024,
+        gpu=1,
+        gpu_model=next(reversed(GKEGPUModels)).value,
+    ),
+    Preset(name="cpu-small", cpu=2, memory_mb=2 * 1024),
+    Preset(name="cpu-large", cpu=3, memory_mb=14 * 1024),
+]

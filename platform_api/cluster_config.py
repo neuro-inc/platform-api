@@ -1,12 +1,12 @@
 from dataclasses import dataclass
 from enum import Enum
 from pathlib import PurePath
-from typing import Optional, Sequence
+from typing import List, Optional, Sequence
 
 from yarl import URL
 
 from .elasticsearch import ElasticsearchConfig
-from .resource import ResourcePoolType
+from .resource import Preset, ResourcePoolType
 
 
 class StorageType(str, Enum):
@@ -107,6 +107,14 @@ class OrchestratorConfig:
 
     job_schedule_timeout: float = 3 * 60
     job_schedule_scaleup_timeout: float = 15 * 60
+
+    @property
+    def presets(self) -> Sequence[Preset]:
+        result: List[Preset] = []
+        for resource_pool_type in self.resource_pool_types:
+            if resource_pool_type.presets:
+                result.extend(resource_pool_type.presets)
+        return result
 
 
 @dataclass(frozen=True)

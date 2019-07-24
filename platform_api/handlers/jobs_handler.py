@@ -23,7 +23,6 @@ from platform_api.orchestrator.job_request import (
 )
 from platform_api.orchestrator.jobs_service import JobsService
 from platform_api.orchestrator.jobs_storage import JobFilter
-from platform_api.resource import GPUModel
 from platform_api.user import User, authorized_user, untrusted_user
 
 from .job_request_builder import ContainerBuilder
@@ -41,9 +40,7 @@ from .validators import (
 logger = logging.getLogger(__name__)
 
 
-def create_job_request_validator(
-    *, allowed_gpu_models: Sequence[GPUModel]
-) -> t.Trafaret:
+def create_job_request_validator(*, allowed_gpu_models: Sequence[str]) -> t.Trafaret:
     return t.Dict(
         {
             "container": create_container_request_validator(

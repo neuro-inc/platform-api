@@ -60,6 +60,7 @@ class TestApi:
                         "memory_mb": 30720,
                         "gpu": 1,
                         "gpu_model": "nvidia-tesla-k80",
+                        "is_preemptible": False,
                     },
                     {
                         "name": "gpu-large",
@@ -67,9 +68,20 @@ class TestApi:
                         "memory_mb": 61440,
                         "gpu": 1,
                         "gpu_model": "nvidia-tesla-v100",
+                        "is_preemptible": False,
                     },
-                    {"name": "cpu-small", "cpu": 2, "memory_mb": 2048},
-                    {"name": "cpu-large", "cpu": 3, "memory_mb": 14336},
+                    {
+                        "name": "cpu-small",
+                        "cpu": 2,
+                        "memory_mb": 2048,
+                        "is_preemptible": False,
+                    },
+                    {
+                        "name": "cpu-large",
+                        "cpu": 3,
+                        "memory_mb": 14336,
+                        "is_preemptible": False,
+                    },
                 ],
             }
 
@@ -96,6 +108,7 @@ class TestApi:
                         "memory_mb": 30720,
                         "gpu": 1,
                         "gpu_model": "nvidia-tesla-k80",
+                        "is_preemptible": False,
                     },
                     {
                         "name": "gpu-large",
@@ -103,9 +116,20 @@ class TestApi:
                         "memory_mb": 61440,
                         "gpu": 1,
                         "gpu_model": "nvidia-tesla-v100",
+                        "is_preemptible": False,
                     },
-                    {"name": "cpu-small", "cpu": 2, "memory_mb": 2048},
-                    {"name": "cpu-large", "cpu": 3, "memory_mb": 14336},
+                    {
+                        "name": "cpu-small",
+                        "cpu": 2,
+                        "memory_mb": 2048,
+                        "is_preemptible": False,
+                    },
+                    {
+                        "name": "cpu-large",
+                        "cpu": 3,
+                        "memory_mb": 14336,
+                        "is_preemptible": False,
+                    },
                 ],
                 "auth_url": "https://platform-auth0-url/authorize",
                 "token_url": "https://platform-auth0-url/oauth/token",

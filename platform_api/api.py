@@ -19,25 +19,10 @@ from .orchestrator.jobs_poller import JobsPoller
 from .orchestrator.jobs_service import JobsService, JobsServiceException
 from .orchestrator.jobs_storage import RedisJobsStorage
 from .redis import create_redis_client
-from .resource import GKEGPUModels
 from .user import authorized_user
 
 
 logger = logging.getLogger(__name__)
-
-RESOURCE_PRESETS = {
-    "gpu-small": dict(
-        cpu=7, memory_mb=30 * 1024, gpu=1, gpu_model=next(iter(GKEGPUModels)).value.id
-    ),
-    "gpu-large": dict(
-        cpu=7,
-        memory_mb=60 * 1024,
-        gpu=1,
-        gpu_model=next(reversed(GKEGPUModels)).value.id,
-    ),
-    "cpu-small": dict(cpu=2, memory_mb=2 * 1024),
-    "cpu-large": dict(cpu=3, memory_mb=14 * 1024),
-}
 
 
 class ApiHandler:
@@ -66,16 +51,25 @@ class ApiHandler:
         try:
             user = await authorized_user(request)
             cluster_config = await self._jobs_service.get_cluster_config(user)
+            presets = []
+            for preset in cluster_config.orchestrator.presets:
+                preset_dict: Dict[str, Any] = {"name": preset.name}
+                preset_dict["cpu"] = preset.cpu
+                preset_dict["memory_mb"] = preset.memory_mb
+                preset_dict["is_preemptible"] = preset.is_preemptible
+                if preset.gpu is not None:
+                    preset_dict["gpu"] = preset.gpu
+                if preset.gpu_model is not None:
+                    preset_dict["gpu_model"] = preset.gpu_model
+
+                presets.append(preset_dict)
             data.update(
                 {
                     "registry_url": str(cluster_config.registry.url),
                     "storage_url": str(cluster_config.ingress.storage_url),
                     "users_url": str(cluster_config.ingress.users_url),
                     "monitoring_url": str(cluster_config.ingress.monitoring_url),
-                    "resource_presets": [
-                        {"name": name, **preset}
-                        for name, preset in RESOURCE_PRESETS.items()
-                    ],
+                    "resource_presets": presets,
                 }
             )
         except HTTPUnauthorized:
