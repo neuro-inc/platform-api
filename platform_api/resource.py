@@ -1,6 +1,6 @@
 from dataclasses import dataclass
 from enum import Enum
-from typing import List, Optional
+from typing import Optional, Sequence
 
 
 @dataclass(frozen=True)
@@ -38,7 +38,7 @@ class ResourcePoolType:
     """Represents an infrastructure instance/node template."""
 
     is_preemptible: Optional[bool] = False
-    presets: Optional[List[Preset]] = None
+    presets: Sequence[Preset] = ()
     cpu: Optional[float] = None
     memory_mb: Optional[int] = None
     gpu: Optional[int] = None

@@ -5,7 +5,6 @@ from typing import Any, Dict, List, Optional
 from yarl import URL
 
 import platform_api
-from platform_api.resource import DEFAULT_PRESETS, Preset
 
 from .cluster_config import (
     ClusterConfig,
@@ -77,9 +76,6 @@ class EnvironConfigFactory:
             ),
             orphaned_job_owner=orphaned_job_owner,
         )
-
-    def create_presets(self) -> List[Preset]:
-        return DEFAULT_PRESETS
 
     def create_ssh(self) -> SSHConfig:
         env_prefix = self._environ.get("NP_ENV_PREFIX", SSHConfig.env_prefix)
