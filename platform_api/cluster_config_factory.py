@@ -18,76 +18,7 @@ from .orchestrator.kube_config import KubeClientAuthType, KubeConfig
 from .resource import GKEGPUModels, GPUModel, ResourcePoolType
 
 
-_nfs_storage_cfg_validator = t.Dict(
-    {"url": t.String, "host": t.Dict({"mount_path": t.String}).allow_extra("*")}
-).allow_extra("*")
-
-_host_storage_cfg_validator = t.Dict(
-    {
-        "url": t.String,
-        "nfs": t.Dict({"server": t.String, "export_path": t.String}).allow_extra("*"),
-    }
-).allow_extra("*")
-
-_storage_config_validator = _nfs_storage_cfg_validator | _host_storage_cfg_validator
-
-_registry_config_validator = t.Dict({"url": t.String, "email": t.Email}).allow_extra(
-    "*"
-)
-
-_orchestrator_config_validator = t.Dict(
-    {
-        "kubernetes": t.Dict(
-            {
-                "url": t.String,
-                "ca_data": t.String,
-                "auth_type": t.Enum(*[s.value for s in KubeClientAuthType]),
-                "token": t.String | t.Null,
-                "namespace": t.String,
-                "jobs_ingress_class": t.Enum("traefik", "nginx"),
-                "jobs_ingress_oauth_url": t.String,
-                "node_label_gpu": t.String,
-                "node_label_preemptible": t.String,
-            }
-        ).allow_extra("*"),
-        "is_http_ingress_secure": t.Bool,
-        "job_hostname_template": t.String,
-        "resource_pool_types": t.List(
-            t.Dict(
-                {
-                    "gpu": t.Int,
-                    t.Key("gpu_model", optional=True): t.Enum(
-                        *[m.value.id for m in GKEGPUModels]
-                    ),
-                }
-            ).allow_extra("*")
-            | t.Dict({})
-        ),
-    }
-).allow_extra("*")
-
-_monitoring_config_validator = t.Dict(
-    {
-        "url": t.String,
-        "elasticsearch": t.Dict({"hosts": t.List(t.String)})
-        | t.Dict(
-            {"hosts": t.List(t.String), "username": t.String, "password": t.String}
-        ).allow_extra("*"),
-    }
-).allow_extra("*")
-
-_ssh_config_validator = t.Dict({"server": t.String}).allow_extra("*")
-
-_cluster_config_validator = t.Dict(
-    {
-        "name": t.String,
-        "storage": _storage_config_validator,
-        "registry": _registry_config_validator,
-        "orchestrator": _orchestrator_config_validator,
-        "ssh": _ssh_config_validator,
-        "monitoring": _monitoring_config_validator,
-    }
-).allow_extra("*")
+_cluster_config_validator = t.Dict({"name": t.String}).allow_extra("*")
 
 
 class ClusterConfigFactory:
