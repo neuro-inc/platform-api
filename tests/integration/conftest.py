@@ -138,14 +138,14 @@ async def kube_config(
                         gpu=1,
                         cpu=7,
                         memory_mb=30720,
-                        gpu_model=GKEGPUModels.K80.value,
+                        gpu_model=GKEGPUModels.K80.value.id,
                     ),
                     Preset(
                         name="gpu-large",
                         gpu=1,
                         cpu=7,
                         memory_mb=61440,
-                        gpu_model=GKEGPUModels.V100.value,
+                        gpu_model=GKEGPUModels.V100.value.id,
                     ),
                 ]
             ),
@@ -155,7 +155,7 @@ async def kube_config(
                     Preset(name="cpu-large", cpu=3, memory_mb=14336),
                 ]
             ),
-            # ResourcePoolType(gpu=1, gpu_model=GPUModel(id="gpumodel")),
+            ResourcePoolType(gpu=1, gpu_model="gpumodel"),
         ],
         node_label_preemptible="preemptible",
         namespace="platformapi-tests",

@@ -37,7 +37,6 @@ from platform_api.orchestrator.job_request import (
     JobStatus,
 )
 from platform_api.orchestrator.jobs_storage import JobFilter
-from platform_api.resource import GPUModel
 from platform_api.user import User
 
 from .conftest import MockOrchestrator
@@ -181,9 +180,7 @@ class TestContainerRequestValidator:
                 "gpu_model": "unknown",
             },
         }
-        validator = create_container_request_validator(
-            allowed_gpu_models=[GPUModel(id="unknown")]
-        )
+        validator = create_container_request_validator(allowed_gpu_models=["unknown"])
         result = validator.check(payload)
         assert result["resources"]["gpu"] == 1
         assert result["resources"]["gpu_model"] == "unknown"

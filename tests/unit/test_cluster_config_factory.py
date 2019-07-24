@@ -220,10 +220,14 @@ class TestClusterConfigFactory:
         assert orchestrator.resource_pool_types[0].gpu_model is None
 
         assert orchestrator.resource_pool_types[1].gpu == 4
-        assert orchestrator.resource_pool_types[1].gpu_model == GKEGPUModels.K80.value
+        assert (
+            orchestrator.resource_pool_types[1].gpu_model == GKEGPUModels.K80.value.id
+        )
 
         assert orchestrator.resource_pool_types[3].gpu == 1
-        assert orchestrator.resource_pool_types[3].gpu_model == GKEGPUModels.V100.value
+        assert (
+            orchestrator.resource_pool_types[3].gpu_model == GKEGPUModels.V100.value.id
+        )
 
         assert orchestrator.resource_pool_types[0].presets is not None
         assert orchestrator.resource_pool_types[0].presets[1].cpu == 7.0
@@ -233,7 +237,7 @@ class TestClusterConfigFactory:
         assert orchestrator.resource_pool_types[1].presets is not None
         assert (
             orchestrator.resource_pool_types[1].presets[0].gpu_model
-            == GKEGPUModels.K80.value
+            == GKEGPUModels.K80.value.id
         )
 
         assert orchestrator.resource_pool_types[2].presets is not None
@@ -241,7 +245,7 @@ class TestClusterConfigFactory:
         assert orchestrator.resource_pool_types[2].presets[0].gpu == 1
         assert (
             orchestrator.resource_pool_types[2].presets[0].gpu_model
-            == GKEGPUModels.K80.value
+            == GKEGPUModels.K80.value.id
         )
         assert orchestrator.resource_pool_types[2].presets[0].memory_mb == 52224
 

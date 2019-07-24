@@ -22,13 +22,6 @@ class GKEGPUModels(Enum):
     P100 = GPUModel(id="nvidia-tesla-p100")
     V100 = GPUModel(id="nvidia-tesla-v100")
 
-    @classmethod
-    def find_model_by_id(cls, id_: str) -> Optional["GPUModel"]:
-        for model in cls:
-            if model.value.id == id_:
-                return model.value
-        return None
-
 
 @dataclass(frozen=True)
 class Preset:
@@ -37,7 +30,7 @@ class Preset:
     memory_mb: int
     is_preemptible: bool = False
     gpu: Optional[int] = None
-    gpu_model: Optional[GPUModel] = None
+    gpu_model: Optional[str] = None
 
 
 @dataclass(frozen=True)
@@ -49,7 +42,7 @@ class ResourcePoolType:
     cpu: Optional[float] = None
     memory_mb: Optional[int] = None
     gpu: Optional[int] = None
-    gpu_model: Optional[GPUModel] = None
+    gpu_model: Optional[str] = None
     disk_gb: Optional[int] = None
     min_size: Optional[int] = None
     max_size: Optional[int] = None

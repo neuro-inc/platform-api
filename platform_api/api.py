@@ -60,7 +60,7 @@ class ApiHandler:
                 if preset.gpu is not None:
                     preset_dict["gpu"] = preset.gpu
                 if preset.gpu_model is not None:
-                    preset_dict["gpu_model"] = preset.gpu_model.id
+                    preset_dict["gpu_model"] = preset.gpu_model
 
                 presets.append(preset_dict)
             data.update(
