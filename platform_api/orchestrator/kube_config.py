@@ -32,7 +32,7 @@ class KubeConfig(OrchestratorConfig):
     client_conn_pool_size: int = 100
 
     jobs_ingress_class: str = "traefik"
-    jobs_ingress_oauth_url: URL = URL()
+    jobs_ingress_oauth_url: URL = URL("https://neu.ro/oauth/authorize")
 
     storage_volume_name: str = "storage"
 
@@ -40,5 +40,5 @@ class KubeConfig(OrchestratorConfig):
     node_label_preemptible: Optional[str] = None
 
     def __post_init__(self) -> None:
-        if not self.endpoint_url:
+        if not all((self.endpoint_url, self.jobs_ingress_oauth_url)):
             raise ValueError("Missing required settings")

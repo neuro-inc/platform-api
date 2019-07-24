@@ -49,6 +49,8 @@ def clusters_payload(nfs_storage_payload: Dict[str, Any]) -> List[Dict[str, Any]
                     "namespace": "default",
                     "node_label_gpu": "cloud.google.com/gke-accelerator",
                     "node_label_preemptible": "cloud.google.com/gke-preemptible",
+                    "jobs_ingress_class": "nginx",
+                    "jobs_ingress_oauth_url": "https://neu.ro/oauth/authorize",
                 },
                 "job_hostname_template": "{job_id}.jobs.neu.ro",
                 "resource_pool_types": [
@@ -149,6 +151,10 @@ class TestClusterConfigFactory:
         assert (
             orchestrator.node_label_preemptible
             == kube_payload["node_label_preemptible"]
+        )
+        assert orchestrator.jobs_ingress_class == "nginx"
+        assert orchestrator.jobs_ingress_oauth_url == URL(
+            "https://neu.ro/oauth/authorize"
         )
 
     def test_valid_elasticsearch_config_without_user(

@@ -485,19 +485,14 @@ class KubeOrchestrator(Orchestrator):
             }
             if job.requires_http_auth:
                 oauth_url = self._kube_config.jobs_ingress_oauth_url
-                if oauth_url:
-                    annotations.update(
-                        {
-                            "ingress.kubernetes.io/auth-type": "forward",
-                            "ingress.kubernetes.io/auth-trust-headers": "true",
-                            "ingress.kubernetes.io/auth-url": str(oauth_url),
-                        }
-                    )
-                else:
-                    logging.warning(
-                        "Job ingress oauth URL is not defined, "
-                        f"http auth is NOT enabled for job {job.id}"
-                    )
+                assert oauth_url
+                annotations.update(
+                    {
+                        "ingress.kubernetes.io/auth-type": "forward",
+                        "ingress.kubernetes.io/auth-trust-headers": "true",
+                        "ingress.kubernetes.io/auth-url": str(oauth_url),
+                    }
+                )
         return annotations
 
     async def _create_ingress(self, job: Job, service: Service) -> None:

@@ -159,10 +159,6 @@ class EnvironConfigFactory:
 
         pool_types = self.create_resource_pool_types()
 
-        jobs_ingress_oauth_url = URL(
-            self._environ.get("NP_JOBS_INGRESS_OAUTH_AUTHORIZE_URL", "")
-        )
-
         ca_path = self._environ.get("NP_K8S_CA_PATH")
         ca_data = Path(ca_path).read_text() if ca_path else None
 
@@ -197,7 +193,9 @@ class EnvironConfigFactory:
             jobs_ingress_class=self._environ.get(
                 "NP_K8S_JOBS_INGRESS_CLASS", KubeConfig.jobs_ingress_class
             ),
-            jobs_ingress_oauth_url=jobs_ingress_oauth_url,
+            jobs_ingress_oauth_url=URL(
+                self._environ["NP_JOBS_INGRESS_OAUTH_AUTHORIZE_URL"]
+            ),
             is_http_ingress_secure=self._get_bool("NP_K8S_JOBS_INGRESS_HTTPS"),
             jobs_domain_name_template=self._environ[
                 "NP_K8S_JOBS_INGRESS_DOMAIN_NAME_TEMPLATE"
