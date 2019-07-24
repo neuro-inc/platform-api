@@ -35,6 +35,7 @@ class Preset:
     name: str
     cpu: float
     memory_mb: int
+    is_preemptible: bool = False
     gpu: Optional[int] = None
     gpu_model: Optional[GPUModel] = None
 

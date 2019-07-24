@@ -54,14 +54,14 @@ class ApiHandler:
             presets = []
             for preset in cluster_config.orchestrator.presets:
                 preset_dict: Dict[str, Any] = {"name": preset.name}
+                preset_dict["cpu"] = preset.cpu
+                preset_dict["memory_mb"] = preset.memory_mb
+                preset_dict["is_preemptible"] = preset.is_preemptible
                 if preset.gpu is not None:
                     preset_dict["gpu"] = preset.gpu
                 if preset.gpu_model is not None:
                     preset_dict["gpu_model"] = preset.gpu_model.id
-                if preset.memory_mb is not None:
-                    preset_dict["memory_mb"] = preset.memory_mb
-                if preset.cpu is not None:
-                    preset_dict["cpu"] = preset.cpu
+
                 presets.append(preset_dict)
             data.update(
                 {

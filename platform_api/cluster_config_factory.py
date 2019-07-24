@@ -70,6 +70,7 @@ class ClusterConfigFactory:
                     name=preset["name"],
                     cpu=preset.get("cpu") or payload["cpu"],
                     memory_mb=preset.get("memory_mb") or payload["memory_mb"],
+                    is_preemptible=payload.get("is_preemptible", False),
                     gpu=preset.get("gpu") or payload.get("gpu"),
                     gpu_model=self._create_gpu_model(preset.get("gpu_model"))
                     or self._create_gpu_model(payload.get("gpu_model")),
