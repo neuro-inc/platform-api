@@ -33,9 +33,9 @@ class GKEGPUModels(Enum):
 @dataclass(frozen=True)
 class Preset:
     name: str
-    cpu: Optional[float] = None
+    cpu: float
+    memory_mb: int
     gpu: Optional[int] = None
-    memory_mb: Optional[int] = None
     gpu_model: Optional[GPUModel] = None
 
 
