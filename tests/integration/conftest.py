@@ -271,9 +271,7 @@ class MyKubeClient(KubeClient):
 
 
 @pytest.fixture(scope="session")
-async def kube_client_factory(
-    kube_config: KubeConfig
-) -> AsyncIterator[Callable[..., MyKubeClient]]:
+async def kube_client_factory(kube_config: KubeConfig) -> Callable[..., MyKubeClient]:
     def _f(custom_kube_config: Optional[KubeConfig] = None) -> MyKubeClient:
 
         config = custom_kube_config or kube_config
@@ -291,7 +289,7 @@ async def kube_client_factory(
         )
         return kube_client
 
-    yield _f
+    return _f
 
 
 @pytest.fixture(scope="session")
@@ -347,11 +345,8 @@ async def kube_orchestrator_factory(
     kube_config: KubeConfig,
     es_client: Optional[Elasticsearch],
     event_loop: Any,
-) -> AsyncIterator[Callable[..., Awaitable[KubeOrchestrator]]]:
-    kube_orchestrator: Optional[KubeOrchestrator] = None
-
-    async def _f(**kwargs: Any) -> KubeOrchestrator:
-        nonlocal kube_orchestrator
+) -> Callable[..., KubeOrchestrator]:
+    def _f(**kwargs: Any) -> KubeOrchestrator:
         defaults = dict(
             storage_config=storage_config_host,
             registry_config=registry_config,
@@ -359,21 +354,17 @@ async def kube_orchestrator_factory(
             es_client=es_client,
         )
         kwargs = {**defaults, **kwargs}
-        kube_orchestrator = KubeOrchestrator(**kwargs)
-        await kube_orchestrator.__aenter__()
-        return kube_orchestrator
+        return KubeOrchestrator(**kwargs)
 
-    yield _f
-
-    if kube_orchestrator is not None:
-        await kube_orchestrator.__aexit__()
+    return _f
 
 
 @pytest.fixture
 async def kube_orchestrator(
-    kube_orchestrator_factory: Callable[..., Awaitable[KubeOrchestrator]],
-) -> KubeOrchestrator:
-    return await kube_orchestrator_factory()
+    kube_orchestrator_factory: Callable[..., KubeOrchestrator],
+) -> AsyncIterator[KubeOrchestrator]:
+    async with kube_orchestrator_factory() as kube_orchestrator:
+        yield kube_orchestrator
 
 
 @pytest.fixture
