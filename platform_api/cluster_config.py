@@ -114,7 +114,7 @@ class OrchestratorConfig:
         for resource_pool_type in self.resource_pool_types:
             if resource_pool_type.presets:
                 result.extend(resource_pool_type.presets)
-        return result or DEFAULT_PRESETS
+        return tuple(result or DEFAULT_PRESETS)
 
 
 @dataclass(frozen=True)
