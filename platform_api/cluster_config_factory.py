@@ -5,8 +5,6 @@ from typing import Any, Dict, List, Optional, Sequence
 import trafaret as t
 from yarl import URL
 
-from platform_api.resource import DEFAULT_PRESETS, Preset
-
 from .cluster_config import (
     ClusterConfig,
     IngressConfig,
@@ -17,7 +15,7 @@ from .cluster_config import (
 )
 from .elasticsearch import ElasticsearchConfig
 from .orchestrator.kube_config import KubeClientAuthType, KubeConfig
-from .resource import ResourcePoolType
+from .resource import Preset, ResourcePoolType
 
 
 _cluster_config_validator = t.Dict({"name": t.String}).allow_extra("*")
@@ -97,9 +95,6 @@ class ClusterConfigFactory:
                     gpu_model=preset.get("gpu_model") or payload.get("gpu_model"),
                 )
             )
-        # default fallback
-        if len(result) == 0:
-            return DEFAULT_PRESETS
         return result
 
     def _create_elasticsearch_config(

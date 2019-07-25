@@ -6,7 +6,7 @@ from typing import List, Optional, Sequence
 from yarl import URL
 
 from .elasticsearch import ElasticsearchConfig
-from .resource import Preset, ResourcePoolType
+from .resource import DEFAULT_PRESETS, Preset, ResourcePoolType
 
 
 class StorageType(str, Enum):
@@ -114,7 +114,7 @@ class OrchestratorConfig:
         for resource_pool_type in self.resource_pool_types:
             if resource_pool_type.presets:
                 result.extend(resource_pool_type.presets)
-        return result
+        return tuple(result or DEFAULT_PRESETS)
 
 
 @dataclass(frozen=True)

@@ -52,21 +52,21 @@ class ResourcePoolType:
             raise ValueError("GPU model unspecified")
 
 
-DEFAULT_PRESETS = [
+DEFAULT_PRESETS = (
     Preset(
         name="gpu-small",
         cpu=7,
         memory_mb=30 * 1024,
         gpu=1,
-        gpu_model=next(iter(GKEGPUModels)).value,
+        gpu_model=next(iter(GKEGPUModels)).value.id,
     ),
     Preset(
         name="gpu-large",
         cpu=7,
         memory_mb=60 * 1024,
         gpu=1,
-        gpu_model=next(reversed(GKEGPUModels)).value,
+        gpu_model=next(reversed(GKEGPUModels)).value.id,
     ),
     Preset(name="cpu-small", cpu=2, memory_mb=2 * 1024),
     Preset(name="cpu-large", cpu=3, memory_mb=14 * 1024),
-]
+)
