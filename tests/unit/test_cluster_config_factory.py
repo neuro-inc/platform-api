@@ -380,8 +380,3 @@ class TestClusterConfigFactory:
         )
 
         assert len(clusters) == 1
-
-    def test_presets_use_defauls_when_none_provided(self) -> None:
-        factory = ClusterConfigFactory()
-        presets = factory._create_presets({})
-        assert len(presets) == 4
