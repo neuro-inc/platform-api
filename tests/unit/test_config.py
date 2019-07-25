@@ -60,7 +60,6 @@ class TestStorageVolume:
         registry_config = RegistryConfig()
         kube_config = KubeConfig(
             jobs_domain_name_template="{job_id}.testdomain",
-            jobs_ingress_name="testingress",
             ssh_auth_domain_name="ssh-auth.domain",
             endpoint_url="http://1.2.3.4",
             resource_pool_types=[ResourcePoolType()],
@@ -83,7 +82,6 @@ class TestStorageVolume:
         kube_config = KubeConfig(
             jobs_domain_name_template="{job_id}.testdomain",
             ssh_auth_domain_name="ssh-auth.domain",
-            jobs_ingress_name="testingress",
             endpoint_url="http://1.2.3.4",
             resource_pool_types=[ResourcePoolType()],
         )
@@ -106,7 +104,7 @@ class TestEnvironConfigFactory:
         environ = {
             "NP_STORAGE_HOST_MOUNT_PATH": "/tmp",
             "NP_K8S_API_URL": "https://localhost:8443",
-            "NP_K8S_JOBS_INGRESS_NAME": "testingress",
+            "NP_JOBS_INGRESS_OAUTH_AUTHORIZE_URL": "http://neu.ro/oauth/authorize",
             "NP_K8S_JOBS_INGRESS_DOMAIN_NAME_TEMPLATE": "{job_id}.jobs.domain",
             "NP_K8S_SSH_AUTH_INGRESS_DOMAIN_NAME": "ssh-auth.domain",
             "NP_AUTH_URL": "https://auth",
@@ -150,9 +148,11 @@ class TestEnvironConfigFactory:
         assert cluster.orchestrator.namespace == "default"
         assert cluster.orchestrator.client_conn_timeout_s == 300
         assert cluster.orchestrator.client_read_timeout_s == 300
+        assert cluster.orchestrator.jobs_ingress_class == "traefik"
+        assert cluster.orchestrator.jobs_ingress_oauth_url == URL(
+            "http://neu.ro/oauth/authorize"
+        )
         assert cluster.orchestrator.client_conn_pool_size == 100
-        assert cluster.orchestrator.jobs_ingress_name == "testingress"
-        assert cluster.orchestrator.jobs_ingress_auth_name == "testingress"
         assert not cluster.orchestrator.is_http_ingress_secure
         assert cluster.orchestrator.jobs_domain_name_template == "{job_id}.jobs.domain"
         assert cluster.orchestrator.ssh_auth_domain_name == "ssh-auth.domain"
@@ -194,6 +194,7 @@ class TestEnvironConfigFactory:
             "NP_AUTH_URL": "https://auth",
             "NP_AUTH_TOKEN": "token",
             "NP_API_URL": "https://neu.ro/api/v1",
+            "NP_JOBS_INGRESS_OAUTH_AUTHORIZE_URL": "http://neu.ro/oauth/authorize",
         }
         with pytest.raises(ValueError):
             EnvironConfigFactory(environ=environ).create()
@@ -212,8 +213,8 @@ class TestEnvironConfigFactory:
             "NP_K8S_CLIENT_CONN_TIMEOUT": "111",
             "NP_K8S_CLIENT_READ_TIMEOUT": "222",
             "NP_K8S_CLIENT_CONN_POOL_SIZE": "333",
-            "NP_K8S_JOBS_INGRESS_NAME": "testingress",
-            "NP_K8S_JOBS_INGRESS_AUTH_NAME": "testingressauth",
+            "NP_K8S_JOBS_INGRESS_CLASS": "nginx",
+            "NP_JOBS_INGRESS_OAUTH_AUTHORIZE_URL": "http://neu.ro/oauth/authorize",
             "NP_K8S_JOBS_INGRESS_HTTPS": "True",
             "NP_K8S_JOBS_INGRESS_DOMAIN_NAME_TEMPLATE": "{job_id}.jobs.domain",
             "NP_K8S_SSH_AUTH_INGRESS_DOMAIN_NAME": "ssh-auth.domain",
@@ -277,8 +278,10 @@ class TestEnvironConfigFactory:
         assert cluster.orchestrator.client_conn_timeout_s == 111
         assert cluster.orchestrator.client_read_timeout_s == 222
         assert cluster.orchestrator.client_conn_pool_size == 333
-        assert cluster.orchestrator.jobs_ingress_name == "testingress"
-        assert cluster.orchestrator.jobs_ingress_auth_name == "testingressauth"
+        assert cluster.orchestrator.jobs_ingress_class == "nginx"
+        assert cluster.orchestrator.jobs_ingress_oauth_url == URL(
+            "http://neu.ro/oauth/authorize"
+        )
         assert cluster.orchestrator.is_http_ingress_secure
         assert cluster.orchestrator.jobs_domain_name_template == "{job_id}.jobs.domain"
         assert cluster.orchestrator.ssh_auth_domain_name == "ssh-auth.domain"
@@ -320,8 +323,8 @@ class TestEnvironConfigFactory:
             "NP_STORAGE_NFS_PATH": "/tmp",
             "NP_STORAGE_HOST_MOUNT_PATH": "/tmp",
             "NP_K8S_API_URL": "https://localhost:8443",
-            "NP_K8S_JOBS_INGRESS_NAME": "testingress",
             "NP_K8S_JOBS_INGRESS_DOMAIN_NAME_TEMPLATE": "{job_id}.jobs.domain",
+            "NP_JOBS_INGRESS_OAUTH_AUTHORIZE_URL": "http://neu.ro/oauth/authorize",
             "NP_K8S_SSH_AUTH_INGRESS_DOMAIN_NAME": "ssh-auth.domain",
             "NP_API_URL": "https://neu.ro/api/v1",
             "NP_AUTH_URL": "https://auth",
@@ -369,3 +372,64 @@ class TestEnvironConfigFactory:
     def test_registry_config_host_custom_port(self) -> None:
         config = RegistryConfig(url=URL("http://registry.com:5000"))
         assert config.host == "registry.com:5000"
+
+
+class TestKubeConfig:
+    def test_missing_api_url(self) -> None:
+        with pytest.raises(ValueError, match="Missing required settings"):
+            KubeConfig(
+                endpoint_url="",
+                cert_authority_data_pem="value",
+                cert_authority_path="value",
+                auth_cert_path="value",
+                auth_cert_key_path="value",
+                token="value",
+                token_path="value",
+                namespace="value",
+                jobs_domain_name_template="value",
+                ssh_auth_domain_name="value",
+                resource_pool_types=[],
+                node_label_gpu="value",
+                node_label_preemptible="value",
+                jobs_ingress_oauth_url=URL("value"),
+            )
+
+    def test_traefik_missing_jobs_ingress_oauth_url(self) -> None:
+        with pytest.raises(ValueError, match="Missing required settings"):
+            KubeConfig(
+                endpoint_url="value",
+                cert_authority_data_pem="value",
+                cert_authority_path="value",
+                auth_cert_path="value",
+                auth_cert_key_path="value",
+                token="value",
+                token_path="value",
+                namespace="value",
+                jobs_domain_name_template="value",
+                ssh_auth_domain_name="value",
+                resource_pool_types=[],
+                node_label_gpu="value",
+                node_label_preemptible="value",
+                jobs_ingress_class="traefik",
+                jobs_ingress_oauth_url=URL(""),
+            )
+
+    def test_non_traefik_missing_jobs_ingress_oauth_url(self) -> None:
+        # does not raise ValueError
+        KubeConfig(
+            endpoint_url="value",
+            cert_authority_data_pem="value",
+            cert_authority_path="value",
+            auth_cert_path="value",
+            auth_cert_key_path="value",
+            token="value",
+            token_path="value",
+            namespace="value",
+            jobs_domain_name_template="value",
+            ssh_auth_domain_name="value",
+            resource_pool_types=[],
+            node_label_gpu="value",
+            node_label_preemptible="value",
+            jobs_ingress_class="nginx",
+            jobs_ingress_oauth_url=URL(""),
+        )

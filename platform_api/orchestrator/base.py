@@ -3,7 +3,7 @@ from typing import Any, Optional, Sequence
 
 from platform_api.resource import ResourcePoolType
 
-from ..config import OrchestratorConfig, StorageConfig  # noqa
+from ..config import OrchestratorConfig, StorageConfig
 from .job import Job, JobStats, JobStatusItem
 from .job_request import JobStatus
 

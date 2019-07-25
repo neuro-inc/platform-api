@@ -467,23 +467,46 @@ class KubeOrchestrator(Orchestrator):
         status = await self._client.delete_pod(pod_id)
         return convert_pod_status_to_job_status(status).status
 
+    def _get_job_ingress_name(self, job: Job) -> str:
+        return job.id
+
+    def _get_ingress_annotations(self, job: Job) -> Dict[str, str]:
+        annotations: Dict[str, str] = {}
+        if self._kube_config.jobs_ingress_class == "traefik":
+            annotations = {
+                "kubernetes.io/ingress.class": "traefik",
+                "traefik.ingress.kubernetes.io/error-pages": (
+                    "default:\n"
+                    "  status:\n"
+                    '  - "500-600"\n'
+                    "  backend: error-pages\n"
+                    "  query: /"
+                ),
+            }
+            if job.requires_http_auth:
+                oauth_url = self._kube_config.jobs_ingress_oauth_url
+                assert oauth_url
+                annotations.update(
+                    {
+                        "ingress.kubernetes.io/auth-type": "forward",
+                        "ingress.kubernetes.io/auth-trust-headers": "true",
+                        "ingress.kubernetes.io/auth-url": str(oauth_url),
+                    }
+                )
+        return annotations
+
     async def _create_ingress(self, job: Job, service: Service) -> None:
-        ingress_name = self._get_ingress_name(job)
-        for host in job.http_hosts:
-            await self._client.add_ingress_rule(
-                name=ingress_name,
-                rule=IngressRule.from_service(host=host, service=service),
-            )
+        name = self._get_job_ingress_name(job)
+        rules = [
+            IngressRule.from_service(host=host, service=service)
+            for host in job.http_hosts
+        ]
+        annotations = self._get_ingress_annotations(job)
+        await self._client.create_ingress(name, rules=rules, annotations=annotations)
 
     async def _delete_ingress(self, job: Job) -> None:
-        ingress_name = self._get_ingress_name(job)
-        for host in job.http_hosts:
-            try:
-                await self._client.remove_ingress_rule(name=ingress_name, host=host)
-            except Exception:
-                logger.exception(f"Failed to remove ingress rule {host}")
-
-    def _get_ingress_name(self, job: Job) -> str:
-        if job.requires_http_auth and self._kube_config.jobs_ingress_auth_name:
-            return self._kube_config.jobs_ingress_auth_name
-        return self._kube_config.jobs_ingress_name
+        name = self._get_job_ingress_name(job)
+        try:
+            await self._client.delete_ingress(name)
+        except Exception as e:
+            logger.warning(f"Failed to remove ingress {name}: {e}")

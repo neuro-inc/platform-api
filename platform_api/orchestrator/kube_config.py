@@ -2,6 +2,8 @@ import enum
 from dataclasses import dataclass
 from typing import Optional
 
+from yarl import URL
+
 from platform_api.config import OrchestratorConfig
 
 
@@ -13,9 +15,6 @@ class KubeClientAuthType(str, enum.Enum):
 
 @dataclass(frozen=True)
 class KubeConfig(OrchestratorConfig):
-    jobs_ingress_name: str = ""
-    jobs_ingress_auth_name: str = ""
-
     endpoint_url: str = ""
     cert_authority_data_pem: Optional[str] = None
     cert_authority_path: Optional[str] = None
@@ -32,11 +31,16 @@ class KubeConfig(OrchestratorConfig):
     client_read_timeout_s: int = 300
     client_conn_pool_size: int = 100
 
+    jobs_ingress_class: str = "traefik"
+    jobs_ingress_oauth_url: URL = URL("https://neu.ro/oauth/authorize")
+
     storage_volume_name: str = "storage"
 
     node_label_gpu: Optional[str] = None
     node_label_preemptible: Optional[str] = None
 
     def __post_init__(self) -> None:
-        if not all((self.jobs_ingress_name, self.endpoint_url)):
+        if not self.endpoint_url or (
+            self.jobs_ingress_class == "traefik" and not self.jobs_ingress_oauth_url
+        ):
             raise ValueError("Missing required settings")

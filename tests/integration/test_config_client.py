@@ -30,8 +30,8 @@ def cluster_configs_payload() -> List[Dict[str, Any]]:
                     "auth_type": "token",
                     "token": "auth_token",
                     "namespace": "default",
-                    "jobs_ingress_name": "platformjobsingress",
-                    "jobs_ingress_auth_name": "platformjobsingressauth",
+                    "jobs_ingress_class": "nginx",
+                    "jobs_ingress_oauth_url": "https://neu.ro/oauth/authorize",
                     "node_label_gpu": "cloud.google.com/gke-accelerator",
                     "node_label_preemptible": "cloud.google.com/gke-preemptible",
                 },
@@ -86,7 +86,11 @@ class TestConfigClient:
         users_url = URL("https://neu.ro/api/v1/users")
         async with create_config_api(cluster_configs_payload) as url:
             async with ConfigClient(base_url=url) as client:
-                result = await client.get_clusters(users_url=users_url)
+                result = await client.get_clusters(
+                    users_url=users_url,
+                    jobs_ingress_class="nginx",
+                    jobs_ingress_oauth_url=URL("https://neu.ro/oauth/authorize"),
+                )
 
                 assert len(result) == 1
 
@@ -98,6 +102,10 @@ class TestConfigClient:
         users_url = URL("https://neu.ro/api/v1/users")
         async with create_config_api(cluster_configs_payload) as url:
             async with ConfigClient(base_url=url) as client:
-                result = await client.get_clusters(users_url=users_url)
+                result = await client.get_clusters(
+                    users_url=users_url,
+                    jobs_ingress_class="nginx",
+                    jobs_ingress_oauth_url=URL("https://neu.ro/oauth/authorize"),
+                )
 
                 assert len(result) == 1

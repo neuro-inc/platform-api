@@ -519,7 +519,35 @@ class TestKubeOrchestrator:
         await kube_client.delete_ingress(ingress.name)
 
     @pytest.mark.asyncio
-    async def test_ingress(self, kube_client: KubeClient, ingress: Ingress) -> None:
+    async def test_ingress_create_delete(self, kube_client: KubeClient) -> None:
+        name = str(uuid.uuid4())
+        rules = [
+            IngressRule(host=""),
+            IngressRule(host="host1", service_name="service1", service_port=81),
+            IngressRule(host="host2", service_name="service2", service_port=82),
+            IngressRule(host="host3", service_name="service3", service_port=83),
+        ]
+        annotations = {"key/1": "value 1", "key/2": "value 2"}
+        expected_ingress = Ingress(name=name, rules=rules, annotations=annotations)
+
+        created_ingress = await kube_client.create_ingress(
+            name=name, rules=rules, annotations=annotations
+        )
+        assert created_ingress == expected_ingress
+
+        requested_ingress = await kube_client.get_ingress(name)
+        assert requested_ingress == expected_ingress
+
+        await kube_client.delete_ingress(name)
+        # NOTE: should be another exception, see issue #792
+        with pytest.raises(JobNotFoundException, match="not found"):
+            await kube_client.get_ingress(name)
+
+    @pytest.mark.asyncio
+    async def test_ingress_add_rules(
+        self, kube_client: KubeClient, ingress: Ingress
+    ) -> None:
+
         await kube_client.add_ingress_rule(ingress.name, IngressRule(host="host1"))
         await kube_client.add_ingress_rule(ingress.name, IngressRule(host="host2"))
         await kube_client.add_ingress_rule(ingress.name, IngressRule(host="host3"))
@@ -613,19 +641,25 @@ class TestKubeOrchestrator:
         try:
             await job.start()
 
+            assert job.http_host is not None
             assert job.http_host_named is None
 
             await self._wait_for_job_service(
                 kube_ingress_ip, host=job.http_host, job_id=job.id
             )
 
-            ingress = await kube_client.get_ingress(kube_config.jobs_ingress_name)
-            assert ingress.find_rule_index_by_host(job.http_host) >= 0
+            ingress = await kube_client.get_ingress(job.id)
+            actual_rules_hosts = {rule.host for rule in ingress.rules}
+            assert actual_rules_hosts == {job.http_host}
 
-            ingress = await kube_client.get_ingress(kube_config.jobs_ingress_auth_name)
-            assert ingress.find_rule_index_by_host(job.http_host) == -1
         finally:
             await job.delete()
+
+            # check if ingresses were deleted:
+
+            # NOTE: should be another exception, see issue #792
+            with pytest.raises(JobNotFoundException, match="not found"):
+                await kube_client.get_ingress(job.id)
 
     @pytest.mark.asyncio
     async def test_job_with_exposed_http_server_with_job_name(
@@ -651,21 +685,29 @@ class TestKubeOrchestrator:
             await job.start()
             assert not (job.requires_http_auth), str(job)
 
-            for host in [job.http_host, job.http_host_named]:
-                assert host
-                await self._wait_for_job_service(
-                    kube_ingress_ip, host=host, job_id=job.id
-                )
-                ingress = await kube_client.get_ingress(kube_config.jobs_ingress_name)
-                assert ingress.find_rule_index_by_host(host) >= 0
+            assert job.http_host is not None
+            assert job.http_host_named is not None
 
-                ingress = await kube_client.get_ingress(
-                    kube_config.jobs_ingress_auth_name
-                )
-                assert ingress.find_rule_index_by_host(host) == -1
+            await self._wait_for_job_service(
+                kube_ingress_ip, host=job.http_host, job_id=job.id
+            )
+            await self._wait_for_job_service(
+                kube_ingress_ip, host=job.http_host_named, job_id=job.id
+            )
+
+            # job ingress:
+            ingress = await kube_client.get_ingress(job.id)
+            actual_rules_hosts = {rule.host for rule in ingress.rules}
+            assert actual_rules_hosts == {job.http_host, job.http_host_named}
 
         finally:
             await job.delete()
+
+            # check ingresses were deleted:
+
+            # NOTE: should be another exception, see issue #792
+            with pytest.raises(JobNotFoundException, match="not found"):
+                await kube_client.get_ingress(job.id)
 
     @pytest.mark.asyncio
     async def test_job_with_exposed_http_server_with_auth_no_job_name(
@@ -687,19 +729,26 @@ class TestKubeOrchestrator:
         try:
             await job.start()
 
+            assert job.http_host is not None
             assert job.http_host_named is None
 
             await self._wait_for_job_service(
                 kube_ingress_ip, host=job.http_host, job_id=job.id
             )
 
-            ingress = await kube_client.get_ingress(kube_config.jobs_ingress_name)
-            assert ingress.find_rule_index_by_host(job.http_host) == -1
+            # job ingress auth:
+            ingress = await kube_client.get_ingress(job.id)
+            actual_rules_hosts = {rule.host for rule in ingress.rules}
+            assert actual_rules_hosts == {job.http_host}
 
-            ingress = await kube_client.get_ingress(kube_config.jobs_ingress_auth_name)
-            assert ingress.find_rule_index_by_host(job.http_host) >= 0
         finally:
             await job.delete()
+
+            # check ingresses were deleted:
+
+            # NOTE: should be another exception, see issue #792
+            with pytest.raises(JobNotFoundException, match="not found"):
+                await kube_client.get_ingress(job.id)
 
     @pytest.mark.asyncio
     async def test_job_with_exposed_http_server_with_auth_with_job_name(
@@ -724,21 +773,29 @@ class TestKubeOrchestrator:
         try:
             await job.start()
 
-            for http_host in [job.http_host, job.http_host_named]:
-                assert http_host
-                await self._wait_for_job_service(
-                    kube_ingress_ip, host=http_host, job_id=job.id
-                )
+            assert job.http_host is not None
+            assert job.http_host_named is not None
 
-                ingress = await kube_client.get_ingress(kube_config.jobs_ingress_name)
-                assert ingress.find_rule_index_by_host(http_host) == -1
+            await self._wait_for_job_service(
+                kube_ingress_ip, host=job.http_host, job_id=job.id
+            )
+            await self._wait_for_job_service(
+                kube_ingress_ip, host=job.http_host_named, job_id=job.id
+            )
 
-                ingress = await kube_client.get_ingress(
-                    kube_config.jobs_ingress_auth_name
-                )
-                assert ingress.find_rule_index_by_host(http_host) >= 0
+            # job ingress auth:
+            ingress = await kube_client.get_ingress(job.id)
+            actual_rules_hosts = {rule.host for rule in ingress.rules}
+            assert actual_rules_hosts == {job.http_host, job.http_host_named}
+
         finally:
             await job.delete()
+
+            # check ingresses were deleted:
+
+            # NOTE: should be another exception, see issue #792
+            with pytest.raises(JobNotFoundException, match="not found"):
+                await kube_client.get_ingress(job.id)
 
     @pytest.fixture
     def create_server_job(
