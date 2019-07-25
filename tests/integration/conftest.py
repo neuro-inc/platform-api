@@ -112,55 +112,65 @@ def registry_config() -> RegistryConfig:
 
 
 @pytest.fixture(scope="session")
-async def kube_config(
+def kube_config_factory(
     kube_config_cluster_payload: Dict[str, Any],
     kube_config_user_payload: Dict[str, Any],
     cert_authority_data_pem: Optional[str],
-) -> KubeConfig:
+) -> Iterator[Callable[..., KubeConfig]]:
     cluster = kube_config_cluster_payload
     user = kube_config_user_payload
-    kube_config = KubeConfig(
-        jobs_ingress_class="nginx",
-        jobs_domain_name_template="{job_id}.jobs.neu.ro",
-        ssh_auth_domain_name="ssh-auth.platform.neuromation.io",
-        endpoint_url=cluster["server"],
-        cert_authority_data_pem=cert_authority_data_pem,
-        cert_authority_path=None,  # disable, so only `cert_authority_data_pem` works
-        auth_cert_path=user["client-certificate"],
-        auth_cert_key_path=user["client-key"],
-        node_label_gpu="gpu",
-        resource_pool_types=[
-            ResourcePoolType(
-                presets=[
-                    Preset(
-                        name="gpu-small",
-                        gpu=1,
-                        cpu=7,
-                        memory_mb=30720,
-                        gpu_model=GKEGPUModels.K80.value.id,
-                    ),
-                    Preset(
-                        name="gpu-large",
-                        gpu=1,
-                        cpu=7,
-                        memory_mb=61440,
-                        gpu_model=GKEGPUModels.V100.value.id,
-                    ),
-                ]
-            ),
-            ResourcePoolType(
-                presets=[
-                    Preset(name="cpu-small", cpu=2, memory_mb=2048),
-                    Preset(name="cpu-large", cpu=3, memory_mb=14336),
-                ]
-            ),
-            ResourcePoolType(gpu=1, gpu_model="gpumodel"),
-        ],
-        node_label_preemptible="preemptible",
-        namespace="platformapi-tests",
-        job_schedule_scaleup_timeout=5,
-    )
-    return kube_config
+
+    def _f(**kwargs: Any) -> KubeConfig:
+        defaults = dict(
+            jobs_ingress_class="nginx",
+            jobs_domain_name_template="{job_id}.jobs.neu.ro",
+            ssh_auth_domain_name="ssh-auth.platform.neuromation.io",
+            endpoint_url=cluster["server"],
+            cert_authority_data_pem=cert_authority_data_pem,
+            cert_authority_path=None,  # disable, only `cert_authority_data_pem` works
+            auth_cert_path=user["client-certificate"],
+            auth_cert_key_path=user["client-key"],
+            node_label_gpu="gpu",
+            resource_pool_types=[
+                ResourcePoolType(
+                    presets=[
+                        Preset(
+                            name="gpu-small",
+                            gpu=1,
+                            cpu=7,
+                            memory_mb=30720,
+                            gpu_model=GKEGPUModels.K80.value.id,
+                        ),
+                        Preset(
+                            name="gpu-large",
+                            gpu=1,
+                            cpu=7,
+                            memory_mb=61440,
+                            gpu_model=GKEGPUModels.V100.value.id,
+                        ),
+                    ]
+                ),
+                ResourcePoolType(
+                    presets=[
+                        Preset(name="cpu-small", cpu=2, memory_mb=2048),
+                        Preset(name="cpu-large", cpu=3, memory_mb=14336),
+                    ]
+                ),
+                ResourcePoolType(gpu=1, gpu_model="gpumodel"),
+            ],
+            node_label_preemptible="preemptible",
+            namespace="platformapi-tests",
+            job_schedule_scaleup_timeout=5,
+        )
+        kwargs = {**defaults, **kwargs}
+        return KubeConfig(**kwargs)
+
+    yield _f
+
+
+@pytest.fixture(scope="session")
+async def kube_config(kube_config_factory: Callable[..., KubeConfig]) -> KubeConfig:
+    return kube_config_factory()
 
 
 @pytest.fixture(scope="session")
@@ -261,23 +271,41 @@ class MyKubeClient(KubeClient):
 
 
 @pytest.fixture(scope="session")
-async def kube_client(kube_config: KubeConfig) -> AsyncIterator[MyKubeClient]:
-    config = kube_config
-    # TODO (A Danshyn 06/06/18): create a factory method
-    client = MyKubeClient(
-        base_url=config.endpoint_url,
-        auth_type=config.auth_type,
-        cert_authority_data_pem=config.cert_authority_data_pem,
-        cert_authority_path=config.cert_authority_path,
-        auth_cert_path=config.auth_cert_path,
-        auth_cert_key_path=config.auth_cert_key_path,
-        namespace=config.namespace,
-        conn_timeout_s=config.client_conn_timeout_s,
-        read_timeout_s=config.client_read_timeout_s,
-        conn_pool_size=config.client_conn_pool_size,
-    )
-    async with client:
-        yield client
+async def kube_client_factory(
+    kube_config: KubeConfig
+) -> AsyncIterator[Callable[..., Awaitable[MyKubeClient]]]:
+    kube_client: Optional[MyKubeClient] = None
+
+    async def _f(custom_kube_config: Optional[KubeConfig] = None) -> MyKubeClient:
+        nonlocal kube_client
+
+        config = custom_kube_config or kube_config
+        kube_client = MyKubeClient(
+            base_url=config.endpoint_url,
+            auth_type=config.auth_type,
+            cert_authority_data_pem=config.cert_authority_data_pem,
+            cert_authority_path=config.cert_authority_path,
+            auth_cert_path=config.auth_cert_path,
+            auth_cert_key_path=config.auth_cert_key_path,
+            namespace=config.namespace,
+            conn_timeout_s=config.client_conn_timeout_s,
+            read_timeout_s=config.client_read_timeout_s,
+            conn_pool_size=config.client_conn_pool_size,
+        )
+        await kube_client.__aenter__()
+        return kube_client
+
+    yield _f
+
+    if kube_client is not None:
+        await kube_client.__aexit__()
+
+
+@pytest.fixture(scope="session")
+async def kube_client(
+    kube_client_factory: Callable[..., Awaitable[MyKubeClient]]
+) -> MyKubeClient:
+    return await kube_client_factory()
 
 
 @pytest.fixture(scope="session")
@@ -319,21 +347,39 @@ async def kube_config_nfs(
 
 
 @pytest.fixture
-async def kube_orchestrator(
+async def kube_orchestrator_factory(
     storage_config_host: StorageConfig,
     registry_config: RegistryConfig,
     kube_config: KubeConfig,
     es_client: Optional[Elasticsearch],
     event_loop: Any,
-) -> AsyncIterator[KubeOrchestrator]:
-    orchestrator = KubeOrchestrator(
-        storage_config=storage_config_host,
-        registry_config=registry_config,
-        kube_config=kube_config,
-        es_client=es_client,
-    )
-    async with orchestrator:
-        yield orchestrator
+) -> AsyncIterator[Callable[..., Awaitable[KubeOrchestrator]]]:
+    kube_orchestrator: Optional[KubeOrchestrator] = None
+
+    async def _f(**kwargs: Any) -> KubeOrchestrator:
+        nonlocal kube_orchestrator
+        defaults = dict(
+            storage_config=storage_config_host,
+            registry_config=registry_config,
+            kube_config=kube_config,
+            es_client=es_client,
+        )
+        kwargs = {**defaults, **kwargs}
+        kube_orchestrator = KubeOrchestrator(**kwargs)
+        await kube_orchestrator.__aenter__()
+        return kube_orchestrator
+
+    yield _f
+
+    if kube_orchestrator is not None:
+        await kube_orchestrator.__aexit__()
+
+
+@pytest.fixture
+async def kube_orchestrator(
+    kube_orchestrator_factory: Callable[..., Awaitable[KubeOrchestrator]],
+) -> KubeOrchestrator:
+    return await kube_orchestrator_factory()
 
 
 @pytest.fixture
