@@ -944,108 +944,105 @@ class TestKubeOrchestrator:
         self,
         kube_config_factory: Callable[..., KubeConfig],
         kube_orchestrator_factory: Callable[..., Awaitable[KubeOrchestrator]],
-        kube_client_factory: Callable[..., Awaitable[MyKubeClient]],
+        kube_client_factory: Callable[..., MyKubeClient],
     ) -> None:
         kube_config = kube_config_factory(jobs_ingress_class="nginx")
         kube_orchestrator = await kube_orchestrator_factory(kube_config=kube_config)
-        kube_client = await kube_client_factory(kube_config)
-
-        container = Container(
-            image="ubuntu",
-            command="sleep 1h",
-            resources=ContainerResources(cpu=0.1, memory_mb=16),
-            http_server=ContainerHTTPServer(port=80),
-        )
-        job = MyJob(
-            orchestrator=kube_orchestrator, job_request=JobRequest.create(container)
-        )
-        try:
-            await job.start()
-            pod_name = job.id
-            await kube_client.wait_pod_is_running(pod_name=pod_name, timeout_s=60.0)
-            ingress = await kube_client.get_ingress(pod_name)
-            assert ingress.annotations == dict()
-        finally:
-            await kube_orchestrator.delete_job(job)
+        async with kube_client_factory(kube_config) as kube_client:
+            container = Container(
+                image="ubuntu",
+                command="sleep 1h",
+                resources=ContainerResources(cpu=0.1, memory_mb=16),
+                http_server=ContainerHTTPServer(port=80),
+            )
+            job = MyJob(
+                orchestrator=kube_orchestrator, job_request=JobRequest.create(container)
+            )
+            try:
+                await job.start()
+                pod_name = job.id
+                await kube_client.wait_pod_is_running(pod_name=pod_name, timeout_s=60.0)
+                ingress = await kube_client.get_ingress(pod_name)
+                assert ingress.annotations == dict()
+            finally:
+                await kube_orchestrator.delete_job(job)
 
     @pytest.mark.asyncio
     async def test_job_check_ingress_annotations_jobs_ingress_class_traefik_no_auth(
         self,
         kube_config_factory: Callable[..., KubeConfig],
         kube_orchestrator_factory: Callable[..., Awaitable[KubeOrchestrator]],
-        kube_client_factory: Callable[..., Awaitable[MyKubeClient]],
+        kube_client_factory: Callable[..., MyKubeClient],
     ) -> None:
         kube_config = kube_config_factory(jobs_ingress_class="traefik")
         kube_orchestrator = await kube_orchestrator_factory(kube_config=kube_config)
-        kube_client = await kube_client_factory(kube_config)
-
-        container = Container(
-            image="ubuntu",
-            command="sleep 1h",
-            resources=ContainerResources(cpu=0.1, memory_mb=16),
-            http_server=ContainerHTTPServer(port=80),
-        )
-        job = MyJob(
-            orchestrator=kube_orchestrator, job_request=JobRequest.create(container)
-        )
-        try:
-            await job.start()
-            pod_name = job.id
-            await kube_client.wait_pod_is_running(pod_name=pod_name, timeout_s=60.0)
-            ingress = await kube_client.get_ingress(pod_name)
-            assert ingress.annotations == {
-                "kubernetes.io/ingress.class": "traefik",
-                "traefik.ingress.kubernetes.io/error-pages": (
-                    "default:\n"
-                    "  status:\n"
-                    '  - "500-600"\n'
-                    "  backend: error-pages\n"
-                    "  query: /"
-                ),
-            }
-        finally:
-            await kube_orchestrator.delete_job(job)
+        async with kube_client_factory(kube_config) as kube_client:
+            container = Container(
+                image="ubuntu",
+                command="sleep 1h",
+                resources=ContainerResources(cpu=0.1, memory_mb=16),
+                http_server=ContainerHTTPServer(port=80),
+            )
+            job = MyJob(
+                orchestrator=kube_orchestrator, job_request=JobRequest.create(container)
+            )
+            try:
+                await job.start()
+                pod_name = job.id
+                await kube_client.wait_pod_is_running(pod_name=pod_name, timeout_s=60.0)
+                ingress = await kube_client.get_ingress(pod_name)
+                assert ingress.annotations == {
+                    "kubernetes.io/ingress.class": "traefik",
+                    "traefik.ingress.kubernetes.io/error-pages": (
+                        "default:\n"
+                        "  status:\n"
+                        '  - "500-600"\n'
+                        "  backend: error-pages\n"
+                        "  query: /"
+                    ),
+                }
+            finally:
+                await kube_orchestrator.delete_job(job)
 
     @pytest.mark.asyncio
     async def test_job_check_ingress_annotations_jobs_ingress_class_traefik_with_auth(
         self,
         kube_config_factory: Callable[..., KubeConfig],
         kube_orchestrator_factory: Callable[..., Awaitable[KubeOrchestrator]],
-        kube_client_factory: Callable[..., Awaitable[MyKubeClient]],
+        kube_client_factory: Callable[..., MyKubeClient],
     ) -> None:
         kube_config = kube_config_factory(jobs_ingress_class="traefik")
         kube_orchestrator = await kube_orchestrator_factory(kube_config=kube_config)
-        kube_client = await kube_client_factory(kube_config)
-
-        container = Container(
-            image="ubuntu",
-            command="sleep 1h",
-            resources=ContainerResources(cpu=0.1, memory_mb=16),
-            http_server=ContainerHTTPServer(port=80, requires_auth=True),
-        )
-        job = MyJob(
-            orchestrator=kube_orchestrator, job_request=JobRequest.create(container)
-        )
-        try:
-            await job.start()
-            pod_name = job.id
-            await kube_client.wait_pod_is_running(pod_name=pod_name, timeout_s=60.0)
-            ingress = await kube_client.get_ingress(pod_name)
-            assert ingress.annotations == {
-                "kubernetes.io/ingress.class": "traefik",
-                "traefik.ingress.kubernetes.io/error-pages": (
-                    "default:\n"
-                    "  status:\n"
-                    '  - "500-600"\n'
-                    "  backend: error-pages\n"
-                    "  query: /"
-                ),
-                "ingress.kubernetes.io/auth-type": "forward",
-                "ingress.kubernetes.io/auth-trust-headers": "true",
-                "ingress.kubernetes.io/auth-url": "https://neu.ro/oauth/authorize",
-            }
-        finally:
-            await kube_orchestrator.delete_job(job)
+        async with kube_client_factory(kube_config) as kube_client:
+            container = Container(
+                image="ubuntu",
+                command="sleep 1h",
+                resources=ContainerResources(cpu=0.1, memory_mb=16),
+                http_server=ContainerHTTPServer(port=80, requires_auth=True),
+            )
+            job = MyJob(
+                orchestrator=kube_orchestrator, job_request=JobRequest.create(container)
+            )
+            try:
+                await job.start()
+                pod_name = job.id
+                await kube_client.wait_pod_is_running(pod_name=pod_name, timeout_s=60.0)
+                ingress = await kube_client.get_ingress(pod_name)
+                assert ingress.annotations == {
+                    "kubernetes.io/ingress.class": "traefik",
+                    "traefik.ingress.kubernetes.io/error-pages": (
+                        "default:\n"
+                        "  status:\n"
+                        '  - "500-600"\n'
+                        "  backend: error-pages\n"
+                        "  query: /"
+                    ),
+                    "ingress.kubernetes.io/auth-type": "forward",
+                    "ingress.kubernetes.io/auth-trust-headers": "true",
+                    "ingress.kubernetes.io/auth-url": "https://neu.ro/oauth/authorize",
+                }
+            finally:
+                await kube_orchestrator.delete_job(job)
 
 
 @pytest.fixture

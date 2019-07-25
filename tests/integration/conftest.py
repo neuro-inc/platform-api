@@ -273,11 +273,8 @@ class MyKubeClient(KubeClient):
 @pytest.fixture(scope="session")
 async def kube_client_factory(
     kube_config: KubeConfig
-) -> AsyncIterator[Callable[..., Awaitable[MyKubeClient]]]:
-    kube_client: Optional[MyKubeClient] = None
-
-    async def _f(custom_kube_config: Optional[KubeConfig] = None) -> MyKubeClient:
-        nonlocal kube_client
+) -> AsyncIterator[Callable[..., MyKubeClient]]:
+    def _f(custom_kube_config: Optional[KubeConfig] = None) -> MyKubeClient:
 
         config = custom_kube_config or kube_config
         kube_client = MyKubeClient(
@@ -292,20 +289,17 @@ async def kube_client_factory(
             read_timeout_s=config.client_read_timeout_s,
             conn_pool_size=config.client_conn_pool_size,
         )
-        await kube_client.__aenter__()
         return kube_client
 
     yield _f
 
-    if kube_client is not None:
-        await kube_client.__aexit__()
-
 
 @pytest.fixture(scope="session")
 async def kube_client(
-    kube_client_factory: Callable[..., Awaitable[MyKubeClient]]
-) -> MyKubeClient:
-    return await kube_client_factory()
+    kube_client_factory: Callable[..., MyKubeClient]
+) -> AsyncIterator[KubeClient]:
+    async with kube_client_factory() as kube_client:
+        yield kube_client
 
 
 @pytest.fixture(scope="session")
