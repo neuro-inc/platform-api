@@ -611,6 +611,7 @@ class PodDescriptor:
         container_payload = {
             "name": f"{self.name}",
             "image": f"{self.image}",
+            "imagePullPolicy": "Always",
             "env": self.env_list,
             "volumeMounts": volume_mounts,
             "terminationMessagePolicy": "FallbackToLogsOnError",

@@ -122,6 +122,7 @@ class TestPodDescriptor:
                     {
                         "name": "testname",
                         "image": "testimage",
+                        "imagePullPolicy": "Always",
                         "env": [],
                         "volumeMounts": [],
                         "terminationMessagePolicy": "FallbackToLogsOnError",
@@ -170,6 +171,7 @@ class TestPodDescriptor:
                     {
                         "name": "testname",
                         "image": "testimage",
+                        "imagePullPolicy": "Always",
                         "env": [{"name": "TESTVAR", "value": "testvalue"}],
                         "volumeMounts": [],
                         "resources": {
@@ -231,6 +233,7 @@ class TestPodDescriptor:
                     {
                         "name": "testname",
                         "image": "testimage",
+                        "imagePullPolicy": "Always",
                         "env": [{"name": "TESTVAR", "value": "testvalue"}],
                         "volumeMounts": [],
                         "resources": {
@@ -284,6 +287,7 @@ class TestPodDescriptor:
                     {
                         "name": "testname",
                         "image": "testimage",
+                        "imagePullPolicy": "Always",
                         "env": [{"name": "TESTVAR", "value": "testvalue"}],
                         "volumeMounts": [],
                         "resources": {
@@ -335,6 +339,7 @@ class TestPodDescriptor:
                     {
                         "name": "testname",
                         "image": "testimage",
+                        "imagePullPolicy": "Always",
                         "env": [{"name": "TESTVAR", "value": "testvalue"}],
                         "volumeMounts": [],
                         "resources": {
@@ -389,6 +394,7 @@ class TestPodDescriptor:
                     {
                         "name": "testname",
                         "image": "testimage",
+                        "imagePullPolicy": "Always",
                         "env": [{"name": "TESTVAR", "value": "testvalue"}],
                         "volumeMounts": [
                             {
