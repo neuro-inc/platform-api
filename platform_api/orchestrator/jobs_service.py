@@ -99,11 +99,17 @@ class JobsService:
             # there were jobs in the cluster, but none of them returned status
             if success_count == 0:
                 cluster_failed = False
-                async with self._get_cluster(cluster_name) as cluster:
-                    cluster.failure_count += 1
-                    if cluster.failed():
-                        # we can't delete the cluster within _get_cluster()
-                        cluster_failed = True
+                try:
+                    async with self._get_cluster(cluster_name) as cluster:
+                        cluster.failure_count += 1
+                        if cluster.failed():
+                            # we can't delete the cluster within _get_cluster()
+                            cluster_failed = True
+                except ClusterNotFound:
+                    logger.info(
+                        "Cluster %s has already been deleted or never existed",
+                        cluster_name,
+                    )
                 if cluster_failed:
                     logger.warning(
                         "Cluster %s is not responding, deleting it", cluster_name
