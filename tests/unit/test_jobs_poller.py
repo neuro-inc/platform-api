@@ -75,9 +75,36 @@ class TestJobsPoller:
         await self.wait_for_job_status(jobs_service=jobs_service)
 
     @pytest.mark.asyncio
-    async def test_cluster_removal(self, jobs_service: JobsService) -> None:
-        # create 2 clusters
-        # create several jobs in each
-        # mock consecutive failures in jobs_service
-        # assert failed cluster is removed
-        pass
+    async def test_cluster_removal(
+        self,
+        jobs_service: JobsService,
+        mock_orchestrator: MockOrchestrator,
+        job_request_factory: Callable[[], JobRequest],
+    ) -> None:
+        mock_orchestrator.raise_on_get_job_status = "JobStatusException"
+
+        user = User(name="testuser", token="")
+        original_job, _ = await jobs_service.create_job(
+            job_request=job_request_factory(), user=user
+        )
+        _, _ = await jobs_service.create_job(
+            job_request=job_request_factory(), user=user
+        )
+        _, _ = await jobs_service.create_job(
+            job_request=job_request_factory(), user=user
+        )
+
+        cluster_name = jobs_service.get_cluster_name(original_job)
+        async with jobs_service._get_cluster(cluster_name) as cluster:
+            assert cluster is not None
+
+        for i in range(1, 11):
+            await jobs_service.update_jobs_statuses()
+        async with jobs_service._get_cluster(cluster_name) as cluster:
+            assert cluster is None
+
+        # job = await jobs_service.get_job(job_id=original_job.id)
+        # assert job.status == JobStatus.FAILED
+        # assert job.is_finished
+        # assert job.finished_at
+        # assert job.is_deleted

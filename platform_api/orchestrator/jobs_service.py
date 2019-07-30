@@ -1,7 +1,6 @@
 import logging
 from typing import AsyncIterator, Dict, Iterable, List, Optional, Sequence, Tuple
 
-from aiohttp import ClientConnectorError
 from async_generator import asynccontextmanager
 from notifications_client import (
     Client as NotificationsClient,
@@ -182,8 +181,6 @@ class JobsService:
                 description="The job could not be scheduled or was preempted.",
             )
             job.is_deleted = True
-        except ClientConnectorError as exc:
-            raise JobStatusException("Failed to get job %s status", job.id) from exc
 
         if old_status_item != status_item:
             job.status_history.current = status_item

@@ -12,7 +12,7 @@ from platform_api.cluster_config import (
 )
 
 from .base import Orchestrator
-from .job import Job, JobStatusItem, JobStatusReason
+from .job import Job, JobStatusException, JobStatusItem, JobStatusReason
 from .job_request import JobError, JobNotFoundException, JobStatus
 from .kube_client import (
     AlreadyExistsException,
@@ -348,10 +348,13 @@ class KubeOrchestrator(Orchestrator):
         # handling PENDING/RUNNING jobs
 
         pod_name = self._get_job_pod_name(job)
-        if job.is_preemptible:
-            pod = await self._check_preemptible_job_pod(job)
-        else:
-            pod = await self._client.get_pod(pod_name)
+        try:
+            if job.is_preemptible:
+                pod = await self._check_preemptible_job_pod(job)
+            else:
+                pod = await self._client.get_pod(pod_name)
+        except Exception as exc:
+            raise JobStatusException("Failed to get job status for %s", job.id) from exc
 
         pod_status = pod.status
         assert pod_status is not None  # should always be present

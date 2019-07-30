@@ -16,6 +16,7 @@ from platform_api.orchestrator.job import (
     AggregatedRunTime,
     Job,
     JobRecord,
+    JobStatusException,
     JobStatusItem,
     JobStatusReason,
 )
@@ -45,7 +46,7 @@ class MockOrchestrator(Orchestrator):
         self._mock_status_to_return = JobStatus.PENDING
         self._mock_reason_to_return: Optional[str] = JobStatusReason.CONTAINER_CREATING
         self._mock_exit_code_to_return: Optional[int] = None
-        self.raise_on_get_job_status = False
+        self.raise_on_get_job_status: Optional[str] = None
         self.raise_on_delete = False
         self._successfully_deleted_jobs: List[Job] = []
 
@@ -62,8 +63,11 @@ class MockOrchestrator(Orchestrator):
         return JobStatus.PENDING
 
     async def get_job_status(self, job: Job) -> JobStatusItem:
-        if self.raise_on_get_job_status:
+        if self.raise_on_get_job_status == "JobNotFoundException":
             raise JobNotFoundException(f"job {job.id} was not found")
+        elif self.raise_on_get_job_status == "JobStatusException":
+            raise JobStatusException(f"Failed to get {job.id} status")
+
         return JobStatusItem.create(
             self._mock_status_to_return,
             reason=self._mock_reason_to_return,
@@ -102,8 +106,8 @@ class MockJobsStorage(InMemoryJobsStorage):
 
 class MockNotificationsClient(NotificationsClient):
     def __init__(self) -> None:
+        super().__init__(URL(), "")
         self._sent_notifications: List[AbstractNotification] = []
-        pass
 
     async def notify(self, notification: AbstractNotification) -> None:
         self._sent_notifications.append(notification)
@@ -145,6 +149,7 @@ def mock_job_request(job_request_factory: Callable[[], JobRequest]) -> JobReques
 
 class MockCluster(Cluster):
     def __init__(self, config: ClusterConfig, orchestrator: Orchestrator) -> None:
+        super().__init__()
         self._config = config
         self._orchestrator = orchestrator
 

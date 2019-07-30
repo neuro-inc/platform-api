@@ -329,7 +329,7 @@ class TestJobsService:
         mock_orchestrator: MockOrchestrator,
         job_request_factory: Callable[[], JobRequest],
     ) -> None:
-        mock_orchestrator.raise_on_get_job_status = True
+        mock_orchestrator.raise_on_get_job_status = "JobNotFoundException"
         jobs_service = jobs_service_factory(deletion_delay_s=0)
 
         user = User(name="testuser", token="")

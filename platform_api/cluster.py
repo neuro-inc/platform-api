@@ -24,9 +24,12 @@ class ClusterNotFound(ClusterException):
 
 
 class Cluster(ABC):
+    def __init__(self) -> None:
+        self._failure_count = 0
+
     @abstractmethod
     async def init(self) -> None:  # pragma: no cover
-        self._failure_count = 0
+        pass
 
     @abstractmethod
     async def close(self) -> None:  # pragma: no cover
@@ -48,7 +51,11 @@ class Cluster(ABC):
 
     @property
     def failure_count(self) -> int:
-        return self.failure_count
+        return self._failure_count
+
+    @failure_count.setter
+    def failure_count(self, val: int) -> None:
+        self._failure_count = val
 
 
 ClusterFactory = Callable[[ClusterConfig], Cluster]
