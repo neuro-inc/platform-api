@@ -14,6 +14,7 @@ from platform_api.orchestrator.base import Orchestrator
 
 class _TestCluster(Cluster):
     def __init__(self, config: ClusterConfig) -> None:
+        super().__init__()
         self._config = config
 
     async def init(self) -> None:

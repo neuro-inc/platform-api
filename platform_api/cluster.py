@@ -26,6 +26,8 @@ class ClusterNotFound(ClusterException):
 class Cluster(ABC):
     def __init__(self) -> None:
         self._failure_count = 0
+        # TODO: make configurable
+        self._max_failure_count = 10
 
     @abstractmethod
     async def init(self) -> None:  # pragma: no cover
@@ -56,6 +58,9 @@ class Cluster(ABC):
     @failure_count.setter
     def failure_count(self, val: int) -> None:
         self._failure_count = val
+
+    def failed(self) -> bool:
+        return self.failure_count > self._max_failure_count
 
 
 ClusterFactory = Callable[[ClusterConfig], Cluster]

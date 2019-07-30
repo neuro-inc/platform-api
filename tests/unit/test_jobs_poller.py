@@ -3,6 +3,7 @@ from typing import Any, AsyncIterator, Callable
 
 import pytest
 
+from platform_api.cluster import ClusterNotFound
 from platform_api.orchestrator.job_request import JobRequest, JobStatus
 from platform_api.orchestrator.jobs_poller import JobsPoller
 from platform_api.orchestrator.jobs_service import JobsService
@@ -87,24 +88,26 @@ class TestJobsPoller:
         original_job, _ = await jobs_service.create_job(
             job_request=job_request_factory(), user=user
         )
-        _, _ = await jobs_service.create_job(
-            job_request=job_request_factory(), user=user
-        )
-        _, _ = await jobs_service.create_job(
-            job_request=job_request_factory(), user=user
-        )
+        # create several jobs, just in case
+        for i in range(5):
+            _, _ = await jobs_service.create_job(
+                job_request=job_request_factory(), user=user
+            )
 
         cluster_name = jobs_service.get_cluster_name(original_job)
         async with jobs_service._get_cluster(cluster_name) as cluster:
             assert cluster is not None
 
-        for i in range(1, 11):
+        # reach max number of failures, but not enough to delete
+        for i in range(cluster._max_failure_count):
             await jobs_service.update_jobs_statuses()
         async with jobs_service._get_cluster(cluster_name) as cluster:
-            assert cluster is None
+            assert cluster is not None
 
-        # job = await jobs_service.get_job(job_id=original_job.id)
-        # assert job.status == JobStatus.FAILED
-        # assert job.is_finished
-        # assert job.finished_at
-        # assert job.is_deleted
+        # one more failure triggers cluster deletion
+        await jobs_service.update_jobs_statuses()
+
+        # it should be deleted by now
+        with pytest.raises(ClusterNotFound):
+            async with jobs_service._get_cluster(cluster_name) as cluster:
+                assert cluster is None
