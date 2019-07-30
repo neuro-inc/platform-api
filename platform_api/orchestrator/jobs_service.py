@@ -107,6 +107,10 @@ class JobsService:
                             "Cluster %s is not responding, deleting it", cluster_name
                         )
                         await self._delete_cluster(cluster_name)
+            else:
+                # reset failure counter if at least one job in cluster responded
+                async with self._get_cluster(cluster_name) as cluster:
+                    cluster.failure_count = 0
 
     async def _update_job_status_by_id(
         self, job_id: str, success_counts: Dict[str, int]
