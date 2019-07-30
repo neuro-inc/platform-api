@@ -26,7 +26,7 @@ class ClusterNotFound(ClusterException):
 class Cluster(ABC):
     @abstractmethod
     async def init(self) -> None:  # pragma: no cover
-        pass
+        self._failure_count = 0
 
     @abstractmethod
     async def close(self) -> None:  # pragma: no cover
@@ -45,6 +45,10 @@ class Cluster(ABC):
     @abstractmethod
     def orchestrator(self) -> Orchestrator:  # pragma: no cover
         pass
+
+    @property
+    def failure_count(self) -> int:
+        return self.failure_count
 
 
 ClusterFactory = Callable[[ClusterConfig], Cluster]

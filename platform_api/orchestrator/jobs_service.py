@@ -1,5 +1,5 @@
 import logging
-from typing import AsyncIterator, Iterable, List, Optional, Sequence, Tuple
+from typing import AsyncIterator, Dict, Iterable, List, Optional, Sequence, Tuple
 
 from aiohttp import ClientConnectorError
 from async_generator import asynccontextmanager
@@ -77,17 +77,17 @@ class JobsService:
         async with self._cluster_registry.get(self._get_cluster_name(name)) as cluster:
             yield cluster
 
+    async def _delete_cluster(self, name: str) -> None:
+        await self._cluster_registry.remove(self._get_cluster_name(name))
+
     async def update_jobs_statuses(self) -> None:
         # TODO (A Danshyn 02/17/19): instead of returning `Job` objects,
         # it makes sense to just return their IDs.
 
         unfinished_jobs = await self._jobs_storage.get_unfinished_jobs()
-        failure_count = 0
+        success_counts: Dict[str, int] = {}
         for record in unfinished_jobs:
-            if not await self._update_job_status_by_id(record.id):
-                failure_count += 1
-        if failure_count == len(unfinished_jobs):
-            pass
+            await self._update_job_status_by_id(record.id, success_counts)
 
         for record in await self._jobs_storage.get_jobs_for_deletion(
             delay=self._jobs_config.deletion_delay
@@ -96,10 +96,25 @@ class JobsService:
             # assert job.is_finished and not job.is_deleted
             await self._delete_job_by_id(record.id)
 
-    async def _update_job_status_by_id(self, job_id: str) -> bool:
+        for cluster_name, success_count in success_counts.items():
+            # there were jobs in the cluster, but none of them returned status
+            if success_count == 0:
+                async with self._get_cluster(cluster_name) as cluster:
+                    cluster.failure_count += 1
+                    # TODO: make the value configurable
+                    if cluster.failure_count == 10:
+                        logger.warning(
+                            "Cluster %s is not responding, deleting it", cluster_name
+                        )
+                        await self._delete_cluster(cluster_name)
+
+    async def _update_job_status_by_id(
+        self, job_id: str, success_counts: Dict[str, int]
+    ) -> bool:
         try:
             async with self._update_job_in_storage(job_id) as record:
                 try:
+                    current_success_count = success_counts.get(record.cluster_name, 0)
                     async with self._get_cluster(record.cluster_name) as cluster:
                         job = Job(
                             storage_config=cluster.config.storage,
@@ -108,6 +123,7 @@ class JobsService:
                         )
                         await self._update_job_status(cluster.orchestrator, job)
                         job.collect_if_needed()
+                    current_success_count += 1
                 except ClusterNotFound as cluster_err:
                     # marking PENDING/RUNNING job as FAILED
                     logger.warning(
@@ -124,11 +140,11 @@ class JobsService:
                     return False
                 except JobStatusException as job_err:
                     logger.warning(
-                        "Failed to get job '%s' status. Reason: %s",
-                        record.id,
-                        job_err,
+                        "Failed to get job '%s' status. Reason: %s", record.id, job_err
                     )
                     return False
+                finally:
+                    success_counts[record.cluster_name] = current_success_count
 
         except JobStorageTransactionError:
             # intentionally ignoring any transaction failures here because

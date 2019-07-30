@@ -73,3 +73,11 @@ class TestJobsPoller:
 
         mock_orchestrator.update_status_to_return(JobStatus.SUCCEEDED)
         await self.wait_for_job_status(jobs_service=jobs_service)
+
+    @pytest.mark.asyncio
+    async def test_cluster_removal(self, jobs_service: JobsService) -> None:
+        # create 2 clusters
+        # create several jobs in each
+        # mock consecutive failures in jobs_service
+        # assert failed cluster is removed
+        pass
