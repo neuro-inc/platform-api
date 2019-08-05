@@ -4,6 +4,7 @@ from typing import Any, AsyncIterator, Callable
 import pytest
 
 from platform_api.cluster import ClusterNotFound
+from platform_api.orchestrator.job import JobStatusException
 from platform_api.orchestrator.job_request import JobRequest, JobStatus
 from platform_api.orchestrator.jobs_poller import JobsPoller
 from platform_api.orchestrator.jobs_service import JobsService
@@ -82,7 +83,7 @@ class TestJobsPoller:
         mock_orchestrator: MockOrchestrator,
         job_request_factory: Callable[[], JobRequest],
     ) -> None:
-        mock_orchestrator.raise_on_get_job_status = "JobStatusException"
+        mock_orchestrator.raise_on_get_job_status = JobStatusException
 
         user = User(name="testuser", token="")
         original_job, _ = await jobs_service.create_job(
@@ -99,7 +100,7 @@ class TestJobsPoller:
             assert cluster is not None
 
         # reach max number of failures, but not enough to delete
-        for i in range(cluster._max_failure_count):
+        for i in range(cluster.health_tracker._max_failure_count):
             await jobs_service.update_jobs_statuses()
         async with jobs_service._get_cluster(cluster_name) as cluster:
             assert cluster is not None

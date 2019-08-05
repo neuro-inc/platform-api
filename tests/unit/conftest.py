@@ -1,7 +1,7 @@
 import asyncio
 from datetime import timedelta
 from pathlib import Path, PurePath
-from typing import AsyncIterator, Callable, Iterator, List, Optional
+from typing import AsyncIterator, Callable, Iterator, List, Optional, Type
 
 import pytest
 from notifications_client import Client as NotificationsClient
@@ -16,7 +16,6 @@ from platform_api.orchestrator.job import (
     AggregatedRunTime,
     Job,
     JobRecord,
-    JobStatusException,
     JobStatusItem,
     JobStatusReason,
 )
@@ -24,7 +23,6 @@ from platform_api.orchestrator.job_request import (
     Container,
     ContainerResources,
     JobError,
-    JobNotFoundException,
     JobRequest,
     JobStatus,
 )
@@ -46,7 +44,7 @@ class MockOrchestrator(Orchestrator):
         self._mock_status_to_return = JobStatus.PENDING
         self._mock_reason_to_return: Optional[str] = JobStatusReason.CONTAINER_CREATING
         self._mock_exit_code_to_return: Optional[int] = None
-        self.raise_on_get_job_status: Optional[str] = None
+        self.raise_on_get_job_status: Optional[Type[Exception]] = None
         self.raise_on_delete = False
         self._successfully_deleted_jobs: List[Job] = []
 
@@ -63,10 +61,8 @@ class MockOrchestrator(Orchestrator):
         return JobStatus.PENDING
 
     async def get_job_status(self, job: Job) -> JobStatusItem:
-        if self.raise_on_get_job_status == "JobNotFoundException":
-            raise JobNotFoundException(f"job {job.id} was not found")
-        elif self.raise_on_get_job_status == "JobStatusException":
-            raise JobStatusException(f"Failed to get {job.id} status")
+        if self.raise_on_get_job_status is not None:
+            raise self.raise_on_get_job_status()
 
         return JobStatusItem.create(
             self._mock_status_to_return,

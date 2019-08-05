@@ -23,11 +23,33 @@ class ClusterNotFound(ClusterException):
         return cls(f"Cluster '{name}' not found")
 
 
-class Cluster(ABC):
+class ClusterHealthTracker:
     def __init__(self) -> None:
-        self._failure_count = 0
         # TODO: make configurable
         self._max_failure_count = 10
+        self._failure_count = 0
+        self._at_least_one_success = False
+
+    def finish_iteration(self) -> None:
+        if self._at_least_one_success:
+            self._failure_count = 0
+        else:
+            self._failure_count += 1
+
+    def reset(self) -> None:
+        self._at_least_one_success = False
+
+    def log_success(self) -> None:
+        self._at_least_one_success = True
+
+    @property
+    def unhealthy(self) -> bool:
+        return self._failure_count > self._max_failure_count
+
+
+class Cluster(ABC):
+    def __init__(self) -> None:
+        self._health_tracker = ClusterHealthTracker()
 
     @abstractmethod
     async def init(self) -> None:  # pragma: no cover
@@ -52,15 +74,16 @@ class Cluster(ABC):
         pass
 
     @property
-    def failure_count(self) -> int:
-        return self._failure_count
+    def health_tracker(self) -> ClusterHealthTracker:
+        return self._health_tracker
 
-    @failure_count.setter
-    def failure_count(self, val: int) -> None:
-        self._failure_count = val
+    def __eq__(self, other: Any) -> bool:
+        if not isinstance(other, Cluster):
+            return False
+        return self.name == other.name
 
-    def failed(self) -> bool:
-        return self.failure_count > self._max_failure_count
+    def __hash__(self) -> int:
+        return self.name.__hash__()
 
 
 ClusterFactory = Callable[[ClusterConfig], Cluster]

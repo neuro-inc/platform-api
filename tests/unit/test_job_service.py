@@ -13,7 +13,11 @@ from platform_api.orchestrator.job import (
     JobStatusItem,
     JobStatusReason,
 )
-from platform_api.orchestrator.job_request import JobRequest, JobStatus
+from platform_api.orchestrator.job_request import (
+    JobNotFoundException,
+    JobRequest,
+    JobStatus,
+)
 from platform_api.orchestrator.jobs_service import (
     GpuQuotaExceededError,
     JobsService,
@@ -329,7 +333,7 @@ class TestJobsService:
         mock_orchestrator: MockOrchestrator,
         job_request_factory: Callable[[], JobRequest],
     ) -> None:
-        mock_orchestrator.raise_on_get_job_status = "JobNotFoundException"
+        mock_orchestrator.raise_on_get_job_status = JobNotFoundException
         jobs_service = jobs_service_factory(deletion_delay_s=0)
 
         user = User(name="testuser", token="")

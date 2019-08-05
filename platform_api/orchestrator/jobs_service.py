@@ -1,5 +1,5 @@
 import logging
-from typing import AsyncIterator, Dict, Iterable, List, Optional, Sequence, Tuple
+from typing import AsyncIterator, Iterable, List, Optional, Sequence, Tuple
 
 from async_generator import asynccontextmanager
 from notifications_client import (
@@ -84,9 +84,20 @@ class JobsService:
         # it makes sense to just return their IDs.
 
         unfinished_jobs = await self._jobs_storage.get_unfinished_jobs()
-        success_counts: Dict[str, int] = {}
+
+        clusters_with_jobs = set()
+        for job in unfinished_jobs:
+            try:
+                async with self._get_cluster(job.cluster_name) as cluster:
+                    clusters_with_jobs.add(cluster)
+                    cluster.health_tracker.reset()
+            except ClusterNotFound:
+                logger.info(
+                    "Cluster %s has been deleted or never existed", job.cluster_name
+                )
+
         for record in unfinished_jobs:
-            await self._update_job_status_by_id(record.id, success_counts)
+            await self._update_job_status_by_id(record.id)
 
         for record in await self._jobs_storage.get_jobs_for_deletion(
             delay=self._jobs_config.deletion_delay
@@ -95,38 +106,23 @@ class JobsService:
             # assert job.is_finished and not job.is_deleted
             await self._delete_job_by_id(record.id)
 
-        for cluster_name, success_count in success_counts.items():
-            # there were jobs in the cluster, but none of them returned status
-            if success_count == 0:
-                cluster_failed = False
+        for cluster in clusters_with_jobs:
+            cluster.health_tracker.finish_iteration()
+            if cluster.health_tracker.unhealthy:
                 try:
-                    async with self._get_cluster(cluster_name) as cluster:
-                        cluster.failure_count += 1
-                        if cluster.failed():
-                            # we can't delete the cluster within _get_cluster()
-                            cluster_failed = True
+                    logger.warning(
+                        "Cluster %s is not responding, deleting it", cluster.name
+                    )
+                    await self._delete_cluster(cluster.name)
                 except ClusterNotFound:
                     logger.info(
-                        "Cluster %s has already been deleted or never existed",
-                        cluster_name,
+                        "Cluster %s has been deleted or never existed", cluster.name
                     )
-                if cluster_failed:
-                    logger.warning(
-                        "Cluster %s is not responding, deleting it", cluster_name
-                    )
-                    await self._delete_cluster(cluster_name)
-            else:
-                # reset failure counter if at least one job in cluster responded
-                async with self._get_cluster(cluster_name) as cluster:
-                    cluster.failure_count = 0
 
-    async def _update_job_status_by_id(
-        self, job_id: str, success_counts: Dict[str, int]
-    ) -> bool:
+    async def _update_job_status_by_id(self, job_id: str) -> None:
         try:
             async with self._update_job_in_storage(job_id) as record:
                 try:
-                    current_success_count = success_counts.get(record.cluster_name, 0)
                     async with self._get_cluster(record.cluster_name) as cluster:
                         job = Job(
                             storage_config=cluster.config.storage,
@@ -134,8 +130,8 @@ class JobsService:
                             record=record,
                         )
                         await self._update_job_status(cluster.orchestrator, job)
+                        cluster.health_tracker.log_success()
                         job.collect_if_needed()
-                    current_success_count += 1
                 except ClusterNotFound as cluster_err:
                     # marking PENDING/RUNNING job as FAILED
                     logger.warning(
@@ -149,20 +145,15 @@ class JobsService:
                         description=str(cluster_err),
                     )
                     record.is_deleted = True
-                    return False
                 except JobStatusException as job_err:
                     logger.warning(
                         "Failed to get job '%s' status. Reason: %s", record.id, job_err
                     )
-                    return False
-                finally:
-                    success_counts[record.cluster_name] = current_success_count
 
         except JobStorageTransactionError:
             # intentionally ignoring any transaction failures here because
             # the job may have been changed and a retry is needed.
             pass
-        return True
 
     async def _update_job_status(self, orchestrator: Orchestrator, job: Job) -> None:
         if job.is_finished:
