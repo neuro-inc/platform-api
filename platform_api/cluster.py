@@ -35,6 +35,7 @@ class ClusterHealthTracker:
             self._failure_count = 0
         else:
             self._failure_count += 1
+        self.reset()
 
     def reset(self) -> None:
         self._at_least_one_success = False

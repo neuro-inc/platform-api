@@ -6,6 +6,7 @@ from async_timeout import timeout
 from platform_api.cluster import (
     Cluster,
     ClusterConfig,
+    ClusterHealthTracker,
     ClusterNotFound,
     ClusterRegistry,
 )
@@ -182,3 +183,44 @@ class TestClusterRegistry:
         with pytest.raises(ClusterNotFound, match=f"Cluster '{name}' not found"):
             async with registry.get(name):
                 pass
+
+
+class TestClusterHealthTracker:
+    @pytest.mark.asyncio
+    async def test_initial_state(self) -> None:
+        tr = ClusterHealthTracker()
+        assert tr.unhealthy is False
+
+    @pytest.mark.asyncio
+    async def test_several_failures_are_not_enough(self) -> None:
+        tr = ClusterHealthTracker()
+        for i in range(tr._max_failure_count):
+            tr.finish_iteration()
+
+        assert tr.unhealthy is False
+
+    @pytest.mark.asyncio
+    async def test_just_enough_failures(self) -> None:
+        tr = ClusterHealthTracker()
+        for i in range(tr._max_failure_count + 1):
+            tr.finish_iteration()
+
+        assert tr.unhealthy is True
+
+    @pytest.mark.asyncio
+    async def test_more_failures(self) -> None:
+        tr = ClusterHealthTracker()
+        for i in range(tr._max_failure_count * 5):
+            tr.finish_iteration()
+
+        assert tr.unhealthy is True
+
+    @pytest.mark.asyncio
+    async def test_log_success(self) -> None:
+        tr = ClusterHealthTracker()
+        for i in range(tr._max_failure_count + 1):
+            tr.finish_iteration()
+        tr.log_success()
+        tr.finish_iteration()
+
+        assert tr.unhealthy is False
