@@ -39,6 +39,19 @@ def create_cluster_config(name: str) -> ClusterConfig:
     )
 
 
+class TestCluster:
+    @pytest.mark.asyncio
+    async def test_equals(self) -> None:
+        config1 = create_cluster_config("test1")
+        config2 = create_cluster_config("test2")
+        c1 = _TestCluster(config=config1)
+        c2 = _TestCluster(config=config2)
+        c3 = _TestCluster(config=config1)
+        assert c1 == c1
+        assert c1 != c2
+        assert c1 == c3
+
+
 class TestClusterRegistry:
     @pytest.mark.asyncio
     async def test_get_not_found(self) -> None:
