@@ -353,6 +353,8 @@ class KubeOrchestrator(Orchestrator):
                 pod = await self._check_preemptible_job_pod(job)
             else:
                 pod = await self._client.get_pod(pod_name)
+        except JobNotFoundException as exc:
+            raise exc
         except Exception as exc:
             raise JobStatusException("Failed to get job status for %s", job.id) from exc
 
