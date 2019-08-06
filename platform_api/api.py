@@ -50,10 +50,10 @@ class ApiHandler:
     async def handle_clusters_sync(
         self, request: aiohttp.web.Request
     ) -> aiohttp.web.Response:
-        # user = await authorized_user(request)
-        # permission = Permission(uri="cluster://", action="manage")
-        # logger.info("Checking whether %r has %r", user, permission)
-        # await check_permission(request, permission.action, [permission])
+        user = await authorized_user(request)
+        permission = Permission(uri="cluster://", action="manage")
+        logger.info("Checking whether %r has %r", user, permission)
+        await check_permission(request, permission.action, [permission])
 
         cluster_configs_future = get_cluster_configs(self._config)
         cluster_registry = self._jobs_service._cluster_registry
@@ -93,7 +93,7 @@ class ApiHandler:
                 {
                     "registry_url": str(cluster_config.registry.url),
                     "storage_url": str(cluster_config.ingress.storage_url),
-                    "users_url": str(cluster_config.ingress.users_url),
+                    "users_url": str(self._config.auth.public_auth_url),
                     "monitoring_url": str(cluster_config.ingress.monitoring_url),
                     "resource_presets": presets,
                 }
@@ -254,10 +254,9 @@ async def create_app(
 
 
 async def get_cluster_configs(config: Config) -> Sequence[ClusterConfig]:
-    cluster_config = EnvironConfigFactory().create_cluster()
     async with config.config_client as client:
         return await client.get_clusters(
-            users_url=cluster_config.ingress.users_url,
+            users_url=config.auth.public_auth_url,
             jobs_ingress_class=config.jobs.jobs_ingress_class,
             jobs_ingress_oauth_url=config.jobs.jobs_ingress_oauth_url,
         )

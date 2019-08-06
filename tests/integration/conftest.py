@@ -523,7 +523,6 @@ def cluster_config(
 ) -> ClusterConfig:
     ingress_config = IngressConfig(
         storage_url=URL("https://neu.ro/api/v1/storage"),
-        users_url=URL("https://neu.ro/api/v1/users"),
         monitoring_url=URL("https://neu.ro/api/v1/monitoring"),
     )
     return ClusterConfig(

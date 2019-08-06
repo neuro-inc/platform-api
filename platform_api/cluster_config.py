@@ -132,7 +132,6 @@ class OrchestratorConfig:
 @dataclass(frozen=True)
 class IngressConfig:
     storage_url: URL
-    users_url: URL
     monitoring_url: URL
 
 
