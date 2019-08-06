@@ -29,6 +29,11 @@ class TestApi:
             assert response.status == HTTPOk.status_code
 
     @pytest.mark.asyncio
+    async def test_config_cluster_sync(self, api: ApiConfig, client: aiohttp.ClientSession) -> None:
+        async with client.get(api.cluster_sync_url) as response:
+            assert response.status == HTTPOk.status_code
+
+    @pytest.mark.asyncio
     async def test_config_unauthorized(
         self, api: ApiConfig, client: aiohttp.ClientSession
     ) -> None:
