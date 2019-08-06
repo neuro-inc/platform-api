@@ -14,7 +14,7 @@ class KubeCluster(Cluster):
     _orchestrator: Orchestrator
 
     def __init__(self, config: ClusterConfig) -> None:
-        super().__init__()
+        super().__init__(failure_threshold=config.registry.failure_threshold)
         self._config = config
 
         self._exit_stack = AsyncExitStack()

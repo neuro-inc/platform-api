@@ -207,7 +207,7 @@ class TestClusterHealthTracker:
     @pytest.mark.asyncio
     async def test_several_failures_are_not_enough(self) -> None:
         tr = ClusterHealthTracker()
-        for i in range(tr._max_failure_count):
+        for i in range(tr._failure_threshold):
             tr.finish_iteration()
 
         assert tr.unhealthy is False
@@ -215,7 +215,7 @@ class TestClusterHealthTracker:
     @pytest.mark.asyncio
     async def test_just_enough_failures(self) -> None:
         tr = ClusterHealthTracker()
-        for i in range(tr._max_failure_count + 1):
+        for i in range(tr._failure_threshold + 1):
             tr.finish_iteration()
 
         assert tr.unhealthy is True
@@ -223,7 +223,7 @@ class TestClusterHealthTracker:
     @pytest.mark.asyncio
     async def test_more_failures(self) -> None:
         tr = ClusterHealthTracker()
-        for i in range(tr._max_failure_count * 5):
+        for i in range(tr._failure_threshold * 5):
             tr.finish_iteration()
 
         assert tr.unhealthy is True
@@ -231,7 +231,7 @@ class TestClusterHealthTracker:
     @pytest.mark.asyncio
     async def test_log_success(self) -> None:
         tr = ClusterHealthTracker()
-        for i in range(tr._max_failure_count + 1):
+        for i in range(tr._failure_threshold + 1):
             tr.finish_iteration()
         tr.log_success()
         tr.finish_iteration()

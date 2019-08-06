@@ -24,9 +24,8 @@ class ClusterNotFound(ClusterException):
 
 
 class ClusterHealthTracker:
-    def __init__(self) -> None:
-        # TODO: make configurable
-        self._max_failure_count = 10
+    def __init__(self, failure_threshold: int = 300) -> None:
+        self._failure_threshold = failure_threshold
         self._failure_count = 0
         self._at_least_one_success = False
 
@@ -45,12 +44,12 @@ class ClusterHealthTracker:
 
     @property
     def unhealthy(self) -> bool:
-        return self._failure_count > self._max_failure_count
+        return self._failure_count > self._failure_threshold
 
 
 class Cluster(ABC):
-    def __init__(self) -> None:
-        self._health_tracker = ClusterHealthTracker()
+    def __init__(self, failure_threshold: int = 300) -> None:
+        self._health_tracker = ClusterHealthTracker(failure_threshold=failure_threshold)
 
     @abstractmethod
     async def init(self) -> None:  # pragma: no cover

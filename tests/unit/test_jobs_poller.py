@@ -100,7 +100,7 @@ class TestJobsPoller:
             assert cluster is not None
 
         # reach max number of failures, but not enough to delete
-        for i in range(cluster.health_tracker._max_failure_count):
+        for i in range(cluster.health_tracker._failure_threshold):
             await jobs_service.update_jobs_statuses()
         async with jobs_service._get_cluster(cluster_name) as cluster:
             assert cluster is not None

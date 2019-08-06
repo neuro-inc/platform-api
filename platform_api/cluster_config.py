@@ -80,6 +80,7 @@ class StorageConfig:
 class RegistryConfig:
     url: URL = URL("https://registry.dev.neuromation.io")
     email: str = "registry@neuromation.io"
+    failure_threshold: int = 300
 
     def __post_init__(self) -> None:
         if not self.url.host:
