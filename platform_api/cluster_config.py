@@ -80,7 +80,6 @@ class StorageConfig:
 class RegistryConfig:
     url: URL = URL("https://registry.dev.neuromation.io")
     email: str = "registry@neuromation.io"
-    failure_threshold: int = 300
 
     def __post_init__(self) -> None:
         if not self.url.host:
@@ -144,3 +143,7 @@ class ClusterConfig:
     registry: RegistryConfig
     orchestrator: OrchestratorConfig
     ingress: IngressConfig
+
+    # number of consecutive query failures required to declare cluster dead
+    # we query cluster's jobs every second, so 300 means 5 minutes
+    cluster_failure_threshold: int = 300
