@@ -4,8 +4,9 @@ from typing import Any, AsyncIterator, Awaitable, Callable, Dict, Sequence
 
 import aiohttp.web
 from aiohttp.web import HTTPUnauthorized
+from aiohttp_security import check_permission
 from async_exit_stack import AsyncExitStack
-from neuro_auth_client import AuthClient
+from neuro_auth_client import AuthClient, Permission
 from neuro_auth_client.security import AuthScheme, setup_security
 from notifications_client import Client as NotificationsClient
 
@@ -35,6 +36,7 @@ class ApiHandler:
             (
                 aiohttp.web.get("/ping", self.handle_ping),
                 aiohttp.web.get("/config", self.handle_config),
+                aiohttp.web.get("/config/clusters/sync", self.handle_clusters_sync),
             )
         )
 
@@ -43,6 +45,23 @@ class ApiHandler:
         return self._app["jobs_service"]
 
     async def handle_ping(self, request: aiohttp.web.Request) -> aiohttp.web.Response:
+        return aiohttp.web.Response()
+
+    async def handle_clusters_sync(
+        self, request: aiohttp.web.Request
+    ) -> aiohttp.web.Response:
+        user = await authorized_user(request)
+        permission = Permission(uri="cluster://", action="manage")
+        logger.info("Checking whether %r has %r", user, permission)
+        await check_permission(request, permission.action, [permission])
+
+        cluster_configs_future = get_cluster_configs(self._config)
+        cluster_registry = self._jobs_service._cluster_registry
+        [
+            await cluster_registry.add(cluster_config)
+            for cluster_config in await cluster_configs_future
+        ]
+
         return aiohttp.web.Response()
 
     async def handle_config(self, request: aiohttp.web.Request) -> aiohttp.web.Response:
