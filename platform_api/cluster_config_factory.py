@@ -60,8 +60,8 @@ class ClusterConfigFactory:
                     jobs_ingress_oauth_url=jobs_ingress_oauth_url,
                 ),
                 ingress=self._create_ingress_config(payload, users_url),
-                cluster_failure_threshold=os.environ.get(
-                    "NP_CLUSTER_FAILURE_THRESHOLD", 300
+                cluster_failure_threshold=int(
+                    os.environ.get("NP_CLUSTER_FAILURE_THRESHOLD", 300)
                 ),
             )
         except t.DataError as err:
