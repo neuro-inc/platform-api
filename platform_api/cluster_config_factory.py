@@ -1,4 +1,5 @@
 import logging
+import os
 from pathlib import PurePath
 from typing import Any, Dict, List, Optional, Sequence
 
@@ -59,7 +60,9 @@ class ClusterConfigFactory:
                     jobs_ingress_oauth_url=jobs_ingress_oauth_url,
                 ),
                 ingress=self._create_ingress_config(payload, users_url),
-                cluster_failure_threshold=payload.get("cluster_failure_threshold", 300),
+                cluster_failure_threshold=os.environ.get(
+                    "NP_CLUSTER_FAILURE_THRESHOLD", 300
+                ),
             )
         except t.DataError as err:
             logging.warning(f"failed to parse cluster config: {err}")
