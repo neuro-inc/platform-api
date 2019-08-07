@@ -61,7 +61,7 @@ class ClusterConfigFactory:
                 ),
                 ingress=self._create_ingress_config(payload, users_url),
                 cluster_failure_threshold=int(
-                    os.environ.get("NP_CLUSTER_FAILURE_THRESHOLD", 300)
+                    os.environ.get("NP_CLUSTER_FAILURE_THRESHOLD", ClusterConfig.cluster_failure_threshold)
                 ),
             )
         except t.DataError as err:
