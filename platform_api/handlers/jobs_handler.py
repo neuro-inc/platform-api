@@ -6,7 +6,7 @@ from typing import Any, Dict, List, Optional, Sequence, Set
 
 import aiohttp.web
 import trafaret as t
-from aiohttp_security import check_authorized, check_permission
+from aiohttp_security import check_authorized
 from multidict import MultiDictProxy
 from neuro_auth_client import AuthClient, Permission
 from neuro_auth_client.client import ClientSubTreeViewRoot
@@ -23,7 +23,7 @@ from platform_api.orchestrator.job_request import (
 )
 from platform_api.orchestrator.jobs_service import JobsService
 from platform_api.orchestrator.jobs_storage import JobFilter
-from platform_api.user import User, authorized_user, untrusted_user
+from platform_api.user import User, authorized_user, check_permissions, untrusted_user
 
 from .job_request_builder import ContainerBuilder
 from .validators import (
@@ -254,8 +254,7 @@ class JobsHandler:
         permissions = infer_permissions_from_container(
             user, container, cluster_config.registry
         )
-        logger.info("Checking whether %r has %r", user, permissions)
-        await check_permission(request, permissions[0].action, permissions)
+        await check_permissions(request, user, permissions)
 
         name = request_payload.get("name")
         description = request_payload.get("description")
@@ -282,8 +281,7 @@ class JobsHandler:
         job = await self._jobs_service.get_job(job_id)
 
         permission = Permission(uri=str(job.to_uri()), action="read")
-        logger.info("Checking whether %r has %r", user, permission)
-        await check_permission(request, permission.action, [permission])
+        await check_permissions(request, user, [permission])
 
         cluster_name = self._jobs_service.get_cluster_name(job)
         response_payload = convert_job_to_job_response(job, cluster_name)
@@ -355,8 +353,7 @@ class JobsHandler:
         job = await self._jobs_service.get_job(job_id)
 
         permission = Permission(uri=str(job.to_uri()), action="write")
-        logger.info("Checking whether %r has %r", user, permission)
-        await check_permission(request, permission.action, [permission])
+        await check_permissions(request, user, [permission])
 
         await self._jobs_service.delete_job(job_id)
         raise aiohttp.web.HTTPNoContent()
@@ -369,8 +366,7 @@ class JobsHandler:
         job = await self._jobs_service.get_job(job_id)
 
         permission = Permission(uri=str(job.to_uri()), action="read")
-        logger.info("Checking whether %r has %r", user, permission)
-        await check_permission(request, permission.action, [permission])
+        await check_permissions(request, user, [permission])
 
         log_reader = await self._jobs_service.get_job_log_reader(job_id)
         # TODO: expose. make configurable
@@ -401,8 +397,7 @@ class JobsHandler:
         job = await self._jobs_service.get_job(job_id)
 
         permission = Permission(uri=str(job.to_uri()), action="read")
-        logger.info("Checking whether %r has %r", user, permission)
-        await check_permission(request, permission.action, [permission])
+        await check_permissions(request, user, [permission])
 
         logger.info("Websocket connection starting")
         ws = aiohttp.web.WebSocketResponse()
