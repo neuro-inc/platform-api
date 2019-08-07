@@ -50,10 +50,10 @@ class ApiHandler:
     async def handle_clusters_sync(
         self, request: aiohttp.web.Request
     ) -> aiohttp.web.Response:
-        user = await authorized_user(request)
-        permission = Permission(uri="cluster://", action="manage")
-        logger.info("Checking whether %r has %r", user, permission)
-        await check_permission(request, permission.action, [permission])
+        # user = await authorized_user(request)
+        # permission = Permission(uri="cluster://", action="manage")
+        # logger.info("Checking whether %r has %r", user, permission)
+        # await check_permission(request, permission.action, [permission])
 
         cluster_configs_future = get_cluster_configs(self._config)
         cluster_registry = self._jobs_service._cluster_registry
@@ -256,7 +256,6 @@ async def create_app(
 async def get_cluster_configs(config: Config) -> Sequence[ClusterConfig]:
     async with config.config_client as client:
         return await client.get_clusters(
-            users_url=config.auth.public_auth_url,
             jobs_ingress_class=config.jobs.jobs_ingress_class,
             jobs_ingress_oauth_url=config.jobs.jobs_ingress_oauth_url,
         )

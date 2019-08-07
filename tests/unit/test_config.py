@@ -128,6 +128,7 @@ class TestEnvironConfigFactory:
             "NP_PLATFORM_CONFIG_URI": "http://platformconfig:8080/api/v1",
             "NP_NOTIFICATIONS_URL": "http://notifications:8080",
             "NP_NOTIFICATIONS_TOKEN": "token",
+            "NP_AUTH_PUBLIC_URL": "https://neu.ro/api/v1/users",
         }
         config = EnvironConfigFactory(environ=environ).create()
         cluster = EnvironConfigFactory(environ=environ).create_cluster()
@@ -198,6 +199,7 @@ class TestEnvironConfigFactory:
             "NP_AUTH_TOKEN": "token",
             "NP_API_URL": "https://neu.ro/api/v1",
             "NP_JOBS_INGRESS_OAUTH_AUTHORIZE_URL": "http://neu.ro/oauth/authorize",
+            "NP_AUTH_PUBLIC_URL": "https://neu.ro/api/v1/users",
         }
         with pytest.raises(ValueError):
             EnvironConfigFactory(environ=environ).create()
@@ -246,6 +248,7 @@ class TestEnvironConfigFactory:
             "NP_PLATFORM_CONFIG_URI": "http://platformconfig:8080/api/v1",
             "NP_NOTIFICATIONS_URL": "http://notifications:8080",
             "NP_NOTIFICATIONS_TOKEN": "token",
+            "NP_AUTH_PUBLIC_URL": "https://neu.ro/api/v1/users",
         }
         config = EnvironConfigFactory(environ=environ).create()
         cluster = EnvironConfigFactory(environ=environ).create_cluster()
@@ -342,6 +345,7 @@ class TestEnvironConfigFactory:
             "NP_AUTH_NAME": "auth-name",
             "NP_LOG_FIFO": "log.txt",
             "NP_K8S_NS": "other",
+            "NP_AUTH_PUBLIC_URL": "https://neu.ro/api/v1/users",
         }
         config = EnvironConfigFactory(environ=environ).create_ssh_auth()
         assert config.platform.server_endpoint_url == URL("http://neu.ro/api/v1")
