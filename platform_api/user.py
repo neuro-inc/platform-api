@@ -1,12 +1,8 @@
-import json
 import logging
 from dataclasses import dataclass, field
-from typing import Dict, List
 
 from aiohttp.web import HTTPUnauthorized, Request
-from aiohttp.web_exceptions import HTTPForbidden
-from aiohttp_security.api import AUTZ_KEY, IDENTITY_KEY, check_authorized, permits
-from neuro_auth_client import Permission
+from aiohttp_security.api import AUTZ_KEY, IDENTITY_KEY
 from yarl import URL
 
 from platform_api.orchestrator.job import (
@@ -75,25 +71,3 @@ async def _get_identity(request: Request) -> str:
     if identity is None:
         raise HTTPUnauthorized()
     return identity
-
-
-async def check_permissions(
-    request: Request, user: User, permissions: List[Permission]
-) -> None:
-    assert permissions, "empty permission set to check"
-    logger.info("Checking whether %r has %r", user, permissions)
-    forbidden = []
-    await check_authorized(request)
-    for perm in permissions:
-        allowed = await permits(request, perm.action, [perm])
-        if not allowed:
-            forbidden.append(perm)
-    if forbidden:
-        error_details = {"resources": [_permission_to_primitive(p) for p in forbidden]}
-        raise HTTPForbidden(
-            text=json.dumps(error_details), content_type="application/json"
-        )
-
-
-def _permission_to_primitive(perm: Permission) -> Dict[str, str]:
-    return {"uri": perm.uri, "action": perm.action}

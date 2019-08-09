@@ -1,4 +1,5 @@
 import asyncio
+import json
 import logging
 from dataclasses import dataclass, replace
 from pathlib import PurePath
@@ -23,7 +24,7 @@ from platform_api.orchestrator.job_request import (
 )
 from platform_api.orchestrator.jobs_service import JobsService
 from platform_api.orchestrator.jobs_storage import JobFilter
-from platform_api.user import User, authorized_user, check_permissions, untrusted_user
+from platform_api.user import User, authorized_user, untrusted_user
 
 from .job_request_builder import ContainerBuilder
 from .validators import (
@@ -254,7 +255,7 @@ class JobsHandler:
         permissions = infer_permissions_from_container(
             user, container, cluster_config.registry
         )
-        await check_permissions(request, user, permissions)
+        await self._check_permissions(request, user, permissions)
 
         name = request_payload.get("name")
         description = request_payload.get("description")
@@ -281,7 +282,7 @@ class JobsHandler:
         job = await self._jobs_service.get_job(job_id)
 
         permission = Permission(uri=str(job.to_uri()), action="read")
-        await check_permissions(request, user, [permission])
+        await self._check_permissions(request, user, [permission])
 
         cluster_name = self._jobs_service.get_cluster_name(job)
         response_payload = convert_job_to_job_response(job, cluster_name)
@@ -353,7 +354,7 @@ class JobsHandler:
         job = await self._jobs_service.get_job(job_id)
 
         permission = Permission(uri=str(job.to_uri()), action="write")
-        await check_permissions(request, user, [permission])
+        await self._check_permissions(request, user, [permission])
 
         await self._jobs_service.delete_job(job_id)
         raise aiohttp.web.HTTPNoContent()
@@ -366,7 +367,7 @@ class JobsHandler:
         job = await self._jobs_service.get_job(job_id)
 
         permission = Permission(uri=str(job.to_uri()), action="read")
-        await check_permissions(request, user, [permission])
+        await self._check_permissions(request, user, [permission])
 
         log_reader = await self._jobs_service.get_job_log_reader(job_id)
         # TODO: expose. make configurable
@@ -397,7 +398,7 @@ class JobsHandler:
         job = await self._jobs_service.get_job(job_id)
 
         permission = Permission(uri=str(job.to_uri()), action="read")
-        await check_permissions(request, user, [permission])
+        await self._check_permissions(request, user, [permission])
 
         logger.info("Websocket connection starting")
         ws = aiohttp.web.WebSocketResponse()
@@ -451,6 +452,30 @@ class JobsHandler:
         if job_stats.gpu_memory is not None:
             message["gpu_memory"] = job_stats.gpu_memory
         return message
+
+    async def _check_permissions(
+        self, request: aiohttp.web.Request, user: User, permissions: List[Permission]
+    ) -> None:
+        print(1111)
+        await check_authorized(request)
+        print(2222)
+        assert permissions, "empty permission set to check"
+        logger.info("Checking whether %r has %r", user, permissions)
+        missing = await self._auth_client.get_missing_permissions(
+            user.name, permissions
+        )
+        print(missing)
+        if missing:
+            error_details = {
+                "resources": [self._permission_to_primitive(p) for p in missing]
+            }
+            raise aiohttp.web.HTTPForbidden(
+                text=json.dumps(error_details), content_type="application/json"
+            )
+        return None
+
+    def _permission_to_primitive(self, perm: Permission) -> Dict[str, str]:
+        return {"uri": perm.uri, "action": perm.action}
 
 
 class JobFilterException(ValueError):
