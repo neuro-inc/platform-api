@@ -456,15 +456,12 @@ class JobsHandler:
     async def _check_permissions(
         self, request: aiohttp.web.Request, user: User, permissions: List[Permission]
     ) -> None:
-        print(1111)
         await check_authorized(request)
-        print(2222)
         assert permissions, "empty permission set to check"
         logger.info("Checking whether %r has %r", user, permissions)
         missing = await self._auth_client.get_missing_permissions(
             user.name, permissions
         )
-        print(missing)
         if missing:
             error_details = {
                 "resources": [self._permission_to_primitive(p) for p in missing]
@@ -472,7 +469,6 @@ class JobsHandler:
             raise aiohttp.web.HTTPForbidden(
                 text=json.dumps(error_details), content_type="application/json"
             )
-        return None
 
     def _permission_to_primitive(self, perm: Permission) -> Dict[str, str]:
         return {"uri": perm.uri, "action": perm.action}
