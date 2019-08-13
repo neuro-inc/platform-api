@@ -44,16 +44,6 @@ NP_JOBS_INGRESS_OAUTH_AUTHORIZE_URL:
   staging: https://staging.neu.ro/oauth/authorize
   prod: https://neu.ro/oauth/authorize
 INGRESS_HOST:
-  _default: platform.dev.neuromation.io
-  dev: platform.dev.neuromation.io
-  staging: platform.staging.neuromation.io
-  prod: platform.prod.neuromation.io
-INGRESS_HOST_TEMPORARY:
-  _default: dev.ai.neuromation.io
-  dev: dev.ai.neuromation.io
-  staging: staging.ai.neuromation.io
-  prod: ai.neuromation.io
-INGRESS_HOST_TEMPORARY_NEW_DOMAIN:
   _default: dev.neu.ro
   dev: dev.neu.ro
   staging: staging.neu.ro
