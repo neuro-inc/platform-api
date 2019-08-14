@@ -140,10 +140,7 @@ def clusters_payload(nfs_storage_payload: Dict[str, Any]) -> List[Dict[str, Any]
                 "is_http_ingress_secure": True,
             },
             "ssh": {"server": "ssh-auth-dev.neu.ro"},
-            "monitoring": {
-                "url": "https://dev.neu.ro/api/v1/jobs",
-                "elasticsearch": {"hosts": ["http://logging-elasticsearch:9200"]},
-            },
+            "monitoring": {"url": "https://dev.neu.ro/api/v1/jobs"},
             **nfs_storage_payload,
         }
     ]
