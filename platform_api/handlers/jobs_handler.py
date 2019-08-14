@@ -1,4 +1,3 @@
-import asyncio
 import logging
 from dataclasses import dataclass, replace
 from pathlib import PurePath
@@ -14,7 +13,7 @@ from yarl import URL
 
 from platform_api.config import Config, RegistryConfig, StorageConfig
 from platform_api.log import log_debug_time
-from platform_api.orchestrator.job import JOB_USER_NAMES_SEPARATOR, Job, JobStats
+from platform_api.orchestrator.job import JOB_USER_NAMES_SEPARATOR, Job
 from platform_api.orchestrator.job_request import (
     Container,
     ContainerVolume,
@@ -228,8 +227,6 @@ class JobsHandler:
                 aiohttp.web.post("", self.create_job),
                 aiohttp.web.delete("/{job_id}", self.handle_delete),
                 aiohttp.web.get("/{job_id}", self.handle_get),
-                aiohttp.web.get("/{job_id}/log", self.stream_log),
-                aiohttp.web.get("/{job_id}/top", self.stream_top),
             )
         )
 
@@ -360,102 +357,6 @@ class JobsHandler:
 
         await self._jobs_service.delete_job(job_id)
         raise aiohttp.web.HTTPNoContent()
-
-    async def stream_log(
-        self, request: aiohttp.web.Request
-    ) -> aiohttp.web.StreamResponse:
-        user = await untrusted_user(request)
-        job_id = request.match_info["job_id"]
-        job = await self._jobs_service.get_job(job_id)
-
-        permission = Permission(uri=str(job.to_uri()), action="read")
-        logger.info("Checking whether %r has %r", user, permission)
-        await check_permission(request, permission.action, [permission])
-
-        log_reader = await self._jobs_service.get_job_log_reader(job_id)
-        # TODO: expose. make configurable
-        chunk_size = 1024
-
-        response = aiohttp.web.StreamResponse(status=200)
-        response.enable_chunked_encoding()
-        response.enable_compression(aiohttp.web.ContentCoding.identity)
-        response.content_type = "text/plain"
-        response.charset = "utf-8"
-        await response.prepare(request)
-
-        async with log_reader:
-            while True:
-                chunk = await log_reader.read(size=chunk_size)
-                if not chunk:
-                    break
-                await response.write(chunk)
-
-        await response.write_eof()
-        return response
-
-    async def stream_top(
-        self, request: aiohttp.web.Request
-    ) -> aiohttp.web.WebSocketResponse:
-        user = await untrusted_user(request)
-        job_id = request.match_info["job_id"]
-        job = await self._jobs_service.get_job(job_id)
-
-        permission = Permission(uri=str(job.to_uri()), action="read")
-        logger.info("Checking whether %r has %r", user, permission)
-        await check_permission(request, permission.action, [permission])
-
-        logger.info("Websocket connection starting")
-        ws = aiohttp.web.WebSocketResponse()
-        await ws.prepare(request)
-        logger.info("Websocket connection ready")
-
-        # TODO (truskovskiyk 09/12/18) remove CancelledError
-        # https://github.com/aio-libs/aiohttp/issues/3443
-
-        # TODO expose configuration
-        sleep_timeout = 1
-
-        telemetry = await self._jobs_service.get_job_telemetry(job.id)
-
-        async with telemetry:
-
-            try:
-                while True:
-                    # client close connection
-                    assert request.transport is not None
-                    if request.transport.is_closing():
-                        break
-
-                    job = await self._jobs_service.get_job(job_id)
-
-                    if job.is_running:
-                        job_stats = await telemetry.get_latest_stats()
-                        if job_stats:
-                            message = self._convert_job_stats_to_ws_message(job_stats)
-                            await ws.send_json(message)
-
-                    if job.is_finished:
-                        await ws.close()
-                        break
-
-                    await asyncio.sleep(sleep_timeout)
-
-            except asyncio.CancelledError as ex:
-                logger.info(f"got cancelled error {ex}")
-
-        return ws
-
-    def _convert_job_stats_to_ws_message(self, job_stats: JobStats) -> Dict[str, Any]:
-        message = {
-            "cpu": job_stats.cpu,
-            "memory": job_stats.memory,
-            "timestamp": job_stats.timestamp,
-        }
-        if job_stats.gpu_duty_cycle is not None:
-            message["gpu_duty_cycle"] = job_stats.gpu_duty_cycle
-        if job_stats.gpu_memory is not None:
-            message["gpu_memory"] = job_stats.gpu_memory
-        return message
 
 
 class JobFilterException(ValueError):

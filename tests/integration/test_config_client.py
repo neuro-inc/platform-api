@@ -46,11 +46,7 @@ def cluster_configs_payload() -> List[Dict[str, Any]]:
             "ssh": {"server": "ssh-auth-dev.neu.ro"},
             "monitoring": {
                 "url": "https://dev.neu.ro/api/v1/jobs",
-                "elasticsearch": {
-                    "hosts": ["http://logging-elasticsearch:9200"],
-                    "username": "es_user_name",
-                    "password": "es_assword",
-                },
+                "elasticsearch": {"hosts": ["http://logging-elasticsearch:9200"]},
             },
         }
     ]

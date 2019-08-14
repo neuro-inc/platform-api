@@ -9,7 +9,6 @@ import platform_api
 from .cluster_config import (
     ClusterConfig,
     IngressConfig,
-    LoggingConfig,
     RegistryConfig,
     StorageConfig,
     StorageType,
@@ -27,7 +26,6 @@ from .config import (
     SSHConfig,
     SSHServerConfig,
 )
-from .elasticsearch import ElasticsearchConfig
 from .orchestrator.kube_client import KubeClientAuthType
 from .orchestrator.kube_orchestrator import KubeConfig
 from .redis import RedisConfig
@@ -66,7 +64,6 @@ class EnvironConfigFactory:
             registry=self.create_registry(),
             orchestrator=self.create_orchestrator(),
             ingress=self.create_ingress(),
-            logging=self.create_logging(),
         )
 
     def create_jobs(self, *, orphaned_job_owner: str) -> JobsConfig:
@@ -242,16 +239,6 @@ class EnvironConfigFactory:
         return RedisConfig(
             uri=uri, conn_pool_size=conn_pool_size, conn_timeout_s=conn_timeout_s
         )
-
-    def create_logging(self) -> LoggingConfig:
-        es = self.create_elasticsearch()
-        return LoggingConfig(elasticsearch=es)
-
-    def create_elasticsearch(self) -> ElasticsearchConfig:
-        hosts = self._environ["NP_ES_HOSTS"].split(",")
-        user = self._environ.get("NP_ES_AUTH_USER")
-        password = self._environ.get("NP_ES_AUTH_PASSWORD")
-        return ElasticsearchConfig(hosts=hosts, user=user, password=password)
 
     def create_auth(self) -> AuthConfig:
         url = URL(self._environ["NP_AUTH_URL"])

@@ -9,14 +9,9 @@ from notifications_client.notification import AbstractNotification
 from yarl import URL
 
 from platform_api.cluster import Cluster, ClusterConfig, ClusterRegistry
-from platform_api.cluster_config import (
-    ElasticsearchConfig,
-    IngressConfig,
-    LoggingConfig,
-    OrchestratorConfig,
-)
+from platform_api.cluster_config import IngressConfig, OrchestratorConfig
 from platform_api.config import JobsConfig, RegistryConfig, StorageConfig
-from platform_api.orchestrator.base import LogReader, Orchestrator, Telemetry
+from platform_api.orchestrator.base import Orchestrator
 from platform_api.orchestrator.job import (
     AggregatedRunTime,
     Job,
@@ -92,12 +87,6 @@ class MockOrchestrator(Orchestrator):
 
     def get_successfully_deleted_jobs(self) -> List[Job]:
         return self._successfully_deleted_jobs
-
-    async def get_job_log_reader(self, job: Job) -> LogReader:
-        pass
-
-    async def get_job_telemetry(self, job: Job) -> Telemetry:
-        pass
 
 
 class MockJobsStorage(InMemoryJobsStorage):
@@ -189,7 +178,6 @@ def cluster_config() -> ClusterConfig:
         storage=storage_config,
         registry=registry_config,
         orchestrator=orchestrator_config,
-        logging=LoggingConfig(elasticsearch=ElasticsearchConfig(hosts=[])),
         ingress=IngressConfig(storage_url=URL(), users_url=URL(), monitoring_url=URL()),
     )
 

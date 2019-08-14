@@ -8,12 +8,10 @@ from yarl import URL
 from .cluster_config import (
     ClusterConfig,
     IngressConfig,
-    LoggingConfig,
     OrchestratorConfig,
     RegistryConfig,
     StorageConfig,
 )
-from .elasticsearch import ElasticsearchConfig
 from .orchestrator.kube_config import KubeClientAuthType, KubeConfig
 from .resource import Preset, ResourcePoolType
 
@@ -60,7 +58,6 @@ class ClusterConfigFactory:
                     jobs_ingress_class=jobs_ingress_class,
                     jobs_ingress_oauth_url=jobs_ingress_oauth_url,
                 ),
-                logging=self._create_logging_config(payload),
                 ingress=self._create_ingress_config(payload, users_url),
             )
         except t.DataError as err:
@@ -74,12 +71,6 @@ class ClusterConfigFactory:
             storage_url=URL(payload["storage"]["url"]),
             monitoring_url=URL(payload["monitoring"]["url"]),
             users_url=users_url,
-        )
-
-    def _create_logging_config(self, payload: Dict[str, Any]) -> LoggingConfig:
-        monitoring = payload["monitoring"]
-        return LoggingConfig(
-            elasticsearch=self._create_elasticsearch_config(monitoring["elasticsearch"])
         )
 
     def _create_presets(self, payload: Dict[str, Any]) -> List[Preset]:
@@ -96,15 +87,6 @@ class ClusterConfigFactory:
                 )
             )
         return result
-
-    def _create_elasticsearch_config(
-        self, payload: Dict[str, Any]
-    ) -> ElasticsearchConfig:
-        return ElasticsearchConfig(
-            hosts=payload["hosts"],
-            user=payload.get("username"),
-            password=payload.get("password"),
-        )
 
     def _create_orchestrator_config(
         self,

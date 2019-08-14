@@ -17,7 +17,7 @@ from platform_api.cluster import (
 from platform_api.config import JobsConfig
 from platform_api.user import User
 
-from .base import LogReader, Orchestrator, Telemetry
+from .base import Orchestrator
 from .job import Job, JobRecord, JobStatusItem, JobStatusReason
 from .job_request import JobException, JobNotFoundException, JobRequest, JobStatus
 from .jobs_storage import (
@@ -270,32 +270,6 @@ class JobsService:
     async def get_job(self, job_id: str) -> Job:
         record = await self._jobs_storage.get_job(job_id)
         return await self._get_cluster_job(record)
-
-    async def get_job_log_reader(self, job_id: str) -> LogReader:
-        # NOTE: deliberately leaving this code without ClusterNotFound
-        # exception handling, because this method will be removed soon due to
-        # migration to a dedicated microservice
-        record = await self._jobs_storage.get_job(job_id)
-        async with self._get_cluster(record.cluster_name) as cluster:
-            job = Job(
-                storage_config=cluster.config.storage,
-                orchestrator_config=cluster.orchestrator.config,
-                record=record,
-            )
-            return await cluster.orchestrator.get_job_log_reader(job)
-
-    async def get_job_telemetry(self, job_id: str) -> Telemetry:
-        # NOTE: deliberately leaving this code without ClusterNotFound
-        # exception handling, because this method will be removed soon due to
-        # migration to a dedicated microservice
-        record = await self._jobs_storage.get_job(job_id)
-        async with self._get_cluster(record.cluster_name) as cluster:
-            job = Job(
-                storage_config=cluster.config.storage,
-                orchestrator_config=cluster.orchestrator.config,
-                record=record,
-            )
-            return await cluster.orchestrator.get_job_telemetry(job)
 
     async def _delete_cluster_job(self, record: JobRecord) -> None:
         try:
