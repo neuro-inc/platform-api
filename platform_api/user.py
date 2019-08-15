@@ -1,3 +1,4 @@
+import logging
 from dataclasses import dataclass, field
 
 from aiohttp.web import HTTPUnauthorized, Request
@@ -8,6 +9,9 @@ from platform_api.orchestrator.job import (
     DEFAULT_QUOTA_NO_RESTRICTIONS,
     AggregatedRunTime,
 )
+
+
+logger = logging.getLogger(__name__)
 
 
 @dataclass(frozen=True)

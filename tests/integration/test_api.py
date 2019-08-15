@@ -6,6 +6,7 @@ import aiohttp
 import aiohttp.web
 import multidict
 import pytest
+from aiohttp import WSServerHandshakeError
 from aiohttp.web import (
     HTTPAccepted,
     HTTPBadRequest,
@@ -276,6 +277,8 @@ class TestJobs:
             url, headers=regular_user.headers, json=payload
         ) as response:
             assert response.status == HTTPForbidden.status_code, await response.text()
+            data = await response.json()
+            assert data == {"resources": [{"action": "write", "uri": "storage:"}]}
 
     @pytest.mark.asyncio
     async def test_forbidden_image(
@@ -298,6 +301,10 @@ class TestJobs:
             url, headers=regular_user.headers, json=payload
         ) as response:
             assert response.status == HTTPForbidden.status_code, await response.text()
+            data = await response.json()
+            assert data == {
+                "resources": [{"action": "read", "uri": "image://anotheruser/image"}]
+            }
 
     @pytest.mark.asyncio
     async def test_allowed_image(
@@ -1143,6 +1150,10 @@ class TestJobs:
 
         async with client.get(url, headers=follower.headers) as response:
             assert response.status == HTTPForbidden.status_code
+            data = await response.json()
+            assert data == {
+                "resources": [{"action": "read", "uri": f"job://{owner.name}/{job_id}"}]
+            }
 
         permission = Permission(uri=f"job://{owner.name}/{job_id}", action="read")
         await auth_client.grant_user_permissions(
@@ -1430,6 +1441,35 @@ class TestJobs:
         assert jobs[0]["id"] == job_id
 
     @pytest.mark.asyncio
+    async def test_delete_job_forbidden(
+        self,
+        api: ApiConfig,
+        client: aiohttp.ClientSession,
+        job_submit: Dict[str, Any],
+        jobs_client: JobsClient,
+        regular_user_factory: Callable[..., Awaitable[_User]],
+        regular_user: _User,
+    ) -> None:
+        url = api.jobs_base_url
+        async with client.post(
+            url, headers=regular_user.headers, json=job_submit
+        ) as response:
+            assert response.status == HTTPAccepted.status_code, await response.text()
+            result = await response.json()
+            job_id = result["id"]
+
+        url = api.generate_job_url(job_id)
+        another_user = await regular_user_factory()
+        async with client.delete(url, headers=another_user.headers) as response:
+            assert response.status == HTTPForbidden.status_code, await response.text()
+            result = await response.json()
+            assert result == {
+                "resources": [
+                    {"action": "write", "uri": f"job://{regular_user.name}/{job_id}"}
+                ]
+            }
+
+    @pytest.mark.asyncio
     async def test_delete_already_deleted(
         self,
         api: ApiConfig,
@@ -1493,6 +1533,35 @@ class TestJobs:
             actual_payload = await response.read()
             expected_payload = "\n".join(str(i) for i in range(1, 6)) + "\n"
             assert actual_payload == expected_payload.encode()
+
+    @pytest.mark.asyncio
+    async def test_job_log_forbidden(
+        self,
+        api: ApiConfig,
+        client: aiohttp.ClientSession,
+        job_submit: Dict[str, Any],
+        jobs_client: JobsClient,
+        regular_user_factory: Callable[..., Awaitable[_User]],
+        regular_user: _User,
+    ) -> None:
+        url = api.jobs_base_url
+        async with client.post(
+            url, headers=regular_user.headers, json=job_submit
+        ) as response:
+            assert response.status == HTTPAccepted.status_code
+            result = await response.json()
+            job_id = result["id"]
+
+        url = api.jobs_base_url + f"/{job_id}/log"
+        another_user = await regular_user_factory()
+        async with client.get(url, headers=another_user.headers) as response:
+            assert response.status == HTTPForbidden.status_code
+            result = await response.json()
+            assert result == {
+                "resources": [
+                    {"action": "read", "uri": f"job://{regular_user.name}/{job_id}"}
+                ]
+            }
 
     @pytest.mark.asyncio
     async def test_create_validation_failure(
@@ -1881,3 +1950,28 @@ class TestJobs:
             assert job["status"] == "succeeded"
 
         await jobs_client.delete_job(job_id=job_id)
+
+    @pytest.mark.asyncio
+    async def test_job_top_forbidden(
+        self,
+        api: ApiConfig,
+        client: aiohttp.ClientSession,
+        jobs_client: JobsClient,
+        job_submit: Dict[str, Any],
+        regular_user_factory: Callable[..., Awaitable[_User]],
+        regular_user: _User,
+    ) -> None:
+
+        url = api.jobs_base_url
+        async with client.post(
+            url, headers=regular_user.headers, json=job_submit
+        ) as response:
+            assert response.status == HTTPAccepted.status_code, await response.text()
+            result = await response.json()
+            job_id = result["id"]
+
+        url = api.jobs_base_url + f"/{job_id}/top"
+        another_user = await regular_user_factory()
+        with pytest.raises(WSServerHandshakeError, match="403"):
+            async with client.ws_connect(url, headers=another_user.headers):
+                pass
