@@ -274,6 +274,8 @@ class TestJobs:
             url, headers=regular_user.headers, json=payload
         ) as response:
             assert response.status == HTTPForbidden.status_code, await response.text()
+            data = await response.json()
+            assert data == {"resources": [{"action": "write", "uri": "storage:"}]}
 
     @pytest.mark.asyncio
     async def test_forbidden_image(
@@ -296,6 +298,10 @@ class TestJobs:
             url, headers=regular_user.headers, json=payload
         ) as response:
             assert response.status == HTTPForbidden.status_code, await response.text()
+            data = await response.json()
+            assert data == {
+                "resources": [{"action": "read", "uri": "image://anotheruser/image"}]
+            }
 
     @pytest.mark.asyncio
     async def test_allowed_image(
@@ -1141,6 +1147,10 @@ class TestJobs:
 
         async with client.get(url, headers=follower.headers) as response:
             assert response.status == HTTPForbidden.status_code
+            data = await response.json()
+            assert data == {
+                "resources": [{"action": "read", "uri": f"job://{owner.name}/{job_id}"}]
+            }
 
         permission = Permission(uri=f"job://{owner.name}/{job_id}", action="read")
         await auth_client.grant_user_permissions(
@@ -1426,6 +1436,35 @@ class TestJobs:
         assert len(jobs) == 1
         assert jobs[0]["status"] == "succeeded"
         assert jobs[0]["id"] == job_id
+
+    @pytest.mark.asyncio
+    async def test_delete_job_forbidden(
+        self,
+        api: ApiConfig,
+        client: aiohttp.ClientSession,
+        job_submit: Dict[str, Any],
+        jobs_client: JobsClient,
+        regular_user_factory: Callable[..., Awaitable[_User]],
+        regular_user: _User,
+    ) -> None:
+        url = api.jobs_base_url
+        async with client.post(
+            url, headers=regular_user.headers, json=job_submit
+        ) as response:
+            assert response.status == HTTPAccepted.status_code, await response.text()
+            result = await response.json()
+            job_id = result["id"]
+
+        url = api.generate_job_url(job_id)
+        another_user = await regular_user_factory()
+        async with client.delete(url, headers=another_user.headers) as response:
+            assert response.status == HTTPForbidden.status_code, await response.text()
+            result = await response.json()
+            assert result == {
+                "resources": [
+                    {"action": "write", "uri": f"job://{regular_user.name}/{job_id}"}
+                ]
+            }
 
     @pytest.mark.asyncio
     async def test_delete_already_deleted(
