@@ -18,7 +18,6 @@ from yarl import URL
 from platform_api.cluster_config import (
     ClusterConfig,
     IngressConfig,
-    LoggingConfig,
     RegistryConfig,
     StorageConfig,
 )
@@ -32,7 +31,6 @@ from platform_api.config import (
     ServerConfig,
 )
 from platform_api.config_client import ConfigClient
-from platform_api.elasticsearch import Elasticsearch, ElasticsearchConfig
 from platform_api.orchestrator.job_request import JobNotFoundException
 from platform_api.orchestrator.kube_client import KubeClient, NodeTaint, Resources
 from platform_api.orchestrator.kube_orchestrator import KubeConfig, KubeOrchestrator
@@ -45,7 +43,6 @@ pytest_plugins = [
     "tests.integration.docker",
     "tests.integration.redis",
     "tests.integration.auth",
-    "tests.integration.elasticsearch",
     "tests.integration.notifications",
 ]
 
@@ -343,7 +340,6 @@ async def kube_orchestrator_factory(
     storage_config_host: StorageConfig,
     registry_config: RegistryConfig,
     kube_config: KubeConfig,
-    es_client: Optional[Elasticsearch],
     event_loop: Any,
 ) -> Callable[..., KubeOrchestrator]:
     def _f(**kwargs: Any) -> KubeOrchestrator:
@@ -351,7 +347,6 @@ async def kube_orchestrator_factory(
             storage_config=storage_config_host,
             registry_config=registry_config,
             kube_config=kube_config,
-            es_client=es_client,
         )
         kwargs = {**defaults, **kwargs}
         return KubeOrchestrator(**kwargs)
@@ -372,14 +367,12 @@ async def kube_orchestrator_nfs(
     storage_config_nfs: StorageConfig,
     registry_config: RegistryConfig,
     kube_config_nfs: KubeConfig,
-    es_client: Optional[Elasticsearch],
     event_loop: Any,
 ) -> AsyncIterator[KubeOrchestrator]:
     orchestrator = KubeOrchestrator(
         storage_config=storage_config_nfs,
         registry_config=registry_config,
         kube_config=kube_config_nfs,
-        es_client=es_client,
     )
     async with orchestrator:
         yield orchestrator
@@ -463,7 +456,6 @@ def config_factory(
     kube_config: KubeConfig,
     redis_config: RedisConfig,
     auth_config: AuthConfig,
-    es_config: ElasticsearchConfig,
     jobs_config: JobsConfig,
     notifications_config: NotificationsConfig,
 ) -> Callable[..., Config]:
@@ -486,12 +478,10 @@ def config_factory(
 
 @pytest.fixture
 def cluster_config(
-    es_config: ElasticsearchConfig,
     kube_config: KubeConfig,
     storage_config_host: StorageConfig,
     registry_config: RegistryConfig,
 ) -> ClusterConfig:
-    logging_config = LoggingConfig(elasticsearch=es_config)
     ingress_config = IngressConfig(
         storage_url=URL("https://neu.ro/api/v1/storage"),
         users_url=URL("https://neu.ro/api/v1/users"),
@@ -500,7 +490,6 @@ def cluster_config(
     return ClusterConfig(
         name="default",
         orchestrator=kube_config,
-        logging=logging_config,
         ingress=ingress_config,
         storage=storage_config_host,
         registry=registry_config,

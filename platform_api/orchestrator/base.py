@@ -1,35 +1,11 @@
 from abc import ABC, abstractmethod
-from typing import Any, Optional, Sequence
+from typing import Sequence
 
 from platform_api.resource import ResourcePoolType
 
 from ..config import OrchestratorConfig, StorageConfig
-from .job import Job, JobStats, JobStatusItem
+from .job import Job, JobStatusItem
 from .job_request import JobStatus
-
-
-class LogReader(ABC):
-    async def __aenter__(self) -> "LogReader":
-        return self
-
-    async def __aexit__(self, *args: Any) -> None:
-        pass
-
-    @abstractmethod
-    async def read(self, size: int = -1) -> bytes:
-        pass
-
-
-class Telemetry(ABC):
-    async def __aenter__(self) -> "Telemetry":
-        return self
-
-    async def __aexit__(self, *args: Any) -> None:
-        pass
-
-    @abstractmethod
-    async def get_latest_stats(self) -> Optional[JobStats]:
-        pass
 
 
 class Orchestrator(ABC):
@@ -49,14 +25,6 @@ class Orchestrator(ABC):
 
     @abstractmethod
     async def get_job_status(self, job: Job) -> JobStatusItem:
-        pass
-
-    @abstractmethod
-    async def get_job_log_reader(self, job: Job) -> LogReader:
-        pass
-
-    @abstractmethod
-    async def get_job_telemetry(self, job: Job) -> Telemetry:
         pass
 
     @abstractmethod

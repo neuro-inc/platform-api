@@ -5,7 +5,6 @@ from typing import List, Optional, Sequence
 
 from yarl import URL
 
-from .elasticsearch import ElasticsearchConfig
 from .resource import DEFAULT_PRESETS, Preset, ResourcePoolType
 
 
@@ -118,11 +117,6 @@ class OrchestratorConfig:
 
 
 @dataclass(frozen=True)
-class LoggingConfig:
-    elasticsearch: ElasticsearchConfig
-
-
-@dataclass(frozen=True)
 class IngressConfig:
     storage_url: URL
     users_url: URL
@@ -135,5 +129,4 @@ class ClusterConfig:
     storage: StorageConfig
     registry: RegistryConfig
     orchestrator: OrchestratorConfig
-    logging: LoggingConfig
     ingress: IngressConfig

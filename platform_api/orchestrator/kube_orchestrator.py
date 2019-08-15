@@ -10,12 +10,10 @@ from platform_api.cluster_config import (
     RegistryConfig,
     StorageConfig,
 )
-from platform_api.elasticsearch import Elasticsearch
 
-from .base import LogReader, Orchestrator, Telemetry
+from .base import Orchestrator
 from .job import Job, JobStatusItem, JobStatusReason
 from .job_request import JobError, JobNotFoundException, JobStatus
-from .jobs_telemetry import KubeTelemetry
 from .kube_client import (
     AlreadyExistsException,
     DockerRegistrySecret,
@@ -35,7 +33,6 @@ from .kube_client import (
     Volume,
 )
 from .kube_config import KubeConfig
-from .logs import ElasticsearchLogReader, PodContainerLogReader
 
 
 logger = logging.getLogger(__name__)
@@ -102,7 +99,6 @@ class KubeOrchestrator(Orchestrator):
         storage_config: StorageConfig,
         registry_config: RegistryConfig,
         kube_config: OrchestratorConfig,
-        es_client: Optional[Elasticsearch] = None,
     ) -> None:
         self._loop = asyncio.get_event_loop()
 
@@ -134,8 +130,6 @@ class KubeOrchestrator(Orchestrator):
 
         # TODO (A Danshyn 11/16/18): make this configurable at some point
         self._docker_secret_name_prefix = "neurouser-"
-
-        self._es_client = es_client
 
     @property
     def config(self) -> OrchestratorConfig:
@@ -418,29 +412,6 @@ class KubeOrchestrator(Orchestrator):
             return True
         except JobNotFoundException:
             return False
-
-    async def get_job_log_reader(self, job: Job) -> LogReader:
-        assert self._es_client
-        pod_name = self._get_job_pod_name(job)
-        if await self._check_pod_exists(pod_name):
-            return PodContainerLogReader(
-                client=self._client, pod_name=pod_name, container_name=pod_name
-            )
-        return ElasticsearchLogReader(
-            es_client=self._es_client,
-            namespace_name=self._kube_config.namespace,
-            pod_name=pod_name,
-            container_name=pod_name,
-        )
-
-    async def get_job_telemetry(self, job: Job) -> Telemetry:
-        pod_name = self._get_job_pod_name(job)
-        return KubeTelemetry(
-            self._client,
-            namespace_name=self._kube_config.namespace,
-            pod_name=pod_name,
-            container_name=pod_name,
-        )
 
     async def exec_pod(
         self, job_id: str, command: Union[str, Iterable[str]], *, tty: bool

@@ -4,7 +4,6 @@ from async_exit_stack import AsyncExitStack
 
 from .cluster import Cluster
 from .cluster_config import ClusterConfig
-from .elasticsearch import Elasticsearch, create_elasticsearch_client
 from .orchestrator.kube_orchestrator import KubeOrchestrator, Orchestrator
 
 
@@ -12,7 +11,6 @@ logger = logging.getLogger(__name__)
 
 
 class KubeCluster(Cluster):
-    _es_client: Elasticsearch
     _orchestrator: Orchestrator
 
     def __init__(self, config: ClusterConfig) -> None:
@@ -30,15 +28,7 @@ class KubeCluster(Cluster):
 
     async def init(self) -> None:
         await self._exit_stack.__aenter__()
-        await self._init_es_client()
         await self._init_orchestrator()
-
-    async def _init_es_client(self) -> None:
-        logger.info(f"Cluster '{self.name}': initializing Elasticsearch client")
-        es_client = await self._exit_stack.enter_async_context(
-            create_elasticsearch_client(self._config.logging.elasticsearch)
-        )
-        self._es_client = es_client
 
     async def _init_orchestrator(self) -> None:
         logger.info(f"Cluster '{self.name}': initializing Orchestrator")
@@ -46,7 +36,6 @@ class KubeCluster(Cluster):
             storage_config=self._config.storage,
             registry_config=self._config.registry,
             kube_config=self._config.orchestrator,
-            es_client=self._es_client,
         )
         await self._exit_stack.enter_async_context(orchestrator)
         self._orchestrator = orchestrator

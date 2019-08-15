@@ -140,14 +140,7 @@ def clusters_payload(nfs_storage_payload: Dict[str, Any]) -> List[Dict[str, Any]
                 "is_http_ingress_secure": True,
             },
             "ssh": {"server": "ssh-auth-dev.neu.ro"},
-            "monitoring": {
-                "url": "https://dev.neu.ro/api/v1/jobs",
-                "elasticsearch": {
-                    "hosts": ["http://logging-elasticsearch:9200"],
-                    "username": "es_user_name",
-                    "password": "es_assword",
-                },
-            },
+            "monitoring": {"url": "https://dev.neu.ro/api/v1/jobs"},
             **nfs_storage_payload,
         }
     ]
@@ -181,7 +174,6 @@ class TestClusterConfigFactory:
         orchestrator_payload = clusters_payload[0]["orchestrator"]
         kube_payload = orchestrator_payload["kubernetes"]
         monitoring_payload = clusters_payload[0]["monitoring"]
-        elasticsearch_payload = monitoring_payload["elasticsearch"]
         ssh_payload = clusters_payload[0]["ssh"]
 
         factory = ClusterConfigFactory()
@@ -197,11 +189,6 @@ class TestClusterConfigFactory:
         cluster = clusters[0]
 
         assert cluster.name == clusters_payload[0]["name"]
-
-        logging = cluster.logging
-        assert logging.elasticsearch.hosts == elasticsearch_payload["hosts"]
-        assert logging.elasticsearch.user == elasticsearch_payload["username"]
-        assert logging.elasticsearch.password == elasticsearch_payload["password"]
 
         ingress = cluster.ingress
         assert ingress.storage_url == URL(storage_payload["url"])
@@ -283,32 +270,6 @@ class TestClusterConfigFactory:
             orchestrator.node_label_preemptible
             == kube_payload["node_label_preemptible"]
         )
-
-    def test_valid_elasticsearch_config_without_user(
-        self,
-        clusters_payload: Sequence[Dict[str, Any]],
-        users_url: URL,
-        jobs_ingress_class: str,
-        jobs_ingress_oauth_url: URL,
-    ) -> None:
-        elasticsearch_payload = clusters_payload[0]["monitoring"]["elasticsearch"]
-
-        del elasticsearch_payload["username"]
-        del elasticsearch_payload["password"]
-
-        factory = ClusterConfigFactory()
-        clusters = factory.create_cluster_configs(
-            clusters_payload,
-            users_url=users_url,
-            jobs_ingress_class=jobs_ingress_class,
-            jobs_ingress_oauth_url=jobs_ingress_oauth_url,
-        )
-        cluster = clusters[0]
-
-        logging = cluster.logging
-        assert logging.elasticsearch.hosts == elasticsearch_payload["hosts"]
-        assert logging.elasticsearch.user is None
-        assert logging.elasticsearch.password is None
 
     def test_valid_storage_config_nfs(
         self,

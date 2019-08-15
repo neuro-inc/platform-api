@@ -15,7 +15,6 @@ install_requires = (
     # because the server has too old OpenSSL version
     "cryptography==2.7",
     "asyncssh==1.17.0",
-    "aioelasticsearch==0.5.2",
     "aiorwlock==0.6.0",
     "notifications-client==0.5",
 )

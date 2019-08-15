@@ -35,8 +35,6 @@ function k8s::start {
     export CHANGE_MINIKUBE_NONE_USER=true
 
     sudo -E mkdir -p ~/.minikube/files/files
-    sudo -E cp tests/k8s/fluentd/kubernetes.conf ~/.minikube/files/files/fluentd-kubernetes.conf
-    sudo -E cp tests/k8s/elasticsearch-auth/nginx/* ~/.minikube/files/files
 
     sudo -E minikube config set WantReportErrorPrompt false
     sudo -E minikube start --vm-driver=none --kubernetes-version=v1.10.0
@@ -45,7 +43,6 @@ function k8s::start {
     k8s::wait "kubectl get po --all-namespaces"
     k8s::wait k8s::start_nfs
     k8s::wait k8s::setup_ingress
-    k8s::wait k8s::setup_logging
 }
 
 function k8s::wait {
@@ -89,10 +86,6 @@ function k8s::setup_ingress {
     # launching the ingress services for some unknown reason!
     find /etc/kubernetes/addons/ -name ingress* | xargs -L 1 sudo kubectl -n kube-system apply -f
     find /etc/kubernetes/addons/ -name kube-dns* | xargs -L 1 sudo kubectl -n kube-system apply -f
-}
-
-function k8s::setup_logging {
-    kubectl apply -f tests/k8s/logging.yml
 }
 
 function k8s::test {

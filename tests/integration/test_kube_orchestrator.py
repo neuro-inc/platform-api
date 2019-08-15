@@ -1,35 +1,16 @@
 import asyncio
-import io
 import shlex
 import time
 import uuid
 from pathlib import PurePath
-from typing import (
-    Any,
-    AsyncIterator,
-    Awaitable,
-    Callable,
-    Dict,
-    Iterator,
-    Optional,
-    Sequence,
-)
-from unittest import mock
+from typing import Any, AsyncIterator, Awaitable, Callable, Dict, Iterator, Optional
 
 import aiohttp
 import pytest
 from aiohttp import web
-from async_timeout import timeout
-from elasticsearch import AuthenticationException
 from yarl import URL
 
 from platform_api.cluster_config import StorageConfig
-from platform_api.elasticsearch import (
-    Elasticsearch,
-    ElasticsearchConfig,
-    create_elasticsearch_client,
-)
-from platform_api.orchestrator.base import LogReader
 from platform_api.orchestrator.job import Job, JobStatusItem, JobStatusReason
 from platform_api.orchestrator.job_request import (
     Container,
@@ -47,8 +28,6 @@ from platform_api.orchestrator.kube_client import (
     Ingress,
     IngressRule,
     KubeClient,
-    KubeClientException,
-    PodContainerStats,
     PodDescriptor,
     SecretRef,
     Service,
@@ -59,7 +38,6 @@ from platform_api.orchestrator.kube_orchestrator import (
     KubeConfig,
     KubeOrchestrator,
 )
-from platform_api.orchestrator.logs import ElasticsearchLogReader, PodContainerLogReader
 from tests.conftest import random_str
 from tests.integration.test_api import ApiConfig
 
@@ -1165,76 +1143,6 @@ class TestKubeClient:
             assert pod_finished.args == shlex.split(command)
 
     @pytest.mark.asyncio
-    async def test_create_log_stream_not_found(self, kube_client: KubeClient) -> None:
-        with pytest.raises(KubeClientException):
-            async with kube_client.create_pod_container_logs_stream(
-                pod_name="unknown", container_name="unknown"
-            ):
-                pass
-
-    @pytest.mark.asyncio
-    async def test_create_log_stream_creating(
-        self,
-        kube_config: KubeConfig,
-        kube_client: KubeClient,
-        kube_orchestrator: KubeOrchestrator,
-        delete_pod_later: Callable[[PodDescriptor], Awaitable[None]],
-    ) -> None:
-        container = Container(
-            image="ubuntu",
-            command="true",
-            resources=ContainerResources(cpu=0.1, memory_mb=128),
-        )
-        job_request = JobRequest.create(container)
-        pod = PodDescriptor.from_job_request(
-            kube_orchestrator.create_storage_volume(), job_request
-        )
-        await delete_pod_later(pod)
-        await kube_client.create_pod(pod)
-
-        async with timeout(5.0):
-            while True:
-                try:
-                    stream_cm = kube_client.create_pod_container_logs_stream(
-                        pod_name=pod.name, container_name=pod.name
-                    )
-                    with pytest.raises(KubeClientException, match="ContainerCreating"):
-                        async with stream_cm:
-                            pass
-                    break
-                except AssertionError as exc:
-                    if "Pattern" not in str(exc):
-                        raise
-                await asyncio.sleep(0.1)
-
-    @pytest.mark.asyncio
-    async def test_create_log_stream(
-        self,
-        kube_config: KubeConfig,
-        kube_client: KubeClient,
-        kube_orchestrator: KubeOrchestrator,
-        delete_pod_later: Callable[[PodDescriptor], Awaitable[None]],
-    ) -> None:
-        container = Container(
-            image="ubuntu",
-            command="true",
-            resources=ContainerResources(cpu=0.1, memory_mb=128),
-        )
-        job_request = JobRequest.create(container)
-        pod = PodDescriptor.from_job_request(
-            kube_orchestrator.create_storage_volume(), job_request
-        )
-        await delete_pod_later(pod)
-        await kube_client.create_pod(pod)
-        await kube_client.wait_pod_is_running(pod_name=pod.name, timeout_s=60.0)
-        stream_cm = kube_client.create_pod_container_logs_stream(
-            pod_name=pod.name, container_name=pod.name
-        )
-        async with stream_cm as stream:
-            payload = await stream.read()
-            assert payload == b""
-
-    @pytest.mark.asyncio
     async def test_create_docker_secret_non_existent_namespace(
         self, kube_config: KubeConfig, kube_client: KubeClient
     ) -> None:
@@ -1432,73 +1340,6 @@ class TestKubeClient:
         assert not events
 
     @pytest.mark.asyncio
-    async def test_get_pod_container_stats(
-        self,
-        kube_config: KubeConfig,
-        kube_client: KubeClient,
-        kube_orchestrator: KubeOrchestrator,
-        delete_pod_later: Callable[[PodDescriptor], Awaitable[None]],
-    ) -> None:
-        command = 'bash -c "for i in {1..5}; do echo $i; sleep 1; done"'
-        container = Container(
-            image="ubuntu",
-            command=command,
-            resources=ContainerResources(cpu=0.1, memory_mb=128),
-        )
-        job_request = JobRequest.create(container)
-        pod = PodDescriptor.from_job_request(
-            kube_orchestrator.create_storage_volume(), job_request
-        )
-        await delete_pod_later(pod)
-        await kube_client.create_pod(pod)
-        await kube_client.wait_pod_is_running(pod_name=pod.name, timeout_s=60.0)
-
-        pod_metrics = []
-        while True:
-            stats = await kube_client.get_pod_container_stats(pod.name, pod.name)
-            if stats:
-                pod_metrics.append(stats)
-            else:
-                break
-            await asyncio.sleep(1)
-
-        assert pod_metrics
-        assert pod_metrics[0] == PodContainerStats(cpu=mock.ANY, memory=mock.ANY)
-        assert pod_metrics[0].cpu >= 0.0
-        assert pod_metrics[0].memory > 0.0
-
-    @pytest.mark.asyncio
-    async def test_get_pod_container_stats_no_pod(
-        self, kube_config: KubeConfig, kube_client: KubeClient
-    ) -> None:
-        pod_name = str(uuid.uuid4())
-        with pytest.raises(JobNotFoundException):
-            await kube_client.get_pod_container_stats(pod_name, pod_name)
-
-    @pytest.mark.asyncio
-    async def test_get_pod_container_stats_not_scheduled_yet(
-        self,
-        kube_config: KubeConfig,
-        kube_client: KubeClient,
-        kube_orchestrator: KubeOrchestrator,
-        delete_pod_later: Callable[[PodDescriptor], Awaitable[None]],
-    ) -> None:
-        container = Container(
-            image="ubuntu",
-            command="true",
-            resources=ContainerResources(cpu=100, memory_mb=128),
-        )
-        job_request = JobRequest.create(container)
-        pod = PodDescriptor.from_job_request(
-            kube_orchestrator.create_storage_volume(), job_request
-        )
-        await delete_pod_later(pod)
-        await kube_client.create_pod(pod)
-
-        stats = await kube_client.get_pod_container_stats(pod.name, pod.name)
-        assert stats is None
-
-    @pytest.mark.asyncio
     async def test_service_account_not_available(
         self,
         kube_client: KubeClient,
@@ -1520,17 +1361,6 @@ class TestKubeClient:
         pod_status = await kube_client.get_pod_status(pod.name)
 
         assert pod_status.container_status.exit_code != 0
-
-    @pytest.mark.asyncio
-    async def test_get_pod_container_stats_error_json_response_parsing(
-        self, mock_kubernetes_server: ApiConfig
-    ) -> None:
-        async with KubeClient(
-            base_url=str(f"http://localhost:{mock_kubernetes_server.port}"),
-            namespace="mock",
-        ) as client:
-            stats = await client.get_pod_container_stats("whatever", "whenever")
-            assert stats is None
 
 
 @pytest.fixture
@@ -1575,352 +1405,7 @@ async def mock_kubernetes_server() -> AsyncIterator[ApiConfig]:
     await runner.close()
 
 
-class TestLogReader:
-    async def _consume_log_reader(
-        self, log_reader: LogReader, chunk_size: int = -1
-    ) -> bytes:
-        istream = io.BytesIO()
-        try:
-            async with log_reader:
-                while True:
-                    chunk = await log_reader.read(chunk_size)
-                    if not chunk:
-                        break
-                    assert chunk_size < 0 or len(chunk) <= chunk_size
-                    istream.write(chunk)
-        except asyncio.CancelledError:
-            pass
-        istream.flush()
-        istream.seek(0)
-        return istream.read()
-
-    @pytest.mark.asyncio
-    async def test_read_instantly_succeeded(
-        self,
-        kube_config: KubeConfig,
-        kube_client: KubeClient,
-        kube_orchestrator: KubeOrchestrator,
-        delete_pod_later: Callable[[PodDescriptor], Awaitable[None]],
-    ) -> None:
-        container = Container(
-            image="ubuntu",
-            command="true",
-            resources=ContainerResources(cpu=0.1, memory_mb=128),
-        )
-        job_request = JobRequest.create(container)
-        pod = PodDescriptor.from_job_request(
-            kube_orchestrator.create_storage_volume(), job_request
-        )
-        await delete_pod_later(pod)
-        await kube_client.create_pod(pod)
-        log_reader = PodContainerLogReader(
-            client=kube_client, pod_name=pod.name, container_name=pod.name
-        )
-        payload = await self._consume_log_reader(log_reader)
-        assert payload == b""
-
-    @pytest.mark.asyncio
-    async def test_read_instantly_failed(
-        self,
-        kube_config: KubeConfig,
-        kube_client: KubeClient,
-        kube_orchestrator: KubeOrchestrator,
-        delete_pod_later: Callable[[PodDescriptor], Awaitable[None]],
-    ) -> None:
-        command = 'bash -c "echo -n Failure!; false"'
-        container = Container(
-            image="ubuntu",
-            command=command,
-            resources=ContainerResources(cpu=0.1, memory_mb=128),
-        )
-        job_request = JobRequest.create(container)
-        pod = PodDescriptor.from_job_request(
-            kube_orchestrator.create_storage_volume(), job_request
-        )
-        await delete_pod_later(pod)
-        await kube_client.create_pod(pod)
-        log_reader = PodContainerLogReader(
-            client=kube_client, pod_name=pod.name, container_name=pod.name
-        )
-        payload = await self._consume_log_reader(log_reader)
-        assert payload == b"Failure!"
-
-    @pytest.mark.asyncio
-    async def test_read_timed_out(
-        self,
-        kube_config: KubeConfig,
-        kube_client: KubeClient,
-        kube_orchestrator: KubeOrchestrator,
-        delete_pod_later: Callable[[PodDescriptor], Awaitable[None]],
-    ) -> None:
-        command = 'bash -c "sleep 5; echo -n Success!"'
-        container = Container(
-            image="ubuntu",
-            command=command,
-            resources=ContainerResources(cpu=0.1, memory_mb=128),
-        )
-        job_request = JobRequest.create(container)
-        pod = PodDescriptor.from_job_request(
-            kube_orchestrator.create_storage_volume(), job_request
-        )
-        await delete_pod_later(pod)
-        await kube_client.create_pod(pod)
-        log_reader = PodContainerLogReader(
-            client=kube_client,
-            pod_name=pod.name,
-            container_name=pod.name,
-            client_read_timeout_s=1,
-        )
-        with pytest.raises(asyncio.TimeoutError):
-            await self._consume_log_reader(log_reader)
-
-    @pytest.mark.asyncio
-    async def test_read_succeeded(
-        self,
-        kube_config: KubeConfig,
-        kube_client: KubeClient,
-        kube_orchestrator: KubeOrchestrator,
-        delete_pod_later: Callable[[PodDescriptor], Awaitable[None]],
-    ) -> None:
-        command = 'bash -c "for i in {1..5}; do echo $i; sleep 1; done"'
-        container = Container(
-            image="ubuntu",
-            command=command,
-            resources=ContainerResources(cpu=0.1, memory_mb=128),
-        )
-        job_request = JobRequest.create(container)
-        pod = PodDescriptor.from_job_request(
-            kube_orchestrator.create_storage_volume(), job_request
-        )
-        await delete_pod_later(pod)
-        await kube_client.create_pod(pod)
-        log_reader = PodContainerLogReader(
-            client=kube_client, pod_name=pod.name, container_name=pod.name
-        )
-        payload = await self._consume_log_reader(log_reader, chunk_size=1)
-        expected_payload = "\n".join(str(i) for i in range(1, 6)) + "\n"
-        assert payload == expected_payload.encode()
-
-    @pytest.mark.asyncio
-    async def test_read_cancelled(
-        self,
-        kube_config: KubeConfig,
-        kube_client: KubeClient,
-        kube_orchestrator: KubeOrchestrator,
-        delete_pod_later: Callable[[PodDescriptor], Awaitable[None]],
-    ) -> None:
-        command = 'bash -c "for i in {1..60}; do echo $i; sleep 1; done"'
-        container = Container(
-            image="ubuntu",
-            command=command,
-            resources=ContainerResources(cpu=0.1, memory_mb=128),
-        )
-        job_request = JobRequest.create(container)
-        pod = PodDescriptor.from_job_request(
-            kube_orchestrator.create_storage_volume(), job_request
-        )
-        await delete_pod_later(pod)
-        await kube_client.create_pod(pod)
-        await kube_client.wait_pod_is_running(pod_name=pod.name, timeout_s=60.0)
-        log_reader = PodContainerLogReader(
-            client=kube_client, pod_name=pod.name, container_name=pod.name
-        )
-        task = asyncio.ensure_future(self._consume_log_reader(log_reader, chunk_size=1))
-        await asyncio.sleep(10)
-        task.cancel()
-        payload = await task
-        expected_payload = "\n".join(str(i) for i in range(1, 6))
-        assert payload.startswith(expected_payload.encode())
-
-    @pytest.mark.asyncio
-    async def test_create_elasticsearch_client_no_auth_header_fail(
-        self, es_hosts_auth: Sequence[str]
-    ) -> None:
-        es_config = ElasticsearchConfig(hosts=es_hosts_auth)
-        with pytest.raises(AuthenticationException):
-            async with create_elasticsearch_client(config=es_config) as es_client:
-                await es_client.ping()
-
-    @pytest.mark.asyncio
-    async def test_create_elasticsearch_client_wrong_auth_fail(
-        self, es_hosts_auth: Sequence[str]
-    ) -> None:
-        es_config = ElasticsearchConfig(
-            hosts=es_hosts_auth, user="wrong-user", password="wrong-pw"
-        )
-        with pytest.raises(AuthenticationException):
-            async with create_elasticsearch_client(es_config) as es_client:
-                await es_client.ping()
-
-    @pytest.mark.asyncio
-    async def test_create_elasticsearch_client_correct_credentials(
-        self, es_hosts_auth: Sequence[str]
-    ) -> None:
-        es_config = ElasticsearchConfig(
-            hosts=es_hosts_auth, user="testuser", password="password"
-        )
-        async with create_elasticsearch_client(es_config) as es_client:
-            await es_client.ping()
-
-    @pytest.mark.asyncio
-    async def test_elasticsearch_log_reader(
-        self,
-        kube_config: KubeConfig,
-        kube_client: MyKubeClient,
-        kube_orchestrator: KubeOrchestrator,
-        delete_pod_later: Callable[[PodDescriptor], Awaitable[None]],
-        es_client: Elasticsearch,
-    ) -> None:
-        command = 'bash -c "for i in {1..5}; do echo $i; sleep 1; done"'
-        expected_payload = ("\n".join(str(i) for i in range(1, 6)) + "\n").encode()
-        container = Container(
-            image="ubuntu",
-            command=command,
-            resources=ContainerResources(cpu=0.1, memory_mb=128),
-        )
-        job_request = JobRequest.create(container)
-        pod = PodDescriptor.from_job_request(
-            kube_orchestrator.create_storage_volume(), job_request
-        )
-        await delete_pod_later(pod)
-        await kube_client.create_pod(pod)
-        await kube_client.wait_pod_is_terminated(pod.name)
-
-        await self._check_kube_logs(
-            kube_client,
-            namespace_name=kube_config.namespace,
-            pod_name=pod.name,
-            container_name=pod.name,
-            expected_payload=expected_payload,
-        )
-
-        await self._check_es_logs(
-            es_client,
-            namespace_name=kube_config.namespace,
-            pod_name=pod.name,
-            container_name=pod.name,
-            expected_payload=expected_payload,
-        )
-
-    async def _check_kube_logs(
-        self,
-        kube_client: KubeClient,
-        namespace_name: str,
-        pod_name: str,
-        container_name: str,
-        expected_payload: Any,
-    ) -> None:
-        log_reader = PodContainerLogReader(
-            client=kube_client, pod_name=pod_name, container_name=container_name
-        )
-        payload = await self._consume_log_reader(log_reader, chunk_size=1)
-        assert payload == expected_payload, "Pod logs did not match."
-
-    async def _check_es_logs(
-        self,
-        es_client: Elasticsearch,
-        namespace_name: str,
-        pod_name: str,
-        container_name: str,
-        expected_payload: Any,
-        timeout_s: float = 120.0,
-        interval_s: float = 1.0,
-    ) -> None:
-        payload = b""
-        try:
-            async with timeout(timeout_s):
-                while True:
-                    log_reader = ElasticsearchLogReader(
-                        es_client,
-                        namespace_name=namespace_name,
-                        pod_name=pod_name,
-                        container_name=container_name,
-                    )
-                    payload = await self._consume_log_reader(log_reader, chunk_size=1)
-                    if payload == expected_payload:
-                        return
-                    await asyncio.sleep(interval_s)
-        except asyncio.TimeoutError:
-            pytest.fail(f"Pod logs did not match. Last payload: {payload}")
-
-    @pytest.mark.asyncio
-    async def test_elasticsearch_log_reader_empty(
-        self, es_client: Elasticsearch
-    ) -> None:
-        namespace_name = pod_name = container_name = str(uuid.uuid4())
-        log_reader = ElasticsearchLogReader(
-            es_client,
-            namespace_name=namespace_name,
-            pod_name=pod_name,
-            container_name=container_name,
-        )
-        payload = await self._consume_log_reader(log_reader, chunk_size=1)
-        assert payload == b""
-
-    @pytest.mark.asyncio
-    async def test_get_job_log_reader(
-        self,
-        kube_config: KubeConfig,
-        kube_orchestrator: KubeOrchestrator,
-        kube_client: MyKubeClient,
-        delete_job_later: Callable[[Job], Awaitable[None]],
-    ) -> None:
-        command = 'bash -c "for i in {1..5}; do echo $i; sleep 1; done"'
-        expected_payload = ("\n".join(str(i) for i in range(1, 6)) + "\n").encode()
-        container = Container(
-            image="ubuntu",
-            command=command,
-            resources=ContainerResources(cpu=0.1, memory_mb=128),
-        )
-        job = MyJob(
-            orchestrator=kube_orchestrator, job_request=JobRequest.create(container)
-        )
-        await delete_job_later(job)
-        await kube_orchestrator.start_job(job, token="test-token")
-        pod_name = job.id
-
-        await kube_client.wait_pod_is_terminated(pod_name)
-
-        log_reader = await kube_orchestrator.get_job_log_reader(job)
-        assert isinstance(log_reader, PodContainerLogReader)
-
-        await kube_client.delete_pod(pod_name)
-
-        timeout_s = 120.0
-        interval_s = 1.0
-        payload = b""
-        try:
-            async with timeout(timeout_s):
-                while True:
-                    log_reader = await kube_orchestrator.get_job_log_reader(job)
-                    assert isinstance(log_reader, ElasticsearchLogReader)
-                    payload = await self._consume_log_reader(log_reader, chunk_size=1)
-                    if payload == expected_payload:
-                        break
-                    await asyncio.sleep(interval_s)
-        except asyncio.TimeoutError:
-            pytest.fail(f"Pod logs did not match. Last payload: {payload}")
-
-
 class TestPodContainerDevShmSettings:
-    async def _consume_log_reader(
-        self, log_reader: LogReader, chunk_size: int = -1
-    ) -> bytes:
-        istream = io.BytesIO()
-        try:
-            async with log_reader:
-                while True:
-                    chunk = await log_reader.read(chunk_size)
-                    if not chunk:
-                        break
-                    assert chunk_size < 0 or len(chunk) <= chunk_size
-                    istream.write(chunk)
-        except asyncio.CancelledError:
-            pass
-        istream.flush()
-        istream.seek(0)
-        return istream.read()
-
     @pytest.fixture
     async def run_command_get_status(
         self,

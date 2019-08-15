@@ -43,11 +43,7 @@ data:
             },
 
             "monitoring": {
-                "url": "http://platformapi/api/v1/jobs",
-
-                "elasticsearch": {
-                    "hosts": ["http://elasticsearch-logging.kube-system:9200"]
-                }
+                "url": "http://platformapi/api/v1/jobs"
             }
         }
     ]

@@ -119,9 +119,6 @@ class TestEnvironConfigFactory:
             "NP_K8S_SSH_AUTH_INGRESS_DOMAIN_NAME": "ssh-auth.domain",
             "NP_AUTH_URL": "https://auth",
             "NP_AUTH_TOKEN": "token",
-            "NP_ES_HOSTS": "http://es",
-            "NP_ES_AUTH_USER": "test-user",
-            "NP_ES_AUTH_PASSWORD": "test-password",
             "NP_OAUTH_BASE_URL": "https://oauth",
             "NP_OAUTH_CLIENT_ID": "oauth_client_id",
             "NP_OAUTH_AUDIENCE": "https://platform-url",
@@ -190,10 +187,6 @@ class TestEnvironConfigFactory:
 
         assert cluster.registry.host == "registry.dev.neuromation.io"
 
-        assert cluster.logging.elasticsearch.hosts == ["http://es"]
-        assert cluster.logging.elasticsearch.user == "test-user"
-        assert cluster.logging.elasticsearch.password == "test-password"
-
         assert config.config_client is not None
 
     def test_create_value_error_invalid_port(self) -> None:
@@ -248,9 +241,6 @@ class TestEnvironConfigFactory:
                 ]
             ),
             "NP_K8S_NODE_LABEL_PREEMPTIBLE": "testpreempt",
-            "NP_ES_HOSTS": "http://es",
-            "NP_ES_AUTH_USER": "test-user",
-            "NP_ES_AUTH_PASSWORD": "test-password",
             "NP_API_URL": "https://neu.ro/api/v1",
             "NP_OAUTH_HEADLESS_CALLBACK_URL": "https://oauth/show-code",
             "NP_PLATFORM_CONFIG_URI": "http://platformconfig:8080/api/v1",
@@ -320,10 +310,6 @@ class TestEnvironConfigFactory:
         assert cluster.registry.host == "testregistry:5000"
         assert cluster.registry.url == URL("https://testregistry:5000")
 
-        assert cluster.logging.elasticsearch.hosts == ["http://es"]
-        assert cluster.logging.elasticsearch.user == "test-user"
-        assert cluster.logging.elasticsearch.password == "test-password"
-
         assert config.config_client is not None
 
     def test_create_nfs(self) -> None:
@@ -339,7 +325,6 @@ class TestEnvironConfigFactory:
             "NP_API_URL": "https://neu.ro/api/v1",
             "NP_AUTH_URL": "https://auth",
             "NP_AUTH_TOKEN": "token",
-            "NP_ES_HOSTS": "http://es",
             "NP_OAUTH_HEADLESS_CALLBACK_URL": "https://oauth/show-code",
             "NP_PLATFORM_CONFIG_URI": "http://platformconfig:8080/api/v1",
             "NP_NOTIFICATIONS_URL": "http://notifications:8080",
