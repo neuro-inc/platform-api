@@ -75,7 +75,7 @@ def _raise_status_job_exception(pod: Dict[str, Any], job_id: Optional[str]) -> N
     elif pod["code"] == 422:
         raise JobError(f"cant create job with id {job_id}")
     else:
-        raise JobError(f"unexpected: {pod['code']}")
+        raise JobError("unexpected")
 
 
 @dataclass(frozen=True)
@@ -234,7 +234,6 @@ class Service:
             "ssh",
             service_descriptor["spec"]["ports"],
         )
-
         return service_descriptor
 
     @classmethod
