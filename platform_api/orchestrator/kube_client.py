@@ -75,7 +75,7 @@ def _raise_status_job_exception(pod: Dict[str, Any], job_id: Optional[str]) -> N
     elif pod["code"] == 422:
         raise JobError(f"cant create job with id {job_id}")
     else:
-        raise JobError("unexpected")
+        raise JobError(f"unexpected: {pod['code']}")
 
 
 @dataclass(frozen=True)
@@ -194,13 +194,11 @@ class Service:
     name: str
     target_port: Optional[int]
     ssh_target_port: Optional[int] = None
-
     port: int = 80
     ssh_port: int = 22
-
     service_type: ServiceType = ServiceType.CLUSTER_IP
-
     cluster_ip: Optional[str] = None
+    labels: Dict[str, str] = field(default_factory=dict)
 
     def _add_port_map(
         self,
@@ -224,6 +222,8 @@ class Service:
 
         if self.cluster_ip:
             service_descriptor["spec"]["clusterIP"] = self.cluster_ip
+        if self.labels:
+            service_descriptor["metadata"]["labels"] = self.labels
 
         self._add_port_map(
             self.port, self.target_port, "http", service_descriptor["spec"]["ports"]
@@ -234,11 +234,17 @@ class Service:
             "ssh",
             service_descriptor["spec"]["ports"],
         )
+
         return service_descriptor
 
     @classmethod
     def create_for_pod(cls, pod: "PodDescriptor") -> "Service":
-        return cls(pod.name, target_port=pod.port, ssh_target_port=pod.ssh_port)
+        return cls(
+            pod.name,
+            target_port=pod.port,
+            ssh_target_port=pod.ssh_port,
+            labels=pod.labels,
+        )
 
     @classmethod
     def create_headless_for_pod(cls, pod: "PodDescriptor") -> "Service":
@@ -248,6 +254,7 @@ class Service:
             cluster_ip="None",
             target_port=http_port,
             ssh_target_port=pod.ssh_port,
+            labels=pod.labels,
         )
 
     @classmethod
@@ -272,6 +279,7 @@ class Service:
             ssh_port=ssh_payload.get("port", Service.ssh_port),
             service_type=ServiceType(service_type),
             cluster_ip=payload["spec"].get("clusterIP"),
+            labels=payload["metadata"].get("labels", {}),
         )
 
 
@@ -319,11 +327,16 @@ class Ingress:
     name: str
     rules: List[IngressRule] = field(default_factory=list)
     annotations: Dict[str, str] = field(default_factory=dict)
+    labels: Dict[str, str] = field(default_factory=dict)
 
     def to_primitive(self) -> Dict[str, Any]:
         rules: List[Any] = [rule.to_primitive() for rule in self.rules] or [None]
         return {
-            "metadata": {"name": self.name, "annotations": self.annotations},
+            "metadata": {
+                "name": self.name,
+                "annotations": self.annotations,
+                "labels": self.labels,
+            },
             "spec": {"rules": rules},
         }
 
@@ -340,6 +353,7 @@ class Ingress:
                 name=payload_metadata["name"],
                 rules=rules,
                 annotations=payload_metadata.get("annotations", {}),
+                labels=payload_metadata.get("labels", {}),
             )
         elif kind == "Status":
             # TODO (A.Yushkovskiy, 28-Jun-2019) patch this method to raise a proper
@@ -729,6 +743,7 @@ class PodDescriptor:
             node_name=payload["spec"].get("nodeName"),
             command=container_payload.get("command"),
             args=container_payload.get("args"),
+            labels=metadata.get("labels", {}),
         )
 
 
@@ -1293,10 +1308,14 @@ class KubeClient:
         name: str,
         rules: Optional[List[IngressRule]] = None,
         annotations: Optional[Dict[str, str]] = None,
+        labels: Optional[Dict[str, str]] = None,
     ) -> Ingress:
         rules = rules or []
         annotations = annotations or {}
-        ingress = Ingress(name=name, rules=rules, annotations=annotations)
+        labels = labels or {}
+        ingress = Ingress(
+            name=name, rules=rules, annotations=annotations, labels=labels
+        )
         payload = await self._request(
             method="POST", url=self._ingresses_url, json=ingress.to_primitive()
         )
@@ -1352,6 +1371,11 @@ class KubeClient:
         payload = await self._request(
             method="POST", url=url, json=service.to_primitive()
         )
+        return Service.from_primitive(payload)
+
+    async def get_service(self, name: str) -> Service:
+        url = self._generate_service_url(name)
+        payload = await self._request(method="GET", url=url)
         return Service.from_primitive(payload)
 
     async def delete_service(self, name: str) -> None:

@@ -795,6 +795,15 @@ class TestService:
         service = Service(name="testservice", target_port=8080)
         assert service.to_primitive() == service_payload
 
+    def test_to_primitive_with_labels(
+        self, service_payload: Dict[str, Dict[str, Any]]
+    ) -> None:
+        labels = {"label-name": "label-value"}
+        expected_payload = service_payload.copy()
+        expected_payload["metadata"]["labels"] = labels
+        service = Service(name="testservice", target_port=8080, labels=labels)
+        assert service.to_primitive() == expected_payload
+
     def test_to_primitive_load_balancer(
         self, service_payload: Dict[str, Dict[str, Any]]
     ) -> None:
@@ -814,6 +823,15 @@ class TestService:
     def test_from_primitive(self, service_payload: Dict[str, Dict[str, Any]]) -> None:
         service = Service.from_primitive(service_payload)
         assert service == Service(name="testservice", target_port=8080)
+
+    def test_from_primitive_with_labels(
+        self, service_payload: Dict[str, Dict[str, Any]]
+    ) -> None:
+        labels = {"label-name": "label-value"}
+        input_payload = service_payload.copy()
+        input_payload["metadata"]["labels"] = labels
+        service = Service.from_primitive(input_payload)
+        assert service == Service(name="testservice", target_port=8080, labels=labels)
 
     def test_from_primitive_node_port(
         self, service_payload: Dict[str, Dict[str, Any]]
