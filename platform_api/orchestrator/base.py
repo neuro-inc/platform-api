@@ -1,9 +1,9 @@
 from abc import ABC, abstractmethod
 from typing import Sequence
 
+from platform_api.config import OrchestratorConfig, StorageConfig
 from platform_api.resource import ResourcePoolType
 
-from ..config import OrchestratorConfig, StorageConfig
 from .job import Job, JobStatusItem
 from .job_request import JobStatus
 
