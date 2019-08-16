@@ -105,6 +105,11 @@ def convert_job_container_to_json(
         resources["gpu_model"] = container.resources.gpu_model_id
     if container.resources.shm is not None:
         resources["shm"] = container.resources.shm
+    if container.resources.tpu:
+        resources["tpu"] = {
+            "type": container.resources.tpu.type,
+            "software_version": container.resources.tpu.software_version,
+        }
     ret["resources"] = resources
 
     if container.http_server is not None:

@@ -32,6 +32,7 @@ from platform_api.orchestrator.job_request import (
     ContainerHTTPServer,
     ContainerResources,
     ContainerSSHServer,
+    ContainerTPUResource,
     ContainerVolume,
     JobRequest,
     JobStatus,
@@ -224,6 +225,26 @@ class TestJobContainerToJson:
             "env": {},
             "image": "image",
             "resources": {"cpu": 0.1, "memory_mb": 16},
+            "volumes": [],
+        }
+
+    def test_tpu_resource(self, storage_config: StorageConfig) -> None:
+        container = Container(
+            image="image",
+            resources=ContainerResources(
+                cpu=0.1,
+                memory_mb=16,
+                tpu=ContainerTPUResource(type="v2-8", software_version="1.14"),
+            ),
+        )
+        assert convert_job_container_to_json(container, storage_config) == {
+            "env": {},
+            "image": "image",
+            "resources": {
+                "cpu": 0.1,
+                "memory_mb": 16,
+                "tpu": {"type": "v2-8", "software_version": "1.14"},
+            },
             "volumes": [],
         }
 
