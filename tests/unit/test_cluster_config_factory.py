@@ -8,7 +8,7 @@ from platform_api.cluster_config import StorageType
 from platform_api.cluster_config_factory import ClusterConfigFactory
 from platform_api.orchestrator.kube_client import KubeClientAuthType
 from platform_api.orchestrator.kube_orchestrator import KubeConfig
-from platform_api.resource import GKEGPUModels
+from platform_api.resource import GKEGPUModels, Preset, TPUPreset, TPUResource
 
 
 @pytest.fixture
@@ -59,9 +59,19 @@ def clusters_payload(nfs_storage_payload: Dict[str, Any]) -> List[Dict[str, Any]
                         "cpu": 8.0,
                         "memory_mb": 53248,
                         "disk_gb": 150,
+                        "tpu": {
+                            "types": ["v2-8", "v3-8"],
+                            "software_versions": ["1.13", "1.14"],
+                        },
                         "presets": [
                             {"name": "cpu-small", "cpu": 1, "memory_mb": 2048},
                             {"name": "cpu-large", "cpu": 7, "memory_mb": 49152},
+                            {
+                                "name": "tpu",
+                                "cpu": 7,
+                                "memory_mb": 49152,
+                                "tpu": {"type": "v2-8", "software_version": "1.14"},
+                            },
                         ],
                     },
                     {
@@ -222,6 +232,9 @@ class TestClusterConfigFactory:
         assert len(orchestrator.resource_pool_types) == 5
         assert orchestrator.resource_pool_types[0].gpu is None
         assert orchestrator.resource_pool_types[0].gpu_model is None
+        assert orchestrator.resource_pool_types[0].tpu == TPUResource(
+            types=("v2-8", "v3-8"), software_versions=("1.13", "1.14")
+        )
 
         assert orchestrator.resource_pool_types[1].gpu == 4
         assert (
@@ -237,6 +250,12 @@ class TestClusterConfigFactory:
         assert orchestrator.resource_pool_types[0].presets[1].cpu == 7.0
         assert orchestrator.resource_pool_types[0].presets[1].memory_mb == 49152
         assert orchestrator.resource_pool_types[0].presets[1].gpu_model is None
+        assert orchestrator.resource_pool_types[0].presets[2] == Preset(
+            name="tpu",
+            cpu=7.0,
+            memory_mb=49152,
+            tpu=TPUPreset(type="v2-8", software_version="1.14"),
+        )
 
         assert orchestrator.resource_pool_types[1].presets is not None
         assert (

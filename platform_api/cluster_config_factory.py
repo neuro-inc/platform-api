@@ -13,7 +13,7 @@ from .cluster_config import (
     StorageConfig,
 )
 from .orchestrator.kube_config import KubeClientAuthType, KubeConfig
-from .resource import Preset, ResourcePoolType
+from .resource import Preset, ResourcePoolType, TPUPreset, TPUResource
 
 
 _cluster_config_validator = t.Dict({"name": t.String}).allow_extra("*")
@@ -84,6 +84,10 @@ class ClusterConfigFactory:
                     is_preemptible=payload.get("is_preemptible", False),
                     gpu=preset.get("gpu") or payload.get("gpu"),
                     gpu_model=preset.get("gpu_model") or payload.get("gpu_model"),
+                    # TPU presets do not inherit their pool type resources,
+                    # because CPU pool types may or may not be used to run TPU
+                    # workloads.
+                    tpu=self._create_tpu_preset(preset.get("tpu")),
                 )
             )
         return result
@@ -120,6 +124,16 @@ class ClusterConfigFactory:
             node_label_preemptible=kube["node_label_preemptible"],
         )
 
+    def _create_tpu_preset(
+        self, payload: Optional[Dict[str, Any]]
+    ) -> Optional[TPUPreset]:
+        if not payload:
+            return None
+
+        return TPUPreset(
+            type=payload["type"], software_version=payload["software_version"]
+        )
+
     def _create_resource_pool_type(self, payload: Dict[str, Any]) -> ResourcePoolType:
         return ResourcePoolType(
             gpu=payload.get("gpu"),
@@ -131,6 +145,18 @@ class ClusterConfigFactory:
             min_size=payload.get("min_size"),
             max_size=payload.get("max_size"),
             presets=self._create_presets(payload),
+            tpu=self._create_tpu_resource(payload.get("tpu")),
+        )
+
+    def _create_tpu_resource(
+        self, payload: Optional[Dict[str, Any]]
+    ) -> Optional[TPUResource]:
+        if not payload:
+            return None
+
+        return TPUResource(
+            types=tuple(payload["types"]),
+            software_versions=tuple(payload["software_versions"]),
         )
 
     def _create_registry_config(self, payload: Dict[str, Any]) -> RegistryConfig:
