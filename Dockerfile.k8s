@@ -17,6 +17,10 @@ RUN pip install -e .
 # disable it, local SSH doesn't like certs changing on every deploy
 # RUN ssh-keygen -f /etc/ssh/ssh_host_rsa_key -N '' -t rsa && ssh-keygen -f /etc/ssh/ssh_host_dsa_key -N '' -t dsa && ssh-keygen -f /etc/ssh/ssh_host_ecdsa_key -N '' -t ecdsa -b 521
 
+RUN cp platform_api/ssh/ssh_host_rsa_key /etc/ssh/ssh_host_rsa_key
+RUN cp platform_api/ssh/ssh_host_dsa_key /etc/ssh/ssh_host_dsa_key
+RUN cp platform_api/ssh/ssh_host_ecdsa_key /etc/ssh/ssh_host_ecdsa_key
+
 ENV NP_API_PORT=8080
 EXPOSE $NP_API_PORT
 
