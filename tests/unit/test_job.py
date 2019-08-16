@@ -344,13 +344,7 @@ def job_request_payload() -> Dict[str, Any]:
         "description": "Description of the testjob",
         "container": {
             "image": "testimage",
-            "resources": {
-                "cpu": 1,
-                "memory_mb": 128,
-                "gpu": None,
-                "gpu_model_id": None,
-                "shm": None,
-            },
+            "resources": {"cpu": 1, "memory_mb": 128},
             "command": None,
             "env": {"testvar": "testval"},
             "volumes": [
@@ -1058,6 +1052,16 @@ class TestJobRequest:
         self, job_request_payload: Dict[str, Any]
     ) -> None:
         job_request_payload["container"]["ssh_server"] = {"port": 678}
+        actual = JobRequest.to_primitive(JobRequest.from_primitive(job_request_payload))
+        assert actual == job_request_payload
+
+    def test_to_and_from_primitive_with_tpu(
+        self, job_request_payload: Dict[str, Any]
+    ) -> None:
+        job_request_payload["container"]["resources"]["tpu"] = {
+            "type": "v2-8",
+            "software_version": "1.14",
+        }
         actual = JobRequest.to_primitive(JobRequest.from_primitive(job_request_payload))
         assert actual == job_request_payload
 

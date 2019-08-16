@@ -1,7 +1,10 @@
 import pytest
 
-from platform_api.orchestrator.job_request import ContainerResources
-from platform_api.resource import ResourcePoolType
+from platform_api.orchestrator.job_request import (
+    ContainerResources,
+    ContainerTPUResource,
+)
+from platform_api.resource import ResourcePoolType, TPUResource
 
 
 class TestResourcePoolType:
@@ -46,3 +49,30 @@ class TestContainerResourcesFit:
             cpu=1, memory_mb=32, gpu=1, gpu_model_id="gpumodel"
         )
         assert resources.check_fit_into_pool_type(pool_type)
+
+    def test_container_requires_tpu(self) -> None:
+        pool_type = ResourcePoolType(
+            tpu=TPUResource(types=("v2-8",), software_versions=("1.14",))
+        )
+        resources = ContainerResources(
+            cpu=1,
+            memory_mb=32,
+            tpu=ContainerTPUResource(type="v2-8", software_version="1.14"),
+        )
+        assert resources.check_fit_into_pool_type(pool_type)
+
+    @pytest.mark.parametrize(
+        "container_tpu_resource",
+        (
+            ContainerTPUResource(type="unknown", software_version="1.14"),
+            ContainerTPUResource(type="v2-8", software_version="unknown"),
+        ),
+    )
+    def test_container_requires_tpu_unknown(
+        self, container_tpu_resource: ContainerTPUResource
+    ) -> None:
+        pool_type = ResourcePoolType(
+            tpu=TPUResource(types=("v2-8",), software_versions=("1.14",))
+        )
+        resources = ContainerResources(cpu=1, memory_mb=32, tpu=container_tpu_resource)
+        assert not resources.check_fit_into_pool_type(pool_type)
