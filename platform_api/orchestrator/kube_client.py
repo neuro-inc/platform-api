@@ -330,12 +330,10 @@ class Ingress:
 
     def to_primitive(self) -> Dict[str, Any]:
         rules: List[Any] = [rule.to_primitive() for rule in self.rules] or [None]
-        primitive = {
-            "metadata": {"name": self.name, "annotations": self.annotations},
-            "spec": {"rules": rules},
-        }
+        metadata = {"name": self.name, "annotations": self.annotations}
         if self.labels:
-            primitive["labels"] = self.labels
+            metadata["labels"] = self.labels
+        primitive = {"metadata": metadata, "spec": {"rules": rules}}
         return primitive
 
     @classmethod

@@ -505,10 +505,13 @@ class TestKubeOrchestrator:
             IngressRule(host="host3", service_name="service3", service_port=83),
         ]
         annotations = {"key/1": "value 1", "key/2": "value 2"}
-        expected_ingress = Ingress(name=name, rules=rules, annotations=annotations)
+        labels = {"label/1": "label-value-1", "label/2": "label-value-2"}
+        expected_ingress = Ingress(
+            name=name, rules=rules, annotations=annotations, labels=labels
+        )
 
         created_ingress = await kube_client.create_ingress(
-            name=name, rules=rules, annotations=annotations
+            name=name, rules=rules, annotations=annotations, labels=labels
         )
         assert created_ingress == expected_ingress
 
