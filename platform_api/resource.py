@@ -24,6 +24,12 @@ class GKEGPUModels(Enum):
 
 
 @dataclass(frozen=True)
+class TPUPreset:
+    type: str
+    software_version: str
+
+
+@dataclass(frozen=True)
 class Preset:
     name: str
     cpu: float
@@ -31,6 +37,13 @@ class Preset:
     is_preemptible: bool = False
     gpu: Optional[int] = None
     gpu_model: Optional[str] = None
+    tpu: Optional[TPUPreset] = None
+
+
+@dataclass(frozen=True)
+class TPUResource:
+    types: Sequence[str] = ()
+    software_versions: Sequence[str] = ()
 
 
 @dataclass(frozen=True)
@@ -46,6 +59,7 @@ class ResourcePoolType:
     disk_gb: Optional[int] = None
     min_size: Optional[int] = None
     max_size: Optional[int] = None
+    tpu: Optional[TPUResource] = None
 
     def __post_init__(self) -> None:
         if self.gpu and not self.gpu_model:
