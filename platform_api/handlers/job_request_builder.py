@@ -7,6 +7,7 @@ from platform_api.orchestrator.job_request import (
     ContainerHTTPServer,
     ContainerResources,
     ContainerSSHServer,
+    ContainerTPUResource,
     ContainerVolume,
 )
 
@@ -103,12 +104,24 @@ class ContainerBuilder:
     def create_resources_from_payload(
         cls, payload: Dict[str, Any]
     ) -> ContainerResources:
+        tpu = None
+        if payload.get("tpu"):
+            tpu = cls.create_tpu_resource_from_payload(payload["tpu"])
         return ContainerResources(
             cpu=payload["cpu"],
             memory_mb=payload["memory_mb"],
             gpu=payload.get("gpu"),
             gpu_model_id=payload.get("gpu_model"),
             shm=payload.get("shm"),
+            tpu=tpu,
+        )
+
+    @classmethod
+    def create_tpu_resource_from_payload(
+        self, payload: Dict[str, Any]
+    ) -> ContainerTPUResource:
+        return ContainerTPUResource(
+            type=payload["type"], software_version=payload["software_version"]
         )
 
     @classmethod
