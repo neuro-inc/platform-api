@@ -476,9 +476,8 @@ class KubeOrchestrator(Orchestrator):
             for host in job.http_hosts
         ]
         annotations = self._get_ingress_annotations(job)
-        labels = self._get_job_resource_labels(job)
         await self._client.create_ingress(
-            name, rules=rules, annotations=annotations, labels=labels
+            name, rules=rules, annotations=annotations, labels=service.labels
         )
 
     async def _delete_ingress(self, job: Job) -> None:
