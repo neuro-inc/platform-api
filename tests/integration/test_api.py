@@ -1747,6 +1747,34 @@ class TestJobs:
             api.jobs_base_url, headers=regular_user.headers, json=request_payload
         ) as response:
             response_text = await response.text()
+            assert response.status == HTTPBadRequest.status_code, response_text
+            data = await response.json()
+            assert """'type': DataError(value doesn't match""" in data["error"]
+
+    @pytest.mark.asyncio
+    async def test_create_unknown_tpu_model(
+        self,
+        jobs_client: JobsClient,
+        api: ApiConfig,
+        client: aiohttp.ClientSession,
+        regular_user: _User,
+    ) -> None:
+        request_payload = {
+            "container": {
+                "image": "ubuntu",
+                "command": "true",
+                "resources": {
+                    "cpu": 0.1,
+                    "memory_mb": 16,
+                    "tpu": {"type": "unknown", "software_version": "unknown"},
+                },
+            }
+        }
+
+        async with client.post(
+            api.jobs_base_url, headers=regular_user.headers, json=request_payload
+        ) as response:
+            response_text = await response.text()
             assert response.status == HTTPAccepted.status_code, response_text
             response_payload = await response.json()
             job_id = response_payload["id"]
@@ -1769,8 +1797,7 @@ class TestJobs:
                     "resources": {
                         "cpu": 0.1,
                         "memory_mb": 16,
-                        "gpu": 1,
-                        "gpu_model": "gpumodel",
+                        "tpu": {"type": "v2-8", "software_version": "1.14"},
                     },
                     "volumes": [],
                 },
@@ -1779,4 +1806,57 @@ class TestJobs:
                 "is_preemptible": False,
             }
 
-        await kube_client.wait_pod_scheduled(job_id, kube_node_gpu)
+    @pytest.mark.asyncio
+    async def test_create_tpu_model(
+        self,
+        jobs_client: JobsClient,
+        api: ApiConfig,
+        client: aiohttp.ClientSession,
+        regular_user: _User,
+    ) -> None:
+        request_payload = {
+            "container": {
+                "image": "ubuntu",
+                "command": "true",
+                "resources": {
+                    "cpu": 0.1,
+                    "memory_mb": 16,
+                    "tpu": {"type": "v2-8", "software_version": "1.14"},
+                },
+            }
+        }
+
+        async with client.post(
+            api.jobs_base_url, headers=regular_user.headers, json=request_payload
+        ) as response:
+            response_text = await response.text()
+            assert response.status == HTTPAccepted.status_code, response_text
+            response_payload = await response.json()
+            job_id = response_payload["id"]
+            assert response_payload == {
+                "id": mock.ANY,
+                "owner": regular_user.name,
+                "cluster_name": "default",
+                "internal_hostname": f"{job_id}.platformapi-tests",
+                "status": "pending",
+                "history": {
+                    "status": "pending",
+                    "reason": None,
+                    "description": None,
+                    "created_at": mock.ANY,
+                },
+                "container": {
+                    "command": "true",
+                    "env": {},
+                    "image": "ubuntu",
+                    "resources": {
+                        "cpu": 0.1,
+                        "memory_mb": 16,
+                        "tpu": {"type": "v2-8", "software_version": "1.14"},
+                    },
+                    "volumes": [],
+                },
+                "ssh_server": "ssh://nobody@ssh-auth.platform.neuromation.io:22",
+                "ssh_auth_server": "ssh://nobody@ssh-auth.platform.neuromation.io:22",
+                "is_preemptible": False,
+            }
