@@ -178,7 +178,7 @@ def cluster_config() -> ClusterConfig:
         storage=storage_config,
         registry=registry_config,
         orchestrator=orchestrator_config,
-        ingress=IngressConfig(storage_url=URL(), users_url=URL(), monitoring_url=URL()),
+        ingress=IngressConfig(storage_url=URL(), monitoring_url=URL()),
     )
 
 

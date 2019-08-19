@@ -15,9 +15,7 @@ from aiohttp.web import (
 from neuro_auth_client import Permission
 from neuro_auth_client.client import Quota
 
-from platform_api.config_client import ConfigClient
 from tests.conftest import random_str
-from tests.integration.test_config_client import create_config_api
 
 from .api import ApiConfig, JobsClient
 from .auth import _AuthClient, _User

@@ -55,7 +55,7 @@ class ClusterConfigFactory:
                     jobs_ingress_class=jobs_ingress_class,
                     jobs_ingress_oauth_url=jobs_ingress_oauth_url,
                 ),
-                ingress=self._create_ingress_config(payload, users_url),
+                ingress=self._create_ingress_config(payload),
             )
         except t.DataError as err:
             logging.warning(f"failed to parse cluster config: {err}")
