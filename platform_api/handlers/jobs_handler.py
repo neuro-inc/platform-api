@@ -242,12 +242,12 @@ class JobsHandler:
         )
 
     async def _create_job_request_validator(self, user: User) -> t.Trafaret:
-        # TODO: rework `gpu_models` to be retrieved from `resources`
+        # TODO: rework `gpu_models` to be retrieved from `cluster_config`
         gpu_models = await self._jobs_service.get_available_gpu_models(user)
-        resources = await self._jobs_service.get_resource_pool_types(user)
-        tpu_resources = [resource.tpu for resource in resources if resource.tpu]
+        cluster_config = await self._jobs_service.get_cluster_config(user)
         return create_job_request_validator(
-            allowed_gpu_models=gpu_models, allowed_tpu_resources=tpu_resources
+            allowed_gpu_models=gpu_models,
+            allowed_tpu_resources=cluster_config.orchestrator.tpu_resources,
         )
 
     async def create_job(self, request: aiohttp.web.Request) -> aiohttp.web.Response:

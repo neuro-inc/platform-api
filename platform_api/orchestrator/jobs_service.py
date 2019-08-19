@@ -15,7 +15,6 @@ from platform_api.cluster import (
     ClusterRegistry,
 )
 from platform_api.config import JobsConfig
-from platform_api.resource import ResourcePoolType
 from platform_api.user import User
 
 from .base import Orchestrator
@@ -323,10 +322,6 @@ class JobsService:
     async def get_cluster_config(self, user: User) -> ClusterConfig:
         async with self._get_cluster(user.cluster_name) as cluster:
             return cluster.config
-
-    async def get_resource_pool_types(self, user: User) -> Sequence[ResourcePoolType]:
-        async with self._get_cluster(user.cluster_name) as cluster:
-            return cluster.config.orchestrator.resource_pool_types
 
     @asynccontextmanager
     async def _create_job_in_storage(

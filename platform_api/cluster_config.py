@@ -5,7 +5,7 @@ from typing import List, Optional, Sequence
 
 from yarl import URL
 
-from .resource import DEFAULT_PRESETS, Preset, ResourcePoolType
+from .resource import DEFAULT_PRESETS, Preset, ResourcePoolType, TPUResource
 
 
 class StorageType(str, Enum):
@@ -114,6 +114,12 @@ class OrchestratorConfig:
             if resource_pool_type.presets:
                 result.extend(resource_pool_type.presets)
         return tuple(result or DEFAULT_PRESETS)
+
+    @property
+    def tpu_resources(self) -> Sequence[TPUResource]:
+        return tuple(
+            resource.tpu for resource in self.resource_pool_types if resource.tpu
+        )
 
 
 @dataclass(frozen=True)
