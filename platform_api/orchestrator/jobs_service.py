@@ -18,7 +18,7 @@ from platform_api.config import JobsConfig
 from platform_api.user import User
 
 from .base import Orchestrator
-from .job import Job, JobRecord, JobStatusItem, JobStatusReason, JobStatusException
+from .job import Job, JobRecord, JobStatusException, JobStatusItem, JobStatusReason
 from .job_request import JobException, JobNotFoundException, JobRequest, JobStatus
 from .jobs_storage import (
     JobFilter,
