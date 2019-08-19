@@ -246,7 +246,10 @@ class EnvironConfigFactory:
         name = self._environ.get("NP_AUTH_NAME", AuthConfig.service_name)
         public_auth_url = URL(self._environ["NP_AUTH_PUBLIC_URL"])
         return AuthConfig(
-            server_endpoint_url=url, service_token=token, service_name=name, public_auth_url=public_auth_url,
+            server_endpoint_url=url,
+            service_token=token,
+            service_name=name,
+            public_auth_url=public_auth_url,
         )
 
     def try_create_oauth(self) -> Optional[OAuthConfig]:

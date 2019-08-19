@@ -61,8 +61,10 @@ class ApiHandler:
             await cluster_registry.add(cluster_config)
             for cluster_config in await cluster_configs_future
         ]
+        record_count = len(cluster_registry)
 
-        return aiohttp.web.Response()
+        # returning JSON for testing purposes only, to be removed
+        return aiohttp.web.json_response({"record_count": record_count})
 
     async def handle_config(self, request: aiohttp.web.Request) -> aiohttp.web.Response:
         data: Dict[str, Any] = {}

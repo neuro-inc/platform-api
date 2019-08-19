@@ -101,7 +101,9 @@ async def create_auth_config(
     url = URL(f"http://{host}:{port}")
     token = create_token("compute")
     public_auth_url = URL(f"https://neu.ro/api/v1/users")
-    return AuthConfig(server_endpoint_url=url, service_token=token, public_auth_url=public_auth_url)
+    return AuthConfig(
+        server_endpoint_url=url, service_token=token, public_auth_url=public_auth_url
+    )
 
 
 @pytest.fixture

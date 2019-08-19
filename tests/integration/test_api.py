@@ -70,22 +70,11 @@ def cluster_configs_payload() -> List[Dict[str, Any]]:
     ]
 
 
-
 class TestApi:
     @pytest.mark.asyncio
     async def test_ping(self, api: ApiConfig, client: aiohttp.ClientSession) -> None:
         async with client.get(api.ping_url) as response:
             assert response.status == HTTPOk.status_code
-
-    @pytest.mark.asyncio
-    async def test_config_cluster_sync(
-        self, api: ApiConfig,
-            cluster_configs_payload: List[Dict[str, Any]],
-            client: aiohttp.ClientSession,
-    ) -> None:
-        async with create_config_api(cluster_configs_payload) as url:
-            async with client.get(api.cluster_sync_url) as response:
-                assert response.status == HTTPOk.status_code
 
     @pytest.mark.asyncio
     async def test_config_unauthorized(
