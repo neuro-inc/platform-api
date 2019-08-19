@@ -1747,9 +1747,37 @@ class TestJobs:
             api.jobs_base_url, headers=regular_user.headers, json=request_payload
         ) as response:
             response_text = await response.text()
-            assert response.status == HTTPBadRequest.status_code, response_text
-            data = await response.json()
-            assert """'type': DataError(value doesn't match""" in data["error"]
+            assert response.status == HTTPAccepted.status_code, response_text
+            response_payload = await response.json()
+            job_id = response_payload["id"]
+            assert response_payload == {
+                "id": mock.ANY,
+                "owner": regular_user.name,
+                "cluster_name": "default",
+                "internal_hostname": f"{job_id}.platformapi-tests",
+                "status": "pending",
+                "history": {
+                    "status": "pending",
+                    "reason": None,
+                    "description": None,
+                    "created_at": mock.ANY,
+                },
+                "container": {
+                    "command": "true",
+                    "env": {},
+                    "image": "ubuntu",
+                    "resources": {
+                        "cpu": 0.1,
+                        "memory_mb": 16,
+                        "gpu": 1,
+                        "gpu_model": "gpumodel",
+                    },
+                    "volumes": [],
+                },
+                "ssh_server": "ssh://nobody@ssh-auth.platform.neuromation.io:22",
+                "ssh_auth_server": "ssh://nobody@ssh-auth.platform.neuromation.io:22",
+                "is_preemptible": False,
+            }
 
     @pytest.mark.asyncio
     async def test_create_unknown_tpu_model(
@@ -1775,36 +1803,9 @@ class TestJobs:
             api.jobs_base_url, headers=regular_user.headers, json=request_payload
         ) as response:
             response_text = await response.text()
-            assert response.status == HTTPAccepted.status_code, response_text
-            response_payload = await response.json()
-            job_id = response_payload["id"]
-            assert response_payload == {
-                "id": mock.ANY,
-                "owner": regular_user.name,
-                "cluster_name": "default",
-                "internal_hostname": f"{job_id}.platformapi-tests",
-                "status": "pending",
-                "history": {
-                    "status": "pending",
-                    "reason": None,
-                    "description": None,
-                    "created_at": mock.ANY,
-                },
-                "container": {
-                    "command": "true",
-                    "env": {},
-                    "image": "ubuntu",
-                    "resources": {
-                        "cpu": 0.1,
-                        "memory_mb": 16,
-                        "tpu": {"type": "v2-8", "software_version": "1.14"},
-                    },
-                    "volumes": [],
-                },
-                "ssh_server": "ssh://nobody@ssh-auth.platform.neuromation.io:22",
-                "ssh_auth_server": "ssh://nobody@ssh-auth.platform.neuromation.io:22",
-                "is_preemptible": False,
-            }
+            assert response.status == HTTPBadRequest.status_code, response_text
+            data = await response.json()
+            assert """'type': DataError(value doesn't match""" in data["error"]
 
     @pytest.mark.asyncio
     async def test_create_tpu_model(
