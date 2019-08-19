@@ -23,6 +23,7 @@ from platform_api.orchestrator.job_request import (
 )
 from platform_api.orchestrator.jobs_service import JobsService
 from platform_api.orchestrator.jobs_storage import JobFilter
+from platform_api.resource import TPUResource
 from platform_api.user import User, authorized_user, untrusted_user
 
 from .job_request_builder import ContainerBuilder
@@ -40,11 +41,15 @@ from .validators import (
 logger = logging.getLogger(__name__)
 
 
-def create_job_request_validator(*, allowed_gpu_models: Sequence[str]) -> t.Trafaret:
+def create_job_request_validator(
+    *, allowed_gpu_models: Sequence[str], allowed_tpu_resources: Sequence[TPUResource]
+) -> t.Trafaret:
     return t.Dict(
         {
             "container": create_container_request_validator(
-                allow_volumes=True, allowed_gpu_models=allowed_gpu_models
+                allow_volumes=True,
+                allowed_gpu_models=allowed_gpu_models,
+                allowed_tpu_resources=allowed_tpu_resources,
             ),
             t.Key("name", optional=True): create_job_name_validator(),
             t.Key("description", optional=True): t.String,
@@ -237,8 +242,13 @@ class JobsHandler:
         )
 
     async def _create_job_request_validator(self, user: User) -> t.Trafaret:
+        # TODO: rework `gpu_models` to be retrieved from `resources`
         gpu_models = await self._jobs_service.get_available_gpu_models(user)
-        return create_job_request_validator(allowed_gpu_models=gpu_models)
+        resources = await self._jobs_service.get_resource_pool_types(user)
+        tpu_resources = [resource.tpu for resource in resources if resource.tpu]
+        return create_job_request_validator(
+            allowed_gpu_models=gpu_models, allowed_tpu_resources=tpu_resources
+        )
 
     async def create_job(self, request: aiohttp.web.Request) -> aiohttp.web.Response:
         user = await authorized_user(request)
