@@ -290,6 +290,10 @@ class TestClusterConfigFactory:
             == kube_payload["node_label_preemptible"]
         )
 
+        assert orchestrator.tpu_resources == (
+            TPUResource(types=("v2-8", "v3-8"), software_versions=("1.13", "1.14")),
+        )
+
     def test_valid_storage_config_nfs(
         self,
         clusters_payload: Sequence[Dict[str, Any]],

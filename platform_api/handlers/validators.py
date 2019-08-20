@@ -5,6 +5,7 @@ from yarl import URL
 
 from platform_api.orchestrator.job import JOB_USER_NAMES_SEPARATOR
 from platform_api.orchestrator.job_request import JobStatus
+from platform_api.resource import TPUResource
 
 
 JOB_NAME_PATTERN = "^[a-z](?:-?[a-z0-9])*$"
@@ -87,6 +88,8 @@ def create_resources_validator(
     *,
     allow_any_gpu_models: bool = False,
     allowed_gpu_models: Optional[Sequence[str]] = None,
+    allow_any_tpu: bool = False,
+    allowed_tpu_resources: Sequence[TPUResource] = (),
 ) -> t.Trafaret:
     MAX_GPU_COUNT = 128
     MAX_CPU_COUNT = 128.0
@@ -98,20 +101,58 @@ def create_resources_validator(
             t.Key("shm", optional=True): t.Bool,
         }
     )
+
+    tpu_validator = create_tpu_validator(
+        allow_any=allow_any_tpu, allowed=allowed_tpu_resources
+    )
+
     gpu_validator = t.Int(gte=0, lte=MAX_GPU_COUNT)
     if allow_any_gpu_models:
         gpu_model_validator = t.String
     else:
         gpu_model_validator = t.Enum(*(allowed_gpu_models or []))
 
-    resources_gpu_validator = common_resources_validator + t.Dict(
-        {t.Key("gpu", optional=True): gpu_validator}
-    )
-    resources_gpu_model_validator = common_resources_validator + t.Dict(
-        {"gpu": gpu_validator, t.Key("gpu_model", optional=True): gpu_model_validator}
+    validators = [
+        common_resources_validator,
+        common_resources_validator
+        + t.Dict(
+            {
+                "gpu": gpu_validator,
+                t.Key("gpu_model", optional=True): gpu_model_validator,
+            }
+        ),
+    ]
+
+    if tpu_validator:
+        validators.append(common_resources_validator + t.Dict({"tpu": tpu_validator}))
+
+    tpu_validator = create_tpu_validator(
+        allow_any=allow_any_tpu, allowed=allowed_tpu_resources
     )
 
-    return resources_gpu_validator | resources_gpu_model_validator
+    return t.Or(*validators)
+
+
+def create_tpu_validator(
+    *, allow_any: bool = False, allowed: Sequence[TPUResource] = ()
+) -> Optional[t.Trafaret]:
+    if allow_any:
+        return t.Dict({"type": t.String, "software_version": t.String})
+
+    if not allowed:
+        return None
+
+    validators = []
+    for resource in allowed:
+        validators.append(
+            t.Dict(
+                {
+                    "type": t.Enum(*resource.types),
+                    "software_version": t.Enum(*resource.software_versions),
+                }
+            )
+        )
+    return t.Or(*validators)
 
 
 def create_container_validator(
@@ -119,6 +160,8 @@ def create_container_validator(
     allow_volumes: bool = False,
     allow_any_gpu_models: bool = False,
     allowed_gpu_models: Optional[Sequence[str]] = None,
+    allow_any_tpu: bool = False,
+    allowed_tpu_resources: Sequence[TPUResource] = (),
 ) -> t.Trafaret:
     """Create a validator for primitive container objects.
 
@@ -137,6 +180,8 @@ def create_container_validator(
             "resources": create_resources_validator(
                 allow_any_gpu_models=allow_any_gpu_models,
                 allowed_gpu_models=allowed_gpu_models,
+                allow_any_tpu=allow_any_tpu,
+                allowed_tpu_resources=allowed_tpu_resources,
             ),
             t.Key("http", optional=True): t.Dict(
                 {
@@ -158,15 +203,24 @@ def create_container_validator(
 
 
 def create_container_request_validator(
-    *, allow_volumes: bool = False, allowed_gpu_models: Optional[Sequence[str]] = None
+    *,
+    allow_volumes: bool = False,
+    allowed_gpu_models: Optional[Sequence[str]] = None,
+    allow_any_tpu: bool = False,
+    allowed_tpu_resources: Sequence[TPUResource] = (),
 ) -> t.Trafaret:
     return create_container_validator(
-        allow_volumes=allow_volumes, allowed_gpu_models=allowed_gpu_models
+        allow_volumes=allow_volumes,
+        allowed_gpu_models=allowed_gpu_models,
+        allow_any_tpu=allow_any_tpu,
+        allowed_tpu_resources=allowed_tpu_resources,
     )
 
 
 def create_container_response_validator() -> t.Trafaret:
-    return create_container_validator(allow_volumes=True, allow_any_gpu_models=True)
+    return create_container_validator(
+        allow_volumes=True, allow_any_gpu_models=True, allow_any_tpu=True
+    )
 
 
 def sanitize_dns_name(value: str) -> Optional[str]:

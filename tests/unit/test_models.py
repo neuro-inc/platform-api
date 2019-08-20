@@ -1,5 +1,5 @@
 from pathlib import PurePath
-from typing import Any, Dict
+from typing import Any, Dict, Sequence
 from unittest import mock
 
 import pytest
@@ -32,11 +32,13 @@ from platform_api.orchestrator.job_request import (
     ContainerHTTPServer,
     ContainerResources,
     ContainerSSHServer,
+    ContainerTPUResource,
     ContainerVolume,
     JobRequest,
     JobStatus,
 )
 from platform_api.orchestrator.jobs_storage import JobFilter
+from platform_api.resource import TPUResource
 from platform_api.user import User
 
 from .conftest import MockOrchestrator
@@ -185,6 +187,61 @@ class TestContainerRequestValidator:
         assert result["resources"]["gpu"] == 1
         assert result["resources"]["gpu_model"] == "unknown"
 
+    def test_gpu_tpu_conflict(self) -> None:
+        payload = {
+            "image": "testimage",
+            "resources": {
+                "cpu": 0.1,
+                "memory_mb": 16,
+                "gpu": 1,
+                "tpu": {"type": "v2-8", "software_version": "1.14"},
+            },
+        }
+        validator = create_container_request_validator()
+        with pytest.raises(ValueError, match="tpu is not allowed key"):
+            validator.check(payload)
+
+    @pytest.mark.parametrize(
+        "allowed_tpu_resources",
+        ([], [TPUResource(types=["v2-8"], software_versions=["1.14"])]),
+    )
+    def test_tpu_unavailable(
+        self, allowed_tpu_resources: Sequence[TPUResource]
+    ) -> None:
+        payload = {
+            "image": "testimage",
+            "resources": {
+                "cpu": 0.1,
+                "memory_mb": 16,
+                "tpu": {"type": "unknown", "software_version": "unknown"},
+            },
+        }
+        validator = create_container_request_validator(
+            allowed_tpu_resources=allowed_tpu_resources
+        )
+        with pytest.raises(ValueError):
+            validator.check(payload)
+
+    def test_tpu(self) -> None:
+        payload = {
+            "image": "testimage",
+            "resources": {
+                "cpu": 0.1,
+                "memory_mb": 16,
+                "tpu": {"type": "v2-8", "software_version": "1.14"},
+            },
+        }
+        validator = create_container_request_validator(
+            allowed_tpu_resources=[
+                TPUResource(types=["v2-8"], software_versions=["1.14"])
+            ]
+        )
+        result = validator.check(payload)
+        assert result["resources"]["tpu"] == {
+            "type": "v2-8",
+            "software_version": "1.14",
+        }
+
     def test_with_entrypoint_and_cmd(self, payload: Dict[str, Any]) -> None:
         payload["entrypoint"] = "/script.sh"
         payload["command"] = "arg1 arg2 arg3"
@@ -210,6 +267,22 @@ class TestContainerResponseValidator:
         assert result["resources"]["gpu"] == 1
         assert result["resources"]["gpu_model"] == "unknown"
 
+    def test_tpu(self) -> None:
+        payload = {
+            "image": "testimage",
+            "resources": {
+                "cpu": 0.1,
+                "memory_mb": 16,
+                "tpu": {"type": "v2-8", "software_version": "1.14"},
+            },
+        }
+        validator = create_container_response_validator()
+        result = validator.check(payload)
+        assert result["resources"]["tpu"] == {
+            "type": "v2-8",
+            "software_version": "1.14",
+        }
+
 
 class TestJobContainerToJson:
     @pytest.fixture
@@ -224,6 +297,26 @@ class TestJobContainerToJson:
             "env": {},
             "image": "image",
             "resources": {"cpu": 0.1, "memory_mb": 16},
+            "volumes": [],
+        }
+
+    def test_tpu_resource(self, storage_config: StorageConfig) -> None:
+        container = Container(
+            image="image",
+            resources=ContainerResources(
+                cpu=0.1,
+                memory_mb=16,
+                tpu=ContainerTPUResource(type="v2-8", software_version="1.14"),
+            ),
+        )
+        assert convert_job_container_to_json(container, storage_config) == {
+            "env": {},
+            "image": "image",
+            "resources": {
+                "cpu": 0.1,
+                "memory_mb": 16,
+                "tpu": {"type": "v2-8", "software_version": "1.14"},
+            },
             "volumes": [],
         }
 

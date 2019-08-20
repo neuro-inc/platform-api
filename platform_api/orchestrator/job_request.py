@@ -54,27 +54,56 @@ class ContainerVolume:
 
 
 @dataclass(frozen=True)
+class ContainerTPUResource:
+    type: str
+    software_version: str
+
+    @classmethod
+    def from_primitive(cls, payload: Dict[str, Any]) -> "ContainerTPUResource":
+        return cls(type=payload["type"], software_version=payload["software_version"])
+
+    def to_primitive(self) -> Dict[str, Any]:
+        return {"type": self.type, "software_version": self.software_version}
+
+
+@dataclass(frozen=True)
 class ContainerResources:
     cpu: float
     memory_mb: int
     gpu: Optional[int] = None
     gpu_model_id: Optional[str] = None
     shm: Optional[bool] = None
+    tpu: Optional[ContainerTPUResource] = None
 
     @classmethod
     def from_primitive(cls, payload: Dict[str, Any]) -> "ContainerResources":
+        tpu = None
+        if payload.get("tpu"):
+            tpu = ContainerTPUResource.from_primitive(payload["tpu"])
         return cls(
             cpu=payload["cpu"],
             memory_mb=payload["memory_mb"],
             gpu=payload.get("gpu"),
             gpu_model_id=payload.get("gpu_model_id"),
             shm=payload.get("shm"),
+            tpu=tpu,
         )
 
     def to_primitive(self) -> Dict[str, Any]:
-        return asdict(self)
+        payload: Dict[str, Any] = {"cpu": self.cpu, "memory_mb": self.memory_mb}
+        if self.gpu is not None:
+            payload["gpu"] = self.gpu
+            payload["gpu_model_id"] = self.gpu_model_id
+        if self.shm is not None:
+            payload["shm"] = self.shm
+        if self.tpu:
+            payload["tpu"] = self.tpu.to_primitive()
+        return payload
 
     def check_fit_into_pool_type(self, pool_type: ResourcePoolType) -> bool:
+        return self._check_gpu(pool_type) and self._check_tpu(pool_type)
+
+    def _check_gpu(self, pool_type: ResourcePoolType) -> bool:
         if not self.gpu:
             # container does not need GPU. we are good regardless of presence
             # of GPU in the pool type.
@@ -94,6 +123,22 @@ class ContainerResources:
 
         assert pool_type.gpu_model
         return self.gpu_model_id == pool_type.gpu_model
+
+    def _check_tpu(self, pool_type: ResourcePoolType) -> bool:
+        if not self.tpu:
+            # container does not need TPU. we are good regardless of presence
+            # of TPU in the pool type.
+            return True
+
+        # container needs TPU
+
+        if not pool_type.tpu:
+            return False
+
+        return (
+            self.tpu.type in pool_type.tpu.types
+            and self.tpu.software_version in pool_type.tpu.software_versions
+        )
 
 
 @dataclass(frozen=True)

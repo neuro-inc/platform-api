@@ -22,6 +22,7 @@ from platform_api.orchestrator.job_request import (
     ContainerHTTPServer,
     ContainerResources,
     ContainerSSHServer,
+    ContainerTPUResource,
     ContainerVolume,
     ContainerVolumeFactory,
     JobRequest,
@@ -264,6 +265,28 @@ class TestContainerBuilder:
             ),
         )
 
+    def test_from_payload_build_tpu(self) -> None:
+        storage_config = StorageConfig(host_mount_path=PurePath("/tmp"))
+        payload = {
+            "image": "testimage",
+            "resources": {
+                "cpu": 0.1,
+                "memory_mb": 128,
+                "tpu": {"type": "v2-8", "software_version": "1.14"},
+            },
+        }
+        container = ContainerBuilder.from_container_payload(
+            payload, storage_config=storage_config
+        ).build()
+        assert container == Container(
+            image="testimage",
+            resources=ContainerResources(
+                cpu=0.1,
+                memory_mb=128,
+                tpu=ContainerTPUResource(type="v2-8", software_version="1.14"),
+            ),
+        )
+
     def test_from_payload_build_with_ssh(self) -> None:
         storage_config = StorageConfig(host_mount_path=PurePath("/tmp"))
         payload = {
@@ -344,13 +367,7 @@ def job_request_payload() -> Dict[str, Any]:
         "description": "Description of the testjob",
         "container": {
             "image": "testimage",
-            "resources": {
-                "cpu": 1,
-                "memory_mb": 128,
-                "gpu": None,
-                "gpu_model_id": None,
-                "shm": None,
-            },
+            "resources": {"cpu": 1, "memory_mb": 128},
             "command": None,
             "env": {"testvar": "testval"},
             "volumes": [
@@ -1058,6 +1075,16 @@ class TestJobRequest:
         self, job_request_payload: Dict[str, Any]
     ) -> None:
         job_request_payload["container"]["ssh_server"] = {"port": 678}
+        actual = JobRequest.to_primitive(JobRequest.from_primitive(job_request_payload))
+        assert actual == job_request_payload
+
+    def test_to_and_from_primitive_with_tpu(
+        self, job_request_payload: Dict[str, Any]
+    ) -> None:
+        job_request_payload["container"]["resources"]["tpu"] = {
+            "type": "v2-8",
+            "software_version": "1.14",
+        }
         actual = JobRequest.to_primitive(JobRequest.from_primitive(job_request_payload))
         assert actual == job_request_payload
 
