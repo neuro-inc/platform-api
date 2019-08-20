@@ -22,6 +22,7 @@ from typing import (
     NoReturn,
     Optional,
     Sequence,
+    Tuple,
     Type,
     Union,
 )
@@ -38,6 +39,7 @@ from platform_api.utils.stream import Stream
 
 from .job_request import (
     ContainerResources,
+    ContainerTPUResource,
     ContainerVolume,
     JobError,
     JobNotFoundException,
@@ -159,8 +161,15 @@ class Resources:
     memory: int
     gpu: Optional[int] = None
     shm: Optional[bool] = None
+    tpu_version: Optional[str] = None
+    tpu_cores: Optional[int] = None
 
     gpu_key: ClassVar[str] = "nvidia.com/gpu"
+    tpu_key_template: ClassVar[str] = "cloud-tpus.google.com/{version}"
+
+    def __post_init__(self) -> None:
+        if bool(self.tpu_version) ^ bool(self.tpu_cores):
+            raise ValueError("invalid TPU configuration")
 
     @property
     def cpu_mcores(self) -> str:
@@ -171,21 +180,41 @@ class Resources:
     def memory_mib(self) -> str:
         return f"{self.memory}Mi"
 
+    @property
+    def tpu_key(self) -> str:
+        return self.tpu_key_template.format(version=self.tpu_version)
+
     def to_primitive(self) -> Dict[str, Any]:
         payload: Dict[str, Any] = {
             "limits": {"cpu": self.cpu_mcores, "memory": self.memory_mib}
         }
         if self.gpu:
             payload["limits"][self.gpu_key] = self.gpu
+        if self.tpu_version:
+            payload["limits"][self.tpu_key] = self.tpu_cores
         return payload
 
     @classmethod
+    def _parse_tpu_resource(cls, tpu: ContainerTPUResource) -> Tuple[str, int]:
+        try:
+            tpu_version, tpu_cores = tpu.type.rsplit("-", 1)
+            return tpu_version, int(tpu_cores)
+        except (ValueError, TypeError):
+            raise ValueError(f"invalid TPU type format: '{tpu.type}'")
+
+    @classmethod
     def from_container_resources(cls, resources: ContainerResources) -> "Resources":
+        kwargs: Dict[str, Any] = {}
+        if resources.tpu:
+            kwargs["tpu_version"], kwargs["tpu_cores"] = cls._parse_tpu_resource(
+                resources.tpu
+            )
         return cls(
             cpu=resources.cpu,
             memory=resources.memory_mb,
             gpu=resources.gpu,
             shm=resources.shm,
+            **kwargs,
         )
 
 

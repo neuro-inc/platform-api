@@ -9,6 +9,7 @@ from platform_api.orchestrator.job import JobStatusItem, JobStatusReason
 from platform_api.orchestrator.job_request import (
     Container,
     ContainerResources,
+    ContainerTPUResource,
     ContainerVolume,
     JobError,
     JobRequest,
@@ -605,6 +606,10 @@ class TestJobStatusItemFactory:
 
 
 class TestResources:
+    def test_invalid_tpu(self) -> None:
+        with pytest.raises(ValueError, match="invalid TPU configuration"):
+            Resources(cpu=0.5, memory=1024, tpu_version="v2")
+
     def test_to_primitive(self) -> None:
         resources = Resources(cpu=0.5, memory=1024)
         assert resources.to_primitive() == {
@@ -617,10 +622,39 @@ class TestResources:
             "limits": {"cpu": "500m", "memory": "1024Mi", "nvidia.com/gpu": 2}
         }
 
+    def test_to_primitive_tpu(self) -> None:
+        resources = Resources(cpu=0.5, memory=1024, tpu_version="v2", tpu_cores=8)
+        assert resources.to_primitive() == {
+            "limits": {
+                "cpu": "500m",
+                "memory": "1024Mi",
+                "cloud-tpus.google.com/v2": 8,
+            }
+        }
+
     def test_from_container_resources(self) -> None:
         container_resources = ContainerResources(cpu=1, memory_mb=128, gpu=1)
         resources = Resources.from_container_resources(container_resources)
         assert resources == Resources(cpu=1, memory=128, gpu=1)
+
+    def test_from_container_resources_tpu(self) -> None:
+        container_resources = ContainerResources(
+            cpu=1,
+            memory_mb=128,
+            tpu=ContainerTPUResource(type="v2-8", software_version="1.14"),
+        )
+        resources = Resources.from_container_resources(container_resources)
+        assert resources == Resources(cpu=1, memory=128, tpu_version="v2", tpu_cores=8)
+
+    @pytest.mark.parametrize("type_", ("v2", "v2-nan", "v2-", "-"))
+    def test_from_container_resources_tpu_invalid_type(self, type_: str) -> None:
+        container_resources = ContainerResources(
+            cpu=1,
+            memory_mb=128,
+            tpu=ContainerTPUResource(type=type_, software_version="1.14"),
+        )
+        with pytest.raises(ValueError, match=f"invalid TPU type format: '{type_}'"):
+            Resources.from_container_resources(container_resources)
 
 
 class TestIngressRule:
