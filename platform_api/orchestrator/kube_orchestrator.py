@@ -183,8 +183,7 @@ class KubeOrchestrator(Orchestrator):
 
     async def _create_user_network_policy(self, job: Job) -> None:
         name = self._get_user_resource_name(job)
-        # TODO (artem) maybe `pod_labels = self._get_POD_labels(job)`?
-        pod_labels = self._get_user_labels(job)
+        pod_labels = self._get_user_pod_labels(job)
         try:
             await self._client.create_default_network_policy(
                 name, pod_labels, namespace_name=self._kube_config.namespace
@@ -200,7 +199,7 @@ class KubeOrchestrator(Orchestrator):
         node_selector = await self._get_pod_node_selector(job)
         tolerations = self._get_pod_tolerations(job)
         node_affinity = self._get_pod_node_affinity(job)
-        labels = self._get_job_resource_labels(job)
+        labels = self._get_pod_labels(job)
         return PodDescriptor.from_job_request(
             self._storage_volume,
             job.request,
@@ -211,15 +210,13 @@ class KubeOrchestrator(Orchestrator):
             labels=labels,
         )
 
-    def _get_user_labels(self, job: Job) -> Dict[str, str]:
+    def _get_user_pod_labels(self, job: Job) -> Dict[str, str]:
         return {"platform.neuromation.io/user": job.owner}
 
-    def _get_job_labels(self, job: Job) -> Dict[str, str]:
-        return {"platform.neuromation.io/job": job.id}
-
-    def _get_job_resource_labels(self, job: Job) -> Dict[str, str]:
-        """ Returns labels that all job's resources will have. """
-        return {**self._get_user_labels(job), **self._get_job_labels(job)}
+    def _get_pod_labels(self, job: Job) -> Dict[str, str]:
+        labels = {"platform.neuromation.io/job": job.id}
+        labels.update(self._get_user_pod_labels(job))
+        return labels
 
     async def start_job(self, job: Job, token: str) -> JobStatus:
         await self._create_docker_secret(job, token)
