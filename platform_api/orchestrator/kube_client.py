@@ -223,7 +223,7 @@ class Service:
         if self.cluster_ip:
             service_descriptor["spec"]["clusterIP"] = self.cluster_ip
         if self.labels:
-            service_descriptor["metadata"]["labels"] = self.labels
+            service_descriptor["metadata"]["labels"] = self.labels.copy()
 
         self._add_port_map(
             self.port, self.target_port, "http", service_descriptor["spec"]["ports"]
