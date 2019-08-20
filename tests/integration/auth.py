@@ -189,6 +189,15 @@ async def regular_user(regular_user_factory: Callable[[], Awaitable[_User]]) -> 
 
 
 @pytest.fixture
+async def admin_user(
+    regular_user_factory: Callable[
+        [Optional[str], Optional[Quota], Optional[str]], Awaitable[_User]
+    ],
+) -> _User:
+    return await regular_user_factory("admin", None, None)
+
+
+@pytest.fixture
 async def regular_user_with_missing_cluster_name(
     regular_user_factory: Callable[
         [Optional[str], Optional[Quota], Optional[str]], Awaitable[_User]

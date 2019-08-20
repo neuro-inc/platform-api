@@ -4,8 +4,9 @@ from typing import Any, AsyncIterator, Awaitable, Callable, Dict, Sequence
 
 import aiohttp.web
 from aiohttp.web import HTTPUnauthorized
+from aiohttp_security import check_permission
 from async_exit_stack import AsyncExitStack
-from neuro_auth_client import AuthClient
+from neuro_auth_client import AuthClient, Permission
 from neuro_auth_client.security import AuthScheme, setup_security
 from notifications_client import Client as NotificationsClient
 
@@ -49,10 +50,10 @@ class ApiHandler:
     async def handle_clusters_sync(
         self, request: aiohttp.web.Request
     ) -> aiohttp.web.Response:
-        # user = await authorized_user(request)
-        # permission = Permission(uri="cluster://", action="manage")
-        # logger.info("Checking whether %r has %r", user, permission)
-        # await check_permission(request, permission.action, [permission])
+        user = await authorized_user(request)
+        permission = Permission(uri="cluster://", action="manage")
+        logger.info("Checking whether %r has %r", user, permission)
+        await check_permission(request, permission.action, [permission])
 
         cluster_configs_future = get_cluster_configs(self._config)
         cluster_configs = [
