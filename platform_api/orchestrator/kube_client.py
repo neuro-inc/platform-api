@@ -332,7 +332,7 @@ class Ingress:
         rules: List[Any] = [rule.to_primitive() for rule in self.rules] or [None]
         metadata = {"name": self.name, "annotations": self.annotations}
         if self.labels:
-            metadata["labels"] = self.labels
+            metadata["labels"] = self.labels.copy()
         primitive = {"metadata": metadata, "spec": {"rules": rules}}
         return primitive
 
