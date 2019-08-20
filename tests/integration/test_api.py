@@ -16,6 +16,7 @@ from neuro_auth_client import Permission
 from neuro_auth_client.client import Quota
 
 from tests.conftest import random_str
+from tests.integration.test_config_client import create_config_api
 
 from .api import ApiConfig, JobsClient
 from .auth import _AuthClient, _User
@@ -37,7 +38,7 @@ def cluster_configs_payload() -> List[Dict[str, Any]]:
             },
             "orchestrator": {
                 "kubernetes": {
-                    "url": "https://1.2.3.4:8443",
+                    "url": "http://127.0.0.1:8443",
                     "ca_data": "certificate",
                     "auth_type": "token",
                     "token": "auth_token",
@@ -83,6 +84,30 @@ class TestApi:
             assert resp.status == HTTPOk.status_code
             result = await resp.json()
             assert result == {}
+
+    @pytest.mark.asyncio
+    async def test_clusters_sync(
+        self,
+        api: ApiConfig,
+        client: aiohttp.ClientSession,
+        regular_user: _User,
+        cluster_configs_payload: List[Dict[str, Any]],
+    ) -> None:
+        # have no additional clusters - we'll have just one (the default)
+        async with create_config_api([]):
+            url = api.clusters_sync_url
+            async with client.get(url, headers=regular_user.headers) as resp:
+                assert resp.status == HTTPOk.status_code
+                result = await resp.json()
+                assert result == {"record_count": 1}
+
+        # add one more cluster to the config (named "cluster_name") - we'll have two now
+        async with create_config_api(cluster_configs_payload):
+            url = api.clusters_sync_url
+            async with client.get(url, headers=regular_user.headers) as resp:
+                assert resp.status == HTTPOk.status_code
+                result = await resp.json()
+                assert result == {"record_count": 2}
 
     @pytest.mark.asyncio
     async def test_config(

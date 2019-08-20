@@ -501,7 +501,7 @@ def config_factory(
     def _factory(**kwargs: Any) -> Config:
         server_config = ServerConfig()
         database_config = DatabaseConfig(redis=redis_config)
-        config_client = ConfigClient(base_url=URL("http://platformconfig/api/v1"))
+        config_client = ConfigClient(base_url=URL("http://localhost:8082/api/v1"))
         return Config(
             server=server_config,
             database=database_config,
