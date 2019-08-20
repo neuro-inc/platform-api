@@ -154,6 +154,7 @@ class TestPodDescriptor:
             tolerations=tolerations,
             node_affinity=node_affinity,
             labels={"testlabel": "testvalue"},
+            annotations={"testa": "testv"},
         )
         assert pod.name == "testname"
         assert pod.image == "testimage"
@@ -163,6 +164,7 @@ class TestPodDescriptor:
             "metadata": {
                 "name": "testname",
                 "labels": {"job": "testname", "testlabel": "testvalue"},
+                "annotations": {"testa": "testv"},
             },
             "spec": {
                 "automountServiceAccountToken": False,
@@ -458,6 +460,20 @@ class TestPodDescriptor:
         assert pod.volumes == [volume]
         assert pod.resources == Resources(cpu=1, memory=128, gpu=1)
 
+    def test_from_job_request_tpu(self) -> None:
+        container = Container(
+            image="testimage",
+            resources=ContainerResources(
+                cpu=1,
+                memory_mb=128,
+                tpu=ContainerTPUResource(type="v2-8", software_version="1.14"),
+            ),
+        )
+        volume = HostVolume(name="testvolume", path=PurePath("/tmp"))
+        job_request = JobRequest.create(container)
+        pod = PodDescriptor.from_job_request(volume, job_request)
+        assert pod.annotations == {"tf-version.cloud-tpus.google.com": "1.14"}
+
     def test_from_primitive(self) -> None:
         payload = {
             "kind": "Pod",
@@ -625,11 +641,7 @@ class TestResources:
     def test_to_primitive_tpu(self) -> None:
         resources = Resources(cpu=0.5, memory=1024, tpu_version="v2", tpu_cores=8)
         assert resources.to_primitive() == {
-            "limits": {
-                "cpu": "500m",
-                "memory": "1024Mi",
-                "cloud-tpus.google.com/v2": 8,
-            }
+            "limits": {"cpu": "500m", "memory": "1024Mi", "cloud-tpus.google.com/v2": 8}
         }
 
     def test_from_container_resources(self) -> None:

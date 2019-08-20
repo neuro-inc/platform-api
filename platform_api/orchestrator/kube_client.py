@@ -558,6 +558,7 @@ class PodDescriptor:
     tolerations: List[Toleration] = field(default_factory=list)
     node_affinity: Optional[NodeAffinity] = None
     labels: Dict[str, str] = field(default_factory=dict)
+    annotations: Dict[str, str] = field(default_factory=dict)
 
     port: Optional[int] = None
     ssh_port: Optional[int] = None
@@ -573,6 +574,8 @@ class PodDescriptor:
     node_name: Optional[str] = None
 
     created_at: Optional[datetime] = None
+
+    tpu_version_annotation_key: ClassVar[str] = "tf-version.cloud-tpus.google.com"
 
     @classmethod
     def from_job_request(
@@ -608,6 +611,12 @@ class PodDescriptor:
             image_pull_secrets = [SecretRef(name) for name in secret_names]
         else:
             image_pull_secrets = []
+
+        annotations: Dict[str, str] = {}
+        if container.resources.tpu:
+            annotations[
+                cls.tpu_version_annotation_key
+            ] = container.resources.tpu.software_version
         return cls(
             name=job_request.job_id,
             image=container.image,
@@ -625,6 +634,7 @@ class PodDescriptor:
             tolerations=tolerations or [],
             node_affinity=node_affinity,
             labels=labels or {},
+            annotations=annotations,
         )
 
     @property
@@ -687,6 +697,8 @@ class PodDescriptor:
                 ],
             },
         }
+        if self.annotations:
+            payload["metadata"]["annotations"] = self.annotations.copy()
         if self.node_selector:
             payload["spec"]["nodeSelector"] = self.node_selector.copy()
         if self.node_affinity:
