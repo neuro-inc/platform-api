@@ -55,15 +55,20 @@ class ApiHandler:
         # await check_permission(request, permission.action, [permission])
 
         cluster_configs_future = get_cluster_configs(self._config)
+        cluster_configs = [
+            cluster_config for cluster_config in await cluster_configs_future
+        ]
         cluster_registry = self._jobs_service._cluster_registry
+        old_record_count = len(cluster_registry)
         [
             await cluster_registry.add(cluster_config)
-            for cluster_config in await cluster_configs_future
+            for cluster_config in cluster_configs
         ]
-        record_count = len(cluster_registry)
+        new_record_count = len(cluster_registry)
 
-        # returning JSON for testing purposes only, to be removed
-        return aiohttp.web.json_response({"record_count": record_count})
+        return aiohttp.web.json_response(
+            {"old_record_count": old_record_count, "new_record_count": new_record_count}
+        )
 
     async def handle_config(self, request: aiohttp.web.Request) -> aiohttp.web.Response:
         data: Dict[str, Any] = {}

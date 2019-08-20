@@ -99,7 +99,7 @@ class TestApi:
             async with client.get(url, headers=regular_user.headers) as resp:
                 assert resp.status == HTTPOk.status_code
                 result = await resp.json()
-                assert result == {"record_count": 1}
+                assert result == {"old_record_count": 1, "new_record_count": 1}
 
         # add one more cluster to the config (named "cluster_name") - we'll have two now
         async with create_config_api(cluster_configs_payload):
@@ -107,7 +107,7 @@ class TestApi:
             async with client.get(url, headers=regular_user.headers) as resp:
                 assert resp.status == HTTPOk.status_code
                 result = await resp.json()
-                assert result == {"record_count": 2}
+                assert result == {"old_record_count": 1, "new_record_count": 2}
 
     @pytest.mark.asyncio
     async def test_config(
