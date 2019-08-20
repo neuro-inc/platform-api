@@ -929,7 +929,7 @@ class TestKubeOrchestrator:
         }
 
     @pytest.mark.asyncio
-    async def test_job_resources_labels(
+    async def test_job_service_labels(
         self,
         kube_config: KubeConfig,
         kube_orchestrator: KubeOrchestrator,
@@ -948,27 +948,45 @@ class TestKubeOrchestrator:
         await delete_job_later(job)
         await job.start()
 
-        expected_default_labels = {
+        pod_name = job.id
+        await kube_client.wait_pod_is_running(pod_name=pod_name, timeout_s=60.0)
+
+        service_name = job.id
+        service = await kube_client.get_service(service_name)
+        assert service.labels == {
             "platform.neuromation.io/job": job.id,
             "platform.neuromation.io/user": job.owner,
         }
 
+    @pytest.mark.asyncio
+    async def test_job_ingress_labels(
+        self,
+        kube_config: KubeConfig,
+        kube_orchestrator: KubeOrchestrator,
+        kube_client: MyKubeClient,
+        delete_job_later: Callable[[Job], Awaitable[None]],
+    ) -> None:
+        container = Container(
+            image="ubuntu",
+            command="sleep 1h",
+            resources=ContainerResources(cpu=0.1, memory_mb=16),
+            http_server=ContainerHTTPServer(port=80),
+        )
+        job = MyJob(
+            orchestrator=kube_orchestrator, job_request=JobRequest.create(container)
+        )
+        await delete_job_later(job)
+        await job.start()
+
         pod_name = job.id
         await kube_client.wait_pod_is_running(pod_name=pod_name, timeout_s=60.0)
 
-        # check pod labels:
-        pod = await kube_client.get_pod(pod_name)
-        assert pod.labels == {"job": job.id, **expected_default_labels}
-
-        # check service labels:
-        service_name = job.id
-        service = await kube_client.get_service(service_name)
-        assert service.labels == expected_default_labels
-
-        # check ingress labels:
         ingress_name = job.id
         ingress = await kube_client.get_ingress(ingress_name)
-        assert ingress.labels == expected_default_labels
+        assert ingress.labels == {
+            "platform.neuromation.io/job": job.id,
+            "platform.neuromation.io/user": job.owner,
+        }
 
     @pytest.mark.asyncio
     async def test_job_check_ingress_annotations_jobs_ingress_class_nginx(
