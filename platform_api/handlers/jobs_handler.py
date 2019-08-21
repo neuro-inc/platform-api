@@ -382,7 +382,7 @@ class JobsHandler:
         )
         if missing:
             error_details = {
-                "resources": [self._permission_to_primitive(p) for p in missing]
+                "missing": [self._permission_to_primitive(p) for p in missing]
             }
             raise aiohttp.web.HTTPForbidden(
                 text=json.dumps(error_details), content_type="application/json"
