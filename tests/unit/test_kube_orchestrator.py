@@ -778,6 +778,42 @@ class TestIngress:
             },
         }
 
+    def test_to_primitive_with_labels(self) -> None:
+        ingress = Ingress(
+            name="testingress",
+            rules=[
+                IngressRule(host="host1", service_name="testservice", service_port=1234)
+            ],
+            labels={"test-label-1": "test-value-1", "test-label-2": "test-value-2"},
+        )
+        assert ingress.to_primitive() == {
+            "metadata": {
+                "name": "testingress",
+                "annotations": {},
+                "labels": {
+                    "test-label-1": "test-value-1",
+                    "test-label-2": "test-value-2",
+                },
+            },
+            "spec": {
+                "rules": [
+                    {
+                        "host": "host1",
+                        "http": {
+                            "paths": [
+                                {
+                                    "backend": {
+                                        "serviceName": "testservice",
+                                        "servicePort": 1234,
+                                    }
+                                }
+                            ]
+                        },
+                    }
+                ]
+            },
+        }
+
 
 class TestService:
     @pytest.fixture
