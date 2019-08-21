@@ -824,6 +824,42 @@ class TestIngress:
             },
         }
 
+    def test_to_primitive_with_labels(self) -> None:
+        ingress = Ingress(
+            name="testingress",
+            rules=[
+                IngressRule(host="host1", service_name="testservice", service_port=1234)
+            ],
+            labels={"test-label-1": "test-value-1", "test-label-2": "test-value-2"},
+        )
+        assert ingress.to_primitive() == {
+            "metadata": {
+                "name": "testingress",
+                "annotations": {},
+                "labels": {
+                    "test-label-1": "test-value-1",
+                    "test-label-2": "test-value-2",
+                },
+            },
+            "spec": {
+                "rules": [
+                    {
+                        "host": "host1",
+                        "http": {
+                            "paths": [
+                                {
+                                    "backend": {
+                                        "serviceName": "testservice",
+                                        "servicePort": 1234,
+                                    }
+                                }
+                            ]
+                        },
+                    }
+                ]
+            },
+        }
+
 
 class TestService:
     @pytest.fixture
@@ -840,6 +876,15 @@ class TestService:
     def test_to_primitive(self, service_payload: Dict[str, Dict[str, Any]]) -> None:
         service = Service(name="testservice", target_port=8080)
         assert service.to_primitive() == service_payload
+
+    def test_to_primitive_with_labels(
+        self, service_payload: Dict[str, Dict[str, Any]]
+    ) -> None:
+        labels = {"label-name": "label-value"}
+        expected_payload = service_payload.copy()
+        expected_payload["metadata"]["labels"] = labels
+        service = Service(name="testservice", target_port=8080, labels=labels)
+        assert service.to_primitive() == expected_payload
 
     def test_to_primitive_load_balancer(
         self, service_payload: Dict[str, Dict[str, Any]]
@@ -860,6 +905,15 @@ class TestService:
     def test_from_primitive(self, service_payload: Dict[str, Dict[str, Any]]) -> None:
         service = Service.from_primitive(service_payload)
         assert service == Service(name="testservice", target_port=8080)
+
+    def test_from_primitive_with_labels(
+        self, service_payload: Dict[str, Dict[str, Any]]
+    ) -> None:
+        labels = {"label-name": "label-value"}
+        input_payload = service_payload.copy()
+        input_payload["metadata"]["labels"] = labels
+        service = Service.from_primitive(input_payload)
+        assert service == Service(name="testservice", target_port=8080, labels=labels)
 
     def test_from_primitive_node_port(
         self, service_payload: Dict[str, Dict[str, Any]]

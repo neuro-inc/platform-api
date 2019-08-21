@@ -506,10 +506,13 @@ class TestKubeOrchestrator:
             IngressRule(host="host3", service_name="service3", service_port=83),
         ]
         annotations = {"key/1": "value 1", "key/2": "value 2"}
-        expected_ingress = Ingress(name=name, rules=rules, annotations=annotations)
+        labels = {"label/1": "label-value-1", "label/2": "label-value-2"}
+        expected_ingress = Ingress(
+            name=name, rules=rules, annotations=annotations, labels=labels
+        )
 
         created_ingress = await kube_client.create_ingress(
-            name=name, rules=rules, annotations=annotations
+            name=name, rules=rules, annotations=annotations, labels=labels
         )
         assert created_ingress == expected_ingress
 
@@ -566,12 +569,21 @@ class TestKubeOrchestrator:
     @pytest.mark.asyncio
     async def test_service(self, kube_client: KubeClient) -> None:
         service_name = f"job-{uuid.uuid4()}"
-        service = Service(name=service_name, target_port=8080)
+        labels = {"label1": f"value-{uuid.uuid4()}", "label2": f"value-{uuid.uuid4()}"}
+        service = Service(name=service_name, target_port=8080, labels=labels)
         try:
             result_service = await kube_client.create_service(service)
             assert result_service.name == service_name
             assert result_service.target_port == 8080
             assert result_service.port == 80
+            assert result_service.labels == labels
+
+            service = await kube_client.get_service(service_name)
+            assert service.name == service_name
+            assert service.target_port == 8080
+            assert service.port == 80
+            assert service.labels == labels
+
         finally:
             await kube_client.delete_service(service_name)
 
@@ -915,6 +927,66 @@ class TestKubeOrchestrator:
         raw_policy = await kube_client.get_network_policy(policy_name)
         assert raw_policy["spec"]["podSelector"]["matchLabels"] == {
             "platform.neuromation.io/user": job.owner
+        }
+
+    @pytest.mark.asyncio
+    async def test_job_service_labels(
+        self,
+        kube_config: KubeConfig,
+        kube_orchestrator: KubeOrchestrator,
+        kube_client: MyKubeClient,
+        delete_job_later: Callable[[Job], Awaitable[None]],
+    ) -> None:
+        container = Container(
+            image="ubuntu",
+            command="sleep 1h",
+            resources=ContainerResources(cpu=0.1, memory_mb=16),
+            http_server=ContainerHTTPServer(port=80),
+        )
+        job = MyJob(
+            orchestrator=kube_orchestrator, job_request=JobRequest.create(container)
+        )
+        await delete_job_later(job)
+        await job.start()
+
+        pod_name = job.id
+        await kube_client.wait_pod_is_running(pod_name=pod_name, timeout_s=60.0)
+
+        service_name = job.id
+        service = await kube_client.get_service(service_name)
+        assert service.labels == {
+            "platform.neuromation.io/job": job.id,
+            "platform.neuromation.io/user": job.owner,
+        }
+
+    @pytest.mark.asyncio
+    async def test_job_ingress_labels(
+        self,
+        kube_config: KubeConfig,
+        kube_orchestrator: KubeOrchestrator,
+        kube_client: MyKubeClient,
+        delete_job_later: Callable[[Job], Awaitable[None]],
+    ) -> None:
+        container = Container(
+            image="ubuntu",
+            command="sleep 1h",
+            resources=ContainerResources(cpu=0.1, memory_mb=16),
+            http_server=ContainerHTTPServer(port=80),
+        )
+        job = MyJob(
+            orchestrator=kube_orchestrator, job_request=JobRequest.create(container)
+        )
+        await delete_job_later(job)
+        await job.start()
+
+        pod_name = job.id
+        await kube_client.wait_pod_is_running(pod_name=pod_name, timeout_s=60.0)
+
+        ingress_name = job.id
+        ingress = await kube_client.get_ingress(ingress_name)
+        assert ingress.labels == {
+            "platform.neuromation.io/job": job.id,
+            "platform.neuromation.io/user": job.owner,
         }
 
     @pytest.mark.asyncio
