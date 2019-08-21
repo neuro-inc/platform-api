@@ -428,6 +428,28 @@ async def kube_node_gpu(
 
 
 @pytest.fixture
+async def kube_node_tpu(
+    kube_config: KubeConfig,
+    kube_client: MyKubeClient,
+    delete_node_later: Callable[[str], Awaitable[None]],
+) -> AsyncIterator[str]:
+    node_name = str(uuid.uuid4())
+    await delete_node_later(node_name)
+
+    await kube_client.create_node(
+        node_name,
+        capacity={
+            "pods": "110",
+            "memory": "1Gi",
+            "cpu": 2,
+            "cloud-tpus.google.com/v2": 8,
+        },
+    )
+
+    yield node_name
+
+
+@pytest.fixture
 async def kube_node_preemptible(
     kube_config: KubeConfig,
     kube_client: MyKubeClient,

@@ -16,6 +16,7 @@ from platform_api.orchestrator.job_request import (
     Container,
     ContainerHTTPServer,
     ContainerResources,
+    ContainerTPUResource,
     ContainerVolume,
     JobError,
     JobNotFoundException,
@@ -1538,6 +1539,34 @@ class TestNodeSelector:
             image="ubuntu",
             command="true",
             resources=ContainerResources(cpu=0.1, memory_mb=128, gpu=1),
+        )
+        job = MyJob(
+            orchestrator=kube_orchestrator, job_request=JobRequest.create(container)
+        )
+        await delete_job_later(job)
+        await kube_orchestrator.start_job(job, token="test-token")
+        pod_name = job.id
+
+        await kube_client.wait_pod_scheduled(pod_name, node_name)
+
+    @pytest.mark.asyncio
+    async def test_tpu(
+        self,
+        kube_config: KubeConfig,
+        kube_client: MyKubeClient,
+        delete_job_later: Callable[[Job], Awaitable[None]],
+        kube_orchestrator: KubeOrchestrator,
+        kube_node_tpu: str,
+    ) -> None:
+        node_name = kube_node_tpu
+        container = Container(
+            image="ubuntu",
+            command="true",
+            resources=ContainerResources(
+                cpu=0.1,
+                memory_mb=128,
+                tpu=ContainerTPUResource(type="v2-8", software_version="1.14"),
+            ),
         )
         job = MyJob(
             orchestrator=kube_orchestrator, job_request=JobRequest.create(container)
