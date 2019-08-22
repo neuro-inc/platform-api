@@ -194,6 +194,36 @@ class KubeOrchestrator(Orchestrator):
                 f"Default network policy for user '{job.owner}' already exists."
             )
 
+    async def _create_pod_network_policy(self, job: Job) -> None:
+        tpu_ipv4_cidr_block = self._kube_config.tpu_ipv4_cidr_block
+        if not job.request.container.resources.tpu or not tpu_ipv4_cidr_block:
+            # no need to create a network policy
+            return
+
+        name = self._get_job_pod_name(job)
+        pod_labels = self._get_job_labels(job)
+        rules: List[Dict[str, Any]] = [
+            # allowing the pod to connect to TPU nodes within internal network
+            {"to": [{"ipBlock": {"cidr": tpu_ipv4_cidr_block}}]}
+        ]
+        labels = self._get_pod_labels(job)
+        await self._client.create_egress_network_policy(
+            name,
+            pod_labels=pod_labels,
+            rules=rules,
+            namespace_name=self._kube_config.namespace,
+            labels=labels,
+        )
+
+    async def _delete_pod_network_policy(self, job: Job) -> None:
+        name = self._get_job_pod_name(job)
+        try:
+            await self._client.delete_network_policy(
+                name, namespace_name=self._kube_config.namespace
+            )
+        except Exception as e:
+            logger.warning(f"Failed to remove network policy {name}: {e}")
+
     async def _create_pod_descriptor(self, job: Job) -> PodDescriptor:
         secret_names = [self._get_docker_secret_name(job)]
         node_selector = await self._get_pod_node_selector(job)
@@ -213,14 +243,18 @@ class KubeOrchestrator(Orchestrator):
     def _get_user_pod_labels(self, job: Job) -> Dict[str, str]:
         return {"platform.neuromation.io/user": job.owner}
 
+    def _get_job_labels(self, job: Job) -> Dict[str, str]:
+        return {"platform.neuromation.io/job": job.id}
+
     def _get_pod_labels(self, job: Job) -> Dict[str, str]:
-        labels = {"platform.neuromation.io/job": job.id}
+        labels = self._get_job_labels(job)
         labels.update(self._get_user_pod_labels(job))
         return labels
 
     async def start_job(self, job: Job, token: str) -> JobStatus:
         await self._create_docker_secret(job, token)
         await self._create_user_network_policy(job)
+        await self._create_pod_network_policy(job)
 
         descriptor = await self._create_pod_descriptor(job)
         pod = await self._client.create_pod(descriptor)
@@ -433,6 +467,8 @@ class KubeOrchestrator(Orchestrator):
             await self._delete_ingress(job)
 
         await self._delete_service(job)
+
+        await self._delete_pod_network_policy(job)
 
         pod_id = self._get_job_pod_name(job)
         status = await self._client.delete_pod(pod_id)
