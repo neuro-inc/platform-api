@@ -768,6 +768,7 @@ class TestJobServiceNotification:
                 prev_status=None,
             )
         ]
+        prev_transition_time = job.status_history.current.transition_time
 
         mock_orchestrator.update_reason_to_return(JobStatusReason.CONTAINER_CREATING)
         mock_orchestrator.update_status_to_return(JobStatus.PENDING)
@@ -783,6 +784,7 @@ class TestJobServiceNotification:
                 description=None,
                 exit_code=None,
                 prev_status=JobStatus.PENDING,
+                prev_transition_time=prev_transition_time,
             )
         )
         assert notifications == mock_notifications_client.sent_notifications
@@ -810,6 +812,7 @@ class TestJobServiceNotification:
                 prev_status=None,
             )
         ]
+        prev_transition_time = job.status_history.current.transition_time
 
         mock_orchestrator.update_reason_to_return(JobStatusReason.ERR_IMAGE_PULL)
         await jobs_service.update_jobs_statuses()
@@ -824,6 +827,7 @@ class TestJobServiceNotification:
                 description="Image can not be pulled",
                 exit_code=None,
                 prev_status=JobStatus.PENDING,
+                prev_transition_time=prev_transition_time,
             )
         )
 
@@ -852,6 +856,7 @@ class TestJobServiceNotification:
                 prev_status=None,
             )
         ]
+        prev_transition_time = job.status_history.current.transition_time
 
         mock_orchestrator.update_reason_to_return(JobStatusReason.CONTAINER_CREATING)
         mock_orchestrator.update_status_to_return(JobStatus.PENDING)
@@ -867,8 +872,10 @@ class TestJobServiceNotification:
                 description=None,
                 exit_code=None,
                 prev_status=JobStatus.PENDING,
+                prev_transition_time=prev_transition_time,
             )
         )
+        prev_transition_time = job.status_history.current.transition_time
 
         mock_orchestrator.update_status_to_return(JobStatus.RUNNING)
         mock_orchestrator.update_reason_to_return(None)
@@ -884,8 +891,10 @@ class TestJobServiceNotification:
                 description=None,
                 exit_code=None,
                 prev_status=JobStatus.PENDING,
+                prev_transition_time=prev_transition_time,
             )
         )
+        prev_transition_time = job.status_history.current.transition_time
 
         mock_orchestrator.update_status_to_return(JobStatus.SUCCEEDED)
         mock_orchestrator.update_reason_to_return(None)
@@ -903,6 +912,7 @@ class TestJobServiceNotification:
                 description=None,
                 exit_code=0,
                 prev_status=JobStatus.RUNNING,
+                prev_transition_time=prev_transition_time,
             )
         )
 
