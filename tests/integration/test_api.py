@@ -275,7 +275,7 @@ class TestJobs:
         ) as response:
             assert response.status == HTTPForbidden.status_code, await response.text()
             data = await response.json()
-            assert data == {"resources": [{"action": "write", "uri": "storage:"}]}
+            assert data == {"missing": [{"action": "write", "uri": "storage:"}]}
 
     @pytest.mark.asyncio
     async def test_forbidden_image(
@@ -300,7 +300,7 @@ class TestJobs:
             assert response.status == HTTPForbidden.status_code, await response.text()
             data = await response.json()
             assert data == {
-                "resources": [{"action": "read", "uri": "image://anotheruser/image"}]
+                "missing": [{"action": "read", "uri": "image://anotheruser/image"}]
             }
 
     @pytest.mark.asyncio
@@ -1149,7 +1149,7 @@ class TestJobs:
             assert response.status == HTTPForbidden.status_code
             data = await response.json()
             assert data == {
-                "resources": [{"action": "read", "uri": f"job://{owner.name}/{job_id}"}]
+                "missing": [{"action": "read", "uri": f"job://{owner.name}/{job_id}"}]
             }
 
         permission = Permission(uri=f"job://{owner.name}/{job_id}", action="read")
@@ -1461,7 +1461,7 @@ class TestJobs:
             assert response.status == HTTPForbidden.status_code, await response.text()
             result = await response.json()
             assert result == {
-                "resources": [
+                "missing": [
                     {"action": "write", "uri": f"job://{regular_user.name}/{job_id}"}
                 ]
             }
