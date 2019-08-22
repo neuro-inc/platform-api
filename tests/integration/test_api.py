@@ -289,7 +289,7 @@ class TestJobs:
             "container": {
                 "image": f"registry.dev.neuromation.io/anotheruser/image:tag",
                 "command": "true",
-                "missing": {"cpu": 0.1, "memory_mb": 16},
+                "resources": {"cpu": 0.1, "memory_mb": 16},
             }
         }
 
