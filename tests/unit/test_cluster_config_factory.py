@@ -60,6 +60,7 @@ def clusters_payload(nfs_storage_payload: Dict[str, Any]) -> List[Dict[str, Any]
                         "memory_mb": 53248,
                         "disk_gb": 150,
                         "tpu": {
+                            "ipv4_cidr_block": "1.1.1.1/32",
                             "types": ["v2-8", "v3-8"],
                             "software_versions": ["1.13", "1.14"],
                         },
@@ -233,7 +234,9 @@ class TestClusterConfigFactory:
         assert orchestrator.resource_pool_types[0].gpu is None
         assert orchestrator.resource_pool_types[0].gpu_model is None
         assert orchestrator.resource_pool_types[0].tpu == TPUResource(
-            types=("v2-8", "v3-8"), software_versions=("1.13", "1.14")
+            ipv4_cidr_block="1.1.1.1/32",
+            types=("v2-8", "v3-8"),
+            software_versions=("1.13", "1.14"),
         )
 
         assert orchestrator.resource_pool_types[1].gpu == 4
@@ -291,7 +294,11 @@ class TestClusterConfigFactory:
         )
 
         assert orchestrator.tpu_resources == (
-            TPUResource(types=("v2-8", "v3-8"), software_versions=("1.13", "1.14")),
+            TPUResource(
+                ipv4_cidr_block="1.1.1.1/32",
+                types=("v2-8", "v3-8"),
+                software_versions=("1.13", "1.14"),
+            ),
         )
 
     def test_valid_storage_config_nfs(
