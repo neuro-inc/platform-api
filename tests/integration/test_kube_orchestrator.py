@@ -1621,6 +1621,9 @@ class TestNodeSelector:
 
         await kube_client.wait_pod_scheduled(pod_name, node_name)
 
+        with pytest.raises(StatusException, match="NotFound"):
+            await kube_client.get_network_policy(pod_name)
+
     @pytest.mark.asyncio
     async def test_tpu(
         self,
@@ -1648,6 +1651,22 @@ class TestNodeSelector:
         pod_name = job.id
 
         await kube_client.wait_pod_scheduled(pod_name, node_name)
+
+        np = await kube_client.get_network_policy(pod_name)
+        assert np["metadata"]["labels"] == {
+            "platform.neuromation.io/job": job.id,
+            "platform.neuromation.io/user": job.owner,
+        }
+        assert np["spec"] == {
+            "podSelector": {"matchLabels": {"platform.neuromation.io/job": job.id}},
+            "egress": [{"to": [{"ipBlock": {"cidr": "1.1.1.1/32"}}]}],
+            "policyTypes": ["Egress"],
+        }
+
+        await kube_orchestrator.delete_job(job)
+
+        with pytest.raises(StatusException, match="NotFound"):
+            await kube_client.get_network_policy(pod_name)
 
 
 class TestPreemption:
