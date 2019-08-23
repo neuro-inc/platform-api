@@ -155,6 +155,7 @@ class ClusterConfigFactory:
             return None
 
         return TPUResource(
+            ipv4_cidr_block=payload.get("ipv4_cidr_block", TPUResource.ipv4_cidr_block),
             types=tuple(payload["types"]),
             software_versions=tuple(payload["software_versions"]),
         )

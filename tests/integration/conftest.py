@@ -148,7 +148,11 @@ def kube_config_factory(
                     ]
                 ),
                 ResourcePoolType(
-                    tpu=TPUResource(types=("v2-8",), software_versions=("1.14",)),
+                    tpu=TPUResource(
+                        ipv4_cidr_block="1.1.1.1/32",
+                        types=("v2-8",),
+                        software_versions=("1.14",),
+                    ),
                     presets=[
                         Preset(name="cpu-small", cpu=2, memory_mb=2048),
                         Preset(name="cpu-large", cpu=3, memory_mb=14336),

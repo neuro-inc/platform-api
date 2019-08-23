@@ -1526,47 +1526,60 @@ class KubeClient:
     ) -> Dict[str, Any]:
         assert pod_labels
         # https://tools.ietf.org/html/rfc1918#section-3
+        rules: List[Dict[str, Any]] = [
+            # allowing pods to connect to public networks only
+            {
+                "to": [
+                    {
+                        "ipBlock": {
+                            "cidr": "0.0.0.0/0",
+                            "except": ["10.0.0.0/8", "172.16.0.0/12", "192.168.0.0/16"],
+                        }
+                    }
+                ]
+            },
+            # allowing labeled pods to make DNS queries in our private
+            # networks, because pods' /etc/resolv.conf files still
+            # point to the internal DNS
+            {
+                "to": [
+                    {"ipBlock": {"cidr": "10.0.0.0/8"}},
+                    {"ipBlock": {"cidr": "172.16.0.0/12"}},
+                    {"ipBlock": {"cidr": "192.168.0.0/16"}},
+                ],
+                "ports": [
+                    {"port": 53, "protocol": "UDP"},
+                    {"port": 53, "protocol": "TCP"},
+                ],
+            },
+            # allowing labeled pods to connect to each other
+            {"to": [{"podSelector": {"matchLabels": pod_labels}}]},
+        ]
+        return await self.create_egress_network_policy(
+            name, pod_labels=pod_labels, rules=rules, namespace_name=namespace_name
+        )
+
+    async def create_egress_network_policy(
+        self,
+        name: str,
+        *,
+        pod_labels: Dict[str, str],
+        rules: List[Dict[str, Any]],
+        namespace_name: Optional[str] = None,
+        labels: Optional[Dict[str, str]] = None,
+    ) -> Dict[str, Any]:
+        assert pod_labels
+        assert rules
+        labels = labels or {}
         request_payload = {
             "apiVersion": "networking.k8s.io/v1",
             "kind": "NetworkPolicy",
-            "metadata": {"name": name},
+            "metadata": {"name": name, "labels": labels},
             "spec": {
                 # applying the rules below to labeled pods
                 "podSelector": {"matchLabels": pod_labels},
                 "policyTypes": ["Egress"],
-                "egress": [
-                    # allowing pods to connect to public networks only
-                    {
-                        "to": [
-                            {
-                                "ipBlock": {
-                                    "cidr": "0.0.0.0/0",
-                                    "except": [
-                                        "10.0.0.0/8",
-                                        "172.16.0.0/12",
-                                        "192.168.0.0/16",
-                                    ],
-                                }
-                            }
-                        ]
-                    },
-                    # allowing labeled pods to make DNS queries in our private
-                    # networks, because pods' /etc/resolv.conf files still
-                    # point to the internal DNS
-                    {
-                        "to": [
-                            {"ipBlock": {"cidr": "10.0.0.0/8"}},
-                            {"ipBlock": {"cidr": "172.16.0.0/12"}},
-                            {"ipBlock": {"cidr": "192.168.0.0/16"}},
-                        ],
-                        "ports": [
-                            {"port": 53, "protocol": "UDP"},
-                            {"port": 53, "protocol": "TCP"},
-                        ],
-                    },
-                    # allowing labeled pods to connect to each other
-                    {"to": [{"podSelector": {"matchLabels": pod_labels}}]},
-                ],
+                "egress": rules,
             },
         }
         url = self._generate_all_network_policies_url(namespace_name)

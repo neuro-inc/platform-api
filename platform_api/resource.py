@@ -42,6 +42,7 @@ class Preset:
 
 @dataclass(frozen=True)
 class TPUResource:
+    ipv4_cidr_block: str = ""
     types: Sequence[str] = ()
     software_versions: Sequence[str] = ()
 

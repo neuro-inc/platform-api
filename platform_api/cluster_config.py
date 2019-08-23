@@ -121,6 +121,13 @@ class OrchestratorConfig:
             resource.tpu for resource in self.resource_pool_types if resource.tpu
         )
 
+    @property
+    def tpu_ipv4_cidr_block(self) -> Optional[str]:
+        tpus = self.tpu_resources
+        if not tpus:
+            return None
+        return tpus[0].ipv4_cidr_block
+
 
 @dataclass(frozen=True)
 class IngressConfig:
