@@ -80,6 +80,13 @@ class TestApi:
                         "memory_mb": 14336,
                         "is_preemptible": False,
                     },
+                    {
+                        "name": "tpu",
+                        "cpu": 3,
+                        "memory_mb": 14336,
+                        "is_preemptible": False,
+                        "tpu": {"type": "v2-8", "software_version": "1.14"},
+                    },
                 ],
             }
 
@@ -127,6 +134,13 @@ class TestApi:
                         "cpu": 3,
                         "memory_mb": 14336,
                         "is_preemptible": False,
+                    },
+                    {
+                        "name": "tpu",
+                        "cpu": 3,
+                        "memory_mb": 14336,
+                        "is_preemptible": False,
+                        "tpu": {"type": "v2-8", "software_version": "1.14"},
                     },
                 ],
                 "auth_url": "https://platform-auth0-url/authorize",

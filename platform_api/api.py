@@ -57,10 +57,17 @@ class ApiHandler:
                 preset_dict["cpu"] = preset.cpu
                 preset_dict["memory_mb"] = preset.memory_mb
                 preset_dict["is_preemptible"] = preset.is_preemptible
+
                 if preset.gpu is not None:
                     preset_dict["gpu"] = preset.gpu
                 if preset.gpu_model is not None:
                     preset_dict["gpu_model"] = preset.gpu_model
+
+                if preset.tpu:
+                    preset_dict["tpu"] = {
+                        "type": preset.tpu.type,
+                        "software_version": preset.tpu.software_version,
+                    }
 
                 presets.append(preset_dict)
             data.update(
