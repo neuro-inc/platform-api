@@ -35,7 +35,13 @@ from platform_api.orchestrator.job_request import JobNotFoundException
 from platform_api.orchestrator.kube_client import KubeClient, NodeTaint, Resources
 from platform_api.orchestrator.kube_orchestrator import KubeConfig, KubeOrchestrator
 from platform_api.redis import RedisConfig
-from platform_api.resource import GKEGPUModels, Preset, ResourcePoolType, TPUResource
+from platform_api.resource import (
+    GKEGPUModels,
+    Preset,
+    ResourcePoolType,
+    TPUPreset,
+    TPUResource,
+)
 
 
 pytest_plugins = [
@@ -156,6 +162,12 @@ def kube_config_factory(
                     presets=[
                         Preset(name="cpu-small", cpu=2, memory_mb=2048),
                         Preset(name="cpu-large", cpu=3, memory_mb=14336),
+                        Preset(
+                            name="tpu",
+                            cpu=3,
+                            memory_mb=14336,
+                            tpu=TPUPreset(type="v2-8", software_version="1.14"),
+                        ),
                     ],
                 ),
                 ResourcePoolType(gpu=1, gpu_model="gpumodel"),
