@@ -300,6 +300,7 @@ class TestClusterConfigFactory:
                 software_versions=("1.13", "1.14"),
             ),
         )
+        assert orchestrator.tpu_ipv4_cidr_block == "1.1.1.1/32"
 
     def test_valid_storage_config_nfs(
         self,
