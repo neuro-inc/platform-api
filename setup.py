@@ -16,7 +16,7 @@ install_requires = (
     "cryptography==2.7",
     "asyncssh==1.17.0",
     "aiorwlock==0.6.0",
-    "notifications-client==0.6rc1",
+    "notifications-client==0.6",
 )
 
 setup(
