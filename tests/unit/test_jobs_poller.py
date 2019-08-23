@@ -4,8 +4,11 @@ from typing import Any, AsyncIterator, Callable
 import pytest
 
 from platform_api.cluster import ClusterNotFound
-from platform_api.orchestrator.job import JobStatusException
-from platform_api.orchestrator.job_request import JobRequest, JobStatus
+from platform_api.orchestrator.job_request import (
+    JobRequest,
+    JobStatus,
+    JobStatusException,
+)
 from platform_api.orchestrator.jobs_poller import JobsPoller
 from platform_api.orchestrator.jobs_service import JobsService
 from platform_api.user import User

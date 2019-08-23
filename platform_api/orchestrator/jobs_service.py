@@ -18,7 +18,7 @@ from platform_api.config import JobsConfig
 from platform_api.user import User
 
 from .base import Orchestrator
-from .job import Job, JobRecord, JobStatusException, JobStatusItem, JobStatusReason
+from .job import Job, JobRecord, JobStatusItem, JobStatusReason
 from .job_request import JobException, JobNotFoundException, JobRequest, JobStatus
 from .jobs_storage import (
     JobFilter,
@@ -96,16 +96,6 @@ class JobsService:
                     "Cluster %s has been deleted or never existed", job.cluster_name
                 )
 
-        for record in unfinished_jobs:
-            await self._update_job_status_by_id(record.id)
-
-        for record in await self._jobs_storage.get_jobs_for_deletion(
-            delay=self._jobs_config.deletion_delay
-        ):
-            # finished, but not yet deleted jobs
-            # assert job.is_finished and not job.is_deleted
-            await self._delete_job_by_id(record.id)
-
         for cluster in clusters_with_jobs:
             cluster.health_tracker.finish_iteration()
             if cluster.health_tracker.unhealthy:
@@ -118,6 +108,16 @@ class JobsService:
                     logger.info(
                         "Cluster %s has been deleted or never existed", cluster.name
                     )
+
+        for record in unfinished_jobs:
+            await self._update_job_status_by_id(record.id)
+
+        for record in await self._jobs_storage.get_jobs_for_deletion(
+            delay=self._jobs_config.deletion_delay
+        ):
+            # finished, but not yet deleted jobs
+            # assert job.is_finished and not job.is_deleted
+            await self._delete_job_by_id(record.id)
 
     async def _update_job_status_by_id(self, job_id: str) -> None:
         try:
@@ -145,7 +145,7 @@ class JobsService:
                         description=str(cluster_err),
                     )
                     record.is_deleted = True
-                except JobStatusException as job_err:
+                except JobException as job_err:
                     logger.warning(
                         "Failed to get job '%s' status. Reason: %s", record.id, job_err
                     )

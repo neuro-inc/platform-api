@@ -10,9 +10,10 @@ from platform_api.cluster_config import (
     RegistryConfig,
     StorageConfig,
 )
+from platform_api.orchestrator.job_request import JobException, JobStatusException
 
 from .base import Orchestrator
-from .job import Job, JobStatusException, JobStatusItem, JobStatusReason
+from .job import Job, JobStatusItem, JobStatusReason
 from .job_request import JobError, JobNotFoundException, JobStatus
 from .kube_client import (
     AlreadyExistsException,
@@ -353,7 +354,7 @@ class KubeOrchestrator(Orchestrator):
                 pod = await self._check_preemptible_job_pod(job)
             else:
                 pod = await self._client.get_pod(pod_name)
-        except JobNotFoundException as exc:
+        except JobException as exc:
             raise exc
         except Exception as exc:
             raise JobStatusException("Failed to get job status for %s", job.id) from exc
