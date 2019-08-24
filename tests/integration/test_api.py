@@ -90,20 +90,13 @@ class TestApi:
         self,
         api: ApiConfig,
         client: aiohttp.ClientSession,
-        admin_user: _User,
         cluster_configs_payload: List[Dict[str, Any]],
-        auth_client: _AuthClient,
-        admin_token: str,
+        cluster_user: _User,
     ) -> None:
-        permission = Permission(uri="cluster://", action="manage")
-        await auth_client.grant_user_permissions(
-            admin_user.name, [permission], token=admin_token
-        )
-
         # have no additional clusters - we'll have just one (the default)
         async with create_config_api([]):
             url = api.clusters_sync_url
-            async with client.get(url, headers=admin_user.headers) as resp:
+            async with client.post(url, headers=cluster_user.headers) as resp:
                 assert resp.status == HTTPOk.status_code
                 result = await resp.json()
                 assert result == {"old_record_count": 1, "new_record_count": 1}
@@ -111,7 +104,7 @@ class TestApi:
         # add one more cluster to the config (named "cluster_name") - we'll have two now
         async with create_config_api(cluster_configs_payload):
             url = api.clusters_sync_url
-            async with client.get(url, headers=admin_user.headers) as resp:
+            async with client.post(url, headers=cluster_user.headers) as resp:
                 assert resp.status == HTTPOk.status_code
                 result = await resp.json()
                 assert result == {"old_record_count": 1, "new_record_count": 2}

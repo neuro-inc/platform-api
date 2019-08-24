@@ -100,9 +100,11 @@ async def create_auth_config(
     port = int((await container.port(8080))[0]["HostPort"])
     url = URL(f"http://{host}:{port}")
     token = create_token("compute")
-    public_auth_url = URL(f"https://neu.ro/api/v1/users")
+    public_endpoint_url = URL(f"https://neu.ro/api/v1/users")
     return AuthConfig(
-        server_endpoint_url=url, service_token=token, public_auth_url=public_auth_url
+        server_endpoint_url=url,
+        service_token=token,
+        public_endpoint_url=public_endpoint_url,
     )
 
 
@@ -204,6 +206,17 @@ async def regular_user_with_missing_cluster_name(
     ],
 ) -> _User:
     return await regular_user_factory(None, None, "missing")
+
+
+@pytest.fixture
+def cluster_user(token_factory: Callable[[str], str]) -> _User:
+    name = "cluster"
+    return _User(  # noqa
+        name=name,
+        token=token_factory(name),
+        quota=AggregatedRunTime.from_quota(Quota()),
+        cluster_name="",
+    )
 
 
 @pytest.fixture

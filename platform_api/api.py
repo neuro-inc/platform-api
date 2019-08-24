@@ -20,7 +20,7 @@ from .orchestrator.jobs_poller import JobsPoller
 from .orchestrator.jobs_service import JobsService, JobsServiceException
 from .orchestrator.jobs_storage import RedisJobsStorage
 from .redis import create_redis_client
-from .user import authorized_user
+from .user import authorized_user, untrusted_user
 
 
 logger = logging.getLogger(__name__)
@@ -36,7 +36,7 @@ class ApiHandler:
             (
                 aiohttp.web.get("/ping", self.handle_ping),
                 aiohttp.web.get("/config", self.handle_config),
-                aiohttp.web.get("/config/clusters/sync", self.handle_clusters_sync),
+                aiohttp.web.post("/config/clusters/sync", self.handle_clusters_sync),
             )
         )
 
@@ -50,7 +50,7 @@ class ApiHandler:
     async def handle_clusters_sync(
         self, request: aiohttp.web.Request
     ) -> aiohttp.web.Response:
-        user = await authorized_user(request)
+        user = await untrusted_user(request)
         permission = Permission(uri="cluster://", action="manage")
         logger.info("Checking whether %r has %r", user, permission)
         await check_permission(request, permission.action, [permission])
@@ -100,7 +100,7 @@ class ApiHandler:
                 {
                     "registry_url": str(cluster_config.registry.url),
                     "storage_url": str(cluster_config.ingress.storage_url),
-                    "users_url": str(self._config.auth.public_auth_url),
+                    "users_url": str(self._config.auth.public_endpoint_url),
                     "monitoring_url": str(cluster_config.ingress.monitoring_url),
                     "resource_presets": presets,
                 }
