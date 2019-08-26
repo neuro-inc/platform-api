@@ -104,6 +104,8 @@ spec:
           value: http://platformauthapi:8080
         - name: NP_AUTH_TOKEN
           value: eyJ0eXAiOiJKV1QiLCJhbGciOiJIUzI1NiJ9.eyJpZGVudGl0eSI6ImNvbXB1dGUifQ.IJDlKCfbiuNGZH9Sh6p-CdUL5KxEK5JStqzfDk4-RAA
+        - name: NP_AUTH_PUBLIC_URL
+          value: https://neu.ro/api/v1/users
         - name: NP_API_URL
           value: http://platformapi/api/v1
         - name: NP_PLATFORM_CONFIG_URI

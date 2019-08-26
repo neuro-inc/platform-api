@@ -77,6 +77,8 @@ spec:
           value: "{{ printf "%s" (pluck .Values.global.env .Values.NP_JOBS_INGRESS_OAUTH_AUTHORIZE_URL | first | default .Values.NP_JOBS_INGRESS_OAUTH_AUTHORIZE_URL._default) }}"
         - name: NP_PLATFORM_CONFIG_URI
           value: {{ printf "%s" (pluck .Values.global.env .Values.NP_PLATFORM_CONFIG_URI | first | default .Values.NP_PLATFORM_CONFIG_URI._default) }}
+        - name: NP_AUTH_PUBLIC_URL
+          value: {{ printf "%s" (pluck .Values.global.env .Values.NP_AUTH_PUBLIC_URL | first | default .Values.NP_AUTH_PUBLIC_URL._default) }}
         - name: NP_NOTIFICATIONS_URL
           value: http://platformnotificationsapi:8080/
         - name: NP_NOTIFICATIONS_TOKEN
