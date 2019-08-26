@@ -15,7 +15,7 @@ install_requires = (
     # because the server has too old OpenSSL version
     "cryptography==2.7",
     "aiorwlock==0.6.0",
-    "notifications-client==0.5",
+    "notifications-client==0.6",
 )
 
 setup(

@@ -358,5 +358,6 @@ class JobsService:
                     description=record.status_history.current.description,
                     exit_code=record.status_history.current.exit_code,
                     prev_status=initial_status.status,
+                    prev_transition_time=initial_status.transition_time,
                 )
             )
