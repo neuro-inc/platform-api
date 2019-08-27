@@ -352,6 +352,7 @@ class TestEnvironConfigFactory:
         assert config.auth.server_endpoint_url == URL("http://auth.com")
         assert config.auth.service_token == "auth-token"
         assert config.auth.service_name == "auth-name"
+        assert config.auth.public_endpoint_url == URL("https://neu.ro/api/v1/users")
         assert config.log_fifo == PurePath("log.txt")
         assert config.env_prefix == "NP"  # default
         assert config.jobs_namespace == "other"
