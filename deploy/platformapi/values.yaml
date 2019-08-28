@@ -38,6 +38,11 @@ NP_API_URL:
   dev: https://dev.neu.ro/api/v1
   staging: https://staging.neu.ro/api/v1
   prod: https://neu.ro/api/v1
+NP_AUTH_PUBLIC_URL:
+  _default: https://dev.neu.ro/api/v1/users
+  dev: https://dev.neu.ro/api/v1/users
+  staging: https://staging.neu.ro/api/v1/users
+  prod: https://neu.ro/api/v1/users
 NP_JOBS_INGRESS_OAUTH_AUTHORIZE_URL:
   _default: https://dev.neu.ro/oauth/authorize
   dev: https://dev.neu.ro/oauth/authorize

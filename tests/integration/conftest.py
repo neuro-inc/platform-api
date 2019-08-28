@@ -501,7 +501,7 @@ def config_factory(
     def _factory(**kwargs: Any) -> Config:
         server_config = ServerConfig()
         database_config = DatabaseConfig(redis=redis_config)
-        config_client = ConfigClient(base_url=URL("http://platformconfig/api/v1"))
+        config_client = ConfigClient(base_url=URL("http://localhost:8082/api/v1"))
         return Config(
             server=server_config,
             database=database_config,
@@ -523,7 +523,6 @@ def cluster_config(
 ) -> ClusterConfig:
     ingress_config = IngressConfig(
         storage_url=URL("https://neu.ro/api/v1/storage"),
-        users_url=URL("https://neu.ro/api/v1/users"),
         monitoring_url=URL("https://neu.ro/api/v1/monitoring"),
     )
     return ClusterConfig(

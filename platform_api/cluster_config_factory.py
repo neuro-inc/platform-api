@@ -24,14 +24,12 @@ class ClusterConfigFactory:
         self,
         payload: Sequence[Dict[str, Any]],
         *,
-        users_url: URL,
         jobs_ingress_class: str,
         jobs_ingress_oauth_url: URL,
     ) -> Sequence[ClusterConfig]:
         configs = (
             self._create_cluster_config(
                 p,
-                users_url=users_url,
                 jobs_ingress_class=jobs_ingress_class,
                 jobs_ingress_oauth_url=jobs_ingress_oauth_url,
             )
@@ -43,7 +41,6 @@ class ClusterConfigFactory:
         self,
         payload: Dict[str, Any],
         *,
-        users_url: URL,
         jobs_ingress_class: str,
         jobs_ingress_oauth_url: URL,
     ) -> Optional[ClusterConfig]:
@@ -58,19 +55,16 @@ class ClusterConfigFactory:
                     jobs_ingress_class=jobs_ingress_class,
                     jobs_ingress_oauth_url=jobs_ingress_oauth_url,
                 ),
-                ingress=self._create_ingress_config(payload, users_url),
+                ingress=self._create_ingress_config(payload),
             )
         except t.DataError as err:
             logging.warning(f"failed to parse cluster config: {err}")
             return None
 
-    def _create_ingress_config(
-        self, payload: Dict[str, Any], users_url: URL
-    ) -> IngressConfig:
+    def _create_ingress_config(self, payload: Dict[str, Any]) -> IngressConfig:
         return IngressConfig(
             storage_url=URL(payload["storage"]["url"]),
             monitoring_url=URL(payload["monitoring"]["url"]),
-            users_url=users_url,
         )
 
     def _create_presets(self, payload: Dict[str, Any]) -> List[Preset]:

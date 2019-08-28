@@ -128,6 +128,7 @@ class TestEnvironConfigFactory:
             "NP_PLATFORM_CONFIG_URI": "http://platformconfig:8080/api/v1",
             "NP_NOTIFICATIONS_URL": "http://notifications:8080",
             "NP_NOTIFICATIONS_TOKEN": "token",
+            "NP_AUTH_PUBLIC_URL": "https://neu.ro/api/v1/users",
         }
         config = EnvironConfigFactory(environ=environ).create()
         cluster = EnvironConfigFactory(environ=environ).create_cluster()
@@ -198,6 +199,7 @@ class TestEnvironConfigFactory:
             "NP_AUTH_TOKEN": "token",
             "NP_API_URL": "https://neu.ro/api/v1",
             "NP_JOBS_INGRESS_OAUTH_AUTHORIZE_URL": "http://neu.ro/oauth/authorize",
+            "NP_AUTH_PUBLIC_URL": "https://neu.ro/api/v1/users",
         }
         with pytest.raises(ValueError):
             EnvironConfigFactory(environ=environ).create()
@@ -246,6 +248,7 @@ class TestEnvironConfigFactory:
             "NP_PLATFORM_CONFIG_URI": "http://platformconfig:8080/api/v1",
             "NP_NOTIFICATIONS_URL": "http://notifications:8080",
             "NP_NOTIFICATIONS_TOKEN": "token",
+            "NP_AUTH_PUBLIC_URL": "https://neu.ro/api/v1/users",
         }
         config = EnvironConfigFactory(environ=environ).create()
         cluster = EnvironConfigFactory(environ=environ).create_cluster()
@@ -258,7 +261,6 @@ class TestEnvironConfigFactory:
         assert cluster.storage.uri_scheme == "storage"
 
         assert cluster.ingress.storage_url == URL("https://neu.ro/api/v1/storage")
-        assert cluster.ingress.users_url == URL("https://neu.ro/api/v1/users")
         assert cluster.ingress.monitoring_url == URL("https://neu.ro/api/v1/jobs")
 
         assert config.jobs.deletion_delay_s == 3600
@@ -342,12 +344,14 @@ class TestEnvironConfigFactory:
             "NP_AUTH_NAME": "auth-name",
             "NP_LOG_FIFO": "log.txt",
             "NP_K8S_NS": "other",
+            "NP_AUTH_PUBLIC_URL": "https://neu.ro/api/v1/users",
         }
         config = EnvironConfigFactory(environ=environ).create_ssh_auth()
         assert config.platform.server_endpoint_url == URL("http://neu.ro/api/v1")
         assert config.auth.server_endpoint_url == URL("http://auth.com")
         assert config.auth.service_token == "auth-token"
         assert config.auth.service_name == "auth-name"
+        assert config.auth.public_endpoint_url == URL("https://neu.ro/api/v1/users")
         assert config.log_fifo == PurePath("log.txt")
         assert config.env_prefix == "NP"  # default
         assert config.jobs_namespace == "other"

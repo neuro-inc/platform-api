@@ -50,6 +50,10 @@ class ApiConfig(NamedTuple):
     def config_url(self) -> str:
         return self.endpoint + "/config"
 
+    @property
+    def clusters_sync_url(self) -> str:
+        return self.endpoint + "/config/clusters/sync"
+
 
 async def get_cluster_configs(
     cluster_configs: Sequence[ClusterConfig]

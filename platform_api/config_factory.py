@@ -244,8 +244,12 @@ class EnvironConfigFactory:
         url = URL(self._environ["NP_AUTH_URL"])
         token = self._environ["NP_AUTH_TOKEN"]
         name = self._environ.get("NP_AUTH_NAME", AuthConfig.service_name)
+        public_endpoint_url = URL(self._environ["NP_AUTH_PUBLIC_URL"])
         return AuthConfig(
-            server_endpoint_url=url, service_token=token, service_name=name
+            server_endpoint_url=url,
+            service_token=token,
+            service_name=name,
+            public_endpoint_url=public_endpoint_url,
         )
 
     def try_create_oauth(self) -> Optional[OAuthConfig]:
@@ -283,9 +287,7 @@ class EnvironConfigFactory:
     def create_ingress(self) -> IngressConfig:
         base_url = URL(self._environ["NP_API_URL"])
         return IngressConfig(
-            storage_url=base_url / "storage",
-            users_url=base_url / "users",
-            monitoring_url=base_url / "jobs",
+            storage_url=base_url / "storage", monitoring_url=base_url / "jobs"
         )
 
     def create_config_client(self) -> platform_api.config_client.ConfigClient:

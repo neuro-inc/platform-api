@@ -176,7 +176,6 @@ class TestClusterConfigFactory:
     def test_valid_cluster_config(
         self,
         clusters_payload: Sequence[Dict[str, Any]],
-        users_url: URL,
         jobs_ingress_class: str,
         jobs_ingress_oauth_url: URL,
     ) -> None:
@@ -190,7 +189,6 @@ class TestClusterConfigFactory:
         factory = ClusterConfigFactory()
         clusters = factory.create_cluster_configs(
             clusters_payload,
-            users_url=users_url,
             jobs_ingress_class=jobs_ingress_class,
             jobs_ingress_oauth_url=jobs_ingress_oauth_url,
         )
@@ -204,7 +202,6 @@ class TestClusterConfigFactory:
         ingress = cluster.ingress
         assert ingress.storage_url == URL(storage_payload["url"])
         assert ingress.monitoring_url == URL(monitoring_payload["url"])
-        assert ingress.users_url == users_url
 
         registry = cluster.registry
         assert registry.url == URL(registry_payload["url"])
@@ -305,7 +302,6 @@ class TestClusterConfigFactory:
     def test_valid_storage_config_nfs(
         self,
         clusters_payload: Sequence[Dict[str, Any]],
-        users_url: URL,
         jobs_ingress_class: str,
         jobs_ingress_oauth_url: URL,
     ) -> None:
@@ -314,7 +310,6 @@ class TestClusterConfigFactory:
         factory = ClusterConfigFactory()
         clusters = factory.create_cluster_configs(
             clusters_payload,
-            users_url=users_url,
             jobs_ingress_class=jobs_ingress_class,
             jobs_ingress_oauth_url=jobs_ingress_oauth_url,
         )
@@ -358,7 +353,6 @@ class TestClusterConfigFactory:
     def test_factory_skips_invalid_cluster_configs(
         self,
         clusters_payload: List[Dict[str, Any]],
-        users_url: URL,
         jobs_ingress_class: str,
         jobs_ingress_oauth_url: URL,
     ) -> None:
@@ -366,7 +360,6 @@ class TestClusterConfigFactory:
         factory = ClusterConfigFactory()
         clusters = factory.create_cluster_configs(
             clusters_payload,
-            users_url=users_url,
             jobs_ingress_class=jobs_ingress_class,
             jobs_ingress_oauth_url=jobs_ingress_oauth_url,
         )

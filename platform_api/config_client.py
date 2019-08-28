@@ -63,13 +63,12 @@ class ConfigClient:
             yield response
 
     async def get_clusters(
-        self, *, users_url: URL, jobs_ingress_class: str, jobs_ingress_oauth_url: URL
+        self, *, jobs_ingress_class: str, jobs_ingress_oauth_url: URL
     ) -> Sequence[ClusterConfig]:
         async with self._request("GET", "clusters") as response:
             payload = await response.json()
             return ClusterConfigFactory().create_cluster_configs(
                 payload,
-                users_url=users_url,
                 jobs_ingress_class=jobs_ingress_class,
                 jobs_ingress_oauth_url=jobs_ingress_oauth_url,
             )

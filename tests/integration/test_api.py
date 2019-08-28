@@ -1,4 +1,4 @@
-from typing import Any, AsyncIterator, Awaitable, Callable, Dict, Iterator
+from typing import Any, AsyncIterator, Awaitable, Callable, Dict, Iterator, List
 from unittest import mock
 
 import aiohttp.web
@@ -16,10 +16,57 @@ from neuro_auth_client import Permission
 from neuro_auth_client.client import Quota
 
 from tests.conftest import random_str
+from tests.integration.test_config_client import create_config_api
 
 from .api import ApiConfig, JobsClient
 from .auth import _AuthClient, _User
 from .conftest import MyKubeClient
+
+
+@pytest.fixture
+def cluster_configs_payload() -> List[Dict[str, Any]]:
+    return [
+        {
+            "name": "cluster_name",
+            "storage": {
+                "nfs": {"server": "127.0.0.1", "export_path": "/nfs/export/path"},
+                "url": "https://dev.neu.ro/api/v1/storage",
+            },
+            "registry": {
+                "url": "https://registry-dev.neu.ro",
+                "email": "registry@neuromation.io",
+            },
+            "orchestrator": {
+                "kubernetes": {
+                    "url": "http://127.0.0.1:8443",
+                    "ca_data": "certificate",
+                    "auth_type": "token",
+                    "token": "auth_token",
+                    "namespace": "default",
+                    "jobs_ingress_class": "nginx",
+                    "jobs_ingress_oauth_url": "https://neu.ro/oauth/authorize",
+                    "node_label_gpu": "cloud.google.com/gke-accelerator",
+                    "node_label_preemptible": "cloud.google.com/gke-preemptible",
+                },
+                "job_hostname_template": "{job_id}.jobs.neu.ro",
+                "resource_pool_types": [
+                    {},
+                    {"gpu": 0},
+                    {"gpu": 1, "gpu_model": "nvidia-tesla-v100"},
+                ],
+                "is_http_ingress_secure": True,
+            },
+            "ssh": {"server": "ssh-auth-dev.neu.ro"},
+            "monitoring": {
+                "url": "https://dev.neu.ro/api/v1/jobs",
+                "elasticsearch": {
+                    "hosts": ["http://logging-elasticsearch:9200"],
+                    "username": "es_user_name",
+                    "password": "es_assword",
+                },
+            },
+        }
+    ]
 
 
 class TestApi:
@@ -37,6 +84,30 @@ class TestApi:
             assert resp.status == HTTPOk.status_code
             result = await resp.json()
             assert result == {}
+
+    @pytest.mark.asyncio
+    async def test_clusters_sync(
+        self,
+        api: ApiConfig,
+        client: aiohttp.ClientSession,
+        cluster_configs_payload: List[Dict[str, Any]],
+        cluster_user: _User,
+    ) -> None:
+        # have no additional clusters - we'll have just one (the default)
+        async with create_config_api([]):
+            url = api.clusters_sync_url
+            async with client.post(url, headers=cluster_user.headers) as resp:
+                assert resp.status == HTTPOk.status_code
+                result = await resp.json()
+                assert result == {"old_record_count": 1, "new_record_count": 1}
+
+        # add one more cluster to the config (named "cluster_name") - we'll have two now
+        async with create_config_api(cluster_configs_payload):
+            url = api.clusters_sync_url
+            async with client.post(url, headers=cluster_user.headers) as resp:
+                assert resp.status == HTTPOk.status_code
+                result = await resp.json()
+                assert result == {"old_record_count": 1, "new_record_count": 2}
 
     @pytest.mark.asyncio
     async def test_config(

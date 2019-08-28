@@ -149,3 +149,6 @@ class ClusterRegistry:
             if record.is_cluster_closed:  # pragma: no cover
                 raise ClusterNotFound.create(name)
             yield record.cluster
+
+    def __len__(self) -> int:
+        return len(self._records)
