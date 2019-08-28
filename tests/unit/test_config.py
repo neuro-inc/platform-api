@@ -261,7 +261,6 @@ class TestEnvironConfigFactory:
         assert cluster.storage.uri_scheme == "storage"
 
         assert cluster.ingress.storage_url == URL("https://neu.ro/api/v1/storage")
-        # assert cluster.ingress.users_url == URL("https://neu.ro/api/v1/users")
         assert cluster.ingress.monitoring_url == URL("https://neu.ro/api/v1/jobs")
 
         assert config.jobs.deletion_delay_s == 3600
