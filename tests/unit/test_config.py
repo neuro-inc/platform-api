@@ -344,14 +344,13 @@ class TestEnvironConfigFactory:
             "NP_AUTH_NAME": "auth-name",
             "NP_LOG_FIFO": "log.txt",
             "NP_K8S_NS": "other",
-            "NP_AUTH_PUBLIC_URL": "https://neu.ro/api/v1/users",
         }
         config = EnvironConfigFactory(environ=environ).create_ssh_auth()
         assert config.platform.server_endpoint_url == URL("http://neu.ro/api/v1")
         assert config.auth.server_endpoint_url == URL("http://auth.com")
         assert config.auth.service_token == "auth-token"
         assert config.auth.service_name == "auth-name"
-        assert config.auth.public_endpoint_url == URL("https://neu.ro/api/v1/users")
+        assert config.auth.public_endpoint_url == URL()
         assert config.log_fifo == PurePath("log.txt")
         assert config.env_prefix == "NP"  # default
         assert config.jobs_namespace == "other"
