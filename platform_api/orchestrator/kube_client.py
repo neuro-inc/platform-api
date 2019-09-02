@@ -771,6 +771,15 @@ class PodDescriptor:
             ]
         else:
             secrets = []
+        tolerations = [
+            Toleration(
+                key=t.get("key", ""),
+                operator=t.get("operator", Toleration.operator),
+                value=t.get("value", Toleration.value),
+                effect=t.get("effect", Toleration.effect),
+            )
+            for t in payload["spec"].get("tolerations", {})
+        ]
         return cls(
             name=metadata["name"],
             created_at=iso8601.parse_date(metadata["creationTimestamp"]),
@@ -780,6 +789,7 @@ class PodDescriptor:
             node_name=payload["spec"].get("nodeName"),
             command=container_payload.get("command"),
             args=container_payload.get("args"),
+            tolerations=tolerations,
             labels=metadata.get("labels", {}),
         )
 

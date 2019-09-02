@@ -278,7 +278,13 @@ class KubeOrchestrator(Orchestrator):
         return f"{service_name}.{self._get_pod_namespace(pod_descriptor)}"
 
     def _get_pod_tolerations(self, job: Job) -> List[Toleration]:
-        tolerations = []
+        tolerations = [
+            Toleration(
+                key=self._kube_config.jobs_pod_toleration_key,
+                operator="Exists",
+                effect="NoSchedule",
+            )
+        ]
         if self._kube_config.node_label_preemptible and job.is_preemptible:
             tolerations.append(
                 Toleration(

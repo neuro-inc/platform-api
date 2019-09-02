@@ -1096,6 +1096,37 @@ class TestKubeOrchestrator:
                 finally:
                     await orchestrator.delete_job(job)
 
+    @pytest.mark.asyncio
+    async def test_job_pod_tolerations(
+        self,
+        kube_config: KubeConfig,
+        kube_orchestrator: KubeOrchestrator,
+        kube_client: MyKubeClient,
+        delete_job_later: Callable[[Job], Awaitable[None]],
+    ) -> None:
+        container = Container(
+            image="ubuntu",
+            command="sleep 1h",
+            resources=ContainerResources(cpu=0.1, memory_mb=16),
+            http_server=ContainerHTTPServer(port=80),
+        )
+        job = MyJob(
+            orchestrator=kube_orchestrator, job_request=JobRequest.create(container)
+        )
+        await delete_job_later(job)
+        await job.start()
+
+        pod_name = job.id
+        await kube_client.wait_pod_is_running(pod_name=pod_name, timeout_s=60.0)
+
+        pod = await kube_client.get_pod(pod_name)
+        toleration_expected = {
+            "key": "platform.neuromation.io/job",
+            "operator": "Exists",
+            "effect": "NoSchedule",
+        }
+        assert toleration_expected in pod.tolerations
+
 
 @pytest.fixture
 async def delete_pod_later(
