@@ -1,15 +1,6 @@
 import asyncio
-from dataclasses import asdict, dataclass
-from typing import (
-    AsyncGenerator,
-    AsyncIterator,
-    Awaitable,
-    Callable,
-    Dict,
-    List,
-    Optional,
-    Sequence,
-)
+from dataclasses import dataclass
+from typing import AsyncGenerator, AsyncIterator, Awaitable, Callable, Dict, Optional
 
 import aiodocker
 import pytest
@@ -18,7 +9,7 @@ from aiohttp.hdrs import AUTHORIZATION
 from async_generator import asynccontextmanager
 from async_timeout import timeout
 from jose import jwt
-from neuro_auth_client import AuthClient, Permission, User as AuthClientUser
+from neuro_auth_client import AuthClient, User as AuthClientUser
 from neuro_auth_client.client import Quota
 from yarl import URL
 
@@ -113,27 +104,16 @@ async def auth_config(auth_server: AuthConfig) -> AsyncIterator[AuthConfig]:
     yield auth_server
 
 
-class _AuthClient(AuthClient):
-    async def grant_user_permissions(
-        self, name: str, permissions: Sequence[Permission], token: Optional[str] = None
-    ) -> None:
-        assert permissions, "No permissions passed"
-        path = "/api/v1/users/{name}/permissions".format(name=name)
-        headers = self._generate_headers(token)
-        payload: List[Dict[str, str]] = [asdict(p) for p in permissions]
-        await self._request("POST", path, headers=headers, json=payload)
-
-
 @asynccontextmanager
-async def create_auth_client(config: AuthConfig) -> AsyncGenerator[_AuthClient, None]:
-    async with _AuthClient(
+async def create_auth_client(config: AuthConfig) -> AsyncGenerator[AuthClient, None]:
+    async with AuthClient(
         url=config.server_endpoint_url, token=config.service_token
     ) as client:
         yield client
 
 
 @pytest.fixture
-async def auth_client(auth_server: AuthConfig) -> AsyncGenerator[_AuthClient, None]:
+async def auth_client(auth_server: AuthConfig) -> AsyncGenerator[AuthClient, None]:
     async with create_auth_client(auth_server) as client:
         yield client
 
@@ -161,7 +141,7 @@ class _User(User):
 
 @pytest.fixture
 async def regular_user_factory(
-    auth_client: _AuthClient, token_factory: Callable[[str], str], admin_token: str
+    auth_client: AuthClient, token_factory: Callable[[str], str], admin_token: str
 ) -> Callable[[Optional[str], Optional[Quota], Optional[str]], Awaitable[_User]]:
     async def _factory(
         name: Optional[str] = None,
