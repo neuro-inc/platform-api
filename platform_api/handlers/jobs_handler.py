@@ -1,4 +1,3 @@
-import json
 import logging
 from dataclasses import dataclass, replace
 from pathlib import PurePath
@@ -8,7 +7,7 @@ import aiohttp.web
 import trafaret as t
 from aiohttp_security import check_authorized
 from multidict import MultiDictProxy
-from neuro_auth_client import AuthClient, Permission
+from neuro_auth_client import AuthClient, Permission, check_permissions
 from neuro_auth_client.client import ClientSubTreeViewRoot
 from yarl import URL
 
@@ -267,7 +266,7 @@ class JobsHandler:
         permissions = infer_permissions_from_container(
             user, container, cluster_config.registry
         )
-        await self._check_permissions(request, user, permissions)
+        await check_permissions(request, user.name, permissions)
 
         name = request_payload.get("name")
         description = request_payload.get("description")
@@ -294,7 +293,7 @@ class JobsHandler:
         job = await self._jobs_service.get_job(job_id)
 
         permission = Permission(uri=str(job.to_uri()), action="read")
-        await self._check_permissions(request, user, [permission])
+        await check_permissions(request, user.name, [permission])
 
         cluster_name = self._jobs_service.get_cluster_name(job)
         response_payload = convert_job_to_job_response(job, cluster_name)
@@ -366,30 +365,10 @@ class JobsHandler:
         job = await self._jobs_service.get_job(job_id)
 
         permission = Permission(uri=str(job.to_uri()), action="write")
-        await self._check_permissions(request, user, [permission])
+        await check_permissions(request, user.name, [permission])
 
         await self._jobs_service.delete_job(job_id)
         raise aiohttp.web.HTTPNoContent()
-
-    async def _check_permissions(
-        self, request: aiohttp.web.Request, user: User, permissions: List[Permission]
-    ) -> None:
-        await check_authorized(request)
-        assert permissions, "empty permission set to check"
-        logger.info("Checking whether %r has %r", user, permissions)
-        missing = await self._auth_client.get_missing_permissions(
-            user.name, permissions
-        )
-        if missing:
-            error_details = {
-                "missing": [self._permission_to_primitive(p) for p in missing]
-            }
-            raise aiohttp.web.HTTPForbidden(
-                text=json.dumps(error_details), content_type="application/json"
-            )
-
-    def _permission_to_primitive(self, perm: Permission) -> Dict[str, str]:
-        return {"uri": perm.uri, "action": perm.action}
 
 
 class JobFilterException(ValueError):

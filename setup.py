@@ -10,7 +10,7 @@ install_requires = (
     "dataclasses==0.6",  # backport from 3.7 stdlib
     "iso8601==0.1.12",
     "trafaret==1.2.0",
-    "neuro_auth_client==1.0.7",
+    "neuro_auth_client==1.0.8",
     # Circle CI fails on the latest cryptography version
     # because the server has too old OpenSSL version
     "cryptography==2.7",
