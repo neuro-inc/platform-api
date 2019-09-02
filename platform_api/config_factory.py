@@ -78,6 +78,9 @@ class EnvironConfigFactory:
             jobs_ingress_oauth_url=URL(
                 self._environ["NP_JOBS_INGRESS_OAUTH_AUTHORIZE_URL"]
             ),
+            jobs_pod_toleration_key=self._environ.get(
+                "NP_JOBS_POD_TOLERATION_KEY", JobsConfig.jobs_pod_toleration_key
+            ),
         )
 
     def create_ssh(self) -> SSHConfig:
@@ -198,6 +201,9 @@ class EnvironConfigFactory:
             ),
             jobs_ingress_oauth_url=URL(
                 self._environ["NP_JOBS_INGRESS_OAUTH_AUTHORIZE_URL"]
+            ),
+            jobs_pod_toleration_key=self._environ.get(
+                "NP_JOBS_POD_TOLERATION_KEY", KubeConfig.jobs_pod_toleration_key
             ),
             is_http_ingress_secure=self._get_bool("NP_K8S_JOBS_INGRESS_HTTPS"),
             jobs_domain_name_template=self._environ[

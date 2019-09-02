@@ -81,6 +81,7 @@ class TestConfigClient:
                 result = await client.get_clusters(
                     jobs_ingress_class="nginx",
                     jobs_ingress_oauth_url=URL("https://neu.ro/oauth/authorize"),
+                    jobs_pod_toleration_key="platform.neuromation.io/job",
                 )
 
                 assert len(result) == 1
@@ -95,6 +96,7 @@ class TestConfigClient:
                 result = await client.get_clusters(
                     jobs_ingress_class="nginx",
                     jobs_ingress_oauth_url=URL("https://neu.ro/oauth/authorize"),
+                    jobs_pod_toleration_key="platform.neuromation.io/job",
                 )
 
                 assert len(result) == 1

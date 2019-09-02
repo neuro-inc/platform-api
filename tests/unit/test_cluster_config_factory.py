@@ -182,12 +182,18 @@ def jobs_ingress_oauth_url() -> URL:
     return URL("https://neu.ro/oauth/authorize")
 
 
+@pytest.fixture
+def jobs_pod_toleration_key() -> str:
+    return "platform.neuromation.io/job"
+
+
 class TestClusterConfigFactory:
     def test_valid_cluster_config(
         self,
         clusters_payload: Sequence[Dict[str, Any]],
         jobs_ingress_class: str,
         jobs_ingress_oauth_url: URL,
+        jobs_pod_toleration_key: str,
     ) -> None:
         storage_payload = clusters_payload[0]["storage"]
         registry_payload = clusters_payload[0]["registry"]
@@ -201,6 +207,7 @@ class TestClusterConfigFactory:
             clusters_payload,
             jobs_ingress_class=jobs_ingress_class,
             jobs_ingress_oauth_url=jobs_ingress_oauth_url,
+            jobs_pod_toleration_key=jobs_pod_toleration_key,
         )
 
         assert len(clusters) == 1
@@ -314,6 +321,7 @@ class TestClusterConfigFactory:
         clusters_payload: Sequence[Dict[str, Any]],
         jobs_ingress_class: str,
         jobs_ingress_oauth_url: URL,
+        jobs_pod_toleration_key: str,
     ) -> None:
         storage_payload = clusters_payload[0]["storage"]
 
@@ -322,6 +330,7 @@ class TestClusterConfigFactory:
             clusters_payload,
             jobs_ingress_class=jobs_ingress_class,
             jobs_ingress_oauth_url=jobs_ingress_oauth_url,
+            jobs_pod_toleration_key=jobs_pod_toleration_key,
         )
         cluster = clusters[0]
 
@@ -395,6 +404,7 @@ class TestClusterConfigFactory:
         clusters_payload: List[Dict[str, Any]],
         jobs_ingress_class: str,
         jobs_ingress_oauth_url: URL,
+        jobs_pod_toleration_key: str,
     ) -> None:
         clusters_payload.append({})
         factory = ClusterConfigFactory()
@@ -402,6 +412,7 @@ class TestClusterConfigFactory:
             clusters_payload,
             jobs_ingress_class=jobs_ingress_class,
             jobs_ingress_oauth_url=jobs_ingress_oauth_url,
+            jobs_pod_toleration_key=jobs_pod_toleration_key,
         )
 
         assert len(clusters) == 1

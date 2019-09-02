@@ -60,6 +60,7 @@ class JobsConfig:
     orphaned_job_owner: str = ""
     jobs_ingress_class: str = "traefik"
     jobs_ingress_oauth_url: URL = URL("https://neu.ro/oauth/authorize")
+    jobs_pod_toleration_key: str = "platform.neuromation.io/job"
 
     @property
     def deletion_delay(self) -> timedelta:

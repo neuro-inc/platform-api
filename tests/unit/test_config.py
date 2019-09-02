@@ -182,6 +182,7 @@ class TestEnvironConfigFactory:
         assert cluster.orchestrator.jobs_ingress_oauth_url == URL(
             "http://neu.ro/oauth/authorize"
         )
+        assert config.jobs.jobs_pod_toleration_key == "platform.neuromation.io/job"
         assert cluster.orchestrator.client_conn_pool_size == 100
         assert not cluster.orchestrator.is_http_ingress_secure
         assert cluster.orchestrator.jobs_domain_name_template == "{job_id}.jobs.domain"
@@ -190,6 +191,10 @@ class TestEnvironConfigFactory:
         assert cluster.orchestrator.resource_pool_types == [ResourcePoolType()]
         assert cluster.orchestrator.node_label_gpu is None
         assert cluster.orchestrator.node_label_preemptible is None
+        assert (
+            cluster.orchestrator.jobs_pod_toleration_key
+            == "platform.neuromation.io/job"
+        )
 
         assert config.database.redis is None
 
@@ -246,6 +251,7 @@ class TestEnvironConfigFactory:
             "NP_K8S_JOBS_INGRESS_DOMAIN_NAME_TEMPLATE": "{job_id}.jobs.domain",
             "NP_K8S_SSH_AUTH_INGRESS_DOMAIN_NAME": "ssh-auth.domain",
             "NP_K8S_JOB_DELETION_DELAY": "3600",
+            "NP_JOBS_POD_TOLERATION_KEY": "jobs-pod-toleration-key",
             "NP_DB_REDIS_URI": "redis://localhost:6379/0",
             "NP_DB_REDIS_CONN_POOL_SIZE": "444",
             "NP_DB_REDIS_CONN_TIMEOUT": "555",
@@ -288,6 +294,7 @@ class TestEnvironConfigFactory:
         assert config.jobs.deletion_delay_s == 3600
         assert config.jobs.deletion_delay == timedelta(seconds=3600)
         assert config.jobs.orphaned_job_owner == "servicename"
+        assert config.jobs.jobs_pod_toleration_key == "jobs-pod-toleration-key"
 
         assert config.notifications.url == URL("http://notifications:8080")
         assert config.notifications.token == "token"
@@ -306,6 +313,7 @@ class TestEnvironConfigFactory:
         assert cluster.orchestrator.jobs_ingress_oauth_url == URL(
             "http://neu.ro/oauth/authorize"
         )
+        assert cluster.orchestrator.jobs_pod_toleration_key == "jobs-pod-toleration-key"
         assert cluster.orchestrator.is_http_ingress_secure
         assert cluster.orchestrator.jobs_domain_name_template == "{job_id}.jobs.domain"
         assert cluster.orchestrator.ssh_auth_domain_name == "ssh-auth.domain"

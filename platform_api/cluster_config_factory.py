@@ -26,12 +26,14 @@ class ClusterConfigFactory:
         *,
         jobs_ingress_class: str,
         jobs_ingress_oauth_url: URL,
+        jobs_pod_toleration_key: str,
     ) -> Sequence[ClusterConfig]:
         configs = (
             self._create_cluster_config(
                 p,
                 jobs_ingress_class=jobs_ingress_class,
                 jobs_ingress_oauth_url=jobs_ingress_oauth_url,
+                jobs_pod_toleration_key=jobs_pod_toleration_key,
             )
             for p in payload
         )
@@ -43,6 +45,7 @@ class ClusterConfigFactory:
         *,
         jobs_ingress_class: str,
         jobs_ingress_oauth_url: URL,
+        jobs_pod_toleration_key: str,
     ) -> Optional[ClusterConfig]:
         try:
             _cluster_config_validator.check(payload)
@@ -54,6 +57,7 @@ class ClusterConfigFactory:
                     payload,
                     jobs_ingress_class=jobs_ingress_class,
                     jobs_ingress_oauth_url=jobs_ingress_oauth_url,
+                    jobs_pod_toleration_key=jobs_pod_toleration_key,
                 ),
                 ingress=self._create_ingress_config(payload),
             )
@@ -91,6 +95,7 @@ class ClusterConfigFactory:
         payload: Dict[str, Any],
         jobs_ingress_class: str,
         jobs_ingress_oauth_url: URL,
+        jobs_pod_toleration_key: str,
     ) -> OrchestratorConfig:
         orchestrator = payload["orchestrator"]
         kube = orchestrator["kubernetes"]
@@ -114,6 +119,7 @@ class ClusterConfigFactory:
             namespace=kube["namespace"],
             jobs_ingress_class=jobs_ingress_class,
             jobs_ingress_oauth_url=jobs_ingress_oauth_url,
+            jobs_pod_toleration_key=jobs_pod_toleration_key,
             node_label_gpu=kube["node_label_gpu"],
             node_label_preemptible=kube["node_label_preemptible"],
         )
