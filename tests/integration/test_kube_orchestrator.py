@@ -33,7 +33,7 @@ from platform_api.orchestrator.kube_client import (
     SecretRef,
     Service,
     StatusException,
-)
+    Toleration)
 from platform_api.orchestrator.kube_orchestrator import (
     JobStatusItemFactory,
     KubeConfig,
@@ -1120,11 +1120,12 @@ class TestKubeOrchestrator:
         await kube_client.wait_pod_is_running(pod_name=pod_name, timeout_s=60.0)
 
         pod = await kube_client.get_pod(pod_name)
-        toleration_expected = {
-            "key": "platform.neuromation.io/job",
-            "operator": "Exists",
-            "effect": "NoSchedule",
-        }
+        toleration_expected = Toleration(
+            key="platform.neuromation.io/job",
+            operator="Exists",
+            value="",
+            effect="NoSchedule",
+        )
         assert toleration_expected in pod.tolerations
 
 
