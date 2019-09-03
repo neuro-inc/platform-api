@@ -33,7 +33,8 @@ from platform_api.orchestrator.kube_client import (
     SecretRef,
     Service,
     StatusException,
-    Toleration)
+    Toleration,
+)
 from platform_api.orchestrator.kube_orchestrator import (
     JobStatusItemFactory,
     KubeConfig,
