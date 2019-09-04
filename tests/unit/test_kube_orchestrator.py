@@ -33,6 +33,7 @@ from platform_api.orchestrator.kube_orchestrator import (
     NodeSelectorTerm,
     PodDescriptor,
     PodStatus,
+    PVCVolume,
     Service,
     Toleration,
     Volume,
@@ -45,6 +46,7 @@ class TestVolume:
         (
             HostVolume("testvolume", path=PurePath("/host")),
             NfsVolume("testvolume", server="1.2.3.4", path=PurePath("/host")),
+            PVCVolume("testvolume", claim_name="testclaim", path=PurePath("/host")),
         ),
     )
     def test_create_mount(self, volume: Volume) -> None:
@@ -86,6 +88,15 @@ class TestNfsVolume:
         assert volume.to_primitive() == {
             "name": "testvolume",
             "nfs": {"server": "1.2.3.4", "path": "/tmp"},
+        }
+
+
+class TestPVCVolume:
+    def test_to_primitive(self) -> None:
+        volume = PVCVolume("testvolume", claim_name="testclaim", path=PurePath("/tmp"))
+        assert volume.to_primitive() == {
+            "name": "testvolume",
+            "persistentVolumeClaim": {"claimName": "testclaim"},
         }
 
 

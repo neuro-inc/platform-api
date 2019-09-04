@@ -49,6 +49,7 @@ class StorageConfig:
     def is_nfs(self) -> bool:
         return self.type == StorageType.NFS
 
+    @property
     def is_pvc(self) -> bool:
         return self.type == StorageType.PVC
 

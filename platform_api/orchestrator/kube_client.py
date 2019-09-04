@@ -140,6 +140,17 @@ class NfsVolume(PathVolume):
 
 
 @dataclass(frozen=True)
+class PVCVolume(PathVolume):
+    claim_name: str
+
+    def to_primitive(self) -> Dict[str, Any]:
+        return {
+            "name": self.name,
+            "persistentVolumeClaim": {"claimName": self.claim_name},
+        }
+
+
+@dataclass(frozen=True)
 class VolumeMount:
     volume: Volume
     mount_path: PurePath

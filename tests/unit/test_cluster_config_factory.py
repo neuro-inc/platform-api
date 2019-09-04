@@ -32,6 +32,16 @@ def nfs_storage_payload() -> Dict[str, Any]:
 
 
 @pytest.fixture
+def pvc_storage_payload() -> Dict[str, Any]:
+    return {
+        "storage": {
+            "pvc": {"name": "platform-storage"},
+            "url": "https://dev.neu.ro/api/v1/storage",
+        }
+    }
+
+
+@pytest.fixture
 def clusters_payload(nfs_storage_payload: Dict[str, Any]) -> List[Dict[str, Any]]:
     return [
         {
@@ -299,7 +309,7 @@ class TestClusterConfigFactory:
         )
         assert orchestrator.tpu_ipv4_cidr_block == "1.1.1.1/32"
 
-    def test_valid_storage_config_nfs(
+    def test_storage_config_nfs(
         self,
         clusters_payload: Sequence[Dict[str, Any]],
         jobs_ingress_class: str,
@@ -317,38 +327,68 @@ class TestClusterConfigFactory:
 
         storage = cluster.storage
         assert storage.type == StorageType.NFS
+        assert storage.is_nfs
         nfs_mount_point = PurePath(storage_payload["nfs"]["export_path"])
         assert storage.host_mount_path == nfs_mount_point
+        assert storage.container_mount_path == PurePath("/var/storage")
         assert storage.nfs_server == storage_payload["nfs"]["server"]
         assert storage.nfs_export_path == nfs_mount_point
+        assert storage.uri_scheme == "storage"
 
-    def test_create_storage_config_host(
-        self, host_storage_payload: Dict[str, Any]
+    def test_storage_config_pvc(
+        self,
+        clusters_payload: Sequence[Dict[str, Any]],
+        jobs_ingress_class: str,
+        jobs_ingress_oauth_url: URL,
+        pvc_storage_payload: Dict[str, Any],
     ) -> None:
-        factory = ClusterConfigFactory()
-        config = factory._create_storage_config(payload=host_storage_payload)
-        # initialized fields:
-        assert config.host_mount_path == PurePath("/host/mount/path")
-        assert config.type == StorageType.HOST
-        # default fields:
-        assert config.container_mount_path == PurePath("/var/storage")
-        assert config.nfs_server is None
-        assert config.nfs_export_path is None
-        assert config.uri_scheme == "storage"
+        storage_payload = pvc_storage_payload
+        clusters_payload[0].update(storage_payload)
 
-    def test_create_storage_config_nfs(
-        self, nfs_storage_payload: Dict[str, Any]
-    ) -> None:
         factory = ClusterConfigFactory()
-        config = factory._create_storage_config(payload=nfs_storage_payload)
-        # initialized fields:
-        assert config.nfs_server == "127.0.0.1"
-        assert config.nfs_export_path == PurePath("/nfs/export/path")
-        assert config.host_mount_path == PurePath("/nfs/export/path")
-        assert config.type == StorageType.NFS
-        # default fields:
-        assert config.container_mount_path == PurePath("/var/storage")
-        assert config.uri_scheme == "storage"
+        clusters = factory.create_cluster_configs(
+            clusters_payload,
+            jobs_ingress_class=jobs_ingress_class,
+            jobs_ingress_oauth_url=jobs_ingress_oauth_url,
+        )
+        cluster = clusters[0]
+
+        storage = cluster.storage
+        assert storage.type == StorageType.PVC
+        assert storage.is_pvc
+        assert storage.host_mount_path == PurePath("/mnt/storage")
+        assert storage.container_mount_path == PurePath("/var/storage")
+        assert storage.pvc_name == "platform-storage"
+        assert storage.uri_scheme == "storage"
+
+    def test_storage_config_host(
+        self,
+        clusters_payload: Sequence[Dict[str, Any]],
+        jobs_ingress_class: str,
+        jobs_ingress_oauth_url: URL,
+        host_storage_payload: Dict[str, Any],
+    ) -> None:
+        storage_payload = host_storage_payload
+        clusters_payload[0].update(storage_payload)
+
+        factory = ClusterConfigFactory()
+        clusters = factory.create_cluster_configs(
+            clusters_payload,
+            jobs_ingress_class=jobs_ingress_class,
+            jobs_ingress_oauth_url=jobs_ingress_oauth_url,
+        )
+        cluster = clusters[0]
+
+        storage = cluster.storage
+        assert storage.host_mount_path == PurePath("/host/mount/path")
+        assert storage.type == StorageType.HOST
+        assert not storage.is_pvc
+        assert not storage.is_nfs
+        assert storage.container_mount_path == PurePath("/var/storage")
+        assert storage.nfs_server is None
+        assert storage.nfs_export_path is None
+        assert storage.pvc_name is None
+        assert storage.uri_scheme == "storage"
 
     def test_factory_skips_invalid_cluster_configs(
         self,
