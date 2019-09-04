@@ -165,6 +165,8 @@ class ClusterConfigFactory:
                 nfs_server=storage["nfs"]["server"],
                 nfs_export_path=PurePath(storage["nfs"]["export_path"]),
             )
+        if storage.get("pvc"):
+            return StorageConfig.create_pvc(pvc_name=storage["pvc"]["name"])
         return StorageConfig.create_host(
             host_mount_path=PurePath(storage["host"]["mount_path"])
         )
