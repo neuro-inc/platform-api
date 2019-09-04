@@ -17,6 +17,7 @@ from platform_api.orchestrator.kube_orchestrator import (
     KubeConfig,
     KubeOrchestrator,
     NfsVolume,
+    PVCVolume,
 )
 from platform_api.resource import (
     DEFAULT_PRESETS,
@@ -102,6 +103,27 @@ class TestStorageVolume:
         )
         volume = kube_orchestrator.create_storage_volume()
         assert volume == HostVolume(name="storage", path=PurePath("/tmp"))
+
+    def test_create_storage_volume_pvc(self) -> None:
+        storage_config = StorageConfig(
+            host_mount_path=PurePath("/tmp"), type=StorageType.PVC, pvc_name="testclaim"
+        )
+        registry_config = RegistryConfig()
+        kube_config = KubeConfig(
+            jobs_domain_name_template="{job_id}.testdomain",
+            ssh_auth_domain_name="ssh-auth.domain",
+            endpoint_url="http://1.2.3.4",
+            resource_pool_types=[ResourcePoolType()],
+        )
+        kube_orchestrator = KubeOrchestrator(
+            storage_config=storage_config,
+            registry_config=registry_config,
+            kube_config=kube_config,
+        )
+        volume = kube_orchestrator.create_storage_volume()
+        assert volume == PVCVolume(
+            name="storage", path=PurePath("/tmp"), claim_name="testclaim"
+        )
 
 
 class TestEnvironConfigFactory:

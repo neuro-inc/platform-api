@@ -388,29 +388,24 @@ class TestKubeOrchestrator:
 
     @pytest.mark.asyncio
     async def test_volumes(
-        self,
-        storage_config_host: StorageConfig,
-        kube_config: KubeConfig,
-        kube_orchestrator: KubeOrchestrator,
+        self, storage_config_host: StorageConfig, kube_orchestrator: KubeOrchestrator
     ) -> None:
-        await self._test_volumes(storage_config_host, kube_config, kube_orchestrator)
+        await self._test_volumes(storage_config_host, kube_orchestrator)
 
     @pytest.mark.asyncio
     async def test_volumes_nfs(
-        self,
-        storage_config_nfs: StorageConfig,
-        kube_config_nfs: KubeConfig,
-        kube_orchestrator_nfs: KubeOrchestrator,
+        self, storage_config_nfs: StorageConfig, kube_orchestrator_nfs: KubeOrchestrator
     ) -> None:
-        await self._test_volumes(
-            storage_config_nfs, kube_config_nfs, kube_orchestrator_nfs
-        )
+        await self._test_volumes(storage_config_nfs, kube_orchestrator_nfs)
+
+    @pytest.mark.asyncio
+    async def test_volumes_pvc(
+        self, storage_config_pvc: StorageConfig, kube_orchestrator_pvc: KubeOrchestrator
+    ) -> None:
+        await self._test_volumes(storage_config_pvc, kube_orchestrator_pvc)
 
     async def _test_volumes(
-        self,
-        storage_config: StorageConfig,
-        kube_config: KubeConfig,
-        kube_orchestrator: KubeOrchestrator,
+        self, storage_config: StorageConfig, kube_orchestrator: KubeOrchestrator
     ) -> None:
         assert storage_config.host_mount_path
         volumes = [

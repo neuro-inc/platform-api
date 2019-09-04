@@ -44,3 +44,34 @@ spec:
     targetPort: 2049
   selector:
     service: platformstoragenfs
+---
+apiVersion: v1
+kind: PersistentVolume
+metadata:
+  name: platformstorage
+  labels:
+    service: platformstorage
+spec:
+  capacity:
+    storage: 10Gi
+  accessModes:
+    - ReadWriteMany
+  persistentVolumeReclaimPolicy: Retain
+  hostPath:
+    path: /tmp
+---
+kind: PersistentVolumeClaim
+apiVersion: v1
+metadata:
+  name: platformstorage
+  namespace: platformapi-tests
+spec:
+  storageClassName: ""
+  accessModes:
+    - ReadWriteMany
+  resources:
+    requests:
+      storage: 1Gi
+  selector:
+    matchLabels:
+      service: platformstorage

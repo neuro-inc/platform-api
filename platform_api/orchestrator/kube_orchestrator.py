@@ -28,6 +28,7 @@ from .kube_client import (
     PodDescriptor,
     PodExec,
     PodStatus,
+    PVCVolume,
     Service,
     Toleration,
     Volume,
@@ -153,6 +154,13 @@ class KubeOrchestrator(Orchestrator):
                 name=self._kube_config.storage_volume_name,
                 server=self._storage_config.nfs_server,
                 path=self._storage_config.nfs_export_path,
+            )
+        if self._storage_config.is_pvc:
+            assert self._storage_config.pvc_name
+            return PVCVolume(
+                name=self._kube_config.storage_volume_name,
+                path=self._storage_config.host_mount_path,
+                claim_name=self._storage_config.pvc_name,
             )
         return HostVolume(
             name=self._kube_config.storage_volume_name,
