@@ -110,6 +110,11 @@ def storage_config_host() -> StorageConfig:
 
 
 @pytest.fixture(scope="session")
+def storage_config_pvc() -> StorageConfig:
+    return StorageConfig.create_pvc(pvc_name="platformstorage")
+
+
+@pytest.fixture(scope="session")
 def registry_config() -> RegistryConfig:
     return RegistryConfig()
 
@@ -328,30 +333,6 @@ def storage_config_nfs(nfs_volume_server: Optional[str]) -> StorageConfig:
     )
 
 
-@pytest.fixture(scope="session")
-async def kube_config_nfs(
-    kube_config_cluster_payload: Dict[str, Any],
-    kube_config_user_payload: Dict[str, Any],
-    cert_authority_data_pem: Optional[str],
-) -> KubeConfig:
-    cluster = kube_config_cluster_payload
-    user = kube_config_user_payload
-    kube_config = KubeConfig(
-        jobs_ingress_class="nginx",
-        endpoint_url=cluster["server"],
-        cert_authority_data_pem=cert_authority_data_pem,
-        cert_authority_path=None,  # disable so that `cert_authority_data_pem` works
-        auth_cert_path=user["client-certificate"],
-        auth_cert_key_path=user["client-key"],
-        jobs_domain_name_template="{job_id}.jobs.neu.ro",
-        ssh_auth_domain_name="ssh-auth.platform.neuromation.io",
-        node_label_gpu="gpu",
-        resource_pool_types=[ResourcePoolType()],
-        namespace="platformapi-tests",
-    )
-    return kube_config
-
-
 @pytest.fixture
 async def kube_orchestrator_factory(
     storage_config_host: StorageConfig,
@@ -383,13 +364,29 @@ async def kube_orchestrator(
 async def kube_orchestrator_nfs(
     storage_config_nfs: StorageConfig,
     registry_config: RegistryConfig,
-    kube_config_nfs: KubeConfig,
+    kube_config: KubeConfig,
     event_loop: Any,
 ) -> AsyncIterator[KubeOrchestrator]:
     orchestrator = KubeOrchestrator(
         storage_config=storage_config_nfs,
         registry_config=registry_config,
-        kube_config=kube_config_nfs,
+        kube_config=kube_config,
+    )
+    async with orchestrator:
+        yield orchestrator
+
+
+@pytest.fixture
+async def kube_orchestrator_pvc(
+    storage_config_pvc: StorageConfig,
+    registry_config: RegistryConfig,
+    kube_config: KubeConfig,
+    event_loop: Any,
+) -> AsyncIterator[KubeOrchestrator]:
+    orchestrator = KubeOrchestrator(
+        storage_config=storage_config_pvc,
+        registry_config=registry_config,
+        kube_config=kube_config,
     )
     async with orchestrator:
         yield orchestrator
