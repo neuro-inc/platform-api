@@ -11,6 +11,7 @@ from .resource import DEFAULT_PRESETS, Preset, ResourcePoolType, TPUResource
 class StorageType(str, Enum):
     HOST = "host"
     NFS = "nfs"
+    PVC = "pvc"
 
 
 @dataclass(frozen=True)
@@ -22,6 +23,8 @@ class StorageConfig:
 
     nfs_server: Optional[str] = None
     nfs_export_path: Optional[PurePath] = None
+
+    pvc_name: Optional[str] = None
 
     uri_scheme: str = "storage"
 
@@ -46,6 +49,9 @@ class StorageConfig:
     def is_nfs(self) -> bool:
         return self.type == StorageType.NFS
 
+    def is_pvc(self) -> bool:
+        return self.type == StorageType.PVC
+
     @classmethod
     def create_nfs(
         cls,
@@ -60,6 +66,19 @@ class StorageConfig:
             type=StorageType.NFS,
             nfs_server=nfs_server,
             nfs_export_path=nfs_export_path,
+        )
+
+    @classmethod
+    def create_pvc(
+        cls, *, container_mount_path: PurePath = container_mount_path, pvc_name: str
+    ) -> "StorageConfig":
+        return cls(
+            # NOTE: `host_mount_path`'s value here does not mean anything
+            # really. It is simply used to infer relative paths later.
+            host_mount_path=PurePath("/mnt/storage"),
+            container_mount_path=container_mount_path,
+            type=StorageType.PVC,
+            pvc_name=pvc_name,
         )
 
     @classmethod
