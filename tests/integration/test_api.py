@@ -19,7 +19,7 @@ from tests.conftest import random_str
 from tests.integration.test_config_client import create_config_api
 
 from .api import ApiConfig, JobsClient
-from .auth import _AuthClient, _User
+from .auth import AuthClient, _User
 from .conftest import MyKubeClient
 
 
@@ -827,7 +827,7 @@ class TestJobs:
 
     @pytest.fixture
     async def share_job(
-        self, auth_client: _AuthClient
+        self, auth_client: AuthClient
     ) -> AsyncIterator[Callable[[_User, _User, Any], Awaitable[None]]]:
         async def _impl(owner: _User, follower: _User, job_id: str) -> None:
             permission = Permission(uri=f"job://{owner.name}/{job_id}", action="read")
@@ -1170,7 +1170,7 @@ class TestJobs:
         client: aiohttp.ClientSession,
         job_request_factory: Callable[[], Dict[str, Any]],
         regular_user_factory: Callable[[], Any],
-        auth_client: _AuthClient,
+        auth_client: AuthClient,
     ) -> None:
         owner = await regular_user_factory()
         follower = await regular_user_factory()
@@ -1212,7 +1212,7 @@ class TestJobs:
         client: aiohttp.ClientSession,
         job_request_factory: Callable[[], Dict[str, Any]],
         regular_user_factory: Callable[[], Any],
-        auth_client: _AuthClient,
+        auth_client: AuthClient,
     ) -> None:
         owner = await regular_user_factory()
         follower = await regular_user_factory()
