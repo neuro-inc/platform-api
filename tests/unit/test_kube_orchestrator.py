@@ -492,7 +492,20 @@ class TestPodDescriptor:
                 "name": "testname",
                 "creationTimestamp": "2019-06-20T11:03:32Z",
             },
-            "spec": {"containers": [{"name": "testname", "image": "testimage"}]},
+            "spec": {
+                "containers": [{"name": "testname", "image": "testimage"}],
+                "tolerations": [
+                    {
+                        "key": "key1",
+                        "value": "value1",
+                        "operator": "Equals",
+                        "effect": "NoSchedule",
+                    },
+                    {"key": "key2", "operator": "Exists"},
+                    {"operator": "Exists"},
+                    {"key": "key3"},
+                ],
+            },
             "status": {"phase": "Running"},
         }
         pod = PodDescriptor.from_primitive(payload)
@@ -500,6 +513,14 @@ class TestPodDescriptor:
         assert pod.image == "testimage"
         assert pod.status is not None
         assert pod.status.phase == "Running"
+        assert pod.tolerations == [
+            Toleration(
+                key="key1", operator="Equals", value="value1", effect="NoSchedule"
+            ),
+            Toleration(key="key2", operator="Exists", value="", effect=""),
+            Toleration(key="", operator="Exists", value="", effect=""),
+            Toleration(key="key3", operator="Equal", value="", effect=""),
+        ]
 
     def test_from_primitive_failure(self) -> None:
         payload = {"kind": "Status", "code": 409}
