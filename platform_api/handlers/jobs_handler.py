@@ -266,7 +266,7 @@ class JobsHandler:
         permissions = infer_permissions_from_container(
             user, container, cluster_config.registry
         )
-        await check_permissions(request, user.name, permissions)
+        await check_permissions(request, permissions)
 
         name = request_payload.get("name")
         description = request_payload.get("description")
@@ -288,12 +288,11 @@ class JobsHandler:
         )
 
     async def handle_get(self, request: aiohttp.web.Request) -> aiohttp.web.Response:
-        user = await untrusted_user(request)
         job_id = request.match_info["job_id"]
         job = await self._jobs_service.get_job(job_id)
 
         permission = Permission(uri=str(job.to_uri()), action="read")
-        await check_permissions(request, user.name, [permission])
+        await check_permissions(request, [permission])
 
         cluster_name = self._jobs_service.get_cluster_name(job)
         response_payload = convert_job_to_job_response(job, cluster_name)
@@ -360,12 +359,11 @@ class JobsHandler:
     async def handle_delete(
         self, request: aiohttp.web.Request
     ) -> aiohttp.web.StreamResponse:
-        user = await untrusted_user(request)
         job_id = request.match_info["job_id"]
         job = await self._jobs_service.get_job(job_id)
 
         permission = Permission(uri=str(job.to_uri()), action="write")
-        await check_permissions(request, user.name, [permission])
+        await check_permissions(request, [permission])
 
         await self._jobs_service.delete_job(job_id)
         raise aiohttp.web.HTTPNoContent()
