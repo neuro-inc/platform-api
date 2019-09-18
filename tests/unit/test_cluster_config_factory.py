@@ -299,6 +299,7 @@ class TestClusterConfigFactory:
             orchestrator.node_label_preemptible
             == kube_payload["node_label_preemptible"]
         )
+        assert orchestrator.node_label_job == kube_payload["node_label_job"]
 
         assert orchestrator.tpu_resources == (
             TPUResource(
