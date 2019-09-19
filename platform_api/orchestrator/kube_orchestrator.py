@@ -238,6 +238,8 @@ class KubeOrchestrator(Orchestrator):
         tolerations = self._get_pod_tolerations(job)
         node_affinity = self._get_pod_node_affinity(job)
         labels = self._get_pod_labels(job)
+        # NOTE: both node selector and affinity must be satisfied for the pod
+        # to be scheduled onto a node.
         return PodDescriptor.from_job_request(
             self._storage_volume,
             job.request,
@@ -304,35 +306,54 @@ class KubeOrchestrator(Orchestrator):
         return tolerations
 
     def _get_pod_node_affinity(self, job: Job) -> Optional[NodeAffinity]:
-        if not self._kube_config.node_label_preemptible:
-            return None
+        requirements = []
+        preferences = []
+
+        if self._kube_config.node_label_job:
+            # requiring a job node
+            requirements.append(
+                NodeSelectorRequirement.create_exists(self._kube_config.node_label_job)
+            )
+
+        if self._kube_config.node_label_preemptible:
+            if job.is_preemptible:
+                preemptible_requirement = NodeSelectorRequirement.create_exists(
+                    self._kube_config.node_label_preemptible
+                )
+                if job.is_forced_to_preemptible_pool:
+                    # requiring a preemptible node
+                    requirements.append(preemptible_requirement)
+                else:
+                    # preferring a preemptible node
+                    preferences.append(preemptible_requirement)
+            else:
+                # requiring a non-preemptible node
+                requirements.append(
+                    NodeSelectorRequirement.create_does_not_exist(
+                        self._kube_config.node_label_preemptible
+                    )
+                )
 
         required_terms = []
         preferred_terms = []
 
-        if job.is_preemptible:
-            node_selector_term = NodeSelectorTerm(
-                [
-                    NodeSelectorRequirement.create_exists(
-                        self._kube_config.node_label_preemptible
-                    )
-                ]
-            )
-            if job.is_forced_to_preemptible_pool:
-                required_terms.append(node_selector_term)
-            else:
-                preferred_terms.append(NodePreferredSchedulingTerm(node_selector_term))
-        else:
-            node_selector_term = NodeSelectorTerm(
-                [
-                    NodeSelectorRequirement.create_does_not_exist(
-                        self._kube_config.node_label_preemptible
-                    )
-                ]
-            )
+        if requirements:
+            node_selector_term = NodeSelectorTerm(requirements)
             required_terms.append(node_selector_term)
 
-        return NodeAffinity(required=required_terms, preferred=preferred_terms)
+        if preferences:
+            node_selector_term = NodeSelectorTerm(preferences)
+            preferred_terms.append(NodePreferredSchedulingTerm(node_selector_term))
+
+        # NOTE:
+        # The pod is scheduled onto a node only if at least one of
+        # `NodeSelectorTerm`s is satisfied.
+        # `NodeSelectorTerm` is satisfied only if its `match_expressions` are
+        # satisfied.
+
+        if required_terms or preferred_terms:
+            return NodeAffinity(required=required_terms, preferred=preferred_terms)
+        return None
 
     async def _get_pod_node_selector(self, job: Job) -> Dict[str, str]:
         container = job.request.container
