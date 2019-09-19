@@ -497,9 +497,9 @@ async def kube_node_job(
     node_name = str(uuid.uuid4())
     await delete_node_later(node_name)
 
-    assert kube_config.node_label_job is not None
-    labels = {kube_config.node_label_job: "true"}
-    taints = [NodeTaint(key=kube_config.node_label_job, value="true")]
+    assert kube_config_node_job.node_label_job is not None
+    labels = {kube_config_node_job.node_label_job: "true"}
+    taints = [NodeTaint(key=kube_config_node_job.node_label_job, value="true")]
     await kube_client.create_node(
         node_name, capacity=default_node_capacity, labels=labels, taints=taints
     )
