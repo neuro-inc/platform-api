@@ -177,7 +177,6 @@ def kube_config_factory(
                 ),
                 ResourcePoolType(gpu=1, gpu_model="gpumodel"),
             ],
-            node_label_preemptible="preemptible",
             namespace="platformapi-tests",
             job_schedule_scaleup_timeout=5,
         )
@@ -463,8 +462,15 @@ async def kube_node_tpu(
 
 
 @pytest.fixture
+def kube_config_node_preemptible(
+    kube_config_factory: Callable[..., KubeConfig]
+) -> KubeConfig:
+    return kube_config_factory(node_label_preemptible="preemptible")
+
+
+@pytest.fixture
 async def kube_node_preemptible(
-    kube_config: KubeConfig,
+    kube_config_node_preemptible: KubeConfig,
     kube_client: MyKubeClient,
     delete_node_later: Callable[[str], Awaitable[None]],
     default_node_capacity: Dict[str, Any],
@@ -472,6 +478,7 @@ async def kube_node_preemptible(
     node_name = str(uuid.uuid4())
     await delete_node_later(node_name)
 
+    kube_config = kube_config_node_preemptible
     assert kube_config.node_label_preemptible is not None
     labels = {kube_config.node_label_preemptible: "true"}
     taints = [NodeTaint(key=kube_config.node_label_preemptible, value="true")]
@@ -497,9 +504,10 @@ async def kube_node_job(
     node_name = str(uuid.uuid4())
     await delete_node_later(node_name)
 
-    assert kube_config_node_job.node_label_job is not None
-    labels = {kube_config_node_job.node_label_job: "true"}
-    taints = [NodeTaint(key=kube_config_node_job.node_label_job, value="true")]
+    kube_config = kube_config_node_job
+    assert kube_config.node_label_job is not None
+    labels = {kube_config.node_label_job: "true"}
+    taints = [NodeTaint(key=kube_config.node_label_job, value="true")]
     await kube_client.create_node(
         node_name, capacity=default_node_capacity, labels=labels, taints=taints
     )

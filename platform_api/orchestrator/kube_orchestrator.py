@@ -351,8 +351,9 @@ class KubeOrchestrator(Orchestrator):
         # `NodeSelectorTerm` is satisfied only if its `match_expressions` are
         # satisfied.
 
-        assert required_terms or preferred_terms
-        return NodeAffinity(required=required_terms, preferred=preferred_terms)
+        if required_terms or preferred_terms:
+            return NodeAffinity(required=required_terms, preferred=preferred_terms)
+        return None
 
     async def _get_pod_node_selector(self, job: Job) -> Dict[str, str]:
         container = job.request.container

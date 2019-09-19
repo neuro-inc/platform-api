@@ -1725,6 +1725,17 @@ class TestNodeSelector:
 
 
 class TestPreemption:
+    @pytest.fixture
+    async def kube_orchestrator(
+        self,
+        kube_orchestrator_factory: Callable[..., KubeOrchestrator],
+        kube_config_node_preemptible: KubeConfig,
+    ) -> AsyncIterator[KubeOrchestrator]:
+        async with kube_orchestrator_factory(
+            kube_config=kube_config_node_preemptible
+        ) as kube_orchestrator:
+            yield kube_orchestrator
+
     @pytest.mark.asyncio
     async def test_preemptible_job_lost_running_pod(
         self,
