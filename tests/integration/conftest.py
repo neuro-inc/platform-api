@@ -483,6 +483,31 @@ async def kube_node_preemptible(
 
 
 @pytest.fixture
+def kube_config_node_job(kube_config_factory: Callable[..., KubeConfig]) -> KubeConfig:
+    return kube_config_factory(node_label_job="platform.neuromation.io/job")
+
+
+@pytest.fixture
+async def kube_node_job(
+    kube_config_node_job: KubeConfig,
+    kube_client: MyKubeClient,
+    delete_node_later: Callable[[str], Awaitable[None]],
+    default_node_capacity: Dict[str, Any],
+) -> AsyncIterator[str]:
+    node_name = str(uuid.uuid4())
+    await delete_node_later(node_name)
+
+    assert kube_config.node_label_job is not None
+    labels = {kube_config.node_label_job: "true"}
+    taints = [NodeTaint(key=kube_config.node_label_job, value="true")]
+    await kube_client.create_node(
+        node_name, capacity=default_node_capacity, labels=labels, taints=taints
+    )
+
+    yield node_name
+
+
+@pytest.fixture
 def jobs_config() -> JobsConfig:
     return JobsConfig(orphaned_job_owner="compute", deletion_delay_s=0)
 
