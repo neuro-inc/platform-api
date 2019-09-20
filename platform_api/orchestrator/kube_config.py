@@ -39,6 +39,7 @@ class KubeConfig(OrchestratorConfig):
 
     node_label_gpu: Optional[str] = None
     node_label_preemptible: Optional[str] = None
+    node_label_job: Optional[str] = None
 
     def __post_init__(self) -> None:
         if not self.endpoint_url or (

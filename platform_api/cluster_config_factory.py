@@ -116,6 +116,7 @@ class ClusterConfigFactory:
             jobs_ingress_oauth_url=jobs_ingress_oauth_url,
             node_label_gpu=kube["node_label_gpu"],
             node_label_preemptible=kube["node_label_preemptible"],
+            node_label_job=kube.get("node_label_job"),
         )
 
     def _create_tpu_preset(

@@ -59,6 +59,7 @@ def clusters_payload(nfs_storage_payload: Dict[str, Any]) -> List[Dict[str, Any]
                     "namespace": "default",
                     "node_label_gpu": "cloud.google.com/gke-accelerator",
                     "node_label_preemptible": "cloud.google.com/gke-preemptible",
+                    "node_label_job": "platform.neuromation.io/job",
                 },
                 "job_hostname_template": "{job_id}.jobs.neu.ro",
                 "resource_pool_types": [
@@ -299,6 +300,7 @@ class TestClusterConfigFactory:
             orchestrator.node_label_preemptible
             == kube_payload["node_label_preemptible"]
         )
+        assert orchestrator.node_label_job == kube_payload["node_label_job"]
 
         assert orchestrator.tpu_resources == (
             TPUResource(
