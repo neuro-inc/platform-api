@@ -4,7 +4,7 @@ from setuptools import find_packages, setup
 install_requires = (
     "aiohttp==3.6.1",
     # WARN: aioredis does not support Redis Cluster yet
-    "aioredis==1.2.0",
+    "aioredis==1.3.0",
     "async-exit-stack==1.0.1",  # backport from 3.7 stdlib
     "async-generator==1.10",
     "dataclasses==0.6",  # backport from 3.7 stdlib
