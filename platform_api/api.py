@@ -156,6 +156,13 @@ async def handle_exceptions(
         )
     except aiohttp.web.HTTPException:
         raise
+    except aiohttp.ClientResponseError as e:
+        payload = {
+            "error": e.message,
+            "method": e.request_info.method,
+            "url": str(e.request_info.real_url),
+        }
+        return aiohttp.web.json_response(payload, status=e.status)
     except Exception as e:
         msg_str = (
             f"Unexpected exception: {str(e)}. " f"Path with query: {request.path_qs}."
