@@ -168,16 +168,20 @@ class JobsService:
             # the job may have been changed and a retry is needed.
             pass
 
-    async def _raise_for_run_time_quota(self, user: User) -> None:
+    async def _raise_for_run_time_quota(self, user: User, gpu_requested: bool) -> None:
         if not user.has_quota():
             return
         quota = user.quota
         run_time_filter = JobFilter(owners={user.name})
         run_time = await self._jobs_storage.get_aggregated_run_time(run_time_filter)
-        if run_time.total_gpu_run_time_delta >= quota.total_gpu_run_time_delta:
-            raise GpuQuotaExceededError(user.name)
+        # Even GPU jobs require CPU, so always check CPU quota
         if run_time.total_non_gpu_run_time_delta >= quota.total_non_gpu_run_time_delta:
             raise NonGpuQuotaExceededError(user.name)
+        if (
+            gpu_requested
+            and run_time.total_gpu_run_time_delta >= quota.total_gpu_run_time_delta
+        ):
+            raise GpuQuotaExceededError(user.name)
 
     async def create_job(
         self,
@@ -189,7 +193,9 @@ class JobsService:
     ) -> Tuple[Job, Status]:
 
         try:
-            await self._raise_for_run_time_quota(user)
+            await self._raise_for_run_time_quota(
+                user, gpu_requested=bool(job_request.container.resources.gpu)
+            )
         except QuotaException:
             await self._notifications_client.notify(
                 JobCannotStartQuotaReached(user.name)

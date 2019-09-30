@@ -131,6 +131,21 @@ def job_request_factory() -> Callable[[], JobRequest]:
     return factory
 
 
+@pytest.fixture
+def gpu_job_request_factory() -> Callable[[], JobRequest]:
+    def factory() -> JobRequest:
+        return JobRequest.create(
+            Container(
+                image="testimage",
+                resources=ContainerResources(
+                    cpu=1, memory_mb=128, gpu=1, gpu_model_id="nvidia-tesla-k80"
+                ),
+            )
+        )
+
+    return factory
+
+
 @pytest.fixture()
 def cert_authority_path(tmp_path: Path) -> str:
     ca_path = tmp_path / "ca.crt"
