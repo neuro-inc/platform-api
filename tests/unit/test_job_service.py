@@ -95,7 +95,7 @@ class TestJobsService:
         self,
         mock_orchestrator: MockOrchestrator,
         jobs_service: JobsService,
-        job_request_factory: Callable[..., JobRequest],
+        job_request_factory: Callable[[], JobRequest],
     ) -> None:
         user = User(name="testuser", token="")
         job_name = "test-Job_name"
@@ -126,7 +126,7 @@ class TestJobsService:
         self,
         mock_orchestrator: MockOrchestrator,
         jobs_service: JobsService,
-        job_request_factory: Callable[..., JobRequest],
+        job_request_factory: Callable[[], JobRequest],
         first_job_status: JobStatus,
     ) -> None:
         user = User(name="testuser", token="")
@@ -158,7 +158,7 @@ class TestJobsService:
         jobs_service: JobsService,
         mock_orchestrator: MockOrchestrator,
         mock_jobs_storage: MockJobsStorage,
-        job_request_factory: Callable[..., JobRequest],
+        job_request_factory: Callable[[], JobRequest],
     ) -> None:
         mock_orchestrator.raise_on_delete = False
         mock_jobs_storage.fail_set_job_transaction = True
@@ -181,7 +181,7 @@ class TestJobsService:
         jobs_service: JobsService,
         mock_orchestrator: MockOrchestrator,
         mock_jobs_storage: MockJobsStorage,
-        job_request_factory: Callable[..., JobRequest],
+        job_request_factory: Callable[[], JobRequest],
     ) -> None:
         mock_orchestrator.raise_on_delete = True
         mock_jobs_storage.fail_set_job_transaction = True
@@ -228,7 +228,7 @@ class TestJobsService:
         jobs_service: JobsService,
         mock_orchestrator: MockOrchestrator,
         mock_jobs_storage: MockJobsStorage,
-        job_request_factory: Callable[..., JobRequest],
+        job_request_factory: Callable[[], JobRequest],
     ) -> None:
         user = User(name="testuser", token="")
 
@@ -280,7 +280,7 @@ class TestJobsService:
         self,
         jobs_service_factory: Callable[..., JobsService],
         mock_orchestrator: MockOrchestrator,
-        job_request_factory: Callable[..., JobRequest],
+        job_request_factory: Callable[[], JobRequest],
     ) -> None:
         jobs_service = jobs_service_factory(deletion_delay_s=60)
 
@@ -304,7 +304,7 @@ class TestJobsService:
         self,
         jobs_service_factory: Callable[..., JobsService],
         mock_orchestrator: MockOrchestrator,
-        job_request_factory: Callable[..., JobRequest],
+        job_request_factory: Callable[[], JobRequest],
     ) -> None:
         jobs_service = jobs_service_factory(deletion_delay_s=0)
 
@@ -327,7 +327,7 @@ class TestJobsService:
         self,
         jobs_service_factory: Callable[..., JobsService],
         mock_orchestrator: MockOrchestrator,
-        job_request_factory: Callable[..., JobRequest],
+        job_request_factory: Callable[[], JobRequest],
     ) -> None:
         mock_orchestrator.raise_on_get_job_status = True
         jobs_service = jobs_service_factory(deletion_delay_s=0)
@@ -363,7 +363,7 @@ class TestJobsService:
         self,
         jobs_service_factory: Callable[..., JobsService],
         mock_orchestrator: MockOrchestrator,
-        job_request_factory: Callable[..., JobRequest],
+        job_request_factory: Callable[[], JobRequest],
         reason: str,
         description: str,
     ) -> None:
@@ -392,7 +392,7 @@ class TestJobsService:
         self,
         jobs_service_factory: Callable[..., JobsService],
         mock_orchestrator: MockOrchestrator,
-        job_request_factory: Callable[..., JobRequest],
+        job_request_factory: Callable[[], JobRequest],
     ) -> None:
         jobs_service = jobs_service_factory(deletion_delay_s=60)
 
@@ -419,7 +419,7 @@ class TestJobsService:
         self,
         jobs_service_factory: Callable[..., JobsService],
         mock_orchestrator: MockOrchestrator,
-        job_request_factory: Callable[..., JobRequest],
+        job_request_factory: Callable[[], JobRequest],
     ) -> None:
         jobs_service = jobs_service_factory(deletion_delay_s=0)
 
@@ -468,7 +468,7 @@ class TestJobsService:
     async def test_create_job_quota_allows(
         self,
         jobs_service: JobsService,
-        job_request_factory: Callable[..., JobRequest],
+        job_request_factory: Callable[[], JobRequest],
         quota: AggregatedRunTime,
     ) -> None:
         user = User(name="testuser", token="token", quota=quota)
@@ -508,7 +508,7 @@ class TestJobsService:
     async def test_raise_for_quota_raise_for_non_gpu(
         self,
         jobs_service: JobsService,
-        job_request_factory: Callable[..., JobRequest],
+        job_request_factory: Callable[[], JobRequest],
         quota: AggregatedRunTime,
     ) -> None:
         user = User(name="testuser", token="token", quota=quota)
@@ -819,7 +819,7 @@ class TestJobServiceNotification:
         self,
         jobs_service: JobsService,
         mock_orchestrator: MockOrchestrator,
-        job_request_factory: Callable[..., JobRequest],
+        job_request_factory: Callable[[], JobRequest],
         mock_notifications_client: MockNotificationsClient,
     ) -> None:
         user = User(name="testuser", token="")
@@ -863,7 +863,7 @@ class TestJobServiceNotification:
         self,
         jobs_service: JobsService,
         mock_orchestrator: MockOrchestrator,
-        job_request_factory: Callable[..., JobRequest],
+        job_request_factory: Callable[[], JobRequest],
         mock_notifications_client: MockNotificationsClient,
     ) -> None:
         user = User(name="testuser", token="")
