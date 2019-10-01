@@ -1332,6 +1332,80 @@ class TestJobs:
             await jobs_client.delete_job(job_id=job_id)
 
     @pytest.mark.asyncio
+    async def test_get_job_by_cluster_name_and_statuses(
+        self,
+        api: ApiConfig,
+        client: aiohttp.ClientSession,
+        regular_user_factory: Callable[..., Any],
+        jobs_client_factory: Callable[[_User], JobsClient],
+        run_job: Callable[..., Awaitable[None]],
+        share_job: Callable[[_User, _User, Any], Awaitable[None]],
+        create_job_request_no_name: Callable[[], Dict[str, Any]],
+    ) -> None:
+        job_req_no_name = create_job_request_no_name()
+        usr1 = await regular_user_factory()
+        usr2 = await regular_user_factory(cluster_name="my-cluster")
+        jobs_client = jobs_client_factory(usr1)
+
+        job_usr1_killed = await run_job(usr1, job_req_no_name, do_kill=True)
+        job_usr1 = await run_job(usr1, job_req_no_name, do_kill=False)
+
+        job_usr2_killed = await run_job(usr2, job_req_no_name, do_kill=True)
+        job_usr2 = await run_job(usr2, job_req_no_name, do_kill=False)
+
+        # usr2 shares their jobs with usr1
+        await share_job(usr2, usr1, job_usr2_killed)
+        await share_job(usr2, usr1, job_usr2)
+
+        # filter: default cluster
+        filters = [("cluster", "default")]
+        jobs = await jobs_client.get_all_jobs(filters)
+        job_ids = {job["id"] for job in jobs}
+        assert job_ids == {job_usr1_killed, job_usr1}
+
+        # filter: other cluster
+        filters = [("cluster", "my-cluster")]
+        jobs = await jobs_client.get_all_jobs(filters)
+        job_ids = {job["id"] for job in jobs}
+        assert job_ids == {job_usr2_killed, job_usr2}
+
+        # filter: invalid cluster
+        filters = [("cluster", "invalid-cluster")]
+        jobs = await jobs_client.get_all_jobs(filters)
+        job_ids = {job["id"] for job in jobs}
+        assert job_ids == set()
+
+        # filter: multiple clusters
+        filters = [("cluster", "default"), ("cluster", "my-cluster")]
+        jobs = await jobs_client.get_all_jobs(filters)
+        job_ids = {job["id"] for job in jobs}
+        assert job_ids == {job_usr1_killed, job_usr1, job_usr2_killed, job_usr2}
+
+        # filter: default cluster + status
+        filters = [("cluster", "default"), ("status", "running")]
+        jobs = await jobs_client.get_all_jobs(filters)
+        job_ids = {job["id"] for job in jobs}
+        assert job_ids == {job_usr1}
+
+        # filter: other cluster + status
+        filters = [("cluster", "my-cluster"), ("status", "running")]
+        jobs = await jobs_client.get_all_jobs(filters)
+        job_ids = {job["id"] for job in jobs}
+        assert job_ids == {job_usr2}
+
+        # filter: other cluster + self owner
+        filters = [("cluster", "my-cluster"), ("owner", usr1.name)]
+        jobs = await jobs_client.get_all_jobs(filters)
+        job_ids = {job["id"] for job in jobs}
+        assert job_ids == set()
+
+        # filter: other cluster + other owner
+        filters = [("cluster", "my-cluster"), ("owner", usr2.name)]
+        jobs = await jobs_client.get_all_jobs(filters)
+        job_ids = {job["id"] for job in jobs}
+        assert job_ids == {job_usr2_killed, job_usr2}
+
+    @pytest.mark.asyncio
     async def test_get_job_by_hostname_self_owner(
         self,
         api: ApiConfig,
