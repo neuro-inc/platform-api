@@ -1356,37 +1356,37 @@ class TestJobs:
         all_job_ids = {job_usr1_killed, job_usr1, job_usr2}
 
         # filter: default cluster
-        filters = [("cluster", "default")]
+        filters = [("cluster_name", "default")]
         jobs = await jobs_client.get_all_jobs(filters)
         job_ids = {job["id"] for job in jobs}
         assert job_ids == all_job_ids
 
         # filter: other cluster
-        filters = [("cluster", "other-cluster")]
+        filters = [("cluster_name", "other-cluster")]
         jobs = await jobs_client.get_all_jobs(filters)
         job_ids = {job["id"] for job in jobs}
-        assert job_ids == {}
+        assert job_ids == set()
 
         # filter: default cluster + status
-        filters = [("cluster", "default"), ("status", "running")]
+        filters = [("cluster_name", "default"), ("status", "running")]
         jobs = await jobs_client.get_all_jobs(filters)
         job_ids = {job["id"] for job in jobs}
         assert job_ids == {job_usr1, job_usr2}
 
         # filter: other cluster + status
-        filters = [("cluster", "other-cluster"), ("status", "running")]
+        filters = [("cluster_name", "other-cluster"), ("status", "running")]
         jobs = await jobs_client.get_all_jobs(filters)
         job_ids = {job["id"] for job in jobs}
         assert job_ids == set()
 
         # filter: default cluster + self owner
-        filters = [("cluster", "default"), ("owner", usr1.name)]
+        filters = [("cluster_name", "default"), ("owner", usr1.name)]
         jobs = await jobs_client.get_all_jobs(filters)
         job_ids = {job["id"] for job in jobs}
         assert job_ids == {job_usr1_killed, job_usr1}
 
         # filter: default cluster + other owner
-        filters = [("cluster", "default"), ("owner", usr2.name)]
+        filters = [("cluster_name", "default"), ("owner", usr2.name)]
         jobs = await jobs_client.get_all_jobs(filters)
         job_ids = {job["id"] for job in jobs}
         assert job_ids == {job_usr2}
