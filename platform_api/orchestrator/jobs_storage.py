@@ -430,8 +430,8 @@ class RedisJobsStorage(JobsStorage):
         self,
         *,
         statuses: AbstractSet[JobStatus],
-        clusters: Optional[AbstractSet[str]] = None,
-        owners: Optional[AbstractSet[str]] = None,
+        clusters: AbstractSet[str],
+        owners: AbstractSet[str],
         name: Optional[str] = None,
     ) -> List[str]:
         if name and not owners:
@@ -441,28 +441,36 @@ class RedisJobsStorage(JobsStorage):
 
         status_keys = [self._generate_jobs_status_index_key(s) for s in statuses]
 
-        if owners:
-            if name:
-                index_keys = [
-                    self._generate_jobs_name_index_zset_key(owner, name)
-                    for owner in owners
-                ]
-            else:
-                index_keys = [
-                    self._generate_jobs_owner_index_key(owner) for owner in owners
-                ]
-        elif clusters:
-            index_keys = [
-                self._generate_jobs_cluster_index_key(cluster) for cluster in clusters
+        if name:
+            owner_keys = [
+                self._generate_jobs_name_index_zset_key(owner, name) for owner in owners
             ]
         else:
-            index_keys = []
+            owner_keys = [
+                self._generate_jobs_owner_index_key(owner) for owner in owners
+            ]
+        cluster_keys = [
+            self._generate_jobs_cluster_index_key(cluster) for cluster in clusters
+        ]
 
         temp_key = self._generate_temp_zset_key()
         tr = self._client.multi_exec()
 
+        index_keys = owner_keys or cluster_keys
         if index_keys:
             tr.zunionstore(temp_key, *index_keys, aggregate=tr.ZSET_AGGREGATE_MAX)
+            if owner_keys and cluster_keys:
+                cluster_temp_key = self._generate_temp_zset_key()
+                tr.zunionstore(
+                    cluster_temp_key, *cluster_keys, aggregate=tr.ZSET_AGGREGATE_MAX
+                )
+                tr.zinterstore(
+                    temp_key,
+                    temp_key,
+                    cluster_temp_key,
+                    aggregate=tr.ZSET_AGGREGATE_MAX,
+                )
+                tr.delete(cluster_temp_key)
             if status_keys:
                 status_temp_key = self._generate_temp_zset_key()
                 tr.zunionstore(
