@@ -488,11 +488,11 @@ class TestJobsService:
     async def test_raise_for_quota_raise_for_gpu(
         self,
         jobs_service: JobsService,
-        job_request_factory: Callable[[], JobRequest],
+        job_request_factory: Callable[..., JobRequest],
         quota: AggregatedRunTime,
     ) -> None:
         user = User(name="testuser", token="token", quota=quota)
-        request = job_request_factory()
+        request = job_request_factory(with_gpu=True)
 
         with pytest.raises(GpuQuotaExceededError, match="GPU quota exceeded"):
             await jobs_service.create_job(request, user)
@@ -513,6 +513,29 @@ class TestJobsService:
     ) -> None:
         user = User(name="testuser", token="token", quota=quota)
         request = job_request_factory()
+
+        with pytest.raises(NonGpuQuotaExceededError, match="non-GPU quota exceeded"):
+            await jobs_service.create_job(request, user)
+
+    @pytest.mark.asyncio
+    async def test_create_job_quota_gpu_exceeded_cpu_allows_ok_for_cpu_job(
+        self, jobs_service: JobsService, job_request_factory: Callable[..., JobRequest]
+    ) -> None:
+        quota = create_quota(time_gpu_minutes=0, time_non_gpu_minutes=100)
+        user = User(name="testuser", token="token", quota=quota)
+        request = job_request_factory()
+
+        job, _ = await jobs_service.create_job(request, user)
+        assert job.status == JobStatus.PENDING
+
+    @pytest.mark.asyncio
+    async def test_create_job_quota_gpu_allows_cpu_exceeded_raise_for_gpu_job(
+        self, jobs_service: JobsService, job_request_factory: Callable[..., JobRequest]
+    ) -> None:
+        # Even GPU-jobs require CPU
+        quota = create_quota(time_gpu_minutes=100, time_non_gpu_minutes=0)
+        user = User(name="testuser", token="token", quota=quota)
+        request = job_request_factory(with_gpu=True)
 
         with pytest.raises(NonGpuQuotaExceededError, match="non-GPU quota exceeded"):
             await jobs_service.create_job(request, user)
