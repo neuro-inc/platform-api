@@ -18,8 +18,8 @@ logger = logging.getLogger(__name__)
 class User:
     name: str
     token: str = field(repr=False)
+    cluster_name: str
     quota: AggregatedRunTime = field(default=DEFAULT_QUOTA_NO_RESTRICTIONS)
-    cluster_name: str = ""
 
     def has_quota(self) -> bool:
         return self.quota != DEFAULT_QUOTA_NO_RESTRICTIONS
@@ -42,7 +42,7 @@ async def untrusted_user(request: Request) -> User:
     if name is None:
         raise HTTPUnauthorized()
 
-    return User(name=name, token=identity)
+    return User(name=name, token=identity, cluster_name="")
 
 
 async def authorized_user(request: Request) -> User:

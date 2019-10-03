@@ -159,7 +159,7 @@ async def regular_user_factory(
             name=user.name,
             token=user_token,
             quota=user_quota,
-            cluster_name=cluster_name or "",
+            cluster_name=cluster_name or "default",
         )
 
     return _factory

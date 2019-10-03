@@ -39,7 +39,7 @@ class TestJobsPoller:
         mock_orchestrator: MockOrchestrator,
         job_request_factory: Callable[[], JobRequest],
     ) -> None:
-        user = User(name="testuser", token="")
+        user = User(name="testuser", token="", cluster_name="default")
         await jobs_service.create_job(job_request_factory(), user=user)
         await jobs_service.create_job(job_request_factory(), user=user)
 
@@ -57,7 +57,7 @@ class TestJobsPoller:
         mock_orchestrator: MockOrchestrator,
         job_request_factory: Callable[[], JobRequest],
     ) -> None:
-        user = User(name="testuser", token="")
+        user = User(name="testuser", token="", cluster_name="default")
         await jobs_service.create_job(job_request_factory(), user=user)
         await jobs_service.create_job(job_request_factory(), user=user)
 

@@ -695,7 +695,7 @@ class TestBulkJobFilterBuilder:
 
 class TestInferPermissionsFromContainer:
     def test_no_volumes(self) -> None:
-        user = User(name="testuser", token="")
+        user = User(name="testuser", token="", cluster_name="test-cluster")
         container = Container(
             image="image", resources=ContainerResources(cpu=0.1, memory_mb=16)
         )
@@ -704,7 +704,7 @@ class TestInferPermissionsFromContainer:
         assert permissions == [Permission(uri="job://testuser", action="write")]
 
     def test_volumes(self) -> None:
-        user = User(name="testuser", token="")
+        user = User(name="testuser", token="", cluster_name="test-cluster")
         container = Container(
             image="image",
             resources=ContainerResources(cpu=0.1, memory_mb=16),
@@ -731,7 +731,7 @@ class TestInferPermissionsFromContainer:
         ]
 
     def test_image(self) -> None:
-        user = User(name="testuser", token="")
+        user = User(name="testuser", token="", cluster_name="test-cluster")
         container = Container(
             image="example.com/testuser/image",
             resources=ContainerResources(cpu=0.1, memory_mb=16),
