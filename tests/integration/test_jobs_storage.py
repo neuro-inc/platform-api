@@ -992,19 +992,17 @@ class TestRedisJobsStorage:
         assert job.status == JobStatus.RUNNING
 
     @pytest.mark.asyncio
-    async def test_reindex_job_owners_no_jobs(
-        self, redis_client: aioredis.Redis
-    ) -> None:
+    async def test_migrate_no_jobs(self, redis_client: aioredis.Redis) -> None:
         storage = RedisJobsStorage(client=redis_client)
 
         jobs = await storage.get_all_jobs()
         assert not jobs
 
-        number_reindexed = await storage.reindex_job_owners()
-        assert number_reindexed == 0
+        assert await storage.migrate()
+        assert not await storage.migrate()
 
     @pytest.mark.asyncio
-    async def test_reindex_job_owners(self, redis_client: aioredis.Redis) -> None:
+    async def test_migrate(self, redis_client: aioredis.Redis) -> None:
         first_job = self._create_pending_job(owner="testuser")
         second_job = self._create_running_job(owner="testuser")
         storage = RedisJobsStorage(client=redis_client)
@@ -1022,15 +1020,13 @@ class TestRedisJobsStorage:
         jobs = await storage.get_all_jobs(filters)
         assert not jobs
 
-        number_reindexed = await storage.reindex_job_owners()
-        assert number_reindexed == 2
+        assert await storage.migrate()
 
         jobs = await storage.get_all_jobs(filters)
         job_ids = {job.id for job in jobs}
         assert job_ids == {first_job.id, second_job.id}
 
-        number_reindexed = await storage.reindex_job_owners()
-        assert number_reindexed == 0
+        assert not await storage.migrate()
 
     @pytest.mark.asyncio
     async def test_get_aggregated_run_time_for_user(
