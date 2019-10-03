@@ -229,7 +229,7 @@ class JobRecord:
     request: JobRequest
     owner: str
     status_history: JobStatusHistory
-    cluster_name: str = ""
+    cluster_name: str
     name: Optional[str] = None
     is_preemptible: bool = False
     is_deleted: bool = False
@@ -337,6 +337,9 @@ class JobRecord:
         )
 
     def to_primitive(self) -> Dict[str, Any]:
+        assert (
+            self.cluster_name
+        ), "empty cluster name must be already replaced with `default`"
         statuses = [item.to_primitive() for item in self.status_history.all]
         # preserving `status` and `finished_at` for forward compat
         result = {
@@ -373,7 +376,7 @@ class JobRecord:
             status_history=status_history,
             is_deleted=payload.get("is_deleted", False),
             owner=payload.get("owner") or orphaned_job_owner,
-            cluster_name=payload.get("cluster_name") or cls.cluster_name,
+            cluster_name=payload.get("cluster_name") or "",
             name=payload.get("name"),
             is_preemptible=payload.get("is_preemptible", False),
             internal_hostname=payload.get("internal_hostname", None),
