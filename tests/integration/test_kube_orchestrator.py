@@ -2,6 +2,7 @@ import asyncio
 import shlex
 import time
 import uuid
+from dataclasses import replace
 from pathlib import PurePath
 from typing import Any, AsyncIterator, Awaitable, Callable, Dict, Iterator, Optional
 
@@ -47,13 +48,16 @@ from .conftest import ApiRunner, MyKubeClient
 
 
 class MyJob(Job):
-    def __init__(self, orchestrator: KubeOrchestrator, **kwargs: Any) -> None:
+    def __init__(
+        self, orchestrator: KubeOrchestrator, *, record: JobRecord, **kwargs: Any
+    ) -> None:
         self._orchestrator = orchestrator
-        kwargs.setdefault("owner", "test-owner")
+        if not record.owner:
+            record = replace(record, owner="test-owner")
         super().__init__(
             storage_config=orchestrator.storage_config,
             orchestrator_config=orchestrator.config,
-            **kwargs,
+            record=record,
         )
 
     async def start(self) -> JobStatus:
