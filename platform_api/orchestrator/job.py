@@ -407,21 +407,10 @@ class Job:
         self,
         storage_config: StorageConfig,
         orchestrator_config: OrchestratorConfig,
-        job_request: Optional[JobRequest] = None,
-        status_history: Optional[JobStatusHistory] = None,
-        # leaving `status` for backward compat with tests
-        status: JobStatus = JobStatus.PENDING,
-        is_deleted: bool = False,
-        current_datetime_factory: Callable[[], datetime] = current_datetime_factory,
-        owner: str = "",
-        name: Optional[str] = None,
-        is_preemptible: bool = False,
-        is_forced_to_preemptible_pool: bool = False,
-        # leaving for backward compat with tests
-        orphaned_job_owner: str = DEFAULT_ORPHANED_JOB_OWNER,
         *,
-        schedule_timeout: Optional[float] = None,
-        record: Optional[JobRecord] = None,
+        record: JobRecord,
+        current_datetime_factory: Callable[[], datetime] = current_datetime_factory,
+        is_forced_to_preemptible_pool: bool = False,
     ) -> None:
         """
         :param bool is_forced_to_preemptible_pool:
@@ -430,22 +419,6 @@ class Job:
 
         self._storage_config = storage_config
         self._orchestrator_config = orchestrator_config
-
-        if not record:
-            # NOTE: this branch is left for backward compat reasons
-            assert job_request
-            record = JobRecord.create(
-                request=job_request,
-                owner=owner,
-                status=status,
-                status_history=status_history,
-                name=name,
-                is_preemptible=is_preemptible,
-                is_deleted=is_deleted,
-                current_datetime_factory=current_datetime_factory,
-                orphaned_job_owner=orphaned_job_owner,
-                schedule_timeout=schedule_timeout,
-            )
 
         self._record = record
         self._job_request = record.request
