@@ -1918,8 +1918,8 @@ class TestPreemption:
                 cluster_name="default",
                 # marking the job as preemptible
                 is_preemptible=True,
-                is_forced_to_preemptible_pool=True,
             ),
+            is_forced_to_preemptible_pool=True,
         )
         await delete_job_later(job)
         await kube_orchestrator.start_job(job, token="test-token")
@@ -1957,8 +1957,8 @@ class TestPreemption:
                 cluster_name="default",
                 # marking the job as preemptible
                 is_preemptible=True,
-                is_forced_to_preemptible_pool=True,
             ),
+            is_forced_to_preemptible_pool=True,
         )
         await delete_job_later(job)
         await kube_orchestrator.start_job(job, token="test-token")
@@ -2005,8 +2005,8 @@ class TestPreemption:
                 cluster_name="default",
                 # marking the job as preemptible
                 is_preemptible=True,
-                is_forced_to_preemptible_pool=True,
             ),
+            is_forced_to_preemptible_pool=True,
         )
         await delete_job_later(job)
         await kube_orchestrator.start_job(job, token="test-token")
@@ -2029,8 +2029,8 @@ class TestPreemption:
                 cluster_name="default",
                 # marking the job as preemptible
                 is_preemptible=True,
-                is_forced_to_preemptible_pool=True,
             ),
+            is_forced_to_preemptible_pool=True,
         )
 
         # triggering pod recreation
