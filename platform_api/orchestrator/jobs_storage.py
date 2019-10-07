@@ -118,8 +118,8 @@ class JobsStorage(ABC):
     async def get_aggregated_run_time(self, job_filter: JobFilter) -> AggregatedRunTime:
         pass
 
-    async def migrate(self) -> None:
-        pass
+    async def migrate(self) -> bool:
+        return False
 
 
 class InMemoryJobsStorage(JobsStorage):
@@ -528,44 +528,44 @@ class RedisJobsStorage(JobsStorage):
             total_non_gpu_run_time_delta=non_gpu_run_time,
         )
 
-    async def migrate(self) -> None:
-        await self.reindex_job_owners()
+    async def migrate(self) -> bool:
+        version = int(await self._client.get("version") or "0")
+        if version >= 1:
+            return False
+        await self._reindex_job_owners()
+        await self._update_job_cluster_names()
+        await self._client.set("version", "1")
+        return True
 
-    async def reindex_job_owners(self) -> int:
+    async def _reindex_job_owners(self) -> None:
         logger.info("Starting reindexing job owners")
 
-        job_ids = await self._get_job_ids_unindexed_owner()
-        for job_id in job_ids:
-            job = await self.get_job(job_id)
-            tr = self._client.pipeline()
+        tr = self._client.pipeline()
+        async for job in self._iter_all_jobs():
             self._update_owner_index(tr, job)
-            await tr.execute()
+        await tr.execute()
 
         logger.info("Finished reindexing job owners")
-        return len(job_ids)
 
-    async def _get_job_ids_unindexed_owner(self) -> Set[str]:
+    async def _update_job_cluster_names(self) -> None:
+        logger.info("Starting updating job cluster names")
+
+        total = changed = 0
+        tr = self._client.pipeline()
+        async for job in self._iter_all_jobs():
+            total += 1
+            if job.cluster_name:
+                continue
+            changed += 1
+            job.cluster_name = "default"
+            payload = json.dumps(job.to_primitive())
+            tr.set(self._generate_job_key(job.id), payload)
+        await tr.execute()
+
+        logger.info(f"Finished updating job cluster names ({changed}/{total})")
+
+    async def _iter_all_jobs(self) -> AsyncIterator[JobRecord]:
         jobs_key = self._generate_jobs_index_key()
-        job_ids = {job_id.decode() async for job_id in self._client.isscan(jobs_key)}
-        job_ids -= await self._get_job_ids_indexed_owner()
-
-        logger.info(f"Found {len(job_ids)} jobs with unindexed owners")
-        return job_ids
-
-    async def _get_job_owner_keys(self) -> List[str]:
-        owner_index_key_template = self._generate_jobs_owner_index_key("*")
-        return [key async for key in self._client.iscan(match=owner_index_key_template)]
-
-    async def _get_job_ids_indexed_owner(self) -> Set[str]:
-        owners_keys = await self._get_job_owner_keys()
-        logger.info(f"Found {len(owners_keys)} job owner index keys")
-        if not owners_keys:
-            return set()
-
-        temp_key = self._generate_temp_zset_key()
-        tr = self._client.multi_exec()
-        tr.zunionstore(temp_key, *owners_keys)
-        tr.zrange(temp_key)
-        tr.delete(temp_key)
-        *_, job_ids, _ = await tr.execute()
-        return {job_id.decode() for job_id in job_ids}
+        async for job_id in self._client.isscan(jobs_key):
+            job = await self.get_job(job_id.decode())
+            yield job
