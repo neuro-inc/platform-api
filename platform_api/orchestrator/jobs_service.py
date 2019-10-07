@@ -201,6 +201,8 @@ class JobsService:
                 JobCannotStartQuotaReached(user.name)
             )
             raise
+        if not user.cluster_name:
+            raise JobsServiceException(f"User '{user.name}' has empty cluster name")
         record = JobRecord.create(
             request=job_request,
             owner=user.name,

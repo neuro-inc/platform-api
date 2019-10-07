@@ -1378,16 +1378,12 @@ class TestUser:
         ],
     )
     def test_user_has_quota_true(self, quota: Quota) -> None:
-        user = User(
-            name="name", token="token", cluster_name="test-cluster", quota=quota
-        )
+        user = User(name="name", token="token", quota=quota)
         assert user.has_quota()
 
     def test_user_has_quota_false(self) -> None:
         quota = AggregatedRunTime(
             total_gpu_run_time_delta=self.q_max, total_non_gpu_run_time_delta=self.q_max
         )
-        user = User(
-            name="name", token="token", cluster_name="test-cluster", quota=quota
-        )
+        user = User(name="name", token="token", quota=quota)
         assert not user.has_quota()

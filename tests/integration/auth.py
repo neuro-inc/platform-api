@@ -142,11 +142,11 @@ class _User(User):
 @pytest.fixture
 async def regular_user_factory(
     auth_client: AuthClient, token_factory: Callable[[str], str], admin_token: str
-) -> Callable[[Optional[str], Optional[Quota], Optional[str]], Awaitable[_User]]:
+) -> Callable[[Optional[str], Optional[Quota], str], Awaitable[_User]]:
     async def _factory(
         name: Optional[str] = None,
         quota: Optional[Quota] = None,
-        cluster_name: Optional[str] = None,
+        cluster_name: str = "default",
     ) -> _User:
         if not name:
             name = random_str()
@@ -159,7 +159,7 @@ async def regular_user_factory(
             name=user.name,
             token=user_token,
             quota=user_quota,
-            cluster_name=cluster_name or "default",
+            cluster_name=cluster_name,
         )
 
     return _factory
