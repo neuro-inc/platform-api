@@ -478,7 +478,7 @@ class TestJob:
         job = Job(
             storage_config=mock_orchestrator.storage_config,
             orchestrator_config=mock_orchestrator.config,
-            job_request=job_request,
+            record=JobRecord.create(request=job_request, cluster_name="test-cluster"),
         )
         assert job.http_host == "testjob.jobs"
 
@@ -488,9 +488,12 @@ class TestJob:
         job = Job(
             storage_config=mock_orchestrator.storage_config,
             orchestrator_config=mock_orchestrator.config,
-            job_request=job_request,
-            name="test-job-name",
-            owner="owner",
+            record=JobRecord.create(
+                request=job_request,
+                cluster_name="test-cluster",
+                name="test-job-name",
+                owner="owner",
+            ),
         )
         assert job.http_host == "testjob.jobs"
         assert job.http_host_named == "test-job-name--owner.jobs"
@@ -501,8 +504,11 @@ class TestJob:
         job = Job(
             storage_config=mock_orchestrator.storage_config,
             orchestrator_config=mock_orchestrator.config,
-            job_request=job_request,
-            name="test-job-name-123",
+            record=JobRecord.create(
+                request=job_request,
+                cluster_name="test-cluster",
+                name="test-job-name-123",
+            ),
         )
         assert job.name == "test-job-name-123"
 
@@ -512,7 +518,7 @@ class TestJob:
         job = Job(
             storage_config=mock_orchestrator.storage_config,
             orchestrator_config=mock_orchestrator.config,
-            job_request=job_request,
+            record=JobRecord.create(request=job_request, cluster_name="test-cluster"),
         )
         assert not job.has_gpu
 
@@ -522,7 +528,9 @@ class TestJob:
         job = Job(
             storage_config=mock_orchestrator.storage_config,
             orchestrator_config=mock_orchestrator.config,
-            job_request=job_request_with_gpu,
+            record=JobRecord.create(
+                request=job_request_with_gpu, cluster_name="test-cluster"
+            ),
         )
         assert job.has_gpu
 
@@ -537,8 +545,12 @@ class TestJob:
         job = Job(
             storage_config=mock_orchestrator.storage_config,
             orchestrator_config=mock_orchestrator.config,
-            job_request=job_request,
-            status_history=JobStatusHistory(items=[first_item]),
+            record=JobRecord.create(
+                request=job_request,
+                cluster_name="test-cluster",
+                status_history=JobStatusHistory(items=[first_item]),
+                current_datetime_factory=mocked_datetime_factory,
+            ),
             current_datetime_factory=mocked_datetime_factory,
         )
         expected_timedelta = mocked_datetime_factory() - started_at
@@ -554,8 +566,11 @@ class TestJob:
         job = Job(
             storage_config=mock_orchestrator.storage_config,
             orchestrator_config=mock_orchestrator.config,
-            job_request=job_request,
-            status_history=JobStatusHistory(items=[first_item, last_item]),
+            record=JobRecord.create(
+                request=job_request,
+                cluster_name="test-cluster",
+                status_history=JobStatusHistory(items=[first_item, last_item]),
+            ),
         )
         expected_timedelta = finished_at - started_at
         assert job.get_run_time() == expected_timedelta
@@ -566,7 +581,7 @@ class TestJob:
         job = Job(
             storage_config=mock_orchestrator.storage_config,
             orchestrator_config=mock_orchestrator.config,
-            job_request=job_request,
+            record=JobRecord.create(request=job_request, cluster_name="test-cluster"),
         )
         assert job.http_url == "http://testjob.jobs"
 
@@ -576,9 +591,12 @@ class TestJob:
         job = Job(
             storage_config=mock_orchestrator.storage_config,
             orchestrator_config=mock_orchestrator.config,
-            job_request=job_request,
-            name="test-job-name",
-            owner="owner",
+            record=JobRecord.create(
+                request=job_request,
+                cluster_name="test-cluster",
+                name="test-job-name",
+                owner="owner",
+            ),
         )
         assert job.http_url == "http://testjob.jobs"
         assert job.http_url_named == "http://test-job-name--owner.jobs"
@@ -592,7 +610,7 @@ class TestJob:
         job = Job(
             storage_config=mock_orchestrator.storage_config,
             orchestrator_config=config,
-            job_request=job_request,
+            record=JobRecord.create(request=job_request, cluster_name="test-cluster"),
         )
         assert job.http_url == "https://testjob.jobs"
 
@@ -605,9 +623,12 @@ class TestJob:
         job = Job(
             storage_config=mock_orchestrator.storage_config,
             orchestrator_config=config,
-            job_request=job_request,
-            name="test-job-name",
-            owner="owner",
+            record=JobRecord.create(
+                request=job_request,
+                cluster_name="test-cluster",
+                name="test-job-name",
+                owner="owner",
+            ),
         )
         assert job.http_url == "https://testjob.jobs"
         assert job.http_url_named == "https://test-job-name--owner.jobs"
@@ -618,7 +639,9 @@ class TestJob:
         job = Job(
             storage_config=mock_orchestrator.storage_config,
             orchestrator_config=mock_orchestrator.config,
-            job_request=job_request_with_ssh,
+            record=JobRecord.create(
+                request=job_request_with_ssh, cluster_name="test-cluster"
+            ),
         )
         assert job.ssh_server == "ssh://nobody@ssh-auth:22"
 
@@ -628,7 +651,7 @@ class TestJob:
         job = Job(
             storage_config=mock_orchestrator.storage_config,
             orchestrator_config=mock_orchestrator.config,
-            job_request=job_request,
+            record=JobRecord.create(request=job_request, cluster_name="test-cluster"),
         )
         assert job.ssh_server == "ssh://nobody@ssh-auth:22"
 
@@ -640,7 +663,9 @@ class TestJob:
         job = Job(
             storage_config=mock_orchestrator.storage_config,
             orchestrator_config=mock_orchestrator.config,
-            job_request=job_request_with_ssh_and_http,
+            record=JobRecord.create(
+                request=job_request_with_ssh_and_http, cluster_name="test-cluster"
+            ),
         )
         assert job.http_url == "http://testjob.jobs"
         assert job.ssh_server == "ssh://nobody@ssh-auth:22"
@@ -653,9 +678,12 @@ class TestJob:
         job = Job(
             storage_config=mock_orchestrator.storage_config,
             orchestrator_config=mock_orchestrator.config,
-            job_request=job_request_with_ssh_and_http,
-            name="test-job-name",
-            owner="owner",
+            record=JobRecord.create(
+                request=job_request_with_ssh_and_http,
+                cluster_name="test-cluster",
+                name="test-job-name",
+                owner="owner",
+            ),
         )
         assert job.http_url == "http://testjob.jobs"
         assert job.http_url_named == "http://test-job-name--owner.jobs"
@@ -667,11 +695,14 @@ class TestJob:
         job = Job(
             storage_config=mock_orchestrator.storage_config,
             orchestrator_config=mock_orchestrator.config,
-            job_request=job_request,
-            owner="testuser",
-            name="test-job-name",
-            is_preemptible=True,
-            schedule_timeout=15,
+            record=JobRecord.create(
+                request=job_request,
+                cluster_name="test-cluster",
+                owner="testuser",
+                name="test-job-name",
+                is_preemptible=True,
+                schedule_timeout=15,
+            ),
         )
         job.status = JobStatus.FAILED
         job.is_deleted = True
@@ -681,7 +712,7 @@ class TestJob:
             "id": job.id,
             "name": "test-job-name",
             "owner": "testuser",
-            "cluster_name": "",
+            "cluster_name": "test-cluster",
             "request": job_request.to_primitive(),
             "status": "failed",
             "is_deleted": True,
@@ -880,8 +911,9 @@ class TestJob:
         job = Job(
             mock_orchestrator.storage_config,
             mock_orchestrator.config,
-            job_request,
-            owner="testuser",
+            record=JobRecord.create(
+                request=job_request, cluster_name="test-cluster", owner="testuser"
+            ),
         )
         assert job.to_uri() == URL(f"job://testuser/{job.id}")
 
@@ -889,7 +921,9 @@ class TestJob:
         self, mock_orchestrator: MockOrchestrator, job_request: JobRequest
     ) -> None:
         job = Job(
-            mock_orchestrator.storage_config, mock_orchestrator.config, job_request
+            mock_orchestrator.storage_config,
+            mock_orchestrator.config,
+            record=JobRecord.create(request=job_request, cluster_name="test-cluster"),
         )
         assert job.to_uri() == URL(f"job://compute/{job.id}")
 
@@ -899,8 +933,9 @@ class TestJob:
         job = Job(
             mock_orchestrator.storage_config,
             mock_orchestrator.config,
-            job_request,
-            orphaned_job_owner="",
+            record=JobRecord.create(
+                request=job_request, cluster_name="test-cluster", orphaned_job_owner=""
+            ),
         )
         assert job.to_uri() == URL(f"job:/{job.id}")
 
