@@ -73,7 +73,7 @@ class TestApi:
     @pytest.mark.asyncio
     async def test_ping(self, api: ApiConfig, client: aiohttp.ClientSession) -> None:
         async with client.get(api.ping_url) as response:
-            assert response.status == HTTPOk.status_code
+            assert response.status == HTTPOk.status_code, await response.text()
 
     @pytest.mark.asyncio
     async def test_config_unauthorized(
@@ -81,7 +81,7 @@ class TestApi:
     ) -> None:
         url = api.config_url
         async with client.get(url) as resp:
-            assert resp.status == HTTPOk.status_code
+            assert resp.status == HTTPOk.status_code, await resp.text()
             result = await resp.json()
             assert result == {}
 
@@ -97,7 +97,7 @@ class TestApi:
         async with create_config_api([]):
             url = api.clusters_sync_url
             async with client.post(url, headers=cluster_user.headers) as resp:
-                assert resp.status == HTTPOk.status_code
+                assert resp.status == HTTPOk.status_code, await resp.text()
                 result = await resp.json()
                 assert result == {"old_record_count": 1, "new_record_count": 1}
 
@@ -105,7 +105,7 @@ class TestApi:
         async with create_config_api(cluster_configs_payload):
             url = api.clusters_sync_url
             async with client.post(url, headers=cluster_user.headers) as resp:
-                assert resp.status == HTTPOk.status_code
+                assert resp.status == HTTPOk.status_code, await resp.text()
                 result = await resp.json()
                 assert result == {"old_record_count": 1, "new_record_count": 2}
 
@@ -115,7 +115,7 @@ class TestApi:
     ) -> None:
         url = api.config_url
         async with client.get(url, headers=regular_user.headers) as resp:
-            assert resp.status == HTTPOk.status_code
+            assert resp.status == HTTPOk.status_code, await resp.text()
             result = await resp.json()
             assert result == {
                 "registry_url": "https://registry.dev.neuromation.io",
@@ -170,7 +170,7 @@ class TestApi:
     ) -> None:
         url = api_with_oauth.config_url
         async with client.get(url, headers=regular_user.headers) as resp:
-            assert resp.status == HTTPOk.status_code
+            assert resp.status == HTTPOk.status_code, await resp.text()
             result = await resp.json()
             assert result == {
                 "registry_url": "https://registry.dev.neuromation.io",
@@ -243,7 +243,7 @@ class TestJobs:
         async with client.post(
             url, headers=regular_user.headers, json=job_submit
         ) as response:
-            assert response.status == HTTPAccepted.status_code
+            assert response.status == HTTPAccepted.status_code, await response.text()
             result = await response.json()
             assert result["status"] in ["pending"]
             job_id = result["id"]
@@ -271,7 +271,7 @@ class TestJobs:
         async with client.post(
             url, headers=regular_user.headers, json=job_submit
         ) as response:
-            assert response.status == HTTPAccepted.status_code
+            assert response.status == HTTPAccepted.status_code, await response.text()
             result = await response.json()
             assert result["status"] in ["pending"]
             job_id = result["id"]
@@ -290,7 +290,7 @@ class TestJobs:
         async with client.post(
             url, headers=regular_user.headers, json=json_job_submit
         ) as response:
-            assert response.status == HTTPBadRequest.status_code
+            assert response.status == HTTPBadRequest.status_code, await response.text()
             data = await response.json()
             assert """'container': DataError(is required)""" in data["error"]
 
@@ -445,7 +445,7 @@ class TestJobs:
         async with client.post(
             url, headers=regular_user.headers, json=job_submit
         ) as response:
-            assert response.status == HTTPBadRequest.status_code
+            assert response.status == HTTPBadRequest.status_code, await response.text()
             payload = await response.json()
             e = (
                 "{'name': DataError({0: DataError(value should be None), "
@@ -468,7 +468,9 @@ class TestJobs:
         job_submit["name"] = job_name
         user = regular_user_with_missing_cluster_name
         async with client.post(url, headers=user.headers, json=job_submit) as response:
-            assert response.status == HTTPInternalServerError.status_code
+            assert (
+                response.status == HTTPInternalServerError.status_code
+            ), await response.text()
             payload = await response.json()
             e = (
                 f"Unexpected exception: Cluster '{user.cluster_name}' not found. "
@@ -496,7 +498,7 @@ class TestJobs:
         async with client.post(
             url, headers=regular_user.headers, json=job_submit
         ) as resp:
-            assert resp.status == HTTPAccepted.status_code
+            assert resp.status == HTTPAccepted.status_code, await resp.text()
             payload = await resp.json()
             job_id = payload["id"]
             assert payload["status"] in ["pending"]
@@ -536,7 +538,7 @@ class TestJobs:
         async with client.post(
             url, headers=regular_user.headers, json=job_submit
         ) as resp:
-            assert resp.status == HTTPAccepted.status_code
+            assert resp.status == HTTPAccepted.status_code, await resp.text()
             payload = await resp.json()
             job_id = payload["id"]
             assert payload["http_url"] == f"http://{job_id}.jobs.neu.ro"
@@ -560,14 +562,14 @@ class TestJobs:
         job_submit["container"]["command"] = "sleep 100500"
 
         async with client.post(url, headers=headers, json=job_submit) as response:
-            assert response.status == HTTPAccepted.status_code
+            assert response.status == HTTPAccepted.status_code, await response.text()
             payload = await response.json()
             job_id = payload["id"]
 
         await jobs_client.long_polling_by_job_id(job_id, status="running")
 
         async with client.post(url, headers=headers, json=job_submit) as response:
-            assert response.status == HTTPBadRequest.status_code
+            assert response.status == HTTPBadRequest.status_code, await response.text()
             payload = await response.json()
             assert payload == {
                 "error": (
@@ -594,7 +596,7 @@ class TestJobs:
         job_request = job_request_factory()
         job_request["container"]["resources"]["gpu"] = 1
         async with client.post(url, headers=user.headers, json=job_request) as response:
-            assert response.status == HTTPAccepted.status_code
+            assert response.status == HTTPAccepted.status_code, await response.text()
 
     @pytest.mark.asyncio
     async def test_create_job_non_gpu_quota_allows(
@@ -610,7 +612,7 @@ class TestJobs:
         url = api.jobs_base_url
         job_request = job_request_factory()
         async with client.post(url, headers=user.headers, json=job_request) as response:
-            assert response.status == HTTPAccepted.status_code
+            assert response.status == HTTPAccepted.status_code, await response.text()
 
     @pytest.mark.asyncio
     async def test_create_job_gpu_quota_exceeded(
@@ -627,7 +629,7 @@ class TestJobs:
         job_request = job_request_factory()
         job_request["container"]["resources"]["gpu"] = 1
         async with client.post(url, headers=user.headers, json=job_request) as response:
-            assert response.status == HTTPBadRequest.status_code
+            assert response.status == HTTPBadRequest.status_code, await response.text()
             data = await response.json()
             assert data == {"error": f"GPU quota exceeded for user '{user.name}'"}
 
@@ -645,7 +647,7 @@ class TestJobs:
         url = api.jobs_base_url
         job_request = job_request_factory()
         async with client.post(url, headers=user.headers, json=job_request) as response:
-            assert response.status == HTTPBadRequest.status_code
+            assert response.status == HTTPBadRequest.status_code, await response.text()
             data = await response.json()
             assert data == {"error": f"non-GPU quota exceeded for user '{user.name}'"}
 
@@ -664,7 +666,7 @@ class TestJobs:
         job_submit["container"]["command"] = "sleep 100500"
 
         async with client.post(url, headers=headers, json=job_submit) as response:
-            assert response.status == HTTPAccepted.status_code
+            assert response.status == HTTPAccepted.status_code, await response.text()
             payload = await response.json()
             job_id = payload["id"]
 
@@ -673,7 +675,7 @@ class TestJobs:
         await jobs_client.long_polling_by_job_id(job_id, status="succeeded")
 
         async with client.post(url, headers=headers, json=job_submit) as response:
-            assert response.status == HTTPAccepted.status_code
+            assert response.status == HTTPAccepted.status_code, await response.text()
 
     @pytest.mark.asyncio
     async def test_get_all_jobs_clear(self, jobs_client: JobsClient) -> None:
@@ -694,11 +696,11 @@ class TestJobs:
 
         filters = {"status": "abrakadabra"}
         async with client.get(url, headers=headers, params=filters) as response:
-            assert response.status == HTTPBadRequest.status_code
+            assert response.status == HTTPBadRequest.status_code, await response.text()
 
         filters2 = [("status", "running"), ("status", "abrakadabra")]
         async with client.get(url, headers=headers, params=filters2) as response:
-            assert response.status == HTTPBadRequest.status_code
+            assert response.status == HTTPBadRequest.status_code, await response.text()
 
     @pytest.mark.asyncio
     async def test_get_all_jobs_filter_by_status_only_single_status_pending(
@@ -714,7 +716,7 @@ class TestJobs:
         job_request = job_request_factory()
         job_request["container"]["resources"]["memory_mb"] = 100_500
         async with client.post(url, headers=headers, json=job_request) as resp:
-            assert resp.status == HTTPAccepted.status_code
+            assert resp.status == HTTPAccepted.status_code, await resp.text()
             result = await resp.json()
             job_id = result["id"]
 
@@ -746,7 +748,7 @@ class TestJobs:
         job_ids_list = []
         for _ in range(5):
             async with client.post(url, headers=headers, json=job_request) as resp:
-                assert resp.status == HTTPAccepted.status_code
+                assert resp.status == HTTPAccepted.status_code, await resp.text()
                 result = await resp.json()
                 job_ids_list.append(result["id"])
 
@@ -1155,12 +1157,12 @@ class TestJobs:
         # filter by name only
         filters = {"name": "InValid_Name.txt"}
         async with client.get(url, headers=headers, params=filters) as resp:
-            assert resp.status == HTTPBadRequest.status_code
+            assert resp.status == HTTPBadRequest.status_code, await resp.text()
 
         # filter by name and status
         filters2 = [("status", "running"), ("name", "InValid_Name.txt")]
         async with client.get(url, headers=headers, params=filters2) as resp:
-            assert resp.status == HTTPBadRequest.status_code
+            assert resp.status == HTTPBadRequest.status_code, await resp.text()
 
     @pytest.mark.asyncio
     async def test_get_all_jobs_shared(
@@ -1180,7 +1182,7 @@ class TestJobs:
         async with client.post(
             url, headers=owner.headers, json=job_request
         ) as response:
-            assert response.status == HTTPAccepted.status_code
+            assert response.status == HTTPAccepted.status_code, await response.text()
             result = await response.json()
             job_id = result["id"]
 
@@ -1192,7 +1194,7 @@ class TestJobs:
             assert job_ids == {job_id}
 
         async with client.get(url, headers=follower.headers) as response:
-            assert response.status == HTTPOk.status_code
+            assert response.status == HTTPOk.status_code, await response.text()
             result = await response.json()
             assert not result["jobs"]
 
@@ -1202,7 +1204,7 @@ class TestJobs:
         )
 
         async with client.get(url, headers=follower.headers) as response:
-            assert response.status == HTTPOk.status_code
+            assert response.status == HTTPOk.status_code, await response.text()
 
     @pytest.mark.asyncio
     async def test_get_shared_job(
@@ -1222,16 +1224,16 @@ class TestJobs:
         async with client.post(
             url, headers=owner.headers, json=job_request
         ) as response:
-            assert response.status == HTTPAccepted.status_code
+            assert response.status == HTTPAccepted.status_code, await response.text()
             result = await response.json()
             job_id = result["id"]
 
         url = f"{api.jobs_base_url}/{job_id}"
         async with client.get(url, headers=owner.headers) as response:
-            assert response.status == HTTPOk.status_code
+            assert response.status == HTTPOk.status_code, await response.text()
 
         async with client.get(url, headers=follower.headers) as response:
-            assert response.status == HTTPForbidden.status_code
+            assert response.status == HTTPForbidden.status_code, await response.text()
             data = await response.json()
             assert data == {
                 "missing": [{"action": "read", "uri": f"job://{owner.name}/{job_id}"}]
@@ -1243,7 +1245,7 @@ class TestJobs:
         )
 
         async with client.get(url, headers=follower.headers) as response:
-            assert response.status == HTTPOk.status_code
+            assert response.status == HTTPOk.status_code, await response.text()
 
     @pytest.mark.asyncio
     async def test_get_jobs_return_corrects_id(
@@ -1261,7 +1263,9 @@ class TestJobs:
             async with client.post(
                 url, headers=regular_user.headers, json=job_submit
             ) as response:
-                assert response.status == HTTPAccepted.status_code
+                assert (
+                    response.status == HTTPAccepted.status_code
+                ), await response.text()
                 result = await response.json()
                 assert result["status"] in ["pending"]
                 job_id = result["id"]
@@ -1510,7 +1514,7 @@ class TestJobs:
         async with client.post(
             url, headers=regular_user.headers, json=job_submit
         ) as response:
-            assert response.status == HTTPAccepted.status_code
+            assert response.status == HTTPAccepted.status_code, await response.text()
             result = await response.json()
             assert result["status"] in ["pending"]
             job_id = result["id"]
@@ -1565,7 +1569,7 @@ class TestJobs:
         async with client.post(
             url, headers=regular_user.headers, json=job_submit
         ) as response:
-            assert response.status == HTTPAccepted.status_code
+            assert response.status == HTTPAccepted.status_code, await response.text()
             result = await response.json()
             assert result["status"] in ["pending"]
             job_id = result["id"]
@@ -1581,7 +1585,7 @@ class TestJobs:
         job_id = "kdfghlksjd-jhsdbljh-3456789!@"
         url = api.jobs_base_url + f"/{job_id}"
         async with client.delete(url, headers=regular_user.headers) as response:
-            assert response.status == HTTPBadRequest.status_code
+            assert response.status == HTTPBadRequest.status_code, await response.text()
             result = await response.json()
             assert result["error"] == f"no such job {job_id}"
 
@@ -1593,7 +1597,7 @@ class TestJobs:
         async with client.post(
             api.jobs_base_url, headers=regular_user.headers, json=request_payload
         ) as response:
-            assert response.status == HTTPBadRequest.status_code
+            assert response.status == HTTPBadRequest.status_code, await response.text()
             response_payload = await response.json()
             assert response_payload == {"error": mock.ANY}
             assert "is required" in response_payload["error"]
@@ -1728,7 +1732,7 @@ class TestJobs:
         async with client.post(
             url, headers=regular_user.headers, json=payload
         ) as response:
-            assert response.status == HTTPAccepted.status_code
+            assert response.status == HTTPAccepted.status_code, await response.text()
             result = await response.json()
             assert result["status"] == "pending"
             job_id = result["id"]

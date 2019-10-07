@@ -25,15 +25,15 @@ async def alice_job(
     response = await client.post(
         api_config.jobs_url, headers=headers, json=job_request_payload
     )
+    assert response.status == 202, await response.text()
     payload = await response.json()
-    assert response.status == 202
     job_id = payload["id"]
     assert isinstance(job_id, str)
     job_url = f"{api_config.jobs_url}/{job_id}"
 
     for i in range(30):
         response = await client.get(job_url, headers=headers)
-        assert response.status == 200
+        assert response.status == 200, await response.text()
         jobs_payload = await response.json()
         assert jobs_payload
         status_name = jobs_payload["status"]
@@ -46,7 +46,7 @@ async def alice_job(
     yield job_id
 
     response = await client.delete(job_url, headers=headers)
-    assert response.status == 204
+    assert response.status == 204, await response.text()
 
 
 @pytest.mark.usefixtures("api")
@@ -91,7 +91,7 @@ async def test_port_forward_no_job_namespace(
         except asyncio.TimeoutError:
             break
     response = await client.get(f"http://{LOCALHOST}:{port}")
-    assert response.status == 200
+    assert response.status == 200, await response.text()
     text = await response.text()
     assert "Welcome to nginx!" in text
     proc.kill()
@@ -138,7 +138,7 @@ async def test_port_forward(
         except asyncio.TimeoutError:
             break
     response = await client.get(f"http://{LOCALHOST}:{port}")
-    assert response.status == 200
+    assert response.status == 200, await response.text()
     text = await response.text()
     assert "Welcome to nginx!" in text
     proc.kill()
