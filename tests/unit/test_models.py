@@ -26,7 +26,7 @@ from platform_api.handlers.validators import (
     create_container_request_validator,
     create_container_response_validator,
 )
-from platform_api.orchestrator.job import Job
+from platform_api.orchestrator.job import Job, JobRecord
 from platform_api.orchestrator.job_request import (
     Container,
     ContainerHTTPServer,
@@ -749,13 +749,17 @@ async def test_job_to_job_response(mock_orchestrator: MockOrchestrator) -> None:
     job = Job(
         storage_config=mock_orchestrator.storage_config,
         orchestrator_config=mock_orchestrator.config,
-        job_request=JobRequest.create(
-            Container(
-                image="testimage", resources=ContainerResources(cpu=1, memory_mb=128)
+        record=JobRecord.create(
+            request=JobRequest.create(
+                Container(
+                    image="testimage",
+                    resources=ContainerResources(cpu=1, memory_mb=128),
+                ),
+                description="test test description",
             ),
-            description="test test description",
+            cluster_name="test-cluster",
+            name="test-job-name",
         ),
-        name="test-job-name",
     )
     response = convert_job_to_job_response(job, cluster_name="my-cluster")
     assert response == {
@@ -792,15 +796,18 @@ async def test_job_to_job_response_with_job_name_and_http_exposed(
     job = Job(
         storage_config=mock_orchestrator.storage_config,
         orchestrator_config=mock_orchestrator.config,
-        job_request=JobRequest.create(
-            Container(
-                image="testimage",
-                resources=ContainerResources(cpu=1, memory_mb=128),
-                http_server=ContainerHTTPServer(port=80),
-            )
+        record=JobRecord.create(
+            request=JobRequest.create(
+                Container(
+                    image="testimage",
+                    resources=ContainerResources(cpu=1, memory_mb=128),
+                    http_server=ContainerHTTPServer(port=80),
+                )
+            ),
+            cluster_name="test-cluster",
+            owner=owner_name,
+            name=job_name,
         ),
-        owner=owner_name,
-        name=job_name,
     )
     response = convert_job_to_job_response(job, cluster_name="my-cluster")
     assert response == {
@@ -839,15 +846,18 @@ async def test_job_to_job_response_with_job_name_and_http_exposed_too_long_name(
     job = Job(
         storage_config=mock_orchestrator.storage_config,
         orchestrator_config=mock_orchestrator.config,
-        job_request=JobRequest.create(
-            Container(
-                image="testimage",
-                resources=ContainerResources(cpu=1, memory_mb=128),
-                http_server=ContainerHTTPServer(port=80),
-            )
+        record=JobRecord.create(
+            request=JobRequest.create(
+                Container(
+                    image="testimage",
+                    resources=ContainerResources(cpu=1, memory_mb=128),
+                    http_server=ContainerHTTPServer(port=80),
+                )
+            ),
+            cluster_name="",
+            owner=owner_name,
+            name=job_name,
         ),
-        owner=owner_name,
-        name=job_name,
     )
     response = convert_job_to_job_response(job, cluster_name="my-cluster")
     assert response == {
@@ -884,10 +894,14 @@ async def test_job_to_job_response_assert_non_empty_cluster_name(
     job = Job(
         storage_config=mock_orchestrator.storage_config,
         orchestrator_config=mock_orchestrator.config,
-        job_request=JobRequest.create(
-            Container(
-                image="testimage", resources=ContainerResources(cpu=1, memory_mb=128)
-            )
+        record=JobRecord.create(
+            request=JobRequest.create(
+                Container(
+                    image="testimage",
+                    resources=ContainerResources(cpu=1, memory_mb=128),
+                )
+            ),
+            cluster_name="",
         ),
     )
     with pytest.raises(AssertionError, match="must be already replaced"):
