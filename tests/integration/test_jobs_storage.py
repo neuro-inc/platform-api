@@ -1025,6 +1025,8 @@ class TestRedisJobsStorage:
         jobs = await storage.get_all_jobs(filters)
         job_ids = {job.id for job in jobs}
         assert job_ids == {first_job.id, second_job.id}
+        for job in jobs:
+            assert job.cluster_name == "default"
 
         assert not await storage.migrate()
 
