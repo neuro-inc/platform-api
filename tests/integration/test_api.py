@@ -811,7 +811,10 @@ class TestJobs:
             headers = user.headers
             jobs_client = jobs_client_factory(user)
             async with client.post(url, headers=headers, json=job_request) as resp:
-                assert resp.status == HTTPAccepted.status_code, str(job_request)
+                assert resp.status == HTTPAccepted.status_code, (
+                    await resp.text(),
+                    str(job_request),
+                )
                 data = await resp.json()
                 job_id = data["id"]
                 await jobs_client.long_polling_by_job_id(job_id, "running")
