@@ -1,7 +1,7 @@
 import asyncio
 from datetime import timedelta
 from pathlib import Path, PurePath
-from typing import AsyncIterator, Callable, Iterator, List, Optional
+from typing import Any, AsyncIterator, Callable, Dict, Iterator, List, Optional
 
 import pytest
 from notifications_client import Client as NotificationsClient
@@ -121,11 +121,14 @@ class MockNotificationsClient(NotificationsClient):
 
 @pytest.fixture
 def job_request_factory() -> Callable[[], JobRequest]:
-    def factory() -> JobRequest:
+    def factory(with_gpu: bool = False) -> JobRequest:
+        cont_kwargs: Dict[str, Any] = {"cpu": 1, "memory_mb": 128}
+        if with_gpu:
+            cont_kwargs["gpu"] = 1
+            cont_kwargs["gpu_model_id"] = "nvidia-tesla-k80"
+
         return JobRequest.create(
-            Container(
-                image="testimage", resources=ContainerResources(cpu=1, memory_mb=128)
-            )
+            Container(image="testimage", resources=ContainerResources(**cont_kwargs))
         )
 
     return factory

@@ -565,11 +565,14 @@ class RedisJobsStorage(JobsStorage):
 
     async def migrate(self) -> bool:
         version = int(await self._client.get("version") or "0")
-        if version >= 1:
+        if version < 1:
+            await self._reindex_job_owners()
+            await self._update_job_cluster_names()
+        if version < 2:
+            await self._reindex_job_clusters()
+        else:
             return False
-        await self._reindex_job_owners()
-        await self._reindex_job_clusters()
-        await self._client.set("version", "1")
+        await self._client.set("version", "2")
         return True
 
     async def _reindex_job_owners(self) -> None:
@@ -591,6 +594,23 @@ class RedisJobsStorage(JobsStorage):
         await tr.execute()
 
         logger.info("Finished reindexing job clusters")
+
+    async def _update_job_cluster_names(self) -> None:
+        logger.info("Starting updating job cluster names")
+
+        total = changed = 0
+        tr = self._client.pipeline()
+        async for job in self._iter_all_jobs():
+            total += 1
+            if job.cluster_name:
+                continue
+            changed += 1
+            job.cluster_name = "default"
+            payload = json.dumps(job.to_primitive())
+            tr.set(self._generate_job_key(job.id), payload)
+        await tr.execute()
+
+        logger.info(f"Finished updating job cluster names ({changed}/{total})")
 
     async def _iter_all_jobs(self) -> AsyncIterator[JobRecord]:
         jobs_key = self._generate_jobs_index_key()
