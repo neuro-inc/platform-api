@@ -236,6 +236,9 @@ class JobRecord:
     internal_hostname: Optional[str] = None
     schedule_timeout: Optional[float] = None
 
+    # for testing only
+    allow_empty_cluster_name: bool = False
+
     @classmethod
     def create(
         cls,
@@ -337,9 +340,10 @@ class JobRecord:
         )
 
     def to_primitive(self) -> Dict[str, Any]:
-        assert (
-            self.cluster_name
-        ), "empty cluster name must be already replaced with `default`"
+        if not self.allow_empty_cluster_name and not self.cluster_name:
+            raise RuntimeError(
+                "empty cluster name must be already replaced with `default`"
+            )
         statuses = [item.to_primitive() for item in self.status_history.all]
         # preserving `status` and `finished_at` for forward compat
         result = {

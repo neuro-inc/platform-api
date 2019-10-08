@@ -988,6 +988,12 @@ class TestRedisJobsStorage:
     async def test_migrate(self, redis_client: aioredis.Redis) -> None:
         first_job = self._create_pending_job(owner="testuser")
         second_job = self._create_running_job(owner="testuser")
+
+        first_job.allow_empty_cluster_name = True
+        first_job.cluster_name = ""
+        second_job.allow_empty_cluster_name = True
+        second_job.cluster_name = ""
+
         storage = RedisJobsStorage(client=redis_client)
         async with storage.try_create_job(first_job, skip_owner_index=True):
             pass
