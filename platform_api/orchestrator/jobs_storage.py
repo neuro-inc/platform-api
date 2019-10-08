@@ -63,7 +63,7 @@ class JobFilter:
     def check(self, job: JobRecord) -> bool:
         if self.statuses and job.status not in self.statuses:
             return False
-        if self.clusters and (job.cluster_name or "default") not in self.clusters:
+        if self.clusters and job.cluster_name not in self.clusters:
             return False
         if self.owners and job.owner not in self.owners:
             return False
@@ -352,9 +352,7 @@ class RedisJobsStorage(JobsStorage):
         tr.zadd(owner_key, score, job.id, exist=tr.ZSET_IF_NOT_EXIST)
 
     def _update_cluster_index(self, tr: Pipeline, job: JobRecord) -> None:
-        cluster_key = self._generate_jobs_cluster_index_key(
-            job.cluster_name or "default"
-        )
+        cluster_key = self._generate_jobs_cluster_index_key(job.cluster_name)
         score = job.status_history.created_at_timestamp
         tr.zadd(cluster_key, score, job.id, exist=tr.ZSET_IF_NOT_EXIST)
 
