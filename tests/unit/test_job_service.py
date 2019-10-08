@@ -60,7 +60,7 @@ class TestJobsService:
     async def test_create_job(
         self, jobs_service: JobsService, mock_job_request: JobRequest
     ) -> None:
-        user = User(name="testuser", token="")
+        user = User(cluster_name="default", name="testuser", token="")
         original_job, _ = await jobs_service.create_job(
             job_request=mock_job_request, user=user
         )
@@ -76,7 +76,7 @@ class TestJobsService:
     async def test_create_job__name_conflict_with_pending(
         self, jobs_service: JobsService, job_request_factory: Callable[[], JobRequest]
     ) -> None:
-        user = User(name="testuser", token="")
+        user = User(cluster_name="default", name="testuser", token="")
         job_name = "test-Job_name"
         request = job_request_factory()
         job_1, _ = await jobs_service.create_job(request, user, job_name=job_name)
@@ -97,7 +97,7 @@ class TestJobsService:
         jobs_service: JobsService,
         job_request_factory: Callable[[], JobRequest],
     ) -> None:
-        user = User(name="testuser", token="")
+        user = User(cluster_name="default", name="testuser", token="")
         job_name = "test-Job_name"
         request = job_request_factory()
         job_1, _ = await jobs_service.create_job(request, user, job_name=job_name)
@@ -129,7 +129,7 @@ class TestJobsService:
         job_request_factory: Callable[[], JobRequest],
         first_job_status: JobStatus,
     ) -> None:
-        user = User(name="testuser", token="")
+        user = User(cluster_name="default", name="testuser", token="")
         job_name = "test-Job_name"
         request = job_request_factory()
 
@@ -163,7 +163,7 @@ class TestJobsService:
         mock_orchestrator.raise_on_delete = False
         mock_jobs_storage.fail_set_job_transaction = True
 
-        user = User(name="testuser", token="")
+        user = User(cluster_name="default", name="testuser", token="")
         job_name = "test-Job_name"
 
         request = job_request_factory()
@@ -186,7 +186,7 @@ class TestJobsService:
         mock_orchestrator.raise_on_delete = True
         mock_jobs_storage.fail_set_job_transaction = True
 
-        user = User(name="testuser", token="")
+        user = User(cluster_name="default", name="testuser", token="")
         job_name = "test-Job_name"
 
         request = job_request_factory()
@@ -202,7 +202,7 @@ class TestJobsService:
     async def test_get_status_by_job_id(
         self, jobs_service: JobsService, mock_job_request: JobRequest
     ) -> None:
-        user = User(name="testuser", token="")
+        user = User(cluster_name="default", name="testuser", token="")
         job, _ = await jobs_service.create_job(job_request=mock_job_request, user=user)
         job_status = await jobs_service.get_job_status(job_id=job.id)
         assert job_status == JobStatus.PENDING
@@ -211,7 +211,7 @@ class TestJobsService:
     async def test_get_all(
         self, jobs_service: JobsService, job_request_factory: Callable[[], JobRequest]
     ) -> None:
-        user = User(name="testuser", token="")
+        user = User(cluster_name="default", name="testuser", token="")
         job_ids = []
         num_jobs = 1000
         for _ in range(num_jobs):
@@ -230,7 +230,7 @@ class TestJobsService:
         mock_jobs_storage: MockJobsStorage,
         job_request_factory: Callable[[], JobRequest],
     ) -> None:
-        user = User(name="testuser", token="")
+        user = User(cluster_name="default", name="testuser", token="")
 
         async def create_job() -> Job:
             job_request = job_request_factory()
@@ -284,7 +284,7 @@ class TestJobsService:
     ) -> None:
         jobs_service = jobs_service_factory(deletion_delay_s=60)
 
-        user = User(name="testuser", token="")
+        user = User(cluster_name="default", name="testuser", token="")
         original_job, _ = await jobs_service.create_job(
             job_request=job_request_factory(), user=user
         )
@@ -308,7 +308,7 @@ class TestJobsService:
     ) -> None:
         jobs_service = jobs_service_factory(deletion_delay_s=0)
 
-        user = User(name="testuser", token="")
+        user = User(cluster_name="default", name="testuser", token="")
         original_job, _ = await jobs_service.create_job(
             job_request=job_request_factory(), user=user
         )
@@ -332,7 +332,7 @@ class TestJobsService:
         mock_orchestrator.raise_on_get_job_status = True
         jobs_service = jobs_service_factory(deletion_delay_s=0)
 
-        user = User(name="testuser", token="")
+        user = User(cluster_name="default", name="testuser", token="")
         original_job, _ = await jobs_service.create_job(
             job_request=job_request_factory(), user=user
         )
@@ -369,7 +369,7 @@ class TestJobsService:
     ) -> None:
         jobs_service = jobs_service_factory(deletion_delay_s=60)
 
-        user = User(name="testuser", token="")
+        user = User(cluster_name="default", name="testuser", token="")
         original_job, _ = await jobs_service.create_job(
             job_request=job_request_factory(), user=user
         )
@@ -396,7 +396,7 @@ class TestJobsService:
     ) -> None:
         jobs_service = jobs_service_factory(deletion_delay_s=60)
 
-        user = User(name="testuser", token="")
+        user = User(cluster_name="default", name="testuser", token="")
         original_job, _ = await jobs_service.create_job(
             job_request=job_request_factory(), user=user
         )
@@ -423,7 +423,7 @@ class TestJobsService:
     ) -> None:
         jobs_service = jobs_service_factory(deletion_delay_s=0)
 
-        user = User(name="testuser", token="")
+        user = User(cluster_name="default", name="testuser", token="")
         original_job, _ = await jobs_service.create_job(
             job_request=job_request_factory(), user=user
         )
@@ -441,7 +441,7 @@ class TestJobsService:
     async def test_delete_running(
         self, jobs_service: JobsService, job_request_factory: Callable[[], JobRequest]
     ) -> None:
-        user = User(name="testuser", token="")
+        user = User(cluster_name="default", name="testuser", token="")
         original_job, _ = await jobs_service.create_job(
             job_request=job_request_factory(), user=user
         )
@@ -471,7 +471,7 @@ class TestJobsService:
         job_request_factory: Callable[[], JobRequest],
         quota: AggregatedRunTime,
     ) -> None:
-        user = User(name="testuser", token="token", quota=quota)
+        user = User(cluster_name="default", name="testuser", token="token", quota=quota)
         request = job_request_factory()
 
         job, _ = await jobs_service.create_job(request, user)
@@ -491,7 +491,7 @@ class TestJobsService:
         job_request_factory: Callable[..., JobRequest],
         quota: AggregatedRunTime,
     ) -> None:
-        user = User(name="testuser", token="token", quota=quota)
+        user = User(cluster_name="default", name="testuser", token="token", quota=quota)
         request = job_request_factory(with_gpu=True)
 
         with pytest.raises(GpuQuotaExceededError, match="GPU quota exceeded"):
@@ -511,7 +511,7 @@ class TestJobsService:
         job_request_factory: Callable[[], JobRequest],
         quota: AggregatedRunTime,
     ) -> None:
-        user = User(name="testuser", token="token", quota=quota)
+        user = User(cluster_name="default", name="testuser", token="token", quota=quota)
         request = job_request_factory()
 
         with pytest.raises(NonGpuQuotaExceededError, match="non-GPU quota exceeded"):
@@ -522,7 +522,7 @@ class TestJobsService:
         self, jobs_service: JobsService, job_request_factory: Callable[..., JobRequest]
     ) -> None:
         quota = create_quota(time_gpu_minutes=0, time_non_gpu_minutes=100)
-        user = User(name="testuser", token="token", quota=quota)
+        user = User(cluster_name="default", name="testuser", token="token", quota=quota)
         request = job_request_factory()
 
         job, _ = await jobs_service.create_job(request, user)
@@ -534,7 +534,7 @@ class TestJobsService:
     ) -> None:
         # Even GPU-jobs require CPU
         quota = create_quota(time_gpu_minutes=100, time_non_gpu_minutes=0)
-        user = User(name="testuser", token="token", quota=quota)
+        user = User(cluster_name="default", name="testuser", token="token", quota=quota)
         request = job_request_factory(with_gpu=True)
 
         with pytest.raises(NonGpuQuotaExceededError, match="non-GPU quota exceeded"):
@@ -587,7 +587,7 @@ class TestJobsServiceCluster:
     async def test_create_job_user_cluster_name_fallback(
         self, jobs_service: JobsService, mock_job_request: JobRequest
     ) -> None:
-        user = User(name="testuser", token="testtoken")
+        user = User(cluster_name="default", name="testuser", token="testtoken")
 
         with pytest.raises(JobsServiceException, match="Cluster 'default' not found"):
             await jobs_service.create_job(mock_job_request, user)
@@ -711,7 +711,7 @@ class TestJobsServiceCluster:
         )
         await cluster_registry.add(cluster_config)
 
-        user = User(name="testuser", token="testtoken")
+        user = User(cluster_name="default", name="testuser", token="testtoken")
         job, _ = await jobs_service.create_job(mock_job_request, user)
 
         await cluster_registry.remove(cluster_config.name)
@@ -754,7 +754,7 @@ class TestJobServiceNotification:
         mock_job_request: JobRequest,
         mock_notifications_client: MockNotificationsClient,
     ) -> None:
-        user = User(name="testuser", token="")
+        user = User(cluster_name="default", name="testuser", token="")
         job, _ = await jobs_service.create_job(job_request=mock_job_request, user=user)
         notifications = [
             JobTransition(
@@ -777,7 +777,7 @@ class TestJobServiceNotification:
         mock_job_request: JobRequest,
         mock_notifications_client: MockNotificationsClient,
     ) -> None:
-        user = User(name="testuser", token="")
+        user = User(cluster_name="default", name="testuser", token="")
         job, _ = await jobs_service.create_job(job_request=mock_job_request, user=user)
 
         notifications = [
@@ -820,7 +820,7 @@ class TestJobServiceNotification:
         job_request_factory: Callable[[], JobRequest],
         mock_notifications_client: MockNotificationsClient,
     ) -> None:
-        user = User(name="testuser", token="")
+        user = User(cluster_name="default", name="testuser", token="")
         job, _ = await jobs_service.create_job(
             job_request=job_request_factory(), user=user
         )
@@ -864,7 +864,7 @@ class TestJobServiceNotification:
         job_request_factory: Callable[[], JobRequest],
         mock_notifications_client: MockNotificationsClient,
     ) -> None:
-        user = User(name="testuser", token="")
+        user = User(cluster_name="default", name="testuser", token="")
         job, _ = await jobs_service.create_job(
             job_request=job_request_factory(), user=user
         )
