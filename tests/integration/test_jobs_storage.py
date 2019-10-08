@@ -684,13 +684,13 @@ class TestRedisJobsStorage:
     ) -> Tuple[RedisJobsStorage, List[JobRecord]]:
         jobs = [
             self._create_running_job(owner="user1", cluster_name="default"),
-            self._create_succeeded_job(owner="user1", cluster_name="my-cluster"),
-            self._create_failed_job(owner="user1", cluster_name="other-cluster"),
+            self._create_succeeded_job(owner="user1", cluster_name="default"),
             self._create_failed_job(owner="user2", cluster_name="default"),
-            self._create_running_job(owner="user2", cluster_name="my-cluster"),
-            self._create_succeeded_job(owner="user2", cluster_name="other-cluster"),
             self._create_succeeded_job(owner="user3", cluster_name="default"),
+            self._create_succeeded_job(owner="user1", cluster_name="my-cluster"),
             self._create_failed_job(owner="user3", cluster_name="my-cluster"),
+            self._create_failed_job(owner="user1", cluster_name="other-cluster"),
+            self._create_succeeded_job(owner="user2", cluster_name="other-cluster"),
             self._create_running_job(owner="user3", cluster_name="other-cluster"),
         ]
         storage = RedisJobsStorage(client=redis_client)
@@ -709,15 +709,11 @@ class TestRedisJobsStorage:
 
         job_filter = JobFilter(clusters={"default"})
         job_ids = {job.id for job in await storage.get_all_jobs(job_filter)}
-        assert job_ids == {jobs[0].id, jobs[3].id, jobs[6].id}
-
-        job_filter = JobFilter(clusters={"my-cluster"})
-        job_ids = {job.id for job in await storage.get_all_jobs(job_filter)}
-        assert job_ids == {jobs[1].id, jobs[4].id, jobs[7].id}
+        assert job_ids == {job.id for job in jobs[:4]}
 
         job_filter = JobFilter(clusters={"default", "my-cluster"})
         job_ids = {job.id for job in await storage.get_all_jobs(job_filter)}
-        assert job_ids == {jobs[i].id for i in (0, 1, 3, 4, 6, 7)}
+        assert job_ids == {job.id for job in jobs[:6]}
 
         job_filter = JobFilter(clusters={"nonexisting-cluster"})
         job_ids = {job.id for job in await storage.get_all_jobs(job_filter)}
@@ -733,19 +729,19 @@ class TestRedisJobsStorage:
 
         job_filter = JobFilter(clusters={"default"}, owners={"user1"})
         job_ids = {job.id for job in await storage.get_all_jobs(job_filter)}
-        assert job_ids == {jobs[0].id}
+        assert job_ids == {jobs[0].id, jobs[1].id}
 
-        job_filter = JobFilter(clusters={"default"}, owners={"user2"})
+        job_filter = JobFilter(clusters={"default", "my-cluster"}, owners={"user1"})
         job_ids = {job.id for job in await storage.get_all_jobs(job_filter)}
-        assert job_ids == {jobs[3].id}
+        assert job_ids == {jobs[0].id, jobs[1].id, jobs[4].id}
 
-        job_filter = JobFilter(clusters={"my-cluster"}, owners={"user1"})
+        job_filter = JobFilter(clusters={"default"}, owners={"user1", "user2"})
         job_ids = {job.id for job in await storage.get_all_jobs(job_filter)}
-        assert job_ids == {jobs[1].id}
+        assert job_ids == {jobs[0].id, jobs[1].id, jobs[2].id}
 
         job_filter = JobFilter(clusters={"my-cluster"}, owners={"user2"})
         job_ids = {job.id for job in await storage.get_all_jobs(job_filter)}
-        assert job_ids == {jobs[4].id}
+        assert job_ids == set()
 
     @pytest.mark.asyncio
     async def test_get_all_filter_by_cluster_and_status(
@@ -755,23 +751,25 @@ class TestRedisJobsStorage:
             redis_client
         )
 
-        statuses = {JobStatus.RUNNING}
-        job_filter = JobFilter(clusters={"default"}, statuses=statuses)
+        job_filter = JobFilter(clusters={"default"}, statuses={JobStatus.SUCCEEDED})
         job_ids = {job.id for job in await storage.get_all_jobs(job_filter)}
-        assert job_ids == {jobs[0].id}
+        assert job_ids == {jobs[1].id, jobs[3].id}
 
-        job_filter = JobFilter(clusters={"my-cluster"}, statuses=statuses)
+        job_filter = JobFilter(
+            clusters={"default", "my-cluster"}, statuses={JobStatus.SUCCEEDED}
+        )
         job_ids = {job.id for job in await storage.get_all_jobs(job_filter)}
-        assert job_ids == {jobs[4].id}
+        assert job_ids == {jobs[1].id, jobs[3].id, jobs[4].id}
 
-        statuses = {JobStatus.SUCCEEDED, JobStatus.FAILED}
-        job_filter = JobFilter(clusters={"default"}, statuses=statuses)
+        job_filter = JobFilter(
+            clusters={"default"}, statuses={JobStatus.RUNNING, JobStatus.SUCCEEDED}
+        )
         job_ids = {job.id for job in await storage.get_all_jobs(job_filter)}
-        assert job_ids == {jobs[3].id, jobs[6].id}
+        assert job_ids == {jobs[0].id, jobs[1].id, jobs[3].id}
 
-        job_filter = JobFilter(clusters={"my-cluster"}, statuses=statuses)
+        job_filter = JobFilter(clusters={"my-cluster"}, statuses={JobStatus.RUNNING})
         job_ids = {job.id for job in await storage.get_all_jobs(job_filter)}
-        assert job_ids == {jobs[1].id, jobs[7].id}
+        assert job_ids == set()
 
     @pytest.mark.asyncio
     async def test_get_running_empty(self, redis_client: aioredis.Redis) -> None:
