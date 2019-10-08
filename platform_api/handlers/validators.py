@@ -10,6 +10,7 @@ from platform_api.resource import TPUResource
 
 JOB_NAME_PATTERN = "^[a-z](?:-?[a-z0-9])*$"
 USER_NAME_PATTERN = "^[a-z0-9](?:-?[a-z0-9])*$"
+CLUSTER_NAME_PATTERN = "^[a-z0-9](?:-?[a-z0-9])*$"
 
 # Since the client supports job-names to be interchangeable with job-IDs
 # (see PR https://github.com/neuromation/platform-client-python/pull/648)
@@ -37,6 +38,11 @@ def create_user_name_validator() -> t.Trafaret:
     return t.String(min_length=3, max_length=USER_NAME_MAX_LENGTH) & t.Regexp(
         USER_NAME_PATTERN
     )
+
+
+def create_cluster_name_validator() -> t.Trafaret:
+    # NOTE: this validator is almost the same as the one used in platform-auth
+    return t.String(min_length=3, max_length=255) & t.Regexp(CLUSTER_NAME_PATTERN)
 
 
 def create_job_status_validator() -> t.Trafaret:

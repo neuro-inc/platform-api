@@ -117,6 +117,15 @@ class TestJobFilter:
         job = self._create_job(owner="testuser", name="testname")
         assert not JobFilter(name="anothername").check(job)
 
+    def test_check_cluster_names(self) -> None:
+        job = JobRecord.create(
+            request=self._create_job_request(),
+            owner="testuser",
+            cluster_name="my-cluster",
+        )
+        assert not JobFilter(clusters={"default"}).check(job)
+        assert JobFilter(clusters={"my-cluster"}).check(job)
+
     def test_check_ids(self) -> None:
         job = self._create_job(owner="testuser", name="testname")
         job2 = self._create_job(owner="testuser")
@@ -139,5 +148,8 @@ class TestJobFilter:
             status=JobStatus.PENDING, owner="testuser", name="testname"
         )
         assert JobFilter(
-            statuses={JobStatus.PENDING}, owners={"testuser"}, name="testname"
+            statuses={JobStatus.PENDING},
+            owners={"testuser"},
+            name="testname",
+            clusters={"test-cluster"},
         ).check(job)
