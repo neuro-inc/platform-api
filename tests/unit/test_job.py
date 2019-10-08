@@ -418,14 +418,16 @@ def job_request() -> JobRequest:
 
 class TestJobRecord:
     def test_should_be_deleted_pending(self, job_request: JobRequest) -> None:
-        record = JobRecord.create(request=job_request)
+        record = JobRecord.create(request=job_request, cluster_name="test-cluster")
         assert not record.finished_at
         assert not record.should_be_deleted(delay=timedelta(60))
 
     def test_should_be_deleted_finished(
         self, mock_orchestrator: MockOrchestrator, job_request: JobRequest
     ) -> None:
-        record = JobRecord.create(status=JobStatus.FAILED, request=job_request)
+        record = JobRecord.create(
+            status=JobStatus.FAILED, request=job_request, cluster_name="test-cluster"
+        )
         assert record.finished_at
         assert record.should_be_deleted(delay=timedelta(0))
 
