@@ -201,10 +201,12 @@ class JobsService:
                 JobCannotStartQuotaReached(user.name)
             )
             raise
+        # XXX cluster_name should be set for regular users
+        cluster_name = self._get_cluster_name(user.cluster_name)
         record = JobRecord.create(
             request=job_request,
             owner=user.name,
-            cluster_name=user.cluster_name,
+            cluster_name=cluster_name,
             status=JobStatus.PENDING,
             name=job_name,
             is_preemptible=is_preemptible,
@@ -225,9 +227,8 @@ class JobsService:
         except ClusterNotFound as cluster_err:
             # NOTE: this will result in 400 HTTP response which may not be
             # what we want to convey really
-            cluster_name = self._get_cluster_name(record.cluster_name)
             raise JobsServiceException(
-                f"Cluster '{cluster_name}' not found"
+                f"Cluster '{record.cluster_name}' not found"
             ) from cluster_err
         except JobsStorageException as transaction_err:
             logger.error(f"Failed to create job {job_id}: {transaction_err}")
