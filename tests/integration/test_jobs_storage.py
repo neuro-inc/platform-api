@@ -34,22 +34,22 @@ class TestRedisJobsStorage:
         container = Container(image="ubuntu", command="sleep 5", resources=resources)
         return JobRequest.create(container)
 
+    def _create_job(
+        self, cluster_name: str = "test-cluster", **kwargs: Any
+    ) -> JobRecord:
+        return JobRecord.create(
+            request=self._create_job_request(), cluster_name=cluster_name, **kwargs
+        )
+
     def _create_pending_job(
         self, owner: str = "compute", job_name: Optional[str] = None
     ) -> JobRecord:
-        return JobRecord.create(
-            request=self._create_job_request(), owner=owner, name=job_name
-        )
+        return self._create_job(owner=owner, name=job_name)
 
     def _create_running_job(
         self, owner: str = "compute", job_name: Optional[str] = None
     ) -> JobRecord:
-        return JobRecord.create(
-            request=self._create_job_request(),
-            name=job_name,
-            owner=owner,
-            status=JobStatus.RUNNING,
-        )
+        return self._create_job(name=job_name, owner=owner, status=JobStatus.RUNNING)
 
     def _create_succeeded_job(
         self,
@@ -57,8 +57,7 @@ class TestRedisJobsStorage:
         owner: str = "compute",
         job_name: Optional[str] = None,
     ) -> JobRecord:
-        return JobRecord.create(
-            request=self._create_job_request(),
+        return self._create_job(
             name=job_name,
             status=JobStatus.SUCCEEDED,
             owner=owner,
@@ -71,12 +70,8 @@ class TestRedisJobsStorage:
         owner: str = "compute",
         job_name: Optional[str] = None,
     ) -> JobRecord:
-        return JobRecord.create(
-            request=self._create_job_request(),
-            name=job_name,
-            status=JobStatus.FAILED,
-            owner=owner,
-            is_deleted=is_deleted,
+        return self._create_job(
+            name=job_name, status=JobStatus.FAILED, owner=owner, is_deleted=is_deleted
         )
 
     @pytest.mark.asyncio
@@ -281,12 +276,8 @@ class TestRedisJobsStorage:
         owner = "test-user"
         job_name = "some-test-job-name"
 
-        first_job = JobRecord.create(
-            request=self._create_job_request(),
-            name=job_name,
-            status=first_job_status,
-            owner=owner,
-            is_deleted=False,
+        first_job = self._create_job(
+            name=job_name, status=first_job_status, owner=owner, is_deleted=False
         )
         async with storage.try_create_job(first_job):
             pass
@@ -314,12 +305,8 @@ class TestRedisJobsStorage:
         owner = "test-user"
         job_name = "some-test-job-name"
 
-        first_job = JobRecord.create(
-            request=self._create_job_request(),
-            name=job_name,
-            status=first_job_status,
-            owner=owner,
-            is_deleted=False,
+        first_job = self._create_job(
+            name=job_name, status=first_job_status, owner=owner, is_deleted=False
         )
         second_job = self._create_pending_job(owner=owner, job_name=job_name)
 
@@ -961,12 +948,8 @@ class TestRedisJobsStorage:
         owner = "test-user"
         job_name = "some-test-job-name"
 
-        first_job = JobRecord.create(
-            request=self._create_job_request(),
-            name=job_name,
-            status=first_job_status,
-            owner=owner,
-            is_deleted=False,
+        first_job = self._create_job(
+            name=job_name, status=first_job_status, owner=owner, is_deleted=False
         )
         second_job = self._create_pending_job(owner=owner, job_name=job_name)
 
@@ -1005,6 +988,12 @@ class TestRedisJobsStorage:
     async def test_migrate(self, redis_client: aioredis.Redis) -> None:
         first_job = self._create_pending_job(owner="testuser")
         second_job = self._create_running_job(owner="testuser")
+
+        first_job.allow_empty_cluster_name = True
+        first_job.cluster_name = ""
+        second_job.allow_empty_cluster_name = True
+        second_job.cluster_name = ""
+
         storage = RedisJobsStorage(client=redis_client)
         async with storage.try_create_job(first_job, skip_owner_index=True):
             pass
@@ -1055,6 +1044,7 @@ class TestRedisJobsStorage:
             return JobRecord.create(
                 owner=owner,
                 request=self._create_job_request(with_gpu),
+                cluster_name="test-cluster",
                 status_history=JobStatusHistory(status_history),
             )
 
