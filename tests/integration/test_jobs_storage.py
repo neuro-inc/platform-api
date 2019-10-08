@@ -683,13 +683,13 @@ class TestRedisJobsStorage:
         self, redis_client: aioredis.Redis
     ) -> Tuple[RedisJobsStorage, List[JobRecord]]:
         jobs = [
-            self._create_running_job(owner="user1"),
+            self._create_running_job(owner="user1", cluster_name="default"),
             self._create_succeeded_job(owner="user1", cluster_name="my-cluster"),
             self._create_failed_job(owner="user1", cluster_name="other-cluster"),
-            self._create_failed_job(owner="user2"),
+            self._create_failed_job(owner="user2", cluster_name="default"),
             self._create_running_job(owner="user2", cluster_name="my-cluster"),
             self._create_succeeded_job(owner="user2", cluster_name="other-cluster"),
-            self._create_succeeded_job(owner="user3"),
+            self._create_succeeded_job(owner="user3", cluster_name="default"),
             self._create_failed_job(owner="user3", cluster_name="my-cluster"),
             self._create_running_job(owner="user3", cluster_name="other-cluster"),
         ]
