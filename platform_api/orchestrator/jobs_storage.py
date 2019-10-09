@@ -565,12 +565,12 @@ class RedisJobsStorage(JobsStorage):
         version = int(await self._client.get("version") or "0")
         if version < 1:
             await self._reindex_job_owners()
+        if version < 3:
             await self._update_job_cluster_names()
-        if version < 2:
             await self._reindex_job_clusters()
         else:
             return False
-        await self._client.set("version", "2")
+        await self._client.set("version", "3")
         return True
 
     async def _reindex_job_owners(self) -> None:
