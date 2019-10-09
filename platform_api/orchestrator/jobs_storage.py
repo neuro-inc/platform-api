@@ -530,11 +530,13 @@ class RedisJobsStorage(JobsStorage):
 
     async def migrate(self) -> bool:
         version = int(await self._client.get("version") or "0")
-        if version >= 1:
+        if version < 1:
+            await self._reindex_job_owners()
+        if version < 2:
+            await self._update_job_cluster_names()
+        else:
             return False
-        await self._reindex_job_owners()
-        await self._update_job_cluster_names()
-        await self._client.set("version", "1")
+        await self._client.set("version", "2")
         return True
 
     async def _reindex_job_owners(self) -> None:
