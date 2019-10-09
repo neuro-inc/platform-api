@@ -27,6 +27,7 @@ from platform_api.user import User, authorized_user, untrusted_user
 
 from .job_request_builder import ContainerBuilder
 from .validators import (
+    create_cluster_name_validator,
     create_container_request_validator,
     create_container_response_validator,
     create_job_history_validator,
@@ -377,6 +378,7 @@ class JobFilterFactory:
     def __init__(self) -> None:
         self._job_name_validator = create_job_name_validator()
         self._user_name_validator = create_user_name_validator()
+        self._cluster_name_validator = create_cluster_name_validator()
 
     def create_from_query(self, query: MultiDictProxy) -> JobFilter:  # type: ignore
         statuses = {JobStatus(s) for s in query.getall("status", [])}
@@ -387,9 +389,15 @@ class JobFilterFactory:
                 self._user_name_validator.check(owner)
                 for owner in query.getall("owner", [])
             }
-            return JobFilter(statuses=statuses, owners=owners, name=job_name)
+            clusters = {
+                self._cluster_name_validator.check(cluster_name)
+                for cluster_name in query.getall("cluster_name", [])
+            }
+            return JobFilter(
+                statuses=statuses, clusters=clusters, owners=owners, name=job_name
+            )
 
-        if "name" in query or "owner" in query:
+        if "name" in query or "owner" in query or "cluster_name" in query:
             raise ValueError("Invalid request")
 
         label = hostname.partition(".")[0]
