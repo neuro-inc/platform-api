@@ -9,6 +9,7 @@ from aiohttp.web import (
     HTTPBadRequest,
     HTTPForbidden,
     HTTPInternalServerError,
+    HTTPNoContent,
     HTTPOk,
     HTTPUnauthorized,
 )
@@ -1582,12 +1583,12 @@ class TestJobs:
         assert result["status"] == "pending"
         job_id = result["id"]
 
-        url = api.generate_job_url(job_id)
+        url = api.generate_job_url(job_id) + "/status"
         payload = {"status": "failed"}
         async with client.put(
             url, headers=regular_user.headers, json=payload
         ) as response:
-            assert response.status == HTTPAccepted.status_code, await response.text()
+            assert response.status == HTTPNoContent.status_code, await response.text()
 
         result = await jobs_client.get_job_by_id(job_id)
         assert result["status"] == "failed"
@@ -1614,12 +1615,12 @@ class TestJobs:
         assert result["status"] == "pending"
         job_id = result["id"]
 
-        url = api.generate_job_url(job_id)
+        url = api.generate_job_url(job_id) + "/status"
         payload = {"status": "failed", "reason": "Test failure"}
         async with client.put(
             url, headers=regular_user.headers, json=payload
         ) as response:
-            assert response.status == HTTPAccepted.status_code, await response.text()
+            assert response.status == HTTPNoContent.status_code, await response.text()
 
         result = await jobs_client.get_job_by_id(job_id)
         assert result["status"] == "failed"
@@ -1646,7 +1647,7 @@ class TestJobs:
         assert result["status"] == "pending"
         job_id = result["id"]
 
-        url = api.generate_job_url(job_id)
+        url = api.generate_job_url(job_id) + "/status"
         payload = {"status": "abrakadabra"}
         async with client.put(
             url, headers=regular_user.headers, json=payload
