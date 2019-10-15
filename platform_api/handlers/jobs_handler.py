@@ -13,7 +13,7 @@ from yarl import URL
 
 from platform_api.config import Config, RegistryConfig, StorageConfig
 from platform_api.log import log_debug_time
-from platform_api.orchestrator.job import JOB_USER_NAMES_SEPARATOR, Job
+from platform_api.orchestrator.job import JOB_USER_NAMES_SEPARATOR, Job, JobStatusItem
 from platform_api.orchestrator.job_request import (
     Container,
     ContainerVolume,
@@ -85,6 +85,10 @@ def create_job_response_validator() -> t.Trafaret:
             t.Key("schedule_timeout", optional=True): t.Float,
         }
     )
+
+
+def create_job_set_status_validator() -> t.Trafaret:
+    return t.Dict({"status": t.String, "reason": t.String | t.Null})
 
 
 def convert_job_container_to_json(
@@ -219,6 +223,7 @@ class JobsHandler:
 
         self._job_filter_factory = JobFilterFactory()
         self._job_response_validator = create_job_response_validator()
+        self._job_set_status_validator = create_job_set_status_validator()
         self._bulk_jobs_response_validator = t.Dict(
             {"jobs": t.List(self._job_response_validator)}
         )
@@ -238,6 +243,7 @@ class JobsHandler:
                 aiohttp.web.post("", self.create_job),
                 aiohttp.web.delete("/{job_id}", self.handle_delete),
                 aiohttp.web.get("/{job_id}", self.handle_get),
+                aiohttp.web.put("/{job_id}/status", self.handle_put_status),
             )
         )
 
@@ -367,6 +373,24 @@ class JobsHandler:
         await check_permissions(request, [permission])
 
         await self._jobs_service.delete_job(job_id)
+        raise aiohttp.web.HTTPNoContent()
+
+    async def handle_put_status(
+        self, request: aiohttp.web.Request
+    ) -> aiohttp.web.StreamResponse:
+        job_id = request.match_info["job_id"]
+
+        permission = Permission(uri="job:", action="manage")
+        await check_permissions(request, [permission])
+
+        orig_payload = await request.json()
+        request_payload = self._job_set_status_validator.check(orig_payload)
+
+        status_item = JobStatusItem.create(
+            JobStatus(request_payload["status"]), reason=request_payload["reason"]
+        )
+
+        await self._jobs_service.set_job_status(job_id, status_item)
         raise aiohttp.web.HTTPNoContent()
 
 

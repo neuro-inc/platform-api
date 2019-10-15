@@ -246,6 +246,18 @@ class JobsService:
         job = await self._jobs_storage.get_job(job_id)
         return job.status
 
+    async def set_job_status(self, job_id: str, status_item: JobStatusItem) -> None:
+        async with self._update_job_in_storage(job_id) as record:
+            old_status_item = record.status_history.current
+            if old_status_item != status_item:
+                record.status_history.current = status_item
+                logger.info(
+                    "Job %s transitioned from %s to %s",
+                    record.request.job_id,
+                    old_status_item.status.name,
+                    status_item.status.name,
+                )
+
     async def _get_cluster_job(self, record: JobRecord) -> Job:
         try:
             async with self._get_cluster(record.cluster_name) as cluster:
