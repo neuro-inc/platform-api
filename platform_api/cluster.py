@@ -1,7 +1,7 @@
 import asyncio
 import logging
 from abc import ABC, abstractmethod
-from typing import Any, AsyncIterator, Callable, Dict
+from typing import Any, AsyncIterator, Callable, Dict, Sequence
 
 from aiorwlock import RWLock
 from async_generator import asynccontextmanager
@@ -135,6 +135,15 @@ class ClusterRegistry:
             except Exception:
                 logger.exception(f"Failed to close cluster '{name}'")
             logger.info(f"Closed cluster '{name}'")
+
+    async def cleanup(self, keep_clusters: Sequence[ClusterConfig]) -> None:
+        all_cluster_names = list(self._records.keys())
+        keep_clusters_with_names = list(
+            map(lambda cluster_config: cluster_config.name, keep_clusters)
+        )
+        for cluster_name in all_cluster_names:
+            if cluster_name not in keep_clusters_with_names:
+                await self.remove(cluster_name)
 
     @asynccontextmanager
     async def get(self, name: str) -> AsyncIterator[Cluster]:
