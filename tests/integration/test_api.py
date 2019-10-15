@@ -1573,11 +1573,11 @@ class TestJobs:
         job_submit: Dict[str, Any],
         jobs_client: JobsClient,
         regular_user: _User,
+        admin_headers: Dict[str, str],
     ) -> None:
         url = api.jobs_base_url
-        async with client.post(
-            url, headers=regular_user.headers, json=job_submit
-        ) as response:
+        headers = regular_user.headers
+        async with client.post(url, headers=headers, json=job_submit) as response:
             assert response.status == HTTPAccepted.status_code, await response.text()
             result = await response.json()
         assert result["status"] == "pending"
@@ -1585,9 +1585,7 @@ class TestJobs:
 
         url = api.generate_job_url(job_id) + "/status"
         payload = {"status": "failed"}
-        async with client.put(
-            url, headers=regular_user.headers, json=payload
-        ) as response:
+        async with client.put(url, headers=admin_headers, json=payload) as response:
             assert response.status == HTTPNoContent.status_code, await response.text()
 
         result = await jobs_client.get_job_by_id(job_id)
@@ -1605,11 +1603,11 @@ class TestJobs:
         job_submit: Dict[str, Any],
         jobs_client: JobsClient,
         regular_user: _User,
+        admin_headers: Dict[str, str],
     ) -> None:
         url = api.jobs_base_url
-        async with client.post(
-            url, headers=regular_user.headers, json=job_submit
-        ) as response:
+        headers = regular_user.headers
+        async with client.post(url, headers=headers, json=job_submit) as response:
             assert response.status == HTTPAccepted.status_code, await response.text()
             result = await response.json()
         assert result["status"] == "pending"
@@ -1617,9 +1615,7 @@ class TestJobs:
 
         url = api.generate_job_url(job_id) + "/status"
         payload = {"status": "failed", "reason": "Test failure"}
-        async with client.put(
-            url, headers=regular_user.headers, json=payload
-        ) as response:
+        async with client.put(url, headers=admin_headers, json=payload) as response:
             assert response.status == HTTPNoContent.status_code, await response.text()
 
         result = await jobs_client.get_job_by_id(job_id)
@@ -1637,11 +1633,11 @@ class TestJobs:
         job_submit: Dict[str, Any],
         jobs_client: JobsClient,
         regular_user: _User,
+        admin_headers: Dict[str, str],
     ) -> None:
         url = api.jobs_base_url
-        async with client.post(
-            url, headers=regular_user.headers, json=job_submit
-        ) as response:
+        headers = regular_user.headers
+        async with client.post(url, headers=headers, json=job_submit) as response:
             assert response.status == HTTPAccepted.status_code, await response.text()
             result = await response.json()
         assert result["status"] == "pending"
@@ -1649,10 +1645,35 @@ class TestJobs:
 
         url = api.generate_job_url(job_id) + "/status"
         payload = {"status": "abrakadabra"}
-        async with client.put(
-            url, headers=regular_user.headers, json=payload
-        ) as response:
+        async with client.put(url, headers=admin_headers, json=payload) as response:
             assert response.status == HTTPBadRequest.status_code, await response.text()
+
+        await jobs_client.delete_job(job_id=job_id)
+
+    @pytest.mark.asyncio
+    async def test_set_job_status_unprivileged(
+        self,
+        api: ApiConfig,
+        client: aiohttp.ClientSession,
+        job_submit: Dict[str, Any],
+        jobs_client: JobsClient,
+        regular_user: _User,
+        admin_headers: Dict[str, str],
+    ) -> None:
+        url = api.jobs_base_url
+        headers = regular_user.headers
+        async with client.post(url, headers=headers, json=job_submit) as response:
+            assert response.status == HTTPAccepted.status_code, await response.text()
+            result = await response.json()
+        assert result["status"] == "pending"
+        job_id = result["id"]
+
+        url = api.generate_job_url(job_id) + "/status"
+        payload = {"status": "running"}
+        async with client.put(url, headers=headers, json=payload) as response:
+            assert response.status == HTTPForbidden.status_code, await response.text()
+            result = await response.json()
+            assert result == {"missing": [{"uri": "job:", "action": "manage"}]}
 
         await jobs_client.delete_job(job_id=job_id)
 
