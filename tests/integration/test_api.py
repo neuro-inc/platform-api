@@ -7,6 +7,7 @@ import pytest
 from aiohttp.web import (
     HTTPAccepted,
     HTTPBadRequest,
+    HTTPConflict,
     HTTPForbidden,
     HTTPInternalServerError,
     HTTPNoContent,
@@ -1587,14 +1588,23 @@ class TestJobs:
         headers = compute_user.headers
         payload = {"status": "failed"}
         async with client.put(url, headers=headers, json=payload) as response:
-            assert response.status == HTTPNoContent.status_code, await response.text()
+            if response.status == HTTPConflict.status_code:
+                result = await response.json()
+                assert result["error"] == f"Job {{id={job_id}}} has changed"
+                ok = False
+            else:
+                assert (
+                    response.status == HTTPNoContent.status_code
+                ), await response.text()
+                ok = True
 
-        result = await jobs_client.get_job_by_id(job_id)
-        assert result["status"] == "failed"
-        assert result["history"]["status"] == "failed"
-        assert result["history"].get("reason") is None
-        assert result["history"].get("description") is None
-        assert result["history"].get("exit_code") is None
+        if ok:
+            result = await jobs_client.get_job_by_id(job_id)
+            assert result["status"] == "failed"
+            assert result["history"]["status"] == "failed"
+            assert result["history"].get("reason") is None
+            assert result["history"].get("description") is None
+            assert result["history"].get("exit_code") is None
 
         await jobs_client.delete_job(job_id=job_id)
 
@@ -1625,14 +1635,23 @@ class TestJobs:
             "exit_code": 42,
         }
         async with client.put(url, headers=headers, json=payload) as response:
-            assert response.status == HTTPNoContent.status_code, await response.text()
+            if response.status == HTTPConflict.status_code:
+                result = await response.json()
+                assert result["error"] == f"Job {{id={job_id}}} has changed"
+                ok = False
+            else:
+                assert (
+                    response.status == HTTPNoContent.status_code
+                ), await response.text()
+                ok = True
 
-        result = await jobs_client.get_job_by_id(job_id)
-        assert result["status"] == "failed"
-        assert result["history"]["status"] == "failed"
-        assert result["history"]["reason"] == "Test failure"
-        assert result["history"]["description"] == "test_set_job_status"
-        assert result["history"]["exit_code"] == 42
+        if ok:
+            result = await jobs_client.get_job_by_id(job_id)
+            assert result["status"] == "failed"
+            assert result["history"]["status"] == "failed"
+            assert result["history"]["reason"] == "Test failure"
+            assert result["history"]["description"] == "test_set_job_status"
+            assert result["history"]["exit_code"] == 42
 
         await jobs_client.delete_job(job_id=job_id)
 

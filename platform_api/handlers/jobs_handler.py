@@ -21,7 +21,7 @@ from platform_api.orchestrator.job_request import (
     JobStatus,
 )
 from platform_api.orchestrator.jobs_service import JobsService
-from platform_api.orchestrator.jobs_storage import JobFilter
+from platform_api.orchestrator.jobs_storage import JobFilter, JobStorageTransactionError
 from platform_api.resource import TPUResource
 from platform_api.user import User, authorized_user, untrusted_user
 
@@ -400,8 +400,15 @@ class JobsHandler:
             exit_code=request_payload.get("exit_code"),
         )
 
-        await self._jobs_service.set_job_status(job_id, status_item)
-        raise aiohttp.web.HTTPNoContent()
+        try:
+            await self._jobs_service.set_job_status(job_id, status_item)
+        except JobStorageTransactionError as e:
+            payload = {"error": str(e)}
+            return aiohttp.web.json_response(
+                payload, status=aiohttp.web.HTTPConflict.status_code
+            )
+        else:
+            raise aiohttp.web.HTTPNoContent()
 
 
 class JobFilterException(ValueError):

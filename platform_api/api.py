@@ -158,7 +158,8 @@ async def handle_exceptions(
         raise
     except Exception as e:
         msg_str = (
-            f"Unexpected exception: {str(e)}. " f"Path with query: {request.path_qs}."
+            f"Unexpected exception {e.__class__.__name__}: {str(e)}. "
+            f"Path with query: {request.path_qs}."
         )
         logging.exception(msg_str)
         payload = {"error": msg_str}
