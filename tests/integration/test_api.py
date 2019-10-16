@@ -1573,7 +1573,7 @@ class TestJobs:
         job_submit: Dict[str, Any],
         jobs_client: JobsClient,
         regular_user: _User,
-        admin_headers: Dict[str, str],
+        compute_user: _User,
     ) -> None:
         url = api.jobs_base_url
         headers = regular_user.headers
@@ -1584,8 +1584,9 @@ class TestJobs:
         job_id = result["id"]
 
         url = api.generate_job_url(job_id) + "/status"
+        headers = compute_user.headers
         payload = {"status": "failed"}
-        async with client.put(url, headers=admin_headers, json=payload) as response:
+        async with client.put(url, headers=headers, json=payload) as response:
             assert response.status == HTTPNoContent.status_code, await response.text()
 
         result = await jobs_client.get_job_by_id(job_id)
@@ -1603,7 +1604,7 @@ class TestJobs:
         job_submit: Dict[str, Any],
         jobs_client: JobsClient,
         regular_user: _User,
-        admin_headers: Dict[str, str],
+        compute_user: _User,
     ) -> None:
         url = api.jobs_base_url
         headers = regular_user.headers
@@ -1614,8 +1615,9 @@ class TestJobs:
         job_id = result["id"]
 
         url = api.generate_job_url(job_id) + "/status"
+        headers = compute_user.headers
         payload = {"status": "failed", "reason": "Test failure"}
-        async with client.put(url, headers=admin_headers, json=payload) as response:
+        async with client.put(url, headers=headers, json=payload) as response:
             assert response.status == HTTPNoContent.status_code, await response.text()
 
         result = await jobs_client.get_job_by_id(job_id)
@@ -1633,7 +1635,7 @@ class TestJobs:
         job_submit: Dict[str, Any],
         jobs_client: JobsClient,
         regular_user: _User,
-        admin_headers: Dict[str, str],
+        compute_user: _User,
     ) -> None:
         url = api.jobs_base_url
         headers = regular_user.headers
@@ -1644,8 +1646,9 @@ class TestJobs:
         job_id = result["id"]
 
         url = api.generate_job_url(job_id) + "/status"
+        headers = compute_user.headers
         payload = {"status": "abrakadabra"}
-        async with client.put(url, headers=admin_headers, json=payload) as response:
+        async with client.put(url, headers=headers, json=payload) as response:
             assert response.status == HTTPBadRequest.status_code, await response.text()
 
         await jobs_client.delete_job(job_id=job_id)
@@ -1658,7 +1661,6 @@ class TestJobs:
         job_submit: Dict[str, Any],
         jobs_client: JobsClient,
         regular_user: _User,
-        admin_headers: Dict[str, str],
     ) -> None:
         url = api.jobs_base_url
         headers = regular_user.headers

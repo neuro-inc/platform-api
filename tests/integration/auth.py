@@ -84,11 +84,6 @@ def admin_token(token_factory: Callable[[str], str]) -> str:
     return token_factory("admin")
 
 
-@pytest.fixture
-def admin_headers(admin_token: str) -> Dict[str, str]:
-    return {AUTHORIZATION: f"Bearer {admin_token}"}
-
-
 async def create_auth_config(
     container: aiodocker.containers.DockerContainer
 ) -> AuthConfig:
@@ -187,6 +182,17 @@ async def regular_user_with_missing_cluster_name(
 @pytest.fixture
 def cluster_user(token_factory: Callable[[str], str]) -> _User:
     name = "cluster"
+    return _User(  # noqa
+        name=name,
+        token=token_factory(name),
+        quota=AggregatedRunTime.from_quota(Quota()),
+        cluster_name="",
+    )
+
+
+@pytest.fixture
+def compute_user(token_factory: Callable[[str], str]) -> _User:
+    name = "compute"
     return _User(  # noqa
         name=name,
         token=token_factory(name),
