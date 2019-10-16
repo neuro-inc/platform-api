@@ -1593,11 +1593,13 @@ class TestJobs:
         assert result["status"] == "failed"
         assert result["history"]["status"] == "failed"
         assert result["history"].get("reason") is None
+        assert result["history"].get("description") is None
+        assert result["history"].get("exit_code") is None
 
         await jobs_client.delete_job(job_id=job_id)
 
     @pytest.mark.asyncio
-    async def test_set_job_status_with_reason(
+    async def test_set_job_status_with_details(
         self,
         api: ApiConfig,
         client: aiohttp.ClientSession,
@@ -1616,7 +1618,12 @@ class TestJobs:
 
         url = api.generate_job_url(job_id) + "/status"
         headers = compute_user.headers
-        payload = {"status": "failed", "reason": "Test failure"}
+        payload = {
+            "status": "failed",
+            "reason": "Test failure",
+            "description": "test_set_job_status",
+            "exit_code": 42,
+        }
         async with client.put(url, headers=headers, json=payload) as response:
             assert response.status == HTTPNoContent.status_code, await response.text()
 
@@ -1624,6 +1631,8 @@ class TestJobs:
         assert result["status"] == "failed"
         assert result["history"]["status"] == "failed"
         assert result["history"]["reason"] == "Test failure"
+        assert result["history"]["description"] == "test_set_job_status"
+        assert result["history"]["exit_code"] == 42
 
         await jobs_client.delete_job(job_id=job_id)
 

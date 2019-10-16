@@ -88,7 +88,14 @@ def create_job_response_validator() -> t.Trafaret:
 
 
 def create_job_set_status_validator() -> t.Trafaret:
-    return t.Dict({"status": t.String, "reason": t.String | t.Null})
+    return t.Dict(
+        {
+            "status": t.String,
+            t.Key("reason", optional=True): t.String | t.Null,
+            t.Key("description", optional=True): t.String | t.Null,
+            t.Key("exit_code", optional=True): t.Int | t.Null,
+        }
+    )
 
 
 def convert_job_container_to_json(
@@ -387,7 +394,10 @@ class JobsHandler:
         request_payload = self._job_set_status_validator.check(orig_payload)
 
         status_item = JobStatusItem.create(
-            JobStatus(request_payload["status"]), reason=request_payload["reason"]
+            JobStatus(request_payload["status"]),
+            reason=request_payload.get("reason"),
+            description=request_payload.get("description"),
+            exit_code=request_payload.get("exit_code"),
         )
 
         await self._jobs_service.set_job_status(job_id, status_item)
