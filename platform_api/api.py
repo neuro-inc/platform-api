@@ -65,6 +65,8 @@ class ApiHandler:
             await cluster_registry.add(cluster_config)
             for cluster_config in cluster_configs
         ]
+        await cluster_registry.cleanup(cluster_configs)
+
         new_record_count = len(cluster_registry)
 
         return aiohttp.web.json_response(
