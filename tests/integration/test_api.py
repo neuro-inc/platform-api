@@ -475,8 +475,9 @@ class TestJobs:
             ), await response.text()
             payload = await response.json()
             e = (
-                f"Unexpected exception: Cluster '{user.cluster_name}' not found. "
-                "Path with query: /api/v1/jobs."
+                f"Unexpected exception ClusterNotFound: "
+                f"Cluster '{user.cluster_name}' not found. "
+                f"Path with query: /api/v1/jobs."
             )
             assert payload == {"error": e}
 
