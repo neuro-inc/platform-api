@@ -137,13 +137,12 @@ class ClusterRegistry:
             logger.info(f"Closed cluster '{name}'")
 
     async def cleanup(self, keep_clusters: Sequence[ClusterConfig]) -> None:
-        all_cluster_names = list(self._records.keys())
-        keep_clusters_with_names = list(
-            map(lambda cluster_config: cluster_config.name, keep_clusters)
+        all_cluster_names = set(self._records.keys())
+        keep_clusters_with_names = set(
+            cluster_config.name for cluster_config in keep_clusters
         )
-        for cluster_name in all_cluster_names:
-            if cluster_name not in keep_clusters_with_names:
-                await self.remove(cluster_name)
+        for cluster_for_removal in all_cluster_names - keep_clusters_with_names:
+            await self.remove(cluster_for_removal)
 
     @asynccontextmanager
     async def get(self, name: str) -> AsyncIterator[Cluster]:
