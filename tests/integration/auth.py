@@ -191,6 +191,17 @@ def cluster_user(token_factory: Callable[[str], str]) -> _User:
 
 
 @pytest.fixture
+def compute_user(token_factory: Callable[[str], str]) -> _User:
+    name = "compute"
+    return _User(  # noqa
+        name=name,
+        token=token_factory(name),
+        quota=AggregatedRunTime.from_quota(Quota()),
+        cluster_name="",
+    )
+
+
+@pytest.fixture
 def oauth_config_dev() -> OAuthConfig:
     return OAuthConfig(
         base_url=URL("https://platform-auth0-url"),

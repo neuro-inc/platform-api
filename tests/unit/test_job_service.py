@@ -208,6 +208,37 @@ class TestJobsService:
         assert job_status == JobStatus.PENDING
 
     @pytest.mark.asyncio
+    async def test_set_status_by_job_id(
+        self, jobs_service: JobsService, mock_job_request: JobRequest
+    ) -> None:
+        user = User(cluster_name="default", name="testuser", token="")
+        job, _ = await jobs_service.create_job(job_request=mock_job_request, user=user)
+        job_id = job.id
+        job_status = await jobs_service.get_job_status(job_id)
+        assert job_status == JobStatus.PENDING
+        job_status = await jobs_service.get_job_status(job_id)
+        status_item = job.status_history.last
+        assert status_item.reason is None
+
+        await jobs_service.set_job_status(
+            job_id, JobStatusItem.create(JobStatus.RUNNING)
+        )
+        job_status = await jobs_service.get_job_status(job_id)
+        assert job_status == JobStatus.RUNNING
+        job = await jobs_service.get_job(job_id)
+        status_item = job.status_history.last
+        assert status_item.reason is None
+
+        await jobs_service.set_job_status(
+            job_id, JobStatusItem.create(JobStatus.FAILED, reason="Test failure")
+        )
+        job_status = await jobs_service.get_job_status(job_id)
+        assert job_status == JobStatus.FAILED
+        job = await jobs_service.get_job(job_id)
+        status_item = job.status_history.last
+        assert status_item.reason == "Test failure"
+
+    @pytest.mark.asyncio
     async def test_get_all(
         self, jobs_service: JobsService, job_request_factory: Callable[[], JobRequest]
     ) -> None:

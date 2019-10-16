@@ -13,7 +13,7 @@ from yarl import URL
 
 from platform_api.config import Config, RegistryConfig, StorageConfig
 from platform_api.log import log_debug_time
-from platform_api.orchestrator.job import JOB_USER_NAMES_SEPARATOR, Job
+from platform_api.orchestrator.job import JOB_USER_NAMES_SEPARATOR, Job, JobStatusItem
 from platform_api.orchestrator.job_request import (
     Container,
     ContainerVolume,
@@ -21,7 +21,7 @@ from platform_api.orchestrator.job_request import (
     JobStatus,
 )
 from platform_api.orchestrator.jobs_service import JobsService
-from platform_api.orchestrator.jobs_storage import JobFilter
+from platform_api.orchestrator.jobs_storage import JobFilter, JobStorageTransactionError
 from platform_api.resource import TPUResource
 from platform_api.user import User, authorized_user, untrusted_user
 
@@ -83,6 +83,17 @@ def create_job_response_validator() -> t.Trafaret:
             t.Key("name", optional=True): create_job_name_validator(max_length=None),
             t.Key("description", optional=True): t.String,
             t.Key("schedule_timeout", optional=True): t.Float,
+        }
+    )
+
+
+def create_job_set_status_validator() -> t.Trafaret:
+    return t.Dict(
+        {
+            "status": t.String,
+            t.Key("reason", optional=True): t.String | t.Null,
+            t.Key("description", optional=True): t.String | t.Null,
+            t.Key("exit_code", optional=True): t.Int | t.Null,
         }
     )
 
@@ -219,6 +230,7 @@ class JobsHandler:
 
         self._job_filter_factory = JobFilterFactory()
         self._job_response_validator = create_job_response_validator()
+        self._job_set_status_validator = create_job_set_status_validator()
         self._bulk_jobs_response_validator = t.Dict(
             {"jobs": t.List(self._job_response_validator)}
         )
@@ -238,6 +250,7 @@ class JobsHandler:
                 aiohttp.web.post("", self.create_job),
                 aiohttp.web.delete("/{job_id}", self.handle_delete),
                 aiohttp.web.get("/{job_id}", self.handle_get),
+                aiohttp.web.put("/{job_id}/status", self.handle_put_status),
             )
         )
 
@@ -368,6 +381,34 @@ class JobsHandler:
 
         await self._jobs_service.delete_job(job_id)
         raise aiohttp.web.HTTPNoContent()
+
+    async def handle_put_status(
+        self, request: aiohttp.web.Request
+    ) -> aiohttp.web.StreamResponse:
+        job_id = request.match_info["job_id"]
+
+        permission = Permission(uri="job:", action="manage")
+        await check_permissions(request, [permission])
+
+        orig_payload = await request.json()
+        request_payload = self._job_set_status_validator.check(orig_payload)
+
+        status_item = JobStatusItem.create(
+            JobStatus(request_payload["status"]),
+            reason=request_payload.get("reason"),
+            description=request_payload.get("description"),
+            exit_code=request_payload.get("exit_code"),
+        )
+
+        try:
+            await self._jobs_service.set_job_status(job_id, status_item)
+        except JobStorageTransactionError as e:
+            payload = {"error": str(e)}
+            return aiohttp.web.json_response(
+                payload, status=aiohttp.web.HTTPConflict.status_code
+            )
+        else:
+            raise aiohttp.web.HTTPNoContent()
 
 
 class JobFilterException(ValueError):
