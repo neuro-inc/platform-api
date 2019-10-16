@@ -803,11 +803,14 @@ class TestJobs:
         api: ApiConfig,
         client: aiohttp.ClientSession,
         jobs_client_factory: Callable[[_User], JobsClient],
-    ) -> AsyncIterator[Callable[[_User, Dict[str, Any], bool], Awaitable[str]]]:
+    ) -> AsyncIterator[Callable[[_User, Dict[str, Any], bool, bool], Awaitable[str]]]:
         cleanup_pairs = []
 
         async def _impl(
-            user: _User, job_request: Dict[str, Any], do_kill: bool = False
+            user: _User,
+            job_request: Dict[str, Any],
+            do_kill: bool = False,
+            do_wait: bool = True,
         ) -> str:
             url = api.jobs_base_url
             headers = user.headers
@@ -819,7 +822,8 @@ class TestJobs:
                 )
                 data = await resp.json()
                 job_id = data["id"]
-                await jobs_client.long_polling_by_job_id(job_id, "running")
+                if do_wait:
+                    await jobs_client.long_polling_by_job_id(job_id, "running")
                 if do_kill:
                     await jobs_client.delete_job(job_id)
                     await jobs_client.long_polling_by_job_id(job_id, "succeeded")
@@ -875,7 +879,7 @@ class TestJobs:
         regular_user_factory: Callable[[], Any],
         jobs_client_factory: Callable[[_User], JobsClient],
         job_request_factory: Callable[[], Dict[str, Any]],
-        run_job: Callable[..., Awaitable[None]],
+        run_job: Callable[..., Awaitable[str]],
         share_job: Callable[[_User, _User, Any], Awaitable[None]],
         create_job_request_no_name: Callable[[], Dict[str, Any]],
         create_job_request_with_name: Callable[[str], Dict[str, Any]],
@@ -928,7 +932,7 @@ class TestJobs:
         regular_user_factory: Callable[[], Any],
         jobs_client_factory: Callable[[_User], JobsClient],
         job_request_factory: Callable[[], Dict[str, Any]],
-        run_job: Callable[..., Awaitable[None]],
+        run_job: Callable[..., Awaitable[str]],
         share_job: Callable[[_User, _User, Any], Awaitable[None]],
         create_job_request_no_name: Callable[[], Dict[str, Any]],
         create_job_request_with_name: Callable[[str], Dict[str, Any]],
@@ -994,7 +998,7 @@ class TestJobs:
         regular_user_factory: Callable[[], Any],
         jobs_client_factory: Callable[[_User], JobsClient],
         job_request_factory: Callable[[], Dict[str, Any]],
-        run_job: Callable[..., Awaitable[None]],
+        run_job: Callable[..., Awaitable[str]],
         share_job: Callable[[_User, _User, Any], Awaitable[None]],
         create_job_request_no_name: Callable[[], Dict[str, Any]],
         create_job_request_with_name: Callable[[str], Dict[str, Any]],
@@ -1059,7 +1063,7 @@ class TestJobs:
         regular_user_factory: Callable[[], Any],
         jobs_client_factory: Callable[[_User], JobsClient],
         job_request_factory: Callable[[], Dict[str, Any]],
-        run_job: Callable[..., Awaitable[None]],
+        run_job: Callable[..., Awaitable[str]],
         share_job: Callable[[_User, _User, Any], Awaitable[None]],
         create_job_request_no_name: Callable[[], Dict[str, Any]],
         create_job_request_with_name: Callable[[str], Dict[str, Any]],
@@ -1347,7 +1351,7 @@ class TestJobs:
         client: aiohttp.ClientSession,
         regular_user_factory: Callable[..., Any],
         jobs_client_factory: Callable[[_User], JobsClient],
-        run_job: Callable[..., Awaitable[None]],
+        run_job: Callable[..., Awaitable[str]],
         share_job: Callable[[_User, _User, Any], Awaitable[None]],
         create_job_request_no_name: Callable[[], Dict[str, Any]],
     ) -> None:
@@ -1407,7 +1411,7 @@ class TestJobs:
         client: aiohttp.ClientSession,
         regular_user_factory: Callable[[], Any],
         jobs_client_factory: Callable[[_User], JobsClient],
-        run_job: Callable[..., Awaitable[None]],
+        run_job: Callable[..., Awaitable[str]],
         create_job_request_with_name: Callable[[str], Dict[str, Any]],
     ) -> None:
         job_name = "test-job-name"
@@ -1459,7 +1463,7 @@ class TestJobs:
         client: aiohttp.ClientSession,
         regular_user_factory: Callable[[], Any],
         jobs_client_factory: Callable[[_User], JobsClient],
-        run_job: Callable[..., Awaitable[None]],
+        run_job: Callable[..., Awaitable[str]],
         share_job: Callable[[_User, _User, Any], Awaitable[None]],
         create_job_request_with_name: Callable[[str], Dict[str, Any]],
     ) -> None:
@@ -1498,7 +1502,7 @@ class TestJobs:
         client: aiohttp.ClientSession,
         regular_user_factory: Callable[[], Any],
         jobs_client_factory: Callable[[_User], JobsClient],
-        run_job: Callable[..., Awaitable[None]],
+        run_job: Callable[..., Awaitable[str]],
         create_job_request_with_name: Callable[[str], Dict[str, Any]],
     ) -> None:
         job_name = "test-job-name"
@@ -1538,7 +1542,7 @@ class TestJobs:
         api: ApiConfig,
         client: aiohttp.ClientSession,
         regular_user_factory: Callable[[], Any],
-        run_job: Callable[..., Awaitable[None]],
+        run_job: Callable[..., Awaitable[str]],
         create_job_request_with_name: Callable[[str], Dict[str, Any]],
     ) -> None:
         url = api.jobs_base_url
@@ -1573,16 +1577,11 @@ class TestJobs:
         client: aiohttp.ClientSession,
         job_submit: Dict[str, Any],
         jobs_client: JobsClient,
+        run_job: Callable[..., Awaitable[str]],
         regular_user: _User,
         compute_user: _User,
     ) -> None:
-        url = api.jobs_base_url
-        headers = regular_user.headers
-        async with client.post(url, headers=headers, json=job_submit) as response:
-            assert response.status == HTTPAccepted.status_code, await response.text()
-            result = await response.json()
-        assert result["status"] == "pending"
-        job_id = result["id"]
+        job_id = await run_job(regular_user, job_submit, do_wait=False)
 
         url = api.generate_job_url(job_id) + "/status"
         headers = compute_user.headers
@@ -1606,8 +1605,6 @@ class TestJobs:
             assert result["history"].get("description") is None
             assert result["history"].get("exit_code") is None
 
-        await jobs_client.delete_job(job_id=job_id)
-
     @pytest.mark.asyncio
     async def test_set_job_status_with_details(
         self,
@@ -1615,16 +1612,11 @@ class TestJobs:
         client: aiohttp.ClientSession,
         job_submit: Dict[str, Any],
         jobs_client: JobsClient,
+        run_job: Callable[..., Awaitable[str]],
         regular_user: _User,
         compute_user: _User,
     ) -> None:
-        url = api.jobs_base_url
-        headers = regular_user.headers
-        async with client.post(url, headers=headers, json=job_submit) as response:
-            assert response.status == HTTPAccepted.status_code, await response.text()
-            result = await response.json()
-        assert result["status"] == "pending"
-        job_id = result["id"]
+        job_id = await run_job(regular_user, job_submit, do_wait=False)
 
         url = api.generate_job_url(job_id) + "/status"
         headers = compute_user.headers
@@ -1653,25 +1645,17 @@ class TestJobs:
             assert result["history"]["description"] == "test_set_job_status"
             assert result["history"]["exit_code"] == 42
 
-        await jobs_client.delete_job(job_id=job_id)
-
     @pytest.mark.asyncio
     async def test_set_job_status_wrong_status(
         self,
         api: ApiConfig,
         client: aiohttp.ClientSession,
         job_submit: Dict[str, Any],
-        jobs_client: JobsClient,
+        run_job: Callable[..., Awaitable[str]],
         regular_user: _User,
         compute_user: _User,
     ) -> None:
-        url = api.jobs_base_url
-        headers = regular_user.headers
-        async with client.post(url, headers=headers, json=job_submit) as response:
-            assert response.status == HTTPAccepted.status_code, await response.text()
-            result = await response.json()
-        assert result["status"] == "pending"
-        job_id = result["id"]
+        job_id = await run_job(regular_user, job_submit, do_wait=False)
 
         url = api.generate_job_url(job_id) + "/status"
         headers = compute_user.headers
@@ -1679,33 +1663,24 @@ class TestJobs:
         async with client.put(url, headers=headers, json=payload) as response:
             assert response.status == HTTPBadRequest.status_code, await response.text()
 
-        await jobs_client.delete_job(job_id=job_id)
-
     @pytest.mark.asyncio
     async def test_set_job_status_unprivileged(
         self,
         api: ApiConfig,
         client: aiohttp.ClientSession,
         job_submit: Dict[str, Any],
-        jobs_client: JobsClient,
+        run_job: Callable[..., Awaitable[str]],
         regular_user: _User,
     ) -> None:
-        url = api.jobs_base_url
-        headers = regular_user.headers
-        async with client.post(url, headers=headers, json=job_submit) as response:
-            assert response.status == HTTPAccepted.status_code, await response.text()
-            result = await response.json()
-        assert result["status"] == "pending"
-        job_id = result["id"]
+        job_id = await run_job(regular_user, job_submit, do_wait=False)
 
         url = api.generate_job_url(job_id) + "/status"
+        headers = regular_user.headers
         payload = {"status": "running"}
         async with client.put(url, headers=headers, json=payload) as response:
             assert response.status == HTTPForbidden.status_code, await response.text()
             result = await response.json()
             assert result == {"missing": [{"uri": "job:", "action": "manage"}]}
-
-        await jobs_client.delete_job(job_id=job_id)
 
     @pytest.mark.asyncio
     async def test_delete_job(
