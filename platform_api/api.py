@@ -10,7 +10,7 @@ from neuro_auth_client import AuthClient, Permission
 from neuro_auth_client.security import AuthScheme, setup_security
 from notifications_client import Client as NotificationsClient
 
-from .cluster import Cluster, ClusterConfig, ClusterRegistry
+from .cluster import Cluster, ClusterConfig, ClusterNotFound, ClusterRegistry
 from .config import Config
 from .config_factory import EnvironConfigFactory
 from .handlers import JobsHandler
@@ -147,6 +147,11 @@ async def handle_exceptions(
             payload, status=aiohttp.web.HTTPBadRequest.status_code
         )
     except JobsServiceException as e:
+        payload = {"error": str(e)}
+        return aiohttp.web.json_response(
+            payload, status=aiohttp.web.HTTPBadRequest.status_code
+        )
+    except ClusterNotFound as e:
         payload = {"error": str(e)}
         return aiohttp.web.json_response(
             payload, status=aiohttp.web.HTTPBadRequest.status_code

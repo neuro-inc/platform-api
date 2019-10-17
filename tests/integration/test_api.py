@@ -9,7 +9,6 @@ from aiohttp.web import (
     HTTPBadRequest,
     HTTPConflict,
     HTTPForbidden,
-    HTTPInternalServerError,
     HTTPNoContent,
     HTTPOk,
     HTTPUnauthorized,
@@ -472,16 +471,9 @@ class TestJobs:
         job_submit["name"] = job_name
         user = regular_user_with_missing_cluster_name
         async with client.post(url, headers=user.headers, json=job_submit) as response:
-            assert (
-                response.status == HTTPInternalServerError.status_code
-            ), await response.text()
+            assert response.status == HTTPBadRequest.status_code, await response.text()
             payload = await response.json()
-            e = (
-                f"Unexpected exception ClusterNotFound: "
-                f"Cluster '{user.cluster_name}' not found. "
-                f"Path with query: /api/v1/jobs."
-            )
-            assert payload == {"error": e}
+            assert payload == {"error": f"Cluster '{user.cluster_name}' not found"}
 
     @pytest.mark.asyncio
     async def test_create_job(
