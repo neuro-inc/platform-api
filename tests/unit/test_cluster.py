@@ -32,8 +32,12 @@ class _TestCluster(Cluster):
 
 
 def create_cluster_config(name: str) -> ClusterConfig:
-    return ClusterConfig(  # type: ignore  # noqa
-        name=name, storage=None, registry=None, orchestrator=None, ingress=None
+    return ClusterConfig(
+        name=name,
+        storage=None,  # type: ignore
+        registry=None,  # type: ignore
+        orchestrator=None,  # type: ignore
+        ingress=None,  # type: ignore
     )
 
 

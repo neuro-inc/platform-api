@@ -1160,8 +1160,9 @@ class KubeClient:
             cafile=self._cert_authority_path, cadata=self._cert_authority_data_pem
         )
         if self._auth_type == KubeClientAuthType.CERTIFICATE:
-            ssl_context.load_cert_chain(  # type: ignore
-                self._auth_cert_path, self._auth_cert_key_path
+            ssl_context.load_cert_chain(
+                self._auth_cert_path,  # type: ignore
+                self._auth_cert_key_path,
             )
         return ssl_context
 

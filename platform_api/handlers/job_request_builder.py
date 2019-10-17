@@ -139,13 +139,13 @@ class ContainerBuilder:
         )
 
     def build(self) -> Container:
-        return Container(  # type: ignore  # noqa
+        return Container(
             image=self._image,
             entrypoint=self._entrypoint,
             command=self._command,
             env=self._env,
             volumes=self._volumes,
-            resources=self._resources,
+            resources=self._resources,  # type: ignore
             http_server=self._http_server,
             ssh_server=self._ssh_server,
         )
