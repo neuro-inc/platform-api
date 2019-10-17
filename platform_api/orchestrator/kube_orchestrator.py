@@ -150,10 +150,10 @@ class KubeOrchestrator(Orchestrator):
 
     def create_storage_volume(self) -> Volume:
         if self._storage_config.is_nfs:
-            return NfsVolume(  # type: ignore # noqa
+            return NfsVolume(
                 name=self._kube_config.storage_volume_name,
-                server=self._storage_config.nfs_server,
-                path=self._storage_config.nfs_export_path,
+                server=self._storage_config.nfs_server,  # type: ignore
+                path=self._storage_config.nfs_export_path,  # type: ignore
             )
         if self._storage_config.is_pvc:
             assert self._storage_config.pvc_name
