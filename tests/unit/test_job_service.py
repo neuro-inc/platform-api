@@ -1,5 +1,5 @@
 from dataclasses import replace
-from typing import AsyncIterator, Callable
+from typing import Any, AsyncIterator, Callable
 from unittest.mock import MagicMock
 
 import pytest
@@ -641,6 +641,43 @@ class TestJobsServiceCluster:
         )
         await cluster_registry.add(cluster_config)
 
+        async with cluster_registry.get(cluster_config.name) as cluster:
+
+            def _f(*args: Any, **kwargs: Any) -> Exception:
+                raise RuntimeError("test")
+
+            cluster.orchestrator.raise_on_get_job_status = True
+            cluster.orchestrator.get_job_status_exc_factory = _f
+
+        user = User(name="testuser", token="testtoken", cluster_name="default")
+        job, _ = await jobs_service.create_job(mock_job_request, user)
+
+        status = await jobs_service.get_job_status(job.id)
+        assert status == JobStatus.PENDING
+
+        await jobs_service.update_jobs_statuses()
+
+        status = await jobs_service.get_job_status(job.id)
+        assert status == JobStatus.PENDING
+
+    @pytest.mark.asyncio
+    async def test_update_pending_job_unavail_cluster(
+        self,
+        cluster_registry: ClusterRegistry,
+        cluster_config: ClusterConfig,
+        mock_jobs_storage: MockJobsStorage,
+        mock_job_request: JobRequest,
+        jobs_config: JobsConfig,
+        mock_notifications_client: NotificationsClient,
+    ) -> None:
+        jobs_service = JobsService(
+            cluster_registry=cluster_registry,
+            jobs_storage=mock_jobs_storage,
+            jobs_config=jobs_config,
+            notifications_client=mock_notifications_client,
+        )
+        await cluster_registry.add(cluster_config)
+
         user = User(name="testuser", token="testtoken", cluster_name="default")
         job, _ = await jobs_service.create_job(mock_job_request, user)
 
@@ -746,6 +783,41 @@ class TestJobsServiceCluster:
         job, _ = await jobs_service.create_job(mock_job_request, user)
 
         await cluster_registry.remove(cluster_config.name)
+
+        await jobs_service.delete_job(job.id)
+
+        record = await mock_jobs_storage.get_job(job.id)
+        assert record.status == JobStatus.SUCCEEDED
+        assert record.is_deleted
+
+    @pytest.mark.asyncio
+    async def test_delete_unavail_cluster(
+        self,
+        cluster_registry: ClusterRegistry,
+        cluster_config: ClusterConfig,
+        mock_jobs_storage: MockJobsStorage,
+        mock_job_request: JobRequest,
+        jobs_config: JobsConfig,
+        mock_notifications_client: NotificationsClient,
+    ) -> None:
+        jobs_service = JobsService(
+            cluster_registry=cluster_registry,
+            jobs_storage=mock_jobs_storage,
+            jobs_config=jobs_config,
+            notifications_client=mock_notifications_client,
+        )
+        await cluster_registry.add(cluster_config)
+
+        async with cluster_registry.get(cluster_config.name) as cluster:
+
+            def _f(*args: Any, **kwargs: Any) -> Exception:
+                raise RuntimeError("test")
+
+            cluster.orchestrator.raise_on_delete = True
+            cluster.orchestrator.delete_job_exc_factory = _f
+
+        user = User(cluster_name="default", name="testuser", token="testtoken")
+        job, _ = await jobs_service.create_job(mock_job_request, user)
 
         await jobs_service.delete_job(job.id)
 
