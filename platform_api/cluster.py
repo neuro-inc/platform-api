@@ -1,8 +1,7 @@
 import asyncio
 import logging
 from abc import ABC, abstractmethod
-from types import TracebackType
-from typing import Any, AsyncIterator, Callable, Dict, Optional, Sequence, Type
+from typing import Any, AsyncContextManager, AsyncIterator, Callable, Dict, Sequence
 
 from aiorwlock import RWLock
 from async_generator import asynccontextmanager
@@ -58,43 +57,15 @@ class Cluster(ABC):
 ClusterFactory = Callable[[ClusterConfig], Cluster]
 
 
-class ClusterCircuitBreaker(CircuitBreaker):
-    def __init__(self, *, name: str, **kwargs: Any) -> None:
-        self._name = name
-        super().__init__(**kwargs)
-
-    async def __aenter__(self) -> "ClusterCircuitBreaker":
-        if self.is_closed or self.is_half_closed:
-            return self
-        raise ClusterNotAvailable.create(self._name)
-
-    async def __aexit__(
-        self,
-        exc_type: Optional[Type[BaseException]],
-        exc_value: Optional[BaseException],
-        traceback: Optional[TracebackType],
-    ) -> bool:
-        if exc_type is not None:
-            self.register_failure()
-
-            if issubclass(exc_type, asyncio.CancelledError):
-                return False
-
-            logger.exception(
-                f"Unexpected exception in cluster: '{self._name}'. Suppressing"
-            )
-            return True
-
-        self.register_success()
-        return False
-
-
 class ClusterRegistryRecord:
     def __init__(self, cluster: Cluster) -> None:
         self._cluster = cluster
         self._lock = RWLock()
         self._is_cluster_closed = False
-        self._breaker = ClusterCircuitBreaker(name=cluster.name)
+        self._breaker = CircuitBreaker(
+            open_threshold=cluster.config.circuit_breaker.open_threshold,
+            open_timeout_s=cluster.config.circuit_breaker.open_timeout_s,
+        )
 
     @property
     def cluster(self) -> Cluster:
@@ -116,8 +87,26 @@ class ClusterRegistryRecord:
         return self.cluster.name
 
     @property
-    def breaker(self) -> ClusterCircuitBreaker:
-        return self._breaker
+    def circuit_breaker(self) -> AsyncContextManager[None]:
+        return self._circuit_breaker()
+
+    @asynccontextmanager
+    async def _circuit_breaker(self) -> AsyncIterator[None]:
+        if not self._breaker.is_closed and not self._breaker.is_half_closed:
+            raise ClusterNotAvailable.create(self.name)
+
+        try:
+            yield
+        except asyncio.CancelledError:
+            self._breaker.register_failure()
+            raise
+        except Exception:
+            self._breaker.register_failure()
+            logger.exception(
+                f"Unexpected exception in cluster: '{self.name}'. Suppressing"
+            )
+        else:
+            self._breaker.register_success()
 
 
 class ClusterRegistry:
@@ -200,7 +189,7 @@ class ClusterRegistry:
         async with record.lock.reader:
             if record.is_cluster_closed:  # pragma: no cover
                 raise ClusterNotFound.create(name)
-            async with record.breaker:
+            async with record.circuit_breaker:
                 yield record.cluster
 
     def __len__(self) -> int:
