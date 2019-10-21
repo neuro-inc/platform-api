@@ -5,7 +5,9 @@ from async_timeout import timeout
 
 from platform_api.cluster import (
     Cluster,
+    ClusterCircuitBreaker,
     ClusterConfig,
+    ClusterNotAvailable,
     ClusterNotFound,
     ClusterRegistry,
 )
@@ -184,4 +186,49 @@ class TestClusterRegistry:
 
         with pytest.raises(ClusterNotFound, match=f"Cluster '{name}' not found"):
             async with registry.get(name):
+                pass
+
+
+class TestClusterCircuitBreaker:
+    @pytest.mark.asyncio
+    async def test_idle_closed(self) -> None:
+        breaker = ClusterCircuitBreaker(name="test")
+
+        with pytest.not_raises(ClusterNotAvailable):
+            async with breaker:
+                pass
+
+    @pytest.mark.asyncio
+    async def test_threshold_not_exceeded(self) -> None:
+        breaker = ClusterCircuitBreaker(name="test", open_threshold=2)
+
+        with pytest.not_raises(ClusterNotAvailable):
+            async with breaker:
+                raise RuntimeError("testerror")
+
+            async with breaker:
+                pass
+
+    @pytest.mark.asyncio
+    async def test_threshold_exceeded(self) -> None:
+        breaker = ClusterCircuitBreaker(name="test", open_threshold=1)
+
+        with pytest.not_raises(ClusterNotAvailable):
+            async with breaker:
+                raise RuntimeError("testerror")
+
+        with pytest.raises(ClusterNotAvailable, match="Cluster 'test' not available"):
+            async with breaker:
+                pass
+
+    @pytest.mark.asyncio
+    async def test_cancelled_not_suppressed(self) -> None:
+        breaker = ClusterCircuitBreaker(name="test", open_threshold=1)
+
+        with pytest.raises(asyncio.CancelledError):
+            async with breaker:
+                raise asyncio.CancelledError()
+
+        with pytest.raises(ClusterNotAvailable, match="Cluster 'test' not available"):
+            async with breaker:
                 pass

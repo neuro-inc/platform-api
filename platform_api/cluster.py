@@ -1,11 +1,13 @@
 import asyncio
 import logging
 from abc import ABC, abstractmethod
-from typing import Any, AsyncIterator, Callable, Dict, Sequence
+from types import TracebackType
+from typing import Any, AsyncIterator, Callable, Dict, Optional, Sequence, Type
 
 from aiorwlock import RWLock
 from async_generator import asynccontextmanager
 
+from .circuit_breaker import CircuitBreaker
 from .cluster_config import ClusterConfig
 from .orchestrator.base import Orchestrator
 
@@ -21,6 +23,12 @@ class ClusterNotFound(ClusterException):
     @classmethod
     def create(cls, name: str) -> "ClusterNotFound":
         return cls(f"Cluster '{name}' not found")
+
+
+class ClusterNotAvailable(ClusterException):
+    @classmethod
+    def create(cls, name: str) -> "ClusterNotAvailable":
+        return cls(f"Cluster '{name}' not available")
 
 
 class Cluster(ABC):
@@ -50,11 +58,43 @@ class Cluster(ABC):
 ClusterFactory = Callable[[ClusterConfig], Cluster]
 
 
+class ClusterCircuitBreaker(CircuitBreaker):
+    def __init__(self, *, name: str, **kwargs: Any) -> None:
+        self._name = name
+        super().__init__(**kwargs)
+
+    async def __aenter__(self) -> "ClusterCircuitBreaker":
+        if self.is_closed or self.is_half_closed:
+            return self
+        raise ClusterNotAvailable.create(self._name)
+
+    async def __aexit__(
+        self,
+        exc_type: Optional[Type[BaseException]],
+        exc_value: Optional[BaseException],
+        traceback: Optional[TracebackType],
+    ) -> bool:
+        if exc_type is not None:
+            self.register_failure()
+
+            if issubclass(exc_type, asyncio.CancelledError):
+                return False
+
+            logger.exception(
+                f"Unexpected exception in cluster: '{self._name}'. Suppressing"
+            )
+            return True
+
+        self.register_success()
+        return False
+
+
 class ClusterRegistryRecord:
     def __init__(self, cluster: Cluster) -> None:
         self._cluster = cluster
         self._lock = RWLock()
         self._is_cluster_closed = False
+        self._breaker = ClusterCircuitBreaker(name=cluster.name)
 
     @property
     def cluster(self) -> Cluster:
@@ -74,6 +114,10 @@ class ClusterRegistryRecord:
     @property
     def name(self) -> str:
         return self.cluster.name
+
+    @property
+    def breaker(self) -> ClusterCircuitBreaker:
+        return self._breaker
 
 
 class ClusterRegistry:
@@ -156,7 +200,8 @@ class ClusterRegistry:
         async with record.lock.reader:
             if record.is_cluster_closed:  # pragma: no cover
                 raise ClusterNotFound.create(name)
-            yield record.cluster
+            async with record.breaker:
+                yield record.cluster
 
     def __len__(self) -> int:
         return len(self._records)
