@@ -60,6 +60,7 @@ def clusters_payload(nfs_storage_payload: Dict[str, Any]) -> List[Dict[str, Any]
                     "node_label_gpu": "cloud.google.com/gke-accelerator",
                     "node_label_preemptible": "cloud.google.com/gke-preemptible",
                     "node_label_job": "platform.neuromation.io/job",
+                    "job_pod_priority_class_name": "testpriority",
                 },
                 "job_hostname_template": "{job_id}.jobs.neu.ro",
                 "resource_pool_types": [
@@ -310,6 +311,7 @@ class TestClusterConfigFactory:
             ),
         )
         assert orchestrator.tpu_ipv4_cidr_block == "1.1.1.1/32"
+        assert orchestrator.jobs_pod_priority_class_name == "testpriority"
 
     def test_storage_config_nfs(
         self,
