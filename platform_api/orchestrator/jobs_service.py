@@ -11,6 +11,7 @@ from notifications_client import (
 from platform_api.cluster import (
     Cluster,
     ClusterConfig,
+    ClusterNotAvailable,
     ClusterNotFound,
     ClusterRegistry,
 )
@@ -115,6 +116,9 @@ class JobsService:
                         description=str(cluster_err),
                     )
                     record.is_deleted = True
+                except ClusterNotAvailable:
+                    # skipping job status update
+                    pass
         except JobStorageTransactionError:
             # intentionally ignoring any transaction failures here because
             # the job may have been changed and a retry is needed.
@@ -299,7 +303,7 @@ class JobsService:
                     record=record,
                 )
                 await cluster.orchestrator.delete_job(job)
-        except (ClusterNotFound, JobException) as exc:
+        except (ClusterNotFound, ClusterNotAvailable, JobException) as exc:
             # if the cluster or the job is missing, we still want to mark
             # the job as deleted. suppressing.
             logger.warning("Could not delete job '%s'. Reason: '%s'", record.id, exc)
