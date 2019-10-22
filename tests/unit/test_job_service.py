@@ -3,6 +3,7 @@ from typing import Any, AsyncIterator, Callable
 from unittest.mock import MagicMock
 
 import pytest
+from _pytest.logging import LogCaptureFixture
 from notifications_client import Client as NotificationsClient, JobTransition
 
 from platform_api.cluster import Cluster, ClusterConfig, ClusterRegistry
@@ -479,6 +480,31 @@ class TestJobsService:
         assert original_job.status == JobStatus.PENDING
 
         await jobs_service.delete_job(original_job.id)
+
+        job = await jobs_service.get_job(original_job.id)
+        assert job.status == JobStatus.SUCCEEDED
+        assert job.is_finished
+        assert job.finished_at
+        assert job.is_deleted
+
+    @pytest.mark.asyncio
+    async def test_delete_missing(
+        self,
+        jobs_service: JobsService,
+        mock_orchestrator: MockOrchestrator,
+        job_request_factory: Callable[[], JobRequest],
+        caplog: LogCaptureFixture,
+    ) -> None:
+        mock_orchestrator.raise_on_delete = True
+        user = User(cluster_name="default", name="testuser", token="")
+        original_job, _ = await jobs_service.create_job(
+            job_request=job_request_factory(), user=user
+        )
+        assert original_job.status == JobStatus.PENDING
+
+        await jobs_service.delete_job(original_job.id)
+
+        assert f"Could not delete job '{original_job.id}'. Reason: ''" in caplog.text
 
         job = await jobs_service.get_job(original_job.id)
         assert job.status == JobStatus.SUCCEEDED

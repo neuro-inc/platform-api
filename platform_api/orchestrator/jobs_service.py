@@ -302,9 +302,16 @@ class JobsService:
                     orchestrator_config=cluster.orchestrator.config,
                     record=record,
                 )
-                await cluster.orchestrator.delete_job(job)
-        except (ClusterNotFound, ClusterNotAvailable, JobException) as exc:
-            # if the cluster or the job is missing, we still want to mark
+                try:
+                    await cluster.orchestrator.delete_job(job)
+                except JobException as exc:
+                    # if the job is missing, we still want to mark
+                    # the job as deleted. suppressing.
+                    logger.warning(
+                        "Could not delete job '%s'. Reason: '%s'", record.id, exc
+                    )
+        except (ClusterNotFound, ClusterNotAvailable) as exc:
+            # if the cluster is unavailable or missing, we still want to mark
             # the job as deleted. suppressing.
             logger.warning("Could not delete job '%s'. Reason: '%s'", record.id, exc)
 
