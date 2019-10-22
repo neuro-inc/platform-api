@@ -2,6 +2,7 @@ import asyncio
 from typing import Any
 
 import pytest
+from _pytest.logging import LogCaptureFixture
 from async_timeout import timeout
 
 from platform_api.cluster import (
@@ -210,11 +211,14 @@ class TestClusterRegistryRecord:
             pass
 
     @pytest.mark.asyncio
-    async def test_threshold_not_exceeded(self) -> None:
+    async def test_threshold_not_exceeded(self, caplog: LogCaptureFixture) -> None:
         record = self.create_record(open_threshold=2)
 
         async with record.circuit_breaker:
             raise RuntimeError("testerror")
+
+        assert "Unexpected exception in cluster: 'test'. Suppressing" in caplog.text
+        assert "RuntimeError: testerror" in caplog.text
 
         async with record.circuit_breaker:
             pass
