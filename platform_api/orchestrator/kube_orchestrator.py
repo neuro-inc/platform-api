@@ -248,6 +248,7 @@ class KubeOrchestrator(Orchestrator):
             tolerations=tolerations,
             node_affinity=node_affinity,
             labels=labels,
+            priority_class_name=self._kube_config.jobs_pod_priority_class_name,
         )
 
     def _get_user_pod_labels(self, job: Job) -> Dict[str, str]:
