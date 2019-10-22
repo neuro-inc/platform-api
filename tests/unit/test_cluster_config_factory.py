@@ -60,7 +60,7 @@ def clusters_payload(nfs_storage_payload: Dict[str, Any]) -> List[Dict[str, Any]
                     "node_label_gpu": "cloud.google.com/gke-accelerator",
                     "node_label_preemptible": "cloud.google.com/gke-preemptible",
                     "node_label_job": "platform.neuromation.io/job",
-                    "pod_priority_class_name": "testpriority",
+                    "job_pod_priority_class_name": "testpriority",
                 },
                 "job_hostname_template": "{job_id}.jobs.neu.ro",
                 "resource_pool_types": [

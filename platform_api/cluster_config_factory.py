@@ -117,7 +117,7 @@ class ClusterConfigFactory:
             node_label_gpu=kube["node_label_gpu"],
             node_label_preemptible=kube["node_label_preemptible"],
             node_label_job=kube.get("node_label_job"),
-            jobs_pod_priority_class_name=kube.get("pod_priority_class_name"),
+            jobs_pod_priority_class_name=kube.get("job_pod_priority_class_name"),
         )
 
     def _create_tpu_preset(
