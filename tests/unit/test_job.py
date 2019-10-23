@@ -1477,6 +1477,26 @@ class TestAggregatedRunTime:
         )
         assert run_time.to_primitive() == {"total_gpu_run_minutes": 30}
 
+    def test_to_primitive_gpu_zero(self) -> None:
+        run_time = AggregatedRunTime(
+            total_gpu_run_time_delta=timedelta(minutes=0),
+            total_non_gpu_run_time_delta=timedelta(minutes=60),
+        )
+        assert run_time.to_primitive() == {
+            "total_gpu_run_minutes": 0,
+            "total_non_gpu_run_minutes": 60,
+        }
+
+    def test_to_primitive_non_gpu_zero(self) -> None:
+        run_time = AggregatedRunTime(
+            total_gpu_run_time_delta=timedelta(minutes=30),
+            total_non_gpu_run_time_delta=timedelta(minutes=0),
+        )
+        assert run_time.to_primitive() == {
+            "total_gpu_run_minutes": 30,
+            "total_non_gpu_run_minutes": 0,
+        }
+
 
 class TestTimeDeltaConverter:
     def test__time_delta_to_minutes_millliseconds_less_than_half(self) -> None:
