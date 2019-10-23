@@ -245,6 +245,7 @@ async def create_app(
 
             app["api_v1_app"]["jobs_service"] = jobs_service
             app["jobs_app"]["jobs_service"] = jobs_service
+            app["stats_app"]["jobs_service"] = jobs_service
 
             auth_client = await exit_stack.enter_async_context(
                 AuthClient(
@@ -267,6 +268,7 @@ async def create_app(
     jobs_app = await create_jobs_app(config=config)
     app["jobs_app"] = jobs_app
     api_v1_app.add_subapp("/jobs", jobs_app)
+
     stats_app = await create_stats_app(config=config)
     app["stats_app"] = stats_app
     api_v1_app.add_subapp("/stats", stats_app)

@@ -11,8 +11,8 @@ from platform_api.user import authorized_user
 def create_aggregated_runtime_validator() -> t.Trafaret:
     return t.Dict(
         {
-            t.Key("total_gpu_run_time_minutes", optional=True): t.Int,
-            t.Key("total_non_gpu_run_time_minutes", optional=True): t.Int,
+            t.Key("total_gpu_run_minutes", optional=True): t.Int,
+            t.Key("total_non_gpu_run_minutes", optional=True): t.Int,
         }
     )
 
@@ -28,17 +28,18 @@ def create_stats_response_validator() -> t.Trafaret:
 
 
 class StatsHandler:
-    def __init__(
-        self, *, app: aiohttp.web.Application, config: Config, jobs_storage: JobsStorage
-    ) -> None:
+    def __init__(self, *, app: aiohttp.web.Application, config: Config) -> None:
         self._app = app
         self._config = config
 
-        self._jobs_storage = jobs_storage
         self._stats_response_validator = create_stats_response_validator()
 
+    @property
+    def jobs_storage(self) -> JobsStorage:
+        return self._app["jobs_service"].jobs_storage
+
     def register(self, app: aiohttp.web.Application) -> None:
-        app.add_routes([aiohttp.web.put("/users/{username}", self.handle_get_stats)])
+        app.add_routes([aiohttp.web.get("/users/{username}", self.handle_get_stats)])
 
     async def handle_get_stats(
         self, request: aiohttp.web.Request
@@ -54,12 +55,12 @@ class StatsHandler:
 
         if user.has_quota():
             pass
-            # response_payload["quota"] = user.quota.to_primitive()
+            response_payload["quota"] = user.quota.to_primitive()
 
         run_time_filter = JobFilter(owners={user.name})
         print(run_time_filter)
-        # run_time = await self._jobs_storage.get_aggregated_run_time(run_time_filter)
-        # response_payload["jobs"] = run_time.to_primivite()
+        run_time = await self.jobs_storage.get_aggregated_run_time(run_time_filter)
+        response_payload["jobs"] = run_time.to_primitive()
 
         self._stats_response_validator.check(response_payload)
 

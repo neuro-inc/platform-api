@@ -391,3 +391,7 @@ class JobsService:
                     prev_transition_time=initial_status.transition_time,
                 )
             )
+
+    @property
+    def jobs_storage(self) -> JobsStorage:
+        return self._jobs_storage
