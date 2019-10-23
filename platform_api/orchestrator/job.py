@@ -37,8 +37,8 @@ class AggregatedRunTime:
             total_non_gpu_run_time_delta=quota.total_non_gpu_run_time_delta,
         )
 
-    def to_primitive(self) -> Dict[str, Optional[int]]:
-        result: Dict[str, Optional[int]] = {}
+    def to_primitive(self) -> Dict[str, int]:
+        result: Dict[str, int] = {}
         gpu_minutes = _timedelta_to_minutes(self.total_gpu_run_time_delta)
         if gpu_minutes:
             result["total_gpu_run_minutes"] = gpu_minutes
