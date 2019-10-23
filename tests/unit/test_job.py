@@ -791,6 +791,7 @@ class TestJob:
         assert job.name is None
         assert job.owner == "testuser"
         assert not job.is_preemptible
+        assert job.max_run_time == timedelta.max
 
     def test_from_primitive_check_name(
         self, mock_orchestrator: MockOrchestrator, job_request_payload: Dict[str, Any]
