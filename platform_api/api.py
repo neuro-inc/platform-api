@@ -10,6 +10,8 @@ from neuro_auth_client import AuthClient, Permission
 from neuro_auth_client.security import AuthScheme, setup_security
 from notifications_client import Client as NotificationsClient
 
+from platform_api.handlers.stats_handler import StatsHandler
+
 from .cluster import Cluster, ClusterConfig, ClusterRegistry
 from .config import Config
 from .config_factory import EnvironConfigFactory
@@ -184,6 +186,13 @@ async def create_jobs_app(config: Config) -> aiohttp.web.Application:
     return jobs_app
 
 
+async def create_stats_app(config: Config) -> aiohttp.web.Application:
+    stats_app = aiohttp.web.Application()
+    stats_handler = StatsHandler(app=stats_app, config=config)
+    stats_handler.register(stats_app)
+    return stats_app
+
+
 def create_cluster(config: ClusterConfig) -> Cluster:
     return KubeCluster(config)
 
@@ -258,6 +267,9 @@ async def create_app(
     jobs_app = await create_jobs_app(config=config)
     app["jobs_app"] = jobs_app
     api_v1_app.add_subapp("/jobs", jobs_app)
+    stats_app = await create_stats_app(config=config)
+    app["stats_app"] = stats_app
+    api_v1_app.add_subapp("/stats", stats_app)
 
     app.add_subapp("/api/v1", api_v1_app)
     return app
