@@ -8,7 +8,7 @@ from platform_api.orchestrator.jobs_storage import JobFilter, JobsStorage
 from platform_api.user import authorized_user
 
 
-def create_aggregate_runtime_validator() -> t.Trafaret:
+def create_aggregated_runtime_validator() -> t.Trafaret:
     return t.Dict(
         {
             t.Key("total_gpu_run_time_minutes", optional=True): t.Int,
@@ -21,8 +21,8 @@ def create_stats_response_validator() -> t.Trafaret:
     return t.Dict(
         {
             "name": t.String,
-            "quota": create_aggregate_runtime_validator(),
-            "jobs": create_aggregate_runtime_validator(),
+            t.Key("quota", optional=True): create_aggregated_runtime_validator(),
+            "jobs": create_aggregated_runtime_validator(),
         }
     )
 
