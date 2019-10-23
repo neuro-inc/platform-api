@@ -621,9 +621,7 @@ class Job:
     def max_run_time(self) -> timedelta:
         minutes = self._record.max_run_time_minutes
         if minutes:
-            assert (
-                minutes > 0
-            ), f"max_run_time_minutes can't be negative, got: {minutes}"
+            assert minutes > 0, f"max_run_time_minutes can't be negative, got {minutes}"
             return timedelta(minutes=minutes)
         return timedelta.max
 
