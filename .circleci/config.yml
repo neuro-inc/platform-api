@@ -66,9 +66,9 @@ jobs:
             pyenv install --debug 3.6.3
             pyenv local 3.6.3-debug
             export DEBIAN_FRONTEND="noninteractive"
-            sudo apt-get update
-            sudo apt-get install -y software-properties-common
-            sudo apt-get install nfs-common
+            apt-get update
+            apt-get install software-properties-common
+            apt-get install nfs-common
             openssl version -a
 
       - run:
