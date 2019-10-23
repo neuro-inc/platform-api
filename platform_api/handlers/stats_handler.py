@@ -58,7 +58,6 @@ class StatsHandler:
             response_payload["quota"] = user.quota.to_primitive()
 
         run_time_filter = JobFilter(owners={user.name})
-        print(run_time_filter)
         run_time = await self.jobs_storage.get_aggregated_run_time(run_time_filter)
         response_payload["jobs"] = run_time.to_primitive()
 
