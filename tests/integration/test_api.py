@@ -515,14 +515,11 @@ class TestJobs:
                 payload["http_url_named"]
                 == f"http://{job_name}--{regular_user.name}.jobs.neu.ro"
             )
-            expected_internal_hostname = f"{job_id}.platformapi-tests"
-            assert payload["internal_hostname"] == expected_internal_hostname
             assert payload["is_preemptible"]
             assert payload["description"] == "test job submitted by neuro job submit"
             assert payload["schedule_timeout"] == 90
 
         retrieved_job = await jobs_client.get_job_by_id(job_id=job_id)
-        assert retrieved_job["internal_hostname"] == expected_internal_hostname
         assert retrieved_job["name"] == job_name
         assert retrieved_job["container"]["http"]["requires_auth"]
         assert retrieved_job["schedule_timeout"] == 90
@@ -1821,11 +1818,10 @@ class TestJobs:
                 "id": mock.ANY,
                 "owner": regular_user.name,
                 "cluster_name": "default",
-                "internal_hostname": f"{job_id}.platformapi-tests",
                 "status": "pending",
                 "history": {
                     "status": "pending",
-                    "reason": None,
+                    "reason": "Creating",
                     "description": None,
                     "created_at": mock.ANY,
                 },
@@ -2022,16 +2018,14 @@ class TestJobs:
             response_text = await response.text()
             assert response.status == HTTPAccepted.status_code, response_text
             response_payload = await response.json()
-            job_id = response_payload["id"]
             assert response_payload == {
                 "id": mock.ANY,
                 "owner": regular_user.name,
                 "cluster_name": "default",
-                "internal_hostname": f"{job_id}.platformapi-tests",
                 "status": "pending",
                 "history": {
                     "status": "pending",
-                    "reason": None,
+                    "reason": "Creating",
                     "description": None,
                     "created_at": mock.ANY,
                 },
@@ -2106,16 +2100,14 @@ class TestJobs:
             response_text = await response.text()
             assert response.status == HTTPAccepted.status_code, response_text
             response_payload = await response.json()
-            job_id = response_payload["id"]
             assert response_payload == {
                 "id": mock.ANY,
                 "owner": regular_user.name,
                 "cluster_name": "default",
-                "internal_hostname": f"{job_id}.platformapi-tests",
                 "status": "pending",
                 "history": {
                     "status": "pending",
-                    "reason": None,
+                    "reason": "Creating",
                     "description": None,
                     "created_at": mock.ANY,
                 },

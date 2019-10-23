@@ -17,7 +17,6 @@ from platform_api.orchestrator.job import (
     Job,
     JobRecord,
     JobStatusItem,
-    JobStatusReason,
 )
 from platform_api.orchestrator.job_request import (
     Container,
@@ -43,7 +42,7 @@ class MockOrchestrator(Orchestrator):
     def __init__(self, config: ClusterConfig) -> None:
         self._config = config
         self._mock_status_to_return = JobStatus.PENDING
-        self._mock_reason_to_return: Optional[str] = JobStatusReason.CONTAINER_CREATING
+        self._mock_reason_to_return: Optional[str] = None
         self._mock_exit_code_to_return: Optional[int] = None
         self.raise_on_get_job_status = False
         self.get_job_status_exc_factory = self._create_get_job_status_exc
@@ -59,7 +58,10 @@ class MockOrchestrator(Orchestrator):
     def storage_config(self) -> StorageConfig:
         return self._config.storage
 
-    async def start_job(self, job: Job, token: str) -> JobStatus:
+    async def prepare_job(self, job: Job, token: str) -> None:
+        pass
+
+    async def start_job(self, job: Job) -> JobStatus:
         job.status = JobStatus.PENDING
         return JobStatus.PENDING
 
