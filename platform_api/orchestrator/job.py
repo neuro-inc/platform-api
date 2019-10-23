@@ -37,6 +37,22 @@ class AggregatedRunTime:
             total_non_gpu_run_time_delta=quota.total_non_gpu_run_time_delta,
         )
 
+    def to_primitive(self) -> Dict[str, Optional[int]]:
+        result: Dict[str, Optional[int]] = {}
+        gpu_minutes = _timedelta_to_minutes(self.total_gpu_run_time_delta)
+        if gpu_minutes:
+            result["total_gpu_run_minutes"] = gpu_minutes
+        non_gpu_minutes = _timedelta_to_minutes(self.total_non_gpu_run_time_delta)
+        if non_gpu_minutes:
+            result["total_non_gpu_run_minutes"] = non_gpu_minutes
+        return result
+
+
+def _timedelta_to_minutes(delta: timedelta) -> Optional[int]:
+    if delta == timedelta.max:
+        return None
+    return (int(delta.total_seconds()) + 30) // 60
+
 
 DEFAULT_QUOTA_NO_RESTRICTIONS: AggregatedRunTime = AggregatedRunTime.from_quota(Quota())
 DEFAULT_ORPHANED_JOB_OWNER = "compute"
