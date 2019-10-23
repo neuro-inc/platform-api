@@ -11,6 +11,8 @@ from neuro_auth_client.security import AuthScheme, setup_security
 from notifications_client import Client as NotificationsClient
 from platform_logging import init_logging
 
+from platform_api.orchestrator.enforce_poller import EnforcePoller
+
 from .cluster import Cluster, ClusterConfig, ClusterRegistry
 from .config import Config
 from .config_factory import EnvironConfigFactory
@@ -233,6 +235,10 @@ async def create_app(
 
             logger.info("Initializing JobsPoller")
             jobs_poller = JobsPoller(jobs_service=jobs_service)
+            await exit_stack.enter_async_context(jobs_poller)
+
+            logger.info("Initializing EnforcePoller")
+            jobs_poller = EnforcePoller()
             await exit_stack.enter_async_context(jobs_poller)
 
             app["api_v1_app"]["jobs_service"] = jobs_service
