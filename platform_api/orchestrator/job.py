@@ -233,6 +233,7 @@ class JobRecord:
     name: Optional[str] = None
     is_preemptible: bool = False
     is_deleted: bool = False
+    max_run_time_minutes: Optional[int] = None
     internal_hostname: Optional[str] = None
     schedule_timeout: Optional[float] = None
 
@@ -359,6 +360,8 @@ class JobRecord:
         }
         if self.schedule_timeout:
             result["schedule_timeout"] = self.schedule_timeout
+        if self.max_run_time_minutes:
+            result["max_run_time_minutes"] = self.max_run_time_minutes
         if self.internal_hostname:
             result["internal_hostname"] = self.internal_hostname
         if self.name:
@@ -383,6 +386,7 @@ class JobRecord:
             cluster_name=payload.get("cluster_name") or "",
             name=payload.get("name"),
             is_preemptible=payload.get("is_preemptible", False),
+            max_run_time_minutes=payload.get("max_run_time_minutes", None),
             internal_hostname=payload.get("internal_hostname", None),
             schedule_timeout=payload.get("schedule_timeout", None),
         )
@@ -612,6 +616,16 @@ class Job:
         return self._record.get_run_time(
             current_datetime_factory=self._current_datetime_factory
         )
+
+    @property
+    def max_run_time(self) -> timedelta:
+        minutes = self._record.max_run_time_minutes
+        if minutes:
+            assert (
+                minutes > 0
+            ), f"max_run_time_minutes can't be negative, got: {minutes}"
+            return timedelta(minutes=minutes)
+        return timedelta.max
 
     def to_primitive(self) -> Dict[str, Any]:
         return self._record.to_primitive()
