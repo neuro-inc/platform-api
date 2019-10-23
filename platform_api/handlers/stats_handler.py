@@ -54,7 +54,6 @@ class StatsHandler:
         response_payload = {"name": username}
 
         if user.has_quota():
-            pass
             response_payload["quota"] = user.quota.to_primitive()
 
         run_time_filter = JobFilter(owners={user.name})
