@@ -132,6 +132,10 @@ def create_resources_validator(
     if tpu_validator:
         validators.append(common_resources_validator + t.Dict({"tpu": tpu_validator}))
 
+    tpu_validator = create_tpu_validator(
+        allow_any=allow_any_tpu, allowed=allowed_tpu_resources
+    )
+
     return t.Or(*validators)
 
 
