@@ -40,10 +40,10 @@ class AggregatedRunTime:
     def to_primitive(self) -> Dict[str, int]:
         result: Dict[str, int] = {}
         gpu_minutes = _timedelta_to_minutes(self.total_gpu_run_time_delta)
-        if gpu_minutes:
+        if gpu_minutes is not None:
             result["total_gpu_run_minutes"] = gpu_minutes
         non_gpu_minutes = _timedelta_to_minutes(self.total_non_gpu_run_time_delta)
-        if non_gpu_minutes:
+        if non_gpu_minutes is not None:
             result["total_non_gpu_run_minutes"] = non_gpu_minutes
         return result
 
@@ -51,7 +51,7 @@ class AggregatedRunTime:
 def _timedelta_to_minutes(delta: timedelta) -> Optional[int]:
     if delta == timedelta.max:
         return None
-    return (int(delta.total_seconds()) + 30) // 60
+    return round(delta / timedelta(minutes=1))
 
 
 DEFAULT_QUOTA_NO_RESTRICTIONS: AggregatedRunTime = AggregatedRunTime.from_quota(Quota())

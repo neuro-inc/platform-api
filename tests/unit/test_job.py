@@ -1386,7 +1386,7 @@ class TestTimeDeltaConverter:
 
     def test__time_delta_to_minutes_seconds_equals_to_half(self) -> None:
         delta = timedelta(minutes=0, seconds=30)
-        assert _timedelta_to_minutes(delta) == 1
+        assert _timedelta_to_minutes(delta) == 0
 
     def test__time_delta_to_minutes_seconds_greater_then_half(self) -> None:
         delta = timedelta(minutes=0, seconds=31)
