@@ -992,7 +992,10 @@ class TestJob:
         job = Job.from_primitive(
             mock_orchestrator.storage_config, mock_orchestrator.config, payload
         )
-        assert job.max_run_time == timedelta.max
+        with pytest.raises(
+            AssertionError, match="max_run_time_minutes must be positive, got: 0"
+        ):
+            job.max_run_time
 
     def test_from_primitive_with_max_run_time_minutes_negative(
         self, mock_orchestrator: MockOrchestrator, job_request_payload: Dict[str, Any]
@@ -1011,7 +1014,7 @@ class TestJob:
             mock_orchestrator.storage_config, mock_orchestrator.config, payload
         )
         with pytest.raises(
-            AssertionError, match="max_run_time_minutes can't be negative, got: -1"
+            AssertionError, match="max_run_time_minutes must be positive, got: -1"
         ):
             job.max_run_time
 
