@@ -10,7 +10,7 @@ from neuro_auth_client import AuthClient, Permission
 from neuro_auth_client.security import AuthScheme, setup_security
 from notifications_client import Client as NotificationsClient
 
-from platform_api.handlers.stats_handler import StatsHandler
+from .handlers.stats_handler import StatsHandler
 
 from .cluster import Cluster, ClusterConfig, ClusterRegistry
 from .config import Config
