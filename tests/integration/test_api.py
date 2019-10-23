@@ -17,8 +17,10 @@ from aiohttp.web import (
 from neuro_auth_client import Permission
 from neuro_auth_client.client import Quota
 
+from platform_api.user import User
 from tests.conftest import random_str
 from tests.integration.test_config_client import create_config_api
+from tests.unit.conftest import create_quota
 
 from .api import ApiConfig, JobsClient
 from .auth import AuthClient, _User
@@ -2156,4 +2158,25 @@ class TestStats:
             assert result == {
                 "name": regular_user.name,
                 "jobs": {"total_gpu_run_minutes": 0, "total_non_gpu_run_minutes": 0},
+            }
+
+    @pytest.mark.asyncio
+    async def test_jobs_status_quota(
+        self,
+        api: ApiConfig,
+        client: aiohttp.ClientSession,
+        regular_user_with_custom_quota: _User,
+    ) -> None:
+        user = regular_user_with_custom_quota
+        url = api.stats_for_user_url(user.name)
+        async with client.get(url, headers=user.headers) as resp:
+            assert resp.status == HTTPOk.status_code, await resp.text()
+            result = await resp.json()
+            assert result == {
+                "name": user.name,
+                "jobs": {"total_gpu_run_minutes": 0, "total_non_gpu_run_minutes": 0},
+                "quota": {
+                    "total_gpu_run_minutes": 123,
+                    "total_non_gpu_run_minutes": 321,
+                },
             }
