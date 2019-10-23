@@ -18,6 +18,7 @@ from .job_request import JobRequest, JobStatus
 # `{job-id}{JOB_USER_NAMES_SEPARATOR}{job-owner}.jobs.neu.ro`.
 JOB_USER_NAMES_SEPARATOR = "--"
 
+TIMEDELTA_ONE_MINUTE = timedelta(minutes=1)
 
 logger = logging.getLogger(__name__)
 current_datetime_factory = partial(datetime.now, timezone.utc)
@@ -36,6 +37,22 @@ class AggregatedRunTime:
             total_gpu_run_time_delta=quota.total_gpu_run_time_delta,
             total_non_gpu_run_time_delta=quota.total_non_gpu_run_time_delta,
         )
+
+    def to_primitive(self) -> Dict[str, int]:
+        result: Dict[str, int] = {}
+        gpu_minutes = _timedelta_to_minutes(self.total_gpu_run_time_delta)
+        if gpu_minutes is not None:
+            result["total_gpu_run_minutes"] = gpu_minutes
+        non_gpu_minutes = _timedelta_to_minutes(self.total_non_gpu_run_time_delta)
+        if non_gpu_minutes is not None:
+            result["total_non_gpu_run_minutes"] = non_gpu_minutes
+        return result
+
+
+def _timedelta_to_minutes(delta: timedelta) -> Optional[int]:
+    if delta == timedelta.max:
+        return None
+    return round(delta / TIMEDELTA_ONE_MINUTE)
 
 
 DEFAULT_QUOTA_NO_RESTRICTIONS: AggregatedRunTime = AggregatedRunTime.from_quota(Quota())

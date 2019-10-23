@@ -16,6 +16,7 @@ from platform_api.orchestrator.job import (
     JobRecord,
     JobStatusHistory,
     JobStatusItem,
+    _timedelta_to_minutes,
 )
 from platform_api.orchestrator.job_request import (
     Container,
@@ -1451,6 +1452,64 @@ class TestAggregatedRunTime:
             total_gpu_run_time_delta=timedelta.max,
             total_non_gpu_run_time_delta=timedelta.max,
         )
+
+    def test_to_primitive(self) -> None:
+        run_time = AggregatedRunTime(
+            total_gpu_run_time_delta=timedelta(minutes=30),
+            total_non_gpu_run_time_delta=timedelta(minutes=60),
+        )
+        assert run_time.to_primitive() == {
+            "total_gpu_run_minutes": 30,
+            "total_non_gpu_run_minutes": 60,
+        }
+
+    def test_to_primitive_gpu_not_defined(self) -> None:
+        run_time = AggregatedRunTime(
+            total_gpu_run_time_delta=timedelta.max,
+            total_non_gpu_run_time_delta=timedelta(minutes=60),
+        )
+        assert run_time.to_primitive() == {"total_non_gpu_run_minutes": 60}
+
+    def test_to_primitive_non_gpu_not_defined(self) -> None:
+        run_time = AggregatedRunTime(
+            total_gpu_run_time_delta=timedelta(minutes=30),
+            total_non_gpu_run_time_delta=timedelta.max,
+        )
+        assert run_time.to_primitive() == {"total_gpu_run_minutes": 30}
+
+
+class TestTimeDeltaConverter:
+    def test__time_delta_to_minutes_millliseconds_less_than_half(self) -> None:
+        delta = timedelta(minutes=0, seconds=10, milliseconds=29)
+        assert _timedelta_to_minutes(delta) == 0
+
+    def test__time_delta_to_minutes_millliseconds_equals_to_half(self) -> None:
+        delta = timedelta(minutes=0, seconds=10, milliseconds=30)
+        assert _timedelta_to_minutes(delta) == 0
+
+    def test__time_delta_to_minutes_millliseconds_greater_then_half(self) -> None:
+        delta = timedelta(minutes=0, seconds=10, milliseconds=31)
+        assert _timedelta_to_minutes(delta) == 0
+
+    def test__time_delta_to_minutes_seconds_less_than_half(self) -> None:
+        delta = timedelta(minutes=0, seconds=29)
+        assert _timedelta_to_minutes(delta) == 0
+
+    def test__time_delta_to_minutes_seconds_equals_to_half(self) -> None:
+        delta = timedelta(minutes=0, seconds=30)
+        assert _timedelta_to_minutes(delta) == 0
+
+    def test__time_delta_to_minutes_seconds_greater_then_half(self) -> None:
+        delta = timedelta(minutes=0, seconds=31)
+        assert _timedelta_to_minutes(delta) == 1
+
+    def test__time_delta_to_minutes_minutes_non_zero(self) -> None:
+        delta = timedelta(minutes=10, seconds=15)
+        assert _timedelta_to_minutes(delta) == 10
+
+    def test__time_delta_to_minutes_max(self) -> None:
+        delta = timedelta.max
+        assert _timedelta_to_minutes(delta) is None
 
 
 class TestUser:
