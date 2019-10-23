@@ -2134,3 +2134,8 @@ class TestJobs:
                 "ssh_auth_server": "ssh://nobody@ssh-auth.platform.neuromation.io:22",
                 "is_preemptible": False,
             }
+
+class TestStats:
+    @pytest.mark.asyncio
+    async def test_status_unauthorized(self) -> None:
+        pass
