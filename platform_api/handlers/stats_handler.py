@@ -8,11 +8,11 @@ from platform_api.orchestrator.jobs_storage import JobFilter, JobsStorage
 from platform_api.user import authorized_user
 
 
-def create_aggregated_runtime_validator() -> t.Trafaret:
+def create_aggregated_runtime_validator(optional_fields: bool) -> t.Trafaret:
     return t.Dict(
         {
-            t.Key("total_gpu_run_minutes", optional=True): t.Int,
-            t.Key("total_non_gpu_run_minutes", optional=True): t.Int,
+            t.Key("total_gpu_run_minutes", optional=optional_fields): t.Int,
+            t.Key("total_non_gpu_run_minutes", optional=optional_fields): t.Int,
         }
     )
 
@@ -21,8 +21,8 @@ def create_stats_response_validator() -> t.Trafaret:
     return t.Dict(
         {
             "name": t.String,
-            t.Key("quota", optional=True): create_aggregated_runtime_validator(),
-            "jobs": create_aggregated_runtime_validator(),
+            "quota": create_aggregated_runtime_validator(True),
+            "jobs": create_aggregated_runtime_validator(False),
         }
     )
 
@@ -55,6 +55,8 @@ class StatsHandler:
 
         if user.has_quota():
             response_payload["quota"] = user.quota.to_primitive()
+        else:
+            response_payload["quota"] = dict()
 
         run_time_filter = JobFilter(owners={user.name})
         run_time = await self.jobs_storage.get_aggregated_run_time(run_time_filter)

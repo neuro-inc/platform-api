@@ -2140,7 +2140,7 @@ class TestJobs:
 
 class TestStats:
     @pytest.mark.asyncio
-    async def test_jobs_status_unauthorized(
+    async def test_user_stats_unauthorized(
         self, api: ApiConfig, client: aiohttp.ClientSession, regular_user: _User
     ) -> None:
         url = api.stats_for_user_url(regular_user.name)
@@ -2148,7 +2148,7 @@ class TestStats:
             assert resp.status == HTTPUnauthorized.status_code
 
     @pytest.mark.asyncio
-    async def test_jobs_status_authorized(
+    async def test_users_stats_authorized(
         self, api: ApiConfig, client: aiohttp.ClientSession, regular_user: _User
     ) -> None:
         url = api.stats_for_user_url(regular_user.name)
@@ -2158,10 +2158,11 @@ class TestStats:
             assert result == {
                 "name": regular_user.name,
                 "jobs": {"total_gpu_run_minutes": 0, "total_non_gpu_run_minutes": 0},
+                "quota": {}
             }
 
     @pytest.mark.asyncio
-    async def test_jobs_status_quota(
+    async def test_user_stats_quota(
         self,
         api: ApiConfig,
         client: aiohttp.ClientSession,
