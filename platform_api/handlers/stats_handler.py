@@ -1,7 +1,6 @@
 import aiohttp.web
 import trafaret as t
 from neuro_auth_client import Permission, check_permissions
-from neuromation.api import Action
 
 from platform_api.config import Config
 from platform_api.orchestrator.jobs_storage import JobFilter, JobsStorage
@@ -46,7 +45,7 @@ class StatsHandler:
     ) -> aiohttp.web.Response:
         username = request.match_info["username"]
 
-        permission = Permission(uri=f"user://{username}", action=Action.READ)
+        permission = Permission(uri=f"user://{username}", action="read")
         await check_permissions(request, [permission])
 
         user = await authorized_user(request)
