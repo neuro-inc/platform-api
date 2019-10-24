@@ -16,7 +16,7 @@ install_requires = (
     "cryptography==2.8",
     "aiorwlock==0.6.0",
     "notifications-client==0.6",
-    "platform-logging==0.2",
+    "platform-logging==0.3",
 )
 
 setup(
