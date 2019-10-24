@@ -70,9 +70,9 @@ jobs:
             echo "deb http://apt.kubernetes.io/ kubernetes-xenial main" | sudo tee -a /etc/apt/sources.list.d/kubernetes.list
             export DEBIAN_FRONTEND="noninteractive"
             sudo apt-get update
-            sudo apt-get install -y software-properties-common
             sudo apt-get install -y nfs-common
             sudo apt-get install -y kubectl
+            sudo apt-get install docker-ce=5:18.09.4~3-0~ubuntu-xenial docker-ce-cli=5:18.09.4~3-0~ubuntu-xenial containerd.io=1.2.5-1
             openssl version -a
 
       - run:
