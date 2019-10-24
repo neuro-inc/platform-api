@@ -2158,7 +2158,7 @@ class TestStats:
             assert result == {
                 "name": regular_user.name,
                 "jobs": {"total_gpu_run_minutes": 0, "total_non_gpu_run_minutes": 0},
-                "quota": {}
+                "quota": {},
             }
 
     @pytest.mark.asyncio
