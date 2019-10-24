@@ -65,10 +65,14 @@ jobs:
           command: |
             pyenv install --debug 3.6.3
             pyenv global 3.6.3-debug
+            curl -s https://packages.cloud.google.com/apt/doc/apt-key.gpg | sudo apt-key add -
+            echo "deb http://apt.kubernetes.io/ kubernetes-xenial main" >> /etc/apt/sources.list.d/kubernetes.list
             export DEBIAN_FRONTEND="noninteractive"
             sudo apt-get update
-            sudo apt-get install software-properties-common
-            sudo apt-get install nfs-common
+            sudo apt-get install -y software-properties-common
+            sudo apt-get install -y nfs-common
+            sudo apt-get install -y virtualbox virtualbox-ext-pack
+            sudo apt-get install -y kubectl
             openssl version -a
 
       - run:
@@ -88,6 +92,7 @@ jobs:
             sudo mount --make-rshared /
             sudo mount --make-rshared /run
             sudo mount --make-rshared /var/lib/docker
+            sudo modprobe nfs 
 
             make start_k8s
 
