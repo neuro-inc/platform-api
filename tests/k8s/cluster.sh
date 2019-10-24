@@ -87,7 +87,6 @@ function k8s::setup_namespace {
 
 function k8s::setup_ingress {
     tools::minikube addons enable ingress
-    tools::kubectl create -f tests/k8s/platformjobsingress.yml --namespace=platformapi-tests
 }
 
 function k8s::setup_logging {

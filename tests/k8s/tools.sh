@@ -7,7 +7,7 @@ function tools::kubectl {
 }
 
 function tools::minikube {
-    minikube --profile $CONTEXT "$@"
+    sudo -E minikube --profile $CONTEXT "$@"
 }
 
 ARGUMENTS="${@:2}"
