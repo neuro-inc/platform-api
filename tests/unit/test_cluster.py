@@ -1,14 +1,19 @@
 import asyncio
+from typing import Any
 
 import pytest
+from _pytest.logging import LogCaptureFixture
 from async_timeout import timeout
 
 from platform_api.cluster import (
     Cluster,
     ClusterConfig,
+    ClusterNotAvailable,
     ClusterNotFound,
     ClusterRegistry,
+    ClusterRegistryRecord,
 )
+from platform_api.cluster_config import CircuitBreakerConfig
 from platform_api.orchestrator.base import Orchestrator
 
 
@@ -31,9 +36,14 @@ class _TestCluster(Cluster):
         pass
 
 
-def create_cluster_config(name: str) -> ClusterConfig:
-    return ClusterConfig(  # type: ignore  # noqa
-        name=name, storage=None, registry=None, orchestrator=None, ingress=None
+def create_cluster_config(name: str, **kwargs: Any) -> ClusterConfig:
+    return ClusterConfig(
+        name=name,
+        storage=None,  # type: ignore
+        registry=None,  # type: ignore
+        orchestrator=None,  # type: ignore
+        ingress=None,  # type: ignore
+        **kwargs,
     )
 
 
@@ -54,6 +64,25 @@ class TestClusterRegistry:
         await registry.add(config)
 
         async with registry.get(config.name) as cluster:
+            assert cluster.name == config.name
+
+    @pytest.mark.asyncio
+    async def test_get(self) -> None:
+        registry = ClusterRegistry(factory=_TestCluster)
+        config = create_cluster_config(
+            name="test", circuit_breaker=CircuitBreakerConfig(open_threshold=1)
+        )
+
+        await registry.add(config)
+
+        async with registry.get(config.name):
+            raise RuntimeError("test")
+
+        with pytest.raises(ClusterNotAvailable):
+            async with registry.get(config.name):
+                pass
+
+        async with registry.get(config.name, skip_circuit_breaker=True) as cluster:
             assert cluster.name == config.name
 
     @pytest.mark.asyncio
@@ -180,4 +209,58 @@ class TestClusterRegistry:
 
         with pytest.raises(ClusterNotFound, match=f"Cluster '{name}' not found"):
             async with registry.get(name):
+                pass
+
+
+class TestClusterRegistryRecord:
+    def create_record(self, **kwargs: Any) -> ClusterRegistryRecord:
+        return ClusterRegistryRecord(
+            _TestCluster(
+                create_cluster_config(
+                    "test", circuit_breaker=CircuitBreakerConfig(**kwargs)
+                )
+            )
+        )
+
+    @pytest.mark.asyncio
+    async def test_idle_closed(self) -> None:
+        record = self.create_record()
+
+        async with record.circuit_breaker:
+            pass
+
+    @pytest.mark.asyncio
+    async def test_threshold_not_exceeded(self, caplog: LogCaptureFixture) -> None:
+        record = self.create_record(open_threshold=2)
+
+        async with record.circuit_breaker:
+            raise RuntimeError("testerror")
+
+        assert "Unexpected exception in cluster: 'test'. Suppressing" in caplog.text
+        assert "RuntimeError: testerror" in caplog.text
+
+        async with record.circuit_breaker:
+            pass
+
+    @pytest.mark.asyncio
+    async def test_threshold_exceeded(self) -> None:
+        record = self.create_record(open_threshold=1)
+
+        async with record.circuit_breaker:
+            raise RuntimeError("testerror")
+
+        with pytest.raises(ClusterNotAvailable, match="Cluster 'test' not available"):
+            async with record.circuit_breaker:
+                pass
+
+    @pytest.mark.asyncio
+    async def test_cancelled_not_suppressed(self) -> None:
+        record = self.create_record(open_threshold=1)
+
+        with pytest.raises(asyncio.CancelledError):
+            async with record.circuit_breaker:
+                raise asyncio.CancelledError()
+
+        with pytest.raises(ClusterNotAvailable, match="Cluster 'test' not available"):
+            async with record.circuit_breaker:
                 pass

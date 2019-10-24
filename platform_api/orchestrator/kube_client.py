@@ -593,6 +593,7 @@ class PodDescriptor:
     readiness_probe: bool = False
 
     node_name: Optional[str] = None
+    priority_class_name: Optional[str] = None
 
     created_at: Optional[datetime] = None
 
@@ -608,6 +609,7 @@ class PodDescriptor:
         tolerations: Optional[List[Toleration]] = None,
         node_affinity: Optional[NodeAffinity] = None,
         labels: Optional[Dict[str, str]] = None,
+        priority_class_name: Optional[str] = None,
     ) -> "PodDescriptor":
         container = job_request.container
         volume_mounts = [
@@ -656,6 +658,7 @@ class PodDescriptor:
             node_affinity=node_affinity,
             labels=labels or {},
             annotations=annotations,
+            priority_class_name=priority_class_name,
         )
 
     @property
@@ -726,6 +729,8 @@ class PodDescriptor:
             payload["spec"]["affinity"] = {
                 "nodeAffinity": self.node_affinity.to_primitive()
             }
+        if self.priority_class_name:
+            payload["spec"]["priorityClassName"] = self.priority_class_name
         return payload
 
     def _to_primitive_ports(self) -> List[Dict[str, int]]:
@@ -802,6 +807,7 @@ class PodDescriptor:
             args=container_payload.get("args"),
             tolerations=tolerations,
             labels=metadata.get("labels", {}),
+            priority_class_name=payload["spec"].get("priorityClassName"),
         )
 
 
@@ -1160,8 +1166,9 @@ class KubeClient:
             cafile=self._cert_authority_path, cadata=self._cert_authority_data_pem
         )
         if self._auth_type == KubeClientAuthType.CERTIFICATE:
-            ssl_context.load_cert_chain(  # type: ignore
-                self._auth_cert_path, self._auth_cert_key_path
+            ssl_context.load_cert_chain(
+                self._auth_cert_path,  # type: ignore
+                self._auth_cert_key_path,
             )
         return ssl_context
 

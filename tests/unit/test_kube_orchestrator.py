@@ -166,6 +166,7 @@ class TestPodDescriptor:
             node_affinity=node_affinity,
             labels={"testlabel": "testvalue"},
             annotations={"testa": "testv"},
+            priority_class_name="testpriority",
         )
         assert pod.name == "testname"
         assert pod.image == "testimage"
@@ -220,6 +221,7 @@ class TestPodDescriptor:
                         "requiredDuringSchedulingIgnoredDuringExecution": mock.ANY
                     }
                 },
+                "priorityClassName": "testpriority",
             },
         }
 
@@ -457,7 +459,9 @@ class TestPodDescriptor:
         )
         volume = HostVolume(name="testvolume", path=PurePath("/tmp"))
         job_request = JobRequest.create(container)
-        pod = PodDescriptor.from_job_request(volume, job_request)
+        pod = PodDescriptor.from_job_request(
+            volume, job_request, priority_class_name="testpriority"
+        )
         assert pod.name == job_request.job_id
         assert pod.image == "testimage"
         assert pod.args == ["testcommand", "123"]
@@ -470,6 +474,7 @@ class TestPodDescriptor:
         ]
         assert pod.volumes == [volume]
         assert pod.resources == Resources(cpu=1, memory=128, gpu=1)
+        assert pod.priority_class_name == "testpriority"
 
     def test_from_job_request_tpu(self) -> None:
         container = Container(
@@ -484,6 +489,7 @@ class TestPodDescriptor:
         job_request = JobRequest.create(container)
         pod = PodDescriptor.from_job_request(volume, job_request)
         assert pod.annotations == {"tf-version.cloud-tpus.google.com": "1.14"}
+        assert pod.priority_class_name is None
 
     def test_from_primitive(self) -> None:
         payload = {
@@ -505,6 +511,7 @@ class TestPodDescriptor:
                     {"operator": "Exists"},
                     {"key": "key3"},
                 ],
+                "priorityClassName": "testpriority",
             },
             "status": {"phase": "Running"},
         }
@@ -521,6 +528,7 @@ class TestPodDescriptor:
             Toleration(key="", operator="Exists", value="", effect=""),
             Toleration(key="key3", operator="Equal", value="", effect=""),
         ]
+        assert pod.priority_class_name == "testpriority"
 
     def test_from_primitive_failure(self) -> None:
         payload = {"kind": "Status", "code": 409}

@@ -1,11 +1,13 @@
 from dataclasses import replace
-from typing import AsyncIterator, Callable
+from typing import Any, AsyncIterator, Callable
 from unittest.mock import MagicMock
 
 import pytest
+from _pytest.logging import LogCaptureFixture
 from notifications_client import Client as NotificationsClient, JobTransition
 
 from platform_api.cluster import Cluster, ClusterConfig, ClusterRegistry
+from platform_api.cluster_config import CircuitBreakerConfig
 from platform_api.config import JobsConfig
 from platform_api.orchestrator.job import (
     AggregatedRunTime,
@@ -206,6 +208,37 @@ class TestJobsService:
         job, _ = await jobs_service.create_job(job_request=mock_job_request, user=user)
         job_status = await jobs_service.get_job_status(job_id=job.id)
         assert job_status == JobStatus.PENDING
+
+    @pytest.mark.asyncio
+    async def test_set_status_by_job_id(
+        self, jobs_service: JobsService, mock_job_request: JobRequest
+    ) -> None:
+        user = User(cluster_name="default", name="testuser", token="")
+        job, _ = await jobs_service.create_job(job_request=mock_job_request, user=user)
+        job_id = job.id
+        job_status = await jobs_service.get_job_status(job_id)
+        assert job_status == JobStatus.PENDING
+        job_status = await jobs_service.get_job_status(job_id)
+        status_item = job.status_history.last
+        assert status_item.reason is None
+
+        await jobs_service.set_job_status(
+            job_id, JobStatusItem.create(JobStatus.RUNNING)
+        )
+        job_status = await jobs_service.get_job_status(job_id)
+        assert job_status == JobStatus.RUNNING
+        job = await jobs_service.get_job(job_id)
+        status_item = job.status_history.last
+        assert status_item.reason is None
+
+        await jobs_service.set_job_status(
+            job_id, JobStatusItem.create(JobStatus.FAILED, reason="Test failure")
+        )
+        job_status = await jobs_service.get_job_status(job_id)
+        assert job_status == JobStatus.FAILED
+        job = await jobs_service.get_job(job_id)
+        status_item = job.status_history.last
+        assert status_item.reason == "Test failure"
 
     @pytest.mark.asyncio
     async def test_get_all(
@@ -456,6 +489,31 @@ class TestJobsService:
         assert job.is_deleted
 
     @pytest.mark.asyncio
+    async def test_delete_missing(
+        self,
+        jobs_service: JobsService,
+        mock_orchestrator: MockOrchestrator,
+        job_request_factory: Callable[[], JobRequest],
+        caplog: LogCaptureFixture,
+    ) -> None:
+        mock_orchestrator.raise_on_delete = True
+        user = User(cluster_name="default", name="testuser", token="")
+        original_job, _ = await jobs_service.create_job(
+            job_request=job_request_factory(), user=user
+        )
+        assert original_job.status == JobStatus.PENDING
+
+        await jobs_service.delete_job(original_job.id)
+
+        assert f"Could not delete job '{original_job.id}'. Reason: ''" in caplog.text
+
+        job = await jobs_service.get_job(original_job.id)
+        assert job.status == JobStatus.SUCCEEDED
+        assert job.is_finished
+        assert job.finished_at
+        assert job.is_deleted
+
+    @pytest.mark.asyncio
     @pytest.mark.parametrize(
         "quota",
         [
@@ -610,6 +668,43 @@ class TestJobsServiceCluster:
         )
         await cluster_registry.add(cluster_config)
 
+        async with cluster_registry.get(cluster_config.name) as cluster:
+
+            def _f(*args: Any, **kwargs: Any) -> Exception:
+                raise RuntimeError("test")
+
+            cluster.orchestrator.raise_on_get_job_status = True
+            cluster.orchestrator.get_job_status_exc_factory = _f
+
+        user = User(name="testuser", token="testtoken", cluster_name="default")
+        job, _ = await jobs_service.create_job(mock_job_request, user)
+
+        status = await jobs_service.get_job_status(job.id)
+        assert status == JobStatus.PENDING
+
+        await jobs_service.update_jobs_statuses()
+
+        status = await jobs_service.get_job_status(job.id)
+        assert status == JobStatus.PENDING
+
+    @pytest.mark.asyncio
+    async def test_update_pending_job_unavail_cluster(
+        self,
+        cluster_registry: ClusterRegistry,
+        cluster_config: ClusterConfig,
+        mock_jobs_storage: MockJobsStorage,
+        mock_job_request: JobRequest,
+        jobs_config: JobsConfig,
+        mock_notifications_client: NotificationsClient,
+    ) -> None:
+        jobs_service = JobsService(
+            cluster_registry=cluster_registry,
+            jobs_storage=mock_jobs_storage,
+            jobs_config=jobs_config,
+            notifications_client=mock_notifications_client,
+        )
+        await cluster_registry.add(cluster_config)
+
         user = User(name="testuser", token="testtoken", cluster_name="default")
         job, _ = await jobs_service.create_job(mock_job_request, user)
 
@@ -694,6 +789,37 @@ class TestJobsServiceCluster:
         assert job.cluster_name == "missing"
 
     @pytest.mark.asyncio
+    async def test_get_job_unavail_cluster(
+        self,
+        cluster_registry: ClusterRegistry,
+        cluster_config: ClusterConfig,
+        mock_jobs_storage: MockJobsStorage,
+        mock_job_request: JobRequest,
+        jobs_config: JobsConfig,
+        mock_notifications_client: NotificationsClient,
+    ) -> None:
+        jobs_service = JobsService(
+            cluster_registry=cluster_registry,
+            jobs_storage=mock_jobs_storage,
+            jobs_config=jobs_config,
+            notifications_client=mock_notifications_client,
+        )
+        cluster_config = replace(
+            cluster_config, circuit_breaker=CircuitBreakerConfig(open_threshold=1)
+        )
+        await cluster_registry.add(cluster_config)  # "default"
+
+        user = User(name="testuser", token="testtoken", cluster_name="default")
+        job, _ = await jobs_service.create_job(mock_job_request, user)
+
+        # forcing the cluster to become unavailable
+        async with cluster_registry.get(cluster_config.name):
+            raise RuntimeError("test")
+
+        job = await jobs_service.get_job(job.id)
+        assert job.cluster_name == "default"
+
+    @pytest.mark.asyncio
     async def test_delete_missing_cluster(
         self,
         cluster_registry: ClusterRegistry,
@@ -715,6 +841,41 @@ class TestJobsServiceCluster:
         job, _ = await jobs_service.create_job(mock_job_request, user)
 
         await cluster_registry.remove(cluster_config.name)
+
+        await jobs_service.delete_job(job.id)
+
+        record = await mock_jobs_storage.get_job(job.id)
+        assert record.status == JobStatus.SUCCEEDED
+        assert record.is_deleted
+
+    @pytest.mark.asyncio
+    async def test_delete_unavail_cluster(
+        self,
+        cluster_registry: ClusterRegistry,
+        cluster_config: ClusterConfig,
+        mock_jobs_storage: MockJobsStorage,
+        mock_job_request: JobRequest,
+        jobs_config: JobsConfig,
+        mock_notifications_client: NotificationsClient,
+    ) -> None:
+        jobs_service = JobsService(
+            cluster_registry=cluster_registry,
+            jobs_storage=mock_jobs_storage,
+            jobs_config=jobs_config,
+            notifications_client=mock_notifications_client,
+        )
+        await cluster_registry.add(cluster_config)
+
+        async with cluster_registry.get(cluster_config.name) as cluster:
+
+            def _f(*args: Any, **kwargs: Any) -> Exception:
+                raise RuntimeError("test")
+
+            cluster.orchestrator.raise_on_delete = True
+            cluster.orchestrator.delete_job_exc_factory = _f
+
+        user = User(cluster_name="default", name="testuser", token="testtoken")
+        job, _ = await jobs_service.create_job(mock_job_request, user)
 
         await jobs_service.delete_job(job.id)
 

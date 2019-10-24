@@ -15,7 +15,6 @@ from typing import (
     Iterator,
     List,
     Optional,
-    Sequence,
     Set,
     Tuple,
     Type,
@@ -266,7 +265,7 @@ class RedisJobsStorage(JobsStorage):
 
     @asynccontextmanager
     async def _watch_keys(
-        self, key: str, *other_keys: Sequence[str], description: str
+        self, key: str, *other_keys: str, description: str
     ) -> AsyncIterator[JobsStorage]:
         async with self._acquire_conn() as client:
             try:

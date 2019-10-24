@@ -7,8 +7,10 @@ import pytest
 from aiohttp.web import (
     HTTPAccepted,
     HTTPBadRequest,
+    HTTPConflict,
     HTTPForbidden,
     HTTPInternalServerError,
+    HTTPNoContent,
     HTTPOk,
     HTTPUnauthorized,
 )
@@ -93,21 +95,23 @@ class TestApi:
         cluster_configs_payload: List[Dict[str, Any]],
         cluster_user: _User,
     ) -> None:
-        # have no additional clusters - we'll have just one (the default)
-        async with create_config_api([]):
+        # pass config with 1 cluster
+        # record count doesnt't change, because there's a default cluster
+        # which gets deleted
+        async with create_config_api(cluster_configs_payload):
             url = api.clusters_sync_url
             async with client.post(url, headers=cluster_user.headers) as resp:
                 assert resp.status == HTTPOk.status_code, await resp.text()
                 result = await resp.json()
                 assert result == {"old_record_count": 1, "new_record_count": 1}
 
-        # add one more cluster to the config (named "cluster_name") - we'll have two now
-        async with create_config_api(cluster_configs_payload):
+        # pass empty cluster config - all clusters should be deleted
+        async with create_config_api([]):
             url = api.clusters_sync_url
             async with client.post(url, headers=cluster_user.headers) as resp:
                 assert resp.status == HTTPOk.status_code, await resp.text()
                 result = await resp.json()
-                assert result == {"old_record_count": 1, "new_record_count": 2}
+                assert result == {"old_record_count": 1, "new_record_count": 0}
 
     @pytest.mark.asyncio
     async def test_config(
@@ -473,8 +477,9 @@ class TestJobs:
             ), await response.text()
             payload = await response.json()
             e = (
-                f"Unexpected exception: Cluster '{user.cluster_name}' not found. "
-                "Path with query: /api/v1/jobs."
+                f"Unexpected exception ClusterNotFound: "
+                f"Cluster '{user.cluster_name}' not found. "
+                f"Path with query: /api/v1/jobs."
             )
             assert payload == {"error": e}
 
@@ -801,11 +806,14 @@ class TestJobs:
         api: ApiConfig,
         client: aiohttp.ClientSession,
         jobs_client_factory: Callable[[_User], JobsClient],
-    ) -> AsyncIterator[Callable[[_User, Dict[str, Any], bool], Awaitable[str]]]:
+    ) -> AsyncIterator[Callable[[_User, Dict[str, Any], bool, bool], Awaitable[str]]]:
         cleanup_pairs = []
 
         async def _impl(
-            user: _User, job_request: Dict[str, Any], do_kill: bool = False
+            user: _User,
+            job_request: Dict[str, Any],
+            do_kill: bool = False,
+            do_wait: bool = True,
         ) -> str:
             url = api.jobs_base_url
             headers = user.headers
@@ -817,7 +825,8 @@ class TestJobs:
                 )
                 data = await resp.json()
                 job_id = data["id"]
-                await jobs_client.long_polling_by_job_id(job_id, "running")
+                if do_wait:
+                    await jobs_client.long_polling_by_job_id(job_id, "running")
                 if do_kill:
                     await jobs_client.delete_job(job_id)
                     await jobs_client.long_polling_by_job_id(job_id, "succeeded")
@@ -873,7 +882,7 @@ class TestJobs:
         regular_user_factory: Callable[[], Any],
         jobs_client_factory: Callable[[_User], JobsClient],
         job_request_factory: Callable[[], Dict[str, Any]],
-        run_job: Callable[..., Awaitable[None]],
+        run_job: Callable[..., Awaitable[str]],
         share_job: Callable[[_User, _User, Any], Awaitable[None]],
         create_job_request_no_name: Callable[[], Dict[str, Any]],
         create_job_request_with_name: Callable[[str], Dict[str, Any]],
@@ -926,7 +935,7 @@ class TestJobs:
         regular_user_factory: Callable[[], Any],
         jobs_client_factory: Callable[[_User], JobsClient],
         job_request_factory: Callable[[], Dict[str, Any]],
-        run_job: Callable[..., Awaitable[None]],
+        run_job: Callable[..., Awaitable[str]],
         share_job: Callable[[_User, _User, Any], Awaitable[None]],
         create_job_request_no_name: Callable[[], Dict[str, Any]],
         create_job_request_with_name: Callable[[str], Dict[str, Any]],
@@ -992,7 +1001,7 @@ class TestJobs:
         regular_user_factory: Callable[[], Any],
         jobs_client_factory: Callable[[_User], JobsClient],
         job_request_factory: Callable[[], Dict[str, Any]],
-        run_job: Callable[..., Awaitable[None]],
+        run_job: Callable[..., Awaitable[str]],
         share_job: Callable[[_User, _User, Any], Awaitable[None]],
         create_job_request_no_name: Callable[[], Dict[str, Any]],
         create_job_request_with_name: Callable[[str], Dict[str, Any]],
@@ -1057,7 +1066,7 @@ class TestJobs:
         regular_user_factory: Callable[[], Any],
         jobs_client_factory: Callable[[_User], JobsClient],
         job_request_factory: Callable[[], Dict[str, Any]],
-        run_job: Callable[..., Awaitable[None]],
+        run_job: Callable[..., Awaitable[str]],
         share_job: Callable[[_User, _User, Any], Awaitable[None]],
         create_job_request_no_name: Callable[[], Dict[str, Any]],
         create_job_request_with_name: Callable[[str], Dict[str, Any]],
@@ -1345,7 +1354,7 @@ class TestJobs:
         client: aiohttp.ClientSession,
         regular_user_factory: Callable[..., Any],
         jobs_client_factory: Callable[[_User], JobsClient],
-        run_job: Callable[..., Awaitable[None]],
+        run_job: Callable[..., Awaitable[str]],
         share_job: Callable[[_User, _User, Any], Awaitable[None]],
         create_job_request_no_name: Callable[[], Dict[str, Any]],
     ) -> None:
@@ -1405,7 +1414,7 @@ class TestJobs:
         client: aiohttp.ClientSession,
         regular_user_factory: Callable[[], Any],
         jobs_client_factory: Callable[[_User], JobsClient],
-        run_job: Callable[..., Awaitable[None]],
+        run_job: Callable[..., Awaitable[str]],
         create_job_request_with_name: Callable[[str], Dict[str, Any]],
     ) -> None:
         job_name = "test-job-name"
@@ -1457,7 +1466,7 @@ class TestJobs:
         client: aiohttp.ClientSession,
         regular_user_factory: Callable[[], Any],
         jobs_client_factory: Callable[[_User], JobsClient],
-        run_job: Callable[..., Awaitable[None]],
+        run_job: Callable[..., Awaitable[str]],
         share_job: Callable[[_User, _User, Any], Awaitable[None]],
         create_job_request_with_name: Callable[[str], Dict[str, Any]],
     ) -> None:
@@ -1496,7 +1505,7 @@ class TestJobs:
         client: aiohttp.ClientSession,
         regular_user_factory: Callable[[], Any],
         jobs_client_factory: Callable[[_User], JobsClient],
-        run_job: Callable[..., Awaitable[None]],
+        run_job: Callable[..., Awaitable[str]],
         create_job_request_with_name: Callable[[str], Dict[str, Any]],
     ) -> None:
         job_name = "test-job-name"
@@ -1536,7 +1545,7 @@ class TestJobs:
         api: ApiConfig,
         client: aiohttp.ClientSession,
         regular_user_factory: Callable[[], Any],
-        run_job: Callable[..., Awaitable[None]],
+        run_job: Callable[..., Awaitable[str]],
         create_job_request_with_name: Callable[[str], Dict[str, Any]],
     ) -> None:
         url = api.jobs_base_url
@@ -1563,6 +1572,118 @@ class TestJobs:
             async with client.get(url, headers=usr.headers, params=params) as response:
                 response_text = await response.text()
                 assert response.status == HTTPBadRequest.status_code, response_text
+
+    @pytest.mark.asyncio
+    async def test_set_job_status_no_reason(
+        self,
+        api: ApiConfig,
+        client: aiohttp.ClientSession,
+        job_submit: Dict[str, Any],
+        jobs_client: JobsClient,
+        run_job: Callable[..., Awaitable[str]],
+        regular_user: _User,
+        compute_user: _User,
+    ) -> None:
+        job_id = await run_job(regular_user, job_submit, do_wait=False)
+
+        url = api.generate_job_url(job_id) + "/status"
+        headers = compute_user.headers
+        payload = {"status": "failed"}
+        async with client.put(url, headers=headers, json=payload) as response:
+            if response.status == HTTPConflict.status_code:
+                result = await response.json()
+                assert result["error"] == f"Job {{id={job_id}}} has changed"
+                ok = False
+            else:
+                assert (
+                    response.status == HTTPNoContent.status_code
+                ), await response.text()
+                ok = True
+
+        if ok:
+            result = await jobs_client.get_job_by_id(job_id)
+            assert result["status"] == "failed"
+            assert result["history"]["status"] == "failed"
+            assert result["history"].get("reason") is None
+            assert result["history"].get("description") is None
+            assert result["history"].get("exit_code") is None
+
+    @pytest.mark.asyncio
+    async def test_set_job_status_with_details(
+        self,
+        api: ApiConfig,
+        client: aiohttp.ClientSession,
+        job_submit: Dict[str, Any],
+        jobs_client: JobsClient,
+        run_job: Callable[..., Awaitable[str]],
+        regular_user: _User,
+        compute_user: _User,
+    ) -> None:
+        job_id = await run_job(regular_user, job_submit, do_wait=False)
+
+        url = api.generate_job_url(job_id) + "/status"
+        headers = compute_user.headers
+        payload = {
+            "status": "failed",
+            "reason": "Test failure",
+            "description": "test_set_job_status",
+            "exit_code": 42,
+        }
+        async with client.put(url, headers=headers, json=payload) as response:
+            if response.status == HTTPConflict.status_code:
+                result = await response.json()
+                assert result["error"] == f"Job {{id={job_id}}} has changed"
+                ok = False
+            else:
+                assert (
+                    response.status == HTTPNoContent.status_code
+                ), await response.text()
+                ok = True
+
+        if ok:
+            result = await jobs_client.get_job_by_id(job_id)
+            assert result["status"] == "failed"
+            assert result["history"]["status"] == "failed"
+            assert result["history"]["reason"] == "Test failure"
+            assert result["history"]["description"] == "test_set_job_status"
+            assert result["history"]["exit_code"] == 42
+
+    @pytest.mark.asyncio
+    async def test_set_job_status_wrong_status(
+        self,
+        api: ApiConfig,
+        client: aiohttp.ClientSession,
+        job_submit: Dict[str, Any],
+        run_job: Callable[..., Awaitable[str]],
+        regular_user: _User,
+        compute_user: _User,
+    ) -> None:
+        job_id = await run_job(regular_user, job_submit, do_wait=False)
+
+        url = api.generate_job_url(job_id) + "/status"
+        headers = compute_user.headers
+        payload = {"status": "abrakadabra"}
+        async with client.put(url, headers=headers, json=payload) as response:
+            assert response.status == HTTPBadRequest.status_code, await response.text()
+
+    @pytest.mark.asyncio
+    async def test_set_job_status_unprivileged(
+        self,
+        api: ApiConfig,
+        client: aiohttp.ClientSession,
+        job_submit: Dict[str, Any],
+        run_job: Callable[..., Awaitable[str]],
+        regular_user: _User,
+    ) -> None:
+        job_id = await run_job(regular_user, job_submit, do_wait=False)
+
+        url = api.generate_job_url(job_id) + "/status"
+        headers = regular_user.headers
+        payload = {"status": "running"}
+        async with client.put(url, headers=headers, json=payload) as response:
+            assert response.status == HTTPForbidden.status_code, await response.text()
+            result = await response.json()
+            assert result == {"missing": [{"uri": "job:", "action": "manage"}]}
 
     @pytest.mark.asyncio
     async def test_delete_job(
@@ -2012,4 +2133,49 @@ class TestJobs:
                 "ssh_server": "ssh://nobody@ssh-auth.platform.neuromation.io:22",
                 "ssh_auth_server": "ssh://nobody@ssh-auth.platform.neuromation.io:22",
                 "is_preemptible": False,
+            }
+
+
+class TestStats:
+    @pytest.mark.asyncio
+    async def test_user_stats_unauthorized(
+        self, api: ApiConfig, client: aiohttp.ClientSession, regular_user: _User
+    ) -> None:
+        url = api.stats_for_user_url(regular_user.name)
+        async with client.get(url) as resp:
+            assert resp.status == HTTPUnauthorized.status_code
+
+    @pytest.mark.asyncio
+    async def test_users_stats_authorized(
+        self, api: ApiConfig, client: aiohttp.ClientSession, regular_user: _User
+    ) -> None:
+        url = api.stats_for_user_url(regular_user.name)
+        async with client.get(url, headers=regular_user.headers) as resp:
+            assert resp.status == HTTPOk.status_code, await resp.text()
+            result = await resp.json()
+            assert result == {
+                "name": regular_user.name,
+                "jobs": {"total_gpu_run_minutes": 0, "total_non_gpu_run_minutes": 0},
+                "quota": {},
+            }
+
+    @pytest.mark.asyncio
+    async def test_user_stats_quota(
+        self,
+        api: ApiConfig,
+        client: aiohttp.ClientSession,
+        regular_user_with_custom_quota: _User,
+    ) -> None:
+        user = regular_user_with_custom_quota
+        url = api.stats_for_user_url(user.name)
+        async with client.get(url, headers=user.headers) as resp:
+            assert resp.status == HTTPOk.status_code, await resp.text()
+            result = await resp.json()
+            assert result == {
+                "name": user.name,
+                "jobs": {"total_gpu_run_minutes": 0, "total_non_gpu_run_minutes": 0},
+                "quota": {
+                    "total_gpu_run_minutes": 123,
+                    "total_non_gpu_run_minutes": 321,
+                },
             }

@@ -11,6 +11,7 @@ from notifications_client import (
 from platform_api.cluster import (
     Cluster,
     ClusterConfig,
+    ClusterNotAvailable,
     ClusterNotFound,
     ClusterRegistry,
 )
@@ -72,8 +73,12 @@ class JobsService:
         return cluster_name or self._jobs_config.default_cluster_name
 
     @asynccontextmanager
-    async def _get_cluster(self, name: str) -> AsyncIterator[Cluster]:
-        async with self._cluster_registry.get(self._get_cluster_name(name)) as cluster:
+    async def _get_cluster(
+        self, name: str, tolerate_unavailable: bool = False
+    ) -> AsyncIterator[Cluster]:
+        async with self._cluster_registry.get(
+            self._get_cluster_name(name), skip_circuit_breaker=tolerate_unavailable
+        ) as cluster:
             yield cluster
 
     async def update_jobs_statuses(self) -> None:
@@ -115,6 +120,9 @@ class JobsService:
                         description=str(cluster_err),
                     )
                     record.is_deleted = True
+                except ClusterNotAvailable:
+                    # skipping job status update
+                    pass
         except JobStorageTransactionError:
             # intentionally ignoring any transaction failures here because
             # the job may have been changed and a retry is needed.
@@ -246,9 +254,23 @@ class JobsService:
         job = await self._jobs_storage.get_job(job_id)
         return job.status
 
+    async def set_job_status(self, job_id: str, status_item: JobStatusItem) -> None:
+        async with self._update_job_in_storage(job_id) as record:
+            old_status_item = record.status_history.current
+            if old_status_item != status_item:
+                record.status_history.current = status_item
+                logger.info(
+                    "Job %s transitioned from %s to %s",
+                    record.request.job_id,
+                    old_status_item.status.name,
+                    status_item.status.name,
+                )
+
     async def _get_cluster_job(self, record: JobRecord) -> Job:
         try:
-            async with self._get_cluster(record.cluster_name) as cluster:
+            async with self._get_cluster(
+                record.cluster_name, tolerate_unavailable=True
+            ) as cluster:
                 return Job(
                     storage_config=cluster.config.storage,
                     orchestrator_config=cluster.orchestrator.config,
@@ -286,9 +308,16 @@ class JobsService:
                     orchestrator_config=cluster.orchestrator.config,
                     record=record,
                 )
-                await cluster.orchestrator.delete_job(job)
-        except (ClusterNotFound, JobException) as exc:
-            # if the cluster or the job is missing, we still want to mark
+                try:
+                    await cluster.orchestrator.delete_job(job)
+                except JobException as exc:
+                    # if the job is missing, we still want to mark
+                    # the job as deleted. suppressing.
+                    logger.warning(
+                        "Could not delete job '%s'. Reason: '%s'", record.id, exc
+                    )
+        except (ClusterNotFound, ClusterNotAvailable) as exc:
+            # if the cluster is unavailable or missing, we still want to mark
             # the job as deleted. suppressing.
             logger.warning("Could not delete job '%s'. Reason: '%s'", record.id, exc)
 
@@ -368,3 +397,7 @@ class JobsService:
                     prev_transition_time=initial_status.transition_time,
                 )
             )
+
+    @property
+    def jobs_storage(self) -> JobsStorage:
+        return self._jobs_storage
