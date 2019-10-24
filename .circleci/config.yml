@@ -93,7 +93,8 @@ jobs:
             sudo mount --make-rshared /
             sudo mount --make-rshared /run
             sudo mount --make-rshared /var/lib/docker
-            sudo modprobe nfs nfsd 
+            sudo modprobe nfs
+            sudo modprobe nfsd
 
             make start_k8s
 
