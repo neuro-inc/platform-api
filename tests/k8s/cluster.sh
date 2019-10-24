@@ -44,7 +44,6 @@ function k8s::start {
     k8s::wait k8s::setup_namespace
     k8s::wait k8s::start_nfs
     k8s::wait k8s::setup_ingress
-    k8s::wait k8s::setup_logging
 
     tools::kubectl wait --for=condition=Ready  pod -l service=platformstoragenfs --timeout=5m
 
@@ -89,9 +88,6 @@ function k8s::setup_ingress {
     tools::minikube addons enable ingress
 }
 
-function k8s::setup_logging {
-    tools::kubectl apply -f tests/k8s/logging.yml
-}
 
 function k8s::test {
     tools::kubectl delete jobs testjob1 || :
