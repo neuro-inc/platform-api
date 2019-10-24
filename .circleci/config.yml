@@ -72,7 +72,6 @@ jobs:
             sudo apt-get update
             sudo apt-get install -y software-properties-common
             sudo apt-get install -y nfs-common
-            sudo apt-get install -y virtualbox 
             sudo apt-get install -y kubectl
             openssl version -a
 
