@@ -237,9 +237,9 @@ async def create_app(
             jobs_poller = JobsPoller(jobs_service=jobs_service)
             await exit_stack.enter_async_context(jobs_poller)
 
-            logger.info("Initializing EnforcePoller")
-            jobs_poller = JobPolicyEnforcer()
-            await exit_stack.enter_async_context(jobs_poller)
+            logger.info("Initializing JobPolicyEnforcer")
+            job_policy_enforcer = JobPolicyEnforcer(config.job_policy_enforcer)
+            await exit_stack.enter_async_context(job_policy_enforcer)
 
             app["api_v1_app"]["jobs_service"] = jobs_service
             app["jobs_app"]["jobs_service"] = jobs_service
