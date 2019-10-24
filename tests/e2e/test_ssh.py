@@ -23,6 +23,7 @@ async def alice_job(
     response = await client.post(
         api_config.jobs_url, headers=headers, json=job_request_payload
     )
+    assert response.status == 202, await response.text()
     payload = await response.json()
     job_id = payload["id"]
     assert isinstance(job_id, str)
@@ -30,7 +31,7 @@ async def alice_job(
 
     for i in range(30):
         response = await client.get(job_url, headers=headers)
-        assert response.status == 200
+        assert response.status == 200, await response.text()
         jobs_payload = await response.json()
         assert jobs_payload
         status_name = jobs_payload["status"]
@@ -43,7 +44,7 @@ async def alice_job(
     yield job_id
 
     response = await client.delete(job_url, headers=headers)
-    assert response.status == 204
+    assert response.status == 204, await response.text()
 
 
 @pytest.mark.asyncio

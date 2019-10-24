@@ -34,6 +34,7 @@ class KubeConfig(OrchestratorConfig):
     jobs_ingress_class: str = "traefik"
     jobs_ingress_oauth_url: URL = URL("https://neu.ro/oauth/authorize")
     jobs_pod_toleration_key: str = "platform.neuromation.io/job"
+    jobs_pod_priority_class_name: Optional[str] = None
 
     storage_volume_name: str = "storage"
 

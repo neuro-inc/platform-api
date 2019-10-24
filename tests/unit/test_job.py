@@ -16,6 +16,7 @@ from platform_api.orchestrator.job import (
     JobRecord,
     JobStatusHistory,
     JobStatusItem,
+    _timedelta_to_minutes,
 )
 from platform_api.orchestrator.job_request import (
     Container,
@@ -418,14 +419,16 @@ def job_request() -> JobRequest:
 
 class TestJobRecord:
     def test_should_be_deleted_pending(self, job_request: JobRequest) -> None:
-        record = JobRecord.create(request=job_request)
+        record = JobRecord.create(request=job_request, cluster_name="test-cluster")
         assert not record.finished_at
         assert not record.should_be_deleted(delay=timedelta(60))
 
     def test_should_be_deleted_finished(
         self, mock_orchestrator: MockOrchestrator, job_request: JobRequest
     ) -> None:
-        record = JobRecord.create(status=JobStatus.FAILED, request=job_request)
+        record = JobRecord.create(
+            status=JobStatus.FAILED, request=job_request, cluster_name="test-cluster"
+        )
         assert record.finished_at
         assert record.should_be_deleted(delay=timedelta(0))
 
@@ -478,7 +481,7 @@ class TestJob:
         job = Job(
             storage_config=mock_orchestrator.storage_config,
             orchestrator_config=mock_orchestrator.config,
-            job_request=job_request,
+            record=JobRecord.create(request=job_request, cluster_name="test-cluster"),
         )
         assert job.http_host == "testjob.jobs"
 
@@ -488,9 +491,12 @@ class TestJob:
         job = Job(
             storage_config=mock_orchestrator.storage_config,
             orchestrator_config=mock_orchestrator.config,
-            job_request=job_request,
-            name="test-job-name",
-            owner="owner",
+            record=JobRecord.create(
+                request=job_request,
+                cluster_name="test-cluster",
+                name="test-job-name",
+                owner="owner",
+            ),
         )
         assert job.http_host == "testjob.jobs"
         assert job.http_host_named == "test-job-name--owner.jobs"
@@ -501,8 +507,11 @@ class TestJob:
         job = Job(
             storage_config=mock_orchestrator.storage_config,
             orchestrator_config=mock_orchestrator.config,
-            job_request=job_request,
-            name="test-job-name-123",
+            record=JobRecord.create(
+                request=job_request,
+                cluster_name="test-cluster",
+                name="test-job-name-123",
+            ),
         )
         assert job.name == "test-job-name-123"
 
@@ -512,7 +521,7 @@ class TestJob:
         job = Job(
             storage_config=mock_orchestrator.storage_config,
             orchestrator_config=mock_orchestrator.config,
-            job_request=job_request,
+            record=JobRecord.create(request=job_request, cluster_name="test-cluster"),
         )
         assert not job.has_gpu
 
@@ -522,7 +531,9 @@ class TestJob:
         job = Job(
             storage_config=mock_orchestrator.storage_config,
             orchestrator_config=mock_orchestrator.config,
-            job_request=job_request_with_gpu,
+            record=JobRecord.create(
+                request=job_request_with_gpu, cluster_name="test-cluster"
+            ),
         )
         assert job.has_gpu
 
@@ -537,8 +548,12 @@ class TestJob:
         job = Job(
             storage_config=mock_orchestrator.storage_config,
             orchestrator_config=mock_orchestrator.config,
-            job_request=job_request,
-            status_history=JobStatusHistory(items=[first_item]),
+            record=JobRecord.create(
+                request=job_request,
+                cluster_name="test-cluster",
+                status_history=JobStatusHistory(items=[first_item]),
+                current_datetime_factory=mocked_datetime_factory,
+            ),
             current_datetime_factory=mocked_datetime_factory,
         )
         expected_timedelta = mocked_datetime_factory() - started_at
@@ -554,8 +569,11 @@ class TestJob:
         job = Job(
             storage_config=mock_orchestrator.storage_config,
             orchestrator_config=mock_orchestrator.config,
-            job_request=job_request,
-            status_history=JobStatusHistory(items=[first_item, last_item]),
+            record=JobRecord.create(
+                request=job_request,
+                cluster_name="test-cluster",
+                status_history=JobStatusHistory(items=[first_item, last_item]),
+            ),
         )
         expected_timedelta = finished_at - started_at
         assert job.get_run_time() == expected_timedelta
@@ -566,7 +584,7 @@ class TestJob:
         job = Job(
             storage_config=mock_orchestrator.storage_config,
             orchestrator_config=mock_orchestrator.config,
-            job_request=job_request,
+            record=JobRecord.create(request=job_request, cluster_name="test-cluster"),
         )
         assert job.http_url == "http://testjob.jobs"
 
@@ -576,9 +594,12 @@ class TestJob:
         job = Job(
             storage_config=mock_orchestrator.storage_config,
             orchestrator_config=mock_orchestrator.config,
-            job_request=job_request,
-            name="test-job-name",
-            owner="owner",
+            record=JobRecord.create(
+                request=job_request,
+                cluster_name="test-cluster",
+                name="test-job-name",
+                owner="owner",
+            ),
         )
         assert job.http_url == "http://testjob.jobs"
         assert job.http_url_named == "http://test-job-name--owner.jobs"
@@ -592,7 +613,7 @@ class TestJob:
         job = Job(
             storage_config=mock_orchestrator.storage_config,
             orchestrator_config=config,
-            job_request=job_request,
+            record=JobRecord.create(request=job_request, cluster_name="test-cluster"),
         )
         assert job.http_url == "https://testjob.jobs"
 
@@ -605,9 +626,12 @@ class TestJob:
         job = Job(
             storage_config=mock_orchestrator.storage_config,
             orchestrator_config=config,
-            job_request=job_request,
-            name="test-job-name",
-            owner="owner",
+            record=JobRecord.create(
+                request=job_request,
+                cluster_name="test-cluster",
+                name="test-job-name",
+                owner="owner",
+            ),
         )
         assert job.http_url == "https://testjob.jobs"
         assert job.http_url_named == "https://test-job-name--owner.jobs"
@@ -618,7 +642,9 @@ class TestJob:
         job = Job(
             storage_config=mock_orchestrator.storage_config,
             orchestrator_config=mock_orchestrator.config,
-            job_request=job_request_with_ssh,
+            record=JobRecord.create(
+                request=job_request_with_ssh, cluster_name="test-cluster"
+            ),
         )
         assert job.ssh_server == "ssh://nobody@ssh-auth:22"
 
@@ -628,7 +654,7 @@ class TestJob:
         job = Job(
             storage_config=mock_orchestrator.storage_config,
             orchestrator_config=mock_orchestrator.config,
-            job_request=job_request,
+            record=JobRecord.create(request=job_request, cluster_name="test-cluster"),
         )
         assert job.ssh_server == "ssh://nobody@ssh-auth:22"
 
@@ -640,7 +666,9 @@ class TestJob:
         job = Job(
             storage_config=mock_orchestrator.storage_config,
             orchestrator_config=mock_orchestrator.config,
-            job_request=job_request_with_ssh_and_http,
+            record=JobRecord.create(
+                request=job_request_with_ssh_and_http, cluster_name="test-cluster"
+            ),
         )
         assert job.http_url == "http://testjob.jobs"
         assert job.ssh_server == "ssh://nobody@ssh-auth:22"
@@ -653,9 +681,12 @@ class TestJob:
         job = Job(
             storage_config=mock_orchestrator.storage_config,
             orchestrator_config=mock_orchestrator.config,
-            job_request=job_request_with_ssh_and_http,
-            name="test-job-name",
-            owner="owner",
+            record=JobRecord.create(
+                request=job_request_with_ssh_and_http,
+                cluster_name="test-cluster",
+                name="test-job-name",
+                owner="owner",
+            ),
         )
         assert job.http_url == "http://testjob.jobs"
         assert job.http_url_named == "http://test-job-name--owner.jobs"
@@ -667,11 +698,14 @@ class TestJob:
         job = Job(
             storage_config=mock_orchestrator.storage_config,
             orchestrator_config=mock_orchestrator.config,
-            job_request=job_request,
-            owner="testuser",
-            name="test-job-name",
-            is_preemptible=True,
-            schedule_timeout=15,
+            record=JobRecord.create(
+                request=job_request,
+                cluster_name="test-cluster",
+                owner="testuser",
+                name="test-job-name",
+                is_preemptible=True,
+                schedule_timeout=15,
+            ),
         )
         job.status = JobStatus.FAILED
         job.is_deleted = True
@@ -681,7 +715,7 @@ class TestJob:
             "id": job.id,
             "name": "test-job-name",
             "owner": "testuser",
-            "cluster_name": "",
+            "cluster_name": "test-cluster",
             "request": job_request.to_primitive(),
             "status": "failed",
             "is_deleted": True,
@@ -702,6 +736,38 @@ class TestJob:
             ],
             "is_preemptible": True,
             "schedule_timeout": 15,
+        }
+
+    def test_to_primitive_with_max_run_time(
+        self, mock_orchestrator: MockOrchestrator, job_request: JobRequest
+    ) -> None:
+        job = Job(
+            storage_config=mock_orchestrator.storage_config,
+            orchestrator_config=mock_orchestrator.config,
+            record=JobRecord.create(
+                request=job_request,
+                cluster_name="test-cluster",
+                max_run_time_minutes=500,
+            ),
+        )
+        assert job.to_primitive() == {
+            "id": "testjob",
+            "owner": "compute",
+            "cluster_name": "test-cluster",
+            "request": job_request.to_primitive(),
+            "status": "pending",
+            "statuses": [
+                {
+                    "status": "pending",
+                    "transition_time": mock.ANY,
+                    "reason": None,
+                    "description": None,
+                }
+            ],
+            "is_deleted": False,
+            "finished_at": None,
+            "is_preemptible": False,
+            "max_run_time_minutes": 500,
         }
 
     def test_from_primitive(
@@ -726,6 +792,7 @@ class TestJob:
         assert job.name is None
         assert job.owner == "testuser"
         assert not job.is_preemptible
+        assert job.max_run_time == timedelta.max
 
     def test_from_primitive_check_name(
         self, mock_orchestrator: MockOrchestrator, job_request_payload: Dict[str, Any]
@@ -874,14 +941,93 @@ class TestJob:
         assert job.request.container.command == "arg1 arg2 arg3"
         assert job.request.container.entrypoint == "/script.sh"
 
+    def test_from_primitive_with_max_run_time_minutes(
+        self, mock_orchestrator: MockOrchestrator, job_request_payload: Dict[str, Any]
+    ) -> None:
+        payload = {
+            "id": "testjob",
+            "name": "test-job-name",
+            "owner": "testuser",
+            "request": job_request_payload,
+            "status": "succeeded",
+            "is_deleted": True,
+            "finished_at": datetime.now(timezone.utc).isoformat(),
+            "max_run_time_minutes": 100,
+        }
+        job = Job.from_primitive(
+            mock_orchestrator.storage_config, mock_orchestrator.config, payload
+        )
+        assert job.max_run_time == timedelta(minutes=100)
+
+    def test_from_primitive_with_max_run_time_minutes_none(
+        self, mock_orchestrator: MockOrchestrator, job_request_payload: Dict[str, Any]
+    ) -> None:
+        payload = {
+            "id": "testjob",
+            "name": "test-job-name",
+            "owner": "testuser",
+            "request": job_request_payload,
+            "status": "succeeded",
+            "is_deleted": True,
+            "finished_at": datetime.now(timezone.utc).isoformat(),
+            "max_run_time_minutes": None,
+        }
+        job = Job.from_primitive(
+            mock_orchestrator.storage_config, mock_orchestrator.config, payload
+        )
+        assert job.max_run_time == timedelta.max
+
+    def test_from_primitive_with_max_run_time_minutes_zero(
+        self, mock_orchestrator: MockOrchestrator, job_request_payload: Dict[str, Any]
+    ) -> None:
+        payload = {
+            "id": "testjob",
+            "name": "test-job-name",
+            "owner": "testuser",
+            "request": job_request_payload,
+            "status": "succeeded",
+            "is_deleted": True,
+            "finished_at": datetime.now(timezone.utc).isoformat(),
+            "max_run_time_minutes": 0,
+        }
+        job = Job.from_primitive(
+            mock_orchestrator.storage_config, mock_orchestrator.config, payload
+        )
+        with pytest.raises(
+            AssertionError, match="max_run_time_minutes must be positive, got: 0"
+        ):
+            job.max_run_time
+
+    def test_from_primitive_with_max_run_time_minutes_negative(
+        self, mock_orchestrator: MockOrchestrator, job_request_payload: Dict[str, Any]
+    ) -> None:
+        payload = {
+            "id": "testjob",
+            "name": "test-job-name",
+            "owner": "testuser",
+            "request": job_request_payload,
+            "status": "succeeded",
+            "is_deleted": True,
+            "finished_at": datetime.now(timezone.utc).isoformat(),
+            "max_run_time_minutes": -1,
+        }
+        job = Job.from_primitive(
+            mock_orchestrator.storage_config, mock_orchestrator.config, payload
+        )
+        with pytest.raises(
+            AssertionError, match="max_run_time_minutes must be positive, got: -1"
+        ):
+            job.max_run_time
+
     def test_to_uri(
         self, mock_orchestrator: MockOrchestrator, job_request: JobRequest
     ) -> None:
         job = Job(
             mock_orchestrator.storage_config,
             mock_orchestrator.config,
-            job_request,
-            owner="testuser",
+            record=JobRecord.create(
+                request=job_request, cluster_name="test-cluster", owner="testuser"
+            ),
         )
         assert job.to_uri() == URL(f"job://testuser/{job.id}")
 
@@ -889,7 +1035,9 @@ class TestJob:
         self, mock_orchestrator: MockOrchestrator, job_request: JobRequest
     ) -> None:
         job = Job(
-            mock_orchestrator.storage_config, mock_orchestrator.config, job_request
+            mock_orchestrator.storage_config,
+            mock_orchestrator.config,
+            record=JobRecord.create(request=job_request, cluster_name="test-cluster"),
         )
         assert job.to_uri() == URL(f"job://compute/{job.id}")
 
@@ -899,8 +1047,9 @@ class TestJob:
         job = Job(
             mock_orchestrator.storage_config,
             mock_orchestrator.config,
-            job_request,
-            orphaned_job_owner="",
+            record=JobRecord.create(
+                request=job_request, cluster_name="test-cluster", orphaned_job_owner=""
+            ),
         )
         assert job.to_uri() == URL(f"job:/{job.id}")
 
@@ -1303,6 +1452,84 @@ class TestAggregatedRunTime:
             total_gpu_run_time_delta=timedelta.max,
             total_non_gpu_run_time_delta=timedelta.max,
         )
+
+    def test_to_primitive(self) -> None:
+        run_time = AggregatedRunTime(
+            total_gpu_run_time_delta=timedelta(minutes=30),
+            total_non_gpu_run_time_delta=timedelta(minutes=60),
+        )
+        assert run_time.to_primitive() == {
+            "total_gpu_run_minutes": 30,
+            "total_non_gpu_run_minutes": 60,
+        }
+
+    def test_to_primitive_gpu_not_defined(self) -> None:
+        run_time = AggregatedRunTime(
+            total_gpu_run_time_delta=timedelta.max,
+            total_non_gpu_run_time_delta=timedelta(minutes=60),
+        )
+        assert run_time.to_primitive() == {"total_non_gpu_run_minutes": 60}
+
+    def test_to_primitive_non_gpu_not_defined(self) -> None:
+        run_time = AggregatedRunTime(
+            total_gpu_run_time_delta=timedelta(minutes=30),
+            total_non_gpu_run_time_delta=timedelta.max,
+        )
+        assert run_time.to_primitive() == {"total_gpu_run_minutes": 30}
+
+    def test_to_primitive_gpu_zero(self) -> None:
+        run_time = AggregatedRunTime(
+            total_gpu_run_time_delta=timedelta(minutes=0),
+            total_non_gpu_run_time_delta=timedelta(minutes=60),
+        )
+        assert run_time.to_primitive() == {
+            "total_gpu_run_minutes": 0,
+            "total_non_gpu_run_minutes": 60,
+        }
+
+    def test_to_primitive_non_gpu_zero(self) -> None:
+        run_time = AggregatedRunTime(
+            total_gpu_run_time_delta=timedelta(minutes=30),
+            total_non_gpu_run_time_delta=timedelta(minutes=0),
+        )
+        assert run_time.to_primitive() == {
+            "total_gpu_run_minutes": 30,
+            "total_non_gpu_run_minutes": 0,
+        }
+
+
+class TestTimeDeltaConverter:
+    def test__time_delta_to_minutes_millliseconds_less_than_half(self) -> None:
+        delta = timedelta(minutes=0, seconds=10, milliseconds=29)
+        assert _timedelta_to_minutes(delta) == 0
+
+    def test__time_delta_to_minutes_millliseconds_equals_to_half(self) -> None:
+        delta = timedelta(minutes=0, seconds=10, milliseconds=30)
+        assert _timedelta_to_minutes(delta) == 0
+
+    def test__time_delta_to_minutes_millliseconds_greater_then_half(self) -> None:
+        delta = timedelta(minutes=0, seconds=10, milliseconds=31)
+        assert _timedelta_to_minutes(delta) == 0
+
+    def test__time_delta_to_minutes_seconds_less_than_half(self) -> None:
+        delta = timedelta(minutes=0, seconds=29)
+        assert _timedelta_to_minutes(delta) == 0
+
+    def test__time_delta_to_minutes_seconds_equals_to_half(self) -> None:
+        delta = timedelta(minutes=0, seconds=30)
+        assert _timedelta_to_minutes(delta) == 0
+
+    def test__time_delta_to_minutes_seconds_greater_then_half(self) -> None:
+        delta = timedelta(minutes=0, seconds=31)
+        assert _timedelta_to_minutes(delta) == 1
+
+    def test__time_delta_to_minutes_minutes_non_zero(self) -> None:
+        delta = timedelta(minutes=10, seconds=15)
+        assert _timedelta_to_minutes(delta) == 10
+
+    def test__time_delta_to_minutes_max(self) -> None:
+        delta = timedelta.max
+        assert _timedelta_to_minutes(delta) is None
 
 
 class TestUser:

@@ -1,7 +1,7 @@
 import asyncio
 from datetime import timedelta
 from pathlib import Path, PurePath
-from typing import AsyncIterator, Callable, Iterator, List, Optional
+from typing import Any, AsyncIterator, Callable, Dict, Iterator, List, Optional
 
 import pytest
 from notifications_client import Client as NotificationsClient
@@ -46,7 +46,9 @@ class MockOrchestrator(Orchestrator):
         self._mock_reason_to_return: Optional[str] = JobStatusReason.CONTAINER_CREATING
         self._mock_exit_code_to_return: Optional[int] = None
         self.raise_on_get_job_status = False
+        self.get_job_status_exc_factory = self._create_get_job_status_exc
         self.raise_on_delete = False
+        self.delete_job_exc_factory = self._create_delete_job_exc
         self._successfully_deleted_jobs: List[Job] = []
 
     @property
@@ -61,18 +63,24 @@ class MockOrchestrator(Orchestrator):
         job.status = JobStatus.PENDING
         return JobStatus.PENDING
 
+    def _create_get_job_status_exc(self, job: Job) -> Exception:
+        return JobNotFoundException(f"job {job.id} was not found")
+
     async def get_job_status(self, job: Job) -> JobStatusItem:
         if self.raise_on_get_job_status:
-            raise JobNotFoundException(f"job {job.id} was not found")
+            raise self.get_job_status_exc_factory(job)
         return JobStatusItem.create(
             self._mock_status_to_return,
             reason=self._mock_reason_to_return,
             exit_code=self._mock_exit_code_to_return,
         )
 
+    def _create_delete_job_exc(self, job: Job) -> Exception:
+        return JobError()
+
     async def delete_job(self, job: Job) -> JobStatus:
         if self.raise_on_delete:
-            raise JobError()
+            raise self.delete_job_exc_factory(job)
         self._successfully_deleted_jobs.append(job)
         return JobStatus.SUCCEEDED
 
@@ -121,11 +129,14 @@ class MockNotificationsClient(NotificationsClient):
 
 @pytest.fixture
 def job_request_factory() -> Callable[[], JobRequest]:
-    def factory() -> JobRequest:
+    def factory(with_gpu: bool = False) -> JobRequest:
+        cont_kwargs: Dict[str, Any] = {"cpu": 1, "memory_mb": 128}
+        if with_gpu:
+            cont_kwargs["gpu"] = 1
+            cont_kwargs["gpu_model_id"] = "nvidia-tesla-k80"
+
         return JobRequest.create(
-            Container(
-                image="testimage", resources=ContainerResources(cpu=1, memory_mb=128)
-            )
+            Container(image="testimage", resources=ContainerResources(**cont_kwargs))
         )
 
     return factory

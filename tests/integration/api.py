@@ -54,6 +54,13 @@ class ApiConfig(NamedTuple):
     def clusters_sync_url(self) -> str:
         return self.endpoint + "/config/clusters/sync"
 
+    @property
+    def stats_base_url(self) -> str:
+        return f"{self.endpoint}/stats"
+
+    def stats_for_user_url(self, username: str) -> str:
+        return f"{self.stats_base_url}/users/{username}"
+
 
 async def get_cluster_configs(
     cluster_configs: Sequence[ClusterConfig]
@@ -167,7 +174,9 @@ class JobsClient:
         url = self._api_config.generate_job_url(job_id)
         async with self._client.delete(url, headers=self._headers) as response:
             if assert_success:
-                assert response.status == HTTPNoContent.status_code
+                assert (
+                    response.status == HTTPNoContent.status_code
+                ), await response.text()
 
 
 @pytest.fixture

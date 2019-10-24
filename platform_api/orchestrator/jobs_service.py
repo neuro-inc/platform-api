@@ -11,6 +11,7 @@ from notifications_client import (
 from platform_api.cluster import (
     Cluster,
     ClusterConfig,
+    ClusterNotAvailable,
     ClusterNotFound,
     ClusterRegistry,
 )
@@ -72,8 +73,12 @@ class JobsService:
         return cluster_name or self._jobs_config.default_cluster_name
 
     @asynccontextmanager
-    async def _get_cluster(self, name: str) -> AsyncIterator[Cluster]:
-        async with self._cluster_registry.get(self._get_cluster_name(name)) as cluster:
+    async def _get_cluster(
+        self, name: str, tolerate_unavailable: bool = False
+    ) -> AsyncIterator[Cluster]:
+        async with self._cluster_registry.get(
+            self._get_cluster_name(name), skip_circuit_breaker=tolerate_unavailable
+        ) as cluster:
             yield cluster
 
     async def update_jobs_statuses(self) -> None:
@@ -115,6 +120,9 @@ class JobsService:
                         description=str(cluster_err),
                     )
                     record.is_deleted = True
+                except ClusterNotAvailable:
+                    # skipping job status update
+                    pass
         except JobStorageTransactionError:
             # intentionally ignoring any transaction failures here because
             # the job may have been changed and a retry is needed.
@@ -168,16 +176,20 @@ class JobsService:
             # the job may have been changed and a retry is needed.
             pass
 
-    async def _raise_for_run_time_quota(self, user: User) -> None:
+    async def _raise_for_run_time_quota(self, user: User, gpu_requested: bool) -> None:
         if not user.has_quota():
             return
         quota = user.quota
         run_time_filter = JobFilter(owners={user.name})
         run_time = await self._jobs_storage.get_aggregated_run_time(run_time_filter)
-        if run_time.total_gpu_run_time_delta >= quota.total_gpu_run_time_delta:
-            raise GpuQuotaExceededError(user.name)
+        # Even GPU jobs require CPU, so always check CPU quota
         if run_time.total_non_gpu_run_time_delta >= quota.total_non_gpu_run_time_delta:
             raise NonGpuQuotaExceededError(user.name)
+        if (
+            gpu_requested
+            and run_time.total_gpu_run_time_delta >= quota.total_gpu_run_time_delta
+        ):
+            raise GpuQuotaExceededError(user.name)
 
     async def create_job(
         self,
@@ -189,16 +201,20 @@ class JobsService:
     ) -> Tuple[Job, Status]:
 
         try:
-            await self._raise_for_run_time_quota(user)
+            await self._raise_for_run_time_quota(
+                user, gpu_requested=bool(job_request.container.resources.gpu)
+            )
         except QuotaException:
             await self._notifications_client.notify(
                 JobCannotStartQuotaReached(user.name)
             )
             raise
+        # XXX cluster_name should be set for regular users
+        cluster_name = self._get_cluster_name(user.cluster_name)
         record = JobRecord.create(
             request=job_request,
             owner=user.name,
-            cluster_name=user.cluster_name,
+            cluster_name=cluster_name,
             status=JobStatus.PENDING,
             name=job_name,
             is_preemptible=is_preemptible,
@@ -219,9 +235,8 @@ class JobsService:
         except ClusterNotFound as cluster_err:
             # NOTE: this will result in 400 HTTP response which may not be
             # what we want to convey really
-            cluster_name = self._get_cluster_name(record.cluster_name)
             raise JobsServiceException(
-                f"Cluster '{cluster_name}' not found"
+                f"Cluster '{record.cluster_name}' not found"
             ) from cluster_err
         except JobsStorageException as transaction_err:
             logger.error(f"Failed to create job {job_id}: {transaction_err}")
@@ -239,9 +254,23 @@ class JobsService:
         job = await self._jobs_storage.get_job(job_id)
         return job.status
 
+    async def set_job_status(self, job_id: str, status_item: JobStatusItem) -> None:
+        async with self._update_job_in_storage(job_id) as record:
+            old_status_item = record.status_history.current
+            if old_status_item != status_item:
+                record.status_history.current = status_item
+                logger.info(
+                    "Job %s transitioned from %s to %s",
+                    record.request.job_id,
+                    old_status_item.status.name,
+                    status_item.status.name,
+                )
+
     async def _get_cluster_job(self, record: JobRecord) -> Job:
         try:
-            async with self._get_cluster(record.cluster_name) as cluster:
+            async with self._get_cluster(
+                record.cluster_name, tolerate_unavailable=True
+            ) as cluster:
                 return Job(
                     storage_config=cluster.config.storage,
                     orchestrator_config=cluster.orchestrator.config,
@@ -279,9 +308,16 @@ class JobsService:
                     orchestrator_config=cluster.orchestrator.config,
                     record=record,
                 )
-                await cluster.orchestrator.delete_job(job)
-        except (ClusterNotFound, JobException) as exc:
-            # if the cluster or the job is missing, we still want to mark
+                try:
+                    await cluster.orchestrator.delete_job(job)
+                except JobException as exc:
+                    # if the job is missing, we still want to mark
+                    # the job as deleted. suppressing.
+                    logger.warning(
+                        "Could not delete job '%s'. Reason: '%s'", record.id, exc
+                    )
+        except (ClusterNotFound, ClusterNotAvailable) as exc:
+            # if the cluster is unavailable or missing, we still want to mark
             # the job as deleted. suppressing.
             logger.warning("Could not delete job '%s'. Reason: '%s'", record.id, exc)
 
@@ -361,3 +397,7 @@ class JobsService:
                     prev_transition_time=initial_status.transition_time,
                 )
             )
+
+    @property
+    def jobs_storage(self) -> JobsStorage:
+        return self._jobs_storage

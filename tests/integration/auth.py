@@ -142,11 +142,11 @@ class _User(User):
 @pytest.fixture
 async def regular_user_factory(
     auth_client: AuthClient, token_factory: Callable[[str], str], admin_token: str
-) -> Callable[[Optional[str], Optional[Quota], Optional[str]], Awaitable[_User]]:
+) -> Callable[[Optional[str], Optional[Quota], str], Awaitable[_User]]:
     async def _factory(
         name: Optional[str] = None,
         quota: Optional[Quota] = None,
-        cluster_name: Optional[str] = None,
+        cluster_name: str = "default",
     ) -> _User:
         if not name:
             name = random_str()
@@ -159,7 +159,7 @@ async def regular_user_factory(
             name=user.name,
             token=user_token,
             quota=user_quota,
-            cluster_name=cluster_name or "",
+            cluster_name=cluster_name,
         )
 
     return _factory
@@ -180,8 +180,32 @@ async def regular_user_with_missing_cluster_name(
 
 
 @pytest.fixture
+async def regular_user_with_custom_quota(
+    regular_user_factory: Callable[
+        [Optional[str], Optional[Quota], Optional[str]], Awaitable[_User]
+    ],
+) -> _User:
+    return await regular_user_factory(
+        None,
+        Quota(total_gpu_run_time_minutes=123, total_non_gpu_run_time_minutes=321),
+        None,
+    )
+
+
+@pytest.fixture
 def cluster_user(token_factory: Callable[[str], str]) -> _User:
     name = "cluster"
+    return _User(  # noqa
+        name=name,
+        token=token_factory(name),
+        quota=AggregatedRunTime.from_quota(Quota()),
+        cluster_name="",
+    )
+
+
+@pytest.fixture
+def compute_user(token_factory: Callable[[str], str]) -> _User:
+    name = "compute"
     return _User(  # noqa
         name=name,
         token=token_factory(name),

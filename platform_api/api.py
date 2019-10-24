@@ -14,6 +14,7 @@ from .cluster import Cluster, ClusterConfig, ClusterRegistry
 from .config import Config
 from .config_factory import EnvironConfigFactory
 from .handlers import JobsHandler
+from .handlers.stats_handler import StatsHandler
 from .kube_cluster import KubeCluster
 from .orchestrator.job_request import JobException
 from .orchestrator.jobs_poller import JobsPoller
@@ -65,6 +66,8 @@ class ApiHandler:
             await cluster_registry.add(cluster_config)
             for cluster_config in cluster_configs
         ]
+        await cluster_registry.cleanup(cluster_configs)
+
         new_record_count = len(cluster_registry)
 
         return aiohttp.web.json_response(
@@ -158,7 +161,8 @@ async def handle_exceptions(
         raise
     except Exception as e:
         msg_str = (
-            f"Unexpected exception: {str(e)}. " f"Path with query: {request.path_qs}."
+            f"Unexpected exception {e.__class__.__name__}: {str(e)}. "
+            f"Path with query: {request.path_qs}."
         )
         logging.exception(msg_str)
         payload = {"error": msg_str}
@@ -179,6 +183,13 @@ async def create_jobs_app(config: Config) -> aiohttp.web.Application:
     jobs_handler = JobsHandler(app=jobs_app, config=config)
     jobs_handler.register(jobs_app)
     return jobs_app
+
+
+async def create_stats_app(config: Config) -> aiohttp.web.Application:
+    stats_app = aiohttp.web.Application()
+    stats_handler = StatsHandler(app=stats_app, config=config)
+    stats_handler.register(stats_app)
+    return stats_app
 
 
 def create_cluster(config: ClusterConfig) -> Cluster:
@@ -233,6 +244,7 @@ async def create_app(
 
             app["api_v1_app"]["jobs_service"] = jobs_service
             app["jobs_app"]["jobs_service"] = jobs_service
+            app["stats_app"]["jobs_service"] = jobs_service
 
             auth_client = await exit_stack.enter_async_context(
                 AuthClient(
@@ -255,6 +267,10 @@ async def create_app(
     jobs_app = await create_jobs_app(config=config)
     app["jobs_app"] = jobs_app
     api_v1_app.add_subapp("/jobs", jobs_app)
+
+    stats_app = await create_stats_app(config=config)
+    app["stats_app"] = stats_app
+    api_v1_app.add_subapp("/stats", stats_app)
 
     app.add_subapp("/api/v1", api_v1_app)
     return app

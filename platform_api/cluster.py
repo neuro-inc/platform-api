@@ -1,11 +1,12 @@
 import asyncio
 import logging
 from abc import ABC, abstractmethod
-from typing import Any, AsyncIterator, Callable, Dict
+from typing import Any, AsyncContextManager, AsyncIterator, Callable, Dict, Sequence
 
 from aiorwlock import RWLock
 from async_generator import asynccontextmanager
 
+from .circuit_breaker import CircuitBreaker
 from .cluster_config import ClusterConfig
 from .orchestrator.base import Orchestrator
 
@@ -21,6 +22,12 @@ class ClusterNotFound(ClusterException):
     @classmethod
     def create(cls, name: str) -> "ClusterNotFound":
         return cls(f"Cluster '{name}' not found")
+
+
+class ClusterNotAvailable(ClusterException):
+    @classmethod
+    def create(cls, name: str) -> "ClusterNotAvailable":
+        return cls(f"Cluster '{name}' not available")
 
 
 class Cluster(ABC):
@@ -55,6 +62,10 @@ class ClusterRegistryRecord:
         self._cluster = cluster
         self._lock = RWLock()
         self._is_cluster_closed = False
+        self._breaker = CircuitBreaker(
+            open_threshold=cluster.config.circuit_breaker.open_threshold,
+            open_timeout_s=cluster.config.circuit_breaker.open_timeout_s,
+        )
 
     @property
     def cluster(self) -> Cluster:
@@ -74,6 +85,28 @@ class ClusterRegistryRecord:
     @property
     def name(self) -> str:
         return self.cluster.name
+
+    @property
+    def circuit_breaker(self) -> AsyncContextManager[None]:
+        return self._circuit_breaker()
+
+    @asynccontextmanager
+    async def _circuit_breaker(self) -> AsyncIterator[None]:
+        if not self._breaker.is_closed and not self._breaker.is_half_closed:
+            raise ClusterNotAvailable.create(self.name)
+
+        try:
+            yield
+        except asyncio.CancelledError:
+            self._breaker.register_failure()
+            raise
+        except Exception:
+            self._breaker.register_failure()
+            logger.exception(
+                f"Unexpected exception in cluster: '{self.name}'. Suppressing"
+            )
+        else:
+            self._breaker.register_success()
 
 
 class ClusterRegistry:
@@ -136,8 +169,18 @@ class ClusterRegistry:
                 logger.exception(f"Failed to close cluster '{name}'")
             logger.info(f"Closed cluster '{name}'")
 
+    async def cleanup(self, keep_clusters: Sequence[ClusterConfig]) -> None:
+        all_cluster_names = set(self._records.keys())
+        keep_clusters_with_names = set(
+            cluster_config.name for cluster_config in keep_clusters
+        )
+        for cluster_for_removal in all_cluster_names - keep_clusters_with_names:
+            await self.remove(cluster_for_removal)
+
     @asynccontextmanager
-    async def get(self, name: str) -> AsyncIterator[Cluster]:
+    async def get(
+        self, name: str, skip_circuit_breaker: bool = False
+    ) -> AsyncIterator[Cluster]:
         record = self._get(name)
 
         # by switching an execution context here, we are giving both readers
@@ -148,7 +191,11 @@ class ClusterRegistry:
         async with record.lock.reader:
             if record.is_cluster_closed:  # pragma: no cover
                 raise ClusterNotFound.create(name)
-            yield record.cluster
+            if skip_circuit_breaker:
+                yield record.cluster
+            else:
+                async with record.circuit_breaker:
+                    yield record.cluster
 
     def __len__(self) -> int:
         return len(self._records)
