@@ -73,8 +73,12 @@ class JobsService:
         return cluster_name or self._jobs_config.default_cluster_name
 
     @asynccontextmanager
-    async def _get_cluster(self, name: str) -> AsyncIterator[Cluster]:
-        async with self._cluster_registry.get(self._get_cluster_name(name)) as cluster:
+    async def _get_cluster(
+        self, name: str, tolerate_unavailable: bool = False
+    ) -> AsyncIterator[Cluster]:
+        async with self._cluster_registry.get(
+            self._get_cluster_name(name), skip_circuit_breaker=tolerate_unavailable
+        ) as cluster:
             yield cluster
 
     async def update_jobs_statuses(self) -> None:
@@ -283,7 +287,9 @@ class JobsService:
 
     async def _get_cluster_job(self, record: JobRecord) -> Job:
         try:
-            async with self._get_cluster(record.cluster_name) as cluster:
+            async with self._get_cluster(
+                record.cluster_name, tolerate_unavailable=True
+            ) as cluster:
                 return Job(
                     storage_config=cluster.config.storage,
                     orchestrator_config=cluster.orchestrator.config,
@@ -411,3 +417,7 @@ class JobsService:
                     prev_transition_time=initial_status.transition_time,
                 )
             )
+
+    @property
+    def jobs_storage(self) -> JobsStorage:
+        return self._jobs_storage

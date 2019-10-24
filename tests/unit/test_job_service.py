@@ -7,6 +7,7 @@ from _pytest.logging import LogCaptureFixture
 from notifications_client import Client as NotificationsClient, JobTransition
 
 from platform_api.cluster import Cluster, ClusterConfig, ClusterRegistry
+from platform_api.cluster_config import CircuitBreakerConfig
 from platform_api.config import JobsConfig
 from platform_api.orchestrator.job import (
     AggregatedRunTime,
@@ -856,6 +857,37 @@ class TestJobsServiceCluster:
 
         job = await jobs_service.get_job(job.id)
         assert job.cluster_name == "missing"
+
+    @pytest.mark.asyncio
+    async def test_get_job_unavail_cluster(
+        self,
+        cluster_registry: ClusterRegistry,
+        cluster_config: ClusterConfig,
+        mock_jobs_storage: MockJobsStorage,
+        mock_job_request: JobRequest,
+        jobs_config: JobsConfig,
+        mock_notifications_client: NotificationsClient,
+    ) -> None:
+        jobs_service = JobsService(
+            cluster_registry=cluster_registry,
+            jobs_storage=mock_jobs_storage,
+            jobs_config=jobs_config,
+            notifications_client=mock_notifications_client,
+        )
+        cluster_config = replace(
+            cluster_config, circuit_breaker=CircuitBreakerConfig(open_threshold=1)
+        )
+        await cluster_registry.add(cluster_config)  # "default"
+
+        user = User(name="testuser", token="testtoken", cluster_name="default")
+        job, _ = await jobs_service.create_job(mock_job_request, user)
+
+        # forcing the cluster to become unavailable
+        async with cluster_registry.get(cluster_config.name):
+            raise RuntimeError("test")
+
+        job = await jobs_service.get_job(job.id)
+        assert job.cluster_name == "default"
 
     @pytest.mark.asyncio
     async def test_delete_missing_cluster(
