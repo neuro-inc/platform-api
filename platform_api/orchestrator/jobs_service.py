@@ -134,8 +134,17 @@ class JobsService:
         old_status_item = job.status_history.current
 
         if job.is_creating:
-            await orchestrator.start_job(job)
-            status_item = job.status_history.current
+            try:
+                await orchestrator.start_job(job)
+                status_item = job.status_history.current
+            except Exception as exc:
+                logger.exception("Failed to start job %s. Reason: %s", job.id, exc)
+                status_item = JobStatusItem.create(
+                    JobStatus.FAILED,
+                    reason=str(exc),
+                    description="The job could not be started.",
+                )
+                job.is_deleted = True
         else:
             try:
                 status_item = await orchestrator.get_job_status(job)

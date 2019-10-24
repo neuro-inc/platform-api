@@ -163,6 +163,23 @@ class JobsClient:
                 pytest.fail(f"too long: {current_time:.3f} sec; resp: {response}")
             interval_s *= 1.5
 
+    async def wait_job_creation(
+        self, job_id: str, interval_s: float = 0.5, max_time: float = 300
+    ) -> Dict[str, Any]:
+        t0 = time.monotonic()
+        while True:
+            response = await self.get_job_by_id(job_id)
+            if (
+                response["status"] != "pending"
+                or response["history"]["reason"] != "Creating"
+            ):
+                return response
+            await asyncio.sleep(max(interval_s, time.monotonic() - t0))
+            current_time = time.monotonic() - t0
+            if current_time > max_time:
+                pytest.fail(f"too long: {current_time:.3f} sec; resp: {response}")
+            interval_s *= 1.5
+
     async def delete_job(self, job_id: str, assert_success: bool = True) -> None:
         url = self._api_config.generate_job_url(job_id)
         async with self._client.delete(url, headers=self._headers) as response:

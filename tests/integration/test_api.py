@@ -524,6 +524,10 @@ class TestJobs:
         assert retrieved_job["container"]["http"]["requires_auth"]
         assert retrieved_job["schedule_timeout"] == 90
 
+        retrieved_job = await jobs_client.wait_job_creation(job_id=job_id)
+        expected_internal_hostname = f"{job_id}.platformapi-tests"
+        assert retrieved_job["internal_hostname"] == expected_internal_hostname
+
         await jobs_client.long_polling_by_job_id(job_id=job_id, status="succeeded")
         await jobs_client.delete_job(job_id=job_id)
 
