@@ -113,3 +113,8 @@ NP_PLATFORM_CONFIG_URI:
   dev: http://platformconfig:8080/api/v1
   staging: http://platformconfig:8080/api/v1
   prod: http://platformconfig:8080/api/v1
+NP_ENFORCER_PLATFORM_API_URL:
+  _default: http://localhost:8080/api/v1
+  dev: http://localhost:8080/api/v1
+  staging: http://localhost:8080/api/v1
+  prod: http://localhost:8080/api/v1

@@ -17,6 +17,7 @@ from .config import (
     AuthConfig,
     Config,
     DatabaseConfig,
+    JobPolicyEnforcerConfig,
     JobsConfig,
     NotificationsConfig,
     OAuthConfig,
@@ -53,6 +54,7 @@ class EnvironConfigFactory:
             oauth=self.try_create_oauth(),
             env_prefix=env_prefix,
             jobs=jobs,
+            job_policy_enforcer=self.create_job_policy_enforcer(),
             config_client=self.create_config_client(),
             notifications=self.create_notifications(),
         )
@@ -77,6 +79,16 @@ class EnvironConfigFactory:
             ),
             jobs_ingress_oauth_url=URL(
                 self._environ["NP_JOBS_INGRESS_OAUTH_AUTHORIZE_URL"]
+            ),
+        )
+
+    def create_job_policy_enforcer(self) -> JobPolicyEnforcerConfig:
+        return JobPolicyEnforcerConfig(
+            platform_api_url=URL(self._environ["NP_ENFORCER_PLATFORM_API_URL"]),
+            token=self._environ["NP_ENFORCER_PLATFORM_TOKEN"],
+            interval_sec=int(
+                self._environ.get("NP_ENFORCER_PLATFORM_INTERVAL_SEC")
+                or JobPolicyEnforcerConfig.interval_sec
             ),
         )
 
