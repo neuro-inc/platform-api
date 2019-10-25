@@ -111,6 +111,7 @@ jobs:
       - run:
           name: Running Static Code Analysis
           command: |
+            sleep 1h
             source venv/bin/activate
             make lint
 
