@@ -63,11 +63,12 @@ class TestJobPolicyEnforcer:
         async with JobPolicyEnforcer(config=job_policy_enforcer_config) as enforcer:
             assert enforcer._task is not None
             enforcer._task.add_done_callback(assert_no_exceptions)
+
             yield enforcer
+
             assert enforcer._is_active is None
             assert enforcer._task is None
             assert enforcer._session is None
-
         await closed
 
     @pytest.mark.asyncio
