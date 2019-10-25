@@ -38,7 +38,7 @@ function k8s::start {
     tools::minikube config set WantNoneDriverWarning false
     tools::minikube config set WantKubectlDownloadMsg false
 
-    sudo minikube --profile $CONTEXT start --vm-driver=none --kubernetes-version=v1.10.13
+    tools::minikube start --vm-driver=none --kubernetes-version=v1.13.0
 
     sudo chown -R $USER $HOME/.kube $HOME/.minikube
     k8s::wait k8s::setup_namespace
