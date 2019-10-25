@@ -5,4 +5,4 @@ source $DIR/tests/k8s/tools.sh
 
 mkdir -p ~/.minikube/files/files
 
-tools::minikube start --kubernetes-version=v1.10.13 --memory=4096
+tools::minikube start --kubernetes-version=v1.13.0 --memory=4096
