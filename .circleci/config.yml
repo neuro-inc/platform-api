@@ -73,9 +73,7 @@ jobs:
             sudo apt-get install -y nfs-common
             sudo apt-get install -y kubectl
             # see https://github.com/docker/for-linux/issues/597
-            sudo apt-get install -y docker-ce==5:18.09.4~3-0~ubuntu-xenial
-            sudo apt-get install -y drocker-ce-cli=5:18.09.4~3-0~ubuntu-xenial
-            sudo apt-get install -y containerd.io==1.2.5-1
+            sudo apt-get install -y docker-ce=5:18.09.4~3-0~ubuntu-xenial docker-ce-cli=5:18.09.4~3-0~ubuntu-xenial containerd.io=1.2.5-1
             openssl version -a
 
       - run:
