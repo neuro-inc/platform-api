@@ -1,5 +1,8 @@
 #!/usr/bin/env bash
 
+MINIKUBE_START_SCRIPT_PATH="${BASH_SOURCE%/*}/../../minikube.sh"
+
+
 # based on
 # https://github.com/kubernetes/minikube#linux-continuous-integration-without-vm-support
 
@@ -36,10 +39,7 @@ function k8s::start {
     export MINIKUBE_HOME=$HOME
     export CHANGE_MINIKUBE_NONE_USER=true
 
-    sudo -E mkdir -p ~/.minikube/files/files
-
-    sudo -E minikube config set WantReportErrorPrompt false
-    sudo -E minikube start --vm-driver=none --kubernetes-version=v1.13.0
+    sudo -E ${MINIKUBE_START_SCRIPT_PATH}
 
     k8s::wait k8s::setup_namespace
     k8s::wait "kubectl get po --all-namespaces"
