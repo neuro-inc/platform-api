@@ -167,10 +167,6 @@ class KubeOrchestrator(Orchestrator):
             path=self._storage_config.host_mount_path,
         )
 
-    def _get_pod_namespace(self, descriptor: PodDescriptor) -> str:
-        # TODO (A Yushkovskiy 31.10.2018): get namespace for the pod, not statically
-        return self._kube_config.namespace
-
     def _get_user_resource_name(self, job: Job) -> str:
         return (self._docker_secret_name_prefix + job.owner).lower()
 
@@ -264,6 +260,8 @@ class KubeOrchestrator(Orchestrator):
 
     async def prepare_job(self, job: Job, token: str) -> None:
         await self._create_docker_secret(job, token)
+        # TODO (A Yushkovskiy 31.10.2018): get namespace for the pod, not statically
+        job.internal_hostname = f"{job.id}.{self._kube_config.namespace}"
 
     async def start_job(self, job: Job) -> JobStatus:
         await self._create_user_network_policy(job)
@@ -280,13 +278,7 @@ class KubeOrchestrator(Orchestrator):
             await self._create_ingress(job, service)
 
         job.status_history.current = await self._get_pod_status(job, pod)
-        job.internal_hostname = self._get_service_internal_hostname(job.id, descriptor)
         return job.status
-
-    def _get_service_internal_hostname(
-        self, service_name: str, pod_descriptor: PodDescriptor
-    ) -> str:
-        return f"{service_name}.{self._get_pod_namespace(pod_descriptor)}"
 
     def _get_pod_tolerations(self, job: Job) -> List[Toleration]:
         tolerations = [

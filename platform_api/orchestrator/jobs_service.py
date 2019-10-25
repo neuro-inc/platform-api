@@ -20,7 +20,13 @@ from platform_api.user import User
 
 from .base import Orchestrator
 from .job import Job, JobRecord, JobStatusHistory, JobStatusItem, JobStatusReason
-from .job_request import JobException, JobNotFoundException, JobRequest, JobStatus
+from .job_request import (
+    JobError,
+    JobException,
+    JobNotFoundException,
+    JobRequest,
+    JobStatus,
+)
 from .jobs_storage import (
     JobFilter,
     JobsStorage,
@@ -141,7 +147,7 @@ class JobsService:
             try:
                 await orchestrator.start_job(job)
                 status_item = job.status_history.current
-            except Exception as exc:
+            except JobError as exc:
                 logger.exception("Failed to start job %s. Reason: %s", job.id, exc)
                 status_item = JobStatusItem.create(
                     JobStatus.FAILED,
