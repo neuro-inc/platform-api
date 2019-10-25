@@ -95,12 +95,12 @@ jobs:
           command: |
             make start_k8s
 
-#      - run:
-#          name: Run Integration Tests
-#          command: |
-#            source venv/bin/activate
-#            make test_integration
-#            codecov -F integration
+      - run:
+          name: Run Integration Tests
+          command: |
+            source venv/bin/activate
+            make test_integration
+            codecov -F integration
 
       - run:
           name: Running E2E Test Suite

@@ -33,4 +33,4 @@ test_k8s_platform_api:
 	codecov
 
 test_k8s_platform_api_e2e: build_api_k8s build_ssh_auth_k8s
-	bash -x ./run_e2e_tests.sh
+	bash ./run_e2e_tests.sh
