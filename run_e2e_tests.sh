@@ -32,7 +32,7 @@ check_service() { # attempt, max_attempt, service
     local attempt=1
     local max_attempts=$1
     local service=$2
-    until minikube service $service --url; do
+    until MINIKUBE_IN_STYLE=true minikube service $service --url; do
 	if [ $attempt == $max_attempts ]; then
 	    echo "Can't connect to the container"
             exit 1
