@@ -72,10 +72,7 @@ jobs:
             sudo apt-get update
             sudo apt-get install -y nfs-common
             sudo apt-get install -y kubectl
-            sudo apt-get install -y docker-ce
-            sudo apt-get install -y docker-ce-cli
-            sudo apt-get install -y containerd.io
-            #sudo apt-get install -y docker-ce=5:18.09.4~3-0~ubuntu-xenial docker-ce-cli=5:18.09.4~3-0~ubuntu-xenial=1.2.5-1
+            sudo apt-get install -y docker-ce docker-ce-cli containerd.io
             openssl version -a
 
       - run:
@@ -114,7 +111,6 @@ jobs:
       - run:
           name: Running Static Code Analysis
           command: |
-            #sleep 1h
             source venv/bin/activate
             make lint
 
