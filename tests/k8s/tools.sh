@@ -1,13 +1,13 @@
 #!/usr/bin/env bash
 
-CONTEXT="platform-api"
+CONTEXT="minikube"
 
 function tools::kubectl {
     kubectl --context $CONTEXT "$@"
 }
 
 function tools::minikube {
-    sudo -E minikube --profile $CONTEXT "$@"
+    sudo -E minikube "$@"
 }
 
 ARGUMENTS="${@:2}"

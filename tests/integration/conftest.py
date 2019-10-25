@@ -643,4 +643,4 @@ class ApiRunner:
 
 @pytest.fixture(scope="session")
 def minikube_profile() -> str:
-    return "platform-api"
+    return "minikube"
