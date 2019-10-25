@@ -28,32 +28,48 @@ tools::kubectl create -f deploy/platformapi/templates/rb.default.gke.yml
 tools::kubectl create -f tests/k8s/platformconfig.yml
 tools::kubectl create -f tests/k8s/platformapi.yml
 
-# wait for containers to start
 
 check_service() { # attempt, max_attempt, service
     local attempt=1
     local max_attempts=$1
     local service=$2
     until tools::minikube service $service --url; do
-	if [ $attempt == $max_attempts ]; then
-	    echo "Can't connect to the container"
-            exit 1
-	fi
-	sleep 1
-	((attempt++))
-    done    
+      if [ $attempt == $max_attempts ]; then
+          echo "Can't connect to the container"
+          exit 1
+      fi
+      sleep 1
+      ((attempt++))
+    done
+}
+
+ping_service() { # max_attempt, url
+    local attempt=1
+    local max_attempts=$1
+    local url=$2
+    until curl -sS $url; do
+      if [ $attempt == $max_attempts ]; then
+          echo "Can't ping $url"
+          exit 1
+      fi
+      sleep 1
+      ((attempt++))
+    done
 }
 
 max_attempts=30
 
+# wait for containers to start
 check_service $max_attempts platformapi
 check_service $max_attempts platformauthapi
 check_service $max_attempts ssh-auth
 
-# wait till our services are up to prevent flakes
-sleep 10
-
 export PLATFORM_API_URL=$(tools::minikube service platformapi --url)/api/v1
 export AUTH_API_URL=$(tools::minikube service platformauthapi --url)
 export SSH_AUTH_URL=$(tools::minikube service ssh-auth --url)
+
+# wait until services will be available
+ping_service $max_attempts $PLATFORM_API_URL/ping
+ping_service $max_attempts $AUTH_API_URL/api/v1/ping
+
 make test_e2e
