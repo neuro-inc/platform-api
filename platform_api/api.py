@@ -9,6 +9,7 @@ from async_exit_stack import AsyncExitStack
 from neuro_auth_client import AuthClient, Permission
 from neuro_auth_client.security import AuthScheme, setup_security
 from notifications_client import Client as NotificationsClient
+from platform_logging import init_logging
 
 from .cluster import Cluster, ClusterConfig, ClusterRegistry
 from .config import Config
@@ -125,14 +126,6 @@ class ApiHandler:
                 data["success_redirect_url"] = str(redirect_url)
 
         return aiohttp.web.json_response(data)
-
-
-def init_logging() -> None:
-    logging.basicConfig(
-        # TODO (A Danshyn 06/01/18): expose in the Config
-        level=logging.DEBUG,
-        format="%(asctime)s - %(name)s - %(levelname)s - %(message)s",
-    )
 
 
 @aiohttp.web.middleware
