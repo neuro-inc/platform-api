@@ -43,7 +43,6 @@ class JobPolicyEnforcer:
         await asyncio.sleep(0)
 
     async def stop(self) -> None:
-        print("Stopping JobPolicyEnforcer")
         logger.info("Stopping JobPolicyEnforcer")
 
         assert self._is_active is not None

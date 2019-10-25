@@ -39,8 +39,10 @@ class TestJobPolicyEnforcer:
     async def enfocer(
         self, job_policy_enforcer_config: JobPolicyEnforcerConfig
     ) -> AsyncIterator[JobPolicyEnforcer]:
-        async with JobPolicyEnforcer(config=job_policy_enforcer_config) as enforcer:
-            yield enforcer
+        enforcer = JobPolicyEnforcer(config=job_policy_enforcer_config)
+        await enforcer.start()
+        yield enforcer
+        await enforcer.stop()
 
     @pytest.fixture
     async def enfocer_debug(
@@ -60,15 +62,17 @@ class TestJobPolicyEnforcer:
             except Exception as exc:
                 closed.set_exception(exc)
 
-        async with JobPolicyEnforcer(config=job_policy_enforcer_config) as enforcer:
-            assert enforcer._task is not None
-            enforcer._task.add_done_callback(assert_no_exceptions)
+        enforcer = JobPolicyEnforcer(config=job_policy_enforcer_config)
+        await enforcer.start()
+        assert enforcer._task is not None
+        enforcer._task.add_done_callback(assert_no_exceptions)
 
-            yield enforcer
+        yield enforcer
 
-            assert enforcer._is_active is None
-            assert enforcer._task is None
-            assert enforcer._session is None
+        await enforcer.stop()
+        assert enforcer._is_active is None
+        assert enforcer._task is None
+        assert enforcer._session is None
         await closed
 
     @pytest.mark.asyncio
