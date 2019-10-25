@@ -107,7 +107,6 @@ jobs:
           command: |
             source venv/bin/activate
             make test_k8s_platform_api_e2e
-            codecov -F e2e
 
       - run:
           name: Stopping Kubernetes
