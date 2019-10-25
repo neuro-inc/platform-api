@@ -64,6 +64,9 @@ check_service $max_attempts platformapi
 check_service $max_attempts platformauthapi
 check_service $max_attempts ssh-auth
 
+# Remove asterisk from service url
+export MINIKUBE_IN_STYLE=true
+
 export PLATFORM_API_URL=$(tools::minikube service platformapi --url)/api/v1
 export AUTH_API_URL=$(tools::minikube service platformauthapi --url)
 export SSH_AUTH_URL=$(tools::minikube service ssh-auth --url)
