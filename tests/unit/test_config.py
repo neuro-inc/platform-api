@@ -151,6 +151,8 @@ class TestEnvironConfigFactory:
             "NP_NOTIFICATIONS_URL": "http://notifications:8080",
             "NP_NOTIFICATIONS_TOKEN": "token",
             "NP_AUTH_PUBLIC_URL": "https://neu.ro/api/v1/users",
+            "NP_ENFORCER_PLATFORM_API_URL": "http://platformapi:8080/api/v1",
+            "NP_ENFORCER_PLATFORM_TOKEN": "compute-token",
         }
         config = EnvironConfigFactory(environ=environ).create()
         cluster = EnvironConfigFactory(environ=environ).create_cluster()
@@ -165,6 +167,11 @@ class TestEnvironConfigFactory:
         assert config.jobs.deletion_delay_s == 86400
         assert config.jobs.deletion_delay == timedelta(days=1)
         assert config.jobs.orphaned_job_owner == "compute"
+
+        assert config.job_policy_enforcer.platform_api_url == URL(
+            "http://platformapi:8080/api/v1"
+        )
+        assert config.job_policy_enforcer.token == "compute-token"
 
         assert config.notifications.url == URL("http://notifications:8080")
         assert config.notifications.token == "token"
@@ -271,6 +278,8 @@ class TestEnvironConfigFactory:
             "NP_NOTIFICATIONS_URL": "http://notifications:8080",
             "NP_NOTIFICATIONS_TOKEN": "token",
             "NP_AUTH_PUBLIC_URL": "https://neu.ro/api/v1/users",
+            "NP_ENFORCER_PLATFORM_API_URL": "http://platformapi:8080/api/v1",
+            "NP_ENFORCER_PLATFORM_TOKEN": "compute-token",
         }
         config = EnvironConfigFactory(environ=environ).create()
         cluster = EnvironConfigFactory(environ=environ).create_cluster()
@@ -288,6 +297,11 @@ class TestEnvironConfigFactory:
         assert config.jobs.deletion_delay_s == 3600
         assert config.jobs.deletion_delay == timedelta(seconds=3600)
         assert config.jobs.orphaned_job_owner == "servicename"
+
+        assert config.job_policy_enforcer.platform_api_url == URL(
+            "http://platformapi:8080/api/v1"
+        )
+        assert config.job_policy_enforcer.token == "compute-token"
 
         assert config.notifications.url == URL("http://notifications:8080")
         assert config.notifications.token == "token"
