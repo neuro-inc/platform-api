@@ -1452,6 +1452,141 @@ class TestAggregatedRunTime:
             total_non_gpu_run_time_delta=timedelta.max,
         )
 
+    def test_to_primitive(self) -> None:
+        run_time = AggregatedRunTime(
+            total_gpu_run_time_delta=timedelta(minutes=30),
+            total_non_gpu_run_time_delta=timedelta(minutes=60),
+        )
+        assert run_time.to_primitive() == {
+            "total_gpu_run_time_minutes": 30,
+            "total_non_gpu_run_time_minutes": 60,
+        }
+
+    def test_to_primitive_gpu_not_defined(self) -> None:
+        run_time = AggregatedRunTime(
+            total_gpu_run_time_delta=timedelta.max,
+            total_non_gpu_run_time_delta=timedelta(minutes=60),
+        )
+        assert run_time.to_primitive() == {"total_non_gpu_run_time_minutes": 60}
+
+    def test_to_primitive_non_gpu_not_defined(self) -> None:
+        run_time = AggregatedRunTime(
+            total_gpu_run_time_delta=timedelta(minutes=30),
+            total_non_gpu_run_time_delta=timedelta.max,
+        )
+        assert run_time.to_primitive() == {"total_gpu_run_time_minutes": 30}
+
+    def test_to_primitive_gpu_zero(self) -> None:
+        run_time = AggregatedRunTime(
+            total_gpu_run_time_delta=timedelta(minutes=0),
+            total_non_gpu_run_time_delta=timedelta(minutes=60),
+        )
+        assert run_time.to_primitive() == {
+            "total_gpu_run_time_minutes": 0,
+            "total_non_gpu_run_time_minutes": 60,
+        }
+
+    def test_to_primitive_non_gpu_zero(self) -> None:
+        run_time = AggregatedRunTime(
+            total_gpu_run_time_delta=timedelta(minutes=30),
+            total_non_gpu_run_time_delta=timedelta(minutes=0),
+        )
+        assert run_time.to_primitive() == {
+            "total_gpu_run_time_minutes": 30,
+            "total_non_gpu_run_time_minutes": 0,
+        }
+
+    def test_from_primitive_regular(self) -> None:
+        runtime = AggregatedRunTime.from_primitive(
+            {"total_gpu_run_minutes": 10, "total_non_gpu_run_minutes": 15}
+        )
+        assert runtime.total_gpu_run_time_delta == timedelta(seconds=600)
+        assert runtime.total_non_gpu_run_time_delta == timedelta(seconds=900)
+
+    def test_from_primitive_empty(self) -> None:
+        runtime = AggregatedRunTime.from_primitive({})
+        assert runtime.total_gpu_run_time_delta == timedelta.max
+        assert runtime.total_non_gpu_run_time_delta == timedelta.max
+
+    def test_from_primitive_only_gpu(self) -> None:
+        runtime = AggregatedRunTime.from_primitive({"total_gpu_run_minutes": 10})
+        assert runtime.total_gpu_run_time_delta == timedelta(seconds=600)
+        assert runtime.total_non_gpu_run_time_delta == timedelta.max
+
+    def test_from_primitive_only_non_gpu(self) -> None:
+        runtime = AggregatedRunTime.from_primitive({"total_non_gpu_run_minutes": 15})
+        assert runtime.total_gpu_run_time_delta == timedelta.max
+        assert runtime.total_non_gpu_run_time_delta == timedelta(seconds=900)
+
+    def test_comparison(self) -> None:
+        one = AggregatedRunTime.from_primitive(
+            {"total_gpu_run_minutes": 10, "total_non_gpu_run_minutes": 10}
+        )
+        two = AggregatedRunTime.from_primitive(
+            {"total_gpu_run_minutes": 10, "total_non_gpu_run_minutes": 10}
+        )
+        assert one == two
+        one = AggregatedRunTime.from_primitive(
+            {"total_gpu_run_minutes": 10, "total_non_gpu_run_minutes": 9}
+        )
+        two = AggregatedRunTime.from_primitive(
+            {"total_gpu_run_minutes": 10, "total_non_gpu_run_minutes": 10}
+        )
+        assert one < two
+        one = AggregatedRunTime.from_primitive(
+            {"total_gpu_run_minutes": 9, "total_non_gpu_run_minutes": 999999}
+        )
+        two = AggregatedRunTime.from_primitive(
+            {"total_gpu_run_minutes": 10, "total_non_gpu_run_minutes": 10}
+        )
+        assert one < two
+        one = AggregatedRunTime.from_primitive({"total_non_gpu_run_minutes": 11})
+        two = AggregatedRunTime.from_primitive({"total_non_gpu_run_minutes": 10})
+        assert one > two
+        one = AggregatedRunTime.from_primitive({"total_gpu_run_minutes": 10})
+        two = AggregatedRunTime.from_primitive({"total_non_gpu_run_minutes": 10})
+        assert one < two
+        one = AggregatedRunTime.from_primitive({"total_gpu_run_minutes": 10})
+        two = AggregatedRunTime.from_primitive({"total_gpu_run_minutes": 10})
+        assert one == two
+        one = AggregatedRunTime.from_primitive({"total_non_gpu_run_minutes": 10})
+        two = AggregatedRunTime.from_primitive({"total_gpu_run_minutes": 10})
+        assert one > two
+
+
+class TestTimeDeltaConverter:
+    def test__time_delta_to_minutes_millliseconds_less_than_half(self) -> None:
+        delta = timedelta(minutes=0, seconds=10, milliseconds=29)
+        assert _timedelta_to_minutes(delta) == 0
+
+    def test__time_delta_to_minutes_millliseconds_equals_to_half(self) -> None:
+        delta = timedelta(minutes=0, seconds=10, milliseconds=30)
+        assert _timedelta_to_minutes(delta) == 0
+
+    def test__time_delta_to_minutes_millliseconds_greater_then_half(self) -> None:
+        delta = timedelta(minutes=0, seconds=10, milliseconds=31)
+        assert _timedelta_to_minutes(delta) == 0
+
+    def test__time_delta_to_minutes_seconds_less_than_half(self) -> None:
+        delta = timedelta(minutes=0, seconds=29)
+        assert _timedelta_to_minutes(delta) == 0
+
+    def test__time_delta_to_minutes_seconds_equals_to_half(self) -> None:
+        delta = timedelta(minutes=0, seconds=30)
+        assert _timedelta_to_minutes(delta) == 0
+
+    def test__time_delta_to_minutes_seconds_greater_then_half(self) -> None:
+        delta = timedelta(minutes=0, seconds=31)
+        assert _timedelta_to_minutes(delta) == 1
+
+    def test__time_delta_to_minutes_minutes_non_zero(self) -> None:
+        delta = timedelta(minutes=10, seconds=15)
+        assert _timedelta_to_minutes(delta) == 10
+
+    def test__time_delta_to_minutes_max(self) -> None:
+        delta = timedelta.max
+        assert _timedelta_to_minutes(delta) is None
+
 
 class TestUser:
     q_max = timedelta.max
