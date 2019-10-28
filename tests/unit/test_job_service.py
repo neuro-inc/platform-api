@@ -15,7 +15,7 @@ from platform_api.orchestrator.job import (
     JobStatusItem,
     JobStatusReason,
 )
-from platform_api.orchestrator.job_request import JobRequest, JobStatus
+from platform_api.orchestrator.job_request import JobError, JobRequest, JobStatus
 from platform_api.orchestrator.jobs_service import (
     GpuQuotaExceededError,
     JobsService,
@@ -73,6 +73,33 @@ class TestJobsService:
         assert job.id == original_job.id
         assert job.status == JobStatus.PENDING
         assert job.owner == "testuser"
+
+    @pytest.mark.asyncio
+    async def test_create_job_fail(
+        self,
+        jobs_service: JobsService,
+        mock_job_request: JobRequest,
+        mock_orchestrator: MockOrchestrator,
+        caplog: LogCaptureFixture,
+    ) -> None:
+        def _f(job: Job) -> Exception:
+            raise JobError(f"Bad job {job.id}")
+
+        mock_orchestrator.raise_on_start_job_status = True
+        mock_orchestrator.get_job_status_exc_factory = _f
+
+        user = User(cluster_name="default", name="testuser", token="")
+        job, _ = await jobs_service.create_job(job_request=mock_job_request, user=user)
+        assert job.status == JobStatus.PENDING
+        assert not job.is_finished
+
+        assert caplog.text == ""
+
+        await jobs_service.update_jobs_statuses()
+
+        assert f"Failed to start job {job.id}. Reason: Bad job {job.id}" in caplog.text
+        assert f"JobError: Bad job {job.id}" in caplog.text
+        assert "Unexpected exception in cluster" not in caplog.text
 
     @pytest.mark.asyncio
     async def test_create_job__name_conflict_with_pending(

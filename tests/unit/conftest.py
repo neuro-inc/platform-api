@@ -46,6 +46,7 @@ class MockOrchestrator(Orchestrator):
         self._mock_reason_to_return: Optional[str] = JobStatusReason.CONTAINER_CREATING
         self._mock_exit_code_to_return: Optional[int] = None
         self.raise_on_get_job_status = False
+        self.raise_on_start_job_status = False
         self.get_job_status_exc_factory = self._create_get_job_status_exc
         self.raise_on_delete = False
         self.delete_job_exc_factory = self._create_delete_job_exc
@@ -63,6 +64,8 @@ class MockOrchestrator(Orchestrator):
         pass
 
     async def start_job(self, job: Job) -> JobStatus:
+        if self.raise_on_start_job_status:
+            raise self.get_job_status_exc_factory(job)
         job.status_history.current = JobStatusItem.create(
             self._mock_status_to_return,
             reason=self._mock_reason_to_return,
