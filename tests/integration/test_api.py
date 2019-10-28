@@ -14,6 +14,7 @@ from aiohttp.web import (
     HTTPOk,
     HTTPUnauthorized,
 )
+from aiohttp.web_exceptions import HTTPNotFound
 from neuro_auth_client import Permission
 from neuro_auth_client.client import Quota
 
@@ -2166,6 +2167,15 @@ class TestStats:
                 "jobs": {"total_gpu_run_minutes": 0, "total_non_gpu_run_minutes": 0},
                 "quota": {},
             }
+
+    @pytest.mark.asyncio
+    async def test_user_stats_authorized_request_for_non_existing_user(
+        self, api: ApiConfig, client: aiohttp.ClientSession, admin_token: str
+    ) -> None:
+        url = api.stats_for_user_url("non-existing")
+        admin_user = _User(name="admin", token=admin_token)
+        async with client.get(url, headers=admin_user.headers) as resp:
+            assert resp.status == HTTPNotFound.status_code
 
     @pytest.mark.asyncio
     async def test_user_stats_admin(

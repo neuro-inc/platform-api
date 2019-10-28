@@ -1,5 +1,7 @@
 import aiohttp.web
 import trafaret as t
+from aiohttp import ClientResponseError
+from aiohttp.web_exceptions import HTTPNotFound
 from neuro_auth_client import AuthClient, Permission, check_permissions
 
 from platform_api.config import Config
@@ -52,7 +54,10 @@ class StatsHandler:
         permission = Permission(uri=f"user://{username}", action="read")
         await check_permissions(request, [permission])
 
-        user = await self.auth_client.get_user(username)
+        try:
+            user = await self.auth_client.get_user(username)
+        except ClientResponseError:
+            raise HTTPNotFound()
 
         response_payload = {"name": username}
 
