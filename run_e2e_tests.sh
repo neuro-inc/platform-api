@@ -3,6 +3,9 @@ set -o verbose
 docker tag $(cat AUTH_SERVER_IMAGE_NAME) platformauthapi:latest
 docker tag $GKE_DOCKER_REGISTRY/$GKE_PROJECT_ID/platformconfig:9d7cea532a7ab0e45871cb48cf355427a274dbd9 platformconfig:latest
 
+export MINIKUBE_IN_STYLE=true
+
+
 if [ ! "$CI" = true ]; then
     kubectl config use-context minikube
     echo "Setting up external services"
@@ -32,7 +35,7 @@ check_service() { # attempt, max_attempt, service
     local attempt=1
     local max_attempts=$1
     local service=$2
-    until MINIKUBE_IN_STYLE=true minikube service $service --url; do
+    until minikube service $service --url; do
 	if [ $attempt == $max_attempts ]; then
 	    echo "Can't connect to the container"
             exit 1
