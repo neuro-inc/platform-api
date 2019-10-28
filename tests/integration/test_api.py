@@ -1826,7 +1826,7 @@ class TestJobs:
                 "status": "pending",
                 "history": {
                     "status": "pending",
-                    "reason": None,
+                    "reason": "Creating",
                     "description": None,
                     "created_at": mock.ANY,
                 },
@@ -2032,7 +2032,7 @@ class TestJobs:
                 "status": "pending",
                 "history": {
                     "status": "pending",
-                    "reason": None,
+                    "reason": "Creating",
                     "description": None,
                     "created_at": mock.ANY,
                 },
@@ -2116,7 +2116,7 @@ class TestJobs:
                 "status": "pending",
                 "history": {
                     "status": "pending",
-                    "reason": None,
+                    "reason": "Creating",
                     "description": None,
                     "created_at": mock.ANY,
                 },
