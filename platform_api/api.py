@@ -252,6 +252,7 @@ async def create_app(
                 )
             )
             app["jobs_app"]["auth_client"] = auth_client
+            app["stats_app"]["auth_client"] = auth_client
 
             await setup_security(
                 app=app, auth_client=auth_client, auth_scheme=AuthScheme.BEARER

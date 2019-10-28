@@ -1,10 +1,10 @@
 import aiohttp.web
 import trafaret as t
-from neuro_auth_client import Permission, check_permissions
+from neuro_auth_client import AuthClient, Permission, check_permissions
 
 from platform_api.config import Config
+from platform_api.orchestrator.job import AggregatedRunTime
 from platform_api.orchestrator.jobs_storage import JobFilter, JobsStorage
-from platform_api.user import authorized_user
 
 
 def create_aggregated_runtime_validator(optional_fields: bool) -> t.Trafaret:
@@ -37,6 +37,10 @@ class StatsHandler:
     def jobs_storage(self) -> JobsStorage:
         return self._app["jobs_service"].jobs_storage
 
+    @property
+    def auth_client(self) -> AuthClient:
+        return self._app["auth_client"]
+
     def register(self, app: aiohttp.web.Application) -> None:
         app.add_routes([aiohttp.web.get("/users/{username}", self.handle_get_stats)])
 
@@ -48,12 +52,14 @@ class StatsHandler:
         permission = Permission(uri=f"user://{username}", action="read")
         await check_permissions(request, [permission])
 
-        user = await authorized_user(request)
+        user = await self.auth_client.get_user(username, token=self.auth_client._token)
 
         response_payload = {"name": username}
 
-        if user.has_quota():
-            response_payload["quota"] = user.quota.to_primitive()
+        if user.quota is not None:
+            response_payload["quota"] = AggregatedRunTime.from_quota(
+                user.quota
+            ).to_primitive()
         else:
             response_payload["quota"] = dict()
 
