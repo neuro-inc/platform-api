@@ -24,7 +24,7 @@ logger = logging.getLogger(__name__)
 current_datetime_factory = partial(datetime.now, timezone.utc)
 
 
-@dataclass(frozen=True)
+@dataclass(frozen=True, order=True)
 class AggregatedRunTime:
     total_gpu_run_time_delta: timedelta
     total_non_gpu_run_time_delta: timedelta
@@ -47,6 +47,24 @@ class AggregatedRunTime:
         if non_gpu_minutes is not None:
             result["total_non_gpu_run_time_minutes"] = non_gpu_minutes
         return result
+
+    @classmethod
+    def from_primitive(cls, json: Dict[str, Optional[int]]) -> "AggregatedRunTime":
+        return cls(
+            total_gpu_run_time_delta=_minutes_to_timedelta(
+                json.get("total_gpu_run_minutes")
+            ),
+            total_non_gpu_run_time_delta=_minutes_to_timedelta(
+                json.get("total_non_gpu_run_minutes")
+            ),
+        )
+
+
+def _minutes_to_timedelta(minutes: Optional[int]) -> timedelta:
+    if minutes is None:
+        return timedelta.max
+    else:
+        return timedelta(minutes=minutes)
 
 
 def _timedelta_to_minutes(delta: timedelta) -> Optional[int]:

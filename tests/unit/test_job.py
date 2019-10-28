@@ -1497,6 +1497,63 @@ class TestAggregatedRunTime:
             "total_non_gpu_run_time_minutes": 0,
         }
 
+    def test_from_primitive_regular(self) -> None:
+        runtime = AggregatedRunTime.from_primitive(
+            {"total_gpu_run_minutes": 10, "total_non_gpu_run_minutes": 15}
+        )
+        assert runtime.total_gpu_run_time_delta == timedelta(seconds=600)
+        assert runtime.total_non_gpu_run_time_delta == timedelta(seconds=900)
+
+    def test_from_primitive_empty(self) -> None:
+        runtime = AggregatedRunTime.from_primitive({})
+        assert runtime.total_gpu_run_time_delta == timedelta.max
+        assert runtime.total_non_gpu_run_time_delta == timedelta.max
+
+    def test_from_primitive_only_gpu(self) -> None:
+        runtime = AggregatedRunTime.from_primitive({"total_gpu_run_minutes": 10})
+        assert runtime.total_gpu_run_time_delta == timedelta(seconds=600)
+        assert runtime.total_non_gpu_run_time_delta == timedelta.max
+
+    def test_from_primitive_only_non_gpu(self) -> None:
+        runtime = AggregatedRunTime.from_primitive({"total_non_gpu_run_minutes": 15})
+        assert runtime.total_gpu_run_time_delta == timedelta.max
+        assert runtime.total_non_gpu_run_time_delta == timedelta(seconds=900)
+
+    def test_comparison(self) -> None:
+        one = AggregatedRunTime.from_primitive(
+            {"total_gpu_run_minutes": 10, "total_non_gpu_run_minutes": 10}
+        )
+        two = AggregatedRunTime.from_primitive(
+            {"total_gpu_run_minutes": 10, "total_non_gpu_run_minutes": 10}
+        )
+        assert one == two
+        one = AggregatedRunTime.from_primitive(
+            {"total_gpu_run_minutes": 10, "total_non_gpu_run_minutes": 9}
+        )
+        two = AggregatedRunTime.from_primitive(
+            {"total_gpu_run_minutes": 10, "total_non_gpu_run_minutes": 10}
+        )
+        assert one < two
+        one = AggregatedRunTime.from_primitive(
+            {"total_gpu_run_minutes": 9, "total_non_gpu_run_minutes": 999999}
+        )
+        two = AggregatedRunTime.from_primitive(
+            {"total_gpu_run_minutes": 10, "total_non_gpu_run_minutes": 10}
+        )
+        assert one < two
+        one = AggregatedRunTime.from_primitive({"total_non_gpu_run_minutes": 11})
+        two = AggregatedRunTime.from_primitive({"total_non_gpu_run_minutes": 10})
+        assert one > two
+        one = AggregatedRunTime.from_primitive({"total_gpu_run_minutes": 10})
+        two = AggregatedRunTime.from_primitive({"total_non_gpu_run_minutes": 10})
+        assert one < two
+        one = AggregatedRunTime.from_primitive({"total_gpu_run_minutes": 10})
+        two = AggregatedRunTime.from_primitive({"total_gpu_run_minutes": 10})
+        assert one == two
+        one = AggregatedRunTime.from_primitive({"total_non_gpu_run_minutes": 10})
+        two = AggregatedRunTime.from_primitive({"total_gpu_run_minutes": 10})
+        assert one > two
+
 
 class TestTimeDeltaConverter:
     def test__time_delta_to_minutes_millliseconds_less_than_half(self) -> None:
