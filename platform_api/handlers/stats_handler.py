@@ -52,7 +52,7 @@ class StatsHandler:
         permission = Permission(uri=f"user://{username}", action="read")
         await check_permissions(request, [permission])
 
-        user = await self.auth_client.get_user(username, token=self.auth_client._token)
+        user = await self.auth_client.get_user(username)
 
         response_payload = {"name": username}
 
