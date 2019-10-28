@@ -42,10 +42,10 @@ class AggregatedRunTime:
         result: Dict[str, int] = {}
         gpu_minutes = _timedelta_to_minutes(self.total_gpu_run_time_delta)
         if gpu_minutes is not None:
-            result["total_gpu_run_minutes"] = gpu_minutes
+            result["total_gpu_run_time_minutes"] = gpu_minutes
         non_gpu_minutes = _timedelta_to_minutes(self.total_non_gpu_run_time_delta)
         if non_gpu_minutes is not None:
-            result["total_non_gpu_run_minutes"] = non_gpu_minutes
+            result["total_non_gpu_run_time_minutes"] = non_gpu_minutes
         return result
 
 

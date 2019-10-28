@@ -12,8 +12,8 @@ from platform_api.orchestrator.jobs_storage import JobFilter, JobsStorage
 def create_aggregated_runtime_validator(optional_fields: bool) -> t.Trafaret:
     return t.Dict(
         {
-            t.Key("total_gpu_run_minutes", optional=optional_fields): t.Int,
-            t.Key("total_non_gpu_run_minutes", optional=optional_fields): t.Int,
+            t.Key("total_gpu_run_time_minutes", optional=optional_fields): t.Int,
+            t.Key("total_non_gpu_run_time_minutes", optional=optional_fields): t.Int,
         }
     )
 
