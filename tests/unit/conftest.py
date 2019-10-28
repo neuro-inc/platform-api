@@ -63,8 +63,12 @@ class MockOrchestrator(Orchestrator):
         pass
 
     async def start_job(self, job: Job) -> JobStatus:
-        job.status = JobStatus.PENDING
-        return JobStatus.PENDING
+        job.status_history.current = JobStatusItem.create(
+            self._mock_status_to_return,
+            reason=self._mock_reason_to_return,
+            exit_code=self._mock_exit_code_to_return,
+        )
+        return job.status
 
     def _create_get_job_status_exc(self, job: Job) -> Exception:
         return JobNotFoundException(f"job {job.id} was not found")

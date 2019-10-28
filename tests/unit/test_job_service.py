@@ -107,14 +107,14 @@ class TestJobsService:
         assert job_1.status_history.current.reason == JobStatusReason.CREATING
         assert not job_1.is_finished
 
-        mock_orchestrator.update_status_to_return(JobStatus.RUNNING)
         await jobs_service.update_jobs_statuses()
 
         job = await jobs_service.get_job(job_id=job_1.id)
         assert job.id == job_1.id
         assert job.status == JobStatus.PENDING
-        assert job.status_history.current.reason is None
+        assert job.status_history.current.reason == JobStatusReason.CONTAINER_CREATING
 
+        mock_orchestrator.update_status_to_return(JobStatus.RUNNING)
         await jobs_service.update_jobs_statuses()
 
         job = await jobs_service.get_job(job_id=job_1.id)
@@ -148,14 +148,14 @@ class TestJobsService:
         assert first_job.status_history.current.reason == JobStatusReason.CREATING
         assert not first_job.is_finished
 
-        mock_orchestrator.update_status_to_return(first_job_status)
         await jobs_service.update_jobs_statuses()
 
         job = await jobs_service.get_job(job_id=first_job.id)
         assert job.id == first_job.id
         assert job.status == JobStatus.PENDING
-        assert job.status_history.current.reason is None
+        assert job.status_history.current.reason == JobStatusReason.CONTAINER_CREATING
 
+        mock_orchestrator.update_status_to_return(first_job_status)
         await jobs_service.update_jobs_statuses()
 
         job = await jobs_service.get_job(job_id=first_job.id)
@@ -339,7 +339,6 @@ class TestJobsService:
         )
         assert original_job.status == JobStatus.PENDING
 
-        mock_orchestrator.update_status_to_return(JobStatus.SUCCEEDED)
         await jobs_service.update_jobs_statuses()
 
         job = await jobs_service.get_job(job_id=original_job.id)
@@ -348,6 +347,7 @@ class TestJobsService:
         assert job.finished_at is None
         assert not job.is_deleted
 
+        mock_orchestrator.update_status_to_return(JobStatus.SUCCEEDED)
         await jobs_service.update_jobs_statuses()
 
         job = await jobs_service.get_job(job_id=original_job.id)
@@ -370,7 +370,6 @@ class TestJobsService:
             job_request=job_request_factory(), user=user
         )
 
-        mock_orchestrator.update_status_to_return(JobStatus.SUCCEEDED)
         await jobs_service.update_jobs_statuses()
 
         job = await jobs_service.get_job(job_id=original_job.id)
@@ -379,6 +378,7 @@ class TestJobsService:
         assert job.finished_at is None
         assert not job.is_deleted
 
+        mock_orchestrator.update_status_to_return(JobStatus.SUCCEEDED)
         await jobs_service.update_jobs_statuses()
 
         job = await jobs_service.get_job(job_id=original_job.id)
@@ -410,7 +410,9 @@ class TestJobsService:
         assert job.finished_at is None
         assert not job.is_deleted
         assert job.status_history.current == JobStatusItem.create(
-            JobStatus.PENDING, reason=None, description=None
+            JobStatus.PENDING,
+            reason=JobStatusReason.CONTAINER_CREATING,
+            description=None,
         )
 
         await jobs_service.update_jobs_statuses()
@@ -451,7 +453,6 @@ class TestJobsService:
         )
         assert original_job.status == JobStatus.PENDING
 
-        mock_orchestrator.update_reason_to_return(reason)
         await jobs_service.update_jobs_statuses()
 
         job = await jobs_service.get_job(job_id=original_job.id)
@@ -460,9 +461,10 @@ class TestJobsService:
         assert job.finished_at is None
         assert not job.is_deleted
         status_item = job.status_history.last
-        assert status_item.reason is None
+        assert status_item.reason == JobStatusReason.CONTAINER_CREATING
         assert status_item.description is None
 
+        mock_orchestrator.update_reason_to_return(reason)
         await jobs_service.update_jobs_statuses()
 
         job = await jobs_service.get_job(job_id=original_job.id)
@@ -489,10 +491,6 @@ class TestJobsService:
         )
         assert original_job.status == JobStatus.PENDING
 
-        mock_orchestrator.update_status_to_return(JobStatus.FAILED)
-        mock_orchestrator.update_reason_to_return(
-            JobStatusReason.CLUSTER_SCALE_UP_FAILED
-        )
         await jobs_service.update_jobs_statuses()
 
         job = await jobs_service.get_job(job_id=original_job.id)
@@ -501,6 +499,10 @@ class TestJobsService:
         assert job.finished_at is None
         assert not job.is_deleted
 
+        mock_orchestrator.update_status_to_return(JobStatus.FAILED)
+        mock_orchestrator.update_reason_to_return(
+            JobStatusReason.CLUSTER_SCALE_UP_FAILED
+        )
         await jobs_service.update_jobs_statuses()
 
         job = await jobs_service.get_job(job_id=original_job.id)
@@ -523,7 +525,6 @@ class TestJobsService:
             job_request=job_request_factory(), user=user
         )
 
-        mock_orchestrator.update_status_to_return(JobStatus.SUCCEEDED)
         await jobs_service.update_jobs_statuses()
 
         job = await jobs_service.get_job(job_id=original_job.id)
@@ -532,6 +533,7 @@ class TestJobsService:
         assert job.finished_at is None
         assert not job.is_deleted
 
+        mock_orchestrator.update_status_to_return(JobStatus.SUCCEEDED)
         await jobs_service.update_jobs_statuses()
 
         job = await jobs_service.get_job(job_id=original_job.id)
@@ -1008,7 +1010,7 @@ class TestJobServiceNotification:
                 job_id=job.id,
                 status=JobStatus.PENDING,
                 transition_time=job.status_history.current.transition_time,
-                reason=None,
+                reason=JobStatusReason.CONTAINER_CREATING,
                 description=None,
                 exit_code=None,
                 prev_status=JobStatus.PENDING,
@@ -1041,26 +1043,6 @@ class TestJobServiceNotification:
         ]
         prev_transition_time = job.status_history.current.transition_time
 
-        mock_orchestrator.update_reason_to_return(JobStatusReason.CONTAINER_CREATING)
-        mock_orchestrator.update_status_to_return(JobStatus.PENDING)
-        await jobs_service.update_jobs_statuses()
-        job = await jobs_service.get_job(job.id)
-
-        notifications.append(
-            JobTransition(
-                job_id=job.id,
-                status=JobStatus.PENDING,
-                transition_time=job.status_history.current.transition_time,
-                reason=None,
-                description=None,
-                exit_code=None,
-                prev_status=JobStatus.PENDING,
-                prev_transition_time=prev_transition_time,
-            )
-        )
-        assert notifications == mock_notifications_client.sent_notifications
-
-        prev_transition_time = job.status_history.current.transition_time
         await jobs_service.update_jobs_statuses()
         job = await jobs_service.get_job(job.id)
 
@@ -1076,6 +1058,10 @@ class TestJobServiceNotification:
                 prev_transition_time=prev_transition_time,
             )
         )
+        assert notifications == mock_notifications_client.sent_notifications
+
+        await jobs_service.update_jobs_statuses()
+
         assert notifications == mock_notifications_client.sent_notifications
 
     @pytest.mark.asyncio
@@ -1103,7 +1089,6 @@ class TestJobServiceNotification:
         ]
         prev_transition_time = job.status_history.current.transition_time
 
-        mock_orchestrator.update_reason_to_return(JobStatusReason.ERR_IMAGE_PULL)
         await jobs_service.update_jobs_statuses()
         job = await jobs_service.get_job(job.id)
 
@@ -1112,7 +1097,7 @@ class TestJobServiceNotification:
                 job_id=job.id,
                 status=JobStatus.PENDING,
                 transition_time=job.status_history.current.transition_time,
-                reason=None,
+                reason=JobStatusReason.CONTAINER_CREATING,
                 description=None,
                 exit_code=None,
                 prev_status=JobStatus.PENDING,
@@ -1121,6 +1106,7 @@ class TestJobServiceNotification:
         )
         prev_transition_time = job.status_history.current.transition_time
 
+        mock_orchestrator.update_reason_to_return(JobStatusReason.ERR_IMAGE_PULL)
         await jobs_service.update_jobs_statuses()
         job = await jobs_service.get_job(job.id)
 
@@ -1164,25 +1150,6 @@ class TestJobServiceNotification:
         ]
         prev_transition_time = job.status_history.current.transition_time
 
-        mock_orchestrator.update_reason_to_return(JobStatusReason.CONTAINER_CREATING)
-        mock_orchestrator.update_status_to_return(JobStatus.PENDING)
-        await jobs_service.update_jobs_statuses()
-        job = await jobs_service.get_job(job.id)
-
-        notifications.append(
-            JobTransition(
-                job_id=job.id,
-                status=JobStatus.PENDING,
-                transition_time=job.status_history.current.transition_time,
-                reason=None,
-                description=None,
-                exit_code=None,
-                prev_status=JobStatus.PENDING,
-                prev_transition_time=prev_transition_time,
-            )
-        )
-        prev_transition_time = job.status_history.current.transition_time
-
         await jobs_service.update_jobs_statuses()
         job = await jobs_service.get_job(job.id)
 
@@ -1199,6 +1166,8 @@ class TestJobServiceNotification:
             )
         )
         prev_transition_time = job.status_history.current.transition_time
+
+        await jobs_service.update_jobs_statuses()
 
         mock_orchestrator.update_status_to_return(JobStatus.RUNNING)
         mock_orchestrator.update_reason_to_return(None)
