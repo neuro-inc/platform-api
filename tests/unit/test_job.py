@@ -1459,8 +1459,8 @@ class TestAggregatedRunTime:
             total_non_gpu_run_time_delta=timedelta(minutes=60),
         )
         assert run_time.to_primitive() == {
-            "total_gpu_run_minutes": 30,
-            "total_non_gpu_run_minutes": 60,
+            "total_gpu_run_time_minutes": 30,
+            "total_non_gpu_run_time_minutes": 60,
         }
 
     def test_to_primitive_gpu_not_defined(self) -> None:
@@ -1468,14 +1468,14 @@ class TestAggregatedRunTime:
             total_gpu_run_time_delta=timedelta.max,
             total_non_gpu_run_time_delta=timedelta(minutes=60),
         )
-        assert run_time.to_primitive() == {"total_non_gpu_run_minutes": 60}
+        assert run_time.to_primitive() == {"total_non_gpu_run_time_minutes": 60}
 
     def test_to_primitive_non_gpu_not_defined(self) -> None:
         run_time = AggregatedRunTime(
             total_gpu_run_time_delta=timedelta(minutes=30),
             total_non_gpu_run_time_delta=timedelta.max,
         )
-        assert run_time.to_primitive() == {"total_gpu_run_minutes": 30}
+        assert run_time.to_primitive() == {"total_gpu_run_time_minutes": 30}
 
     def test_to_primitive_gpu_zero(self) -> None:
         run_time = AggregatedRunTime(
@@ -1483,8 +1483,8 @@ class TestAggregatedRunTime:
             total_non_gpu_run_time_delta=timedelta(minutes=60),
         )
         assert run_time.to_primitive() == {
-            "total_gpu_run_minutes": 0,
-            "total_non_gpu_run_minutes": 60,
+            "total_gpu_run_time_minutes": 0,
+            "total_non_gpu_run_time_minutes": 60,
         }
 
     def test_to_primitive_non_gpu_zero(self) -> None:
@@ -1493,8 +1493,8 @@ class TestAggregatedRunTime:
             total_non_gpu_run_time_delta=timedelta(minutes=0),
         )
         assert run_time.to_primitive() == {
-            "total_gpu_run_minutes": 30,
-            "total_non_gpu_run_minutes": 0,
+            "total_gpu_run_time_minutes": 30,
+            "total_non_gpu_run_time_minutes": 0,
         }
 
 

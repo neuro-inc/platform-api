@@ -2164,7 +2164,10 @@ class TestStats:
             result = await resp.json()
             assert result == {
                 "name": regular_user.name,
-                "jobs": {"total_gpu_run_minutes": 0, "total_non_gpu_run_minutes": 0},
+                "jobs": {
+                    "total_gpu_run_time_minutes": 0,
+                    "total_non_gpu_run_time_minutes": 0,
+                },
                 "quota": {},
             }
 
@@ -2192,7 +2195,10 @@ class TestStats:
             result = await resp.json()
             assert result == {
                 "name": regular_user.name,
-                "jobs": {"total_gpu_run_minutes": 0, "total_non_gpu_run_minutes": 0},
+                "jobs": {
+                    "total_gpu_run_time_minutes": 0,
+                    "total_non_gpu_run_time_minutes": 0,
+                },
                 "quota": {},
             }
 
@@ -2210,9 +2216,12 @@ class TestStats:
             result = await resp.json()
             assert result == {
                 "name": user.name,
-                "jobs": {"total_gpu_run_minutes": 0, "total_non_gpu_run_minutes": 0},
+                "jobs": {
+                    "total_gpu_run_time_minutes": 0,
+                    "total_non_gpu_run_time_minutes": 0,
+                },
                 "quota": {
-                    "total_gpu_run_minutes": 123,
-                    "total_non_gpu_run_minutes": 321,
+                    "total_gpu_run_time_minutes": 123,
+                    "total_non_gpu_run_time_minutes": 321,
                 },
             }
