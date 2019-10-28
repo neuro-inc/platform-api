@@ -54,4 +54,9 @@ sleep 10
 export PLATFORM_API_URL=$(minikube service platformapi --url)/api/v1
 export AUTH_API_URL=$(minikube service platformauthapi --url)
 export SSH_AUTH_URL=$(minikube service ssh-auth --url)
+
+# wait until services are available
+curl --retry $max_attempts --retry-connrefuse --retry-max-time 60 $PLATFORM_API_URL/ping
+curl --retry $max_attempts --retry-connrefuse --retry-max-time 60 $AUTH_API_URL/api/v1/ping
+
 make test_e2e
