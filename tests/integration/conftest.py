@@ -394,7 +394,7 @@ async def kube_orchestrator_pvc(
 
 @pytest.fixture
 async def delete_node_later(
-    kube_client: MyKubeClient
+    kube_client: MyKubeClient,
 ) -> AsyncIterator[Callable[[str], Awaitable[None]]]:
     nodes = []
 
