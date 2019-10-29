@@ -152,7 +152,7 @@ class TestEnvironConfigFactory:
             "NP_NOTIFICATIONS_TOKEN": "token",
             "NP_AUTH_PUBLIC_URL": "https://neu.ro/api/v1/users",
             "NP_ENFORCER_PLATFORM_API_URL": "http://platformapi:8080/api/v1",
-            "NP_ENFORCER_PLATFORM_TOKEN": "compute-token",
+            "NP_ENFORCER_TOKEN": "compute-token",
         }
         config = EnvironConfigFactory(environ=environ).create()
         cluster = EnvironConfigFactory(environ=environ).create_cluster()
@@ -279,7 +279,7 @@ class TestEnvironConfigFactory:
             "NP_NOTIFICATIONS_TOKEN": "token",
             "NP_AUTH_PUBLIC_URL": "https://neu.ro/api/v1/users",
             "NP_ENFORCER_PLATFORM_API_URL": "http://platformapi:8080/api/v1",
-            "NP_ENFORCER_PLATFORM_TOKEN": "compute-token",
+            "NP_ENFORCER_TOKEN": "compute-token",
         }
         config = EnvironConfigFactory(environ=environ).create()
         cluster = EnvironConfigFactory(environ=environ).create_cluster()
