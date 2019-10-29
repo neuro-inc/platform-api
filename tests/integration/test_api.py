@@ -592,7 +592,7 @@ class TestJobs:
         api: ApiConfig,
         client: aiohttp.ClientSession,
         job_request_factory: Callable[[], Dict[str, Any]],
-        jobs_client: Callable[[], Any],
+        jobs_client: JobsClient,
         regular_user_factory: Callable[..., Any],
     ) -> None:
         quota = Quota(total_gpu_run_time_minutes=100)
@@ -602,6 +602,8 @@ class TestJobs:
         job_request["container"]["resources"]["gpu"] = 1
         async with client.post(url, headers=user.headers, json=job_request) as response:
             assert response.status == HTTPAccepted.status_code, await response.text()
+            payload = await response.json()
+            jobs_client.delete_job_later(job_id=payload["id"])
 
     @pytest.mark.asyncio
     async def test_create_job_non_gpu_quota_allows(
@@ -609,7 +611,7 @@ class TestJobs:
         api: ApiConfig,
         client: aiohttp.ClientSession,
         job_request_factory: Callable[[], Dict[str, Any]],
-        jobs_client: Callable[[], Any],
+        jobs_client: JobsClient,
         regular_user_factory: Callable[..., Any],
     ) -> None:
         quota = Quota(total_non_gpu_run_time_minutes=100)
@@ -618,6 +620,8 @@ class TestJobs:
         job_request = job_request_factory()
         async with client.post(url, headers=user.headers, json=job_request) as response:
             assert response.status == HTTPAccepted.status_code, await response.text()
+            payload = await response.json()
+            jobs_client.delete_job_later(job_id=payload["id"])
 
     @pytest.mark.asyncio
     async def test_create_job_gpu_quota_exceeded(
@@ -674,6 +678,7 @@ class TestJobs:
             assert response.status == HTTPAccepted.status_code, await response.text()
             payload = await response.json()
             job_id = payload["id"]
+            jobs_client.delete_job_later(job_id)
 
         await jobs_client.long_polling_by_job_id(job_id, status="running")
         await jobs_client.delete_job(job_id)
@@ -724,6 +729,7 @@ class TestJobs:
             assert resp.status == HTTPAccepted.status_code, await resp.text()
             result = await resp.json()
             job_id = result["id"]
+            jobs_client.delete_job_later(job_id)
 
         await jobs_client.long_polling_by_job_id(job_id, status="pending")
 
@@ -755,7 +761,9 @@ class TestJobs:
             async with client.post(url, headers=headers, json=job_request) as resp:
                 assert resp.status == HTTPAccepted.status_code, await resp.text()
                 result = await resp.json()
-                job_ids_list.append(result["id"])
+                job_id = result["id"]
+                jobs_client.delete_job_later(job_id)
+                job_ids_list.append(job_id)
 
         job_ids_killed = set(job_ids_list[:2])
         job_ids_alive = set(job_ids_list[2:])
@@ -825,6 +833,7 @@ class TestJobs:
                 )
                 data = await resp.json()
                 job_id = data["id"]
+                jobs_client.delete_job_later(job_id)
                 if do_wait:
                     await jobs_client.long_polling_by_job_id(job_id, "running")
                 if do_kill:
@@ -835,9 +844,6 @@ class TestJobs:
             return job_id
 
         yield _impl
-
-        for jobs_client, job_id in cleanup_pairs:
-            await jobs_client.delete_job(job_id=job_id, assert_success=False)
 
     @pytest.fixture
     async def share_job(
@@ -1197,6 +1203,7 @@ class TestJobs:
             assert response.status == HTTPAccepted.status_code, await response.text()
             result = await response.json()
             job_id = result["id"]
+            jobs_client.delete_job_later(job_id)
 
         url = api.jobs_base_url
         async with client.get(url, headers=owner.headers) as response:
@@ -1239,6 +1246,7 @@ class TestJobs:
             assert response.status == HTTPAccepted.status_code, await response.text()
             result = await response.json()
             job_id = result["id"]
+            jobs_client.delete_job_later(job_id)
 
         url = f"{api.jobs_base_url}/{job_id}"
         async with client.get(url, headers=owner.headers) as response:
@@ -1281,16 +1289,12 @@ class TestJobs:
                 result = await response.json()
                 assert result["status"] in ["pending"]
                 job_id = result["id"]
-                await jobs_client.long_polling_by_job_id(
-                    job_id=job_id, status="succeeded"
-                )
+                jobs_client.delete_job_later(job_id)
+                await jobs_client.long_polling_by_job_id(job_id, "succeeded")
                 jobs_ids.append(job_id)
 
         jobs = await jobs_client.get_all_jobs()
         assert set(jobs_ids) <= {x["id"] for x in jobs}
-        # clean:
-        for job in jobs:
-            await jobs_client.delete_job(job_id=job["id"])
 
     @pytest.mark.asyncio
     @pytest.mark.parametrize(
@@ -1331,6 +1335,7 @@ class TestJobs:
                 result = await response.json()
                 assert result["status"] == "pending"
                 job_id = result["id"]
+                jobs_client.delete_job_later(job_id)
                 jobs_ids.append(job_id)
                 await jobs_client.long_polling_by_job_id(job_id, status="running")
                 # let only the last job be running
@@ -1342,10 +1347,6 @@ class TestJobs:
         jobs_ls = [job["id"] for job in jobs_ls]
         assert set(jobs_ids) == set(jobs_ls), "content differs"
         assert jobs_ids == jobs_ls, "order differs"
-
-        # cleanup all:
-        for job_id in jobs_ids:
-            await jobs_client.delete_job(job_id=job_id)
 
     @pytest.mark.asyncio
     async def test_get_job_by_cluster_name_and_statuses(
@@ -1702,6 +1703,7 @@ class TestJobs:
             result = await response.json()
             assert result["status"] in ["pending"]
             job_id = result["id"]
+            jobs_client.delete_job_later(job_id)
             await jobs_client.long_polling_by_job_id(job_id=job_id, status="succeeded")
         await jobs_client.delete_job(job_id=job_id)
 
@@ -1727,6 +1729,7 @@ class TestJobs:
             assert response.status == HTTPAccepted.status_code, await response.text()
             result = await response.json()
             job_id = result["id"]
+            jobs_client.delete_job_later(job_id)
 
         url = api.generate_job_url(job_id)
         another_user = await regular_user_factory()
@@ -1817,6 +1820,7 @@ class TestJobs:
             assert response.status == HTTPAccepted.status_code, response_text
             response_payload = await response.json()
             job_id = response_payload["id"]
+            jobs_client.delete_job_later(job_id)
             assert response_payload == {
                 "id": mock.ANY,
                 "owner": regular_user.name,
@@ -1920,6 +1924,7 @@ class TestJobs:
             result = await response.json()
             assert result["status"] == "pending"
             job_id = result["id"]
+            jobs_client.delete_job_later(job_id)
 
         response_payload = await jobs_client.long_polling_by_job_id(
             job_id=job_id, status="failed"
@@ -2023,6 +2028,7 @@ class TestJobs:
             assert response.status == HTTPAccepted.status_code, response_text
             response_payload = await response.json()
             job_id = response_payload["id"]
+            jobs_client.delete_job_later(job_id)
             assert response_payload == {
                 "id": mock.ANY,
                 "owner": regular_user.name,
@@ -2107,6 +2113,7 @@ class TestJobs:
             assert response.status == HTTPAccepted.status_code, response_text
             response_payload = await response.json()
             job_id = response_payload["id"]
+            jobs_client.delete_job_later(job_id)
             assert response_payload == {
                 "id": mock.ANY,
                 "owner": regular_user.name,

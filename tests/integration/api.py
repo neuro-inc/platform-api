@@ -105,6 +105,14 @@ class JobsClient:
         self._api_config = api_config
         self._client = client
         self._headers = headers
+        self._submitted_jobs: List[str] = []
+
+    @property
+    def submitted_jobs(self) -> List[str]:
+        return self._submitted_jobs
+
+    def delete_job_later(self, job_id: str) -> None:
+        self._submitted_jobs.append(job_id)
 
     async def get_all_jobs(self, params: Any = None) -> List[Dict[str, Any]]:
         url = self._api_config.jobs_base_url
@@ -190,10 +198,13 @@ def jobs_client_factory(
 
 
 @pytest.fixture
-def jobs_client(
+async def jobs_client(
     jobs_client_factory: Callable[[_User], JobsClient], regular_user: _User
-) -> JobsClient:
-    return jobs_client_factory(regular_user)
+) -> AsyncIterator[JobsClient]:
+    client = jobs_client_factory(regular_user)
+    yield client
+    for job in client.submitted_jobs:
+        await client.delete_job(job)
 
 
 @pytest.fixture
