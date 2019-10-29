@@ -1,6 +1,6 @@
 import asyncio
 from dataclasses import dataclass
-from typing import AsyncIterator
+from typing import AsyncIterator, List
 
 import pytest
 from yarl import URL
@@ -36,48 +36,32 @@ class TestJobPolicyEnforcer:
         return config.job_policy_enforcer
 
     @pytest.fixture
-    async def enfocer(
+    async def enforcer(
         self, job_policy_enforcer_config: JobPolicyEnforcerConfig
     ) -> AsyncIterator[JobPolicyEnforcer]:
-        enforcer = JobPolicyEnforcer(config=job_policy_enforcer_config)
+        exceptions: List[BaseException] = []
+        enforcer = JobPolicyEnforcer(
+            config=job_policy_enforcer_config,
+            exception_handler=lambda exc: exceptions.append(exc),
+        )
         await enforcer.start()
-        yield enforcer
-        await enforcer.stop()
-
-    @pytest.fixture
-    async def enfocer_debug(
-        self,
-        job_policy_enforcer_config: JobPolicyEnforcerConfig,
-        event_loop: asyncio.AbstractEventLoop,
-    ) -> AsyncIterator[JobPolicyEnforcer]:
-
-        closed = event_loop.create_future()
-
-        def assert_no_exceptions(fut: "asyncio.Future[None]") -> None:
-            try:
-                assert fut.done()
-                assert not fut.cancelled()
-                assert fut.exception() is None
-                closed.set_result(1)
-            except Exception as exc:
-                closed.set_exception(exc)
-
-        enforcer = JobPolicyEnforcer(config=job_policy_enforcer_config)
-        await enforcer.start()
-        assert enforcer._task is not None
-        enforcer._task.add_done_callback(assert_no_exceptions)
+        assert enforcer._task
+        assert not enforcer._task.done()
 
         yield enforcer
 
+        assert not enforcer._task.done()
         await enforcer.stop()
-        assert enforcer._is_active is None
         assert enforcer._task is None
-        assert enforcer._session is None
-        await closed
+        assert enforcer._session.closed
+        assert not exceptions
 
     @pytest.mark.asyncio
-    async def test_basic(
-        self, api: ApiConfig, enfocer_debug: JobPolicyEnforcer
-    ) -> None:
-        two_loops_timeout = enfocer_debug._interval_sec * 2
+    async def test_basic(self, api: ApiConfig, enforcer: JobPolicyEnforcer) -> None:
+        two_loops_timeout = enforcer._interval_sec * 2
+        await asyncio.sleep(two_loops_timeout)
+
+    @pytest.mark.asyncio
+    async def test_basic2(self, api: ApiConfig, enforcer: JobPolicyEnforcer) -> None:
+        two_loops_timeout = enforcer._interval_sec * 2
         await asyncio.sleep(two_loops_timeout)

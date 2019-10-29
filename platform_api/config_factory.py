@@ -85,10 +85,14 @@ class EnvironConfigFactory:
     def create_job_policy_enforcer(self) -> JobPolicyEnforcerConfig:
         return JobPolicyEnforcerConfig(
             platform_api_url=URL(self._environ["NP_ENFORCER_PLATFORM_API_URL"]),
-            token=self._environ["NP_ENFORCER_PLATFORM_TOKEN"],
+            token=self._environ["NP_ENFORCER_TOKEN"],
             interval_sec=int(
-                self._environ.get("NP_ENFORCER_PLATFORM_INTERVAL_SEC")
+                self._environ.get("NP_ENFORCER_INTERVAL_SEC")
                 or JobPolicyEnforcerConfig.interval_sec
+            ),
+            run_once_timeout_sec=int(
+                self._environ.get("NP_ENFORCER_RUN_ONCE_TIMEOUT_SEC")
+                or JobPolicyEnforcerConfig.run_once_timeout_sec
             ),
         )
 
