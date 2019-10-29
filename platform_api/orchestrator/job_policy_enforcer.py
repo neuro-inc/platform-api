@@ -50,10 +50,6 @@ class JobPolicyEnforcer:
         await self._session.close()
 
     async def _run(self) -> None:
-        import sys
-
-        logger.addHandler(logging.StreamHandler(sys.stdout))
-
         while True:
             await self._run_once()
             await asyncio.sleep(self._interval_sec)
