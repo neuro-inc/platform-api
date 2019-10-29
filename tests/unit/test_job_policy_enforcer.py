@@ -6,7 +6,7 @@ import pytest
 from async_generator import asynccontextmanager
 from yarl import URL
 
-from platform_api.config import Config, JobPolicyEnforcerConfig
+from platform_api.config import JobPolicyEnforcerConfig
 from platform_api.orchestrator.job_policy_enforcer import (
     JobPolicyEnforcePoller,
     JobPolicyEnforcer,
@@ -56,11 +56,16 @@ class MockedJobPolicyEnforcer(JobPolicyEnforcer):
             raise RuntimeError("exception in job policy enforcer")
 
 
-class TestJobPolicyEnforcer:
-    @pytest.fixture
-    def job_policy_enforcer_config(self, config: Config) -> JobPolicyEnforcerConfig:
-        return config.job_policy_enforcer
+@pytest.fixture
+def job_policy_enforcer_config() -> JobPolicyEnforcerConfig:
+    return JobPolicyEnforcerConfig(
+        platform_api_url=URL("http://localhost:8080"),
+        token="admin-token",
+        interval_sec=1,
+    )
 
+
+class TestJobPolicyEnforcer:
     @pytest.fixture
     async def run_enforce_polling(
         self, job_policy_enforcer_config: JobPolicyEnforcerConfig
