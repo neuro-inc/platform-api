@@ -2,19 +2,20 @@ from typing import Dict
 
 import aiohttp.web
 import trafaret as t
-from neuro_auth_client import Permission, check_permissions
+from aiohttp import ClientResponseError
+from aiohttp.web_exceptions import HTTPNotFound
+from neuro_auth_client import AuthClient, Permission, check_permissions
 
 from platform_api.config import Config
 from platform_api.orchestrator.job import AggregatedRunTime
 from platform_api.orchestrator.jobs_storage import JobFilter, JobsStorage
-from platform_api.user import authorized_user
 
 
 def create_aggregated_runtime_validator(optional_fields: bool) -> t.Trafaret:
     return t.Dict(
         {
-            t.Key("total_gpu_run_minutes", optional=optional_fields): t.Int,
-            t.Key("total_non_gpu_run_minutes", optional=optional_fields): t.Int,
+            t.Key("total_gpu_run_time_minutes", optional=optional_fields): t.Int,
+            t.Key("total_non_gpu_run_time_minutes", optional=optional_fields): t.Int,
         }
     )
 
@@ -22,7 +23,6 @@ def create_aggregated_runtime_validator(optional_fields: bool) -> t.Trafaret:
 def create_stats_response_validator() -> t.Trafaret:
     return t.Dict(
         {
-
             "name": t.String,
             "quota": create_aggregated_runtime_validator(True),
             "jobs": create_aggregated_runtime_validator(False),
@@ -41,6 +41,10 @@ class StatsHandler:
     def jobs_storage(self) -> JobsStorage:
         return self._app["jobs_service"].jobs_storage
 
+    @property
+    def auth_client(self) -> AuthClient:
+        return self._app["auth_client"]
+
     def register(self, app: aiohttp.web.Application) -> None:
         app.add_routes([aiohttp.web.get("/users/{username}", self.handle_get_stats)])
 
@@ -52,11 +56,14 @@ class StatsHandler:
         permission = Permission(uri=f"user://{username}", action="read")
         await check_permissions(request, [permission])
 
-        user = await authorized_user(request)
+        try:
+            user = await self.auth_client.get_user(username)
+        except ClientResponseError:
+            raise HTTPNotFound()
 
         response_payload = {"name": username}
 
-        if user.has_quota():
+        if user.quota is not None:
             response_payload["quota"] = convert_run_time_to_response(user.quota)
         else:
             response_payload["quota"] = dict()
@@ -76,8 +83,8 @@ def convert_run_time_to_response(run_time: AggregatedRunTime) -> Dict[str, int]:
     result: Dict[str, int] = {}
     gpu_minutes = run_time.total_gpu_run_time_minutes
     if gpu_minutes is not None:
-        result["total_gpu_run_minutes"] = gpu_minutes
+        result["total_gpu_run_time_minutes"] = gpu_minutes
     non_gpu_minutes = run_time.total_non_gpu_run_time_minutes
     if non_gpu_minutes is not None:
-        result["total_non_gpu_run_minutes"] = non_gpu_minutes
+        result["total_non_gpu_run_time_minutes"] = non_gpu_minutes
     return result

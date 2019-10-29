@@ -73,6 +73,7 @@ class JobStatusReason:
     ERROR = "Error"
     CONTAINER_CANNOT_RUN = "ContainerCannotRun"
     # neuromation custom reasons:
+    CREATING = "Creating"
     COLLECTED = "Collected"
     SCHEDULING = "Scheduling"
     NOT_FOUND = "NotFound"  # "The job could not be scheduled or was preempted."
@@ -506,6 +507,14 @@ class Job:
     @property
     def status_history(self) -> JobStatusHistory:
         return self._status_history
+
+    @property
+    def is_creating(self) -> bool:
+        status_item = self.status_history.current
+        return (
+            status_item.status == JobStatus.PENDING
+            and status_item.reason == JobStatusReason.CREATING
+        )
 
     @property
     def is_running(self) -> bool:

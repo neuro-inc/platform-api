@@ -10,8 +10,8 @@ def test_to_primitive() -> None:
         total_non_gpu_run_time_delta=timedelta(minutes=60),
     )
     assert convert_run_time_to_response(run_time) == {
-        "total_gpu_run_minutes": 30,
-        "total_non_gpu_run_minutes": 60,
+        "total_gpu_run_time_minutes": 30,
+        "total_non_gpu_run_time_minutes": 60,
     }
 
 
@@ -20,7 +20,9 @@ def test_to_primitive_gpu_not_defined() -> None:
         total_gpu_run_time_delta=timedelta.max,
         total_non_gpu_run_time_delta=timedelta(minutes=60),
     )
-    assert convert_run_time_to_response(run_time) == {"total_non_gpu_run_minutes": 60}
+    assert convert_run_time_to_response(run_time) == {
+        "total_non_gpu_run_time_minutes": 60
+    }
 
 
 def test_to_primitive_non_gpu_not_defined() -> None:
@@ -28,7 +30,7 @@ def test_to_primitive_non_gpu_not_defined() -> None:
         total_gpu_run_time_delta=timedelta(minutes=30),
         total_non_gpu_run_time_delta=timedelta.max,
     )
-    assert convert_run_time_to_response(run_time) == {"total_gpu_run_minutes": 30}
+    assert convert_run_time_to_response(run_time) == {"total_gpu_run_time_minutes": 30}
 
 
 def test_to_primitive_gpu_zero() -> None:
@@ -37,8 +39,8 @@ def test_to_primitive_gpu_zero() -> None:
         total_non_gpu_run_time_delta=timedelta(minutes=60),
     )
     assert convert_run_time_to_response(run_time) == {
-        "total_gpu_run_minutes": 0,
-        "total_non_gpu_run_minutes": 60,
+        "total_gpu_run_time_minutes": 0,
+        "total_non_gpu_run_time_minutes": 60,
     }
 
 
@@ -48,6 +50,6 @@ def test_to_primitive_non_gpu_zero() -> None:
         total_non_gpu_run_time_delta=timedelta(minutes=0),
     )
     assert convert_run_time_to_response(run_time) == {
-        "total_gpu_run_minutes": 30,
-        "total_non_gpu_run_minutes": 0,
+        "total_gpu_run_time_minutes": 30,
+        "total_non_gpu_run_time_minutes": 0,
     }

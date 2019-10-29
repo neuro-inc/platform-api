@@ -20,7 +20,11 @@ class Orchestrator(ABC):
         pass
 
     @abstractmethod
-    async def start_job(self, job: Job, token: str) -> JobStatus:
+    async def prepare_job(self, job: Job, token: str) -> None:
+        pass
+
+    @abstractmethod
+    async def start_job(self, job: Job) -> JobStatus:
         pass
 
     @abstractmethod

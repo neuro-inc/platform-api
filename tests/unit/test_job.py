@@ -1452,7 +1452,9 @@ class TestAggregatedRunTime:
             total_non_gpu_run_time_delta=timedelta.max,
         )
 
-    def test_timedelta_to_minutes_millliseconds_less_than_half(self) -> None:
+
+class TestTimeDeltaConverter:
+    def test__time_delta_to_minutes_millliseconds_less_than_half(self) -> None:
         delta = timedelta(minutes=0, seconds=10, milliseconds=29)
         assert AggregatedRunTime._timedelta_to_minutes(delta) == 0
 

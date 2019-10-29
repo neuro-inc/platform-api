@@ -167,10 +167,6 @@ class KubeOrchestrator(Orchestrator):
             path=self._storage_config.host_mount_path,
         )
 
-    def _get_pod_namespace(self, descriptor: PodDescriptor) -> str:
-        # TODO (A Yushkovskiy 31.10.2018): get namespace for the pod, not statically
-        return self._kube_config.namespace
-
     def _get_user_resource_name(self, job: Job) -> str:
         return (self._docker_secret_name_prefix + job.owner).lower()
 
@@ -262,15 +258,17 @@ class KubeOrchestrator(Orchestrator):
         labels.update(self._get_user_pod_labels(job))
         return labels
 
-    async def start_job(self, job: Job, token: str) -> JobStatus:
+    async def prepare_job(self, job: Job, token: str) -> None:
         await self._create_docker_secret(job, token)
+        # TODO (A Yushkovskiy 31.10.2018): get namespace for the pod, not statically
+        job.internal_hostname = f"{job.id}.{self._kube_config.namespace}"
+
+    async def start_job(self, job: Job) -> JobStatus:
         await self._create_user_network_policy(job)
         await self._create_pod_network_policy(job)
 
         descriptor = await self._create_pod_descriptor(job)
         pod = await self._client.create_pod(descriptor)
-        status = pod.status
-        assert status is not None
 
         logger.info(f"Starting Service for {job.id}.")
         service = await self._create_service(descriptor)
@@ -279,14 +277,8 @@ class KubeOrchestrator(Orchestrator):
             logger.info(f"Starting Ingress for {job.id}")
             await self._create_ingress(job, service)
 
-        job.status = convert_pod_status_to_job_status(status).status
-        job.internal_hostname = self._get_service_internal_hostname(job.id, descriptor)
+        job.status_history.current = await self._get_pod_status(job, pod)
         return job.status
-
-    def _get_service_internal_hostname(
-        self, service_name: str, pod_descriptor: PodDescriptor
-    ) -> str:
-        return f"{service_name}.{self._get_pod_namespace(pod_descriptor)}"
 
     def _get_pod_tolerations(self, job: Job) -> List[Toleration]:
         tolerations = [
@@ -383,12 +375,13 @@ class KubeOrchestrator(Orchestrator):
 
         # handling PENDING/RUNNING jobs
 
-        pod_name = self._get_job_pod_name(job)
         if job.is_preemptible:
             pod = await self._check_preemptible_job_pod(job)
         else:
-            pod = await self._client.get_pod(pod_name)
+            pod = await self._client.get_pod(self._get_job_pod_name(job))
+        return await self._get_pod_status(job, pod)
 
+    async def _get_pod_status(self, job: Job, pod: PodDescriptor) -> JobStatusItem:
         pod_status = pod.status
         assert pod_status is not None  # should always be present
         job_status = convert_pod_status_to_job_status(pod_status)
@@ -408,7 +401,7 @@ class KubeOrchestrator(Orchestrator):
 
         logger.info(f"Found pod that requested too much resources. Job '{job.id}'")
         pod_events = await self._client.get_pod_events(
-            pod_name, self._kube_config.namespace
+            self._get_job_pod_name(job), self._kube_config.namespace
         )
         scaleup_events = [e for e in pod_events if e.reason == "TriggeredScaleUp"]
         scaleup_events.sort(key=operator.attrgetter("last_timestamp"))
