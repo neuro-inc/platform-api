@@ -20,11 +20,8 @@ class JobPolicyEnforcePoller:
         self, policy_enforcer: JobPolicyEnforcer, config: JobPolicyEnforcerConfig
     ) -> None:
         self._loop: asyncio.AbstractEventLoop = asyncio.get_event_loop()
-
-        self._platform_api_url = config.platform_api_url
-        self._headers = {"Authorization": f"Bearer {config.token}"}
-        self._interval_sec = config.interval_sec
         self._policy_enforcer = policy_enforcer
+        self._config = config
 
         self._task: Optional[asyncio.Task[None]] = None
 
@@ -38,12 +35,10 @@ class JobPolicyEnforcePoller:
     async def start(self) -> None:
         logger.info("Starting job policy enforce polling")
         assert self._task is None
-
         self._task = self._loop.create_task(self._run())
 
     async def stop(self) -> None:
         logger.info("Stopping job policy enforce polling")
-
         assert self._task is not None
         self._task.cancel()
         self._task = None
@@ -53,7 +48,7 @@ class JobPolicyEnforcePoller:
             start = self._loop.time()
             await self._run_once()
             elapsed = self._loop.time() - start
-            delay = self._interval_sec - elapsed
+            delay = self._config.interval_sec - elapsed
             if delay < 0:
                 delay = 0
             await asyncio.sleep(delay)
