@@ -1,8 +1,11 @@
+from typing import Dict
+
 import aiohttp.web
 import trafaret as t
 from neuro_auth_client import Permission, check_permissions
 
 from platform_api.config import Config
+from platform_api.orchestrator.job import AggregatedRunTime
 from platform_api.orchestrator.jobs_storage import JobFilter, JobsStorage
 from platform_api.user import authorized_user
 
@@ -19,6 +22,7 @@ def create_aggregated_runtime_validator(optional_fields: bool) -> t.Trafaret:
 def create_stats_response_validator() -> t.Trafaret:
     return t.Dict(
         {
+
             "name": t.String,
             "quota": create_aggregated_runtime_validator(True),
             "jobs": create_aggregated_runtime_validator(False),
@@ -53,16 +57,27 @@ class StatsHandler:
         response_payload = {"name": username}
 
         if user.has_quota():
-            response_payload["quota"] = user.quota.to_primitive()
+            response_payload["quota"] = convert_run_time_to_response(user.quota)
         else:
             response_payload["quota"] = dict()
 
         run_time_filter = JobFilter(owners={user.name})
         run_time = await self.jobs_storage.get_aggregated_run_time(run_time_filter)
-        response_payload["jobs"] = run_time.to_primitive()
+        response_payload["jobs"] = convert_run_time_to_response(run_time)
 
         self._stats_response_validator.check(response_payload)
 
         return aiohttp.web.json_response(
             data=response_payload, status=aiohttp.web.HTTPOk.status_code
         )
+
+
+def convert_run_time_to_response(run_time: AggregatedRunTime) -> Dict[str, int]:
+    result: Dict[str, int] = {}
+    gpu_minutes = run_time.total_gpu_run_time_minutes
+    if gpu_minutes is not None:
+        result["total_gpu_run_minutes"] = gpu_minutes
+    non_gpu_minutes = run_time.total_non_gpu_run_time_minutes
+    if non_gpu_minutes is not None:
+        result["total_non_gpu_run_minutes"] = non_gpu_minutes
+    return result

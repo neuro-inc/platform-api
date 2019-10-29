@@ -29,6 +29,14 @@ class AggregatedRunTime:
     total_gpu_run_time_delta: timedelta
     total_non_gpu_run_time_delta: timedelta
 
+    @property
+    def total_gpu_run_time_minutes(self) -> Optional[int]:
+        return self._timedelta_to_minutes(self.total_gpu_run_time_delta)
+
+    @property
+    def total_non_gpu_run_time_minutes(self) -> Optional[int]:
+        return self._timedelta_to_minutes(self.total_non_gpu_run_time_delta)
+
     @classmethod
     def from_quota(cls, quota: Quota) -> "AggregatedRunTime":
         # TODO (ajuszkowski 4-Apr-2019) platform-auth's Quota should have
@@ -38,21 +46,11 @@ class AggregatedRunTime:
             total_non_gpu_run_time_delta=quota.total_non_gpu_run_time_delta,
         )
 
-    def to_primitive(self) -> Dict[str, int]:
-        result: Dict[str, int] = {}
-        gpu_minutes = _timedelta_to_minutes(self.total_gpu_run_time_delta)
-        if gpu_minutes is not None:
-            result["total_gpu_run_minutes"] = gpu_minutes
-        non_gpu_minutes = _timedelta_to_minutes(self.total_non_gpu_run_time_delta)
-        if non_gpu_minutes is not None:
-            result["total_non_gpu_run_minutes"] = non_gpu_minutes
-        return result
-
-
-def _timedelta_to_minutes(delta: timedelta) -> Optional[int]:
-    if delta == timedelta.max:
-        return None
-    return round(delta / TIMEDELTA_ONE_MINUTE)
+    @classmethod
+    def _timedelta_to_minutes(cls, delta: timedelta) -> Optional[int]:
+        if delta == timedelta.max:
+            return None
+        return round(delta / TIMEDELTA_ONE_MINUTE)
 
 
 DEFAULT_QUOTA_NO_RESTRICTIONS: AggregatedRunTime = AggregatedRunTime.from_quota(Quota())
