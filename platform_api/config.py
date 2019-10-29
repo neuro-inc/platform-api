@@ -77,7 +77,6 @@ class JobPolicyEnforcerConfig:
     platform_api_url: URL
     token: str
     interval_sec: int = 60
-    run_once_timeout_sec: int = 5
 
 
 @dataclass(frozen=True)

@@ -1,13 +1,16 @@
 import asyncio
 from dataclasses import dataclass
-from typing import AsyncIterator, List
+from typing import AsyncContextManager, AsyncIterator, Callable
 
 import pytest
+from async_generator import asynccontextmanager
 from yarl import URL
 
 from platform_api.config import Config, JobPolicyEnforcerConfig
-from platform_api.orchestrator.job_policy_enforcer import JobPolicyEnforcer
-from tests.integration.api import ApiConfig
+from platform_api.orchestrator.job_policy_enforcer import (
+    JobPolicyEnforcePoller,
+    JobPolicyEnforcer,
+)
 
 
 @dataclass(frozen=True)
@@ -30,38 +33,97 @@ class PlatformApiEndpoints:
         return f"{self.jobs_base_url}/{job_id}"
 
 
+class MockedJobPolicyEnforcer(JobPolicyEnforcer):
+    def __init__(
+        self, *, raise_exception: bool = False, enforce_time_sec: float = 0
+    ) -> None:
+        self._raise_exception = raise_exception
+        self._enforce_time_sec = enforce_time_sec
+        self._called_times: int = 0
+
+    @property
+    def called_times(self) -> int:
+        return self._called_times
+
+    @property
+    def enforce_time_sec(self) -> float:
+        return self._enforce_time_sec
+
+    async def enforce(self) -> None:
+        self._called_times += 1
+        await asyncio.sleep(self._enforce_time_sec)
+        if self._raise_exception:
+            raise RuntimeError("exception in job policy enforcer")
+
+
 class TestJobPolicyEnforcer:
     @pytest.fixture
     def job_policy_enforcer_config(self, config: Config) -> JobPolicyEnforcerConfig:
         return config.job_policy_enforcer
 
     @pytest.fixture
-    async def enforcer(
+    async def run_enforce_polling(
         self, job_policy_enforcer_config: JobPolicyEnforcerConfig
-    ) -> AsyncIterator[JobPolicyEnforcer]:
-        exceptions: List[BaseException] = []
-        enforcer = JobPolicyEnforcer(
-            config=job_policy_enforcer_config,
-            exception_handler=lambda exc: exceptions.append(exc),
+    ) -> Callable[[JobPolicyEnforcer], AsyncIterator[None]]:
+        @asynccontextmanager
+        async def _factory(enforcer: JobPolicyEnforcer) -> AsyncIterator[None]:
+            poller = JobPolicyEnforcePoller(
+                policy_enforcer=enforcer, config=job_policy_enforcer_config
+            )
+            await poller.start()
+            yield
+            await poller.stop()
+
+        return _factory
+
+    @pytest.mark.asyncio
+    async def test_basic_no_exception_short_response(
+        self,
+        run_enforce_polling: Callable[[JobPolicyEnforcer], AsyncContextManager[None]],
+        job_policy_enforcer_config: JobPolicyEnforcerConfig,
+    ) -> None:
+        interval = job_policy_enforcer_config.interval_sec
+        enforcer = MockedJobPolicyEnforcer(raise_exception=False)
+        async with run_enforce_polling(enforcer):
+            await asyncio.sleep(interval * 1.5)
+            assert enforcer.called_times == 2
+
+    @pytest.mark.asyncio
+    async def test_basic_exception_thrown_short_response(
+        self,
+        run_enforce_polling: Callable[[JobPolicyEnforcer], AsyncContextManager[None]],
+        job_policy_enforcer_config: JobPolicyEnforcerConfig,
+    ) -> None:
+        interval = job_policy_enforcer_config.interval_sec
+        enforcer = MockedJobPolicyEnforcer(raise_exception=True)
+        async with run_enforce_polling(enforcer):
+            await asyncio.sleep(interval * 1.5)
+            assert enforcer.called_times == 2
+
+    @pytest.mark.asyncio
+    async def test_basic_no_exception_long_enforce(
+        self,
+        run_enforce_polling: Callable[[JobPolicyEnforcer], AsyncContextManager[None]],
+        job_policy_enforcer_config: JobPolicyEnforcerConfig,
+    ) -> None:
+        interval = job_policy_enforcer_config.interval_sec
+        enforcer = MockedJobPolicyEnforcer(
+            raise_exception=False, enforce_time_sec=interval * 2
         )
-        await enforcer.start()
-        assert enforcer._task
-        assert not enforcer._task.done()
-
-        yield enforcer
-
-        assert not enforcer._task.done()
-        await enforcer.stop()
-        assert enforcer._task is None
-        assert enforcer._session.closed
-        assert not exceptions
+        async with run_enforce_polling(enforcer):
+            await asyncio.sleep(interval * 1.5)
+            assert enforcer.called_times == 1
 
     @pytest.mark.asyncio
-    async def test_basic(self, api: ApiConfig, enforcer: JobPolicyEnforcer) -> None:
-        two_loops_timeout = enforcer._interval_sec * 2
-        await asyncio.sleep(two_loops_timeout)
-
-    @pytest.mark.asyncio
-    async def test_basic2(self, api: ApiConfig, enforcer: JobPolicyEnforcer) -> None:
-        two_loops_timeout = enforcer._interval_sec * 2
-        await asyncio.sleep(two_loops_timeout)
+    async def test_basic_exception_thrown_long_enforce(
+        self,
+        run_enforce_polling: Callable[[JobPolicyEnforcer], AsyncContextManager[None]],
+        job_policy_enforcer_config: JobPolicyEnforcerConfig,
+    ) -> None:
+        interval = job_policy_enforcer_config.interval_sec
+        enforcer = MockedJobPolicyEnforcer(
+            raise_exception=True, enforce_time_sec=interval * 2
+        )
+        async with run_enforce_polling(enforcer):
+            await asyncio.sleep(interval * 1.5)
+            assert enforcer.called_times == 1

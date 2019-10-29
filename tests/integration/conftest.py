@@ -535,8 +535,7 @@ def config_factory(
         job_policy_enforcer = JobPolicyEnforcerConfig(
             platform_api_url=URL("http://localhost:8080/api/v1"),
             token=admin_token,
-            interval_sec=2,
-            run_once_timeout_sec=5,
+            interval_sec=1,
         )
         database_config = DatabaseConfig(redis=redis_config)
         config_client = ConfigClient(base_url=URL("http://localhost:8082/api/v1"))

@@ -1,9 +1,7 @@
+import abc
 import asyncio
 import logging
-from typing import Any, Callable, Optional
-
-import aiohttp
-import async_timeout
+from typing import Any, Optional
 
 from platform_api.config import JobPolicyEnforcerConfig
 
@@ -11,61 +9,59 @@ from platform_api.config import JobPolicyEnforcerConfig
 logger = logging.getLogger(__name__)
 
 
-def _nop(*args: Any, **kwargs: Any) -> None:
-    pass
-
-
 class JobPolicyEnforcer:
+    @abc.abstractmethod
+    async def enforce(self) -> None:
+        pass
+
+
+class JobPolicyEnforcePoller:
     def __init__(
-        self,
-        config: JobPolicyEnforcerConfig,
-        exception_handler: Callable[[BaseException], None] = _nop,
+        self, policy_enforcer: JobPolicyEnforcer, config: JobPolicyEnforcerConfig
     ) -> None:
+        self._loop: asyncio.AbstractEventLoop = asyncio.get_event_loop()
+
         self._platform_api_url = config.platform_api_url
         self._headers = {"Authorization": f"Bearer {config.token}"}
         self._interval_sec = config.interval_sec
-        self._run_once_timeout_sec = config.run_once_timeout_sec
-        self._exception_handler = exception_handler
+        self._policy_enforcer = policy_enforcer
 
-        self._session = aiohttp.ClientSession()
         self._task: Optional[asyncio.Task[None]] = None
 
+    async def __aenter__(self) -> "JobPolicyEnforcePoller":
+        await self.start()
+        return self
+
+    async def __aexit__(self, *args: Any) -> None:
+        await self.stop()
+
     async def start(self) -> None:
-        logger.info("Starting enforce polling")
+        logger.info("Starting job policy enforce polling")
         assert self._task is None
 
-        loop = asyncio.get_event_loop()
-        self._task = loop.create_task(self._run())
-
-        # forcing execution of the newly created task:
-        await asyncio.sleep(0)
+        self._task = self._loop.create_task(self._run())
 
     async def stop(self) -> None:
-        logger.info("Stopping JobPolicyEnforcer")
+        logger.info("Stopping job policy enforce polling")
 
         assert self._task is not None
         self._task.cancel()
         self._task = None
 
-        await self._session.close()
-
     async def _run(self) -> None:
         while True:
+            start = self._loop.time()
             await self._run_once()
-            await asyncio.sleep(self._interval_sec)
+            elapsed = self._loop.time() - start
+            delay = self._interval_sec - elapsed
+            if delay < 0:
+                delay = 0
+            await asyncio.sleep(delay)
 
     async def _run_once(self) -> None:
-        assert self._session is not None
         try:
-            logger.debug("JobPolicyEnforcer._run_once() called")
-            with async_timeout.timeout(self._run_once_timeout_sec):
-                async with self._session.get(
-                    self._platform_api_url / "ping", headers=self._headers
-                ) as resp:
-                    assert resp.status == 200
-                    logger.debug("Platform API available")
+            await self._policy_enforcer.enforce()
         except asyncio.CancelledError:
             raise
-        except BaseException as exc:
+        except BaseException:
             logger.exception("Exception when trying to enforce jobs policies")
-            self._exception_handler(exc)

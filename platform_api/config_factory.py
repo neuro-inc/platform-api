@@ -90,10 +90,6 @@ class EnvironConfigFactory:
                 self._environ.get("NP_ENFORCER_INTERVAL_SEC")
                 or JobPolicyEnforcerConfig.interval_sec
             ),
-            run_once_timeout_sec=int(
-                self._environ.get("NP_ENFORCER_RUN_ONCE_TIMEOUT_SEC")
-                or JobPolicyEnforcerConfig.run_once_timeout_sec
-            ),
         )
 
     def create_ssh(self) -> SSHConfig:
