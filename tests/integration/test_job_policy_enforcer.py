@@ -83,7 +83,9 @@ class TestJobPolicyEnforcer:
         job_policy_enforcer_config: JobPolicyEnforcerConfig,
     ) -> None:
         interval = job_policy_enforcer_config.interval_sec
-        enforcer = MockedJobPolicyEnforcer(raise_exception=False)
+        enforcer = MockedJobPolicyEnforcer(
+            raise_exception=False, enforce_time_sec=interval * 0.1
+        )
         async with run_enforce_polling(enforcer):
             await asyncio.sleep(interval * 1.5)
             assert enforcer.called_times == 2
@@ -95,7 +97,9 @@ class TestJobPolicyEnforcer:
         job_policy_enforcer_config: JobPolicyEnforcerConfig,
     ) -> None:
         interval = job_policy_enforcer_config.interval_sec
-        enforcer = MockedJobPolicyEnforcer(raise_exception=True)
+        enforcer = MockedJobPolicyEnforcer(
+            raise_exception=True, enforce_time_sec=interval * 0.1
+        )
         async with run_enforce_polling(enforcer):
             await asyncio.sleep(interval * 1.5)
             assert enforcer.called_times == 2
