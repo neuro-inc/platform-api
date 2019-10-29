@@ -98,6 +98,8 @@ class StorageConfig:
 
 @dataclass(frozen=True)
 class RegistryConfig:
+    username: str
+    password: str
     url: URL = URL("https://registry.dev.neuromation.io")
     email: str = "registry@neuromation.io"
 

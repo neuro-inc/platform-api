@@ -60,7 +60,7 @@ class MockOrchestrator(Orchestrator):
     def storage_config(self) -> StorageConfig:
         return self._config.storage
 
-    async def prepare_job(self, job: Job, token: str) -> None:
+    async def prepare_job(self, job: Job) -> None:
         pass
 
     async def start_job(self, job: Job) -> JobStatus:
@@ -185,9 +185,13 @@ class MockCluster(Cluster):
 
 
 @pytest.fixture
-def cluster_config() -> ClusterConfig:
+def registry_config() -> RegistryConfig:
+    return RegistryConfig(username="compute", password="compute_token")
+
+
+@pytest.fixture
+def cluster_config(registry_config: RegistryConfig) -> ClusterConfig:
     storage_config = StorageConfig(host_mount_path=PurePath("/tmp"))
-    registry_config = RegistryConfig()
     orchestrator_config = KubeConfig(
         jobs_domain_name_template="{job_id}.jobs",
         ssh_auth_domain_name="ssh-auth",

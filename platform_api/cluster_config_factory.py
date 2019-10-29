@@ -158,7 +158,12 @@ class ClusterConfigFactory:
 
     def _create_registry_config(self, payload: Dict[str, Any]) -> RegistryConfig:
         registry = payload["registry"]
-        return RegistryConfig(url=URL(registry["url"]), email=registry["email"])
+        return RegistryConfig(
+            url=URL(registry["url"]),
+            email=registry["email"],
+            username=registry["username"],
+            password=registry["password"],
+        )
 
     def _create_storage_config(self, payload: Dict[str, Any]) -> StorageConfig:
         storage = payload["storage"]

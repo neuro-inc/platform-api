@@ -61,14 +61,13 @@ class TestStorageConfig:
 
 
 class TestStorageVolume:
-    def test_create_storage_volume_nfs(self) -> None:
+    def test_create_storage_volume_nfs(self, registry_config: RegistryConfig) -> None:
         storage_config = StorageConfig(
             host_mount_path=PurePath("/tmp"),
             type=StorageType.NFS,
             nfs_server="4.3.2.1",
             nfs_export_path=PurePath("/tmp"),
         )
-        registry_config = RegistryConfig()
         kube_config = KubeConfig(
             jobs_domain_name_template="{job_id}.testdomain",
             ssh_auth_domain_name="ssh-auth.domain",
@@ -85,11 +84,10 @@ class TestStorageVolume:
             name="storage", path=PurePath("/tmp"), server="4.3.2.1"
         )
 
-    def test_create_storage_volume_host(self) -> None:
+    def test_create_storage_volume_host(self, registry_config: RegistryConfig) -> None:
         storage_config = StorageConfig(
             host_mount_path=PurePath("/tmp"), type=StorageType.HOST
         )
-        registry_config = RegistryConfig()
         kube_config = KubeConfig(
             jobs_domain_name_template="{job_id}.testdomain",
             ssh_auth_domain_name="ssh-auth.domain",
@@ -104,11 +102,10 @@ class TestStorageVolume:
         volume = kube_orchestrator.create_storage_volume()
         assert volume == HostVolume(name="storage", path=PurePath("/tmp"))
 
-    def test_create_storage_volume_pvc(self) -> None:
+    def test_create_storage_volume_pvc(self, registry_config: RegistryConfig) -> None:
         storage_config = StorageConfig(
             host_mount_path=PurePath("/tmp"), type=StorageType.PVC, pvc_name="testclaim"
         )
-        registry_config = RegistryConfig()
         kube_config = KubeConfig(
             jobs_domain_name_template="{job_id}.testdomain",
             ssh_auth_domain_name="ssh-auth.domain",
@@ -393,18 +390,30 @@ class TestEnvironConfigFactory:
 
     def test_registry_config_invalid_missing_host(self) -> None:
         with pytest.raises(ValueError, match="missing url hostname"):
-            RegistryConfig(url=URL("registry.com"))
+            RegistryConfig(
+                url=URL("registry.com"), username="compute", password="compute_token"
+            )
 
     def test_registry_config_host_default_port(self) -> None:
-        config = RegistryConfig(url=URL("http://registry.com"))
+        config = RegistryConfig(
+            url=URL("http://registry.com"), username="compute", password="compute_token"
+        )
         assert config.host == "registry.com"
 
     def test_registry_config_host_default_port_explicit(self) -> None:
-        config = RegistryConfig(url=URL("http://registry.com:80"))
+        config = RegistryConfig(
+            url=URL("http://registry.com:80"),
+            username="compute",
+            password="compute_token",
+        )
         assert config.host == "registry.com:80"
 
     def test_registry_config_host_custom_port(self) -> None:
-        config = RegistryConfig(url=URL("http://registry.com:5000"))
+        config = RegistryConfig(
+            url=URL("http://registry.com:5000"),
+            username="compute",
+            password="compute_token",
+        )
         assert config.host == "registry.com:5000"
 
 

@@ -49,6 +49,8 @@ def clusters_payload(nfs_storage_payload: Dict[str, Any]) -> List[Dict[str, Any]
             "registry": {
                 "url": "https://registry-dev.neu.ro",
                 "email": "registry@neuromation.io",
+                "username": "compute",
+                "password": "compute_token",
             },
             "orchestrator": {
                 "kubernetes": {
