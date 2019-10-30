@@ -63,7 +63,7 @@ class ApiConfig(NamedTuple):
 
 
 async def get_cluster_configs(
-    cluster_configs: Sequence[ClusterConfig]
+    cluster_configs: Sequence[ClusterConfig],
 ) -> Sequence[ClusterConfig]:
     return cluster_configs
 

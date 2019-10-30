@@ -90,7 +90,7 @@ async def job_nginx(kube_orchestrator: KubeOrchestrator) -> MyJob:
 
 @pytest.fixture
 async def delete_job_later(
-    kube_orchestrator: KubeOrchestrator
+    kube_orchestrator: KubeOrchestrator,
 ) -> AsyncIterator[Callable[[Job], Awaitable[None]]]:
     jobs = []
 
@@ -1206,7 +1206,7 @@ class TestKubeOrchestrator:
 
 @pytest.fixture
 async def delete_pod_later(
-    kube_client: KubeClient
+    kube_client: KubeClient,
 ) -> AsyncIterator[Callable[[PodDescriptor], Awaitable[None]]]:
     pods = []
 
