@@ -26,7 +26,7 @@ OptionalString = t.String(allow_blank=True) | t.Null
 
 
 def create_job_name_validator(
-    max_length: Optional[int] = JOB_NAME_MAX_LENGTH
+    max_length: Optional[int] = JOB_NAME_MAX_LENGTH,
 ) -> t.Trafaret:
     return t.Null | t.String(min_length=3, max_length=max_length) & t.Regexp(
         JOB_NAME_PATTERN

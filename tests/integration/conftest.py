@@ -25,6 +25,7 @@ from platform_api.config import (
     AuthConfig,
     Config,
     DatabaseConfig,
+    JobPolicyEnforcerConfig,
     JobsConfig,
     NotificationsConfig,
     OAuthConfig,
@@ -393,7 +394,7 @@ async def kube_orchestrator_pvc(
 
 @pytest.fixture
 async def delete_node_later(
-    kube_client: MyKubeClient
+    kube_client: MyKubeClient,
 ) -> AsyncIterator[Callable[[str], Awaitable[None]]]:
     nodes = []
 
@@ -527,9 +528,15 @@ def config_factory(
     auth_config: AuthConfig,
     jobs_config: JobsConfig,
     notifications_config: NotificationsConfig,
+    admin_token: str,
 ) -> Callable[..., Config]:
     def _factory(**kwargs: Any) -> Config:
         server_config = ServerConfig()
+        job_policy_enforcer = JobPolicyEnforcerConfig(
+            platform_api_url=URL("http://localhost:8080/api/v1"),
+            token=admin_token,
+            interval_sec=1,
+        )
         database_config = DatabaseConfig(redis=redis_config)
         config_client = ConfigClient(base_url=URL("http://localhost:8082/api/v1"))
         return Config(
@@ -537,6 +544,7 @@ def config_factory(
             database=database_config,
             auth=auth_config,
             jobs=jobs_config,
+            job_policy_enforcer=job_policy_enforcer,
             notifications=notifications_config,
             config_client=config_client,
             **kwargs,

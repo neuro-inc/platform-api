@@ -73,6 +73,13 @@ class NotificationsConfig:
 
 
 @dataclass(frozen=True)
+class JobPolicyEnforcerConfig:
+    platform_api_url: URL
+    token: str
+    interval_sec: int = 60
+
+
+@dataclass(frozen=True)
 class Config:
     config_client: ConfigClient
 
@@ -81,6 +88,7 @@ class Config:
     database: DatabaseConfig
     auth: AuthConfig
     notifications: NotificationsConfig
+    job_policy_enforcer: JobPolicyEnforcerConfig
 
     oauth: Optional[OAuthConfig] = None
 

@@ -61,7 +61,8 @@ class MyJob(Job):
         )
 
     async def start(self) -> JobStatus:
-        status = await self._orchestrator.start_job(self, "test-token")
+        await self._orchestrator.prepare_job(self, "test-token")
+        status = await self._orchestrator.start_job(self)
         assert status == JobStatus.PENDING
         return status
 
@@ -89,7 +90,7 @@ async def job_nginx(kube_orchestrator: KubeOrchestrator) -> MyJob:
 
 @pytest.fixture
 async def delete_job_later(
-    kube_orchestrator: KubeOrchestrator
+    kube_orchestrator: KubeOrchestrator,
 ) -> AsyncIterator[Callable[[Job], Awaitable[None]]]:
     jobs = []
 
@@ -1205,7 +1206,7 @@ class TestKubeOrchestrator:
 
 @pytest.fixture
 async def delete_pod_later(
-    kube_client: KubeClient
+    kube_client: KubeClient,
 ) -> AsyncIterator[Callable[[PodDescriptor], Awaitable[None]]]:
     pods = []
 
@@ -1725,7 +1726,8 @@ class TestNodeSelector:
             ),
         )
         await delete_job_later(job)
-        await kube_orchestrator.start_job(job, token="test-token")
+        await kube_orchestrator.prepare_job(job, token="test-token")
+        await kube_orchestrator.start_job(job)
         pod_name = job.id
 
         await kube_client.wait_pod_scheduled(pod_name, node_name)
@@ -1758,7 +1760,8 @@ class TestNodeSelector:
                 ),
             )
             await delete_job_later(job)
-            await kube_orchestrator.start_job(job, token="test-token")
+            await kube_orchestrator.prepare_job(job, token="test-token")
+            await kube_orchestrator.start_job(job)
             pod_name = job.id
 
             await kube_client.wait_pod_scheduled(pod_name, node_name)
@@ -1789,7 +1792,8 @@ class TestNodeSelector:
             ),
         )
         await delete_job_later(job)
-        await kube_orchestrator.start_job(job, token="test-token")
+        await kube_orchestrator.prepare_job(job, token="test-token")
+        await kube_orchestrator.start_job(job)
         pod_name = job.id
 
         await kube_client.wait_pod_scheduled(pod_name, node_name)
@@ -1843,7 +1847,8 @@ class TestPreemption:
             ),
         )
         await delete_job_later(job)
-        await kube_orchestrator.start_job(job, token="test-token")
+        await kube_orchestrator.prepare_job(job, token="test-token")
+        await kube_orchestrator.start_job(job)
         pod_name = job.id
 
         await kube_client.wait_pod_is_running(pod_name=pod_name, timeout_s=60.0)
@@ -1879,7 +1884,8 @@ class TestPreemption:
             ),
         )
         await delete_job_later(job)
-        await kube_orchestrator.start_job(job, token="test-token")
+        await kube_orchestrator.prepare_job(job, token="test-token")
+        await kube_orchestrator.start_job(job)
         pod_name = job.id
 
         await kube_client.wait_pod_is_running(pod_name=pod_name, timeout_s=60.0)
@@ -1922,7 +1928,8 @@ class TestPreemption:
             is_forced_to_preemptible_pool=True,
         )
         await delete_job_later(job)
-        await kube_orchestrator.start_job(job, token="test-token")
+        await kube_orchestrator.prepare_job(job, token="test-token")
+        await kube_orchestrator.start_job(job)
         pod_name = job.id
 
         await kube_client.wait_pod_scheduled(pod_name, node_name)
@@ -1961,7 +1968,8 @@ class TestPreemption:
             is_forced_to_preemptible_pool=True,
         )
         await delete_job_later(job)
-        await kube_orchestrator.start_job(job, token="test-token")
+        await kube_orchestrator.prepare_job(job, token="test-token")
+        await kube_orchestrator.start_job(job)
         pod_name = job.id
 
         await kube_client.wait_pod_scheduled(pod_name, node_name)
@@ -2009,7 +2017,8 @@ class TestPreemption:
             is_forced_to_preemptible_pool=True,
         )
         await delete_job_later(job)
-        await kube_orchestrator.start_job(job, token="test-token")
+        await kube_orchestrator.prepare_job(job, token="test-token")
+        await kube_orchestrator.start_job(job)
         pod_name = job.id
 
         await kube_client.wait_pod_scheduled(pod_name, node_name)

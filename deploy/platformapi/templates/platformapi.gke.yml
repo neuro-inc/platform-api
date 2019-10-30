@@ -86,6 +86,15 @@ spec:
             secretKeyRef:
               name: platformservices-secret
               key: compute_token
+
+        - name: NP_ENFORCER_PLATFORM_API_URL
+          value: {{ printf "%s" (pluck .Values.global.env .Values.NP_ENFORCER_PLATFORM_API_URL | first | default .Values.NP_ENFORCER_PLATFORM_API_URL._default) }}
+        - name: NP_ENFORCER_TOKEN
+          valueFrom:
+            secretKeyRef:
+              name: platformservices-secret
+              key: compute_token
+
       - name: kubeproxy
         image: lachlanevenson/k8s-kubectl:v1.10.3
         args: [proxy]

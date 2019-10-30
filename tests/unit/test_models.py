@@ -789,7 +789,7 @@ async def test_job_to_job_response(mock_orchestrator: MockOrchestrator) -> None:
 
 @pytest.mark.asyncio
 async def test_job_to_job_response_with_job_name_and_http_exposed(
-    mock_orchestrator: MockOrchestrator
+    mock_orchestrator: MockOrchestrator,
 ) -> None:
     owner_name = "a" * USER_NAME_MAX_LENGTH
     job_name = "b" * JOB_NAME_MAX_LENGTH
@@ -839,7 +839,7 @@ async def test_job_to_job_response_with_job_name_and_http_exposed(
 
 @pytest.mark.asyncio
 async def test_job_to_job_response_with_job_name_and_http_exposed_too_long_name(
-    mock_orchestrator: MockOrchestrator
+    mock_orchestrator: MockOrchestrator,
 ) -> None:
     owner_name = "a" * USER_NAME_MAX_LENGTH
     job_name = "b" * (JOB_NAME_MAX_LENGTH + 1)
@@ -889,7 +889,7 @@ async def test_job_to_job_response_with_job_name_and_http_exposed_too_long_name(
 
 @pytest.mark.asyncio
 async def test_job_to_job_response_assert_non_empty_cluster_name(
-    mock_orchestrator: MockOrchestrator
+    mock_orchestrator: MockOrchestrator,
 ) -> None:
     job = Job(
         storage_config=mock_orchestrator.storage_config,

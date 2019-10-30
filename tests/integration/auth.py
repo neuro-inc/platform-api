@@ -85,7 +85,7 @@ def admin_token(token_factory: Callable[[str], str]) -> str:
 
 
 async def create_auth_config(
-    container: aiodocker.containers.DockerContainer
+    container: aiodocker.containers.DockerContainer,
 ) -> AuthConfig:
     host = "0.0.0.0"
     port = int((await container.port(8080))[0]["HostPort"])
