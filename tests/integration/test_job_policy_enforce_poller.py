@@ -5,6 +5,7 @@ import pytest
 from yarl import URL
 
 from platform_api.config import Config, JobPolicyEnforcerConfig
+from platform_api.orchestrator.job_policy_enforce_poller import JobPolicyEnforcePoller
 from platform_api.orchestrator.job_policy_enforcer import JobPolicyEnforcer
 from tests.integration.api import ApiConfig
 
@@ -29,23 +30,31 @@ class PlatformApiEndpoints:
         return f"{self.jobs_base_url}/{job_id}"
 
 
-class TestJobPolicyEnforcer:
+class MockJobPolicyEnforcer(JobPolicyEnforcer):
+    async def enforce(self) -> None:
+        pass
+
+
+class TestJobPolicyEnforcePoller:
     @pytest.fixture
     def job_policy_enforcer_config(self, config: Config) -> JobPolicyEnforcerConfig:
         return config.job_policy_enforcer
 
     @pytest.fixture
-    async def job_policy_enfocer(
+    async def job_policy_enforce_poller(
         self, job_policy_enforcer_config: JobPolicyEnforcerConfig
-    ) -> AsyncIterator[JobPolicyEnforcer]:
-        enforcer = JobPolicyEnforcer(config=job_policy_enforcer_config)
-        await enforcer.start()
-        yield enforcer
-        await enforcer.stop()
+    ) -> AsyncIterator[JobPolicyEnforcePoller]:
+        enforcer = MockJobPolicyEnforcer()
+        poller = JobPolicyEnforcePoller(
+            config=job_policy_enforcer_config, policy_enforcer=enforcer
+        )
+        await poller.start()
+        yield poller
+        await poller.stop()
 
     @pytest.mark.asyncio
     async def test_basic(
-        self, api: ApiConfig, job_policy_enfocer: JobPolicyEnforcer
+        self, api: ApiConfig, job_policy_enforce_poller: JobPolicyEnforcePoller
     ) -> None:
         # TODO(artem): drop this test once we have tests on the policy enforcement logic
-        await job_policy_enfocer._run_once()
+        await job_policy_enforce_poller._run_once()

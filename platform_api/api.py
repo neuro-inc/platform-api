@@ -11,7 +11,11 @@ from neuro_auth_client.security import AuthScheme, setup_security
 from notifications_client import Client as NotificationsClient
 from platform_logging import init_logging
 
-from platform_api.orchestrator.job_policy_enforcer import JobPolicyEnforcer
+from platform_api.orchestrator.job_policy_enforce_poller import JobPolicyEnforcePoller
+from platform_api.orchestrator.job_policy_enforcer import (
+    QuotaJobPolicyEnforcer,
+    RealJobPolicyEnforcerClientWrapper,
+)
 
 from .cluster import Cluster, ClusterConfig, ClusterRegistry
 from .config import Config
@@ -237,9 +241,15 @@ async def create_app(
             jobs_poller = JobsPoller(jobs_service=jobs_service)
             await exit_stack.enter_async_context(jobs_poller)
 
-            logger.info("Initializing JobPolicyEnforcer")
-            job_policy_enforcer = JobPolicyEnforcer(config.job_policy_enforcer)
-            await exit_stack.enter_async_context(job_policy_enforcer)
+            logger.info("Initializing JobPolicyEnforcePoller")
+            client_wrapper = RealJobPolicyEnforcerClientWrapper(
+                config.job_policy_enforcer
+            )
+            job_policy_enforcer = QuotaJobPolicyEnforcer(client_wrapper)
+            job_policy_enforce_poller = JobPolicyEnforcePoller(
+                job_policy_enforcer, config.job_policy_enforcer
+            )
+            await exit_stack.enter_async_context(job_policy_enforce_poller)
 
             app["api_v1_app"]["jobs_service"] = jobs_service
             app["jobs_app"]["jobs_service"] = jobs_service

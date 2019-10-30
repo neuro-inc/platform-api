@@ -7,10 +7,8 @@ from async_generator import asynccontextmanager
 from yarl import URL
 
 from platform_api.config import JobPolicyEnforcerConfig
-from platform_api.orchestrator.job_policy_enforcer import (
-    JobPolicyEnforcePoller,
-    JobPolicyEnforcer,
-)
+from platform_api.orchestrator.job_policy_enforce_poller import JobPolicyEnforcePoller
+from platform_api.orchestrator.job_policy_enforcer import JobPolicyEnforcer
 
 
 @dataclass(frozen=True)
