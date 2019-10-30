@@ -485,29 +485,29 @@ class BulkJobFilterBuilder:
         owners_shared_all: Set[str] = set()
         shared_ids: Set[str] = set()
 
-        if tree.sub_tree.action == "deny":
+        if not tree.sub_tree.can_list():
             # no job resources whatsoever
             raise JobFilterException("no jobs")
 
-        if tree.sub_tree.action != "list":
+        if tree.sub_tree.can_read():
             # read access to all jobs = job:
             self._has_access_to_all = True
             return
 
         for owner, sub_tree in tree.sub_tree.children.items():
-            if sub_tree.action == "deny":
+            if not sub_tree.can_list():
                 continue
 
             if self._query_filter.owners and owner not in self._query_filter.owners:
                 # skipping owners
                 continue
 
-            if sub_tree.action == "list":
+            if not sub_tree.can_read():
                 # specific ids
                 shared_ids.update(
                     job_id
                     for job_id, job_sub_tree in sub_tree.children.items()
-                    if job_sub_tree.action not in ("deny", "list")
+                    if job_sub_tree.can_read()
                 )
             else:
                 # read/write/manage access to all owner's jobs = job://owner
