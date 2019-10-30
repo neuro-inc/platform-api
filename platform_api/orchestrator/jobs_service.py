@@ -334,7 +334,7 @@ class JobsService:
                     record=record,
                 )
                 try:
-                    await cluster.orchestrator.kill_job(job)
+                    await cluster.orchestrator.delete_job(job)
                 except JobException as exc:
                     # if the job is missing, we still want to mark
                     # the job as deleted. suppressing.
