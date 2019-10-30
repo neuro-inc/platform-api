@@ -295,7 +295,7 @@ class EnvironConfigFactory:
         else:
             url = RegistryConfig.url
         token = self._environ["NP_AUTH_TOKEN"]
-        name = self._environ.get("NP_AUTH_NAME", RegistryConfig.username)
+        name = self._environ.get("NP_AUTH_NAME", AuthConfig.service_name)
         return RegistryConfig(url=url, username=name, password=token)
 
     def create_ingress(self) -> IngressConfig:
