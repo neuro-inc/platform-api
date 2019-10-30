@@ -69,7 +69,7 @@ def _minutes_to_timedelta(minutes: Optional[int]) -> timedelta:
 def _timedelta_to_minutes(delta: timedelta) -> Optional[int]:
     if delta == timedelta.max:
         return None
-    return round(delta / TIMEDELTA_ONE_MINUTE)
+    return round(delta / timedelta(minutes=1))
 
 
 DEFAULT_QUOTA_NO_RESTRICTIONS: AggregatedRunTime = AggregatedRunTime.from_quota(Quota())

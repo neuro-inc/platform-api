@@ -16,6 +16,7 @@ from platform_api.orchestrator.job import (
     JobRecord,
     JobStatusHistory,
     JobStatusItem,
+    _timedelta_to_minutes,
 )
 from platform_api.orchestrator.job_request import (
     Container,
