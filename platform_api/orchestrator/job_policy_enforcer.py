@@ -61,7 +61,7 @@ class JobPolicyEnforcer:
 
 
 class QuotaJobPolicyEnforcer(JobPolicyEnforcer):
-    def __init__(self, wrapper: RealJobPolicyEnforcerClientWrapper):
+    def __init__(self, wrapper: JobPolicyEnforcerClientWrapper):
         self._wrapper = wrapper
 
     async def enforce(self) -> None:
@@ -74,7 +74,7 @@ class QuotaJobPolicyEnforcer(JobPolicyEnforcer):
         jobs = response_payload["jobs"]
         jobs_by_owner: Dict[str, Dict[str, Set[str]]] = {}
         for job in jobs:
-            job_status = JobStatus(response_payload["status"])
+            job_status = JobStatus(job["status"])
             if job_status.is_running or job_status.is_pending:
                 owner = job.get("owner")
                 if owner:

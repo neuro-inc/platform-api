@@ -1,6 +1,6 @@
 import asyncio
 from dataclasses import dataclass
-from typing import AsyncContextManager, AsyncIterator, Callable
+from typing import Any, AsyncContextManager, AsyncIterator, Callable, Dict
 
 import pytest
 from async_generator import asynccontextmanager
@@ -8,7 +8,11 @@ from yarl import URL
 
 from platform_api.config import JobPolicyEnforcerConfig
 from platform_api.orchestrator.job_policy_enforce_poller import JobPolicyEnforcePoller
-from platform_api.orchestrator.job_policy_enforcer import JobPolicyEnforcer
+from platform_api.orchestrator.job_policy_enforcer import (
+    JobPolicyEnforcer,
+    JobPolicyEnforcerClientWrapper,
+    QuotaJobPolicyEnforcer,
+)
 
 
 @dataclass(frozen=True)
@@ -63,7 +67,7 @@ def job_policy_enforcer_config() -> JobPolicyEnforcerConfig:
     )
 
 
-class TestJobPolicyEnforcer:
+class TestJobPolicyEnforcePoller:
     @pytest.fixture
     async def run_enforce_polling(
         self, job_policy_enforcer_config: JobPolicyEnforcerConfig
@@ -134,3 +138,59 @@ class TestJobPolicyEnforcer:
         async with run_enforce_polling(enforcer):
             await asyncio.sleep(interval * 1.5)
             assert enforcer.called_times == 1
+
+
+class MockJobPolicyEnforcerClientWrapper(JobPolicyEnforcerClientWrapper):
+    async def get_users_with_active_jobs(self) -> Dict[Any, Any]:
+        return {
+            "jobs": [
+                {
+                    "id": "job1",
+                    "status": "running",
+                    "owner": "user1",
+                    "container": {"resources": {"cpu": 1.0}},
+                },
+                {
+                    "id": "job2",
+                    "status": "pending",
+                    "owner": "user1",
+                    "container": {"resources": {"cpu": 1.0}},
+                },
+                {
+                    "id": "job3",
+                    "status": "running",
+                    "owner": "user2",
+                    "container": {"resources": {"cpu": 1.0}},
+                },
+                {
+                    "id": "job4",
+                    "status": "pending",
+                    "owner": "user2",
+                    "container": {"resources": {"cpu": 1.0}},
+                },
+                {
+                    "id": "job5",
+                    "status": "pending",
+                    "owner": "user2",
+                    "container": {"resources": {"cpu": 1.0, "gpu": 0.5}},
+                },
+            ]
+        }
+
+    async def get_user_stats(self, username: str) -> Dict[Any, Any]:
+        pass
+
+    async def kill_job(self, job_id: str) -> None:
+        pass
+
+
+class TestQuotaJobPolicyEnforcer:
+    @pytest.mark.asyncio
+    async def test_get_users_with_active_jobs(self) -> None:
+        wrapper = MockJobPolicyEnforcerClientWrapper()
+        enforcer = QuotaJobPolicyEnforcer(wrapper)
+        result = await enforcer.get_users_with_active_jobs()
+        assert result == {
+            "user1": {"cpu": {"job1", "job2"}, "gpu": set()},
+            "user2": {"cpu": {"job3", "job4"}, "gpu": {"job5"}},
+        }
