@@ -1453,40 +1453,6 @@ class TestAggregatedRunTime:
         )
 
 
-class TestTimeDeltaConverter:
-    def test__time_delta_to_minutes_millliseconds_less_than_half(self) -> None:
-        delta = timedelta(minutes=0, seconds=10, milliseconds=29)
-        assert AggregatedRunTime._timedelta_to_minutes(delta) == 0
-
-    def test_timedelta_to_minutes_millliseconds_equals_to_half(self) -> None:
-        delta = timedelta(minutes=0, seconds=10, milliseconds=30)
-        assert AggregatedRunTime._timedelta_to_minutes(delta) == 0
-
-    def test_timedelta_to_minutes_millliseconds_greater_then_half(self) -> None:
-        delta = timedelta(minutes=0, seconds=10, milliseconds=31)
-        assert AggregatedRunTime._timedelta_to_minutes(delta) == 0
-
-    def test_timedelta_to_minutes_seconds_less_than_half(self) -> None:
-        delta = timedelta(minutes=0, seconds=29)
-        assert AggregatedRunTime._timedelta_to_minutes(delta) == 0
-
-    def test_timedelta_to_minutes_seconds_equals_to_half(self) -> None:
-        delta = timedelta(minutes=0, seconds=30)
-        assert AggregatedRunTime._timedelta_to_minutes(delta) == 0
-
-    def test_timedelta_to_minutes_seconds_greater_then_half(self) -> None:
-        delta = timedelta(minutes=0, seconds=31)
-        assert AggregatedRunTime._timedelta_to_minutes(delta) == 1
-
-    def test_timedelta_to_minutes_minutes_non_zero(self) -> None:
-        delta = timedelta(minutes=10, seconds=15)
-        assert AggregatedRunTime._timedelta_to_minutes(delta) == 10
-
-    def test_timedelta_to_minutes_max(self) -> None:
-        delta = timedelta.max
-        assert AggregatedRunTime._timedelta_to_minutes(delta) is None
-
-
 class TestUser:
     q_max = timedelta.max
     q_value = timedelta(10)

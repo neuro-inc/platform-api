@@ -1,4 +1,5 @@
-from typing import Dict
+from datetime import timedelta
+from typing import Dict, Optional
 
 import aiohttp.web
 import trafaret as t
@@ -9,6 +10,9 @@ from neuro_auth_client import AuthClient, Permission, check_permissions
 from platform_api.config import Config
 from platform_api.orchestrator.job import AggregatedRunTime
 from platform_api.orchestrator.jobs_storage import JobFilter, JobsStorage
+
+
+TIMEDELTA_ONE_MINUTE = timedelta(minutes=1)
 
 
 def create_aggregated_runtime_validator(optional_fields: bool) -> t.Trafaret:
@@ -64,7 +68,7 @@ class StatsHandler:
         response_payload = {"name": username}
 
         if user.quota is not None:
-            response_payload["quota"] = convert_run_time_to_response(user.quota)
+            response_payload["quota"] = AggregatedRunTime.from_quota(user.quota)
         else:
             response_payload["quota"] = dict()
 
@@ -81,10 +85,16 @@ class StatsHandler:
 
 def convert_run_time_to_response(run_time: AggregatedRunTime) -> Dict[str, int]:
     result: Dict[str, int] = {}
-    gpu_minutes = run_time.total_gpu_run_time_minutes
+    gpu_minutes = timedelta_to_minutes(run_time.total_gpu_run_time_delta)
     if gpu_minutes is not None:
         result["total_gpu_run_time_minutes"] = gpu_minutes
-    non_gpu_minutes = run_time.total_non_gpu_run_time_minutes
+    non_gpu_minutes = timedelta_to_minutes(run_time.total_non_gpu_run_time_delta)
     if non_gpu_minutes is not None:
         result["total_non_gpu_run_time_minutes"] = non_gpu_minutes
     return result
+
+
+def timedelta_to_minutes(delta: timedelta) -> Optional[int]:
+    if delta == timedelta.max:
+        return None
+    return round(delta / TIMEDELTA_ONE_MINUTE)
