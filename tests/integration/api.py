@@ -221,7 +221,7 @@ async def jobs_client(
     client = jobs_client_factory(regular_user)
     yield client
     for job in client.submitted_jobs:
-        await client.delete_job(job)
+        await client.delete_job(job, assert_success=False)
 
 
 @pytest.fixture
