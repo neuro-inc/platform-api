@@ -51,10 +51,10 @@ class AggregatedRunTime:
     def from_primitive(cls, json: Dict[str, Optional[int]]) -> "AggregatedRunTime":
         return cls(
             total_gpu_run_time_delta=_minutes_to_timedelta(
-                json.get("total_gpu_run_minutes")
+                json.get("total_gpu_run_time_minutes")
             ),
             total_non_gpu_run_time_delta=_minutes_to_timedelta(
-                json.get("total_non_gpu_run_minutes")
+                json.get("total_non_gpu_run_time_minutes")
             ),
         )
 

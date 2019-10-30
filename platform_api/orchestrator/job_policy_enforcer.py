@@ -34,7 +34,7 @@ class RealJobPolicyEnforcerClientWrapper(JobPolicyEnforcerClientWrapper):
 
     async def get_users_with_active_jobs(self) -> Dict[Any, Any]:
         async with self._session.get(
-            self._platform_api_url / "jobs?status=pending&status=running",
+            f"{self._platform_api_url}/jobs?status=pending&status=running",
             headers=self._headers,
         ) as resp:
             resp.raise_for_status()
