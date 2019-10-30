@@ -584,8 +584,6 @@ class TestJobs:
                 )
             }
 
-        # cleanup
-        await jobs_client.delete_job(job_id)
 
     @pytest.mark.asyncio
     async def test_create_job_gpu_quota_allows(
@@ -593,18 +591,19 @@ class TestJobs:
         api: ApiConfig,
         client: aiohttp.ClientSession,
         job_request_factory: Callable[[], Dict[str, Any]],
-        jobs_client: JobsClient,
         regular_user_factory: Callable[..., Any],
+        jobs_client_factory:  Callable[[_User], JobsClient],
     ) -> None:
         quota = Quota(total_gpu_run_time_minutes=100)
         user = await regular_user_factory(quota=quota)
+        user_jobs_client = jobs_client_factory(user)
         url = api.jobs_base_url
         job_request = job_request_factory()
         job_request["container"]["resources"]["gpu"] = 1
         async with client.post(url, headers=user.headers, json=job_request) as response:
             assert response.status == HTTPAccepted.status_code, await response.text()
             payload = await response.json()
-            jobs_client.delete_job_later(job_id=payload["id"])
+            user_jobs_client.delete_job_later(job_id=payload["id"])
 
     @pytest.mark.asyncio
     async def test_create_job_non_gpu_quota_allows(
@@ -612,17 +611,18 @@ class TestJobs:
         api: ApiConfig,
         client: aiohttp.ClientSession,
         job_request_factory: Callable[[], Dict[str, Any]],
-        jobs_client: JobsClient,
         regular_user_factory: Callable[..., Any],
+        jobs_client_factory:  Callable[[_User], JobsClient],
     ) -> None:
         quota = Quota(total_non_gpu_run_time_minutes=100)
         user = await regular_user_factory(quota=quota)
+        user_jobs_client = jobs_client_factory(user)
         url = api.jobs_base_url
         job_request = job_request_factory()
         async with client.post(url, headers=user.headers, json=job_request) as response:
             assert response.status == HTTPAccepted.status_code, await response.text()
             payload = await response.json()
-            jobs_client.delete_job_later(job_id=payload["id"])
+            user_jobs_client.delete_job_later(job_id=payload["id"])
 
     @pytest.mark.asyncio
     async def test_create_job_gpu_quota_exceeded(
@@ -816,8 +816,6 @@ class TestJobs:
         client: aiohttp.ClientSession,
         jobs_client_factory: Callable[[_User], JobsClient],
     ) -> AsyncIterator[Callable[[_User, Dict[str, Any], bool, bool], Awaitable[str]]]:
-        cleanup_pairs = []
-
         async def _impl(
             user: _User,
             job_request: Dict[str, Any],
@@ -834,14 +832,13 @@ class TestJobs:
                 )
                 data = await resp.json()
                 job_id = data["id"]
-                jobs_client.delete_job_later(job_id)
                 if do_wait:
                     await jobs_client.long_polling_by_job_id(job_id, "running")
                 if do_kill:
                     await jobs_client.delete_job(job_id)
                     await jobs_client.long_polling_by_job_id(job_id, "succeeded")
                 else:
-                    cleanup_pairs.append((jobs_client, job_id))
+                    jobs_client.delete_job_later(job_id)
             return job_id
 
         yield _impl

@@ -35,7 +35,8 @@ test_unit:
 	pytest -vv --cov-config=setup.cfg --cov platform_api tests/unit
 
 test_integration:
-	pytest -vv --maxfail=3 --cov-config=setup.cfg --cov platform_api tests/integration
+# 	pytest -vv --maxfail=3 --cov-config=setup.cfg --cov platform_api tests/integration
+	pytest -vv -s --cov-config=setup.cfg --cov platform_api tests/integration
 
 test_e2e:
 	pytest -vv tests/e2e
