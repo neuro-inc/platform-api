@@ -275,6 +275,8 @@ async def get_cluster_configs(config: Config) -> Sequence[ClusterConfig]:
         return await client.get_clusters(
             jobs_ingress_class=config.jobs.jobs_ingress_class,
             jobs_ingress_oauth_url=config.jobs.jobs_ingress_oauth_url,
+            registry_username=config.auth.service_name,
+            registry_password=config.auth.service_token,
         )
 
 

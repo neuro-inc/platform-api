@@ -38,8 +38,6 @@ def cluster_configs_payload() -> List[Dict[str, Any]]:
             "registry": {
                 "url": "https://registry-dev.neu.ro",
                 "email": "registry@neuromation.io",
-                "username": "compute",
-                "password": "compute_token",
             },
             "orchestrator": {
                 "kubernetes": {

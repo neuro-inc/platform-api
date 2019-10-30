@@ -22,8 +22,6 @@ def cluster_configs_payload() -> List[Dict[str, Any]]:
             "registry": {
                 "url": "https://registry-dev.neu.ro",
                 "email": "registry@neuromation.io",
-                "username": "compute",
-                "password": "compute_token",
             },
             "orchestrator": {
                 "kubernetes": {
@@ -83,6 +81,8 @@ class TestConfigClient:
                 result = await client.get_clusters(
                     jobs_ingress_class="nginx",
                     jobs_ingress_oauth_url=URL("https://neu.ro/oauth/authorize"),
+                    registry_username="registry_user",
+                    registry_password="registry_token",
                 )
 
                 assert len(result) == 1
@@ -97,6 +97,8 @@ class TestConfigClient:
                 result = await client.get_clusters(
                     jobs_ingress_class="nginx",
                     jobs_ingress_oauth_url=URL("https://neu.ro/oauth/authorize"),
+                    registry_username="registry_user",
+                    registry_password="registry_token",
                 )
 
                 assert len(result) == 1
