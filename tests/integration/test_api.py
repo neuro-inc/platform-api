@@ -14,6 +14,7 @@ from aiohttp.web import (
     HTTPOk,
     HTTPUnauthorized,
 )
+from aiohttp.web_exceptions import HTTPNotFound
 from neuro_auth_client import Permission
 from neuro_auth_client.client import Quota
 
@@ -1829,7 +1830,7 @@ class TestJobs:
                 "status": "pending",
                 "history": {
                     "status": "pending",
-                    "reason": None,
+                    "reason": "Creating",
                     "description": None,
                     "created_at": mock.ANY,
                 },
@@ -2037,7 +2038,7 @@ class TestJobs:
                 "status": "pending",
                 "history": {
                     "status": "pending",
-                    "reason": None,
+                    "reason": "Creating",
                     "description": None,
                     "created_at": mock.ANY,
                 },
@@ -2122,7 +2123,7 @@ class TestJobs:
                 "status": "pending",
                 "history": {
                     "status": "pending",
-                    "reason": None,
+                    "reason": "Creating",
                     "description": None,
                     "created_at": mock.ANY,
                 },
@@ -2153,7 +2154,15 @@ class TestStats:
             assert resp.status == HTTPUnauthorized.status_code
 
     @pytest.mark.asyncio
-    async def test_users_stats_authorized(
+    async def test_user_stats_for_another_user(
+        self, api: ApiConfig, client: aiohttp.ClientSession, regular_user: _User
+    ) -> None:
+        url = api.stats_for_user_url("admin")
+        async with client.get(url, headers=regular_user.headers) as resp:
+            assert resp.status == HTTPForbidden.status_code
+
+    @pytest.mark.asyncio
+    async def test_user_stats_authorized(
         self, api: ApiConfig, client: aiohttp.ClientSession, regular_user: _User
     ) -> None:
         url = api.stats_for_user_url(regular_user.name)
@@ -2162,7 +2171,41 @@ class TestStats:
             result = await resp.json()
             assert result == {
                 "name": regular_user.name,
-                "jobs": {"total_gpu_run_minutes": 0, "total_non_gpu_run_minutes": 0},
+                "jobs": {
+                    "total_gpu_run_time_minutes": 0,
+                    "total_non_gpu_run_time_minutes": 0,
+                },
+                "quota": {},
+            }
+
+    @pytest.mark.asyncio
+    async def test_user_stats_authorized_request_for_non_existing_user(
+        self, api: ApiConfig, client: aiohttp.ClientSession, admin_token: str
+    ) -> None:
+        url = api.stats_for_user_url("non-existing")
+        admin_user = _User(name="admin", token=admin_token)
+        async with client.get(url, headers=admin_user.headers) as resp:
+            assert resp.status == HTTPNotFound.status_code
+
+    @pytest.mark.asyncio
+    async def test_user_stats_admin(
+        self,
+        api: ApiConfig,
+        client: aiohttp.ClientSession,
+        regular_user: _User,
+        admin_token: str,
+    ) -> None:
+        url = api.stats_for_user_url(regular_user.name)
+        admin_user = _User(name="admin", token=admin_token)
+        async with client.get(url, headers=admin_user.headers) as resp:
+            assert resp.status == HTTPOk.status_code, await resp.text()
+            result = await resp.json()
+            assert result == {
+                "name": regular_user.name,
+                "jobs": {
+                    "total_gpu_run_time_minutes": 0,
+                    "total_non_gpu_run_time_minutes": 0,
+                },
                 "quota": {},
             }
 
@@ -2180,9 +2223,12 @@ class TestStats:
             result = await resp.json()
             assert result == {
                 "name": user.name,
-                "jobs": {"total_gpu_run_minutes": 0, "total_non_gpu_run_minutes": 0},
+                "jobs": {
+                    "total_gpu_run_time_minutes": 0,
+                    "total_non_gpu_run_time_minutes": 0,
+                },
                 "quota": {
-                    "total_gpu_run_minutes": 123,
-                    "total_non_gpu_run_minutes": 321,
+                    "total_gpu_run_time_minutes": 123,
+                    "total_non_gpu_run_time_minutes": 321,
                 },
             }

@@ -48,6 +48,6 @@ async def mock_notifications_server() -> AsyncIterator[NotificationsServer]:
 
 @pytest.fixture
 def notifications_config(
-    mock_notifications_server: NotificationsServer
+    mock_notifications_server: NotificationsServer,
 ) -> NotificationsConfig:
     return NotificationsConfig(url=mock_notifications_server.url, token="token")

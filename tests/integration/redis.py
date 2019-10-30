@@ -61,7 +61,7 @@ async def redis_server(_redis_server: RedisConfig) -> AsyncIterator[RedisConfig]
 
 
 async def create_redis_config(
-    container: aiodocker.containers.DockerContainer
+    container: aiodocker.containers.DockerContainer,
 ) -> RedisConfig:
     host = "0.0.0.0"
     port = int((await container.port(6379))[0]["HostPort"])

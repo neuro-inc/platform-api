@@ -19,8 +19,14 @@ from platform_api.config import JobsConfig
 from platform_api.user import User
 
 from .base import Orchestrator
-from .job import Job, JobRecord, JobStatusItem, JobStatusReason
-from .job_request import JobException, JobNotFoundException, JobRequest, JobStatus
+from .job import Job, JobRecord, JobStatusHistory, JobStatusItem, JobStatusReason
+from .job_request import (
+    JobError,
+    JobException,
+    JobNotFoundException,
+    JobRequest,
+    JobStatus,
+)
 from .jobs_storage import (
     JobFilter,
     JobsStorage,
@@ -137,23 +143,36 @@ class JobsService:
 
         old_status_item = job.status_history.current
 
-        try:
-            status_item = await orchestrator.get_job_status(job)
-            # TODO: In case job is found, but container is not in state Pending
-            # We shall go and check for the events assigned to the pod
-            # "pod didn't trigger scale-up (it wouldn't fit if a new node is added)"
-            # this is the sign that we KILL the job.
-            # Event details
-            # Additional details: NotTriggerScaleUp, Nov 2, 2018, 3:00:53 PM,
-            # 	Nov 2, 2018, 3:51:06 PM	178
-        except JobNotFoundException as exc:
-            logger.warning("Failed to get job %s status. Reason: %s", job.id, exc)
-            status_item = JobStatusItem.create(
-                JobStatus.FAILED,
-                reason=JobStatusReason.NOT_FOUND,
-                description="The job could not be scheduled or was preempted.",
-            )
-            job.is_deleted = True
+        if job.is_creating:
+            try:
+                await orchestrator.start_job(job)
+                status_item = job.status_history.current
+            except JobError as exc:
+                logger.exception("Failed to start job %s. Reason: %s", job.id, exc)
+                status_item = JobStatusItem.create(
+                    JobStatus.FAILED,
+                    reason=str(exc),
+                    description="The job could not be started.",
+                )
+                job.is_deleted = True
+        else:
+            try:
+                status_item = await orchestrator.get_job_status(job)
+                # TODO: In case job is found, but container is not in state Pending
+                # We shall go and check for the events assigned to the pod
+                # "pod didn't trigger scale-up (it wouldn't fit if a new node is added)"
+                # this is the sign that we KILL the job.
+                # Event details
+                # Additional details: NotTriggerScaleUp, Nov 2, 2018, 3:00:53 PM,
+                # 	Nov 2, 2018, 3:51:06 PM	178
+            except JobNotFoundException as exc:
+                logger.warning("Failed to get job %s status. Reason: %s", job.id, exc)
+                status_item = JobStatusItem.create(
+                    JobStatus.FAILED,
+                    reason=JobStatusReason.NOT_FOUND,
+                    description="The job could not be scheduled or was preempted.",
+                )
+                job.is_deleted = True
 
         if old_status_item != status_item:
             job.status_history.current = status_item
@@ -215,7 +234,13 @@ class JobsService:
             request=job_request,
             owner=user.name,
             cluster_name=cluster_name,
-            status=JobStatus.PENDING,
+            status_history=JobStatusHistory(
+                [
+                    JobStatusItem.create(
+                        JobStatus.PENDING, reason=JobStatusReason.CREATING
+                    )
+                ]
+            ),
             name=job_name,
             is_preemptible=is_preemptible,
             schedule_timeout=schedule_timeout,
@@ -229,7 +254,7 @@ class JobsService:
                         orchestrator_config=cluster.orchestrator.config,
                         record=record,
                     )
-                    await cluster.orchestrator.start_job(job, user.token)
+                    await cluster.orchestrator.prepare_job(job, user.token)
             return job, Status.create(job.status)
 
         except ClusterNotFound as cluster_err:
@@ -373,6 +398,7 @@ class JobsService:
                 job_id=record.id,
                 status=record.status,
                 transition_time=record.status_history.current.transition_time,
+                reason=record.status_history.current.reason,
             )
         )
 
