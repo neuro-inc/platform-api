@@ -584,7 +584,6 @@ class TestJobs:
                 )
             }
 
-
     @pytest.mark.asyncio
     async def test_create_job_gpu_quota_allows(
         self,
@@ -592,7 +591,7 @@ class TestJobs:
         client: aiohttp.ClientSession,
         job_request_factory: Callable[[], Dict[str, Any]],
         regular_user_factory: Callable[..., Any],
-        jobs_client_factory:  Callable[[_User], JobsClient],
+        jobs_client_factory: Callable[[_User], JobsClient],
     ) -> None:
         quota = Quota(total_gpu_run_time_minutes=100)
         user = await regular_user_factory(quota=quota)
@@ -612,7 +611,7 @@ class TestJobs:
         client: aiohttp.ClientSession,
         job_request_factory: Callable[[], Dict[str, Any]],
         regular_user_factory: Callable[..., Any],
-        jobs_client_factory:  Callable[[_User], JobsClient],
+        jobs_client_factory: Callable[[_User], JobsClient],
     ) -> None:
         quota = Quota(total_non_gpu_run_time_minutes=100)
         user = await regular_user_factory(quota=quota)
