@@ -115,6 +115,13 @@ jobs:
             make test_k8s_platform_api
 
       - run:
+          name: minikube status
+          command: |
+            minikub logs
+            kubectl get all --all-namespaces
+          when: always
+
+      - run:
           name: Running E2E Test Suite
           command: |
             source venv/bin/activate
