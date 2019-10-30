@@ -89,7 +89,7 @@ spec:
 
         - name: NP_ENFORCER_PLATFORM_API_URL
           value: {{ printf "%s" (pluck .Values.global.env .Values.NP_ENFORCER_PLATFORM_API_URL | first | default .Values.NP_ENFORCER_PLATFORM_API_URL._default) }}
-        - name: NP_ENFORCER_PLATFORM_TOKEN
+        - name: NP_ENFORCER_TOKEN
           valueFrom:
             secretKeyRef:
               name: platformservices-secret
