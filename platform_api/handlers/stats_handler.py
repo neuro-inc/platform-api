@@ -68,7 +68,9 @@ class StatsHandler:
         response_payload = {"name": username}
 
         if user.quota is not None:
-            response_payload["quota"] = AggregatedRunTime.from_quota(user.quota)
+            response_payload["quota"] = convert_run_time_to_response(
+                AggregatedRunTime.from_quota(user.quota)
+            )
         else:
             response_payload["quota"] = dict()
 
