@@ -1,7 +1,7 @@
 import dataclasses
 from datetime import datetime, timedelta, timezone
 from pathlib import PurePath
-from typing import Any, Dict
+from typing import Any, Callable, Dict, List
 from unittest import mock
 
 import pytest
@@ -536,46 +536,164 @@ class TestJob:
         )
         assert job.has_gpu
 
-    def test_job_get_run_time_active_job(
-        self, mock_orchestrator: MockOrchestrator, job_request: JobRequest
-    ) -> None:
-        def mocked_datetime_factory() -> datetime:
-            return datetime(year=2099, month=1, day=1)
+    def _mocked_datetime_factory(self) -> datetime:
+        return datetime(year=2019, month=1, day=1)
 
-        started_at = datetime(year=2019, month=1, day=1)
-        first_item = JobStatusItem.create(JobStatus.PENDING, transition_time=started_at)
-        job = Job(
-            storage_config=mock_orchestrator.storage_config,
-            orchestrator_config=mock_orchestrator.config,
-            record=JobRecord.create(
-                request=job_request,
-                cluster_name="test-cluster",
-                status_history=JobStatusHistory(items=[first_item]),
-                current_datetime_factory=mocked_datetime_factory,
-            ),
-            current_datetime_factory=mocked_datetime_factory,
-        )
-        expected_timedelta = mocked_datetime_factory() - started_at
+    @pytest.fixture
+    def job_factory(
+        self, mock_orchestrator: MockOrchestrator, job_request: JobRequest
+    ) -> Callable[..., Job]:
+        current_datetime_factory = self._mocked_datetime_factory
+
+        def _f(
+            job_status_history: JobStatusHistory, is_preemptible: bool = False
+        ) -> Job:
+            return Job(
+                storage_config=mock_orchestrator.storage_config,
+                orchestrator_config=mock_orchestrator.config,
+                record=JobRecord.create(
+                    request=job_request,
+                    cluster_name="test-cluster",
+                    status_history=job_status_history,
+                    current_datetime_factory=current_datetime_factory,
+                    is_preemptible=is_preemptible,
+                ),
+                current_datetime_factory=current_datetime_factory,
+            )
+
+        return _f
+
+    def test_job_get_run_time_pending_job(
+        self, mock_orchestrator: MockOrchestrator, job_factory: Callable[..., Job]
+    ) -> None:
+        time_now = self._mocked_datetime_factory()
+        started_at = time_now - timedelta(minutes=30)
+        items = [JobStatusItem.create(JobStatus.PENDING, transition_time=started_at)]
+
+        job = job_factory(JobStatusHistory(items))
+        # job is still pending
+        expected_timedelta = timedelta(0)
         assert job.get_run_time() == expected_timedelta
 
+    def test_job_get_run_time_pending_job_preemptible(
+        self, mock_orchestrator: MockOrchestrator, job_factory: Callable[..., Job]
+    ) -> None:
+        time_now = self._mocked_datetime_factory()
+        started_at = time_now - timedelta(minutes=30)
+        items = [JobStatusItem.create(JobStatus.PENDING, transition_time=started_at)]
+
+        job = job_factory(JobStatusHistory(items), is_preemptible=True)
+        # job is still pending
+        expected_timedelta = timedelta(0)
+        assert job.get_run_time() == expected_timedelta
+
+    def test_job_get_run_time_running_job(
+        self, mock_orchestrator: MockOrchestrator, job_factory: Callable[..., Job]
+    ) -> None:
+        time_now = self._mocked_datetime_factory()
+
+        started_ago_delta = timedelta(hours=1)  # job started 1 hour ago: pending
+        pending_delta = timedelta(minutes=5)  # after 5 min: running (still running)
+        running_delta = started_ago_delta - pending_delta
+
+        pending_at = time_now - started_ago_delta
+        running_at = pending_at + pending_delta
+        items = [
+            JobStatusItem.create(JobStatus.PENDING, transition_time=pending_at),
+            JobStatusItem.create(JobStatus.RUNNING, transition_time=running_at),
+        ]
+        job = job_factory(JobStatusHistory(items))
+
+        assert job.get_run_time() == running_delta
+
+    def test_job_get_run_time_running_job_preemptible(
+        self, mock_orchestrator: MockOrchestrator, job_factory: Callable[..., Job]
+    ) -> None:
+        time_now = self._mocked_datetime_factory()
+
+        started_ago_delta = timedelta(hours=1)  # job started 1 hour ago: pending
+        pending1_delta = timedelta(minutes=3)  # after 3 min: running
+        running1_delta = timedelta(minutes=4)  # after 4 min: pending
+        pending2_delta = timedelta(minutes=5)  # after 5 min: running (still running)
+        running2_delta = (
+            started_ago_delta - pending1_delta - running1_delta - pending2_delta
+        )
+        running_sum_delta = running1_delta + running2_delta
+
+        pending1_at = time_now - started_ago_delta
+        running1_at = pending1_at + pending1_delta
+        pending2_at = running1_at + running1_delta
+        running2_at = pending2_at + pending2_delta
+        items = [
+            JobStatusItem.create(JobStatus.PENDING, transition_time=pending1_at),
+            JobStatusItem.create(JobStatus.RUNNING, transition_time=running1_at),
+            JobStatusItem.create(JobStatus.PENDING, transition_time=pending2_at),
+            JobStatusItem.create(JobStatus.RUNNING, transition_time=running2_at),
+        ]
+        job = job_factory(JobStatusHistory(items), is_preemptible=True)
+
+        assert job.get_run_time() == running_sum_delta
+
+    @pytest.mark.parametrize(
+        "terminated_status", [JobStatus.SUCCEEDED, JobStatus.FAILED]
+    )
     def test_job_get_run_time_terminated_job(
-        self, mock_orchestrator: MockOrchestrator, job_request: JobRequest
+        self,
+        mock_orchestrator: MockOrchestrator,
+        job_factory: Callable[..., Job],
+        terminated_status: JobStatus,
     ) -> None:
-        started_at = datetime(year=2019, month=3, day=1)
-        finished_at = datetime(year=2019, month=3, day=2)
-        first_item = JobStatusItem.create(JobStatus.PENDING, transition_time=started_at)
-        last_item = JobStatusItem.create(JobStatus.FAILED, transition_time=finished_at)
-        job = Job(
-            storage_config=mock_orchestrator.storage_config,
-            orchestrator_config=mock_orchestrator.config,
-            record=JobRecord.create(
-                request=job_request,
-                cluster_name="test-cluster",
-                status_history=JobStatusHistory(items=[first_item, last_item]),
-            ),
-        )
-        expected_timedelta = finished_at - started_at
-        assert job.get_run_time() == expected_timedelta
+        time_now = self._mocked_datetime_factory()
+
+        started_ago_delta = timedelta(hours=1)  # job started 1 hour ago: pending
+        pending_delta = timedelta(minutes=5)  # after 5 min: running
+        running_delta = timedelta(minutes=6)  # after 6 min: succeeded
+
+        pending_at = time_now - started_ago_delta
+        running_at = pending_at + pending_delta
+        terminated_at = running_at + running_delta
+        items = [
+            JobStatusItem.create(JobStatus.PENDING, transition_time=pending_at),
+            JobStatusItem.create(JobStatus.RUNNING, transition_time=running_at),
+            JobStatusItem.create(terminated_status, transition_time=terminated_at),
+        ]
+        job = job_factory(JobStatusHistory(items))
+
+        assert job.get_run_time() == running_delta
+
+    @pytest.mark.parametrize(
+        "terminated_status", [JobStatus.SUCCEEDED, JobStatus.FAILED]
+    )
+    def test_job_get_run_time_terminated_job_preemptible(
+        self,
+        mock_orchestrator: MockOrchestrator,
+        job_factory: Callable[..., Job],
+        terminated_status: JobStatus,
+    ) -> None:
+        time_now = self._mocked_datetime_factory()
+
+        started_ago_delta = timedelta(hours=1)  # job started 1 hour ago: pending
+        pending1_delta = timedelta(minutes=3)  # after 3 min: running
+        running1_delta = timedelta(minutes=4)  # after 4 min: pending
+        pending2_delta = timedelta(minutes=5)  # after 5 min: running
+        running2_delta = timedelta(minutes=6)  # after 6 min: succeeded (still)
+        running_sum_delta = running1_delta + running2_delta
+
+        pending1_at = time_now - started_ago_delta
+        running1_at = pending1_at + pending1_delta
+        pending2_at = running1_at + running1_delta
+        running2_at = pending2_at + pending2_delta
+        terminated_at = running2_at + running2_delta
+        items = [
+            JobStatusItem.create(JobStatus.PENDING, transition_time=pending1_at),
+            JobStatusItem.create(JobStatus.RUNNING, transition_time=running1_at),
+            JobStatusItem.create(JobStatus.PENDING, transition_time=pending2_at),
+            JobStatusItem.create(JobStatus.RUNNING, transition_time=running2_at),
+            JobStatusItem.create(terminated_status, transition_time=terminated_at),
+        ]
+        job = job_factory(JobStatusHistory(items), is_preemptible=True)
+
+        assert job.get_run_time() == running_sum_delta
 
     def test_http_url(
         self, mock_orchestrator: MockOrchestrator, job_request: JobRequest

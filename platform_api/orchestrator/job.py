@@ -310,21 +310,21 @@ class JobRecord:
         run_time = timedelta()
         prev_time: Optional[datetime] = None
         for item in self.status_history.all:
-            # TODO: check that item.transition_time always exists
-            if item.status == JobStatus.RUNNING:
+            if item.status.is_running:
                 prev_time = item.transition_time
-            elif item.status == JobStatus.PENDING:
-                if prev_time is not None:
+            elif item.status.is_pending:
+                if prev_time:
                     # preemptible job can go running->pending->running...
                     run_time += item.transition_time - prev_time
                     prev_time = None
             else:
                 # job terminated
-                assert prev_time is not None
-                run_time += item.transition_time - prev_time
-                prev_time = None
+                if prev_time:
+                    # previous status was running
+                    run_time += item.transition_time - prev_time
+                    prev_time = None
                 break
-        if prev_time is not None:
+        if prev_time:
             # job still running
             run_time += current_datetime_factory() - prev_time
         return run_time
