@@ -61,7 +61,7 @@ class MyJob(Job):
         )
 
     async def start(self) -> JobStatus:
-        await self._orchestrator.prepare_job(self, "test-token")
+        await self._orchestrator.prepare_job(self)
         status = await self._orchestrator.start_job(self)
         assert status == JobStatus.PENDING
         return status
@@ -1726,7 +1726,7 @@ class TestNodeSelector:
             ),
         )
         await delete_job_later(job)
-        await kube_orchestrator.prepare_job(job, token="test-token")
+        await kube_orchestrator.prepare_job(job)
         await kube_orchestrator.start_job(job)
         pod_name = job.id
 
@@ -1760,7 +1760,7 @@ class TestNodeSelector:
                 ),
             )
             await delete_job_later(job)
-            await kube_orchestrator.prepare_job(job, token="test-token")
+            await kube_orchestrator.prepare_job(job)
             await kube_orchestrator.start_job(job)
             pod_name = job.id
 
@@ -1792,7 +1792,7 @@ class TestNodeSelector:
             ),
         )
         await delete_job_later(job)
-        await kube_orchestrator.prepare_job(job, token="test-token")
+        await kube_orchestrator.prepare_job(job)
         await kube_orchestrator.start_job(job)
         pod_name = job.id
 
@@ -1847,7 +1847,7 @@ class TestPreemption:
             ),
         )
         await delete_job_later(job)
-        await kube_orchestrator.prepare_job(job, token="test-token")
+        await kube_orchestrator.prepare_job(job)
         await kube_orchestrator.start_job(job)
         pod_name = job.id
 
@@ -1884,7 +1884,7 @@ class TestPreemption:
             ),
         )
         await delete_job_later(job)
-        await kube_orchestrator.prepare_job(job, token="test-token")
+        await kube_orchestrator.prepare_job(job)
         await kube_orchestrator.start_job(job)
         pod_name = job.id
 
@@ -1928,7 +1928,7 @@ class TestPreemption:
             is_forced_to_preemptible_pool=True,
         )
         await delete_job_later(job)
-        await kube_orchestrator.prepare_job(job, token="test-token")
+        await kube_orchestrator.prepare_job(job)
         await kube_orchestrator.start_job(job)
         pod_name = job.id
 
@@ -1968,7 +1968,7 @@ class TestPreemption:
             is_forced_to_preemptible_pool=True,
         )
         await delete_job_later(job)
-        await kube_orchestrator.prepare_job(job, token="test-token")
+        await kube_orchestrator.prepare_job(job)
         await kube_orchestrator.start_job(job)
         pod_name = job.id
 
@@ -2017,7 +2017,7 @@ class TestPreemption:
             is_forced_to_preemptible_pool=True,
         )
         await delete_job_later(job)
-        await kube_orchestrator.prepare_job(job, token="test-token")
+        await kube_orchestrator.prepare_job(job)
         await kube_orchestrator.start_job(job)
         pod_name = job.id
 

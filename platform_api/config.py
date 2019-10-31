@@ -113,7 +113,7 @@ class SSHConfig:
     orchestrator: OrchestratorConfig
     database: DatabaseConfig
     auth: AuthConfig
-    registry: RegistryConfig = RegistryConfig()
+    registry: RegistryConfig
 
     # used for generating environment variable names and
     # sourcing them inside containers.

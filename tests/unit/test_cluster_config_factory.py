@@ -203,6 +203,8 @@ class TestClusterConfigFactory:
             clusters_payload,
             jobs_ingress_class=jobs_ingress_class,
             jobs_ingress_oauth_url=jobs_ingress_oauth_url,
+            registry_username="registry_user",
+            registry_password="registry_token",
         )
 
         assert len(clusters) == 1
@@ -218,6 +220,8 @@ class TestClusterConfigFactory:
         registry = cluster.registry
         assert registry.url == URL(registry_payload["url"])
         assert registry.email == registry_payload["email"]
+        assert registry.username == "registry_user"
+        assert registry.password == "registry_token"
 
         storage = cluster.storage
         assert storage.type == StorageType.NFS
@@ -326,6 +330,8 @@ class TestClusterConfigFactory:
             clusters_payload,
             jobs_ingress_class=jobs_ingress_class,
             jobs_ingress_oauth_url=jobs_ingress_oauth_url,
+            registry_username="registry_user",
+            registry_password="registry_token",
         )
         cluster = clusters[0]
 
@@ -354,6 +360,8 @@ class TestClusterConfigFactory:
             clusters_payload,
             jobs_ingress_class=jobs_ingress_class,
             jobs_ingress_oauth_url=jobs_ingress_oauth_url,
+            registry_username="registry_user",
+            registry_password="registry_token",
         )
         cluster = clusters[0]
 
@@ -380,6 +388,8 @@ class TestClusterConfigFactory:
             clusters_payload,
             jobs_ingress_class=jobs_ingress_class,
             jobs_ingress_oauth_url=jobs_ingress_oauth_url,
+            registry_username="registry_user",
+            registry_password="registry_token",
         )
         cluster = clusters[0]
 
@@ -406,6 +416,8 @@ class TestClusterConfigFactory:
             clusters_payload,
             jobs_ingress_class=jobs_ingress_class,
             jobs_ingress_oauth_url=jobs_ingress_oauth_url,
+            registry_username="registry_user",
+            registry_password="registry_token",
         )
 
         assert len(clusters) == 1

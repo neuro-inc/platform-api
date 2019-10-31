@@ -74,7 +74,7 @@ def create_token(name: str) -> str:
     return jwt.encode(payload, "secret", algorithm="HS256")
 
 
-@pytest.fixture
+@pytest.fixture(scope="session")
 def token_factory() -> Callable[[str], str]:
     return create_token
 

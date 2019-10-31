@@ -1,4 +1,4 @@
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from enum import Enum
 from pathlib import PurePath
 from typing import List, Optional, Sequence
@@ -98,6 +98,8 @@ class StorageConfig:
 
 @dataclass(frozen=True)
 class RegistryConfig:
+    username: str
+    password: str = field(repr=False)
     url: URL = URL("https://registry.dev.neuromation.io")
     email: str = "registry@neuromation.io"
 

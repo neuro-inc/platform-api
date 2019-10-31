@@ -254,7 +254,7 @@ class JobsService:
                         orchestrator_config=cluster.orchestrator.config,
                         record=record,
                     )
-                    await cluster.orchestrator.prepare_job(job, user.token)
+                    await cluster.orchestrator.prepare_job(job)
             return job, Status.create(job.status)
 
         except ClusterNotFound as cluster_err:
