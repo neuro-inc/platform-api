@@ -101,12 +101,12 @@ jobs:
             pip install -U pip
             make setup
             pip uninstall -y hiredis
-
-      - run:
-          name: Running Static Code Analysis
-          command: |
-            source venv/bin/activate
-            make lint
+#
+#      - run:
+#          name: Running Static Code Analysis
+#          command: |
+#            source venv/bin/activate
+#            make lint
 
       - run:
           name: Run Platform Tests
