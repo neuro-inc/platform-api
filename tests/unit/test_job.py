@@ -1,7 +1,7 @@
 import dataclasses
 from datetime import datetime, timedelta, timezone
 from pathlib import PurePath
-from typing import Any, Callable, Dict, List
+from typing import Any, Callable, Dict
 from unittest import mock
 
 import pytest
