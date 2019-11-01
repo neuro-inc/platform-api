@@ -9,8 +9,13 @@ from notifications_client.notification import AbstractNotification
 from yarl import URL
 
 from platform_api.cluster import Cluster, ClusterConfig, ClusterRegistry
-from platform_api.cluster_config import IngressConfig, OrchestratorConfig
-from platform_api.config import JobsConfig, RegistryConfig, StorageConfig
+from platform_api.cluster_config import (
+    IngressConfig,
+    OrchestratorConfig,
+    RegistryConfig,
+    StorageConfig,
+)
+from platform_api.config import JobsConfig
 from platform_api.orchestrator.base import Orchestrator
 from platform_api.orchestrator.job import (
     AggregatedRunTime,

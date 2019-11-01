@@ -11,7 +11,8 @@ from neuro_auth_client import AuthClient, Permission, check_permissions
 from neuro_auth_client.client import ClientSubTreeViewRoot
 from yarl import URL
 
-from platform_api.config import Config, RegistryConfig, StorageConfig
+from platform_api.cluster_config import RegistryConfig, StorageConfig
+from platform_api.config import Config
 from platform_api.log import log_debug_time
 from platform_api.orchestrator.job import JOB_USER_NAMES_SEPARATOR, Job, JobStatusItem
 from platform_api.orchestrator.job_request import (

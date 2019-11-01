@@ -9,7 +9,7 @@ from neuro_auth_client.client import ClientAccessSubTreeView, ClientSubTreeViewR
 from trafaret import DataError
 from yarl import URL
 
-from platform_api.config import RegistryConfig, StorageConfig
+from platform_api.cluster_config import RegistryConfig, StorageConfig
 from platform_api.handlers.jobs_handler import (
     BulkJobFilter,
     BulkJobFilterBuilder,

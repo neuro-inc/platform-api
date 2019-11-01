@@ -8,7 +8,7 @@ import pytest
 from neuro_auth_client.client import Quota
 from yarl import URL
 
-from platform_api.config import RegistryConfig, StorageConfig
+from platform_api.cluster_config import RegistryConfig, StorageConfig
 from platform_api.handlers.job_request_builder import ContainerBuilder
 from platform_api.orchestrator.job import (
     AggregatedRunTime,
