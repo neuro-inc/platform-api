@@ -13,8 +13,8 @@ from platform_logging import init_logging
 
 from platform_api.orchestrator.job_policy_enforce_poller import JobPolicyEnforcePoller
 from platform_api.orchestrator.job_policy_enforcer import (
-    QuotaJobPolicyEnforcer,
-    RealJobPolicyEnforcerClientWrapper,
+    PlatformApiHelper,
+    QuotaEnforcer,
 )
 
 from .cluster import Cluster, ClusterConfig, ClusterRegistry
@@ -242,10 +242,8 @@ async def create_app(
             await exit_stack.enter_async_context(jobs_poller)
 
             logger.info("Initializing JobPolicyEnforcePoller")
-            client_wrapper = RealJobPolicyEnforcerClientWrapper(
-                config.job_policy_enforcer
-            )
-            job_policy_enforcer = QuotaJobPolicyEnforcer(client_wrapper)
+            client_wrapper = PlatformApiHelper(config.job_policy_enforcer)
+            job_policy_enforcer = QuotaEnforcer(client_wrapper)
             job_policy_enforce_poller = JobPolicyEnforcePoller(
                 job_policy_enforcer, config.job_policy_enforcer
             )

@@ -10,10 +10,10 @@ from yarl import URL
 from platform_api.config import JobPolicyEnforcerConfig
 from platform_api.orchestrator.job_policy_enforce_poller import JobPolicyEnforcePoller
 from platform_api.orchestrator.job_policy_enforcer import (
+    AbstractPlatformApiHelper,
     JobPolicyEnforcer,
-    JobPolicyEnforcerClientWrapper,
-    QuotaJobPolicyEnforcer,
-    RealJobPolicyEnforcerClientWrapper,
+    PlatformApiHelper,
+    QuotaEnforcer,
 )
 from tests.integration.api import ApiConfig
 from tests.integration.conftest import ApiRunner
@@ -144,7 +144,7 @@ class TestJobPolicyEnforcePoller:
             assert enforcer.called_times == 1
 
 
-class MockJobPolicyEnforcerClientWrapper(JobPolicyEnforcerClientWrapper):
+class MockPlatformApiHelper(AbstractPlatformApiHelper):
     def __init__(self, gpu_quota: int = 10, cpu_quota: int = 10):
         self._gpu_quota = gpu_quota
         self._cpu_quota = cpu_quota
@@ -215,8 +215,8 @@ class MockJobPolicyEnforcerClientWrapper(JobPolicyEnforcerClientWrapper):
 class TestQuotaJobPolicyEnforcer:
     @pytest.mark.asyncio
     async def test_get_users_with_active_jobs(self) -> None:
-        wrapper = MockJobPolicyEnforcerClientWrapper()
-        enforcer = QuotaJobPolicyEnforcer(wrapper)
+        wrapper = MockPlatformApiHelper()
+        enforcer = QuotaEnforcer(wrapper)
         result = await enforcer.get_users_with_active_jobs()
         assert result == {
             "user1": {"cpu": {"job1", "job2"}, "gpu": set()},
@@ -227,8 +227,8 @@ class TestQuotaJobPolicyEnforcer:
     async def test_check_user_quota_ok(self) -> None:
         cpu_jobs = {"job3", "job4"}
         gpu_jobs = {"job5"}
-        wrapper = MockJobPolicyEnforcerClientWrapper()
-        enforcer = QuotaJobPolicyEnforcer(wrapper)
+        wrapper = MockPlatformApiHelper()
+        enforcer = QuotaEnforcer(wrapper)
         await enforcer.check_user_quota("user2", cpu_jobs, gpu_jobs)
         assert len(wrapper.killed_jobs) == 0
 
@@ -236,8 +236,8 @@ class TestQuotaJobPolicyEnforcer:
     async def test_check_user_quota_gpu_exceeded(self) -> None:
         cpu_jobs = {"job3", "job4"}
         gpu_jobs = {"job5"}
-        wrapper = MockJobPolicyEnforcerClientWrapper(gpu_quota=1)
-        enforcer = QuotaJobPolicyEnforcer(wrapper)
+        wrapper = MockPlatformApiHelper(gpu_quota=1)
+        enforcer = QuotaEnforcer(wrapper)
         await enforcer.check_user_quota("user2", cpu_jobs, gpu_jobs)
         assert wrapper.killed_jobs == gpu_jobs
 
@@ -245,23 +245,23 @@ class TestQuotaJobPolicyEnforcer:
     async def test_check_user_quota_cpu_exceeded(self) -> None:
         cpu_jobs = {"job3", "job4"}
         gpu_jobs = {"job5"}
-        wrapper = MockJobPolicyEnforcerClientWrapper(cpu_quota=1)
-        enforcer = QuotaJobPolicyEnforcer(wrapper)
+        wrapper = MockPlatformApiHelper(cpu_quota=1)
+        enforcer = QuotaEnforcer(wrapper)
         await enforcer.check_user_quota("user2", cpu_jobs, gpu_jobs)
-        assert wrapper.killed_jobs == cpu_jobs.union(gpu_jobs)
+        assert wrapper.killed_jobs == cpu_jobs | gpu_jobs
 
     @pytest.mark.asyncio
     async def test_enforce_ok(self) -> None:
-        wrapper = MockJobPolicyEnforcerClientWrapper()
-        enforcer = QuotaJobPolicyEnforcer(wrapper)
+        wrapper = MockPlatformApiHelper()
+        enforcer = QuotaEnforcer(wrapper)
         await enforcer.enforce()
         assert len(wrapper.killed_jobs) == 0
 
     @pytest.mark.asyncio
     async def test_enforce_gpu_exceeded(self) -> None:
         gpu_jobs = {"job5"}
-        wrapper = MockJobPolicyEnforcerClientWrapper(gpu_quota=1)
-        enforcer = QuotaJobPolicyEnforcer(wrapper)
+        wrapper = MockPlatformApiHelper(gpu_quota=1)
+        enforcer = QuotaEnforcer(wrapper)
         await enforcer.enforce()
         assert wrapper.killed_jobs == gpu_jobs
 
@@ -269,10 +269,10 @@ class TestQuotaJobPolicyEnforcer:
     async def test_enforce_cpu_exceeded(self) -> None:
         cpu_jobs = {f"job{i}" for i in range(1, 5)}
         gpu_jobs = {"job5"}
-        wrapper = MockJobPolicyEnforcerClientWrapper(cpu_quota=1)
-        enforcer = QuotaJobPolicyEnforcer(wrapper)
+        wrapper = MockPlatformApiHelper(cpu_quota=1)
+        enforcer = QuotaEnforcer(wrapper)
         await enforcer.enforce()
-        assert wrapper.killed_jobs == gpu_jobs.union(cpu_jobs)
+        assert wrapper.killed_jobs == gpu_jobs | cpu_jobs
 
 
 @pytest.fixture
@@ -327,7 +327,7 @@ class TestRealJobPolicyEnforcerClientWrapper:
         job_policy_enforcer_config = JobPolicyEnforcerConfig(
             URL(mock_api.endpoint), "random_token"
         )
-        wrapper = RealJobPolicyEnforcerClientWrapper(job_policy_enforcer_config)
+        wrapper = PlatformApiHelper(job_policy_enforcer_config)
         await wrapper.kill_job("job123")
         # TODO Validate corresponding URL with correct parameter gets called
 
@@ -336,7 +336,7 @@ class TestRealJobPolicyEnforcerClientWrapper:
         job_policy_enforcer_config = JobPolicyEnforcerConfig(
             URL(mock_api.endpoint), "random_token"
         )
-        wrapper = RealJobPolicyEnforcerClientWrapper(job_policy_enforcer_config)
+        wrapper = PlatformApiHelper(job_policy_enforcer_config)
         response = await wrapper.get_user_stats("user1")
         assert response == {
             "name": "user1",

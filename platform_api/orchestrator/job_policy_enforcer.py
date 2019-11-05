@@ -12,7 +12,7 @@ from platform_api.orchestrator.job_request import JobStatus
 logger = logging.getLogger(__name__)
 
 
-class JobPolicyEnforcerClientWrapper:
+class AbstractPlatformApiHelper:
     @abc.abstractmethod
     async def get_users_with_active_jobs(self) -> Dict[Any, Any]:
         pass
@@ -26,30 +26,29 @@ class JobPolicyEnforcerClientWrapper:
         pass
 
 
-class RealJobPolicyEnforcerClientWrapper(JobPolicyEnforcerClientWrapper):
+class PlatformApiHelper(AbstractPlatformApiHelper):
     def __init__(self, config: JobPolicyEnforcerConfig):
         self._platform_api_url = config.platform_api_url
         self._headers = {"Authorization": f"Bearer {config.token}"}
         self._session = aiohttp.ClientSession(headers=self._headers)
 
-    async def get_users_with_active_jobs(self) -> Dict[Any, Any]:
+    async def get_users_with_active_jobs(self) -> Dict[str, Any]:
         async with self._session.get(
-            f"{self._platform_api_url}/jobs?status=pending&status=running",
-            headers=self._headers,
+            f"{self._platform_api_url}/jobs?status=pending&status=running"
         ) as resp:
             resp.raise_for_status()
             return await resp.json()
 
     async def get_user_stats(self, username: str) -> Dict[Any, Any]:
         async with self._session.get(
-            self._platform_api_url / f"stats/user/{username}", headers=self._headers
+            self._platform_api_url / f"stats/user/{username}"
         ) as resp:
             resp.raise_for_status()
             return await resp.json()
 
     async def kill_job(self, job_id: str) -> None:
         async with self._session.delete(
-            self._platform_api_url / f"jobs/{job_id}", headers=self._headers
+            self._platform_api_url / f"jobs/{job_id}"
         ) as resp:
             resp.raise_for_status()
 
@@ -60,8 +59,8 @@ class JobPolicyEnforcer:
         pass
 
 
-class QuotaJobPolicyEnforcer(JobPolicyEnforcer):
-    def __init__(self, wrapper: JobPolicyEnforcerClientWrapper):
+class QuotaEnforcer(JobPolicyEnforcer):
+    def __init__(self, wrapper: AbstractPlatformApiHelper):
         self._wrapper = wrapper
 
     async def enforce(self) -> None:
@@ -103,7 +102,7 @@ class QuotaJobPolicyEnforcer(JobPolicyEnforcer):
         jobs_to_delete: Set[str] = set()
         if quota.total_non_gpu_run_time_delta < jobs.total_non_gpu_run_time_delta:
             logger.info(f"CPU quota exceeded for {username}")
-            jobs_to_delete = cpu_job_ids.union(gpu_job_ids)
+            jobs_to_delete = cpu_job_ids | gpu_job_ids
         elif quota.total_gpu_run_time_delta < jobs.total_gpu_run_time_delta:
             logger.info(f"GPU quota exceeded for {username}")
             jobs_to_delete = gpu_job_ids
@@ -111,6 +110,5 @@ class QuotaJobPolicyEnforcer(JobPolicyEnforcer):
             logger.info(f"No quota issues for {username}")
 
         if len(jobs_to_delete) > 0:
-            logger.info(f"Killing jobs: {jobs_to_delete}")
             for job_id in jobs_to_delete:
                 await self._wrapper.kill_job(job_id)
