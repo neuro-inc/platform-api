@@ -36,7 +36,11 @@ async def auth_server(
         "AttachStdout": False,
         "AttachStderr": False,
         "HostConfig": {"PublishAllPorts": True},
-        "Env": ["NP_JWT_SECRET=secret"],
+        "Env": [
+            "NP_JWT_SECRET=secret",
+            "NP_AUTH_ZIPKIN_URL=http://zipkin",
+            "NP_AUTH_ZIPKIN_SAMPLE_RATE=0",
+        ],
     }
 
     if reuse_docker:
