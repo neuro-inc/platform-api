@@ -96,9 +96,6 @@ class QuotaEnforcer(JobPolicyEnforcer):
         quota = AggregatedRunTime.from_primitive(response_payload["quota"])
         jobs = AggregatedRunTime.from_primitive(response_payload["jobs"])
 
-        assert quota is not None
-        assert jobs is not None
-
         jobs_to_delete: Set[str] = set()
         if quota.total_non_gpu_run_time_delta < jobs.total_non_gpu_run_time_delta:
             logger.info(f"CPU quota exceeded for {username}")
