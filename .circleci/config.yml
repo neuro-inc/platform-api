@@ -106,7 +106,7 @@ jobs:
           name: Running Static Code Analysis
           command: |
             source venv/bin/activate
-            make lint
+            make test_k8s_platform_api_e2e
 
       - run:
           name: Run Platform Tests
