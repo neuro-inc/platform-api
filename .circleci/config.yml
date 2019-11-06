@@ -112,7 +112,6 @@ jobs:
           name: Run Platform Tests
           command: |
             source venv/bin/activate
-            sleep 4h
             make test_k8s_platform_api
 
       - run:

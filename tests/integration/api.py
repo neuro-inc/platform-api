@@ -3,11 +3,12 @@ import time
 from typing import (
     Any,
     AsyncIterator,
+    Awaitable,
     Callable,
     Dict,
-    Iterator,
     List,
     NamedTuple,
+    Optional,
     Sequence,
 )
 
@@ -205,23 +206,35 @@ class JobsClient:
 
 
 @pytest.fixture
-def jobs_client_factory(
+async def jobs_client_factory(
     api: ApiConfig, client: ClientSession
-) -> Iterator[Callable[[_User], JobsClient]]:
-    def impl(user: _User) -> JobsClient:
-        return JobsClient(api, client, headers=user.headers)
+) -> AsyncIterator[Callable[[_User], Awaitable[JobsClient]]]:
+    job_client: Optional[JobsClient] = None
 
-    yield impl
+    async def _factory(user: _User) -> JobsClient:
+        nonlocal job_client
+        job_client = JobsClient(api, client, headers=user.headers)
+        return job_client
+
+    yield _factory
+
+    if job_client:
+        for job in job_client.submitted_jobs:
+            await job_client.delete_job(job, assert_success=False)
+
+        pendings = await job_client.get_all_jobs(params=[("status", "pending")])
+        runnings = await job_client.get_all_jobs(params=[("status", "running")])
+        if pendings or runnings:
+            print(f"after kill:")
+            print(f"> pending: {len(pendings)}, {[k['id'] for k in pendings]}")
+            print(f"> running: {len(runnings)}, {[k['id'] for k in runnings]}")
 
 
 @pytest.fixture
 async def jobs_client(
-    jobs_client_factory: Callable[[_User], JobsClient], regular_user: _User
-) -> AsyncIterator[JobsClient]:
-    client = jobs_client_factory(regular_user)
-    yield client
-    for job in client.submitted_jobs:
-        await client.delete_job(job, assert_success=False)
+    jobs_client_factory: Callable[[_User], Awaitable[JobsClient]], regular_user: _User
+) -> JobsClient:
+    return await jobs_client_factory(regular_user)
 
 
 @pytest.fixture

@@ -571,6 +571,7 @@ class TestJobs:
             assert response.status == HTTPAccepted.status_code, await response.text()
             payload = await response.json()
             job_id = payload["id"]
+            jobs_client.delete_job_later(job_id)
 
         await jobs_client.long_polling_by_job_id(job_id, status="running")
 
@@ -591,11 +592,11 @@ class TestJobs:
         client: aiohttp.ClientSession,
         job_request_factory: Callable[[], Dict[str, Any]],
         regular_user_factory: Callable[..., Any],
-        jobs_client_factory: Callable[[_User], JobsClient],
+        jobs_client_factory: Callable[[_User], Awaitable[JobsClient]],
     ) -> None:
         quota = Quota(total_gpu_run_time_minutes=100)
         user = await regular_user_factory(quota=quota)
-        user_jobs_client = jobs_client_factory(user)
+        user_jobs_client = await jobs_client_factory(user)
         url = api.jobs_base_url
         job_request = job_request_factory()
         job_request["container"]["resources"]["gpu"] = 1
@@ -611,11 +612,11 @@ class TestJobs:
         client: aiohttp.ClientSession,
         job_request_factory: Callable[[], Dict[str, Any]],
         regular_user_factory: Callable[..., Any],
-        jobs_client_factory: Callable[[_User], JobsClient],
+        jobs_client_factory: Callable[[_User], Awaitable[JobsClient]],
     ) -> None:
         quota = Quota(total_non_gpu_run_time_minutes=100)
         user = await regular_user_factory(quota=quota)
-        user_jobs_client = jobs_client_factory(user)
+        user_jobs_client = await jobs_client_factory(user)
         url = api.jobs_base_url
         job_request = job_request_factory()
         async with client.post(url, headers=user.headers, json=job_request) as response:
@@ -686,6 +687,8 @@ class TestJobs:
 
         async with client.post(url, headers=headers, json=job_submit) as response:
             assert response.status == HTTPAccepted.status_code, await response.text()
+            payload = await response.json()
+            jobs_client.delete_job_later(payload["id"])
 
     @pytest.mark.asyncio
     async def test_get_all_jobs_clear(self, jobs_client: JobsClient) -> None:
@@ -813,7 +816,7 @@ class TestJobs:
         self,
         api: ApiConfig,
         client: aiohttp.ClientSession,
-        jobs_client_factory: Callable[[_User], JobsClient],
+        jobs_client_factory: Callable[[_User], Awaitable[JobsClient]],
     ) -> AsyncIterator[Callable[[_User, Dict[str, Any], bool, bool], Awaitable[str]]]:
         async def _impl(
             user: _User,
@@ -823,7 +826,7 @@ class TestJobs:
         ) -> str:
             url = api.jobs_base_url
             headers = user.headers
-            jobs_client = jobs_client_factory(user)
+            jobs_client = await jobs_client_factory(user)
             async with client.post(url, headers=headers, json=job_request) as resp:
                 assert resp.status == HTTPAccepted.status_code, (
                     await resp.text(),
@@ -883,7 +886,7 @@ class TestJobs:
         api: ApiConfig,
         client: aiohttp.ClientSession,
         regular_user_factory: Callable[[], Any],
-        jobs_client_factory: Callable[[_User], JobsClient],
+        jobs_client_factory: Callable[[_User], Awaitable[JobsClient]],
         job_request_factory: Callable[[], Dict[str, Any]],
         run_job: Callable[..., Awaitable[str]],
         share_job: Callable[[_User, _User, Any], Awaitable[None]],
@@ -894,7 +897,7 @@ class TestJobs:
         job_req_no_name = create_job_request_no_name()
         job_req_with_name = create_job_request_with_name(job_name)
         usr = await regular_user_factory()
-        jobs_client_usr1 = jobs_client_factory(usr)
+        jobs_client_usr1 = await jobs_client_factory(usr)
 
         job_usr_with_name_killed = await run_job(usr, job_req_with_name, do_kill=True)
         job_usr_no_name_killed = await run_job(usr, job_req_no_name, do_kill=True)
@@ -936,7 +939,7 @@ class TestJobs:
         api: ApiConfig,
         client: aiohttp.ClientSession,
         regular_user_factory: Callable[[], Any],
-        jobs_client_factory: Callable[[_User], JobsClient],
+        jobs_client_factory: Callable[[_User], Awaitable[JobsClient]],
         job_request_factory: Callable[[], Dict[str, Any]],
         run_job: Callable[..., Awaitable[str]],
         share_job: Callable[[_User, _User, Any], Awaitable[None]],
@@ -949,7 +952,7 @@ class TestJobs:
         usr1 = await regular_user_factory()
         usr2 = await regular_user_factory()
 
-        jobs_client_usr1 = jobs_client_factory(usr1)
+        jobs_client_usr1 = await jobs_client_factory(usr1)
 
         job_usr1_with_name_killed = await run_job(usr1, job_req_with_name, do_kill=True)
         job_usr1_no_name_killed = await run_job(usr1, job_req_no_name, do_kill=True)
@@ -1002,7 +1005,7 @@ class TestJobs:
         api: ApiConfig,
         client: aiohttp.ClientSession,
         regular_user_factory: Callable[[], Any],
-        jobs_client_factory: Callable[[_User], JobsClient],
+        jobs_client_factory: Callable[[_User], Awaitable[JobsClient]],
         job_request_factory: Callable[[], Dict[str, Any]],
         run_job: Callable[..., Awaitable[str]],
         share_job: Callable[[_User, _User, Any], Awaitable[None]],
@@ -1014,7 +1017,7 @@ class TestJobs:
         job_req_with_name = create_job_request_with_name(job_name)
         usr1 = await regular_user_factory()
         usr2 = await regular_user_factory()
-        jobs_client_usr1 = jobs_client_factory(usr1)
+        jobs_client_usr1 = await jobs_client_factory(usr1)
 
         await run_job(usr1, job_req_with_name, do_kill=True)  # job_usr1_with_name_kiled
         await run_job(usr1, job_req_no_name, do_kill=True)  # job_usr1_no_name_killed
@@ -1067,7 +1070,7 @@ class TestJobs:
         api: ApiConfig,
         client: aiohttp.ClientSession,
         regular_user_factory: Callable[[], Any],
-        jobs_client_factory: Callable[[_User], JobsClient],
+        jobs_client_factory: Callable[[_User], Awaitable[JobsClient]],
         job_request_factory: Callable[[], Dict[str, Any]],
         run_job: Callable[..., Awaitable[str]],
         share_job: Callable[[_User, _User, Any], Awaitable[None]],
@@ -1079,7 +1082,7 @@ class TestJobs:
         job_req_with_name = create_job_request_with_name(job_name)
         usr1 = await regular_user_factory()
         usr2 = await regular_user_factory()
-        jobs_client_usr1 = jobs_client_factory(usr1)
+        jobs_client_usr1 = await jobs_client_factory(usr1)
 
         job_usr1_with_name_killed = await run_job(usr1, job_req_with_name, do_kill=True)
         job_usr1_no_name_killed = await run_job(usr1, job_req_no_name, do_kill=True)
@@ -1351,7 +1354,7 @@ class TestJobs:
         api: ApiConfig,
         client: aiohttp.ClientSession,
         regular_user_factory: Callable[..., Any],
-        jobs_client_factory: Callable[[_User], JobsClient],
+        jobs_client_factory: Callable[[_User], Awaitable[JobsClient]],
         run_job: Callable[..., Awaitable[str]],
         share_job: Callable[[_User, _User, Any], Awaitable[None]],
         create_job_request_no_name: Callable[[], Dict[str, Any]],
@@ -1359,7 +1362,7 @@ class TestJobs:
         job_req_no_name = create_job_request_no_name()
         usr1 = await regular_user_factory()
         usr2 = await regular_user_factory()
-        jobs_client = jobs_client_factory(usr1)
+        jobs_client = await jobs_client_factory(usr1)
 
         job_usr1_killed = await run_job(usr1, job_req_no_name, do_kill=True)
         job_usr1 = await run_job(usr1, job_req_no_name, do_kill=False)
@@ -1411,14 +1414,14 @@ class TestJobs:
         api: ApiConfig,
         client: aiohttp.ClientSession,
         regular_user_factory: Callable[[], Any],
-        jobs_client_factory: Callable[[_User], JobsClient],
+        jobs_client_factory: Callable[[_User], Awaitable[JobsClient]],
         run_job: Callable[..., Awaitable[str]],
         create_job_request_with_name: Callable[[str], Dict[str, Any]],
     ) -> None:
         job_name = "test-job-name"
         job_name2 = "test-job-name2"
         usr = await regular_user_factory()
-        jobs_client = jobs_client_factory(usr)
+        jobs_client = await jobs_client_factory(usr)
 
         job_id = await run_job(usr, create_job_request_with_name(job_name))
         await run_job(usr, create_job_request_with_name(job_name2))
@@ -1463,7 +1466,7 @@ class TestJobs:
         api: ApiConfig,
         client: aiohttp.ClientSession,
         regular_user_factory: Callable[[], Any],
-        jobs_client_factory: Callable[[_User], JobsClient],
+        jobs_client_factory: Callable[[_User], Awaitable[JobsClient]],
         run_job: Callable[..., Awaitable[str]],
         share_job: Callable[[_User, _User, Any], Awaitable[None]],
         create_job_request_with_name: Callable[[str], Dict[str, Any]],
@@ -1472,7 +1475,7 @@ class TestJobs:
         job_name2 = "test-job-name2"
         usr1 = await regular_user_factory()
         usr2 = await regular_user_factory()
-        jobs_client_usr1 = jobs_client_factory(usr1)
+        jobs_client_usr1 = await jobs_client_factory(usr1)
 
         job_id = await run_job(usr2, create_job_request_with_name(job_name))
         await run_job(usr2, create_job_request_with_name(job_name2))
@@ -1502,14 +1505,14 @@ class TestJobs:
         api: ApiConfig,
         client: aiohttp.ClientSession,
         regular_user_factory: Callable[[], Any],
-        jobs_client_factory: Callable[[_User], JobsClient],
+        jobs_client_factory: Callable[[_User], Awaitable[JobsClient]],
         run_job: Callable[..., Awaitable[str]],
         create_job_request_with_name: Callable[[str], Dict[str, Any]],
     ) -> None:
         job_name = "test-job-name"
         job_name2 = "test-job-name2"
         usr = await regular_user_factory()
-        jobs_client = jobs_client_factory(usr)
+        jobs_client = await jobs_client_factory(usr)
 
         job_id = await run_job(usr, create_job_request_with_name(job_name))
         await run_job(usr, create_job_request_with_name(job_name2))
