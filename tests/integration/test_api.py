@@ -834,13 +834,12 @@ class TestJobs:
                 )
                 data = await resp.json()
                 job_id = data["id"]
+                jobs_client.delete_job_later(job_id)
                 if do_wait:
                     await jobs_client.long_polling_by_job_id(job_id, "running")
                 if do_kill:
                     await jobs_client.delete_job(job_id)
                     await jobs_client.long_polling_by_job_id(job_id, "succeeded")
-                else:
-                    jobs_client.delete_job_later(job_id)
             return job_id
 
         yield _impl
@@ -1185,15 +1184,16 @@ class TestJobs:
     @pytest.mark.asyncio
     async def test_get_all_jobs_shared(
         self,
-        jobs_client: JobsClient,
         api: ApiConfig,
         client: aiohttp.ClientSession,
         job_request_factory: Callable[[], Dict[str, Any]],
         regular_user_factory: Callable[[], Any],
+        jobs_client_factory: Callable[[_User], Awaitable[JobsClient]],
         auth_client: AuthClient,
     ) -> None:
         owner = await regular_user_factory()
         follower = await regular_user_factory()
+        owner_jobs_client = await jobs_client_factory(owner)
 
         url = api.jobs_base_url
         job_request = job_request_factory()
@@ -1203,7 +1203,7 @@ class TestJobs:
             assert response.status == HTTPAccepted.status_code, await response.text()
             result = await response.json()
             job_id = result["id"]
-            jobs_client.delete_job_later(job_id)
+            owner_jobs_client.delete_job_later(job_id)
 
         url = api.jobs_base_url
         async with client.get(url, headers=owner.headers) as response:
@@ -1228,15 +1228,16 @@ class TestJobs:
     @pytest.mark.asyncio
     async def test_get_shared_job(
         self,
-        jobs_client: JobsClient,
         api: ApiConfig,
         client: aiohttp.ClientSession,
         job_request_factory: Callable[[], Dict[str, Any]],
         regular_user_factory: Callable[[], Any],
+        jobs_client_factory: Callable[[_User], Awaitable[JobsClient]],
         auth_client: AuthClient,
     ) -> None:
         owner = await regular_user_factory()
         follower = await regular_user_factory()
+        owner_jobs_client = await jobs_client_factory(owner)
 
         url = api.jobs_base_url
         job_request = job_request_factory()
@@ -1246,7 +1247,7 @@ class TestJobs:
             assert response.status == HTTPAccepted.status_code, await response.text()
             result = await response.json()
             job_id = result["id"]
-            jobs_client.delete_job_later(job_id)
+            owner_jobs_client.delete_job_later(job_id)
 
         url = f"{api.jobs_base_url}/{job_id}"
         async with client.get(url, headers=owner.headers) as response:

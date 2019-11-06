@@ -209,25 +209,18 @@ class JobsClient:
 async def jobs_client_factory(
     api: ApiConfig, client: ClientSession
 ) -> AsyncIterator[Callable[[_User], Awaitable[JobsClient]]]:
-    job_client: Optional[JobsClient] = None
+    jobs_client_local: Optional[JobsClient] = None
 
     async def _factory(user: _User) -> JobsClient:
-        nonlocal job_client
-        job_client = JobsClient(api, client, headers=user.headers)
-        return job_client
+        nonlocal jobs_client_local
+        jobs_client_local = JobsClient(api, client, headers=user.headers)
+        return jobs_client_local
 
     yield _factory
 
-    if job_client:
-        for job in job_client.submitted_jobs:
-            await job_client.delete_job(job, assert_success=False)
-
-        pendings = await job_client.get_all_jobs(params=[("status", "pending")])
-        runnings = await job_client.get_all_jobs(params=[("status", "running")])
-        if pendings or runnings:
-            print(f"after kill:")
-            print(f"> pending: {len(pendings)}, {[k['id'] for k in pendings]}")
-            print(f"> running: {len(runnings)}, {[k['id'] for k in runnings]}")
+    if jobs_client_local:
+        for job in jobs_client_local.submitted_jobs:
+            await jobs_client_local.delete_job(job, assert_success=False)
 
 
 @pytest.fixture
