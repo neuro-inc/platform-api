@@ -49,9 +49,9 @@ spec:
         - name: NP_JWT_SECRET
           value: secret
         - name: NP_AUTH_ZIPKIN_URL
-          value: http://zipkin
+          value: 'http://zipkin'
         - name: NP_AUTH_ZIPKIN_SAMPLE_RATE
-          value: 0
+          value: '0'
 ---
 apiVersion: v1
 kind: Service
