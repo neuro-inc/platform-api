@@ -20,14 +20,7 @@ from platform_api.config import JobsConfig
 from platform_api.user import User
 
 from .base import Orchestrator
-from .job import (
-    Job,
-    JobRecord,
-    JobStatusHistory,
-    JobStatusItem,
-    JobStatusReason,
-    current_datetime_factory,
-)
+from .job import Job, JobRecord, JobStatusHistory, JobStatusItem, JobStatusReason
 from .job_request import (
     JobError,
     JobException,
@@ -95,23 +88,25 @@ class JobsService:
         ) as cluster:
             yield cluster
 
-    async def collect_claster_resources(
+    async def collect_resources(self, deletion_delay_s: int) -> None:
+        for cluster_name in self._cluster_registry:
+            await self._collect_cluster_resources(
+                cluster_name, deletion_delay_s=deletion_delay_s
+            )
+
+    async def _collect_cluster_resources(
         self, cluster_name: str, deletion_delay_s: int
     ) -> None:
         async with self._get_cluster(cluster_name) as cluster:
             client = cluster.orchestrator._client
 
-        resources = client.get_all_resource_links()
+        resources = await client.get_all_resource_links()
 
         uncollected_jobs = set()
-        limit_time = current_datetime_factory() - timedelta(seconds=deletion_delay_s)
+        deletion_delay = timedelta(seconds=deletion_delay_s)
         job_filter = JobFilter(statuses={JobStatus.FAILED, JobStatus.SUCCEEDED})
         for record in await self._jobs_storage.get_jobs_by_ids(resources, job_filter):
-            status_item = record.status_history.current
-            if (
-                status_item.reason == JobStatusReason.COLLECTED
-                or status_item.transition_time > limit_time
-            ):
+            if record.should_be_collected(delay=deletion_delay):
                 uncollected_jobs.add(record.id)
 
         if uncollected_jobs:

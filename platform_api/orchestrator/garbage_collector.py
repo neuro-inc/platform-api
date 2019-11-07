@@ -13,13 +13,11 @@ class GarbageCollectorPoller:
         self,
         *,
         jobs_service: JobsService,
-        cluster_name: str,
         interval_s: int = 300,
         deletion_delay_s: int = 300
     ) -> None:
         self._loop = asyncio.get_event_loop()
 
-        self._cluster_name = cluster_name
         self._deletion_delay_s = deletion_delay_s
         self._jobs_service = jobs_service
         self._interval_s = interval_s
@@ -66,8 +64,8 @@ class GarbageCollectorPoller:
 
     async def _run_once(self) -> None:
         try:
-            await self._jobs_service.collect_claster_resources(
-                self._cluster_name, deletion_delay_s=self._deletion_delay_s
+            await self._jobs_service.collect_resources(
+                deletion_delay_s=self._deletion_delay_s
             )
         except Exception:
             logger.exception("exception when trying collect resources")

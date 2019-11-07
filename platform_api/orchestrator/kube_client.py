@@ -1298,7 +1298,8 @@ class KubeClient:
 
     async def get_all_resource_links(self) -> Dict[str, List[str]]:
         resources: Dict[str, List[str]] = defaultdict(list)
-        params = {"labelSelector": "platform.neuromation.io/user=compute"}
+        job_label_name = "platform.neuromation.io/job"
+        params = {"labelSelector": job_label_name}
         urls = [
             self._pods_url,
             self._ingresses_url,
@@ -1309,9 +1310,8 @@ class KubeClient:
             payload = await self._request(method="GET", url=url, params=params)
             for item in payload["items"]:
                 metadata = item["metadata"]
-                job_id = metadata["labels"].get("platform.neuromation.io/job")
-                if job_id is not None:
-                    resources[job_id].append(metadata["selfLink"])
+                job_id = metadata["labels"][job_label_name]
+                resources[job_id].append(metadata["selfLink"])
         return resources
 
     async def delete_resource_link(self, url: str) -> None:
@@ -1349,7 +1349,7 @@ class KubeClient:
 
     async def delete_node(self, name: str) -> None:
         url = self._generate_node_url(name)
-        self.delete_resource_link(url)
+        await self.delete_resource_link(url)
 
     async def create_pod(self, descriptor: PodDescriptor) -> PodDescriptor:
         payload = await self._request(
@@ -1417,7 +1417,7 @@ class KubeClient:
 
     async def delete_ingress(self, name: str) -> None:
         url = self._generate_ingress_url(name)
-        self.delete_resource_link(url)
+        await self.delete_resource_link(url)
 
     def _check_status_payload(self, payload: Dict[str, Any]) -> None:
         if payload["kind"] == "Status":
@@ -1468,7 +1468,7 @@ class KubeClient:
 
     async def delete_service(self, name: str) -> None:
         url = self._generate_service_url(name)
-        self.delete_resource_link(url)
+        await self.delete_resource_link(url)
 
     async def create_docker_secret(self, secret: DockerRegistrySecret) -> None:
         url = self._generate_all_secrets_url(secret.namespace)
@@ -1496,7 +1496,7 @@ class KubeClient:
         self, secret_name: str, namespace_name: Optional[str] = None
     ) -> None:
         url = self._generate_secret_url(secret_name, namespace_name)
-        self.delete_resource_link(url)
+        await self.delete_resource_link(url)
 
     async def get_pod_events(
         self, pod_id: str, namespace: str
@@ -1648,7 +1648,7 @@ class KubeClient:
         self, name: str, namespace_name: Optional[str] = None
     ) -> None:
         url = self._generate_network_policy_url(name, namespace_name)
-        self.delete_resource_link(url)
+        await self.delete_resource_link(url)
 
     def _generate_node_proxy_url(self, name: str, port: int) -> str:
         return f"{self._api_v1_url}/nodes/{name}:{port}/proxy"

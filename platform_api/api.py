@@ -237,11 +237,8 @@ async def create_app(
             await exit_stack.enter_async_context(jobs_poller)
 
             logger.info("Initializing GarbageCollectorPoller")
-            for cluster_name in cluster_registry:
-                gc_poller = GarbageCollectorPoller(
-                    jobs_service=jobs_service, cluster_name=cluster_name
-                )
-                await exit_stack.enter_async_context(gc_poller)
+            gc_poller = GarbageCollectorPoller(jobs_service=jobs_service)
+            await exit_stack.enter_async_context(gc_poller)
 
             app["api_v1_app"]["jobs_service"] = jobs_service
             app["jobs_app"]["jobs_service"] = jobs_service
