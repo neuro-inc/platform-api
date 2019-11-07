@@ -1122,6 +1122,7 @@ class TestRedisJobsStorage:
     async def test_get_aggregated_run_time_for_user(
         self, redis_client: aioredis.Redis
     ) -> None:
+        test_started_at = current_datetime_factory()
         owner = f"test-user-{random_str()}"
 
         job_started_delay = timedelta(hours=1)
@@ -1170,14 +1171,12 @@ class TestRedisJobsStorage:
             async with storage.try_create_job(job):
                 pass
 
-        calculation_started_at = current_datetime_factory()
-
         job_filter = JobFilter(owners={owner})
         actual_run_time = await storage.get_aggregated_run_time(job_filter)
 
-        calculation_elapsed = current_datetime_factory() - calculation_started_at
-        calculation_elapsed_sec = calculation_elapsed.total_seconds()
-        assert 0 < calculation_elapsed_sec < 1
+        test_elapsed = current_datetime_factory() - test_started_at
+        test_elapsed_sec = test_elapsed.total_seconds()
+        assert 0 < test_elapsed_sec < 1
 
         # 2x terminated GPU jobs, 2x GPU alive jobs
         expected = 2 * expected_alive_job_runtime + 2 * expected_finished_job_runtime
@@ -1189,12 +1188,8 @@ class TestRedisJobsStorage:
         # all deserialized `Job` instances get the default value of
         # `current_datetime_factory`, so we cannot assert exact value
         # of `Job.get_run_time()` in this test
-        assert expected.total_seconds() == pytest.approx(
-            actual_gpu.total_seconds(), rel=calculation_elapsed_sec
-        )
-        assert expected.total_seconds() == pytest.approx(
-            actual_non_gpu.total_seconds(), rel=calculation_elapsed_sec
-        )
+        assert expected <= actual_gpu <= expected + 2 * test_elapsed
+        assert expected <= actual_non_gpu <= expected + 2 * test_elapsed
 
     @pytest.mark.asyncio
     async def test_get_jobs_by_ids_missing_only(
