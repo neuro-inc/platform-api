@@ -1122,28 +1122,23 @@ class TestRedisJobsStorage:
     async def test_get_aggregated_run_time_for_user(
         self, redis_client: aioredis.Redis
     ) -> None:
-        def _timedelta_zero_microseconds(delta: timedelta) -> timedelta:
-            return delta - timedelta(microseconds=delta.microseconds)
-
         owner = f"test-user-{random_str()}"
 
         job_started_delay = timedelta(hours=1)
         time_pending_delta = timedelta(minutes=3)
         time_running_delta = timedelta(minutes=20)
 
-        expected_alive_job_runtime = job_started_delay - time_pending_delta
-        expected_finished_job_runtime = time_running_delta
-
         job_started_at = current_datetime_factory() - job_started_delay
         job_running_at = job_started_at + time_pending_delta
         job_finished_at = job_running_at + time_running_delta
 
+        expected_alive_job_runtime = job_started_delay - time_pending_delta
+        expected_finished_job_runtime = time_running_delta
+
         def create_job(with_gpu: bool, finished: bool) -> JobRecord:
             status_history = [
                 JobStatusItem.create(JobStatus.PENDING, transition_time=job_started_at),
-                JobStatusItem.create(
-                    JobStatus.RUNNING, transition_time=job_running_at
-                ),
+                JobStatusItem.create(JobStatus.RUNNING, transition_time=job_running_at),
             ]
             if finished:
                 status_history.append(
@@ -1174,27 +1169,32 @@ class TestRedisJobsStorage:
         for job in jobs_with_gpu + jobs_no_gpu:
             async with storage.try_create_job(job):
                 pass
+
+        calculation_started_at = current_datetime_factory()
+
         job_filter = JobFilter(owners={owner})
         actual_run_time = await storage.get_aggregated_run_time(job_filter)
 
+        calculation_elapsed = current_datetime_factory() - calculation_started_at
+        calculation_elapsed_sec = calculation_elapsed.total_seconds()
+        assert 0 < calculation_elapsed_sec < 1
+
         # 2x terminated GPU jobs, 2x GPU alive jobs
-        expected = _timedelta_zero_microseconds(
-            2 * expected_alive_job_runtime + 2 * expected_finished_job_runtime
-        )
-        actual_gpu = _timedelta_zero_microseconds(
-            actual_run_time.total_gpu_run_time_delta
-        )
-        actual_non_gpu = _timedelta_zero_microseconds(
-            actual_run_time.total_non_gpu_run_time_delta
-        )
+        expected = 2 * expected_alive_job_runtime + 2 * expected_finished_job_runtime
+        actual_gpu = actual_run_time.total_gpu_run_time_delta
+        actual_non_gpu = actual_run_time.total_non_gpu_run_time_delta
 
         # NOTE (ajuszkowski, 4-Apr-2019) Because we don't serialize all fields of `Job`
         # (specifically, `Job.current_datetime_factory`, see issue #560),
         # all deserialized `Job` instances get the default value of
         # `current_datetime_factory`, so we cannot assert exact value
         # of `Job.get_run_time()` in this test
-        assert actual_gpu == expected
-        assert actual_non_gpu == expected
+        assert expected.total_seconds() == pytest.approx(
+            actual_gpu.total_seconds(), rel=calculation_elapsed_sec
+        )
+        assert expected.total_seconds() == pytest.approx(
+            actual_non_gpu.total_seconds(), rel=calculation_elapsed_sec
+        )
 
     @pytest.mark.asyncio
     async def test_get_jobs_by_ids_missing_only(
