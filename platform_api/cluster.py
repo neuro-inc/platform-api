@@ -1,7 +1,15 @@
 import asyncio
 import logging
 from abc import ABC, abstractmethod
-from typing import Any, AsyncContextManager, AsyncIterator, Callable, Dict, Sequence
+from typing import (
+    Any,
+    AsyncContextManager,
+    AsyncIterator,
+    Callable,
+    Dict,
+    Iterator,
+    Sequence,
+)
 
 from aiorwlock import RWLock
 from async_generator import asynccontextmanager
@@ -199,3 +207,6 @@ class ClusterRegistry:
 
     def __len__(self) -> int:
         return len(self._records)
+
+    def __iter__(self) -> Iterator[str]:
+        return iter(self._records)

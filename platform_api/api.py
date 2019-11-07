@@ -17,6 +17,7 @@ from .config_factory import EnvironConfigFactory
 from .handlers import JobsHandler
 from .handlers.stats_handler import StatsHandler
 from .kube_cluster import KubeCluster
+from .orchestrator.garbage_collector import GarbageCollectorPoller
 from .orchestrator.job_request import JobException
 from .orchestrator.jobs_poller import JobsPoller
 from .orchestrator.jobs_service import JobsService, JobsServiceException
@@ -234,6 +235,13 @@ async def create_app(
             logger.info("Initializing JobsPoller")
             jobs_poller = JobsPoller(jobs_service=jobs_service)
             await exit_stack.enter_async_context(jobs_poller)
+
+            logger.info("Initializing GarbageCollectorPoller")
+            for cluster_name in cluster_registry:
+                gc_poller = GarbageCollectorPoller(
+                    jobs_service=jobs_service, cluster_name=cluster_name
+                )
+                await exit_stack.enter_async_context(gc_poller)
 
             app["api_v1_app"]["jobs_service"] = jobs_service
             app["jobs_app"]["jobs_service"] = jobs_service

@@ -1,4 +1,5 @@
 import logging
+from datetime import timedelta
 from typing import AsyncIterator, Iterable, List, Optional, Sequence, Tuple
 
 from async_generator import asynccontextmanager
@@ -19,7 +20,14 @@ from platform_api.config import JobsConfig
 from platform_api.user import User
 
 from .base import Orchestrator
-from .job import Job, JobRecord, JobStatusHistory, JobStatusItem, JobStatusReason
+from .job import (
+    Job,
+    JobRecord,
+    JobStatusHistory,
+    JobStatusItem,
+    JobStatusReason,
+    current_datetime_factory,
+)
 from .job_request import (
     JobError,
     JobException,
@@ -86,6 +94,32 @@ class JobsService:
             self._get_cluster_name(name), skip_circuit_breaker=tolerate_unavailable
         ) as cluster:
             yield cluster
+
+    async def collect_claster_resources(
+        self, cluster_name: str, deletion_delay_s: int
+    ) -> None:
+        async with self._get_cluster(cluster_name) as cluster:
+            client = cluster.orchestrator._client
+
+        resources = client.get_all_resource_links()
+
+        uncollected_jobs = set()
+        limit_time = current_datetime_factory() - timedelta(seconds=deletion_delay_s)
+        job_filter = JobFilter(statuses={JobStatus.FAILED, JobStatus.SUCCEEDED})
+        for record in await self._jobs_storage.get_jobs_by_ids(resources, job_filter):
+            status_item = record.status_history.current
+            if (
+                status_item.reason == JobStatusReason.COLLECTED
+                or status_item.transition_time > limit_time
+            ):
+                uncollected_jobs.add(record.id)
+
+        if uncollected_jobs:
+            for job_id in uncollected_jobs:
+                logger.info("Collecting resources for job %s", job_id)
+                for url in resources[job_id]:
+                    logger.info("Collecting resource URL %s", url)
+                    # client.delete_resource_link(url)
 
     async def update_jobs_statuses(self) -> None:
         # TODO (A Danshyn 02/17/19): instead of returning `Job` objects,
@@ -427,3 +461,15 @@ class JobsService:
     @property
     def jobs_storage(self) -> JobsStorage:
         return self._jobs_storage
+
+    async def collect_garbage(self) -> None:
+
+        for record in await self._jobs_storage.get_unfinished_jobs():
+            await self._update_job_status_by_id(record.id)
+
+        for record in await self._jobs_storage.get_jobs_for_deletion(
+            delay=self._jobs_config.deletion_delay
+        ):
+            # finished, but not yet deleted jobs
+            # assert job.is_finished and not job.is_deleted
+            await self._delete_job_by_id(record.id)

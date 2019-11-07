@@ -6,6 +6,7 @@ import logging
 import re
 import ssl
 from base64 import b64encode
+from collections import defaultdict
 from contextlib import suppress
 from dataclasses import dataclass, field
 from datetime import datetime
@@ -1218,6 +1219,8 @@ class KubeClient:
     def _namespace_url(self) -> str:
         return self._generate_namespace_url(self._namespace)
 
+    ["pods", "ingresses", "services"]
+
     @property
     def _pods_url(self) -> str:
         return f"{self._namespace_url}/pods"
@@ -1293,6 +1296,28 @@ class KubeClient:
             logging.debug("k8s response payload: %s", payload)
             return payload
 
+    async def get_all_resource_links(self) -> Dict[str, List[str]]:
+        resources: Dict[str, List[str]] = defaultdict(list)
+        params = {"labelSelector": "platform.neuromation.io/user=compute"}
+        urls = [
+            self._pods_url,
+            self._ingresses_url,
+            self._services_url,
+            self._generate_all_network_policies_url(),
+        ]
+        for url in urls:
+            payload = await self._request(method="GET", url=url, params=params)
+            for item in payload["items"]:
+                metadata = item["metadata"]
+                job_id = metadata["labels"].get("platform.neuromation.io/job")
+                if job_id is not None:
+                    resources[job_id].append(metadata["selfLink"])
+        return resources
+
+    async def delete_resource_link(self, url: str) -> None:
+        payload = await self._request(method="DELETE", url=url)
+        self._check_status_payload(payload)
+
     async def get_endpoint(
         self, name: str, namespace: Optional[str] = None
     ) -> Dict[str, Any]:
@@ -1324,8 +1349,7 @@ class KubeClient:
 
     async def delete_node(self, name: str) -> None:
         url = self._generate_node_url(name)
-        result = await self._request(method="DELETE", url=url)
-        self._check_status_payload(result)
+        self.delete_resource_link(url)
 
     async def create_pod(self, descriptor: PodDescriptor) -> PodDescriptor:
         payload = await self._request(
@@ -1393,8 +1417,7 @@ class KubeClient:
 
     async def delete_ingress(self, name: str) -> None:
         url = self._generate_ingress_url(name)
-        payload = await self._request(method="DELETE", url=url)
-        self._check_status_payload(payload)
+        self.delete_resource_link(url)
 
     def _check_status_payload(self, payload: Dict[str, Any]) -> None:
         if payload["kind"] == "Status":
@@ -1445,8 +1468,7 @@ class KubeClient:
 
     async def delete_service(self, name: str) -> None:
         url = self._generate_service_url(name)
-        payload = await self._request(method="DELETE", url=url)
-        self._check_status_payload(payload)
+        self.delete_resource_link(url)
 
     async def create_docker_secret(self, secret: DockerRegistrySecret) -> None:
         url = self._generate_all_secrets_url(secret.namespace)
@@ -1474,8 +1496,7 @@ class KubeClient:
         self, secret_name: str, namespace_name: Optional[str] = None
     ) -> None:
         url = self._generate_secret_url(secret_name, namespace_name)
-        payload = await self._request(method="DELETE", url=url)
-        self._check_status_payload(payload)
+        self.delete_resource_link(url)
 
     async def get_pod_events(
         self, pod_id: str, namespace: str
@@ -1627,8 +1648,7 @@ class KubeClient:
         self, name: str, namespace_name: Optional[str] = None
     ) -> None:
         url = self._generate_network_policy_url(name, namespace_name)
-        payload = await self._request(method="DELETE", url=url)
-        self._check_status_payload(payload)
+        self.delete_resource_link(url)
 
     def _generate_node_proxy_url(self, name: str, port: int) -> str:
         return f"{self._api_v1_url}/nodes/{name}:{port}/proxy"
