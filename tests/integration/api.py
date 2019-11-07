@@ -207,13 +207,13 @@ async def jobs_client_factory(
         nonlocal jclient
         jclient = JobsClient(api, client, headers=user.headers)
         return jclient
+
     yield impl
 
     assert jclient is not None
     params = [("status", "pending"), ("status", "running")]
     for job in await jclient.get_all_jobs(params):
         await jclient.delete_job(job["id"], assert_success=False)
-
 
 
 @pytest.fixture
