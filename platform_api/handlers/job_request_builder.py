@@ -1,7 +1,7 @@
 from pathlib import PurePath
 from typing import Any, Dict, List, Optional
 
-from platform_api.config import StorageConfig
+from platform_api.cluster_config import StorageConfig
 from platform_api.orchestrator.job_request import (
     Container,
     ContainerHTTPServer,

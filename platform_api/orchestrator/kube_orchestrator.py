@@ -173,12 +173,12 @@ class KubeOrchestrator(Orchestrator):
     def _get_docker_secret_name(self, job: Job) -> str:
         return self._get_user_resource_name(job)
 
-    async def _create_docker_secret(self, job: Job, token: str) -> DockerRegistrySecret:
+    async def _create_docker_secret(self, job: Job) -> DockerRegistrySecret:
         secret = DockerRegistrySecret(
             name=self._get_docker_secret_name(job),
             namespace=self._kube_config.namespace,
-            username=job.owner,
-            password=token,
+            username=self._registry_config.username,
+            password=self._registry_config.password,
             email=self._registry_config.email,
             registry_server=self._registry_config.host,
         )
@@ -258,12 +258,12 @@ class KubeOrchestrator(Orchestrator):
         labels.update(self._get_user_pod_labels(job))
         return labels
 
-    async def prepare_job(self, job: Job, token: str) -> None:
-        await self._create_docker_secret(job, token)
+    async def prepare_job(self, job: Job) -> None:
         # TODO (A Yushkovskiy 31.10.2018): get namespace for the pod, not statically
         job.internal_hostname = f"{job.id}.{self._kube_config.namespace}"
 
     async def start_job(self, job: Job) -> JobStatus:
+        await self._create_docker_secret(job)
         await self._create_user_network_policy(job)
         await self._create_pod_network_policy(job)
 
