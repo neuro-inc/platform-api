@@ -307,9 +307,16 @@ class JobRecord:
         *,
         current_datetime_factory: Callable[[], datetime] = current_datetime_factory,
     ) -> timedelta:
-        end_time = self.finished_at or current_datetime_factory()
-        start_time = self.status_history.created_at
-        return end_time - start_time
+        run_time = timedelta()
+        prev_time: Optional[datetime] = None
+        for item in self.status_history.all:
+            if prev_time:
+                run_time += item.transition_time - prev_time
+            prev_time = item.transition_time if item.status.is_running else None
+        if prev_time:
+            # job still running
+            run_time += current_datetime_factory() - prev_time
+        return run_time
 
     def _is_time_for_deletion(
         self, delay: timedelta, current_datetime_factory: Callable[[], datetime]
