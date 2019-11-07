@@ -5,7 +5,6 @@ from typing import (
     AsyncIterator,
     Callable,
     Dict,
-    Iterator,
     List,
     NamedTuple,
     Optional,
@@ -200,7 +199,7 @@ class JobsClient:
 @pytest.fixture
 async def jobs_client_factory(
     api: ApiConfig, client: ClientSession
-) -> Iterator[Callable[[_User], JobsClient]]:
+) -> AsyncIterator[Callable[[_User], JobsClient]]:
     jclient: Optional[JobsClient] = None
 
     def impl(user: _User) -> JobsClient:
