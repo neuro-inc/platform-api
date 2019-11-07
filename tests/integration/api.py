@@ -216,10 +216,10 @@ async def jobs_client_factory(
 
 
 @pytest.fixture
-def jobs_client(
+async def jobs_client(
     jobs_client_factory: Callable[[_User], JobsClient], regular_user: _User
-) -> JobsClient:
-    return jobs_client_factory(regular_user)
+) -> AsyncIterator[JobsClient]:
+    yield jobs_client_factory(regular_user)
 
 
 @pytest.fixture
