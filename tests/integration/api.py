@@ -8,6 +8,7 @@ from typing import (
     Iterator,
     List,
     NamedTuple,
+    Optional,
     Sequence,
 )
 
@@ -197,11 +198,19 @@ class JobsClient:
 
 
 @pytest.fixture
-def jobs_client_factory(
+async def jobs_client_factory(
     api: ApiConfig, client: ClientSession
 ) -> Iterator[Callable[[_User], JobsClient]]:
+    jobs_client: Optional[JobsClient] = None
+
     def impl(user: _User) -> JobsClient:
-        return JobsClient(api, client, headers=user.headers)
+        nonlocal jobs_client
+        jobs_client = JobsClient(api, client, headers=user.headers)
+        return jobs_client
+
+    params = [("status", "pending"), ("status", "running")]
+    for job in await jobs_client.get_all_jobs(params):
+        await jobs_client.delete_job(job["id"], assert_success=True)
 
     yield impl
 
