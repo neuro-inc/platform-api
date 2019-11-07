@@ -1,15 +1,6 @@
 import asyncio
 import time
-from typing import (
-    Any,
-    AsyncIterator,
-    Callable,
-    Dict,
-    List,
-    NamedTuple,
-    Optional,
-    Sequence,
-)
+from typing import Any, AsyncIterator, Callable, Dict, List, NamedTuple, Sequence
 
 import aiohttp
 import aiohttp.web
@@ -200,19 +191,19 @@ class JobsClient:
 async def jobs_client_factory(
     api: ApiConfig, client: ClientSession
 ) -> AsyncIterator[Callable[[_User], JobsClient]]:
-    jclient: Optional[JobsClient] = None
+    jobs_clients: List[JobsClient] = []
 
     def impl(user: _User) -> JobsClient:
-        nonlocal jclient
-        jclient = JobsClient(api, client, headers=user.headers)
-        return jclient
+        jobs_client = JobsClient(api, client, headers=user.headers)
+        jobs_clients.append(jobs_client)
+        return jobs_client
 
     yield impl
 
-    assert jclient is not None
     params = [("status", "pending"), ("status", "running")]
-    for job in await jclient.get_all_jobs(params):
-        await jclient.delete_job(job["id"], assert_success=False)
+    for jobs_client in jobs_clients:
+        for job in await jobs_client.get_all_jobs(params):
+            await jobs_client.delete_job(job["id"], assert_success=False)
 
 
 @pytest.fixture
