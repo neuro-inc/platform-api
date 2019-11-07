@@ -1135,20 +1135,20 @@ class TestRedisJobsStorage:
         expected_finished_job_runtime = time_running_delta
 
         job_started_at = current_datetime_factory() - job_started_delay
-        time_running_at = job_started_at + time_pending_delta
-        time_finished_at = time_running_at + time_running_delta
+        job_running_at = job_started_at + time_pending_delta
+        job_finished_at = job_running_at + time_running_delta
 
         def create_job(with_gpu: bool, finished: bool) -> JobRecord:
             status_history = [
                 JobStatusItem.create(JobStatus.PENDING, transition_time=job_started_at),
                 JobStatusItem.create(
-                    JobStatus.RUNNING, transition_time=time_running_at
+                    JobStatus.RUNNING, transition_time=job_running_at
                 ),
             ]
             if finished:
                 status_history.append(
                     JobStatusItem.create(
-                        JobStatus.SUCCEEDED, transition_time=time_finished_at
+                        JobStatus.SUCCEEDED, transition_time=job_finished_at
                     )
                 )
             return JobRecord.create(
