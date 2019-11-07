@@ -97,24 +97,16 @@ class JobsService:
     async def _collect_cluster_resources(
         self, cluster_name: str, deletion_delay_s: int
     ) -> None:
-        async with self._get_cluster(cluster_name) as cluster:
-            client = cluster.orchestrator._client
-
-        resources = await client.get_all_resource_links()
-
-        uncollected_jobs = set()
         deletion_delay = timedelta(seconds=deletion_delay_s)
-        job_filter = JobFilter(statuses={JobStatus.FAILED, JobStatus.SUCCEEDED})
-        for record in await self._jobs_storage.get_jobs_by_ids(resources, job_filter):
-            if record.should_be_collected(delay=deletion_delay):
-                uncollected_jobs.add(record.id)
 
-        if uncollected_jobs:
-            for job_id in uncollected_jobs:
-                logger.info("Collecting resources for job %s", job_id)
-                for url in resources[job_id]:
-                    logger.info("Collecting resource URL %s", url)
-                    # client.delete_resource_link(url)
+        async def should_be_collected(job_ids: Iterable[str]) -> AsyncIterator[str]:
+            job_filter = JobFilter(statuses={JobStatus.FAILED, JobStatus.SUCCEEDED})
+            for record in await self._jobs_storage.get_jobs_by_ids(job_ids, job_filter):
+                if record.should_be_collected(delay=deletion_delay):
+                    yield record.id
+
+        async with self._get_cluster(cluster_name) as cluster:
+            cluster.orchestrator.cleanup(should_be_collected=should_be_collected)
 
     async def update_jobs_statuses(self) -> None:
         # TODO (A Danshyn 02/17/19): instead of returning `Job` objects,
