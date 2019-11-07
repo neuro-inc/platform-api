@@ -201,18 +201,19 @@ class JobsClient:
 async def jobs_client_factory(
     api: ApiConfig, client: ClientSession
 ) -> Iterator[Callable[[_User], JobsClient]]:
-    jobs_client: Optional[JobsClient] = None
+    jclient: Optional[JobsClient] = None
 
     def impl(user: _User) -> JobsClient:
-        nonlocal jobs_client
-        jobs_client = JobsClient(api, client, headers=user.headers)
-        return jobs_client
-
-    params = [("status", "pending"), ("status", "running")]
-    for job in await jobs_client.get_all_jobs(params):
-        await jobs_client.delete_job(job["id"], assert_success=True)
-
+        nonlocal jclient
+        jclient = JobsClient(api, client, headers=user.headers)
+        return jclient
     yield impl
+
+    assert jclient is not None
+    params = [("status", "pending"), ("status", "running")]
+    for job in await jclient.get_all_jobs(params):
+        await jclient.delete_job(job["id"], assert_success=False)
+
 
 
 @pytest.fixture
