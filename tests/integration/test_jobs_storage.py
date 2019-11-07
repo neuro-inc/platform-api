@@ -1175,7 +1175,6 @@ class TestRedisJobsStorage:
         actual_run_time = await storage.get_aggregated_run_time(job_filter)
 
         test_elapsed = current_datetime_factory() - test_started_at
-        test_elapsed_sec = test_elapsed.total_seconds()
 
         # 2x terminated GPU jobs, 2x GPU alive jobs
         expected = 2 * expected_alive_job_runtime + 2 * expected_finished_job_runtime
