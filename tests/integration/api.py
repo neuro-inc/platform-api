@@ -200,11 +200,14 @@ async def jobs_client_factory(
 
     yield impl
 
-    params = [("status", "pending"), ("status", "running")]
-    for jobs_client in jobs_clients:
-        for job in await jobs_client.get_all_jobs(params):
-            await jobs_client.delete_job(job["id"], assert_success=False)
-
+    try:
+        params = [("status", "pending"), ("status", "running")]
+        for jobs_client in jobs_clients:
+            for job in await jobs_client.get_all_jobs(params):
+                await jobs_client.delete_job(job["id"], assert_success=False)
+    except Exception:
+        # ignore cleanup exceptions
+        pass
 
 @pytest.fixture
 def jobs_client(
