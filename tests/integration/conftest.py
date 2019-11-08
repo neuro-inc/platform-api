@@ -220,7 +220,7 @@ class MyKubeClient(KubeClient):
                         return
                     await asyncio.sleep(interval_s)
         except asyncio.TimeoutError:
-            pytest.fail(f"Pod unscheduled: {pod_name}")
+            pytest.fail("Pod unscheduled")
 
     async def wait_pod_non_existent(
         self, pod_name: str, timeout_s: float = 5.0, interval_s: float = 1.0
