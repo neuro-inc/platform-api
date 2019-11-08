@@ -119,29 +119,6 @@ jobs:
           name: Run Platform Tests
           command: |
             source venv/bin/activate
-            pytest -s -v tests/integration -k test_tpu
-            sleep 1
-            pytest -s -v tests/integration -k test_tpu
-            sleep 1
-            pytest -s -v tests/integration -k test_tpu
-            sleep 1
-            pytest -s -v tests/integration -k test_tpu
-            sleep 1
-            pytest -s -v tests/integration -k test_tpu
-            sleep 1
-            pytest -s -v tests/integration -k test_tpu
-            sleep 1
-            pytest -s -v tests/integration -k test_tpu
-            sleep 1
-            pytest -s -v tests/integration -k test_tpu
-            sleep 1
-            pytest -s -v tests/integration -k test_tpu
-            sleep 1
-            pytest -s -v tests/integration -k test_tpu
-            sleep 1
-            pytest -s -v tests/integration -k test_tpu
-            sleep 1
-            pytest -s -v tests/integration -k test_tpu
             make test_k8s_platform_api
 
       - run:
