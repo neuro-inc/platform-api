@@ -206,7 +206,6 @@ class MyKubeClient(KubeClient):
         interval_s: float = 1.0,
     ) -> None:
         try:
-            import time; start = time.time()
             async with timeout(timeout_s):
                 while True:
                     raw_pod = await self.get_raw_pod(pod_name)
@@ -217,7 +216,6 @@ class MyKubeClient(KubeClient):
                         if cond["status"]
                     ]
                     if pod_has_node and pod_is_scheduled:
-                        print('overal time:', time.time() - start)
                         return
                     await asyncio.sleep(interval_s)
         except asyncio.TimeoutError:
