@@ -13,6 +13,7 @@ from platform_logging import init_logging
 
 from platform_api.orchestrator.job_policy_enforce_poller import JobPolicyEnforcePoller
 from platform_api.orchestrator.job_policy_enforcer import (
+    AggregatedEnforcer,
     PlatformApiHelper,
     QuotaEnforcer,
 )
@@ -243,7 +244,7 @@ async def create_app(
 
             logger.info("Initializing JobPolicyEnforcePoller")
             client_wrapper = PlatformApiHelper(config.job_policy_enforcer)
-            job_policy_enforcer = QuotaEnforcer(client_wrapper)
+            job_policy_enforcer = AggregatedEnforcer([QuotaEnforcer(client_wrapper)])
             job_policy_enforce_poller = JobPolicyEnforcePoller(
                 job_policy_enforcer, config.job_policy_enforcer
             )

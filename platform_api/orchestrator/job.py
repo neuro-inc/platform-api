@@ -10,6 +10,7 @@ from neuro_auth_client.client import Quota
 from yarl import URL
 
 from platform_api.cluster_config import OrchestratorConfig, StorageConfig
+from platform_api.handlers.stats_handler import timedelta_to_minutes
 
 from .job_request import JobRequest, JobStatus
 
@@ -64,12 +65,6 @@ def _minutes_to_timedelta(minutes: Optional[int]) -> timedelta:
         return timedelta.max
     else:
         return timedelta(minutes=minutes)
-
-
-def timedelta_to_minutes(delta: timedelta) -> Optional[int]:
-    if delta == timedelta.max:
-        return None
-    return round(delta / timedelta(minutes=1))
 
 
 DEFAULT_QUOTA_NO_RESTRICTIONS: AggregatedRunTime = AggregatedRunTime.from_quota(Quota())

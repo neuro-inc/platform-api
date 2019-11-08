@@ -12,6 +12,7 @@ from platform_api.orchestrator.job_policy_enforce_poller import JobPolicyEnforce
 from platform_api.orchestrator.job_policy_enforcer import (
     AbstractPlatformApiHelper,
     JobPolicyEnforcer,
+    JobsByUser,
     PlatformApiHelper,
     QuotaEnforcer,
 )
@@ -150,7 +151,7 @@ class MockPlatformApiHelper(AbstractPlatformApiHelper):
         self._cpu_quota = cpu_quota
         self._killed_jobs: Set[str] = set()
 
-    async def get_users_with_active_jobs(self) -> Dict[Any, Any]:
+    async def get_users_and_active_job_ids(self) -> Dict[Any, Any]:
         return {
             "jobs": [
                 {
@@ -217,7 +218,7 @@ class TestQuotaJobPolicyEnforcer:
     async def test_get_users_with_active_jobs(self) -> None:
         wrapper = MockPlatformApiHelper()
         enforcer = QuotaEnforcer(wrapper)
-        result = await enforcer.get_users_with_active_jobs()
+        result = await enforcer.get_active_users_and_jobs()
         assert result == {
             "user1": {"cpu": {"job1", "job2"}, "gpu": set()},
             "user2": {"cpu": {"job3", "job4"}, "gpu": {"job5"}},
@@ -227,52 +228,52 @@ class TestQuotaJobPolicyEnforcer:
     async def test_check_user_quota_ok(self) -> None:
         cpu_jobs = {"job3", "job4"}
         gpu_jobs = {"job5"}
-        wrapper = MockPlatformApiHelper()
-        enforcer = QuotaEnforcer(wrapper)
-        await enforcer.check_user_quota("user2", cpu_jobs, gpu_jobs)
-        assert len(wrapper.killed_jobs) == 0
+        helper = MockPlatformApiHelper()
+        enforcer = QuotaEnforcer(helper)
+        await enforcer.check_user_quota(JobsByUser("user2", cpu_jobs, gpu_jobs))
+        assert len(helper.killed_jobs) == 0
 
     @pytest.mark.asyncio
     async def test_check_user_quota_gpu_exceeded(self) -> None:
         cpu_jobs = {"job3", "job4"}
         gpu_jobs = {"job5"}
-        wrapper = MockPlatformApiHelper(gpu_quota=1)
-        enforcer = QuotaEnforcer(wrapper)
-        await enforcer.check_user_quota("user2", cpu_jobs, gpu_jobs)
-        assert wrapper.killed_jobs == gpu_jobs
+        helper = MockPlatformApiHelper(gpu_quota=1)
+        enforcer = QuotaEnforcer(helper)
+        await enforcer.check_user_quota(JobsByUser("user2", cpu_jobs, gpu_jobs))
+        assert helper.killed_jobs == gpu_jobs
 
     @pytest.mark.asyncio
     async def test_check_user_quota_cpu_exceeded(self) -> None:
         cpu_jobs = {"job3", "job4"}
         gpu_jobs = {"job5"}
-        wrapper = MockPlatformApiHelper(cpu_quota=1)
-        enforcer = QuotaEnforcer(wrapper)
-        await enforcer.check_user_quota("user2", cpu_jobs, gpu_jobs)
-        assert wrapper.killed_jobs == cpu_jobs | gpu_jobs
+        helper = MockPlatformApiHelper(cpu_quota=1)
+        enforcer = QuotaEnforcer(helper)
+        await enforcer.check_user_quota(JobsByUser("user2", cpu_jobs, gpu_jobs))
+        assert helper.killed_jobs == cpu_jobs | gpu_jobs
 
     @pytest.mark.asyncio
     async def test_enforce_ok(self) -> None:
-        wrapper = MockPlatformApiHelper()
-        enforcer = QuotaEnforcer(wrapper)
+        helper = MockPlatformApiHelper()
+        enforcer = QuotaEnforcer(helper)
         await enforcer.enforce()
-        assert len(wrapper.killed_jobs) == 0
+        assert len(helper.killed_jobs) == 0
 
     @pytest.mark.asyncio
     async def test_enforce_gpu_exceeded(self) -> None:
         gpu_jobs = {"job5"}
-        wrapper = MockPlatformApiHelper(gpu_quota=1)
-        enforcer = QuotaEnforcer(wrapper)
+        helper = MockPlatformApiHelper(gpu_quota=1)
+        enforcer = QuotaEnforcer(helper)
         await enforcer.enforce()
-        assert wrapper.killed_jobs == gpu_jobs
+        assert helper.killed_jobs == gpu_jobs
 
     @pytest.mark.asyncio
     async def test_enforce_cpu_exceeded(self) -> None:
         cpu_jobs = {f"job{i}" for i in range(1, 5)}
         gpu_jobs = {"job5"}
-        wrapper = MockPlatformApiHelper(cpu_quota=1)
-        enforcer = QuotaEnforcer(wrapper)
+        helper = MockPlatformApiHelper(cpu_quota=1)
+        enforcer = QuotaEnforcer(helper)
         await enforcer.enforce()
-        assert wrapper.killed_jobs == gpu_jobs | cpu_jobs
+        assert helper.killed_jobs == gpu_jobs | cpu_jobs
 
 
 @pytest.fixture
