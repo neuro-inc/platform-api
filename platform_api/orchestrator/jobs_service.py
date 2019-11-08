@@ -106,7 +106,7 @@ class JobsService:
                     yield record.id
 
         async with self._get_cluster(cluster_name) as cluster:
-            cluster.orchestrator.cleanup(should_be_collected=should_be_collected)
+            await cluster.orchestrator.cleanup(should_be_collected=should_be_collected)
 
     async def update_jobs_statuses(self) -> None:
         # TODO (A Danshyn 02/17/19): instead of returning `Job` objects,
