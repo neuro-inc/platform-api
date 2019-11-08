@@ -5,7 +5,6 @@ docker tag $GKE_DOCKER_REGISTRY/$GKE_PROJECT_ID/platformconfig:9d7cea532a7ab0e45
 
 export MINIKUBE_IN_STYLE=true
 
-
 if [ ! "$CI" = true ]; then
     kubectl config use-context minikube
     echo "Setting up external services"

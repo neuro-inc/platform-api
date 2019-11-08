@@ -1,8 +1,5 @@
 #!/usr/bin/env bash
 
-MINIKUBE_START_SCRIPT_PATH="${BASH_SOURCE%/*}/../../minikube.sh"
-
-
 # based on
 # https://github.com/kubernetes/minikube#linux-continuous-integration-without-vm-support
 
