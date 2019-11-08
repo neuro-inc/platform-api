@@ -200,14 +200,16 @@ async def jobs_client_factory(
 
     yield impl
 
-    try:
-        params = [("status", "pending"), ("status", "running")]
-        for jobs_client in jobs_clients:
-            for job in await jobs_client.get_all_jobs(params):
-                await jobs_client.delete_job(job["id"], assert_success=False)
-    except Exception:
-        # ignore cleanup exceptions
-        pass
+    params = [("status", "pending"), ("status", "running")]
+    for jobs_client in jobs_clients:
+        try:
+            jobs = await jobs_client.get_all_jobs(params)
+        except aiohttp.ClientConnectorError:
+            # server might be down
+            continue
+        for job in jobs:
+            await jobs_client.delete_job(job["id"], assert_success=False)
+
 
 @pytest.fixture
 def jobs_client(
