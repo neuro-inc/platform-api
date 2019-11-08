@@ -67,6 +67,25 @@ class TestClusterRegistry:
             assert cluster.name == config.name
 
     @pytest.mark.asyncio
+    async def test_get(self) -> None:
+        registry = ClusterRegistry(factory=_TestCluster)
+        config = create_cluster_config(
+            name="test", circuit_breaker=CircuitBreakerConfig(open_threshold=1)
+        )
+
+        await registry.add(config)
+
+        async with registry.get(config.name):
+            raise RuntimeError("test")
+
+        with pytest.raises(ClusterNotAvailable):
+            async with registry.get(config.name):
+                pass
+
+        async with registry.get(config.name, skip_circuit_breaker=True) as cluster:
+            assert cluster.name == config.name
+
+    @pytest.mark.asyncio
     async def test_add_existing(self) -> None:
         registry = ClusterRegistry(factory=_TestCluster)
         name = "test"

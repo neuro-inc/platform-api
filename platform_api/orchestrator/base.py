@@ -1,7 +1,7 @@
 from abc import ABC, abstractmethod
 from typing import Sequence
 
-from platform_api.config import OrchestratorConfig, StorageConfig
+from platform_api.cluster_config import OrchestratorConfig, StorageConfig
 from platform_api.resource import ResourcePoolType
 
 from .job import Job, JobStatusItem
@@ -20,7 +20,11 @@ class Orchestrator(ABC):
         pass
 
     @abstractmethod
-    async def start_job(self, job: Job, token: str) -> JobStatus:
+    async def prepare_job(self, job: Job) -> None:
+        pass
+
+    @abstractmethod
+    async def start_job(self, job: Job) -> JobStatus:
         pass
 
     @abstractmethod

@@ -1,11 +1,10 @@
 from dataclasses import dataclass, field
 from datetime import timedelta
 from pathlib import Path
-from typing import Container, Optional, Sequence
+from typing import Optional, Sequence
 
 from yarl import URL
 
-from .cluster_config import OrchestratorConfig, RegistryConfig, StorageConfig
 from .config_client import ConfigClient
 from .redis import RedisConfig
 
@@ -73,6 +72,13 @@ class NotificationsConfig:
 
 
 @dataclass(frozen=True)
+class JobPolicyEnforcerConfig:
+    platform_api_url: URL
+    token: str
+    interval_sec: int = 60
+
+
+@dataclass(frozen=True)
 class Config:
     config_client: ConfigClient
 
@@ -81,31 +87,11 @@ class Config:
     database: DatabaseConfig
     auth: AuthConfig
     notifications: NotificationsConfig
+    job_policy_enforcer: JobPolicyEnforcerConfig
 
     oauth: Optional[OAuthConfig] = None
 
     jobs: JobsConfig = JobsConfig()
-
-    # used for generating environment variable names and
-    # sourcing them inside containers.
-    env_prefix: str = "NP"  # stands for Neuromation Platform
-
-
-@dataclass(frozen=True)
-class SSHServerConfig:
-    host: str = "0.0.0.0"
-    port: int = 8022  # use nonprivileged port for dev mode
-    ssh_host_keys: Container[str] = ()
-
-
-@dataclass(frozen=True)
-class SSHConfig:
-    server: SSHServerConfig
-    storage: StorageConfig
-    orchestrator: OrchestratorConfig
-    database: DatabaseConfig
-    auth: AuthConfig
-    registry: RegistryConfig = RegistryConfig()
 
     # used for generating environment variable names and
     # sourcing them inside containers.

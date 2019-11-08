@@ -17,14 +17,13 @@ from .config import (
     AuthConfig,
     Config,
     DatabaseConfig,
+    JobPolicyEnforcerConfig,
     JobsConfig,
     NotificationsConfig,
     OAuthConfig,
     PlatformConfig,
     ServerConfig,
     SSHAuthConfig,
-    SSHConfig,
-    SSHServerConfig,
 )
 from .orchestrator.kube_client import KubeClientAuthType
 from .orchestrator.kube_orchestrator import KubeConfig
@@ -53,6 +52,7 @@ class EnvironConfigFactory:
             oauth=self.try_create_oauth(),
             env_prefix=env_prefix,
             jobs=jobs,
+            job_policy_enforcer=self.create_job_policy_enforcer(),
             config_client=self.create_config_client(),
             notifications=self.create_notifications(),
         )
@@ -80,20 +80,14 @@ class EnvironConfigFactory:
             ),
         )
 
-    def create_ssh(self) -> SSHConfig:
-        env_prefix = self._environ.get("NP_ENV_PREFIX", SSHConfig.env_prefix)
-        storage = self.create_storage()
-        database = self.create_database()
-        auth = self.create_auth()
-        registry = self.create_registry()
-        return SSHConfig(
-            server=self.create_ssh_server(),
-            storage=storage,
-            orchestrator=self.create_orchestrator(),
-            database=database,
-            auth=auth,
-            registry=registry,
-            env_prefix=env_prefix,
+    def create_job_policy_enforcer(self) -> JobPolicyEnforcerConfig:
+        return JobPolicyEnforcerConfig(
+            platform_api_url=URL(self._environ["NP_ENFORCER_PLATFORM_API_URL"]),
+            token=self._environ["NP_ENFORCER_TOKEN"],
+            interval_sec=int(
+                self._environ.get("NP_ENFORCER_INTERVAL_SEC")
+                or JobPolicyEnforcerConfig.interval_sec
+            ),
         )
 
     def create_ssh_auth(self) -> SSHAuthConfig:
@@ -111,16 +105,6 @@ class EnvironConfigFactory:
     def create_server(self) -> ServerConfig:
         port = int(self._environ.get("NP_API_PORT", ServerConfig.port))
         return ServerConfig(port=port)
-
-    def create_ssh_server(self) -> SSHServerConfig:
-        port = int(self._environ.get("NP_SSH_PORT", SSHServerConfig.port))
-        # NP_SSH_HOST_KEYS is a comma separated list of paths to SSH server keys
-        ssh_host_keys = [
-            s.strip()
-            for s in self._environ.get("NP_SSH_HOST_KEYS", "").split(",")
-            if s.strip()
-        ]
-        return SSHServerConfig(port=port, ssh_host_keys=ssh_host_keys)
 
     def create_platform(self) -> PlatformConfig:
         server_endpoint_url = URL(self._environ["NP_PLATFORM_API_URL"])
@@ -282,7 +266,9 @@ class EnvironConfigFactory:
             url = URL(f"{scheme}://{host}")
         else:
             url = RegistryConfig.url
-        return RegistryConfig(url=url)
+        token = self._environ["NP_AUTH_TOKEN"]
+        name = self._environ.get("NP_AUTH_NAME", AuthConfig.service_name)
+        return RegistryConfig(url=url, username=name, password=token)
 
     def create_ingress(self) -> IngressConfig:
         base_url = URL(self._environ["NP_API_URL"])

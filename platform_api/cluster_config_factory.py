@@ -26,12 +26,16 @@ class ClusterConfigFactory:
         *,
         jobs_ingress_class: str,
         jobs_ingress_oauth_url: URL,
+        registry_username: str,
+        registry_password: str,
     ) -> Sequence[ClusterConfig]:
         configs = (
             self._create_cluster_config(
                 p,
                 jobs_ingress_class=jobs_ingress_class,
                 jobs_ingress_oauth_url=jobs_ingress_oauth_url,
+                registry_username=registry_username,
+                registry_password=registry_password,
             )
             for p in payload
         )
@@ -43,13 +47,19 @@ class ClusterConfigFactory:
         *,
         jobs_ingress_class: str,
         jobs_ingress_oauth_url: URL,
+        registry_username: str,
+        registry_password: str,
     ) -> Optional[ClusterConfig]:
         try:
             _cluster_config_validator.check(payload)
             return ClusterConfig(
                 name=payload["name"],
                 storage=self._create_storage_config(payload),
-                registry=self._create_registry_config(payload),
+                registry=self._create_registry_config(
+                    payload,
+                    registry_username=registry_username,
+                    registry_password=registry_password,
+                ),
                 orchestrator=self._create_orchestrator_config(
                     payload,
                     jobs_ingress_class=jobs_ingress_class,
@@ -156,9 +166,16 @@ class ClusterConfigFactory:
             software_versions=tuple(payload["software_versions"]),
         )
 
-    def _create_registry_config(self, payload: Dict[str, Any]) -> RegistryConfig:
+    def _create_registry_config(
+        self, payload: Dict[str, Any], registry_username: str, registry_password: str
+    ) -> RegistryConfig:
         registry = payload["registry"]
-        return RegistryConfig(url=URL(registry["url"]), email=registry["email"])
+        return RegistryConfig(
+            url=URL(registry["url"]),
+            email=registry["email"],
+            username=registry_username,
+            password=registry_password,
+        )
 
     def _create_storage_config(self, payload: Dict[str, Any]) -> StorageConfig:
         storage = payload["storage"]

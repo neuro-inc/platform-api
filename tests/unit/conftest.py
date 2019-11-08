@@ -9,8 +9,13 @@ from notifications_client.notification import AbstractNotification
 from yarl import URL
 
 from platform_api.cluster import Cluster, ClusterConfig, ClusterRegistry
-from platform_api.cluster_config import IngressConfig, OrchestratorConfig
-from platform_api.config import JobsConfig, RegistryConfig, StorageConfig
+from platform_api.cluster_config import (
+    IngressConfig,
+    OrchestratorConfig,
+    RegistryConfig,
+    StorageConfig,
+)
+from platform_api.config import JobsConfig
 from platform_api.orchestrator.base import Orchestrator
 from platform_api.orchestrator.job import (
     AggregatedRunTime,
@@ -46,6 +51,7 @@ class MockOrchestrator(Orchestrator):
         self._mock_reason_to_return: Optional[str] = JobStatusReason.CONTAINER_CREATING
         self._mock_exit_code_to_return: Optional[int] = None
         self.raise_on_get_job_status = False
+        self.raise_on_start_job_status = False
         self.get_job_status_exc_factory = self._create_get_job_status_exc
         self.raise_on_delete = False
         self.delete_job_exc_factory = self._create_delete_job_exc
@@ -59,9 +65,18 @@ class MockOrchestrator(Orchestrator):
     def storage_config(self) -> StorageConfig:
         return self._config.storage
 
-    async def start_job(self, job: Job, token: str) -> JobStatus:
-        job.status = JobStatus.PENDING
-        return JobStatus.PENDING
+    async def prepare_job(self, job: Job) -> None:
+        pass
+
+    async def start_job(self, job: Job) -> JobStatus:
+        if self.raise_on_start_job_status:
+            raise self.get_job_status_exc_factory(job)
+        job.status_history.current = JobStatusItem.create(
+            self._mock_status_to_return,
+            reason=self._mock_reason_to_return,
+            exit_code=self._mock_exit_code_to_return,
+        )
+        return job.status
 
     def _create_get_job_status_exc(self, job: Job) -> Exception:
         return JobNotFoundException(f"job {job.id} was not found")
@@ -175,9 +190,13 @@ class MockCluster(Cluster):
 
 
 @pytest.fixture
-def cluster_config() -> ClusterConfig:
+def registry_config() -> RegistryConfig:
+    return RegistryConfig(username="compute", password="compute_token")
+
+
+@pytest.fixture
+def cluster_config(registry_config: RegistryConfig) -> ClusterConfig:
     storage_config = StorageConfig(host_mount_path=PurePath("/tmp"))
-    registry_config = RegistryConfig()
     orchestrator_config = KubeConfig(
         jobs_domain_name_template="{job_id}.jobs",
         ssh_auth_domain_name="ssh-auth",

@@ -4,7 +4,7 @@ from typing import Optional
 
 from yarl import URL
 
-from platform_api.config import OrchestratorConfig
+from platform_api.cluster_config import OrchestratorConfig
 
 
 class KubeClientAuthType(str, enum.Enum):

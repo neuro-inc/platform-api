@@ -9,7 +9,7 @@ from neuro_auth_client.client import ClientAccessSubTreeView, ClientSubTreeViewR
 from trafaret import DataError
 from yarl import URL
 
-from platform_api.config import RegistryConfig, StorageConfig
+from platform_api.cluster_config import RegistryConfig, StorageConfig
 from platform_api.handlers.jobs_handler import (
     BulkJobFilter,
     BulkJobFilterBuilder,
@@ -699,7 +699,9 @@ class TestInferPermissionsFromContainer:
         container = Container(
             image="image", resources=ContainerResources(cpu=0.1, memory_mb=16)
         )
-        registry_config = RegistryConfig(url=URL("http://example.com"))
+        registry_config = RegistryConfig(
+            url=URL("http://example.com"), username="compute", password="compute_token"
+        )
         permissions = infer_permissions_from_container(user, container, registry_config)
         assert permissions == [Permission(uri="job://testuser", action="write")]
 
@@ -722,7 +724,9 @@ class TestInferPermissionsFromContainer:
                 ),
             ],
         )
-        registry_config = RegistryConfig(url=URL("http://example.com"))
+        registry_config = RegistryConfig(
+            url=URL("http://example.com"), username="compute", password="compute_token"
+        )
         permissions = infer_permissions_from_container(user, container, registry_config)
         assert permissions == [
             Permission(uri="job://testuser", action="write"),
@@ -736,7 +740,9 @@ class TestInferPermissionsFromContainer:
             image="example.com/testuser/image",
             resources=ContainerResources(cpu=0.1, memory_mb=16),
         )
-        registry_config = RegistryConfig(url=URL("http://example.com"))
+        registry_config = RegistryConfig(
+            url=URL("http://example.com"), username="compute", password="compute_token"
+        )
         permissions = infer_permissions_from_container(user, container, registry_config)
         assert permissions == [
             Permission(uri="job://testuser", action="write"),
@@ -789,7 +795,7 @@ async def test_job_to_job_response(mock_orchestrator: MockOrchestrator) -> None:
 
 @pytest.mark.asyncio
 async def test_job_to_job_response_with_job_name_and_http_exposed(
-    mock_orchestrator: MockOrchestrator
+    mock_orchestrator: MockOrchestrator,
 ) -> None:
     owner_name = "a" * USER_NAME_MAX_LENGTH
     job_name = "b" * JOB_NAME_MAX_LENGTH
@@ -839,7 +845,7 @@ async def test_job_to_job_response_with_job_name_and_http_exposed(
 
 @pytest.mark.asyncio
 async def test_job_to_job_response_with_job_name_and_http_exposed_too_long_name(
-    mock_orchestrator: MockOrchestrator
+    mock_orchestrator: MockOrchestrator,
 ) -> None:
     owner_name = "a" * USER_NAME_MAX_LENGTH
     job_name = "b" * (JOB_NAME_MAX_LENGTH + 1)
@@ -889,7 +895,7 @@ async def test_job_to_job_response_with_job_name_and_http_exposed_too_long_name(
 
 @pytest.mark.asyncio
 async def test_job_to_job_response_assert_non_empty_cluster_name(
-    mock_orchestrator: MockOrchestrator
+    mock_orchestrator: MockOrchestrator,
 ) -> None:
     job = Job(
         storage_config=mock_orchestrator.storage_config,

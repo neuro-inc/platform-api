@@ -178,7 +178,9 @@ class ClusterRegistry:
             await self.remove(cluster_for_removal)
 
     @asynccontextmanager
-    async def get(self, name: str) -> AsyncIterator[Cluster]:
+    async def get(
+        self, name: str, skip_circuit_breaker: bool = False
+    ) -> AsyncIterator[Cluster]:
         record = self._get(name)
 
         # by switching an execution context here, we are giving both readers
@@ -189,8 +191,11 @@ class ClusterRegistry:
         async with record.lock.reader:
             if record.is_cluster_closed:  # pragma: no cover
                 raise ClusterNotFound.create(name)
-            async with record.circuit_breaker:
+            if skip_circuit_breaker:
                 yield record.cluster
+            else:
+                async with record.circuit_breaker:
+                    yield record.cluster
 
     def __len__(self) -> int:
         return len(self._records)

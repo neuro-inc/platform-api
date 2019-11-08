@@ -8,7 +8,7 @@ from urllib.parse import urlsplit
 
 from yarl import URL
 
-from platform_api.config import RegistryConfig
+from platform_api.cluster_config import RegistryConfig
 from platform_api.resource import ResourcePoolType
 
 

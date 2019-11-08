@@ -18,7 +18,6 @@ from .job_request import JobRequest, JobStatus
 # `{job-id}{JOB_USER_NAMES_SEPARATOR}{job-owner}.jobs.neu.ro`.
 JOB_USER_NAMES_SEPARATOR = "--"
 
-TIMEDELTA_ONE_MINUTE = timedelta(minutes=1)
 
 logger = logging.getLogger(__name__)
 current_datetime_factory = partial(datetime.now, timezone.utc)
@@ -37,22 +36,6 @@ class AggregatedRunTime:
             total_gpu_run_time_delta=quota.total_gpu_run_time_delta,
             total_non_gpu_run_time_delta=quota.total_non_gpu_run_time_delta,
         )
-
-    def to_primitive(self) -> Dict[str, int]:
-        result: Dict[str, int] = {}
-        gpu_minutes = _timedelta_to_minutes(self.total_gpu_run_time_delta)
-        if gpu_minutes is not None:
-            result["total_gpu_run_minutes"] = gpu_minutes
-        non_gpu_minutes = _timedelta_to_minutes(self.total_non_gpu_run_time_delta)
-        if non_gpu_minutes is not None:
-            result["total_non_gpu_run_minutes"] = non_gpu_minutes
-        return result
-
-
-def _timedelta_to_minutes(delta: timedelta) -> Optional[int]:
-    if delta == timedelta.max:
-        return None
-    return round(delta / TIMEDELTA_ONE_MINUTE)
 
 
 DEFAULT_QUOTA_NO_RESTRICTIONS: AggregatedRunTime = AggregatedRunTime.from_quota(Quota())
@@ -75,6 +58,7 @@ class JobStatusReason:
     ERROR = "Error"
     CONTAINER_CANNOT_RUN = "ContainerCannotRun"
     # neuromation custom reasons:
+    CREATING = "Creating"
     COLLECTED = "Collected"
     SCHEDULING = "Scheduling"
     NOT_FOUND = "NotFound"  # "The job could not be scheduled or was preempted."
@@ -250,6 +234,7 @@ class JobRecord:
     name: Optional[str] = None
     is_preemptible: bool = False
     is_deleted: bool = False
+    max_run_time_minutes: Optional[int] = None
     internal_hostname: Optional[str] = None
     schedule_timeout: Optional[float] = None
 
@@ -322,9 +307,16 @@ class JobRecord:
         *,
         current_datetime_factory: Callable[[], datetime] = current_datetime_factory,
     ) -> timedelta:
-        end_time = self.finished_at or current_datetime_factory()
-        start_time = self.status_history.created_at
-        return end_time - start_time
+        run_time = timedelta()
+        prev_time: Optional[datetime] = None
+        for item in self.status_history.all:
+            if prev_time:
+                run_time += item.transition_time - prev_time
+            prev_time = item.transition_time if item.status.is_running else None
+        if prev_time:
+            # job still running
+            run_time += current_datetime_factory() - prev_time
+        return run_time
 
     def _is_time_for_deletion(
         self, delay: timedelta, current_datetime_factory: Callable[[], datetime]
@@ -376,6 +368,8 @@ class JobRecord:
         }
         if self.schedule_timeout:
             result["schedule_timeout"] = self.schedule_timeout
+        if self.max_run_time_minutes:
+            result["max_run_time_minutes"] = self.max_run_time_minutes
         if self.internal_hostname:
             result["internal_hostname"] = self.internal_hostname
         if self.name:
@@ -400,6 +394,7 @@ class JobRecord:
             cluster_name=payload.get("cluster_name") or "",
             name=payload.get("name"),
             is_preemptible=payload.get("is_preemptible", False),
+            max_run_time_minutes=payload.get("max_run_time_minutes", None),
             internal_hostname=payload.get("internal_hostname", None),
             schedule_timeout=payload.get("schedule_timeout", None),
         )
@@ -504,6 +499,14 @@ class Job:
     @property
     def status_history(self) -> JobStatusHistory:
         return self._status_history
+
+    @property
+    def is_creating(self) -> bool:
+        status_item = self.status_history.current
+        return (
+            status_item.status == JobStatus.PENDING
+            and status_item.reason == JobStatusReason.CREATING
+        )
 
     @property
     def is_running(self) -> bool:
@@ -629,6 +632,14 @@ class Job:
         return self._record.get_run_time(
             current_datetime_factory=self._current_datetime_factory
         )
+
+    @property
+    def max_run_time(self) -> timedelta:
+        mrt = self._record.max_run_time_minutes
+        if mrt is None:
+            return timedelta.max
+        assert mrt > 0, f"max_run_time_minutes must be positive, got: {mrt}"
+        return timedelta(minutes=mrt)
 
     def to_primitive(self) -> Dict[str, Any]:
         return self._record.to_primitive()

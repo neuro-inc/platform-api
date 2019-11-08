@@ -1,14 +1,14 @@
 import dataclasses
 from datetime import datetime, timedelta, timezone
 from pathlib import PurePath
-from typing import Any, Dict
+from typing import Any, Callable, Dict
 from unittest import mock
 
 import pytest
 from neuro_auth_client.client import Quota
 from yarl import URL
 
-from platform_api.config import RegistryConfig, StorageConfig
+from platform_api.cluster_config import RegistryConfig, StorageConfig
 from platform_api.handlers.job_request_builder import ContainerBuilder
 from platform_api.orchestrator.job import (
     AggregatedRunTime,
@@ -16,7 +16,6 @@ from platform_api.orchestrator.job import (
     JobRecord,
     JobStatusHistory,
     JobStatusItem,
-    _timedelta_to_minutes,
 )
 from platform_api.orchestrator.job_request import (
     Container,
@@ -72,7 +71,9 @@ class TestContainer:
         container = Container(
             image="testimage", resources=ContainerResources(cpu=1, memory_mb=128)
         )
-        registry_config = RegistryConfig(url=URL("http://example.com"))
+        registry_config = RegistryConfig(
+            url=URL("http://example.com"), username="compute", password="compute_token"
+        )
         assert not container.belongs_to_registry(registry_config)
 
     def test_belongs_to_registry_different_host(self) -> None:
@@ -80,7 +81,9 @@ class TestContainer:
             image="registry.com/project/testimage",
             resources=ContainerResources(cpu=1, memory_mb=128),
         )
-        registry_config = RegistryConfig(url=URL("http://example.com"))
+        registry_config = RegistryConfig(
+            url=URL("http://example.com"), username="compute", password="compute_token"
+        )
         assert not container.belongs_to_registry(registry_config)
 
     def test_belongs_to_registry(self) -> None:
@@ -88,7 +91,9 @@ class TestContainer:
             image="example.com/project/testimage",
             resources=ContainerResources(cpu=1, memory_mb=128),
         )
-        registry_config = RegistryConfig(url=URL("http://example.com"))
+        registry_config = RegistryConfig(
+            url=URL("http://example.com"), username="compute", password="compute_token"
+        )
         assert container.belongs_to_registry(registry_config)
 
     def test_to_image_uri_failure(self) -> None:
@@ -96,7 +101,9 @@ class TestContainer:
             image="registry.com/project/testimage",
             resources=ContainerResources(cpu=1, memory_mb=128),
         )
-        registry_config = RegistryConfig(url=URL("http://example.com"))
+        registry_config = RegistryConfig(
+            url=URL("http://example.com"), username="compute", password="compute_token"
+        )
         with pytest.raises(AssertionError, match="Unknown registry"):
             container.to_image_uri(registry_config)
 
@@ -105,7 +112,9 @@ class TestContainer:
             image="example.com/project/testimage",
             resources=ContainerResources(cpu=1, memory_mb=128),
         )
-        registry_config = RegistryConfig(url=URL("http://example.com"))
+        registry_config = RegistryConfig(
+            url=URL("http://example.com"), username="compute", password="compute_token"
+        )
         uri = container.to_image_uri(registry_config)
         assert uri == URL("image://project/testimage")
 
@@ -114,7 +123,11 @@ class TestContainer:
             image="example.com:5000/project/testimage",
             resources=ContainerResources(cpu=1, memory_mb=128),
         )
-        registry_config = RegistryConfig(url=URL("http://example.com:5000"))
+        registry_config = RegistryConfig(
+            url=URL("http://example.com:5000"),
+            username="compute",
+            password="compute_token",
+        )
         uri = container.to_image_uri(registry_config)
         assert uri == URL("image://project/testimage")
 
@@ -123,7 +136,9 @@ class TestContainer:
             image="example.com/project/testimage:latest",
             resources=ContainerResources(cpu=1, memory_mb=128),
         )
-        registry_config = RegistryConfig(url=URL("http://example.com"))
+        registry_config = RegistryConfig(
+            url=URL("http://example.com"), username="compute", password="compute_token"
+        )
         uri = container.to_image_uri(registry_config)
         assert uri == URL("image://project/testimage")
 
@@ -537,46 +552,164 @@ class TestJob:
         )
         assert job.has_gpu
 
-    def test_job_get_run_time_active_job(
-        self, mock_orchestrator: MockOrchestrator, job_request: JobRequest
-    ) -> None:
-        def mocked_datetime_factory() -> datetime:
-            return datetime(year=2099, month=1, day=1)
+    def _mocked_datetime_factory(self) -> datetime:
+        return datetime(year=2019, month=1, day=1)
 
-        started_at = datetime(year=2019, month=1, day=1)
-        first_item = JobStatusItem.create(JobStatus.PENDING, transition_time=started_at)
-        job = Job(
-            storage_config=mock_orchestrator.storage_config,
-            orchestrator_config=mock_orchestrator.config,
-            record=JobRecord.create(
-                request=job_request,
-                cluster_name="test-cluster",
-                status_history=JobStatusHistory(items=[first_item]),
-                current_datetime_factory=mocked_datetime_factory,
-            ),
-            current_datetime_factory=mocked_datetime_factory,
-        )
-        expected_timedelta = mocked_datetime_factory() - started_at
+    @pytest.fixture
+    def job_factory(
+        self, mock_orchestrator: MockOrchestrator, job_request: JobRequest
+    ) -> Callable[..., Job]:
+        current_datetime_factory = self._mocked_datetime_factory
+
+        def _f(
+            job_status_history: JobStatusHistory, is_preemptible: bool = False
+        ) -> Job:
+            return Job(
+                storage_config=mock_orchestrator.storage_config,
+                orchestrator_config=mock_orchestrator.config,
+                record=JobRecord.create(
+                    request=job_request,
+                    cluster_name="test-cluster",
+                    status_history=job_status_history,
+                    current_datetime_factory=current_datetime_factory,
+                    is_preemptible=is_preemptible,
+                ),
+                current_datetime_factory=current_datetime_factory,
+            )
+
+        return _f
+
+    def test_job_get_run_time_pending_job(
+        self, mock_orchestrator: MockOrchestrator, job_factory: Callable[..., Job]
+    ) -> None:
+        time_now = self._mocked_datetime_factory()
+        started_at = time_now - timedelta(minutes=30)
+        items = [JobStatusItem.create(JobStatus.PENDING, transition_time=started_at)]
+
+        job = job_factory(JobStatusHistory(items))
+        # job is still pending
+        expected_timedelta = timedelta(0)
         assert job.get_run_time() == expected_timedelta
 
+    def test_job_get_run_time_pending_job_preemptible(
+        self, mock_orchestrator: MockOrchestrator, job_factory: Callable[..., Job]
+    ) -> None:
+        time_now = self._mocked_datetime_factory()
+        started_at = time_now - timedelta(minutes=30)
+        items = [JobStatusItem.create(JobStatus.PENDING, transition_time=started_at)]
+
+        job = job_factory(JobStatusHistory(items), is_preemptible=True)
+        # job is still pending
+        expected_timedelta = timedelta(0)
+        assert job.get_run_time() == expected_timedelta
+
+    def test_job_get_run_time_running_job(
+        self, mock_orchestrator: MockOrchestrator, job_factory: Callable[..., Job]
+    ) -> None:
+        time_now = self._mocked_datetime_factory()
+
+        started_ago_delta = timedelta(hours=1)  # job started 1 hour ago: pending
+        pending_delta = timedelta(minutes=5)  # after 5 min: running (still running)
+        running_delta = started_ago_delta - pending_delta
+
+        pending_at = time_now - started_ago_delta
+        running_at = pending_at + pending_delta
+        items = [
+            JobStatusItem.create(JobStatus.PENDING, transition_time=pending_at),
+            JobStatusItem.create(JobStatus.RUNNING, transition_time=running_at),
+        ]
+        job = job_factory(JobStatusHistory(items))
+
+        assert job.get_run_time() == running_delta
+
+    def test_job_get_run_time_running_job_preemptible(
+        self, mock_orchestrator: MockOrchestrator, job_factory: Callable[..., Job]
+    ) -> None:
+        time_now = self._mocked_datetime_factory()
+
+        started_ago_delta = timedelta(hours=1)  # job started 1 hour ago: pending
+        pending1_delta = timedelta(minutes=3)  # after 3 min: running
+        running1_delta = timedelta(minutes=4)  # after 4 min: pending
+        pending2_delta = timedelta(minutes=5)  # after 5 min: running (still running)
+        running2_delta = (
+            started_ago_delta - pending1_delta - running1_delta - pending2_delta
+        )
+        running_sum_delta = running1_delta + running2_delta
+
+        pending1_at = time_now - started_ago_delta
+        running1_at = pending1_at + pending1_delta
+        pending2_at = running1_at + running1_delta
+        running2_at = pending2_at + pending2_delta
+        items = [
+            JobStatusItem.create(JobStatus.PENDING, transition_time=pending1_at),
+            JobStatusItem.create(JobStatus.RUNNING, transition_time=running1_at),
+            JobStatusItem.create(JobStatus.PENDING, transition_time=pending2_at),
+            JobStatusItem.create(JobStatus.RUNNING, transition_time=running2_at),
+        ]
+        job = job_factory(JobStatusHistory(items), is_preemptible=True)
+
+        assert job.get_run_time() == running_sum_delta
+
+    @pytest.mark.parametrize(
+        "terminated_status", [JobStatus.SUCCEEDED, JobStatus.FAILED]
+    )
     def test_job_get_run_time_terminated_job(
-        self, mock_orchestrator: MockOrchestrator, job_request: JobRequest
+        self,
+        mock_orchestrator: MockOrchestrator,
+        job_factory: Callable[..., Job],
+        terminated_status: JobStatus,
     ) -> None:
-        started_at = datetime(year=2019, month=3, day=1)
-        finished_at = datetime(year=2019, month=3, day=2)
-        first_item = JobStatusItem.create(JobStatus.PENDING, transition_time=started_at)
-        last_item = JobStatusItem.create(JobStatus.FAILED, transition_time=finished_at)
-        job = Job(
-            storage_config=mock_orchestrator.storage_config,
-            orchestrator_config=mock_orchestrator.config,
-            record=JobRecord.create(
-                request=job_request,
-                cluster_name="test-cluster",
-                status_history=JobStatusHistory(items=[first_item, last_item]),
-            ),
-        )
-        expected_timedelta = finished_at - started_at
-        assert job.get_run_time() == expected_timedelta
+        time_now = self._mocked_datetime_factory()
+
+        started_ago_delta = timedelta(hours=1)  # job started 1 hour ago: pending
+        pending_delta = timedelta(minutes=5)  # after 5 min: running
+        running_delta = timedelta(minutes=6)  # after 6 min: succeeded
+
+        pending_at = time_now - started_ago_delta
+        running_at = pending_at + pending_delta
+        terminated_at = running_at + running_delta
+        items = [
+            JobStatusItem.create(JobStatus.PENDING, transition_time=pending_at),
+            JobStatusItem.create(JobStatus.RUNNING, transition_time=running_at),
+            JobStatusItem.create(terminated_status, transition_time=terminated_at),
+        ]
+        job = job_factory(JobStatusHistory(items))
+
+        assert job.get_run_time() == running_delta
+
+    @pytest.mark.parametrize(
+        "terminated_status", [JobStatus.SUCCEEDED, JobStatus.FAILED]
+    )
+    def test_job_get_run_time_terminated_job_preemptible(
+        self,
+        mock_orchestrator: MockOrchestrator,
+        job_factory: Callable[..., Job],
+        terminated_status: JobStatus,
+    ) -> None:
+        time_now = self._mocked_datetime_factory()
+
+        started_ago_delta = timedelta(hours=1)  # job started 1 hour ago: pending
+        pending1_delta = timedelta(minutes=3)  # after 3 min: running
+        running1_delta = timedelta(minutes=4)  # after 4 min: pending
+        pending2_delta = timedelta(minutes=5)  # after 5 min: running
+        running2_delta = timedelta(minutes=6)  # after 6 min: succeeded (still)
+        running_sum_delta = running1_delta + running2_delta
+
+        pending1_at = time_now - started_ago_delta
+        running1_at = pending1_at + pending1_delta
+        pending2_at = running1_at + running1_delta
+        running2_at = pending2_at + pending2_delta
+        terminated_at = running2_at + running2_delta
+        items = [
+            JobStatusItem.create(JobStatus.PENDING, transition_time=pending1_at),
+            JobStatusItem.create(JobStatus.RUNNING, transition_time=running1_at),
+            JobStatusItem.create(JobStatus.PENDING, transition_time=pending2_at),
+            JobStatusItem.create(JobStatus.RUNNING, transition_time=running2_at),
+            JobStatusItem.create(terminated_status, transition_time=terminated_at),
+        ]
+        job = job_factory(JobStatusHistory(items), is_preemptible=True)
+
+        assert job.get_run_time() == running_sum_delta
 
     def test_http_url(
         self, mock_orchestrator: MockOrchestrator, job_request: JobRequest
@@ -738,6 +871,38 @@ class TestJob:
             "schedule_timeout": 15,
         }
 
+    def test_to_primitive_with_max_run_time(
+        self, mock_orchestrator: MockOrchestrator, job_request: JobRequest
+    ) -> None:
+        job = Job(
+            storage_config=mock_orchestrator.storage_config,
+            orchestrator_config=mock_orchestrator.config,
+            record=JobRecord.create(
+                request=job_request,
+                cluster_name="test-cluster",
+                max_run_time_minutes=500,
+            ),
+        )
+        assert job.to_primitive() == {
+            "id": "testjob",
+            "owner": "compute",
+            "cluster_name": "test-cluster",
+            "request": job_request.to_primitive(),
+            "status": "pending",
+            "statuses": [
+                {
+                    "status": "pending",
+                    "transition_time": mock.ANY,
+                    "reason": None,
+                    "description": None,
+                }
+            ],
+            "is_deleted": False,
+            "finished_at": None,
+            "is_preemptible": False,
+            "max_run_time_minutes": 500,
+        }
+
     def test_from_primitive(
         self, mock_orchestrator: MockOrchestrator, job_request_payload: Dict[str, Any]
     ) -> None:
@@ -760,6 +925,7 @@ class TestJob:
         assert job.name is None
         assert job.owner == "testuser"
         assert not job.is_preemptible
+        assert job.max_run_time == timedelta.max
 
     def test_from_primitive_check_name(
         self, mock_orchestrator: MockOrchestrator, job_request_payload: Dict[str, Any]
@@ -907,6 +1073,84 @@ class TestJob:
         )
         assert job.request.container.command == "arg1 arg2 arg3"
         assert job.request.container.entrypoint == "/script.sh"
+
+    def test_from_primitive_with_max_run_time_minutes(
+        self, mock_orchestrator: MockOrchestrator, job_request_payload: Dict[str, Any]
+    ) -> None:
+        payload = {
+            "id": "testjob",
+            "name": "test-job-name",
+            "owner": "testuser",
+            "request": job_request_payload,
+            "status": "succeeded",
+            "is_deleted": True,
+            "finished_at": datetime.now(timezone.utc).isoformat(),
+            "max_run_time_minutes": 100,
+        }
+        job = Job.from_primitive(
+            mock_orchestrator.storage_config, mock_orchestrator.config, payload
+        )
+        assert job.max_run_time == timedelta(minutes=100)
+
+    def test_from_primitive_with_max_run_time_minutes_none(
+        self, mock_orchestrator: MockOrchestrator, job_request_payload: Dict[str, Any]
+    ) -> None:
+        payload = {
+            "id": "testjob",
+            "name": "test-job-name",
+            "owner": "testuser",
+            "request": job_request_payload,
+            "status": "succeeded",
+            "is_deleted": True,
+            "finished_at": datetime.now(timezone.utc).isoformat(),
+            "max_run_time_minutes": None,
+        }
+        job = Job.from_primitive(
+            mock_orchestrator.storage_config, mock_orchestrator.config, payload
+        )
+        assert job.max_run_time == timedelta.max
+
+    def test_from_primitive_with_max_run_time_minutes_zero(
+        self, mock_orchestrator: MockOrchestrator, job_request_payload: Dict[str, Any]
+    ) -> None:
+        payload = {
+            "id": "testjob",
+            "name": "test-job-name",
+            "owner": "testuser",
+            "request": job_request_payload,
+            "status": "succeeded",
+            "is_deleted": True,
+            "finished_at": datetime.now(timezone.utc).isoformat(),
+            "max_run_time_minutes": 0,
+        }
+        job = Job.from_primitive(
+            mock_orchestrator.storage_config, mock_orchestrator.config, payload
+        )
+        with pytest.raises(
+            AssertionError, match="max_run_time_minutes must be positive, got: 0"
+        ):
+            job.max_run_time
+
+    def test_from_primitive_with_max_run_time_minutes_negative(
+        self, mock_orchestrator: MockOrchestrator, job_request_payload: Dict[str, Any]
+    ) -> None:
+        payload = {
+            "id": "testjob",
+            "name": "test-job-name",
+            "owner": "testuser",
+            "request": job_request_payload,
+            "status": "succeeded",
+            "is_deleted": True,
+            "finished_at": datetime.now(timezone.utc).isoformat(),
+            "max_run_time_minutes": -1,
+        }
+        job = Job.from_primitive(
+            mock_orchestrator.storage_config, mock_orchestrator.config, payload
+        )
+        with pytest.raises(
+            AssertionError, match="max_run_time_minutes must be positive, got: -1"
+        ):
+            job.max_run_time
 
     def test_to_uri(
         self, mock_orchestrator: MockOrchestrator, job_request: JobRequest
@@ -1341,64 +1585,6 @@ class TestAggregatedRunTime:
             total_gpu_run_time_delta=timedelta.max,
             total_non_gpu_run_time_delta=timedelta.max,
         )
-
-    def test_to_primitive(self) -> None:
-        run_time = AggregatedRunTime(
-            total_gpu_run_time_delta=timedelta(minutes=30),
-            total_non_gpu_run_time_delta=timedelta(minutes=60),
-        )
-        assert run_time.to_primitive() == {
-            "total_gpu_run_minutes": 30,
-            "total_non_gpu_run_minutes": 60,
-        }
-
-    def test_to_primitive_gpu_not_defined(self) -> None:
-        run_time = AggregatedRunTime(
-            total_gpu_run_time_delta=timedelta.max,
-            total_non_gpu_run_time_delta=timedelta(minutes=60),
-        )
-        assert run_time.to_primitive() == {"total_non_gpu_run_minutes": 60}
-
-    def test_to_primitive_non_gpu_not_defined(self) -> None:
-        run_time = AggregatedRunTime(
-            total_gpu_run_time_delta=timedelta(minutes=30),
-            total_non_gpu_run_time_delta=timedelta.max,
-        )
-        assert run_time.to_primitive() == {"total_gpu_run_minutes": 30}
-
-
-class TestTimeDeltaConverter:
-    def test__time_delta_to_minutes_millliseconds_less_than_half(self) -> None:
-        delta = timedelta(minutes=0, seconds=10, milliseconds=29)
-        assert _timedelta_to_minutes(delta) == 0
-
-    def test__time_delta_to_minutes_millliseconds_equals_to_half(self) -> None:
-        delta = timedelta(minutes=0, seconds=10, milliseconds=30)
-        assert _timedelta_to_minutes(delta) == 0
-
-    def test__time_delta_to_minutes_millliseconds_greater_then_half(self) -> None:
-        delta = timedelta(minutes=0, seconds=10, milliseconds=31)
-        assert _timedelta_to_minutes(delta) == 0
-
-    def test__time_delta_to_minutes_seconds_less_than_half(self) -> None:
-        delta = timedelta(minutes=0, seconds=29)
-        assert _timedelta_to_minutes(delta) == 0
-
-    def test__time_delta_to_minutes_seconds_equals_to_half(self) -> None:
-        delta = timedelta(minutes=0, seconds=30)
-        assert _timedelta_to_minutes(delta) == 0
-
-    def test__time_delta_to_minutes_seconds_greater_then_half(self) -> None:
-        delta = timedelta(minutes=0, seconds=31)
-        assert _timedelta_to_minutes(delta) == 1
-
-    def test__time_delta_to_minutes_minutes_non_zero(self) -> None:
-        delta = timedelta(minutes=10, seconds=15)
-        assert _timedelta_to_minutes(delta) == 10
-
-    def test__time_delta_to_minutes_max(self) -> None:
-        delta = timedelta.max
-        assert _timedelta_to_minutes(delta) is None
 
 
 class TestUser:

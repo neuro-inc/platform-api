@@ -1,15 +1,6 @@
 import asyncio
 import time
-from typing import (
-    Any,
-    AsyncIterator,
-    Callable,
-    Dict,
-    Iterator,
-    List,
-    NamedTuple,
-    Sequence,
-)
+from typing import Any, AsyncIterator, Callable, Dict, List, NamedTuple, Sequence
 
 import aiohttp
 import aiohttp.web
@@ -54,9 +45,16 @@ class ApiConfig(NamedTuple):
     def clusters_sync_url(self) -> str:
         return self.endpoint + "/config/clusters/sync"
 
+    @property
+    def stats_base_url(self) -> str:
+        return f"{self.endpoint}/stats"
+
+    def stats_for_user_url(self, username: str) -> str:
+        return f"{self.stats_base_url}/users/{username}"
+
 
 async def get_cluster_configs(
-    cluster_configs: Sequence[ClusterConfig]
+    cluster_configs: Sequence[ClusterConfig],
 ) -> Sequence[ClusterConfig]:
     return cluster_configs
 
@@ -163,6 +161,23 @@ class JobsClient:
                 pytest.fail(f"too long: {current_time:.3f} sec; resp: {response}")
             interval_s *= 1.5
 
+    async def wait_job_creation(
+        self, job_id: str, interval_s: float = 0.5, max_time: float = 300
+    ) -> Dict[str, Any]:
+        t0 = time.monotonic()
+        while True:
+            response = await self.get_job_by_id(job_id)
+            if (
+                response["status"] != "pending"
+                or response["history"]["reason"] != "Creating"
+            ):
+                return response
+            await asyncio.sleep(max(interval_s, time.monotonic() - t0))
+            current_time = time.monotonic() - t0
+            if current_time > max_time:
+                pytest.fail(f"too long: {current_time:.3f} sec; resp: {response}")
+            interval_s *= 1.5
+
     async def delete_job(self, job_id: str, assert_success: bool = True) -> None:
         url = self._api_config.generate_job_url(job_id)
         async with self._client.delete(url, headers=self._headers) as response:
@@ -173,13 +188,27 @@ class JobsClient:
 
 
 @pytest.fixture
-def jobs_client_factory(
+async def jobs_client_factory(
     api: ApiConfig, client: ClientSession
-) -> Iterator[Callable[[_User], JobsClient]]:
+) -> AsyncIterator[Callable[[_User], JobsClient]]:
+    jobs_clients: List[JobsClient] = []
+
     def impl(user: _User) -> JobsClient:
-        return JobsClient(api, client, headers=user.headers)
+        jobs_client = JobsClient(api, client, headers=user.headers)
+        jobs_clients.append(jobs_client)
+        return jobs_client
 
     yield impl
+
+    params = [("status", "pending"), ("status", "running")]
+    for jobs_client in jobs_clients:
+        try:
+            jobs = await jobs_client.get_all_jobs(params)
+        except aiohttp.ClientConnectorError:
+            # server might be down
+            continue
+        for job in jobs:
+            await jobs_client.delete_job(job["id"], assert_success=False)
 
 
 @pytest.fixture

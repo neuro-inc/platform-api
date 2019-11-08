@@ -9,11 +9,13 @@ from async_exit_stack import AsyncExitStack
 from neuro_auth_client import AuthClient, Permission
 from neuro_auth_client.security import AuthScheme, setup_security
 from notifications_client import Client as NotificationsClient
+from platform_logging import init_logging
 
 from .cluster import Cluster, ClusterConfig, ClusterRegistry
 from .config import Config
 from .config_factory import EnvironConfigFactory
 from .handlers import JobsHandler
+from .handlers.stats_handler import StatsHandler
 from .kube_cluster import KubeCluster
 from .orchestrator.job_request import JobException
 from .orchestrator.jobs_poller import JobsPoller
@@ -126,14 +128,6 @@ class ApiHandler:
         return aiohttp.web.json_response(data)
 
 
-def init_logging() -> None:
-    logging.basicConfig(
-        # TODO (A Danshyn 06/01/18): expose in the Config
-        level=logging.DEBUG,
-        format="%(asctime)s - %(name)s - %(levelname)s - %(message)s",
-    )
-
-
 @aiohttp.web.middleware
 async def handle_exceptions(
     request: aiohttp.web.Request,
@@ -182,6 +176,13 @@ async def create_jobs_app(config: Config) -> aiohttp.web.Application:
     jobs_handler = JobsHandler(app=jobs_app, config=config)
     jobs_handler.register(jobs_app)
     return jobs_app
+
+
+async def create_stats_app(config: Config) -> aiohttp.web.Application:
+    stats_app = aiohttp.web.Application()
+    stats_handler = StatsHandler(app=stats_app, config=config)
+    stats_handler.register(stats_app)
+    return stats_app
 
 
 def create_cluster(config: ClusterConfig) -> Cluster:
@@ -236,6 +237,7 @@ async def create_app(
 
             app["api_v1_app"]["jobs_service"] = jobs_service
             app["jobs_app"]["jobs_service"] = jobs_service
+            app["stats_app"]["jobs_service"] = jobs_service
 
             auth_client = await exit_stack.enter_async_context(
                 AuthClient(
@@ -243,6 +245,7 @@ async def create_app(
                 )
             )
             app["jobs_app"]["auth_client"] = auth_client
+            app["stats_app"]["auth_client"] = auth_client
 
             await setup_security(
                 app=app, auth_client=auth_client, auth_scheme=AuthScheme.BEARER
@@ -259,6 +262,10 @@ async def create_app(
     app["jobs_app"] = jobs_app
     api_v1_app.add_subapp("/jobs", jobs_app)
 
+    stats_app = await create_stats_app(config=config)
+    app["stats_app"] = stats_app
+    api_v1_app.add_subapp("/stats", stats_app)
+
     app.add_subapp("/api/v1", api_v1_app)
     return app
 
@@ -268,6 +275,8 @@ async def get_cluster_configs(config: Config) -> Sequence[ClusterConfig]:
         return await client.get_clusters(
             jobs_ingress_class=config.jobs.jobs_ingress_class,
             jobs_ingress_oauth_url=config.jobs.jobs_ingress_oauth_url,
+            registry_username=config.auth.service_name,
+            registry_password=config.auth.service_token,
         )
 
 
