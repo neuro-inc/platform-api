@@ -23,7 +23,7 @@ logger = logging.getLogger(__name__)
 current_datetime_factory = partial(datetime.now, timezone.utc)
 
 
-@dataclass(frozen=True, order=True)
+@dataclass(frozen=True)
 class AggregatedRunTime:
     total_gpu_run_time_delta: timedelta
     total_non_gpu_run_time_delta: timedelta
