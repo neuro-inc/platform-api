@@ -1,15 +1,6 @@
 import asyncio
 import time
-from typing import (
-    Any,
-    AsyncIterator,
-    Callable,
-    Dict,
-    Iterator,
-    List,
-    NamedTuple,
-    Sequence,
-)
+from typing import Any, AsyncIterator, Callable, Dict, List, NamedTuple, Sequence
 
 import aiohttp
 import aiohttp.web
@@ -197,13 +188,27 @@ class JobsClient:
 
 
 @pytest.fixture
-def jobs_client_factory(
+async def jobs_client_factory(
     api: ApiConfig, client: ClientSession
-) -> Iterator[Callable[[_User], JobsClient]]:
+) -> AsyncIterator[Callable[[_User], JobsClient]]:
+    jobs_clients: List[JobsClient] = []
+
     def impl(user: _User) -> JobsClient:
-        return JobsClient(api, client, headers=user.headers)
+        jobs_client = JobsClient(api, client, headers=user.headers)
+        jobs_clients.append(jobs_client)
+        return jobs_client
 
     yield impl
+
+    params = [("status", "pending"), ("status", "running")]
+    for jobs_client in jobs_clients:
+        try:
+            jobs = await jobs_client.get_all_jobs(params)
+        except aiohttp.ClientConnectorError:
+            # server might be down
+            continue
+        for job in jobs:
+            await jobs_client.delete_job(job["id"], assert_success=False)
 
 
 @pytest.fixture
