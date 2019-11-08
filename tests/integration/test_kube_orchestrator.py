@@ -1792,7 +1792,7 @@ class TestNodeSelector:
         await kube_orchestrator.start_job(job, token="test-token")
         pod_name = job.id
 
-        await kube_client.wait_pod_scheduled(pod_name, node_name, timeout_s=100)
+        await kube_client.wait_pod_scheduled(pod_name, node_name)
 
         np = await kube_client.get_network_policy(pod_name)
         assert np["metadata"]["labels"] == {

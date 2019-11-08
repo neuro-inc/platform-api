@@ -113,7 +113,7 @@ jobs:
           name: Running Static Code Analysis
           command: |
             source venv/bin/activate
-#            make lint
+            make lint
 
       - run:
           name: Run Platform Tests
