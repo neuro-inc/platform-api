@@ -332,7 +332,7 @@ async def mock_api() -> AsyncIterator[ApiConfig]:
         return web.json_response(payload)
 
     async def _kill_job(request: web.Request) -> web.Response:
-        # job_id = request.match_info["job_id"]
+        job_id = request.match_info["job_id"]
         return web.Response()
 
     async def _user_stats(request: web.Request) -> web.Response:
