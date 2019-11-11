@@ -1,12 +1,11 @@
 import abc
 import asyncio
 import logging
-from dataclasses import field
+from dataclasses import dataclass, field
 from datetime import timedelta
 from typing import Any, Dict, List, Optional, Set
 
 import aiohttp
-from attr import dataclass
 
 from platform_api.config import JobPolicyEnforcerConfig
 from platform_api.orchestrator.job import AggregatedRunTime
