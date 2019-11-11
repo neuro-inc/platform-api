@@ -9,6 +9,7 @@ import aiohttp
 
 from platform_api.config import JobPolicyEnforcerConfig
 from platform_api.orchestrator.job import AggregatedRunTime
+from platform_api.orchestrator.job_request import JobStatus
 
 
 logger = logging.getLogger(__name__)
@@ -21,9 +22,24 @@ def _minutes_to_timedelta(minutes: Optional[int]) -> timedelta:
         return timedelta(minutes=minutes)
 
 
+@dataclass(frozen=True)
+class JobInfo:
+    id: str
+    status: JobStatus
+    owner: str
+    is_gpu: bool
+
+    @classmethod
+    def from_json(cls, payload: Dict[str, Any]) -> "JobInfo":
+        is_gpu = bool(payload["container"]["resources"].get("gpu"))
+        return cls(
+            payload["id"], JobStatus(payload["status"]), payload["owner"], is_gpu
+        )
+
+
 class AbstractPlatformApiHelper:
     @abc.abstractmethod
-    async def get_users_and_active_job_ids(self) -> Dict[Any, Any]:
+    async def get_users_and_active_job_ids(self) -> List[JobInfo]:
         pass
 
     @abc.abstractmethod
@@ -54,12 +70,23 @@ class PlatformApiHelper(AbstractPlatformApiHelper):
         self._headers = {"Authorization": f"Bearer {config.token}"}
         self._session = aiohttp.ClientSession(headers=self._headers)
 
-    async def get_users_and_active_job_ids(self) -> Dict[str, Any]:
+    async def get_users_and_active_job_ids(self) -> List[JobInfo]:
         async with self._session.get(
             f"{self._platform_api_url}/jobs?status=pending&status=running"
         ) as resp:
             resp.raise_for_status()
-            return await resp.json()
+            payload = (await resp.json())["jobs"]
+        result = []
+        for job in payload:
+            result.append(
+                JobInfo(
+                    job["id"],
+                    JobStatus(job["status"]),
+                    job["owner"],
+                    bool(job["container"]["resources"].get("gpu")),
+                )
+            )
+        return result
 
     async def get_user_stats(self, username: str) -> Dict[str, Any]:
         async with self._session.get(
@@ -102,19 +129,15 @@ class QuotaEnforcer(JobPolicyEnforcer):
             await self.check_user_quota(jobs_by_user)
 
     async def get_active_users_and_jobs(self) -> List[JobsByUser]:
-        response_payload = (
-            await self._platform_api_helper.get_users_and_active_job_ids()
-        )
-        jobs = response_payload["jobs"]
+        active_jobs = await self._platform_api_helper.get_users_and_active_job_ids()
         jobs_by_owner: Dict[str, JobsByUser] = {}
-        for job in jobs:
-            owner = job["owner"]
+        for job_info in active_jobs:
+            owner = job_info.owner
             existing_jobs = jobs_by_owner.get(owner) or JobsByUser(username=owner)
-            is_gpu = bool(job["container"]["resources"].get("gpu"))
-            if is_gpu:
-                existing_jobs.gpu_job_ids.add(job["id"])
+            if job_info.is_gpu:
+                existing_jobs.gpu_job_ids.add(job_info.id)
             else:
-                existing_jobs.cpu_job_ids.add(job["id"])
+                existing_jobs.cpu_job_ids.add(job_info.id)
             jobs_by_owner[owner] = existing_jobs
 
         return list(jobs_by_owner.values())

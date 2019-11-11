@@ -1,7 +1,7 @@
 import asyncio
 from dataclasses import dataclass
 from datetime import timedelta
-from typing import Any, AsyncContextManager, AsyncIterator, Callable, Dict, Set
+from typing import Any, AsyncContextManager, AsyncIterator, Callable, Dict, List, Set
 
 import pytest
 from aiohttp import web
@@ -11,12 +11,14 @@ from yarl import URL
 from platform_api.config import JobPolicyEnforcerConfig
 from platform_api.orchestrator.job_policy_enforcer import (
     AbstractPlatformApiHelper,
+    JobInfo,
     JobPolicyEnforcePoller,
     JobPolicyEnforcer,
     JobsByUser,
     PlatformApiHelper,
     QuotaEnforcer,
 )
+from platform_api.orchestrator.job_request import JobStatus
 from tests.integration.api import ApiConfig
 from tests.integration.conftest import ApiRunner
 
@@ -112,41 +114,14 @@ class MockPlatformApiHelper(AbstractPlatformApiHelper):
         self._cpu_quota = cpu_quota
         self._killed_jobs: Set[str] = set()
 
-    async def get_users_and_active_job_ids(self) -> Dict[str, Any]:
-        return {
-            "jobs": [
-                {
-                    "id": "job1",
-                    "status": "running",
-                    "owner": "user1",
-                    "container": {"resources": {"cpu": 1.0}},
-                },
-                {
-                    "id": "job2",
-                    "status": "pending",
-                    "owner": "user1",
-                    "container": {"resources": {"cpu": 1.0}},
-                },
-                {
-                    "id": "job3",
-                    "status": "running",
-                    "owner": "user2",
-                    "container": {"resources": {"cpu": 1.0}},
-                },
-                {
-                    "id": "job4",
-                    "status": "pending",
-                    "owner": "user2",
-                    "container": {"resources": {"cpu": 1.0}},
-                },
-                {
-                    "id": "job5",
-                    "status": "pending",
-                    "owner": "user2",
-                    "container": {"resources": {"cpu": 1.0, "gpu": 0.5}},
-                },
-            ]
-        }
+    async def get_users_and_active_job_ids(self) -> List[JobInfo]:
+        return [
+            JobInfo("job1", JobStatus.RUNNING, "user1", False),
+            JobInfo("job2", JobStatus.PENDING, "user1", False),
+            JobInfo("job3", JobStatus.RUNNING, "user2", False),
+            JobInfo("job4", JobStatus.PENDING, "user2", False),
+            JobInfo("job5", JobStatus.PENDING, "user2", True),
+        ]
 
     async def get_user_stats(self, username: str) -> Dict[str, Any]:
         return {
@@ -326,13 +301,13 @@ class TestJobPolicyEnforcer:
 @pytest.fixture
 async def mock_api() -> AsyncIterator[ApiConfig]:
     async def _get_jobs(request: web.Request) -> web.Response:
-        # statuses = request.query["status"]
-        # assert statuses == ["pending", "running"]
-        payload: Dict[str, Any] = {}
+        statuses = request.query.getall("status")
+        assert statuses == ["pending", "running"]
+        payload: Dict[str, Any] = {"jobs": []}
         return web.json_response(payload)
 
     async def _kill_job(request: web.Request) -> web.Response:
-        job_id = request.match_info["job_id"]
+        # job_id = request.match_info["job_id"]
         return web.Response()
 
     async def _user_stats(request: web.Request) -> web.Response:
@@ -371,21 +346,12 @@ async def mock_api() -> AsyncIterator[ApiConfig]:
 
 class TestRealJobPolicyEnforcerClientWrapper:
     @pytest.mark.asyncio
-    async def test_kill_job(self, mock_api: ApiConfig) -> None:
-        job_policy_enforcer_config = JobPolicyEnforcerConfig(
-            URL(mock_api.endpoint), "random_token"
-        )
-        wrapper = PlatformApiHelper(job_policy_enforcer_config)
-        await wrapper.kill_job("job123")
-        # TODO Validate corresponding URL with correct parameter gets called
-
-    @pytest.mark.asyncio
     async def test_get_stats(self, mock_api: ApiConfig) -> None:
         job_policy_enforcer_config = JobPolicyEnforcerConfig(
             URL(mock_api.endpoint), "random_token"
         )
-        wrapper = PlatformApiHelper(job_policy_enforcer_config)
-        response = await wrapper.get_user_stats("user1")
+        helper = PlatformApiHelper(job_policy_enforcer_config)
+        response = await helper.get_user_stats("user1")
         assert response == {
             "name": "user1",
             "jobs": {
@@ -400,10 +366,9 @@ class TestRealJobPolicyEnforcerClientWrapper:
 
     @pytest.mark.asyncio
     async def test_get_jobs(self, mock_api: ApiConfig) -> None:
-        pass
-        # job_policy_enforcer_config = JobPolicyEnforcerConfig(
-        #     URL(mock_api.endpoint), "random_token"
-        # )
-        # wrapper = RealJobPolicyEnforcerClientWrapper(job_policy_enforcer_config)
-        # response = await wrapper.get_users_with_active_jobs()
-        # TODO validate response
+        job_policy_enforcer_config = JobPolicyEnforcerConfig(
+            URL(mock_api.endpoint), "random_token"
+        )
+        helper = PlatformApiHelper(job_policy_enforcer_config)
+        response = await helper.get_users_and_active_job_ids()
+        print(response)
