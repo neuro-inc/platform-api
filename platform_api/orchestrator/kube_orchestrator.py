@@ -557,5 +557,5 @@ class KubeOrchestrator(Orchestrator):
         async for job_id in should_be_collected(resources):
             logger.info("Collecting resources for job %s", job_id)
             for url in resources[job_id]:
-                logger.info("Collecting resource URL %s", url)
-                # self._client.delete_resource_link(url)
+                logger.info("Collecting resource URL %s for job %s", url, job_id)
+                # await self._client.delete_resource_link(url)
