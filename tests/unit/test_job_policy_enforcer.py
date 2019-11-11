@@ -77,7 +77,7 @@ class TestJobPolicyEnforcer:
     ) -> Callable[[JobPolicyEnforcer], AsyncIterator[JobPolicyEnforcePoller]]:
         @asynccontextmanager
         async def _factory(
-            enforcer: JobPolicyEnforcer
+            enforcer: JobPolicyEnforcer,
         ) -> AsyncIterator[JobPolicyEnforcePoller]:
             async with JobPolicyEnforcePoller(
                 policy_enforcer=enforcer, config=job_policy_enforcer_config
