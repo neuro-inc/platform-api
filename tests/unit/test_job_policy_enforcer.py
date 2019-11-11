@@ -145,12 +145,6 @@ class MockPlatformApiHelper(AbstractPlatformApiHelper):
                     "owner": "user2",
                     "container": {"resources": {"cpu": 1.0, "gpu": 0.5}},
                 },
-                {
-                    "id": "job6",
-                    "status": "succeeded",
-                    "owner": "user2",
-                    "container": {"resources": {"cpu": 1.0, "gpu": 0.5}},
-                },
             ]
         }
 
@@ -180,10 +174,12 @@ class TestQuotaJobPolicyEnforcer:
         wrapper = MockPlatformApiHelper()
         enforcer = QuotaEnforcer(wrapper)
         result = await enforcer.get_active_users_and_jobs()
-        assert result == {
-            "user1": {"cpu": {"job1", "job2"}, "gpu": set()},
-            "user2": {"cpu": {"job3", "job4"}, "gpu": {"job5"}},
-        }
+        assert result == [
+            JobsByUser(username="user1", cpu_job_ids={"job1", "job2"}),
+            JobsByUser(
+                username="user2", cpu_job_ids={"job3", "job4"}, gpu_job_ids={"job5"}
+            ),
+        ]
 
     @pytest.mark.asyncio
     async def test_check_user_quota_ok(self) -> None:
