@@ -84,7 +84,7 @@ class EnvironConfigFactory:
         return JobPolicyEnforcerConfig(
             platform_api_url=URL(self._environ["NP_ENFORCER_PLATFORM_API_URL"]),
             token=self._environ["NP_ENFORCER_TOKEN"],
-            interval_sec=int(
+            interval_sec=float(
                 self._environ.get("NP_ENFORCER_INTERVAL_SEC")
                 or JobPolicyEnforcerConfig.interval_sec
             ),
