@@ -3,6 +3,8 @@ set -o verbose
 docker tag $(cat AUTH_SERVER_IMAGE_NAME) platformauthapi:latest
 docker tag $GKE_DOCKER_REGISTRY/$GKE_PROJECT_ID/platformconfig:9d7cea532a7ab0e45871cb48cf355427a274dbd9 platformconfig:latest
 
+export MINIKUBE_IN_STYLE=true
+
 if [ ! "$CI" = true ]; then
     kubectl config use-context minikube
     echo "Setting up external services"
@@ -54,4 +56,9 @@ sleep 10
 export PLATFORM_API_URL=$(minikube service platformapi --url)/api/v1
 export AUTH_API_URL=$(minikube service platformauthapi --url)
 export SSH_AUTH_URL=$(minikube service ssh-auth --url)
+
+echo $PLATFORM_API_URL
+echo $AUTH_API_URL
+echo $SSH_AUTH_URL
+
 make test_e2e
