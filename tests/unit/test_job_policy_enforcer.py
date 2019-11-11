@@ -13,6 +13,11 @@ from platform_api.orchestrator.job_policy_enforcer import (
 )
 
 
+_EnforcePollingRunner = Callable[
+    [JobPolicyEnforcer], AsyncContextManager[JobPolicyEnforcePoller]
+]
+
+
 @dataclass(frozen=True)
 class PlatformApiEndpoints:
     url: URL
@@ -69,20 +74,22 @@ class TestJobPolicyEnforcer:
     @pytest.fixture
     async def run_enforce_polling(
         self, job_policy_enforcer_config: JobPolicyEnforcerConfig
-    ) -> Callable[[JobPolicyEnforcer], AsyncIterator[None]]:
+    ) -> Callable[[JobPolicyEnforcer], AsyncIterator[JobPolicyEnforcePoller]]:
         @asynccontextmanager
-        async def _factory(enforcer: JobPolicyEnforcer) -> AsyncIterator[None]:
+        async def _factory(
+            enforcer: JobPolicyEnforcer
+        ) -> AsyncIterator[JobPolicyEnforcePoller]:
             async with JobPolicyEnforcePoller(
                 policy_enforcer=enforcer, config=job_policy_enforcer_config
-            ):
-                yield
+            ) as poller:
+                yield poller
 
         return _factory
 
     @pytest.mark.asyncio
     async def test_basic_no_exception_short_response(
         self,
-        run_enforce_polling: Callable[[JobPolicyEnforcer], AsyncContextManager[None]],
+        run_enforce_polling: _EnforcePollingRunner,
         job_policy_enforcer_config: JobPolicyEnforcerConfig,
     ) -> None:
         interval = job_policy_enforcer_config.interval_sec
@@ -96,7 +103,7 @@ class TestJobPolicyEnforcer:
     @pytest.mark.asyncio
     async def test_basic_exception_thrown_short_response(
         self,
-        run_enforce_polling: Callable[[JobPolicyEnforcer], AsyncContextManager[None]],
+        run_enforce_polling: _EnforcePollingRunner,
         job_policy_enforcer_config: JobPolicyEnforcerConfig,
     ) -> None:
         interval = job_policy_enforcer_config.interval_sec
@@ -110,7 +117,7 @@ class TestJobPolicyEnforcer:
     @pytest.mark.asyncio
     async def test_basic_no_exception_long_enforce(
         self,
-        run_enforce_polling: Callable[[JobPolicyEnforcer], AsyncContextManager[None]],
+        run_enforce_polling: _EnforcePollingRunner,
         job_policy_enforcer_config: JobPolicyEnforcerConfig,
     ) -> None:
         interval = job_policy_enforcer_config.interval_sec
@@ -124,7 +131,7 @@ class TestJobPolicyEnforcer:
     @pytest.mark.asyncio
     async def test_basic_exception_thrown_long_enforce(
         self,
-        run_enforce_polling: Callable[[JobPolicyEnforcer], AsyncContextManager[None]],
+        run_enforce_polling: _EnforcePollingRunner,
         job_policy_enforcer_config: JobPolicyEnforcerConfig,
     ) -> None:
         interval = job_policy_enforcer_config.interval_sec
@@ -134,3 +141,20 @@ class TestJobPolicyEnforcer:
         async with run_enforce_polling(enforcer):
             await asyncio.sleep(interval * 1.5)
             assert enforcer.called_times == 1
+
+    @pytest.mark.asyncio
+    async def test_concurrent_call_not_allowed(
+        self,
+        run_enforce_polling: _EnforcePollingRunner,
+        job_policy_enforcer_config: JobPolicyEnforcerConfig,
+    ) -> None:
+        interval = job_policy_enforcer_config.interval_sec
+        enforcer = MockedJobPolicyEnforcer(
+            raise_exception=True, enforce_time_sec=interval
+        )
+        async with run_enforce_polling(enforcer) as poller:
+            with pytest.raises(
+                RuntimeError, match="Concurrent usage of enforce poller not allowed"
+            ):
+                async with poller:
+                    pass
