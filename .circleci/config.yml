@@ -1,6 +1,6 @@
 defaults: &defaults
   machine:
-    image: circleci/classic:201711-01
+    image: ubuntu-1604:201903-01
     docker_layer_caching: true
   working_directory: ~/platform-api
 
@@ -64,13 +64,17 @@ jobs:
           name: Installing Dependencies
           command: |
             pyenv install --debug 3.6.3
-            pyenv local 3.6.3-debug
-            sudo apt-get install -y software-properties-common
-            sudo add-apt-repository -y ppa:0k53d-karl-f830m/openssl
-            sudo apt-get update
-            sudo apt-get install nfs-common
+            pyenv global 3.6.3-debug
+            curl -s https://packages.cloud.google.com/apt/doc/apt-key.gpg | sudo apt-key add -
+            sudo touch /etc/apt/sources.list.d/kubernetes.list
+            echo "deb http://apt.kubernetes.io/ kubernetes-xenial main" | sudo tee -a /etc/apt/sources.list.d/kubernetes.list
             export DEBIAN_FRONTEND="noninteractive"
-            sudo apt-get install -y -q openssl
+            sudo apt-get update
+            sudo apt-get install -y nfs-common
+            sudo apt-get install -y kubectl
+            # see https://github.com/docker/for-linux/issues/597
+            sudo apt-get install -y docker-ce=5:18.09.4~3-0~ubuntu-xenial docker-ce-cli=5:18.09.4~3-0~ubuntu-xenial containerd.io=1.2.5-1
+            openssl version -a
 
       - run:
           name: Running Kubernetes
@@ -89,6 +93,8 @@ jobs:
             sudo mount --make-rshared /
             sudo mount --make-rshared /run
             sudo mount --make-rshared /var/lib/docker
+            sudo modprobe nfs
+            sudo modprobe nfsd
 
             make start_k8s
 
@@ -96,6 +102,7 @@ jobs:
       - run:
           name: Setting Up Python Virtual Environment
           command: |
+            python --version
             python -m venv venv
             source venv/bin/activate
             pip install -U pip
