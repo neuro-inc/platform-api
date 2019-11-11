@@ -303,11 +303,46 @@ async def mock_api() -> AsyncIterator[ApiConfig]:
     async def _get_jobs(request: web.Request) -> web.Response:
         statuses = request.query.getall("status")
         assert statuses == ["pending", "running"]
-        payload: Dict[str, Any] = {"jobs": []}
+        payload: Dict[str, Any] = {
+            "jobs": [
+                {
+                    "id": "job1",
+                    "status": "running",
+                    "owner": "user1",
+                    "container": {"resources": {"cpu": 1.0}},
+                },
+                {
+                    "id": "job2",
+                    "status": "pending",
+                    "owner": "user1",
+                    "container": {"resources": {"cpu": 1.0}},
+                },
+                {
+                    "id": "job3",
+                    "status": "running",
+                    "owner": "user2",
+                    "container": {"resources": {"cpu": 1.0}},
+                },
+                {
+                    "id": "job4",
+                    "status": "pending",
+                    "owner": "user2",
+                    "container": {"resources": {"cpu": 1.0}},
+                },
+                {
+                    "id": "job5",
+                    "status": "pending",
+                    "owner": "user2",
+                    "container": {"resources": {"cpu": 1.0, "gpu": 0.5}},
+                },
+            ]
+        }
+
         return web.json_response(payload)
 
     async def _kill_job(request: web.Request) -> web.Response:
-        # job_id = request.match_info["job_id"]
+        job_id = request.match_info.get("job_id")
+        assert job_id is not None
         return web.Response()
 
     async def _user_stats(request: web.Request) -> web.Response:
@@ -371,4 +406,4 @@ class TestRealJobPolicyEnforcerClientWrapper:
         )
         helper = PlatformApiHelper(job_policy_enforcer_config)
         response = await helper.get_users_and_active_job_ids()
-        print(response)
+        assert len(response) == 5
