@@ -1,5 +1,4 @@
 import logging
-from datetime import timedelta
 from typing import AsyncIterator, Iterable, List, Optional, Sequence, Tuple
 
 from async_generator import asynccontextmanager
@@ -87,26 +86,6 @@ class JobsService:
             self._get_cluster_name(name), skip_circuit_breaker=tolerate_unavailable
         ) as cluster:
             yield cluster
-
-    async def collect_resources(self, deletion_delay_s: int) -> None:
-        for cluster_name in self._cluster_registry:
-            await self._collect_cluster_resources(
-                cluster_name, deletion_delay_s=deletion_delay_s
-            )
-
-    async def _collect_cluster_resources(
-        self, cluster_name: str, deletion_delay_s: int
-    ) -> None:
-        deletion_delay = timedelta(seconds=deletion_delay_s)
-
-        async def should_be_collected(job_ids: Iterable[str]) -> AsyncIterator[str]:
-            job_filter = JobFilter(statuses={JobStatus.FAILED, JobStatus.SUCCEEDED})
-            for record in await self._jobs_storage.get_jobs_by_ids(job_ids, job_filter):
-                if record.should_be_collected(delay=deletion_delay):
-                    yield record.id
-
-        async with self._get_cluster(cluster_name) as cluster:
-            await cluster.orchestrator.cleanup(should_be_collected=should_be_collected)
 
     async def update_jobs_statuses(self) -> None:
         # TODO (A Danshyn 02/17/19): instead of returning `Job` objects,
