@@ -61,7 +61,7 @@ def job_policy_enforcer_config() -> JobPolicyEnforcerConfig:
     return JobPolicyEnforcerConfig(
         platform_api_url=URL("http://localhost:8080"),
         token="admin-token",
-        interval_sec=1,
+        interval_sec=0.1,
     )
 
 
