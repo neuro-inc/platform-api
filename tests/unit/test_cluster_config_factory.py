@@ -4,9 +4,8 @@ from typing import Any, Dict, List, Sequence
 import pytest
 from yarl import URL
 
-from platform_api.cluster_config import StorageType
+from platform_api.cluster_config import GarbageCollectorConfig, StorageType
 from platform_api.cluster_config_factory import ClusterConfigFactory
-from platform_api.config import GarbageCollectorConfig
 from platform_api.orchestrator.kube_client import KubeClientAuthType
 from platform_api.orchestrator.kube_orchestrator import KubeConfig
 from platform_api.resource import GKEGPUModels, Preset, TPUPreset, TPUResource

@@ -5,9 +5,8 @@ from async_generator import asynccontextmanager
 from multidict import CIMultiDict
 from yarl import URL
 
-from .cluster_config import ClusterConfig
+from .cluster_config import ClusterConfig, GarbageCollectorConfig
 from .cluster_config_factory import ClusterConfigFactory
-from .config import GarbageCollectorConfig
 
 
 class ConfigClient:

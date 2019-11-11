@@ -5,7 +5,7 @@ import pytest
 from async_generator import asynccontextmanager
 from yarl import URL
 
-from platform_api.config import GarbageCollectorConfig
+from platform_api.cluster_config import GarbageCollectorConfig
 from platform_api.config_client import ConfigClient
 
 from .conftest import ApiRunner

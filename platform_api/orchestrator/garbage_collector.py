@@ -5,7 +5,7 @@ from typing import Any, AsyncIterator, Iterable, Optional
 
 import aiohttp
 
-from platform_api.config import GarbageCollectorConfig
+from platform_api.cluster_config import GarbageCollectorConfig
 
 from .job import JobRecord
 from .kube_orchestrator import KubeOrchestrator

@@ -17,6 +17,7 @@ from yarl import URL
 
 from platform_api.cluster_config import (
     ClusterConfig,
+    GarbageCollectorConfig,
     IngressConfig,
     RegistryConfig,
     StorageConfig,
@@ -25,7 +26,6 @@ from platform_api.config import (
     AuthConfig,
     Config,
     DatabaseConfig,
-    GarbageCollectorConfig,
     JobPolicyEnforcerConfig,
     JobsConfig,
     NotificationsConfig,

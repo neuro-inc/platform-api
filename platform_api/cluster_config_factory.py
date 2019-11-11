@@ -7,12 +7,12 @@ from yarl import URL
 
 from .cluster_config import (
     ClusterConfig,
+    GarbageCollectorConfig,
     IngressConfig,
     OrchestratorConfig,
     RegistryConfig,
     StorageConfig,
 )
-from .config import GarbageCollectorConfig
 from .orchestrator.kube_config import KubeClientAuthType, KubeConfig
 from .resource import Preset, ResourcePoolType, TPUPreset, TPUResource
 

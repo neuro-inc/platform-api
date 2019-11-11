@@ -8,6 +8,7 @@ import platform_api
 
 from .cluster_config import (
     ClusterConfig,
+    GarbageCollectorConfig,
     IngressConfig,
     RegistryConfig,
     StorageConfig,
@@ -17,7 +18,6 @@ from .config import (
     AuthConfig,
     Config,
     DatabaseConfig,
-    GarbageCollectorConfig,
     JobPolicyEnforcerConfig,
     JobsConfig,
     NotificationsConfig,
