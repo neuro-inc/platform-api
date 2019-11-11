@@ -108,6 +108,34 @@ class TestPlatformApiHelper:
         assert runtime.total_non_gpu_run_time_delta == timedelta(seconds=900)
 
 
+class TestJobInfo:
+    def test_from_json_gpu(self) -> None:
+        payload = {
+            "id": "job1",
+            "owner": "user1",
+            "status": "pending",
+            "container": {"resources": {"gpu": 1}},
+        }
+        job_info = JobInfo.from_json(payload)
+        assert job_info.id == "job1"
+        assert job_info.owner == "user1"
+        assert job_info.status == JobStatus.PENDING
+        assert job_info.is_gpu == True
+
+    def test_from_json_cpu(self) -> None:
+        payload = {
+            "id": "job123",
+            "owner": "user2",
+            "status": "running",
+            "container": {"resources": {"cpu": 4}},
+        }
+        job_info = JobInfo.from_json(payload)
+        assert job_info.id == "job123"
+        assert job_info.owner == "user2"
+        assert job_info.status == JobStatus.RUNNING
+        assert job_info.is_gpu == False
+
+
 class MockPlatformApiHelper(AbstractPlatformApiHelper):
     def __init__(self, gpu_quota: int = 10, cpu_quota: int = 10):
         self._gpu_quota = gpu_quota
