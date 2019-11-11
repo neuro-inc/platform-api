@@ -17,7 +17,6 @@ from .config_factory import EnvironConfigFactory
 from .handlers import JobsHandler
 from .handlers.stats_handler import StatsHandler
 from .kube_cluster import KubeCluster
-from .orchestrator.garbage_collector import GarbageCollectorPoller
 from .orchestrator.job_request import JobException
 from .orchestrator.jobs_poller import JobsPoller
 from .orchestrator.jobs_service import JobsService, JobsServiceException
@@ -64,10 +63,8 @@ class ApiHandler:
         ]
         cluster_registry = self._jobs_service._cluster_registry
         old_record_count = len(cluster_registry)
-        [
+        for cluster_config in cluster_configs:
             await cluster_registry.add(cluster_config)
-            for cluster_config in cluster_configs
-        ]
         await cluster_registry.cleanup(cluster_configs)
 
         new_record_count = len(cluster_registry)
@@ -236,10 +233,6 @@ async def create_app(
             jobs_poller = JobsPoller(jobs_service=jobs_service)
             await exit_stack.enter_async_context(jobs_poller)
 
-            logger.info("Initializing GarbageCollectorPoller")
-            gc_poller = GarbageCollectorPoller(jobs_service=jobs_service)
-            await exit_stack.enter_async_context(gc_poller)
-
             app["api_v1_app"]["jobs_service"] = jobs_service
             app["jobs_app"]["jobs_service"] = jobs_service
             app["stats_app"]["jobs_service"] = jobs_service
@@ -282,6 +275,7 @@ async def get_cluster_configs(config: Config) -> Sequence[ClusterConfig]:
             jobs_ingress_oauth_url=config.jobs.jobs_ingress_oauth_url,
             registry_username=config.auth.service_name,
             registry_password=config.auth.service_token,
+            garbage_collector=config.garbage_collector,
         )
 
 

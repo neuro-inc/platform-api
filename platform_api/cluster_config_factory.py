@@ -12,6 +12,7 @@ from .cluster_config import (
     RegistryConfig,
     StorageConfig,
 )
+from .config import GarbageCollectorConfig
 from .orchestrator.kube_config import KubeClientAuthType, KubeConfig
 from .resource import Preset, ResourcePoolType, TPUPreset, TPUResource
 
@@ -28,6 +29,7 @@ class ClusterConfigFactory:
         jobs_ingress_oauth_url: URL,
         registry_username: str,
         registry_password: str,
+        garbage_collector: GarbageCollectorConfig,
     ) -> Sequence[ClusterConfig]:
         configs = (
             self._create_cluster_config(
@@ -36,6 +38,7 @@ class ClusterConfigFactory:
                 jobs_ingress_oauth_url=jobs_ingress_oauth_url,
                 registry_username=registry_username,
                 registry_password=registry_password,
+                garbage_collector=garbage_collector,
             )
             for p in payload
         )
@@ -49,6 +52,7 @@ class ClusterConfigFactory:
         jobs_ingress_oauth_url: URL,
         registry_username: str,
         registry_password: str,
+        garbage_collector: GarbageCollectorConfig,
     ) -> Optional[ClusterConfig]:
         try:
             _cluster_config_validator.check(payload)
@@ -66,6 +70,7 @@ class ClusterConfigFactory:
                     jobs_ingress_oauth_url=jobs_ingress_oauth_url,
                 ),
                 ingress=self._create_ingress_config(payload),
+                garbage_collector=garbage_collector,
             )
         except t.DataError as err:
             logging.warning(f"failed to parse cluster config: {err}")

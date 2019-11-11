@@ -5,6 +5,7 @@ import pytest
 from async_generator import asynccontextmanager
 from yarl import URL
 
+from platform_api.config import GarbageCollectorConfig
 from platform_api.config_client import ConfigClient
 
 from .conftest import ApiRunner
@@ -83,6 +84,9 @@ class TestConfigClient:
                     jobs_ingress_oauth_url=URL("https://neu.ro/oauth/authorize"),
                     registry_username="registry_user",
                     registry_password="registry_token",
+                    garbage_collector=GarbageCollectorConfig(
+                        platform_api_url=URL(), token=""
+                    ),
                 )
 
                 assert len(result) == 1
@@ -99,6 +103,9 @@ class TestConfigClient:
                     jobs_ingress_oauth_url=URL("https://neu.ro/oauth/authorize"),
                     registry_username="registry_user",
                     registry_password="registry_token",
+                    garbage_collector=GarbageCollectorConfig(
+                        platform_api_url=URL(), token=""
+                    ),
                 )
 
                 assert len(result) == 1

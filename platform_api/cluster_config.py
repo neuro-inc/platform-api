@@ -164,10 +164,19 @@ class CircuitBreakerConfig:
 
 
 @dataclass(frozen=True)
+class GarbageCollectorConfig:
+    platform_api_url: URL
+    token: str
+    interval_s: int = 300
+    deletion_delay_s: int = 300
+
+
+@dataclass(frozen=True)
 class ClusterConfig:
     name: str
     storage: StorageConfig
     registry: RegistryConfig
     orchestrator: OrchestratorConfig
     ingress: IngressConfig
+    garbage_collector: GarbageCollectorConfig
     circuit_breaker: CircuitBreakerConfig = CircuitBreakerConfig()

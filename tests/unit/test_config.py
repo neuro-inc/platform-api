@@ -150,6 +150,8 @@ class TestEnvironConfigFactory:
             "NP_AUTH_PUBLIC_URL": "https://neu.ro/api/v1/users",
             "NP_ENFORCER_PLATFORM_API_URL": "http://platformapi:8080/api/v1",
             "NP_ENFORCER_TOKEN": "compute-token",
+            "NP_GC_PLATFORM_API_URL": "http://platformapi:8080/api/v1",
+            "NP_GC_TOKEN": "compute-token",
         }
         config = EnvironConfigFactory(environ=environ).create()
         cluster = EnvironConfigFactory(environ=environ).create_cluster()
@@ -277,6 +279,8 @@ class TestEnvironConfigFactory:
             "NP_AUTH_PUBLIC_URL": "https://neu.ro/api/v1/users",
             "NP_ENFORCER_PLATFORM_API_URL": "http://platformapi:8080/api/v1",
             "NP_ENFORCER_TOKEN": "compute-token",
+            "NP_GC_PLATFORM_API_URL": "http://platformapi:8080/api/v1",
+            "NP_GC_TOKEN": "compute-token",
         }
         config = EnvironConfigFactory(environ=environ).create()
         cluster = EnvironConfigFactory(environ=environ).create_cluster()
@@ -364,6 +368,8 @@ class TestEnvironConfigFactory:
             "NP_PLATFORM_CONFIG_URI": "http://platformconfig:8080/api/v1",
             "NP_NOTIFICATIONS_URL": "http://notifications:8080",
             "NP_NOTIFICATIONS_TOKEN": "token",
+            "NP_GC_PLATFORM_API_URL": "http://platformapi:8080/api/v1",
+            "NP_GC_TOKEN": "compute-token",
         }
         cluster = EnvironConfigFactory(environ=environ).create_cluster()
         assert cluster.storage.nfs_server == "1.2.3.4"

@@ -15,7 +15,7 @@ from platform_api.cluster_config import (
     RegistryConfig,
     StorageConfig,
 )
-from platform_api.config import JobsConfig
+from platform_api.config import GarbageCollectorConfig, JobsConfig
 from platform_api.orchestrator.base import Orchestrator
 from platform_api.orchestrator.job import (
     AggregatedRunTime,
@@ -209,6 +209,7 @@ def cluster_config(registry_config: RegistryConfig) -> ClusterConfig:
         registry=registry_config,
         orchestrator=orchestrator_config,
         ingress=IngressConfig(storage_url=URL(), monitoring_url=URL()),
+        garbage_collector=GarbageCollectorConfig(platform_api_url=URL(), token=""),
     )
 
 

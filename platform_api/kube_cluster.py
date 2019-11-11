@@ -4,6 +4,7 @@ from async_exit_stack import AsyncExitStack
 
 from .cluster import Cluster
 from .cluster_config import ClusterConfig
+from .orchestrator.garbage_collector import GarbageCollectorPoller
 from .orchestrator.kube_orchestrator import KubeOrchestrator, Orchestrator
 
 
@@ -37,8 +38,12 @@ class KubeCluster(Cluster):
             registry_config=self._config.registry,
             kube_config=self._config.orchestrator,
         )
+        garbage_collector = GarbageCollectorPoller(
+            config=self._config.garbage_collector, orchestrator=orchestrator,
+        )
         await self._exit_stack.enter_async_context(orchestrator)
         self._orchestrator = orchestrator
+        self._garbage_collector = garbage_collector
 
     async def close(self) -> None:
         await self._exit_stack.__aexit__(None, None, None)

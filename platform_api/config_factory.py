@@ -17,6 +17,7 @@ from .config import (
     AuthConfig,
     Config,
     DatabaseConfig,
+    GarbageCollectorConfig,
     JobPolicyEnforcerConfig,
     JobsConfig,
     NotificationsConfig,
@@ -53,6 +54,7 @@ class EnvironConfigFactory:
             env_prefix=env_prefix,
             jobs=jobs,
             job_policy_enforcer=self.create_job_policy_enforcer(),
+            garbage_collector=self.create_garbage_collector(),
             config_client=self.create_config_client(),
             notifications=self.create_notifications(),
         )
@@ -64,6 +66,7 @@ class EnvironConfigFactory:
             registry=self.create_registry(),
             orchestrator=self.create_orchestrator(),
             ingress=self.create_ingress(),
+            garbage_collector=self.create_garbage_collector(),
         )
 
     def create_jobs(self, *, orphaned_job_owner: str) -> JobsConfig:
@@ -87,6 +90,19 @@ class EnvironConfigFactory:
             interval_sec=int(
                 self._environ.get("NP_ENFORCER_INTERVAL_SEC")
                 or JobPolicyEnforcerConfig.interval_sec
+            ),
+        )
+
+    def create_garbage_collector(self) -> GarbageCollectorConfig:
+        return GarbageCollectorConfig(
+            platform_api_url=URL(self._environ["NP_GC_PLATFORM_API_URL"]),
+            token=self._environ["NP_GC_TOKEN"],
+            interval_s=int(
+                self._environ.get("NP_GC_INTERVAL") or GarbageCollectorConfig.interval_s
+            ),
+            deletion_delay_s=int(
+                self._environ.get("NP_GC_DELETION_DELAY")
+                or GarbageCollectorConfig.deletion_delay_s
             ),
         )
 

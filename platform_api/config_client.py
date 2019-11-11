@@ -7,6 +7,7 @@ from yarl import URL
 
 from .cluster_config import ClusterConfig
 from .cluster_config_factory import ClusterConfigFactory
+from .config import GarbageCollectorConfig
 
 
 class ConfigClient:
@@ -69,6 +70,7 @@ class ConfigClient:
         jobs_ingress_oauth_url: URL,
         registry_username: str,
         registry_password: str,
+        garbage_collector: GarbageCollectorConfig,
     ) -> Sequence[ClusterConfig]:
         async with self._request("GET", "clusters") as response:
             payload = await response.json()
@@ -78,4 +80,5 @@ class ConfigClient:
                 jobs_ingress_oauth_url=jobs_ingress_oauth_url,
                 registry_username=registry_username,
                 registry_password=registry_password,
+                garbage_collector=garbage_collector,
             )

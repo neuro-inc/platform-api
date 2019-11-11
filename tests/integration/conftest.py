@@ -25,6 +25,7 @@ from platform_api.config import (
     AuthConfig,
     Config,
     DatabaseConfig,
+    GarbageCollectorConfig,
     JobPolicyEnforcerConfig,
     JobsConfig,
     NotificationsConfig,
@@ -569,6 +570,7 @@ def cluster_config(
         ingress=ingress_config,
         storage=storage_config_host,
         registry=registry_config,
+        garbage_collector=GarbageCollectorConfig(platform_api_url=URL(), token=""),
     )
 
 

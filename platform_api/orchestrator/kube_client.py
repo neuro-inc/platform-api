@@ -1219,8 +1219,6 @@ class KubeClient:
     def _namespace_url(self) -> str:
         return self._generate_namespace_url(self._namespace)
 
-    ["pods", "ingresses", "services"]
-
     @property
     def _pods_url(self) -> str:
         return f"{self._namespace_url}/pods"

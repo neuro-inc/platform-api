@@ -1,8 +1,14 @@
 import asyncio
 import logging
-from typing import Any, Optional
+from datetime import timedelta
+from typing import Any, AsyncIterator, Iterable, Optional
 
-from .jobs_service import JobsService
+import aiohttp
+
+from platform_api.config import GarbageCollectorConfig
+
+from .job import JobRecord
+from .kube_orchestrator import KubeOrchestrator
 
 
 logger = logging.getLogger(__name__)
@@ -10,20 +16,21 @@ logger = logging.getLogger(__name__)
 
 class GarbageCollectorPoller:
     def __init__(
-        self,
-        *,
-        jobs_service: JobsService,
-        interval_s: int = 300,
-        deletion_delay_s: int = 300
+        self, *, config: GarbageCollectorConfig, orchestrator: KubeOrchestrator,
     ) -> None:
         self._loop = asyncio.get_event_loop()
 
-        self._deletion_delay_s = deletion_delay_s
-        self._jobs_service = jobs_service
-        self._interval_s = interval_s
+        self._config = config
+        self._orchestrator = orchestrator
+        self._deletion_delay = timedelta(seconds=config.deletion_delay_s)
+        self._interval_s = config.interval_s
 
         self._is_active: Optional[asyncio.Future[None]] = None
         self._task: Optional[asyncio.Future[None]] = None
+
+        self._platform_api_url = config.platform_api_url
+        headers = {"Authorization": f"Bearer {config.token}"}
+        self._session = aiohttp.ClientSession(headers=headers)
 
     async def start(self) -> None:
         logger.info("Starting garbage collector")
@@ -64,12 +71,32 @@ class GarbageCollectorPoller:
 
     async def _run_once(self) -> None:
         try:
-            await self._jobs_service.collect_resources(
-                deletion_delay_s=self._deletion_delay_s
-            )
+            await self._collect_cluster_resources()
         except Exception:
             logger.exception("exception when trying collect resources")
 
     async def _wait(self) -> None:
         assert self._is_active is not None
         await asyncio.wait((self._is_active,), timeout=self._interval_s)
+
+    async def _get_finished_jobs_by_ids(
+        self, job_ids: Iterable[str]
+    ) -> AsyncIterator[JobRecord]:
+        # TODO (S Storchaka): Implement filtering by status and id:
+        # .../jobs?status=succeeded&status=failed&id=...&id=...
+        for job_id in job_ids:
+            async with self._session.get(
+                f"{self._platform_api_url}/jobs?status=succeeded&status=failed"
+            ) as resp:
+                resp.raise_for_status()
+                record = JobRecord.from_primitive(await resp.json())
+                if not record.is_finished:
+                    yield record
+
+    async def _should_be_collected(self, job_ids: Iterable[str]) -> AsyncIterator[str]:
+        async for record in self._get_finished_jobs_by_ids(job_ids):
+            if record.should_be_collected(delay=self._deletion_delay):
+                yield record.id
+
+    async def _collect_cluster_resources(self) -> None:
+        await self._orchestrator.cleanup(should_be_collected=self._should_be_collected)

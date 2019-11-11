@@ -43,6 +43,7 @@ def create_cluster_config(name: str, **kwargs: Any) -> ClusterConfig:
         registry=None,  # type: ignore
         orchestrator=None,  # type: ignore
         ingress=None,  # type: ignore
+        garbage_collector=None,  # type: ignore
         **kwargs,
     )
 

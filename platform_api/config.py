@@ -5,6 +5,7 @@ from typing import Optional, Sequence
 
 from yarl import URL
 
+from .cluster_config import GarbageCollectorConfig
 from .config_client import ConfigClient
 from .redis import RedisConfig
 
@@ -88,6 +89,7 @@ class Config:
     auth: AuthConfig
     notifications: NotificationsConfig
     job_policy_enforcer: JobPolicyEnforcerConfig
+    garbage_collector: GarbageCollectorConfig
 
     oauth: Optional[OAuthConfig] = None
 

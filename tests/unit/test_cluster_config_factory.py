@@ -6,6 +6,7 @@ from yarl import URL
 
 from platform_api.cluster_config import StorageType
 from platform_api.cluster_config_factory import ClusterConfigFactory
+from platform_api.config import GarbageCollectorConfig
 from platform_api.orchestrator.kube_client import KubeClientAuthType
 from platform_api.orchestrator.kube_orchestrator import KubeConfig
 from platform_api.resource import GKEGPUModels, Preset, TPUPreset, TPUResource
@@ -184,6 +185,11 @@ def jobs_ingress_oauth_url() -> URL:
     return URL("https://neu.ro/oauth/authorize")
 
 
+@pytest.fixture
+def garbage_collector() -> GarbageCollectorConfig:
+    return GarbageCollectorConfig(platform_api_url=URL(), token="")
+
+
 class TestClusterConfigFactory:
     def test_valid_cluster_config(
         self,
@@ -205,6 +211,10 @@ class TestClusterConfigFactory:
             jobs_ingress_oauth_url=jobs_ingress_oauth_url,
             registry_username="registry_user",
             registry_password="registry_token",
+            garbage_collector=GarbageCollectorConfig(
+                platform_api_url=URL("https://paltform_api/api/v1"),
+                token="platform_token",
+            ),
         )
 
         assert len(clusters) == 1
@@ -317,11 +327,19 @@ class TestClusterConfigFactory:
         assert orchestrator.tpu_ipv4_cidr_block == "1.1.1.1/32"
         assert orchestrator.jobs_pod_priority_class_name == "testpriority"
 
+        assert cluster.garbage_collector.platform_api_url == URL(
+            "https://paltform_api/api/v1"
+        )
+        assert cluster.garbage_collector.token == "platform_token"
+        assert cluster.garbage_collector.interval_s == 300
+        assert cluster.garbage_collector.deletion_delay_s == 300
+
     def test_storage_config_nfs(
         self,
         clusters_payload: Sequence[Dict[str, Any]],
         jobs_ingress_class: str,
         jobs_ingress_oauth_url: URL,
+        garbage_collector: GarbageCollectorConfig,
     ) -> None:
         storage_payload = clusters_payload[0]["storage"]
 
@@ -332,6 +350,7 @@ class TestClusterConfigFactory:
             jobs_ingress_oauth_url=jobs_ingress_oauth_url,
             registry_username="registry_user",
             registry_password="registry_token",
+            garbage_collector=garbage_collector,
         )
         cluster = clusters[0]
 
@@ -350,6 +369,7 @@ class TestClusterConfigFactory:
         clusters_payload: Sequence[Dict[str, Any]],
         jobs_ingress_class: str,
         jobs_ingress_oauth_url: URL,
+        garbage_collector: GarbageCollectorConfig,
         pvc_storage_payload: Dict[str, Any],
     ) -> None:
         storage_payload = pvc_storage_payload
@@ -362,6 +382,7 @@ class TestClusterConfigFactory:
             jobs_ingress_oauth_url=jobs_ingress_oauth_url,
             registry_username="registry_user",
             registry_password="registry_token",
+            garbage_collector=garbage_collector,
         )
         cluster = clusters[0]
 
@@ -378,6 +399,7 @@ class TestClusterConfigFactory:
         clusters_payload: Sequence[Dict[str, Any]],
         jobs_ingress_class: str,
         jobs_ingress_oauth_url: URL,
+        garbage_collector: GarbageCollectorConfig,
         host_storage_payload: Dict[str, Any],
     ) -> None:
         storage_payload = host_storage_payload
@@ -390,6 +412,7 @@ class TestClusterConfigFactory:
             jobs_ingress_oauth_url=jobs_ingress_oauth_url,
             registry_username="registry_user",
             registry_password="registry_token",
+            garbage_collector=garbage_collector,
         )
         cluster = clusters[0]
 
@@ -409,6 +432,7 @@ class TestClusterConfigFactory:
         clusters_payload: List[Dict[str, Any]],
         jobs_ingress_class: str,
         jobs_ingress_oauth_url: URL,
+        garbage_collector: GarbageCollectorConfig,
     ) -> None:
         clusters_payload.append({})
         factory = ClusterConfigFactory()
@@ -418,6 +442,7 @@ class TestClusterConfigFactory:
             jobs_ingress_oauth_url=jobs_ingress_oauth_url,
             registry_username="registry_user",
             registry_password="registry_token",
+            garbage_collector=garbage_collector,
         )
 
         assert len(clusters) == 1
