@@ -10,7 +10,6 @@ from attr import dataclass
 
 from platform_api.config import JobPolicyEnforcerConfig
 from platform_api.orchestrator.job import AggregatedRunTime
-from platform_api.orchestrator.job_request import JobStatus
 
 
 logger = logging.getLogger(__name__)
@@ -29,7 +28,7 @@ class AbstractPlatformApiHelper:
         pass
 
     @abc.abstractmethod
-    async def get_user_stats(self, username: str) -> Dict[Any, Any]:
+    async def get_user_stats(self, username: str) -> Dict[str, Any]:
         pass
 
     @abc.abstractmethod
@@ -38,14 +37,14 @@ class AbstractPlatformApiHelper:
 
     @classmethod
     def convert_response_to_runtime(
-        cls, json: Dict[str, Optional[int]]
+        cls, payload: Dict[str, Optional[int]]
     ) -> AggregatedRunTime:
         return AggregatedRunTime(
             total_gpu_run_time_delta=_minutes_to_timedelta(
-                json.get("total_gpu_run_time_minutes")
+                payload.get("total_gpu_run_time_minutes")
             ),
             total_non_gpu_run_time_delta=_minutes_to_timedelta(
-                json.get("total_non_gpu_run_time_minutes")
+                payload.get("total_non_gpu_run_time_minutes")
             ),
         )
 
@@ -63,9 +62,9 @@ class PlatformApiHelper(AbstractPlatformApiHelper):
             resp.raise_for_status()
             return await resp.json()
 
-    async def get_user_stats(self, username: str) -> Dict[Any, Any]:
+    async def get_user_stats(self, username: str) -> Dict[str, Any]:
         async with self._session.get(
-            self._platform_api_url / f"stats/user/{username}"
+            f"{self._platform_api_url}/stats/user/{username}"
         ) as resp:
             resp.raise_for_status()
             return await resp.json()
@@ -110,17 +109,14 @@ class QuotaEnforcer(JobPolicyEnforcer):
         jobs = response_payload["jobs"]
         jobs_by_owner: Dict[str, JobsByUser] = {}
         for job in jobs:
-            job_status = JobStatus(job["status"])
-            if job_status.is_running or job_status.is_pending:
-                owner = job.get("owner")
-                if owner:
-                    existing_jobs = jobs_by_owner.get(owner, JobsByUser(username=owner))
-                    is_gpu = job["container"]["resources"].get("gpu") is not None
-                    if is_gpu:
-                        existing_jobs.gpu_job_ids.add(job["id"])
-                    else:
-                        existing_jobs.cpu_job_ids.add(job["id"])
-                    jobs_by_owner[owner] = existing_jobs
+            owner = job["owner"]
+            existing_jobs = jobs_by_owner.get(owner) or JobsByUser(username=owner)
+            is_gpu = bool(job["container"]["resources"].get("gpu"))
+            if is_gpu:
+                existing_jobs.gpu_job_ids.add(job["id"])
+            else:
+                existing_jobs.cpu_job_ids.add(job["id"])
+            jobs_by_owner[owner] = existing_jobs
 
         return list(jobs_by_owner.values())
 
@@ -141,10 +137,8 @@ class QuotaEnforcer(JobPolicyEnforcer):
         elif quota.total_gpu_run_time_delta < jobs.total_gpu_run_time_delta:
             logger.info(f"GPU quota exceeded for {username}")
             jobs_to_delete = jobs_by_user.gpu_job_ids
-        else:
-            logger.debug(f"No quota issues for {username}")
 
-        if len(jobs_to_delete) > 0:
+        if jobs_to_delete:
             for job_id in jobs_to_delete:
                 await self._platform_api_helper.kill_job(job_id)
 
@@ -158,7 +152,7 @@ class AggregatedEnforcer(JobPolicyEnforcer):
             try:
                 await enforcer.enforce()
             except Exception:
-                logger.exception("Failed to run enforcer")
+                logger.exception("Failed to run %s", type(enforcer).__name__)
 
 
 class JobPolicyEnforcePoller:
