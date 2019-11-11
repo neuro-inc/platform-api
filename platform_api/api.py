@@ -11,8 +11,13 @@ from neuro_auth_client.security import AuthScheme, setup_security
 from notifications_client import Client as NotificationsClient
 from platform_logging import init_logging
 
-from platform_api.orchestrator.job_policy_enforcer import PlatformApiHelper, \
-    AggregatedEnforcer, QuotaEnforcer, JobPolicyEnforcePoller
+from platform_api.orchestrator.job_policy_enforcer import (
+    AggregatedEnforcer,
+    JobPolicyEnforcePoller,
+    PlatformApiHelper,
+    QuotaEnforcer,
+)
+
 from .cluster import Cluster, ClusterConfig, ClusterRegistry
 from .config import Config
 from .config_factory import EnvironConfigFactory

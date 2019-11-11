@@ -1,16 +1,17 @@
 import abc
 import asyncio
 import logging
+from dataclasses import field
 from datetime import timedelta
-from typing import Any, Optional, Dict, Set, List
+from typing import Any, Dict, List, Optional, Set
 
 import aiohttp
 from attr import dataclass
-from dataclasses import field
 
 from platform_api.config import JobPolicyEnforcerConfig
 from platform_api.orchestrator.job import AggregatedRunTime
 from platform_api.orchestrator.job_request import JobStatus
+
 
 logger = logging.getLogger(__name__)
 
@@ -37,7 +38,7 @@ class AbstractPlatformApiHelper:
 
     @classmethod
     def convert_response_to_runtime(
-            cls, json: Dict[str, Optional[int]]
+        cls, json: Dict[str, Optional[int]]
     ) -> AggregatedRunTime:
         return AggregatedRunTime(
             total_gpu_run_time_delta=_minutes_to_timedelta(
@@ -57,21 +58,21 @@ class PlatformApiHelper(AbstractPlatformApiHelper):
 
     async def get_users_and_active_job_ids(self) -> Dict[str, Any]:
         async with self._session.get(
-                f"{self._platform_api_url}/jobs?status=pending&status=running"
+            f"{self._platform_api_url}/jobs?status=pending&status=running"
         ) as resp:
             resp.raise_for_status()
             return await resp.json()
 
     async def get_user_stats(self, username: str) -> Dict[Any, Any]:
         async with self._session.get(
-                self._platform_api_url / f"stats/user/{username}"
+            self._platform_api_url / f"stats/user/{username}"
         ) as resp:
             resp.raise_for_status()
             return await resp.json()
 
     async def kill_job(self, job_id: str) -> None:
         async with self._session.delete(
-                self._platform_api_url / f"jobs/{job_id}"
+            self._platform_api_url / f"jobs/{job_id}"
         ) as resp:
             resp.raise_for_status()
 
