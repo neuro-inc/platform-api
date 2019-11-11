@@ -523,6 +523,13 @@ def jobs_config() -> JobsConfig:
 
 
 @pytest.fixture
+def garbage_collector_config(admin_token: str,) -> GarbageCollectorConfig:
+    return GarbageCollectorConfig(
+        platform_api_url=URL("http://localhost:8080/api/v1"), token=admin_token,
+    )
+
+
+@pytest.fixture
 def config_factory(
     kube_config: KubeConfig,
     redis_config: RedisConfig,
@@ -530,6 +537,7 @@ def config_factory(
     jobs_config: JobsConfig,
     notifications_config: NotificationsConfig,
     admin_token: str,
+    garbage_collector_config: GarbageCollectorConfig,
 ) -> Callable[..., Config]:
     def _factory(**kwargs: Any) -> Config:
         server_config = ServerConfig()
@@ -548,6 +556,7 @@ def config_factory(
             job_policy_enforcer=job_policy_enforcer,
             notifications=notifications_config,
             config_client=config_client,
+            garbage_collector=garbage_collector_config,
             **kwargs,
         )
 
@@ -559,6 +568,7 @@ def cluster_config(
     kube_config: KubeConfig,
     storage_config_host: StorageConfig,
     registry_config: RegistryConfig,
+    garbage_collector_config: GarbageCollectorConfig,
 ) -> ClusterConfig:
     ingress_config = IngressConfig(
         storage_url=URL("https://neu.ro/api/v1/storage"),
@@ -570,7 +580,7 @@ def cluster_config(
         ingress=ingress_config,
         storage=storage_config_host,
         registry=registry_config,
-        garbage_collector=GarbageCollectorConfig(platform_api_url=URL(), token=""),
+        garbage_collector=garbage_collector_config,
     )
 
 
