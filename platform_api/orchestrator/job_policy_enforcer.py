@@ -76,17 +76,7 @@ class PlatformApiHelper(AbstractPlatformApiHelper):
         ) as resp:
             resp.raise_for_status()
             payload = (await resp.json())["jobs"]
-        result = []
-        for job in payload:
-            result.append(
-                JobInfo(
-                    job["id"],
-                    JobStatus(job["status"]),
-                    job["owner"],
-                    bool(job["container"]["resources"].get("gpu")),
-                )
-            )
-        return result
+        return [JobInfo.from_json(job) for job in payload]
 
     async def get_user_stats(self, username: str) -> Dict[str, Any]:
         async with self._session.get(
