@@ -34,14 +34,14 @@ class JobPolicyEnforcePoller:
 
     async def start(self) -> None:
         logger.info("Starting job policy enforce polling")
-        assert self._task is None
+        if self._task is not None:
+            raise RuntimeError("Concurrent usage of enforce poller not allowed")
         self._task = self._loop.create_task(self._run())
 
     async def stop(self) -> None:
         logger.info("Stopping job policy enforce polling")
         assert self._task is not None
         self._task.cancel()
-        self._task = None
 
     async def _run(self) -> None:
         while True:
