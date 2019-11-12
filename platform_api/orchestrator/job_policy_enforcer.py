@@ -37,9 +37,9 @@ class JobInfo:
         )
 
 
-class AbstractPlatformApiHelper:
+class AbstractPlatformApiClient:
     @abc.abstractmethod
-    async def get_users_and_active_job_ids(self) -> List[JobInfo]:
+    async def get_non_terminated_jobs(self) -> List[JobInfo]:
         pass
 
     @abc.abstractmethod
@@ -64,13 +64,13 @@ class AbstractPlatformApiHelper:
         )
 
 
-class PlatformApiHelper(AbstractPlatformApiHelper):
+class PlatformApiClient(AbstractPlatformApiClient):
     def __init__(self, config: JobPolicyEnforcerConfig):
         self._platform_api_url = config.platform_api_url
         self._headers = {"Authorization": f"Bearer {config.token}"}
         self._session = aiohttp.ClientSession(headers=self._headers)
 
-    async def get_users_and_active_job_ids(self) -> List[JobInfo]:
+    async def get_non_terminated_jobs(self) -> List[JobInfo]:
         async with self._session.get(
             f"{self._platform_api_url}/jobs?status=pending&status=running"
         ) as resp:
@@ -110,8 +110,8 @@ class JobPolicyEnforcer:
 
 
 class QuotaEnforcer(JobPolicyEnforcer):
-    def __init__(self, platform_api_helper: AbstractPlatformApiHelper):
-        self._platform_api_helper = platform_api_helper
+    def __init__(self, platform_api_client: AbstractPlatformApiClient):
+        self._platform_api_client = platform_api_client
 
     async def enforce(self) -> None:
         users_with_active_jobs = await self.get_active_users_and_jobs()
@@ -119,7 +119,7 @@ class QuotaEnforcer(JobPolicyEnforcer):
             await self.check_user_quota(jobs_by_user)
 
     async def get_active_users_and_jobs(self) -> List[JobsByUser]:
-        active_jobs = await self._platform_api_helper.get_users_and_active_job_ids()
+        active_jobs = await self._platform_api_client.get_non_terminated_jobs()
         jobs_by_owner: Dict[str, JobsByUser] = {}
         for job_info in active_jobs:
             owner = job_info.owner
@@ -134,11 +134,11 @@ class QuotaEnforcer(JobPolicyEnforcer):
 
     async def check_user_quota(self, jobs_by_user: JobsByUser) -> None:
         username = jobs_by_user.username
-        response_payload = await self._platform_api_helper.get_user_stats(username)
-        quota = AbstractPlatformApiHelper.convert_response_to_runtime(
+        response_payload = await self._platform_api_client.get_user_stats(username)
+        quota = AbstractPlatformApiClient.convert_response_to_runtime(
             response_payload["quota"]
         )
-        jobs = AbstractPlatformApiHelper.convert_response_to_runtime(
+        jobs = AbstractPlatformApiClient.convert_response_to_runtime(
             response_payload["jobs"]
         )
 
@@ -152,7 +152,7 @@ class QuotaEnforcer(JobPolicyEnforcer):
 
         if jobs_to_delete:
             for job_id in jobs_to_delete:
-                await self._platform_api_helper.kill_job(job_id)
+                await self._platform_api_client.kill_job(job_id)
 
 
 class AggregatedEnforcer(JobPolicyEnforcer):

@@ -10,12 +10,12 @@ from yarl import URL
 
 from platform_api.config import JobPolicyEnforcerConfig
 from platform_api.orchestrator.job_policy_enforcer import (
-    AbstractPlatformApiHelper,
+    AbstractPlatformApiClient,
     JobInfo,
     JobPolicyEnforcePoller,
     JobPolicyEnforcer,
     JobsByUser,
-    PlatformApiHelper,
+    PlatformApiClient,
     QuotaEnforcer,
 )
 from platform_api.orchestrator.job_request import JobStatus
@@ -80,28 +80,28 @@ def job_policy_enforcer_config() -> JobPolicyEnforcerConfig:
     )
 
 
-class TestPlatformApiHelper:
+class TestPlatformApiClient:
     def test_convert_response_regular(self) -> None:
-        runtime = AbstractPlatformApiHelper.convert_response_to_runtime(
+        runtime = AbstractPlatformApiClient.convert_response_to_runtime(
             {"total_gpu_run_time_minutes": 10, "total_non_gpu_run_time_minutes": 15}
         )
         assert runtime.total_gpu_run_time_delta == timedelta(seconds=600)
         assert runtime.total_non_gpu_run_time_delta == timedelta(seconds=900)
 
     def test_from_primitive_empty(self) -> None:
-        runtime = AbstractPlatformApiHelper.convert_response_to_runtime({})
+        runtime = AbstractPlatformApiClient.convert_response_to_runtime({})
         assert runtime.total_gpu_run_time_delta == timedelta.max
         assert runtime.total_non_gpu_run_time_delta == timedelta.max
 
     def test_from_primitive_only_gpu(self) -> None:
-        runtime = AbstractPlatformApiHelper.convert_response_to_runtime(
+        runtime = AbstractPlatformApiClient.convert_response_to_runtime(
             {"total_gpu_run_time_minutes": 10}
         )
         assert runtime.total_gpu_run_time_delta == timedelta(seconds=600)
         assert runtime.total_non_gpu_run_time_delta == timedelta.max
 
     def test_from_primitive_only_non_gpu(self) -> None:
-        runtime = AbstractPlatformApiHelper.convert_response_to_runtime(
+        runtime = AbstractPlatformApiClient.convert_response_to_runtime(
             {"total_non_gpu_run_time_minutes": 15}
         )
         assert runtime.total_gpu_run_time_delta == timedelta.max
@@ -136,13 +136,13 @@ class TestJobInfo:
         assert job_info.is_gpu is False
 
 
-class MockPlatformApiHelper(AbstractPlatformApiHelper):
+class MockPlatformApiClient(AbstractPlatformApiClient):
     def __init__(self, gpu_quota: int = 10, cpu_quota: int = 10):
         self._gpu_quota = gpu_quota
         self._cpu_quota = cpu_quota
         self._killed_jobs: Set[str] = set()
 
-    async def get_users_and_active_job_ids(self) -> List[JobInfo]:
+    async def get_non_terminated_jobs(self) -> List[JobInfo]:
         return [
             JobInfo("job1", JobStatus.RUNNING, "user1", False),
             JobInfo("job2", JobStatus.PENDING, "user1", False),
@@ -174,8 +174,8 @@ class MockPlatformApiHelper(AbstractPlatformApiHelper):
 class TestQuotaEnforcer:
     @pytest.mark.asyncio
     async def test_get_users_with_active_jobs(self) -> None:
-        helper = MockPlatformApiHelper()
-        enforcer = QuotaEnforcer(helper)
+        client = MockPlatformApiClient()
+        enforcer = QuotaEnforcer(client)
         result = await enforcer.get_active_users_and_jobs()
         assert result == [
             JobsByUser(username="user1", cpu_job_ids={"job1", "job2"}),
@@ -188,52 +188,52 @@ class TestQuotaEnforcer:
     async def test_check_user_quota_ok(self) -> None:
         cpu_jobs = {"job3", "job4"}
         gpu_jobs = {"job5"}
-        helper = MockPlatformApiHelper()
-        enforcer = QuotaEnforcer(helper)
+        client = MockPlatformApiClient()
+        enforcer = QuotaEnforcer(client)
         await enforcer.check_user_quota(JobsByUser("user2", cpu_jobs, gpu_jobs))
-        assert len(helper.killed_jobs) == 0
+        assert len(client.killed_jobs) == 0
 
     @pytest.mark.asyncio
     async def test_check_user_quota_gpu_exceeded(self) -> None:
         cpu_jobs = {"job3", "job4"}
         gpu_jobs = {"job5"}
-        helper = MockPlatformApiHelper(gpu_quota=1)
-        enforcer = QuotaEnforcer(helper)
+        client = MockPlatformApiClient(gpu_quota=1)
+        enforcer = QuotaEnforcer(client)
         await enforcer.check_user_quota(JobsByUser("user2", cpu_jobs, gpu_jobs))
-        assert helper.killed_jobs == gpu_jobs
+        assert client.killed_jobs == gpu_jobs
 
     @pytest.mark.asyncio
     async def test_check_user_quota_cpu_exceeded(self) -> None:
         cpu_jobs = {"job3", "job4"}
         gpu_jobs = {"job5"}
-        helper = MockPlatformApiHelper(cpu_quota=1)
-        enforcer = QuotaEnforcer(helper)
+        client = MockPlatformApiClient(cpu_quota=1)
+        enforcer = QuotaEnforcer(client)
         await enforcer.check_user_quota(JobsByUser("user2", cpu_jobs, gpu_jobs))
-        assert helper.killed_jobs == cpu_jobs | gpu_jobs
+        assert client.killed_jobs == cpu_jobs | gpu_jobs
 
     @pytest.mark.asyncio
     async def test_enforce_ok(self) -> None:
-        helper = MockPlatformApiHelper()
-        enforcer = QuotaEnforcer(helper)
+        client = MockPlatformApiClient()
+        enforcer = QuotaEnforcer(client)
         await enforcer.enforce()
-        assert len(helper.killed_jobs) == 0
+        assert len(client.killed_jobs) == 0
 
     @pytest.mark.asyncio
     async def test_enforce_gpu_exceeded(self) -> None:
         gpu_jobs = {"job5"}
-        helper = MockPlatformApiHelper(gpu_quota=1)
-        enforcer = QuotaEnforcer(helper)
+        client = MockPlatformApiClient(gpu_quota=1)
+        enforcer = QuotaEnforcer(client)
         await enforcer.enforce()
-        assert helper.killed_jobs == gpu_jobs
+        assert client.killed_jobs == gpu_jobs
 
     @pytest.mark.asyncio
     async def test_enforce_cpu_exceeded(self) -> None:
         cpu_jobs = {f"job{i}" for i in range(1, 5)}
         gpu_jobs = {"job5"}
-        helper = MockPlatformApiHelper(cpu_quota=1)
-        enforcer = QuotaEnforcer(helper)
+        client = MockPlatformApiClient(cpu_quota=1)
+        enforcer = QuotaEnforcer(client)
         await enforcer.enforce()
-        assert helper.killed_jobs == gpu_jobs | cpu_jobs
+        assert client.killed_jobs == gpu_jobs | cpu_jobs
 
 
 class TestJobPolicyEnforcer:
@@ -413,8 +413,8 @@ class TestRealJobPolicyEnforcerClientWrapper:
         job_policy_enforcer_config = JobPolicyEnforcerConfig(
             URL(mock_api.endpoint), "random_token"
         )
-        helper = PlatformApiHelper(job_policy_enforcer_config)
-        response = await helper.get_user_stats("user1")
+        client = PlatformApiClient(job_policy_enforcer_config)
+        response = await client.get_user_stats("user1")
         assert response == {
             "name": "user1",
             "jobs": {
@@ -428,10 +428,10 @@ class TestRealJobPolicyEnforcerClientWrapper:
         }
 
     @pytest.mark.asyncio
-    async def test_get_jobs(self, mock_api: ApiConfig) -> None:
+    async def test_get_non_terminated_jobs(self, mock_api: ApiConfig) -> None:
         job_policy_enforcer_config = JobPolicyEnforcerConfig(
             URL(mock_api.endpoint), "random_token"
         )
-        helper = PlatformApiHelper(job_policy_enforcer_config)
-        response = await helper.get_users_and_active_job_ids()
+        client = PlatformApiClient(job_policy_enforcer_config)
+        response = await client.get_non_terminated_jobs()
         assert len(response) == 5

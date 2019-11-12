@@ -14,7 +14,7 @@ from platform_logging import init_logging
 from platform_api.orchestrator.job_policy_enforcer import (
     AggregatedEnforcer,
     JobPolicyEnforcePoller,
-    PlatformApiHelper,
+    PlatformApiClient,
     QuotaEnforcer,
 )
 
@@ -247,8 +247,8 @@ async def create_app(
             app["stats_app"]["jobs_service"] = jobs_service
 
             logger.info("Initializing JobPolicyEnforcePoller")
-            client_wrapper = PlatformApiHelper(config.job_policy_enforcer)
-            job_policy_enforcer = AggregatedEnforcer([QuotaEnforcer(client_wrapper)])
+            api_client = PlatformApiClient(config.job_policy_enforcer)
+            job_policy_enforcer = AggregatedEnforcer([QuotaEnforcer(api_client)])
             job_policy_enforce_poller = JobPolicyEnforcePoller(
                 job_policy_enforcer, config.job_policy_enforcer
             )
