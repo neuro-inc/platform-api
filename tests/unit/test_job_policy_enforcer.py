@@ -17,6 +17,7 @@ from platform_api.orchestrator.job_policy_enforcer import (
     JobsByUser,
     PlatformApiClient,
     QuotaEnforcer,
+    UserQuotaInfo,
 )
 from platform_api.orchestrator.job_request import JobStatus
 from tests.integration.api import ApiConfig
@@ -151,17 +152,17 @@ class MockPlatformApiClient(AbstractPlatformApiClient):
             JobInfo("job5", JobStatus.PENDING, "user2", True),
         ]
 
-    async def get_user_stats(self, username: str) -> Dict[str, Any]:
-        return {
-            "quota": {
+    async def get_user_stats(self, username: str) -> UserQuotaInfo:
+        quota = AbstractPlatformApiClient.convert_response_to_runtime(
+            {
                 "total_gpu_run_time_minutes": self._gpu_quota,
                 "total_non_gpu_run_time_minutes": self._cpu_quota,
-            },
-            "jobs": {
-                "total_gpu_run_time_minutes": 9,
-                "total_non_gpu_run_time_minutes": 8,
-            },
-        }
+            }
+        )
+        jobs = AbstractPlatformApiClient.convert_response_to_runtime(
+            {"total_gpu_run_time_minutes": 9, "total_non_gpu_run_time_minutes": 8}
+        )
+        return UserQuotaInfo(quota=quota, jobs=jobs)
 
     async def kill_job(self, job_id: str) -> None:
         self._killed_jobs.add(job_id)
@@ -415,17 +416,17 @@ class TestRealJobPolicyEnforcerClientWrapper:
         )
         client = PlatformApiClient(job_policy_enforcer_config)
         response = await client.get_user_stats("user1")
-        assert response == {
-            "name": "user1",
-            "jobs": {
-                "total_gpu_run_time_minutes": 0,
-                "total_non_gpu_run_time_minutes": 0,
-            },
-            "quota": {
+        expected_quota = AbstractPlatformApiClient.convert_response_to_runtime(
+            {
                 "total_gpu_run_time_minutes": 60 * 100,
                 "total_non_gpu_run_time_minutes": 60 * 100,
-            },
-        }
+            }
+        )
+        expected_jobs = AbstractPlatformApiClient.convert_response_to_runtime(
+            {"total_gpu_run_time_minutes": 0, "total_non_gpu_run_time_minutes": 0}
+        )
+        expected_response = UserQuotaInfo(quota=expected_quota, jobs=expected_jobs)
+        assert response == expected_response
 
     @pytest.mark.asyncio
     async def test_get_non_terminated_jobs(self, mock_api: ApiConfig) -> None:

@@ -37,13 +37,19 @@ class JobInfo:
         )
 
 
+@dataclass(frozen=True)
+class UserQuotaInfo:
+    quota: AggregatedRunTime
+    jobs: AggregatedRunTime
+
+
 class AbstractPlatformApiClient:
     @abc.abstractmethod
     async def get_non_terminated_jobs(self) -> List[JobInfo]:
         pass
 
     @abc.abstractmethod
-    async def get_user_stats(self, username: str) -> Dict[str, Any]:
+    async def get_user_stats(self, username: str) -> UserQuotaInfo:
         pass
 
     @abc.abstractmethod
@@ -78,12 +84,15 @@ class PlatformApiClient(AbstractPlatformApiClient):
             payload = (await resp.json())["jobs"]
         return [JobInfo.from_json(job) for job in payload]
 
-    async def get_user_stats(self, username: str) -> Dict[str, Any]:
+    async def get_user_stats(self, username: str) -> UserQuotaInfo:
         async with self._session.get(
             f"{self._platform_api_url}/stats/user/{username}"
         ) as resp:
             resp.raise_for_status()
-            return await resp.json()
+            payload = await resp.json()
+        quota = AbstractPlatformApiClient.convert_response_to_runtime(payload["quota"])
+        jobs = AbstractPlatformApiClient.convert_response_to_runtime(payload["jobs"])
+        return UserQuotaInfo(quota=quota, jobs=jobs)
 
     async def kill_job(self, job_id: str) -> None:
         async with self._session.delete(
@@ -134,13 +143,9 @@ class QuotaEnforcer(JobPolicyEnforcer):
 
     async def check_user_quota(self, jobs_by_user: JobsByUser) -> None:
         username = jobs_by_user.username
-        response_payload = await self._platform_api_client.get_user_stats(username)
-        quota = AbstractPlatformApiClient.convert_response_to_runtime(
-            response_payload["quota"]
-        )
-        jobs = AbstractPlatformApiClient.convert_response_to_runtime(
-            response_payload["jobs"]
-        )
+        user_quota_info = await self._platform_api_client.get_user_stats(username)
+        quota = user_quota_info.quota
+        jobs = user_quota_info.jobs
 
         jobs_to_delete: Set[str] = set()
         if quota.total_non_gpu_run_time_delta < jobs.total_non_gpu_run_time_delta:
@@ -150,9 +155,8 @@ class QuotaEnforcer(JobPolicyEnforcer):
             logger.info(f"GPU quota exceeded for {username}")
             jobs_to_delete = jobs_by_user.gpu_job_ids
 
-        if jobs_to_delete:
-            for job_id in jobs_to_delete:
-                await self._platform_api_client.kill_job(job_id)
+        for job_id in jobs_to_delete:
+            await self._platform_api_client.kill_job(job_id)
 
 
 class AggregatedEnforcer(JobPolicyEnforcer):
