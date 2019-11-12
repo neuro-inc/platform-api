@@ -427,15 +427,3 @@ class JobsService:
     @property
     def jobs_storage(self) -> JobsStorage:
         return self._jobs_storage
-
-    async def collect_garbage(self) -> None:
-
-        for record in await self._jobs_storage.get_unfinished_jobs():
-            await self._update_job_status_by_id(record.id)
-
-        for record in await self._jobs_storage.get_jobs_for_deletion(
-            delay=self._jobs_config.deletion_delay
-        ):
-            # finished, but not yet deleted jobs
-            # assert job.is_finished and not job.is_deleted
-            await self._delete_job_by_id(record.id)

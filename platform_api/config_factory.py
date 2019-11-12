@@ -97,10 +97,10 @@ class EnvironConfigFactory:
         return GarbageCollectorConfig(
             platform_api_url=URL(self._environ["NP_GC_PLATFORM_API_URL"]),
             token=self._environ["NP_GC_TOKEN"],
-            interval_s=int(
+            interval_s=float(
                 self._environ.get("NP_GC_INTERVAL") or GarbageCollectorConfig.interval_s
             ),
-            deletion_delay_s=int(
+            deletion_delay_s=float(
                 self._environ.get("NP_GC_DELETION_DELAY")
                 or GarbageCollectorConfig.deletion_delay_s
             ),

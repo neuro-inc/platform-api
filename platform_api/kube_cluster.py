@@ -42,6 +42,7 @@ class KubeCluster(Cluster):
             config=self._config.garbage_collector, orchestrator=orchestrator,
         )
         await self._exit_stack.enter_async_context(orchestrator)
+        await self._exit_stack.enter_async_context(garbage_collector)
         self._orchestrator = orchestrator
         self._garbage_collector = garbage_collector
 

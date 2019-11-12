@@ -167,8 +167,8 @@ class CircuitBreakerConfig:
 class GarbageCollectorConfig:
     platform_api_url: URL
     token: str
-    interval_s: int = 300
-    deletion_delay_s: int = 300
+    interval_s: float = 300
+    deletion_delay_s: float = 300
 
 
 @dataclass(frozen=True)
