@@ -120,7 +120,7 @@ class TestJobInfo:
         assert job_info.id == "job1"
         assert job_info.owner == "user1"
         assert job_info.status == JobStatus.PENDING
-        assert job_info.is_gpu == True
+        assert job_info.is_gpu is True
 
     def test_from_json_cpu(self) -> None:
         payload = {
@@ -133,7 +133,7 @@ class TestJobInfo:
         assert job_info.id == "job123"
         assert job_info.owner == "user2"
         assert job_info.status == JobStatus.RUNNING
-        assert job_info.is_gpu == False
+        assert job_info.is_gpu is False
 
 
 class MockPlatformApiHelper(AbstractPlatformApiHelper):
@@ -171,11 +171,11 @@ class MockPlatformApiHelper(AbstractPlatformApiHelper):
         return self._killed_jobs
 
 
-class TestQuotaJobPolicyEnforcer:
+class TestQuotaEnforcer:
     @pytest.mark.asyncio
     async def test_get_users_with_active_jobs(self) -> None:
-        wrapper = MockPlatformApiHelper()
-        enforcer = QuotaEnforcer(wrapper)
+        helper = MockPlatformApiHelper()
+        enforcer = QuotaEnforcer(helper)
         result = await enforcer.get_active_users_and_jobs()
         assert result == [
             JobsByUser(username="user1", cpu_job_ids={"job1", "job2"}),
