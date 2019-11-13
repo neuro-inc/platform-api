@@ -244,6 +244,7 @@ class JobsService:
             name=job_name,
             is_preemptible=is_preemptible,
             schedule_timeout=schedule_timeout,
+            max_run_time_minutes=job_request.max_run_time_minutes,
         )
         job_id = job_request.job_id
         try:

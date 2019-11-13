@@ -3,7 +3,10 @@ from typing import Tuple
 import pytest
 import trafaret as t
 
-from platform_api.handlers.jobs_handler import create_job_response_validator
+from platform_api.handlers.jobs_handler import (
+    create_job_request_validator,
+    create_job_response_validator,
+)
 from platform_api.handlers.validators import (
     JOB_NAME_MAX_LENGTH,
     USER_NAME_MAX_LENGTH,
@@ -198,6 +201,56 @@ class TestUserNameValidator:
             assert validator.check(value)
 
 
+class TestJobRequestValidator:
+    def test_validator(self) -> None:
+        container = {
+            "image": "testimage",
+            "command": "arg1 arg2 arg3",
+            "resources": {"cpu": 0.1, "memory_mb": 16, "shm": True},
+            "ssh": {"port": 666},
+        }
+        request = {
+            "container": container,
+        }
+        validator = create_job_request_validator(
+            allowed_gpu_models=None, allowed_tpu_resources=()
+        )
+        assert validator.check(request)
+
+    def test_with_max_run_time_minutes(self) -> None:
+        container = {
+            "image": "testimage",
+            "command": "arg1 arg2 arg3",
+            "resources": {"cpu": 0.1, "memory_mb": 16, "shm": True},
+            "ssh": {"port": 666},
+        }
+        request = {
+            "container": container,
+            "max_run_time_minutes": 10,
+        }
+        validator = create_job_request_validator(
+            allowed_gpu_models=None, allowed_tpu_resources=()
+        )
+        assert validator.check(request)
+
+    def test_with_max_run_time_minutes_invalid_too_small(self) -> None:
+        container = {
+            "image": "testimage",
+            "command": "arg1 arg2 arg3",
+            "resources": {"cpu": 0.1, "memory_mb": 16, "shm": True},
+            "ssh": {"port": 666},
+        }
+        request = {
+            "container": container,
+            "max_run_time_minutes": 0,
+        }
+        validator = create_job_request_validator(
+            allowed_gpu_models=None, allowed_tpu_resources=()
+        )
+        with pytest.raises(t.DataError, match="value is less than 1"):
+            assert validator.check(request)
+
+
 class TestJobResponseValidator:
     def test_job_details_with_name(self) -> None:
         container = {
@@ -303,6 +356,35 @@ class TestJobResponseValidator:
             "ssh_server": "nobody@ssh-auth",
             "ssh_auth_server": "nobody@ssh-auth",
             "is_preemptible": False,
+        }
+        validator = create_job_response_validator()
+        assert validator.check(response)
+
+    def test_with_max_run_time_minutes(self) -> None:
+        container = {
+            "image": "testimage",
+            "command": "arg1 arg2 arg3",
+            "resources": {"cpu": 0.1, "memory_mb": 16, "shm": True},
+            "ssh": {"port": 666},
+        }
+        response = {
+            "id": "test-job-id",
+            "owner": "tests",
+            "cluster_name": "cluster-name",
+            "status": "pending",
+            "name": "test-job-name",
+            "description": "test-job",
+            "history": {
+                "status": "pending",
+                "reason": None,
+                "description": None,
+                "created_at": "now",
+            },
+            "container": container,
+            "ssh_server": "nobody@ssh-auth",
+            "ssh_auth_server": "nobody@ssh-auth",
+            "is_preemptible": False,
+            "max_run_time_minutes": 10,
         }
         validator = create_job_response_validator()
         assert validator.check(response)
