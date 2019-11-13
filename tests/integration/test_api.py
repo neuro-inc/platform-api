@@ -302,11 +302,7 @@ class TestJobs:
             assert response.status == HTTPAccepted.status_code, await response.text()
             result = await response.json()
             assert result["status"] in ["pending"]
-            job_id = result["id"]
             assert result["max_run_time_minutes"] == 10
-
-        await jobs_client.long_polling_by_job_id(job_id=job_id, status="succeeded")
-        await jobs_client.delete_job(job_id=job_id)
 
     @pytest.mark.asyncio
     async def test_incorrect_request(

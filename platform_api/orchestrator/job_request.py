@@ -283,20 +283,13 @@ class JobRequest:
     job_id: str
     container: Container
     description: Optional[str] = None
-    max_run_time_minutes: Optional[int] = None
 
     @classmethod
     def create(
-        cls,
-        container: Container,
-        description: Optional[str] = None,
-        max_run_time_minutes: Optional[int] = None,
+        cls, container: Container, description: Optional[str] = None,
     ) -> "JobRequest":
         return cls(
-            job_id=f"job-{uuid.uuid4()}",
-            description=description,
-            container=container,
-            max_run_time_minutes=max_run_time_minutes,
+            job_id=f"job-{uuid.uuid4()}", description=description, container=container,
         )
 
     @classmethod

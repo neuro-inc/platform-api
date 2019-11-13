@@ -291,16 +291,17 @@ class JobsHandler:
 
         name = request_payload.get("name")
         description = request_payload.get("description")
-        max_run_time_minutes = request_payload.get("max_run_time_minutes")
         is_preemptible = request_payload["is_preemptible"]
         schedule_timeout = request_payload.get("schedule_timeout")
-        job_request = JobRequest.create(container, description, max_run_time_minutes)
+        max_run_time_minutes = request_payload.get("max_run_time_minutes")
+        job_request = JobRequest.create(container, description)
         job, _ = await self._jobs_service.create_job(
             job_request,
             user=user,
             job_name=name,
             is_preemptible=is_preemptible,
             schedule_timeout=schedule_timeout,
+            max_run_time_minutes=max_run_time_minutes,
         )
         cluster_name = self._jobs_service.get_cluster_name(job)
         response_payload = convert_job_to_job_response(job, cluster_name)
