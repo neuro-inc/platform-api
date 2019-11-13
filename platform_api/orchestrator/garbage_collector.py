@@ -1,14 +1,19 @@
 import asyncio
 import logging
-from datetime import timedelta
-from typing import Any, AsyncIterator, Iterable, Optional
+from datetime import datetime, timedelta, timezone
+from functools import partial
+from typing import Any, AsyncIterator, Dict, Iterable, Optional
 
 import aiohttp
+import iso8601
 
 from platform_api.cluster_config import GarbageCollectorConfig
 
-from .job import JobRecord
+from .job import JobStatusReason
 from .kube_orchestrator import KubeOrchestrator
+
+
+current_datetime_factory = partial(datetime.now, timezone.utc)
 
 
 logger = logging.getLogger(__name__)
@@ -81,7 +86,7 @@ class GarbageCollectorPoller:
 
     async def _get_finished_jobs_by_ids(
         self, job_ids: Iterable[str]
-    ) -> AsyncIterator[JobRecord]:
+    ) -> AsyncIterator[Dict[str, Any]]:
         # TODO (S Storchaka): Implement filtering by status and id:
         # .../jobs?status=succeeded&status=failed&id=...&id=...
         for job_id in job_ids:
@@ -89,14 +94,30 @@ class GarbageCollectorPoller:
                 f"{self._platform_api_url}/jobs?status=succeeded&status=failed"
             ) as resp:
                 resp.raise_for_status()
-                record = JobRecord.from_primitive(await resp.json())
-                if not record.is_finished:
-                    yield record
+                yield (await resp.json())
 
-    async def _should_be_collected(self, job_ids: Iterable[str]) -> AsyncIterator[str]:
-        async for record in self._get_finished_jobs_by_ids(job_ids):
-            if record.should_be_collected(delay=self._deletion_delay):
-                yield record.id
+    @staticmethod
+    def _is_reason_for_deletion(reason: str) -> bool:
+        return reason in (
+            JobStatusReason.COLLECTED,
+            JobStatusReason.CLUSTER_SCALE_UP_FAILED,
+        )
+
+    def _should_be_collected(self, job_payload: Dict[str, Any]) -> bool:
+        history = job_payload["history"]
+        return (
+            self._is_reason_for_deletion(history["reason"])
+            or iso8601.parse_date(history["finished_at"]) + self._deletion_delay
+            <= current_datetime_factory()
+        )
 
     async def _collect_cluster_resources(self) -> None:
-        await self._orchestrator.cleanup(should_be_collected=self._should_be_collected)
+        resources = await self._orchestrator.get_all_resource_links()
+
+        async for job_payload in self._get_finished_jobs_by_ids(resources):
+            if self._should_be_collected(job_payload):
+                job_id = job_payload["id"]
+                logger.info("Collecting resources for job %s", job_id)
+                for url in resources[job_id]:
+                    logger.info("Collecting resource URL %s for job %s", url, job_id)
+                    await self._orchestrator.delete_resource_link(url)

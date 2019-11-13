@@ -330,20 +330,14 @@ class JobRecord:
         delay: timedelta = timedelta(),
         current_datetime_factory: Callable[[], datetime] = current_datetime_factory,
     ) -> bool:
-        return not self.is_deleted and self.should_be_collected(
-            delay=delay, current_datetime_factory=current_datetime_factory
-        )
-
-    def should_be_collected(
-        self,
-        *,
-        delay: timedelta = timedelta(),
-        current_datetime_factory: Callable[[], datetime] = current_datetime_factory,
-    ) -> bool:
-        return self.is_finished and (
-            self._is_reason_for_deletion()
-            or self._is_time_for_deletion(
-                delay=delay, current_datetime_factory=current_datetime_factory
+        return (
+            self.is_finished
+            and not self.is_deleted
+            and (
+                self._is_time_for_deletion(
+                    delay=delay, current_datetime_factory=current_datetime_factory
+                )
+                or self._is_reason_for_deletion()
             )
         )
 

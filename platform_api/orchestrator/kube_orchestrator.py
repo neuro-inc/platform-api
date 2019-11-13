@@ -3,7 +3,7 @@ import logging
 import operator
 from dataclasses import replace
 from datetime import datetime, timezone
-from typing import Any, AsyncIterator, Callable, Dict, Iterable, List, Optional, Union
+from typing import Any, Dict, Iterable, List, Optional, Union
 
 from platform_api.cluster_config import (
     OrchestratorConfig,
@@ -549,13 +549,8 @@ class KubeOrchestrator(Orchestrator):
         except Exception as e:
             logger.warning(f"Failed to remove ingress {name}: {e}")
 
-    async def cleanup(
-        self, should_be_collected: Callable[[Iterable[str]], AsyncIterator[str]]
-    ) -> None:
-        resources = await self._client.get_all_resource_links()
+    async def get_all_resource_links(self) -> Dict[str, List[str]]:
+        return await self._client.get_all_resource_links()
 
-        async for job_id in should_be_collected(resources):
-            logger.info("Collecting resources for job %s", job_id)
-            for url in resources[job_id]:
-                logger.info("Collecting resource URL %s for job %s", url, job_id)
-                # await self._client.delete_resource_link(url)
+    async def delete_resource_link(self, url: str) -> None:
+        await self._client.delete_resource_link(url)
