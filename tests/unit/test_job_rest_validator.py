@@ -3,10 +3,7 @@ from typing import Tuple
 import pytest
 import trafaret as t
 
-from platform_api.handlers.jobs_handler import (
-    create_job_request_validator,
-    create_job_response_validator,
-)
+from platform_api.handlers.jobs_handler import create_job_response_validator
 from platform_api.handlers.validators import (
     JOB_NAME_MAX_LENGTH,
     USER_NAME_MAX_LENGTH,
@@ -199,56 +196,6 @@ class TestUserNameValidator:
         validator = create_user_name_validator()
         with pytest.raises(t.DataError):
             assert validator.check(value)
-
-
-class TestJobRequestValidator:
-    def test_validator(self) -> None:
-        container = {
-            "image": "testimage",
-            "command": "arg1 arg2 arg3",
-            "resources": {"cpu": 0.1, "memory_mb": 16, "shm": True},
-            "ssh": {"port": 666},
-        }
-        request = {
-            "container": container,
-        }
-        validator = create_job_request_validator(
-            allowed_gpu_models=None, allowed_tpu_resources=()
-        )
-        assert validator.check(request)
-
-    def test_with_max_run_time_minutes(self) -> None:
-        container = {
-            "image": "testimage",
-            "command": "arg1 arg2 arg3",
-            "resources": {"cpu": 0.1, "memory_mb": 16, "shm": True},
-            "ssh": {"port": 666},
-        }
-        request = {
-            "container": container,
-            "max_run_time_minutes": 10,
-        }
-        validator = create_job_request_validator(
-            allowed_gpu_models=None, allowed_tpu_resources=()
-        )
-        assert validator.check(request)
-
-    def test_with_max_run_time_minutes_invalid_too_small(self) -> None:
-        container = {
-            "image": "testimage",
-            "command": "arg1 arg2 arg3",
-            "resources": {"cpu": 0.1, "memory_mb": 16, "shm": True},
-            "ssh": {"port": 666},
-        }
-        request = {
-            "container": container,
-            "max_run_time_minutes": 0,
-        }
-        validator = create_job_request_validator(
-            allowed_gpu_models=None, allowed_tpu_resources=()
-        )
-        with pytest.raises(t.DataError, match="value is less than 1"):
-            assert validator.check(request)
 
 
 class TestJobResponseValidator:

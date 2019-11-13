@@ -43,9 +43,7 @@ logger = logging.getLogger(__name__)
 
 
 def create_job_request_validator(
-    *,
-    allowed_gpu_models: Optional[Sequence[str]],
-    allowed_tpu_resources: Sequence[TPUResource],
+    *, allowed_gpu_models: Sequence[str], allowed_tpu_resources: Sequence[TPUResource],
 ) -> t.Trafaret:
     return t.Dict(
         {
