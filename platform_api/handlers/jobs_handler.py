@@ -56,6 +56,7 @@ def create_job_request_validator(
             t.Key("description", optional=True): t.String,
             t.Key("is_preemptible", optional=True, default=False): t.Bool,
             t.Key("schedule_timeout", optional=True): t.Float(gte=1, lt=30 * 24 * 3600),
+            t.Key("max_run_time_minutes", optional=True): t.Int(gte=1),
         }
     )
 
@@ -84,6 +85,7 @@ def create_job_response_validator() -> t.Trafaret:
             t.Key("name", optional=True): create_job_name_validator(max_length=None),
             t.Key("description", optional=True): t.String,
             t.Key("schedule_timeout", optional=True): t.Float,
+            t.Key("max_run_time_minutes", optional=True): t.Int,
         }
     )
 
@@ -200,6 +202,8 @@ def convert_job_to_job_response(job: Job, cluster_name: str) -> Dict[str, Any]:
         response_payload["internal_hostname"] = job.internal_hostname
     if job.schedule_timeout is not None:
         response_payload["schedule_timeout"] = job.schedule_timeout
+    if job.max_run_time_minutes is not None:
+        response_payload["max_run_time_minutes"] = job.max_run_time_minutes
     if history.started_at:
         response_payload["history"]["started_at"] = history.started_at_str
     if history.is_finished:
@@ -287,6 +291,7 @@ class JobsHandler:
         description = request_payload.get("description")
         is_preemptible = request_payload["is_preemptible"]
         schedule_timeout = request_payload.get("schedule_timeout")
+        max_run_time_minutes = request_payload.get("max_run_time_minutes")
         job_request = JobRequest.create(container, description)
         job, _ = await self._jobs_service.create_job(
             job_request,
@@ -294,6 +299,7 @@ class JobsHandler:
             job_name=name,
             is_preemptible=is_preemptible,
             schedule_timeout=schedule_timeout,
+            max_run_time_minutes=max_run_time_minutes,
         )
         cluster_name = self._jobs_service.get_cluster_name(job)
         response_payload = convert_job_to_job_response(job, cluster_name)

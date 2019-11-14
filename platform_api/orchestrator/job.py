@@ -634,8 +634,12 @@ class Job:
         )
 
     @property
+    def max_run_time_minutes(self) -> Optional[int]:
+        return self._record.max_run_time_minutes
+
+    @property
     def max_run_time(self) -> timedelta:
-        mrt = self._record.max_run_time_minutes
+        mrt = self.max_run_time_minutes
         if mrt is None:
             return timedelta.max
         assert mrt > 0, f"max_run_time_minutes must be positive, got: {mrt}"

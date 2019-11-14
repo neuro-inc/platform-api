@@ -307,6 +307,35 @@ class TestJobResponseValidator:
         validator = create_job_response_validator()
         assert validator.check(response)
 
+    def test_with_max_run_time_minutes(self) -> None:
+        container = {
+            "image": "testimage",
+            "command": "arg1 arg2 arg3",
+            "resources": {"cpu": 0.1, "memory_mb": 16, "shm": True},
+            "ssh": {"port": 666},
+        }
+        response = {
+            "id": "test-job-id",
+            "owner": "tests",
+            "cluster_name": "cluster-name",
+            "status": "pending",
+            "name": "test-job-name",
+            "description": "test-job",
+            "history": {
+                "status": "pending",
+                "reason": None,
+                "description": None,
+                "created_at": "now",
+            },
+            "container": container,
+            "ssh_server": "nobody@ssh-auth",
+            "ssh_auth_server": "nobody@ssh-auth",
+            "is_preemptible": False,
+            "max_run_time_minutes": 10,
+        }
+        validator = create_job_response_validator()
+        assert validator.check(response)
+
 
 class TestVolumesValidator:
     def test_valid_volumes(self) -> None:
