@@ -1543,28 +1543,27 @@ class TestKubeClient:
         assert pod_status.container_status.exit_code != 0
 
     @pytest.mark.asyncio
-    async def test_get_all_resource_links_empty(self, kube_client: KubeClient) -> None:
-        resources = await kube_client.get_all_resource_links()
-        assert not resources
-
-    @pytest.mark.asyncio
     async def test_get_all_resource_links_network_policy(
         self,
         kube_config: KubeConfig,
         kube_client: KubeClient,
         delete_network_policy_later: Callable[[str], Awaitable[None]],
     ) -> None:
-        name = str(uuid.uuid4())
-        await delete_network_policy_later(name)
+        job_id = str(uuid.uuid4())
+        np_name = str(uuid.uuid4())
+        await delete_network_policy_later(np_name)
         payload = await kube_client.create_default_network_policy(
-            f"{name}-np",
-            {"platform.neuromation.io/job": name},
+            np_name,
+            {"platform.neuromation.io/job": job_id},
             namespace_name=kube_config.namespace,
         )
         link = payload["metadata"]["selfLink"]
 
+        payload = await kube_client.get_network_policy(np_name)
+        assert payload["metadata"]["selfLink"] == link
+
         resources = await kube_client.get_all_resource_links()
-        assert resources[name] == [link]
+        assert resources[job_id] == [link]
 
     @pytest.mark.asyncio
     async def test_delete_resource_link_network_policy(
