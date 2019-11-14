@@ -326,12 +326,14 @@ class TestJobPolicyEnforcer:
     ) -> None:
         interval = job_policy_enforcer_config.interval_sec
         enforcer = MockedJobPolicyEnforcer(
-            raise_exception=True, enforce_time_sec=interval
+            raise_exception=False, enforce_time_sec=interval
         )
         async with run_enforce_polling(enforcer) as poller:
             with pytest.raises(
                 RuntimeError, match="Concurrent usage of enforce poller not allowed"
             ):
+                # allow poller task to start:
+                await asyncio.sleep(0)
                 async with poller:
                     pass
 

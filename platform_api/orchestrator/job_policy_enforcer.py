@@ -236,20 +236,24 @@ class JobPolicyEnforcePoller:
         return self
 
     async def __aexit__(self, *args: Any) -> None:
-        logger.info("Stopping job policy enforce polling")
+        logger.info("Finishing job policy enforce polling")
         assert self._task is not None
         await self._policy_enforcer.__aexit__(*args)
         self._task.cancel()
+        await self._task
 
     async def _run(self) -> None:
-        while True:
-            start = self._loop.time()
-            await self._run_once()
-            elapsed = self._loop.time() - start
-            delay = self._config.interval_sec - elapsed
-            if delay < 0:
-                delay = 0
-            await asyncio.sleep(delay)
+        try:
+            while True:
+                start = self._loop.time()
+                await self._run_once()
+                elapsed = self._loop.time() - start
+                delay = self._config.interval_sec - elapsed
+                if delay < 0:
+                    delay = 0
+                await asyncio.sleep(delay)
+        except asyncio.CancelledError:
+            logger.info("Enforcer loop cancelled")
 
     async def _run_once(self) -> None:
         try:
