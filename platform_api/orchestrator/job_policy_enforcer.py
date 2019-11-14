@@ -85,7 +85,6 @@ class PlatformApiClient(AbstractPlatformApiClient):
         self._platform_api_url = config.platform_api_url
         self._headers = {"Authorization": f"Bearer {config.token}"}
         self._session: Optional[aiohttp.ClientSession] = None
-        self._ping_timeout = config.interval_sec / 10
 
     async def __aenter__(self) -> "PlatformApiClient":
         assert self._session is None, "already initialized"
