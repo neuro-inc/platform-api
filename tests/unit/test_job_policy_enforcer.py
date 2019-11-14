@@ -4,7 +4,7 @@ from datetime import timedelta
 from typing import Any, AsyncContextManager, AsyncIterator, Callable, Dict, List, Set
 
 import pytest
-from aiohttp import web
+from aiohttp import ClientResponseError, web
 from async_generator import asynccontextmanager
 from yarl import URL
 
@@ -142,6 +142,15 @@ class MockPlatformApiClient(AbstractPlatformApiClient):
         self._gpu_quota = gpu_quota
         self._cpu_quota = cpu_quota
         self._killed_jobs: Set[str] = set()
+        self._initialized = False
+
+    async def __aenter__(self) -> "MockPlatformApiClient":
+        assert not self._initialized
+        self._initialized = True
+        return self
+
+    async def __aexit__(self, *args: Any) -> None:
+        self._initialized = False
 
     async def get_non_terminated_jobs(self) -> List[JobInfo]:
         return [
@@ -409,12 +418,21 @@ async def mock_api() -> AsyncIterator[ApiConfig]:
 
 
 class TestRealJobPolicyEnforcerClientWrapper:
+    @pytest.fixture
+    async def job_policy_enforcer_config(
+        self, mock_api: ApiConfig
+    ) -> JobPolicyEnforcerConfig:
+        return JobPolicyEnforcerConfig(URL(mock_api.endpoint), "random_token")
+
+    @pytest.fixture
+    async def client(
+        self, job_policy_enforcer_config: JobPolicyEnforcerConfig
+    ) -> AsyncIterator[PlatformApiClient]:
+        async with PlatformApiClient(job_policy_enforcer_config) as client:
+            yield client
+
     @pytest.mark.asyncio
-    async def test_get_stats(self, mock_api: ApiConfig) -> None:
-        job_policy_enforcer_config = JobPolicyEnforcerConfig(
-            URL(mock_api.endpoint), "random_token"
-        )
-        client = PlatformApiClient(job_policy_enforcer_config)
+    async def test_client_get_stats(self, client: PlatformApiClient) -> None:
         response = await client.get_user_stats("user1")
         expected_quota = AbstractPlatformApiClient.convert_response_to_runtime(
             {
@@ -429,10 +447,88 @@ class TestRealJobPolicyEnforcerClientWrapper:
         assert response == expected_response
 
     @pytest.mark.asyncio
-    async def test_get_non_terminated_jobs(self, mock_api: ApiConfig) -> None:
-        job_policy_enforcer_config = JobPolicyEnforcerConfig(
-            URL(mock_api.endpoint), "random_token"
-        )
-        client = PlatformApiClient(job_policy_enforcer_config)
+    async def test_get_non_terminated_jobs(self, client: PlatformApiClient) -> None:
         response = await client.get_non_terminated_jobs()
         assert len(response) == 5
+
+    @pytest.mark.asyncio
+    async def test_client_get_non_terminated_jobs_uninitialized(
+        self, mock_api: ApiConfig,
+    ) -> None:
+        config = JobPolicyEnforcerConfig(URL(mock_api.endpoint), "token")
+        client = PlatformApiClient(config)
+
+        with pytest.raises(AssertionError, match="not initialized"):
+            await client.get_non_terminated_jobs()
+
+    @pytest.mark.asyncio
+    async def test_client_get_user_stats_uninitialized(
+        self, mock_api: ApiConfig
+    ) -> None:
+        config = JobPolicyEnforcerConfig(URL(mock_api.endpoint), "token")
+        client = PlatformApiClient(config)
+
+        with pytest.raises(AssertionError, match="not initialized"):
+            await client.get_user_stats("user")
+
+    @pytest.mark.asyncio
+    async def test_client_kill_job_uninitialized(self, mock_api: ApiConfig) -> None:
+        config = JobPolicyEnforcerConfig(URL(mock_api.endpoint), "token")
+        client = PlatformApiClient(config)
+
+        with pytest.raises(AssertionError, match="not initialized"):
+            await client.kill_job("job-id")
+
+    @pytest.mark.asyncio
+    async def test_client_platform_unavailable(self, mock_api: ApiConfig) -> None:
+        wrong_config = JobPolicyEnforcerConfig(
+            URL(f"{mock_api.endpoint}/wrong/base/path"), "token"
+        )
+        async with PlatformApiClient(wrong_config) as client:
+            with pytest.raises(ClientResponseError, match="Not Found"):
+                await client.get_non_terminated_jobs()
+
+    @pytest.mark.asyncio
+    async def test_enforcer_platform_unavailable(self, mock_api: ApiConfig) -> None:
+        wrong_config = JobPolicyEnforcerConfig(
+            URL(f"{mock_api.endpoint}/wrong/base/path"), "token"
+        )
+        client = PlatformApiClient(wrong_config)
+        with pytest.raises(ClientResponseError, match="Not Found"):
+            async with QuotaEnforcer(client) as enforcer:
+                await enforcer.enforce()
+
+    @pytest.mark.asyncio
+    async def test_client_multiple_usages(self, mock_api: ApiConfig) -> None:
+        config = JobPolicyEnforcerConfig(URL(mock_api.endpoint), "token")
+        client = PlatformApiClient(config)
+
+        async with client:
+            await client.get_non_terminated_jobs()
+
+        # close a closed client is safe:
+        await client.__aexit__()
+
+        async with client:
+            await client.get_non_terminated_jobs()
+
+            # open an opened client is not allowed:
+            with pytest.raises(AssertionError, match="already initialized"):
+                await client.__aenter__()
+
+    @pytest.mark.asyncio
+    async def test_enforcer_multiple_usages(self, mock_api: ApiConfig) -> None:
+        wrong_config = JobPolicyEnforcerConfig(URL(mock_api.endpoint), "token")
+        enforcer = QuotaEnforcer(PlatformApiClient(wrong_config))
+
+        async with enforcer:
+            await enforcer.enforce()
+
+        # close a closed enfocer is safe:
+        await enforcer.__aexit__()
+
+        async with enforcer:
+            await enforcer.enforce()
+            # open an opened client is not allowed:
+            with pytest.raises(AssertionError, match="already initialized"):
+                await enforcer.__aenter__()

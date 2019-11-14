@@ -45,6 +45,16 @@ class UserQuotaInfo:
 
 class AbstractPlatformApiClient:
     @abc.abstractmethod
+    async def __aenter__(self) -> "AbstractPlatformApiClient":
+        return self
+
+    @abc.abstractmethod
+    async def __aexit__(self, *args: Any) -> None:
+        pass
+
+    # TODO(artem) when moved to a separate microservice, add `ping()`
+
+    @abc.abstractmethod
     async def get_non_terminated_jobs(self) -> List[JobInfo]:
         pass
 
@@ -74,9 +84,21 @@ class PlatformApiClient(AbstractPlatformApiClient):
     def __init__(self, config: JobPolicyEnforcerConfig):
         self._platform_api_url = config.platform_api_url
         self._headers = {"Authorization": f"Bearer {config.token}"}
+        self._session: Optional[aiohttp.ClientSession] = None
+        self._ping_timeout = config.interval_sec / 10
+
+    async def __aenter__(self) -> "PlatformApiClient":
+        assert self._session is None, "already initialized"
         self._session = aiohttp.ClientSession(headers=self._headers)
+        return self
+
+    async def __aexit__(self, *args: Any) -> None:
+        if self._session is not None:
+            await self._session.close()
+            self._session = None
 
     async def get_non_terminated_jobs(self) -> List[JobInfo]:
+        assert self._session is not None, "not initialized"
         async with self._session.get(
             f"{self._platform_api_url}/jobs?status=pending&status=running"
         ) as resp:
@@ -85,16 +107,18 @@ class PlatformApiClient(AbstractPlatformApiClient):
         return [JobInfo.from_json(job) for job in payload]
 
     async def get_user_stats(self, username: str) -> UserQuotaInfo:
+        assert self._session is not None, "not initialized"
         async with self._session.get(
             f"{self._platform_api_url}/stats/user/{username}"
         ) as resp:
             resp.raise_for_status()
             payload = await resp.json()
-        quota = AbstractPlatformApiClient.convert_response_to_runtime(payload["quota"])
-        jobs = AbstractPlatformApiClient.convert_response_to_runtime(payload["jobs"])
+        quota = self.convert_response_to_runtime(payload["quota"])
+        jobs = self.convert_response_to_runtime(payload["jobs"])
         return UserQuotaInfo(quota=quota, jobs=jobs)
 
     async def kill_job(self, job_id: str) -> None:
+        assert self._session is not None, "not initialized"
         async with self._session.delete(
             self._platform_api_url / f"jobs/{job_id}"
         ) as resp:
@@ -113,6 +137,12 @@ class JobsByUser:
 
 
 class JobPolicyEnforcer:
+    async def __aenter__(self) -> "JobPolicyEnforcer":
+        return self
+
+    async def __aexit__(self, *args: Any) -> None:
+        pass
+
     @abc.abstractmethod
     async def enforce(self) -> None:
         pass
@@ -121,6 +151,13 @@ class JobPolicyEnforcer:
 class QuotaEnforcer(JobPolicyEnforcer):
     def __init__(self, platform_api_client: AbstractPlatformApiClient):
         self._platform_api_client = platform_api_client
+
+    async def __aenter__(self) -> "QuotaEnforcer":
+        await self._platform_api_client.__aenter__()
+        return self
+
+    async def __aexit__(self, *args: Any) -> None:
+        await self._platform_api_client.__aexit__(*args)
 
     async def enforce(self) -> None:
         users_with_active_jobs = await self.get_active_users_and_jobs()
@@ -163,6 +200,15 @@ class AggregatedEnforcer(JobPolicyEnforcer):
     def __init__(self, enforcers: List[JobPolicyEnforcer]):
         self._enforcers = enforcers
 
+    async def __aenter__(self) -> "AggregatedEnforcer":
+        for enforcer in self._enforcers:
+            await enforcer.__aenter__()
+        return self
+
+    async def __aexit__(self, *args: Any) -> None:
+        for enforcer in self._enforcers:
+            await enforcer.__aexit__(*args)
+
     async def enforce(self) -> None:
         for enforcer in self._enforcers:
             try:
@@ -182,21 +228,17 @@ class JobPolicyEnforcePoller:
         self._task: Optional[asyncio.Task[None]] = None
 
     async def __aenter__(self) -> "JobPolicyEnforcePoller":
-        await self.start()
-        return self
-
-    async def __aexit__(self, *args: Any) -> None:
-        await self.stop()
-
-    async def start(self) -> None:
         logger.info("Starting job policy enforce polling")
         if self._task is not None:
             raise RuntimeError("Concurrent usage of enforce poller not allowed")
+        await self._policy_enforcer.__aenter__()
         self._task = self._loop.create_task(self._run())
+        return self
 
-    async def stop(self) -> None:
+    async def __aexit__(self, *args: Any) -> None:
         logger.info("Stopping job policy enforce polling")
         assert self._task is not None
+        await self._policy_enforcer.__aexit__(*args)
         self._task.cancel()
 
     async def _run(self) -> None:
