@@ -1,5 +1,6 @@
 import abc
 import asyncio
+import contextlib
 import logging
 from dataclasses import dataclass, field
 from datetime import timedelta
@@ -198,6 +199,9 @@ class JobPolicyEnforcePoller:
         logger.info("Stopping job policy enforce polling")
         assert self._task is not None
         self._task.cancel()
+        with contextlib.suppress(asyncio.CancelledError):
+            await self._task
+        self._task = None
 
     async def _run(self) -> None:
         while True:
