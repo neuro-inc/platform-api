@@ -195,8 +195,9 @@ class JobPolicyEnforcePoller:
         await self.stop()
 
     async def _init_task(self) -> None:
-        assert not self._is_active
-        assert not self._task
+        if self._is_active:
+            raise RuntimeError("Concurrent usage of enforce poller not allowed")
+        assert self._task is None
 
         self._is_active = self._loop.create_future()
         self._task = asyncio.ensure_future(self._run())
