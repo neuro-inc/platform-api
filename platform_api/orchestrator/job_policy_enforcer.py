@@ -172,7 +172,9 @@ class AggregatedEnforcer(JobPolicyEnforcer):
 
 
 class JobPolicyEnforcePoller:
-    def __init__(self, policy_enforcer: JobPolicyEnforcer, config: JobPolicyEnforcerConfig) -> None:
+    def __init__(
+        self, policy_enforcer: JobPolicyEnforcer, config: JobPolicyEnforcerConfig
+    ) -> None:
         self._loop = asyncio.get_event_loop()
 
         self._policy_enforcer = policy_enforcer
