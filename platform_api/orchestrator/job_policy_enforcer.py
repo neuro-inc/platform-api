@@ -172,14 +172,18 @@ class AggregatedEnforcer(JobPolicyEnforcer):
 
 
 class JobPolicyEnforcePoller:
-    def __init__(
-        self, policy_enforcer: JobPolicyEnforcer, config: JobPolicyEnforcerConfig
-    ) -> None:
-        self._loop: asyncio.AbstractEventLoop = asyncio.get_event_loop()
+    def __init__(self, policy_enforcer: JobPolicyEnforcer, config: JobPolicyEnforcerConfig) -> None:
+        self._loop = asyncio.get_event_loop()
+
         self._policy_enforcer = policy_enforcer
         self._config = config
 
-        self._task: Optional[asyncio.Task[None]] = None
+        self._is_active: Optional[asyncio.Future[None]] = None
+        self._task: Optional[asyncio.Future[None]] = None
+
+    async def start(self) -> None:
+        logger.info("Starting enforce polling")
+        await self._init_task()
 
     async def __aenter__(self) -> "JobPolicyEnforcePoller":
         await self.start()
@@ -188,26 +192,36 @@ class JobPolicyEnforcePoller:
     async def __aexit__(self, *args: Any) -> None:
         await self.stop()
 
-    async def start(self) -> None:
-        logger.info("Starting job policy enforce polling")
-        if self._task is not None:
-            raise RuntimeError("Concurrent usage of enforce poller not allowed")
-        self._task = self._loop.create_task(self._run())
+    async def _init_task(self) -> None:
+        assert not self._is_active
+        assert not self._task
+
+        self._is_active = self._loop.create_future()
+        self._task = asyncio.ensure_future(self._run())
+        # forcing execution of the newly created task
+        await asyncio.sleep(0)
 
     async def stop(self) -> None:
-        logger.info("Stopping job policy enforce polling")
-        assert self._task is not None
-        self._task.cancel()
+        logger.info("Finishing enforce polling")
+        assert self._is_active is not None
+        self._is_active.set_result(None)
+
+        assert self._task
+        await self._task
+
+        self._task = None
+        self._is_active = None
 
     async def _run(self) -> None:
-        while True:
+        assert self._is_active is not None
+        while not self._is_active.done():
             start = self._loop.time()
             await self._run_once()
             elapsed = self._loop.time() - start
             delay = self._config.interval_sec - elapsed
             if delay < 0:
                 delay = 0
-            await asyncio.sleep(delay)
+            await self._wait(delay)
 
     async def _run_once(self) -> None:
         try:
@@ -216,3 +230,7 @@ class JobPolicyEnforcePoller:
             raise
         except BaseException:
             logger.exception("Exception when trying to enforce jobs policies")
+
+    async def _wait(self, delay_sec: float) -> None:
+        assert self._is_active is not None
+        await asyncio.wait((self._is_active,), timeout=delay_sec)
