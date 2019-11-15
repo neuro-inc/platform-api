@@ -239,7 +239,6 @@ class JobPolicyEnforcePoller:
         assert self._task is not None
         await self._policy_enforcer.__aexit__(*args)
         self._task.cancel()
-        await self._task
 
     async def _run(self) -> None:
         try:
