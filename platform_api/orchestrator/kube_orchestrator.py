@@ -211,13 +211,16 @@ class KubeOrchestrator(Orchestrator):
             {"to": [{"ipBlock": {"cidr": tpu_ipv4_cidr_block}}]}
         ]
         labels = self._get_pod_labels(job)
-        await self._client.create_egress_network_policy(
-            name,
-            pod_labels=pod_labels,
-            rules=rules,
-            namespace_name=self._kube_config.namespace,
-            labels=labels,
-        )
+        try:
+            await self._client.create_egress_network_policy(
+                name,
+                pod_labels=pod_labels,
+                rules=rules,
+                namespace_name=self._kube_config.namespace,
+                labels=labels,
+            )
+        except AlreadyExistsException:
+            logger.info(f"Network policy for job '{job.id}' already exists.")
 
     async def _delete_pod_network_policy(self, job: Job) -> None:
         name = self._get_job_pod_name(job)
@@ -268,7 +271,11 @@ class KubeOrchestrator(Orchestrator):
         await self._create_pod_network_policy(job)
 
         descriptor = await self._create_pod_descriptor(job)
-        pod = await self._client.create_pod(descriptor)
+        try:
+            pod = await self._client.create_pod(descriptor)
+        except AlreadyExistsException:
+            logger.info(f"Pod '{job.id}' already exists.")
+            return job.status
 
         logger.info(f"Starting Service for {job.id}.")
         service = await self._create_service(descriptor)
