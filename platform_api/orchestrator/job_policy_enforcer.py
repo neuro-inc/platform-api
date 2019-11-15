@@ -86,7 +86,7 @@ class PlatformApiClient(AbstractPlatformApiClient):
 
     async def get_user_stats(self, username: str) -> UserQuotaInfo:
         async with self._session.get(
-            f"{self._platform_api_url}/stats/user/{username}"
+            f"{self._platform_api_url}/stats/users/{username}"
         ) as resp:
             resp.raise_for_status()
             payload = await resp.json()

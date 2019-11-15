@@ -395,7 +395,7 @@ async def mock_api() -> AsyncIterator[ApiConfig]:
             [
                 web.get("/api/v1/jobs", _get_jobs),
                 web.delete("/api/v1/jobs/{job_id}", _kill_job),
-                web.get("/api/v1/stats/user/{username}", _user_stats),
+                web.get("/api/v1/stats/users/{username}", _user_stats),
             ]
         )
         return app
