@@ -1,7 +1,16 @@
 import asyncio
 from dataclasses import dataclass
 from datetime import timedelta
-from typing import Any, AsyncContextManager, AsyncIterator, Callable, Dict, List, Set
+from typing import (
+    Any,
+    AsyncContextManager,
+    AsyncIterator,
+    Callable,
+    Dict,
+    List,
+    Optional,
+    Set,
+)
 
 import pytest
 from aiohttp import ClientResponseError, web
@@ -153,6 +162,7 @@ class MockPlatformApiClient(PlatformApiClient):
         self._gpu_quota = timedelta(minutes=gpu_quota_minutes)
         self._cpu_quota = timedelta(minutes=cpu_quota_minutes)
         self._killed_jobs: Set[str] = set()
+        self._kill_exception = kill_exception
 
     async def get_non_terminated_jobs(self) -> List[JobInfo]:
         return [
@@ -175,7 +185,10 @@ class MockPlatformApiClient(PlatformApiClient):
         return UserQuotaInfo(quota=quota, jobs=jobs)
 
     async def kill_job(self, job_id: str) -> None:
-        self._killed_jobs.add(job_id)
+        if self._kill_exception is not None:
+            raise self._kill_exception
+        else:
+            self._killed_jobs.add(job_id)
 
     @property
     def killed_jobs(self) -> Set[str]:
@@ -228,6 +241,16 @@ class TestQuotaEnforcer:
         enforcer = QuotaEnforcer(client)
         await enforcer.enforce()
         assert len(client.killed_jobs) == 0
+
+    @pytest.mark.asyncio
+    async def test_enforce_error_handling(self) -> None:
+        client = MockPlatformApiClient(
+            cpu_quota=1, kill_exception=Exception("Test exception")
+        )
+        enforcer = QuotaEnforcer(client)
+        # If enforcer handles ApiClient exceptions correctly, this will not fail
+        # (but will not yield any results either)
+        await enforcer.enforce()
 
     @pytest.mark.asyncio
     async def test_enforce_gpu_exceeded(self) -> None:
