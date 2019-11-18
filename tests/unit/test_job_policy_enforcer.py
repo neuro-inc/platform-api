@@ -163,6 +163,7 @@ class MockPlatformApiClient(PlatformApiClient):
         self._cpu_quota = timedelta(minutes=cpu_quota_minutes)
         self._killed_jobs: Set[str] = set()
         self._kill_exception = kill_exception
+        self._stat_exception = stat_exception
 
     async def get_non_terminated_jobs(self) -> List[JobInfo]:
         return [
@@ -187,8 +188,7 @@ class MockPlatformApiClient(PlatformApiClient):
     async def kill_job(self, job_id: str) -> None:
         if self._kill_exception is not None:
             raise self._kill_exception
-        else:
-            self._killed_jobs.add(job_id)
+        self._killed_jobs.add(job_id)
 
     @property
     def killed_jobs(self) -> Set[str]:
@@ -243,12 +243,22 @@ class TestQuotaEnforcer:
         assert len(client.killed_jobs) == 0
 
     @pytest.mark.asyncio
-    async def test_enforce_error_handling(self) -> None:
+    async def test_enforcer_error_handling_in_api(self) -> None:
         client = MockPlatformApiClient(
             cpu_quota=1, kill_exception=Exception("Test exception")
         )
         enforcer = QuotaEnforcer(client)
         # If enforcer handles ApiClient exceptions correctly, this will not fail
+        # (but will not yield any results either)
+        await enforcer.enforce()
+
+    @pytest.mark.asyncio
+    async def test_enforcer_error_handling_in_check_user_quota(self) -> None:
+        client = MockPlatformApiClient(
+            cpu_quota=1, stat_exception=Exception("Test exception")
+        )
+        enforcer = QuotaEnforcer(client)
+        # If enforcer handles exceptions correctly, this will not fail
         # (but will not yield any results either)
         await enforcer.enforce()
 
