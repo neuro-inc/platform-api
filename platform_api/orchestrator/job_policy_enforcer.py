@@ -52,8 +52,6 @@ class AbstractPlatformApiClient:
     async def __aexit__(self, *args: Any) -> None:
         pass
 
-    # TODO(artem) when moved to a separate microservice, add `ping()`
-
     @abc.abstractmethod
     async def get_non_terminated_jobs(self) -> List[JobInfo]:
         pass
@@ -241,17 +239,14 @@ class JobPolicyEnforcePoller:
         self._task.cancel()
 
     async def _run(self) -> None:
-        try:
-            while True:
-                start = self._loop.time()
-                await self._run_once()
-                elapsed = self._loop.time() - start
-                delay = self._config.interval_sec - elapsed
-                if delay < 0:
-                    delay = 0
-                await asyncio.sleep(delay)
-        except asyncio.CancelledError:
-            logger.info("Enforcer loop cancelled")
+        while True:
+            start = self._loop.time()
+            await self._run_once()
+            elapsed = self._loop.time() - start
+            delay = self._config.interval_sec - elapsed
+            if delay < 0:
+                delay = 0
+            await asyncio.sleep(delay)
 
     async def _run_once(self) -> None:
         try:

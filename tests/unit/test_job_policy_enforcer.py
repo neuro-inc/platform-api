@@ -487,7 +487,7 @@ class TestRealJobPolicyEnforcerClientWrapper:
             URL(f"{mock_api.endpoint}/wrong/base/path"), "token"
         )
         async with PlatformApiClient(wrong_config) as client:
-            with pytest.raises(ClientResponseError, match="Not Found"):
+            with pytest.raises(ClientResponseError, match="404, message='Not Found'"):
                 await client.get_non_terminated_jobs()
 
     @pytest.mark.asyncio
@@ -496,7 +496,7 @@ class TestRealJobPolicyEnforcerClientWrapper:
             URL(f"{mock_api.endpoint}/wrong/base/path"), "token"
         )
         client = PlatformApiClient(wrong_config)
-        with pytest.raises(ClientResponseError, match="Not Found"):
+        with pytest.raises(ClientResponseError, match="404, message='Not Found"):
             async with QuotaEnforcer(client) as enforcer:
                 await enforcer.enforce()
 
