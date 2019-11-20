@@ -44,11 +44,9 @@ class UserQuotaInfo:
 
 
 class AbstractPlatformApiClient:
-    @abc.abstractmethod
     async def __aenter__(self) -> "AbstractPlatformApiClient":
         return self
 
-    @abc.abstractmethod
     async def __aexit__(self, *args: Any) -> None:
         pass
 

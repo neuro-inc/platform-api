@@ -142,15 +142,6 @@ class MockPlatformApiClient(AbstractPlatformApiClient):
         self._gpu_quota = gpu_quota
         self._cpu_quota = cpu_quota
         self._killed_jobs: Set[str] = set()
-        self._initialized = False
-
-    async def __aenter__(self) -> "MockPlatformApiClient":
-        assert not self._initialized
-        self._initialized = True
-        return self
-
-    async def __aexit__(self, *args: Any) -> None:
-        self._initialized = False
 
     async def get_non_terminated_jobs(self) -> List[JobInfo]:
         return [
