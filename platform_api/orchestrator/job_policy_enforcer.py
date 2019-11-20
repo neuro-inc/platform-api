@@ -168,6 +168,8 @@ class AggregatedEnforcer(JobPolicyEnforcer):
         for enforcer in self._enforcers:
             try:
                 await enforcer.enforce()
+            except asyncio.CancelledError:
+                raise
             except Exception:
                 logger.exception("Failed to run %s", type(enforcer).__name__)
 
