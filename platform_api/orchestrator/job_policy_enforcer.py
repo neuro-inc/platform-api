@@ -114,7 +114,7 @@ class QuotaEnforcer(JobPolicyEnforcer):
     async def enforce(self) -> None:
         users_with_active_jobs = await self._get_active_users_and_jobs()
         for jobs_by_user in users_with_active_jobs:
-            await self._check_user_quota(jobs_by_user)
+            await self._enforce_user_quota(jobs_by_user)
 
     async def _get_active_users_and_jobs(self) -> List[JobsByUser]:
         active_jobs = await self._platform_api_client.get_non_terminated_jobs()
@@ -130,7 +130,7 @@ class QuotaEnforcer(JobPolicyEnforcer):
 
         return list(jobs_by_owner.values())
 
-    async def _check_user_quota(self, jobs_by_user: JobsByUser) -> None:
+    async def _enforce_user_quota(self, jobs_by_user: JobsByUser) -> None:
         username = jobs_by_user.username
         user_quota_info = await self._platform_api_client.get_user_stats(username)
         quota = user_quota_info.quota

@@ -191,7 +191,7 @@ class TestQuotaEnforcer:
         gpu_jobs = {"job5"}
         client = MockPlatformApiClient()
         enforcer = QuotaEnforcer(client)
-        await enforcer._check_user_quota(JobsByUser("user2", cpu_jobs, gpu_jobs))
+        await enforcer._enforce_user_quota(JobsByUser("user2", cpu_jobs, gpu_jobs))
         assert len(client.killed_jobs) == 0
 
     @pytest.mark.asyncio
@@ -200,7 +200,7 @@ class TestQuotaEnforcer:
         gpu_jobs = {"job5"}
         client = MockPlatformApiClient(gpu_quota_minutes=1)
         enforcer = QuotaEnforcer(client)
-        await enforcer._check_user_quota(JobsByUser("user2", cpu_jobs, gpu_jobs))
+        await enforcer._enforce_user_quota(JobsByUser("user2", cpu_jobs, gpu_jobs))
         assert client.killed_jobs == gpu_jobs
 
     @pytest.mark.asyncio
@@ -209,7 +209,7 @@ class TestQuotaEnforcer:
         gpu_jobs = {"job5"}
         client = MockPlatformApiClient(cpu_quota_minutes=1)
         enforcer = QuotaEnforcer(client)
-        await enforcer._check_user_quota(JobsByUser("user2", cpu_jobs, gpu_jobs))
+        await enforcer._enforce_user_quota(JobsByUser("user2", cpu_jobs, gpu_jobs))
         assert client.killed_jobs == cpu_jobs | gpu_jobs
 
     @pytest.mark.asyncio
