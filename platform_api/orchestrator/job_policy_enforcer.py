@@ -67,7 +67,6 @@ class PlatformApiClient:
 
     @classmethod
     def _parse_job_info(cls, value: Dict[str, Any]) -> JobInfo:
-        # TODO: test
         return JobInfo(
             id=value["id"],
             status=JobStatus(value["status"]),
@@ -77,17 +76,15 @@ class PlatformApiClient:
 
     @classmethod
     def _parse_runtime(cls, value: Dict[str, Optional[int]]) -> AggregatedRunTime:
-        # TODO: test
         gpu_runtime = value.get("total_gpu_run_time_minutes")
         cpu_runtime = value.get("total_non_gpu_run_time_minutes")
         return AggregatedRunTime(
-            total_gpu_run_time_delta=cls._runtime_minutes_to_timedelta(gpu_runtime),
-            total_non_gpu_run_time_delta=cls._runtime_minutes_to_timedelta(cpu_runtime),
+            total_gpu_run_time_delta=cls._minutes_to_timedelta(gpu_runtime),
+            total_non_gpu_run_time_delta=cls._minutes_to_timedelta(cpu_runtime),
         )
 
     @classmethod
-    def _runtime_minutes_to_timedelta(self, minutes: Optional[int]) -> timedelta:
-        # TODO: test
+    def _minutes_to_timedelta(self, minutes: Optional[int]) -> timedelta:
         if minutes is None:
             return timedelta.max
         return timedelta(minutes=minutes)
