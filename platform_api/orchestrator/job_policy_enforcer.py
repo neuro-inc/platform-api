@@ -45,6 +45,12 @@ class UserQuotaInfo:
 
 
 class AbstractPlatformApiClient:
+    async def __aenter__(self) -> "AbstractPlatformApiClient":
+        return self
+
+    async def __aexit__(self, *args: Any) -> None:
+        pass
+
     @abc.abstractmethod
     async def get_non_terminated_jobs(self) -> List[JobInfo]:
         pass
@@ -76,6 +82,12 @@ class PlatformApiClient(AbstractPlatformApiClient):
         self._platform_api_url = config.platform_api_url
         self._headers = {"Authorization": f"Bearer {config.token}"}
         self._session = aiohttp.ClientSession(headers=self._headers)
+
+    async def __aenter__(self) -> "PlatformApiClient":
+        return self
+
+    async def __aexit__(self, *args: Any) -> None:
+        await self._session.close()
 
     async def get_non_terminated_jobs(self) -> List[JobInfo]:
         async with self._session.get(
