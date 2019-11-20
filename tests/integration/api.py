@@ -7,10 +7,11 @@ import aiohttp.web
 import pytest
 from aiohttp.client import ClientSession
 from aiohttp.web import HTTPAccepted, HTTPNoContent, HTTPOk
+from yarl import URL
 
 from platform_api.api import create_app
 from platform_api.cluster_config import ClusterConfig
-from platform_api.config import Config
+from platform_api.config import AuthConfig, Config
 from platform_api.orchestrator.job import JobStatus
 
 from .auth import _User
@@ -53,6 +54,17 @@ class ApiConfig(NamedTuple):
         return f"{self.stats_base_url}/users/{username}"
 
 
+class AuthApiConfig(NamedTuple):
+    server_endpoint_url: URL
+
+    @property
+    def endpoint(self) -> str:
+        return f"{self.server_endpoint_url}/api/v1/users"
+
+    def auth_for_user_url(self, username: str) -> str:
+        return f"{self.endpoint}/{username}"
+
+
 async def get_cluster_configs(
     cluster_configs: Sequence[ClusterConfig],
 ) -> Sequence[ClusterConfig]:
@@ -81,6 +93,11 @@ async def api_with_oauth(
     api_config = ApiConfig(host=api_address.host, port=api_address.port, runner=runner)
     yield api_config
     await runner.close()
+
+
+@pytest.fixture
+async def auth_api(auth_config: AuthConfig) -> AuthApiConfig:
+    return AuthApiConfig(server_endpoint_url=auth_config.server_endpoint_url)
 
 
 @pytest.fixture

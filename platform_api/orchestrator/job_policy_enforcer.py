@@ -161,10 +161,10 @@ class QuotaEnforcer(JobPolicyEnforcer):
         jobs = user_quota_info.jobs
 
         jobs_to_delete: Set[str] = set()
-        if quota.total_non_gpu_run_time_delta < jobs.total_non_gpu_run_time_delta:
+        if quota.total_non_gpu_run_time_delta <= jobs.total_non_gpu_run_time_delta:
             logger.info(f"CPU quota exceeded for {username}")
             jobs_to_delete = jobs_by_user.all_job_ids
-        elif quota.total_gpu_run_time_delta < jobs.total_gpu_run_time_delta:
+        elif quota.total_gpu_run_time_delta <= jobs.total_gpu_run_time_delta:
             logger.info(f"GPU quota exceeded for {username}")
             jobs_to_delete = jobs_by_user.gpu_job_ids
 

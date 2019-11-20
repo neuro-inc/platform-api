@@ -14,14 +14,15 @@ from aiohttp.web import (
     HTTPOk,
     HTTPUnauthorized,
 )
-from aiohttp.web_exceptions import HTTPNotFound
+from aiohttp.web_exceptions import HTTPCreated, HTTPNotFound
 from neuro_auth_client import Permission
 from neuro_auth_client.client import Quota
 
+from platform_api.config import Config
 from tests.conftest import random_str
 from tests.integration.test_config_client import create_config_api
 
-from .api import ApiConfig, JobsClient
+from .api import ApiConfig, AuthApiConfig, JobsClient
 from .auth import AuthClient, _User
 from .conftest import MyKubeClient
 
@@ -2243,3 +2244,85 @@ class TestStats:
                     "total_non_gpu_run_time_minutes": 321,
                 },
             }
+
+
+class TestJobPolicyEnforcer:
+    @pytest.mark.parametrize("has_gpu", [False, True])
+    @pytest.mark.asyncio
+    async def test_enforce_quota(
+        self,
+        api: ApiConfig,
+        auth_api: AuthApiConfig,
+        config: Config,
+        client: aiohttp.ClientSession,
+        job_submit: Dict[str, Any],
+        jobs_client_factory: Callable[[_User], JobsClient],
+        regular_user_with_custom_quota: _User,
+        admin_token: str,
+        has_gpu: bool,
+    ) -> None:
+        quota_type = (
+            "total_gpu_run_time_minutes"
+            if has_gpu
+            else "total_non_gpu_run_time_minutes"
+        )
+
+        admin_user = _User(name="admin", token=admin_token)
+        user = regular_user_with_custom_quota
+        user_jobs_client = jobs_client_factory(user)
+
+        url = api.stats_for_user_url(user.name)
+        async with client.get(url, headers=admin_user.headers) as resp:
+            assert resp.status == HTTPOk.status_code, await resp.text()
+            result = await resp.json()
+            assert result == {
+                "name": user.name,
+                "jobs": {
+                    "total_gpu_run_time_minutes": 0,
+                    "total_non_gpu_run_time_minutes": 0,
+                },
+                "quota": {
+                    "total_gpu_run_time_minutes": 123,
+                    "total_non_gpu_run_time_minutes": 321,
+                },
+            }
+
+        url = api.jobs_base_url
+        job_submit["container"]["command"] = "sleep 1h"
+        if has_gpu:
+            job_submit["container"]["resources"]["gpu"] = 1
+            job_submit["container"]["resources"]["gpu_model"] = "gpumodel"
+
+        async with client.post(url, headers=user.headers, json=job_submit) as resp:
+            assert resp.status == HTTPAccepted.status_code, await resp.text()
+            result = await resp.json()
+            assert result["status"] == "pending"
+            job_id = result["id"]
+            await user_jobs_client.long_polling_by_job_id(
+                job_id=job_id, status="pending"
+            )
+
+        # GPU jobs cannot run on minikube, so they get stuck in "pending" state
+        if not has_gpu:
+            await user_jobs_client.long_polling_by_job_id(
+                job_id=job_id, status="running"
+            )
+
+        payload = {
+            "name": user.name,
+            "quota": {quota_type: 0},
+        }
+        url = auth_api.auth_for_user_url(user.name)
+        async with client.put(url, headers=admin_user.headers, json=payload) as resp:
+            assert resp.status == HTTPCreated.status_code, await resp.text()
+
+        # Due to conflict between quota enforcer and jobs poller (see issue #986),
+        #  we cannot guarrantee that the quota will be enforced up to one
+        #  enfoce-poller's interval, so we check up to 7 intervals:
+        max_enforcing_time = config.job_policy_enforcer.interval_sec * 7
+        await user_jobs_client.long_polling_by_job_id(
+            job_id=job_id,
+            interval_s=0.1,
+            status="succeeded",
+            max_time=max_enforcing_time,
+        )

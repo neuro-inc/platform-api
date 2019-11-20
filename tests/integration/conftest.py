@@ -528,13 +528,13 @@ def config_factory(
     auth_config: AuthConfig,
     jobs_config: JobsConfig,
     notifications_config: NotificationsConfig,
-    admin_token: str,
+    token_factory: Callable[[str], str],
 ) -> Callable[..., Config]:
     def _factory(**kwargs: Any) -> Config:
         server_config = ServerConfig()
         job_policy_enforcer = JobPolicyEnforcerConfig(
             platform_api_url=URL("http://localhost:8080/api/v1"),
-            token=admin_token,
+            token=token_factory("compute"),
             interval_sec=1,
         )
         database_config = DatabaseConfig(redis=redis_config)
