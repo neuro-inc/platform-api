@@ -2187,6 +2187,16 @@ class TestStats:
                     "total_non_gpu_run_time_minutes": 0,
                 },
                 "quota": {},
+                "clusters": [
+                    {
+                        "name": "default",
+                        "jobs": {
+                            "total_gpu_run_time_minutes": 0,
+                            "total_non_gpu_run_time_minutes": 0,
+                        },
+                        "quota": {},
+                    }
+                ],
             }
 
     @pytest.mark.asyncio
@@ -2218,6 +2228,16 @@ class TestStats:
                     "total_non_gpu_run_time_minutes": 0,
                 },
                 "quota": {},
+                "clusters": [
+                    {
+                        "name": "default",
+                        "jobs": {
+                            "total_gpu_run_time_minutes": 0,
+                            "total_non_gpu_run_time_minutes": 0,
+                        },
+                        "quota": {},
+                    }
+                ],
             }
 
     @pytest.mark.asyncio
@@ -2242,4 +2262,17 @@ class TestStats:
                     "total_gpu_run_time_minutes": 123,
                     "total_non_gpu_run_time_minutes": 321,
                 },
+                "clusters": [
+                    {
+                        "name": "default",
+                        "jobs": {
+                            "total_gpu_run_time_minutes": 0,
+                            "total_non_gpu_run_time_minutes": 0,
+                        },
+                        "quota": {
+                            "total_gpu_run_time_minutes": 123,
+                            "total_non_gpu_run_time_minutes": 321,
+                        },
+                    }
+                ],
             }
