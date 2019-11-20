@@ -297,9 +297,44 @@ class TestJobRequestValidator:
             "container": container,
         }
         validator = create_job_request_validator(
-            allowed_gpu_models=(), allowed_tpu_resources=()
+            allowed_gpu_models=(), allowed_tpu_resources=(), cluster_name="testcluster"
         )
-        assert validator.check(request)
+        payload = validator.check(request)
+        assert payload["cluster_name"] == "testcluster"
+
+    def test_validator_explicit_cluster_name(self) -> None:
+        container = {
+            "image": "testimage",
+            "command": "arg1 arg2 arg3",
+            "resources": {"cpu": 0.1, "memory_mb": 16, "shm": True},
+            "ssh": {"port": 666},
+        }
+        request = {
+            "container": container,
+            "cluster_name": "testcluster",
+        }
+        validator = create_job_request_validator(
+            allowed_gpu_models=(), allowed_tpu_resources=(), cluster_name="testcluster"
+        )
+        payload = validator.check(request)
+        assert payload["cluster_name"] == "testcluster"
+
+    def test_validator_invalid_cluster_name(self) -> None:
+        container = {
+            "image": "testimage",
+            "command": "arg1 arg2 arg3",
+            "resources": {"cpu": 0.1, "memory_mb": 16, "shm": True},
+            "ssh": {"port": 666},
+        }
+        request = {
+            "container": container,
+            "cluster_name": "testcluster",
+        }
+        validator = create_job_request_validator(
+            allowed_gpu_models=(), allowed_tpu_resources=(), cluster_name=""
+        )
+        with pytest.raises(DataError, match="value is not exactly ''"):
+            validator.check(request)
 
     def test_with_max_run_time_minutes(self) -> None:
         container = {
@@ -313,9 +348,9 @@ class TestJobRequestValidator:
             "max_run_time_minutes": 10,
         }
         validator = create_job_request_validator(
-            allowed_gpu_models=(), allowed_tpu_resources=()
+            allowed_gpu_models=(), allowed_tpu_resources=(), cluster_name=""
         )
-        assert validator.check(request)
+        validator.check(request)
 
     def test_with_max_run_time_minutes_invalid_too_small(self) -> None:
         container = {
@@ -329,10 +364,10 @@ class TestJobRequestValidator:
             "max_run_time_minutes": 0,
         }
         validator = create_job_request_validator(
-            allowed_gpu_models=(), allowed_tpu_resources=()
+            allowed_gpu_models=(), allowed_tpu_resources=(), cluster_name=""
         )
         with pytest.raises(DataError, match="value is less than 1"):
-            assert validator.check(request)
+            validator.check(request)
 
 
 class TestJobContainerToJson:
