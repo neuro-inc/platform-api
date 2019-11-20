@@ -247,9 +247,7 @@ async def create_app(
             app["stats_app"]["jobs_service"] = jobs_service
 
             logger.info("Initializing JobPolicyEnforcePoller")
-            api_client = await exit_stack.enter_async_context(
-                PlatformApiClient(config.job_policy_enforcer)
-            )
+            api_client = PlatformApiClient(config.job_policy_enforcer)
             job_policy_enforcer = AggregatedEnforcer([QuotaEnforcer(api_client)])
             job_policy_enforce_poller = JobPolicyEnforcePoller(
                 job_policy_enforcer, config.job_policy_enforcer
