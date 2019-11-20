@@ -1,5 +1,6 @@
 import abc
 import asyncio
+import contextlib
 import logging
 from dataclasses import dataclass, field
 from datetime import timedelta
@@ -167,6 +168,8 @@ class AggregatedEnforcer(JobPolicyEnforcer):
         for enforcer in self._enforcers:
             try:
                 await enforcer.enforce()
+            except asyncio.CancelledError:
+                raise
             except Exception:
                 logger.exception("Failed to run %s", type(enforcer).__name__)
 
@@ -198,6 +201,8 @@ class JobPolicyEnforcePoller:
         logger.info("Stopping job policy enforce polling")
         assert self._task is not None
         self._task.cancel()
+        with contextlib.suppress(asyncio.CancelledError):
+            await self._task
 
     async def _run(self) -> None:
         while True:
