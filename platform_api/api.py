@@ -12,7 +12,6 @@ from notifications_client import Client as NotificationsClient
 from platform_logging import init_logging
 
 from platform_api.orchestrator.job_policy_enforcer import (
-    AggregatedEnforcer,
     JobPolicyEnforcePoller,
     PlatformApiClient,
     QuotaEnforcer,
@@ -250,11 +249,11 @@ async def create_app(
             api_client = await exit_stack.enter_async_context(
                 PlatformApiClient(config.job_policy_enforcer)
             )
-            job_policy_enforcer = AggregatedEnforcer([QuotaEnforcer(api_client)])
-            job_policy_enforce_poller = JobPolicyEnforcePoller(
-                job_policy_enforcer, config.job_policy_enforcer
+            await exit_stack.enter_async_context(
+                JobPolicyEnforcePoller(
+                    config.job_policy_enforcer, enforcers=[QuotaEnforcer(api_client)]
+                )
             )
-            await exit_stack.enter_async_context(job_policy_enforce_poller)
 
             auth_client = await exit_stack.enter_async_context(
                 AuthClient(
