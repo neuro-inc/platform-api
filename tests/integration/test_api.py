@@ -2302,7 +2302,7 @@ class TestJobPolicyEnforcer:
                 job_id=job_id, status="pending"
             )
 
-        # non-GPU jobs cannot run on minikube, so they get stuck in "pending" state
+        # GPU jobs cannot run on minikube, so they get stuck in "pending" state
         if not has_gpu:
             await user_jobs_client.long_polling_by_job_id(
                 job_id=job_id, status="running"
