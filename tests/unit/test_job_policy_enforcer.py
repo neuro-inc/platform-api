@@ -186,7 +186,7 @@ class TestQuotaEnforcer:
         ]
 
     @pytest.mark.asyncio
-    async def test_check_user_quota_ok(self) -> None:
+    async def test_enforce_user_quota_ok(self) -> None:
         cpu_jobs = {"job3", "job4"}
         gpu_jobs = {"job5"}
         client = MockPlatformApiClient()
@@ -195,7 +195,7 @@ class TestQuotaEnforcer:
         assert len(client.killed_jobs) == 0
 
     @pytest.mark.asyncio
-    async def test_check_user_quota_gpu_exceeded(self) -> None:
+    async def test_enforce_user_quota_gpu_exceeded(self) -> None:
         cpu_jobs = {"job3", "job4"}
         gpu_jobs = {"job5"}
         client = MockPlatformApiClient(gpu_quota_minutes=1)
@@ -204,7 +204,7 @@ class TestQuotaEnforcer:
         assert client.killed_jobs == gpu_jobs
 
     @pytest.mark.asyncio
-    async def test_check_user_quota_cpu_exceeded(self) -> None:
+    async def test_enforce_user_quota_cpu_exceeded(self) -> None:
         cpu_jobs = {"job3", "job4"}
         gpu_jobs = {"job5"}
         client = MockPlatformApiClient(cpu_quota_minutes=1)
