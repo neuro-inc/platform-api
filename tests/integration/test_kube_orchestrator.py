@@ -1672,7 +1672,7 @@ class TestPodContainerDevShmSettings:
         self, run_command_get_status: Callable[..., Awaitable[JobStatusItem]]
     ) -> None:
         command = "dd if=/dev/zero of=/dev/shm/test  bs=32M  count=1"
-        resources = ContainerResources(cpu=0.1, memory_mb=32, shm=False)
+        resources = ContainerResources(cpu=0.1, memory_mb=128, shm=False)
         status_actual = await run_command_get_status(resources, command)
         status_expected = JobStatusItem.create(status=JobStatus.SUCCEEDED, exit_code=0)
         assert status_actual == status_expected, f"actual: '{status_actual}'"
