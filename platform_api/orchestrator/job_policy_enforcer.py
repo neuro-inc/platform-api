@@ -49,15 +49,15 @@ class PlatformApiClient:
         async with self._session.get(url, params=params) as resp:
             resp.raise_for_status()
             payload = await resp.json()
-        return [self._parse_job_info(job) for job in payload["jobs"]]
+        return [_parse_job_info(job) for job in payload["jobs"]]
 
     async def get_user_stats(self, username: str) -> UserQuotaInfo:
         url = f"{self._platform_api_url}/stats/users/{username}"
         async with self._session.get(url) as resp:
             resp.raise_for_status()
             payload = await resp.json()
-        quota = self._parse_quota_runtime(payload["quota"])
-        jobs = self._parse_jobs_runtime(payload["jobs"])
+        quota = _parse_quota_runtime(payload["quota"])
+        jobs = _parse_jobs_runtime(payload["jobs"])
         return UserQuotaInfo(quota=quota, jobs=jobs)
 
     async def kill_job(self, job_id: str) -> None:
@@ -65,38 +65,38 @@ class PlatformApiClient:
         async with self._session.delete(url) as resp:
             resp.raise_for_status()
 
-    @classmethod
-    def _parse_job_info(cls, value: Dict[str, Any]) -> JobInfo:
-        return JobInfo(
-            id=value["id"],
-            status=JobStatus(value["status"]),
-            owner=value["owner"],
-            is_gpu=bool(value["container"]["resources"].get("gpu")),
-        )
 
-    @classmethod
-    def _parse_jobs_runtime(cls, value: Dict[str, int]) -> AggregatedRunTime:
-        gpu_runtime = int(value["total_gpu_run_time_minutes"])
-        cpu_runtime = int(value["total_non_gpu_run_time_minutes"])
-        return AggregatedRunTime(
-            total_gpu_run_time_delta=timedelta(minutes=gpu_runtime),
-            total_non_gpu_run_time_delta=timedelta(minutes=cpu_runtime),
-        )
+def _parse_job_info(value: Dict[str, Any]) -> JobInfo:
+    return JobInfo(
+        id=value["id"],
+        status=JobStatus(value["status"]),
+        owner=value["owner"],
+        is_gpu=bool(value["container"]["resources"].get("gpu")),
+    )
 
-    @classmethod
-    def _parse_quota_runtime(cls, value: Dict[str, Optional[int]]) -> AggregatedRunTime:
-        gpu_runtime = value.get("total_gpu_run_time_minutes")
-        cpu_runtime = value.get("total_non_gpu_run_time_minutes")
-        return AggregatedRunTime(
-            total_gpu_run_time_delta=cls._quota_minutes_to_timedelta(gpu_runtime),
-            total_non_gpu_run_time_delta=cls._quota_minutes_to_timedelta(cpu_runtime),
-        )
 
-    @classmethod
-    def _quota_minutes_to_timedelta(self, minutes: Optional[int]) -> timedelta:
-        if minutes is None:
-            return timedelta.max
-        return timedelta(minutes=minutes)
+def _parse_jobs_runtime(value: Dict[str, int]) -> AggregatedRunTime:
+    gpu_runtime = int(value["total_gpu_run_time_minutes"])
+    cpu_runtime = int(value["total_non_gpu_run_time_minutes"])
+    return AggregatedRunTime(
+        total_gpu_run_time_delta=timedelta(minutes=gpu_runtime),
+        total_non_gpu_run_time_delta=timedelta(minutes=cpu_runtime),
+    )
+
+
+def _parse_quota_runtime(value: Dict[str, Optional[int]]) -> AggregatedRunTime:
+    gpu_runtime = value.get("total_gpu_run_time_minutes")
+    cpu_runtime = value.get("total_non_gpu_run_time_minutes")
+    return AggregatedRunTime(
+        total_gpu_run_time_delta=_quota_minutes_to_timedelta(gpu_runtime),
+        total_non_gpu_run_time_delta=_quota_minutes_to_timedelta(cpu_runtime),
+    )
+
+
+def _quota_minutes_to_timedelta(minutes: Optional[int]) -> timedelta:
+    if minutes is None:
+        return timedelta.max
+    return timedelta(minutes=minutes)
 
 
 @dataclass(frozen=True)

@@ -18,6 +18,9 @@ from platform_api.orchestrator.job_policy_enforcer import (
     PlatformApiClient,
     QuotaEnforcer,
     UserQuotaInfo,
+    _parse_job_info,
+    _parse_jobs_runtime,
+    _parse_quota_runtime,
 )
 from platform_api.orchestrator.job_request import JobStatus
 from tests.integration.api import ApiConfig
@@ -58,37 +61,33 @@ def job_policy_enforcer_config() -> JobPolicyEnforcerConfig:
     )
 
 
-class TestPlatformApiClient:
+class TestSerializers:
     def test_parse_jobs_runtime_regular(self) -> None:
-        runtime = PlatformApiClient._parse_jobs_runtime(
+        runtime = _parse_jobs_runtime(
             {"total_gpu_run_time_minutes": 10, "total_non_gpu_run_time_minutes": 15}
         )
         assert runtime.total_gpu_run_time_delta == timedelta(seconds=600)
         assert runtime.total_non_gpu_run_time_delta == timedelta(seconds=900)
 
     def test_parse_quota_runtime_regular(self) -> None:
-        runtime = PlatformApiClient._parse_quota_runtime(
+        runtime = _parse_quota_runtime(
             {"total_gpu_run_time_minutes": 10, "total_non_gpu_run_time_minutes": 15}
         )
         assert runtime.total_gpu_run_time_delta == timedelta(seconds=600)
         assert runtime.total_non_gpu_run_time_delta == timedelta(seconds=900)
 
     def test_parse_quota_runtime_empty(self) -> None:
-        runtime = PlatformApiClient._parse_quota_runtime({})
+        runtime = _parse_quota_runtime({})
         assert runtime.total_gpu_run_time_delta == timedelta.max
         assert runtime.total_non_gpu_run_time_delta == timedelta.max
 
     def test_parse_quota_runtime_only_gpu(self) -> None:
-        runtime = PlatformApiClient._parse_quota_runtime(
-            {"total_gpu_run_time_minutes": 10}
-        )
+        runtime = _parse_quota_runtime({"total_gpu_run_time_minutes": 10})
         assert runtime.total_gpu_run_time_delta == timedelta(seconds=600)
         assert runtime.total_non_gpu_run_time_delta == timedelta.max
 
     def test_parse_quota_runtime_only_non_gpu(self) -> None:
-        runtime = PlatformApiClient._parse_quota_runtime(
-            {"total_non_gpu_run_time_minutes": 15}
-        )
+        runtime = _parse_quota_runtime({"total_non_gpu_run_time_minutes": 15})
         assert runtime.total_gpu_run_time_delta == timedelta.max
         assert runtime.total_non_gpu_run_time_delta == timedelta(seconds=900)
 
@@ -99,7 +98,7 @@ class TestPlatformApiClient:
             "status": "pending",
             "container": {"resources": {"gpu": 1}},
         }
-        job_info = PlatformApiClient._parse_job_info(payload)
+        job_info = _parse_job_info(payload)
         assert job_info.id == "job1"
         assert job_info.owner == "user1"
         assert job_info.status == JobStatus.PENDING
@@ -112,12 +111,14 @@ class TestPlatformApiClient:
             "status": "running",
             "container": {"resources": {"cpu": 4}},
         }
-        job_info = PlatformApiClient._parse_job_info(payload)
+        job_info = _parse_job_info(payload)
         assert job_info.id == "job123"
         assert job_info.owner == "user2"
         assert job_info.status == JobStatus.RUNNING
         assert job_info.is_gpu is False
 
+
+class TestPlatformApiClient:
     @pytest.mark.asyncio
     async def test_get_user_stats(self, mock_api: ApiConfig) -> None:
         job_policy_enforcer_config = JobPolicyEnforcerConfig(
