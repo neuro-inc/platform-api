@@ -1,3 +1,5 @@
+import math
+import time
 from typing import Any, AsyncIterator, Awaitable, Callable, Dict, Iterator, List
 from unittest import mock
 
@@ -1928,11 +1930,15 @@ class TestJobs:
                 "ssh_server": "ssh://nobody@ssh-auth.platform.neuromation.io:22",
                 "ssh_auth_server": "ssh://nobody@ssh-auth.platform.neuromation.io:22",
                 "is_preemptible": True,
+                "run_time_minutes": 0,
             }
 
+        time_started = time.time()
         response_payload = await jobs_client.long_polling_by_job_id(
             job_id=job_id, status="succeeded"
         )
+        elapsed_sec = time.time() - time_started
+        elapsed_min = math.floor(elapsed_sec) // 60
 
         assert response_payload == {
             "id": job_id,
@@ -1965,7 +1971,11 @@ class TestJobs:
             "ssh_server": "ssh://nobody@ssh-auth.platform.neuromation.io:22",
             "ssh_auth_server": "ssh://nobody@ssh-auth.platform.neuromation.io:22",
             "is_preemptible": True,
+            "run_time_minutes": mock.ANY,
         }
+        assert (
+            elapsed_min - 1 <= response_payload["run_time_minutes"] <= elapsed_min + 1
+        )
 
     @pytest.mark.asyncio
     async def test_job_failed(
@@ -2004,9 +2014,12 @@ class TestJobs:
             assert result["status"] == "pending"
             job_id = result["id"]
 
+        time_started = time.time()
         response_payload = await jobs_client.long_polling_by_job_id(
             job_id=job_id, status="failed"
         )
+        elapsed_sec = time.time() - time_started
+        elapsed_min = math.floor(elapsed_sec) // 60
 
         assert response_payload == {
             "id": job_id,
@@ -2044,7 +2057,11 @@ class TestJobs:
             "ssh_server": "ssh://nobody@ssh-auth.platform.neuromation.io:22",
             "ssh_auth_server": "ssh://nobody@ssh-auth.platform.neuromation.io:22",
             "is_preemptible": False,
+            "run_time_minutes": mock.ANY,
         }
+        assert (
+            elapsed_min - 1 <= response_payload["run_time_minutes"] <= elapsed_min + 1
+        )
 
     @pytest.mark.asyncio
     async def test_job_create_unknown_gpu_model(
@@ -2133,6 +2150,7 @@ class TestJobs:
                 "ssh_server": "ssh://nobody@ssh-auth.platform.neuromation.io:22",
                 "ssh_auth_server": "ssh://nobody@ssh-auth.platform.neuromation.io:22",
                 "is_preemptible": False,
+                "run_time_minutes": mock.ANY,
             }
 
     @pytest.mark.asyncio
@@ -2216,6 +2234,7 @@ class TestJobs:
                 "ssh_server": "ssh://nobody@ssh-auth.platform.neuromation.io:22",
                 "ssh_auth_server": "ssh://nobody@ssh-auth.platform.neuromation.io:22",
                 "is_preemptible": False,
+                "run_time_minutes": mock.ANY,
             }
 
 
