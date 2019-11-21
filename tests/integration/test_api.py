@@ -490,7 +490,7 @@ class TestJobs:
             assert payload == {"error": e}
 
     @pytest.mark.asyncio
-    async def test_create_job_missing_cluster_name(
+    async def test_create_job_user_has_unknown_cluster_name(
         self,
         api: ApiConfig,
         client: aiohttp.ClientSession,
@@ -516,6 +516,29 @@ class TestJobs:
             assert payload == {"error": e}
 
     @pytest.mark.asyncio
+    async def test_create_job_unknown_cluster_name(
+        self,
+        api: ApiConfig,
+        client: aiohttp.ClientSession,
+        job_submit: Dict[str, Any],
+        jobs_client: JobsClient,
+        regular_user: _User,
+    ) -> None:
+        job_name = f"test-job-name-{random_str()}"
+        url = api.jobs_base_url
+        job_submit["is_preemptible"] = True
+        job_submit["name"] = job_name
+        job_submit["cluster_name"] = "unknown"
+        async with client.post(
+            url, headers=regular_user.headers, json=job_submit
+        ) as response:
+            assert response.status == HTTPBadRequest.status_code, await response.text()
+            payload = await response.json()
+            assert payload == {
+                "error": "{'cluster_name': DataError(value is not exactly 'default')}"
+            }
+
+    @pytest.mark.asyncio
     async def test_create_job(
         self,
         api: ApiConfig,
@@ -532,6 +555,7 @@ class TestJobs:
         job_submit["container"]["command"] = "false"
         job_submit["container"]["http"]["requires_auth"] = True
         job_submit["schedule_timeout"] = 90
+        job_submit["cluster_name"] = "default"
         async with client.post(
             url, headers=regular_user.headers, json=job_submit
         ) as resp:
