@@ -109,29 +109,43 @@ jobs:
             make setup
             pip uninstall -y hiredis
 
-      - run:
-          name: Running Static Code Analysis
-          command: |
-            source venv/bin/activate
-            make lint
+#      - run:
+#          name: Running Static Code Analysis
+#          command: |
+#            source venv/bin/activate
+#            make lint
 
       - run:
           name: Run Platform Tests
           command: |
             source venv/bin/activate
             make test_k8s_platform_api
-
-      - run:
-          name: Running E2E Test Suite
-          command: |
-            source venv/bin/activate
-            make test_k8s_platform_api_e2e
-
-      - run:
-          name: Stopping Kubernetes
-          command: |
-            make clean_k8s
-          when: always
+            print 1
+            sleep 9m
+            print 2
+            sleep 9m
+            print 3
+            sleep 9m
+            print 4
+            sleep 9m
+            print 5
+            sleep 9m
+            print 6
+            sleep 9m
+            print 7
+            sleep 9m
+#
+#      - run:
+#          name: Running E2E Test Suite
+#          command: |
+#            source venv/bin/activate
+#            make test_k8s_platform_api_e2e
+#
+#      - run:
+#          name: Stopping Kubernetes
+#          command: |
+#            make clean_k8s
+#          when: always
 
 
   artifactory_ssh_auth_deploy:
