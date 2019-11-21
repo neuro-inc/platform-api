@@ -1781,7 +1781,7 @@ class TestNodeSelector:
             command="true",
             resources=ContainerResources(
                 cpu=0.1,
-                memory_mb=128,
+                memory_mb=32,
                 tpu=ContainerTPUResource(type="v2-8", software_version="1.14"),
             ),
         )
