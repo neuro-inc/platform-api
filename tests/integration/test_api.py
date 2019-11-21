@@ -123,7 +123,8 @@ class TestApi:
         async with client.get(url, headers=regular_user.headers) as resp:
             assert resp.status == HTTPOk.status_code, await resp.text()
             result = await resp.json()
-            assert result == {
+            expected_cluster_payload = {
+                "name": "default",
                 "registry_url": "https://registry.dev.neuromation.io",
                 "storage_url": "https://neu.ro/api/v1/storage",
                 "users_url": "https://neu.ro/api/v1/users",
@@ -166,6 +167,11 @@ class TestApi:
                     },
                 ],
             }
+            expected_payload: Dict[str, Any] = {
+                "clusters": [expected_cluster_payload],
+                **expected_cluster_payload,
+            }
+            assert result == expected_payload
 
     @pytest.mark.asyncio
     async def test_config_with_oauth(
@@ -178,7 +184,8 @@ class TestApi:
         async with client.get(url, headers=regular_user.headers) as resp:
             assert resp.status == HTTPOk.status_code, await resp.text()
             result = await resp.json()
-            assert result == {
+            expected_cluster_payload = {
+                "name": "default",
                 "registry_url": "https://registry.dev.neuromation.io",
                 "storage_url": "https://neu.ro/api/v1/storage",
                 "users_url": "https://neu.ro/api/v1/users",
@@ -220,6 +227,8 @@ class TestApi:
                         "tpu": {"type": "v2-8", "software_version": "1.14"},
                     },
                 ],
+            }
+            expected_payload: Dict[str, Any] = {
                 "auth_url": "https://platform-auth0-url/authorize",
                 "token_url": "https://platform-auth0-url/oauth/token",
                 "client_id": "client_id",
@@ -231,7 +240,10 @@ class TestApi:
                     "http://127.0.0.1:54541",
                     "http://127.0.0.1:54542",
                 ],
+                "clusters": [expected_cluster_payload],
+                **expected_cluster_payload,
             }
+            assert result == expected_payload
 
 
 class TestJobs:
