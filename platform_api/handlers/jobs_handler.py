@@ -91,7 +91,7 @@ def create_job_response_validator() -> t.Trafaret:
             t.Key("name", optional=True): create_job_name_validator(max_length=None),
             t.Key("description", optional=True): t.String,
             t.Key("schedule_timeout", optional=True): t.Float,
-            t.Key("run_time_minutes"): t.Int,
+            t.Key("run_time_minutes"): t.Int(gte=0),
             t.Key("max_run_time_minutes", optional=True): t.Int,
         }
     )
