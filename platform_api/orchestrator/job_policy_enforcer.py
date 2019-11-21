@@ -56,8 +56,8 @@ class PlatformApiClient:
         async with self._session.get(url) as resp:
             resp.raise_for_status()
             payload = await resp.json()
-        quota = self._parse_runtime(payload["quota"])
-        jobs = self._parse_runtime(payload["jobs"])
+        quota = self._parse_quota_runtime(payload["quota"])
+        jobs = self._parse_jobs_runtime(payload["jobs"])
         return UserQuotaInfo(quota=quota, jobs=jobs)
 
     async def kill_job(self, job_id: str) -> None:
@@ -75,16 +75,25 @@ class PlatformApiClient:
         )
 
     @classmethod
-    def _parse_runtime(cls, value: Dict[str, Optional[int]]) -> AggregatedRunTime:
-        gpu_runtime = value.get("total_gpu_run_time_minutes")
-        cpu_runtime = value.get("total_non_gpu_run_time_minutes")
+    def _parse_jobs_runtime(cls, value: Dict[str, int]) -> AggregatedRunTime:
+        gpu_runtime = int(value["total_gpu_run_time_minutes"])
+        cpu_runtime = int(value["total_non_gpu_run_time_minutes"])
         return AggregatedRunTime(
-            total_gpu_run_time_delta=cls._minutes_to_timedelta(gpu_runtime),
-            total_non_gpu_run_time_delta=cls._minutes_to_timedelta(cpu_runtime),
+            total_gpu_run_time_delta=timedelta(minutes=gpu_runtime),
+            total_non_gpu_run_time_delta=timedelta(minutes=cpu_runtime),
         )
 
     @classmethod
-    def _minutes_to_timedelta(self, minutes: Optional[int]) -> timedelta:
+    def _parse_quota_runtime(cls, value: Dict[str, Optional[int]]) -> AggregatedRunTime:
+        gpu_runtime = value.get("total_gpu_run_time_minutes")
+        cpu_runtime = value.get("total_non_gpu_run_time_minutes")
+        return AggregatedRunTime(
+            total_gpu_run_time_delta=cls._quota_minutes_to_timedelta(gpu_runtime),
+            total_non_gpu_run_time_delta=cls._quota_minutes_to_timedelta(cpu_runtime),
+        )
+
+    @classmethod
+    def _quota_minutes_to_timedelta(self, minutes: Optional[int]) -> timedelta:
         if minutes is None:
             return timedelta.max
         return timedelta(minutes=minutes)

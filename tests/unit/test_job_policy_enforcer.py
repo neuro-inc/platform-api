@@ -59,25 +59,34 @@ def job_policy_enforcer_config() -> JobPolicyEnforcerConfig:
 
 
 class TestPlatformApiClient:
-    def test_parse_runtime_regular(self) -> None:
-        runtime = PlatformApiClient._parse_runtime(
+    def test_parse_jobs_runtime_regular(self) -> None:
+        runtime = PlatformApiClient._parse_jobs_runtime(
             {"total_gpu_run_time_minutes": 10, "total_non_gpu_run_time_minutes": 15}
         )
         assert runtime.total_gpu_run_time_delta == timedelta(seconds=600)
         assert runtime.total_non_gpu_run_time_delta == timedelta(seconds=900)
 
-    def test_parse_runtime_empty(self) -> None:
-        runtime = PlatformApiClient._parse_runtime({})
+    def test_parse_quota_runtime_regular(self) -> None:
+        runtime = PlatformApiClient._parse_quota_runtime(
+            {"total_gpu_run_time_minutes": 10, "total_non_gpu_run_time_minutes": 15}
+        )
+        assert runtime.total_gpu_run_time_delta == timedelta(seconds=600)
+        assert runtime.total_non_gpu_run_time_delta == timedelta(seconds=900)
+
+    def test_parse_quota_runtime_empty(self) -> None:
+        runtime = PlatformApiClient._parse_quota_runtime({})
         assert runtime.total_gpu_run_time_delta == timedelta.max
         assert runtime.total_non_gpu_run_time_delta == timedelta.max
 
-    def test_parse_runtime_only_gpu(self) -> None:
-        runtime = PlatformApiClient._parse_runtime({"total_gpu_run_time_minutes": 10})
+    def test_parse_quota_runtime_only_gpu(self) -> None:
+        runtime = PlatformApiClient._parse_quota_runtime(
+            {"total_gpu_run_time_minutes": 10}
+        )
         assert runtime.total_gpu_run_time_delta == timedelta(seconds=600)
         assert runtime.total_non_gpu_run_time_delta == timedelta.max
 
-    def test_parse_runtime_only_non_gpu(self) -> None:
-        runtime = PlatformApiClient._parse_runtime(
+    def test_parse_quota_runtime_only_non_gpu(self) -> None:
+        runtime = PlatformApiClient._parse_quota_runtime(
             {"total_non_gpu_run_time_minutes": 15}
         )
         assert runtime.total_gpu_run_time_delta == timedelta.max
