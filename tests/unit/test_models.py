@@ -1,3 +1,4 @@
+from datetime import datetime, timedelta
 from pathlib import PurePath
 from typing import Any, Dict, Sequence
 from unittest import mock
@@ -16,6 +17,7 @@ from platform_api.handlers.jobs_handler import (
     JobFilterException,
     JobFilterFactory,
     convert_container_volume_to_json,
+    convert_finite_delta_to_minutes,
     convert_job_container_to_json,
     convert_job_to_job_response,
     create_job_request_validator,
@@ -27,7 +29,12 @@ from platform_api.handlers.validators import (
     create_container_request_validator,
     create_container_response_validator,
 )
-from platform_api.orchestrator.job import Job, JobRecord
+from platform_api.orchestrator.job import (
+    Job,
+    JobRecord,
+    JobStatusHistory,
+    JobStatusItem,
+)
 from platform_api.orchestrator.job_request import (
     Container,
     ContainerHTTPServer,
@@ -876,7 +883,47 @@ async def test_job_to_job_response(mock_orchestrator: MockOrchestrator) -> None:
         "ssh_server": "ssh://nobody@ssh-auth:22",
         "ssh_auth_server": "ssh://nobody@ssh-auth:22",
         "is_preemptible": False,
+        "run_time_minutes": 0,
     }
+
+
+@pytest.mark.asyncio
+async def test_job_to_job_response_nonzero_runtime(
+    mock_orchestrator: MockOrchestrator,
+) -> None:
+    def _mocked_datetime_factory() -> datetime:
+        return datetime(year=2019, month=1, day=1)
+
+    time_now = _mocked_datetime_factory()
+    started_ago_delta = timedelta(minutes=10)  # job started 10 min ago: pending
+    pending_delta = timedelta(minutes=5)  # after 5 min: running (still running)
+    pending_at = time_now - started_ago_delta
+    running_at = pending_at + pending_delta
+    items = [
+        JobStatusItem.create(JobStatus.PENDING, transition_time=pending_at),
+        JobStatusItem.create(JobStatus.RUNNING, transition_time=running_at),
+    ]
+    status_history = JobStatusHistory(items)
+
+    job = Job(
+        storage_config=mock_orchestrator.storage_config,
+        orchestrator_config=mock_orchestrator.config,
+        record=JobRecord.create(
+            request=JobRequest.create(
+                Container(
+                    image="testimage",
+                    resources=ContainerResources(cpu=1, memory_mb=128),
+                ),
+                description="test test description",
+            ),
+            status_history=status_history,
+            cluster_name="test-cluster",
+            name="test-job-name",
+        ),
+        current_datetime_factory=_mocked_datetime_factory,
+    )
+    response = convert_job_to_job_response(job, cluster_name="my-cluster")
+    assert response["run_time_minutes"] == 5
 
 
 @pytest.mark.asyncio
@@ -926,6 +973,7 @@ async def test_job_to_job_response_with_job_name_and_http_exposed(
         "ssh_server": "ssh://nobody@ssh-auth:22",
         "ssh_auth_server": "ssh://nobody@ssh-auth:22",
         "is_preemptible": False,
+        "run_time_minutes": 0,
     }
 
 
@@ -976,6 +1024,7 @@ async def test_job_to_job_response_with_job_name_and_http_exposed_too_long_name(
         "ssh_server": "ssh://nobody@ssh-auth:22",
         "ssh_auth_server": "ssh://nobody@ssh-auth:22",
         "is_preemptible": False,
+        "run_time_minutes": 0,
     }
 
 
@@ -998,3 +1047,17 @@ async def test_job_to_job_response_assert_non_empty_cluster_name(
     )
     with pytest.raises(AssertionError, match="must be already replaced"):
         convert_job_to_job_response(job, cluster_name="")
+
+
+class TestConvertRunTime:
+    def test_convert_finite_delta_to_minutes_nonzero(self) -> None:
+        delta = timedelta(minutes=10)
+        assert convert_finite_delta_to_minutes(delta) == 10
+
+    def test_convert_finite_delta_to_minutes_zero(self) -> None:
+        delta = timedelta(0)
+        assert convert_finite_delta_to_minutes(delta) == 0
+
+    def test_convert_finite_delta_to_minutes_seconds_floor(self) -> None:
+        delta = timedelta(minutes=10, seconds=59)
+        assert convert_finite_delta_to_minutes(delta) == 10

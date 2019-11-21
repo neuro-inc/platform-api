@@ -318,6 +318,33 @@ class TestJobs:
             assert result["max_run_time_minutes"] == 10
 
     @pytest.mark.asyncio
+    async def test_get_job_run_time_minutes(
+        self,
+        api: ApiConfig,
+        client: aiohttp.ClientSession,
+        job_submit: Dict[str, Any],
+        jobs_client: JobsClient,
+        regular_user: _User,
+    ) -> None:
+        headers = regular_user.headers
+        url = api.jobs_base_url
+        job_submit["container"]["command"] = "sleep 1h"
+        async with client.post(url, headers=headers, json=job_submit) as resp:
+            assert resp.status == HTTPAccepted.status_code, await resp.text()
+            result = await resp.json()
+            assert result["status"] in ["pending"]
+            job_id = result["id"]
+
+        await jobs_client.long_polling_by_job_id(job_id, "running")
+
+        url = api.generate_job_url(job_id)
+        async with client.get(url, headers=headers, json=job_submit) as resp:
+            assert resp.status == HTTPOk.status_code, await resp.text()
+            result = await resp.json()
+            run_time = result["run_time_minutes"]
+            assert run_time >= 0
+
+    @pytest.mark.asyncio
     async def test_incorrect_request(
         self, api: ApiConfig, client: aiohttp.ClientSession, regular_user: _User
     ) -> None:
