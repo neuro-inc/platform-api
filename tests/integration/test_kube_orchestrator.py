@@ -78,7 +78,7 @@ async def job_nginx(kube_orchestrator: KubeOrchestrator) -> MyJob:
     container = Container(
         image="ubuntu",
         command="sleep 5",
-        resources=ContainerResources(cpu=0.1, memory_mb=256),
+        resources=ContainerResources(cpu=0.1, memory_mb=32),
     )
     job_request = JobRequest.create(container)
     job = MyJob(
@@ -178,7 +178,7 @@ class TestKubeOrchestrator:
     ) -> None:
         container = Container(
             image="notsuchdockerimage",
-            resources=ContainerResources(cpu=0.1, memory_mb=128),
+            resources=ContainerResources(cpu=0.1, memory_mb=32),
         )
         job_request = JobRequest.create(container)
         job = MyJob(
@@ -197,7 +197,7 @@ class TestKubeOrchestrator:
         container = Container(
             image="ubuntu",
             command="sleep 5",
-            resources=ContainerResources(cpu=0.1, memory_mb=256),
+            resources=ContainerResources(cpu=0.1, memory_mb=32),
         )
         job_request = JobRequest(job_id=job_id, container=container)
         job = MyJob(
@@ -219,7 +219,7 @@ class TestKubeOrchestrator:
         await self.wait_for_success(job_nginx)
 
         container = Container(
-            image="python", resources=ContainerResources(cpu=0.1, memory_mb=128)
+            image="python", resources=ContainerResources(cpu=0.1, memory_mb=32)
         )
         job_request_second = JobRequest(job_id=job_nginx.id, container=container)
         job_second = MyJob(
@@ -246,7 +246,7 @@ class TestKubeOrchestrator:
     async def test_broken_job_id(self, kube_orchestrator: KubeOrchestrator) -> None:
         job_id = "some_BROCKEN_JOB-123@#$%^&*(______------ID"
         container = Container(
-            image="python", resources=ContainerResources(cpu=0.1, memory_mb=128)
+            image="python", resources=ContainerResources(cpu=0.1, memory_mb=32)
         )
         job_request = JobRequest(job_id=job_id, container=container)
         job = MyJob(
@@ -262,7 +262,7 @@ class TestKubeOrchestrator:
         container = Container(
             image="ubuntu",
             command="true",
-            resources=ContainerResources(cpu=0.1, memory_mb=128),
+            resources=ContainerResources(cpu=0.1, memory_mb=32),
         )
         job = MyJob(
             orchestrator=kube_orchestrator,
@@ -282,7 +282,7 @@ class TestKubeOrchestrator:
         container = Container(
             image="ubuntu",
             command=command,
-            resources=ContainerResources(cpu=0.1, memory_mb=128),
+            resources=ContainerResources(cpu=0.1, memory_mb=32),
         )
         job = MyJob(
             orchestrator=kube_orchestrator,
@@ -450,7 +450,7 @@ class TestKubeOrchestrator:
             image="ubuntu",
             command=f"""bash -c 'echo "test" > {file_path}'""",
             volumes=volumes,
-            resources=ContainerResources(cpu=0.1, memory_mb=128),
+            resources=ContainerResources(cpu=0.1, memory_mb=32),
         )
         write_job = MyJob(
             orchestrator=kube_orchestrator,
@@ -463,7 +463,7 @@ class TestKubeOrchestrator:
             image="ubuntu",
             command=f"""bash -c '[ "$(cat {file_path})" == "test" ]'""",
             volumes=volumes,
-            resources=ContainerResources(cpu=0.1, memory_mb=128),
+            resources=ContainerResources(cpu=0.1, memory_mb=32),
         )
         read_job = MyJob(
             orchestrator=kube_orchestrator,
@@ -500,7 +500,7 @@ class TestKubeOrchestrator:
             image="ubuntu",
             env={"A": "2", "B": "3"},
             command=fr"""bash -c '[ "$(expr $A \* $B)" == "{product}" ]'""",
-            resources=ContainerResources(cpu=0.1, memory_mb=128),
+            resources=ContainerResources(cpu=0.1, memory_mb=32),
         )
         job = MyJob(
             orchestrator=kube_orchestrator,
@@ -649,7 +649,7 @@ class TestKubeOrchestrator:
         container = Container(
             image="python",
             command="python -m http.server 80",
-            resources=ContainerResources(cpu=0.1, memory_mb=128),
+            resources=ContainerResources(cpu=0.1, memory_mb=32),
             http_server=ContainerHTTPServer(port=80),
         )
         job = MyJob(
@@ -692,7 +692,7 @@ class TestKubeOrchestrator:
         container = Container(
             image="python",
             command="python -m http.server 80",
-            resources=ContainerResources(cpu=0.1, memory_mb=128),
+            resources=ContainerResources(cpu=0.1, memory_mb=32),
             http_server=ContainerHTTPServer(port=80),
         )
         job = MyJob(
@@ -743,7 +743,7 @@ class TestKubeOrchestrator:
         container = Container(
             image="python",
             command="python -m http.server 80",
-            resources=ContainerResources(cpu=0.1, memory_mb=128),
+            resources=ContainerResources(cpu=0.1, memory_mb=32),
             http_server=ContainerHTTPServer(port=80, requires_auth=True),
         )
         job = MyJob(
@@ -787,7 +787,7 @@ class TestKubeOrchestrator:
         container = Container(
             image="python",
             command="python -m http.server 80",
-            resources=ContainerResources(cpu=0.1, memory_mb=128),
+            resources=ContainerResources(cpu=0.1, memory_mb=32),
             http_server=ContainerHTTPServer(port=80, requires_auth=True),
         )
         job = MyJob(
@@ -834,7 +834,7 @@ class TestKubeOrchestrator:
             server_cont = Container(
                 image="python",
                 command="python -m http.server 80",
-                resources=ContainerResources(cpu=0.1, memory_mb=128),
+                resources=ContainerResources(cpu=0.1, memory_mb=32),
                 http_server=ContainerHTTPServer(port=80),
             )
             return MyJob(
@@ -860,7 +860,7 @@ class TestKubeOrchestrator:
             client_cont = Container(
                 image="python",
                 command=cmd,
-                resources=ContainerResources(cpu=0.1, memory_mb=128),
+                resources=ContainerResources(cpu=0.1, memory_mb=32),
             )
             return MyJob(
                 orchestrator=kube_orchestrator,
@@ -906,7 +906,7 @@ class TestKubeOrchestrator:
             server_cont = Container(
                 image="python",
                 command="python -m http.server 12345",
-                resources=ContainerResources(cpu=0.1, memory_mb=128),
+                resources=ContainerResources(cpu=0.1, memory_mb=32),
             )
             return MyJob(
                 orchestrator=kube_orchestrator,
@@ -923,7 +923,7 @@ class TestKubeOrchestrator:
             client_cont = Container(
                 image="python",
                 command=cmd,
-                resources=ContainerResources(cpu=0.1, memory_mb=128),
+                resources=ContainerResources(cpu=0.1, memory_mb=32),
             )
             return MyJob(
                 orchestrator=kube_orchestrator,
@@ -1239,7 +1239,7 @@ class TestKubeClient:
         container = Container(
             image="ubuntu",
             command="true",
-            resources=ContainerResources(cpu=0.1, memory_mb=128),
+            resources=ContainerResources(cpu=0.1, memory_mb=32),
         )
         job_request = JobRequest.create(container)
         pod = PodDescriptor.from_job_request(
@@ -1261,7 +1261,7 @@ class TestKubeClient:
         container = Container(
             image="ubuntu",
             command="true",
-            resources=ContainerResources(cpu=0.1, memory_mb=128),
+            resources=ContainerResources(cpu=0.1, memory_mb=32),
         )
         job_request = JobRequest.create(container)
         pod = PodDescriptor.from_job_request(
@@ -1296,7 +1296,7 @@ class TestKubeClient:
             image="ubuntu",
             entrypoint=entrypoint,
             command=command,
-            resources=ContainerResources(cpu=0.1, memory_mb=128),
+            resources=ContainerResources(cpu=0.1, memory_mb=32),
         )
         job_request = JobRequest.create(container)
         pod = PodDescriptor.from_job_request(
@@ -1491,7 +1491,7 @@ class TestKubeClient:
         container = Container(
             image="ubuntu",
             command="true",
-            resources=ContainerResources(cpu=0.1, memory_mb=128),
+            resources=ContainerResources(cpu=0.1, memory_mb=32),
         )
         job_request = JobRequest.create(container)
         pod = PodDescriptor.from_job_request(
@@ -1529,7 +1529,7 @@ class TestKubeClient:
         container = Container(
             image="lachlanevenson/k8s-kubectl:v1.10.3",
             command="get pods",
-            resources=ContainerResources(cpu=0.2, memory_mb=128),
+            resources=ContainerResources(cpu=0.2, memory_mb=32),
         )
         job_request = JobRequest.create(container)
         pod = PodDescriptor.from_job_request(
@@ -1618,7 +1618,7 @@ class TestPodContainerDevShmSettings:
         run_command_get_status: Callable[..., Awaitable[JobStatusItem]],
         command_assert_shm_64_mb: str,
     ) -> None:
-        resources = ContainerResources(cpu=0.1, memory_mb=128)
+        resources = ContainerResources(cpu=0.1, memory_mb=32)
         status_item = await run_command_get_status(resources, command_assert_shm_64_mb)
         assert status_item.status == JobStatus.SUCCEEDED
 
@@ -1628,7 +1628,7 @@ class TestPodContainerDevShmSettings:
         run_command_get_status: Callable[..., Awaitable[JobStatusItem]],
         command_assert_shm_64_mb: str,
     ) -> None:
-        resources = ContainerResources(cpu=0.1, memory_mb=128, shm=False)
+        resources = ContainerResources(cpu=0.1, memory_mb=32, shm=False)
         status_item = await run_command_get_status(resources, command_assert_shm_64_mb)
         assert status_item.status == JobStatus.SUCCEEDED
 
@@ -1638,7 +1638,7 @@ class TestPodContainerDevShmSettings:
         run_command_get_status: Callable[..., Awaitable[JobStatusItem]],
         command_assert_shm_64_mb: str,
     ) -> None:
-        resources = ContainerResources(cpu=0.1, memory_mb=128, shm=True)
+        resources = ContainerResources(cpu=0.1, memory_mb=32, shm=True)
         status_item = await run_command_get_status(resources, command_assert_shm_64_mb)
         assert status_item.status == JobStatus.FAILED
 
@@ -1647,7 +1647,7 @@ class TestPodContainerDevShmSettings:
         self, run_command_get_status: Callable[..., Awaitable[JobStatusItem]]
     ) -> None:
         command = "dd if=/dev/zero of=/dev/zero  bs=999999M  count=1"
-        resources = ContainerResources(cpu=0.1, memory_mb=128, shm=False)
+        resources = ContainerResources(cpu=0.1, memory_mb=32, shm=False)
         status_actual = await run_command_get_status(resources, command)
         status_expected = JobStatusItem.create(
             status=JobStatus.FAILED,
@@ -1672,7 +1672,7 @@ class TestPodContainerDevShmSettings:
         self, run_command_get_status: Callable[..., Awaitable[JobStatusItem]]
     ) -> None:
         command = "dd if=/dev/zero of=/dev/shm/test  bs=32M  count=1"
-        resources = ContainerResources(cpu=0.1, memory_mb=128, shm=False)
+        resources = ContainerResources(cpu=0.1, memory_mb=32, shm=False)
         status_actual = await run_command_get_status(resources, command)
         status_expected = JobStatusItem.create(status=JobStatus.SUCCEEDED, exit_code=0)
         assert status_actual == status_expected, f"actual: '{status_actual}'"
@@ -1717,7 +1717,7 @@ class TestNodeSelector:
         container = Container(
             image="ubuntu",
             command="true",
-            resources=ContainerResources(cpu=0.1, memory_mb=128, gpu=1),
+            resources=ContainerResources(cpu=0.1, memory_mb=32, gpu=1),
         )
         job = MyJob(
             orchestrator=kube_orchestrator,
@@ -1748,7 +1748,7 @@ class TestNodeSelector:
         container = Container(
             image="ubuntu",
             command="true",
-            resources=ContainerResources(cpu=0.1, memory_mb=128),
+            resources=ContainerResources(cpu=0.1, memory_mb=32),
         )
         async with kube_orchestrator_factory(
             kube_config=kube_config_node_job
@@ -1838,7 +1838,7 @@ class TestPreemption:
         container = Container(
             image="ubuntu",
             command="bash -c 'sleep infinity'",
-            resources=ContainerResources(cpu=0.1, memory_mb=128),
+            resources=ContainerResources(cpu=0.1, memory_mb=32),
         )
         job = MyJob(
             orchestrator=kube_orchestrator,
@@ -1872,7 +1872,7 @@ class TestPreemption:
         container = Container(
             image="ubuntu",
             command="bash -c 'sleep infinity'",
-            resources=ContainerResources(cpu=0.1, memory_mb=128),
+            resources=ContainerResources(cpu=0.1, memory_mb=32),
         )
         job = MyJob(
             orchestrator=kube_orchestrator,
@@ -1915,7 +1915,7 @@ class TestPreemption:
         container = Container(
             image="ubuntu",
             command="bash -c 'sleep infinity'",
-            resources=ContainerResources(cpu=0.1, memory_mb=128),
+            resources=ContainerResources(cpu=0.1, memory_mb=32),
         )
         job = MyJob(
             orchestrator=kube_orchestrator,
@@ -1955,7 +1955,7 @@ class TestPreemption:
         container = Container(
             image="ubuntu",
             command="bash -c 'sleep infinity'",
-            resources=ContainerResources(cpu=0.1, memory_mb=128),
+            resources=ContainerResources(cpu=0.1, memory_mb=32),
         )
         job = MyJob(
             orchestrator=kube_orchestrator,
@@ -2004,7 +2004,7 @@ class TestPreemption:
         container = Container(
             image="ubuntu",
             command="bash -c 'sleep infinity'",
-            resources=ContainerResources(cpu=0.1, memory_mb=128),
+            resources=ContainerResources(cpu=0.1, memory_mb=32),
         )
         job = MyJob(
             orchestrator=kube_orchestrator,
