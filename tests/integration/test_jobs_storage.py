@@ -1136,7 +1136,7 @@ class TestRedisJobsStorage:
         expected_alive_job_runtime = job_started_delay - time_pending_delta
         expected_finished_job_runtime = time_running_delta
 
-        def create_job(with_gpu: bool, finished: bool) -> JobRecord:
+        def create_job(cluster_name: str, with_gpu: bool, finished: bool) -> JobRecord:
             status_history = [
                 JobStatusItem.create(JobStatus.PENDING, transition_time=job_started_at),
                 JobStatusItem.create(JobStatus.RUNNING, transition_time=job_running_at),
@@ -1150,21 +1150,29 @@ class TestRedisJobsStorage:
             return JobRecord.create(
                 owner=owner,
                 request=self._create_job_request(with_gpu),
-                cluster_name="test-cluster",
+                cluster_name=cluster_name,
                 status_history=JobStatusHistory(status_history),
             )
 
         jobs_with_gpu = [
-            create_job(with_gpu=True, finished=False),
-            create_job(with_gpu=True, finished=False),
-            create_job(with_gpu=True, finished=True),
-            create_job(with_gpu=True, finished=True),
+            create_job(cluster_name="test-cluster1", with_gpu=True, finished=False),
+            create_job(cluster_name="test-cluster1", with_gpu=True, finished=False),
+            create_job(cluster_name="test-cluster1", with_gpu=True, finished=True),
+            create_job(cluster_name="test-cluster1", with_gpu=True, finished=True),
+            create_job(cluster_name="test-cluster2", with_gpu=True, finished=False),
+            create_job(cluster_name="test-cluster2", with_gpu=True, finished=False),
+            create_job(cluster_name="test-cluster2", with_gpu=True, finished=True),
+            create_job(cluster_name="test-cluster2", with_gpu=True, finished=True),
         ]
         jobs_no_gpu = [
-            create_job(with_gpu=False, finished=False),
-            create_job(with_gpu=False, finished=False),
-            create_job(with_gpu=False, finished=True),
-            create_job(with_gpu=False, finished=True),
+            create_job(cluster_name="test-cluster1", with_gpu=False, finished=False),
+            create_job(cluster_name="test-cluster1", with_gpu=False, finished=False),
+            create_job(cluster_name="test-cluster1", with_gpu=False, finished=True),
+            create_job(cluster_name="test-cluster1", with_gpu=False, finished=True),
+            create_job(cluster_name="test-cluster2", with_gpu=False, finished=False),
+            create_job(cluster_name="test-cluster2", with_gpu=False, finished=False),
+            create_job(cluster_name="test-cluster2", with_gpu=False, finished=True),
+            create_job(cluster_name="test-cluster2", with_gpu=False, finished=True),
         ]
         storage = RedisJobsStorage(redis_client)
         for job in jobs_with_gpu + jobs_no_gpu:
@@ -1172,22 +1180,31 @@ class TestRedisJobsStorage:
                 pass
 
         job_filter = JobFilter(owners={owner})
-        actual_run_time = await storage.get_aggregated_run_time(job_filter)
+        actual_run_time_per_cluster = await storage.get_aggregated_run_time(job_filter)
 
         test_elapsed = current_datetime_factory() - test_started_at
 
         # 2x terminated GPU jobs, 2x GPU alive jobs
-        expected = 2 * expected_alive_job_runtime + 2 * expected_finished_job_runtime
-        actual_gpu = actual_run_time.total_gpu_run_time_delta
-        actual_non_gpu = actual_run_time.total_non_gpu_run_time_delta
+        actual_run_time1 = actual_run_time_per_cluster["test-cluster1"]
+        expected1 = 2 * expected_alive_job_runtime + 2 * expected_finished_job_runtime
+        actual_gpu1 = actual_run_time1.total_gpu_run_time_delta
+        actual_non_gpu1 = actual_run_time1.total_non_gpu_run_time_delta
+
+        actual_run_time2 = actual_run_time_per_cluster["test-cluster1"]
+        expected2 = 2 * expected_alive_job_runtime + 2 * expected_finished_job_runtime
+        actual_gpu2 = actual_run_time2.total_gpu_run_time_delta
+        actual_non_gpu2 = actual_run_time2.total_non_gpu_run_time_delta
 
         # NOTE (ajuszkowski, 4-Apr-2019) Because we don't serialize all fields of `Job`
         # (specifically, `Job.current_datetime_factory`, see issue #560),
         # all deserialized `Job` instances get the default value of
         # `current_datetime_factory`, so we cannot assert exact value
         # of `Job.get_run_time()` in this test
-        assert expected <= actual_gpu <= expected + 2 * test_elapsed
-        assert expected <= actual_non_gpu <= expected + 2 * test_elapsed
+        assert expected1 <= actual_gpu1 <= expected1 + 2 * test_elapsed
+        assert expected1 <= actual_non_gpu1 <= expected1 + 2 * test_elapsed
+
+        assert expected2 <= actual_gpu2 <= expected2 + 2 * test_elapsed
+        assert expected2 <= actual_non_gpu2 <= expected2 + 2 * test_elapsed
 
     @pytest.mark.asyncio
     async def test_get_jobs_by_ids_missing_only(

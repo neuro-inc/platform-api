@@ -84,7 +84,13 @@ class StatsHandler:
         cluster_config = await self.jobs_service.get_cluster_config(user)
 
         run_time_filter = JobFilter(owners={user.name})
-        run_time = await self.jobs_storage.get_aggregated_run_time(run_time_filter)
+        run_time_per_cluster = await self.jobs_storage.get_aggregated_run_time(
+            run_time_filter
+        )
+        run_time = run_time_per_cluster.get(cluster_config.name) or AggregatedRunTime(
+            total_gpu_run_time_delta=timedelta(),
+            total_non_gpu_run_time_delta=timedelta(),
+        )
 
         quota_payload = convert_run_time_to_response(user.quota)
         jobs_payload = convert_run_time_to_response(run_time)

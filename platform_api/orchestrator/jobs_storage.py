@@ -117,7 +117,9 @@ class JobsStorage(ABC):
         return await self.get_all_jobs(filt)
 
     @abstractmethod
-    async def get_aggregated_run_time(self, job_filter: JobFilter) -> AggregatedRunTime:
+    async def get_aggregated_run_time(
+        self, job_filter: JobFilter
+    ) -> Dict[str, AggregatedRunTime]:
         pass
 
     async def migrate(self) -> bool:
@@ -188,20 +190,36 @@ class InMemoryJobsStorage(JobsStorage):
                 jobs.append(job)
         return jobs
 
-    async def get_aggregated_run_time(self, job_filter: JobFilter) -> AggregatedRunTime:
+    async def get_aggregated_run_time(
+        self, job_filter: JobFilter
+    ) -> Dict[str, AggregatedRunTime]:
         # TODO (ajuszkowski 4-Apr-2019) add a test on this method if it's used anywhere
         jobs = await self.get_all_jobs(job_filter)
-        gpu_run_time_delta, non_gpu_run_time_delta = timedelta(), timedelta()
+        default_run_time_delta = (timedelta(), timedelta())
+        aggregated_run_times: Dict[str, Tuple[timedelta, timedelta]] = {}
         for job in jobs:
+            gpu_run_time_delta, non_gpu_run_time_delta = aggregated_run_times.get(
+                job.cluster_name, default_run_time_delta
+            )
             job_run_time = job.get_run_time()
             if job.has_gpu:
                 gpu_run_time_delta += job_run_time
             else:
                 non_gpu_run_time_delta += job_run_time
-        return AggregatedRunTime(
-            total_gpu_run_time_delta=gpu_run_time_delta,
-            total_non_gpu_run_time_delta=non_gpu_run_time_delta,
-        )
+            aggregated_run_times[job.cluster_name] = (
+                gpu_run_time_delta,
+                non_gpu_run_time_delta,
+            )
+        return {
+            cluster_name: AggregatedRunTime(
+                total_gpu_run_time_delta=gpu_run_time_delta,
+                total_non_gpu_run_time_delta=non_gpu_run_time_delta,
+            )
+            for cluster_name, (
+                gpu_run_time_delta,
+                non_gpu_run_time_delta,
+            ) in aggregated_run_times.items()
+        }
 
     async def get_jobs_for_deletion(
         self, *, delay: timedelta = timedelta()
@@ -530,7 +548,9 @@ class RedisJobsStorage(JobsStorage):
         jobs = await self._get_jobs(job_ids)
         return [job for job in jobs if job.should_be_deleted(delay=delay)]
 
-    async def get_aggregated_run_time(self, job_filter: JobFilter) -> AggregatedRunTime:
+    async def get_aggregated_run_time(
+        self, job_filter: JobFilter
+    ) -> Dict[str, AggregatedRunTime]:
         # NOTE (ajuszkowski 4-Apr-2019): because of possible high number of jobs
         # submitted by a user, we need to process all job separately iterating
         # by job-ids not by job objects in order not to store them all in memory
@@ -541,7 +561,8 @@ class RedisJobsStorage(JobsStorage):
             name=job_filter.name,
         )
 
-        gpu_run_time, non_gpu_run_time = timedelta(), timedelta()
+        default_run_time = (timedelta(), timedelta())
+        aggregated_run_times: Dict[str, Tuple[timedelta, timedelta]] = {}
         for job_id_chunk in self._iterate_in_chunks(jobs_ids, chunk_size=10):
             keys = [self._generate_job_key(job_id) for job_id in job_id_chunk if job_id]
             jobs = [
@@ -549,16 +570,29 @@ class RedisJobsStorage(JobsStorage):
                 for payload in await self._client.mget(*keys)
             ]
             for job in jobs:
+                gpu_run_time, non_gpu_run_time = aggregated_run_times.get(
+                    job.cluster_name, default_run_time
+                )
                 job_run_time = job.get_run_time()
                 if job.has_gpu:
                     gpu_run_time += job_run_time
                 else:
                     non_gpu_run_time += job_run_time
+                aggregated_run_times[job.cluster_name] = (
+                    gpu_run_time,
+                    non_gpu_run_time,
+                )
 
-        return AggregatedRunTime(
-            total_gpu_run_time_delta=gpu_run_time,
-            total_non_gpu_run_time_delta=non_gpu_run_time,
-        )
+        return {
+            cluster_name: AggregatedRunTime(
+                total_gpu_run_time_delta=gpu_run_time,
+                total_non_gpu_run_time_delta=non_gpu_run_time,
+            )
+            for cluster_name, (
+                gpu_run_time,
+                non_gpu_run_time,
+            ) in aggregated_run_times.items()
+        }
 
     async def migrate(self) -> bool:
         version = int(await self._client.get("version") or "0")

@@ -1,8 +1,14 @@
+from datetime import datetime, timedelta
 from typing import Any
 
 import pytest
 
-from platform_api.orchestrator.job import JobRecord, JobRequest, JobStatus
+from platform_api.orchestrator.job import (
+    AggregatedRunTime,
+    JobRecord,
+    JobRequest,
+    JobStatus,
+)
 from platform_api.orchestrator.job_request import Container, ContainerResources
 from platform_api.orchestrator.jobs_storage import (
     InMemoryJobsStorage,
@@ -18,10 +24,15 @@ class TestInMemoryJobsStorage:
         jobs = await jobs_storage.get_all_jobs()
         assert not jobs
 
-    def _create_job_request(self) -> JobRequest:
+    def _create_job_request(self, is_gpu_job: bool = False) -> JobRequest:
         return JobRequest.create(
             Container(
-                image="testimage", resources=ContainerResources(cpu=1, memory_mb=128)
+                image="testimage",
+                resources=ContainerResources(
+                    cpu=1, memory_mb=128, gpu=1, gpu_model_id="nvidia-tesla-k80"
+                )
+                if is_gpu_job
+                else ContainerResources(cpu=1, memory_mb=128),
             )
         )
 
@@ -31,6 +42,26 @@ class TestInMemoryJobsStorage:
         return JobRecord.create(
             request=self._create_job_request(), cluster_name=cluster_name, **kwargs
         )
+
+    def _create_finished_job(
+        self,
+        run_time: timedelta,
+        is_gpu_job: bool = False,
+        job_status: JobStatus = JobStatus.SUCCEEDED,
+        cluster_name: str = "test-cluster",
+        **kwargs: Any
+    ) -> JobRecord:
+        job = JobRecord.create(
+            request=self._create_job_request(is_gpu_job=is_gpu_job),
+            cluster_name=cluster_name,
+            **kwargs
+        )
+        current_time = datetime.utcnow()
+        job.set_status(
+            JobStatus.RUNNING, current_datetime_factory=lambda: current_time - run_time
+        )
+        job.set_status(job_status, current_datetime_factory=lambda: current_time)
+        return job
 
     @pytest.mark.asyncio
     async def test_set_get_job(self) -> None:
@@ -84,6 +115,79 @@ class TestInMemoryJobsStorage:
         with pytest.raises(JobStorageJobFoundError):
             async with jobs_storage.try_create_job(job):
                 pass
+
+    @pytest.mark.asyncio
+    async def test_get_aggregated_run_time(self) -> None:
+        jobs_storage = InMemoryJobsStorage()
+        await jobs_storage.set_job(
+            self._create_finished_job(
+                cluster_name="test-cluster-1",
+                is_gpu_job=False,
+                run_time=timedelta(minutes=1),
+            )
+        )
+        await jobs_storage.set_job(
+            self._create_finished_job(
+                cluster_name="test-cluster-1",
+                is_gpu_job=False,
+                run_time=timedelta(minutes=2),
+            )
+        )
+        await jobs_storage.set_job(
+            self._create_finished_job(
+                cluster_name="test-cluster-1",
+                is_gpu_job=True,
+                run_time=timedelta(minutes=3),
+            )
+        )
+        await jobs_storage.set_job(
+            self._create_finished_job(
+                cluster_name="test-cluster-1",
+                is_gpu_job=True,
+                run_time=timedelta(minutes=4),
+            )
+        )
+        await jobs_storage.set_job(
+            self._create_finished_job(
+                cluster_name="test-cluster-2", run_time=timedelta(minutes=5),
+            )
+        )
+        result = await jobs_storage.get_aggregated_run_time(JobFilter())
+
+        assert result == {
+            "test-cluster-1": AggregatedRunTime(
+                total_gpu_run_time_delta=timedelta(minutes=7),
+                total_non_gpu_run_time_delta=timedelta(minutes=3),
+            ),
+            "test-cluster-2": AggregatedRunTime(
+                total_gpu_run_time_delta=timedelta(),
+                total_non_gpu_run_time_delta=timedelta(minutes=5),
+            ),
+        }
+
+    @pytest.mark.asyncio
+    async def test_get_aggregated_run_time_for_cluster(self) -> None:
+        jobs_storage = InMemoryJobsStorage()
+        await jobs_storage.set_job(
+            self._create_finished_job(
+                cluster_name="test-cluster-1", run_time=timedelta(minutes=1),
+            )
+        )
+        await jobs_storage.set_job(
+            self._create_finished_job(
+                cluster_name="test-cluster-2", run_time=timedelta(minutes=2),
+            )
+        )
+        result = await jobs_storage.get_aggregated_run_time(
+            JobFilter(clusters={"test-cluster-1"})
+        )
+
+        assert result == {
+            "test-cluster-1": AggregatedRunTime(
+                total_gpu_run_time_delta=timedelta(),
+                total_non_gpu_run_time_delta=timedelta(minutes=1),
+            ),
+        }
 
 
 class TestJobFilter:

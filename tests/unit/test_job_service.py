@@ -1,4 +1,5 @@
 from dataclasses import replace
+from datetime import datetime, timedelta
 from typing import Any, AsyncIterator, Callable
 from unittest.mock import MagicMock
 
@@ -12,6 +13,7 @@ from platform_api.config import JobsConfig
 from platform_api.orchestrator.job import (
     AggregatedRunTime,
     Job,
+    JobRecord,
     JobStatusItem,
     JobStatusReason,
 )
@@ -642,7 +644,7 @@ class TestJobsService:
             create_quota(time_gpu_minutes=0, time_non_gpu_minutes=100),
         ],
     )
-    async def test_raise_for_quota_raise_for_gpu(
+    async def test_raise_for_quota_raise_for_gpu_first_job(
         self,
         jobs_service: JobsService,
         job_request_factory: Callable[..., JobRequest],
@@ -655,6 +657,27 @@ class TestJobsService:
             await jobs_service.create_job(request, user)
 
     @pytest.mark.asyncio
+    async def test_raise_for_quota_raise_for_gpu_second_job(
+        self, jobs_service: JobsService, job_request_factory: Callable[..., JobRequest],
+    ) -> None:
+        quota = create_quota(time_gpu_minutes=100)
+        user = User(cluster_name="default", name="testuser", token="token", quota=quota)
+        request = job_request_factory(with_gpu=True)
+        await jobs_service.jobs_storage.set_job(
+            JobRecord.create(
+                request=request,
+                cluster_name=user.cluster_name,
+                owner=user.name,
+                status=JobStatus.RUNNING,
+                current_datetime_factory=lambda: datetime.utcnow()
+                - quota.total_gpu_run_time_delta,
+            )
+        )
+
+        with pytest.raises(GpuQuotaExceededError, match="GPU quota exceeded"):
+            await jobs_service.create_job(request, user)
+
+    @pytest.mark.asyncio
     @pytest.mark.parametrize(
         "quota",
         [
@@ -662,7 +685,7 @@ class TestJobsService:
             create_quota(time_non_gpu_minutes=0, time_gpu_minutes=100),
         ],
     )
-    async def test_raise_for_quota_raise_for_non_gpu(
+    async def test_raise_for_quota_raise_for_non_gpu_first_job(
         self,
         jobs_service: JobsService,
         job_request_factory: Callable[[], JobRequest],
@@ -670,6 +693,27 @@ class TestJobsService:
     ) -> None:
         user = User(cluster_name="default", name="testuser", token="token", quota=quota)
         request = job_request_factory()
+
+        with pytest.raises(NonGpuQuotaExceededError, match="non-GPU quota exceeded"):
+            await jobs_service.create_job(request, user)
+
+    @pytest.mark.asyncio
+    async def test_raise_for_quota_raise_for_non_gpu_second_job(
+        self, jobs_service: JobsService, job_request_factory: Callable[..., JobRequest],
+    ) -> None:
+        quota = create_quota(time_non_gpu_minutes=100)
+        user = User(cluster_name="default", name="testuser", token="token", quota=quota)
+        request = job_request_factory()
+        await jobs_service.jobs_storage.set_job(
+            JobRecord.create(
+                request=request,
+                cluster_name=user.cluster_name,
+                owner=user.name,
+                status=JobStatus.RUNNING,
+                current_datetime_factory=lambda: datetime.utcnow()
+                - quota.total_non_gpu_run_time_delta,
+            )
+        )
 
         with pytest.raises(NonGpuQuotaExceededError, match="non-GPU quota exceeded"):
             await jobs_service.create_job(request, user)
