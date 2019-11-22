@@ -1180,17 +1180,22 @@ class TestRedisJobsStorage:
                 pass
 
         job_filter = JobFilter(owners={owner})
-        actual_run_time_per_cluster = await storage.get_aggregated_run_time(job_filter)
+        actual_run_time = await storage.get_aggregated_run_time(job_filter)
+        actual_run_times = await storage.get_aggregated_run_time_by_clusters(job_filter)
 
         test_elapsed = current_datetime_factory() - test_started_at
 
         # 2x terminated GPU jobs, 2x GPU alive jobs
-        actual_run_time1 = actual_run_time_per_cluster["test-cluster1"]
+        expected = 2 * expected_alive_job_runtime + 2 * expected_finished_job_runtime
+        actual_gpu = actual_run_time.total_gpu_run_time_delta
+        actual_non_gpu = actual_run_time.total_non_gpu_run_time_delta
+
+        actual_run_time1 = actual_run_times["test-cluster-1"]
         expected1 = 2 * expected_alive_job_runtime + 2 * expected_finished_job_runtime
         actual_gpu1 = actual_run_time1.total_gpu_run_time_delta
         actual_non_gpu1 = actual_run_time1.total_non_gpu_run_time_delta
 
-        actual_run_time2 = actual_run_time_per_cluster["test-cluster1"]
+        actual_run_time2 = actual_run_times["test-cluster-1"]
         expected2 = 2 * expected_alive_job_runtime + 2 * expected_finished_job_runtime
         actual_gpu2 = actual_run_time2.total_gpu_run_time_delta
         actual_non_gpu2 = actual_run_time2.total_non_gpu_run_time_delta
@@ -1200,6 +1205,9 @@ class TestRedisJobsStorage:
         # all deserialized `Job` instances get the default value of
         # `current_datetime_factory`, so we cannot assert exact value
         # of `Job.get_run_time()` in this test
+        assert expected <= actual_gpu <= expected + 2 * test_elapsed
+        assert expected <= actual_non_gpu <= expected + 2 * test_elapsed
+
         assert expected1 <= actual_gpu1 <= expected1 + 2 * test_elapsed
         assert expected1 <= actual_non_gpu1 <= expected1 + 2 * test_elapsed
 

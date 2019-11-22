@@ -1,5 +1,5 @@
 from dataclasses import replace
-from datetime import datetime, timedelta
+from datetime import datetime
 from typing import Any, AsyncIterator, Callable
 from unittest.mock import MagicMock
 

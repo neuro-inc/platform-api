@@ -1,5 +1,4 @@
 import logging
-from datetime import timedelta
 from typing import AsyncIterator, Iterable, List, Optional, Sequence, Tuple
 
 from async_generator import asynccontextmanager
@@ -20,14 +19,7 @@ from platform_api.config import JobsConfig
 from platform_api.user import User
 
 from .base import Orchestrator
-from .job import (
-    AggregatedRunTime,
-    Job,
-    JobRecord,
-    JobStatusHistory,
-    JobStatusItem,
-    JobStatusReason,
-)
+from .job import Job, JobRecord, JobStatusHistory, JobStatusItem, JobStatusReason
 from .job_request import (
     JobError,
     JobException,
@@ -203,20 +195,13 @@ class JobsService:
             # the job may have been changed and a retry is needed.
             pass
 
-    async def _raise_for_run_time_quota(
-        self, user: User, cluster_name: str, gpu_requested: bool
-    ) -> None:
+    async def _raise_for_run_time_quota(self, user: User, gpu_requested: bool) -> None:
         if not user.has_quota():
             return
         quota = user.quota
-        run_time_filter = JobFilter(owners={user.name}, clusters={cluster_name})
-        run_time_per_cluster = await self._jobs_storage.get_aggregated_run_time(
-            run_time_filter
-        )
-        run_time = run_time_per_cluster.get(cluster_name) or AggregatedRunTime(
-            total_gpu_run_time_delta=timedelta(),
-            total_non_gpu_run_time_delta=timedelta(),
-        )
+        run_time_filter = JobFilter(owners={user.name})
+        run_time = await self._jobs_storage.get_aggregated_run_time(run_time_filter)
+        # Even GPU jobs require CPU, so always check CPU quota
         if run_time.total_non_gpu_run_time_delta >= quota.total_non_gpu_run_time_delta:
             raise NonGpuQuotaExceededError(user.name)
         if (
@@ -234,20 +219,18 @@ class JobsService:
         schedule_timeout: Optional[float] = None,
         max_run_time_minutes: Optional[int] = None,
     ) -> Tuple[Job, Status]:
-        # XXX cluster_name should be set for regular users
-        cluster_name = self._get_cluster_name(user.cluster_name)
 
         try:
             await self._raise_for_run_time_quota(
-                user,
-                cluster_name,
-                gpu_requested=bool(job_request.container.resources.gpu),
+                user, gpu_requested=bool(job_request.container.resources.gpu)
             )
         except QuotaException:
             await self._notifications_client.notify(
                 JobCannotStartQuotaReached(user.name)
             )
             raise
+        # XXX cluster_name should be set for regular users
+        cluster_name = self._get_cluster_name(user.cluster_name)
         record = JobRecord.create(
             request=job_request,
             owner=user.name,
