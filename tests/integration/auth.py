@@ -1,6 +1,14 @@
 import asyncio
 from dataclasses import dataclass
-from typing import AsyncGenerator, AsyncIterator, Awaitable, Callable, Dict, Optional
+from typing import (
+    AsyncGenerator,
+    AsyncIterator,
+    Awaitable,
+    Callable,
+    Dict,
+    Optional,
+    Sequence,
+)
 
 import aiodocker
 import pytest
@@ -19,7 +27,7 @@ from yarl import URL
 
 from platform_api.config import AuthConfig, OAuthConfig
 from platform_api.orchestrator.job import AggregatedRunTime
-from platform_api.user import User
+from platform_api.user import User, UserCluster
 from tests.conftest import random_str
 
 
@@ -151,13 +159,14 @@ async def regular_user_factory(
         name: Optional[str] = None,
         quota: Optional[Quota] = None,
         cluster_name: str = "default",
+        auth_clusters: Optional[Sequence[AuthCluster]] = None,
     ) -> _User:
         if not name:
             name = random_str()
         quota = quota or Quota()
-        user = AuthClientUser(
-            name=name, clusters=[AuthCluster(name=cluster_name, quota=quota)]
-        )
+        if auth_clusters is None:
+            auth_clusters = [AuthCluster(name=cluster_name, quota=quota)]
+        user = AuthClientUser(name=name, clusters=auth_clusters)
         await auth_client.add_user(user, token=admin_token)
         user_token = token_factory(user.name)
         return _User.create_from_auth_user(user, token=user_token)  # type: ignore

@@ -554,22 +554,32 @@ def config_factory(
 
 
 @pytest.fixture
-def cluster_config(
+def cluster_config_factory(
     kube_config: KubeConfig,
     storage_config_host: StorageConfig,
     registry_config: RegistryConfig,
+) -> Callable[..., ClusterConfig]:
+    def _f(cluster_name: str = "default") -> ClusterConfig:
+        ingress_config = IngressConfig(
+            storage_url=URL("https://neu.ro/api/v1/storage"),
+            monitoring_url=URL("https://neu.ro/api/v1/monitoring"),
+        )
+        return ClusterConfig(
+            name=cluster_name,
+            orchestrator=kube_config,
+            ingress=ingress_config,
+            storage=storage_config_host,
+            registry=registry_config,
+        )
+
+    return _f
+
+
+@pytest.fixture
+def cluster_config(
+    cluster_config_factory: Callable[..., ClusterConfig]
 ) -> ClusterConfig:
-    ingress_config = IngressConfig(
-        storage_url=URL("https://neu.ro/api/v1/storage"),
-        monitoring_url=URL("https://neu.ro/api/v1/monitoring"),
-    )
-    return ClusterConfig(
-        name="default",
-        orchestrator=kube_config,
-        ingress=ingress_config,
-        storage=storage_config_host,
-        registry=registry_config,
-    )
+    return cluster_config_factory()
 
 
 @pytest.fixture

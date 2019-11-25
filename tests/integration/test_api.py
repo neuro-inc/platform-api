@@ -15,8 +15,7 @@ from aiohttp.web import (
     HTTPUnauthorized,
 )
 from aiohttp.web_exceptions import HTTPCreated, HTTPNotFound
-from neuro_auth_client import Permission
-from neuro_auth_client.client import Quota
+from neuro_auth_client import Cluster as AuthCluster, Permission, Quota
 
 from platform_api.config import Config
 from tests.conftest import random_str
@@ -117,9 +116,18 @@ class TestApi:
 
     @pytest.mark.asyncio
     async def test_config(
-        self, api: ApiConfig, client: aiohttp.ClientSession, regular_user: _User
+        self,
+        api: ApiConfig,
+        client: aiohttp.ClientSession,
+        regular_user_factory: Callable[..., Awaitable[_User]],
     ) -> None:
         url = api.config_url
+        regular_user = await regular_user_factory(
+            auth_clusters=[
+                AuthCluster(name="default"),
+                AuthCluster(name="testcluster2"),
+            ]
+        )
         async with client.get(url, headers=regular_user.headers) as resp:
             assert resp.status == HTTPOk.status_code, await resp.text()
             result = await resp.json()
@@ -168,7 +176,10 @@ class TestApi:
                 ],
             }
             expected_payload: Dict[str, Any] = {
-                "clusters": [expected_cluster_payload],
+                "clusters": [
+                    expected_cluster_payload,
+                    {**expected_cluster_payload, **{"name": "testcluster2"}},
+                ],
                 **expected_cluster_payload,
             }
             assert result == expected_payload
