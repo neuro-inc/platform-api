@@ -1,7 +1,5 @@
 import logging
-import math
 from dataclasses import dataclass, replace
-from datetime import timedelta
 from pathlib import PurePath
 from typing import Any, Dict, List, Optional, Sequence, Set
 
@@ -91,7 +89,7 @@ def create_job_response_validator() -> t.Trafaret:
             t.Key("name", optional=True): create_job_name_validator(max_length=None),
             t.Key("description", optional=True): t.String,
             t.Key("schedule_timeout", optional=True): t.Float,
-            t.Key("run_time_minutes"): t.Int(gte=0),
+            t.Key("run_time_seconds"): t.Float(gte=0),
             t.Key("max_run_time_minutes", optional=True): t.Int,
         }
     )
@@ -192,7 +190,7 @@ def convert_job_to_job_response(job: Job, cluster_name: str) -> Dict[str, Any]:
         "ssh_server": job.ssh_server,
         "ssh_auth_server": job.ssh_server,  # deprecated
         "is_preemptible": job.is_preemptible,
-        "run_time_minutes": convert_finite_delta_to_minutes(job.get_run_time()),
+        "run_time_seconds": job.get_run_time().total_seconds(),
     }
     if job.name:
         response_payload["name"] = job.name
@@ -219,10 +217,6 @@ def convert_job_to_job_response(job: Job, cluster_name: str) -> Dict[str, Any]:
     if current_status.exit_code is not None:
         response_payload["history"]["exit_code"] = current_status.exit_code
     return response_payload
-
-
-def convert_finite_delta_to_minutes(run_time: timedelta) -> int:
-    return math.floor(run_time.total_seconds()) // 60
 
 
 def infer_permissions_from_container(

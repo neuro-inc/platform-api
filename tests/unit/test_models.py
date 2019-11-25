@@ -17,7 +17,6 @@ from platform_api.handlers.jobs_handler import (
     JobFilterException,
     JobFilterFactory,
     convert_container_volume_to_json,
-    convert_finite_delta_to_minutes,
     convert_job_container_to_json,
     convert_job_to_job_response,
     create_job_request_validator,
@@ -883,7 +882,7 @@ async def test_job_to_job_response(mock_orchestrator: MockOrchestrator) -> None:
         "ssh_server": "ssh://nobody@ssh-auth:22",
         "ssh_auth_server": "ssh://nobody@ssh-auth:22",
         "is_preemptible": False,
-        "run_time_minutes": 0,
+        "run_time_seconds": 0,
     }
 
 
@@ -896,7 +895,9 @@ async def test_job_to_job_response_nonzero_runtime(
 
     time_now = _mocked_datetime_factory()
     started_ago_delta = timedelta(minutes=10)  # job started 10 min ago: pending
-    pending_delta = timedelta(minutes=5)  # after 5 min: running (still running)
+    pending_delta = timedelta(
+        minutes=5, seconds=30
+    )  # after 5 min: running (still running)
     pending_at = time_now - started_ago_delta
     running_at = pending_at + pending_delta
     items = [
@@ -923,7 +924,7 @@ async def test_job_to_job_response_nonzero_runtime(
         current_datetime_factory=_mocked_datetime_factory,
     )
     response = convert_job_to_job_response(job, cluster_name="my-cluster")
-    assert response["run_time_minutes"] == 5
+    assert response["run_time_seconds"] == (time_now - running_at).total_seconds()
 
 
 @pytest.mark.asyncio
@@ -973,7 +974,7 @@ async def test_job_to_job_response_with_job_name_and_http_exposed(
         "ssh_server": "ssh://nobody@ssh-auth:22",
         "ssh_auth_server": "ssh://nobody@ssh-auth:22",
         "is_preemptible": False,
-        "run_time_minutes": 0,
+        "run_time_seconds": 0,
     }
 
 
@@ -1024,7 +1025,7 @@ async def test_job_to_job_response_with_job_name_and_http_exposed_too_long_name(
         "ssh_server": "ssh://nobody@ssh-auth:22",
         "ssh_auth_server": "ssh://nobody@ssh-auth:22",
         "is_preemptible": False,
-        "run_time_minutes": 0,
+        "run_time_seconds": 0,
     }
 
 
@@ -1047,17 +1048,3 @@ async def test_job_to_job_response_assert_non_empty_cluster_name(
     )
     with pytest.raises(AssertionError, match="must be already replaced"):
         convert_job_to_job_response(job, cluster_name="")
-
-
-class TestConvertRunTime:
-    def test_convert_finite_delta_to_minutes_nonzero(self) -> None:
-        delta = timedelta(minutes=10)
-        assert convert_finite_delta_to_minutes(delta) == 10
-
-    def test_convert_finite_delta_to_minutes_zero(self) -> None:
-        delta = timedelta(0)
-        assert convert_finite_delta_to_minutes(delta) == 0
-
-    def test_convert_finite_delta_to_minutes_seconds_floor(self) -> None:
-        delta = timedelta(minutes=10, seconds=59)
-        assert convert_finite_delta_to_minutes(delta) == 10
