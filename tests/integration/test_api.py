@@ -342,7 +342,7 @@ class TestJobs:
             assert resp.status == HTTPOk.status_code, await resp.text()
             result = await resp.json()
             run_time = result["run_time_seconds"]
-            assert 4 < run_time < ~6
+            assert 4 < run_time < 6
 
     @pytest.mark.asyncio
     async def test_incorrect_request(
@@ -2048,9 +2048,8 @@ class TestJobs:
             "ssh_server": "ssh://nobody@ssh-auth.platform.neuromation.io:22",
             "ssh_auth_server": "ssh://nobody@ssh-auth.platform.neuromation.io:22",
             "is_preemptible": False,
-            "run_time_seconds": mock.ANY,
+            "run_time_seconds": 0,
         }
-        assert response_payload["run_time_seconds"] == 0
 
     @pytest.mark.asyncio
     async def test_job_create_unknown_gpu_model(
@@ -2139,7 +2138,7 @@ class TestJobs:
                 "ssh_server": "ssh://nobody@ssh-auth.platform.neuromation.io:22",
                 "ssh_auth_server": "ssh://nobody@ssh-auth.platform.neuromation.io:22",
                 "is_preemptible": False,
-                "run_time_seconds": mock.ANY,
+                "run_time_seconds": 0,
             }
 
     @pytest.mark.asyncio
@@ -2223,7 +2222,7 @@ class TestJobs:
                 "ssh_server": "ssh://nobody@ssh-auth.platform.neuromation.io:22",
                 "ssh_auth_server": "ssh://nobody@ssh-auth.platform.neuromation.io:22",
                 "is_preemptible": False,
-                "run_time_seconds": mock.ANY,
+                "run_time_seconds": 0,
             }
 
 
