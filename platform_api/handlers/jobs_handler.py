@@ -288,7 +288,6 @@ class JobsHandler:
         request_payload = job_request_validator.check(orig_payload)
 
         cluster_name = request_payload["cluster_name"]
-
         cluster_config = await self._jobs_service.get_cluster_config(cluster_name)
 
         container = ContainerBuilder.from_container_payload(
