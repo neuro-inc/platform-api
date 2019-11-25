@@ -9,7 +9,6 @@ from aiohttp.web import (
     HTTPBadRequest,
     HTTPConflict,
     HTTPForbidden,
-    HTTPInternalServerError,
     HTTPNoContent,
     HTTPOk,
     HTTPUnauthorized,
@@ -104,7 +103,7 @@ class TestApi:
             async with client.post(url, headers=cluster_user.headers) as resp:
                 assert resp.status == HTTPOk.status_code, await resp.text()
                 result = await resp.json()
-                assert result == {"old_record_count": 1, "new_record_count": 1}
+                assert result == {"old_record_count": 2, "new_record_count": 1}
 
         # pass empty cluster config - all clusters should be deleted
         async with create_config_api([]):
@@ -515,16 +514,9 @@ class TestJobs:
         job_submit["name"] = job_name
         user = regular_user_with_missing_cluster_name
         async with client.post(url, headers=user.headers, json=job_submit) as response:
-            assert (
-                response.status == HTTPInternalServerError.status_code
-            ), await response.text()
+            assert response.status == HTTPForbidden.status_code, await response.text()
             payload = await response.json()
-            e = (
-                f"Unexpected exception ClusterNotFound: "
-                f"Cluster '{user.cluster_name}' not found. "
-                f"Path with query: /api/v1/jobs."
-            )
-            assert payload == {"error": e}
+            assert payload == {"error": "No clusters"}
 
     @pytest.mark.asyncio
     async def test_create_job_unknown_cluster_name(
@@ -572,7 +564,7 @@ class TestJobs:
         async with client.post(
             url, headers=regular_user.headers, json=job_submit
         ) as response:
-            assert response.status == HTTPBadRequest.status_code, await response.text()
+            assert response.status == HTTPForbidden.status_code, await response.text()
             payload = await response.json()
             assert payload == {"error": "No clusters"}
 

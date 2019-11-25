@@ -409,12 +409,12 @@ class JobsService:
 
     async def get_user_cluster_configs(self, user: User) -> List[ClusterConfig]:
         configs = []
-        for cluster in user.clusters:
+        for user_cluster in user.clusters:
             try:
                 async with self._get_cluster(
-                    cluster.name, tolerate_unavailable=True
-                ) as config:
-                    configs.append(config)
+                    user_cluster.name, tolerate_unavailable=True
+                ) as cluster:
+                    configs.append(cluster.config)
             except ClusterNotFound:
                 pass
         return configs

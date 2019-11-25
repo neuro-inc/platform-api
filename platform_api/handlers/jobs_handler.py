@@ -1,3 +1,4 @@
+import json
 import logging
 from dataclasses import dataclass, replace
 from pathlib import PurePath
@@ -267,7 +268,10 @@ class JobsHandler:
         # TODO: rework `gpu_models` to be retrieved from `cluster_config`
         cluster_configs = await self._jobs_service.get_user_cluster_configs(user)
         if not cluster_configs:
-            raise ValueError("No clusters")
+            raise aiohttp.web.HTTPForbidden(
+                text=json.dumps({"error": "No clusters"}),
+                content_type="application/json",
+            )
         cluster_config = cluster_configs[0]
         gpu_models = await self._jobs_service.get_available_gpu_models(
             cluster_config.name
