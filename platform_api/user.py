@@ -33,7 +33,24 @@ class UserCluster:
 class User:
     name: str
     token: str = field(repr=False)
+
+    # NOTE: left this for backward compatibility with existing tests
+    quota: AggregatedRunTime = field(default=DEFAULT_QUOTA_NO_RESTRICTIONS)
+    cluster_name: str = ""
+
     clusters: List[UserCluster] = field(default_factory=list)
+
+    # NOTE: left this for backward compatibility with existing tests
+    def __post_init__(self) -> None:
+        if self.clusters:
+            object.__setattr__(self, "cluster_name", self.clusters[0].name)
+            object.__setattr__(self, "quota", self.clusters[0].quota)
+        else:
+            self.clusters.append(UserCluster(name=self.cluster_name, quota=self.quota))
+
+    # NOTE: left this for backward compatibility with existing tests
+    def has_quota(self) -> bool:
+        return self.quota != DEFAULT_QUOTA_NO_RESTRICTIONS
 
     def get_cluster(self, name: str) -> Optional[UserCluster]:
         for cluster in self.clusters:
