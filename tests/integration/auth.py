@@ -9,8 +9,12 @@ from aiohttp.hdrs import AUTHORIZATION
 from async_generator import asynccontextmanager
 from async_timeout import timeout
 from jose import jwt
-from neuro_auth_client import AuthClient, User as AuthClientUser
-from neuro_auth_client.client import Quota
+from neuro_auth_client import (
+    AuthClient,
+    Cluster as AuthCluster,
+    Quota,
+    User as AuthClientUser,
+)
 from yarl import URL
 
 from platform_api.config import AuthConfig, OAuthConfig
@@ -151,16 +155,12 @@ async def regular_user_factory(
         if not name:
             name = random_str()
         quota = quota or Quota()
-        user = AuthClientUser(name=name, quota=quota, cluster_name=cluster_name)
+        user = AuthClientUser(
+            name=name, clusters=[AuthCluster(name=cluster_name, quota=quota)]
+        )
         await auth_client.add_user(user, token=admin_token)
         user_token = token_factory(user.name)
-        user_quota = AggregatedRunTime.from_quota(user.quota)
-        return _User(  # noqa
-            name=user.name,
-            token=user_token,
-            quota=user_quota,
-            cluster_name=cluster_name,
-        )
+        return _User.create_from_auth_user(user, token=user_token)  # type: ignore
 
     return _factory
 

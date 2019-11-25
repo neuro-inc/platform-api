@@ -96,7 +96,7 @@ class ApiHandler:
             ]
             # NOTE: adding the cluster payload to the root document for
             # backward compatibility
-            data.update(data["clusters"])
+            data.update(data["clusters"][0])
         except HTTPUnauthorized:
             pass
 
