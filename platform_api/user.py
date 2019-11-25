@@ -1,9 +1,10 @@
 import logging
 from dataclasses import dataclass, field
+from typing import List, Optional
 
 from aiohttp.web import HTTPUnauthorized, Request
 from aiohttp_security.api import AUTZ_KEY, IDENTITY_KEY
-from neuro_auth_client import User as AuthUser
+from neuro_auth_client import Cluster as AuthCluster, User as AuthUser
 from yarl import URL
 
 from platform_api.orchestrator.job import (
@@ -16,14 +17,29 @@ logger = logging.getLogger(__name__)
 
 
 @dataclass(frozen=True)
-class User:
+class UserCluster:
     name: str
-    token: str = field(repr=False)
     quota: AggregatedRunTime = field(default=DEFAULT_QUOTA_NO_RESTRICTIONS)
-    cluster_name: str = ""
 
     def has_quota(self) -> bool:
         return self.quota != DEFAULT_QUOTA_NO_RESTRICTIONS
+
+    @classmethod
+    def create_from_auth_cluster(cls, cluster: AuthCluster) -> "UserCluster":
+        return cls(name=cluster.name, quota=AggregatedRunTime.from_quota(cluster.quota))
+
+
+@dataclass(frozen=True)
+class User:
+    name: str
+    token: str = field(repr=False)
+    clusters: List[UserCluster] = field(default_factory=list)
+
+    def get_cluster(self, name: str) -> Optional[UserCluster]:
+        for cluster in self.clusters:
+            if cluster.name == name:
+                return cluster
+        return None
 
     def to_job_uri(self) -> URL:
         return URL(f"job://{self.name}")
@@ -33,8 +49,9 @@ class User:
         return cls(
             name=auth_user.name,
             token=token,
-            quota=AggregatedRunTime.from_quota(auth_user.quota),
-            cluster_name=auth_user.cluster_name,
+            clusters=[
+                UserCluster.create_from_auth_cluster(c) for c in auth_user.clusters
+            ],
         )
 
 
