@@ -326,9 +326,10 @@ class TestJobs:
         jobs_client: JobsClient,
         regular_user: _User,
     ) -> None:
+        DELAY = 1
         headers = regular_user.headers
         url = api.jobs_base_url
-        job_submit["container"]["command"] = "sleep 5"
+        job_submit["container"]["command"] = f"sleep {DELAY}"
         async with client.post(url, headers=headers, json=job_submit) as resp:
             assert resp.status == HTTPAccepted.status_code, await resp.text()
             result = await resp.json()
@@ -342,7 +343,9 @@ class TestJobs:
             assert resp.status == HTTPOk.status_code, await resp.text()
             result = await resp.json()
             run_time = result["run_time_seconds"]
-            assert 4 < run_time < 6
+            # since jobs_poller works with delay 1 sec, we should give it time
+            # to actually kill the job
+            assert 0 < run_time < DELAY * 2.5
 
     @pytest.mark.asyncio
     async def test_incorrect_request(
@@ -1969,7 +1972,9 @@ class TestJobs:
             "is_preemptible": True,
             "run_time_seconds": mock.ANY,
         }
-        assert 0 < response_payload["run_time_seconds"] < 2
+        # since jobs_poller works with delay 1 sec, we should give it time
+        # to actually kill the job
+        assert 0 < response_payload["run_time_seconds"] < 2.5
 
     @pytest.mark.asyncio
     async def test_job_failed(
