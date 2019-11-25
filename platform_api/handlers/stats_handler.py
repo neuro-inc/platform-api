@@ -81,28 +81,41 @@ class StatsHandler:
             raise HTTPNotFound()
 
         user = User.create_from_auth_user(auth_user)
-        cluster_config = await self.jobs_service.get_cluster_config(user)
 
         run_time_filter = JobFilter(owners={user.name})
         run_times = await self.jobs_storage.get_aggregated_run_time_by_clusters(
             run_time_filter
         )
-        run_time = run_times.get(cluster_config.name, ZERO_RUN_TIME)
 
-        quota_payload = convert_run_time_to_response(user.quota)
-        jobs_payload = convert_run_time_to_response(run_time)
+        cluster_payloads = []
+        for cluster in user.clusters:
+            run_time = run_times.pop(cluster.name, ZERO_RUN_TIME)
+            cluster_payloads.append(
+                {
+                    "name": cluster.name,
+                    "quota": convert_run_time_to_response(cluster.quota),
+                    "jobs": convert_run_time_to_response(run_time),
+                }
+            )
+
+        # handling clusters previously available to the user
+        for cluster_name, run_time in run_times.items():
+            cluster_payloads.append(
+                {
+                    "name": cluster_name,
+                    # explicitly setting unavailable/exceeded "quota"
+                    "quota": convert_run_time_to_response(ZERO_RUN_TIME),
+                    "jobs": convert_run_time_to_response(run_time),
+                }
+            )
+
+        cluster_payload = cluster_payloads[0]
 
         response_payload = {
             "name": username,
-            "quota": quota_payload,
-            "jobs": jobs_payload,
-            "clusters": [
-                {
-                    "name": cluster_config.name,
-                    "quota": quota_payload,
-                    "jobs": jobs_payload,
-                }
-            ],
+            "quota": cluster_payload["quota"],
+            "jobs": cluster_payload["jobs"],
+            "clusters": cluster_payloads,
         }
         self._stats_response_validator.check(response_payload)
 
