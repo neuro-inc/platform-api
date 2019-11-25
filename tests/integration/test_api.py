@@ -2344,6 +2344,67 @@ class TestStats:
                 ],
             }
 
+    @pytest.mark.asyncio
+    async def test_user_stats_unavailable_clusters(
+        self,
+        api: ApiConfig,
+        auth_api: AuthApiConfig,
+        client: aiohttp.ClientSession,
+        job_submit: Dict[str, Any],
+        jobs_client: JobsClient,
+        admin_token: str,
+        regular_user: _User,
+    ) -> None:
+        admin_user = _User(name="admin", token=admin_token)
+        user = regular_user
+
+        async with client.post(
+            api.jobs_base_url, headers=user.headers, json=job_submit
+        ) as response:
+            assert response.status == HTTPAccepted.status_code, await response.text()
+            result = await response.json()
+            job_id = result["id"]
+            await jobs_client.long_polling_by_job_id(job_id=job_id, status="succeeded")
+
+        url = auth_api.auth_for_user_url(user.name)
+        payload = {"name": user.name, "cluster_name": "testcluster2"}
+        async with client.put(url, headers=admin_user.headers, json=payload) as resp:
+            assert resp.status == HTTPCreated.status_code, await resp.text()
+
+        url = api.stats_for_user_url(user.name)
+        async with client.get(url, headers=user.headers) as resp:
+            assert resp.status == HTTPOk.status_code, await resp.text()
+            result = await resp.json()
+            assert result == {
+                "name": user.name,
+                "jobs": {
+                    "total_gpu_run_time_minutes": 0,
+                    "total_non_gpu_run_time_minutes": 0,
+                },
+                "quota": {},
+                "clusters": [
+                    {
+                        "name": "testcluster2",
+                        "jobs": {
+                            "total_gpu_run_time_minutes": 0,
+                            "total_non_gpu_run_time_minutes": 0,
+                        },
+                        "quota": {},
+                    },
+                    {
+                        "name": "default",
+                        "jobs": {
+                            "total_gpu_run_time_minutes": mock.ANY,
+                            "total_non_gpu_run_time_minutes": mock.ANY,
+                        },
+                        "quota": {
+                            "total_gpu_run_time_minutes": 0,
+                            "total_non_gpu_run_time_minutes": 0,
+                        },
+                    },
+                ],
+            }
+
 
 class TestJobPolicyEnforcer:
     @pytest.mark.parametrize("has_gpu", [False, True])
