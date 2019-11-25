@@ -202,7 +202,10 @@ class JobsService:
             return
         quota = user_cluster.quota
         run_time_filter = JobFilter(owners={user.name}, clusters={user_cluster.name})
-        run_time = await self._jobs_storage.get_aggregated_run_time(run_time_filter)
+        run_times = await self._jobs_storage.get_aggregated_run_time_by_clusters(
+            run_time_filter
+        )
+        run_time = run_times.get(user_cluster.name, ZERO_RUN_TIME)
         # Even GPU jobs require CPU, so always check CPU quota
         if run_time.total_non_gpu_run_time_delta >= quota.total_non_gpu_run_time_delta:
             raise NonGpuQuotaExceededError(user.name)
