@@ -70,7 +70,7 @@ class JobsService:
         self._jobs_config = jobs_config
         self._notifications_client = notifications_client
 
-        self._max_deletion_attempts = 3
+        self._max_deletion_attempts = 10
 
     def get_cluster_name(self, job: Job) -> str:
         return self._get_cluster_name(job.cluster_name)

@@ -38,6 +38,10 @@ class AggregatedRunTime:
         )
 
 
+ZERO_RUN_TIME = AggregatedRunTime(
+    total_gpu_run_time_delta=timedelta(), total_non_gpu_run_time_delta=timedelta()
+)
+
 DEFAULT_QUOTA_NO_RESTRICTIONS: AggregatedRunTime = AggregatedRunTime.from_quota(Quota())
 DEFAULT_ORPHANED_JOB_OWNER = "compute"
 

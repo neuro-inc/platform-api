@@ -123,7 +123,8 @@ class TestApi:
         async with client.get(url, headers=regular_user.headers) as resp:
             assert resp.status == HTTPOk.status_code, await resp.text()
             result = await resp.json()
-            assert result == {
+            expected_cluster_payload = {
+                "name": "default",
                 "registry_url": "https://registry.dev.neuromation.io",
                 "storage_url": "https://neu.ro/api/v1/storage",
                 "users_url": "https://neu.ro/api/v1/users",
@@ -166,6 +167,11 @@ class TestApi:
                     },
                 ],
             }
+            expected_payload: Dict[str, Any] = {
+                "clusters": [expected_cluster_payload],
+                **expected_cluster_payload,
+            }
+            assert result == expected_payload
 
     @pytest.mark.asyncio
     async def test_config_with_oauth(
@@ -178,7 +184,8 @@ class TestApi:
         async with client.get(url, headers=regular_user.headers) as resp:
             assert resp.status == HTTPOk.status_code, await resp.text()
             result = await resp.json()
-            assert result == {
+            expected_cluster_payload = {
+                "name": "default",
                 "registry_url": "https://registry.dev.neuromation.io",
                 "storage_url": "https://neu.ro/api/v1/storage",
                 "users_url": "https://neu.ro/api/v1/users",
@@ -220,6 +227,8 @@ class TestApi:
                         "tpu": {"type": "v2-8", "software_version": "1.14"},
                     },
                 ],
+            }
+            expected_payload: Dict[str, Any] = {
                 "auth_url": "https://platform-auth0-url/authorize",
                 "token_url": "https://platform-auth0-url/oauth/token",
                 "client_id": "client_id",
@@ -231,7 +240,10 @@ class TestApi:
                     "http://127.0.0.1:54541",
                     "http://127.0.0.1:54542",
                 ],
+                "clusters": [expected_cluster_payload],
+                **expected_cluster_payload,
             }
+            assert result == expected_payload
 
 
 class TestJobs:
@@ -478,7 +490,7 @@ class TestJobs:
             assert payload == {"error": e}
 
     @pytest.mark.asyncio
-    async def test_create_job_missing_cluster_name(
+    async def test_create_job_user_has_unknown_cluster_name(
         self,
         api: ApiConfig,
         client: aiohttp.ClientSession,
@@ -504,6 +516,29 @@ class TestJobs:
             assert payload == {"error": e}
 
     @pytest.mark.asyncio
+    async def test_create_job_unknown_cluster_name(
+        self,
+        api: ApiConfig,
+        client: aiohttp.ClientSession,
+        job_submit: Dict[str, Any],
+        jobs_client: JobsClient,
+        regular_user: _User,
+    ) -> None:
+        job_name = f"test-job-name-{random_str()}"
+        url = api.jobs_base_url
+        job_submit["is_preemptible"] = True
+        job_submit["name"] = job_name
+        job_submit["cluster_name"] = "unknown"
+        async with client.post(
+            url, headers=regular_user.headers, json=job_submit
+        ) as response:
+            assert response.status == HTTPBadRequest.status_code, await response.text()
+            payload = await response.json()
+            assert payload == {
+                "error": "{'cluster_name': DataError(value is not exactly 'default')}"
+            }
+
+    @pytest.mark.asyncio
     async def test_create_job(
         self,
         api: ApiConfig,
@@ -520,6 +555,7 @@ class TestJobs:
         job_submit["container"]["command"] = "false"
         job_submit["container"]["http"]["requires_auth"] = True
         job_submit["schedule_timeout"] = 90
+        job_submit["cluster_name"] = "default"
         async with client.post(
             url, headers=regular_user.headers, json=job_submit
         ) as resp:
@@ -2188,6 +2224,16 @@ class TestStats:
                     "total_non_gpu_run_time_minutes": 0,
                 },
                 "quota": {},
+                "clusters": [
+                    {
+                        "name": "default",
+                        "jobs": {
+                            "total_gpu_run_time_minutes": 0,
+                            "total_non_gpu_run_time_minutes": 0,
+                        },
+                        "quota": {},
+                    }
+                ],
             }
 
     @pytest.mark.asyncio
@@ -2219,6 +2265,16 @@ class TestStats:
                     "total_non_gpu_run_time_minutes": 0,
                 },
                 "quota": {},
+                "clusters": [
+                    {
+                        "name": "default",
+                        "jobs": {
+                            "total_gpu_run_time_minutes": 0,
+                            "total_non_gpu_run_time_minutes": 0,
+                        },
+                        "quota": {},
+                    }
+                ],
             }
 
     @pytest.mark.asyncio
@@ -2243,6 +2299,19 @@ class TestStats:
                     "total_gpu_run_time_minutes": 123,
                     "total_non_gpu_run_time_minutes": 321,
                 },
+                "clusters": [
+                    {
+                        "name": "default",
+                        "jobs": {
+                            "total_gpu_run_time_minutes": 0,
+                            "total_non_gpu_run_time_minutes": 0,
+                        },
+                        "quota": {
+                            "total_gpu_run_time_minutes": 123,
+                            "total_non_gpu_run_time_minutes": 321,
+                        },
+                    }
+                ],
             }
 
 
@@ -2285,6 +2354,19 @@ class TestJobPolicyEnforcer:
                     "total_gpu_run_time_minutes": 123,
                     "total_non_gpu_run_time_minutes": 321,
                 },
+                "clusters": [
+                    {
+                        "name": "default",
+                        "jobs": {
+                            "total_gpu_run_time_minutes": 0,
+                            "total_non_gpu_run_time_minutes": 0,
+                        },
+                        "quota": {
+                            "total_gpu_run_time_minutes": 123,
+                            "total_non_gpu_run_time_minutes": 321,
+                        },
+                    }
+                ],
             }
 
         url = api.jobs_base_url

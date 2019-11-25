@@ -3,6 +3,7 @@ from dataclasses import dataclass, field
 
 from aiohttp.web import HTTPUnauthorized, Request
 from aiohttp_security.api import AUTZ_KEY, IDENTITY_KEY
+from neuro_auth_client import User as AuthUser
 from yarl import URL
 
 from platform_api.orchestrator.job import (
@@ -26,6 +27,15 @@ class User:
 
     def to_job_uri(self) -> URL:
         return URL(f"job://{self.name}")
+
+    @classmethod
+    def create_from_auth_user(cls, auth_user: AuthUser, *, token: str = "") -> "User":
+        return cls(
+            name=auth_user.name,
+            token=token,
+            quota=AggregatedRunTime.from_quota(auth_user.quota),
+            cluster_name=auth_user.cluster_name,
+        )
 
 
 async def untrusted_user(request: Request) -> User:
@@ -55,14 +65,7 @@ async def authorized_user(request: Request) -> User:
     autz_user = await autz_policy.authorized_user(identity)
     if autz_user is None:
         raise HTTPUnauthorized()
-    quota = AggregatedRunTime.from_quota(autz_user.quota)
-
-    return User(
-        name=autz_user.name,
-        cluster_name=autz_user.cluster_name,
-        token=identity,
-        quota=quota,
-    )
+    return User.create_from_auth_user(autz_user, token=identity)
 
 
 async def _get_identity(request: Request) -> str:
