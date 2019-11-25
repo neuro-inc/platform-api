@@ -265,10 +265,9 @@ class JobsHandler:
 
     async def _create_job_request_validator(self, user: User) -> t.Trafaret:
         # TODO: rework `gpu_models` to be retrieved from `cluster_config`
-        cluster_configs = await self._jobs_service.get_available_cluster_configs(user)
+        cluster_configs = await self._jobs_service.get_user_cluster_configs(user)
         if not cluster_configs:
-            # TODO: text=
-            raise aiohttp.web.HTTPForbidden()
+            raise ValueError("No clusters")
         cluster_config = cluster_configs[0]
         gpu_models = await self._jobs_service.get_available_gpu_models(
             cluster_config.name

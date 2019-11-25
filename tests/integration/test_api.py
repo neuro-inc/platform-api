@@ -550,6 +550,33 @@ class TestJobs:
             }
 
     @pytest.mark.asyncio
+    async def test_create_job_no_clusters(
+        self,
+        api: ApiConfig,
+        auth_api: AuthApiConfig,
+        client: aiohttp.ClientSession,
+        job_submit: Dict[str, Any],
+        jobs_client: JobsClient,
+        admin_token: str,
+        regular_user: _User,
+    ) -> None:
+        admin_user = _User(name="admin", token=admin_token)
+        user = regular_user
+
+        url = auth_api.auth_for_user_url(user.name)
+        payload = {"name": user.name, "cluster_name": "unknowncluster"}
+        async with client.put(url, headers=admin_user.headers, json=payload) as resp:
+            assert resp.status == HTTPCreated.status_code, await resp.text()
+
+        url = api.jobs_base_url
+        async with client.post(
+            url, headers=regular_user.headers, json=job_submit
+        ) as response:
+            assert response.status == HTTPBadRequest.status_code, await response.text()
+            payload = await response.json()
+            assert payload == {"error": "No clusters"}
+
+    @pytest.mark.asyncio
     async def test_create_job(
         self,
         api: ApiConfig,

@@ -407,8 +407,17 @@ class JobsService:
         async with self._get_cluster(name) as cluster:
             return cluster.config
 
-    async def get_available_cluster_configs(self, user: User) -> List[ClusterConfig]:
-        return [await self.get_cluster_config(c.name) for c in user.clusters]
+    async def get_user_cluster_configs(self, user: User) -> List[ClusterConfig]:
+        configs = []
+        for cluster in user.clusters:
+            try:
+                async with self._get_cluster(
+                    cluster.name, tolerate_unavailable=True
+                ) as config:
+                    configs.append(config)
+            except ClusterNotFound:
+                pass
+        return configs
 
     @asynccontextmanager
     async def _create_job_in_storage(

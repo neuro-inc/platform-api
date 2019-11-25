@@ -88,9 +88,7 @@ class ApiHandler:
 
         try:
             user = await authorized_user(request)
-            cluster_configs = await self._jobs_service.get_available_cluster_configs(
-                user
-            )
+            cluster_configs = await self._jobs_service.get_user_cluster_configs(user)
             data["clusters"] = [
                 self._convert_cluster_config_to_payload(c) for c in cluster_configs
             ]
