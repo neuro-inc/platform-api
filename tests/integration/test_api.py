@@ -2293,9 +2293,20 @@ class TestStats:
         self,
         api: ApiConfig,
         client: aiohttp.ClientSession,
-        regular_user_with_custom_quota: _User,
+        regular_user_factory: Callable[..., Awaitable[_User]],
     ) -> None:
-        user = regular_user_with_custom_quota
+        user = await regular_user_factory(
+            auth_clusters=[
+                AuthCluster(
+                    name="default",
+                    quota=Quota(
+                        total_gpu_run_time_minutes=123,
+                        total_non_gpu_run_time_minutes=321,
+                    ),
+                ),
+                AuthCluster(name="testcluster2"),
+            ]
+        )
         url = api.stats_for_user_url(user.name)
         async with client.get(url, headers=user.headers) as resp:
             assert resp.status == HTTPOk.status_code, await resp.text()
@@ -2321,7 +2332,15 @@ class TestStats:
                             "total_gpu_run_time_minutes": 123,
                             "total_non_gpu_run_time_minutes": 321,
                         },
-                    }
+                    },
+                    {
+                        "name": "testcluster2",
+                        "jobs": {
+                            "total_gpu_run_time_minutes": 0,
+                            "total_non_gpu_run_time_minutes": 0,
+                        },
+                        "quota": {},
+                    },
                 ],
             }
 
