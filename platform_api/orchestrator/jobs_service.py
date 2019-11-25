@@ -227,14 +227,18 @@ class JobsService:
         job_request: JobRequest,
         user: User,
         *,
-        cluster_name: str,
+        cluster_name: Optional[str] = None,
         job_name: Optional[str] = None,
         is_preemptible: bool = False,
         schedule_timeout: Optional[float] = None,
         max_run_time_minutes: Optional[int] = None,
     ) -> Tuple[Job, Status]:
-        user_cluster = user.get_cluster(cluster_name)
-        assert user_cluster
+        if cluster_name:
+            user_cluster = user.get_cluster(cluster_name)
+            assert user_cluster
+        else:
+            # NOTE: left this for backward compatibility with existing tests
+            user_cluster = user.clusters[0]
 
         try:
             await self._raise_for_run_time_quota(
