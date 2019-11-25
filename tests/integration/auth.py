@@ -27,7 +27,7 @@ from yarl import URL
 
 from platform_api.config import AuthConfig, OAuthConfig
 from platform_api.orchestrator.job import AggregatedRunTime
-from platform_api.user import User, UserCluster
+from platform_api.user import User
 from tests.conftest import random_str
 
 
