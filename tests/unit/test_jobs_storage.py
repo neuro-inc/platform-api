@@ -1,4 +1,4 @@
-from datetime import datetime, timedelta
+from datetime import timedelta
 from typing import Any
 
 import pytest
@@ -8,6 +8,7 @@ from platform_api.orchestrator.job import (
     JobRecord,
     JobRequest,
     JobStatus,
+    current_datetime_factory,
 )
 from platform_api.orchestrator.job_request import Container, ContainerResources
 from platform_api.orchestrator.jobs_storage import (
@@ -56,7 +57,7 @@ class TestInMemoryJobsStorage:
             cluster_name=cluster_name,
             **kwargs
         )
-        current_time = datetime.utcnow()
+        current_time = current_datetime_factory()
         job.set_status(
             JobStatus.RUNNING, current_datetime_factory=lambda: current_time - run_time
         )
