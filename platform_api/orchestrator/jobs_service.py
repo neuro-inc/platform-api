@@ -239,6 +239,7 @@ class JobsService:
         else:
             # NOTE: left this for backward compatibility with existing tests
             user_cluster = user.clusters[0]
+        cluster_name = user_cluster.name
 
         try:
             await self._raise_for_run_time_quota(
