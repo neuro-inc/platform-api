@@ -197,7 +197,7 @@ async def regular_user_with_custom_quota(
     return await regular_user_factory(
         None,
         Quota(total_gpu_run_time_minutes=123, total_non_gpu_run_time_minutes=321),
-        "default"
+        "default",
     )
 
 
