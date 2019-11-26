@@ -1944,6 +1944,7 @@ class TestJobs:
                     "reason": "Creating",
                     "description": None,
                     "created_at": mock.ANY,
+                    "run_time_seconds": 0,
                 },
                 "container": {
                     "command": command,
@@ -1961,7 +1962,6 @@ class TestJobs:
                 "ssh_server": "ssh://nobody@ssh-auth.platform.neuromation.io:22",
                 "ssh_auth_server": "ssh://nobody@ssh-auth.platform.neuromation.io:22",
                 "is_preemptible": True,
-                "run_time_seconds": 0,
             }
 
         response_payload = await jobs_client.long_polling_by_job_id(
@@ -1982,6 +1982,7 @@ class TestJobs:
                 "created_at": mock.ANY,
                 "started_at": mock.ANY,
                 "finished_at": mock.ANY,
+                "run_time_seconds": mock.ANY,
             },
             "container": {
                 "command": command,
@@ -1999,11 +2000,10 @@ class TestJobs:
             "ssh_server": "ssh://nobody@ssh-auth.platform.neuromation.io:22",
             "ssh_auth_server": "ssh://nobody@ssh-auth.platform.neuromation.io:22",
             "is_preemptible": True,
-            "run_time_seconds": mock.ANY,
         }
         # since jobs_poller works with delay 1 sec, we should give it time
         # to actually kill the job
-        assert 3 < response_payload["run_time_seconds"] < 6
+        assert 3 < response_payload["history"]["run_time_seconds"] < 6
 
     @pytest.mark.asyncio
     async def test_job_failed(
@@ -2060,6 +2060,7 @@ class TestJobs:
                 "started_at": mock.ANY,
                 "finished_at": mock.ANY,
                 "exit_code": 1,
+                "run_time_seconds": 0,
             },
             "container": {
                 "command": 'bash -c "echo Failed!; false"',
@@ -2082,7 +2083,6 @@ class TestJobs:
             "ssh_server": "ssh://nobody@ssh-auth.platform.neuromation.io:22",
             "ssh_auth_server": "ssh://nobody@ssh-auth.platform.neuromation.io:22",
             "is_preemptible": False,
-            "run_time_seconds": 0,
         }
 
     @pytest.mark.asyncio
@@ -2156,6 +2156,7 @@ class TestJobs:
                     "reason": "Creating",
                     "description": None,
                     "created_at": mock.ANY,
+                    "run_time_seconds": 0,
                 },
                 "container": {
                     "command": "true",
@@ -2172,7 +2173,6 @@ class TestJobs:
                 "ssh_server": "ssh://nobody@ssh-auth.platform.neuromation.io:22",
                 "ssh_auth_server": "ssh://nobody@ssh-auth.platform.neuromation.io:22",
                 "is_preemptible": False,
-                "run_time_seconds": 0,
             }
 
     @pytest.mark.asyncio
@@ -2241,6 +2241,7 @@ class TestJobs:
                     "reason": "Creating",
                     "description": None,
                     "created_at": mock.ANY,
+                    "run_time_seconds": 0,
                 },
                 "container": {
                     "command": "true",
@@ -2256,7 +2257,6 @@ class TestJobs:
                 "ssh_server": "ssh://nobody@ssh-auth.platform.neuromation.io:22",
                 "ssh_auth_server": "ssh://nobody@ssh-auth.platform.neuromation.io:22",
                 "is_preemptible": False,
-                "run_time_seconds": 0,
             }
 
 

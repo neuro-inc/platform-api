@@ -870,6 +870,7 @@ async def test_job_to_job_response(mock_orchestrator: MockOrchestrator) -> None:
             "reason": None,
             "description": None,
             "created_at": mock.ANY,
+            "run_time_seconds": 0,
         },
         "container": {
             "image": "testimage",
@@ -882,7 +883,6 @@ async def test_job_to_job_response(mock_orchestrator: MockOrchestrator) -> None:
         "ssh_server": "ssh://nobody@ssh-auth:22",
         "ssh_auth_server": "ssh://nobody@ssh-auth:22",
         "is_preemptible": False,
-        "run_time_seconds": 0,
     }
 
 
@@ -924,7 +924,8 @@ async def test_job_to_job_response_nonzero_runtime(
         current_datetime_factory=_mocked_datetime_factory,
     )
     response = convert_job_to_job_response(job, cluster_name="my-cluster")
-    assert response["run_time_seconds"] == (time_now - running_at).total_seconds()
+    run_time = response["history"]["run_time_seconds"]
+    assert run_time == (time_now - running_at).total_seconds()
 
 
 @pytest.mark.asyncio
@@ -963,6 +964,7 @@ async def test_job_to_job_response_with_job_name_and_http_exposed(
             "reason": None,
             "description": None,
             "created_at": mock.ANY,
+            "run_time_seconds": 0,
         },
         "container": {
             "image": "testimage",
@@ -974,7 +976,6 @@ async def test_job_to_job_response_with_job_name_and_http_exposed(
         "ssh_server": "ssh://nobody@ssh-auth:22",
         "ssh_auth_server": "ssh://nobody@ssh-auth:22",
         "is_preemptible": False,
-        "run_time_seconds": 0,
     }
 
 
@@ -1014,6 +1015,7 @@ async def test_job_to_job_response_with_job_name_and_http_exposed_too_long_name(
             "reason": None,
             "description": None,
             "created_at": mock.ANY,
+            "run_time_seconds": 0,
         },
         "container": {
             "image": "testimage",
@@ -1025,7 +1027,6 @@ async def test_job_to_job_response_with_job_name_and_http_exposed_too_long_name(
         "ssh_server": "ssh://nobody@ssh-auth:22",
         "ssh_auth_server": "ssh://nobody@ssh-auth:22",
         "is_preemptible": False,
-        "run_time_seconds": 0,
     }
 
 

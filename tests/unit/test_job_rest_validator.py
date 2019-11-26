@@ -217,12 +217,12 @@ class TestJobResponseValidator:
                 "reason": None,
                 "description": None,
                 "created_at": "now",
+                "run_time_seconds": 10,
             },
             "container": container,
             "ssh_server": "nobody@ssh-auth",
             "ssh_auth_server": "nobody@ssh-auth",
             "is_preemptible": False,
-            "run_time_seconds": 10,
         }
         validator = create_job_response_validator()
         assert validator.check(response)
@@ -245,12 +245,12 @@ class TestJobResponseValidator:
                 "reason": None,
                 "description": "",
                 "created_at": "now",
+                "run_time_seconds": 10,
             },
             "container": container,
             "ssh_server": "nobody@ssh-auth",
             "ssh_auth_server": "nobody@ssh-auth",
             "is_preemptible": False,
-            "run_time_seconds": 10,
         }
         validator = create_job_response_validator()
         assert validator.check(response)
@@ -271,12 +271,12 @@ class TestJobResponseValidator:
                 "reason": None,
                 "description": None,
                 "created_at": "now",
+                "run_time_seconds": 10,
             },
             "container": container,
             "ssh_server": "nobody@ssh-auth",
             "ssh_auth_server": "nobody@ssh-auth",
             "is_preemptible": False,
-            "run_time_seconds": 10,
         }
         validator = create_job_response_validator()
         assert validator.check(response)
@@ -301,12 +301,12 @@ class TestJobResponseValidator:
                 "reason": None,
                 "description": None,
                 "created_at": "now",
+                "run_time_seconds": 10,
             },
             "container": container,
             "ssh_server": "nobody@ssh-auth",
             "ssh_auth_server": "nobody@ssh-auth",
             "is_preemptible": False,
-            "run_time_seconds": 10,
         }
         validator = create_job_response_validator()
         assert validator.check(response)
@@ -330,13 +330,13 @@ class TestJobResponseValidator:
                 "reason": None,
                 "description": None,
                 "created_at": "now",
+                "run_time_seconds": 10,
             },
             "container": container,
             "ssh_server": "nobody@ssh-auth",
             "ssh_auth_server": "nobody@ssh-auth",
             "is_preemptible": False,
             "max_run_time_minutes": 10,
-            "run_time_seconds": 10,
         }
         validator = create_job_response_validator()
         assert validator.check(response)
@@ -360,12 +360,12 @@ class TestJobResponseValidator:
                 "reason": None,
                 "description": None,
                 "created_at": "now",
+                "run_time_seconds": -10.0,
             },
             "container": container,
             "ssh_server": "nobody@ssh-auth",
             "ssh_auth_server": "nobody@ssh-auth",
             "is_preemptible": False,
-            "run_time_seconds": -10.0,
         }
         validator = create_job_response_validator()
         with pytest.raises(t.DataError, match="value is less than 0"):

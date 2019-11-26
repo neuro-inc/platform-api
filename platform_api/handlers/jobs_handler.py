@@ -90,7 +90,6 @@ def create_job_response_validator() -> t.Trafaret:
             t.Key("name", optional=True): create_job_name_validator(max_length=None),
             t.Key("description", optional=True): t.String,
             t.Key("schedule_timeout", optional=True): t.Float,
-            t.Key("run_time_seconds"): t.Float(gte=0),
             t.Key("max_run_time_minutes", optional=True): t.Int,
         }
     )
@@ -184,6 +183,7 @@ def convert_job_to_job_response(job: Job, cluster_name: str) -> Dict[str, Any]:
             "reason": current_status.reason,
             "description": current_status.description,
             "created_at": history.created_at_str,
+            "run_time_seconds": job.get_run_time().total_seconds(),
         },
         "container": convert_job_container_to_json(
             job.request.container, job.storage_config
@@ -191,7 +191,6 @@ def convert_job_to_job_response(job: Job, cluster_name: str) -> Dict[str, Any]:
         "ssh_server": job.ssh_server,
         "ssh_auth_server": job.ssh_server,  # deprecated
         "is_preemptible": job.is_preemptible,
-        "run_time_seconds": job.get_run_time().total_seconds(),
     }
     if job.name:
         response_payload["name"] = job.name
