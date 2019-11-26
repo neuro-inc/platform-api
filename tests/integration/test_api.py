@@ -535,10 +535,10 @@ class TestJobs:
         async with client.post(
             url, headers=regular_user.headers, json=job_submit
         ) as response:
-            assert response.status == HTTPBadRequest.status_code, await response.text()
+            assert response.status == HTTPForbidden.status_code, await response.text()
             payload = await response.json()
             assert payload == {
-                "error": "{'cluster_name': DataError(value is not exactly 'default')}"
+                "error": "User is not allowed to submit jobs to the specified cluster"
             }
 
     @pytest.mark.asyncio
