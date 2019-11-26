@@ -328,7 +328,7 @@ class TestJobs:
     ) -> None:
         headers = regular_user.headers
         url = api.jobs_base_url
-        job_submit["container"]["command"] = "sleep 1"
+        job_submit["container"]["command"] = "sleep 3"
         async with client.post(url, headers=headers, json=job_submit) as resp:
             assert resp.status == HTTPAccepted.status_code, await resp.text()
             result = await resp.json()
@@ -344,7 +344,7 @@ class TestJobs:
             run_time = result["run_time_seconds"]
             # since jobs_poller works with delay 1 sec, we should give it time
             # to actually kill the job
-            assert 0 < run_time < 2.5
+            assert 3 < run_time < 6
 
     @pytest.mark.asyncio
     async def test_incorrect_request(
@@ -1879,7 +1879,7 @@ class TestJobs:
         client: aiohttp.ClientSession,
         regular_user: _User,
     ) -> None:
-        command = "sleep 1"
+        command = "sleep 3"
         request_payload = {
             "container": {
                 "image": "ubuntu",
@@ -1973,7 +1973,7 @@ class TestJobs:
         }
         # since jobs_poller works with delay 1 sec, we should give it time
         # to actually kill the job
-        assert 0 < response_payload["run_time_seconds"] < 2.5
+        assert 3 < response_payload["run_time_seconds"] < 6
 
     @pytest.mark.asyncio
     async def test_job_failed(
