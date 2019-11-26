@@ -1704,6 +1704,7 @@ class TestNodeSelector:
 
         await kube_client.wait_pod_scheduled(pod_name, node_name)
 
+    @pytest.mark.xfail
     @pytest.mark.asyncio
     async def test_gpu(
         self,
@@ -1766,6 +1767,7 @@ class TestNodeSelector:
 
             await kube_client.wait_pod_scheduled(pod_name, node_name)
 
+    @pytest.mark.xfail
     @pytest.mark.asyncio
     async def test_tpu(
         self,
