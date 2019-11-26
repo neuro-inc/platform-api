@@ -310,7 +310,7 @@ class JobsHandler:
         for config in cluster_configs:
             if config.name == cluster_name:
                 return config
-        raise ClusterNotFound(cluster_name)
+        raise ClusterNotFound(cluster_name)  # pragma: no cover
 
     async def create_job(self, request: aiohttp.web.Request) -> aiohttp.web.Response:
         user = await authorized_user(request)
