@@ -12,7 +12,8 @@ from neuro_auth_client import AuthClient, Permission, check_permissions
 from neuro_auth_client.client import ClientSubTreeViewRoot
 from yarl import URL
 
-from platform_api.cluster_config import RegistryConfig, StorageConfig
+from platform_api.cluster import ClusterNotFound
+from platform_api.cluster_config import ClusterConfig, RegistryConfig, StorageConfig
 from platform_api.config import Config
 from platform_api.log import log_debug_time
 from platform_api.orchestrator.job import JOB_USER_NAMES_SEPARATOR, Job, JobStatusItem
@@ -264,15 +265,36 @@ class JobsHandler:
             )
         )
 
-    async def _create_job_request_validator(self, user: User) -> t.Trafaret:
-        # TODO: rework `gpu_models` to be retrieved from `cluster_config`
-        cluster_configs = await self._jobs_service.get_user_cluster_configs(user)
-        if not cluster_configs:
+    def _check_user_can_submit_jobs(
+        self, user_cluster_configs: Sequence[ClusterConfig]
+    ) -> None:
+        if not user_cluster_configs:
             raise aiohttp.web.HTTPForbidden(
                 text=json.dumps({"error": "No clusters"}),
                 content_type="application/json",
             )
-        cluster_config = cluster_configs[0]
+
+    def _check_user_can_submit_jobs_to_cluster(
+        self, user: User, job_cluster_name: str
+    ) -> None:
+        user_cluster_names = [cluster.name for cluster in user.clusters]
+        if job_cluster_name not in user_cluster_names:
+            raise aiohttp.web.HTTPForbidden(
+                text=json.dumps(
+                    {
+                        "error": (
+                            "User is not allowed to submit jobs "
+                            "to the specified cluster"
+                        )
+                    }
+                ),
+                content_type="application/json",
+            )
+
+    async def _create_job_request_validator(
+        self, cluster_config: ClusterConfig
+    ) -> t.Trafaret:
+        # TODO: rework `gpu_models` to be retrieved from `cluster_config`
         gpu_models = await self._jobs_service.get_available_gpu_models(
             cluster_config.name
         )
@@ -282,16 +304,28 @@ class JobsHandler:
             cluster_name=cluster_config.name,
         )
 
+    def _get_cluster_config(
+        self, cluster_configs: Sequence[ClusterConfig], cluster_name: str
+    ) -> ClusterConfig:
+        for config in cluster_configs:
+            if config.name == cluster_name:
+                return config
+        raise ClusterNotFound(cluster_name)
+
     async def create_job(self, request: aiohttp.web.Request) -> aiohttp.web.Response:
         user = await authorized_user(request)
 
         orig_payload = await request.json()
 
-        job_request_validator = await self._create_job_request_validator(user)
-        request_payload = job_request_validator.check(orig_payload)
+        cluster_configs = await self._jobs_service.get_user_cluster_configs(user)
+        self._check_user_can_submit_jobs(cluster_configs)
+        default_cluster_name = cluster_configs[0].name
+        cluster_name = orig_payload.get("cluster_name", default_cluster_name)
+        self._check_user_can_submit_jobs_to_cluster(user, cluster_name)
 
-        cluster_name = request_payload["cluster_name"]
-        cluster_config = await self._jobs_service.get_cluster_config(cluster_name)
+        cluster_config = self._get_cluster_config(cluster_configs, cluster_name)
+        job_request_validator = await self._create_job_request_validator(cluster_config)
+        request_payload = job_request_validator.check(orig_payload)
 
         container = ContainerBuilder.from_container_payload(
             request_payload["container"], storage_config=cluster_config.storage
