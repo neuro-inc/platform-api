@@ -12,7 +12,6 @@ from neuro_auth_client import AuthClient, Permission, check_permissions
 from neuro_auth_client.client import ClientSubTreeViewRoot
 from yarl import URL
 
-from platform_api.cluster import ClusterNotFound
 from platform_api.cluster_config import ClusterConfig, RegistryConfig, StorageConfig
 from platform_api.config import Config
 from platform_api.log import log_debug_time
@@ -65,6 +64,12 @@ def create_job_request_validator(
             t.Key("cluster_name", default=cluster_name): t.Atom(cluster_name),
         }
     )
+
+
+def create_job_cluster_name_validator(default_cluster_name: str) -> t.Trafaret:
+    return t.Dict(
+        {t.Key("cluster_name", default=default_cluster_name): t.String}
+    ).allow_extra("*")
 
 
 def create_job_response_validator() -> t.Trafaret:
@@ -274,23 +279,6 @@ class JobsHandler:
                 content_type="application/json",
             )
 
-    def _check_user_can_submit_jobs_to_cluster(
-        self, user: User, job_cluster_name: str
-    ) -> None:
-        user_cluster_names = [cluster.name for cluster in user.clusters]
-        if job_cluster_name not in user_cluster_names:
-            raise aiohttp.web.HTTPForbidden(
-                text=json.dumps(
-                    {
-                        "error": (
-                            "User is not allowed to submit jobs "
-                            "to the specified cluster"
-                        )
-                    }
-                ),
-                content_type="application/json",
-            )
-
     async def _create_job_request_validator(
         self, cluster_config: ClusterConfig
     ) -> t.Trafaret:
@@ -310,7 +298,16 @@ class JobsHandler:
         for config in cluster_configs:
             if config.name == cluster_name:
                 return config
-        raise ClusterNotFound(cluster_name)  # pragma: no cover
+        raise aiohttp.web.HTTPForbidden(
+            text=json.dumps(
+                {
+                    "error": (
+                        "User is not allowed to submit jobs " "to the specified cluster"
+                    )
+                }
+            ),
+            content_type="application/json",
+        )
 
     async def create_job(self, request: aiohttp.web.Request) -> aiohttp.web.Response:
         user = await authorized_user(request)
@@ -320,12 +317,16 @@ class JobsHandler:
         cluster_configs = await self._jobs_service.get_user_cluster_configs(user)
         self._check_user_can_submit_jobs(cluster_configs)
         default_cluster_name = cluster_configs[0].name
-        cluster_name = orig_payload.get("cluster_name", default_cluster_name)
-        self._check_user_can_submit_jobs_to_cluster(user, cluster_name)
 
+        job_cluster_name_validator = create_job_cluster_name_validator(
+            default_cluster_name
+        )
+        request_payload = job_cluster_name_validator.check(orig_payload)
+        self._check_user_can_submit_jobs(cluster_configs)
+        cluster_name = request_payload["cluster_name"]
         cluster_config = self._get_cluster_config(cluster_configs, cluster_name)
         job_request_validator = await self._create_job_request_validator(cluster_config)
-        request_payload = job_request_validator.check(orig_payload)
+        request_payload = job_request_validator.check(request_payload)
 
         container = ContainerBuilder.from_container_payload(
             request_payload["container"], storage_config=cluster_config.storage
