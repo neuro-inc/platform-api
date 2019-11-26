@@ -87,12 +87,13 @@ class ApiHandler:
 
         try:
             user = await authorized_user(request)
-            cluster_config = await self._jobs_service.get_cluster_config(user)
-            cluster_payload = self._convert_cluster_config_to_payload(cluster_config)
-            data["clusters"] = [cluster_payload]
+            cluster_configs = await self._jobs_service.get_user_cluster_configs(user)
+            data["clusters"] = [
+                self._convert_cluster_config_to_payload(c) for c in cluster_configs
+            ]
             # NOTE: adding the cluster payload to the root document for
             # backward compatibility
-            data.update(cluster_payload)
+            data.update(data["clusters"][0])
         except HTTPUnauthorized:
             pass
 

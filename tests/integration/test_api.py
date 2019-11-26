@@ -9,14 +9,12 @@ from aiohttp.web import (
     HTTPBadRequest,
     HTTPConflict,
     HTTPForbidden,
-    HTTPInternalServerError,
     HTTPNoContent,
     HTTPOk,
     HTTPUnauthorized,
 )
 from aiohttp.web_exceptions import HTTPCreated, HTTPNotFound
-from neuro_auth_client import Permission
-from neuro_auth_client.client import Quota
+from neuro_auth_client import Cluster as AuthCluster, Permission, Quota
 
 from platform_api.config import Config
 from tests.conftest import random_str
@@ -105,7 +103,7 @@ class TestApi:
             async with client.post(url, headers=cluster_user.headers) as resp:
                 assert resp.status == HTTPOk.status_code, await resp.text()
                 result = await resp.json()
-                assert result == {"old_record_count": 1, "new_record_count": 1}
+                assert result == {"old_record_count": 2, "new_record_count": 1}
 
         # pass empty cluster config - all clusters should be deleted
         async with create_config_api([]):
@@ -117,9 +115,18 @@ class TestApi:
 
     @pytest.mark.asyncio
     async def test_config(
-        self, api: ApiConfig, client: aiohttp.ClientSession, regular_user: _User
+        self,
+        api: ApiConfig,
+        client: aiohttp.ClientSession,
+        regular_user_factory: Callable[..., Awaitable[_User]],
     ) -> None:
         url = api.config_url
+        regular_user = await regular_user_factory(
+            auth_clusters=[
+                AuthCluster(name="default"),
+                AuthCluster(name="testcluster2"),
+            ]
+        )
         async with client.get(url, headers=regular_user.headers) as resp:
             assert resp.status == HTTPOk.status_code, await resp.text()
             result = await resp.json()
@@ -168,7 +175,10 @@ class TestApi:
                 ],
             }
             expected_payload: Dict[str, Any] = {
-                "clusters": [expected_cluster_payload],
+                "clusters": [
+                    expected_cluster_payload,
+                    {**expected_cluster_payload, **{"name": "testcluster2"}},
+                ],
                 **expected_cluster_payload,
             }
             assert result == expected_payload
@@ -504,16 +514,9 @@ class TestJobs:
         job_submit["name"] = job_name
         user = regular_user_with_missing_cluster_name
         async with client.post(url, headers=user.headers, json=job_submit) as response:
-            assert (
-                response.status == HTTPInternalServerError.status_code
-            ), await response.text()
+            assert response.status == HTTPForbidden.status_code, await response.text()
             payload = await response.json()
-            e = (
-                f"Unexpected exception ClusterNotFound: "
-                f"Cluster '{user.cluster_name}' not found. "
-                f"Path with query: /api/v1/jobs."
-            )
-            assert payload == {"error": e}
+            assert payload == {"error": "No clusters"}
 
     @pytest.mark.asyncio
     async def test_create_job_unknown_cluster_name(
@@ -537,6 +540,33 @@ class TestJobs:
             assert payload == {
                 "error": "{'cluster_name': DataError(value is not exactly 'default')}"
             }
+
+    @pytest.mark.asyncio
+    async def test_create_job_no_clusters(
+        self,
+        api: ApiConfig,
+        auth_api: AuthApiConfig,
+        client: aiohttp.ClientSession,
+        job_submit: Dict[str, Any],
+        jobs_client: JobsClient,
+        admin_token: str,
+        regular_user: _User,
+    ) -> None:
+        admin_user = _User(name="admin", token=admin_token)
+        user = regular_user
+
+        url = auth_api.auth_for_user_url(user.name)
+        payload = {"name": user.name, "cluster_name": "unknowncluster"}
+        async with client.put(url, headers=admin_user.headers, json=payload) as resp:
+            assert resp.status == HTTPCreated.status_code, await resp.text()
+
+        url = api.jobs_base_url
+        async with client.post(
+            url, headers=regular_user.headers, json=job_submit
+        ) as response:
+            assert response.status == HTTPForbidden.status_code, await response.text()
+            payload = await response.json()
+            assert payload == {"error": "No clusters"}
 
     @pytest.mark.asyncio
     async def test_create_job(
@@ -2282,9 +2312,20 @@ class TestStats:
         self,
         api: ApiConfig,
         client: aiohttp.ClientSession,
-        regular_user_with_custom_quota: _User,
+        regular_user_factory: Callable[..., Awaitable[_User]],
     ) -> None:
-        user = regular_user_with_custom_quota
+        user = await regular_user_factory(
+            auth_clusters=[
+                AuthCluster(
+                    name="default",
+                    quota=Quota(
+                        total_gpu_run_time_minutes=123,
+                        total_non_gpu_run_time_minutes=321,
+                    ),
+                ),
+                AuthCluster(name="testcluster2"),
+            ]
+        )
         url = api.stats_for_user_url(user.name)
         async with client.get(url, headers=user.headers) as resp:
             assert resp.status == HTTPOk.status_code, await resp.text()
@@ -2310,7 +2351,76 @@ class TestStats:
                             "total_gpu_run_time_minutes": 123,
                             "total_non_gpu_run_time_minutes": 321,
                         },
-                    }
+                    },
+                    {
+                        "name": "testcluster2",
+                        "jobs": {
+                            "total_gpu_run_time_minutes": 0,
+                            "total_non_gpu_run_time_minutes": 0,
+                        },
+                        "quota": {},
+                    },
+                ],
+            }
+
+    @pytest.mark.asyncio
+    async def test_user_stats_unavailable_clusters(
+        self,
+        api: ApiConfig,
+        auth_api: AuthApiConfig,
+        client: aiohttp.ClientSession,
+        job_submit: Dict[str, Any],
+        jobs_client: JobsClient,
+        admin_token: str,
+        regular_user: _User,
+    ) -> None:
+        admin_user = _User(name="admin", token=admin_token)
+        user = regular_user
+
+        async with client.post(
+            api.jobs_base_url, headers=user.headers, json=job_submit
+        ) as response:
+            assert response.status == HTTPAccepted.status_code, await response.text()
+            result = await response.json()
+            job_id = result["id"]
+            await jobs_client.long_polling_by_job_id(job_id=job_id, status="succeeded")
+
+        url = auth_api.auth_for_user_url(user.name)
+        payload = {"name": user.name, "cluster_name": "testcluster2"}
+        async with client.put(url, headers=admin_user.headers, json=payload) as resp:
+            assert resp.status == HTTPCreated.status_code, await resp.text()
+
+        url = api.stats_for_user_url(user.name)
+        async with client.get(url, headers=user.headers) as resp:
+            assert resp.status == HTTPOk.status_code, await resp.text()
+            result = await resp.json()
+            assert result == {
+                "name": user.name,
+                "jobs": {
+                    "total_gpu_run_time_minutes": 0,
+                    "total_non_gpu_run_time_minutes": 0,
+                },
+                "quota": {},
+                "clusters": [
+                    {
+                        "name": "testcluster2",
+                        "jobs": {
+                            "total_gpu_run_time_minutes": 0,
+                            "total_non_gpu_run_time_minutes": 0,
+                        },
+                        "quota": {},
+                    },
+                    {
+                        "name": "default",
+                        "jobs": {
+                            "total_gpu_run_time_minutes": mock.ANY,
+                            "total_non_gpu_run_time_minutes": mock.ANY,
+                        },
+                        "quota": {
+                            "total_gpu_run_time_minutes": 0,
+                            "total_non_gpu_run_time_minutes": 0,
+                        },
+                    },
                 ],
             }
 

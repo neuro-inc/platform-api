@@ -1,6 +1,14 @@
 import asyncio
 from dataclasses import dataclass
-from typing import AsyncGenerator, AsyncIterator, Awaitable, Callable, Dict, Optional
+from typing import (
+    AsyncGenerator,
+    AsyncIterator,
+    Awaitable,
+    Callable,
+    Dict,
+    Optional,
+    Sequence,
+)
 
 import aiodocker
 import pytest
@@ -9,8 +17,12 @@ from aiohttp.hdrs import AUTHORIZATION
 from async_generator import asynccontextmanager
 from async_timeout import timeout
 from jose import jwt
-from neuro_auth_client import AuthClient, User as AuthClientUser
-from neuro_auth_client.client import Quota
+from neuro_auth_client import (
+    AuthClient,
+    Cluster as AuthCluster,
+    Quota,
+    User as AuthClientUser,
+)
 from yarl import URL
 
 from platform_api.config import AuthConfig, OAuthConfig
@@ -147,20 +159,17 @@ async def regular_user_factory(
         name: Optional[str] = None,
         quota: Optional[Quota] = None,
         cluster_name: str = "default",
+        auth_clusters: Optional[Sequence[AuthCluster]] = None,
     ) -> _User:
         if not name:
             name = random_str()
         quota = quota or Quota()
-        user = AuthClientUser(name=name, quota=quota, cluster_name=cluster_name)
+        if auth_clusters is None:
+            auth_clusters = [AuthCluster(name=cluster_name, quota=quota)]
+        user = AuthClientUser(name=name, clusters=auth_clusters)
         await auth_client.add_user(user, token=admin_token)
         user_token = token_factory(user.name)
-        user_quota = AggregatedRunTime.from_quota(user.quota)
-        return _User(  # noqa
-            name=user.name,
-            token=user_token,
-            quota=user_quota,
-            cluster_name=cluster_name,
-        )
+        return _User.create_from_auth_user(user, token=user_token)  # type: ignore
 
     return _factory
 
@@ -188,7 +197,7 @@ async def regular_user_with_custom_quota(
     return await regular_user_factory(
         None,
         Quota(total_gpu_run_time_minutes=123, total_non_gpu_run_time_minutes=321),
-        None,
+        "default",
     )
 
 
