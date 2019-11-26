@@ -73,9 +73,14 @@ async def get_cluster_configs(
 
 @pytest.fixture
 async def api(
-    config: Config, cluster_config: ClusterConfig
+    config: Config, cluster_config_factory: Callable[..., ClusterConfig]
 ) -> AsyncIterator[ApiConfig]:
-    app = await create_app(config, get_cluster_configs([cluster_config]))
+    app = await create_app(
+        config,
+        get_cluster_configs(
+            [cluster_config_factory("default"), cluster_config_factory("testcluster2")]
+        ),
+    )
     runner = ApiRunner(app, port=8080)
     api_address = await runner.run()
     api_config = ApiConfig(host=api_address.host, port=api_address.port, runner=runner)

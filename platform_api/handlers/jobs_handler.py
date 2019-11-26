@@ -1,3 +1,4 @@
+import json
 import logging
 from dataclasses import dataclass, replace
 from pathlib import PurePath
@@ -267,8 +268,16 @@ class JobsHandler:
 
     async def _create_job_request_validator(self, user: User) -> t.Trafaret:
         # TODO: rework `gpu_models` to be retrieved from `cluster_config`
-        gpu_models = await self._jobs_service.get_available_gpu_models(user)
-        cluster_config = await self._jobs_service.get_cluster_config(user)
+        cluster_configs = await self._jobs_service.get_user_cluster_configs(user)
+        if not cluster_configs:
+            raise aiohttp.web.HTTPForbidden(
+                text=json.dumps({"error": "No clusters"}),
+                content_type="application/json",
+            )
+        cluster_config = cluster_configs[0]
+        gpu_models = await self._jobs_service.get_available_gpu_models(
+            cluster_config.name
+        )
         return create_job_request_validator(
             allowed_gpu_models=gpu_models,
             allowed_tpu_resources=cluster_config.orchestrator.tpu_resources,
@@ -283,7 +292,8 @@ class JobsHandler:
         job_request_validator = await self._create_job_request_validator(user)
         request_payload = job_request_validator.check(orig_payload)
 
-        cluster_config = await self._jobs_service.get_cluster_config(user)
+        cluster_name = request_payload["cluster_name"]
+        cluster_config = await self._jobs_service.get_cluster_config(cluster_name)
 
         container = ContainerBuilder.from_container_payload(
             request_payload["container"], storage_config=cluster_config.storage
@@ -303,12 +313,12 @@ class JobsHandler:
         job, _ = await self._jobs_service.create_job(
             job_request,
             user=user,
+            cluster_name=cluster_name,
             job_name=name,
             is_preemptible=is_preemptible,
             schedule_timeout=schedule_timeout,
             max_run_time_minutes=max_run_time_minutes,
         )
-        cluster_name = self._jobs_service.get_cluster_name(job)
         response_payload = convert_job_to_job_response(job, cluster_name)
         self._job_response_validator.check(response_payload)
         return aiohttp.web.json_response(
