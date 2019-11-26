@@ -97,25 +97,29 @@ class TestSerializers:
             "owner": "user1",
             "status": "pending",
             "container": {"resources": {"gpu": 1}},
+            "cluster_name": "cluster1",
         }
         job_info = _parse_job_info(payload)
         assert job_info.id == "job1"
         assert job_info.owner == "user1"
         assert job_info.status == JobStatus.PENDING
         assert job_info.is_gpu is True
+        assert job_info.cluster_name == "cluster1"
 
-    def test_parse_job_info_cpu(self) -> None:
+    def test_parse_job_info_non_gpu(self) -> None:
         payload = {
             "id": "job123",
             "owner": "user2",
             "status": "running",
             "container": {"resources": {"cpu": 4}},
+            "cluster_name": "cluster1",
         }
         job_info = _parse_job_info(payload)
         assert job_info.id == "job123"
         assert job_info.owner == "user2"
         assert job_info.status == JobStatus.RUNNING
         assert job_info.is_gpu is False
+        assert job_info.cluster_name == "cluster1"
 
 
 class TestPlatformApiClient:
@@ -156,11 +160,11 @@ class MockPlatformApiClient(PlatformApiClient):
 
     async def get_non_terminated_jobs(self) -> List[JobInfo]:
         return [
-            JobInfo("job1", JobStatus.RUNNING, "user1", False),
-            JobInfo("job2", JobStatus.PENDING, "user1", False),
-            JobInfo("job3", JobStatus.RUNNING, "user2", False),
-            JobInfo("job4", JobStatus.PENDING, "user2", False),
-            JobInfo("job5", JobStatus.PENDING, "user2", True),
+            JobInfo("job1", JobStatus.RUNNING, "user1", False, cluster_name="cluster1"),
+            JobInfo("job2", JobStatus.PENDING, "user1", False, cluster_name="cluster1"),
+            JobInfo("job3", JobStatus.RUNNING, "user2", False, cluster_name="cluster1"),
+            JobInfo("job4", JobStatus.PENDING, "user2", False, cluster_name="cluster1"),
+            JobInfo("job5", JobStatus.PENDING, "user2", True, cluster_name="cluster1"),
         ]
 
     async def get_user_stats(self, username: str) -> UserQuotaInfo:
@@ -372,30 +376,35 @@ async def mock_api() -> AsyncIterator[ApiConfig]:
                     "status": "running",
                     "owner": "user1",
                     "container": {"resources": {"cpu": 1.0}},
+                    "cluster_name": "cluster1",
                 },
                 {
                     "id": "job2",
                     "status": "pending",
                     "owner": "user1",
                     "container": {"resources": {"cpu": 1.0}},
+                    "cluster_name": "cluster1",
                 },
                 {
                     "id": "job3",
                     "status": "running",
                     "owner": "user2",
                     "container": {"resources": {"cpu": 1.0}},
+                    "cluster_name": "cluster1",
                 },
                 {
                     "id": "job4",
                     "status": "pending",
                     "owner": "user2",
                     "container": {"resources": {"cpu": 1.0}},
+                    "cluster_name": "cluster1",
                 },
                 {
                     "id": "job5",
                     "status": "pending",
                     "owner": "user2",
                     "container": {"resources": {"cpu": 1.0, "gpu": 0.5}},
+                    "cluster_name": "cluster1",
                 },
             ]
         }

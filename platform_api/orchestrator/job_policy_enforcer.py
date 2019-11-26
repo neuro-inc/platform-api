@@ -23,6 +23,7 @@ class JobInfo:
     status: JobStatus
     owner: str
     is_gpu: bool
+    cluster_name: str
 
 
 @dataclass(frozen=True)
@@ -72,6 +73,7 @@ def _parse_job_info(value: Dict[str, Any]) -> JobInfo:
         status=JobStatus(value["status"]),
         owner=value["owner"],
         is_gpu=bool(value["container"]["resources"].get("gpu")),
+        cluster_name=value["cluster_name"],
     )
 
 
