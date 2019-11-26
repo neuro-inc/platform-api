@@ -158,7 +158,13 @@ class TestPlatformApiClient:
 
 
 class MockPlatformApiClient(PlatformApiClient):
-    def __init__(self, gpu_quota_minutes: int = 10, cpu_quota_minutes: int = 10):
+    def __init__(
+        self,
+        gpu_quota_minutes: int = 10,
+        cpu_quota_minutes: int = 10,
+        kill_exception: Optional[Exception] = None,
+        stat_exception: Optional[Exception] = None,
+    ):
         self._gpu_quota = timedelta(minutes=gpu_quota_minutes)
         self._cpu_quota = timedelta(minutes=cpu_quota_minutes)
         self._killed_jobs: Set[str] = set()
@@ -245,7 +251,7 @@ class TestQuotaEnforcer:
     @pytest.mark.asyncio
     async def test_enforcer_error_handling_in_api(self) -> None:
         client = MockPlatformApiClient(
-            cpu_quota=1, kill_exception=Exception("Test exception")
+            cpu_quota_minutes=1, kill_exception=Exception("Test exception")
         )
         enforcer = QuotaEnforcer(client)
         # If enforcer handles ApiClient exceptions correctly, this will not fail
@@ -255,7 +261,7 @@ class TestQuotaEnforcer:
     @pytest.mark.asyncio
     async def test_enforcer_error_handling_in_check_user_quota(self) -> None:
         client = MockPlatformApiClient(
-            cpu_quota=1, stat_exception=Exception("Test exception")
+            cpu_quota_minutes=1, stat_exception=Exception("Test exception")
         )
         enforcer = QuotaEnforcer(client)
         # If enforcer handles exceptions correctly, this will not fail
