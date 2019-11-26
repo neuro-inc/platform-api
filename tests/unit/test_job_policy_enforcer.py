@@ -15,6 +15,7 @@ from typing import (
 import pytest
 from aiohttp import ClientResponseError, web
 from async_generator import asynccontextmanager
+from notifications_client.client import Client
 from yarl import URL
 
 from platform_api.config import JobPolicyEnforcerConfig
@@ -375,18 +376,22 @@ class TestQuotaEnforcer:
         await enforcer.enforce()
 
     @pytest.mark.asyncio
-    async def test_enforce_gpu_exceeded(self) -> None:
+    async def test_enforce_gpu_exceeded(
+        self, mock_notifications_client: Client
+    ) -> None:
         gpu_jobs = {"job5"}
         client = MockPlatformApiClient(gpu_quota_minutes=1)
-        enforcer = QuotaEnforcer(client)
+        enforcer = QuotaEnforcer(client, mock_notifications_client)
         await enforcer.enforce()
         assert client.killed_jobs == gpu_jobs
 
     @pytest.mark.asyncio
-    async def test_enforce_cpu_exceeded(self) -> None:
+    async def test_enforce_cpu_exceeded(
+        self, mock_notifications_client: Client
+    ) -> None:
         cpu_jobs = {f"job{i}" for i in range(1, 5)}
         client = MockPlatformApiClient(cpu_quota_minutes=1)
-        enforcer = QuotaEnforcer(client)
+        enforcer = QuotaEnforcer(client, mock_notifications_client)
         await enforcer.enforce()
         assert client.killed_jobs == cpu_jobs
 
@@ -624,12 +629,14 @@ class TestRealJobPolicyEnforcerClientWrapper:
                 await client.get_non_terminated_jobs()
 
     @pytest.mark.asyncio
-    async def test_enforcer_platform_unavailable(self, mock_api: ApiConfig) -> None:
+    async def test_enforcer_platform_unavailable(
+        self, mock_api: ApiConfig, mock_notifications_client: Client
+    ) -> None:
         wrong_config = JobPolicyEnforcerConfig(
             URL(f"{mock_api.endpoint}/wrong/base/path"), "token"
         )
         async with PlatformApiClient(wrong_config) as client:
-            enforcer = QuotaEnforcer(client)
+            enforcer = QuotaEnforcer(client, mock_notifications_client)
             with pytest.raises(ClientResponseError, match="404, message='Not Found"):
                 await enforcer.enforce()
 

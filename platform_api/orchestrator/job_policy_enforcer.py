@@ -8,6 +8,8 @@ from typing import Any, Dict, Iterable, List, Optional, Sequence
 
 import aiohttp
 from multidict import MultiDict
+from notifications_client import JobCannotStartQuotaReached
+from notifications_client.client import Client
 
 from platform_api.config import JobPolicyEnforcerConfig
 from platform_api.orchestrator.job import ZERO_RUN_TIME, AggregatedRunTime
@@ -198,8 +200,11 @@ class JobPolicyEnforcer:
 
 
 class QuotaEnforcer(JobPolicyEnforcer):
-    def __init__(self, platform_api_client: PlatformApiClient):
+    def __init__(
+        self, platform_api_client: PlatformApiClient, notifications_client: Client
+    ):
         self._platform_api_client = platform_api_client
+        self._notifications_client = notifications_client
 
     async def enforce(self) -> None:
         users_with_active_jobs = await self._get_active_users_and_jobs()
