@@ -352,9 +352,9 @@ class TestJobs:
             assert resp.status == HTTPOk.status_code, await resp.text()
             result = await resp.json()
             run_time = result["history"]["run_time_seconds"]
-            # since jobs_poller works with delay 1 sec, we should give it time
-            # to actually kill the job
-            assert 3 < run_time < 6
+            # since jobs_poller works with delay 1 sec for each transition,
+            # so we should give it time to actually kill the job
+            assert 3 - 2 < run_time < 3 + 2
 
     @pytest.mark.asyncio
     async def test_incorrect_request(
@@ -2001,9 +2001,10 @@ class TestJobs:
             "ssh_auth_server": "ssh://nobody@ssh-auth.platform.neuromation.io:22",
             "is_preemptible": True,
         }
-        # since jobs_poller works with delay 1 sec, we should give it time
-        # to actually kill the job
-        assert 3 < response_payload["history"]["run_time_seconds"] < 6
+        run_time = response_payload["history"]["run_time_seconds"]
+        # since jobs_poller works with delay 1 sec for each transition,
+        # so we should give it time to actually kill the job
+        assert 3 - 2 < run_time < 3 + 2
 
     @pytest.mark.asyncio
     async def test_job_failed(
