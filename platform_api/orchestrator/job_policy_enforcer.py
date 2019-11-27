@@ -1,6 +1,7 @@
 import abc
 import asyncio
 import contextlib
+import hashlib
 import logging
 from dataclasses import dataclass, field
 from datetime import timedelta
@@ -205,6 +206,7 @@ class QuotaEnforcer(JobPolicyEnforcer):
     ):
         self._platform_api_client = platform_api_client
         self._notifications_client = notifications_client
+        self._sent_quota_will_be_reached_soon_notifications: Set[str] = set()
 
     async def enforce(self) -> None:
         users_with_active_jobs = await self._get_active_users_and_jobs()
@@ -240,6 +242,17 @@ class QuotaEnforcer(JobPolicyEnforcer):
                 raise
             except Exception:
                 logger.exception("Failed to kill job %s", job_id)
+
+    def _store_sent_quota_notification(
+        self, username: str, cluster_name: str, resource_type: str, quota: int
+    ) -> None:
+        hash_object = hashlib.sha1(
+            username.encode()
+            + resource_type.encode()
+            + cluster_name.encode()
+            + str(quota).encode()
+        )
+        self._sent_quota_will_be_reached_soon_notifications.add(hash_object.hexdigest())
 
 
 class JobPolicyEnforcePoller:
