@@ -730,16 +730,15 @@ class TestJobsService:
         assert job.status == JobStatus.PENDING
 
     @pytest.mark.asyncio
-    async def test_create_job_quota_gpu_allows_cpu_exceeded_raise_for_gpu_job(
+    async def test_create_job_quota_gpu_allows_cpu_exceeded_ok_for_gpu_job(
         self, jobs_service: JobsService, job_request_factory: Callable[..., JobRequest]
     ) -> None:
-        # Even GPU-jobs require CPU
         quota = create_quota(time_gpu_minutes=100, time_non_gpu_minutes=0)
         user = User(cluster_name="default", name="testuser", token="token", quota=quota)
         request = job_request_factory(with_gpu=True)
 
-        with pytest.raises(NonGpuQuotaExceededError, match="non-GPU quota exceeded"):
-            await jobs_service.create_job(request, user)
+        job, _ = await jobs_service.create_job(request, user)
+        assert job.status == JobStatus.PENDING
 
     def test_get_cluster_name_non_empty(self, jobs_service: JobsService) -> None:
         mocked_job = MagicMock(cluster_name="my-cluster")
