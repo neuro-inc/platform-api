@@ -8,7 +8,7 @@ from typing import Any, Dict, Iterable, List, Optional, Sequence
 
 import aiohttp
 from multidict import MultiDict
-from notifications_client import JobCannotStartQuotaReached
+from notifications_client import QuotaResourceType, QuotaWillBeReachedSoon
 from notifications_client.client import Client
 
 from platform_api.config import JobPolicyEnforcerConfig
