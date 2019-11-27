@@ -564,10 +564,10 @@ class TestJobs:
         async with client.post(
             url, headers=regular_user.headers, json=job_submit
         ) as response:
-            assert response.status == HTTPBadRequest.status_code, await response.text()
+            assert response.status == HTTPForbidden.status_code, await response.text()
             payload = await response.json()
             assert payload == {
-                "error": "{'cluster_name': DataError(value is not exactly 'default')}"
+                "error": "User is not allowed to submit jobs to the specified cluster"
             }
 
     @pytest.mark.asyncio
@@ -2514,7 +2514,15 @@ class TestJobPolicyEnforcer:
                             "total_gpu_run_time_minutes": 123,
                             "total_non_gpu_run_time_minutes": 321,
                         },
-                    }
+                    },
+                    {
+                        "name": "testcluster2",
+                        "jobs": {
+                            "total_gpu_run_time_minutes": 0,
+                            "total_non_gpu_run_time_minutes": 0,
+                        },
+                        "quota": {},
+                    },
                 ],
             }
 
@@ -2524,24 +2532,24 @@ class TestJobPolicyEnforcer:
             job_submit["container"]["resources"]["gpu"] = 1
             job_submit["container"]["resources"]["gpu_model"] = "gpumodel"
 
-        async with client.post(url, headers=user.headers, json=job_submit) as resp:
-            assert resp.status == HTTPAccepted.status_code, await resp.text()
-            result = await resp.json()
-            assert result["status"] == "pending"
-            job_id = result["id"]
-            await user_jobs_client.long_polling_by_job_id(
-                job_id=job_id, status="pending"
-            )
+        job_default = await user_jobs_client.create_job(job_submit)
+        poll_status = "pending" if has_gpu else "running"
+        await user_jobs_client.long_polling_by_job_id(
+            job_id=job_default["id"], status=poll_status
+        )
 
-        # GPU jobs cannot run on minikube, so they get stuck in "pending" state
-        if not has_gpu:
-            await user_jobs_client.long_polling_by_job_id(
-                job_id=job_id, status="running"
-            )
+        job_submit["cluster_name"] = "testcluster2"
+        job_cluster2 = await user_jobs_client.create_job(job_submit)
+        await user_jobs_client.long_polling_by_job_id(
+            job_id=job_cluster2["id"], status=poll_status
+        )
 
         payload = {
             "name": user.name,
-            "quota": {quota_type: 0},
+            "clusters": [
+                {"name": "default", "quota": {quota_type: 0}},
+                {"name": "testcluster2", "quota": {}},
+            ],
         }
         url = auth_api.auth_for_user_url(user.name)
         async with client.put(url, headers=admin_user.headers, json=payload) as resp:
@@ -2552,8 +2560,12 @@ class TestJobPolicyEnforcer:
         #  enfoce-poller's interval, so we check up to 7 intervals:
         max_enforcing_time = config.job_policy_enforcer.interval_sec * 7
         await user_jobs_client.long_polling_by_job_id(
-            job_id=job_id,
+            job_id=job_default["id"],
             interval_s=0.1,
             status="succeeded",
             max_time=max_enforcing_time,
+        )
+
+        await user_jobs_client.long_polling_by_job_id(
+            job_id=job_cluster2["id"], status=poll_status
         )

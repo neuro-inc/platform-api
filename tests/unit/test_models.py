@@ -19,6 +19,7 @@ from platform_api.handlers.jobs_handler import (
     convert_container_volume_to_json,
     convert_job_container_to_json,
     convert_job_to_job_response,
+    create_job_cluster_name_validator,
     create_job_request_validator,
     infer_permissions_from_container,
 )
@@ -289,6 +290,50 @@ class TestContainerResponseValidator:
             "type": "v2-8",
             "software_version": "1.14",
         }
+
+
+class TestJobClusterNameValidator:
+    def test_without_cluster_name(self) -> None:
+        container = {
+            "image": "testimage",
+            "command": "arg1 arg2 arg3",
+            "resources": {"cpu": 0.1, "memory_mb": 16, "shm": True},
+            "ssh": {"port": 666},
+        }
+        request = {
+            "container": container,
+        }
+        validator = create_job_cluster_name_validator("default")
+        payload = validator.check(request)
+        assert payload["cluster_name"] == "default"
+
+    def test_with_cluster_name(self) -> None:
+        container = {
+            "image": "testimage",
+            "command": "arg1 arg2 arg3",
+            "resources": {"cpu": 0.1, "memory_mb": 16, "shm": True},
+            "ssh": {"port": 666},
+        }
+        request = {
+            "cluster_name": "testcluster",
+            "container": container,
+        }
+        validator = create_job_cluster_name_validator("default")
+        payload = validator.check(request)
+        assert payload["cluster_name"] == "testcluster"
+
+    def test_invalid_payload_type(self) -> None:
+        validator = create_job_cluster_name_validator("default")
+        with pytest.raises(DataError):
+            validator.check([])
+
+    def test_invalid_cluster_name_type(self) -> None:
+        request = {
+            "cluster_name": 123,
+        }
+        validator = create_job_cluster_name_validator("default")
+        with pytest.raises(DataError, match="value is not a string"):
+            validator.check(request)
 
 
 class TestJobRequestValidator:
