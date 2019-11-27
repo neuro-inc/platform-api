@@ -5,7 +5,7 @@ import hashlib
 import logging
 from dataclasses import dataclass, field
 from datetime import timedelta
-from typing import Any, Dict, Iterable, List, Optional, Sequence
+from typing import Any, Dict, Iterable, List, Optional, Sequence, Set
 
 import aiohttp
 from multidict import MultiDict
@@ -235,6 +235,13 @@ class QuotaEnforcer(JobPolicyEnforcer):
                     f"on cluster '{cluster_name}'"
                 )
                 jobs_to_delete.extend(cluster_jobs.gpu_ids)
+            await self._notify_for_quota(
+                user_name,
+                cluster_name,
+                cluster_stats.quota,
+                cluster_stats.jobs,
+                jobs_to_delete,
+            )
         for job_id in jobs_to_delete:
             try:
                 await self._platform_api_client.kill_job(job_id)
@@ -243,14 +250,48 @@ class QuotaEnforcer(JobPolicyEnforcer):
             except Exception:
                 logger.exception("Failed to kill job %s", job_id)
 
+    async def _notify_for_quota(
+        self,
+        username: str,
+        cluster_name: str,
+        quota: AggregatedRunTime,
+        jobs: AggregatedRunTime,
+        jobs_to_delete: List[str],
+    ) -> None:
+        # TODO: Extract to env variables?
+        CPU_QUOTA_NOTIFICATION_THRESHOLD = 0.9
+        GPU_QUOTA_NOTIFICATION_THRESHOLD = 0.9
+
+        # We only send notifications in this iteration unless we're about to kill
+        # some jobs. It might be the case we have some GPU jobs to kill plus
+        # CPU quota notification pending, but we'll send the notification
+        # on the next QuotaEnforcer iteration in a second
+        if len(jobs_to_delete) == 0:
+            if not await self._notify_quota_will_be_reached_soon(
+                username,
+                QuotaResourceType.NON_GPU,
+                jobs.total_non_gpu_run_time_delta.seconds,
+                quota.total_non_gpu_run_time_delta.seconds,
+                cluster_name,
+                CPU_QUOTA_NOTIFICATION_THRESHOLD,
+            ):
+                await self._notify_quota_will_be_reached_soon(
+                    username,
+                    QuotaResourceType.GPU,
+                    jobs.total_gpu_run_time_delta.seconds,
+                    quota.total_gpu_run_time_delta.seconds,
+                    cluster_name,
+                    GPU_QUOTA_NOTIFICATION_THRESHOLD,
+                )
+
     async def _notify_quota_will_be_reached_soon(
-            self,
-            username: str,
-            resource_type: str,
-            used_seconds: int,
-            quota_seconds: int,
-            cluster_name: str,
-            threshold: float,
+        self,
+        username: str,
+        resource_type: QuotaResourceType,
+        used_seconds: int,
+        quota_seconds: int,
+        cluster_name: str,
+        threshold: float,
     ) -> bool:
 
         if used_seconds / quota_seconds >= threshold:
@@ -272,7 +313,11 @@ class QuotaEnforcer(JobPolicyEnforcer):
 
     @classmethod
     def _compute_quota_notification_hash(
-        cls, username: str, cluster_name: str, resource_type: str, quota: int
+        cls,
+        username: str,
+        cluster_name: str,
+        resource_type: QuotaResourceType,
+        quota: int,
     ) -> str:
         return hashlib.sha1(
             username.encode()

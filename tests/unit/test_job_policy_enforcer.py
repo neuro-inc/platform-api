@@ -350,9 +350,9 @@ class MockPlatformApiClient(PlatformApiClient):
 
 class TestQuotaEnforcer:
     @pytest.mark.asyncio
-    async def test_enforce_ok(self) -> None:
+    async def test_enforce_ok(self, mock_notifications_client: Client) -> None:
         client = MockPlatformApiClient()
-        enforcer = QuotaEnforcer(client)
+        enforcer = QuotaEnforcer(client, mock_notifications_client)
         await enforcer.enforce()
         assert len(client.killed_jobs) == 0
 
@@ -360,11 +360,16 @@ class TestQuotaEnforcer:
     async def test_enforce_user_quota_cpu_almost_reached_notification(
         self, mock_notifications_client: Client
     ) -> None:
-        cpu_jobs = {"job3", "job4"}
-        gpu_jobs = {"job5"}
+        cpu_jobs = [
+            JobInfo("job3", JobStatus.PENDING, "user2", False, "default"),
+            JobInfo("job4", JobStatus.RUNNING, "user2", False, "default"),
+        ]
+        gpu_jobs = [JobInfo("job5", JobStatus.RUNNING, "user2", True, "default")]
         client = MockPlatformApiClient(gpu_quota_minutes=100)
         enforcer = QuotaEnforcer(client, mock_notifications_client)
-        await enforcer._enforce_user_quota(JobsByUser("user2", cpu_jobs, gpu_jobs))
+        await enforcer._enforce_user_quota(
+            UserJobs("user2", {"default": ClusterJobs("default", cpu_jobs, gpu_jobs)})
+        )
         assert len(mock_notifications_client.sent_notifications) == 1
         notification = mock_notifications_client.sent_notifications[0]
         assert isinstance(notification, QuotaWillBeReachedSoon)
@@ -372,18 +377,25 @@ class TestQuotaEnforcer:
         assert notification.resource == QuotaResourceType.NON_GPU
 
         # start another enforcement and verify no new notifications were sent
-        await enforcer._enforce_user_quota(JobsByUser("user2", cpu_jobs, gpu_jobs))
+        await enforcer._enforce_user_quota(
+            UserJobs("user2", {"default": ClusterJobs("default", cpu_jobs, gpu_jobs)})
+        )
         assert len(mock_notifications_client.sent_notifications) == 1
 
     @pytest.mark.asyncio
     async def test_enforce_user_quota_gpu_almost_reached_notification(
         self, mock_notifications_client: Client
     ) -> None:
-        cpu_jobs = {"job3", "job4"}
-        gpu_jobs = {"job5"}
+        cpu_jobs = [
+            JobInfo("job3", JobStatus.PENDING, "user1", False, "default"),
+            JobInfo("job4", JobStatus.RUNNING, "user1", False, "default"),
+        ]
+        gpu_jobs = [JobInfo("job5", JobStatus.RUNNING, "user1", True, "default")]
         client = MockPlatformApiClient(cpu_quota_minutes=100)
         enforcer = QuotaEnforcer(client, mock_notifications_client)
-        await enforcer._enforce_user_quota(JobsByUser("user1", cpu_jobs, gpu_jobs))
+        await enforcer._enforce_user_quota(
+            UserJobs("user1", {"default": ClusterJobs("default", cpu_jobs, gpu_jobs)})
+        )
         assert len(mock_notifications_client.sent_notifications) == 1
         notification = mock_notifications_client.sent_notifications[0]
         assert isinstance(notification, QuotaWillBeReachedSoon)
@@ -391,18 +403,25 @@ class TestQuotaEnforcer:
         assert notification.resource == QuotaResourceType.GPU
 
         # start another enforcement and verify no new notifications were sent
-        await enforcer._enforce_user_quota(JobsByUser("user1", cpu_jobs, gpu_jobs))
+        await enforcer._enforce_user_quota(
+            UserJobs("user1", {"default": ClusterJobs("default", cpu_jobs, gpu_jobs)})
+        )
         assert len(mock_notifications_client.sent_notifications) == 1
 
     @pytest.mark.asyncio
     async def test_enforce_user_quota_cpu_and_gpu_both_almost_reached_notifications(
         self, mock_notifications_client: Client
     ) -> None:
-        cpu_jobs = {"job3", "job4"}
-        gpu_jobs = {"job5"}
+        cpu_jobs = [
+            JobInfo("job3", JobStatus.PENDING, "user2", False, "default"),
+            JobInfo("job4", JobStatus.RUNNING, "user2", False, "default"),
+        ]
+        gpu_jobs = [JobInfo("job5", JobStatus.RUNNING, "user2", True, "default")]
         client = MockPlatformApiClient()
         enforcer = QuotaEnforcer(client, mock_notifications_client)
-        await enforcer._enforce_user_quota(JobsByUser("user2", cpu_jobs, gpu_jobs))
+        await enforcer._enforce_user_quota(
+            UserJobs("user2", {"default": ClusterJobs("default", cpu_jobs, gpu_jobs)})
+        )
         assert len(mock_notifications_client.sent_notifications) == 1
         # Verify we send CPU notification first
         notification = mock_notifications_client.sent_notifications[0]
@@ -411,7 +430,9 @@ class TestQuotaEnforcer:
         assert notification.resource == QuotaResourceType.NON_GPU
 
         # start another enforcement and verify we send a GPU notification as well
-        await enforcer._enforce_user_quota(JobsByUser("user2", cpu_jobs, gpu_jobs))
+        await enforcer._enforce_user_quota(
+            UserJobs("user2", {"default": ClusterJobs("default", cpu_jobs, gpu_jobs)})
+        )
         assert len(mock_notifications_client.sent_notifications) == 2
         notification = mock_notifications_client.sent_notifications[1]
         assert isinstance(notification, QuotaWillBeReachedSoon)
@@ -419,21 +440,25 @@ class TestQuotaEnforcer:
         assert notification.resource == QuotaResourceType.GPU
 
     @pytest.mark.asyncio
-    async def test_enforcer_error_handling_in_api(self) -> None:
+    async def test_enforcer_error_handling_in_api(
+        self, mock_notifications_client: Client
+    ) -> None:
         client = MockPlatformApiClient(
             cpu_quota_minutes=1, kill_exception=Exception("Test exception")
         )
-        enforcer = QuotaEnforcer(client)
+        enforcer = QuotaEnforcer(client, mock_notifications_client)
         # If enforcer handles ApiClient exceptions correctly, this will not fail
         # (but will not yield any results either)
         await enforcer.enforce()
 
     @pytest.mark.asyncio
-    async def test_enforcer_error_handling_in_check_user_quota(self) -> None:
+    async def test_enforcer_error_handling_in_check_user_quota(
+        self, mock_notifications_client: Client
+    ) -> None:
         client = MockPlatformApiClient(
             cpu_quota_minutes=1, stat_exception=Exception("Test exception")
         )
-        enforcer = QuotaEnforcer(client)
+        enforcer = QuotaEnforcer(client, mock_notifications_client)
         # If enforcer handles exceptions correctly, this will not fail
         # (but will not yield any results either)
         await enforcer.enforce()
