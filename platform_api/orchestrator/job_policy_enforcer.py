@@ -243,16 +243,25 @@ class QuotaEnforcer(JobPolicyEnforcer):
             except Exception:
                 logger.exception("Failed to kill job %s", job_id)
 
-    def _store_sent_quota_notification(
-        self, username: str, cluster_name: str, resource_type: str, quota: int
-    ) -> None:
-        hash_object = hashlib.sha1(
+    @classmethod
+    def _compute_quota_notification_hash(
+        cls, username: str, cluster_name: str, resource_type: str, quota: int
+    ) -> str:
+        return hashlib.sha1(
             username.encode()
             + resource_type.encode()
             + cluster_name.encode()
             + str(quota).encode()
+        ).hexdigest()
+
+    def _store_sent_quota_notification(self, quota_notification_hash: str) -> None:
+        self._sent_quota_will_be_reached_soon_notifications.add(quota_notification_hash)
+
+    def _need_to_send_quota_notification(self, quota_notification_hash: str) -> bool:
+        return (
+            quota_notification_hash
+            not in self._sent_quota_will_be_reached_soon_notifications
         )
-        self._sent_quota_will_be_reached_soon_notifications.add(hash_object.hexdigest())
 
 
 class JobPolicyEnforcePoller:
