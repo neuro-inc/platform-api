@@ -229,7 +229,10 @@ class QuotaEnforcer(JobPolicyEnforcer):
                 )
                 jobs_to_delete.extend(cluster_jobs.gpu_ids)
         for job_id in jobs_to_delete:
-            await self._platform_api_client.kill_job(job_id)
+            try:
+                await self._platform_api_client.kill_job(job_id)
+            except Exception:
+                logger.exception("Failed to kill job %s", job_id)
 
 
 class JobPolicyEnforcePoller:
