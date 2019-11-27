@@ -362,7 +362,7 @@ class TestQuotaEnforcer:
     ) -> None:
         cpu_jobs = {"job3", "job4"}
         gpu_jobs = {"job5"}
-        client = MockPlatformApiClient()
+        client = MockPlatformApiClient(gpu_quota_minutes=100)
         enforcer = QuotaEnforcer(client, mock_notifications_client)
         await enforcer._enforce_user_quota(JobsByUser("user2", cpu_jobs, gpu_jobs))
         assert len(mock_notifications_client.sent_notifications) == 1
@@ -389,9 +389,34 @@ class TestQuotaEnforcer:
         assert isinstance(notification, QuotaWillBeReachedSoon)
         assert notification.user_id == "user1"
         assert notification.resource == QuotaResourceType.GPU
+
         # start another enforcement and verify no new notifications were sent
         await enforcer._enforce_user_quota(JobsByUser("user1", cpu_jobs, gpu_jobs))
         assert len(mock_notifications_client.sent_notifications) == 1
+
+    @pytest.mark.asyncio
+    async def test_enforce_user_quota_cpu_and_gpu_both_almost_reached_notifications(
+        self, mock_notifications_client: Client
+    ) -> None:
+        cpu_jobs = {"job3", "job4"}
+        gpu_jobs = {"job5"}
+        client = MockPlatformApiClient()
+        enforcer = QuotaEnforcer(client, mock_notifications_client)
+        await enforcer._enforce_user_quota(JobsByUser("user2", cpu_jobs, gpu_jobs))
+        assert len(mock_notifications_client.sent_notifications) == 1
+        # Verify we send CPU notification first
+        notification = mock_notifications_client.sent_notifications[0]
+        assert isinstance(notification, QuotaWillBeReachedSoon)
+        assert notification.user_id == "user2"
+        assert notification.resource == QuotaResourceType.NON_GPU
+
+        # start another enforcement and verify we send a GPU notification as well
+        await enforcer._enforce_user_quota(JobsByUser("user2", cpu_jobs, gpu_jobs))
+        assert len(mock_notifications_client.sent_notifications) == 2
+        notification = mock_notifications_client.sent_notifications[1]
+        assert isinstance(notification, QuotaWillBeReachedSoon)
+        assert notification.user_id == "user2"
+        assert notification.resource == QuotaResourceType.GPU
 
     @pytest.mark.asyncio
     async def test_enforcer_error_handling_in_api(self) -> None:

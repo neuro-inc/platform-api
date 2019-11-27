@@ -243,6 +243,33 @@ class QuotaEnforcer(JobPolicyEnforcer):
             except Exception:
                 logger.exception("Failed to kill job %s", job_id)
 
+    async def _notify_quota_will_be_reached_soon(
+            self,
+            username: str,
+            resource_type: str,
+            used_seconds: int,
+            quota_seconds: int,
+            cluster_name: str,
+            threshold: float,
+    ) -> bool:
+
+        if used_seconds / quota_seconds >= threshold:
+            notification_hash = self._compute_quota_notification_hash(
+                username, cluster_name, resource_type, quota_seconds,
+            )
+            if self._need_to_send_quota_notification(notification_hash):
+                notification = QuotaWillBeReachedSoon(
+                    username,
+                    resource=resource_type,
+                    used=used_seconds,
+                    quota=quota_seconds,
+                    cluster_name=cluster_name,
+                )
+                await self._notifications_client.notify(notification)
+                self._store_sent_quota_notification(notification_hash)
+                return True
+        return False
+
     @classmethod
     def _compute_quota_notification_hash(
         cls, username: str, cluster_name: str, resource_type: str, quota: int
