@@ -149,7 +149,7 @@ class ClusterJobs:
     gpu: List[JobInfo] = field(default_factory=list)
 
     def add(self, job: JobInfo) -> None:
-        assert self.name == job.cluster_name
+        assert self.name == job.cluster_name, "Invalid job cluster name"
         if job.is_gpu:
             self.gpu.append(job)
         else:
@@ -170,7 +170,7 @@ class UserJobs:
     clusters: Dict[str, ClusterJobs] = field(default_factory=dict)
 
     def add(self, job: JobInfo) -> None:
-        assert self.name == job.owner
+        assert self.name == job.owner, "Invalid job owner"
         cluster = self.clusters.get(job.cluster_name)
         if not cluster:
             self.clusters[job.cluster_name] = cluster = ClusterJobs(

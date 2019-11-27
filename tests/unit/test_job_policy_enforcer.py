@@ -215,6 +215,7 @@ class TestUserStats:
             ],
         )
         cluster_stats = user_stats.get_cluster("c1")
+        assert cluster_stats.name == "c1"
         assert not cluster_stats.is_non_gpu_quota_exceeded
         assert not cluster_stats.is_gpu_quota_exceeded
 
