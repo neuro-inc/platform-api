@@ -351,7 +351,7 @@ class TestJobs:
         async with client.get(url, headers=headers, json=job_submit) as resp:
             assert resp.status == HTTPOk.status_code, await resp.text()
             result = await resp.json()
-            run_time = result["run_time_seconds"]
+            run_time = result["history"]["run_time_seconds"]
             # since jobs_poller works with delay 1 sec, we should give it time
             # to actually kill the job
             assert 3 < run_time < 6
