@@ -213,8 +213,11 @@ class JobsService:
             run_time_filter
         )
         run_time = run_times.get(user_cluster.name, ZERO_RUN_TIME)
-        # Even GPU jobs require CPU, so always check CPU quota
-        if run_time.total_non_gpu_run_time_delta >= quota.total_non_gpu_run_time_delta:
+        if (
+            not gpu_requested
+            and run_time.total_non_gpu_run_time_delta
+            >= quota.total_non_gpu_run_time_delta
+        ):
             raise NonGpuQuotaExceededError(user.name)
         if (
             gpu_requested

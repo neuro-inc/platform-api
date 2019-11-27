@@ -119,6 +119,14 @@ class JobsClient:
         self._client = client
         self._headers = headers
 
+    async def create_job(self, payload: Dict[str, Any]) -> Dict[str, Any]:
+        url = self._api_config.jobs_base_url
+        async with self._client.post(url, headers=self._headers, json=payload) as resp:
+            assert resp.status == HTTPAccepted.status_code, await resp.text()
+            result = await resp.json()
+            assert result["status"] == "pending"
+            return result
+
     async def get_all_jobs(self, params: Any = None) -> List[Dict[str, Any]]:
         url = self._api_config.jobs_base_url
         async with self._client.get(

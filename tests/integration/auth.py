@@ -190,14 +190,18 @@ async def regular_user_with_missing_cluster_name(
 
 @pytest.fixture
 async def regular_user_with_custom_quota(
-    regular_user_factory: Callable[
-        [Optional[str], Optional[Quota], Optional[str]], Awaitable[_User]
-    ],
+    regular_user_factory: Callable[..., Awaitable[_User]],
 ) -> _User:
     return await regular_user_factory(
-        None,
-        Quota(total_gpu_run_time_minutes=123, total_non_gpu_run_time_minutes=321),
-        "default",
+        auth_clusters=[
+            AuthCluster(
+                name="default",
+                quota=Quota(
+                    total_gpu_run_time_minutes=123, total_non_gpu_run_time_minutes=321
+                ),
+            ),
+            AuthCluster(name="testcluster2"),
+        ]
     )
 
 

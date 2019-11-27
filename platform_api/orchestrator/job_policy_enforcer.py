@@ -4,13 +4,13 @@ import contextlib
 import logging
 from dataclasses import dataclass, field
 from datetime import timedelta
-from typing import Any, Dict, List, Optional, Set
+from typing import Any, Dict, Iterable, List, Optional, Sequence
 
 import aiohttp
 from multidict import MultiDict
 
 from platform_api.config import JobPolicyEnforcerConfig
-from platform_api.orchestrator.job import AggregatedRunTime
+from platform_api.orchestrator.job import ZERO_RUN_TIME, AggregatedRunTime
 from platform_api.orchestrator.job_request import JobStatus
 
 
@@ -23,12 +23,41 @@ class JobInfo:
     status: JobStatus
     owner: str
     is_gpu: bool
+    cluster_name: str
 
 
 @dataclass(frozen=True)
-class UserQuotaInfo:
+class UserClusterStats:
+    name: str
     quota: AggregatedRunTime
     jobs: AggregatedRunTime
+
+    @classmethod
+    def create_dummy(cls, name: str) -> "UserClusterStats":
+        return cls(name=name, quota=ZERO_RUN_TIME, jobs=ZERO_RUN_TIME)
+
+    @property
+    def is_non_gpu_quota_exceeded(self) -> bool:
+        return (
+            self.quota.total_non_gpu_run_time_delta
+            <= self.jobs.total_non_gpu_run_time_delta
+        )
+
+    @property
+    def is_gpu_quota_exceeded(self) -> bool:
+        return self.quota.total_gpu_run_time_delta <= self.jobs.total_gpu_run_time_delta
+
+
+@dataclass(frozen=True)
+class UserStats:
+    name: str
+    clusters: List[UserClusterStats]
+
+    def get_cluster(self, name: str) -> UserClusterStats:
+        for cluster in self.clusters:
+            if cluster.name == name:
+                return cluster
+        return UserClusterStats.create_dummy(name)
 
 
 class PlatformApiClient:
@@ -51,14 +80,12 @@ class PlatformApiClient:
             payload = await resp.json()
         return [_parse_job_info(job) for job in payload["jobs"]]
 
-    async def get_user_stats(self, username: str) -> UserQuotaInfo:
+    async def get_user_stats(self, username: str) -> UserStats:
         url = f"{self._platform_api_url}/stats/users/{username}"
         async with self._session.get(url) as resp:
             resp.raise_for_status()
             payload = await resp.json()
-        quota = _parse_quota_runtime(payload["quota"])
-        jobs = _parse_jobs_runtime(payload["jobs"])
-        return UserQuotaInfo(quota=quota, jobs=jobs)
+        return _parse_user_stats(payload)
 
     async def kill_job(self, job_id: str) -> None:
         url = f"{self._platform_api_url}/jobs/{job_id}"
@@ -72,6 +99,22 @@ def _parse_job_info(value: Dict[str, Any]) -> JobInfo:
         status=JobStatus(value["status"]),
         owner=value["owner"],
         is_gpu=bool(value["container"]["resources"].get("gpu")),
+        cluster_name=value["cluster_name"],
+    )
+
+
+def _parse_user_stats(value: Dict[str, Any]) -> UserStats:
+    return UserStats(
+        name=value["name"],
+        clusters=[_parse_user_cluster_stats(c) for c in value["clusters"]],
+    )
+
+
+def _parse_user_cluster_stats(value: Dict[str, Any]) -> UserClusterStats:
+    return UserClusterStats(
+        name=value["name"],
+        quota=_parse_quota_runtime(value["quota"]),
+        jobs=_parse_jobs_runtime(value["jobs"]),
     )
 
 
@@ -100,14 +143,52 @@ def _quota_minutes_to_timedelta(minutes: Optional[int]) -> timedelta:
 
 
 @dataclass(frozen=True)
-class JobsByUser:
-    username: str
-    cpu_job_ids: Set[str] = field(default_factory=set)
-    gpu_job_ids: Set[str] = field(default_factory=set)
+class ClusterJobs:
+    name: str
+    non_gpu: List[JobInfo] = field(default_factory=list)
+    gpu: List[JobInfo] = field(default_factory=list)
+
+    def add(self, job: JobInfo) -> None:
+        assert self.name == job.cluster_name, "Invalid job cluster name"
+        if job.is_gpu:
+            self.gpu.append(job)
+        else:
+            self.non_gpu.append(job)
 
     @property
-    def all_job_ids(self) -> Set[str]:
-        return self.cpu_job_ids | self.gpu_job_ids
+    def non_gpu_ids(self) -> Iterable[str]:
+        return (job.id for job in self.non_gpu)
+
+    @property
+    def gpu_ids(self) -> Iterable[str]:
+        return (job.id for job in self.gpu)
+
+
+@dataclass(frozen=True)
+class UserJobs:
+    name: str
+    clusters: Dict[str, ClusterJobs] = field(default_factory=dict)
+
+    def add(self, job: JobInfo) -> None:
+        assert self.name == job.owner, "Invalid job owner"
+        cluster = self.clusters.get(job.cluster_name)
+        if not cluster:
+            self.clusters[job.cluster_name] = cluster = ClusterJobs(
+                name=job.cluster_name
+            )
+        cluster.add(job)
+
+
+class Jobs:
+    @staticmethod
+    def group_by_user(jobs: Sequence[JobInfo]) -> List[UserJobs]:
+        groups: Dict[str, UserJobs] = {}
+        for job in jobs:
+            user_jobs = groups.get(job.owner)
+            if not user_jobs:
+                groups[job.owner] = user_jobs = UserJobs(name=job.owner)
+            user_jobs.add(job)
+        return list(groups.values())
 
 
 class JobPolicyEnforcer:
@@ -125,34 +206,28 @@ class QuotaEnforcer(JobPolicyEnforcer):
         for jobs_by_user in users_with_active_jobs:
             await self._enforce_user_quota(jobs_by_user)
 
-    async def _get_active_users_and_jobs(self) -> List[JobsByUser]:
-        active_jobs = await self._platform_api_client.get_non_terminated_jobs()
-        jobs_by_owner: Dict[str, JobsByUser] = {}
-        for job_info in active_jobs:
-            owner = job_info.owner
-            existing_jobs = jobs_by_owner.get(owner) or JobsByUser(username=owner)
-            if job_info.is_gpu:
-                existing_jobs.gpu_job_ids.add(job_info.id)
-            else:
-                existing_jobs.cpu_job_ids.add(job_info.id)
-            jobs_by_owner[owner] = existing_jobs
+    async def _get_active_users_and_jobs(self) -> List[UserJobs]:
+        jobs = await self._platform_api_client.get_non_terminated_jobs()
+        return Jobs.group_by_user(jobs)
 
-        return list(jobs_by_owner.values())
-
-    async def _enforce_user_quota(self, jobs_by_user: JobsByUser) -> None:
-        username = jobs_by_user.username
-        user_quota_info = await self._platform_api_client.get_user_stats(username)
-        quota = user_quota_info.quota
-        jobs = user_quota_info.jobs
-
-        jobs_to_delete: Set[str] = set()
-        if quota.total_non_gpu_run_time_delta <= jobs.total_non_gpu_run_time_delta:
-            logger.info(f"CPU quota exceeded for {username}")
-            jobs_to_delete = jobs_by_user.all_job_ids
-        elif quota.total_gpu_run_time_delta <= jobs.total_gpu_run_time_delta:
-            logger.info(f"GPU quota exceeded for {username}")
-            jobs_to_delete = jobs_by_user.gpu_job_ids
-
+    async def _enforce_user_quota(self, user_jobs: UserJobs) -> None:
+        user_name = user_jobs.name
+        user_stats = await self._platform_api_client.get_user_stats(user_name)
+        jobs_to_delete: List[str] = []
+        for cluster_name, cluster_jobs in user_jobs.clusters.items():
+            cluster_stats = user_stats.get_cluster(cluster_name)
+            if cluster_stats.is_non_gpu_quota_exceeded:
+                logger.info(
+                    f"User '{user_name}' exceeded non-GPU quota "
+                    f"on cluster '{cluster_name}'"
+                )
+                jobs_to_delete.extend(cluster_jobs.non_gpu_ids)
+            if cluster_stats.is_gpu_quota_exceeded:
+                logger.info(
+                    f"User '{user_name}' exceeded GPU quota "
+                    f"on cluster '{cluster_name}'"
+                )
+                jobs_to_delete.extend(cluster_jobs.gpu_ids)
         for job_id in jobs_to_delete:
             try:
                 await self._platform_api_client.kill_job(job_id)
