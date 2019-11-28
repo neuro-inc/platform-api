@@ -231,6 +231,8 @@ class QuotaEnforcer(JobPolicyEnforcer):
         for job_id in jobs_to_delete:
             try:
                 await self._platform_api_client.kill_job(job_id)
+            except asyncio.CancelledError:
+                raise
             except Exception:
                 logger.exception("Failed to kill job %s", job_id)
 
