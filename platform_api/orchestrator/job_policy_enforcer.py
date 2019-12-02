@@ -223,25 +223,27 @@ class QuotaEnforcer(JobPolicyEnforcer):
         jobs_to_delete: List[str] = []
         for cluster_name, cluster_jobs in user_jobs.clusters.items():
             cluster_stats = user_stats.get_cluster(cluster_name)
+            jobs_to_delete_in_current_cluster: List[str] = []
             if cluster_stats.is_non_gpu_quota_exceeded:
                 logger.info(
                     f"User '{user_name}' exceeded non-GPU quota "
                     f"on cluster '{cluster_name}'"
                 )
-                jobs_to_delete.extend(cluster_jobs.non_gpu_ids)
+                jobs_to_delete_in_current_cluster.extend(cluster_jobs.non_gpu_ids)
             if cluster_stats.is_gpu_quota_exceeded:
                 logger.info(
                     f"User '{user_name}' exceeded GPU quota "
                     f"on cluster '{cluster_name}'"
                 )
-                jobs_to_delete.extend(cluster_jobs.gpu_ids)
+                jobs_to_delete_in_current_cluster.extend(cluster_jobs.gpu_ids)
             await self._notify_for_quota(
                 user_name,
                 cluster_name,
-                cluster_stats.quota,
-                cluster_stats.jobs,
-                jobs_to_delete,
+                cluster_stats,
+                jobs_to_delete_in_current_cluster,
             )
+            jobs_to_delete.extend(jobs_to_delete_in_current_cluster)
+
         for job_id in jobs_to_delete:
             try:
                 await self._platform_api_client.kill_job(job_id)
@@ -254,13 +256,15 @@ class QuotaEnforcer(JobPolicyEnforcer):
         self,
         username: str,
         cluster_name: str,
-        quota: AggregatedRunTime,
-        jobs: AggregatedRunTime,
+        cluster_stats: UserClusterStats,
         jobs_to_delete: List[str],
     ) -> None:
         # TODO: Extract to env variables?
         NON_GPU_QUOTA_NOTIFICATION_THRESHOLD = 0.9
         GPU_QUOTA_NOTIFICATION_THRESHOLD = 0.9
+
+        quota = cluster_stats.quota
+        jobs = cluster_stats.jobs
 
         # We only send notifications in this iteration unless we're about to kill
         # some jobs. It might be the case we have some GPU jobs to kill plus
@@ -273,7 +277,7 @@ class QuotaEnforcer(JobPolicyEnforcer):
                 jobs.total_non_gpu_run_time_delta.seconds,
                 quota.total_non_gpu_run_time_delta.seconds,
                 cluster_name,
-                CPU_QUOTA_NOTIFICATION_THRESHOLD,
+                NON_GPU_QUOTA_NOTIFICATION_THRESHOLD,
             ):
                 await self._notify_quota_will_be_reached_soon(
                     username,
