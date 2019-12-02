@@ -6,6 +6,7 @@ from notifications_client import (
     Client as NotificationsClient,
     JobCannotStartQuotaReached,
     JobTransition,
+    QuotaResourceType,
 )
 
 from platform_api.cluster import (
@@ -250,9 +251,26 @@ class JobsService:
                 user_cluster,
                 gpu_requested=bool(job_request.container.resources.gpu),
             )
-        except QuotaException:
+        except GpuQuotaExceededError:
+            quota = user_cluster.quota.total_gpu_run_time_delta
             await self._notifications_client.notify(
-                JobCannotStartQuotaReached(user.name)
+                JobCannotStartQuotaReached(
+                    user_id=user.name,
+                    resource=QuotaResourceType.GPU,
+                    quota=quota.total_seconds(),
+                    cluster_name=cluster_name,
+                )
+            )
+            raise
+        except NonGpuQuotaExceededError:
+            quota = user_cluster.quota.total_non_gpu_run_time_delta
+            await self._notifications_client.notify(
+                JobCannotStartQuotaReached(
+                    user_id=user.name,
+                    resource=QuotaResourceType.NON_GPU,
+                    quota=quota.total_seconds(),
+                    cluster_name=cluster_name,
+                )
             )
             raise
         record = JobRecord.create(
