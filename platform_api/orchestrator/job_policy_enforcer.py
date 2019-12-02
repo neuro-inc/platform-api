@@ -259,7 +259,7 @@ class QuotaEnforcer(JobPolicyEnforcer):
         jobs_to_delete: List[str],
     ) -> None:
         # TODO: Extract to env variables?
-        CPU_QUOTA_NOTIFICATION_THRESHOLD = 0.9
+        NON_GPU_QUOTA_NOTIFICATION_THRESHOLD = 0.9
         GPU_QUOTA_NOTIFICATION_THRESHOLD = 0.9
 
         # We only send notifications in this iteration unless we're about to kill
