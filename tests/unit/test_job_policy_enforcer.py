@@ -361,14 +361,14 @@ class TestQuotaEnforcer:
         self, mock_notifications_client: Client
     ) -> None:
         cpu_jobs = [
-            JobInfo("job3", JobStatus.PENDING, "user2", False, "default"),
-            JobInfo("job4", JobStatus.RUNNING, "user2", False, "default"),
+            JobInfo("job3", JobStatus.PENDING, "user2", False, "cluster1"),
+            JobInfo("job4", JobStatus.RUNNING, "user2", False, "cluster1"),
         ]
-        gpu_jobs = [JobInfo("job5", JobStatus.RUNNING, "user2", True, "default")]
+        gpu_jobs = [JobInfo("job5", JobStatus.RUNNING, "user2", True, "cluster1")]
         client = MockPlatformApiClient(gpu_quota_minutes=100)
         enforcer = QuotaEnforcer(client, mock_notifications_client)
         await enforcer._enforce_user_quota(
-            UserJobs("user2", {"default": ClusterJobs("default", cpu_jobs, gpu_jobs)})
+            UserJobs("user2", {"cluster1": ClusterJobs("cluster1", cpu_jobs, gpu_jobs)})
         )
         assert len(mock_notifications_client.sent_notifications) == 1
         notification = mock_notifications_client.sent_notifications[0]
@@ -378,7 +378,7 @@ class TestQuotaEnforcer:
 
         # start another enforcement and verify no new notifications were sent
         await enforcer._enforce_user_quota(
-            UserJobs("user2", {"default": ClusterJobs("default", cpu_jobs, gpu_jobs)})
+            UserJobs("user2", {"cluster1": ClusterJobs("cluster1", cpu_jobs, gpu_jobs)})
         )
         assert len(mock_notifications_client.sent_notifications) == 1
 
@@ -387,14 +387,14 @@ class TestQuotaEnforcer:
         self, mock_notifications_client: Client
     ) -> None:
         cpu_jobs = [
-            JobInfo("job3", JobStatus.PENDING, "user1", False, "default"),
-            JobInfo("job4", JobStatus.RUNNING, "user1", False, "default"),
+            JobInfo("job3", JobStatus.PENDING, "user1", False, "cluster1"),
+            JobInfo("job4", JobStatus.RUNNING, "user1", False, "cluster1"),
         ]
-        gpu_jobs = [JobInfo("job5", JobStatus.RUNNING, "user1", True, "default")]
+        gpu_jobs = [JobInfo("job5", JobStatus.RUNNING, "user1", True, "cluster1")]
         client = MockPlatformApiClient(cpu_quota_minutes=100)
         enforcer = QuotaEnforcer(client, mock_notifications_client)
         await enforcer._enforce_user_quota(
-            UserJobs("user1", {"default": ClusterJobs("default", cpu_jobs, gpu_jobs)})
+            UserJobs("user1", {"cluster1": ClusterJobs("cluster1", cpu_jobs, gpu_jobs)})
         )
         assert len(mock_notifications_client.sent_notifications) == 1
         notification = mock_notifications_client.sent_notifications[0]
@@ -404,7 +404,7 @@ class TestQuotaEnforcer:
 
         # start another enforcement and verify no new notifications were sent
         await enforcer._enforce_user_quota(
-            UserJobs("user1", {"default": ClusterJobs("default", cpu_jobs, gpu_jobs)})
+            UserJobs("user1", {"cluster1": ClusterJobs("cluster1", cpu_jobs, gpu_jobs)})
         )
         assert len(mock_notifications_client.sent_notifications) == 1
 
@@ -413,14 +413,14 @@ class TestQuotaEnforcer:
         self, mock_notifications_client: Client
     ) -> None:
         cpu_jobs = [
-            JobInfo("job3", JobStatus.PENDING, "user2", False, "default"),
-            JobInfo("job4", JobStatus.RUNNING, "user2", False, "default"),
+            JobInfo("job3", JobStatus.PENDING, "user2", False, "cluster1"),
+            JobInfo("job4", JobStatus.RUNNING, "user2", False, "cluster1"),
         ]
-        gpu_jobs = [JobInfo("job5", JobStatus.RUNNING, "user2", True, "default")]
+        gpu_jobs = [JobInfo("job5", JobStatus.RUNNING, "user2", True, "cluster1")]
         client = MockPlatformApiClient()
         enforcer = QuotaEnforcer(client, mock_notifications_client)
         await enforcer._enforce_user_quota(
-            UserJobs("user2", {"default": ClusterJobs("default", cpu_jobs, gpu_jobs)})
+            UserJobs("user2", {"cluster1": ClusterJobs("cluster1", cpu_jobs, gpu_jobs)})
         )
         assert len(mock_notifications_client.sent_notifications) == 1
         # Verify we send CPU notification first
@@ -431,7 +431,7 @@ class TestQuotaEnforcer:
 
         # start another enforcement and verify we send a GPU notification as well
         await enforcer._enforce_user_quota(
-            UserJobs("user2", {"default": ClusterJobs("default", cpu_jobs, gpu_jobs)})
+            UserJobs("user2", {"cluster1": ClusterJobs("cluster1", cpu_jobs, gpu_jobs)})
         )
         assert len(mock_notifications_client.sent_notifications) == 2
         notification = mock_notifications_client.sent_notifications[1]
