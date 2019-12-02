@@ -243,7 +243,6 @@ class TestJobTransition:
         assert states == {"pending", "failed"}
 
 
-# TODO Write correct tests for QuotaWillBeReachedSoon notifications
 class TestQuotaWillBeReachedSoon:
     @pytest.mark.asyncio
     async def test_not_sent_if_quota_not_reached(

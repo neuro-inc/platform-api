@@ -29,6 +29,7 @@ from platform_api.orchestrator.job_policy_enforcer import (
     Jobs,
     PlatformApiClient,
     QuotaEnforcer,
+    QuotaNotifier,
     UserClusterStats,
     UserJobs,
     UserStats,
@@ -488,20 +489,20 @@ class TestQuotaEnforcer:
         # generate 5 hashes, where 1 element is different from any other hash and
         # verify they're all different
         quota_hashes = {
-            QuotaEnforcer._compute_quota_notification_hash(
-                "user1", "cluster1", "CPU", 10
+            QuotaNotifier._compute_quota_notification_hash(
+                "user1", "cluster1", QuotaResourceType.NON_GPU, 10
             ),
-            QuotaEnforcer._compute_quota_notification_hash(
-                "user2", "cluster1", "CPU", 10
+            QuotaNotifier._compute_quota_notification_hash(
+                "user2", "cluster1", QuotaResourceType.NON_GPU, 10
             ),
-            QuotaEnforcer._compute_quota_notification_hash(
-                "user1", "cluster2", "CPU", 10
+            QuotaNotifier._compute_quota_notification_hash(
+                "user1", "cluster2", QuotaResourceType.NON_GPU, 10
             ),
-            QuotaEnforcer._compute_quota_notification_hash(
-                "user1", "cluster1", "GPU", 10
+            QuotaNotifier._compute_quota_notification_hash(
+                "user1", "cluster1", QuotaResourceType.GPU, 10
             ),
-            QuotaEnforcer._compute_quota_notification_hash(
-                "user1", "cluster1", "CPU", 11
+            QuotaNotifier._compute_quota_notification_hash(
+                "user1", "cluster1", QuotaResourceType.NON_GPU, 11
             ),
         }
         assert len(quota_hashes) == 5
