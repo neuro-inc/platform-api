@@ -1,6 +1,15 @@
 import asyncio
 import time
-from typing import Any, AsyncIterator, Callable, Dict, List, NamedTuple, Sequence
+from typing import (
+    Any,
+    AsyncIterator,
+    Callable,
+    Dict,
+    List,
+    NamedTuple,
+    Optional,
+    Sequence,
+)
 
 import aiohttp
 import aiohttp.web
@@ -277,9 +286,9 @@ async def infinite_job(
 
 @pytest.fixture
 def job_request_factory() -> Callable[[], Dict[str, Any]]:
-    def _factory() -> Dict[str, Any]:
+    def _factory(cluster_name: Optional[str] = None) -> Dict[str, Any]:
         # Note: Optional fields (as "name") should not have a value here
-        return {
+        request = {
             "container": {
                 "image": "ubuntu",
                 "command": "true",
@@ -288,6 +297,9 @@ def job_request_factory() -> Callable[[], Dict[str, Any]]:
             },
             "description": "test job submitted by neuro job submit",
         }
+        if cluster_name:
+            request["cluster_name"] = cluster_name
+        return request
 
     return _factory
 
