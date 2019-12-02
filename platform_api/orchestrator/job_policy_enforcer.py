@@ -207,8 +207,9 @@ class QuotaNotifier:
             jobs_to_delete: List[str],
     ) -> None:
         # TODO: Extract to env variables?
-        NON_GPU_QUOTA_NOTIFICATION_THRESHOLD = 0.9
-        GPU_QUOTA_NOTIFICATION_THRESHOLD = 0.9
+        # TEMP: Just as a proof-of-concept for tests
+        NON_GPU_QUOTA_NOTIFICATION_THRESHOLD = 0.1
+        GPU_QUOTA_NOTIFICATION_THRESHOLD = 0.1
 
         quota = cluster_stats.quota
         jobs = cluster_stats.jobs

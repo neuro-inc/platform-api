@@ -1,3 +1,4 @@
+import asyncio
 from typing import Any, AsyncIterator, Awaitable, Callable, Dict, Optional, Set
 
 import aiohttp.web
@@ -264,7 +265,7 @@ class TestQuotaWillBeReachedSoon:
         await api.runner.close()
         for (slug, request) in mock_notifications_server.requests:
             if slug == QuotaWillBeReachedSoon.slug():
-                raise AssertionError("Unexpected JobCannotStartQuotaReached sent")
+                raise AssertionError("Unexpected QuotaWillBeReachedSoon sent")
 
     @pytest.mark.asyncio
     async def test_sent_if_non_gpu_quota_reached(
@@ -276,16 +277,17 @@ class TestQuotaWillBeReachedSoon:
         regular_user_factory: Callable[..., Any],
         mock_notifications_server: NotificationsServer,
     ) -> None:
-        quota = Quota(total_non_gpu_run_time_minutes=0)
+        quota = Quota(total_non_gpu_run_time_minutes=2)
         user = await regular_user_factory(quota=quota)
         url = api.jobs_base_url
         job_request = job_request_factory()
         async with client.post(url, headers=user.headers, json=job_request) as response:
             await response.read()
         # Notification will be sent in graceful app shutdown
+        await asyncio.sleep(70)
         await api.runner.close()
         assert (
-            "job-cannot-start-quota-reached",
+            QuotaWillBeReachedSoon.slug(),
             {"user_id": user.name},
         ) in mock_notifications_server.requests
 
@@ -299,16 +301,17 @@ class TestQuotaWillBeReachedSoon:
         regular_user_factory: Callable[..., Any],
         mock_notifications_server: NotificationsServer,
     ) -> None:
-        quota = Quota(total_gpu_run_time_minutes=0)
+        quota = Quota(total_gpu_run_time_minutes=2)
         user = await regular_user_factory(quota=quota)
         url = api.jobs_base_url
         job_request = job_request_factory()
         job_request["container"]["resources"]["gpu"] = 1
         async with client.post(url, headers=user.headers, json=job_request) as response:
             await response.read()
+        await asyncio.sleep(70)
         # Notification will be sent in graceful app shutdown
         await api.runner.close()
         assert (
-            "job-cannot-start-quota-reached",
+            QuotaWillBeReachedSoon.slug(),
             {"user_id": user.name},
         ) in mock_notifications_server.requests
