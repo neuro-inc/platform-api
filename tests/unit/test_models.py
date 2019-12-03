@@ -1,3 +1,4 @@
+from datetime import datetime, timedelta
 from pathlib import PurePath
 from typing import Any, Dict, Sequence
 from unittest import mock
@@ -28,7 +29,12 @@ from platform_api.handlers.validators import (
     create_container_request_validator,
     create_container_response_validator,
 )
-from platform_api.orchestrator.job import Job, JobRecord
+from platform_api.orchestrator.job import (
+    Job,
+    JobRecord,
+    JobStatusHistory,
+    JobStatusItem,
+)
 from platform_api.orchestrator.job_request import (
     Container,
     ContainerHTTPServer,
@@ -909,6 +915,7 @@ async def test_job_to_job_response(mock_orchestrator: MockOrchestrator) -> None:
             "reason": None,
             "description": None,
             "created_at": mock.ANY,
+            "run_time_seconds": 0,
         },
         "container": {
             "image": "testimage",
@@ -922,6 +929,48 @@ async def test_job_to_job_response(mock_orchestrator: MockOrchestrator) -> None:
         "ssh_auth_server": "ssh://nobody@ssh-auth:22",
         "is_preemptible": False,
     }
+
+
+@pytest.mark.asyncio
+async def test_job_to_job_response_nonzero_runtime(
+    mock_orchestrator: MockOrchestrator,
+) -> None:
+    def _mocked_datetime_factory() -> datetime:
+        return datetime(year=2019, month=1, day=1)
+
+    time_now = _mocked_datetime_factory()
+    started_ago_delta = timedelta(minutes=10)  # job started 10 min ago: pending
+    pending_delta = timedelta(
+        minutes=5, seconds=30
+    )  # after 5 min: running (still running)
+    pending_at = time_now - started_ago_delta
+    running_at = pending_at + pending_delta
+    items = [
+        JobStatusItem.create(JobStatus.PENDING, transition_time=pending_at),
+        JobStatusItem.create(JobStatus.RUNNING, transition_time=running_at),
+    ]
+    status_history = JobStatusHistory(items)
+
+    job = Job(
+        storage_config=mock_orchestrator.storage_config,
+        orchestrator_config=mock_orchestrator.config,
+        record=JobRecord.create(
+            request=JobRequest.create(
+                Container(
+                    image="testimage",
+                    resources=ContainerResources(cpu=1, memory_mb=128),
+                ),
+                description="test test description",
+            ),
+            status_history=status_history,
+            cluster_name="test-cluster",
+            name="test-job-name",
+        ),
+        current_datetime_factory=_mocked_datetime_factory,
+    )
+    response = convert_job_to_job_response(job, cluster_name="my-cluster")
+    run_time = response["history"]["run_time_seconds"]
+    assert run_time == (time_now - running_at).total_seconds()
 
 
 @pytest.mark.asyncio
@@ -960,6 +1009,7 @@ async def test_job_to_job_response_with_job_name_and_http_exposed(
             "reason": None,
             "description": None,
             "created_at": mock.ANY,
+            "run_time_seconds": 0,
         },
         "container": {
             "image": "testimage",
@@ -1010,6 +1060,7 @@ async def test_job_to_job_response_with_job_name_and_http_exposed_too_long_name(
             "reason": None,
             "description": None,
             "created_at": mock.ANY,
+            "run_time_seconds": 0,
         },
         "container": {
             "image": "testimage",

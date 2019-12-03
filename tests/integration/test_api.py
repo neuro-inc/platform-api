@@ -328,6 +328,35 @@ class TestJobs:
             assert result["max_run_time_minutes"] == 10
 
     @pytest.mark.asyncio
+    async def test_get_job_run_time_seconds(
+        self,
+        api: ApiConfig,
+        client: aiohttp.ClientSession,
+        job_submit: Dict[str, Any],
+        jobs_client: JobsClient,
+        regular_user: _User,
+    ) -> None:
+        headers = regular_user.headers
+        url = api.jobs_base_url
+        job_submit["container"]["command"] = "sleep 3"
+        async with client.post(url, headers=headers, json=job_submit) as resp:
+            assert resp.status == HTTPAccepted.status_code, await resp.text()
+            result = await resp.json()
+            assert result["status"] in ["pending"]
+            job_id = result["id"]
+
+        await jobs_client.long_polling_by_job_id(job_id, "succeeded")
+
+        url = api.generate_job_url(job_id)
+        async with client.get(url, headers=headers, json=job_submit) as resp:
+            assert resp.status == HTTPOk.status_code, await resp.text()
+            result = await resp.json()
+            run_time = result["history"]["run_time_seconds"]
+            # since jobs_poller works with delay 1 sec for each transition,
+            # so we should give it time to actually kill the job
+            assert 3 - 2 < run_time < 3 + 2
+
+    @pytest.mark.asyncio
     async def test_incorrect_request(
         self, api: ApiConfig, client: aiohttp.ClientSession, regular_user: _User
     ) -> None:
@@ -1914,6 +1943,7 @@ class TestJobs:
                     "reason": "Creating",
                     "description": None,
                     "created_at": mock.ANY,
+                    "run_time_seconds": 0,
                 },
                 "container": {
                     "command": "true",
@@ -1951,6 +1981,7 @@ class TestJobs:
                 "created_at": mock.ANY,
                 "started_at": mock.ANY,
                 "finished_at": mock.ANY,
+                "run_time_seconds": mock.ANY,
             },
             "container": {
                 "command": "true",
@@ -2025,6 +2056,7 @@ class TestJobs:
                 "started_at": mock.ANY,
                 "finished_at": mock.ANY,
                 "exit_code": 1,
+                "run_time_seconds": 0,
             },
             "container": {
                 "command": 'bash -c "echo Failed!; false"',
@@ -2120,6 +2152,7 @@ class TestJobs:
                     "reason": "Creating",
                     "description": None,
                     "created_at": mock.ANY,
+                    "run_time_seconds": 0,
                 },
                 "container": {
                     "command": "true",
@@ -2204,6 +2237,7 @@ class TestJobs:
                     "reason": "Creating",
                     "description": None,
                     "created_at": mock.ANY,
+                    "run_time_seconds": 0,
                 },
                 "container": {
                     "command": "true",
