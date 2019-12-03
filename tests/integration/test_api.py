@@ -1909,11 +1909,10 @@ class TestJobs:
         client: aiohttp.ClientSession,
         regular_user: _User,
     ) -> None:
-        command = "sleep 3"
         request_payload = {
             "container": {
                 "image": "ubuntu",
-                "command": command,
+                "command": "true",
                 "resources": {"cpu": 0.1, "memory_mb": 16},
                 "volumes": [
                     {
@@ -1947,7 +1946,7 @@ class TestJobs:
                     "run_time_seconds": 0,
                 },
                 "container": {
-                    "command": command,
+                    "command": "true",
                     "env": {},
                     "image": "ubuntu",
                     "resources": {"cpu": 0.1, "memory_mb": 16},
@@ -1985,7 +1984,7 @@ class TestJobs:
                 "run_time_seconds": mock.ANY,
             },
             "container": {
-                "command": command,
+                "command": "true",
                 "env": {},
                 "image": "ubuntu",
                 "resources": {"cpu": 0.1, "memory_mb": 16},
@@ -2001,10 +2000,6 @@ class TestJobs:
             "ssh_auth_server": "ssh://nobody@ssh-auth.platform.neuromation.io:22",
             "is_preemptible": True,
         }
-        run_time = response_payload["history"]["run_time_seconds"]
-        # since jobs_poller works with delay 1 sec for each transition,
-        # so we should give it time to actually kill the job
-        assert 3 - 2 < run_time < 3 + 2
 
     @pytest.mark.asyncio
     async def test_job_failed(
