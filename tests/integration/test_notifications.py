@@ -1,7 +1,8 @@
-from typing import Any, AsyncIterator, Awaitable, Callable, Dict, Set
+from typing import Any, AsyncIterator, Awaitable, Callable, Dict, Optional, Set
 
 import aiohttp.web
 import pytest
+from neuro_auth_client import Cluster as AuthCluster
 from notifications_client.notification import JobCannotStartQuotaReached
 
 from platform_api.orchestrator.job import Quota
@@ -39,22 +40,30 @@ class TestCannotStartJobQuotaReached:
         self,
         api: ApiConfig,
         client: aiohttp.ClientSession,
-        job_request_factory: Callable[[], Dict[str, Any]],
+        job_request_factory: Callable[[Optional[str]], Dict[str, Any]],
         jobs_client: Callable[[], Any],
         regular_user_factory: Callable[..., Any],
         mock_notifications_server: NotificationsServer,
     ) -> None:
-        quota = Quota(total_non_gpu_run_time_minutes=0)
-        user = await regular_user_factory(quota=quota)
+        clusters = [
+            AuthCluster("default"),
+            AuthCluster("testcluster2", quota=Quota(total_non_gpu_run_time_minutes=0)),
+        ]
+        user = await regular_user_factory(auth_clusters=clusters)
         url = api.jobs_base_url
-        job_request = job_request_factory()
+        job_request = job_request_factory("testcluster2")
         async with client.post(url, headers=user.headers, json=job_request) as response:
             await response.read()
         # Notification will be sent in graceful app shutdown
         await api.runner.close()
         assert (
             "job-cannot-start-quota-reached",
-            {"user_id": user.name},
+            {
+                "user_id": user.name,
+                "cluster_name": "testcluster2",
+                "quota": 0.0,
+                "resource": "non_gpu",
+            },
         ) in mock_notifications_server.requests
 
     @pytest.mark.asyncio
@@ -62,15 +71,18 @@ class TestCannotStartJobQuotaReached:
         self,
         api: ApiConfig,
         client: aiohttp.ClientSession,
-        job_request_factory: Callable[[], Dict[str, Any]],
+        job_request_factory: Callable[[Optional[str]], Dict[str, Any]],
         jobs_client: Callable[[], Any],
         regular_user_factory: Callable[..., Any],
         mock_notifications_server: NotificationsServer,
     ) -> None:
-        quota = Quota(total_gpu_run_time_minutes=0)
-        user = await regular_user_factory(quota=quota)
+        clusters = [
+            AuthCluster("default"),
+            AuthCluster("testcluster2", quota=Quota(total_gpu_run_time_minutes=0)),
+        ]
+        user = await regular_user_factory(auth_clusters=clusters)
         url = api.jobs_base_url
-        job_request = job_request_factory()
+        job_request = job_request_factory("testcluster2")
         job_request["container"]["resources"]["gpu"] = 1
         async with client.post(url, headers=user.headers, json=job_request) as response:
             await response.read()
@@ -78,7 +90,12 @@ class TestCannotStartJobQuotaReached:
         await api.runner.close()
         assert (
             "job-cannot-start-quota-reached",
-            {"user_id": user.name},
+            {
+                "user_id": user.name,
+                "cluster_name": "testcluster2",
+                "quota": 0.0,
+                "resource": "gpu",
+            },
         ) in mock_notifications_server.requests
 
 

@@ -131,10 +131,10 @@ class MockNotificationsClient(NotificationsClient):
     async def notify(self, notification: AbstractNotification) -> None:
         self._sent_notifications.append(notification)
 
-    def init(self) -> None:
+    async def init(self) -> None:
         pass
 
-    def close(self) -> None:
+    async def close(self) -> None:
         pass
 
     @property
