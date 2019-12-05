@@ -17,6 +17,7 @@ install_requires = (
     "aiorwlock==0.6.0",
     "notifications-client==0.8.1",
     "platform-logging==0.3",
+    "yarl==1.3.0",
 )
 
 setup(
