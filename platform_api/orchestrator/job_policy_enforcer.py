@@ -217,12 +217,12 @@ class QuotaNotifier:
         # on the next QuotaEnforcer iteration in a second
         if len(jobs_to_delete) == 0:
             if not await self._notify_quota_will_be_reached_soon(
-                    username,
-                    QuotaResourceType.NON_GPU,
-                    jobs.total_non_gpu_run_time_delta.seconds,
-                    quota.total_non_gpu_run_time_delta.seconds,
-                    cluster_name,
-                    NON_GPU_QUOTA_NOTIFICATION_THRESHOLD,
+                username,
+                QuotaResourceType.NON_GPU,
+                jobs.total_non_gpu_run_time_delta.seconds,
+                quota.total_non_gpu_run_time_delta.seconds,
+                cluster_name,
+                NON_GPU_QUOTA_NOTIFICATION_THRESHOLD,
             ):
                 await self._notify_quota_will_be_reached_soon(
                     username,
@@ -234,13 +234,13 @@ class QuotaNotifier:
                 )
 
     async def _notify_quota_will_be_reached_soon(
-            self,
-            username: str,
-            resource_type: QuotaResourceType,
-            used_seconds: int,
-            quota_seconds: int,
-            cluster_name: str,
-            threshold: float,
+        self,
+        username: str,
+        resource_type: QuotaResourceType,
+        used_seconds: int,
+        quota_seconds: int,
+        cluster_name: str,
+        threshold: float,
     ) -> bool:
 
         if used_seconds / quota_seconds >= threshold:
@@ -262,17 +262,14 @@ class QuotaNotifier:
 
     @classmethod
     def _compute_quota_notification_hash(
-            cls,
-            username: str,
-            cluster_name: str,
-            resource_type: QuotaResourceType,
-            quota: int,
+        cls,
+        username: str,
+        cluster_name: str,
+        resource_type: QuotaResourceType,
+        quota: int,
     ) -> str:
         return hashlib.sha1(
-            username.encode()
-            + resource_type.encode()
-            + cluster_name.encode()
-            + str(quota).encode()
+            f"{username}:{resource_type}:{cluster_name}:{quota}".encode()
         ).hexdigest()
 
     def _store_sent_quota_notification(self, quota_notification_hash: str) -> None:
@@ -280,8 +277,8 @@ class QuotaNotifier:
 
     def _need_to_send_quota_notification(self, quota_notification_hash: str) -> bool:
         return (
-                quota_notification_hash
-                not in self._sent_quota_will_be_reached_soon_notifications
+            quota_notification_hash
+            not in self._sent_quota_will_be_reached_soon_notifications
         )
 
 
@@ -338,93 +335,6 @@ class QuotaEnforcer(JobPolicyEnforcer):
                 raise
             except Exception:
                 logger.exception("Failed to kill job %s", job_id)
-
-    async def _notify_for_quota(
-        self,
-        username: str,
-        cluster_name: str,
-        cluster_stats: UserClusterStats,
-        jobs_to_delete: List[str],
-    ) -> None:
-        # TODO: Extract to env variables?
-        NON_GPU_QUOTA_NOTIFICATION_THRESHOLD = 0.9
-        GPU_QUOTA_NOTIFICATION_THRESHOLD = 0.9
-
-        quota = cluster_stats.quota
-        jobs = cluster_stats.jobs
-
-        # We only send notifications in this iteration unless we're about to kill
-        # some jobs. It might be the case we have some GPU jobs to kill plus
-        # CPU quota notification pending, but we'll send the notification
-        # on the next QuotaEnforcer iteration in a second
-        if len(jobs_to_delete) == 0:
-            if not await self._notify_quota_will_be_reached_soon(
-                username,
-                QuotaResourceType.NON_GPU,
-                jobs.total_non_gpu_run_time_delta.seconds,
-                quota.total_non_gpu_run_time_delta.seconds,
-                cluster_name,
-                NON_GPU_QUOTA_NOTIFICATION_THRESHOLD,
-            ):
-                await self._notify_quota_will_be_reached_soon(
-                    username,
-                    QuotaResourceType.GPU,
-                    jobs.total_gpu_run_time_delta.seconds,
-                    quota.total_gpu_run_time_delta.seconds,
-                    cluster_name,
-                    GPU_QUOTA_NOTIFICATION_THRESHOLD,
-                )
-
-    async def _notify_quota_will_be_reached_soon(
-        self,
-        username: str,
-        resource_type: QuotaResourceType,
-        used_seconds: int,
-        quota_seconds: int,
-        cluster_name: str,
-        threshold: float,
-    ) -> bool:
-
-        if used_seconds / quota_seconds >= threshold:
-            notification_hash = self._compute_quota_notification_hash(
-                username, cluster_name, resource_type, quota_seconds,
-            )
-            if self._need_to_send_quota_notification(notification_hash):
-                notification = QuotaWillBeReachedSoon(
-                    username,
-                    resource=resource_type,
-                    used=used_seconds,
-                    quota=quota_seconds,
-                    cluster_name=cluster_name,
-                )
-                await self._notifications_client.notify(notification)
-                self._store_sent_quota_notification(notification_hash)
-                return True
-        return False
-
-    @classmethod
-    def _compute_quota_notification_hash(
-        cls,
-        username: str,
-        cluster_name: str,
-        resource_type: QuotaResourceType,
-        quota: int,
-    ) -> str:
-        return hashlib.sha1(
-            username.encode()
-            + resource_type.encode()
-            + cluster_name.encode()
-            + str(quota).encode()
-        ).hexdigest()
-
-    def _store_sent_quota_notification(self, quota_notification_hash: str) -> None:
-        self._sent_quota_will_be_reached_soon_notifications.add(quota_notification_hash)
-
-    def _need_to_send_quota_notification(self, quota_notification_hash: str) -> bool:
-        return (
-            quota_notification_hash
-            not in self._sent_quota_will_be_reached_soon_notifications
-        )
 
 
 class JobPolicyEnforcePoller:
