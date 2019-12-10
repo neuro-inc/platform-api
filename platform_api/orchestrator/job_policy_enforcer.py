@@ -1,11 +1,10 @@
 import abc
 import asyncio
 import contextlib
-import hashlib
 import logging
 from dataclasses import dataclass, field
 from datetime import timedelta
-from typing import Any, Dict, Iterable, List, Optional, Sequence, Set
+from typing import Any, Dict, Iterable, List, Optional, Sequence
 
 import aiohttp
 from multidict import MultiDict
@@ -194,10 +193,19 @@ class Jobs:
         return list(groups.values())
 
 
+@dataclass(frozen=True)
+class QuotaNotificationKey:
+    username: str
+    cluster_name: str
+    resource_type: QuotaResourceType
+
+
 class QuotaNotifier:
     def __init__(self, notifications_client: Client):
         self._notifications_client = notifications_client
-        self._sent_quota_will_be_reached_soon_notifications: Set[str] = set()
+        self._sent_quota_will_be_reached_soon_notifications: Dict[
+            QuotaNotificationKey, int
+        ] = {}
 
     async def notify_for_quota(
         self, username: str, cluster_stats: UserClusterStats, jobs_to_delete: List[str]
@@ -211,75 +219,73 @@ class QuotaNotifier:
         quota = cluster_stats.quota
         jobs = cluster_stats.jobs
 
-        # We only send notifications in this iteration unless we're about to kill
-        # some jobs. It might be the case we have some GPU jobs to kill plus
-        # CPU quota notification pending, but we'll send the notification
-        # on the next QuotaEnforcer iteration in a second
-        if len(jobs_to_delete) == 0:
-            if not await self._notify_quota_will_be_reached_soon(
+        if not jobs_to_delete:
+            await self._notify_quota_will_be_reached_soon(
                 username,
                 QuotaResourceType.NON_GPU,
-                jobs.total_non_gpu_run_time_delta.seconds,
-                quota.total_non_gpu_run_time_delta.seconds,
+                jobs.total_non_gpu_run_time_delta,
+                quota.total_non_gpu_run_time_delta,
                 cluster_name,
                 NON_GPU_QUOTA_NOTIFICATION_THRESHOLD,
-            ):
-                await self._notify_quota_will_be_reached_soon(
-                    username,
-                    QuotaResourceType.GPU,
-                    jobs.total_gpu_run_time_delta.seconds,
-                    quota.total_gpu_run_time_delta.seconds,
-                    cluster_name,
-                    GPU_QUOTA_NOTIFICATION_THRESHOLD,
-                )
+            )
+            await self._notify_quota_will_be_reached_soon(
+                username,
+                QuotaResourceType.GPU,
+                jobs.total_gpu_run_time_delta,
+                quota.total_gpu_run_time_delta,
+                cluster_name,
+                GPU_QUOTA_NOTIFICATION_THRESHOLD,
+            )
 
     async def _notify_quota_will_be_reached_soon(
         self,
         username: str,
         resource_type: QuotaResourceType,
-        used_seconds: int,
-        quota_seconds: int,
+        used_quota: timedelta,
+        total_quota: timedelta,
         cluster_name: str,
         threshold: float,
     ) -> bool:
 
-        if used_seconds / quota_seconds >= threshold:
-            notification_hash = self._compute_quota_notification_hash(
-                username, cluster_name, resource_type, quota_seconds,
+        if used_quota >= threshold * total_quota:
+            notification_key = QuotaNotificationKey(
+                username, cluster_name, resource_type
             )
-            if self._need_to_send_quota_notification(notification_hash):
+            if self._need_to_send_quota_notification(
+                notification_key, int(total_quota.total_seconds())
+            ):
                 notification = QuotaWillBeReachedSoon(
                     username,
                     resource=resource_type,
-                    used=used_seconds,
-                    quota=quota_seconds,
+                    used=used_quota.total_seconds(),
+                    quota=total_quota.total_seconds(),
                     cluster_name=cluster_name,
                 )
                 await self._notifications_client.notify(notification)
-                self._store_sent_quota_notification(notification_hash)
+                self._store_sent_quota_notification(
+                    notification_key, int(total_quota.total_seconds())
+                )
                 return True
         return False
 
-    @classmethod
-    def _compute_quota_notification_hash(
-        cls,
-        username: str,
-        cluster_name: str,
-        resource_type: QuotaResourceType,
-        quota: int,
-    ) -> str:
-        return hashlib.sha1(
-            f"{username}:{resource_type}:{cluster_name}:{quota}".encode()
-        ).hexdigest()
+    def _store_sent_quota_notification(
+        self,
+        quota_notification_key: QuotaNotificationKey,
+        current_quota_value_seconds: int,
+    ) -> None:
+        self._sent_quota_will_be_reached_soon_notifications[
+            quota_notification_key
+        ] = current_quota_value_seconds
 
-    def _store_sent_quota_notification(self, quota_notification_hash: str) -> None:
-        self._sent_quota_will_be_reached_soon_notifications.add(quota_notification_hash)
-
-    def _need_to_send_quota_notification(self, quota_notification_hash: str) -> bool:
-        return (
-            quota_notification_hash
-            not in self._sent_quota_will_be_reached_soon_notifications
+    def _need_to_send_quota_notification(
+        self,
+        quota_notification_key: QuotaNotificationKey,
+        current_quota_value_seconds: int,
+    ) -> bool:
+        stored_quota_value = self._sent_quota_will_be_reached_soon_notifications.get(
+            quota_notification_key
         )
+        return stored_quota_value != current_quota_value_seconds
 
 
 class JobPolicyEnforcer:

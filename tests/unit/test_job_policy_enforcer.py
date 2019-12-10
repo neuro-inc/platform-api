@@ -29,7 +29,6 @@ from platform_api.orchestrator.job_policy_enforcer import (
     Jobs,
     PlatformApiClient,
     QuotaEnforcer,
-    QuotaNotifier,
     UserClusterStats,
     UserJobs,
     UserStats,
@@ -424,17 +423,12 @@ class TestQuotaEnforcer:
         await enforcer._enforce_user_quota(
             UserJobs("user2", {"cluster1": ClusterJobs("cluster1", cpu_jobs, gpu_jobs)})
         )
-        assert len(mock_notifications_client.sent_notifications) == 1
-        # Verify we send CPU notification first
+        assert len(mock_notifications_client.sent_notifications) == 2
+
         notification = mock_notifications_client.sent_notifications[0]
         assert isinstance(notification, QuotaWillBeReachedSoon)
         assert notification.user_id == "user2"
         assert notification.resource == QuotaResourceType.NON_GPU
-
-        # start another enforcement and verify we send a GPU notification as well
-        await enforcer._enforce_user_quota(
-            UserJobs("user2", {"cluster1": ClusterJobs("cluster1", cpu_jobs, gpu_jobs)})
-        )
         assert len(mock_notifications_client.sent_notifications) == 2
         notification = mock_notifications_client.sent_notifications[1]
         assert isinstance(notification, QuotaWillBeReachedSoon)
@@ -484,38 +478,6 @@ class TestQuotaEnforcer:
         enforcer = QuotaEnforcer(client, mock_notifications_client)
         await enforcer.enforce()
         assert client.killed_jobs == cpu_jobs
-
-    @pytest.mark.asyncio
-    async def test_sent_notification_hash(self) -> None:
-        # generate 5 hashes, where 1 element is different from any other hash and
-        # verify they're all different
-        quota_hashes = {
-            QuotaNotifier._compute_quota_notification_hash(
-                "user1", "cluster1", QuotaResourceType.NON_GPU, 10
-            ),
-            QuotaNotifier._compute_quota_notification_hash(
-                "user2", "cluster1", QuotaResourceType.NON_GPU, 10
-            ),
-            QuotaNotifier._compute_quota_notification_hash(
-                "user1", "cluster2", QuotaResourceType.NON_GPU, 10
-            ),
-            QuotaNotifier._compute_quota_notification_hash(
-                "user1", "cluster1", QuotaResourceType.GPU, 10
-            ),
-            QuotaNotifier._compute_quota_notification_hash(
-                "user1", "cluster1", QuotaResourceType.NON_GPU, 11
-            ),
-        }
-        assert len(quota_hashes) == 5
-
-        # verify items in the hash are separated
-        hash1 = QuotaNotifier._compute_quota_notification_hash(
-            "user1", "cluster1", QuotaResourceType.NON_GPU, 10
-        )
-        hash2 = QuotaNotifier._compute_quota_notification_hash(
-            "user1non_", "cluster1", QuotaResourceType.GPU, 10
-        )
-        assert hash1 != hash2
 
 
 class MockedJobPolicyEnforcer(JobPolicyEnforcer):
