@@ -200,17 +200,14 @@ class QuotaNotifier:
         self._sent_quota_will_be_reached_soon_notifications: Set[str] = set()
 
     async def notify_for_quota(
-            self,
-            username: str,
-            cluster_name: str,
-            cluster_stats: UserClusterStats,
-            jobs_to_delete: List[str],
+        self, username: str, cluster_stats: UserClusterStats, jobs_to_delete: List[str]
     ) -> None:
         # TODO: Extract to env variables?
         # TEMP: Just as a proof-of-concept for tests
         NON_GPU_QUOTA_NOTIFICATION_THRESHOLD = 0.1
         GPU_QUOTA_NOTIFICATION_THRESHOLD = 0.1
 
+        cluster_name = cluster_stats.name
         quota = cluster_stats.quota
         jobs = cluster_stats.jobs
 
@@ -330,10 +327,7 @@ class QuotaEnforcer(JobPolicyEnforcer):
                 )
                 jobs_to_delete_in_current_cluster.extend(cluster_jobs.gpu_ids)
             await self._quota_notifier.notify_for_quota(
-                user_name,
-                cluster_name,
-                cluster_stats,
-                jobs_to_delete_in_current_cluster,
+                user_name, cluster_stats, jobs_to_delete_in_current_cluster
             )
             jobs_to_delete.extend(jobs_to_delete_in_current_cluster)
 
