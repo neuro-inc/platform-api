@@ -1,4 +1,5 @@
 import asyncio
+import os
 from typing import Any, AsyncIterator, Awaitable, Callable, Dict, Optional, Set
 
 import aiohttp.web
@@ -325,15 +326,24 @@ class TestQuotaWillBeReachedSoon:
         job_request["container"]["command"] = "sleep 15m"
         job_id = await run_job(user, job_request, do_kill=False)
         assert job_id
-        await asyncio.sleep(120)
+        await asyncio.sleep(65)
         # Notification will be sent in graceful app shutdown
         await api.runner.close()
         assert (
             QuotaWillBeReachedSoon.slug(),
-            {"user_id": user.name},
+            {
+                "user_id": user.name,
+                "cluster_name": "default",
+                "resource": "non_gpu",
+                "quota": 120.0,
+                "used": 60.0,
+            },
         ) in mock_notifications_server.requests
 
     @pytest.mark.asyncio
+    @pytest.mark.skipif(
+        os.environ.get("CI") is None, reason="Can only run this test in CircleCI"
+    )
     async def test_sent_if_gpu_quota_will_be_reached_soon(
         self,
         api: ApiConfig,
@@ -348,13 +358,20 @@ class TestQuotaWillBeReachedSoon:
         user = await regular_user_factory(quota=quota)
         job_request = job_request_factory()
         job_request["container"]["command"] = "sleep 15m"
+        job_request["container"]["resources"]["gpu"] = 1
         job_id = await run_job(user, job_request, do_kill=False)
         assert job_id
-        await asyncio.sleep(120)
+        await asyncio.sleep(65)
         # Notification will be sent in graceful app shutdown
         await api.runner.close()
 
         assert (
             QuotaWillBeReachedSoon.slug(),
-            {"user_id": user.name},
+            {
+                "user_id": user.name,
+                "cluster_name": "default",
+                "resource": "gpu",
+                "quota": 120.0,
+                "used": 60.0,
+            },
         ) in mock_notifications_server.requests

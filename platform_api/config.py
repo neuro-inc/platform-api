@@ -75,8 +75,7 @@ class NotificationsConfig:
 class JobPolicyEnforcerConfig:
     platform_api_url: URL
     token: str
-    # TEMP: proof-of-concept for integration tests
-    interval_sec: float = 1
+    interval_sec: float = 60
 
 
 @dataclass(frozen=True)

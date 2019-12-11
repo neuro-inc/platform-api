@@ -245,28 +245,26 @@ class QuotaNotifier:
         total_quota: timedelta,
         cluster_name: str,
         threshold: float,
-    ) -> bool:
+    ) -> None:
 
-        if used_quota >= threshold * total_quota:
-            notification_key = QuotaNotificationKey(
-                username, cluster_name, resource_type
-            )
-            if self._need_to_send_quota_notification(
+        notification_key = QuotaNotificationKey(username, cluster_name, resource_type)
+        if (
+            self._need_to_send_quota_notification(
                 notification_key, int(total_quota.total_seconds())
-            ):
-                notification = QuotaWillBeReachedSoon(
-                    username,
-                    resource=resource_type,
-                    used=used_quota.total_seconds(),
-                    quota=total_quota.total_seconds(),
-                    cluster_name=cluster_name,
-                )
-                await self._notifications_client.notify(notification)
-                self._store_sent_quota_notification(
-                    notification_key, int(total_quota.total_seconds())
-                )
-                return True
-        return False
+            )
+            and used_quota >= threshold * total_quota
+        ):
+            notification = QuotaWillBeReachedSoon(
+                username,
+                resource=resource_type,
+                used=used_quota.total_seconds(),
+                quota=total_quota.total_seconds(),
+                cluster_name=cluster_name,
+            )
+            await self._notifications_client.notify(notification)
+            self._store_sent_quota_notification(
+                notification_key, int(total_quota.total_seconds())
+            )
 
     def _store_sent_quota_notification(
         self,
@@ -285,7 +283,13 @@ class QuotaNotifier:
         stored_quota_value = self._sent_quota_will_be_reached_soon_notifications.get(
             quota_notification_key
         )
-        return stored_quota_value != current_quota_value_seconds
+        if stored_quota_value != current_quota_value_seconds:
+            del self._sent_quota_will_be_reached_soon_notifications[
+                quota_notification_key
+            ]
+            return True
+        else:
+            return False
 
 
 class JobPolicyEnforcer:
