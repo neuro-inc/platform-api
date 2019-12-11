@@ -208,7 +208,7 @@ class QuotaNotifier:
         ] = {}
 
     async def notify_for_quota(
-        self, username: str, cluster_stats: UserClusterStats, jobs_to_delete: List[str]
+        self, username: str, cluster_stats: UserClusterStats
     ) -> None:
         # TODO: Extract to env variables?
         # TEMP: Just as a proof-of-concept for tests
@@ -219,23 +219,22 @@ class QuotaNotifier:
         quota = cluster_stats.quota
         jobs = cluster_stats.jobs
 
-        if not jobs_to_delete:
-            await self._notify_quota_will_be_reached_soon(
-                username,
-                QuotaResourceType.NON_GPU,
-                jobs.total_non_gpu_run_time_delta,
-                quota.total_non_gpu_run_time_delta,
-                cluster_name,
-                NON_GPU_QUOTA_NOTIFICATION_THRESHOLD,
-            )
-            await self._notify_quota_will_be_reached_soon(
-                username,
-                QuotaResourceType.GPU,
-                jobs.total_gpu_run_time_delta,
-                quota.total_gpu_run_time_delta,
-                cluster_name,
-                GPU_QUOTA_NOTIFICATION_THRESHOLD,
-            )
+        await self._notify_quota_will_be_reached_soon(
+            username,
+            QuotaResourceType.NON_GPU,
+            jobs.total_non_gpu_run_time_delta,
+            quota.total_non_gpu_run_time_delta,
+            cluster_name,
+            NON_GPU_QUOTA_NOTIFICATION_THRESHOLD,
+        )
+        await self._notify_quota_will_be_reached_soon(
+            username,
+            QuotaResourceType.GPU,
+            jobs.total_gpu_run_time_delta,
+            quota.total_gpu_run_time_delta,
+            cluster_name,
+            GPU_QUOTA_NOTIFICATION_THRESHOLD,
+        )
 
     async def _notify_quota_will_be_reached_soon(
         self,
@@ -284,9 +283,9 @@ class QuotaNotifier:
             quota_notification_key
         )
         if stored_quota_value != current_quota_value_seconds:
-            del self._sent_quota_will_be_reached_soon_notifications[
-                quota_notification_key
-            ]
+            self._sent_quota_will_be_reached_soon_notifications.pop(
+                quota_notification_key, None
+            )
             return True
         else:
             return False
@@ -333,9 +332,8 @@ class QuotaEnforcer(JobPolicyEnforcer):
                     f"on cluster '{cluster_name}'"
                 )
                 jobs_to_delete_in_current_cluster.extend(cluster_jobs.gpu_ids)
-            await self._quota_notifier.notify_for_quota(
-                user_name, cluster_stats, jobs_to_delete_in_current_cluster
-            )
+            if not jobs_to_delete_in_current_cluster:
+                await self._quota_notifier.notify_for_quota(user_name, cluster_stats)
             jobs_to_delete.extend(jobs_to_delete_in_current_cluster)
 
         for job_id in jobs_to_delete:
