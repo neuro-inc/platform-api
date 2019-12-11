@@ -201,20 +201,18 @@ class QuotaNotificationKey:
 
 
 class QuotaNotifier:
-    def __init__(self, notifications_client: Client):
+    def __init__(
+        self, notifications_client: Client, notification_threshold: float = 0.9
+    ):
         self._notifications_client = notifications_client
         self._sent_quota_will_be_reached_soon_notifications: Dict[
             QuotaNotificationKey, int
         ] = {}
+        self._notifications_threshold = notification_threshold
 
     async def notify_for_quota(
         self, username: str, cluster_stats: UserClusterStats
     ) -> None:
-        # TODO: Extract to env variables?
-        # TEMP: Just as a proof-of-concept for tests
-        NON_GPU_QUOTA_NOTIFICATION_THRESHOLD = 0.1
-        GPU_QUOTA_NOTIFICATION_THRESHOLD = 0.1
-
         cluster_name = cluster_stats.name
         quota = cluster_stats.quota
         jobs = cluster_stats.jobs
@@ -225,7 +223,6 @@ class QuotaNotifier:
             jobs.total_non_gpu_run_time_delta,
             quota.total_non_gpu_run_time_delta,
             cluster_name,
-            NON_GPU_QUOTA_NOTIFICATION_THRESHOLD,
         )
         await self._notify_quota_will_be_reached_soon(
             username,
@@ -233,7 +230,6 @@ class QuotaNotifier:
             jobs.total_gpu_run_time_delta,
             quota.total_gpu_run_time_delta,
             cluster_name,
-            GPU_QUOTA_NOTIFICATION_THRESHOLD,
         )
 
     async def _notify_quota_will_be_reached_soon(
@@ -243,7 +239,6 @@ class QuotaNotifier:
         used_quota: timedelta,
         total_quota: timedelta,
         cluster_name: str,
-        threshold: float,
     ) -> None:
 
         notification_key = QuotaNotificationKey(username, cluster_name, resource_type)
@@ -251,7 +246,7 @@ class QuotaNotifier:
             self._need_to_send_quota_notification(
                 notification_key, int(total_quota.total_seconds())
             )
-            and used_quota >= threshold * total_quota
+            and used_quota >= self._notifications_threshold * total_quota
         ):
             notification = QuotaWillBeReachedSoon(
                 username,
@@ -299,10 +294,15 @@ class JobPolicyEnforcer:
 
 class QuotaEnforcer(JobPolicyEnforcer):
     def __init__(
-        self, platform_api_client: PlatformApiClient, notifications_client: Client
+        self,
+        platform_api_client: PlatformApiClient,
+        notifications_client: Client,
+        enforcer_config: JobPolicyEnforcerConfig,
     ):
         self._platform_api_client = platform_api_client
-        self._quota_notifier = QuotaNotifier(notifications_client)
+        self._quota_notifier = QuotaNotifier(
+            notifications_client, enforcer_config.quota_notification_threshold
+        )
 
     async def enforce(self) -> None:
         users_with_active_jobs = await self._get_active_users_and_jobs()

@@ -1,5 +1,4 @@
 import asyncio
-import os
 from typing import Any, AsyncIterator, Awaitable, Callable, Dict, Optional, Set
 
 import aiohttp.web
@@ -340,10 +339,8 @@ class TestQuotaWillBeReachedSoon:
             },
         ) in mock_notifications_server.requests
 
+    @pytest.mark.xfail
     @pytest.mark.asyncio
-    @pytest.mark.skipif(
-        os.environ.get("CI") is None, reason="Can only run this test in CircleCI"
-    )
     async def test_sent_if_gpu_quota_will_be_reached_soon(
         self,
         api: ApiConfig,

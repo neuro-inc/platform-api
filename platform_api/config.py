@@ -76,6 +76,7 @@ class JobPolicyEnforcerConfig:
     platform_api_url: URL
     token: str
     interval_sec: float = 60
+    quota_notification_threshold: float = 0.9
 
 
 @dataclass(frozen=True)

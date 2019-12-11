@@ -353,7 +353,9 @@ class TestQuotaEnforcer:
     @pytest.mark.asyncio
     async def test_enforce_ok(self, mock_notifications_client: Client) -> None:
         client = MockPlatformApiClient()
-        enforcer = QuotaEnforcer(client, mock_notifications_client)
+        enforcer = QuotaEnforcer(
+            client, mock_notifications_client, JobPolicyEnforcerConfig(URL(), "")
+        )
         await enforcer.enforce()
         assert len(client.killed_jobs) == 0
 
@@ -367,7 +369,9 @@ class TestQuotaEnforcer:
         ]
         gpu_jobs = [JobInfo("job5", JobStatus.RUNNING, "user2", True, "cluster1")]
         client = MockPlatformApiClient(gpu_quota_minutes=100)
-        enforcer = QuotaEnforcer(client, mock_notifications_client)
+        enforcer = QuotaEnforcer(
+            client, mock_notifications_client, JobPolicyEnforcerConfig(URL(), "")
+        )
         await enforcer._enforce_user_quota(
             UserJobs("user2", {"cluster1": ClusterJobs("cluster1", cpu_jobs, gpu_jobs)})
         )
@@ -393,7 +397,9 @@ class TestQuotaEnforcer:
         ]
         gpu_jobs = [JobInfo("job5", JobStatus.RUNNING, "user1", True, "cluster1")]
         client = MockPlatformApiClient(cpu_quota_minutes=100)
-        enforcer = QuotaEnforcer(client, mock_notifications_client)
+        enforcer = QuotaEnforcer(
+            client, mock_notifications_client, JobPolicyEnforcerConfig(URL(), "")
+        )
         await enforcer._enforce_user_quota(
             UserJobs("user1", {"cluster1": ClusterJobs("cluster1", cpu_jobs, gpu_jobs)})
         )
@@ -419,7 +425,9 @@ class TestQuotaEnforcer:
         ]
         gpu_jobs = [JobInfo("job5", JobStatus.RUNNING, "user2", True, "cluster1")]
         client = MockPlatformApiClient()
-        enforcer = QuotaEnforcer(client, mock_notifications_client)
+        enforcer = QuotaEnforcer(
+            client, mock_notifications_client, JobPolicyEnforcerConfig(URL(), "")
+        )
         await enforcer._enforce_user_quota(
             UserJobs("user2", {"cluster1": ClusterJobs("cluster1", cpu_jobs, gpu_jobs)})
         )
@@ -442,7 +450,9 @@ class TestQuotaEnforcer:
         client = MockPlatformApiClient(
             cpu_quota_minutes=1, kill_exception=Exception("Test exception")
         )
-        enforcer = QuotaEnforcer(client, mock_notifications_client)
+        enforcer = QuotaEnforcer(
+            client, mock_notifications_client, JobPolicyEnforcerConfig(URL(), "")
+        )
         # If enforcer handles ApiClient exceptions correctly, this will not fail
         # (but will not yield any results either)
         await enforcer.enforce()
@@ -454,7 +464,9 @@ class TestQuotaEnforcer:
         client = MockPlatformApiClient(
             cpu_quota_minutes=1, stat_exception=Exception("Test exception")
         )
-        enforcer = QuotaEnforcer(client, mock_notifications_client)
+        enforcer = QuotaEnforcer(
+            client, mock_notifications_client, JobPolicyEnforcerConfig(URL(), "")
+        )
         # If enforcer handles exceptions correctly, this will not fail
         # (but will not yield any results either)
         await enforcer.enforce()
@@ -465,7 +477,9 @@ class TestQuotaEnforcer:
     ) -> None:
         gpu_jobs = {"job5"}
         client = MockPlatformApiClient(gpu_quota_minutes=1)
-        enforcer = QuotaEnforcer(client, mock_notifications_client)
+        enforcer = QuotaEnforcer(
+            client, mock_notifications_client, JobPolicyEnforcerConfig(URL(), "")
+        )
         await enforcer.enforce()
         assert client.killed_jobs == gpu_jobs
 
@@ -475,7 +489,9 @@ class TestQuotaEnforcer:
     ) -> None:
         cpu_jobs = {f"job{i}" for i in range(1, 5)}
         client = MockPlatformApiClient(cpu_quota_minutes=1)
-        enforcer = QuotaEnforcer(client, mock_notifications_client)
+        enforcer = QuotaEnforcer(
+            client, mock_notifications_client, JobPolicyEnforcerConfig(URL(), "")
+        )
         await enforcer.enforce()
         assert client.killed_jobs == cpu_jobs
 
@@ -720,7 +736,9 @@ class TestRealJobPolicyEnforcerClientWrapper:
             URL(f"{mock_api.endpoint}/wrong/base/path"), "token"
         )
         async with PlatformApiClient(wrong_config) as client:
-            enforcer = QuotaEnforcer(client, mock_notifications_client)
+            enforcer = QuotaEnforcer(
+                client, mock_notifications_client, JobPolicyEnforcerConfig(URL(), "")
+            )
             with pytest.raises(ClientResponseError, match="404, message='Not Found"):
                 await enforcer.enforce()
 

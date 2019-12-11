@@ -266,7 +266,11 @@ async def create_app(
             await exit_stack.enter_async_context(
                 JobPolicyEnforcePoller(
                     config.job_policy_enforcer,
-                    enforcers=[QuotaEnforcer(api_client, notifications_client)],
+                    enforcers=[
+                        QuotaEnforcer(
+                            api_client, notifications_client, config.job_policy_enforcer
+                        )
+                    ],
                 )
             )
 
