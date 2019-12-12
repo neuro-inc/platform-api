@@ -320,6 +320,7 @@ class QuotaEnforcer(JobPolicyEnforcer):
         for cluster_name, cluster_jobs in user_jobs.clusters.items():
             cluster_stats = user_stats.get_cluster(cluster_name)
             jobs_to_delete_in_current_cluster: List[str] = []
+            logger.debug(f"Checking {cluster_stats}")
             if cluster_stats.is_non_gpu_quota_exceeded:
                 logger.info(
                     f"User '{user_name}' exceeded non-GPU quota "
@@ -333,6 +334,13 @@ class QuotaEnforcer(JobPolicyEnforcer):
                 )
                 jobs_to_delete_in_current_cluster.extend(cluster_jobs.gpu_ids)
             if not jobs_to_delete_in_current_cluster:
+                # NOTE: `_enforce_user_quota` gets executed only when a user
+                # has some 'pending' or 'running' jobs. Assuming that, if any
+                # type of quota is exceeded, there should be some jobs to
+                # delete, otherwise we wouldn't even enter the loop above.
+                # This condition allows us not to send a
+                # `QuotaWillBeReachedSoon` notification in case the quota has
+                # been already exceeded.
                 await self._quota_notifier.notify_for_quota(user_name, cluster_stats)
             jobs_to_delete.extend(jobs_to_delete_in_current_cluster)
 

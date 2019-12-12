@@ -1,4 +1,3 @@
-import asyncio
 from typing import Any, AsyncIterator, Awaitable, Callable, Dict, Optional, Set
 
 import aiohttp.web
@@ -285,49 +284,39 @@ class TestQuotaWillBeReachedSoon:
                 await jobs_client.delete_job(job_id=job_id, assert_success=False)
 
     @pytest.mark.asyncio
-    async def test_not_sent_if_quota_not_reached(
-        self,
-        api: ApiConfig,
-        client: aiohttp.ClientSession,
-        job_request_factory: Callable[[], Dict[str, Any]],
-        jobs_client: Callable[[], Any],
-        regular_user_factory: Callable[..., Any],
-        run_job: Callable[..., Awaitable[str]],
-        mock_notifications_server: NotificationsServer,
-    ) -> None:
-        quota = Quota(total_non_gpu_run_time_minutes=100)
-        user = await regular_user_factory(quota=quota)
-        job_request = job_request_factory()
-        job_request["container"]["command"] = "sleep 15m"
-        job_id = await run_job(user, job_request, do_kill=False)
-        assert job_id
-        await asyncio.sleep(120)
-        # Notification will be sent in graceful app shutdown
-        await api.runner.close()
-        for (slug, request) in mock_notifications_server.requests:
-            if slug == QuotaWillBeReachedSoon.slug():
-                raise AssertionError("Unexpected QuotaWillBeReachedSoon sent")
-
-    @pytest.mark.asyncio
     async def test_sent_if_non_gpu_quota_will_be_reached_soon(
         self,
         api: ApiConfig,
         client: aiohttp.ClientSession,
         job_request_factory: Callable[[], Dict[str, Any]],
-        jobs_client: Callable[[], Any],
+        jobs_client_factory: Callable[[_User], JobsClient],
         regular_user_factory: Callable[..., Any],
         run_job: Callable[..., Awaitable[str]],
         mock_notifications_server: NotificationsServer,
     ) -> None:
         quota = Quota(total_non_gpu_run_time_minutes=2)
         user = await regular_user_factory(quota=quota)
+        jobs_client = jobs_client_factory(user)
+
+        # NOTE: due to the fact that the /stats route reports the jobs run
+        # time in minutes rounded, we need to wait at least 30 seconds to
+        # trigger the quota enforcing logic.
         job_request = job_request_factory()
-        job_request["container"]["command"] = "sleep 15m"
+        job_request["container"]["command"] = "sleep 35s"
         job_id = await run_job(user, job_request, do_kill=False)
-        assert job_id
-        await asyncio.sleep(65)
+        await jobs_client.long_polling_by_job_id(job_id, "succeeded")
+
         # Notification will be sent in graceful app shutdown
         await api.runner.close()
+
+        number_of_quota_notifs = len(
+            [
+                slug
+                for slug, _ in mock_notifications_server.requests
+                if slug == QuotaWillBeReachedSoon.slug()
+            ]
+        )
+        assert number_of_quota_notifs == 1
         assert (
             QuotaWillBeReachedSoon.slug(),
             {
@@ -335,6 +324,6 @@ class TestQuotaWillBeReachedSoon:
                 "cluster_name": "default",
                 "resource": "non_gpu",
                 "quota": 120.0,
-                "used": 60.0,
+                "used": 60.0,  # indicates that the notification was sent in time
             },
         ) in mock_notifications_server.requests
