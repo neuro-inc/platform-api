@@ -2551,8 +2551,8 @@ class TestJobPolicyEnforcer:
             assert resp.status == HTTPCreated.status_code, await resp.text()
 
         # Due to conflict between quota enforcer and jobs poller (see issue #986),
-        #  we cannot guarrantee that the quota will be enforced up to one
-        #  enfoce-poller's interval, so we check up to 7 intervals:
+        # we cannot guarrantee that the quota will be enforced up to one
+        # enforce-poller's interval, so we check up to 7 intervals:
         max_enforcing_time = config.job_policy_enforcer.interval_sec * 7
         await user_jobs_client.long_polling_by_job_id(
             job_id=job_default["id"],

@@ -18,6 +18,7 @@ install_requires = (
     "notifications-client==0.8.1",
     "platform-logging==0.3",
     "yarl==1.3.0",
+    "multidict==4.6.1",
 )
 
 setup(

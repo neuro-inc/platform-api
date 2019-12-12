@@ -8,6 +8,8 @@ from typing import Any, Dict, Iterable, List, Optional, Sequence
 
 import aiohttp
 from multidict import MultiDict
+from notifications_client import QuotaResourceType, QuotaWillBeReachedSoon
+from notifications_client.client import Client
 
 from platform_api.config import JobPolicyEnforcerConfig
 from platform_api.orchestrator.job import ZERO_RUN_TIME, AggregatedRunTime
@@ -191,6 +193,99 @@ class Jobs:
         return list(groups.values())
 
 
+@dataclass(frozen=True)
+class QuotaNotificationKey:
+    username: str
+    cluster_name: str
+    resource_type: QuotaResourceType
+
+
+class QuotaNotifier:
+    def __init__(
+        self, notifications_client: Client, notification_threshold: float = 0.9
+    ):
+        self._notifications_client = notifications_client
+        self._sent_quota_will_be_reached_soon_notifications: Dict[
+            QuotaNotificationKey, int
+        ] = {}
+        self._notifications_threshold = notification_threshold
+
+    async def notify_for_quota(
+        self, username: str, cluster_stats: UserClusterStats
+    ) -> None:
+        cluster_name = cluster_stats.name
+        quota = cluster_stats.quota
+        jobs = cluster_stats.jobs
+
+        await self._notify_quota_will_be_reached_soon(
+            username,
+            QuotaResourceType.NON_GPU,
+            jobs.total_non_gpu_run_time_delta,
+            quota.total_non_gpu_run_time_delta,
+            cluster_name,
+        )
+        await self._notify_quota_will_be_reached_soon(
+            username,
+            QuotaResourceType.GPU,
+            jobs.total_gpu_run_time_delta,
+            quota.total_gpu_run_time_delta,
+            cluster_name,
+        )
+
+    async def _notify_quota_will_be_reached_soon(
+        self,
+        username: str,
+        resource_type: QuotaResourceType,
+        used_quota: timedelta,
+        total_quota: timedelta,
+        cluster_name: str,
+    ) -> None:
+
+        notification_key = QuotaNotificationKey(username, cluster_name, resource_type)
+        if (
+            self._need_to_send_quota_notification(
+                notification_key, int(total_quota.total_seconds())
+            )
+            and used_quota >= self._notifications_threshold * total_quota
+        ):
+            notification = QuotaWillBeReachedSoon(
+                username,
+                resource=resource_type,
+                used=used_quota.total_seconds(),
+                quota=total_quota.total_seconds(),
+                cluster_name=cluster_name,
+            )
+            await self._notifications_client.notify(notification)
+            self._store_sent_quota_notification(
+                notification_key, int(total_quota.total_seconds())
+            )
+
+    def _store_sent_quota_notification(
+        self,
+        quota_notification_key: QuotaNotificationKey,
+        current_quota_value_seconds: int,
+    ) -> None:
+        self._sent_quota_will_be_reached_soon_notifications[
+            quota_notification_key
+        ] = current_quota_value_seconds
+
+    def _need_to_send_quota_notification(
+        self,
+        quota_notification_key: QuotaNotificationKey,
+        current_quota_value_seconds: int,
+    ) -> bool:
+        stored_quota_value = self._sent_quota_will_be_reached_soon_notifications.get(
+            quota_notification_key
+        )
+        if stored_quota_value != current_quota_value_seconds:
+            self._sent_quota_will_be_reached_soon_notifications.pop(
+                quota_notification_key, None
+            )
+            return True
+        else:
+            return False
+
+
 class JobPolicyEnforcer:
     @abc.abstractmethod
     async def enforce(self) -> None:
@@ -198,8 +293,16 @@ class JobPolicyEnforcer:
 
 
 class QuotaEnforcer(JobPolicyEnforcer):
-    def __init__(self, platform_api_client: PlatformApiClient):
+    def __init__(
+        self,
+        platform_api_client: PlatformApiClient,
+        notifications_client: Client,
+        enforcer_config: JobPolicyEnforcerConfig,
+    ):
         self._platform_api_client = platform_api_client
+        self._quota_notifier = QuotaNotifier(
+            notifications_client, enforcer_config.quota_notification_threshold
+        )
 
     async def enforce(self) -> None:
         users_with_active_jobs = await self._get_active_users_and_jobs()
@@ -216,18 +319,31 @@ class QuotaEnforcer(JobPolicyEnforcer):
         jobs_to_delete: List[str] = []
         for cluster_name, cluster_jobs in user_jobs.clusters.items():
             cluster_stats = user_stats.get_cluster(cluster_name)
+            jobs_to_delete_in_current_cluster: List[str] = []
+            logger.debug(f"Checking {cluster_stats}")
             if cluster_stats.is_non_gpu_quota_exceeded:
                 logger.info(
                     f"User '{user_name}' exceeded non-GPU quota "
                     f"on cluster '{cluster_name}'"
                 )
-                jobs_to_delete.extend(cluster_jobs.non_gpu_ids)
+                jobs_to_delete_in_current_cluster.extend(cluster_jobs.non_gpu_ids)
             if cluster_stats.is_gpu_quota_exceeded:
                 logger.info(
                     f"User '{user_name}' exceeded GPU quota "
                     f"on cluster '{cluster_name}'"
                 )
-                jobs_to_delete.extend(cluster_jobs.gpu_ids)
+                jobs_to_delete_in_current_cluster.extend(cluster_jobs.gpu_ids)
+            if not jobs_to_delete_in_current_cluster:
+                # NOTE: `_enforce_user_quota` gets executed only when a user
+                # has some 'pending' or 'running' jobs. Assuming that, if any
+                # type of quota is exceeded, there should be some jobs to
+                # delete, otherwise we wouldn't even enter the loop above.
+                # This condition allows us not to send a
+                # `QuotaWillBeReachedSoon` notification in case the quota has
+                # been already exceeded.
+                await self._quota_notifier.notify_for_quota(user_name, cluster_stats)
+            jobs_to_delete.extend(jobs_to_delete_in_current_cluster)
+
         for job_id in jobs_to_delete:
             try:
                 await self._platform_api_client.kill_job(job_id)
