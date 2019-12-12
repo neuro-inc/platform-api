@@ -338,37 +338,3 @@ class TestQuotaWillBeReachedSoon:
                 "used": 60.0,
             },
         ) in mock_notifications_server.requests
-
-    @pytest.mark.xfail
-    @pytest.mark.asyncio
-    async def test_sent_if_gpu_quota_will_be_reached_soon(
-        self,
-        api: ApiConfig,
-        client: aiohttp.ClientSession,
-        job_request_factory: Callable[[], Dict[str, Any]],
-        jobs_client: Callable[[], Any],
-        regular_user_factory: Callable[..., Any],
-        run_job: Callable[..., Awaitable[str]],
-        mock_notifications_server: NotificationsServer,
-    ) -> None:
-        quota = Quota(total_gpu_run_time_minutes=2)
-        user = await regular_user_factory(quota=quota)
-        job_request = job_request_factory()
-        job_request["container"]["command"] = "sleep 15m"
-        job_request["container"]["resources"]["gpu"] = 1
-        job_id = await run_job(user, job_request, do_kill=False)
-        assert job_id
-        await asyncio.sleep(65)
-        # Notification will be sent in graceful app shutdown
-        await api.runner.close()
-
-        assert (
-            QuotaWillBeReachedSoon.slug(),
-            {
-                "user_id": user.name,
-                "cluster_name": "default",
-                "resource": "gpu",
-                "quota": 120.0,
-                "used": 60.0,
-            },
-        ) in mock_notifications_server.requests
