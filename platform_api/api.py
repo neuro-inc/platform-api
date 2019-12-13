@@ -3,6 +3,7 @@ import logging
 from typing import Any, AsyncIterator, Awaitable, Callable, Dict, Sequence
 
 import aiohttp.web
+import aiohttp_cors
 from aiohttp.web import HTTPUnauthorized
 from aiohttp_security import check_permission
 from async_exit_stack import AsyncExitStack
@@ -18,7 +19,7 @@ from platform_api.orchestrator.job_policy_enforcer import (
 )
 
 from .cluster import Cluster, ClusterConfig, ClusterRegistry
-from .config import Config
+from .config import Config, CORSConfig
 from .config_factory import EnvironConfigFactory
 from .handlers import JobsHandler
 from .handlers.stats_handler import StatsHandler
@@ -302,7 +303,25 @@ async def create_app(
     api_v1_app.add_subapp("/stats", stats_app)
 
     app.add_subapp("/api/v1", api_v1_app)
+
+    _setup_cors(app, config.cors)
     return app
+
+
+def _setup_cors(app: aiohttp.web.Application, config: CORSConfig) -> None:
+    if not config.allowed_origins:
+        return
+
+    logger.info(f"Setting up CORS with allowed origins: {config.allowed_origins}")
+    default_options = aiohttp_cors.ResourceOptions(
+        allow_credentials=True, expose_headers="*", allow_headers="*",
+    )
+    cors = aiohttp_cors.setup(
+        app, defaults={origin: default_options for origin in config.allowed_origins}
+    )
+    for route in app.router.routes():
+        logger.debug(f"Setting up CORS for {route}")
+        cors.add(route)
 
 
 async def get_cluster_configs(config: Config) -> Sequence[ClusterConfig]:

@@ -216,6 +216,8 @@ class TestEnvironConfigFactory:
 
         assert config.config_client is not None
 
+        assert not config.cors.allowed_origins
+
     def test_create_value_error_invalid_port(self) -> None:
         environ = {
             "NP_STORAGE_HOST_MOUNT_PATH": "/tmp",
@@ -277,6 +279,7 @@ class TestEnvironConfigFactory:
             "NP_AUTH_PUBLIC_URL": "https://neu.ro/api/v1/users",
             "NP_ENFORCER_PLATFORM_API_URL": "http://platformapi:8080/api/v1",
             "NP_ENFORCER_TOKEN": "compute-token",
+            "NP_CORS_ORIGINS": "https://domain1.com,http://do.main",
         }
         config = EnvironConfigFactory(environ=environ).create()
         cluster = EnvironConfigFactory(environ=environ).create_cluster()
@@ -346,6 +349,8 @@ class TestEnvironConfigFactory:
         assert cluster.registry.url == URL("https://testregistry:5000")
 
         assert config.config_client is not None
+
+        assert config.cors.allowed_origins == ["https://domain1.com", "http://do.main"]
 
     def test_create_nfs(self) -> None:
         environ = {

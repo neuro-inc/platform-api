@@ -19,6 +19,7 @@ install_requires = (
     "platform-logging==0.3",
     "yarl==1.3.0",
     "multidict==4.6.1",
+    "aiohttp-cors==0.7.0",
 )
 
 setup(
