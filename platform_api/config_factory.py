@@ -1,6 +1,6 @@
 import os
 from pathlib import Path, PurePath
-from typing import Any, Dict, List, Optional
+from typing import Any, Dict, List, Optional, Sequence
 
 from yarl import URL
 
@@ -16,6 +16,7 @@ from .cluster_config import (
 from .config import (
     AuthConfig,
     Config,
+    CORSConfig,
     DatabaseConfig,
     JobPolicyEnforcerConfig,
     JobsConfig,
@@ -55,6 +56,7 @@ class EnvironConfigFactory:
             job_policy_enforcer=self.create_job_policy_enforcer(),
             config_client=self.create_config_client(),
             notifications=self.create_notifications(),
+            cors=self.create_cors(),
         )
 
     def create_cluster(self) -> ClusterConfig:
@@ -286,3 +288,10 @@ class EnvironConfigFactory:
         url = URL(self._environ["NP_NOTIFICATIONS_URL"])
         token = self._environ["NP_NOTIFICATIONS_TOKEN"]
         return NotificationsConfig(url=url, token=token)
+
+    def create_cors(self) -> CORSConfig:
+        origins: Sequence[str] = CORSConfig.allowed_origins
+        origins_str = self._environ.get("NP_CORS_ORIGINS", "").strip()
+        if origins_str:
+            origins = origins_str.split(",")
+        return CORSConfig(allowed_origins=origins)
