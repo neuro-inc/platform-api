@@ -24,6 +24,7 @@ from platform_api.cluster_config import (
 from platform_api.config import (
     AuthConfig,
     Config,
+    CORSConfig,
     DatabaseConfig,
     JobPolicyEnforcerConfig,
     JobsConfig,
@@ -548,6 +549,7 @@ def config_factory(
             job_policy_enforcer=job_policy_enforcer,
             notifications=notifications_config,
             config_client=config_client,
+            cors=CORSConfig(allowed_origins=["https://neu.ro"]),
             **kwargs,
         )
 

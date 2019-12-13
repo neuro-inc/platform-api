@@ -78,6 +78,72 @@ class TestApi:
             assert response.status == HTTPOk.status_code, await response.text()
 
     @pytest.mark.asyncio
+    async def test_ping_unknown_origin(
+        self, api: ApiConfig, client: aiohttp.ClientSession
+    ) -> None:
+        async with client.get(
+            api.ping_url, headers={"Origin": "http://unknown"}
+        ) as response:
+            assert response.status == HTTPOk.status_code, await response.text()
+            assert "Access-Control-Allow-Origin" not in response.headers
+
+    @pytest.mark.asyncio
+    async def test_ping_allowed_origin(
+        self, api: ApiConfig, client: aiohttp.ClientSession
+    ) -> None:
+        async with client.get(
+            api.ping_url, headers={"Origin": "https://neu.ro"}
+        ) as resp:
+            assert resp.status == HTTPOk.status_code, await resp.text()
+            assert resp.headers["Access-Control-Allow-Origin"] == "https://neu.ro"
+            assert resp.headers["Access-Control-Allow-Credentials"] == "true"
+            assert resp.headers["Access-Control-Expose-Headers"] == ""
+
+    @pytest.mark.asyncio
+    async def test_ping_options_no_headers(
+        self, api: ApiConfig, client: aiohttp.ClientSession
+    ) -> None:
+        async with client.options(api.ping_url) as resp:
+            assert resp.status == HTTPForbidden.status_code, await resp.text()
+            assert await resp.text() == (
+                "CORS preflight request failed: "
+                "origin header is not specified in the request"
+            )
+
+    @pytest.mark.asyncio
+    async def test_ping_options_unknown_origin(
+        self, api: ApiConfig, client: aiohttp.ClientSession
+    ) -> None:
+        async with client.options(
+            api.ping_url,
+            headers={
+                "Origin": "http://unknown",
+                "Access-Control-Request-Method": "GET",
+            },
+        ) as resp:
+            assert resp.status == HTTPForbidden.status_code, await resp.text()
+            assert await resp.text() == (
+                "CORS preflight request failed: "
+                "origin 'http://unknown' is not allowed"
+            )
+
+    @pytest.mark.asyncio
+    async def test_ping_options(
+        self, api: ApiConfig, client: aiohttp.ClientSession
+    ) -> None:
+        async with client.options(
+            api.ping_url,
+            headers={
+                "Origin": "https://neu.ro",
+                "Access-Control-Request-Method": "GET",
+            },
+        ) as resp:
+            assert resp.status == HTTPOk.status_code, await resp.text()
+            assert resp.headers["Access-Control-Allow-Origin"] == "https://neu.ro"
+            assert resp.headers["Access-Control-Allow-Credentials"] == "true"
+            assert resp.headers["Access-Control-Allow-Methods"] == "GET"
+
+    @pytest.mark.asyncio
     async def test_config_unauthorized(
         self, api: ApiConfig, client: aiohttp.ClientSession
     ) -> None:
