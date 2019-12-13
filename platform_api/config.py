@@ -80,6 +80,11 @@ class JobPolicyEnforcerConfig:
 
 
 @dataclass(frozen=True)
+class CORSConfig:
+    allowed_origins: Sequence[str] = ()
+
+
+@dataclass(frozen=True)
 class Config:
     config_client: ConfigClient
 
@@ -93,6 +98,7 @@ class Config:
     oauth: Optional[OAuthConfig] = None
 
     jobs: JobsConfig = JobsConfig()
+    cors: CORSConfig = CORSConfig()
 
     # used for generating environment variable names and
     # sourcing them inside containers.
