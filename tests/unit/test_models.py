@@ -1,3 +1,4 @@
+from datetime import datetime, timedelta
 from pathlib import PurePath
 from typing import Any, Dict, Sequence
 from unittest import mock
@@ -18,6 +19,7 @@ from platform_api.handlers.jobs_handler import (
     convert_container_volume_to_json,
     convert_job_container_to_json,
     convert_job_to_job_response,
+    create_job_cluster_name_validator,
     create_job_request_validator,
     infer_permissions_from_container,
 )
@@ -27,7 +29,12 @@ from platform_api.handlers.validators import (
     create_container_request_validator,
     create_container_response_validator,
 )
-from platform_api.orchestrator.job import Job, JobRecord
+from platform_api.orchestrator.job import (
+    Job,
+    JobRecord,
+    JobStatusHistory,
+    JobStatusItem,
+)
 from platform_api.orchestrator.job_request import (
     Container,
     ContainerHTTPServer,
@@ -285,6 +292,50 @@ class TestContainerResponseValidator:
         }
 
 
+class TestJobClusterNameValidator:
+    def test_without_cluster_name(self) -> None:
+        container = {
+            "image": "testimage",
+            "command": "arg1 arg2 arg3",
+            "resources": {"cpu": 0.1, "memory_mb": 16, "shm": True},
+            "ssh": {"port": 666},
+        }
+        request = {
+            "container": container,
+        }
+        validator = create_job_cluster_name_validator("default")
+        payload = validator.check(request)
+        assert payload["cluster_name"] == "default"
+
+    def test_with_cluster_name(self) -> None:
+        container = {
+            "image": "testimage",
+            "command": "arg1 arg2 arg3",
+            "resources": {"cpu": 0.1, "memory_mb": 16, "shm": True},
+            "ssh": {"port": 666},
+        }
+        request = {
+            "cluster_name": "testcluster",
+            "container": container,
+        }
+        validator = create_job_cluster_name_validator("default")
+        payload = validator.check(request)
+        assert payload["cluster_name"] == "testcluster"
+
+    def test_invalid_payload_type(self) -> None:
+        validator = create_job_cluster_name_validator("default")
+        with pytest.raises(DataError):
+            validator.check([])
+
+    def test_invalid_cluster_name_type(self) -> None:
+        request = {
+            "cluster_name": 123,
+        }
+        validator = create_job_cluster_name_validator("default")
+        with pytest.raises(DataError, match="value is not a string"):
+            validator.check(request)
+
+
 class TestJobRequestValidator:
     def test_validator(self) -> None:
         container = {
@@ -297,9 +348,44 @@ class TestJobRequestValidator:
             "container": container,
         }
         validator = create_job_request_validator(
-            allowed_gpu_models=(), allowed_tpu_resources=()
+            allowed_gpu_models=(), allowed_tpu_resources=(), cluster_name="testcluster"
         )
-        assert validator.check(request)
+        payload = validator.check(request)
+        assert payload["cluster_name"] == "testcluster"
+
+    def test_validator_explicit_cluster_name(self) -> None:
+        container = {
+            "image": "testimage",
+            "command": "arg1 arg2 arg3",
+            "resources": {"cpu": 0.1, "memory_mb": 16, "shm": True},
+            "ssh": {"port": 666},
+        }
+        request = {
+            "container": container,
+            "cluster_name": "testcluster",
+        }
+        validator = create_job_request_validator(
+            allowed_gpu_models=(), allowed_tpu_resources=(), cluster_name="testcluster"
+        )
+        payload = validator.check(request)
+        assert payload["cluster_name"] == "testcluster"
+
+    def test_validator_invalid_cluster_name(self) -> None:
+        container = {
+            "image": "testimage",
+            "command": "arg1 arg2 arg3",
+            "resources": {"cpu": 0.1, "memory_mb": 16, "shm": True},
+            "ssh": {"port": 666},
+        }
+        request = {
+            "container": container,
+            "cluster_name": "testcluster",
+        }
+        validator = create_job_request_validator(
+            allowed_gpu_models=(), allowed_tpu_resources=(), cluster_name=""
+        )
+        with pytest.raises(DataError, match="value is not exactly ''"):
+            validator.check(request)
 
     def test_with_max_run_time_minutes(self) -> None:
         container = {
@@ -313,9 +399,9 @@ class TestJobRequestValidator:
             "max_run_time_minutes": 10,
         }
         validator = create_job_request_validator(
-            allowed_gpu_models=(), allowed_tpu_resources=()
+            allowed_gpu_models=(), allowed_tpu_resources=(), cluster_name=""
         )
-        assert validator.check(request)
+        validator.check(request)
 
     def test_with_max_run_time_minutes_invalid_too_small(self) -> None:
         container = {
@@ -329,10 +415,10 @@ class TestJobRequestValidator:
             "max_run_time_minutes": 0,
         }
         validator = create_job_request_validator(
-            allowed_gpu_models=(), allowed_tpu_resources=()
+            allowed_gpu_models=(), allowed_tpu_resources=(), cluster_name=""
         )
         with pytest.raises(DataError, match="value is less than 1"):
-            assert validator.check(request)
+            validator.check(request)
 
 
 class TestJobContainerToJson:
@@ -829,6 +915,7 @@ async def test_job_to_job_response(mock_orchestrator: MockOrchestrator) -> None:
             "reason": None,
             "description": None,
             "created_at": mock.ANY,
+            "run_time_seconds": 0,
         },
         "container": {
             "image": "testimage",
@@ -842,6 +929,48 @@ async def test_job_to_job_response(mock_orchestrator: MockOrchestrator) -> None:
         "ssh_auth_server": "ssh://nobody@ssh-auth:22",
         "is_preemptible": False,
     }
+
+
+@pytest.mark.asyncio
+async def test_job_to_job_response_nonzero_runtime(
+    mock_orchestrator: MockOrchestrator,
+) -> None:
+    def _mocked_datetime_factory() -> datetime:
+        return datetime(year=2019, month=1, day=1)
+
+    time_now = _mocked_datetime_factory()
+    started_ago_delta = timedelta(minutes=10)  # job started 10 min ago: pending
+    pending_delta = timedelta(
+        minutes=5, seconds=30
+    )  # after 5 min: running (still running)
+    pending_at = time_now - started_ago_delta
+    running_at = pending_at + pending_delta
+    items = [
+        JobStatusItem.create(JobStatus.PENDING, transition_time=pending_at),
+        JobStatusItem.create(JobStatus.RUNNING, transition_time=running_at),
+    ]
+    status_history = JobStatusHistory(items)
+
+    job = Job(
+        storage_config=mock_orchestrator.storage_config,
+        orchestrator_config=mock_orchestrator.config,
+        record=JobRecord.create(
+            request=JobRequest.create(
+                Container(
+                    image="testimage",
+                    resources=ContainerResources(cpu=1, memory_mb=128),
+                ),
+                description="test test description",
+            ),
+            status_history=status_history,
+            cluster_name="test-cluster",
+            name="test-job-name",
+        ),
+        current_datetime_factory=_mocked_datetime_factory,
+    )
+    response = convert_job_to_job_response(job, cluster_name="my-cluster")
+    run_time = response["history"]["run_time_seconds"]
+    assert run_time == (time_now - running_at).total_seconds()
 
 
 @pytest.mark.asyncio
@@ -880,6 +1009,7 @@ async def test_job_to_job_response_with_job_name_and_http_exposed(
             "reason": None,
             "description": None,
             "created_at": mock.ANY,
+            "run_time_seconds": 0,
         },
         "container": {
             "image": "testimage",
@@ -930,6 +1060,7 @@ async def test_job_to_job_response_with_job_name_and_http_exposed_too_long_name(
             "reason": None,
             "description": None,
             "created_at": mock.ANY,
+            "run_time_seconds": 0,
         },
         "container": {
             "image": "testimage",

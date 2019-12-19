@@ -76,6 +76,12 @@ class JobPolicyEnforcerConfig:
     platform_api_url: URL
     token: str
     interval_sec: float = 60
+    quota_notification_threshold: float = 0.9
+
+
+@dataclass(frozen=True)
+class CORSConfig:
+    allowed_origins: Sequence[str] = ()
 
 
 @dataclass(frozen=True)
@@ -92,6 +98,7 @@ class Config:
     oauth: Optional[OAuthConfig] = None
 
     jobs: JobsConfig = JobsConfig()
+    cors: CORSConfig = CORSConfig()
 
     # used for generating environment variable names and
     # sourcing them inside containers.

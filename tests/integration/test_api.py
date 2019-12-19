@@ -9,19 +9,18 @@ from aiohttp.web import (
     HTTPBadRequest,
     HTTPConflict,
     HTTPForbidden,
-    HTTPInternalServerError,
     HTTPNoContent,
     HTTPOk,
     HTTPUnauthorized,
 )
-from aiohttp.web_exceptions import HTTPNotFound
-from neuro_auth_client import Permission
-from neuro_auth_client.client import Quota
+from aiohttp.web_exceptions import HTTPCreated, HTTPNotFound
+from neuro_auth_client import Cluster as AuthCluster, Permission, Quota
 
+from platform_api.config import Config
 from tests.conftest import random_str
 from tests.integration.test_config_client import create_config_api
 
-from .api import ApiConfig, JobsClient
+from .api import ApiConfig, AuthApiConfig, JobsClient
 from .auth import AuthClient, _User
 from .conftest import MyKubeClient
 
@@ -79,6 +78,72 @@ class TestApi:
             assert response.status == HTTPOk.status_code, await response.text()
 
     @pytest.mark.asyncio
+    async def test_ping_unknown_origin(
+        self, api: ApiConfig, client: aiohttp.ClientSession
+    ) -> None:
+        async with client.get(
+            api.ping_url, headers={"Origin": "http://unknown"}
+        ) as response:
+            assert response.status == HTTPOk.status_code, await response.text()
+            assert "Access-Control-Allow-Origin" not in response.headers
+
+    @pytest.mark.asyncio
+    async def test_ping_allowed_origin(
+        self, api: ApiConfig, client: aiohttp.ClientSession
+    ) -> None:
+        async with client.get(
+            api.ping_url, headers={"Origin": "https://neu.ro"}
+        ) as resp:
+            assert resp.status == HTTPOk.status_code, await resp.text()
+            assert resp.headers["Access-Control-Allow-Origin"] == "https://neu.ro"
+            assert resp.headers["Access-Control-Allow-Credentials"] == "true"
+            assert resp.headers["Access-Control-Expose-Headers"] == ""
+
+    @pytest.mark.asyncio
+    async def test_ping_options_no_headers(
+        self, api: ApiConfig, client: aiohttp.ClientSession
+    ) -> None:
+        async with client.options(api.ping_url) as resp:
+            assert resp.status == HTTPForbidden.status_code, await resp.text()
+            assert await resp.text() == (
+                "CORS preflight request failed: "
+                "origin header is not specified in the request"
+            )
+
+    @pytest.mark.asyncio
+    async def test_ping_options_unknown_origin(
+        self, api: ApiConfig, client: aiohttp.ClientSession
+    ) -> None:
+        async with client.options(
+            api.ping_url,
+            headers={
+                "Origin": "http://unknown",
+                "Access-Control-Request-Method": "GET",
+            },
+        ) as resp:
+            assert resp.status == HTTPForbidden.status_code, await resp.text()
+            assert await resp.text() == (
+                "CORS preflight request failed: "
+                "origin 'http://unknown' is not allowed"
+            )
+
+    @pytest.mark.asyncio
+    async def test_ping_options(
+        self, api: ApiConfig, client: aiohttp.ClientSession
+    ) -> None:
+        async with client.options(
+            api.ping_url,
+            headers={
+                "Origin": "https://neu.ro",
+                "Access-Control-Request-Method": "GET",
+            },
+        ) as resp:
+            assert resp.status == HTTPOk.status_code, await resp.text()
+            assert resp.headers["Access-Control-Allow-Origin"] == "https://neu.ro"
+            assert resp.headers["Access-Control-Allow-Credentials"] == "true"
+            assert resp.headers["Access-Control-Allow-Methods"] == "GET"
+
+    @pytest.mark.asyncio
     async def test_config_unauthorized(
         self, api: ApiConfig, client: aiohttp.ClientSession
     ) -> None:
@@ -104,7 +169,7 @@ class TestApi:
             async with client.post(url, headers=cluster_user.headers) as resp:
                 assert resp.status == HTTPOk.status_code, await resp.text()
                 result = await resp.json()
-                assert result == {"old_record_count": 1, "new_record_count": 1}
+                assert result == {"old_record_count": 2, "new_record_count": 1}
 
         # pass empty cluster config - all clusters should be deleted
         async with create_config_api([]):
@@ -116,13 +181,23 @@ class TestApi:
 
     @pytest.mark.asyncio
     async def test_config(
-        self, api: ApiConfig, client: aiohttp.ClientSession, regular_user: _User
+        self,
+        api: ApiConfig,
+        client: aiohttp.ClientSession,
+        regular_user_factory: Callable[..., Awaitable[_User]],
     ) -> None:
         url = api.config_url
+        regular_user = await regular_user_factory(
+            auth_clusters=[
+                AuthCluster(name="default"),
+                AuthCluster(name="testcluster2"),
+            ]
+        )
         async with client.get(url, headers=regular_user.headers) as resp:
             assert resp.status == HTTPOk.status_code, await resp.text()
             result = await resp.json()
-            assert result == {
+            expected_cluster_payload = {
+                "name": "default",
                 "registry_url": "https://registry.dev.neuromation.io",
                 "storage_url": "https://neu.ro/api/v1/storage",
                 "users_url": "https://neu.ro/api/v1/users",
@@ -165,6 +240,14 @@ class TestApi:
                     },
                 ],
             }
+            expected_payload: Dict[str, Any] = {
+                "clusters": [
+                    expected_cluster_payload,
+                    {**expected_cluster_payload, **{"name": "testcluster2"}},
+                ],
+                **expected_cluster_payload,
+            }
+            assert result == expected_payload
 
     @pytest.mark.asyncio
     async def test_config_with_oauth(
@@ -177,7 +260,8 @@ class TestApi:
         async with client.get(url, headers=regular_user.headers) as resp:
             assert resp.status == HTTPOk.status_code, await resp.text()
             result = await resp.json()
-            assert result == {
+            expected_cluster_payload = {
+                "name": "default",
                 "registry_url": "https://registry.dev.neuromation.io",
                 "storage_url": "https://neu.ro/api/v1/storage",
                 "users_url": "https://neu.ro/api/v1/users",
@@ -219,6 +303,8 @@ class TestApi:
                         "tpu": {"type": "v2-8", "software_version": "1.14"},
                     },
                 ],
+            }
+            expected_payload: Dict[str, Any] = {
                 "auth_url": "https://platform-auth0-url/authorize",
                 "token_url": "https://platform-auth0-url/oauth/token",
                 "client_id": "client_id",
@@ -230,7 +316,10 @@ class TestApi:
                     "http://127.0.0.1:54541",
                     "http://127.0.0.1:54542",
                 ],
+                "clusters": [expected_cluster_payload],
+                **expected_cluster_payload,
             }
+            assert result == expected_payload
 
 
 class TestJobs:
@@ -303,6 +392,35 @@ class TestJobs:
             result = await response.json()
             assert result["status"] in ["pending"]
             assert result["max_run_time_minutes"] == 10
+
+    @pytest.mark.asyncio
+    async def test_get_job_run_time_seconds(
+        self,
+        api: ApiConfig,
+        client: aiohttp.ClientSession,
+        job_submit: Dict[str, Any],
+        jobs_client: JobsClient,
+        regular_user: _User,
+    ) -> None:
+        headers = regular_user.headers
+        url = api.jobs_base_url
+        job_submit["container"]["command"] = "sleep 3"
+        async with client.post(url, headers=headers, json=job_submit) as resp:
+            assert resp.status == HTTPAccepted.status_code, await resp.text()
+            result = await resp.json()
+            assert result["status"] in ["pending"]
+            job_id = result["id"]
+
+        await jobs_client.long_polling_by_job_id(job_id, "succeeded")
+
+        url = api.generate_job_url(job_id)
+        async with client.get(url, headers=headers, json=job_submit) as resp:
+            assert resp.status == HTTPOk.status_code, await resp.text()
+            result = await resp.json()
+            run_time = result["history"]["run_time_seconds"]
+            # since jobs_poller works with delay 1 sec for each transition,
+            # so we should give it time to actually kill the job
+            assert 3 - 2 < run_time < 3 + 2
 
     @pytest.mark.asyncio
     async def test_incorrect_request(
@@ -477,7 +595,7 @@ class TestJobs:
             assert payload == {"error": e}
 
     @pytest.mark.asyncio
-    async def test_create_job_missing_cluster_name(
+    async def test_create_job_user_has_unknown_cluster_name(
         self,
         api: ApiConfig,
         client: aiohttp.ClientSession,
@@ -491,16 +609,59 @@ class TestJobs:
         job_submit["name"] = job_name
         user = regular_user_with_missing_cluster_name
         async with client.post(url, headers=user.headers, json=job_submit) as response:
-            assert (
-                response.status == HTTPInternalServerError.status_code
-            ), await response.text()
+            assert response.status == HTTPForbidden.status_code, await response.text()
             payload = await response.json()
-            e = (
-                f"Unexpected exception ClusterNotFound: "
-                f"Cluster '{user.cluster_name}' not found. "
-                f"Path with query: /api/v1/jobs."
-            )
-            assert payload == {"error": e}
+            assert payload == {"error": "No clusters"}
+
+    @pytest.mark.asyncio
+    async def test_create_job_unknown_cluster_name(
+        self,
+        api: ApiConfig,
+        client: aiohttp.ClientSession,
+        job_submit: Dict[str, Any],
+        jobs_client: JobsClient,
+        regular_user: _User,
+    ) -> None:
+        job_name = f"test-job-name-{random_str()}"
+        url = api.jobs_base_url
+        job_submit["is_preemptible"] = True
+        job_submit["name"] = job_name
+        job_submit["cluster_name"] = "unknown"
+        async with client.post(
+            url, headers=regular_user.headers, json=job_submit
+        ) as response:
+            assert response.status == HTTPForbidden.status_code, await response.text()
+            payload = await response.json()
+            assert payload == {
+                "error": "User is not allowed to submit jobs to the specified cluster"
+            }
+
+    @pytest.mark.asyncio
+    async def test_create_job_no_clusters(
+        self,
+        api: ApiConfig,
+        auth_api: AuthApiConfig,
+        client: aiohttp.ClientSession,
+        job_submit: Dict[str, Any],
+        jobs_client: JobsClient,
+        admin_token: str,
+        regular_user: _User,
+    ) -> None:
+        admin_user = _User(name="admin", token=admin_token)
+        user = regular_user
+
+        url = auth_api.auth_for_user_url(user.name)
+        payload = {"name": user.name, "cluster_name": "unknowncluster"}
+        async with client.put(url, headers=admin_user.headers, json=payload) as resp:
+            assert resp.status == HTTPCreated.status_code, await resp.text()
+
+        url = api.jobs_base_url
+        async with client.post(
+            url, headers=regular_user.headers, json=job_submit
+        ) as response:
+            assert response.status == HTTPForbidden.status_code, await response.text()
+            payload = await response.json()
+            assert payload == {"error": "No clusters"}
 
     @pytest.mark.asyncio
     async def test_create_job(
@@ -519,6 +680,7 @@ class TestJobs:
         job_submit["container"]["command"] = "false"
         job_submit["container"]["http"]["requires_auth"] = True
         job_submit["schedule_timeout"] = 90
+        job_submit["cluster_name"] = "default"
         async with client.post(
             url, headers=regular_user.headers, json=job_submit
         ) as resp:
@@ -1847,6 +2009,7 @@ class TestJobs:
                     "reason": "Creating",
                     "description": None,
                     "created_at": mock.ANY,
+                    "run_time_seconds": 0,
                 },
                 "container": {
                     "command": "true",
@@ -1884,6 +2047,7 @@ class TestJobs:
                 "created_at": mock.ANY,
                 "started_at": mock.ANY,
                 "finished_at": mock.ANY,
+                "run_time_seconds": mock.ANY,
             },
             "container": {
                 "command": "true",
@@ -1958,6 +2122,7 @@ class TestJobs:
                 "started_at": mock.ANY,
                 "finished_at": mock.ANY,
                 "exit_code": 1,
+                "run_time_seconds": 0,
             },
             "container": {
                 "command": 'bash -c "echo Failed!; false"',
@@ -2053,6 +2218,7 @@ class TestJobs:
                     "reason": "Creating",
                     "description": None,
                     "created_at": mock.ANY,
+                    "run_time_seconds": 0,
                 },
                 "container": {
                     "command": "true",
@@ -2137,6 +2303,7 @@ class TestJobs:
                     "reason": "Creating",
                     "description": None,
                     "created_at": mock.ANY,
+                    "run_time_seconds": 0,
                 },
                 "container": {
                     "command": "true",
@@ -2187,6 +2354,16 @@ class TestStats:
                     "total_non_gpu_run_time_minutes": 0,
                 },
                 "quota": {},
+                "clusters": [
+                    {
+                        "name": "default",
+                        "jobs": {
+                            "total_gpu_run_time_minutes": 0,
+                            "total_non_gpu_run_time_minutes": 0,
+                        },
+                        "quota": {},
+                    }
+                ],
             }
 
     @pytest.mark.asyncio
@@ -2218,6 +2395,16 @@ class TestStats:
                     "total_non_gpu_run_time_minutes": 0,
                 },
                 "quota": {},
+                "clusters": [
+                    {
+                        "name": "default",
+                        "jobs": {
+                            "total_gpu_run_time_minutes": 0,
+                            "total_non_gpu_run_time_minutes": 0,
+                        },
+                        "quota": {},
+                    }
+                ],
             }
 
     @pytest.mark.asyncio
@@ -2225,9 +2412,20 @@ class TestStats:
         self,
         api: ApiConfig,
         client: aiohttp.ClientSession,
-        regular_user_with_custom_quota: _User,
+        regular_user_factory: Callable[..., Awaitable[_User]],
     ) -> None:
-        user = regular_user_with_custom_quota
+        user = await regular_user_factory(
+            auth_clusters=[
+                AuthCluster(
+                    name="default",
+                    quota=Quota(
+                        total_gpu_run_time_minutes=123,
+                        total_non_gpu_run_time_minutes=321,
+                    ),
+                ),
+                AuthCluster(name="testcluster2"),
+            ]
+        )
         url = api.stats_for_user_url(user.name)
         async with client.get(url, headers=user.headers) as resp:
             assert resp.status == HTTPOk.status_code, await resp.text()
@@ -2242,4 +2440,193 @@ class TestStats:
                     "total_gpu_run_time_minutes": 123,
                     "total_non_gpu_run_time_minutes": 321,
                 },
+                "clusters": [
+                    {
+                        "name": "default",
+                        "jobs": {
+                            "total_gpu_run_time_minutes": 0,
+                            "total_non_gpu_run_time_minutes": 0,
+                        },
+                        "quota": {
+                            "total_gpu_run_time_minutes": 123,
+                            "total_non_gpu_run_time_minutes": 321,
+                        },
+                    },
+                    {
+                        "name": "testcluster2",
+                        "jobs": {
+                            "total_gpu_run_time_minutes": 0,
+                            "total_non_gpu_run_time_minutes": 0,
+                        },
+                        "quota": {},
+                    },
+                ],
             }
+
+    @pytest.mark.asyncio
+    async def test_user_stats_unavailable_clusters(
+        self,
+        api: ApiConfig,
+        auth_api: AuthApiConfig,
+        client: aiohttp.ClientSession,
+        job_submit: Dict[str, Any],
+        jobs_client: JobsClient,
+        admin_token: str,
+        regular_user: _User,
+    ) -> None:
+        admin_user = _User(name="admin", token=admin_token)
+        user = regular_user
+
+        async with client.post(
+            api.jobs_base_url, headers=user.headers, json=job_submit
+        ) as response:
+            assert response.status == HTTPAccepted.status_code, await response.text()
+            result = await response.json()
+            job_id = result["id"]
+            await jobs_client.long_polling_by_job_id(job_id=job_id, status="succeeded")
+
+        url = auth_api.auth_for_user_url(user.name)
+        payload = {"name": user.name, "cluster_name": "testcluster2"}
+        async with client.put(url, headers=admin_user.headers, json=payload) as resp:
+            assert resp.status == HTTPCreated.status_code, await resp.text()
+
+        url = api.stats_for_user_url(user.name)
+        async with client.get(url, headers=user.headers) as resp:
+            assert resp.status == HTTPOk.status_code, await resp.text()
+            result = await resp.json()
+            assert result == {
+                "name": user.name,
+                "jobs": {
+                    "total_gpu_run_time_minutes": 0,
+                    "total_non_gpu_run_time_minutes": 0,
+                },
+                "quota": {},
+                "clusters": [
+                    {
+                        "name": "testcluster2",
+                        "jobs": {
+                            "total_gpu_run_time_minutes": 0,
+                            "total_non_gpu_run_time_minutes": 0,
+                        },
+                        "quota": {},
+                    },
+                    {
+                        "name": "default",
+                        "jobs": {
+                            "total_gpu_run_time_minutes": mock.ANY,
+                            "total_non_gpu_run_time_minutes": mock.ANY,
+                        },
+                        "quota": {
+                            "total_gpu_run_time_minutes": 0,
+                            "total_non_gpu_run_time_minutes": 0,
+                        },
+                    },
+                ],
+            }
+
+
+class TestJobPolicyEnforcer:
+    @pytest.mark.parametrize("has_gpu", [False, True])
+    @pytest.mark.asyncio
+    async def test_enforce_quota(
+        self,
+        api: ApiConfig,
+        auth_api: AuthApiConfig,
+        config: Config,
+        client: aiohttp.ClientSession,
+        job_submit: Dict[str, Any],
+        jobs_client_factory: Callable[[_User], JobsClient],
+        regular_user_with_custom_quota: _User,
+        admin_token: str,
+        has_gpu: bool,
+    ) -> None:
+        quota_type = (
+            "total_gpu_run_time_minutes"
+            if has_gpu
+            else "total_non_gpu_run_time_minutes"
+        )
+
+        admin_user = _User(name="admin", token=admin_token)
+        user = regular_user_with_custom_quota
+        user_jobs_client = jobs_client_factory(user)
+
+        url = api.stats_for_user_url(user.name)
+        async with client.get(url, headers=admin_user.headers) as resp:
+            assert resp.status == HTTPOk.status_code, await resp.text()
+            result = await resp.json()
+            assert result == {
+                "name": user.name,
+                "jobs": {
+                    "total_gpu_run_time_minutes": 0,
+                    "total_non_gpu_run_time_minutes": 0,
+                },
+                "quota": {
+                    "total_gpu_run_time_minutes": 123,
+                    "total_non_gpu_run_time_minutes": 321,
+                },
+                "clusters": [
+                    {
+                        "name": "default",
+                        "jobs": {
+                            "total_gpu_run_time_minutes": 0,
+                            "total_non_gpu_run_time_minutes": 0,
+                        },
+                        "quota": {
+                            "total_gpu_run_time_minutes": 123,
+                            "total_non_gpu_run_time_minutes": 321,
+                        },
+                    },
+                    {
+                        "name": "testcluster2",
+                        "jobs": {
+                            "total_gpu_run_time_minutes": 0,
+                            "total_non_gpu_run_time_minutes": 0,
+                        },
+                        "quota": {},
+                    },
+                ],
+            }
+
+        url = api.jobs_base_url
+        job_submit["container"]["command"] = "sleep 1h"
+        if has_gpu:
+            job_submit["container"]["resources"]["gpu"] = 1
+            job_submit["container"]["resources"]["gpu_model"] = "gpumodel"
+
+        job_default = await user_jobs_client.create_job(job_submit)
+        poll_status = "pending" if has_gpu else "running"
+        await user_jobs_client.long_polling_by_job_id(
+            job_id=job_default["id"], status=poll_status
+        )
+
+        job_submit["cluster_name"] = "testcluster2"
+        job_cluster2 = await user_jobs_client.create_job(job_submit)
+        await user_jobs_client.long_polling_by_job_id(
+            job_id=job_cluster2["id"], status=poll_status
+        )
+
+        payload = {
+            "name": user.name,
+            "clusters": [
+                {"name": "default", "quota": {quota_type: 0}},
+                {"name": "testcluster2", "quota": {}},
+            ],
+        }
+        url = auth_api.auth_for_user_url(user.name)
+        async with client.put(url, headers=admin_user.headers, json=payload) as resp:
+            assert resp.status == HTTPCreated.status_code, await resp.text()
+
+        # Due to conflict between quota enforcer and jobs poller (see issue #986),
+        # we cannot guarrantee that the quota will be enforced up to one
+        # enforce-poller's interval, so we check up to 7 intervals:
+        max_enforcing_time = config.job_policy_enforcer.interval_sec * 7
+        await user_jobs_client.long_polling_by_job_id(
+            job_id=job_default["id"],
+            interval_s=0.1,
+            status="succeeded",
+            max_time=max_enforcing_time,
+        )
+
+        await user_jobs_client.long_polling_by_job_id(
+            job_id=job_cluster2["id"], status=poll_status
+        )

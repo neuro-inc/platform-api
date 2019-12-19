@@ -24,6 +24,7 @@ from platform_api.cluster_config import (
 from platform_api.config import (
     AuthConfig,
     Config,
+    CORSConfig,
     DatabaseConfig,
     JobPolicyEnforcerConfig,
     JobsConfig,
@@ -528,14 +529,15 @@ def config_factory(
     auth_config: AuthConfig,
     jobs_config: JobsConfig,
     notifications_config: NotificationsConfig,
-    admin_token: str,
+    token_factory: Callable[[str], str],
 ) -> Callable[..., Config]:
     def _factory(**kwargs: Any) -> Config:
         server_config = ServerConfig()
         job_policy_enforcer = JobPolicyEnforcerConfig(
             platform_api_url=URL("http://localhost:8080/api/v1"),
-            token=admin_token,
+            token=token_factory("compute"),
             interval_sec=1,
+            quota_notification_threshold=0.1,
         )
         database_config = DatabaseConfig(redis=redis_config)
         config_client = ConfigClient(base_url=URL("http://localhost:8082/api/v1"))
@@ -547,6 +549,7 @@ def config_factory(
             job_policy_enforcer=job_policy_enforcer,
             notifications=notifications_config,
             config_client=config_client,
+            cors=CORSConfig(allowed_origins=["https://neu.ro"]),
             **kwargs,
         )
 
@@ -554,22 +557,32 @@ def config_factory(
 
 
 @pytest.fixture
-def cluster_config(
+def cluster_config_factory(
     kube_config: KubeConfig,
     storage_config_host: StorageConfig,
     registry_config: RegistryConfig,
+) -> Callable[..., ClusterConfig]:
+    def _f(cluster_name: str = "default") -> ClusterConfig:
+        ingress_config = IngressConfig(
+            storage_url=URL("https://neu.ro/api/v1/storage"),
+            monitoring_url=URL("https://neu.ro/api/v1/monitoring"),
+        )
+        return ClusterConfig(
+            name=cluster_name,
+            orchestrator=kube_config,
+            ingress=ingress_config,
+            storage=storage_config_host,
+            registry=registry_config,
+        )
+
+    return _f
+
+
+@pytest.fixture
+def cluster_config(
+    cluster_config_factory: Callable[..., ClusterConfig]
 ) -> ClusterConfig:
-    ingress_config = IngressConfig(
-        storage_url=URL("https://neu.ro/api/v1/storage"),
-        monitoring_url=URL("https://neu.ro/api/v1/monitoring"),
-    )
-    return ClusterConfig(
-        name="default",
-        orchestrator=kube_config,
-        ingress=ingress_config,
-        storage=storage_config_host,
-        registry=registry_config,
-    )
+    return cluster_config_factory()
 
 
 @pytest.fixture

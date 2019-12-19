@@ -1,3 +1,4 @@
+import json
 import logging
 from dataclasses import dataclass, replace
 from pathlib import PurePath
@@ -11,7 +12,7 @@ from neuro_auth_client import AuthClient, Permission, check_permissions
 from neuro_auth_client.client import ClientSubTreeViewRoot
 from yarl import URL
 
-from platform_api.cluster_config import RegistryConfig, StorageConfig
+from platform_api.cluster_config import ClusterConfig, RegistryConfig, StorageConfig
 from platform_api.config import Config
 from platform_api.log import log_debug_time
 from platform_api.orchestrator.job import JOB_USER_NAMES_SEPARATOR, Job, JobStatusItem
@@ -43,7 +44,10 @@ logger = logging.getLogger(__name__)
 
 
 def create_job_request_validator(
-    *, allowed_gpu_models: Sequence[str], allowed_tpu_resources: Sequence[TPUResource]
+    *,
+    allowed_gpu_models: Sequence[str],
+    allowed_tpu_resources: Sequence[TPUResource],
+    cluster_name: str,
 ) -> t.Trafaret:
     return t.Dict(
         {
@@ -57,8 +61,15 @@ def create_job_request_validator(
             t.Key("is_preemptible", optional=True, default=False): t.Bool,
             t.Key("schedule_timeout", optional=True): t.Float(gte=1, lt=30 * 24 * 3600),
             t.Key("max_run_time_minutes", optional=True): t.Int(gte=1),
+            t.Key("cluster_name", default=cluster_name): t.Atom(cluster_name),
         }
     )
+
+
+def create_job_cluster_name_validator(default_cluster_name: str) -> t.Trafaret:
+    return t.Dict(
+        {t.Key("cluster_name", default=default_cluster_name): t.String}
+    ).allow_extra("*")
 
 
 def create_job_response_validator() -> t.Trafaret:
@@ -178,6 +189,7 @@ def convert_job_to_job_response(job: Job, cluster_name: str) -> Dict[str, Any]:
             "reason": current_status.reason,
             "description": current_status.description,
             "created_at": history.created_at_str,
+            "run_time_seconds": job.get_run_time().total_seconds(),
         },
         "container": convert_job_container_to_json(
             job.request.container, job.storage_config
@@ -259,13 +271,43 @@ class JobsHandler:
             )
         )
 
-    async def _create_job_request_validator(self, user: User) -> t.Trafaret:
+    def _check_user_can_submit_jobs(
+        self, user_cluster_configs: Sequence[ClusterConfig]
+    ) -> None:
+        if not user_cluster_configs:
+            raise aiohttp.web.HTTPForbidden(
+                text=json.dumps({"error": "No clusters"}),
+                content_type="application/json",
+            )
+
+    async def _create_job_request_validator(
+        self, cluster_config: ClusterConfig
+    ) -> t.Trafaret:
         # TODO: rework `gpu_models` to be retrieved from `cluster_config`
-        gpu_models = await self._jobs_service.get_available_gpu_models(user)
-        cluster_config = await self._jobs_service.get_cluster_config(user)
+        gpu_models = await self._jobs_service.get_available_gpu_models(
+            cluster_config.name
+        )
         return create_job_request_validator(
             allowed_gpu_models=gpu_models,
             allowed_tpu_resources=cluster_config.orchestrator.tpu_resources,
+            cluster_name=cluster_config.name,
+        )
+
+    def _get_cluster_config(
+        self, cluster_configs: Sequence[ClusterConfig], cluster_name: str
+    ) -> ClusterConfig:
+        for config in cluster_configs:
+            if config.name == cluster_name:
+                return config
+        raise aiohttp.web.HTTPForbidden(
+            text=json.dumps(
+                {
+                    "error": (
+                        "User is not allowed to submit jobs " "to the specified cluster"
+                    )
+                }
+            ),
+            content_type="application/json",
         )
 
     async def create_job(self, request: aiohttp.web.Request) -> aiohttp.web.Response:
@@ -273,10 +315,19 @@ class JobsHandler:
 
         orig_payload = await request.json()
 
-        job_request_validator = await self._create_job_request_validator(user)
-        request_payload = job_request_validator.check(orig_payload)
+        cluster_configs = await self._jobs_service.get_user_cluster_configs(user)
+        self._check_user_can_submit_jobs(cluster_configs)
+        default_cluster_name = cluster_configs[0].name
 
-        cluster_config = await self._jobs_service.get_cluster_config(user)
+        job_cluster_name_validator = create_job_cluster_name_validator(
+            default_cluster_name
+        )
+        request_payload = job_cluster_name_validator.check(orig_payload)
+        self._check_user_can_submit_jobs(cluster_configs)
+        cluster_name = request_payload["cluster_name"]
+        cluster_config = self._get_cluster_config(cluster_configs, cluster_name)
+        job_request_validator = await self._create_job_request_validator(cluster_config)
+        request_payload = job_request_validator.check(request_payload)
 
         container = ContainerBuilder.from_container_payload(
             request_payload["container"], storage_config=cluster_config.storage
@@ -296,12 +347,12 @@ class JobsHandler:
         job, _ = await self._jobs_service.create_job(
             job_request,
             user=user,
+            cluster_name=cluster_name,
             job_name=name,
             is_preemptible=is_preemptible,
             schedule_timeout=schedule_timeout,
             max_run_time_minutes=max_run_time_minutes,
         )
-        cluster_name = self._jobs_service.get_cluster_name(job)
         response_payload = convert_job_to_job_response(job, cluster_name)
         self._job_response_validator.check(response_payload)
         return aiohttp.web.json_response(

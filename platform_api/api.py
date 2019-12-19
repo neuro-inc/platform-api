@@ -3,6 +3,7 @@ import logging
 from typing import Any, AsyncIterator, Awaitable, Callable, Dict, Sequence
 
 import aiohttp.web
+import aiohttp_cors
 from aiohttp.web import HTTPUnauthorized
 from aiohttp_security import check_permission
 from async_exit_stack import AsyncExitStack
@@ -12,14 +13,13 @@ from notifications_client import Client as NotificationsClient
 from platform_logging import init_logging
 
 from platform_api.orchestrator.job_policy_enforcer import (
-    AggregatedEnforcer,
     JobPolicyEnforcePoller,
     PlatformApiClient,
     QuotaEnforcer,
 )
 
 from .cluster import Cluster, ClusterConfig, ClusterRegistry
-from .config import Config
+from .config import Config, CORSConfig
 from .config_factory import EnvironConfigFactory
 from .handlers import JobsHandler
 from .handlers.stats_handler import StatsHandler
@@ -29,6 +29,7 @@ from .orchestrator.jobs_poller import JobsPoller
 from .orchestrator.jobs_service import JobsService, JobsServiceException
 from .orchestrator.jobs_storage import RedisJobsStorage
 from .redis import create_redis_client
+from .resource import Preset
 from .user import authorized_user, untrusted_user
 
 
@@ -87,35 +88,13 @@ class ApiHandler:
 
         try:
             user = await authorized_user(request)
-            cluster_config = await self._jobs_service.get_cluster_config(user)
-            presets = []
-            for preset in cluster_config.orchestrator.presets:
-                preset_dict: Dict[str, Any] = {"name": preset.name}
-                preset_dict["cpu"] = preset.cpu
-                preset_dict["memory_mb"] = preset.memory_mb
-                preset_dict["is_preemptible"] = preset.is_preemptible
-
-                if preset.gpu is not None:
-                    preset_dict["gpu"] = preset.gpu
-                if preset.gpu_model is not None:
-                    preset_dict["gpu_model"] = preset.gpu_model
-
-                if preset.tpu:
-                    preset_dict["tpu"] = {
-                        "type": preset.tpu.type,
-                        "software_version": preset.tpu.software_version,
-                    }
-
-                presets.append(preset_dict)
-            data.update(
-                {
-                    "registry_url": str(cluster_config.registry.url),
-                    "storage_url": str(cluster_config.ingress.storage_url),
-                    "users_url": str(self._config.auth.public_endpoint_url),
-                    "monitoring_url": str(cluster_config.ingress.monitoring_url),
-                    "resource_presets": presets,
-                }
-            )
+            cluster_configs = await self._jobs_service.get_user_cluster_configs(user)
+            data["clusters"] = [
+                self._convert_cluster_config_to_payload(c) for c in cluster_configs
+            ]
+            # NOTE: adding the cluster payload to the root document for
+            # backward compatibility
+            data.update(data["clusters"][0])
         except HTTPUnauthorized:
             pass
 
@@ -133,6 +112,41 @@ class ApiHandler:
                 data["success_redirect_url"] = str(redirect_url)
 
         return aiohttp.web.json_response(data)
+
+    def _convert_cluster_config_to_payload(
+        self, cluster_config: ClusterConfig
+    ) -> Dict[str, Any]:
+        presets = [
+            self._convert_preset_to_payload(preset)
+            for preset in cluster_config.orchestrator.presets
+        ]
+        return {
+            "name": cluster_config.name,
+            "registry_url": str(cluster_config.registry.url),
+            "storage_url": str(cluster_config.ingress.storage_url),
+            "users_url": str(self._config.auth.public_endpoint_url),
+            "monitoring_url": str(cluster_config.ingress.monitoring_url),
+            "resource_presets": presets,
+        }
+
+    def _convert_preset_to_payload(self, preset: Preset) -> Dict[str, Any]:
+        payload: Dict[str, Any] = {
+            "name": preset.name,
+            "cpu": preset.cpu,
+            "memory_mb": preset.memory_mb,
+            "is_preemptible": preset.is_preemptible,
+        }
+        if preset.gpu is not None:
+            payload["gpu"] = preset.gpu
+        if preset.gpu_model is not None:
+            payload["gpu_model"] = preset.gpu_model
+
+        if preset.tpu:
+            payload["tpu"] = {
+                "type": preset.tpu.type,
+                "software_version": preset.tpu.software_version,
+            }
+        return payload
 
 
 @aiohttp.web.middleware
@@ -247,12 +261,19 @@ async def create_app(
             app["stats_app"]["jobs_service"] = jobs_service
 
             logger.info("Initializing JobPolicyEnforcePoller")
-            api_client = PlatformApiClient(config.job_policy_enforcer)
-            job_policy_enforcer = AggregatedEnforcer([QuotaEnforcer(api_client)])
-            job_policy_enforce_poller = JobPolicyEnforcePoller(
-                job_policy_enforcer, config.job_policy_enforcer
+            api_client = await exit_stack.enter_async_context(
+                PlatformApiClient(config.job_policy_enforcer)
             )
-            await exit_stack.enter_async_context(job_policy_enforce_poller)
+            await exit_stack.enter_async_context(
+                JobPolicyEnforcePoller(
+                    config.job_policy_enforcer,
+                    enforcers=[
+                        QuotaEnforcer(
+                            api_client, notifications_client, config.job_policy_enforcer
+                        )
+                    ],
+                )
+            )
 
             auth_client = await exit_stack.enter_async_context(
                 AuthClient(
@@ -282,7 +303,25 @@ async def create_app(
     api_v1_app.add_subapp("/stats", stats_app)
 
     app.add_subapp("/api/v1", api_v1_app)
+
+    _setup_cors(app, config.cors)
     return app
+
+
+def _setup_cors(app: aiohttp.web.Application, config: CORSConfig) -> None:
+    if not config.allowed_origins:
+        return
+
+    logger.info(f"Setting up CORS with allowed origins: {config.allowed_origins}")
+    default_options = aiohttp_cors.ResourceOptions(
+        allow_credentials=True, expose_headers="*", allow_headers="*",
+    )
+    cors = aiohttp_cors.setup(
+        app, defaults={origin: default_options for origin in config.allowed_origins}
+    )
+    for route in app.router.routes():
+        logger.debug(f"Setting up CORS for {route}")
+        cors.add(route)
 
 
 async def get_cluster_configs(config: Config) -> Sequence[ClusterConfig]:

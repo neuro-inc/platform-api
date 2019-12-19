@@ -1,16 +1,26 @@
 import asyncio
 import time
-from typing import Any, AsyncIterator, Callable, Dict, List, NamedTuple, Sequence
+from typing import (
+    Any,
+    AsyncIterator,
+    Callable,
+    Dict,
+    List,
+    NamedTuple,
+    Optional,
+    Sequence,
+)
 
 import aiohttp
 import aiohttp.web
 import pytest
 from aiohttp.client import ClientSession
 from aiohttp.web import HTTPAccepted, HTTPNoContent, HTTPOk
+from yarl import URL
 
 from platform_api.api import create_app
 from platform_api.cluster_config import ClusterConfig
-from platform_api.config import Config
+from platform_api.config import AuthConfig, Config
 from platform_api.orchestrator.job import JobStatus
 
 from .auth import _User
@@ -53,6 +63,17 @@ class ApiConfig(NamedTuple):
         return f"{self.stats_base_url}/users/{username}"
 
 
+class AuthApiConfig(NamedTuple):
+    server_endpoint_url: URL
+
+    @property
+    def endpoint(self) -> str:
+        return f"{self.server_endpoint_url}/api/v1/users"
+
+    def auth_for_user_url(self, username: str) -> str:
+        return f"{self.endpoint}/{username}"
+
+
 async def get_cluster_configs(
     cluster_configs: Sequence[ClusterConfig],
 ) -> Sequence[ClusterConfig]:
@@ -61,9 +82,14 @@ async def get_cluster_configs(
 
 @pytest.fixture
 async def api(
-    config: Config, cluster_config: ClusterConfig
+    config: Config, cluster_config_factory: Callable[..., ClusterConfig]
 ) -> AsyncIterator[ApiConfig]:
-    app = await create_app(config, get_cluster_configs([cluster_config]))
+    app = await create_app(
+        config,
+        get_cluster_configs(
+            [cluster_config_factory("default"), cluster_config_factory("testcluster2")]
+        ),
+    )
     runner = ApiRunner(app, port=8080)
     api_address = await runner.run()
     api_config = ApiConfig(host=api_address.host, port=api_address.port, runner=runner)
@@ -84,6 +110,11 @@ async def api_with_oauth(
 
 
 @pytest.fixture
+async def auth_api(auth_config: AuthConfig) -> AuthApiConfig:
+    return AuthApiConfig(server_endpoint_url=auth_config.server_endpoint_url)
+
+
+@pytest.fixture
 async def client() -> AsyncIterator[aiohttp.ClientSession]:
     async with aiohttp.ClientSession() as session:
         yield session
@@ -96,6 +127,14 @@ class JobsClient:
         self._api_config = api_config
         self._client = client
         self._headers = headers
+
+    async def create_job(self, payload: Dict[str, Any]) -> Dict[str, Any]:
+        url = self._api_config.jobs_base_url
+        async with self._client.post(url, headers=self._headers, json=payload) as resp:
+            assert resp.status == HTTPAccepted.status_code, await resp.text()
+            result = await resp.json()
+            assert result["status"] == "pending"
+            return result
 
     async def get_all_jobs(self, params: Any = None) -> List[Dict[str, Any]]:
         url = self._api_config.jobs_base_url
@@ -247,9 +286,9 @@ async def infinite_job(
 
 @pytest.fixture
 def job_request_factory() -> Callable[[], Dict[str, Any]]:
-    def _factory() -> Dict[str, Any]:
+    def _factory(cluster_name: Optional[str] = None) -> Dict[str, Any]:
         # Note: Optional fields (as "name") should not have a value here
-        return {
+        request = {
             "container": {
                 "image": "ubuntu",
                 "command": "true",
@@ -258,6 +297,9 @@ def job_request_factory() -> Callable[[], Dict[str, Any]]:
             },
             "description": "test job submitted by neuro job submit",
         }
+        if cluster_name:
+            request["cluster_name"] = cluster_name
+        return request
 
     return _factory
 
