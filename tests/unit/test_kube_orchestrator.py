@@ -11,11 +11,11 @@ from platform_api.orchestrator.job_request import (
     ContainerResources,
     ContainerTPUResource,
     ContainerVolume,
-    JobError,
     JobRequest,
     JobStatus,
 )
 from platform_api.orchestrator.kube_client import (
+    AlreadyExistsException,
     ContainerStatus,
     Ingress,
     Resources,
@@ -532,7 +532,7 @@ class TestPodDescriptor:
 
     def test_from_primitive_failure(self) -> None:
         payload = {"kind": "Status", "code": 409}
-        with pytest.raises(JobError, match="already exist"):
+        with pytest.raises(AlreadyExistsException, match="already exist"):
             PodDescriptor.from_primitive(payload)
 
     def test_from_primitive_unknown_kind(self) -> None:
