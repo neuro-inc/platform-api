@@ -24,6 +24,10 @@ class JobNotFoundException(JobException):
     pass
 
 
+class JobAlreadyExistsException(JobException):
+    pass
+
+
 @dataclass(frozen=True)
 class ContainerVolume:
     uri: URL

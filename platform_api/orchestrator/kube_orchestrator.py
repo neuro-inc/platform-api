@@ -13,7 +13,12 @@ from platform_api.cluster_config import (
 
 from .base import Orchestrator
 from .job import Job, JobStatusItem, JobStatusReason
-from .job_request import JobError, JobNotFoundException, JobStatus
+from .job_request import (
+    JobAlreadyExistsException,
+    JobError,
+    JobNotFoundException,
+    JobStatus,
+)
 from .kube_client import (
     AlreadyExistsException,
     DockerRegistrySecret,
@@ -265,17 +270,20 @@ class KubeOrchestrator(Orchestrator):
     async def start_job(self, job: Job) -> JobStatus:
         await self._create_docker_secret(job)
         await self._create_user_network_policy(job)
-        await self._create_pod_network_policy(job)
+        try:
+            await self._create_pod_network_policy(job)
 
-        descriptor = await self._create_pod_descriptor(job)
-        pod = await self._client.create_pod(descriptor)
+            descriptor = await self._create_pod_descriptor(job)
+            pod = await self._client.create_pod(descriptor)
 
-        logger.info(f"Starting Service for {job.id}.")
-        service = await self._create_service(descriptor)
+            logger.info(f"Starting Service for {job.id}.")
+            service = await self._create_service(descriptor)
 
-        if job.has_http_server_exposed:
-            logger.info(f"Starting Ingress for {job.id}")
-            await self._create_ingress(job, service)
+            if job.has_http_server_exposed:
+                logger.info(f"Starting Ingress for {job.id}")
+                await self._create_ingress(job, service)
+        except AlreadyExistsException as e:
+            raise JobAlreadyExistsException(str(e))
 
         job.status_history.current = await self._get_pod_status(job, pod)
         return job.status
