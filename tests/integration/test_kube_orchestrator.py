@@ -20,6 +20,7 @@ from platform_api.orchestrator.job_request import (
     ContainerResources,
     ContainerTPUResource,
     ContainerVolume,
+    JobAlreadyExistsException,
     JobError,
     JobNotFoundException,
     JobRequest,
@@ -227,7 +228,7 @@ class TestKubeOrchestrator:
             orchestrator=kube_orchestrator,
             record=JobRecord.create(request=job_request_second, cluster_name="default"),
         )
-        with pytest.raises(JobError):
+        with pytest.raises(JobAlreadyExistsException):
             await job_second.start()
 
         status = await job_nginx.delete()
