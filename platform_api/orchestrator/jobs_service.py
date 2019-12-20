@@ -158,7 +158,8 @@ class JobsService:
                 status_item = job.status_history.current
             except JobAlreadyExistsException:
                 logger.info(f"Job '{job.id}' already exists.")
-                return
+                # Terminate the transaction. The exception will be ignored.
+                raise JobStorageTransactionError
             except JobError as exc:
                 logger.exception("Failed to start job %s. Reason: %s", job.id, exc)
                 status_item = JobStatusItem.create(
