@@ -71,7 +71,7 @@ class AlreadyExistsException(StatusException):
 
 def _raise_status_job_exception(pod: Dict[str, Any], job_id: Optional[str]) -> NoReturn:
     if pod["code"] == 409:
-        raise AlreadyExistsException(pod["reason"])
+        raise AlreadyExistsException(pod.get("reason", "job already exists"))
     elif pod["code"] == 404:
         raise JobNotFoundException(f"job {job_id} was not found")
     elif pod["code"] == 422:
