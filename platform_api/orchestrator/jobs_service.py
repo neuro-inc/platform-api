@@ -29,6 +29,7 @@ from .job import (
     JobStatusReason,
 )
 from .job_request import (
+    JobAlreadyExistsException,
     JobError,
     JobException,
     JobNotFoundException,
@@ -155,6 +156,9 @@ class JobsService:
             try:
                 await orchestrator.start_job(job)
                 status_item = job.status_history.current
+            except JobAlreadyExistsException:
+                logger.info(f"Job '{job.id}' already exists.")
+                return
             except JobError as exc:
                 logger.exception("Failed to start job %s. Reason: %s", job.id, exc)
                 status_item = JobStatusItem.create(
