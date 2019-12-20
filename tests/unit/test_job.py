@@ -25,6 +25,7 @@ from platform_api.orchestrator.job_request import (
     ContainerTPUResource,
     ContainerVolume,
     ContainerVolumeFactory,
+    JobError,
     JobRequest,
     JobStatus,
 )
@@ -48,6 +49,24 @@ class TestContainer:
             resources=ContainerResources(cpu=1, memory_mb=128),
         )
         assert container.command_list == ["bash", "-c", "date"]
+
+    def test_command_list_invalid(self) -> None:
+        container = Container(
+            image="testimage",
+            command='"',
+            resources=ContainerResources(cpu=1, memory_mb=128),
+        )
+        with pytest.raises(JobError, match="invalid command format"):
+            container.command_list
+
+    def test_entrypoint_list_invalid(self) -> None:
+        container = Container(
+            image="testimage",
+            entrypoint='"',
+            resources=ContainerResources(cpu=1, memory_mb=128),
+        )
+        with pytest.raises(JobError, match="invalid command format"):
+            container.entrypoint_list
 
     def test_entrypoint_list_non_empty(self) -> None:
         container = Container(
