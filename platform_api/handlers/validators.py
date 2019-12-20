@@ -1,3 +1,4 @@
+import shlex
 from typing import Any, Dict, Optional, Sequence, Set
 
 import trafaret as t
@@ -179,8 +180,8 @@ def create_container_validator(
     validator = t.Dict(
         {
             "image": t.String,
-            t.Key("entrypoint", optional=True): t.String,
-            t.Key("command", optional=True): t.String,
+            t.Key("entrypoint", optional=True): create_container_command_validator(),
+            t.Key("command", optional=True): create_container_command_validator(),
             t.Key("env", optional=True): t.Mapping(
                 t.String, t.String(allow_blank=True)
             ),
@@ -241,3 +242,14 @@ def sanitize_dns_name(value: str) -> Optional[str]:
         return value
     except ValueError:
         return None
+
+
+def create_container_command_validator() -> t.Trafaret:
+    def _validate(command: str) -> str:
+        try:
+            shlex.split(command)
+        except ValueError:
+            raise t.DataError("invalid command format")
+        return command
+
+    return t.String() >> _validate
