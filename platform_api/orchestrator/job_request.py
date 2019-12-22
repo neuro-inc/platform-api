@@ -216,16 +216,22 @@ class Container:
             return self.http_server.health_check_path
         return ContainerHTTPServer.health_check_path
 
+    def _parse_command(self, command: str) -> List[str]:
+        try:
+            return shlex.split(command)
+        except ValueError:
+            raise JobError("invalid command format")
+
     @property
     def entrypoint_list(self) -> List[str]:
         if self.entrypoint:
-            return shlex.split(self.entrypoint)
+            return self._parse_command(self.entrypoint)
         return []
 
     @property
     def command_list(self) -> List[str]:
         if self.command:
-            return shlex.split(self.command)
+            return self._parse_command(self.command)
         return []
 
     @property

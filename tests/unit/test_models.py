@@ -258,6 +258,18 @@ class TestContainerRequestValidator:
         assert result["entrypoint"] == "/script.sh"
         assert result["command"] == "arg1 arg2 arg3"
 
+    def test_invalid_entrypoint(self, payload: Dict[str, Any]) -> None:
+        payload["entrypoint"] = '"'
+        validator = create_container_request_validator()
+        with pytest.raises(DataError, match="invalid command format"):
+            validator.check(payload)
+
+    def test_invalid_command(self, payload: Dict[str, Any]) -> None:
+        payload["entrypoint"] = '"'
+        validator = create_container_request_validator()
+        with pytest.raises(DataError, match="invalid command format"):
+            validator.check(payload)
+
 
 class TestContainerResponseValidator:
     def test_gpu_model(self) -> None:
