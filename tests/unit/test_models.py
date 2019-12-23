@@ -265,7 +265,7 @@ class TestContainerRequestValidator:
             validator.check(payload)
 
     def test_invalid_command(self, payload: Dict[str, Any]) -> None:
-        payload["entrypoint"] = '"'
+        payload["command"] = '"'
         validator = create_container_request_validator()
         with pytest.raises(DataError, match="invalid command format"):
             validator.check(payload)
