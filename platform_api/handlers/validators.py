@@ -170,6 +170,7 @@ def create_container_validator(
     allowed_gpu_models: Optional[Sequence[str]] = None,
     allow_any_tpu: bool = False,
     allowed_tpu_resources: Sequence[TPUResource] = (),
+    allow_any_command: bool = False,
 ) -> t.Trafaret:
     """Create a validator for primitive container objects.
 
@@ -180,8 +181,12 @@ def create_container_validator(
     validator = t.Dict(
         {
             "image": t.String,
-            t.Key("entrypoint", optional=True): create_container_command_validator(),
-            t.Key("command", optional=True): create_container_command_validator(),
+            t.Key("entrypoint", optional=True): create_container_command_validator(
+                allow_any_command=allow_any_command
+            ),
+            t.Key("command", optional=True): create_container_command_validator(
+                allow_any_command=allow_any_command
+            ),
             t.Key("env", optional=True): t.Mapping(
                 t.String, t.String(allow_blank=True)
             ),
@@ -227,7 +232,10 @@ def create_container_request_validator(
 
 def create_container_response_validator() -> t.Trafaret:
     return create_container_validator(
-        allow_volumes=True, allow_any_gpu_models=True, allow_any_tpu=True
+        allow_volumes=True,
+        allow_any_gpu_models=True,
+        allow_any_tpu=True,
+        allow_any_command=True,
     )
 
 
@@ -244,12 +252,15 @@ def sanitize_dns_name(value: str) -> Optional[str]:
         return None
 
 
-def create_container_command_validator() -> t.Trafaret:
+def create_container_command_validator(
+    *, allow_any_command: bool = False
+) -> t.Trafaret:
     def _validate(command: str) -> str:
-        try:
-            shlex.split(command)
-        except ValueError:
-            raise t.DataError("invalid command format")
+        if not allow_any_command:
+            try:
+                shlex.split(command)
+            except ValueError:
+                raise t.DataError("invalid command format")
         return command
 
     return t.String() >> _validate
