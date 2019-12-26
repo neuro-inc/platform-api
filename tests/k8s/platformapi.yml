@@ -108,6 +108,8 @@ spec:
           value: http://platformauthapi:8080/api/v1/users
         - name: NP_API_URL
           value: http://platformapi/api/v1
+        - name: NP_ADMIN_URL
+          value: http://platformapi/apis/admin/v1
         - name: NP_PLATFORM_CONFIG_URI
           value: http://platformconfig:8080/api/v1
         - name: NP_NOTIFICATIONS_URL

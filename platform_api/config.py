@@ -95,6 +95,8 @@ class Config:
     notifications: NotificationsConfig
     job_policy_enforcer: JobPolicyEnforcerConfig
 
+    admin_url: URL
+
     oauth: Optional[OAuthConfig] = None
 
     jobs: JobsConfig = JobsConfig()
