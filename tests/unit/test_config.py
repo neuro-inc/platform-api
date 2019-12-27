@@ -144,6 +144,7 @@ class TestEnvironConfigFactory:
             "NP_OAUTH_SUCCESS_REDIRECT_URL": "https://platform-default-url",
             "NP_OAUTH_HEADLESS_CALLBACK_URL": "https://dev.neu.ro/oauth/show-code",
             "NP_API_URL": "https://neu.ro/api/v1",
+            "NP_ADMIN_URL": "https://neu.ro/apis/admin/v1",
             "NP_PLATFORM_CONFIG_URI": "http://platformconfig:8080/api/v1",
             "NP_NOTIFICATIONS_URL": "http://notifications:8080",
             "NP_NOTIFICATIONS_TOKEN": "token",
@@ -153,6 +154,8 @@ class TestEnvironConfigFactory:
         }
         config = EnvironConfigFactory(environ=environ).create()
         cluster = EnvironConfigFactory(environ=environ).create_cluster()
+
+        assert config.admin_url == URL("https://neu.ro/apis/admin/v1")
 
         assert config.server.host == "0.0.0.0"
         assert config.server.port == 8080
@@ -226,6 +229,7 @@ class TestEnvironConfigFactory:
             "NP_AUTH_URL": "https://auth",
             "NP_AUTH_TOKEN": "token",
             "NP_API_URL": "https://neu.ro/api/v1",
+            "NP_ADMIN_URL": "https://neu.ro/apis/admin/v1",
             "NP_JOBS_INGRESS_OAUTH_AUTHORIZE_URL": "http://neu.ro/oauth/authorize",
             "NP_AUTH_PUBLIC_URL": "https://neu.ro/api/v1/users",
         }
@@ -272,6 +276,7 @@ class TestEnvironConfigFactory:
             ),
             "NP_K8S_NODE_LABEL_PREEMPTIBLE": "testpreempt",
             "NP_API_URL": "https://neu.ro/api/v1",
+            "NP_ADMIN_URL": "https://neu.ro/apis/admin/v1",
             "NP_OAUTH_HEADLESS_CALLBACK_URL": "https://oauth/show-code",
             "NP_PLATFORM_CONFIG_URI": "http://platformconfig:8080/api/v1",
             "NP_NOTIFICATIONS_URL": "http://notifications:8080",
@@ -363,6 +368,7 @@ class TestEnvironConfigFactory:
             "NP_JOBS_INGRESS_OAUTH_AUTHORIZE_URL": "http://neu.ro/oauth/authorize",
             "NP_K8S_SSH_AUTH_INGRESS_DOMAIN_NAME": "ssh-auth.domain",
             "NP_API_URL": "https://neu.ro/api/v1",
+            "NP_ADMIN_URL": "https://neu.ro/apis/admin/v1",
             "NP_AUTH_URL": "https://auth",
             "NP_AUTH_TOKEN": "token",
             "NP_OAUTH_HEADLESS_CALLBACK_URL": "https://oauth/show-code",

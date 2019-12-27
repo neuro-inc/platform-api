@@ -95,6 +95,8 @@ class ApiHandler:
             # NOTE: adding the cluster payload to the root document for
             # backward compatibility
             data.update(data["clusters"][0])
+
+            data["admin_url"] = str(self._config.admin_url)
         except HTTPUnauthorized:
             pass
 

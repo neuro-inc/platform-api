@@ -541,6 +541,7 @@ def config_factory(
         )
         database_config = DatabaseConfig(redis=redis_config)
         config_client = ConfigClient(base_url=URL("http://localhost:8082/api/v1"))
+        admin_url = URL("http://localhost:8080/apis/admin/v1")
         return Config(
             server=server_config,
             database=database_config,
@@ -550,6 +551,7 @@ def config_factory(
             notifications=notifications_config,
             config_client=config_client,
             cors=CORSConfig(allowed_origins=["https://neu.ro"]),
+            admin_url=admin_url,
             **kwargs,
         )
 

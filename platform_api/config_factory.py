@@ -46,6 +46,7 @@ class EnvironConfigFactory:
         env_prefix = self._environ.get("NP_ENV_PREFIX", Config.env_prefix)
         auth = self.create_auth()
         jobs = self.create_jobs(orphaned_job_owner=auth.service_name)
+        admin_url = URL(self._environ["NP_ADMIN_URL"])
         return Config(
             server=self.create_server(),
             database=self.create_database(),
@@ -57,6 +58,7 @@ class EnvironConfigFactory:
             config_client=self.create_config_client(),
             notifications=self.create_notifications(),
             cors=self.create_cors(),
+            admin_url=admin_url,
         )
 
     def create_cluster(self) -> ClusterConfig:
