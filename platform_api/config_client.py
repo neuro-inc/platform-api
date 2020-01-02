@@ -70,7 +70,9 @@ class ConfigClient:
         registry_username: str,
         registry_password: str,
     ) -> Sequence[ClusterConfig]:
-        async with self._request("GET", "clusters") as response:
+        async with self._request(
+            "GET", "clusters", params={"include": "config", "is_ready": "true"}
+        ) as response:
             payload = await response.json()
             return ClusterConfigFactory().create_cluster_configs(
                 payload,
