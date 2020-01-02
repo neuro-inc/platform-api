@@ -9,9 +9,9 @@ from platform_api.orchestrator.job_request import JobStatus
 from platform_api.resource import TPUResource
 
 
-JOB_NAME_PATTERN = "^[a-z](?:-?[a-z0-9])*$"
-USER_NAME_PATTERN = "^[a-z0-9](?:-?[a-z0-9])*$"
-CLUSTER_NAME_PATTERN = "^[a-z0-9](?:-?[a-z0-9])*$"
+JOB_NAME_PATTERN = r"\A[a-z](?:-?[a-z0-9])*\Z"
+USER_NAME_PATTERN = r"\A[a-z0-9](?:-?[a-z0-9])*\Z"
+CLUSTER_NAME_PATTERN = r"\A[a-z0-9](?:-?[a-z0-9])*\Z"
 
 # Since the client supports job-names to be interchangeable with job-IDs
 # (see PR https://github.com/neuromation/platform-client-python/pull/648)
