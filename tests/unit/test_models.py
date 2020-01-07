@@ -303,6 +303,15 @@ class TestContainerResponseValidator:
             "software_version": "1.14",
         }
 
+    def test_invalid_command(self) -> None:
+        payload = {
+            "image": "testimage",
+            "resources": {"cpu": 0.1, "memory_mb": 16},
+            "command": '"',
+        }
+        validator = create_container_response_validator()
+        assert validator.check(payload) == payload
+
 
 class TestJobClusterNameValidator:
     def test_without_cluster_name(self) -> None:
