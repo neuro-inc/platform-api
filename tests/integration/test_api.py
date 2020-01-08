@@ -591,8 +591,8 @@ class TestJobs:
             assert response.status == HTTPBadRequest.status_code, await response.text()
             payload = await response.json()
             e = (
-                "{'name': DataError({0: DataError(value should be None), "
-                "1: DataError(does not match pattern ^[a-z](?:-?[a-z0-9])*$)})}"
+                r"{'name': DataError({0: DataError(value should be None), "
+                r"1: DataError(does not match pattern \A[a-z](?:-?[a-z0-9])*\Z)})}"
             )
             assert payload == {"error": e}
 
