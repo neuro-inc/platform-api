@@ -71,6 +71,7 @@ class TestJobNameValidator:
             "abc.",
             "abc?",
             "abc#",
+            "abc\n",
         ],
     )
     def test_invalid_job_names__contains_illegal_char(self, value: str) -> None:
@@ -188,6 +189,7 @@ class TestUserNameValidator:
             ("foo~", 1),
             ("foo,", 1),
             ("foo.", 1),
+            ("foo\n", 1),
             ("46CAC3A6-2956-481B-B4AA-A80A6EAF2CDE", 1),  # regression test
         ],
     )
