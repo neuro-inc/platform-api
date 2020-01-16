@@ -72,7 +72,7 @@ class StatsHandler:
     ) -> aiohttp.web.Response:
         username = request.match_info["username"]
 
-        permission = Permission(uri=f"user://{username}", action="read")
+        permission = Permission(uri=f"user://{username}/stats", action="read")
         await check_permissions(request, [permission])
 
         try:
