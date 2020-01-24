@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <title>Neuromation Platform</title>
-    <link rel="icon" href="icon-48x48.png" type="image/png">
+    <link rel="icon" href="${INGRESS_FALLBACK_URL}icon-48x48.png" type="image/png" />
 
     <script>
         const loc = window.location.href;
@@ -67,7 +67,7 @@
 <body>
 <div class="container">
     <div class="logo">
-        <img src="logo-large.svg" alt="Neuromation Logo">
+        <img src="${INGRESS_FALLBACK_URL}/logo-large.svg" alt="Neuromation Logo">
         <h1>Waiting for container start<span id="ellipsis">&nbsp;&nbsp;&nbsp;</span></h1>
     </div>
 </div>
