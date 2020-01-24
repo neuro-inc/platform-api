@@ -68,6 +68,8 @@ async def test_port_forward_no_job_namespace(
             "-NL",
             f"{port}:{alice_job}:80",
             "-o",
+            "StrictHostKeyChecking=no",
+            "-o",
             f"ProxyCommand=ssh -o StrictHostKeyChecking=no -p "
             f"{str(ssh_auth_config.port)} nobody@{ssh_auth_config.ip} "
             f'\'{{"method": "job_port_forward", "token": "{alice.token}",'
@@ -115,6 +117,8 @@ async def test_port_forward(
             "-NL",
             f"{port}:{job_domain_name}:80",
             "-o",
+            "StrictHostKeyChecking=no",
+            "-o",
             f"ProxyCommand=ssh -o StrictHostKeyChecking=no -p "
             f"{str(ssh_auth_config.port)} nobody@{ssh_auth_config.ip} "
             f'\'{{"method": "job_port_forward", "token": "{alice.token}",'
@@ -160,6 +164,8 @@ async def test_wrong_user(
             "-NL",
             f"{port}:{alice_job}:22",
             "-o",
+            "StrictHostKeyChecking=no",
+            "-o",
             f"ProxyCommand=ssh -o StrictHostKeyChecking=no -p "
             f"{str(ssh_auth_config.port)} nobody@{ssh_auth_config.ip} "
             f'\'{{"method": "job_port_forward", "token": "{bob.token}",'
@@ -198,6 +204,8 @@ async def test_incorrect_token(
             "ssh",
             "-NL",
             f"{port}:{alice_job}:22",
+            "-o",
+            "StrictHostKeyChecking=no",
             "-o",
             f"ProxyCommand=ssh -o StrictHostKeyChecking=no -p "
             f"{str(ssh_auth_config.port)} nobody@{ssh_auth_config.ip} "
@@ -241,6 +249,8 @@ async def test_port_forward_nonexposed(
             "ssh",
             "-NL",
             f"{port}:{alice_job}:23",
+            "-o",
+            "StrictHostKeyChecking=no",
             "-o",
             f"ProxyCommand=ssh -o StrictHostKeyChecking=no -p "
             f"{str(ssh_auth_config.port)} nobody@{ssh_auth_config.ip} "
