@@ -13,11 +13,9 @@
             fetch(loc, {method: "HEAD"}).then(response => {
                 if (response.status === 502) {
                     console.log("Still waiting");
-                } else if (response.status === 200) {
+                } else {
                     console.log("Found OK response, reloading")
                     window.location.href = loc;
-                } else {
-                    throw new Error(response.statusText);
                 }
                 return response;
             }).catch(errorMessage => {
