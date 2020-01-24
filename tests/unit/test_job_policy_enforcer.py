@@ -265,43 +265,6 @@ class TestJobs:
         assert list(groups[1].clusters["c2"].gpu_ids) == [job4.id]
 
 
-class TestPlatformApiClient:
-    @pytest.mark.asyncio
-    async def test_get_user_stats(self, mock_api: ApiConfig) -> None:
-        job_policy_enforcer_config = JobPolicyEnforcerConfig(
-            URL(mock_api.endpoint), "random_token"
-        )
-        client = PlatformApiClient(job_policy_enforcer_config)
-        expected_quota = AggregatedRunTime(
-            total_gpu_run_time_delta=timedelta(minutes=60 * 100),
-            total_non_gpu_run_time_delta=timedelta(minutes=60 * 100),
-        )
-        expected_jobs = AggregatedRunTime(
-            total_gpu_run_time_delta=timedelta(minutes=0),
-            total_non_gpu_run_time_delta=timedelta(minutes=0),
-        )
-        expected_response = UserStats(
-            name="user1",
-            clusters=[
-                UserClusterStats(
-                    name="cluster1", quota=expected_quota, jobs=expected_jobs
-                )
-            ],
-        )
-
-        response = await client.get_user_stats("user1")
-        assert response == expected_response
-
-    @pytest.mark.asyncio
-    async def test_get_non_terminated_jobs(self, mock_api: ApiConfig) -> None:
-        job_policy_enforcer_config = JobPolicyEnforcerConfig(
-            URL(mock_api.endpoint), "random_token"
-        )
-        client = PlatformApiClient(job_policy_enforcer_config)
-        response = await client.get_non_terminated_jobs()
-        assert len(response) == 5
-
-
 class MockPlatformApiClient(PlatformApiClient):
     def __init__(
         self,
@@ -700,7 +663,7 @@ async def mock_api() -> AsyncIterator[ApiConfig]:
     await runner.close()
 
 
-class TestRealJobPolicyEnforcerClientWrapper:
+class TestPlatformApiClient:
     @pytest.fixture
     async def job_policy_enforcer_config(
         self, mock_api: ApiConfig
@@ -713,6 +676,28 @@ class TestRealJobPolicyEnforcerClientWrapper:
     ) -> AsyncIterator[PlatformApiClient]:
         async with PlatformApiClient(job_policy_enforcer_config) as client:
             yield client
+
+    @pytest.mark.asyncio
+    async def test_get_user_stats(self, client: PlatformApiClient) -> None:
+        expected_quota = AggregatedRunTime(
+            total_gpu_run_time_delta=timedelta(minutes=60 * 100),
+            total_non_gpu_run_time_delta=timedelta(minutes=60 * 100),
+        )
+        expected_jobs = AggregatedRunTime(
+            total_gpu_run_time_delta=timedelta(minutes=0),
+            total_non_gpu_run_time_delta=timedelta(minutes=0),
+        )
+        expected_response = UserStats(
+            name="user1",
+            clusters=[
+                UserClusterStats(
+                    name="cluster1", quota=expected_quota, jobs=expected_jobs
+                )
+            ],
+        )
+
+        response = await client.get_user_stats("user1")
+        assert response == expected_response
 
     @pytest.mark.asyncio
     async def test_get_non_terminated_jobs(self, client: PlatformApiClient) -> None:
