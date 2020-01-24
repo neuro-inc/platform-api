@@ -1,0 +1,76 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <title>Neuromation Platform</title>
+    <link rel="icon" href="icon-48x48.png" type="image/png">
+
+    <script>
+        const loc = window.location.href;
+        let dotsCount = 0;
+
+        function check() {
+            fetch(loc, {method: "HEAD"}).then(response => {
+                if (response.status === 502) {
+                    console.log("Still waiting");
+                } else if (response.status === 200) {
+                    console.log("Found OK response, reloading")
+                    window.location.href = loc;
+                } else {
+                    throw new Error(response.statusText);
+                }
+                return response;
+            }).catch(errorMessage => {
+                console.error("Fetch error:\n" + errorMessage, errorMessage)
+            });
+        }
+
+        function toggleEllipsis() {
+            const elements = ["&nbsp;&nbsp;&nbsp;", ".&nbsp;&nbsp;", "..&nbsp;", "..."];
+            const span = document.querySelector("#ellipsis");
+            dotsCount = (dotsCount + 1) % 4;
+            span.innerHTML = elements[dotsCount];
+        }
+
+        document.addEventListener("DOMContentLoaded", () => {
+            setInterval(check, 3000);
+            setInterval(toggleEllipsis, 1000);
+        });
+    </script>
+
+    <style>
+        body {
+            background-color: #3d003f;
+        }
+
+        .logo {
+            width: 550px;
+            height: 350px;
+            margin: auto;
+            position: absolute;
+            top: 0;
+            left: 0;
+            right: 0;
+            bottom: 0;
+        }
+
+        .logo h1 {
+            text-align: center;
+            margin-top: 2em;
+            color: #fff;
+            font-family: Roboto, sans-serif;
+        }
+    </style>
+
+</head>
+
+<body>
+<div class="container">
+    <div class="logo">
+        <img src="logo-large.svg" alt="Neuromation Logo">
+        <h1>Waiting for container start<span id="ellipsis">&nbsp;&nbsp;&nbsp;</span></h1>
+    </div>
+</div>
+</body>
+
+</html>
