@@ -26,6 +26,12 @@ class JobInfo:
     owner: str
     is_gpu: bool
     cluster_name: str
+    run_time: timedelta
+    run_time_limit: timedelta
+
+    @property
+    def is_run_time_exceeded(self) -> bool:
+        return self.run_time >= self.run_time_limit
 
 
 @dataclass(frozen=True)
@@ -102,6 +108,10 @@ def _parse_job_info(value: Dict[str, Any]) -> JobInfo:
         owner=value["owner"],
         is_gpu=bool(value["container"]["resources"].get("gpu")),
         cluster_name=value["cluster_name"],
+        run_time=timedelta(seconds=float(value["history"]["run_time_seconds"])),
+        run_time_limit=_time_limit_minutes_to_timedelta(
+            value.get("max_run_time_minutes")
+        ),
     )
 
 
@@ -133,12 +143,12 @@ def _parse_quota_runtime(value: Dict[str, Optional[int]]) -> AggregatedRunTime:
     gpu_runtime = value.get("total_gpu_run_time_minutes")
     cpu_runtime = value.get("total_non_gpu_run_time_minutes")
     return AggregatedRunTime(
-        total_gpu_run_time_delta=_quota_minutes_to_timedelta(gpu_runtime),
-        total_non_gpu_run_time_delta=_quota_minutes_to_timedelta(cpu_runtime),
+        total_gpu_run_time_delta=_time_limit_minutes_to_timedelta(gpu_runtime),
+        total_non_gpu_run_time_delta=_time_limit_minutes_to_timedelta(cpu_runtime),
     )
 
 
-def _quota_minutes_to_timedelta(minutes: Optional[int]) -> timedelta:
+def _time_limit_minutes_to_timedelta(minutes: Optional[int]) -> timedelta:
     if minutes is None:
         return timedelta.max
     return timedelta(minutes=minutes)
@@ -351,6 +361,27 @@ class QuotaEnforcer(JobPolicyEnforcer):
                 raise
             except Exception:
                 logger.exception("Failed to kill job %s", job_id)
+
+
+class RuntimeLimitEnforcer(JobPolicyEnforcer):
+    def __init__(
+        self, platform_api_client: PlatformApiClient,
+    ):
+        self._platform_api_client = platform_api_client
+
+    async def enforce(self) -> None:
+        active_jobs = await self._platform_api_client.get_non_terminated_jobs()
+        for job in active_jobs:
+            await self._enforce_job_lifetime(job)
+
+    async def _enforce_job_lifetime(self, job: JobInfo) -> None:
+        if job.is_run_time_exceeded:
+            try:
+                await self._platform_api_client.kill_job(job.id)
+            except asyncio.CancelledError:
+                raise
+            except Exception:
+                logger.exception("Failed to kill job %s", job.id)
 
 
 class JobPolicyEnforcePoller:

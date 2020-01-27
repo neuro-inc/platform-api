@@ -16,6 +16,7 @@ from platform_api.orchestrator.job_policy_enforcer import (
     JobPolicyEnforcePoller,
     PlatformApiClient,
     QuotaEnforcer,
+    RuntimeLimitEnforcer,
 )
 
 from .cluster import Cluster, ClusterConfig, ClusterRegistry
@@ -272,7 +273,8 @@ async def create_app(
                     enforcers=[
                         QuotaEnforcer(
                             api_client, notifications_client, config.job_policy_enforcer
-                        )
+                        ),
+                        RuntimeLimitEnforcer(api_client),
                     ],
                 )
             )

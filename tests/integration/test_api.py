@@ -2589,7 +2589,6 @@ class TestJobPolicyEnforcer:
                 ],
             }
 
-        url = api.jobs_base_url
         job_submit["container"]["command"] = "sleep 1h"
         if has_gpu:
             job_submit["container"]["resources"]["gpu"] = 1
@@ -2624,11 +2623,60 @@ class TestJobPolicyEnforcer:
         max_enforcing_time = config.job_policy_enforcer.interval_sec * 7
         await user_jobs_client.long_polling_by_job_id(
             job_id=job_default["id"],
-            interval_s=0.1,
             status="succeeded",
             max_time=max_enforcing_time,
+            monotonic_interval=True,
         )
 
         await user_jobs_client.long_polling_by_job_id(
             job_id=job_cluster2["id"], status=poll_status
+        )
+
+
+class TestRuntimeLimitEnforcer:
+    @pytest.mark.asyncio
+    async def test_enforce_runtime(
+        self,
+        api: ApiConfig,
+        auth_api: AuthApiConfig,
+        config: Config,
+        client: aiohttp.ClientSession,
+        job_submit: Dict[str, Any],
+        jobs_client_factory: Callable[[_User], JobsClient],
+        regular_user_with_custom_quota: _User,
+    ) -> None:
+        user = regular_user_with_custom_quota
+        user_jobs_client = jobs_client_factory(user)
+
+        job_submit["max_run_time_minutes"] = 1
+        job_submit["container"]["command"] = "sleep 1h"
+
+        job_default = await user_jobs_client.create_job(job_submit)
+        assert job_default["max_run_time_minutes"] == 1
+        await user_jobs_client.long_polling_by_job_id(
+            job_id=job_default["id"], status="running"
+        )
+
+        job_submit["cluster_name"] = "testcluster2"
+        job_cluster2 = await user_jobs_client.create_job(job_submit)
+        assert job_cluster2["max_run_time_minutes"] == 1
+        await user_jobs_client.long_polling_by_job_id(
+            job_id=job_cluster2["id"], status="running"
+        )
+
+        # Due to conflict between quota enforcer and jobs poller (see issue #986),
+        # we cannot guarrantee that the quota will be enforced up to one
+        # enforce-poller's interval, so we check up to 7 intervals:
+        max_enforcing_time = 60 + config.job_policy_enforcer.interval_sec * 7
+        await user_jobs_client.long_polling_by_job_id(
+            job_id=job_default["id"],
+            status="succeeded",
+            max_time=max_enforcing_time,
+            monotonic_interval=True,
+        )
+        await user_jobs_client.long_polling_by_job_id(
+            job_id=job_cluster2["id"],
+            status="succeeded",
+            max_time=max_enforcing_time,
+            monotonic_interval=True,
         )

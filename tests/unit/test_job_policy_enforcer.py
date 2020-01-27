@@ -29,6 +29,7 @@ from platform_api.orchestrator.job_policy_enforcer import (
     Jobs,
     PlatformApiClient,
     QuotaEnforcer,
+    RuntimeLimitEnforcer,
     UserClusterStats,
     UserJobs,
     UserStats,
@@ -77,6 +78,44 @@ def job_policy_enforcer_config() -> JobPolicyEnforcerConfig:
     )
 
 
+class TestJobInfo:
+    def test_is_run_time_exceeded_true(self) -> None:
+        job = JobInfo(
+            "job",
+            JobStatus.PENDING,
+            "user",
+            False,
+            "cluster",
+            run_time=timedelta(seconds=10),
+            run_time_limit=timedelta(seconds=1),
+        )
+        assert job.is_run_time_exceeded
+
+    def test_is_run_time_exceeded_false(self) -> None:
+        job = JobInfo(
+            "job",
+            JobStatus.PENDING,
+            "user",
+            False,
+            "cluster",
+            run_time=timedelta(seconds=10),
+            run_time_limit=timedelta(seconds=100),
+        )
+        assert not job.is_run_time_exceeded
+
+    def test_is_run_time_exceeded_limit_max(self) -> None:
+        job = JobInfo(
+            "job",
+            JobStatus.PENDING,
+            "user",
+            False,
+            "cluster",
+            run_time=timedelta(seconds=10),
+            run_time_limit=timedelta.max,
+        )
+        assert not job.is_run_time_exceeded
+
+
 class TestSerializers:
     def test_parse_jobs_runtime_regular(self) -> None:
         runtime = _parse_jobs_runtime(
@@ -114,6 +153,8 @@ class TestSerializers:
             "status": "pending",
             "container": {"resources": {"gpu": 1}},
             "cluster_name": "cluster1",
+            "history": {"run_time_seconds": 65.0},
+            "max_run_time_minutes": 10,
         }
         job_info = _parse_job_info(payload)
         assert job_info.id == "job1"
@@ -121,6 +162,8 @@ class TestSerializers:
         assert job_info.status == JobStatus.PENDING
         assert job_info.is_gpu is True
         assert job_info.cluster_name == "cluster1"
+        assert job_info.run_time == timedelta(seconds=65.0)
+        assert job_info.run_time_limit == timedelta(minutes=10)
 
     def test_parse_job_info_non_gpu(self) -> None:
         payload = {
@@ -129,6 +172,8 @@ class TestSerializers:
             "status": "running",
             "container": {"resources": {"cpu": 4}},
             "cluster_name": "cluster1",
+            "history": {"run_time_seconds": 65.0},
+            "max_run_time_minutes": 10,
         }
         job_info = _parse_job_info(payload)
         assert job_info.id == "job123"
@@ -136,6 +181,8 @@ class TestSerializers:
         assert job_info.status == JobStatus.RUNNING
         assert job_info.is_gpu is False
         assert job_info.cluster_name == "cluster1"
+        assert job_info.run_time == timedelta(seconds=65.0)
+        assert job_info.run_time_limit == timedelta(minutes=10)
 
     def test_parse_user_stats(self) -> None:
         payload = {
@@ -231,7 +278,12 @@ class TestJobs:
 
     def test_group_by_user(self) -> None:
         def _Job(**kwargs: Any) -> JobInfo:
-            return JobInfo(status=JobStatus.RUNNING, **kwargs)
+            return JobInfo(
+                status=JobStatus.RUNNING,
+                run_time=timedelta(seconds=1.0),
+                run_time_limit=timedelta(minutes=10),
+                **kwargs,
+            )
 
         job1 = _Job(id="j1", owner="u1", is_gpu=False, cluster_name="c1",)
         job2 = _Job(id="j2", owner="u1", is_gpu=True, cluster_name="c1",)
@@ -265,6 +317,18 @@ class TestJobs:
         assert list(groups[1].clusters["c2"].gpu_ids) == [job4.id]
 
 
+def _job_info(
+    id: str,
+    status: JobStatus,
+    owner: str,
+    is_gpu: bool,
+    cluster_name: str = "cluster1",
+    run_time: timedelta = timedelta(),
+    run_time_limit: timedelta = timedelta(hours=1),
+) -> JobInfo:
+    return JobInfo(id, status, owner, is_gpu, cluster_name, run_time, run_time_limit)
+
+
 class MockPlatformApiClient(PlatformApiClient):
     def __init__(
         self,
@@ -281,11 +345,11 @@ class MockPlatformApiClient(PlatformApiClient):
 
     async def get_non_terminated_jobs(self) -> List[JobInfo]:
         return [
-            JobInfo("job1", JobStatus.RUNNING, "user1", False, cluster_name="cluster1"),
-            JobInfo("job2", JobStatus.PENDING, "user1", False, cluster_name="cluster1"),
-            JobInfo("job3", JobStatus.RUNNING, "user2", False, cluster_name="cluster1"),
-            JobInfo("job4", JobStatus.PENDING, "user2", False, cluster_name="cluster1"),
-            JobInfo("job5", JobStatus.PENDING, "user2", True, cluster_name="cluster1"),
+            _job_info("job1", JobStatus.RUNNING, "user1", False, "cluster1"),
+            _job_info("job2", JobStatus.PENDING, "user1", False, "cluster1"),
+            _job_info("job3", JobStatus.RUNNING, "user2", False, "cluster1"),
+            _job_info("job4", JobStatus.PENDING, "user2", False, "cluster1"),
+            _job_info("job5", JobStatus.PENDING, "user2", True, "cluster1"),
         ]
 
     async def get_user_stats(self, username: str) -> UserStats:
@@ -327,10 +391,12 @@ class TestQuotaEnforcer:
         self, mock_notifications_client: MockNotificationsClient
     ) -> None:
         cpu_jobs = [
-            JobInfo("job3", JobStatus.PENDING, "user2", False, "cluster1"),
-            JobInfo("job4", JobStatus.RUNNING, "user2", False, "cluster1"),
+            _job_info("job3", JobStatus.PENDING, "user2", False),
+            _job_info("job4", JobStatus.RUNNING, "user2", False),
         ]
-        gpu_jobs = [JobInfo("job5", JobStatus.RUNNING, "user2", True, "cluster1")]
+        gpu_jobs = [
+            _job_info("job5", JobStatus.RUNNING, "user2", True),
+        ]
         client = MockPlatformApiClient(gpu_quota_minutes=100)
         enforcer = QuotaEnforcer(
             client, mock_notifications_client, JobPolicyEnforcerConfig(URL(), "")
@@ -354,11 +420,14 @@ class TestQuotaEnforcer:
     async def test_enforce_user_quota_gpu_almost_reached_notification(
         self, mock_notifications_client: MockNotificationsClient
     ) -> None:
+
         cpu_jobs = [
-            JobInfo("job3", JobStatus.PENDING, "user1", False, "cluster1"),
-            JobInfo("job4", JobStatus.RUNNING, "user1", False, "cluster1"),
+            _job_info("job3", JobStatus.PENDING, "user1", False),
+            _job_info("job4", JobStatus.RUNNING, "user1", False),
         ]
-        gpu_jobs = [JobInfo("job5", JobStatus.RUNNING, "user1", True, "cluster1")]
+        gpu_jobs = [
+            _job_info("job5", JobStatus.RUNNING, "user1", True),
+        ]
         client = MockPlatformApiClient(cpu_quota_minutes=100)
         enforcer = QuotaEnforcer(
             client, mock_notifications_client, JobPolicyEnforcerConfig(URL(), "")
@@ -383,10 +452,10 @@ class TestQuotaEnforcer:
         self, mock_notifications_client: MockNotificationsClient
     ) -> None:
         cpu_jobs = [
-            JobInfo("job3", JobStatus.PENDING, "user2", False, "cluster1"),
-            JobInfo("job4", JobStatus.RUNNING, "user2", False, "cluster1"),
+            _job_info("job3", JobStatus.PENDING, "user2", False),
+            _job_info("job4", JobStatus.RUNNING, "user2", False),
         ]
-        gpu_jobs = [JobInfo("job5", JobStatus.RUNNING, "user2", True, "cluster1")]
+        gpu_jobs = [_job_info("job5", JobStatus.RUNNING, "user2", True)]
         client = MockPlatformApiClient()
         enforcer = QuotaEnforcer(
             client, mock_notifications_client, JobPolicyEnforcerConfig(URL(), "")
@@ -457,6 +526,44 @@ class TestQuotaEnforcer:
         )
         await enforcer.enforce()
         assert client.killed_jobs == cpu_jobs
+
+
+class TestRuntimeLimitEnforcer:
+    @pytest.mark.asyncio
+    async def test_enforce_nothing_killed(
+        self, mock_notifications_client: MockNotificationsClient
+    ) -> None:
+        job = JobInfo(
+            "job",
+            JobStatus.PENDING,
+            "user",
+            False,
+            "cluster",
+            run_time=timedelta(seconds=10),
+            run_time_limit=timedelta(seconds=100),
+        )
+        client = MockPlatformApiClient(gpu_quota_minutes=100)
+        enforcer = RuntimeLimitEnforcer(client)
+        await enforcer._enforce_job_lifetime(job)
+        assert client.killed_jobs == set()
+
+    @pytest.mark.asyncio
+    async def test_enforce_killed(
+        self, mock_notifications_client: MockNotificationsClient
+    ) -> None:
+        job = JobInfo(
+            "job",
+            JobStatus.PENDING,
+            "user",
+            False,
+            "cluster",
+            run_time=timedelta(seconds=61),
+            run_time_limit=timedelta(seconds=1),
+        )
+        client = MockPlatformApiClient(gpu_quota_minutes=100)
+        enforcer = RuntimeLimitEnforcer(client)
+        await enforcer._enforce_job_lifetime(job)
+        assert client.killed_jobs == {job.id}
 
 
 class MockedJobPolicyEnforcer(JobPolicyEnforcer):
@@ -585,6 +692,7 @@ async def mock_api() -> AsyncIterator[ApiConfig]:
                     "owner": "user1",
                     "container": {"resources": {"cpu": 1.0}},
                     "cluster_name": "cluster1",
+                    "history": {"run_time_seconds": 65.0},
                 },
                 {
                     "id": "job2",
@@ -592,6 +700,7 @@ async def mock_api() -> AsyncIterator[ApiConfig]:
                     "owner": "user1",
                     "container": {"resources": {"cpu": 1.0}},
                     "cluster_name": "cluster1",
+                    "history": {"run_time_seconds": 0},
                 },
                 {
                     "id": "job3",
@@ -599,6 +708,7 @@ async def mock_api() -> AsyncIterator[ApiConfig]:
                     "owner": "user2",
                     "container": {"resources": {"cpu": 1.0}},
                     "cluster_name": "cluster1",
+                    "history": {"run_time_seconds": 5 * 60},
                 },
                 {
                     "id": "job4",
@@ -606,6 +716,7 @@ async def mock_api() -> AsyncIterator[ApiConfig]:
                     "owner": "user2",
                     "container": {"resources": {"cpu": 1.0}},
                     "cluster_name": "cluster1",
+                    "history": {"run_time_seconds": 0},
                 },
                 {
                     "id": "job5",
@@ -613,6 +724,7 @@ async def mock_api() -> AsyncIterator[ApiConfig]:
                     "owner": "user2",
                     "container": {"resources": {"cpu": 1.0, "gpu": 0.5}},
                     "cluster_name": "cluster1",
+                    "history": {"run_time_seconds": 0},
                 },
             ]
         }

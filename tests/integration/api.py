@@ -167,6 +167,7 @@ class JobsClient:
         interval_s: float = 0.5,
         max_time: float = 300,
         unreachable_optimization: bool = True,
+        monotonic_interval: bool = False,
     ) -> Dict[str, Any]:
 
         # A little optimization with unreachable statuses
@@ -194,11 +195,15 @@ class JobsClient:
                 return response
             if response["status"] in stop_statuses:
                 pytest.fail(f"Status {status} cannot be reached, resp: {response}")
-            await asyncio.sleep(max(interval_s, time.monotonic() - t0))
             current_time = time.monotonic() - t0
             if current_time > max_time:
                 pytest.fail(f"too long: {current_time:.3f} sec; resp: {response}")
-            interval_s *= 1.5
+            if monotonic_interval:
+                sleep_interval = interval_s
+            else:
+                sleep_interval = max(interval_s, time.monotonic() - t0)
+                interval_s *= 1.5
+            await asyncio.sleep(sleep_interval)
 
     async def wait_job_creation(
         self, job_id: str, interval_s: float = 0.5, max_time: float = 300
