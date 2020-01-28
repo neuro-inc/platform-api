@@ -376,6 +376,10 @@ class RuntimeLimitEnforcer(JobPolicyEnforcer):
 
     async def _enforce_job_lifetime(self, job: JobInfo) -> None:
         if job.is_run_time_exceeded:
+            logger.info(
+                f"Job {job.id} by user '{job.owner}' exceeded its lifetime limit "
+                f"on cluster '{job.cluster_name}'"
+            )
             try:
                 await self._platform_api_client.kill_job(job.id)
             except asyncio.CancelledError:
