@@ -408,24 +408,8 @@ class TestJobRequestValidator:
         with pytest.raises(DataError, match="value is not exactly ''"):
             validator.check(request)
 
-    def test_with_max_run_time_minutes(self) -> None:
-        container = {
-            "image": "testimage",
-            "command": "arg1 arg2 arg3",
-            "resources": {"cpu": 0.1, "memory_mb": 16, "shm": True},
-            "ssh": {"port": 666},
-        }
-        request = {
-            "container": container,
-            "max_run_time_minutes": 10,
-        }
-        validator = create_job_request_validator(
-            allowed_gpu_models=(), allowed_tpu_resources=(), cluster_name=""
-        )
-        validator.check(request)
-
-    @pytest.mark.parametrize("limit_minutes", [0, -1])
-    def test_with_max_run_time_minutes_invalid(self, limit_minutes: int) -> None:
+    @pytest.mark.parametrize("limit_minutes", [0, 1])
+    def test_with_max_run_time_minutes_valid(self, limit_minutes: int) -> None:
         container = {
             "image": "testimage",
             "command": "arg1 arg2 arg3",
@@ -439,7 +423,23 @@ class TestJobRequestValidator:
         validator = create_job_request_validator(
             allowed_gpu_models=(), allowed_tpu_resources=(), cluster_name=""
         )
-        with pytest.raises(DataError, match="value is less than 1"):
+        validator.check(request)
+
+    def test_with_max_run_time_minutes_invalid_negative(self) -> None:
+        container = {
+            "image": "testimage",
+            "command": "arg1 arg2 arg3",
+            "resources": {"cpu": 0.1, "memory_mb": 16, "shm": True},
+            "ssh": {"port": 666},
+        }
+        request = {
+            "container": container,
+            "max_run_time_minutes": -1,
+        }
+        validator = create_job_request_validator(
+            allowed_gpu_models=(), allowed_tpu_resources=(), cluster_name=""
+        )
+        with pytest.raises(DataError, match="value is less than"):
             validator.check(request)
 
 
