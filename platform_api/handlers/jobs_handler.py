@@ -60,7 +60,7 @@ def create_job_request_validator(
             t.Key("description", optional=True): t.String,
             t.Key("is_preemptible", optional=True, default=False): t.Bool,
             t.Key("schedule_timeout", optional=True): t.Float(gte=1, lt=30 * 24 * 3600),
-            t.Key("max_run_time_minutes", optional=True): t.Int(gte=1),
+            t.Key("max_run_time_minutes", optional=True): t.Int(gte=0),
             t.Key("cluster_name", default=cluster_name): t.Atom(cluster_name),
         }
     )

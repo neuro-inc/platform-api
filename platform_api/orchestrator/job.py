@@ -372,7 +372,7 @@ class JobRecord:
         }
         if self.schedule_timeout:
             result["schedule_timeout"] = self.schedule_timeout
-        if self.max_run_time_minutes:
+        if self.max_run_time_minutes is not None:
             result["max_run_time_minutes"] = self.max_run_time_minutes
         if self.internal_hostname:
             result["internal_hostname"] = self.internal_hostname

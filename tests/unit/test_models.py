@@ -408,7 +408,8 @@ class TestJobRequestValidator:
         with pytest.raises(DataError, match="value is not exactly ''"):
             validator.check(request)
 
-    def test_with_max_run_time_minutes(self) -> None:
+    @pytest.mark.parametrize("limit_minutes", [0, 1])
+    def test_with_max_run_time_minutes_valid(self, limit_minutes: int) -> None:
         container = {
             "image": "testimage",
             "command": "arg1 arg2 arg3",
@@ -417,14 +418,14 @@ class TestJobRequestValidator:
         }
         request = {
             "container": container,
-            "max_run_time_minutes": 10,
+            "max_run_time_minutes": limit_minutes,
         }
         validator = create_job_request_validator(
             allowed_gpu_models=(), allowed_tpu_resources=(), cluster_name=""
         )
         validator.check(request)
 
-    def test_with_max_run_time_minutes_invalid_too_small(self) -> None:
+    def test_with_max_run_time_minutes_invalid_negative(self) -> None:
         container = {
             "image": "testimage",
             "command": "arg1 arg2 arg3",
@@ -433,12 +434,12 @@ class TestJobRequestValidator:
         }
         request = {
             "container": container,
-            "max_run_time_minutes": 0,
+            "max_run_time_minutes": -1,
         }
         validator = create_job_request_validator(
             allowed_gpu_models=(), allowed_tpu_resources=(), cluster_name=""
         )
-        with pytest.raises(DataError, match="value is less than 1"):
+        with pytest.raises(DataError, match="value is less than"):
             validator.check(request)
 
 
