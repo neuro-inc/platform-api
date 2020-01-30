@@ -15,7 +15,7 @@
                     console.log("Still waiting");
                 } else {
                     console.log("Found OK response, reloading")
-                    window.location.href = loc;
+                    window.location.reload(true);
                 }
                 return response;
             }).catch(errorMessage => {
