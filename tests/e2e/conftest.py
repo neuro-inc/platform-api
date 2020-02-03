@@ -97,8 +97,8 @@ async def api(api_config: PlatformConfig, client: aiohttp.ClientSession) -> None
                 break
             if attempts <= 0:
                 assert response.status == 200, (
-                    f"Unable to connect to Platform API: {url}\n"
-                    f"response: {await response.text()!r}"
+                    f"Unable to connect to Platform API: {url}"
+                    "\nresponse: " + repr(await response.text())
                 )
                 break
         except OSError:
