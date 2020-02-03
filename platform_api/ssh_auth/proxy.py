@@ -97,12 +97,14 @@ class ExecProxy:
         platform_url: URL,
         executor: Executor,
         forwarder: Forwarder,
+        use_cluster_name: bool,
     ) -> None:
         self._auth_client = auth_client
         self._jobs_url = platform_url / "jobs"
         self._ssh_request_validator = create_request_validator()
         self._executor = executor
         self._forwarder = forwarder
+        self._use_cluster_name = use_cluster_name
 
     async def _get_job_uri(self, token: str, job_id: str) -> str:
         async with aiohttp.ClientSession() as session:
@@ -112,9 +114,12 @@ class ExecProxy:
             if response.status != 200:
                 raise AuthorizationError(f"Response status: {response.status}")
             job_payload = await response.json()
-        cluster_name = job_payload["cluster_name"]
         owner = job_payload["owner"]
-        return f"job://{cluster_name}/{owner}/{job_id}"
+        if self._use_cluster_name:
+            cluster_name = job_payload["cluster_name"]
+            return f"job://{cluster_name}/{owner}/{job_id}"
+        else:
+            return f"job://{owner}/{job_id}"
 
     async def authorize_job(self, token: str, job_id: str, action: str) -> None:
         auth_policy = AuthPolicy(self._auth_client)

@@ -168,6 +168,19 @@ async def regular_user_factory(
             auth_clusters = [AuthCluster(name=cluster_name, quota=quota)]
         user = AuthClientUser(name=name, clusters=auth_clusters)
         await auth_client.add_user(user, token=admin_token)
+        # Grant permissions to the user home directory
+        for cluster in auth_clusters:
+            headers = auth_client._generate_headers(admin_token)
+            payload = [
+                {"uri": f"storage://{cluster.name}/{name}", "action": "manage"},
+            ]
+            async with auth_client._request(
+                "POST",
+                f"/api/v1/users/{name}/permissions",
+                headers=headers,
+                json=payload,
+            ) as p:
+                assert p.status == 201
         user_token = token_factory(user.name)
         return _User.create_from_auth_user(user, token=user_token)  # type: ignore
 
