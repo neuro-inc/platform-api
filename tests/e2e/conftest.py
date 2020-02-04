@@ -6,7 +6,7 @@ from typing import AsyncIterator, Awaitable, Callable, Optional
 import aiohttp
 import pytest
 from jose import jwt
-from neuro_auth_client import AuthClient, User
+from neuro_auth_client import AuthClient, Cluster, User
 from yarl import URL
 
 from tests.conftest import random_str
@@ -138,7 +138,7 @@ async def regular_user_factory(
     async def _factory(name: Optional[str] = None) -> _User:
         if not name:
             name = random_str()
-        user = User(name=name, cluster_name=cluster_name)
+        user = User(name=name, clusters=[Cluster(cluster_name)])
         await auth_client.add_user(user)
         # Grant cluster-specific permissions
         headers = auth_client._generate_headers(admin_token)
