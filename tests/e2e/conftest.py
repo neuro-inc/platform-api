@@ -140,10 +140,12 @@ async def regular_user_factory(
             name = random_str()
         user = User(name=name, cluster_name=cluster_name)
         await auth_client.add_user(user)
-        # Grant permissions to the user home directory
+        # Grant cluster-specific permissions
         headers = auth_client._generate_headers(admin_token)
         payload = [
             {"uri": f"storage://{cluster_name}/{name}", "action": "manage"},
+            {"uri": f"image://{cluster_name}/{name}", "action": "manage"},
+            {"uri": f"job://{cluster_name}/{name}", "action": "manage"},
         ]
         async with auth_client._request(
             "POST", f"/api/v1/users/{name}/permissions", headers=headers, json=payload
