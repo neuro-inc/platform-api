@@ -190,11 +190,17 @@ class Container:
         prefix = f"{registry_config.host}/"
         return self.image.startswith(prefix)
 
-    def to_image_uri(self, registry_config: RegistryConfig) -> URL:
+    def to_image_uri(
+        self, registry_config: RegistryConfig, cluster_name: Optional[str]
+    ) -> URL:
         assert self.belongs_to_registry(registry_config), "Unknown registry"
         prefix = f"{registry_config.host}/"
         repo = self.image.replace(prefix, "", 1)
-        uri = URL(f"image://{repo}")
+        # XXX (serhiy 04-Feb-2020) Temporary patch the URI
+        if cluster_name:
+            uri = URL(f"image://{cluster_name}/{repo}")
+        else:
+            uri = URL(f"image://{repo}")
         path, *_ = uri.path.split(":", 1)
         return uri.with_path(path)
 

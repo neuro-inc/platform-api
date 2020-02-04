@@ -98,6 +98,8 @@ spec:
               key: compute_token
         - name: NP_CORS_ORIGINS
           value: {{ printf "%s" (pluck .Values.global.env .Values.NP_CORS_ORIGINS | first | default .Values.NP_CORS_ORIGINS._default) }}
+        - name: NP_USE_CLUSTER_NAME
+          value: {{ printf "%s" (pluck .Values.global.env .Values.NP_USE_CLUSTER_NAME | first | default .Values.NP_USE_CLUSTER_NAME._default) }}
 
       - name: kubeproxy
         image: lachlanevenson/k8s-kubectl:v1.10.3

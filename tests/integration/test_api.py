@@ -489,7 +489,7 @@ class TestJobs:
                 "resources": {"cpu": 0.1, "memory_mb": 16},
                 "volumes": [
                     {
-                        "src_storage_uri": f"storage://",
+                        "src_storage_uri": "storage:",
                         "dst_path": "/var/storage",
                         "read_only": False,
                     }
@@ -503,7 +503,7 @@ class TestJobs:
         ) as response:
             assert response.status == HTTPForbidden.status_code, await response.text()
             data = await response.json()
-            assert data == {"missing": [{"action": "write", "uri": "storage:"}]}
+            assert data == {"missing": [{"action": "write", "uri": f"storage:/"}]}
 
     @pytest.mark.asyncio
     async def test_forbidden_image(
@@ -528,7 +528,9 @@ class TestJobs:
             assert response.status == HTTPForbidden.status_code, await response.text()
             data = await response.json()
             assert data == {
-                "missing": [{"action": "read", "uri": "image://anotheruser/image"}]
+                "missing": [
+                    {"action": "read", "uri": "image://test-cluster/anotheruser/image"}
+                ]
             }
 
     @pytest.mark.asyncio
@@ -1958,7 +1960,7 @@ class TestJobs:
 
     @pytest.mark.asyncio
     async def test_create_validation_failure(
-        self, api: ApiConfig, client: aiohttp.ClientSession, regular_user: _User
+        self, api: ApiConfig, client: aiohttp.ClientSession, regular_user: _User,
     ) -> None:
         request_payload: Dict[str, Any] = {}
         async with client.post(

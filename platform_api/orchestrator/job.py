@@ -476,10 +476,15 @@ class Job:
     def storage_config(self) -> StorageConfig:
         return self._storage_config
 
-    def to_uri(self) -> URL:
+    def to_uri(self, use_cluster_name: bool = True) -> URL:
         base_uri = "job:"
-        if self.owner:
-            base_uri += "//" + self.owner
+        if use_cluster_name and self.cluster_name:
+            base_uri += "//" + self.cluster_name
+            if self.owner:
+                base_uri += "/" + self.owner
+        else:
+            if self.owner:
+                base_uri += "//" + self.owner
         return URL(f"{base_uri}/{self.id}")
 
     @property

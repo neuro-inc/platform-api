@@ -226,16 +226,30 @@ def convert_job_to_job_response(job: Job, cluster_name: str) -> Dict[str, Any]:
 
 
 def infer_permissions_from_container(
-    user: User, container: Container, registry_config: RegistryConfig
+    user: User,
+    container: Container,
+    registry_config: RegistryConfig,
+    cluster_name: Optional[str],
 ) -> List[Permission]:
-    permissions = [Permission(uri=str(user.to_job_uri()), action="write")]
+    permissions = [Permission(uri=str(user.to_job_uri(cluster_name)), action="write")]
     if container.belongs_to_registry(registry_config):
         permissions.append(
-            Permission(uri=str(container.to_image_uri(registry_config)), action="read")
+            Permission(
+                uri=str(container.to_image_uri(registry_config, cluster_name)),
+                action="read",
+            )
         )
     for volume in container.volumes:
         action = "read" if volume.read_only else "write"
-        permission = Permission(uri=str(volume.uri), action=action)
+        uri = volume.uri
+        # XXX (serhiy 04-Feb-2020) Temporary patch the URI
+        if cluster_name:
+            if uri.scheme == "storage" and uri.host != cluster_name:
+                if uri.host:
+                    assert uri.path[0] == "/"
+                    uri = uri.with_path(f"/{uri.host}{uri.path}")
+                uri = uri.with_host(cluster_name)
+        permission = Permission(uri=str(uri), action=action)
         permissions.append(permission)
     return permissions
 
@@ -334,7 +348,10 @@ class JobsHandler:
         ).build()
 
         permissions = infer_permissions_from_container(
-            user, container, cluster_config.registry
+            user,
+            container,
+            cluster_config.registry,
+            cluster_name if self._config.use_cluster_name else None,
         )
         await check_permissions(request, permissions)
 
@@ -363,7 +380,9 @@ class JobsHandler:
         job_id = request.match_info["job_id"]
         job = await self._jobs_service.get_job(job_id)
 
-        permission = Permission(uri=str(job.to_uri()), action="read")
+        permission = Permission(
+            uri=str(job.to_uri(self._config.use_cluster_name)), action="read"
+        )
         await check_permissions(request, [permission])
 
         cluster_name = self._jobs_service.get_cluster_name(job)
@@ -390,6 +409,7 @@ class JobsHandler:
             bulk_job_filter = BulkJobFilterBuilder(
                 query_filter=self._job_filter_factory.create_from_query(request.query),
                 access_tree=tree,
+                use_cluster_name=self._config.use_cluster_name,
             ).build()
 
             if bulk_job_filter.bulk_filter:
@@ -434,7 +454,9 @@ class JobsHandler:
         job_id = request.match_info["job_id"]
         job = await self._jobs_service.get_job(job_id)
 
-        permission = Permission(uri=str(job.to_uri()), action="write")
+        permission = Permission(
+            uri=str(job.to_uri(self._config.use_cluster_name)), action="write"
+        )
         await check_permissions(request, [permission])
 
         await self._jobs_service.delete_job(job_id)
@@ -445,6 +467,7 @@ class JobsHandler:
     ) -> aiohttp.web.StreamResponse:
         job_id = request.match_info["job_id"]
 
+        # XXX (serhy 06-Feb-2020) Should we check job://{cluster_name}?
         permission = Permission(uri="job:", action="manage")
         await check_permissions(request, [permission])
 
@@ -518,10 +541,14 @@ class BulkJobFilter:
 
 class BulkJobFilterBuilder:
     def __init__(
-        self, query_filter: JobFilter, access_tree: ClientSubTreeViewRoot
+        self,
+        query_filter: JobFilter,
+        access_tree: ClientSubTreeViewRoot,
+        use_cluster_name: bool = True,
     ) -> None:
         self._query_filter = query_filter
         self._access_tree = access_tree
+        self._use_cluster_name = use_cluster_name
 
         self._has_access_to_all: bool = False
         self._owners_shared_all: Set[str] = set()
@@ -538,40 +565,82 @@ class BulkJobFilterBuilder:
         )
 
     def _traverse_access_tree(self) -> None:
-        tree = self._access_tree
+        tree = self._access_tree.sub_tree
 
         owners_shared_all: Set[str] = set()
+        clusters_shared_all: Set[str] = set()
         shared_ids: Set[str] = set()
 
-        if not tree.sub_tree.can_list():
+        if not tree.can_list():
             # no job resources whatsoever
             raise JobFilterException("no jobs")
 
-        if tree.sub_tree.can_read():
+        if tree.can_read():
             # read access to all jobs = job:
             self._has_access_to_all = True
             return
 
-        for owner, sub_tree in tree.sub_tree.children.items():
-            if not sub_tree.can_list():
-                continue
+        if self._use_cluster_name:
+            for cluster_name, cluster_tree in tree.children.items():
+                if not cluster_tree.can_list():
+                    continue
 
-            if self._query_filter.owners and owner not in self._query_filter.owners:
-                # skipping owners
-                continue
+                if (
+                    self._query_filter.clusters
+                    and cluster_name not in self._query_filter.clusters
+                ):
+                    # skipping clusters
+                    continue
 
-            if not sub_tree.can_read():
-                # specific ids
-                shared_ids.update(
-                    job_id
-                    for job_id, job_sub_tree in sub_tree.children.items()
-                    if job_sub_tree.can_read()
-                )
-            else:
-                # read/write/manage access to all owner's jobs = job://owner
-                owners_shared_all.add(owner)
+                if cluster_tree.can_read():
+                    # read/write/manage access to all jobs on the
+                    # cluster = job://cluster
+                    clusters_shared_all.add(cluster_name)
+                else:
+                    for owner, sub_tree in cluster_tree.children.items():
+                        if not sub_tree.can_list():
+                            continue
 
-        if not owners_shared_all and not shared_ids:
+                        if (
+                            self._query_filter.owners
+                            and owner not in self._query_filter.owners
+                        ):
+                            # skipping owners
+                            continue
+
+                        if sub_tree.can_read():
+                            # read/write/manage access to all owner's jobs
+                            # on the cluster = job://cluster/owner
+                            owners_shared_all.add(owner)
+                        else:
+                            # specific ids
+                            shared_ids.update(
+                                job_id
+                                for job_id, job_sub_tree in sub_tree.children.items()
+                                if job_sub_tree.can_read()
+                            )
+
+        else:
+            for owner, sub_tree in tree.children.items():
+                if not sub_tree.can_list():
+                    continue
+
+                if self._query_filter.owners and owner not in self._query_filter.owners:
+                    # skipping owners
+                    continue
+
+                if sub_tree.can_read():
+                    # read/write/manage access to all owner's jobs = job://owner
+                    owners_shared_all.add(owner)
+                else:
+                    # specific ids
+                    shared_ids.update(
+                        job_id
+                        for job_id, job_sub_tree in sub_tree.children.items()
+                        if job_sub_tree.can_read()
+                    )
+
+        if not clusters_shared_all and not owners_shared_all and not shared_ids:
             # no job resources whatsoever
             raise JobFilterException("no jobs")
 

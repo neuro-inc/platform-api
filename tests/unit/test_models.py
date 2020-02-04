@@ -700,15 +700,28 @@ class TestBulkJobFilterBuilder:
             sub_tree=ClientAccessSubTreeView(
                 action="list",
                 children={
-                    "testuser": ClientAccessSubTreeView(action="read", children={}),
-                    "anotheruser": ClientAccessSubTreeView(
+                    "test-cluster": ClientAccessSubTreeView(
                         action="list",
                         children={
-                            "job-test-1": ClientAccessSubTreeView("read", children={}),
-                            "job-test-2": ClientAccessSubTreeView("deny", children={}),
+                            "testuser": ClientAccessSubTreeView(
+                                action="read", children={}
+                            ),
+                            "anotheruser": ClientAccessSubTreeView(
+                                action="list",
+                                children={
+                                    "job-test-1": ClientAccessSubTreeView(
+                                        "read", children={}
+                                    ),
+                                    "job-test-2": ClientAccessSubTreeView(
+                                        "deny", children={}
+                                    ),
+                                },
+                            ),
+                            "someuser": ClientAccessSubTreeView(
+                                action="deny", children={}
+                            ),
                         },
-                    ),
-                    "someuser": ClientAccessSubTreeView(action="deny", children={}),
+                    )
                 },
             ),
         )
@@ -744,15 +757,28 @@ class TestBulkJobFilterBuilder:
             sub_tree=ClientAccessSubTreeView(
                 action="list",
                 children={
-                    "testuser": ClientAccessSubTreeView(action="read", children={}),
-                    "anotheruser": ClientAccessSubTreeView(
+                    "test-cluster": ClientAccessSubTreeView(
                         action="list",
                         children={
-                            "job-test-1": ClientAccessSubTreeView("read", children={}),
-                            "job-test-2": ClientAccessSubTreeView("deny", children={}),
+                            "testuser": ClientAccessSubTreeView(
+                                action="read", children={}
+                            ),
+                            "anotheruser": ClientAccessSubTreeView(
+                                action="list",
+                                children={
+                                    "job-test-1": ClientAccessSubTreeView(
+                                        "read", children={}
+                                    ),
+                                    "job-test-2": ClientAccessSubTreeView(
+                                        "deny", children={}
+                                    ),
+                                },
+                            ),
+                            "someuser": ClientAccessSubTreeView(
+                                action="deny", children={}
+                            ),
                         },
-                    ),
-                    "someuser": ClientAccessSubTreeView(action="deny", children={}),
+                    )
                 },
             ),
         )
@@ -770,15 +796,28 @@ class TestBulkJobFilterBuilder:
             sub_tree=ClientAccessSubTreeView(
                 action="list",
                 children={
-                    "testuser": ClientAccessSubTreeView(action="read", children={}),
-                    "anotheruser": ClientAccessSubTreeView(
+                    "test-cluster": ClientAccessSubTreeView(
                         action="list",
                         children={
-                            "job-test-1": ClientAccessSubTreeView("read", children={}),
-                            "job-test-2": ClientAccessSubTreeView("deny", children={}),
+                            "testuser": ClientAccessSubTreeView(
+                                action="read", children={}
+                            ),
+                            "anotheruser": ClientAccessSubTreeView(
+                                action="list",
+                                children={
+                                    "job-test-1": ClientAccessSubTreeView(
+                                        "read", children={}
+                                    ),
+                                    "job-test-2": ClientAccessSubTreeView(
+                                        "deny", children={}
+                                    ),
+                                },
+                            ),
+                            "someuser": ClientAccessSubTreeView(
+                                action="deny", children={}
+                            ),
                         },
-                    ),
-                    "someuser": ClientAccessSubTreeView(action="deny", children={}),
+                    )
                 },
             ),
         )
@@ -796,15 +835,28 @@ class TestBulkJobFilterBuilder:
             sub_tree=ClientAccessSubTreeView(
                 action="list",
                 children={
-                    "testuser": ClientAccessSubTreeView(action="read", children={}),
-                    "anotheruser": ClientAccessSubTreeView(
+                    "test-cluster": ClientAccessSubTreeView(
                         action="list",
                         children={
-                            "job-test-1": ClientAccessSubTreeView("read", children={}),
-                            "job-test-2": ClientAccessSubTreeView("deny", children={}),
+                            "testuser": ClientAccessSubTreeView(
+                                action="read", children={}
+                            ),
+                            "anotheruser": ClientAccessSubTreeView(
+                                action="list",
+                                children={
+                                    "job-test-1": ClientAccessSubTreeView(
+                                        "read", children={}
+                                    ),
+                                    "job-test-2": ClientAccessSubTreeView(
+                                        "deny", children={}
+                                    ),
+                                },
+                            ),
+                            "someuser": ClientAccessSubTreeView(
+                                action="deny", children={}
+                            ),
                         },
-                    ),
-                    "someuser": ClientAccessSubTreeView(action="deny", children={}),
+                    )
                 },
             ),
         )
@@ -826,15 +878,28 @@ class TestBulkJobFilterBuilder:
             sub_tree=ClientAccessSubTreeView(
                 action="list",
                 children={
-                    "testuser": ClientAccessSubTreeView(action="read", children={}),
-                    "anotheruser": ClientAccessSubTreeView(
+                    "test-cluster": ClientAccessSubTreeView(
                         action="list",
                         children={
-                            "job-test-1": ClientAccessSubTreeView("read", children={}),
-                            "job-test-2": ClientAccessSubTreeView("deny", children={}),
+                            "testuser": ClientAccessSubTreeView(
+                                action="read", children={}
+                            ),
+                            "anotheruser": ClientAccessSubTreeView(
+                                action="list",
+                                children={
+                                    "job-test-1": ClientAccessSubTreeView(
+                                        "read", children={}
+                                    ),
+                                    "job-test-2": ClientAccessSubTreeView(
+                                        "deny", children={}
+                                    ),
+                                },
+                            ),
+                            "someuser": ClientAccessSubTreeView(
+                                action="deny", children={}
+                            ),
                         },
-                    ),
-                    "someuser": ClientAccessSubTreeView(action="deny", children={}),
+                    )
                 },
             ),
         )
@@ -856,13 +921,17 @@ class TestInferPermissionsFromContainer:
     def test_no_volumes(self) -> None:
         user = User(name="testuser", token="")
         container = Container(
-            image="image", resources=ContainerResources(cpu=0.1, memory_mb=16)
+            image="image", resources=ContainerResources(cpu=0.1, memory_mb=16),
         )
         registry_config = RegistryConfig(
             url=URL("http://example.com"), username="compute", password="compute_token"
         )
-        permissions = infer_permissions_from_container(user, container, registry_config)
-        assert permissions == [Permission(uri="job://testuser", action="write")]
+        permissions = infer_permissions_from_container(
+            user, container, registry_config, "test-cluster"
+        )
+        assert permissions == [
+            Permission(uri="job://test-cluster/testuser", action="write")
+        ]
 
     def test_volumes(self) -> None:
         user = User(name="testuser", token="")
@@ -871,7 +940,7 @@ class TestInferPermissionsFromContainer:
             resources=ContainerResources(cpu=0.1, memory_mb=16),
             volumes=[
                 ContainerVolume(
-                    uri=URL("storage://testuser/dataset"),
+                    uri=URL("storage://test-cluster/testuser/dataset"),
                     src_path=PurePath("/"),
                     dst_path=PurePath("/var/storage/testuser/dataset"),
                     read_only=True,
@@ -886,11 +955,13 @@ class TestInferPermissionsFromContainer:
         registry_config = RegistryConfig(
             url=URL("http://example.com"), username="compute", password="compute_token"
         )
-        permissions = infer_permissions_from_container(user, container, registry_config)
+        permissions = infer_permissions_from_container(
+            user, container, registry_config, "test-cluster"
+        )
         assert permissions == [
-            Permission(uri="job://testuser", action="write"),
-            Permission(uri="storage://testuser/dataset", action="read"),
-            Permission(uri="storage://testuser/result", action="write"),
+            Permission(uri="job://test-cluster/testuser", action="write"),
+            Permission(uri="storage://test-cluster/testuser/dataset", action="read"),
+            Permission(uri="storage://test-cluster/testuser/result", action="write"),
         ]
 
     def test_image(self) -> None:
@@ -902,10 +973,12 @@ class TestInferPermissionsFromContainer:
         registry_config = RegistryConfig(
             url=URL("http://example.com"), username="compute", password="compute_token"
         )
-        permissions = infer_permissions_from_container(user, container, registry_config)
+        permissions = infer_permissions_from_container(
+            user, container, registry_config, "test-cluster"
+        )
         assert permissions == [
-            Permission(uri="job://testuser", action="write"),
-            Permission(uri="image://testuser/image", action="read"),
+            Permission(uri="job://test-cluster/testuser", action="write"),
+            Permission(uri="image://test-cluster/testuser/image", action="read"),
         ]
 
 
