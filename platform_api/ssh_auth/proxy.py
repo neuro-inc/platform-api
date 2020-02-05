@@ -115,7 +115,7 @@ class ExecProxy:
                 raise AuthorizationError(f"Response status: {response.status}")
             job_payload = await response.json()
         owner = job_payload["owner"]
-        if self._use_cluster_name:
+        if 0 and self._use_cluster_name:
             cluster_name = job_payload["cluster_name"]
             return f"job://{cluster_name}/{owner}/{job_id}"
         else:
