@@ -85,7 +85,7 @@ async def job_nginx(kube_orchestrator: KubeOrchestrator) -> MyJob:
     job_request = JobRequest.create(container)
     job = MyJob(
         orchestrator=kube_orchestrator,
-        record=JobRecord.create(request=job_request, cluster_name="default"),
+        record=JobRecord.create(request=job_request, cluster_name="test-cluster"),
     )
     return job
 
@@ -185,7 +185,7 @@ class TestKubeOrchestrator:
         job_request = JobRequest.create(container)
         job = MyJob(
             orchestrator=kube_orchestrator,
-            record=JobRecord.create(request=job_request, cluster_name="default"),
+            record=JobRecord.create(request=job_request, cluster_name="test-cluster"),
         )
         await job.start()
         status = await job.delete()
@@ -205,7 +205,7 @@ class TestKubeOrchestrator:
         job = MyJob(
             orchestrator=kube_orchestrator,
             record=JobRecord.create(
-                request=job_request, cluster_name="default", owner="invalid_name"
+                request=job_request, cluster_name="test-cluster", owner="invalid_name"
             ),
         )
 
@@ -226,7 +226,9 @@ class TestKubeOrchestrator:
         job_request_second = JobRequest(job_id=job_nginx.id, container=container)
         job_second = MyJob(
             orchestrator=kube_orchestrator,
-            record=JobRecord.create(request=job_request_second, cluster_name="default"),
+            record=JobRecord.create(
+                request=job_request_second, cluster_name="test-cluster"
+            ),
         )
         with pytest.raises(JobAlreadyExistsException):
             await job_second.start()
@@ -253,7 +255,7 @@ class TestKubeOrchestrator:
         job_request = JobRequest(job_id=job_id, container=container)
         job = MyJob(
             orchestrator=kube_orchestrator,
-            record=JobRecord.create(request=job_request, cluster_name="default"),
+            record=JobRecord.create(request=job_request, cluster_name="test-cluster"),
         )
 
         with pytest.raises(JobError):
@@ -269,7 +271,7 @@ class TestKubeOrchestrator:
         job = MyJob(
             orchestrator=kube_orchestrator,
             record=JobRecord.create(
-                request=JobRequest.create(container), cluster_name="default"
+                request=JobRequest.create(container), cluster_name="test-cluster"
             ),
         )
         try:
@@ -289,7 +291,7 @@ class TestKubeOrchestrator:
         job = MyJob(
             orchestrator=kube_orchestrator,
             record=JobRecord.create(
-                request=JobRequest.create(container), cluster_name="default"
+                request=JobRequest.create(container), cluster_name="test-cluster"
             ),
         )
         try:
@@ -318,7 +320,7 @@ class TestKubeOrchestrator:
         job = MyJob(
             orchestrator=kube_orchestrator,
             record=JobRecord.create(
-                request=JobRequest.create(container), cluster_name="default"
+                request=JobRequest.create(container), cluster_name="test-cluster"
             ),
         )
         try:
@@ -343,7 +345,7 @@ class TestKubeOrchestrator:
             orchestrator=kube_orchestrator,
             record=JobRecord.create(
                 request=JobRequest.create(container),
-                cluster_name="default",
+                cluster_name="test-cluster",
                 schedule_timeout=10,
             ),
         )
@@ -382,7 +384,7 @@ class TestKubeOrchestrator:
             orchestrator=kube_orchestrator,
             record=JobRecord.create(
                 request=JobRequest.create(container),
-                cluster_name="default",
+                cluster_name="test-cluster",
                 schedule_timeout=10,
             ),
         )
@@ -457,7 +459,7 @@ class TestKubeOrchestrator:
         write_job = MyJob(
             orchestrator=kube_orchestrator,
             record=JobRecord.create(
-                request=JobRequest.create(write_container), cluster_name="default"
+                request=JobRequest.create(write_container), cluster_name="test-cluster"
             ),
         )
 
@@ -470,7 +472,7 @@ class TestKubeOrchestrator:
         read_job = MyJob(
             orchestrator=kube_orchestrator,
             record=JobRecord.create(
-                request=JobRequest.create(read_container), cluster_name="default"
+                request=JobRequest.create(read_container), cluster_name="test-cluster"
             ),
         )
 
@@ -507,7 +509,7 @@ class TestKubeOrchestrator:
         job = MyJob(
             orchestrator=kube_orchestrator,
             record=JobRecord.create(
-                request=JobRequest.create(container), cluster_name="default"
+                request=JobRequest.create(container), cluster_name="test-cluster"
             ),
         )
 
@@ -657,7 +659,7 @@ class TestKubeOrchestrator:
         job = MyJob(
             orchestrator=kube_orchestrator,
             record=JobRecord.create(
-                request=JobRequest.create(container), cluster_name="default"
+                request=JobRequest.create(container), cluster_name="test-cluster"
             ),
         )
         try:
@@ -701,7 +703,7 @@ class TestKubeOrchestrator:
             orchestrator=kube_orchestrator,
             record=JobRecord.create(
                 request=JobRequest.create(container),
-                cluster_name="default",
+                cluster_name="test-cluster",
                 name=f"test-job-name-{random_str()}",
                 owner="owner",
             ),
@@ -751,7 +753,7 @@ class TestKubeOrchestrator:
         job = MyJob(
             orchestrator=kube_orchestrator,
             record=JobRecord.create(
-                request=JobRequest.create(container), cluster_name="default"
+                request=JobRequest.create(container), cluster_name="test-cluster"
             ),
         )
         try:
@@ -796,7 +798,7 @@ class TestKubeOrchestrator:
             orchestrator=kube_orchestrator,
             record=JobRecord.create(
                 request=JobRequest.create(container),
-                cluster_name="default",
+                cluster_name="test-cluster",
                 name=f"test-job-name-{random_str()}",
                 owner="owner",
             ),
@@ -843,7 +845,7 @@ class TestKubeOrchestrator:
                 orchestrator=kube_orchestrator,
                 record=JobRecord.create(
                     request=JobRequest.create(server_cont),
-                    cluster_name="default",
+                    cluster_name="test-cluster",
                     name=job_name,
                 ),
             )
@@ -867,7 +869,7 @@ class TestKubeOrchestrator:
             return MyJob(
                 orchestrator=kube_orchestrator,
                 record=JobRecord.create(
-                    request=JobRequest.create(client_cont), cluster_name="default"
+                    request=JobRequest.create(client_cont), cluster_name="test-cluster"
                 ),
             )
 
@@ -913,7 +915,7 @@ class TestKubeOrchestrator:
             return MyJob(
                 orchestrator=kube_orchestrator,
                 record=JobRecord.create(
-                    request=JobRequest.create(server_cont), cluster_name="default"
+                    request=JobRequest.create(server_cont), cluster_name="test-cluster"
                 ),
             )
 
@@ -930,7 +932,7 @@ class TestKubeOrchestrator:
             return MyJob(
                 orchestrator=kube_orchestrator,
                 record=JobRecord.create(
-                    request=JobRequest.create(client_cont), cluster_name="default"
+                    request=JobRequest.create(client_cont), cluster_name="test-cluster"
                 ),
             )
 
@@ -961,7 +963,7 @@ class TestKubeOrchestrator:
         job = MyJob(
             orchestrator=kube_orchestrator,
             record=JobRecord.create(
-                request=JobRequest.create(container), cluster_name="default"
+                request=JobRequest.create(container), cluster_name="test-cluster"
             ),
         )
         await delete_job_later(job)
@@ -999,7 +1001,7 @@ class TestKubeOrchestrator:
         job = MyJob(
             orchestrator=kube_orchestrator,
             record=JobRecord.create(
-                request=JobRequest.create(container), cluster_name="default"
+                request=JobRequest.create(container), cluster_name="test-cluster"
             ),
         )
         await delete_job_later(job)
@@ -1032,7 +1034,7 @@ class TestKubeOrchestrator:
         job = MyJob(
             orchestrator=kube_orchestrator,
             record=JobRecord.create(
-                request=JobRequest.create(container), cluster_name="default"
+                request=JobRequest.create(container), cluster_name="test-cluster"
             ),
         )
         await delete_job_later(job)
@@ -1067,7 +1069,8 @@ class TestKubeOrchestrator:
                 job = MyJob(
                     orchestrator,
                     record=JobRecord.create(
-                        request=JobRequest.create(container), cluster_name="default"
+                        request=JobRequest.create(container),
+                        cluster_name="test-cluster",
                     ),
                 )
                 try:
@@ -1100,7 +1103,8 @@ class TestKubeOrchestrator:
                 job = MyJob(
                     orchestrator,
                     record=JobRecord.create(
-                        request=JobRequest.create(container), cluster_name="default"
+                        request=JobRequest.create(container),
+                        cluster_name="test-cluster",
                     ),
                 )
                 try:
@@ -1142,7 +1146,8 @@ class TestKubeOrchestrator:
                 job = MyJob(
                     orchestrator,
                     record=JobRecord.create(
-                        request=JobRequest.create(container), cluster_name="default"
+                        request=JobRequest.create(container),
+                        cluster_name="test-cluster",
                     ),
                 )
                 try:
@@ -1187,7 +1192,7 @@ class TestKubeOrchestrator:
         job = MyJob(
             orchestrator=kube_orchestrator,
             record=JobRecord.create(
-                request=JobRequest.create(container), cluster_name="default"
+                request=JobRequest.create(container), cluster_name="test-cluster"
             ),
         )
         await delete_job_later(job)
@@ -1725,7 +1730,7 @@ class TestNodeSelector:
         job = MyJob(
             orchestrator=kube_orchestrator,
             record=JobRecord.create(
-                request=JobRequest.create(container), cluster_name="default"
+                request=JobRequest.create(container), cluster_name="test-cluster"
             ),
         )
         await delete_job_later(job)
@@ -1759,7 +1764,7 @@ class TestNodeSelector:
             job = MyJob(
                 orchestrator=kube_orchestrator,
                 record=JobRecord.create(
-                    request=JobRequest.create(container), cluster_name="default"
+                    request=JobRequest.create(container), cluster_name="test-cluster"
                 ),
             )
             await delete_job_later(job)
@@ -1792,7 +1797,7 @@ class TestNodeSelector:
         job = MyJob(
             orchestrator=kube_orchestrator,
             record=JobRecord.create(
-                request=JobRequest.create(container), cluster_name="default"
+                request=JobRequest.create(container), cluster_name="test-cluster"
             ),
         )
         await delete_job_later(job)
@@ -1847,7 +1852,7 @@ class TestPreemption:
         job = MyJob(
             orchestrator=kube_orchestrator,
             record=JobRecord.create(
-                request=JobRequest.create(container), cluster_name="default"
+                request=JobRequest.create(container), cluster_name="test-cluster"
             ),
         )
         await delete_job_later(job)
@@ -1882,7 +1887,7 @@ class TestPreemption:
             orchestrator=kube_orchestrator,
             record=JobRecord.create(
                 request=JobRequest.create(container),
-                cluster_name="default",
+                cluster_name="test-cluster",
                 # marking the job as preemptible
                 is_preemptible=True,
             ),
@@ -1925,7 +1930,7 @@ class TestPreemption:
             orchestrator=kube_orchestrator,
             record=JobRecord.create(
                 request=JobRequest.create(container),
-                cluster_name="default",
+                cluster_name="test-cluster",
                 # marking the job as preemptible
                 is_preemptible=True,
             ),
@@ -1965,7 +1970,7 @@ class TestPreemption:
             orchestrator=kube_orchestrator,
             record=JobRecord.create(
                 request=JobRequest.create(container),
-                cluster_name="default",
+                cluster_name="test-cluster",
                 # marking the job as preemptible
                 is_preemptible=True,
             ),
@@ -2014,7 +2019,7 @@ class TestPreemption:
             orchestrator=kube_orchestrator,
             record=JobRecord.create(
                 request=JobRequest.create(container),
-                cluster_name="default",
+                cluster_name="test-cluster",
                 # marking the job as preemptible
                 is_preemptible=True,
             ),
@@ -2039,7 +2044,7 @@ class TestPreemption:
             orchestrator=kube_orchestrator,
             record=JobRecord.create(
                 request=JobRequest(job_id=job.id, container=container),
-                cluster_name="default",
+                cluster_name="test-cluster",
                 # marking the job as preemptible
                 is_preemptible=True,
             ),

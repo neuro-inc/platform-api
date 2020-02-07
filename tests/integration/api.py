@@ -87,7 +87,10 @@ async def api(
     app = await create_app(
         config,
         get_cluster_configs(
-            [cluster_config_factory("default"), cluster_config_factory("testcluster2")]
+            [
+                cluster_config_factory("test-cluster"),
+                cluster_config_factory("testcluster2"),
+            ]
         ),
     )
     runner = ApiRunner(app, port=8080)
