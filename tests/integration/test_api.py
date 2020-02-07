@@ -487,6 +487,7 @@ class TestJobs:
         client: aiohttp.ClientSession,
         jobs_client: JobsClient,
         regular_user: _User,
+        cluster_name: str,
     ) -> None:
         payload = {
             "container": {
@@ -509,7 +510,9 @@ class TestJobs:
         ) as response:
             assert response.status == HTTPForbidden.status_code, await response.text()
             data = await response.json()
-            assert data == {"missing": [{"action": "write", "uri": f"storage:/"}]}
+            assert data == {
+                "missing": [{"action": "write", "uri": f"storage://{cluster_name}"}]
+            }
 
     @pytest.mark.asyncio
     async def test_forbidden_image(
@@ -518,6 +521,7 @@ class TestJobs:
         client: aiohttp.ClientSession,
         jobs_client: JobsClient,
         regular_user: _User,
+        cluster_name: str,
     ) -> None:
         payload = {
             "container": {
@@ -535,7 +539,10 @@ class TestJobs:
             data = await response.json()
             assert data == {
                 "missing": [
-                    {"action": "read", "uri": "image://default/anotheruser/image"}
+                    {
+                        "action": "read",
+                        "uri": "image://{cluster_name}/anotheruser/image",
+                    }
                 ]
             }
 
