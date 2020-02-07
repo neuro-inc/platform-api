@@ -40,6 +40,7 @@ async def run(config: SSHAuthConfig) -> int:
             platform_url=config.platform.server_endpoint_url,
             executor=executor,
             forwarder=forwarder,
+            use_cluster_name=config.use_cluster_name,
         )
         retcode = await proxy.process(json_request)
         log.info(f"Done, retcode={retcode}")

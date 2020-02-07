@@ -38,6 +38,8 @@ spec:
           value: "22"
         - name: NP_K8S_NS
           value: {{ .Values.NP_K8S_NS }}
+        - name: NP_USE_CLUSTER_NAME
+          value: {{ .Values.NP_USE_CLUSTER_NAME }}
       {{- if .Values.DOCKER_LOGIN_ARTIFACTORY_SECRET_NAME }}
       imagePullSecrets:
         - name: {{ .Values.DOCKER_LOGIN_ARTIFACTORY_SECRET_NAME }}

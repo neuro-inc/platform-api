@@ -100,11 +100,17 @@ class EnvironConfigFactory:
         auth = self.create_auth()
         log_fifo = Path(self._environ["NP_LOG_FIFO"])
         jobs_namespace = self._environ.get("NP_K8S_NS", SSHAuthConfig.jobs_namespace)
+        use_cluster_name = bool(
+            int(
+                self._environ.get("NP_USE_CLUSTER_NAME", SSHAuthConfig.use_cluster_name)
+            )
+        )
         return SSHAuthConfig(
             platform=platform,
             auth=auth,
             log_fifo=log_fifo,
             jobs_namespace=jobs_namespace,
+            use_cluster_name=use_cluster_name,
         )
 
     def create_server(self) -> ServerConfig:
