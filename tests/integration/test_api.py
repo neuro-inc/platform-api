@@ -541,7 +541,7 @@ class TestJobs:
                 "missing": [
                     {
                         "action": "read",
-                        "uri": "image://{cluster_name}/anotheruser/image",
+                        "uri": f"image://{cluster_name}/anotheruser/image",
                     }
                 ]
             }
