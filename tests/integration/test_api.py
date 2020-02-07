@@ -26,6 +26,12 @@ from .conftest import MyKubeClient
 
 
 @pytest.fixture
+def cluster_name() -> str:
+    # TODO (serhiy 7-Feb-2020): use non-default name
+    return "default"
+
+
+@pytest.fixture
 def cluster_configs_payload() -> List[Dict[str, Any]]:
     return [
         {
@@ -529,7 +535,7 @@ class TestJobs:
             data = await response.json()
             assert data == {
                 "missing": [
-                    {"action": "read", "uri": "image://test-cluster/anotheruser/image"}
+                    {"action": "read", "uri": "image://default/anotheruser/image"}
                 ]
             }
 
@@ -1026,10 +1032,12 @@ class TestJobs:
 
     @pytest.fixture
     async def share_job(
-        self, auth_client: AuthClient
+        self, auth_client: AuthClient, cluster_name: str,
     ) -> AsyncIterator[Callable[[_User, _User, Any], Awaitable[None]]]:
         async def _impl(owner: _User, follower: _User, job_id: str) -> None:
-            permission = Permission(uri=f"job://{owner.name}/{job_id}", action="read")
+            permission = Permission(
+                uri=f"job://{cluster_name}/{owner.name}/{job_id}", action="read"
+            )
             await auth_client.grant_user_permissions(
                 follower.name, [permission], token=owner.token
             )
@@ -1370,6 +1378,7 @@ class TestJobs:
         job_request_factory: Callable[[], Dict[str, Any]],
         regular_user_factory: Callable[[], Any],
         auth_client: AuthClient,
+        cluster_name: str,
     ) -> None:
         owner = await regular_user_factory()
         follower = await regular_user_factory()
@@ -1395,7 +1404,9 @@ class TestJobs:
             result = await response.json()
             assert not result["jobs"]
 
-        permission = Permission(uri=f"job://{owner.name}/{job_id}", action="read")
+        permission = Permission(
+            uri=f"job://{cluster_name}/{owner.name}/{job_id}", action="read"
+        )
         await auth_client.grant_user_permissions(
             follower.name, [permission], token=owner.token
         )
@@ -1412,6 +1423,7 @@ class TestJobs:
         job_request_factory: Callable[[], Dict[str, Any]],
         regular_user_factory: Callable[[], Any],
         auth_client: AuthClient,
+        cluster_name: str,
     ) -> None:
         owner = await regular_user_factory()
         follower = await regular_user_factory()
@@ -1433,10 +1445,17 @@ class TestJobs:
             assert response.status == HTTPForbidden.status_code, await response.text()
             data = await response.json()
             assert data == {
-                "missing": [{"action": "read", "uri": f"job://{owner.name}/{job_id}"}]
+                "missing": [
+                    {
+                        "action": "read",
+                        "uri": f"job://{cluster_name}/{owner.name}/{job_id}",
+                    }
+                ]
             }
 
-        permission = Permission(uri=f"job://{owner.name}/{job_id}", action="read")
+        permission = Permission(
+            uri=f"job://{cluster_name}/{owner.name}/{job_id}", action="read"
+        )
         await auth_client.grant_user_permissions(
             follower.name, [permission], token=owner.token
         )
@@ -1904,6 +1923,7 @@ class TestJobs:
         jobs_client: JobsClient,
         regular_user_factory: Callable[..., Awaitable[_User]],
         regular_user: _User,
+        cluster_name: str,
     ) -> None:
         url = api.jobs_base_url
         async with client.post(
@@ -1920,7 +1940,10 @@ class TestJobs:
             result = await response.json()
             assert result == {
                 "missing": [
-                    {"action": "write", "uri": f"job://{regular_user.name}/{job_id}"}
+                    {
+                        "action": "write",
+                        "uri": f"job://{cluster_name}/{regular_user.name}/{job_id}",
+                    }
                 ]
             }
 
