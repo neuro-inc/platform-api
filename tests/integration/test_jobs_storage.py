@@ -1103,7 +1103,7 @@ class TestRedisJobsStorage:
         jobs = await storage.get_all_jobs(filters)
         assert not jobs
 
-        filters2 = JobFilter(clusters={"test-cluster"})
+        filters2 = JobFilter(clusters={"default"})
 
         jobs = await storage.get_all_jobs(filters2)
         assert not jobs
@@ -1114,7 +1114,7 @@ class TestRedisJobsStorage:
         job_ids = {job.id for job in jobs}
         assert job_ids == {first_job.id, second_job.id}
         for job in jobs:
-            assert job.cluster_name == "test-cluster"
+            assert job.cluster_name == "default"
 
         jobs = await storage.get_all_jobs(filters2)
         job_ids = {job.id for job in jobs}
