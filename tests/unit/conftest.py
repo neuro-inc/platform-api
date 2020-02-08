@@ -204,7 +204,7 @@ def cluster_config(registry_config: RegistryConfig) -> ClusterConfig:
         resource_pool_types=[ResourcePoolType()],
     )
     return ClusterConfig(
-        name="default",
+        name="test-cluster",
         storage=storage_config,
         registry=registry_config,
         orchestrator=orchestrator_config,
