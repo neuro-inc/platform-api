@@ -964,6 +964,43 @@ class TestInferPermissionsFromContainer:
             Permission(uri="storage://test-cluster/testuser/result", action="write"),
         ]
 
+    def test_volumes_no_host(self) -> None:
+        user = User(name="testuser", token="")
+        container = Container(
+            image="image",
+            resources=ContainerResources(cpu=0.1, memory_mb=16),
+            volumes=[
+                ContainerVolume(
+                    uri=URL("storage:"),
+                    src_path=PurePath("/"),
+                    dst_path=PurePath("/var/storage/root1"),
+                    read_only=True,
+                ),
+                ContainerVolume(
+                    uri=URL("storage:/"),
+                    src_path=PurePath("/"),
+                    dst_path=PurePath("/var/storage/root2"),
+                ),
+                ContainerVolume(
+                    uri=URL("storage:///path/to"),
+                    src_path=PurePath("/"),
+                    dst_path=PurePath("/var/storage/testuser/path/to"),
+                ),
+            ],
+        )
+        registry_config = RegistryConfig(
+            url=URL("http://example.com"), username="compute", password="compute_token"
+        )
+        permissions = infer_permissions_from_container(
+            user, container, registry_config, "test-cluster"
+        )
+        assert permissions == [
+            Permission(uri="job://test-cluster/testuser", action="write"),
+            Permission(uri="storage://test-cluster", action="read"),
+            Permission(uri="storage://test-cluster", action="write"),
+            Permission(uri="storage://test-cluster/path/to", action="write"),
+        ]
+
     def test_image(self) -> None:
         user = User(name="testuser", token="")
         container = Container(
@@ -1025,6 +1062,43 @@ class TestInferPermissionsFromContainerLegacy:
             Permission(uri="job://testuser", action="write"),
             Permission(uri="storage://test-cluster/testuser/dataset", action="read"),
             Permission(uri="storage://testuser/result", action="write"),
+        ]
+
+    def test_volumes_no_host(self) -> None:
+        user = User(name="testuser", token="")
+        container = Container(
+            image="image",
+            resources=ContainerResources(cpu=0.1, memory_mb=16),
+            volumes=[
+                ContainerVolume(
+                    uri=URL("storage:"),
+                    src_path=PurePath("/"),
+                    dst_path=PurePath("/var/storage/root1"),
+                    read_only=True,
+                ),
+                ContainerVolume(
+                    uri=URL("storage:/"),
+                    src_path=PurePath("/"),
+                    dst_path=PurePath("/var/storage/root2"),
+                ),
+                ContainerVolume(
+                    uri=URL("storage:///path/to"),
+                    src_path=PurePath("/"),
+                    dst_path=PurePath("/var/storage/testuser/path/to"),
+                ),
+            ],
+        )
+        registry_config = RegistryConfig(
+            url=URL("http://example.com"), username="compute", password="compute_token"
+        )
+        permissions = infer_permissions_from_container(
+            user, container, registry_config, None
+        )
+        assert permissions == [
+            Permission(uri="job://testuser", action="write"),
+            Permission(uri="storage:", action="read"),
+            Permission(uri="storage:/", action="write"),
+            Permission(uri="storage:/path/to", action="write"),
         ]
 
     def test_image(self) -> None:

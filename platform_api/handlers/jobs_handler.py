@@ -249,6 +249,9 @@ def infer_permissions_from_container(
                     assert uri.path[0] == "/"
                     uri = uri.with_path(f"/{uri.host}{uri.path}")
                     uri = uri.with_host(cluster_name)
+                elif uri.path != "/":
+                    assert uri.path == "" or uri.path[0] == "/"
+                    uri = URL(f"{uri.scheme}://{cluster_name}{uri.path}")
                 else:
                     uri = URL(f"{uri.scheme}://{cluster_name}")
         permission = Permission(uri=str(uri), action=action)
