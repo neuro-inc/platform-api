@@ -221,7 +221,7 @@ class TestEnvironConfigFactory:
 
         assert not config.cors.allowed_origins
 
-        assert not config.use_cluster_name
+        assert not config.use_cluster_names_in_uris
 
     def test_create_value_error_invalid_port(self) -> None:
         environ = {
@@ -287,7 +287,7 @@ class TestEnvironConfigFactory:
             "NP_ENFORCER_PLATFORM_API_URL": "http://platformapi:8080/api/v1",
             "NP_ENFORCER_TOKEN": "compute-token",
             "NP_CORS_ORIGINS": "https://domain1.com,http://do.main",
-            "NP_USE_CLUSTER_NAME": "1",
+            "NP_USE_CLUSTER_NAMES_IN_URIS": "1",
         }
         config = EnvironConfigFactory(environ=environ).create()
         cluster = EnvironConfigFactory(environ=environ).create_cluster()
@@ -360,7 +360,7 @@ class TestEnvironConfigFactory:
 
         assert config.cors.allowed_origins == ["https://domain1.com", "http://do.main"]
 
-        assert config.use_cluster_name
+        assert config.use_cluster_names_in_uris
 
     def test_create_nfs(self) -> None:
         environ = {
@@ -393,7 +393,7 @@ class TestEnvironConfigFactory:
             "NP_AUTH_NAME": "auth-name",
             "NP_LOG_FIFO": "log.txt",
             "NP_K8S_NS": "other",
-            "NP_USE_CLUSTER_NAME": "1",
+            "NP_USE_CLUSTER_NAMES_IN_URIS": "1",
         }
         config = EnvironConfigFactory(environ=environ).create_ssh_auth()
         assert config.platform.server_endpoint_url == URL("http://neu.ro/api/v1")
@@ -404,7 +404,7 @@ class TestEnvironConfigFactory:
         assert config.log_fifo == PurePath("log.txt")
         assert config.env_prefix == "NP"  # default
         assert config.jobs_namespace == "other"
-        assert config.use_cluster_name
+        assert config.use_cluster_names_in_uris
 
     def test_registry_config_invalid_missing_host(self) -> None:
         with pytest.raises(ValueError, match="missing url hostname"):

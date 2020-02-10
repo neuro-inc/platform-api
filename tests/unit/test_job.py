@@ -1214,7 +1214,9 @@ class TestJob:
                 request=job_request, cluster_name="test-cluster", owner="testuser"
             ),
         )
-        assert job.to_uri(use_cluster_name=False) == URL(f"job://testuser/{job.id}")
+        assert job.to_uri(use_cluster_names_in_uris=False) == URL(
+            f"job://testuser/{job.id}"
+        )
 
     def test_to_uri_no_cluster(
         self, mock_orchestrator: MockOrchestrator, job_request: JobRequest

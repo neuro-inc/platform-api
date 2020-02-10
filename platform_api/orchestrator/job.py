@@ -476,9 +476,9 @@ class Job:
     def storage_config(self) -> StorageConfig:
         return self._storage_config
 
-    def to_uri(self, use_cluster_name: bool = True) -> URL:
+    def to_uri(self, use_cluster_names_in_uris: bool = True) -> URL:
         base_uri = "job:"
-        if use_cluster_name and self.cluster_name:
+        if use_cluster_names_in_uris and self.cluster_name:
             base_uri += "//" + self.cluster_name
             if self.owner:
                 base_uri += "/" + self.owner

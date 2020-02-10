@@ -353,7 +353,7 @@ class JobsHandler:
             user,
             container,
             cluster_config.registry,
-            cluster_name if self._config.use_cluster_name else None,
+            cluster_name if self._config.use_cluster_names_in_uris else None,
         )
         await check_permissions(request, permissions)
 
@@ -383,7 +383,7 @@ class JobsHandler:
         job = await self._jobs_service.get_job(job_id)
 
         permission = Permission(
-            uri=str(job.to_uri(self._config.use_cluster_name)), action="read"
+            uri=str(job.to_uri(self._config.use_cluster_names_in_uris)), action="read"
         )
         await check_permissions(request, [permission])
 
@@ -411,7 +411,7 @@ class JobsHandler:
             bulk_job_filter = BulkJobFilterBuilder(
                 query_filter=self._job_filter_factory.create_from_query(request.query),
                 access_tree=tree,
-                use_cluster_name=self._config.use_cluster_name,
+                use_cluster_names_in_uris=self._config.use_cluster_names_in_uris,
             ).build()
 
             if bulk_job_filter.bulk_filter:
@@ -457,7 +457,7 @@ class JobsHandler:
         job = await self._jobs_service.get_job(job_id)
 
         permission = Permission(
-            uri=str(job.to_uri(self._config.use_cluster_name)), action="write"
+            uri=str(job.to_uri(self._config.use_cluster_names_in_uris)), action="write"
         )
         await check_permissions(request, [permission])
 
@@ -546,11 +546,11 @@ class BulkJobFilterBuilder:
         self,
         query_filter: JobFilter,
         access_tree: ClientSubTreeViewRoot,
-        use_cluster_name: bool = True,
+        use_cluster_names_in_uris: bool = True,
     ) -> None:
         self._query_filter = query_filter
         self._access_tree = access_tree
-        self._use_cluster_name = use_cluster_name
+        self._use_cluster_names_in_uris = use_cluster_names_in_uris
 
         self._has_access_to_all: bool = False
         self._owners_shared_all: Set[str] = set()
@@ -582,7 +582,7 @@ class BulkJobFilterBuilder:
             self._has_access_to_all = True
             return
 
-        if self._use_cluster_name:
+        if self._use_cluster_names_in_uris:
             for cluster_name, cluster_tree in tree.children.items():
                 if not cluster_tree.can_list():
                     continue
