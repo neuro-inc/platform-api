@@ -118,8 +118,7 @@ async def auth_client(
 
 @pytest.fixture
 def cluster_name() -> str:
-    # TODO (serhiy 3-Feb-2020): use non-default name
-    return "default"
+    return "test-cluster"
 
 
 @dataclass

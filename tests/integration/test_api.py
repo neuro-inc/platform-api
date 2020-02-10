@@ -27,8 +27,7 @@ from .conftest import MyKubeClient
 
 @pytest.fixture
 def cluster_name() -> str:
-    # TODO (serhiy 7-Feb-2020): use non-default name
-    return "default"
+    return "test-cluster"
 
 
 @pytest.fixture
