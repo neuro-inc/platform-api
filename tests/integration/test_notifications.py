@@ -49,7 +49,7 @@ class TestCannotStartJobQuotaReached:
         mock_notifications_server: NotificationsServer,
     ) -> None:
         clusters = [
-            AuthCluster("default"),
+            AuthCluster("test-cluster"),
             AuthCluster("testcluster2", quota=Quota(total_non_gpu_run_time_minutes=0)),
         ]
         user = await regular_user_factory(auth_clusters=clusters)
@@ -80,7 +80,7 @@ class TestCannotStartJobQuotaReached:
         mock_notifications_server: NotificationsServer,
     ) -> None:
         clusters = [
-            AuthCluster("default"),
+            AuthCluster("test-cluster"),
             AuthCluster("testcluster2", quota=Quota(total_gpu_run_time_minutes=0)),
         ]
         user = await regular_user_factory(auth_clusters=clusters)
@@ -321,7 +321,7 @@ class TestQuotaWillBeReachedSoon:
             QuotaWillBeReachedSoon.slug(),
             {
                 "user_id": user.name,
-                "cluster_name": "default",
+                "cluster_name": "test-cluster",
                 "resource": "non_gpu",
                 "quota": 120.0,
                 "used": 60.0,  # indicates that the notification was sent in time
