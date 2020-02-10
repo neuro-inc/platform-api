@@ -982,6 +982,69 @@ class TestInferPermissionsFromContainer:
         ]
 
 
+class TestInferPermissionsFromContainerLegacy:
+    def test_no_volumes(self) -> None:
+        user = User(name="testuser", token="")
+        container = Container(
+            image="image", resources=ContainerResources(cpu=0.1, memory_mb=16),
+        )
+        registry_config = RegistryConfig(
+            url=URL("http://example.com"), username="compute", password="compute_token"
+        )
+        permissions = infer_permissions_from_container(
+            user, container, registry_config, None
+        )
+        assert permissions == [Permission(uri="job://testuser", action="write")]
+
+    def test_volumes(self) -> None:
+        user = User(name="testuser", token="")
+        container = Container(
+            image="image",
+            resources=ContainerResources(cpu=0.1, memory_mb=16),
+            volumes=[
+                ContainerVolume(
+                    uri=URL("storage://test-cluster/testuser/dataset"),
+                    src_path=PurePath("/"),
+                    dst_path=PurePath("/var/storage/testuser/dataset"),
+                    read_only=True,
+                ),
+                ContainerVolume(
+                    uri=URL("storage://testuser/result"),
+                    src_path=PurePath("/"),
+                    dst_path=PurePath("/var/storage/testuser/result"),
+                ),
+            ],
+        )
+        registry_config = RegistryConfig(
+            url=URL("http://example.com"), username="compute", password="compute_token"
+        )
+        permissions = infer_permissions_from_container(
+            user, container, registry_config, None
+        )
+        assert permissions == [
+            Permission(uri="job://testuser", action="write"),
+            Permission(uri="storage://test-cluster/testuser/dataset", action="read"),
+            Permission(uri="storage://testuser/result", action="write"),
+        ]
+
+    def test_image(self) -> None:
+        user = User(name="testuser", token="")
+        container = Container(
+            image="example.com/testuser/image",
+            resources=ContainerResources(cpu=0.1, memory_mb=16),
+        )
+        registry_config = RegistryConfig(
+            url=URL("http://example.com"), username="compute", password="compute_token"
+        )
+        permissions = infer_permissions_from_container(
+            user, container, registry_config, None
+        )
+        assert permissions == [
+            Permission(uri="job://testuser", action="write"),
+            Permission(uri="image://testuser/image", action="read"),
+        ]
+
+
 @pytest.mark.asyncio
 async def test_job_to_job_response(mock_orchestrator: MockOrchestrator) -> None:
     job = Job(
