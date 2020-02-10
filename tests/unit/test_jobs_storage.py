@@ -247,7 +247,7 @@ class TestJobFilter:
             owner="testuser",
             cluster_name="my-cluster",
         )
-        assert not JobFilter(clusters={"default"}).check(job)
+        assert not JobFilter(clusters={"test-cluster"}).check(job)
         assert JobFilter(clusters={"my-cluster"}).check(job)
 
     def test_check_ids(self) -> None:

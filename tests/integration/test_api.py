@@ -195,7 +195,7 @@ class TestApi:
         url = api.config_url
         regular_user = await regular_user_factory(
             auth_clusters=[
-                AuthCluster(name="default"),
+                AuthCluster(name="test-cluster"),
                 AuthCluster(name="testcluster2"),
             ]
         )
@@ -203,7 +203,7 @@ class TestApi:
             assert resp.status == HTTPOk.status_code, await resp.text()
             result = await resp.json()
             expected_cluster_payload = {
-                "name": "default",
+                "name": "test-cluster",
                 "registry_url": "https://registry.dev.neuromation.io",
                 "storage_url": "https://neu.ro/api/v1/storage",
                 "users_url": "https://neu.ro/api/v1/users",
@@ -268,7 +268,7 @@ class TestApi:
             assert resp.status == HTTPOk.status_code, await resp.text()
             result = await resp.json()
             expected_cluster_payload = {
-                "name": "default",
+                "name": "test-cluster",
                 "registry_url": "https://registry.dev.neuromation.io",
                 "storage_url": "https://neu.ro/api/v1/storage",
                 "users_url": "https://neu.ro/api/v1/users",
@@ -697,7 +697,7 @@ class TestJobs:
         job_submit["container"]["command"] = "false"
         job_submit["container"]["http"]["requires_auth"] = True
         job_submit["schedule_timeout"] = 90
-        job_submit["cluster_name"] = "default"
+        job_submit["cluster_name"] = "test-cluster"
         async with client.post(
             url, headers=regular_user.headers, json=job_submit
         ) as resp:
@@ -1582,8 +1582,8 @@ class TestJobs:
         await share_job(usr2, usr1, job_usr2)
         all_job_ids = {job_usr1_killed, job_usr1, job_usr2}
 
-        # filter: default cluster
-        filters = [("cluster_name", "default")]
+        # filter: test cluster
+        filters = [("cluster_name", "test-cluster")]
         jobs = await jobs_client.get_all_jobs(filters)
         job_ids = {job["id"] for job in jobs}
         assert job_ids == all_job_ids
@@ -1594,8 +1594,8 @@ class TestJobs:
         job_ids = {job["id"] for job in jobs}
         assert job_ids == set()
 
-        # filter: default cluster + status
-        filters = [("cluster_name", "default"), ("status", "running")]
+        # filter: test cluster + status
+        filters = [("cluster_name", "test-cluster"), ("status", "running")]
         jobs = await jobs_client.get_all_jobs(filters)
         job_ids = {job["id"] for job in jobs}
         assert job_ids == {job_usr1, job_usr2}
@@ -1606,14 +1606,14 @@ class TestJobs:
         job_ids = {job["id"] for job in jobs}
         assert job_ids == set()
 
-        # filter: default cluster + self owner
-        filters = [("cluster_name", "default"), ("owner", usr1.name)]
+        # filter: test cluster + self owner
+        filters = [("cluster_name", "test-cluster"), ("owner", usr1.name)]
         jobs = await jobs_client.get_all_jobs(filters)
         job_ids = {job["id"] for job in jobs}
         assert job_ids == {job_usr1_killed, job_usr1}
 
-        # filter: default cluster + other owner
-        filters = [("cluster_name", "default"), ("owner", usr2.name)]
+        # filter: test cluster + other owner
+        filters = [("cluster_name", "test-cluster"), ("owner", usr2.name)]
         jobs = await jobs_client.get_all_jobs(filters)
         job_ids = {job["id"] for job in jobs}
         assert job_ids == {job_usr2}
@@ -2035,7 +2035,7 @@ class TestJobs:
             assert response_payload == {
                 "id": mock.ANY,
                 "owner": regular_user.name,
-                "cluster_name": "default",
+                "cluster_name": "test-cluster",
                 "internal_hostname": f"{job_id}.platformapi-tests",
                 "status": "pending",
                 "history": {
@@ -2070,7 +2070,7 @@ class TestJobs:
         assert response_payload == {
             "id": job_id,
             "owner": regular_user.name,
-            "cluster_name": "default",
+            "cluster_name": "test-cluster",
             "internal_hostname": f"{job_id}.platformapi-tests",
             "status": "succeeded",
             "history": {
@@ -2145,7 +2145,7 @@ class TestJobs:
         assert response_payload == {
             "id": job_id,
             "owner": regular_user.name,
-            "cluster_name": "default",
+            "cluster_name": "test-cluster",
             "status": "failed",
             "internal_hostname": f"{job_id}.platformapi-tests",
             "history": {
@@ -2244,7 +2244,7 @@ class TestJobs:
             assert response_payload == {
                 "id": mock.ANY,
                 "owner": regular_user.name,
-                "cluster_name": "default",
+                "cluster_name": "test-cluster",
                 "internal_hostname": f"{job_id}.platformapi-tests",
                 "status": "pending",
                 "history": {
@@ -2329,7 +2329,7 @@ class TestJobs:
             assert response_payload == {
                 "id": mock.ANY,
                 "owner": regular_user.name,
-                "cluster_name": "default",
+                "cluster_name": "test-cluster",
                 "internal_hostname": f"{job_id}.platformapi-tests",
                 "status": "pending",
                 "history": {
@@ -2390,7 +2390,7 @@ class TestStats:
                 "quota": {},
                 "clusters": [
                     {
-                        "name": "default",
+                        "name": "test-cluster",
                         "jobs": {
                             "total_gpu_run_time_minutes": 0,
                             "total_non_gpu_run_time_minutes": 0,
@@ -2431,7 +2431,7 @@ class TestStats:
                 "quota": {},
                 "clusters": [
                     {
-                        "name": "default",
+                        "name": "test-cluster",
                         "jobs": {
                             "total_gpu_run_time_minutes": 0,
                             "total_non_gpu_run_time_minutes": 0,
@@ -2451,7 +2451,7 @@ class TestStats:
         user = await regular_user_factory(
             auth_clusters=[
                 AuthCluster(
-                    name="default",
+                    name="test-cluster",
                     quota=Quota(
                         total_gpu_run_time_minutes=123,
                         total_non_gpu_run_time_minutes=321,
@@ -2476,7 +2476,7 @@ class TestStats:
                 },
                 "clusters": [
                     {
-                        "name": "default",
+                        "name": "test-cluster",
                         "jobs": {
                             "total_gpu_run_time_minutes": 0,
                             "total_non_gpu_run_time_minutes": 0,
@@ -2545,7 +2545,7 @@ class TestStats:
                         "quota": {},
                     },
                     {
-                        "name": "default",
+                        "name": "test-cluster",
                         "jobs": {
                             "total_gpu_run_time_minutes": mock.ANY,
                             "total_non_gpu_run_time_minutes": mock.ANY,
@@ -2600,7 +2600,7 @@ class TestJobPolicyEnforcer:
                 },
                 "clusters": [
                     {
-                        "name": "default",
+                        "name": "test-cluster",
                         "jobs": {
                             "total_gpu_run_time_minutes": 0,
                             "total_non_gpu_run_time_minutes": 0,
@@ -2641,7 +2641,7 @@ class TestJobPolicyEnforcer:
         payload = {
             "name": user.name,
             "clusters": [
-                {"name": "default", "quota": {quota_type: 0}},
+                {"name": "test-cluster", "quota": {quota_type: 0}},
                 {"name": "testcluster2", "quota": {}},
             ],
         }

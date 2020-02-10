@@ -6,7 +6,7 @@ data:
   clusters.json: |-
     [
         {
-            "name": "default",
+            "name": "test-cluster",
 
             "storage": {
                 "host": {"mount_path": "/tmp"},

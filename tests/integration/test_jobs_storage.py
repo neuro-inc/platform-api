@@ -688,10 +688,10 @@ class TestRedisJobsStorage:
         self, redis_client: aioredis.Redis
     ) -> Tuple[RedisJobsStorage, List[JobRecord]]:
         jobs = [
-            self._create_running_job(owner="user1", cluster_name="default"),
-            self._create_succeeded_job(owner="user1", cluster_name="default"),
-            self._create_failed_job(owner="user2", cluster_name="default"),
-            self._create_succeeded_job(owner="user3", cluster_name="default"),
+            self._create_running_job(owner="user1", cluster_name="test-cluster"),
+            self._create_succeeded_job(owner="user1", cluster_name="test-cluster"),
+            self._create_failed_job(owner="user2", cluster_name="test-cluster"),
+            self._create_succeeded_job(owner="user3", cluster_name="test-cluster"),
             self._create_succeeded_job(owner="user1", cluster_name="my-cluster"),
             self._create_failed_job(owner="user3", cluster_name="my-cluster"),
             self._create_failed_job(owner="user1", cluster_name="other-cluster"),
@@ -712,11 +712,11 @@ class TestRedisJobsStorage:
             redis_client
         )
 
-        job_filter = JobFilter(clusters={"default"})
+        job_filter = JobFilter(clusters={"test-cluster"})
         job_ids = {job.id for job in await storage.get_all_jobs(job_filter)}
         assert job_ids == {job.id for job in jobs[:4]}
 
-        job_filter = JobFilter(clusters={"default", "my-cluster"})
+        job_filter = JobFilter(clusters={"test-cluster", "my-cluster"})
         job_ids = {job.id for job in await storage.get_all_jobs(job_filter)}
         assert job_ids == {job.id for job in jobs[:6]}
 
@@ -732,15 +732,17 @@ class TestRedisJobsStorage:
             redis_client
         )
 
-        job_filter = JobFilter(clusters={"default"}, owners={"user1"})
+        job_filter = JobFilter(clusters={"test-cluster"}, owners={"user1"})
         job_ids = {job.id for job in await storage.get_all_jobs(job_filter)}
         assert job_ids == {jobs[0].id, jobs[1].id}
 
-        job_filter = JobFilter(clusters={"default", "my-cluster"}, owners={"user1"})
+        job_filter = JobFilter(
+            clusters={"test-cluster", "my-cluster"}, owners={"user1"}
+        )
         job_ids = {job.id for job in await storage.get_all_jobs(job_filter)}
         assert job_ids == {jobs[0].id, jobs[1].id, jobs[4].id}
 
-        job_filter = JobFilter(clusters={"default"}, owners={"user1", "user2"})
+        job_filter = JobFilter(clusters={"test-cluster"}, owners={"user1", "user2"})
         job_ids = {job.id for job in await storage.get_all_jobs(job_filter)}
         assert job_ids == {jobs[0].id, jobs[1].id, jobs[2].id}
 
@@ -756,18 +758,20 @@ class TestRedisJobsStorage:
             redis_client
         )
 
-        job_filter = JobFilter(clusters={"default"}, statuses={JobStatus.SUCCEEDED})
+        job_filter = JobFilter(
+            clusters={"test-cluster"}, statuses={JobStatus.SUCCEEDED}
+        )
         job_ids = {job.id for job in await storage.get_all_jobs(job_filter)}
         assert job_ids == {jobs[1].id, jobs[3].id}
 
         job_filter = JobFilter(
-            clusters={"default", "my-cluster"}, statuses={JobStatus.SUCCEEDED}
+            clusters={"test-cluster", "my-cluster"}, statuses={JobStatus.SUCCEEDED}
         )
         job_ids = {job.id for job in await storage.get_all_jobs(job_filter)}
         assert job_ids == {jobs[1].id, jobs[3].id, jobs[4].id}
 
         job_filter = JobFilter(
-            clusters={"default"}, statuses={JobStatus.RUNNING, JobStatus.SUCCEEDED}
+            clusters={"test-cluster"}, statuses={JobStatus.RUNNING, JobStatus.SUCCEEDED}
         )
         job_ids = {job.id for job in await storage.get_all_jobs(job_filter)}
         assert job_ids == {jobs[0].id, jobs[1].id, jobs[3].id}

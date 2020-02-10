@@ -159,7 +159,7 @@ async def regular_user_factory(
     async def _factory(
         name: Optional[str] = None,
         quota: Optional[Quota] = None,
-        cluster_name: str = "default",
+        cluster_name: str = "test-cluster",
         auth_clusters: Optional[Sequence[AuthCluster]] = None,
     ) -> _User:
         if not name:
@@ -224,7 +224,7 @@ async def regular_user_with_custom_quota(
     return await regular_user_factory(
         auth_clusters=[
             AuthCluster(
-                name="default",
+                name="test-cluster",
                 quota=Quota(
                     total_gpu_run_time_minutes=123, total_non_gpu_run_time_minutes=321
                 ),

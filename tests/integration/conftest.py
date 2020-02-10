@@ -566,7 +566,7 @@ def cluster_config_factory(
     storage_config_host: StorageConfig,
     registry_config: RegistryConfig,
 ) -> Callable[..., ClusterConfig]:
-    def _f(cluster_name: str = "default") -> ClusterConfig:
+    def _f(cluster_name: str = "test-cluster") -> ClusterConfig:
         ingress_config = IngressConfig(
             storage_url=URL("https://neu.ro/api/v1/storage"),
             monitoring_url=URL("https://neu.ro/api/v1/monitoring"),
