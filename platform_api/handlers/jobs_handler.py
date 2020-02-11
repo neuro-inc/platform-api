@@ -471,16 +471,16 @@ class JobsHandler:
         self, request: aiohttp.web.Request
     ) -> aiohttp.web.StreamResponse:
         job_id = request.match_info["job_id"]
+        job = await self._jobs_service.get_job(job_id)
 
-        orig_payload = await request.json()
-        request_payload = self._job_set_status_validator.check(orig_payload)
-
-        cluster_name = request_payload.get("cluster_name")
-        if self._config.use_cluster_names_in_uris and cluster_name:
-            permission = Permission(uri=f"job://{cluster_name}", action="manage")
+        if self._config.use_cluster_names_in_uris and job.cluster_name:
+            permission = Permission(uri=f"job://{job.cluster_name}", action="manage")
         else:
             permission = Permission(uri="job:", action="manage")
         await check_permissions(request, [permission])
+
+        orig_payload = await request.json()
+        request_payload = self._job_set_status_validator.check(orig_payload)
 
         status_item = JobStatusItem.create(
             JobStatus(request_payload["status"]),
