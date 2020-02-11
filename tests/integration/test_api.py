@@ -1884,6 +1884,7 @@ class TestJobs:
         job_submit: Dict[str, Any],
         run_job: Callable[..., Awaitable[str]],
         regular_user: _User,
+        cluster_name: str,
     ) -> None:
         job_id = await run_job(regular_user, job_submit, do_wait=False)
 
@@ -1893,7 +1894,9 @@ class TestJobs:
         async with client.put(url, headers=headers, json=payload) as response:
             assert response.status == HTTPForbidden.status_code, await response.text()
             result = await response.json()
-            assert result == {"missing": [{"uri": "job:", "action": "manage"}]}
+            assert result == {
+                "missing": [{"uri": f"job://{cluster_name}", "action": "manage"}]
+            }
 
     @pytest.mark.asyncio
     async def test_delete_job(
