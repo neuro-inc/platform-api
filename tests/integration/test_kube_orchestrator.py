@@ -76,6 +76,11 @@ class MyJob(Job):
 
 
 @pytest.fixture
+def cluster_name() -> str:
+    return "test-cluster"
+
+
+@pytest.fixture
 async def job_nginx(kube_orchestrator: KubeOrchestrator) -> MyJob:
     container = Container(
         image="ubuntu",

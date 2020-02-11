@@ -498,7 +498,7 @@ class TestJobs:
                 "resources": {"cpu": 0.1, "memory_mb": 16},
                 "volumes": [
                     {
-                        "src_storage_uri": "storage://{cluster_name}",
+                        "src_storage_uri": f"storage://{cluster_name}",
                         "dst_path": "/var/storage",
                         "read_only": False,
                     }
