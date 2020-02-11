@@ -472,12 +472,15 @@ class JobsHandler:
     ) -> aiohttp.web.StreamResponse:
         job_id = request.match_info["job_id"]
 
-        # XXX (serhy 06-Feb-2020) Should we check job://{cluster_name}?
-        permission = Permission(uri="job:", action="manage")
-        await check_permissions(request, [permission])
-
         orig_payload = await request.json()
         request_payload = self._job_set_status_validator.check(orig_payload)
+
+        if self._config.use_cluster_names_in_uris:
+            cluster_name = request_payload["cluster_name"]
+            permission = Permission(uri=f"job://{cluster_name}", action="manage")
+        else:
+            permission = Permission(uri="job:", action="manage")
+        await check_permissions(request, [permission])
 
         status_item = JobStatusItem.create(
             JobStatus(request_payload["status"]),
