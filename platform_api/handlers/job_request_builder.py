@@ -62,7 +62,11 @@ class ContainerBuilder:
 
     @classmethod
     def from_container_payload(
-        cls, payload: Dict[str, Any], *, storage_config: StorageConfig
+        cls,
+        payload: Dict[str, Any],
+        *,
+        storage_config: StorageConfig,
+        cluster_name: str
     ) -> "ContainerBuilder":
         builder = cls(storage_config=storage_config)
         builder.set_image(payload["image"])
@@ -94,7 +98,7 @@ class ContainerBuilder:
 
         for volume_payload in payload.get("volumes", []):
             volume = cls.create_volume_from_payload(
-                volume_payload, storage_config=storage_config
+                volume_payload, storage_config=storage_config, cluster_name=cluster_name
             )
             builder.add_volume(volume)
 
@@ -126,7 +130,11 @@ class ContainerBuilder:
 
     @classmethod
     def create_volume_from_payload(
-        cls, payload: Dict[str, Any], *, storage_config: StorageConfig
+        cls,
+        payload: Dict[str, Any],
+        *,
+        storage_config: StorageConfig,
+        cluster_name: str
     ) -> ContainerVolume:
         dst_path = PurePath(payload["dst_path"])
         return ContainerVolume.create(
@@ -136,6 +144,7 @@ class ContainerBuilder:
             extend_dst_mount_path=False,
             read_only=bool(payload.get("read_only")),
             scheme=storage_config.uri_scheme,
+            cluster_name=cluster_name,
         )
 
     def build(self) -> Container:

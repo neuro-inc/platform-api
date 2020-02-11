@@ -417,32 +417,47 @@ class TestKubeOrchestrator:
 
     @pytest.mark.asyncio
     async def test_volumes(
-        self, storage_config_host: StorageConfig, kube_orchestrator: KubeOrchestrator
+        self,
+        storage_config_host: StorageConfig,
+        kube_orchestrator: KubeOrchestrator,
+        cluster_name: str,
     ) -> None:
-        await self._test_volumes(storage_config_host, kube_orchestrator)
+        await self._test_volumes(storage_config_host, kube_orchestrator, cluster_name)
 
     @pytest.mark.asyncio
     async def test_volumes_nfs(
-        self, storage_config_nfs: StorageConfig, kube_orchestrator_nfs: KubeOrchestrator
+        self,
+        storage_config_nfs: StorageConfig,
+        kube_orchestrator_nfs: KubeOrchestrator,
+        cluster_name: str,
     ) -> None:
-        await self._test_volumes(storage_config_nfs, kube_orchestrator_nfs)
+        await self._test_volumes(
+            storage_config_nfs, kube_orchestrator_nfs, cluster_name
+        )
 
     @pytest.mark.asyncio
     async def test_volumes_pvc(
-        self, storage_config_pvc: StorageConfig, kube_orchestrator_pvc: KubeOrchestrator
+        self,
+        storage_config_pvc: StorageConfig,
+        kube_orchestrator_pvc: KubeOrchestrator,
+        cluster_name: str,
     ) -> None:
-        await self._test_volumes(storage_config_pvc, kube_orchestrator_pvc)
+        await self._test_volumes(
+            storage_config_pvc, kube_orchestrator_pvc, cluster_name
+        )
 
     async def _test_volumes(
-        self, storage_config: StorageConfig, kube_orchestrator: KubeOrchestrator
+        self,
+        storage_config: StorageConfig,
+        kube_orchestrator: KubeOrchestrator,
+        cluster_name: str,
     ) -> None:
         assert storage_config.host_mount_path
         volumes = [
             ContainerVolume(
                 uri=URL(
-                    storage_config.uri_scheme
-                    + "://"
-                    + str(storage_config.host_mount_path)
+                    f"{storage_config.uri_scheme}://"
+                    f"{cluster_name}/{storage_config.host_mount_path}"
                 ),
                 src_path=storage_config.host_mount_path,
                 dst_path=PurePath("/storage"),

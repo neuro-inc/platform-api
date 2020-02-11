@@ -449,6 +449,7 @@ class TestJobs:
         client: aiohttp.ClientSession,
         jobs_client: JobsClient,
         regular_user: _User,
+        cluster_name: str,
     ) -> None:
         payload = {
             "container": {
@@ -457,12 +458,14 @@ class TestJobs:
                 "resources": {"cpu": 0.1, "memory_mb": 16},
                 "volumes": [
                     {
-                        "src_storage_uri": f"storage://{regular_user.name}",
+                        "src_storage_uri": f"storage://{cluster_name}/"
+                        f"{regular_user.name}",
                         "dst_path": "/var/storage",
                         "read_only": False,
                     },
                     {
-                        "src_storage_uri": f"storage://{regular_user.name}/result",
+                        "src_storage_uri": f"storage://{cluster_name}/"
+                        f"{regular_user.name}/result",
                         "dst_path": "/var/storage/result",
                         "read_only": True,
                     },
@@ -495,7 +498,7 @@ class TestJobs:
                 "resources": {"cpu": 0.1, "memory_mb": 16},
                 "volumes": [
                     {
-                        "src_storage_uri": "storage:",
+                        "src_storage_uri": "storage://{cluster_name}",
                         "dst_path": "/var/storage",
                         "read_only": False,
                     }
@@ -2010,6 +2013,110 @@ class TestJobs:
         api: ApiConfig,
         client: aiohttp.ClientSession,
         regular_user: _User,
+        cluster_name: str,
+    ) -> None:
+        request_payload = {
+            "container": {
+                "image": "ubuntu",
+                "command": "true",
+                "resources": {"cpu": 0.1, "memory_mb": 16},
+                "volumes": [
+                    {
+                        "src_storage_uri": f"storage://{cluster_name}/"
+                        f"{regular_user.name}",
+                        "dst_path": "/var/storage",
+                        "read_only": False,
+                    }
+                ],
+            },
+            "is_preemptible": True,
+        }
+
+        async with client.post(
+            api.jobs_base_url, headers=regular_user.headers, json=request_payload
+        ) as response:
+            response_text = await response.text()
+            assert response.status == HTTPAccepted.status_code, response_text
+            response_payload = await response.json()
+            job_id = response_payload["id"]
+            assert response_payload == {
+                "id": mock.ANY,
+                "owner": regular_user.name,
+                "cluster_name": "test-cluster",
+                "internal_hostname": f"{job_id}.platformapi-tests",
+                "status": "pending",
+                "history": {
+                    "status": "pending",
+                    "reason": "Creating",
+                    "description": None,
+                    "created_at": mock.ANY,
+                    "run_time_seconds": 0,
+                },
+                "container": {
+                    "command": "true",
+                    "env": {},
+                    "image": "ubuntu",
+                    "resources": {"cpu": 0.1, "memory_mb": 16},
+                    "volumes": [
+                        {
+                            "dst_path": "/var/storage",
+                            "read_only": False,
+                            "src_storage_uri": f"storage://{cluster_name}/"
+                            f"{regular_user.name}",
+                        }
+                    ],
+                },
+                "ssh_server": "ssh://nobody@ssh-auth.platform.neuromation.io:22",
+                "ssh_auth_server": "ssh://nobody@ssh-auth.platform.neuromation.io:22",
+                "is_preemptible": True,
+            }
+
+        response_payload = await jobs_client.long_polling_by_job_id(
+            job_id=job_id, status="succeeded"
+        )
+
+        assert response_payload == {
+            "id": job_id,
+            "owner": regular_user.name,
+            "cluster_name": "test-cluster",
+            "internal_hostname": f"{job_id}.platformapi-tests",
+            "status": "succeeded",
+            "history": {
+                "status": "succeeded",
+                "reason": None,
+                "description": None,
+                "exit_code": 0,
+                "created_at": mock.ANY,
+                "started_at": mock.ANY,
+                "finished_at": mock.ANY,
+                "run_time_seconds": mock.ANY,
+            },
+            "container": {
+                "command": "true",
+                "env": {},
+                "image": "ubuntu",
+                "resources": {"cpu": 0.1, "memory_mb": 16},
+                "volumes": [
+                    {
+                        "dst_path": "/var/storage",
+                        "read_only": False,
+                        "src_storage_uri": f"storage://{cluster_name}/"
+                        f"{regular_user.name}",
+                    }
+                ],
+            },
+            "ssh_server": "ssh://nobody@ssh-auth.platform.neuromation.io:22",
+            "ssh_auth_server": "ssh://nobody@ssh-auth.platform.neuromation.io:22",
+            "is_preemptible": True,
+        }
+
+    @pytest.mark.asyncio
+    async def test_create_with_custom_volumes_legacy(
+        self,
+        jobs_client: JobsClient,
+        api: ApiConfig,
+        client: aiohttp.ClientSession,
+        regular_user: _User,
     ) -> None:
         request_payload = {
             "container": {
@@ -2112,6 +2219,7 @@ class TestJobs:
         api: ApiConfig,
         client: aiohttp.ClientSession,
         regular_user: _User,
+        cluster_name: str,
     ) -> None:
         command = 'bash -c "echo Failed!; false"'
         payload = {
@@ -2123,12 +2231,14 @@ class TestJobs:
                     {
                         "dst_path": f"/var/storage/{regular_user.name}",
                         "read_only": True,
-                        "src_storage_uri": f"storage://{regular_user.name}",
+                        "src_storage_uri": f"storage://{cluster_name}/"
+                        f"{regular_user.name}",
                     },
                     {
                         "dst_path": f"/var/storage/{regular_user.name}/result",
                         "read_only": False,
-                        "src_storage_uri": f"storage://{regular_user.name}/result",
+                        "src_storage_uri": f"storage://{cluster_name}/"
+                        f"{regular_user.name}/result",
                     },
                 ],
             }
@@ -2171,12 +2281,14 @@ class TestJobs:
                     {
                         "dst_path": f"/var/storage/{regular_user.name}",
                         "read_only": True,
-                        "src_storage_uri": f"storage://{regular_user.name}",
+                        "src_storage_uri": f"storage://{cluster_name}/"
+                        f"{regular_user.name}",
                     },
                     {
                         "dst_path": f"/var/storage/{regular_user.name}/result",
                         "read_only": False,
-                        "src_storage_uri": f"storage://{regular_user.name}/result",
+                        "src_storage_uri": f"storage://{cluster_name}/"
+                        f"{regular_user.name}/result",
                     },
                 ],
             },
