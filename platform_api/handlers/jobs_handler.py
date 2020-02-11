@@ -9,7 +9,7 @@ import trafaret as t
 from aiohttp_security import check_authorized
 from multidict import MultiDictProxy
 from neuro_auth_client import AuthClient, Permission, check_permissions
-from neuro_auth_client.client import ClientSubTreeViewRoot
+from neuro_auth_client.client import ClientAccessSubTreeView, ClientSubTreeViewRoot
 from yarl import URL
 
 from platform_api.cluster_config import ClusterConfig, RegistryConfig, StorageConfig
@@ -559,6 +559,7 @@ class BulkJobFilterBuilder:
         self._use_cluster_names_in_uris = use_cluster_names_in_uris
 
         self._has_access_to_all: bool = False
+        self._clusters_shared_all: Set[str] = set()
         self._owners_shared_all: Set[str] = set()
         self._shared_ids: Set[str] = set()
 
@@ -575,10 +576,6 @@ class BulkJobFilterBuilder:
     def _traverse_access_tree(self) -> None:
         tree = self._access_tree.sub_tree
 
-        owners_shared_all: Set[str] = set()
-        clusters_shared_all: Set[str] = set()
-        shared_ids: Set[str] = set()
-
         if not tree.can_list():
             # no job resources whatsoever
             raise JobFilterException("no jobs")
@@ -589,78 +586,68 @@ class BulkJobFilterBuilder:
             return
 
         if self._use_cluster_names_in_uris:
-            for cluster_name, cluster_tree in tree.children.items():
-                if not cluster_tree.can_list():
-                    continue
-
-                if (
-                    self._query_filter.clusters
-                    and cluster_name not in self._query_filter.clusters
-                ):
-                    # skipping clusters
-                    continue
-
-                if cluster_tree.can_read():
-                    # read/write/manage access to all jobs on the
-                    # cluster = job://cluster
-                    clusters_shared_all.add(cluster_name)
-                else:
-                    for owner, sub_tree in cluster_tree.children.items():
-                        if not sub_tree.can_list():
-                            continue
-
-                        if (
-                            self._query_filter.owners
-                            and owner not in self._query_filter.owners
-                        ):
-                            # skipping owners
-                            continue
-
-                        if sub_tree.can_read():
-                            # read/write/manage access to all owner's jobs
-                            # on the cluster = job://cluster/owner
-                            owners_shared_all.add(owner)
-                        else:
-                            # specific ids
-                            shared_ids.update(
-                                job_id
-                                for job_id, job_sub_tree in sub_tree.children.items()
-                                if job_sub_tree.can_read()
-                            )
-
+            self._traverse_clusters(tree)
         else:
-            for owner, sub_tree in tree.children.items():
-                if not sub_tree.can_list():
-                    continue
+            self._traverse_owners(tree)
 
-                if self._query_filter.owners and owner not in self._query_filter.owners:
-                    # skipping owners
-                    continue
-
-                if sub_tree.can_read():
-                    # read/write/manage access to all owner's jobs = job://owner
-                    owners_shared_all.add(owner)
-                else:
-                    # specific ids
-                    shared_ids.update(
-                        job_id
-                        for job_id, job_sub_tree in sub_tree.children.items()
-                        if job_sub_tree.can_read()
-                    )
-
-        if not clusters_shared_all and not owners_shared_all and not shared_ids:
+        if (
+            not self._clusters_shared_all
+            and not self._owners_shared_all
+            and not self._shared_ids
+        ):
             # no job resources whatsoever
             raise JobFilterException("no jobs")
 
-        self._owners_shared_all = owners_shared_all
-        self._shared_ids = shared_ids
+    def _traverse_clusters(self, tree: ClientAccessSubTreeView) -> None:
+        for cluster_name, sub_tree in tree.children.items():
+            if not sub_tree.can_list():
+                continue
+
+            if (
+                self._query_filter.clusters
+                and cluster_name not in self._query_filter.clusters
+            ):
+                # skipping clusters
+                continue
+
+            if sub_tree.can_read():
+                # read/write/manage access to all jobs on the
+                # cluster = job://cluster
+                self._clusters_shared_all.add(cluster_name)
+            else:
+                self._traverse_owners(sub_tree)
+
+    def _traverse_owners(self, tree: ClientAccessSubTreeView) -> None:
+        for owner, sub_tree in tree.children.items():
+            if not sub_tree.can_list():
+                continue
+
+            if self._query_filter.owners and owner not in self._query_filter.owners:
+                # skipping owners
+                continue
+
+            if sub_tree.can_read():
+                # read/write/manage access to all owner's jobs
+                self._owners_shared_all.add(owner)
+            else:
+                # specific ids
+                self._traverse_jobs(sub_tree)
+
+    def _traverse_jobs(self, tree: ClientAccessSubTreeView) -> None:
+        self._shared_ids.update(
+            job_id for job_id, sub_tree in tree.children.items() if sub_tree.can_read()
+        )
 
     def _create_bulk_filter(self) -> Optional[JobFilter]:
         if not self._has_access_to_all and not self._owners_shared_all:
             return None
+        bulk_filter = self._query_filter
         # `self._owners_shared_all` is already filtered against
         # `self._query_filter.owners`.
         # if `self._owners_shared_all` is empty, we still want to try to limit
         # the scope to the owners passed in the query, otherwise pull all.
-        owners = set(self._owners_shared_all or self._query_filter.owners)
-        return replace(self._query_filter, owners=owners)
+        if self._owners_shared_all:
+            bulk_filter = replace(bulk_filter, owners=self._owners_shared_all)
+        if self._clusters_shared_all:
+            bulk_filter = replace(bulk_filter, clusters=self._clusters_shared_all)
+        return bulk_filter
