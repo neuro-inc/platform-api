@@ -475,8 +475,8 @@ class JobsHandler:
         orig_payload = await request.json()
         request_payload = self._job_set_status_validator.check(orig_payload)
 
-        if self._config.use_cluster_names_in_uris:
-            cluster_name = request_payload["cluster_name"]
+        cluster_name = request_payload.get("cluster_name")
+        if self._config.use_cluster_names_in_uris and cluster_name:
             permission = Permission(uri=f"job://{cluster_name}", action="manage")
         else:
             permission = Permission(uri="job:", action="manage")
