@@ -82,6 +82,7 @@ def create_job_response_validator() -> t.Trafaret:
             # prod env is there.
             "owner": t.String(allow_blank=True),
             "cluster_name": t.String(allow_blank=False),
+            "uri": t.String(allow_blank=False),
             # `status` is left for backward compat. the python client/cli still
             # relies on it.
             "status": create_job_status_validator(),
@@ -197,6 +198,7 @@ def convert_job_to_job_response(job: Job, cluster_name: str) -> Dict[str, Any]:
         "ssh_server": job.ssh_server,
         "ssh_auth_server": job.ssh_server,  # deprecated
         "is_preemptible": job.is_preemptible,
+        "uri": str(job.to_uri()),
     }
     if job.name:
         response_payload["name"] = job.name
