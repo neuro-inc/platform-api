@@ -6,13 +6,7 @@ import pytest
 from _pytest.logging import LogCaptureFixture
 from notifications_client import Client as NotificationsClient, JobTransition
 
-from platform_api.cluster import (
-    Cluster,
-    ClusterConfig,
-    ClusterNotAvailable,
-    ClusterNotFound,
-    ClusterRegistry,
-)
+from platform_api.cluster import Cluster, ClusterConfig, ClusterRegistry
 from platform_api.cluster_config import CircuitBreakerConfig
 from platform_api.config import JobsConfig
 from platform_api.orchestrator.job import (
@@ -941,8 +935,8 @@ class TestJobsServiceCluster:
 
         await cluster_registry.remove("missing")
 
-        with pytest.raises(ClusterNotFound):
-            await jobs_service.get_job(job.id)
+        job = await jobs_service.get_job(job.id)
+        assert job.cluster_name == "missing"
 
     @pytest.mark.asyncio
     async def test_get_job_unavail_cluster(
@@ -972,8 +966,8 @@ class TestJobsServiceCluster:
         async with cluster_registry.get(cluster_config.name):
             raise RuntimeError("test")
 
-        with pytest.raises(ClusterNotAvailable):
-            await jobs_service.get_job(job.id)
+        job = await jobs_service.get_job(job.id)
+        assert job.cluster_name == "test-cluster"
 
     @pytest.mark.asyncio
     async def test_delete_missing_cluster(

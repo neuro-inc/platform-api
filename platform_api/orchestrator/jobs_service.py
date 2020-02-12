@@ -1,4 +1,5 @@
 import logging
+from pathlib import PurePath
 from typing import AsyncIterator, Iterable, List, Optional, Sequence, Tuple
 
 from async_generator import asynccontextmanager
@@ -16,6 +17,7 @@ from platform_api.cluster import (
     ClusterNotFound,
     ClusterRegistry,
 )
+from platform_api.cluster_config import OrchestratorConfig, StorageConfig
 from platform_api.config import JobsConfig
 from platform_api.user import User, UserCluster
 
@@ -80,6 +82,15 @@ class JobsService:
         self._notifications_client = notifications_client
 
         self._max_deletion_attempts = 10
+
+        self._dummy_cluster_storage_config = StorageConfig(
+            host_mount_path=PurePath("/<dummy>")
+        )
+        self._dummy_cluster_orchestrator_config = OrchestratorConfig(
+            jobs_domain_name_template="{job_id}.<dummy>",
+            ssh_auth_domain_name="<dummy>",
+            resource_pool_types=(),
+        )
 
     @asynccontextmanager
     async def _get_cluster(
@@ -335,10 +346,27 @@ class JobsService:
                 )
 
     async def _get_cluster_job(self, record: JobRecord) -> Job:
-        async with self._get_cluster(record.cluster_name) as cluster:
+        try:
+            async with self._get_cluster(
+                record.cluster_name, tolerate_unavailable=True
+            ) as cluster:
+                return Job(
+                    storage_config=cluster.config.storage,
+                    orchestrator_config=cluster.orchestrator.config,
+                    record=record,
+                )
+        except ClusterNotFound:
+            # in case the cluster is missing, we still want to return the job
+            # to be able to render a proper HTTP response, therefore we have
+            # the fallback logic that uses the default cluster instead.
+            logger.warning(
+                "Falling back to dummy cluster config to retrieve job '%s'", record.id,
+            )
+            # NOTE: we may rather want to fall back to some dummy
+            # OrchestratorConfig instead.
             return Job(
-                storage_config=cluster.config.storage,
-                orchestrator_config=cluster.orchestrator.config,
+                storage_config=self._dummy_cluster_storage_config,
+                orchestrator_config=self._dummy_cluster_orchestrator_config,
                 record=record,
             )
 

@@ -61,7 +61,6 @@ class EnvironConfigFactory:
             admin_url=admin_url,
         )
 
-    # XXX (serhiy 12-Feb-2020) The method is only used in tests. Can be removed?
     def create_cluster(self, name: str) -> ClusterConfig:
         return ClusterConfig(
             name=name,
