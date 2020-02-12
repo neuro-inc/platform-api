@@ -104,7 +104,7 @@ class ExecProxy:
         self._executor = executor
         self._forwarder = forwarder
 
-    async def _get_owner(self, token: str, job_id: str) -> None:
+    async def _get_job_uri(self, token: str, job_id: str) -> str:
         async with aiohttp.ClientSession() as session:
             job_url = self._jobs_url / job_id
             headers = {"Authorization": f"Bearer {token}"}
@@ -112,7 +112,7 @@ class ExecProxy:
             if response.status != 200:
                 raise AuthorizationError(f"Response status: {response.status}")
             job_payload = await response.json()
-            return job_payload["owner"]
+            return job_payload["uri"]
 
     async def authorize_job(self, token: str, job_id: str, action: str) -> None:
         auth_policy = AuthPolicy(self._auth_client)
@@ -120,8 +120,8 @@ class ExecProxy:
         if not user:
             raise AuthenticationError(f"Incorrect token: token={token}, job={job_id}")
         log.debug(f"user {user}")
-        owner = await self._get_owner(token, job_id)
-        permission = Permission(uri=f"job://{owner}/{job_id}", action=action)
+        job_uri = await self._get_job_uri(token, job_id)
+        permission = Permission(uri=job_uri, action=action)
         log.debug(f"Checking permission: {permission}")
         result = await auth_policy.permits(token, None, [permission])
         if not result:

@@ -2029,6 +2029,7 @@ class TestJobs:
                 "ssh_server": "ssh://nobody@ssh-auth.platform.neuromation.io:22",
                 "ssh_auth_server": "ssh://nobody@ssh-auth.platform.neuromation.io:22",
                 "is_preemptible": True,
+                "uri": f"job://{regular_user.name}/{job_id}",
             }
 
         response_payload = await jobs_client.long_polling_by_job_id(
@@ -2067,6 +2068,7 @@ class TestJobs:
             "ssh_server": "ssh://nobody@ssh-auth.platform.neuromation.io:22",
             "ssh_auth_server": "ssh://nobody@ssh-auth.platform.neuromation.io:22",
             "is_preemptible": True,
+            "uri": f"job://{regular_user.name}/{job_id}",
         }
 
     @pytest.mark.asyncio
@@ -2147,6 +2149,7 @@ class TestJobs:
             "ssh_server": "ssh://nobody@ssh-auth.platform.neuromation.io:22",
             "ssh_auth_server": "ssh://nobody@ssh-auth.platform.neuromation.io:22",
             "is_preemptible": False,
+            "uri": f"job://{regular_user.name}/{job_id}",
         }
 
     @pytest.mark.asyncio
@@ -2237,6 +2240,7 @@ class TestJobs:
                 "ssh_server": "ssh://nobody@ssh-auth.platform.neuromation.io:22",
                 "ssh_auth_server": "ssh://nobody@ssh-auth.platform.neuromation.io:22",
                 "is_preemptible": False,
+                "uri": f"job://{regular_user.name}/{job_id}",
             }
 
     @pytest.mark.asyncio
@@ -2321,6 +2325,7 @@ class TestJobs:
                 "ssh_server": "ssh://nobody@ssh-auth.platform.neuromation.io:22",
                 "ssh_auth_server": "ssh://nobody@ssh-auth.platform.neuromation.io:22",
                 "is_preemptible": False,
+                "uri": f"job://{regular_user.name}/{job_id}",
             }
 
 
