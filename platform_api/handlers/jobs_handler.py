@@ -639,7 +639,11 @@ class BulkJobFilterBuilder:
         )
 
     def _create_bulk_filter(self) -> Optional[JobFilter]:
-        if not self._has_access_to_all and not self._owners_shared_all:
+        if not (
+            self._has_access_to_all
+            or self._clusters_shared_all
+            or self._owners_shared_all
+        ):
             return None
         bulk_filter = self._query_filter
         # `self._owners_shared_all` is already filtered against
