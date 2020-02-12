@@ -82,6 +82,7 @@ def create_job_response_validator() -> t.Trafaret:
             # prod env is there.
             "owner": t.String(allow_blank=True),
             "cluster_name": t.String(allow_blank=False),
+            "uri": t.String(allow_blank=False),
             # `status` is left for backward compat. the python client/cli still
             # relies on it.
             "status": create_job_status_validator(),
@@ -175,7 +176,9 @@ def convert_container_volume_to_json(
     }
 
 
-def convert_job_to_job_response(job: Job, cluster_name: str) -> Dict[str, Any]:
+def convert_job_to_job_response(
+    job: Job, cluster_name: str, use_cluster_names_in_uris: bool = True
+) -> Dict[str, Any]:
     assert cluster_name, "empty cluster name must be already replaced with `default`"
     history = job.status_history
     current_status = history.current
@@ -197,6 +200,7 @@ def convert_job_to_job_response(job: Job, cluster_name: str) -> Dict[str, Any]:
         "ssh_server": job.ssh_server,
         "ssh_auth_server": job.ssh_server,  # deprecated
         "is_preemptible": job.is_preemptible,
+        "uri": str(job.to_uri(use_cluster_names_in_uris)),
     }
     if job.name:
         response_payload["name"] = job.name
@@ -375,7 +379,9 @@ class JobsHandler:
             schedule_timeout=schedule_timeout,
             max_run_time_minutes=max_run_time_minutes,
         )
-        response_payload = convert_job_to_job_response(job, cluster_name)
+        response_payload = convert_job_to_job_response(
+            job, cluster_name, self._config.use_cluster_names_in_uris
+        )
         self._job_response_validator.check(response_payload)
         return aiohttp.web.json_response(
             data=response_payload, status=aiohttp.web.HTTPAccepted.status_code
@@ -391,7 +397,9 @@ class JobsHandler:
         await check_permissions(request, [permission])
 
         cluster_name = self._jobs_service.get_cluster_name(job)
-        response_payload = convert_job_to_job_response(job, cluster_name)
+        response_payload = convert_job_to_job_response(
+            job, cluster_name, self._config.use_cluster_names_in_uris
+        )
         self._job_response_validator.check(response_payload)
         return aiohttp.web.json_response(
             data=response_payload, status=aiohttp.web.HTTPOk.status_code
@@ -443,7 +451,9 @@ class JobsHandler:
         response_payload = {
             "jobs": [
                 convert_job_to_job_response(
-                    job, cluster_name=self._jobs_service.get_cluster_name(job)
+                    job,
+                    self._jobs_service.get_cluster_name(job),
+                    self._config.use_cluster_names_in_uris,
                 )
                 for job in jobs
             ]

@@ -114,12 +114,7 @@ class ExecProxy:
             if response.status != 200:
                 raise AuthorizationError(f"Response status: {response.status}")
             job_payload = await response.json()
-        owner = job_payload["owner"]
-        cluster_name = job_payload["cluster_name"]
-        if self._use_cluster_names_in_uris and cluster_name:
-            return f"job://{cluster_name}/{owner}/{job_id}"
-        else:
-            return f"job://{owner}/{job_id}"
+            return job_payload["uri"]
 
     async def authorize_job(self, token: str, job_id: str, action: str) -> None:
         auth_policy = AuthPolicy(self._auth_client)
