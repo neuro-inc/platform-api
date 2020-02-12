@@ -1,13 +1,18 @@
 from dataclasses import replace
 from datetime import datetime
 from typing import Any, AsyncIterator, Callable
-from unittest.mock import MagicMock
 
 import pytest
 from _pytest.logging import LogCaptureFixture
 from notifications_client import Client as NotificationsClient, JobTransition
 
-from platform_api.cluster import Cluster, ClusterConfig, ClusterRegistry
+from platform_api.cluster import (
+    Cluster,
+    ClusterConfig,
+    ClusterNotAvailable,
+    ClusterNotFound,
+    ClusterRegistry,
+)
 from platform_api.cluster_config import CircuitBreakerConfig
 from platform_api.config import JobsConfig
 from platform_api.orchestrator.job import (
@@ -754,15 +759,6 @@ class TestJobsService:
         job, _ = await jobs_service.create_job(request, user)
         assert job.status == JobStatus.PENDING
 
-    def test_get_cluster_name_non_empty(self, jobs_service: JobsService) -> None:
-        mocked_job = MagicMock(cluster_name="my-cluster")
-        assert jobs_service.get_cluster_name(mocked_job) == "my-cluster"
-
-    def test_get_cluster_name_empty(self, jobs_service: JobsService) -> None:
-        mocked_job = MagicMock(cluster_name="")
-        default_cluster_name = jobs_service._jobs_config.default_cluster_name
-        assert jobs_service.get_cluster_name(mocked_job) == default_cluster_name
-
 
 class TestJobsServiceCluster:
     @pytest.fixture
@@ -784,7 +780,7 @@ class TestJobsServiceCluster:
         return JobsService(
             cluster_registry=cluster_registry,
             jobs_storage=mock_jobs_storage,
-            jobs_config=JobsConfig(default_cluster_name="default"),
+            jobs_config=JobsConfig(),
             notifications_client=mock_notifications_client,
         )
 
@@ -945,8 +941,8 @@ class TestJobsServiceCluster:
 
         await cluster_registry.remove("missing")
 
-        job = await jobs_service.get_job(job.id)
-        assert job.cluster_name == "missing"
+        with pytest.raises(ClusterNotFound):
+            await jobs_service.get_job(job.id)
 
     @pytest.mark.asyncio
     async def test_get_job_unavail_cluster(
@@ -976,8 +972,8 @@ class TestJobsServiceCluster:
         async with cluster_registry.get(cluster_config.name):
             raise RuntimeError("test")
 
-        job = await jobs_service.get_job(job.id)
-        assert job.cluster_name == "test-cluster"
+        with pytest.raises(ClusterNotAvailable):
+            await jobs_service.get_job(job.id)
 
     @pytest.mark.asyncio
     async def test_delete_missing_cluster(

@@ -61,9 +61,10 @@ class EnvironConfigFactory:
             admin_url=admin_url,
         )
 
-    def create_cluster(self) -> ClusterConfig:
+    # XXX (serhiy 12-Feb-2020) The method is only used in tests. Can be removed?
+    def create_cluster(self, name: str) -> ClusterConfig:
         return ClusterConfig(
-            name=JobsConfig.default_cluster_name,
+            name=name,
             storage=self.create_storage(),
             registry=self.create_registry(),
             orchestrator=self.create_orchestrator(),

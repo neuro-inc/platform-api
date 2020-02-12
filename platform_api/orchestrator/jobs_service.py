@@ -81,18 +81,12 @@ class JobsService:
 
         self._max_deletion_attempts = 10
 
-    def get_cluster_name(self, job: Job) -> str:
-        return self._get_cluster_name(job.cluster_name)
-
-    def _get_cluster_name(self, cluster_name: str) -> str:
-        return cluster_name or self._jobs_config.default_cluster_name
-
     @asynccontextmanager
     async def _get_cluster(
         self, name: str, tolerate_unavailable: bool = False
     ) -> AsyncIterator[Cluster]:
         async with self._cluster_registry.get(
-            self._get_cluster_name(name), skip_circuit_breaker=tolerate_unavailable
+            name, skip_circuit_breaker=tolerate_unavailable
         ) as cluster:
             yield cluster
 
@@ -341,34 +335,12 @@ class JobsService:
                 )
 
     async def _get_cluster_job(self, record: JobRecord) -> Job:
-        try:
-            async with self._get_cluster(
-                record.cluster_name, tolerate_unavailable=True
-            ) as cluster:
-                return Job(
-                    storage_config=cluster.config.storage,
-                    orchestrator_config=cluster.orchestrator.config,
-                    record=record,
-                )
-        except ClusterNotFound:
-            # in case the cluster is missing, we still want to return the job
-            # to be able to render a proper HTTP response, therefore we have
-            # the fallback logic that uses the default cluster instead.
-            logger.warning(
-                "Falling back to cluster '%s' to retrieve job '%s'",
-                self._jobs_config.default_cluster_name,
-                record.id,
+        async with self._get_cluster(record.cluster_name) as cluster:
+            return Job(
+                storage_config=cluster.config.storage,
+                orchestrator_config=cluster.orchestrator.config,
+                record=record,
             )
-            # NOTE: we may rather want to fall back to some dummy
-            # OrchestratorConfig instead.
-            async with self._get_cluster(
-                self._jobs_config.default_cluster_name
-            ) as cluster:
-                return Job(
-                    storage_config=cluster.config.storage,
-                    orchestrator_config=cluster.orchestrator.config,
-                    record=record,
-                )
 
     async def get_job(self, job_id: str) -> Job:
         record = await self._jobs_storage.get_job(job_id)

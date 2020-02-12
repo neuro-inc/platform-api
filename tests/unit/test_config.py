@@ -153,7 +153,7 @@ class TestEnvironConfigFactory:
             "NP_ENFORCER_TOKEN": "compute-token",
         }
         config = EnvironConfigFactory(environ=environ).create()
-        cluster = EnvironConfigFactory(environ=environ).create_cluster()
+        cluster = EnvironConfigFactory(environ=environ).create_cluster("new-cluster")
 
         assert config.admin_url == URL("https://neu.ro/apis/admin/v1")
 
@@ -287,7 +287,7 @@ class TestEnvironConfigFactory:
             "NP_CORS_ORIGINS": "https://domain1.com,http://do.main",
         }
         config = EnvironConfigFactory(environ=environ).create()
-        cluster = EnvironConfigFactory(environ=environ).create_cluster()
+        cluster = EnvironConfigFactory(environ=environ).create_cluster("new-cluster")
 
         assert config.server.host == "0.0.0.0"
         assert config.server.port == 1111
@@ -376,7 +376,7 @@ class TestEnvironConfigFactory:
             "NP_NOTIFICATIONS_URL": "http://notifications:8080",
             "NP_NOTIFICATIONS_TOKEN": "token",
         }
-        cluster = EnvironConfigFactory(environ=environ).create_cluster()
+        cluster = EnvironConfigFactory(environ=environ).create_cluster("new-cluster")
         assert cluster.storage.nfs_server == "1.2.3.4"
         assert cluster.storage.nfs_export_path == PurePath("/tmp")
 
