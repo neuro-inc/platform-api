@@ -393,7 +393,6 @@ class TestEnvironConfigFactory:
             "NP_AUTH_NAME": "auth-name",
             "NP_LOG_FIFO": "log.txt",
             "NP_K8S_NS": "other",
-            "NP_USE_CLUSTER_NAMES_IN_URIS": "1",
         }
         config = EnvironConfigFactory(environ=environ).create_ssh_auth()
         assert config.platform.server_endpoint_url == URL("http://neu.ro/api/v1")
@@ -404,7 +403,6 @@ class TestEnvironConfigFactory:
         assert config.log_fifo == PurePath("log.txt")
         assert config.env_prefix == "NP"  # default
         assert config.jobs_namespace == "other"
-        assert config.use_cluster_names_in_uris
 
     def test_registry_config_invalid_missing_host(self) -> None:
         with pytest.raises(ValueError, match="missing url hostname"):

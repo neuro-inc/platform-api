@@ -121,4 +121,3 @@ class SSHAuthConfig:
     log_fifo: Path
     env_prefix: str = "NP"
     jobs_namespace: str = "default"
-    use_cluster_names_in_uris: bool = False

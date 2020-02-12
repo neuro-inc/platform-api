@@ -97,14 +97,12 @@ class ExecProxy:
         platform_url: URL,
         executor: Executor,
         forwarder: Forwarder,
-        use_cluster_names_in_uris: bool,
     ) -> None:
         self._auth_client = auth_client
         self._jobs_url = platform_url / "jobs"
         self._ssh_request_validator = create_request_validator()
         self._executor = executor
         self._forwarder = forwarder
-        self._use_cluster_names_in_uris = use_cluster_names_in_uris
 
     async def _get_job_uri(self, token: str, job_id: str) -> str:
         async with aiohttp.ClientSession() as session:
