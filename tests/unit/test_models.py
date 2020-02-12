@@ -950,7 +950,7 @@ async def test_job_to_job_response(mock_orchestrator: MockOrchestrator) -> None:
         "ssh_server": "ssh://nobody@ssh-auth:22",
         "ssh_auth_server": "ssh://nobody@ssh-auth:22",
         "is_preemptible": False,
-        "uri": f"job://my-cluster/compute/{job.id}",
+        "uri": f"job://compute/{job.id}",
     }
 
 
