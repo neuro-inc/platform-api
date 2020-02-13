@@ -176,14 +176,16 @@ def convert_container_volume_to_json(
     }
 
 
-def convert_job_to_job_response(job: Job, cluster_name: str) -> Dict[str, Any]:
-    assert cluster_name, "empty cluster name must be already replaced with `default`"
+def convert_job_to_job_response(job: Job) -> Dict[str, Any]:
+    assert (
+        job.cluster_name
+    ), "empty cluster name must be already replaced with `default`"
     history = job.status_history
     current_status = history.current
     response_payload: Dict[str, Any] = {
         "id": job.id,
         "owner": job.owner,
-        "cluster_name": cluster_name,
+        "cluster_name": job.cluster_name,
         "status": current_status.status,
         "history": {
             "status": current_status.status,
@@ -355,7 +357,7 @@ class JobsHandler:
             schedule_timeout=schedule_timeout,
             max_run_time_minutes=max_run_time_minutes,
         )
-        response_payload = convert_job_to_job_response(job, cluster_name)
+        response_payload = convert_job_to_job_response(job)
         self._job_response_validator.check(response_payload)
         return aiohttp.web.json_response(
             data=response_payload, status=aiohttp.web.HTTPAccepted.status_code
@@ -368,8 +370,7 @@ class JobsHandler:
         permission = Permission(uri=str(job.to_uri()), action="read")
         await check_permissions(request, [permission])
 
-        cluster_name = self._jobs_service.get_cluster_name(job)
-        response_payload = convert_job_to_job_response(job, cluster_name)
+        response_payload = convert_job_to_job_response(job)
         self._job_response_validator.check(response_payload)
         return aiohttp.web.json_response(
             data=response_payload, status=aiohttp.web.HTTPOk.status_code
@@ -417,14 +418,7 @@ class JobsHandler:
         except JobFilterException:
             pass
 
-        response_payload = {
-            "jobs": [
-                convert_job_to_job_response(
-                    job, cluster_name=self._jobs_service.get_cluster_name(job)
-                )
-                for job in jobs
-            ]
-        }
+        response_payload = {"jobs": [convert_job_to_job_response(job) for job in jobs]}
         self._bulk_jobs_response_validator.check(response_payload)
         return aiohttp.web.json_response(
             data=response_payload, status=aiohttp.web.HTTPOk.status_code

@@ -895,11 +895,11 @@ async def test_job_to_job_response(mock_orchestrator: MockOrchestrator) -> None:
             name="test-job-name",
         ),
     )
-    response = convert_job_to_job_response(job, cluster_name="my-cluster")
+    response = convert_job_to_job_response(job)
     assert response == {
         "id": job.id,
         "owner": "compute",
-        "cluster_name": "my-cluster",
+        "cluster_name": "test-cluster",
         "status": "pending",
         "history": {
             "status": "pending",
@@ -960,7 +960,7 @@ async def test_job_to_job_response_nonzero_runtime(
         ),
         current_datetime_factory=_mocked_datetime_factory,
     )
-    response = convert_job_to_job_response(job, cluster_name="my-cluster")
+    response = convert_job_to_job_response(job)
     run_time = response["history"]["run_time_seconds"]
     assert run_time == (time_now - running_at).total_seconds()
 
@@ -987,11 +987,11 @@ async def test_job_to_job_response_with_job_name_and_http_exposed(
             name=job_name,
         ),
     )
-    response = convert_job_to_job_response(job, cluster_name="my-cluster")
+    response = convert_job_to_job_response(job)
     assert response == {
         "id": job.id,
         "owner": owner_name,
-        "cluster_name": "my-cluster",
+        "cluster_name": "test-cluster",
         "name": job_name,
         "http_url": f"http://{job.id}.jobs",
         "http_url_named": f"http://{job_name}--{owner_name}.jobs",
@@ -1034,16 +1034,16 @@ async def test_job_to_job_response_with_job_name_and_http_exposed_too_long_name(
                     http_server=ContainerHTTPServer(port=80),
                 )
             ),
-            cluster_name="",
+            cluster_name="test-cluster",
             owner=owner_name,
             name=job_name,
         ),
     )
-    response = convert_job_to_job_response(job, cluster_name="my-cluster")
+    response = convert_job_to_job_response(job)
     assert response == {
         "id": job.id,
         "owner": owner_name,
-        "cluster_name": "my-cluster",
+        "cluster_name": "test-cluster",
         "name": job_name,
         "http_url": f"http://{job.id}.jobs",
         # NOTE: field `http_url_named` is cut off when it is invalid
@@ -1087,4 +1087,4 @@ async def test_job_to_job_response_assert_non_empty_cluster_name(
         ),
     )
     with pytest.raises(AssertionError, match="must be already replaced"):
-        convert_job_to_job_response(job, cluster_name="")
+        convert_job_to_job_response(job)

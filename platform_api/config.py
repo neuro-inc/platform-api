@@ -54,7 +54,6 @@ class DatabaseConfig:
 
 @dataclass(frozen=True)
 class JobsConfig:
-    default_cluster_name: str = "default"
     deletion_delay_s: int = 0
     orphaned_job_owner: str = ""
     jobs_ingress_class: str = "traefik"
