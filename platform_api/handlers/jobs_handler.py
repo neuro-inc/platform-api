@@ -569,6 +569,7 @@ class BulkJobFilterBuilder:
         self._use_cluster_names_in_uris = use_cluster_names_in_uris
 
         self._has_access_to_all: bool = False
+        self._has_clusters_shared_all: bool = False
         self._clusters_owners_shared_all: Set[Tuple[str, str]] = set()
         self._clusters_shared_any: Set[str] = set()
         self._owners_shared_all: Set[str] = set()
@@ -624,6 +625,7 @@ class BulkJobFilterBuilder:
             if sub_tree.can_read():
                 # read/write/manage access to all jobs on the cluster =
                 # job://cluster
+                self._has_clusters_shared_all = True
                 self._clusters_shared_any.add(cluster_name)
                 self._clusters_owners_shared_all.add((cluster_name, ""))
             else:
@@ -664,14 +666,19 @@ class BulkJobFilterBuilder:
         ):
             return None
         bulk_filter = self._query_filter
-        # `self._owners_shared_all` is already filtered against
-        # `self._query_filter.owners`.
-        # if `self._owners_shared_all` is empty, we still want to try to limit
-        # the scope to the owners passed in the query, otherwise pull all.
-        if self._owners_shared_all:
-            bulk_filter = replace(bulk_filter, owners=self._owners_shared_all)
+        # `self._clusters_shared_any` is already filtered against
+        # `self._query_filter.clusters`.
+        # if `self._clusters_shared_any` is empty, we still want to try to limit
+        # the scope to the clusters passed in the query, otherwise pull all.
         if self._clusters_shared_any:
             bulk_filter = replace(bulk_filter, clusters=self._clusters_shared_any)
+        # `self._owners_shared_all` is already filtered against
+        # `self._query_filter.owners`.
+        # if `self._owners_shared_all` is empty and no clusters share full
+        # access, we still want to try to limit the scope to the owners
+        # passed in the query, otherwise pull all.
+        if not self._has_clusters_shared_all and self._owners_shared_all:
+            bulk_filter = replace(bulk_filter, owners=self._owners_shared_all)
         if self._clusters_owners_shared_all:
             self._optimize_clusters_owners(
                 self._clusters_owners_shared_all,
@@ -690,15 +697,21 @@ class BulkJobFilterBuilder:
         clusters: AbstractSet[str],
         owners: AbstractSet[str],
     ) -> None:
-        for cluster_name in clusters:
-            for owner in owners:
-                if (cluster_name, owner) not in clusters_owners:
-                    break
-            else:
-                for owner in owners:
-                    clusters_owners.remove((cluster_name, owner))
-                clusters_owners.add((cluster_name, ""))
+        if not clusters:
+            return
 
+        if owners:
+            # Collapse {(cluster_name, x) for all x} to {(cluster_name, "")}.
+            for cluster_name in clusters:
+                for owner in owners:
+                    if (cluster_name, owner) not in clusters_owners:
+                        break
+                else:
+                    for owner in owners:
+                        clusters_owners.remove((cluster_name, owner))
+                    clusters_owners.add((cluster_name, ""))
+
+        # Collapse {(x, "") for all x} to the empty set (which means ALL).
         for cluster_name in clusters:
             if (cluster_name, "") not in clusters_owners:
                 break
@@ -706,6 +719,7 @@ class BulkJobFilterBuilder:
             clusters_owners.clear()
             return
 
+        # Collapse {(x, owner) for all x} to {("", owner)}.
         for owner in owners:
             for cluster_name in clusters:
                 if (cluster_name, owner) not in clusters_owners:
