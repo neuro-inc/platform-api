@@ -937,6 +937,9 @@ class TestJobsServiceCluster:
 
         job = await jobs_service.get_job(job.id)
         assert job.cluster_name == "missing"
+        assert job.http_host == f"{job.id}.missing-cluster"
+        assert job.http_host_named is None
+        assert job.ssh_server == "ssh://nobody@missing-cluster:22"
 
     @pytest.mark.asyncio
     async def test_get_job_unavail_cluster(
@@ -968,6 +971,9 @@ class TestJobsServiceCluster:
 
         job = await jobs_service.get_job(job.id)
         assert job.cluster_name == "test-cluster"
+        assert job.http_host == f"{job.id}.jobs"
+        assert job.http_host_named is None
+        assert job.ssh_server == "ssh://nobody@ssh-auth:22"
 
     @pytest.mark.asyncio
     async def test_delete_missing_cluster(

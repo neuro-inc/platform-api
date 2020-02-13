@@ -87,8 +87,8 @@ class JobsService:
             host_mount_path=PurePath("/<dummy>")
         )
         self._dummy_cluster_orchestrator_config = OrchestratorConfig(
-            jobs_domain_name_template="{job_id}.<dummy>",
-            ssh_auth_domain_name="<dummy>",
+            jobs_domain_name_template="{job_id}.missing-cluster",
+            ssh_auth_domain_name="missing-cluster",
             resource_pool_types=(),
         )
 
