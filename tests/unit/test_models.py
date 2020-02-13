@@ -684,42 +684,49 @@ class TestJobFilterFactory:
             factory(MultiDict(query))  # type: ignore # noqa
 
 
+def make_access_tree(perm_dict: Dict[str, str]) -> ClientSubTreeViewRoot:
+    tree = ClientSubTreeViewRoot(
+        path="/",
+        sub_tree=ClientAccessSubTreeView(
+            action="list" if perm_dict else "deny", children={}
+        ),
+    )
+    for path, action in perm_dict.items():
+        node = tree.sub_tree
+        if path:
+            for name in path.split("/"):
+                if name not in node.children:
+                    node.children[name] = ClientAccessSubTreeView(
+                        action="list", children={}
+                    )
+                node = node.children[name]
+        node.action = action
+    return tree
+
+
 class TestBulkJobFilterBuilder:
     def test_no_access(self) -> None:
         query_filter = JobFilter()
-        tree = ClientSubTreeViewRoot(
-            path="/", sub_tree=ClientAccessSubTreeView(action="deny", children={})
-        )
+        tree = make_access_tree({})
         with pytest.raises(JobFilterException, match="no jobs"):
             BulkJobFilterBuilder(query_filter, tree).build()
 
     def test_no_access_with_owners(self) -> None:
         query_filter = JobFilter(owners={"someuser"})
-        tree = ClientSubTreeViewRoot(
-            path="/",
-            sub_tree=ClientAccessSubTreeView(
-                action="list",
-                children={
-                    "testuser": ClientAccessSubTreeView(action="read", children={}),
-                    "anotheruser": ClientAccessSubTreeView(
-                        action="list",
-                        children={
-                            "job-test-1": ClientAccessSubTreeView("read", children={}),
-                            "job-test-2": ClientAccessSubTreeView("deny", children={}),
-                        },
-                    ),
-                    "someuser": ClientAccessSubTreeView(action="deny", children={}),
-                },
-            ),
+        tree = make_access_tree(
+            {
+                "testuser": "read",
+                "anotheruser/job-test-1": "read",
+                "anotheruser/job-test-2": "deny",
+                "someuser": "deny",
+            }
         )
         with pytest.raises(JobFilterException, match="no jobs"):
             BulkJobFilterBuilder(query_filter, tree).build()
 
     def test_full_access_no_owners(self) -> None:
         query_filter = JobFilter()
-        tree = ClientSubTreeViewRoot(
-            path="/", sub_tree=ClientAccessSubTreeView(action="manage", children={})
-        )
+        tree = make_access_tree({"": "manage"})
         bulk_filter = BulkJobFilterBuilder(query_filter, tree).build()
         assert bulk_filter == BulkJobFilter(
             bulk_filter=JobFilter(), shared_ids=set(), shared_ids_filter=None
@@ -727,9 +734,7 @@ class TestBulkJobFilterBuilder:
 
     def test_full_access_with_owners(self) -> None:
         query_filter = JobFilter(owners={"testuser"})
-        tree = ClientSubTreeViewRoot(
-            path="/", sub_tree=ClientAccessSubTreeView(action="manage", children={})
-        )
+        tree = make_access_tree({"": "manage"})
         bulk_filter = BulkJobFilterBuilder(query_filter, tree).build()
         assert bulk_filter == BulkJobFilter(
             bulk_filter=JobFilter(owners={"testuser"}),
@@ -739,22 +744,13 @@ class TestBulkJobFilterBuilder:
 
     def test_mixed_access_no_owners(self) -> None:
         query_filter = JobFilter()
-        tree = ClientSubTreeViewRoot(
-            path="/",
-            sub_tree=ClientAccessSubTreeView(
-                action="list",
-                children={
-                    "testuser": ClientAccessSubTreeView(action="read", children={}),
-                    "anotheruser": ClientAccessSubTreeView(
-                        action="list",
-                        children={
-                            "job-test-1": ClientAccessSubTreeView("read", children={}),
-                            "job-test-2": ClientAccessSubTreeView("deny", children={}),
-                        },
-                    ),
-                    "someuser": ClientAccessSubTreeView(action="deny", children={}),
-                },
-            ),
+        tree = make_access_tree(
+            {
+                "testuser": "read",
+                "anotheruser/job-test-1": "read",
+                "anotheruser/job-test-2": "deny",
+                "someuser": "deny",
+            }
         )
         bulk_filter = BulkJobFilterBuilder(query_filter, tree).build()
         assert bulk_filter == BulkJobFilter(
@@ -765,22 +761,13 @@ class TestBulkJobFilterBuilder:
 
     def test_mixed_access_owners_shared_all(self) -> None:
         query_filter = JobFilter(owners={"testuser"})
-        tree = ClientSubTreeViewRoot(
-            path="/",
-            sub_tree=ClientAccessSubTreeView(
-                action="list",
-                children={
-                    "testuser": ClientAccessSubTreeView(action="read", children={}),
-                    "anotheruser": ClientAccessSubTreeView(
-                        action="list",
-                        children={
-                            "job-test-1": ClientAccessSubTreeView("read", children={}),
-                            "job-test-2": ClientAccessSubTreeView("deny", children={}),
-                        },
-                    ),
-                    "someuser": ClientAccessSubTreeView(action="deny", children={}),
-                },
-            ),
+        tree = make_access_tree(
+            {
+                "testuser": "read",
+                "anotheruser/job-test-1": "read",
+                "anotheruser/job-test-2": "deny",
+                "someuser": "deny",
+            }
         )
         bulk_filter = BulkJobFilterBuilder(query_filter, tree).build()
         assert bulk_filter == BulkJobFilter(
@@ -791,22 +778,13 @@ class TestBulkJobFilterBuilder:
 
     def test_mixed_access_shared_ids_only(self) -> None:
         query_filter = JobFilter(owners={"anotheruser"})
-        tree = ClientSubTreeViewRoot(
-            path="/",
-            sub_tree=ClientAccessSubTreeView(
-                action="list",
-                children={
-                    "testuser": ClientAccessSubTreeView(action="read", children={}),
-                    "anotheruser": ClientAccessSubTreeView(
-                        action="list",
-                        children={
-                            "job-test-1": ClientAccessSubTreeView("read", children={}),
-                            "job-test-2": ClientAccessSubTreeView("deny", children={}),
-                        },
-                    ),
-                    "someuser": ClientAccessSubTreeView(action="deny", children={}),
-                },
-            ),
+        tree = make_access_tree(
+            {
+                "testuser": "read",
+                "anotheruser/job-test-1": "read",
+                "anotheruser/job-test-2": "deny",
+                "someuser": "deny",
+            }
         )
         bulk_filter = BulkJobFilterBuilder(query_filter, tree).build()
         assert bulk_filter == BulkJobFilter(
@@ -821,22 +799,13 @@ class TestBulkJobFilterBuilder:
             statuses={JobStatus.PENDING},
             name="testname",
         )
-        tree = ClientSubTreeViewRoot(
-            path="/",
-            sub_tree=ClientAccessSubTreeView(
-                action="list",
-                children={
-                    "testuser": ClientAccessSubTreeView(action="read", children={}),
-                    "anotheruser": ClientAccessSubTreeView(
-                        action="list",
-                        children={
-                            "job-test-1": ClientAccessSubTreeView("read", children={}),
-                            "job-test-2": ClientAccessSubTreeView("deny", children={}),
-                        },
-                    ),
-                    "someuser": ClientAccessSubTreeView(action="deny", children={}),
-                },
-            ),
+        tree = make_access_tree(
+            {
+                "testuser": "read",
+                "anotheruser/job-test-1": "read",
+                "anotheruser/job-test-2": "deny",
+                "someuser": "deny",
+            }
         )
         bulk_filter = BulkJobFilterBuilder(query_filter, tree).build()
         assert bulk_filter == BulkJobFilter(
