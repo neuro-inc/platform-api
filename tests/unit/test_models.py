@@ -684,76 +684,55 @@ class TestJobFilterFactory:
             factory(MultiDict(query))  # type: ignore # noqa
 
 
+def make_access_tree(perm_dict: Dict[str, str]) -> ClientSubTreeViewRoot:
+    tree = ClientSubTreeViewRoot(
+        path="/",
+        sub_tree=ClientAccessSubTreeView(
+            action="list" if perm_dict else "deny", children={}
+        ),
+    )
+    for path, action in perm_dict.items():
+        node = tree.sub_tree
+        if path:
+            for name in path.split("/"):
+                if name not in node.children:
+                    node.children[name] = ClientAccessSubTreeView(
+                        action="list", children={}
+                    )
+                node = node.children[name]
+        node.action = action
+    return tree
+
+
 class TestBulkJobFilterBuilder:
     def test_no_access(self) -> None:
         query_filter = JobFilter()
-        tree = ClientSubTreeViewRoot(
-            path="/", sub_tree=ClientAccessSubTreeView(action="deny", children={})
-        )
+        tree = make_access_tree({})
         with pytest.raises(JobFilterException, match="no jobs"):
             BulkJobFilterBuilder(query_filter, tree).build()
 
     def test_no_access_with_owners(self) -> None:
         query_filter = JobFilter(owners={"someuser"})
-        tree = ClientSubTreeViewRoot(
-            path="/",
-            sub_tree=ClientAccessSubTreeView(
-                action="list",
-                children={
-                    "test-cluster": ClientAccessSubTreeView(
-                        action="list",
-                        children={
-                            "testuser": ClientAccessSubTreeView(
-                                action="read", children={}
-                            ),
-                            "anotheruser": ClientAccessSubTreeView(
-                                action="list",
-                                children={
-                                    "job-test-1": ClientAccessSubTreeView(
-                                        "read", children={}
-                                    ),
-                                    "job-test-2": ClientAccessSubTreeView(
-                                        "deny", children={}
-                                    ),
-                                },
-                            ),
-                            "someuser": ClientAccessSubTreeView(
-                                action="deny", children={}
-                            ),
-                        },
-                    )
-                },
-            ),
+        tree = make_access_tree(
+            {
+                "test-cluster/testuser": "read",
+                "test-cluster/anotheruser/job-test-1": "read",
+                "test-cluster/anotheruser/job-test-2": "deny",
+                "test-cluster/someuser": "deny",
+            }
         )
         with pytest.raises(JobFilterException, match="no jobs"):
             BulkJobFilterBuilder(query_filter, tree).build()
 
     def test_no_access_with_clusters(self) -> None:
         query_filter = JobFilter(clusters={"somecluster"})
-        tree = ClientSubTreeViewRoot(
-            path="/",
-            sub_tree=ClientAccessSubTreeView(
-                action="list",
-                children={
-                    "test-cluster": ClientAccessSubTreeView(
-                        action="list",
-                        children={
-                            "testuser": ClientAccessSubTreeView(
-                                action="read", children={}
-                            ),
-                        },
-                    )
-                },
-            ),
-        )
+        tree = make_access_tree({"test-cluster/testuser": "read"})
         with pytest.raises(JobFilterException, match="no jobs"):
             BulkJobFilterBuilder(query_filter, tree).build()
 
     def test_full_access_no_owners(self) -> None:
         query_filter = JobFilter()
-        tree = ClientSubTreeViewRoot(
-            path="/", sub_tree=ClientAccessSubTreeView(action="manage", children={})
-        )
+        tree = make_access_tree({"": "manage"})
         bulk_filter = BulkJobFilterBuilder(query_filter, tree).build()
         assert bulk_filter == BulkJobFilter(
             bulk_filter=JobFilter(), shared_ids=set(), shared_ids_filter=None
@@ -761,9 +740,7 @@ class TestBulkJobFilterBuilder:
 
     def test_full_access_with_owners(self) -> None:
         query_filter = JobFilter(owners={"testuser", "someuser"})
-        tree = ClientSubTreeViewRoot(
-            path="/", sub_tree=ClientAccessSubTreeView(action="manage", children={})
-        )
+        tree = make_access_tree({"": "manage"})
         bulk_filter = BulkJobFilterBuilder(query_filter, tree).build()
         assert bulk_filter == BulkJobFilter(
             bulk_filter=JobFilter(owners={"testuser", "someuser"}),
@@ -773,9 +750,7 @@ class TestBulkJobFilterBuilder:
 
     def test_full_access_with_clusters(self) -> None:
         query_filter = JobFilter(clusters={"test-cluster", "somecluster"})
-        tree = ClientSubTreeViewRoot(
-            path="/", sub_tree=ClientAccessSubTreeView(action="manage", children={})
-        )
+        tree = make_access_tree({"": "manage"})
         bulk_filter = BulkJobFilterBuilder(query_filter, tree).build()
         assert bulk_filter == BulkJobFilter(
             bulk_filter=JobFilter(clusters={"test-cluster", "somecluster"}),
@@ -785,18 +760,7 @@ class TestBulkJobFilterBuilder:
 
     def test_cluster_access_no_owners(self) -> None:
         query_filter = JobFilter()
-        tree = ClientSubTreeViewRoot(
-            path="/",
-            sub_tree=ClientAccessSubTreeView(
-                action="list",
-                children={
-                    "test-cluster": ClientAccessSubTreeView(action="read", children={}),
-                    "anothercluster": ClientAccessSubTreeView(
-                        action="read", children={}
-                    ),
-                },
-            ),
-        )
+        tree = make_access_tree({"test-cluster": "read", "anothercluster": "read"})
         bulk_filter = BulkJobFilterBuilder(query_filter, tree).build()
         assert bulk_filter == BulkJobFilter(
             bulk_filter=JobFilter(clusters={"test-cluster", "anothercluster"}),
@@ -806,18 +770,7 @@ class TestBulkJobFilterBuilder:
 
     def test_cluster_access_with_owners(self) -> None:
         query_filter = JobFilter(owners={"testuser", "someuser"})
-        tree = ClientSubTreeViewRoot(
-            path="/",
-            sub_tree=ClientAccessSubTreeView(
-                action="list",
-                children={
-                    "test-cluster": ClientAccessSubTreeView(action="read", children={}),
-                    "anothercluster": ClientAccessSubTreeView(
-                        action="read", children={}
-                    ),
-                },
-            ),
-        )
+        tree = make_access_tree({"test-cluster": "read", "anothercluster": "read"})
         bulk_filter = BulkJobFilterBuilder(query_filter, tree).build()
         assert bulk_filter == BulkJobFilter(
             bulk_filter=JobFilter(
@@ -830,18 +783,7 @@ class TestBulkJobFilterBuilder:
 
     def test_cluster_access_with_clusters(self) -> None:
         query_filter = JobFilter(clusters={"test-cluster", "somecluster"})
-        tree = ClientSubTreeViewRoot(
-            path="/",
-            sub_tree=ClientAccessSubTreeView(
-                action="list",
-                children={
-                    "test-cluster": ClientAccessSubTreeView(action="read", children={}),
-                    "anothercluster": ClientAccessSubTreeView(
-                        action="read", children={}
-                    ),
-                },
-            ),
-        )
+        tree = make_access_tree({"test-cluster": "read", "anothercluster": "read"})
         bulk_filter = BulkJobFilterBuilder(query_filter, tree).build()
         assert bulk_filter == BulkJobFilter(
             bulk_filter=JobFilter(clusters={"test-cluster"}),
@@ -851,29 +793,8 @@ class TestBulkJobFilterBuilder:
 
     def test_user_access_same_user(self) -> None:
         query_filter = JobFilter()
-        tree = ClientSubTreeViewRoot(
-            path="/",
-            sub_tree=ClientAccessSubTreeView(
-                action="list",
-                children={
-                    "test-cluster": ClientAccessSubTreeView(
-                        action="list",
-                        children={
-                            "testuser": ClientAccessSubTreeView(
-                                action="read", children={}
-                            )
-                        },
-                    ),
-                    "anothercluster": ClientAccessSubTreeView(
-                        action="list",
-                        children={
-                            "testuser": ClientAccessSubTreeView(
-                                action="read", children={}
-                            )
-                        },
-                    ),
-                },
-            ),
+        tree = make_access_tree(
+            {"test-cluster/testuser": "read", "anothercluster/testuser": "read"}
         )
         bulk_filter = BulkJobFilterBuilder(query_filter, tree).build()
         assert bulk_filter == BulkJobFilter(
@@ -886,24 +807,8 @@ class TestBulkJobFilterBuilder:
 
     def test_user_access_same_cluster(self) -> None:
         query_filter = JobFilter()
-        tree = ClientSubTreeViewRoot(
-            path="/",
-            sub_tree=ClientAccessSubTreeView(
-                action="list",
-                children={
-                    "test-cluster": ClientAccessSubTreeView(
-                        action="list",
-                        children={
-                            "testuser": ClientAccessSubTreeView(
-                                action="read", children={}
-                            ),
-                            "anotheruser": ClientAccessSubTreeView(
-                                action="read", children={}
-                            ),
-                        },
-                    ),
-                },
-            ),
+        tree = make_access_tree(
+            {"test-cluster/testuser": "read", "test-cluster/anotheruser": "read"}
         )
         bulk_filter = BulkJobFilterBuilder(query_filter, tree).build()
         assert bulk_filter == BulkJobFilter(
@@ -916,29 +821,8 @@ class TestBulkJobFilterBuilder:
 
     def test_user_access_different_users_and_clusters(self) -> None:
         query_filter = JobFilter()
-        tree = ClientSubTreeViewRoot(
-            path="/",
-            sub_tree=ClientAccessSubTreeView(
-                action="list",
-                children={
-                    "test-cluster": ClientAccessSubTreeView(
-                        action="list",
-                        children={
-                            "testuser": ClientAccessSubTreeView(
-                                action="read", children={}
-                            ),
-                        },
-                    ),
-                    "anothercluster": ClientAccessSubTreeView(
-                        action="list",
-                        children={
-                            "anotheruser": ClientAccessSubTreeView(
-                                action="read", children={}
-                            )
-                        },
-                    ),
-                },
-            ),
+        tree = make_access_tree(
+            {"test-cluster/testuser": "read", "anothercluster/anotheruser": "read"}
         )
         bulk_filter = BulkJobFilterBuilder(query_filter, tree).build()
         assert bulk_filter == BulkJobFilter(
@@ -956,32 +840,12 @@ class TestBulkJobFilterBuilder:
 
     def test_user_access_mixed_users_and_clusters(self) -> None:
         query_filter = JobFilter()
-        tree = ClientSubTreeViewRoot(
-            path="/",
-            sub_tree=ClientAccessSubTreeView(
-                action="list",
-                children={
-                    "test-cluster": ClientAccessSubTreeView(
-                        action="list",
-                        children={
-                            "testuser": ClientAccessSubTreeView(
-                                action="read", children={}
-                            ),
-                            "anotheruser": ClientAccessSubTreeView(
-                                action="read", children={}
-                            ),
-                        },
-                    ),
-                    "anothercluster": ClientAccessSubTreeView(
-                        action="list",
-                        children={
-                            "testuser": ClientAccessSubTreeView(
-                                action="read", children={}
-                            ),
-                        },
-                    ),
-                },
-            ),
+        tree = make_access_tree(
+            {
+                "test-cluster/testuser": "read",
+                "test-cluster/anotheruser": "read",
+                "anothercluster/testuser": "read",
+            }
         )
         bulk_filter = BulkJobFilterBuilder(query_filter, tree).build()
         assert bulk_filter == BulkJobFilter(
@@ -996,43 +860,14 @@ class TestBulkJobFilterBuilder:
 
     def test_user_access_mixed_users_and_clusters2(self) -> None:
         query_filter = JobFilter()
-        tree = ClientSubTreeViewRoot(
-            path="/",
-            sub_tree=ClientAccessSubTreeView(
-                action="list",
-                children={
-                    "test-cluster": ClientAccessSubTreeView(
-                        action="list",
-                        children={
-                            "testuser": ClientAccessSubTreeView(
-                                action="read", children={}
-                            ),
-                            "anotheruser": ClientAccessSubTreeView(
-                                action="read", children={}
-                            ),
-                        },
-                    ),
-                    "anothercluster": ClientAccessSubTreeView(
-                        action="list",
-                        children={
-                            "testuser": ClientAccessSubTreeView(
-                                action="read", children={}
-                            ),
-                            "thirduser": ClientAccessSubTreeView(
-                                action="read", children={}
-                            ),
-                        },
-                    ),
-                    "thirdcluster": ClientAccessSubTreeView(
-                        action="list",
-                        children={
-                            "testuser": ClientAccessSubTreeView(
-                                action="read", children={}
-                            ),
-                        },
-                    ),
-                },
-            ),
+        tree = make_access_tree(
+            {
+                "test-cluster/testuser": "read",
+                "test-cluster/anotheruser": "read",
+                "anothercluster/testuser": "read",
+                "anothercluster/thirduser": "read",
+                "thirdcluster/testuser": "read",
+            }
         )
         bulk_filter = BulkJobFilterBuilder(query_filter, tree).build()
         assert bulk_filter == BulkJobFilter(
@@ -1051,27 +886,12 @@ class TestBulkJobFilterBuilder:
 
     def test_mixed_cluster_user_access(self) -> None:
         query_filter = JobFilter()
-        tree = ClientSubTreeViewRoot(
-            path="/",
-            sub_tree=ClientAccessSubTreeView(
-                action="list",
-                children={
-                    "test-cluster": ClientAccessSubTreeView(
-                        action="list",
-                        children={
-                            "testuser": ClientAccessSubTreeView(
-                                action="read", children={}
-                            ),
-                            "anotheruser": ClientAccessSubTreeView(
-                                action="read", children={}
-                            ),
-                        },
-                    ),
-                    "anothercluster": ClientAccessSubTreeView(
-                        action="read", children={}
-                    ),
-                },
-            ),
+        tree = make_access_tree(
+            {
+                "test-cluster/testuser": "read",
+                "test-cluster/anotheruser": "read",
+                "anothercluster": "read",
+            }
         )
         bulk_filter = BulkJobFilterBuilder(query_filter, tree).build()
         assert bulk_filter == BulkJobFilter(
@@ -1089,35 +909,13 @@ class TestBulkJobFilterBuilder:
 
     def test_mixed_access_no_owners(self) -> None:
         query_filter = JobFilter()
-        tree = ClientSubTreeViewRoot(
-            path="/",
-            sub_tree=ClientAccessSubTreeView(
-                action="list",
-                children={
-                    "test-cluster": ClientAccessSubTreeView(
-                        action="list",
-                        children={
-                            "testuser": ClientAccessSubTreeView(
-                                action="read", children={}
-                            ),
-                            "anotheruser": ClientAccessSubTreeView(
-                                action="list",
-                                children={
-                                    "job-test-1": ClientAccessSubTreeView(
-                                        "read", children={}
-                                    ),
-                                    "job-test-2": ClientAccessSubTreeView(
-                                        "deny", children={}
-                                    ),
-                                },
-                            ),
-                            "someuser": ClientAccessSubTreeView(
-                                action="deny", children={}
-                            ),
-                        },
-                    )
-                },
-            ),
+        tree = make_access_tree(
+            {
+                "test-cluster/testuser": "read",
+                "test-cluster/anotheruser/job-test-1": "read",
+                "test-cluster/anotheruser/job-test-2": "deny",
+                "test-cluster/someuser": "deny",
+            }
         )
         bulk_filter = BulkJobFilterBuilder(query_filter, tree).build()
         assert bulk_filter == BulkJobFilter(
@@ -1128,35 +926,13 @@ class TestBulkJobFilterBuilder:
 
     def test_mixed_access_owners_shared_all(self) -> None:
         query_filter = JobFilter(owners={"testuser"})
-        tree = ClientSubTreeViewRoot(
-            path="/",
-            sub_tree=ClientAccessSubTreeView(
-                action="list",
-                children={
-                    "test-cluster": ClientAccessSubTreeView(
-                        action="list",
-                        children={
-                            "testuser": ClientAccessSubTreeView(
-                                action="read", children={}
-                            ),
-                            "anotheruser": ClientAccessSubTreeView(
-                                action="list",
-                                children={
-                                    "job-test-1": ClientAccessSubTreeView(
-                                        "read", children={}
-                                    ),
-                                    "job-test-2": ClientAccessSubTreeView(
-                                        "deny", children={}
-                                    ),
-                                },
-                            ),
-                            "someuser": ClientAccessSubTreeView(
-                                action="deny", children={}
-                            ),
-                        },
-                    )
-                },
-            ),
+        tree = make_access_tree(
+            {
+                "test-cluster/testuser": "read",
+                "test-cluster/anotheruser/job-test-1": "read",
+                "test-cluster/anotheruser/job-test-2": "deny",
+                "test-cluster/someuser": "deny",
+            }
         )
         bulk_filter = BulkJobFilterBuilder(query_filter, tree).build()
         assert bulk_filter == BulkJobFilter(
@@ -1167,35 +943,13 @@ class TestBulkJobFilterBuilder:
 
     def test_mixed_access_shared_ids_only(self) -> None:
         query_filter = JobFilter(owners={"anotheruser"})
-        tree = ClientSubTreeViewRoot(
-            path="/",
-            sub_tree=ClientAccessSubTreeView(
-                action="list",
-                children={
-                    "test-cluster": ClientAccessSubTreeView(
-                        action="list",
-                        children={
-                            "testuser": ClientAccessSubTreeView(
-                                action="read", children={}
-                            ),
-                            "anotheruser": ClientAccessSubTreeView(
-                                action="list",
-                                children={
-                                    "job-test-1": ClientAccessSubTreeView(
-                                        "read", children={}
-                                    ),
-                                    "job-test-2": ClientAccessSubTreeView(
-                                        "deny", children={}
-                                    ),
-                                },
-                            ),
-                            "someuser": ClientAccessSubTreeView(
-                                action="deny", children={}
-                            ),
-                        },
-                    )
-                },
-            ),
+        tree = make_access_tree(
+            {
+                "test-cluster/testuser": "read",
+                "test-cluster/anotheruser/job-test-1": "read",
+                "test-cluster/anotheruser/job-test-2": "deny",
+                "test-cluster/someuser": "deny",
+            }
         )
         bulk_filter = BulkJobFilterBuilder(query_filter, tree).build()
         assert bulk_filter == BulkJobFilter(
@@ -1210,35 +964,13 @@ class TestBulkJobFilterBuilder:
             statuses={JobStatus.PENDING},
             name="testname",
         )
-        tree = ClientSubTreeViewRoot(
-            path="/",
-            sub_tree=ClientAccessSubTreeView(
-                action="list",
-                children={
-                    "test-cluster": ClientAccessSubTreeView(
-                        action="list",
-                        children={
-                            "testuser": ClientAccessSubTreeView(
-                                action="read", children={}
-                            ),
-                            "anotheruser": ClientAccessSubTreeView(
-                                action="list",
-                                children={
-                                    "job-test-1": ClientAccessSubTreeView(
-                                        "read", children={}
-                                    ),
-                                    "job-test-2": ClientAccessSubTreeView(
-                                        "deny", children={}
-                                    ),
-                                },
-                            ),
-                            "someuser": ClientAccessSubTreeView(
-                                action="deny", children={}
-                            ),
-                        },
-                    )
-                },
-            ),
+        tree = make_access_tree(
+            {
+                "test-cluster/testuser": "read",
+                "test-cluster/anotheruser/job-test-1": "read",
+                "test-cluster/anotheruser/job-test-2": "deny",
+                "test-cluster/someuser": "deny",
+            }
         )
         bulk_filter = BulkJobFilterBuilder(query_filter, tree).build()
         assert bulk_filter == BulkJobFilter(
@@ -1260,9 +992,7 @@ class TestBulkJobFilterBuilder:
 class TestBulkJobFilterBuilderLegacy:
     def test_no_access(self) -> None:
         query_filter = JobFilter()
-        tree = ClientSubTreeViewRoot(
-            path="/", sub_tree=ClientAccessSubTreeView(action="deny", children={})
-        )
+        tree = make_access_tree({})
         with pytest.raises(JobFilterException, match="no jobs"):
             BulkJobFilterBuilder(
                 query_filter, tree, use_cluster_names_in_uris=False
@@ -1270,22 +1000,13 @@ class TestBulkJobFilterBuilderLegacy:
 
     def test_no_access_with_owners(self) -> None:
         query_filter = JobFilter(owners={"someuser"})
-        tree = ClientSubTreeViewRoot(
-            path="/",
-            sub_tree=ClientAccessSubTreeView(
-                action="list",
-                children={
-                    "testuser": ClientAccessSubTreeView(action="read", children={}),
-                    "anotheruser": ClientAccessSubTreeView(
-                        action="list",
-                        children={
-                            "job-test-1": ClientAccessSubTreeView("read", children={}),
-                            "job-test-2": ClientAccessSubTreeView("deny", children={}),
-                        },
-                    ),
-                    "someuser": ClientAccessSubTreeView(action="deny", children={}),
-                },
-            ),
+        tree = make_access_tree(
+            {
+                "testuser": "read",
+                "anotheruser/job-test-1": "read",
+                "anotheruser/job-test-2": "deny",
+                "someuser": "deny",
+            }
         )
         with pytest.raises(JobFilterException, match="no jobs"):
             BulkJobFilterBuilder(
@@ -1294,9 +1015,7 @@ class TestBulkJobFilterBuilderLegacy:
 
     def test_full_access_no_owners(self) -> None:
         query_filter = JobFilter()
-        tree = ClientSubTreeViewRoot(
-            path="/", sub_tree=ClientAccessSubTreeView(action="manage", children={})
-        )
+        tree = make_access_tree({"": "manage"})
         bulk_filter = BulkJobFilterBuilder(
             query_filter, tree, use_cluster_names_in_uris=False
         ).build()
@@ -1306,9 +1025,7 @@ class TestBulkJobFilterBuilderLegacy:
 
     def test_full_access_with_owners(self) -> None:
         query_filter = JobFilter(owners={"testuser"})
-        tree = ClientSubTreeViewRoot(
-            path="/", sub_tree=ClientAccessSubTreeView(action="manage", children={})
-        )
+        tree = make_access_tree({"": "manage"})
         bulk_filter = BulkJobFilterBuilder(
             query_filter, tree, use_cluster_names_in_uris=False
         ).build()
@@ -1320,22 +1037,13 @@ class TestBulkJobFilterBuilderLegacy:
 
     def test_mixed_access_no_owners(self) -> None:
         query_filter = JobFilter()
-        tree = ClientSubTreeViewRoot(
-            path="/",
-            sub_tree=ClientAccessSubTreeView(
-                action="list",
-                children={
-                    "testuser": ClientAccessSubTreeView(action="read", children={}),
-                    "anotheruser": ClientAccessSubTreeView(
-                        action="list",
-                        children={
-                            "job-test-1": ClientAccessSubTreeView("read", children={}),
-                            "job-test-2": ClientAccessSubTreeView("deny", children={}),
-                        },
-                    ),
-                    "someuser": ClientAccessSubTreeView(action="deny", children={}),
-                },
-            ),
+        tree = make_access_tree(
+            {
+                "testuser": "read",
+                "anotheruser/job-test-1": "read",
+                "anotheruser/job-test-2": "deny",
+                "someuser": "deny",
+            }
         )
         bulk_filter = BulkJobFilterBuilder(
             query_filter, tree, use_cluster_names_in_uris=False
@@ -1348,22 +1056,13 @@ class TestBulkJobFilterBuilderLegacy:
 
     def test_mixed_access_owners_shared_all(self) -> None:
         query_filter = JobFilter(owners={"testuser"})
-        tree = ClientSubTreeViewRoot(
-            path="/",
-            sub_tree=ClientAccessSubTreeView(
-                action="list",
-                children={
-                    "testuser": ClientAccessSubTreeView(action="read", children={}),
-                    "anotheruser": ClientAccessSubTreeView(
-                        action="list",
-                        children={
-                            "job-test-1": ClientAccessSubTreeView("read", children={}),
-                            "job-test-2": ClientAccessSubTreeView("deny", children={}),
-                        },
-                    ),
-                    "someuser": ClientAccessSubTreeView(action="deny", children={}),
-                },
-            ),
+        tree = make_access_tree(
+            {
+                "testuser": "read",
+                "anotheruser/job-test-1": "read",
+                "anotheruser/job-test-2": "deny",
+                "someuser": "deny",
+            }
         )
         bulk_filter = BulkJobFilterBuilder(
             query_filter, tree, use_cluster_names_in_uris=False
@@ -1376,22 +1075,13 @@ class TestBulkJobFilterBuilderLegacy:
 
     def test_mixed_access_shared_ids_only(self) -> None:
         query_filter = JobFilter(owners={"anotheruser"})
-        tree = ClientSubTreeViewRoot(
-            path="/",
-            sub_tree=ClientAccessSubTreeView(
-                action="list",
-                children={
-                    "testuser": ClientAccessSubTreeView(action="read", children={}),
-                    "anotheruser": ClientAccessSubTreeView(
-                        action="list",
-                        children={
-                            "job-test-1": ClientAccessSubTreeView("read", children={}),
-                            "job-test-2": ClientAccessSubTreeView("deny", children={}),
-                        },
-                    ),
-                    "someuser": ClientAccessSubTreeView(action="deny", children={}),
-                },
-            ),
+        tree = make_access_tree(
+            {
+                "testuser": "read",
+                "anotheruser/job-test-1": "read",
+                "anotheruser/job-test-2": "deny",
+                "someuser": "deny",
+            }
         )
         bulk_filter = BulkJobFilterBuilder(
             query_filter, tree, use_cluster_names_in_uris=False
@@ -1408,22 +1098,13 @@ class TestBulkJobFilterBuilderLegacy:
             statuses={JobStatus.PENDING},
             name="testname",
         )
-        tree = ClientSubTreeViewRoot(
-            path="/",
-            sub_tree=ClientAccessSubTreeView(
-                action="list",
-                children={
-                    "testuser": ClientAccessSubTreeView(action="read", children={}),
-                    "anotheruser": ClientAccessSubTreeView(
-                        action="list",
-                        children={
-                            "job-test-1": ClientAccessSubTreeView("read", children={}),
-                            "job-test-2": ClientAccessSubTreeView("deny", children={}),
-                        },
-                    ),
-                    "someuser": ClientAccessSubTreeView(action="deny", children={}),
-                },
-            ),
+        tree = make_access_tree(
+            {
+                "testuser": "read",
+                "anotheruser/job-test-1": "read",
+                "anotheruser/job-test-2": "deny",
+                "someuser": "deny",
+            }
         )
         bulk_filter = BulkJobFilterBuilder(
             query_filter, tree, use_cluster_names_in_uris=False
