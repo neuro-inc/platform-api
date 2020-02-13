@@ -2,7 +2,7 @@ import json
 import logging
 from dataclasses import dataclass, replace
 from pathlib import PurePath
-from typing import Any, Dict, List, Optional, Sequence, Set
+from typing import AbstractSet, Any, Dict, List, Optional, Sequence, Set, Tuple
 
 import aiohttp.web
 import trafaret as t
@@ -569,7 +569,8 @@ class BulkJobFilterBuilder:
         self._use_cluster_names_in_uris = use_cluster_names_in_uris
 
         self._has_access_to_all: bool = False
-        self._clusters_shared_all: Set[str] = set()
+        self._clusters_owners_shared_all: Set[Tuple[str, str]] = set()
+        self._clusters_shared_any: Set[str] = set()
         self._owners_shared_all: Set[str] = set()
         self._shared_ids: Set[str] = set()
 
@@ -598,10 +599,10 @@ class BulkJobFilterBuilder:
         if self._use_cluster_names_in_uris:
             self._traverse_clusters(tree)
         else:
-            self._traverse_owners(tree)
+            self._traverse_owners(tree, "")
 
         if (
-            not self._clusters_shared_all
+            not self._clusters_shared_any
             and not self._owners_shared_all
             and not self._shared_ids
         ):
@@ -621,13 +622,16 @@ class BulkJobFilterBuilder:
                 continue
 
             if sub_tree.can_read():
-                # read/write/manage access to all jobs on the
-                # cluster = job://cluster
-                self._clusters_shared_all.add(cluster_name)
+                # read/write/manage access to all jobs on the cluster =
+                # job://cluster
+                self._clusters_shared_any.add(cluster_name)
+                self._clusters_owners_shared_all.add((cluster_name, ""))
             else:
-                self._traverse_owners(sub_tree)
+                self._traverse_owners(sub_tree, cluster_name)
 
-    def _traverse_owners(self, tree: ClientAccessSubTreeView) -> None:
+    def _traverse_owners(
+        self, tree: ClientAccessSubTreeView, cluster_name: str
+    ) -> None:
         for owner, sub_tree in tree.children.items():
             if not sub_tree.can_list():
                 continue
@@ -637,8 +641,12 @@ class BulkJobFilterBuilder:
                 continue
 
             if sub_tree.can_read():
-                # read/write/manage access to all owner's jobs
+                # read/write/manage access to all owner's jobs =
+                # job://cluster/owner
                 self._owners_shared_all.add(owner)
+                if cluster_name:
+                    self._clusters_shared_any.add(cluster_name)
+                    self._clusters_owners_shared_all.add((cluster_name, owner))
             else:
                 # specific ids
                 self._traverse_jobs(sub_tree)
@@ -651,7 +659,7 @@ class BulkJobFilterBuilder:
     def _create_bulk_filter(self) -> Optional[JobFilter]:
         if not (
             self._has_access_to_all
-            or self._clusters_shared_all
+            or self._clusters_shared_any
             or self._owners_shared_all
         ):
             return None
@@ -662,6 +670,47 @@ class BulkJobFilterBuilder:
         # the scope to the owners passed in the query, otherwise pull all.
         if self._owners_shared_all:
             bulk_filter = replace(bulk_filter, owners=self._owners_shared_all)
-        if self._clusters_shared_all:
-            bulk_filter = replace(bulk_filter, clusters=self._clusters_shared_all)
+        if self._clusters_shared_any:
+            bulk_filter = replace(bulk_filter, clusters=self._clusters_shared_any)
+        if self._clusters_owners_shared_all:
+            self._optimize_clusters_owners(
+                self._clusters_owners_shared_all,
+                bulk_filter.clusters,
+                bulk_filter.owners,
+            )
+            if self._clusters_owners_shared_all:
+                bulk_filter = replace(
+                    bulk_filter, clusters_owners=self._clusters_owners_shared_all
+                )
         return bulk_filter
+
+    def _optimize_clusters_owners(
+        self,
+        clusters_owners: Set[Tuple[str, str]],
+        clusters: AbstractSet[str],
+        owners: AbstractSet[str],
+    ) -> None:
+        for cluster_name in clusters:
+            for owner in owners:
+                if (cluster_name, owner) not in clusters_owners:
+                    break
+            else:
+                for owner in owners:
+                    clusters_owners.remove((cluster_name, owner))
+                clusters_owners.add((cluster_name, ""))
+
+        for cluster_name in clusters:
+            if (cluster_name, "") not in clusters_owners:
+                break
+        else:
+            clusters_owners.clear()
+            return
+
+        for owner in owners:
+            for cluster_name in clusters:
+                if (cluster_name, owner) not in clusters_owners:
+                    break
+            else:
+                for cluster_name in clusters:
+                    clusters_owners.remove((cluster_name, owner))
+                clusters_owners.add(("", owner))

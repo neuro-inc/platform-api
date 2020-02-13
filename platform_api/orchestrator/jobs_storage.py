@@ -54,6 +54,9 @@ class JobFilter:
     statuses: AbstractSet[JobStatus] = field(
         default_factory=cast(Type[Set[JobStatus]], set)
     )
+    clusters_owners: AbstractSet[Tuple[str, str]] = field(
+        default_factory=cast(Type[Set[Tuple[str, str]]], set)
+    )
     clusters: AbstractSet[str] = field(default_factory=cast(Type[Set[str]], set))
     owners: AbstractSet[str] = field(default_factory=cast(Type[Set[str]], set))
     name: Optional[str] = None
@@ -61,6 +64,13 @@ class JobFilter:
 
     def check(self, job: JobRecord) -> bool:
         if self.statuses and job.status not in self.statuses:
+            return False
+        if (
+            self.clusters_owners
+            and (job.cluster_name, job.owner) not in self.clusters_owners
+            and ("", job.owner) not in self.clusters_owners
+            and (job.cluster_name, "") not in self.clusters_owners
+        ):
             return False
         if self.clusters and job.cluster_name not in self.clusters:
             return False
@@ -540,7 +550,10 @@ class RedisJobsStorage(JobsStorage):
             owners=job_filter.owners,
             name=job_filter.name,
         )
-        return await self._get_jobs(job_ids)
+        jobs = await self._get_jobs(job_ids)
+        if job_filter.clusters_owners:
+            jobs = [job for job in jobs if job_filter.check(job)]
+        return jobs
 
     async def get_jobs_by_ids(
         self, job_ids: Iterable[str], job_filter: Optional[JobFilter] = None
@@ -578,6 +591,8 @@ class RedisJobsStorage(JobsStorage):
                 self._parse_job_payload(payload)
                 for payload in await self._client.mget(*keys)
             ]
+            if job_filter.clusters_owners:
+                jobs = [job for job in jobs if job_filter.check(job)]
             for job in jobs:
                 gpu_run_time, non_gpu_run_time = aggregated_run_times.get(
                     job.cluster_name, zero_run_time

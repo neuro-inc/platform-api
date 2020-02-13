@@ -784,7 +784,7 @@ class TestBulkJobFilterBuilder:
         )
         bulk_filter = BulkJobFilterBuilder(query_filter, tree).build()
         assert bulk_filter == BulkJobFilter(
-            bulk_filter=JobFilter(owners={"testuser"}),
+            bulk_filter=JobFilter(clusters={"test-cluster"}, owners={"testuser"},),
             shared_ids={"job-test-1"},
             shared_ids_filter=JobFilter(),
         )
@@ -823,7 +823,7 @@ class TestBulkJobFilterBuilder:
         )
         bulk_filter = BulkJobFilterBuilder(query_filter, tree).build()
         assert bulk_filter == BulkJobFilter(
-            bulk_filter=JobFilter(owners={"testuser"}),
+            bulk_filter=JobFilter(clusters={"test-cluster"}, owners={"testuser"},),
             shared_ids=set(),
             shared_ids_filter=None,
         )
@@ -906,7 +906,10 @@ class TestBulkJobFilterBuilder:
         bulk_filter = BulkJobFilterBuilder(query_filter, tree).build()
         assert bulk_filter == BulkJobFilter(
             bulk_filter=JobFilter(
-                owners={"testuser"}, statuses={JobStatus.PENDING}, name="testname"
+                clusters={"test-cluster"},
+                owners={"testuser"},
+                statuses={JobStatus.PENDING},
+                name="testname",
             ),
             shared_ids={"job-test-1"},
             shared_ids_filter=JobFilter(
