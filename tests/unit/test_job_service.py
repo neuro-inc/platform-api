@@ -1,7 +1,6 @@
 from dataclasses import replace
 from datetime import datetime
 from typing import Any, AsyncIterator, Callable
-from unittest.mock import MagicMock
 
 import pytest
 from _pytest.logging import LogCaptureFixture
@@ -754,15 +753,6 @@ class TestJobsService:
         job, _ = await jobs_service.create_job(request, user)
         assert job.status == JobStatus.PENDING
 
-    def test_get_cluster_name_non_empty(self, jobs_service: JobsService) -> None:
-        mocked_job = MagicMock(cluster_name="my-cluster")
-        assert jobs_service.get_cluster_name(mocked_job) == "my-cluster"
-
-    def test_get_cluster_name_empty(self, jobs_service: JobsService) -> None:
-        mocked_job = MagicMock(cluster_name="")
-        default_cluster_name = jobs_service._jobs_config.default_cluster_name
-        assert jobs_service.get_cluster_name(mocked_job) == default_cluster_name
-
 
 class TestJobsServiceCluster:
     @pytest.fixture
@@ -784,7 +774,7 @@ class TestJobsServiceCluster:
         return JobsService(
             cluster_registry=cluster_registry,
             jobs_storage=mock_jobs_storage,
-            jobs_config=JobsConfig(default_cluster_name="default"),
+            jobs_config=JobsConfig(),
             notifications_client=mock_notifications_client,
         )
 
@@ -947,6 +937,9 @@ class TestJobsServiceCluster:
 
         job = await jobs_service.get_job(job.id)
         assert job.cluster_name == "missing"
+        assert job.http_host == f"{job.id}.missing-cluster"
+        assert job.http_host_named is None
+        assert job.ssh_server == "ssh://nobody@missing-cluster:22"
 
     @pytest.mark.asyncio
     async def test_get_job_unavail_cluster(
@@ -978,6 +971,9 @@ class TestJobsServiceCluster:
 
         job = await jobs_service.get_job(job.id)
         assert job.cluster_name == "test-cluster"
+        assert job.http_host == f"{job.id}.jobs"
+        assert job.http_host_named is None
+        assert job.ssh_server == "ssh://nobody@ssh-auth:22"
 
     @pytest.mark.asyncio
     async def test_delete_missing_cluster(

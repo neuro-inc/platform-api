@@ -64,9 +64,9 @@ class EnvironConfigFactory:
             ),
         )
 
-    def create_cluster(self) -> ClusterConfig:
+    def create_cluster(self, name: str) -> ClusterConfig:
         return ClusterConfig(
-            name=JobsConfig.default_cluster_name,
+            name=name,
             storage=self.create_storage(),
             registry=self.create_registry(),
             orchestrator=self.create_orchestrator(),
