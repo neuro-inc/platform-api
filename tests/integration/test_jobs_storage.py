@@ -750,6 +750,41 @@ class TestRedisJobsStorage:
         job_ids = {job.id for job in await storage.get_all_jobs(job_filter)}
         assert job_ids == set()
 
+        job_filter = JobFilter(
+            clusters_owners={("test-cluster", "user1"), ("other-cluster", "user2")},
+            clusters={"test-cluster", "other-cluster"},
+            owners={"user1", "user2"},
+        )
+        job_ids = {job.id for job in await storage.get_all_jobs(job_filter)}
+        assert job_ids == {jobs[0].id, jobs[1].id, jobs[7].id}
+
+        job_filter = JobFilter(
+            clusters_owners={("test-cluster", "user1"), ("other-cluster", "")},
+            clusters={"test-cluster", "other-cluster"},
+            owners={"user1", "user2"},
+        )
+        job_ids = {job.id for job in await storage.get_all_jobs(job_filter)}
+        assert job_ids == {jobs[0].id, jobs[1].id, jobs[6].id, jobs[7].id}
+
+        job_filter = JobFilter(
+            clusters_owners={
+                ("test-cluster", "user1"),
+                ("my-cluster", "user3"),
+                ("", "user2"),
+            },
+            clusters={"test-cluster", "my-cluster", "other-cluster"},
+            owners={"user1", "user2", "user3"},
+        )
+        job_ids = {job.id for job in await storage.get_all_jobs(job_filter)}
+        assert job_ids == {jobs[0].id, jobs[1].id, jobs[2].id, jobs[5].id, jobs[7].id}
+
+        job_filter = JobFilter(
+            clusters_owners={("test-cluster", "user1"), ("other-cluster", "")},
+            clusters={"test-cluster", "other-cluster"},
+        )
+        job_ids = {job.id for job in await storage.get_all_jobs(job_filter)}
+        assert job_ids == {jobs[0].id, jobs[1].id, jobs[6].id, jobs[7].id, jobs[8].id}
+
     @pytest.mark.asyncio
     async def test_get_all_filter_by_cluster_and_status(
         self, redis_client: aioredis.Redis
