@@ -873,7 +873,9 @@ class TestBulkJobFilterBuilder:
         assert bulk_filter == BulkJobFilter(
             bulk_filter=JobFilter(
                 clusters_owners={
-                    ("", "testuser"),
+                    ("test-cluster", "testuser"),
+                    ("anothercluster", "testuser"),
+                    ("thirdcluster", "testuser"),
                     ("test-cluster", "anotheruser"),
                     ("anothercluster", "thirduser"),
                 },
