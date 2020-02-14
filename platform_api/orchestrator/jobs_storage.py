@@ -54,10 +54,9 @@ class JobFilter:
     statuses: AbstractSet[JobStatus] = field(
         default_factory=cast(Type[Set[JobStatus]], set)
     )
-    clusters_owners: AbstractSet[Tuple[str, str]] = field(
-        default_factory=cast(Type[Set[Tuple[str, str]]], set)
+    clusters: Dict[str, AbstractSet[str]] = field(
+        default_factory=cast(Type[Dict[str, AbstractSet[str]]], dict)
     )
-    clusters: AbstractSet[str] = field(default_factory=cast(Type[Set[str]], set))
     owners: AbstractSet[str] = field(default_factory=cast(Type[Set[str]], set))
     name: Optional[str] = None
     ids: AbstractSet[str] = field(default_factory=cast(Type[Set[str]], set))
@@ -65,17 +64,12 @@ class JobFilter:
     def check(self, job: JobRecord) -> bool:
         if self.statuses and job.status not in self.statuses:
             return False
-        if (
-            self.clusters_owners
-            and (job.cluster_name, job.owner) not in self.clusters_owners
-            and ("", job.owner) not in self.clusters_owners
-            and (job.cluster_name, "") not in self.clusters_owners
-        ):
-            return False
-        if self.clusters and job.cluster_name not in self.clusters:
-            return False
         if self.owners and job.owner not in self.owners:
             return False
+        if self.clusters:
+            owners = self.clusters.get(job.cluster_name)
+            if owners is None or (owners and job.owner not in owners):
+                return False
         if self.name and self.name != job.name:
             return False
         if self.ids and job.id not in self.ids:
@@ -464,7 +458,7 @@ class RedisJobsStorage(JobsStorage):
         self,
         *,
         statuses: AbstractSet[JobStatus],
-        clusters: AbstractSet[str],
+        clusters: Dict[str, AbstractSet[str]],
         owners: AbstractSet[str],
         name: Optional[str] = None,
     ) -> List[str]:
@@ -551,7 +545,7 @@ class RedisJobsStorage(JobsStorage):
             name=job_filter.name,
         )
         jobs = await self._get_jobs(job_ids)
-        if job_filter.clusters_owners:
+        if any(job_filter.clusters.values()):
             jobs = [job for job in jobs if job_filter.check(job)]
         return jobs
 
@@ -591,7 +585,7 @@ class RedisJobsStorage(JobsStorage):
                 self._parse_job_payload(payload)
                 for payload in await self._client.mget(*keys)
             ]
-            if job_filter.clusters_owners:
+            if any(job_filter.clusters.values()):
                 jobs = [job for job in jobs if job_filter.check(job)]
             for job in jobs:
                 gpu_run_time, non_gpu_run_time = aggregated_run_times.get(

@@ -2,7 +2,7 @@ import json
 import logging
 from dataclasses import dataclass, replace
 from pathlib import PurePath
-from typing import AbstractSet, Any, Dict, List, Optional, Sequence, Set, Tuple
+from typing import AbstractSet, Any, Dict, List, Optional, Sequence, Set
 
 import aiohttp.web
 import trafaret as t
@@ -528,8 +528,8 @@ class JobFilterFactory:
                 self._user_name_validator.check(owner)
                 for owner in query.getall("owner", [])
             }
-            clusters = {
-                self._cluster_name_validator.check(cluster_name)
+            clusters: Dict[Any, AbstractSet[Any]] = {
+                self._cluster_name_validator.check(cluster_name): set()
                 for cluster_name in query.getall("cluster_name", [])
             }
             return JobFilter(
@@ -664,12 +664,6 @@ class BulkJobFilterBuilder:
         ):
             return None
         bulk_filter = self._query_filter
-        # `self._clusters_shared_any` is already filtered against
-        # `self._query_filter.clusters`.
-        # if `self._clusters_shared_any` is empty, we still want to try to limit
-        # the scope to the clusters passed in the query, otherwise pull all.
-        if self._clusters_shared_any:
-            bulk_filter = replace(bulk_filter, clusters=set(self._clusters_shared_any))
         # `self._owners_shared_all` is already filtered against
         # `self._query_filter.owners`.
         # if `self._owners_shared_all` is empty and no clusters share full
@@ -677,22 +671,13 @@ class BulkJobFilterBuilder:
         # passed in the query, otherwise pull all.
         if not self._has_clusters_shared_all and self._owners_shared_all:
             bulk_filter = replace(bulk_filter, owners=self._owners_shared_all)
-        if any(self._clusters_shared_any.values()):
+        # `self._clusters_shared_any` is already filtered against
+        # `self._query_filter.clusters`.
+        # if `self._clusters_shared_any` is empty, we still want to try to limit
+        # the scope to the clusters passed in the query, otherwise pull all.
+        if not self._has_access_to_all:
             self._optimize_clusters_owners(bulk_filter.owners)
-            if any(self._clusters_shared_any.values()):
-                clusters_owners: Set[Tuple[str, str]] = {
-                    (cluster_name, owner)
-                    for cluster_name, owners in self._clusters_shared_any.items()
-                    for owner in owners
-                }
-                clusters_owners.update(
-                    {
-                        (cluster_name, "")
-                        for cluster_name, owners in self._clusters_shared_any.items()
-                        if not owners
-                    }
-                )
-                bulk_filter = replace(bulk_filter, clusters_owners=clusters_owners)
+            bulk_filter = replace(bulk_filter, clusters=self._clusters_shared_any)
         return bulk_filter
 
     def _optimize_clusters_owners(self, owners: AbstractSet[str]) -> None:
