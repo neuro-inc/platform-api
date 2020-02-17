@@ -457,22 +457,19 @@ class RedisJobsStorage(JobsStorage):
     async def _get_job_ids(
         self,
         *,
-        statuses: AbstractSet[JobStatus],
-        clusters: Dict[str, AbstractSet[str]],
-        owners: AbstractSet[str],
+        statuses: Iterable[JobStatus],
+        clusters: Iterable[str],
+        owners: Iterable[str],
         name: Optional[str] = None,
     ) -> List[str]:
-        if name and not owners:
-            raise JobsStorageException(
-                "filtering jobs by name is allowed only together with owners"
-            )
-
-        status_keys = [self._generate_jobs_status_index_key(s) for s in statuses]
-
         if name:
             owner_keys = [
                 self._generate_jobs_name_index_zset_key(owner, name) for owner in owners
             ]
+            if not owner_keys:
+                raise JobsStorageException(
+                    "filtering jobs by name is allowed only together with owners"
+                )
         else:
             owner_keys = [
                 self._generate_jobs_owner_index_key(owner) for owner in owners
@@ -480,6 +477,7 @@ class RedisJobsStorage(JobsStorage):
         cluster_keys = [
             self._generate_jobs_cluster_index_key(cluster) for cluster in clusters
         ]
+        status_keys = [self._generate_jobs_status_index_key(s) for s in statuses]
 
         temp_key = self._generate_temp_zset_key()
         tr = self._client.multi_exec()
