@@ -374,6 +374,7 @@ class ContainerVolumeFactory:
         *,
         src_mount_path: PurePath,
         dst_mount_path: PurePath,
+        cluster_name: str,
         extend_dst_mount_path: bool = True,
         read_only: bool = False,
         scheme: str = "storage",
@@ -387,6 +388,8 @@ class ContainerVolumeFactory:
         self._uri = uri
         self._scheme = scheme
         self._path: PurePath = PurePath("")
+        assert cluster_name
+        self._cluster_name = cluster_name
 
         self._parse_uri()
 
@@ -403,8 +406,10 @@ class ContainerVolumeFactory:
         url = urlsplit(self._uri)
         if url.scheme != self._scheme:
             raise ValueError(f"Invalid URI scheme: {self._uri}")
-
-        path = PurePath(url.netloc + url.path)
+        if url.netloc == self._cluster_name:
+            path = PurePath(url.path)
+        else:
+            path = PurePath(url.netloc + url.path)
         if path.is_absolute():
             path = path.relative_to("/")
         self._check_dots_in_path(path)

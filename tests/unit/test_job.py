@@ -178,13 +178,27 @@ class TestContainerVolumeFactory:
         uri = "invalid://path"
         with pytest.raises(ValueError, match="Invalid URI scheme"):
             ContainerVolumeFactory(
-                uri, src_mount_path=PurePath("/"), dst_mount_path=PurePath("/")
+                uri,
+                src_mount_path=PurePath("/"),
+                dst_mount_path=PurePath("/"),
+                cluster_name="test-cluster",
             )
 
-    @pytest.mark.parametrize("uri", ("storage:///", "storage://"))
+    @pytest.mark.parametrize(
+        "uri",
+        (
+            "storage:///",
+            "storage://",
+            "storage://test-cluster",
+            "storage://test-cluster/",
+        ),
+    )
     def test_invalid_storage_uri_path(self, uri: str) -> None:
         volume = ContainerVolumeFactory(
-            uri, src_mount_path=PurePath("/host"), dst_mount_path=PurePath("/container")
+            uri,
+            src_mount_path=PurePath("/host"),
+            dst_mount_path=PurePath("/container"),
+            cluster_name="test-cluster",
         ).create()
         assert volume.src_path == PurePath("/host")
         assert volume.dst_path == PurePath("/container")
@@ -193,10 +207,13 @@ class TestContainerVolumeFactory:
     @pytest.mark.parametrize(
         "uri",
         (
-            "storage:///path/to/dir",
-            "storage:///path/to//dir",
-            "storage:///path/to/./dir",
+            "storage://test-cluster/path/to/dir",
+            "storage://test-cluster/path/to//dir",
+            "storage://test-cluster/path/to/./dir",
             "storage://path/to/dir",
+            "storage://path/to//dir",
+            "storage://path/to/./dir",
+            "storage:///path/to/dir",
         ),
     )
     def test_create(self, uri: str) -> None:
@@ -205,49 +222,61 @@ class TestContainerVolumeFactory:
             src_mount_path=PurePath("/host"),
             dst_mount_path=PurePath("/container"),
             read_only=True,
+            cluster_name="test-cluster",
         )
         assert volume.src_path == PurePath("/host/path/to/dir")
         assert volume.dst_path == PurePath("/container/path/to/dir")
         assert volume.read_only
 
-    @pytest.mark.parametrize("uri", ("storage:///../to/dir", "storage://path/../dir"))
+    @pytest.mark.parametrize(
+        "uri",
+        (
+            "storage:///../to/dir",
+            "storage://path/../dir",
+            "storage://test-cluster/path/../dir",
+        ),
+    )
     def test_create_invalid_path(self, uri: str) -> None:
         with pytest.raises(ValueError, match="Invalid path"):
             ContainerVolumeFactory(
                 uri,
                 src_mount_path=PurePath("/host"),
                 dst_mount_path=PurePath("/container"),
+                cluster_name="test-cluster",
             ).create()
 
     def test_create_without_extending_dst_mount_path(self) -> None:
-        uri = "storage:///path/to/dir"
+        uri = "storage://test-cluster/path/to/dir"
         volume = ContainerVolume.create(
             uri,
             src_mount_path=PurePath("/host"),
             dst_mount_path=PurePath("/container"),
             read_only=True,
             extend_dst_mount_path=False,
+            cluster_name="test-cluster",
         )
         assert volume.src_path == PurePath("/host/path/to/dir")
         assert volume.dst_path == PurePath("/container")
         assert volume.read_only
 
     def test_relative_dst_mount_path(self) -> None:
-        uri = "storage:///path/to/dir"
+        uri = "storage://test-cluster/path/to/dir"
         with pytest.raises(ValueError, match="Mount path must be absolute"):
             ContainerVolumeFactory(
                 uri,
                 src_mount_path=PurePath("/host"),
                 dst_mount_path=PurePath("container"),
+                cluster_name="test-cluster",
             )
 
     def test_dots_dst_mount_path(self) -> None:
-        uri = "storage:///path/to/dir"
+        uri = "storage://test-cluster/path/to/dir"
         with pytest.raises(ValueError, match="Invalid path"):
             ContainerVolumeFactory(
                 uri,
                 src_mount_path=PurePath("/host"),
                 dst_mount_path=PurePath("/container/../path"),
+                cluster_name="test-cluster",
             )
 
 
@@ -270,7 +299,7 @@ class TestContainerBuilder:
             ],
         }
         container = ContainerBuilder.from_container_payload(
-            payload, storage_config=storage_config
+            payload, storage_config=storage_config, cluster_name="test-cluster"
         ).build()
         assert container == Container(
             image="testimage",
@@ -302,7 +331,7 @@ class TestContainerBuilder:
             },
         }
         container = ContainerBuilder.from_container_payload(
-            payload, storage_config=storage_config
+            payload, storage_config=storage_config, cluster_name="test-cluster"
         ).build()
         assert container == Container(
             image="testimage",
@@ -322,7 +351,7 @@ class TestContainerBuilder:
             },
         }
         container = ContainerBuilder.from_container_payload(
-            payload, storage_config=storage_config
+            payload, storage_config=storage_config, cluster_name="test-cluster"
         ).build()
         assert container == Container(
             image="testimage",
@@ -351,7 +380,7 @@ class TestContainerBuilder:
             ],
         }
         container = ContainerBuilder.from_container_payload(
-            payload, storage_config=storage_config
+            payload, storage_config=storage_config, cluster_name="test-cluster"
         ).build()
         assert container == Container(
             image="testimage",
@@ -387,7 +416,7 @@ class TestContainerBuilder:
             ],
         }
         container = ContainerBuilder.from_container_payload(
-            payload, storage_config=storage_config
+            payload, storage_config=storage_config, cluster_name="test-cluster"
         ).build()
         assert container == Container(
             image="testimage",
