@@ -715,12 +715,18 @@ class TestBulkJobFilterBuilder:
         query_filter = JobFilter(owners={"someuser"})
         tree = make_access_tree(
             {
-                "testuser": "read",
-                "anotheruser/job-test-1": "read",
-                "anotheruser/job-test-2": "deny",
-                "someuser": "deny",
+                "test-cluster/testuser": "read",
+                "test-cluster/anotheruser/job-test-1": "read",
+                "test-cluster/anotheruser/job-test-2": "deny",
+                "test-cluster/someuser": "deny",
             }
         )
+        with pytest.raises(JobFilterException, match="no jobs"):
+            BulkJobFilterBuilder(query_filter, tree).build()
+
+    def test_no_access_with_clusters(self) -> None:
+        query_filter = JobFilter(clusters={"somecluster": set()})
+        tree = make_access_tree({"test-cluster/testuser": "read"})
         with pytest.raises(JobFilterException, match="no jobs"):
             BulkJobFilterBuilder(query_filter, tree).build()
 
@@ -733,9 +739,300 @@ class TestBulkJobFilterBuilder:
         )
 
     def test_full_access_with_owners(self) -> None:
-        query_filter = JobFilter(owners={"testuser"})
+        query_filter = JobFilter(owners={"testuser", "someuser"})
         tree = make_access_tree({"": "manage"})
         bulk_filter = BulkJobFilterBuilder(query_filter, tree).build()
+        assert bulk_filter == BulkJobFilter(
+            bulk_filter=JobFilter(owners={"testuser", "someuser"}),
+            shared_ids=set(),
+            shared_ids_filter=None,
+        )
+
+    def test_full_access_with_clusters(self) -> None:
+        query_filter = JobFilter(clusters={"test-cluster": set(), "somecluster": set()})
+        tree = make_access_tree({"": "manage"})
+        bulk_filter = BulkJobFilterBuilder(query_filter, tree).build()
+        assert bulk_filter == BulkJobFilter(
+            bulk_filter=JobFilter(
+                clusters={"test-cluster": set(), "somecluster": set()}
+            ),
+            shared_ids=set(),
+            shared_ids_filter=None,
+        )
+
+    def test_cluster_access_no_owners(self) -> None:
+        query_filter = JobFilter()
+        tree = make_access_tree({"test-cluster": "read", "anothercluster": "read"})
+        bulk_filter = BulkJobFilterBuilder(query_filter, tree).build()
+        assert bulk_filter == BulkJobFilter(
+            bulk_filter=JobFilter(
+                clusters={"test-cluster": set(), "anothercluster": set()}
+            ),
+            shared_ids=set(),
+            shared_ids_filter=None,
+        )
+
+    def test_cluster_access_with_owners(self) -> None:
+        query_filter = JobFilter(owners={"testuser", "someuser"})
+        tree = make_access_tree({"test-cluster": "read", "anothercluster": "read"})
+        bulk_filter = BulkJobFilterBuilder(query_filter, tree).build()
+        assert bulk_filter == BulkJobFilter(
+            bulk_filter=JobFilter(
+                clusters={"test-cluster": set(), "anothercluster": set()},
+                owners={"testuser", "someuser"},
+            ),
+            shared_ids=set(),
+            shared_ids_filter=None,
+        )
+
+    def test_cluster_access_with_clusters(self) -> None:
+        query_filter = JobFilter(clusters={"test-cluster": set(), "somecluster": set()})
+        tree = make_access_tree({"test-cluster": "read", "anothercluster": "read"})
+        bulk_filter = BulkJobFilterBuilder(query_filter, tree).build()
+        assert bulk_filter == BulkJobFilter(
+            bulk_filter=JobFilter(clusters={"test-cluster": set()}),
+            shared_ids=set(),
+            shared_ids_filter=None,
+        )
+
+    def test_user_access_same_user(self) -> None:
+        query_filter = JobFilter()
+        tree = make_access_tree(
+            {"test-cluster/testuser": "read", "anothercluster/testuser": "read"}
+        )
+        bulk_filter = BulkJobFilterBuilder(query_filter, tree).build()
+        assert bulk_filter == BulkJobFilter(
+            bulk_filter=JobFilter(
+                clusters={"test-cluster": set(), "anothercluster": set()},
+                owners={"testuser"},
+            ),
+            shared_ids=set(),
+            shared_ids_filter=None,
+        )
+
+    def test_user_access_same_cluster(self) -> None:
+        query_filter = JobFilter()
+        tree = make_access_tree(
+            {"test-cluster/testuser": "read", "test-cluster/anotheruser": "read"}
+        )
+        bulk_filter = BulkJobFilterBuilder(query_filter, tree).build()
+        assert bulk_filter == BulkJobFilter(
+            bulk_filter=JobFilter(
+                clusters={"test-cluster": set()}, owners={"testuser", "anotheruser"}
+            ),
+            shared_ids=set(),
+            shared_ids_filter=None,
+        )
+
+    def test_user_access_different_users_and_clusters(self) -> None:
+        query_filter = JobFilter()
+        tree = make_access_tree(
+            {"test-cluster/testuser": "read", "anothercluster/anotheruser": "read"}
+        )
+        bulk_filter = BulkJobFilterBuilder(query_filter, tree).build()
+        assert bulk_filter == BulkJobFilter(
+            bulk_filter=JobFilter(
+                clusters={
+                    "test-cluster": {"testuser"},
+                    "anothercluster": {"anotheruser"},
+                },
+                owners={"testuser", "anotheruser"},
+            ),
+            shared_ids=set(),
+            shared_ids_filter=None,
+        )
+
+    def test_user_access_mixed_users_and_clusters(self) -> None:
+        query_filter = JobFilter()
+        tree = make_access_tree(
+            {
+                "test-cluster/testuser": "read",
+                "test-cluster/anotheruser": "read",
+                "anothercluster/testuser": "read",
+            }
+        )
+        bulk_filter = BulkJobFilterBuilder(query_filter, tree).build()
+        assert bulk_filter == BulkJobFilter(
+            bulk_filter=JobFilter(
+                clusters={"test-cluster": set(), "anothercluster": {"testuser"}},
+                owners={"testuser", "anotheruser"},
+            ),
+            shared_ids=set(),
+            shared_ids_filter=None,
+        )
+
+    def test_user_access_mixed_users_and_clusters2(self) -> None:
+        query_filter = JobFilter()
+        tree = make_access_tree(
+            {
+                "test-cluster/testuser": "read",
+                "test-cluster/anotheruser": "read",
+                "anothercluster/testuser": "read",
+                "anothercluster/thirduser": "read",
+                "thirdcluster/testuser": "read",
+            }
+        )
+        bulk_filter = BulkJobFilterBuilder(query_filter, tree).build()
+        assert bulk_filter == BulkJobFilter(
+            bulk_filter=JobFilter(
+                clusters={
+                    "test-cluster": {"testuser", "anotheruser"},
+                    "anothercluster": {"testuser", "thirduser"},
+                    "thirdcluster": {"testuser"},
+                },
+                owners={"testuser", "anotheruser", "thirduser"},
+            ),
+            shared_ids=set(),
+            shared_ids_filter=None,
+        )
+
+    def test_mixed_cluster_user_access(self) -> None:
+        query_filter = JobFilter()
+        tree = make_access_tree(
+            {
+                "test-cluster/testuser": "read",
+                "test-cluster/anotheruser": "read",
+                "anothercluster": "read",
+            }
+        )
+        bulk_filter = BulkJobFilterBuilder(query_filter, tree).build()
+        assert bulk_filter == BulkJobFilter(
+            bulk_filter=JobFilter(
+                clusters={
+                    "test-cluster": {"testuser", "anotheruser"},
+                    "anothercluster": set(),
+                },
+            ),
+            shared_ids=set(),
+            shared_ids_filter=None,
+        )
+
+    def test_mixed_access_no_owners(self) -> None:
+        query_filter = JobFilter()
+        tree = make_access_tree(
+            {
+                "test-cluster/testuser": "read",
+                "test-cluster/anotheruser/job-test-1": "read",
+                "test-cluster/anotheruser/job-test-2": "deny",
+                "test-cluster/someuser": "deny",
+            }
+        )
+        bulk_filter = BulkJobFilterBuilder(query_filter, tree).build()
+        assert bulk_filter == BulkJobFilter(
+            bulk_filter=JobFilter(
+                clusters={"test-cluster": set()}, owners={"testuser"}
+            ),
+            shared_ids={"job-test-1"},
+            shared_ids_filter=JobFilter(),
+        )
+
+    def test_mixed_access_owners_shared_all(self) -> None:
+        query_filter = JobFilter(owners={"testuser"})
+        tree = make_access_tree(
+            {
+                "test-cluster/testuser": "read",
+                "test-cluster/anotheruser/job-test-1": "read",
+                "test-cluster/anotheruser/job-test-2": "deny",
+                "test-cluster/someuser": "deny",
+            }
+        )
+        bulk_filter = BulkJobFilterBuilder(query_filter, tree).build()
+        assert bulk_filter == BulkJobFilter(
+            bulk_filter=JobFilter(
+                clusters={"test-cluster": set()}, owners={"testuser"}
+            ),
+            shared_ids=set(),
+            shared_ids_filter=None,
+        )
+
+    def test_mixed_access_shared_ids_only(self) -> None:
+        query_filter = JobFilter(owners={"anotheruser"})
+        tree = make_access_tree(
+            {
+                "test-cluster/testuser": "read",
+                "test-cluster/anotheruser/job-test-1": "read",
+                "test-cluster/anotheruser/job-test-2": "deny",
+                "test-cluster/someuser": "deny",
+            }
+        )
+        bulk_filter = BulkJobFilterBuilder(query_filter, tree).build()
+        assert bulk_filter == BulkJobFilter(
+            bulk_filter=None,
+            shared_ids={"job-test-1"},
+            shared_ids_filter=JobFilter(owners={"anotheruser"}),
+        )
+
+    def test_mixed_access_owners_shared_all_and_specific(self) -> None:
+        query_filter = JobFilter(
+            owners={"testuser", "anotheruser"},
+            statuses={JobStatus.PENDING},
+            name="testname",
+        )
+        tree = make_access_tree(
+            {
+                "test-cluster/testuser": "read",
+                "test-cluster/anotheruser/job-test-1": "read",
+                "test-cluster/anotheruser/job-test-2": "deny",
+                "test-cluster/someuser": "deny",
+            }
+        )
+        bulk_filter = BulkJobFilterBuilder(query_filter, tree).build()
+        assert bulk_filter == BulkJobFilter(
+            bulk_filter=JobFilter(
+                clusters={"test-cluster": set()},
+                owners={"testuser"},
+                statuses={JobStatus.PENDING},
+                name="testname",
+            ),
+            shared_ids={"job-test-1"},
+            shared_ids_filter=JobFilter(
+                owners={"testuser", "anotheruser"},
+                statuses={JobStatus.PENDING},
+                name="testname",
+            ),
+        )
+
+
+class TestBulkJobFilterBuilderLegacy:
+    def test_no_access(self) -> None:
+        query_filter = JobFilter()
+        tree = make_access_tree({})
+        with pytest.raises(JobFilterException, match="no jobs"):
+            BulkJobFilterBuilder(
+                query_filter, tree, use_cluster_names_in_uris=False
+            ).build()
+
+    def test_no_access_with_owners(self) -> None:
+        query_filter = JobFilter(owners={"someuser"})
+        tree = make_access_tree(
+            {
+                "testuser": "read",
+                "anotheruser/job-test-1": "read",
+                "anotheruser/job-test-2": "deny",
+                "someuser": "deny",
+            }
+        )
+        with pytest.raises(JobFilterException, match="no jobs"):
+            BulkJobFilterBuilder(
+                query_filter, tree, use_cluster_names_in_uris=False
+            ).build()
+
+    def test_full_access_no_owners(self) -> None:
+        query_filter = JobFilter()
+        tree = make_access_tree({"": "manage"})
+        bulk_filter = BulkJobFilterBuilder(
+            query_filter, tree, use_cluster_names_in_uris=False
+        ).build()
+        assert bulk_filter == BulkJobFilter(
+            bulk_filter=JobFilter(), shared_ids=set(), shared_ids_filter=None
+        )
+
+    def test_full_access_with_owners(self) -> None:
+        query_filter = JobFilter(owners={"testuser"})
+        tree = make_access_tree({"": "manage"})
+        bulk_filter = BulkJobFilterBuilder(
+            query_filter, tree, use_cluster_names_in_uris=False
+        ).build()
         assert bulk_filter == BulkJobFilter(
             bulk_filter=JobFilter(owners={"testuser"}),
             shared_ids=set(),
@@ -752,7 +1049,9 @@ class TestBulkJobFilterBuilder:
                 "someuser": "deny",
             }
         )
-        bulk_filter = BulkJobFilterBuilder(query_filter, tree).build()
+        bulk_filter = BulkJobFilterBuilder(
+            query_filter, tree, use_cluster_names_in_uris=False
+        ).build()
         assert bulk_filter == BulkJobFilter(
             bulk_filter=JobFilter(owners={"testuser"}),
             shared_ids={"job-test-1"},
@@ -769,7 +1068,9 @@ class TestBulkJobFilterBuilder:
                 "someuser": "deny",
             }
         )
-        bulk_filter = BulkJobFilterBuilder(query_filter, tree).build()
+        bulk_filter = BulkJobFilterBuilder(
+            query_filter, tree, use_cluster_names_in_uris=False
+        ).build()
         assert bulk_filter == BulkJobFilter(
             bulk_filter=JobFilter(owners={"testuser"}),
             shared_ids=set(),
@@ -786,7 +1087,9 @@ class TestBulkJobFilterBuilder:
                 "someuser": "deny",
             }
         )
-        bulk_filter = BulkJobFilterBuilder(query_filter, tree).build()
+        bulk_filter = BulkJobFilterBuilder(
+            query_filter, tree, use_cluster_names_in_uris=False
+        ).build()
         assert bulk_filter == BulkJobFilter(
             bulk_filter=None,
             shared_ids={"job-test-1"},
@@ -807,7 +1110,9 @@ class TestBulkJobFilterBuilder:
                 "someuser": "deny",
             }
         )
-        bulk_filter = BulkJobFilterBuilder(query_filter, tree).build()
+        bulk_filter = BulkJobFilterBuilder(
+            query_filter, tree, use_cluster_names_in_uris=False
+        ).build()
         assert bulk_filter == BulkJobFilter(
             bulk_filter=JobFilter(
                 owners={"testuser"}, statuses={JobStatus.PENDING}, name="testname"
@@ -825,13 +1130,17 @@ class TestInferPermissionsFromContainer:
     def test_no_volumes(self) -> None:
         user = User(name="testuser", token="")
         container = Container(
-            image="image", resources=ContainerResources(cpu=0.1, memory_mb=16)
+            image="image", resources=ContainerResources(cpu=0.1, memory_mb=16),
         )
         registry_config = RegistryConfig(
             url=URL("http://example.com"), username="compute", password="compute_token"
         )
-        permissions = infer_permissions_from_container(user, container, registry_config)
-        assert permissions == [Permission(uri="job://testuser", action="write")]
+        permissions = infer_permissions_from_container(
+            user, container, registry_config, "test-cluster"
+        )
+        assert permissions == [
+            Permission(uri="job://test-cluster/testuser", action="write")
+        ]
 
     def test_volumes(self) -> None:
         user = User(name="testuser", token="")
@@ -840,7 +1149,7 @@ class TestInferPermissionsFromContainer:
             resources=ContainerResources(cpu=0.1, memory_mb=16),
             volumes=[
                 ContainerVolume(
-                    uri=URL("storage://testuser/dataset"),
+                    uri=URL("storage://test-cluster/testuser/dataset"),
                     src_path=PurePath("/"),
                     dst_path=PurePath("/var/storage/testuser/dataset"),
                     read_only=True,
@@ -855,11 +1164,50 @@ class TestInferPermissionsFromContainer:
         registry_config = RegistryConfig(
             url=URL("http://example.com"), username="compute", password="compute_token"
         )
-        permissions = infer_permissions_from_container(user, container, registry_config)
+        permissions = infer_permissions_from_container(
+            user, container, registry_config, "test-cluster"
+        )
         assert permissions == [
-            Permission(uri="job://testuser", action="write"),
-            Permission(uri="storage://testuser/dataset", action="read"),
-            Permission(uri="storage://testuser/result", action="write"),
+            Permission(uri="job://test-cluster/testuser", action="write"),
+            Permission(uri="storage://test-cluster/testuser/dataset", action="read"),
+            Permission(uri="storage://test-cluster/testuser/result", action="write"),
+        ]
+
+    def test_volumes_no_host(self) -> None:
+        user = User(name="testuser", token="")
+        container = Container(
+            image="image",
+            resources=ContainerResources(cpu=0.1, memory_mb=16),
+            volumes=[
+                ContainerVolume(
+                    uri=URL("storage:"),
+                    src_path=PurePath("/"),
+                    dst_path=PurePath("/var/storage/root1"),
+                    read_only=True,
+                ),
+                ContainerVolume(
+                    uri=URL("storage:/"),
+                    src_path=PurePath("/"),
+                    dst_path=PurePath("/var/storage/root2"),
+                ),
+                ContainerVolume(
+                    uri=URL("storage:///path/to"),
+                    src_path=PurePath("/"),
+                    dst_path=PurePath("/var/storage/testuser/path/to"),
+                ),
+            ],
+        )
+        registry_config = RegistryConfig(
+            url=URL("http://example.com"), username="compute", password="compute_token"
+        )
+        permissions = infer_permissions_from_container(
+            user, container, registry_config, "test-cluster"
+        )
+        assert permissions == [
+            Permission(uri="job://test-cluster/testuser", action="write"),
+            Permission(uri="storage://test-cluster", action="read"),
+            Permission(uri="storage://test-cluster", action="write"),
+            Permission(uri="storage://test-cluster/path/to", action="write"),
         ]
 
     def test_image(self) -> None:
@@ -871,7 +1219,109 @@ class TestInferPermissionsFromContainer:
         registry_config = RegistryConfig(
             url=URL("http://example.com"), username="compute", password="compute_token"
         )
-        permissions = infer_permissions_from_container(user, container, registry_config)
+        permissions = infer_permissions_from_container(
+            user, container, registry_config, "test-cluster"
+        )
+        assert permissions == [
+            Permission(uri="job://test-cluster/testuser", action="write"),
+            Permission(uri="image://test-cluster/testuser/image", action="read"),
+        ]
+
+
+class TestInferPermissionsFromContainerLegacy:
+    def test_no_volumes(self) -> None:
+        user = User(name="testuser", token="")
+        container = Container(
+            image="image", resources=ContainerResources(cpu=0.1, memory_mb=16),
+        )
+        registry_config = RegistryConfig(
+            url=URL("http://example.com"), username="compute", password="compute_token"
+        )
+        permissions = infer_permissions_from_container(
+            user, container, registry_config, None
+        )
+        assert permissions == [Permission(uri="job://testuser", action="write")]
+
+    def test_volumes(self) -> None:
+        user = User(name="testuser", token="")
+        container = Container(
+            image="image",
+            resources=ContainerResources(cpu=0.1, memory_mb=16),
+            volumes=[
+                ContainerVolume(
+                    uri=URL("storage://test-cluster/testuser/dataset"),
+                    src_path=PurePath("/"),
+                    dst_path=PurePath("/var/storage/testuser/dataset"),
+                    read_only=True,
+                ),
+                ContainerVolume(
+                    uri=URL("storage://testuser/result"),
+                    src_path=PurePath("/"),
+                    dst_path=PurePath("/var/storage/testuser/result"),
+                ),
+            ],
+        )
+        registry_config = RegistryConfig(
+            url=URL("http://example.com"), username="compute", password="compute_token"
+        )
+        permissions = infer_permissions_from_container(
+            user, container, registry_config, None
+        )
+        assert permissions == [
+            Permission(uri="job://testuser", action="write"),
+            Permission(uri="storage://test-cluster/testuser/dataset", action="read"),
+            Permission(uri="storage://testuser/result", action="write"),
+        ]
+
+    def test_volumes_no_host(self) -> None:
+        user = User(name="testuser", token="")
+        container = Container(
+            image="image",
+            resources=ContainerResources(cpu=0.1, memory_mb=16),
+            volumes=[
+                ContainerVolume(
+                    uri=URL("storage:"),
+                    src_path=PurePath("/"),
+                    dst_path=PurePath("/var/storage/root1"),
+                    read_only=True,
+                ),
+                ContainerVolume(
+                    uri=URL("storage:/"),
+                    src_path=PurePath("/"),
+                    dst_path=PurePath("/var/storage/root2"),
+                ),
+                ContainerVolume(
+                    uri=URL("storage:///path/to"),
+                    src_path=PurePath("/"),
+                    dst_path=PurePath("/var/storage/testuser/path/to"),
+                ),
+            ],
+        )
+        registry_config = RegistryConfig(
+            url=URL("http://example.com"), username="compute", password="compute_token"
+        )
+        permissions = infer_permissions_from_container(
+            user, container, registry_config, None
+        )
+        assert permissions == [
+            Permission(uri="job://testuser", action="write"),
+            Permission(uri="storage:", action="read"),
+            Permission(uri="storage:/", action="write"),
+            Permission(uri="storage:/path/to", action="write"),
+        ]
+
+    def test_image(self) -> None:
+        user = User(name="testuser", token="")
+        container = Container(
+            image="example.com/testuser/image",
+            resources=ContainerResources(cpu=0.1, memory_mb=16),
+        )
+        registry_config = RegistryConfig(
+            url=URL("http://example.com"), username="compute", password="compute_token"
+        )
+        permissions = infer_permissions_from_container(
+            user, container, registry_config, None
+        )
         assert permissions == [
             Permission(uri="job://testuser", action="write"),
             Permission(uri="image://testuser/image", action="read"),
@@ -919,7 +1369,7 @@ async def test_job_to_job_response(mock_orchestrator: MockOrchestrator) -> None:
         "ssh_server": "ssh://nobody@ssh-auth:22",
         "ssh_auth_server": "ssh://nobody@ssh-auth:22",
         "is_preemptible": False,
-        "uri": f"job://compute/{job.id}",
+        "uri": f"job://test-cluster/compute/{job.id}",
     }
 
 
@@ -1013,7 +1463,7 @@ async def test_job_to_job_response_with_job_name_and_http_exposed(
         "ssh_server": "ssh://nobody@ssh-auth:22",
         "ssh_auth_server": "ssh://nobody@ssh-auth:22",
         "is_preemptible": False,
-        "uri": f"job://{owner_name}/{job.id}",
+        "uri": f"job://test-cluster/{owner_name}/{job.id}",
     }
 
 
@@ -1065,7 +1515,7 @@ async def test_job_to_job_response_with_job_name_and_http_exposed_too_long_name(
         "ssh_server": "ssh://nobody@ssh-auth:22",
         "ssh_auth_server": "ssh://nobody@ssh-auth:22",
         "is_preemptible": False,
-        "uri": f"job://{owner_name}/{job.id}",
+        "uri": f"job://test-cluster/{owner_name}/{job.id}",
     }
 
 

@@ -1,6 +1,7 @@
 import asyncio
 from dataclasses import dataclass
 from typing import (
+    Any,
     AsyncGenerator,
     AsyncIterator,
     Awaitable,
@@ -168,6 +169,34 @@ async def regular_user_factory(
             auth_clusters = [AuthCluster(name=cluster_name, quota=quota)]
         user = AuthClientUser(name=name, clusters=auth_clusters)
         await auth_client.add_user(user, token=admin_token)
+        # Revoke world-wide permissions
+        headers = auth_client._generate_headers(admin_token)
+        payload: Any = [
+            ("uri", f"storage://{name}"),
+            ("uri", f"image://{name}"),
+            ("uri", f"job://{name}"),
+        ]
+        async with auth_client._request(
+            "DELETE",
+            f"/api/v1/users/{name}/permissions",
+            headers=headers,
+            params=payload,
+        ) as p:
+            assert p.status == 204
+        # Grant cluster-specific permissions
+        payload = []
+        for cluster in auth_clusters:
+            payload.extend(
+                [
+                    {"uri": f"storage://{cluster.name}/{name}", "action": "manage"},
+                    {"uri": f"image://{cluster.name}/{name}", "action": "manage"},
+                    {"uri": f"job://{cluster.name}/{name}", "action": "manage"},
+                ]
+            )
+        async with auth_client._request(
+            "POST", f"/api/v1/users/{name}/permissions", headers=headers, json=payload,
+        ) as p:
+            assert p.status == 201
         user_token = token_factory(user.name)
         return _User.create_from_auth_user(user, token=user_token)  # type: ignore
 

@@ -26,6 +26,11 @@ from .conftest import MyKubeClient
 
 
 @pytest.fixture
+def cluster_name() -> str:
+    return "test-cluster"
+
+
+@pytest.fixture
 def cluster_configs_payload() -> List[Dict[str, Any]]:
     return [
         {
@@ -481,6 +486,7 @@ class TestJobs:
         client: aiohttp.ClientSession,
         jobs_client: JobsClient,
         regular_user: _User,
+        cluster_name: str,
     ) -> None:
         payload = {
             "container": {
@@ -489,7 +495,7 @@ class TestJobs:
                 "resources": {"cpu": 0.1, "memory_mb": 16},
                 "volumes": [
                     {
-                        "src_storage_uri": f"storage://",
+                        "src_storage_uri": "storage:",
                         "dst_path": "/var/storage",
                         "read_only": False,
                     }
@@ -503,7 +509,9 @@ class TestJobs:
         ) as response:
             assert response.status == HTTPForbidden.status_code, await response.text()
             data = await response.json()
-            assert data == {"missing": [{"action": "write", "uri": "storage:"}]}
+            assert data == {
+                "missing": [{"action": "write", "uri": f"storage://{cluster_name}"}]
+            }
 
     @pytest.mark.asyncio
     async def test_forbidden_image(
@@ -512,6 +520,7 @@ class TestJobs:
         client: aiohttp.ClientSession,
         jobs_client: JobsClient,
         regular_user: _User,
+        cluster_name: str,
     ) -> None:
         payload = {
             "container": {
@@ -528,7 +537,12 @@ class TestJobs:
             assert response.status == HTTPForbidden.status_code, await response.text()
             data = await response.json()
             assert data == {
-                "missing": [{"action": "read", "uri": "image://anotheruser/image"}]
+                "missing": [
+                    {
+                        "action": "read",
+                        "uri": f"image://{cluster_name}/anotheruser/image",
+                    }
+                ]
             }
 
     @pytest.mark.asyncio
@@ -1024,10 +1038,12 @@ class TestJobs:
 
     @pytest.fixture
     async def share_job(
-        self, auth_client: AuthClient
+        self, auth_client: AuthClient, cluster_name: str,
     ) -> AsyncIterator[Callable[[_User, _User, Any], Awaitable[None]]]:
         async def _impl(owner: _User, follower: _User, job_id: str) -> None:
-            permission = Permission(uri=f"job://{owner.name}/{job_id}", action="read")
+            permission = Permission(
+                uri=f"job://{cluster_name}/{owner.name}/{job_id}", action="read"
+            )
             await auth_client.grant_user_permissions(
                 follower.name, [permission], token=owner.token
             )
@@ -1368,6 +1384,7 @@ class TestJobs:
         job_request_factory: Callable[[], Dict[str, Any]],
         regular_user_factory: Callable[[], Any],
         auth_client: AuthClient,
+        cluster_name: str,
     ) -> None:
         owner = await regular_user_factory()
         follower = await regular_user_factory()
@@ -1393,7 +1410,9 @@ class TestJobs:
             result = await response.json()
             assert not result["jobs"]
 
-        permission = Permission(uri=f"job://{owner.name}/{job_id}", action="read")
+        permission = Permission(
+            uri=f"job://{cluster_name}/{owner.name}/{job_id}", action="read"
+        )
         await auth_client.grant_user_permissions(
             follower.name, [permission], token=owner.token
         )
@@ -1410,6 +1429,7 @@ class TestJobs:
         job_request_factory: Callable[[], Dict[str, Any]],
         regular_user_factory: Callable[[], Any],
         auth_client: AuthClient,
+        cluster_name: str,
     ) -> None:
         owner = await regular_user_factory()
         follower = await regular_user_factory()
@@ -1431,10 +1451,17 @@ class TestJobs:
             assert response.status == HTTPForbidden.status_code, await response.text()
             data = await response.json()
             assert data == {
-                "missing": [{"action": "read", "uri": f"job://{owner.name}/{job_id}"}]
+                "missing": [
+                    {
+                        "action": "read",
+                        "uri": f"job://{cluster_name}/{owner.name}/{job_id}",
+                    }
+                ]
             }
 
-        permission = Permission(uri=f"job://{owner.name}/{job_id}", action="read")
+        permission = Permission(
+            uri=f"job://{cluster_name}/{owner.name}/{job_id}", action="read"
+        )
         await auth_client.grant_user_permissions(
             follower.name, [permission], token=owner.token
         )
@@ -1857,6 +1884,7 @@ class TestJobs:
         job_submit: Dict[str, Any],
         run_job: Callable[..., Awaitable[str]],
         regular_user: _User,
+        cluster_name: str,
     ) -> None:
         job_id = await run_job(regular_user, job_submit, do_wait=False)
 
@@ -1866,7 +1894,9 @@ class TestJobs:
         async with client.put(url, headers=headers, json=payload) as response:
             assert response.status == HTTPForbidden.status_code, await response.text()
             result = await response.json()
-            assert result == {"missing": [{"uri": "job:", "action": "manage"}]}
+            assert result == {
+                "missing": [{"uri": f"job://{cluster_name}", "action": "manage"}]
+            }
 
     @pytest.mark.asyncio
     async def test_delete_job(
@@ -1902,6 +1932,7 @@ class TestJobs:
         jobs_client: JobsClient,
         regular_user_factory: Callable[..., Awaitable[_User]],
         regular_user: _User,
+        cluster_name: str,
     ) -> None:
         url = api.jobs_base_url
         async with client.post(
@@ -1918,7 +1949,10 @@ class TestJobs:
             result = await response.json()
             assert result == {
                 "missing": [
-                    {"action": "write", "uri": f"job://{regular_user.name}/{job_id}"}
+                    {
+                        "action": "write",
+                        "uri": f"job://{cluster_name}/{regular_user.name}/{job_id}",
+                    }
                 ]
             }
 
@@ -1958,7 +1992,7 @@ class TestJobs:
 
     @pytest.mark.asyncio
     async def test_create_validation_failure(
-        self, api: ApiConfig, client: aiohttp.ClientSession, regular_user: _User
+        self, api: ApiConfig, client: aiohttp.ClientSession, regular_user: _User,
     ) -> None:
         request_payload: Dict[str, Any] = {}
         async with client.post(
@@ -2029,7 +2063,7 @@ class TestJobs:
                 "ssh_server": "ssh://nobody@ssh-auth.platform.neuromation.io:22",
                 "ssh_auth_server": "ssh://nobody@ssh-auth.platform.neuromation.io:22",
                 "is_preemptible": True,
-                "uri": f"job://{regular_user.name}/{job_id}",
+                "uri": f"job://test-cluster/{regular_user.name}/{job_id}",
             }
 
         response_payload = await jobs_client.long_polling_by_job_id(
@@ -2068,7 +2102,7 @@ class TestJobs:
             "ssh_server": "ssh://nobody@ssh-auth.platform.neuromation.io:22",
             "ssh_auth_server": "ssh://nobody@ssh-auth.platform.neuromation.io:22",
             "is_preemptible": True,
-            "uri": f"job://{regular_user.name}/{job_id}",
+            "uri": f"job://test-cluster/{regular_user.name}/{job_id}",
         }
 
     @pytest.mark.asyncio
@@ -2149,7 +2183,7 @@ class TestJobs:
             "ssh_server": "ssh://nobody@ssh-auth.platform.neuromation.io:22",
             "ssh_auth_server": "ssh://nobody@ssh-auth.platform.neuromation.io:22",
             "is_preemptible": False,
-            "uri": f"job://{regular_user.name}/{job_id}",
+            "uri": f"job://test-cluster/{regular_user.name}/{job_id}",
         }
 
     @pytest.mark.asyncio
@@ -2240,7 +2274,7 @@ class TestJobs:
                 "ssh_server": "ssh://nobody@ssh-auth.platform.neuromation.io:22",
                 "ssh_auth_server": "ssh://nobody@ssh-auth.platform.neuromation.io:22",
                 "is_preemptible": False,
-                "uri": f"job://{regular_user.name}/{job_id}",
+                "uri": f"job://test-cluster/{regular_user.name}/{job_id}",
             }
 
     @pytest.mark.asyncio
@@ -2325,7 +2359,7 @@ class TestJobs:
                 "ssh_server": "ssh://nobody@ssh-auth.platform.neuromation.io:22",
                 "ssh_auth_server": "ssh://nobody@ssh-auth.platform.neuromation.io:22",
                 "is_preemptible": False,
-                "uri": f"job://{regular_user.name}/{job_id}",
+                "uri": f"job://test-cluster/{regular_user.name}/{job_id}",
             }
 
 

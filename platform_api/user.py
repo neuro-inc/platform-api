@@ -58,8 +58,11 @@ class User:
                 return cluster
         return None
 
-    def to_job_uri(self) -> URL:
-        return URL(f"job://{self.name}")
+    def to_job_uri(self, cluster_name: Optional[str]) -> URL:
+        if cluster_name:
+            return URL(f"job://{cluster_name}/{self.name}")
+        else:
+            return URL(f"job://{self.name}")
 
     @classmethod
     def create_from_auth_user(cls, auth_user: AuthUser, *, token: str = "") -> "User":

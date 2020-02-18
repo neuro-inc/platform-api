@@ -59,6 +59,9 @@ class EnvironConfigFactory:
             notifications=self.create_notifications(),
             cors=self.create_cors(),
             admin_url=admin_url,
+            use_cluster_names_in_uris=self._get_bool(
+                "NP_USE_CLUSTER_NAMES_IN_URIS", Config.use_cluster_names_in_uris
+            ),
         )
 
     def create_cluster(self, name: str) -> ClusterConfig:

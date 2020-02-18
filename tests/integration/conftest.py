@@ -530,6 +530,7 @@ def config_factory(
     jobs_config: JobsConfig,
     notifications_config: NotificationsConfig,
     token_factory: Callable[[str], str],
+    use_cluster_names_in_uris: bool = True,
 ) -> Callable[..., Config]:
     def _factory(**kwargs: Any) -> Config:
         server_config = ServerConfig()
@@ -552,6 +553,7 @@ def config_factory(
             config_client=config_client,
             cors=CORSConfig(allowed_origins=["https://neu.ro"]),
             admin_url=admin_url,
+            use_cluster_names_in_uris=use_cluster_names_in_uris,
             **kwargs,
         )
 

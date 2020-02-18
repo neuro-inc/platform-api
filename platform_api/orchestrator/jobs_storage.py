@@ -54,7 +54,9 @@ class JobFilter:
     statuses: AbstractSet[JobStatus] = field(
         default_factory=cast(Type[Set[JobStatus]], set)
     )
-    clusters: AbstractSet[str] = field(default_factory=cast(Type[Set[str]], set))
+    clusters: Dict[str, AbstractSet[str]] = field(
+        default_factory=cast(Type[Dict[str, AbstractSet[str]]], dict)
+    )
     owners: AbstractSet[str] = field(default_factory=cast(Type[Set[str]], set))
     name: Optional[str] = None
     ids: AbstractSet[str] = field(default_factory=cast(Type[Set[str]], set))
@@ -62,10 +64,12 @@ class JobFilter:
     def check(self, job: JobRecord) -> bool:
         if self.statuses and job.status not in self.statuses:
             return False
-        if self.clusters and job.cluster_name not in self.clusters:
-            return False
         if self.owners and job.owner not in self.owners:
             return False
+        if self.clusters:
+            owners = self.clusters.get(job.cluster_name)
+            if owners is None or (owners and job.owner not in owners):
+                return False
         if self.name and self.name != job.name:
             return False
         if self.ids and job.id not in self.ids:
@@ -453,22 +457,19 @@ class RedisJobsStorage(JobsStorage):
     async def _get_job_ids(
         self,
         *,
-        statuses: AbstractSet[JobStatus],
-        clusters: AbstractSet[str],
-        owners: AbstractSet[str],
+        statuses: Iterable[JobStatus],
+        clusters: Iterable[str],
+        owners: Iterable[str],
         name: Optional[str] = None,
     ) -> List[str]:
-        if name and not owners:
-            raise JobsStorageException(
-                "filtering jobs by name is allowed only together with owners"
-            )
-
-        status_keys = [self._generate_jobs_status_index_key(s) for s in statuses]
-
         if name:
             owner_keys = [
                 self._generate_jobs_name_index_zset_key(owner, name) for owner in owners
             ]
+            if not owner_keys:
+                raise JobsStorageException(
+                    "filtering jobs by name is allowed only together with owners"
+                )
         else:
             owner_keys = [
                 self._generate_jobs_owner_index_key(owner) for owner in owners
@@ -476,6 +477,7 @@ class RedisJobsStorage(JobsStorage):
         cluster_keys = [
             self._generate_jobs_cluster_index_key(cluster) for cluster in clusters
         ]
+        status_keys = [self._generate_jobs_status_index_key(s) for s in statuses]
 
         temp_key = self._generate_temp_zset_key()
         tr = self._client.multi_exec()
@@ -540,7 +542,10 @@ class RedisJobsStorage(JobsStorage):
             owners=job_filter.owners,
             name=job_filter.name,
         )
-        return await self._get_jobs(job_ids)
+        jobs = await self._get_jobs(job_ids)
+        if any(job_filter.clusters.values()):
+            jobs = [job for job in jobs if job_filter.check(job)]
+        return jobs
 
     async def get_jobs_by_ids(
         self, job_ids: Iterable[str], job_filter: Optional[JobFilter] = None
@@ -578,6 +583,8 @@ class RedisJobsStorage(JobsStorage):
                 self._parse_job_payload(payload)
                 for payload in await self._client.mget(*keys)
             ]
+            if any(job_filter.clusters.values()):
+                jobs = [job for job in jobs if job_filter.check(job)]
             for job in jobs:
                 gpu_run_time, non_gpu_run_time = aggregated_run_times.get(
                     job.cluster_name, zero_run_time

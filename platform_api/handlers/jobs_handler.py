@@ -2,14 +2,14 @@ import json
 import logging
 from dataclasses import dataclass, replace
 from pathlib import PurePath
-from typing import Any, Dict, List, Optional, Sequence, Set
+from typing import AbstractSet, Any, Dict, List, Optional, Sequence, Set
 
 import aiohttp.web
 import trafaret as t
 from aiohttp_security import check_authorized
 from multidict import MultiDictProxy
 from neuro_auth_client import AuthClient, Permission, check_permissions
-from neuro_auth_client.client import ClientSubTreeViewRoot
+from neuro_auth_client.client import ClientAccessSubTreeView, ClientSubTreeViewRoot
 from yarl import URL
 
 from platform_api.cluster_config import ClusterConfig, RegistryConfig, StorageConfig
@@ -176,7 +176,9 @@ def convert_container_volume_to_json(
     }
 
 
-def convert_job_to_job_response(job: Job) -> Dict[str, Any]:
+def convert_job_to_job_response(
+    job: Job, use_cluster_names_in_uris: bool = True
+) -> Dict[str, Any]:
     assert (
         job.cluster_name
     ), "empty cluster name must be already replaced with `default`"
@@ -200,7 +202,7 @@ def convert_job_to_job_response(job: Job) -> Dict[str, Any]:
         "ssh_server": job.ssh_server,
         "ssh_auth_server": job.ssh_server,  # deprecated
         "is_preemptible": job.is_preemptible,
-        "uri": str(job.to_uri()),
+        "uri": str(job.to_uri(use_cluster_names_in_uris)),
     }
     if job.name:
         response_payload["name"] = job.name
@@ -230,16 +232,35 @@ def convert_job_to_job_response(job: Job) -> Dict[str, Any]:
 
 
 def infer_permissions_from_container(
-    user: User, container: Container, registry_config: RegistryConfig
+    user: User,
+    container: Container,
+    registry_config: RegistryConfig,
+    cluster_name: Optional[str],
 ) -> List[Permission]:
-    permissions = [Permission(uri=str(user.to_job_uri()), action="write")]
+    permissions = [Permission(uri=str(user.to_job_uri(cluster_name)), action="write")]
     if container.belongs_to_registry(registry_config):
         permissions.append(
-            Permission(uri=str(container.to_image_uri(registry_config)), action="read")
+            Permission(
+                uri=str(container.to_image_uri(registry_config, cluster_name)),
+                action="read",
+            )
         )
     for volume in container.volumes:
         action = "read" if volume.read_only else "write"
-        permission = Permission(uri=str(volume.uri), action=action)
+        uri = volume.uri
+        # XXX (serhiy 04-Feb-2020) Temporary patch the URI
+        if cluster_name:
+            if uri.scheme == "storage" and uri.host != cluster_name:
+                if uri.host:
+                    assert uri.path[0] == "/"
+                    uri = uri.with_path(f"/{uri.host}{uri.path}")
+                    uri = uri.with_host(cluster_name)
+                elif uri.path != "/":
+                    assert uri.path == "" or uri.path[0] == "/"
+                    uri = URL(f"{uri.scheme}://{cluster_name}{uri.path}")
+                else:
+                    uri = URL(f"{uri.scheme}://{cluster_name}")
+        permission = Permission(uri=str(uri), action=action)
         permissions.append(permission)
     return permissions
 
@@ -338,7 +359,10 @@ class JobsHandler:
         ).build()
 
         permissions = infer_permissions_from_container(
-            user, container, cluster_config.registry
+            user,
+            container,
+            cluster_config.registry,
+            cluster_name if self._config.use_cluster_names_in_uris else None,
         )
         await check_permissions(request, permissions)
 
@@ -357,7 +381,9 @@ class JobsHandler:
             schedule_timeout=schedule_timeout,
             max_run_time_minutes=max_run_time_minutes,
         )
-        response_payload = convert_job_to_job_response(job)
+        response_payload = convert_job_to_job_response(
+            job, self._config.use_cluster_names_in_uris
+        )
         self._job_response_validator.check(response_payload)
         return aiohttp.web.json_response(
             data=response_payload, status=aiohttp.web.HTTPAccepted.status_code
@@ -367,10 +393,14 @@ class JobsHandler:
         job_id = request.match_info["job_id"]
         job = await self._jobs_service.get_job(job_id)
 
-        permission = Permission(uri=str(job.to_uri()), action="read")
+        permission = Permission(
+            uri=str(job.to_uri(self._config.use_cluster_names_in_uris)), action="read"
+        )
         await check_permissions(request, [permission])
 
-        response_payload = convert_job_to_job_response(job)
+        response_payload = convert_job_to_job_response(
+            job, self._config.use_cluster_names_in_uris
+        )
         self._job_response_validator.check(response_payload)
         return aiohttp.web.json_response(
             data=response_payload, status=aiohttp.web.HTTPOk.status_code
@@ -393,6 +423,7 @@ class JobsHandler:
             bulk_job_filter = BulkJobFilterBuilder(
                 query_filter=self._job_filter_factory.create_from_query(request.query),
                 access_tree=tree,
+                use_cluster_names_in_uris=self._config.use_cluster_names_in_uris,
             ).build()
 
             if bulk_job_filter.bulk_filter:
@@ -418,7 +449,14 @@ class JobsHandler:
         except JobFilterException:
             pass
 
-        response_payload = {"jobs": [convert_job_to_job_response(job) for job in jobs]}
+        response_payload = {
+            "jobs": [
+                convert_job_to_job_response(
+                    job, self._config.use_cluster_names_in_uris,
+                )
+                for job in jobs
+            ]
+        }
         self._bulk_jobs_response_validator.check(response_payload)
         return aiohttp.web.json_response(
             data=response_payload, status=aiohttp.web.HTTPOk.status_code
@@ -430,7 +468,9 @@ class JobsHandler:
         job_id = request.match_info["job_id"]
         job = await self._jobs_service.get_job(job_id)
 
-        permission = Permission(uri=str(job.to_uri()), action="write")
+        permission = Permission(
+            uri=str(job.to_uri(self._config.use_cluster_names_in_uris)), action="write"
+        )
         await check_permissions(request, [permission])
 
         await self._jobs_service.delete_job(job_id)
@@ -440,8 +480,12 @@ class JobsHandler:
         self, request: aiohttp.web.Request
     ) -> aiohttp.web.StreamResponse:
         job_id = request.match_info["job_id"]
+        job = await self._jobs_service.get_job(job_id)
 
-        permission = Permission(uri="job:", action="manage")
+        if self._config.use_cluster_names_in_uris and job.cluster_name:
+            permission = Permission(uri=f"job://{job.cluster_name}", action="manage")
+        else:
+            permission = Permission(uri="job:", action="manage")
         await check_permissions(request, [permission])
 
         orig_payload = await request.json()
@@ -484,8 +528,8 @@ class JobFilterFactory:
                 self._user_name_validator.check(owner)
                 for owner in query.getall("owner", [])
             }
-            clusters = {
-                self._cluster_name_validator.check(cluster_name)
+            clusters: Dict[Any, AbstractSet[Any]] = {
+                self._cluster_name_validator.check(cluster_name): set()
                 for cluster_name in query.getall("cluster_name", [])
             }
             return JobFilter(
@@ -514,12 +558,18 @@ class BulkJobFilter:
 
 class BulkJobFilterBuilder:
     def __init__(
-        self, query_filter: JobFilter, access_tree: ClientSubTreeViewRoot
+        self,
+        query_filter: JobFilter,
+        access_tree: ClientSubTreeViewRoot,
+        use_cluster_names_in_uris: bool = True,
     ) -> None:
         self._query_filter = query_filter
         self._access_tree = access_tree
+        self._use_cluster_names_in_uris = use_cluster_names_in_uris
 
         self._has_access_to_all: bool = False
+        self._has_clusters_shared_all: bool = False
+        self._clusters_shared_any: Dict[str, Set[str]] = {}
         self._owners_shared_all: Set[str] = set()
         self._shared_ids: Set[str] = set()
 
@@ -534,21 +584,54 @@ class BulkJobFilterBuilder:
         )
 
     def _traverse_access_tree(self) -> None:
-        tree = self._access_tree
+        tree = self._access_tree.sub_tree
 
-        owners_shared_all: Set[str] = set()
-        shared_ids: Set[str] = set()
-
-        if not tree.sub_tree.can_list():
+        if not tree.can_list():
             # no job resources whatsoever
             raise JobFilterException("no jobs")
 
-        if tree.sub_tree.can_read():
+        if tree.can_read():
             # read access to all jobs = job:
             self._has_access_to_all = True
             return
 
-        for owner, sub_tree in tree.sub_tree.children.items():
+        if self._use_cluster_names_in_uris:
+            self._traverse_clusters(tree)
+        else:
+            self._traverse_owners(tree, "")
+
+        if (
+            not self._clusters_shared_any
+            and not self._owners_shared_all
+            and not self._shared_ids
+        ):
+            # no job resources whatsoever
+            raise JobFilterException("no jobs")
+
+    def _traverse_clusters(self, tree: ClientAccessSubTreeView) -> None:
+        for cluster_name, sub_tree in tree.children.items():
+            if not sub_tree.can_list():
+                continue
+
+            if (
+                self._query_filter.clusters
+                and cluster_name not in self._query_filter.clusters
+            ):
+                # skipping clusters
+                continue
+
+            if sub_tree.can_read():
+                # read/write/manage access to all jobs on the cluster =
+                # job://cluster
+                self._has_clusters_shared_all = True
+                self._clusters_shared_any[cluster_name] = set()
+            else:
+                self._traverse_owners(sub_tree, cluster_name)
+
+    def _traverse_owners(
+        self, tree: ClientAccessSubTreeView, cluster_name: str
+    ) -> None:
+        for owner, sub_tree in tree.children.items():
             if not sub_tree.can_list():
                 continue
 
@@ -556,30 +639,49 @@ class BulkJobFilterBuilder:
                 # skipping owners
                 continue
 
-            if not sub_tree.can_read():
-                # specific ids
-                shared_ids.update(
-                    job_id
-                    for job_id, job_sub_tree in sub_tree.children.items()
-                    if job_sub_tree.can_read()
-                )
+            if sub_tree.can_read():
+                # read/write/manage access to all owner's jobs =
+                # job://cluster/owner
+                self._owners_shared_all.add(owner)
+                if cluster_name:
+                    if cluster_name not in self._clusters_shared_any:
+                        self._clusters_shared_any[cluster_name] = set()
+                    self._clusters_shared_any[cluster_name].add(owner)
             else:
-                # read/write/manage access to all owner's jobs = job://owner
-                owners_shared_all.add(owner)
+                # specific ids
+                self._traverse_jobs(sub_tree)
 
-        if not owners_shared_all and not shared_ids:
-            # no job resources whatsoever
-            raise JobFilterException("no jobs")
-
-        self._owners_shared_all = owners_shared_all
-        self._shared_ids = shared_ids
+    def _traverse_jobs(self, tree: ClientAccessSubTreeView) -> None:
+        self._shared_ids.update(
+            job_id for job_id, sub_tree in tree.children.items() if sub_tree.can_read()
+        )
 
     def _create_bulk_filter(self) -> Optional[JobFilter]:
-        if not self._has_access_to_all and not self._owners_shared_all:
+        if not (
+            self._has_access_to_all
+            or self._clusters_shared_any
+            or self._owners_shared_all
+        ):
             return None
+        bulk_filter = self._query_filter
         # `self._owners_shared_all` is already filtered against
         # `self._query_filter.owners`.
-        # if `self._owners_shared_all` is empty, we still want to try to limit
-        # the scope to the owners passed in the query, otherwise pull all.
-        owners = set(self._owners_shared_all or self._query_filter.owners)
-        return replace(self._query_filter, owners=owners)
+        # if `self._owners_shared_all` is empty and no clusters share full
+        # access, we still want to try to limit the scope to the owners
+        # passed in the query, otherwise pull all.
+        if not self._has_clusters_shared_all and self._owners_shared_all:
+            bulk_filter = replace(bulk_filter, owners=self._owners_shared_all)
+        # `self._clusters_shared_any` is already filtered against
+        # `self._query_filter.clusters`.
+        # if `self._clusters_shared_any` is empty, we still want to try to limit
+        # the scope to the clusters passed in the query, otherwise pull all.
+        if not self._has_access_to_all:
+            self._optimize_clusters_owners(bulk_filter.owners)
+            bulk_filter = replace(bulk_filter, clusters=self._clusters_shared_any)
+        return bulk_filter
+
+    def _optimize_clusters_owners(self, owners: AbstractSet[str]) -> None:
+        if owners:
+            for cluster_owners in self._clusters_shared_any.values():
+                if cluster_owners == owners:
+                    cluster_owners.clear()
