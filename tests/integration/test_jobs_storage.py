@@ -30,7 +30,7 @@ from tests.conftest import not_raises, random_str
 
 class TestRedisJobsStorage:
     def _create_job_request(
-        self, with_gpu: bool = False, labels: Optional[List[str]] = None
+        self, with_gpu: bool = False, tags: Optional[List[str]] = None
     ) -> JobRequest:
         if with_gpu:
             resources = ContainerResources(
@@ -39,16 +39,16 @@ class TestRedisJobsStorage:
         else:
             resources = ContainerResources(cpu=0.1, memory_mb=256)
         container = Container(image="ubuntu", command="sleep 5", resources=resources)
-        return JobRequest.create(container, labels=labels)
+        return JobRequest.create(container, tags=tags)
 
     def _create_job(
         self,
         cluster_name: str = "test-cluster",
-        labels: Optional[List[str]] = None,
+        tags: Optional[List[str]] = None,
         **kwargs: Any,
     ) -> JobRecord:
         return JobRecord.create(
-            request=self._create_job_request(labels=labels),
+            request=self._create_job_request(tags=tags),
             cluster_name=cluster_name,
             **kwargs,
         )
@@ -330,19 +330,19 @@ class TestRedisJobsStorage:
         assert job.status == JobStatus.PENDING
 
     @pytest.mark.asyncio
-    async def test_try_create_job__with_labels(
+    async def test_try_create_job__with_tags(
         self, redis_client: aioredis.Redis
     ) -> None:
         storage = RedisJobsStorage(redis_client)
 
-        labels = ["label1", "label2"]
-        job = self._create_job(labels=labels)
+        tags = ["tag1", "tag2"]
+        job = self._create_job(tags=tags)
         async with storage.try_create_job(job) as job:
             assert job.id == job.id
-            assert job.request.labels == labels
+            assert job.request.tags == tags
 
         result_job = await storage.get_job(job.id)
-        assert result_job.request.labels == labels
+        assert result_job.request.tags == tags
 
     @pytest.mark.asyncio
     async def test_get_non_existent(self, redis_client: aioredis.Redis) -> None:
@@ -423,13 +423,13 @@ class TestRedisJobsStorage:
         assert job_ids == {succeeded_job.id, running_job.id}
 
     @pytest.mark.asyncio
-    async def test_get_all_filter_by_labels(self, redis_client: aioredis.Redis) -> None:
-        labels1 = ["l1"]
-        labels2 = ["l1", "l2"]
-        labels3 = ["l3"]
-        job1 = self._create_job(labels=labels1)
-        job2 = self._create_job(labels=labels2)
-        job3 = self._create_job(labels=labels3)
+    async def test_get_all_filter_by_tags(self, redis_client: aioredis.Redis) -> None:
+        tags1 = ["t1"]
+        tags2 = ["t1", "t2"]
+        tags3 = ["t3"]
+        job1 = self._create_job(tags=tags1)
+        job2 = self._create_job(tags=tags2)
+        job3 = self._create_job(tags=tags3)
 
         storage = RedisJobsStorage(client=redis_client)
         await storage.set_job(job1)
@@ -440,12 +440,17 @@ class TestRedisJobsStorage:
         job_ids = {job.id for job in jobs}
         assert job_ids == {job1.id, job2.id, job3.id}
 
-        filters = JobFilter(labels={"l1"})
+        filters = JobFilter(tags={"t1"})
         jobs = await storage.get_all_jobs(filters)
         job_ids = {job.id for job in jobs}
         assert job_ids == {job1.id, job2.id}
 
-        filters = JobFilter(labels={"l3"})
+        filters = JobFilter(tags={"t1", "t2"})
+        jobs = await storage.get_all_jobs(filters)
+        job_ids = {job.id for job in jobs}
+        assert job_ids == {job2.id}
+
+        filters = JobFilter(tags={"t3"})
         jobs = await storage.get_all_jobs(filters)
         job_ids = {job.id for job in jobs}
         assert job_ids == {job3.id}

@@ -58,7 +58,7 @@ class JobFilter:
         default_factory=cast(Type[Dict[str, AbstractSet[str]]], dict)
     )
     owners: AbstractSet[str] = field(default_factory=cast(Type[Set[str]], set))
-    labels: AbstractSet[str] = field(default_factory=cast(Type[Set[str]], set))
+    tags: AbstractSet[str] = field(default_factory=cast(Type[Set[str]], set))
     name: Optional[str] = None
     ids: AbstractSet[str] = field(default_factory=cast(Type[Set[str]], set))
 
@@ -75,8 +75,9 @@ class JobFilter:
             return False
         if self.ids and job.id not in self.ids:
             return False
-        if self.labels:
-            if set(job.request.labels or []) < self.labels:
+        if self.tags:
+            job_tags = job.request.tags or []
+            if set(job_tags) < self.tags:
                 return False
         return True
 
@@ -275,8 +276,8 @@ class RedisJobsStorage(JobsStorage):
     def _generate_jobs_deleted_index_key(self) -> str:
         return "jobs.deleted"
 
-    def _generate_jobs_labels_index_key(self, label: str) -> str:
-        return f"jobs.labels.{label}"
+    def _generate_jobs_tags_index_key(self, tag: str) -> str:
+        return f"jobs.tags.{tag}"
 
     def _generate_jobs_index_key(self) -> str:
         return "jobs"
@@ -414,9 +415,9 @@ class RedisJobsStorage(JobsStorage):
                 self._update_cluster_index(tr, job)
             if job.name:
                 self._update_name_index(tr, job)
-            if job.request.labels:
-                for label in job.request.labels:
-                    tr.sadd(self._generate_jobs_labels_index_key(label), job.id)
+            if job.request.tags:
+                for tag in job.request.tags:
+                    tr.sadd(self._generate_jobs_tags_index_key(tag), job.id)
 
         if job.is_deleted:
             tr.sadd(self._generate_jobs_deleted_index_key(), job.id)
@@ -467,7 +468,7 @@ class RedisJobsStorage(JobsStorage):
         statuses: Iterable[JobStatus],
         clusters: Iterable[str],
         owners: Iterable[str],
-        labels: Iterable[str],
+        tags: Iterable[str],
         name: Optional[str] = None,
     ) -> List[str]:
         if name:
@@ -486,13 +487,12 @@ class RedisJobsStorage(JobsStorage):
             self._generate_jobs_cluster_index_key(cluster) for cluster in clusters
         ]
         status_keys = [self._generate_jobs_status_index_key(s) for s in statuses]
-
-        labels_keys = [self._generate_jobs_labels_index_key(key) for key in labels]
+        tags_keys = [self._generate_jobs_tags_index_key(t) for t in tags]
 
         target = self._generate_temp_zset_key()
         tr = self._client.multi_exec()
 
-        index_keys = owner_keys or cluster_keys or labels_keys
+        index_keys = owner_keys or cluster_keys or tags_keys
         if index_keys:
             tr.zunionstore(target, *index_keys, aggregate=tr.ZSET_AGGREGATE_MAX)
             if owner_keys and cluster_keys:
@@ -500,8 +500,8 @@ class RedisJobsStorage(JobsStorage):
                 self._intersect_keys(tr, target, cluster_keys)
             if status_keys:
                 self._intersect_keys(tr, target, cluster_keys)
-            if labels_keys:
-                self._intersect_keys(tr, target, labels_keys)
+            if tags_keys:
+                self._intersect_keys(tr, target, tags_keys)
             tr.zrange(target)
         else:
             status_keys = status_keys or [self._generate_jobs_index_key()]
@@ -543,7 +543,7 @@ class RedisJobsStorage(JobsStorage):
             statuses=job_filter.statuses,
             clusters=job_filter.clusters,
             owners=job_filter.owners,
-            labels=job_filter.labels,
+            tags=job_filter.tags,
             name=job_filter.name,
         )
         jobs = await self._get_jobs(job_ids)
@@ -577,7 +577,7 @@ class RedisJobsStorage(JobsStorage):
             clusters=job_filter.clusters,
             owners=job_filter.owners,
             name=job_filter.name,
-            labels=job_filter.labels,
+            tags=job_filter.tags,
         )
 
         zero_run_time = (timedelta(), timedelta())

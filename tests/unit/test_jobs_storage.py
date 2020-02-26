@@ -211,24 +211,22 @@ class TestInMemoryJobsStorage:
 
 
 class TestJobFilter:
-    def _create_job_request(self, labels: Optional[List[str]] = None) -> JobRequest:
+    def _create_job_request(self, tags: Optional[List[str]] = None) -> JobRequest:
         return JobRequest.create(
             Container(
                 image="testimage", resources=ContainerResources(cpu=1, memory_mb=128)
             ),
-            labels=labels,
+            tags=tags,
         )
 
     def _create_job(
         self,
         cluster_name: str = "test-cluster",
-        labels: Optional[List[str]] = None,
+        tags: Optional[List[str]] = None,
         **kwargs: Any
     ) -> JobRecord:
         return JobRecord.create(
-            request=self._create_job_request(labels),
-            cluster_name=cluster_name,
-            **kwargs
+            request=self._create_job_request(tags), cluster_name=cluster_name, **kwargs
         )
 
     def test_check_empty_filter(self) -> None:
@@ -239,42 +237,40 @@ class TestJobFilter:
         job = self._create_job(owner="testuser", status=JobStatus.PENDING)
         assert not JobFilter(statuses={JobStatus.RUNNING}).check(job)
 
-    def test_check_labels_job_zero_filter_zero(self) -> None:
+    def test_check_tags_job_zero_filter_zero(self) -> None:
         job = self._create_job(owner="testuser", status=JobStatus.PENDING)
         filt = JobFilter()
         assert filt.check(job)
 
-    def test_check_labels_job_all_fileter_all(self) -> None:
+    def test_check_tags_job_all_fileter_all(self) -> None:
         job = self._create_job(
-            owner="testuser", status=JobStatus.PENDING, labels=["l1", "l2", "l3"]
+            owner="testuser", status=JobStatus.PENDING, tags=["t1", "t2", "t3"]
         )
-        filt = JobFilter(labels={"l1", "l2", "l3"})
+        filt = JobFilter(tags={"t1", "t2", "t3"})
         assert filt.check(job)
 
-    def test_check_labels_job_zero_filter_all(self) -> None:
+    def test_check_tags_job_zero_filter_all(self) -> None:
         job = self._create_job(owner="testuser", status=JobStatus.PENDING)
-        filt = JobFilter(labels={"l1", "l2", "l3"})
+        filt = JobFilter(tags={"t1", "t2", "t3"})
         assert not filt.check(job)
 
-    def test_check_labels_job_all_filter_zero(self) -> None:
+    def test_check_tags_job_all_filter_zero(self) -> None:
         job = self._create_job(
-            owner="testuser", status=JobStatus.PENDING, labels=["l1", "l2", "l3"]
+            owner="testuser", status=JobStatus.PENDING, tags=["t1", "t2", "t3"]
         )
         filt = JobFilter()
         assert filt.check(job)
 
-    def test_check_labels_job_less_filter_more(self) -> None:
-        job = self._create_job(
-            owner="testuser", status=JobStatus.PENDING, labels=["l1"]
-        )
-        filt = JobFilter(labels={"l1", "l2", "l3"})
+    def test_check_tags_job_less_filter_more(self) -> None:
+        job = self._create_job(owner="testuser", status=JobStatus.PENDING, tags=["t1"])
+        filt = JobFilter(tags={"t1", "t2", "t3"})
         assert not filt.check(job)
 
-    def test_check_labels_job_more_filter_less(self) -> None:
+    def test_check_tags_job_more_filter_less(self) -> None:
         job = self._create_job(
-            owner="testuser", status=JobStatus.PENDING, labels=["l1", "l2", "l3"]
+            owner="testuser", status=JobStatus.PENDING, tags=["t1", "t2", "t3"]
         )
-        filt = JobFilter(labels={"l1"})
+        filt = JobFilter(tags={"t1"})
         assert filt.check(job)
 
     def test_check_owners(self) -> None:
