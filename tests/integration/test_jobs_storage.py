@@ -29,7 +29,9 @@ from tests.conftest import not_raises, random_str
 
 
 class TestRedisJobsStorage:
-    def _create_job_request(self, with_gpu: bool = False) -> JobRequest:
+    def _create_job_request(
+        self, with_gpu: bool = False, labels: Optional[List[str]] = None
+    ) -> JobRequest:
         if with_gpu:
             resources = ContainerResources(
                 cpu=0.1, memory_mb=256, gpu=1, gpu_model_id="nvidia-tesla-k80"
@@ -37,13 +39,18 @@ class TestRedisJobsStorage:
         else:
             resources = ContainerResources(cpu=0.1, memory_mb=256)
         container = Container(image="ubuntu", command="sleep 5", resources=resources)
-        return JobRequest.create(container)
+        return JobRequest.create(container, labels=labels)
 
     def _create_job(
-        self, cluster_name: str = "test-cluster", **kwargs: Any
+        self,
+        cluster_name: str = "test-cluster",
+        labels: Optional[List[str]] = None,
+        **kwargs: Any,
     ) -> JobRecord:
         return JobRecord.create(
-            request=self._create_job_request(), cluster_name=cluster_name, **kwargs
+            request=self._create_job_request(labels=labels),
+            cluster_name=cluster_name,
+            **kwargs,
         )
 
     def _create_pending_job(
@@ -323,6 +330,21 @@ class TestRedisJobsStorage:
         assert job.status == JobStatus.PENDING
 
     @pytest.mark.asyncio
+    async def test_try_create_job__with_labels(
+        self, redis_client: aioredis.Redis
+    ) -> None:
+        storage = RedisJobsStorage(redis_client)
+
+        labels = ["label1", "label2"]
+        job = self._create_job(labels=labels)
+        async with storage.try_create_job(job) as job:
+            assert job.id == job.id
+            assert job.request.labels == labels
+
+        result_job = await storage.get_job(job.id)
+        assert result_job.request.labels == labels
+
+    @pytest.mark.asyncio
     async def test_get_non_existent(self, redis_client: aioredis.Redis) -> None:
         storage = RedisJobsStorage(redis_client)
         with pytest.raises(JobError, match="no such job unknown"):
@@ -399,6 +421,34 @@ class TestRedisJobsStorage:
         jobs = await storage.get_all_jobs(filters)
         job_ids = {job.id for job in jobs}
         assert job_ids == {succeeded_job.id, running_job.id}
+
+    @pytest.mark.asyncio
+    async def test_get_all_filter_by_labels(self, redis_client: aioredis.Redis) -> None:
+        labels1 = ["l1"]
+        labels2 = ["l1", "l2"]
+        labels3 = ["l3"]
+        job1 = self._create_job(labels=labels1)
+        job2 = self._create_job(labels=labels2)
+        job3 = self._create_job(labels=labels3)
+
+        storage = RedisJobsStorage(client=redis_client)
+        await storage.set_job(job1)
+        await storage.set_job(job2)
+        await storage.set_job(job3)
+
+        jobs = await storage.get_all_jobs()
+        job_ids = {job.id for job in jobs}
+        assert job_ids == {job1.id, job2.id, job3.id}
+
+        filters = JobFilter(labels={"l1"})
+        jobs = await storage.get_all_jobs(filters)
+        job_ids = {job.id for job in jobs}
+        assert job_ids == {job1.id, job2.id}
+
+        filters = JobFilter(labels={"l3"})
+        jobs = await storage.get_all_jobs(filters)
+        job_ids = {job.id for job in jobs}
+        assert job_ids == {job3.id}
 
     async def prepare_filtering_test(
         self, redis_client: aioredis.Redis

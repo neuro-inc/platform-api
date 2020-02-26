@@ -58,6 +58,7 @@ class JobFilter:
         default_factory=cast(Type[Dict[str, AbstractSet[str]]], dict)
     )
     owners: AbstractSet[str] = field(default_factory=cast(Type[Set[str]], set))
+    labels: AbstractSet[str] = field(default_factory=cast(Type[Set[str]], set))
     name: Optional[str] = None
     ids: AbstractSet[str] = field(default_factory=cast(Type[Set[str]], set))
 
@@ -74,6 +75,9 @@ class JobFilter:
             return False
         if self.ids and job.id not in self.ids:
             return False
+        if self.labels:
+            if set(job.request.labels or []) < self.labels:
+                return False
         return True
 
 
@@ -219,10 +223,7 @@ class InMemoryJobsStorage(JobsStorage):
                 gpu_run_time += job.get_run_time()
             else:
                 non_gpu_run_time += job.get_run_time()
-            aggregated_run_times[job.cluster_name] = (
-                gpu_run_time,
-                non_gpu_run_time,
-            )
+            aggregated_run_times[job.cluster_name] = (gpu_run_time, non_gpu_run_time)
         return {
             cluster_name: AggregatedRunTime(
                 total_gpu_run_time_delta=gpu_run_time,
@@ -273,6 +274,9 @@ class RedisJobsStorage(JobsStorage):
 
     def _generate_jobs_deleted_index_key(self) -> str:
         return "jobs.deleted"
+
+    def _generate_jobs_labels_index_key(self, label: str) -> str:
+        return f"jobs.labels.{label}"
 
     def _generate_jobs_index_key(self) -> str:
         return "jobs"
@@ -410,6 +414,9 @@ class RedisJobsStorage(JobsStorage):
                 self._update_cluster_index(tr, job)
             if job.name:
                 self._update_name_index(tr, job)
+            if job.request.labels:
+                for label in job.request.labels:
+                    tr.sadd(self._generate_jobs_labels_index_key(label), job.id)
 
         if job.is_deleted:
             tr.sadd(self._generate_jobs_deleted_index_key(), job.id)
@@ -460,6 +467,7 @@ class RedisJobsStorage(JobsStorage):
         statuses: Iterable[JobStatus],
         clusters: Iterable[str],
         owners: Iterable[str],
+        labels: Iterable[str],
         name: Optional[str] = None,
     ) -> List[str]:
         if name:
@@ -479,42 +487,37 @@ class RedisJobsStorage(JobsStorage):
         ]
         status_keys = [self._generate_jobs_status_index_key(s) for s in statuses]
 
-        temp_key = self._generate_temp_zset_key()
+        labels_keys = [self._generate_jobs_labels_index_key(key) for key in labels]
+
+        target = self._generate_temp_zset_key()
         tr = self._client.multi_exec()
 
-        index_keys = owner_keys or cluster_keys
+        index_keys = owner_keys or cluster_keys or labels_keys
         if index_keys:
-            tr.zunionstore(temp_key, *index_keys, aggregate=tr.ZSET_AGGREGATE_MAX)
+            tr.zunionstore(target, *index_keys, aggregate=tr.ZSET_AGGREGATE_MAX)
             if owner_keys and cluster_keys:
-                cluster_temp_key = self._generate_temp_zset_key()
-                tr.zunionstore(
-                    cluster_temp_key, *cluster_keys, aggregate=tr.ZSET_AGGREGATE_MAX
-                )
-                tr.zinterstore(
-                    temp_key,
-                    temp_key,
-                    cluster_temp_key,
-                    aggregate=tr.ZSET_AGGREGATE_MAX,
-                )
-                tr.delete(cluster_temp_key)
+                # TODO(artem) is it correct above, `if owner_keys and cluster_keys`?
+                self._intersect_keys(tr, target, cluster_keys)
             if status_keys:
-                status_temp_key = self._generate_temp_zset_key()
-                tr.zunionstore(
-                    status_temp_key, *status_keys, aggregate=tr.ZSET_AGGREGATE_MAX
-                )
-                tr.zinterstore(
-                    temp_key, temp_key, status_temp_key, aggregate=tr.ZSET_AGGREGATE_MAX
-                )
-                tr.delete(status_temp_key)
-            tr.zrange(temp_key)
+                self._intersect_keys(tr, target, cluster_keys)
+            if labels_keys:
+                self._intersect_keys(tr, target, labels_keys)
+            tr.zrange(target)
         else:
             status_keys = status_keys or [self._generate_jobs_index_key()]
             tr.sunion(*status_keys)
 
-        tr.delete(temp_key)
+        tr.delete(target)
         *_, payloads, _ = await tr.execute()
 
         return [job_id.decode() for job_id in payloads]
+
+    def _intersect_keys(self, tr: Pipeline, target: str, keys: List[str]) -> None:
+        """Intersects `target` with `keys` and stores the result in `target`. """
+        temp_key = self._generate_temp_zset_key()
+        tr.zunionstore(temp_key, *keys, aggregate=tr.ZSET_AGGREGATE_MAX)
+        tr.zinterstore(target, target, temp_key, aggregate=tr.ZSET_AGGREGATE_MAX)
+        tr.delete(temp_key)
 
     async def _get_job_ids_for_deletion(self) -> List[str]:
         tr = self._client.multi_exec()
@@ -540,6 +543,7 @@ class RedisJobsStorage(JobsStorage):
             statuses=job_filter.statuses,
             clusters=job_filter.clusters,
             owners=job_filter.owners,
+            labels=job_filter.labels,
             name=job_filter.name,
         )
         jobs = await self._get_jobs(job_ids)
@@ -573,6 +577,7 @@ class RedisJobsStorage(JobsStorage):
             clusters=job_filter.clusters,
             owners=job_filter.owners,
             name=job_filter.name,
+            labels=job_filter.labels,
         )
 
         zero_run_time = (timedelta(), timedelta())

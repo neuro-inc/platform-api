@@ -1333,6 +1333,18 @@ class TestJobRequest:
         )
         assert request.to_primitive() == job_request_payload
 
+    def test_to_primitive_with_labels(
+        self, job_request_payload: Dict[str, Any]
+    ) -> None:
+        request = JobRequest(
+            job_id="testjob",
+            description="Description of the testjob",
+            container=Container("testimage", ContainerResources(cpu=1, memory_mb=128)),
+            labels=["l1", "l2", "l3"],
+        )
+        primitive = request.to_primitive()
+        assert primitive["labels"] == ["l1", "l2", "l3"]
+
     def test_to_primitive_with_entrypoint(
         self, job_request_payload: Dict[str, Any]
     ) -> None:
@@ -1397,6 +1409,13 @@ class TestJobRequest:
             ],
         )
         assert request.container == expected_container
+
+    def test_from_primitive_with_labels(
+        self, job_request_payload: Dict[str, Any]
+    ) -> None:
+        job_request_payload["labels"] = ["l1", "l2"]
+        request = JobRequest.from_primitive(job_request_payload)
+        assert request.labels == ["l1", "l2"]
 
     def test_from_primitive_with_ssh(self, job_request_payload: Dict[str, Any]) -> None:
         job_request_payload["container"]["ssh_server"] = {"port": 678}
