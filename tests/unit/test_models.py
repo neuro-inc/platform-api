@@ -1040,27 +1040,6 @@ class TestInferPermissionsFromContainer:
             Permission(uri="storage://test-cluster/testuser/result", action="write"),
         ]
 
-    def test_volumes_no_host(self) -> None:
-        user = User(name="testuser", token="")
-        container = Container(
-            image="image",
-            resources=ContainerResources(cpu=0.1, memory_mb=16),
-            volumes=[
-                ContainerVolume(
-                    uri=URL("storage:///path/to"),
-                    src_path=PurePath("/"),
-                    dst_path=PurePath("/var/storage/testuser/path/to"),
-                ),
-            ],
-        )
-        registry_config = RegistryConfig(
-            url=URL("http://example.com"), username="compute", password="compute_token"
-        )
-        with pytest.raises(ValueError):
-            infer_permissions_from_container(
-                user, container, registry_config, "test-cluster"
-            )
-
     def test_image(self) -> None:
         user = User(name="testuser", token="")
         container = Container(

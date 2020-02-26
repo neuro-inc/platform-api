@@ -245,12 +245,7 @@ def infer_permissions_from_container(
         )
     for volume in container.volumes:
         action = "read" if volume.read_only else "write"
-        uri = volume.uri
-        if uri.scheme == "storage" and uri.host != cluster_name:
-            raise ValueError(
-                "Bad storage URI {uri}: cluster name must be {cluster_name}"
-            )
-        permission = Permission(uri=str(uri), action=action)
+        permission = Permission(uri=str(volume.uri), action=action)
         permissions.append(permission)
     return permissions
 

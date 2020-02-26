@@ -400,10 +400,9 @@ class ContainerVolumeFactory:
         url = urlsplit(self._uri)
         if url.scheme != self._scheme:
             raise ValueError(f"Invalid URI scheme: {self._uri}")
-        if url.netloc == self._cluster_name:
-            path = PurePath(url.path)
-        else:
-            path = PurePath(url.netloc + url.path)
+        if url.netloc != self._cluster_name:
+            raise ValueError(f"Invalid URI cluster: {self._uri}")
+        path = PurePath(url.path)
         if path.is_absolute():
             path = path.relative_to("/")
         self._check_dots_in_path(path)

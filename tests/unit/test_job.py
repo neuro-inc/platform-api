@@ -174,15 +174,9 @@ class TestContainerVolumeFactory:
             )
 
     @pytest.mark.parametrize(
-        "uri",
-        (
-            "storage:///",
-            "storage://",
-            "storage://test-cluster",
-            "storage://test-cluster/",
-        ),
+        "uri", ("storage://test-cluster", "storage://test-cluster/",),
     )
-    def test_invalid_storage_uri_path(self, uri: str) -> None:
+    def test_create_storage_root_path(self, uri: str) -> None:
         volume = ContainerVolumeFactory(
             uri,
             src_mount_path=PurePath("/host"),
@@ -199,10 +193,6 @@ class TestContainerVolumeFactory:
             "storage://test-cluster/path/to/dir",
             "storage://test-cluster/path/to//dir",
             "storage://test-cluster/path/to/./dir",
-            "storage://path/to/dir",
-            "storage://path/to//dir",
-            "storage://path/to/./dir",
-            "storage:///path/to/dir",
         ),
     )
     def test_create(self, uri: str) -> None:
@@ -220,10 +210,25 @@ class TestContainerVolumeFactory:
     @pytest.mark.parametrize(
         "uri",
         (
-            "storage:///../to/dir",
-            "storage://path/../dir",
-            "storage://test-cluster/path/../dir",
+            "storage:",
+            "storage:/",
+            "storage://",
+            "storage:/path/to/dir",
+            "storage://path/to/dir",
         ),
+    )
+    def test_create_invalid_uri(self, uri: str) -> None:
+        with pytest.raises(ValueError, match="Invalid URI cluster"):
+            ContainerVolumeFactory(
+                uri,
+                src_mount_path=PurePath("/host"),
+                dst_mount_path=PurePath("/container"),
+                cluster_name="test-cluster",
+            ).create()
+
+    @pytest.mark.parametrize(
+        "uri",
+        ("storage://test-cluster/../to/dir", "storage://test-cluster/path/../dir",),
     )
     def test_create_invalid_path(self, uri: str) -> None:
         with pytest.raises(ValueError, match="Invalid path"):
@@ -281,7 +286,7 @@ class TestContainerBuilder:
             "http": {"port": 80},
             "volumes": [
                 {
-                    "src_storage_uri": "storage://path/to/dir",
+                    "src_storage_uri": "storage://test-cluster/path/to/dir",
                     "dst_path": "/container/path",
                     "read_only": True,
                 }
@@ -297,7 +302,7 @@ class TestContainerBuilder:
             env={"TESTVAR": "testvalue"},
             volumes=[
                 ContainerVolume(
-                    uri=URL("storage://path/to/dir"),
+                    uri=URL("storage://test-cluster/path/to/dir"),
                     src_path=PurePath("/tmp/path/to/dir"),
                     dst_path=PurePath("/container/path"),
                     read_only=True,
@@ -362,7 +367,7 @@ class TestContainerBuilder:
             "ssh": {"port": 22},
             "volumes": [
                 {
-                    "src_storage_uri": "storage://path/to/dir",
+                    "src_storage_uri": "storage://test-cluster/path/to/dir",
                     "dst_path": "/container/path",
                     "read_only": True,
                 }
@@ -377,7 +382,7 @@ class TestContainerBuilder:
             env={"TESTVAR": "testvalue"},
             volumes=[
                 ContainerVolume(
-                    uri=URL("storage://path/to/dir"),
+                    uri=URL("storage://test-cluster/path/to/dir"),
                     src_path=PurePath("/tmp/path/to/dir"),
                     dst_path=PurePath("/container/path"),
                     read_only=True,
@@ -398,7 +403,7 @@ class TestContainerBuilder:
             "http": {"port": 80},
             "volumes": [
                 {
-                    "src_storage_uri": "storage://path/to/dir",
+                    "src_storage_uri": "storage://test-cluster/path/to/dir",
                     "dst_path": "/container/path",
                     "read_only": True,
                 }
@@ -413,7 +418,7 @@ class TestContainerBuilder:
             env={"TESTVAR": "testvalue"},
             volumes=[
                 ContainerVolume(
-                    uri=URL("storage://path/to/dir"),
+                    uri=URL("storage://test-cluster/path/to/dir"),
                     src_path=PurePath("/tmp/path/to/dir"),
                     dst_path=PurePath("/container/path"),
                     read_only=True,
