@@ -128,8 +128,3 @@ NP_CORS_ORIGINS:
   dev: https://neu.ro
   staging: https://neu.ro
   prod: https://neu.ro
-NP_USE_CLUSTER_NAMES_IN_URIS:
-  _default: "0"
-  dev: "0"
-  staging: "0"
-  prod: "0"

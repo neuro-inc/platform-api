@@ -993,139 +993,6 @@ class TestBulkJobFilterBuilder:
         )
 
 
-class TestBulkJobFilterBuilderLegacy:
-    def test_no_access(self) -> None:
-        query_filter = JobFilter()
-        tree = make_access_tree({})
-        with pytest.raises(JobFilterException, match="no jobs"):
-            BulkJobFilterBuilder(
-                query_filter, tree, use_cluster_names_in_uris=False
-            ).build()
-
-    def test_no_access_with_owners(self) -> None:
-        query_filter = JobFilter(owners={"someuser"})
-        tree = make_access_tree(
-            {
-                "testuser": "read",
-                "anotheruser/job-test-1": "read",
-                "anotheruser/job-test-2": "deny",
-                "someuser": "deny",
-            }
-        )
-        with pytest.raises(JobFilterException, match="no jobs"):
-            BulkJobFilterBuilder(
-                query_filter, tree, use_cluster_names_in_uris=False
-            ).build()
-
-    def test_full_access_no_owners(self) -> None:
-        query_filter = JobFilter()
-        tree = make_access_tree({"": "manage"})
-        bulk_filter = BulkJobFilterBuilder(
-            query_filter, tree, use_cluster_names_in_uris=False
-        ).build()
-        assert bulk_filter == BulkJobFilter(
-            bulk_filter=JobFilter(), shared_ids=set(), shared_ids_filter=None
-        )
-
-    def test_full_access_with_owners(self) -> None:
-        query_filter = JobFilter(owners={"testuser"})
-        tree = make_access_tree({"": "manage"})
-        bulk_filter = BulkJobFilterBuilder(
-            query_filter, tree, use_cluster_names_in_uris=False
-        ).build()
-        assert bulk_filter == BulkJobFilter(
-            bulk_filter=JobFilter(owners={"testuser"}),
-            shared_ids=set(),
-            shared_ids_filter=None,
-        )
-
-    def test_mixed_access_no_owners(self) -> None:
-        query_filter = JobFilter()
-        tree = make_access_tree(
-            {
-                "testuser": "read",
-                "anotheruser/job-test-1": "read",
-                "anotheruser/job-test-2": "deny",
-                "someuser": "deny",
-            }
-        )
-        bulk_filter = BulkJobFilterBuilder(
-            query_filter, tree, use_cluster_names_in_uris=False
-        ).build()
-        assert bulk_filter == BulkJobFilter(
-            bulk_filter=JobFilter(owners={"testuser"}),
-            shared_ids={"job-test-1"},
-            shared_ids_filter=JobFilter(),
-        )
-
-    def test_mixed_access_owners_shared_all(self) -> None:
-        query_filter = JobFilter(owners={"testuser"})
-        tree = make_access_tree(
-            {
-                "testuser": "read",
-                "anotheruser/job-test-1": "read",
-                "anotheruser/job-test-2": "deny",
-                "someuser": "deny",
-            }
-        )
-        bulk_filter = BulkJobFilterBuilder(
-            query_filter, tree, use_cluster_names_in_uris=False
-        ).build()
-        assert bulk_filter == BulkJobFilter(
-            bulk_filter=JobFilter(owners={"testuser"}),
-            shared_ids=set(),
-            shared_ids_filter=None,
-        )
-
-    def test_mixed_access_shared_ids_only(self) -> None:
-        query_filter = JobFilter(owners={"anotheruser"})
-        tree = make_access_tree(
-            {
-                "testuser": "read",
-                "anotheruser/job-test-1": "read",
-                "anotheruser/job-test-2": "deny",
-                "someuser": "deny",
-            }
-        )
-        bulk_filter = BulkJobFilterBuilder(
-            query_filter, tree, use_cluster_names_in_uris=False
-        ).build()
-        assert bulk_filter == BulkJobFilter(
-            bulk_filter=None,
-            shared_ids={"job-test-1"},
-            shared_ids_filter=JobFilter(owners={"anotheruser"}),
-        )
-
-    def test_mixed_access_owners_shared_all_and_specific(self) -> None:
-        query_filter = JobFilter(
-            owners={"testuser", "anotheruser"},
-            statuses={JobStatus.PENDING},
-            name="testname",
-        )
-        tree = make_access_tree(
-            {
-                "testuser": "read",
-                "anotheruser/job-test-1": "read",
-                "anotheruser/job-test-2": "deny",
-                "someuser": "deny",
-            }
-        )
-        bulk_filter = BulkJobFilterBuilder(
-            query_filter, tree, use_cluster_names_in_uris=False
-        ).build()
-        assert bulk_filter == BulkJobFilter(
-            bulk_filter=JobFilter(
-                owners={"testuser"}, statuses={JobStatus.PENDING}, name="testname"
-            ),
-            shared_ids={"job-test-1"},
-            shared_ids_filter=JobFilter(
-                owners={"testuser", "anotheruser"},
-                statuses={JobStatus.PENDING},
-                name="testname",
-            ),
-        )
-
-
 class TestInferPermissionsFromContainer:
     def test_no_volumes(self) -> None:
         user = User(name="testuser", token="")
@@ -1155,7 +1022,7 @@ class TestInferPermissionsFromContainer:
                     read_only=True,
                 ),
                 ContainerVolume(
-                    uri=URL("storage://testuser/result"),
+                    uri=URL("storage://test-cluster/testuser/result"),
                     src_path=PurePath("/"),
                     dst_path=PurePath("/var/storage/testuser/result"),
                 ),
@@ -1180,17 +1047,6 @@ class TestInferPermissionsFromContainer:
             resources=ContainerResources(cpu=0.1, memory_mb=16),
             volumes=[
                 ContainerVolume(
-                    uri=URL("storage:"),
-                    src_path=PurePath("/"),
-                    dst_path=PurePath("/var/storage/root1"),
-                    read_only=True,
-                ),
-                ContainerVolume(
-                    uri=URL("storage:/"),
-                    src_path=PurePath("/"),
-                    dst_path=PurePath("/var/storage/root2"),
-                ),
-                ContainerVolume(
                     uri=URL("storage:///path/to"),
                     src_path=PurePath("/"),
                     dst_path=PurePath("/var/storage/testuser/path/to"),
@@ -1200,15 +1056,10 @@ class TestInferPermissionsFromContainer:
         registry_config = RegistryConfig(
             url=URL("http://example.com"), username="compute", password="compute_token"
         )
-        permissions = infer_permissions_from_container(
-            user, container, registry_config, "test-cluster"
-        )
-        assert permissions == [
-            Permission(uri="job://test-cluster/testuser", action="write"),
-            Permission(uri="storage://test-cluster", action="read"),
-            Permission(uri="storage://test-cluster", action="write"),
-            Permission(uri="storage://test-cluster/path/to", action="write"),
-        ]
+        with pytest.raises(ValueError):
+            infer_permissions_from_container(
+                user, container, registry_config, "test-cluster"
+            )
 
     def test_image(self) -> None:
         user = User(name="testuser", token="")
@@ -1225,106 +1076,6 @@ class TestInferPermissionsFromContainer:
         assert permissions == [
             Permission(uri="job://test-cluster/testuser", action="write"),
             Permission(uri="image://test-cluster/testuser/image", action="read"),
-        ]
-
-
-class TestInferPermissionsFromContainerLegacy:
-    def test_no_volumes(self) -> None:
-        user = User(name="testuser", token="")
-        container = Container(
-            image="image", resources=ContainerResources(cpu=0.1, memory_mb=16),
-        )
-        registry_config = RegistryConfig(
-            url=URL("http://example.com"), username="compute", password="compute_token"
-        )
-        permissions = infer_permissions_from_container(
-            user, container, registry_config, None
-        )
-        assert permissions == [Permission(uri="job://testuser", action="write")]
-
-    def test_volumes(self) -> None:
-        user = User(name="testuser", token="")
-        container = Container(
-            image="image",
-            resources=ContainerResources(cpu=0.1, memory_mb=16),
-            volumes=[
-                ContainerVolume(
-                    uri=URL("storage://test-cluster/testuser/dataset"),
-                    src_path=PurePath("/"),
-                    dst_path=PurePath("/var/storage/testuser/dataset"),
-                    read_only=True,
-                ),
-                ContainerVolume(
-                    uri=URL("storage://testuser/result"),
-                    src_path=PurePath("/"),
-                    dst_path=PurePath("/var/storage/testuser/result"),
-                ),
-            ],
-        )
-        registry_config = RegistryConfig(
-            url=URL("http://example.com"), username="compute", password="compute_token"
-        )
-        permissions = infer_permissions_from_container(
-            user, container, registry_config, None
-        )
-        assert permissions == [
-            Permission(uri="job://testuser", action="write"),
-            Permission(uri="storage://test-cluster/testuser/dataset", action="read"),
-            Permission(uri="storage://testuser/result", action="write"),
-        ]
-
-    def test_volumes_no_host(self) -> None:
-        user = User(name="testuser", token="")
-        container = Container(
-            image="image",
-            resources=ContainerResources(cpu=0.1, memory_mb=16),
-            volumes=[
-                ContainerVolume(
-                    uri=URL("storage:"),
-                    src_path=PurePath("/"),
-                    dst_path=PurePath("/var/storage/root1"),
-                    read_only=True,
-                ),
-                ContainerVolume(
-                    uri=URL("storage:/"),
-                    src_path=PurePath("/"),
-                    dst_path=PurePath("/var/storage/root2"),
-                ),
-                ContainerVolume(
-                    uri=URL("storage:///path/to"),
-                    src_path=PurePath("/"),
-                    dst_path=PurePath("/var/storage/testuser/path/to"),
-                ),
-            ],
-        )
-        registry_config = RegistryConfig(
-            url=URL("http://example.com"), username="compute", password="compute_token"
-        )
-        permissions = infer_permissions_from_container(
-            user, container, registry_config, None
-        )
-        assert permissions == [
-            Permission(uri="job://testuser", action="write"),
-            Permission(uri="storage:", action="read"),
-            Permission(uri="storage:/", action="write"),
-            Permission(uri="storage:/path/to", action="write"),
-        ]
-
-    def test_image(self) -> None:
-        user = User(name="testuser", token="")
-        container = Container(
-            image="example.com/testuser/image",
-            resources=ContainerResources(cpu=0.1, memory_mb=16),
-        )
-        registry_config = RegistryConfig(
-            url=URL("http://example.com"), username="compute", password="compute_token"
-        )
-        permissions = infer_permissions_from_container(
-            user, container, registry_config, None
-        )
-        assert permissions == [
-            Permission(uri="job://testuser", action="write"),
-            Permission(uri="image://testuser/image", action="read"),
         ]
 
 

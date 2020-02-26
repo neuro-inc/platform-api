@@ -137,17 +137,6 @@ class TestContainer:
         uri = container.to_image_uri(registry_config, "test-cluster")
         assert uri == URL("image://test-cluster/project/testimage")
 
-    def test_to_image_uri_no_cluster_name(self) -> None:
-        container = Container(
-            image="example.com/project/testimage",
-            resources=ContainerResources(cpu=1, memory_mb=128),
-        )
-        registry_config = RegistryConfig(
-            url=URL("http://example.com"), username="compute", password="compute_token"
-        )
-        uri = container.to_image_uri(registry_config, None)
-        assert uri == URL("image://project/testimage")
-
     def test_to_image_uri_registry_with_custom_port(self) -> None:
         container = Container(
             image="example.com:5000/project/testimage",
@@ -1233,20 +1222,6 @@ class TestJob:
         )
         assert job.to_uri() == URL(f"job://test-cluster/compute/{job.id}")
 
-    def test_to_uri_no_use_cluster_name(
-        self, mock_orchestrator: MockOrchestrator, job_request: JobRequest
-    ) -> None:
-        job = Job(
-            mock_orchestrator.storage_config,
-            mock_orchestrator.config,
-            record=JobRecord.create(
-                request=job_request, cluster_name="test-cluster", owner="testuser"
-            ),
-        )
-        assert job.to_uri(use_cluster_names_in_uris=False) == URL(
-            f"job://testuser/{job.id}"
-        )
-
     def test_to_uri_no_cluster(
         self, mock_orchestrator: MockOrchestrator, job_request: JobRequest
     ) -> None:
@@ -1257,7 +1232,8 @@ class TestJob:
                 request=job_request, cluster_name="", owner="testuser"
             ),
         )
-        assert job.to_uri() == URL(f"job://testuser/{job.id}")
+        with pytest.raises(AssertionError):
+            job.to_uri()
 
     def test_to_uri_no_owner(
         self, mock_orchestrator: MockOrchestrator, job_request: JobRequest
@@ -1270,18 +1246,6 @@ class TestJob:
             ),
         )
         assert job.to_uri() == URL(f"job://test-cluster/{job.id}")
-
-    def test_to_uri_no_cluster_no_owner(
-        self, mock_orchestrator: MockOrchestrator, job_request: JobRequest
-    ) -> None:
-        job = Job(
-            mock_orchestrator.storage_config,
-            mock_orchestrator.config,
-            record=JobRecord.create(
-                request=job_request, cluster_name="", orphaned_job_owner=""
-            ),
-        )
-        assert job.to_uri() == URL(f"job:/{job.id}")
 
     def test_to_and_from_primitive(
         self, mock_orchestrator: MockOrchestrator, job_request_payload: Dict[str, Any]
