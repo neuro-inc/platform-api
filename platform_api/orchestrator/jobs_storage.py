@@ -3,7 +3,7 @@ import itertools
 import json
 import logging
 from abc import ABC, abstractmethod
-from dataclasses import dataclass, field
+from dataclasses import dataclass, field, replace
 from datetime import timedelta
 from typing import (
     AbstractSet,
@@ -27,7 +27,7 @@ from aioredis.commands import Pipeline
 from async_generator import asynccontextmanager
 
 from .job import AggregatedRunTime, JobRecord
-from .job_request import JobError, JobStatus
+from .job_request import ContainerVolume, JobError, JobStatus
 
 
 logger = logging.getLogger(__name__)
@@ -616,9 +616,11 @@ class RedisJobsStorage(JobsStorage):
         if version < 3:
             await self._update_job_cluster_names()
             await self._reindex_job_clusters()
+        if version < 4:
+            await self._update_volume_storage_uris()
         else:
             return False
-        await self._client.set("version", "3")
+        await self._client.set("version", "4")
         return True
 
     async def _reindex_job_owners(self) -> None:
@@ -657,6 +659,36 @@ class RedisJobsStorage(JobsStorage):
         await tr.execute()
 
         logger.info(f"Finished updating job cluster names ({changed}/{total})")
+
+    async def _update_volume_storage_uris(self) -> None:
+        logger.info("Starting updating volume storage URIs")
+
+        total = changed = 0
+        tr = self._client.pipeline()
+        async for job in self._iter_all_jobs():
+            total += 1
+            assert job.cluster_name
+            volumes: List[ContainerVolume] = []
+            changed_job = False
+            for volume in job.request.container.volumes:
+                uri = volume.uri
+                if uri.scheme == "storage" and uri.host != job.cluster_name:
+                    user_name = uri.host
+                    uri = uri.with_host(job.cluster_name)
+                    if user_name:
+                        uri = uri.with_path(f"/{user_name}{uri.path}")
+                    volume = replace(volume, uri=uri)
+                    changed_job = True
+                volumes.append(volume)
+            if changed_job:
+                container = replace(job.request.container, volumes=volumes)
+                job.request = replace(job.request, container=container)
+                changed += 1
+                payload = json.dumps(job.to_primitive())
+                tr.set(self._generate_job_key(job.id), payload)
+        await tr.execute()
+
+        logger.info(f"Finished updating volume storage URIs ({changed}/{total})")
 
     async def _iter_all_jobs(self) -> AsyncIterator[JobRecord]:
         jobs_key = self._generate_jobs_index_key()
