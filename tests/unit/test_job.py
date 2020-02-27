@@ -9,7 +9,7 @@ from neuro_auth_client.client import Quota
 from yarl import URL
 
 from platform_api.cluster_config import RegistryConfig, StorageConfig
-from platform_api.handlers.job_request_builder import ContainerBuilder
+from platform_api.handlers.job_request_builder import create_container_from_payload
 from platform_api.orchestrator.job import (
     AggregatedRunTime,
     Job,
@@ -298,9 +298,9 @@ class TestContainerBuilder:
                 }
             ],
         }
-        container = ContainerBuilder.from_container_payload(
+        container = create_container_from_payload(
             payload, storage_config=storage_config, cluster_name="test-cluster"
-        ).build()
+        )
         assert container == Container(
             image="testimage",
             entrypoint="testentrypoint",
@@ -330,9 +330,9 @@ class TestContainerBuilder:
                 "gpu_model": "gpumodel",
             },
         }
-        container = ContainerBuilder.from_container_payload(
+        container = create_container_from_payload(
             payload, storage_config=storage_config, cluster_name="test-cluster"
-        ).build()
+        )
         assert container == Container(
             image="testimage",
             resources=ContainerResources(
@@ -350,9 +350,9 @@ class TestContainerBuilder:
                 "tpu": {"type": "v2-8", "software_version": "1.14"},
             },
         }
-        container = ContainerBuilder.from_container_payload(
+        container = create_container_from_payload(
             payload, storage_config=storage_config, cluster_name="test-cluster"
-        ).build()
+        )
         assert container == Container(
             image="testimage",
             resources=ContainerResources(
@@ -379,9 +379,9 @@ class TestContainerBuilder:
                 }
             ],
         }
-        container = ContainerBuilder.from_container_payload(
+        container = create_container_from_payload(
             payload, storage_config=storage_config, cluster_name="test-cluster"
-        ).build()
+        )
         assert container == Container(
             image="testimage",
             command="testcommand",
@@ -415,9 +415,9 @@ class TestContainerBuilder:
                 }
             ],
         }
-        container = ContainerBuilder.from_container_payload(
+        container = create_container_from_payload(
             payload, storage_config=storage_config, cluster_name="test-cluster"
-        ).build()
+        )
         assert container == Container(
             image="testimage",
             command="testcommand",

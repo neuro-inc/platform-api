@@ -27,7 +27,7 @@ from platform_api.orchestrator.jobs_storage import JobFilter, JobStorageTransact
 from platform_api.resource import TPUResource
 from platform_api.user import User, authorized_user, untrusted_user
 
-from .job_request_builder import ContainerBuilder
+from .job_request_builder import create_container_from_payload
 from .validators import (
     create_cluster_name_validator,
     create_container_request_validator,
@@ -354,11 +354,11 @@ class JobsHandler:
         job_request_validator = await self._create_job_request_validator(cluster_config)
         request_payload = job_request_validator.check(request_payload)
 
-        container = ContainerBuilder.from_container_payload(
+        container = create_container_from_payload(
             request_payload["container"],
             storage_config=cluster_config.storage,
             cluster_name=cluster_name,
-        ).build()
+        )
 
         permissions = infer_permissions_from_container(
             user,
