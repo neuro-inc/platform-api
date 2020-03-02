@@ -264,7 +264,7 @@ class TestJobFilter:
     def test_check_tags_job_less_filter_more(self) -> None:
         job = self._create_job(owner="testuser", status=JobStatus.PENDING, tags=["t1"])
         filt = JobFilter(tags={"t1", "t2", "t3"})
-        assert not filt.check(job)
+        assert filt.check(job)
 
     def test_check_tags_job_more_filter_less(self) -> None:
         job = self._create_job(
@@ -272,6 +272,20 @@ class TestJobFilter:
         )
         filt = JobFilter(tags={"t1"})
         assert filt.check(job)
+
+    def test_check_tags_intersect(self) -> None:
+        job = self._create_job(
+            owner="testuser", status=JobStatus.PENDING, tags=["t1", "t2"]
+        )
+        filt = JobFilter(tags={"t2", "t3"})
+        assert filt.check(job)
+
+    def test_check_tags_disjoint(self) -> None:
+        job = self._create_job(
+            owner="testuser", status=JobStatus.PENDING, tags=["t1", "t2"]
+        )
+        filt = JobFilter(tags={"t3", "t4"})
+        assert not filt.check(job)
 
     def test_check_owners(self) -> None:
         job = self._create_job(owner="testuser")
