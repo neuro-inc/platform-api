@@ -448,7 +448,7 @@ class TestRedisJobsStorage:
         filters = JobFilter(tags={"t1", "t2"})
         jobs = await storage.get_all_jobs(filters)
         job_ids = {job.id for job in jobs}
-        assert job_ids == {job2.id}
+        assert job_ids == {job1.id, job2.id}
 
         filters = JobFilter(tags={"t3"})
         jobs = await storage.get_all_jobs(filters)
