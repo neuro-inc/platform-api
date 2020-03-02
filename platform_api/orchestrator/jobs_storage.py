@@ -75,10 +75,8 @@ class JobFilter:
             return False
         if self.ids and job.id not in self.ids:
             return False
-        if self.tags:
-            job_tags = job.request.tags or []
-            if set(job_tags) < self.tags:
-                return False
+        if self.tags and self.tags.isdisjoint(job.request.tags or ()):
+            return False
         return True
 
 
@@ -496,12 +494,11 @@ class RedisJobsStorage(JobsStorage):
         if index_keys:
             tr.zunionstore(target, *index_keys, aggregate=tr.ZSET_AGGREGATE_MAX)
             if owner_keys and cluster_keys:
-                # TODO(artem) is it correct above, `if owner_keys and cluster_keys`?
                 self._intersect_keys(tr, target, cluster_keys)
-            if status_keys:
-                self._intersect_keys(tr, target, cluster_keys)
-            if tags_keys:
+            if (owner_keys or cluster_keys) and tags_keys:
                 self._intersect_keys(tr, target, tags_keys)
+            if status_keys:
+                self._intersect_keys(tr, target, status_keys)
             tr.zrange(target)
         else:
             status_keys = status_keys or [self._generate_jobs_index_key()]
