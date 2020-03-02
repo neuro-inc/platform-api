@@ -308,9 +308,11 @@ class TestContainerResponseValidator:
             "image": "testimage",
             "resources": {"cpu": 0.1, "memory_mb": 16},
             "command": '"',
+            "tty": False,
         }
         validator = create_container_response_validator()
-        assert validator.check(payload) == payload
+        result = validator.check(payload)
+        assert result["command"] == '"'
 
 
 class TestJobClusterNameValidator:
