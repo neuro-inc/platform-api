@@ -20,7 +20,6 @@ from platform_api.orchestrator.job_request import (
 )
 from platform_api.orchestrator.jobs_storage import (
     JobFilter,
-    JobsStorageException,
     JobStorageJobFoundError,
     JobStorageTransactionError,
     RedisJobsStorage,
@@ -527,30 +526,31 @@ class TestRedisJobsStorage:
 
     @pytest.mark.asyncio
     @pytest.mark.parametrize(
-        "name,owners,statuses",
+        "name,statuses",
         [
-            ("job-1", (), ()),
-            ("job-1", (), (pend,)),
-            ("job-1", (), (pend, runn)),
-            ("job-1", (), (succ, fail)),
-            ("job-1", (), (succ, fail, runn)),
-            ("job-1", (), (succ, fail, runn, pend)),
+            ("job-1", ()),
+            ("job-1", (pend,)),
+            ("job-1", (pend, runn)),
+            ("job-1", (succ, fail)),
+            ("job-1", (succ, fail, runn)),
+            ("job-1", (succ, fail, runn, pend)),
         ],
     )
-    async def test_get_all_filter_by_name_with_no_owner_fail(
+    async def test_get_all_filter_by_name_with_no_owner(
         self,
-        owners: Tuple[str],
         name: Optional[str],
         statuses: Tuple[JobStatus],
         redis_client: aioredis.Redis,
     ) -> None:
         storage, jobs = await self.prepare_filtering_test(redis_client)
-        job_filter = JobFilter(name=name, owners=set(owners), statuses=set(statuses))
-        invalid_operation_error = (
-            "filtering jobs by name is allowed only together with owner"
-        )
-        with pytest.raises(JobsStorageException, match=invalid_operation_error):
-            await storage.get_all_jobs(job_filter)
+        job_filter = JobFilter(name=name, owners=set(), statuses=set(statuses))
+        job_ids = {job.id for job in await storage.get_all_jobs(job_filter)}
+        expected = {
+            job.id
+            for job in jobs
+            if job.name == name and (not statuses or job.status in statuses)
+        }
+        assert job_ids == expected
 
     @pytest.mark.asyncio
     async def test_get_all_filter_by_owner_and_name(
