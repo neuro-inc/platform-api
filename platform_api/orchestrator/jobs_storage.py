@@ -463,6 +463,14 @@ class RedisJobsStorage(JobsStorage):
         name: Optional[str] = None,
     ) -> List[str]:
         if name:
+            if not owners:
+                # Retrieve all owners of jobs
+                all_jobs_owner_index_key = self._generate_jobs_owner_index_key("*")
+                jobs_owner_index_key_prefix_len = len(all_jobs_owner_index_key) - 1
+                owners = [
+                    key.decode()[jobs_owner_index_key_prefix_len:]
+                    async for key in self._client.iscan(match=all_jobs_owner_index_key)
+                ]
             owner_keys = [
                 self._generate_jobs_name_index_zset_key(owner, name) for owner in owners
             ]
@@ -539,9 +547,7 @@ class RedisJobsStorage(JobsStorage):
             name=job_filter.name,
         )
         jobs = await self._get_jobs(job_ids)
-        if (job_filter.name and not job_filter.owners) or any(
-            job_filter.clusters.values()
-        ):
+        if any(job_filter.clusters.values()):
             jobs = [job for job in jobs if job_filter.check(job)]
         return jobs
 
@@ -573,9 +579,7 @@ class RedisJobsStorage(JobsStorage):
             name=job_filter.name,
         )
 
-        needs_additional_check = (job_filter.name and not job_filter.owners) or any(
-            job_filter.clusters.values()
-        )
+        needs_additional_check = any(job_filter.clusters.values())
         zero_run_time = (timedelta(), timedelta())
         aggregated_run_times: Dict[str, Tuple[timedelta, timedelta]] = {}
         for job_id_chunk in self._iterate_in_chunks(jobs_ids, chunk_size=10):
