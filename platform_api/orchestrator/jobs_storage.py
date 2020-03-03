@@ -283,6 +283,9 @@ class RedisJobsStorage(JobsStorage):
         """
         return f"temp_zset_{uuid4()}"
 
+    def _glob_escape(self, s: str) -> str:
+        return s.replace("*", r"\*").replace("?", r"\?").replace("[", r"\[")
+
     @asynccontextmanager
     async def _acquire_conn(self) -> AsyncIterator[aioredis.Redis]:
         pool = self._client.connection
@@ -463,13 +466,16 @@ class RedisJobsStorage(JobsStorage):
         name: Optional[str] = None,
     ) -> List[str]:
         if name:
-            owner_keys = [
-                self._generate_jobs_name_index_zset_key(owner, name) for owner in owners
-            ]
-            if not owner_keys:
-                raise JobsStorageException(
-                    "filtering jobs by name is allowed only together with owners"
+            if owners:
+                owner_keys = [
+                    self._generate_jobs_name_index_zset_key(owner, name)
+                    for owner in owners
+                ]
+            else:
+                match = self._generate_jobs_name_index_zset_key(
+                    "*", self._glob_escape(name)
                 )
+                owner_keys = await self._client.keys(match)
         else:
             owner_keys = [
                 self._generate_jobs_owner_index_key(owner) for owner in owners
@@ -575,6 +581,7 @@ class RedisJobsStorage(JobsStorage):
             name=job_filter.name,
         )
 
+        needs_additional_check = any(job_filter.clusters.values())
         zero_run_time = (timedelta(), timedelta())
         aggregated_run_times: Dict[str, Tuple[timedelta, timedelta]] = {}
         for job_id_chunk in self._iterate_in_chunks(jobs_ids, chunk_size=10):
@@ -583,7 +590,7 @@ class RedisJobsStorage(JobsStorage):
                 self._parse_job_payload(payload)
                 for payload in await self._client.mget(*keys)
             ]
-            if any(job_filter.clusters.values()):
+            if needs_additional_check:
                 jobs = [job for job in jobs if job_filter.check(job)]
             for job in jobs:
                 gpu_run_time, non_gpu_run_time = aggregated_run_times.get(
