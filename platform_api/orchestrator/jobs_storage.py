@@ -489,15 +489,13 @@ class RedisJobsStorage(JobsStorage):
         target = self._generate_temp_zset_key()
         tr = self._client.multi_exec()
 
-        index_keys = owner_keys or cluster_keys or tags_keys
+        index_keys = [keys for keys in (owner_keys, cluster_keys, tags_keys) if keys]
         if index_keys:
-            tr.zunionstore(target, *index_keys, aggregate=tr.ZSET_AGGREGATE_MAX)
-            if owner_keys and cluster_keys:
-                self._intersect_keys(tr, target, cluster_keys)
-            if (owner_keys or cluster_keys) and tags_keys:
-                self._intersect_keys(tr, target, tags_keys)
+            tr.zunionstore(target, *index_keys.pop(0), aggregate=tr.ZSET_AGGREGATE_MAX)
             if status_keys:
-                self._intersect_keys(tr, target, status_keys)
+                index_keys += [status_keys]
+            for keys in index_keys:
+                self._intersect_keys(tr, target, keys)
             tr.zrange(target)
         else:
             status_keys = status_keys or [self._generate_jobs_index_key()]
