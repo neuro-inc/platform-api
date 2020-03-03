@@ -283,6 +283,9 @@ class RedisJobsStorage(JobsStorage):
         """
         return f"temp_zset_{uuid4()}"
 
+    def _glob_escape(self, s: str) -> str:
+        return s.replace("*", r"\*").replace("?", r"\?").replace("[", r"\[")
+
     @asynccontextmanager
     async def _acquire_conn(self) -> AsyncIterator[aioredis.Redis]:
         pool = self._client.connection
@@ -463,17 +466,16 @@ class RedisJobsStorage(JobsStorage):
         name: Optional[str] = None,
     ) -> List[str]:
         if name:
-            if not owners:
-                # Retrieve all owners of jobs
-                all_jobs_owner_index_key = self._generate_jobs_owner_index_key("*")
-                jobs_owner_index_key_prefix_len = len(all_jobs_owner_index_key) - 1
-                owners = [
-                    key.decode()[jobs_owner_index_key_prefix_len:]
-                    async for key in self._client.iscan(match=all_jobs_owner_index_key)
+            if owners:
+                owner_keys = [
+                    self._generate_jobs_name_index_zset_key(owner, name)
+                    for owner in owners
                 ]
-            owner_keys = [
-                self._generate_jobs_name_index_zset_key(owner, name) for owner in owners
-            ]
+            else:
+                match = self._generate_jobs_name_index_zset_key(
+                    "*", self._glob_escape(name)
+                )
+                owner_keys = [key async for key in self._client.iscan(match=match)]
         else:
             owner_keys = [
                 self._generate_jobs_owner_index_key(owner) for owner in owners
