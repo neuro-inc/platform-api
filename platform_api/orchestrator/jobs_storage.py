@@ -222,7 +222,10 @@ class InMemoryJobsStorage(JobsStorage):
                 gpu_run_time += job.get_run_time()
             else:
                 non_gpu_run_time += job.get_run_time()
-            aggregated_run_times[job.cluster_name] = (gpu_run_time, non_gpu_run_time)
+            aggregated_run_times[job.cluster_name] = (
+                gpu_run_time,
+                non_gpu_run_time,
+            )
         return {
             cluster_name: AggregatedRunTime(
                 total_gpu_run_time_delta=gpu_run_time,
@@ -491,7 +494,7 @@ class RedisJobsStorage(JobsStorage):
 
         index_keys = [keys for keys in (owner_keys, cluster_keys, tags_keys) if keys]
         if index_keys:
-            tr.zunionstore(target, *index_keys.pop(0), aggregate=tr.ZSET_AGGREGATE_MAX)
+            tr.zunionstore(target, *index_keys.pop(), aggregate=tr.ZSET_AGGREGATE_MAX)
             if status_keys:
                 index_keys += [status_keys]
             for keys in index_keys:

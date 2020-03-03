@@ -215,7 +215,7 @@ class TestJobFilter:
         return JobRequest.create(
             Container(
                 image="testimage", resources=ContainerResources(cpu=1, memory_mb=128)
-            ),
+            )
         )
 
     def _create_job(

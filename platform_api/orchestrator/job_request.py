@@ -302,10 +302,10 @@ class JobRequest:
 
     @classmethod
     def create(
-        cls, container: Container, description: Optional[str] = None,
+        cls, container: Container, description: Optional[str] = None
     ) -> "JobRequest":
         return cls(
-            job_id=f"job-{uuid.uuid4()}", container=container, description=description,
+            job_id=f"job-{uuid.uuid4()}", description=description, container=container
         )
 
     @classmethod
