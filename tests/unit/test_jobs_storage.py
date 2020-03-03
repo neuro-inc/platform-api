@@ -233,6 +233,56 @@ class TestJobFilter:
         job = self._create_job(owner="testuser", status=JobStatus.PENDING)
         assert not JobFilter(statuses={JobStatus.RUNNING}).check(job)
 
+    def test_check_tags_job_zero_filter_zero(self) -> None:
+        job = self._create_job(owner="testuser", status=JobStatus.PENDING)
+        filt = JobFilter()
+        assert filt.check(job)
+
+    def test_check_tags_job_all_fileter_all(self) -> None:
+        job = self._create_job(
+            owner="testuser", status=JobStatus.PENDING, tags=["t1", "t2", "t3"]
+        )
+        filt = JobFilter(tags={"t1", "t2", "t3"})
+        assert filt.check(job)
+
+    def test_check_tags_job_zero_filter_all(self) -> None:
+        job = self._create_job(owner="testuser", status=JobStatus.PENDING)
+        filt = JobFilter(tags={"t1", "t2", "t3"})
+        assert not filt.check(job)
+
+    def test_check_tags_job_all_filter_zero(self) -> None:
+        job = self._create_job(
+            owner="testuser", status=JobStatus.PENDING, tags=["t1", "t2", "t3"]
+        )
+        filt = JobFilter()
+        assert filt.check(job)
+
+    def test_check_tags_job_less_filter_more(self) -> None:
+        job = self._create_job(owner="testuser", status=JobStatus.PENDING, tags=["t1"])
+        filt = JobFilter(tags={"t1", "t2", "t3"})
+        assert filt.check(job)
+
+    def test_check_tags_job_more_filter_less(self) -> None:
+        job = self._create_job(
+            owner="testuser", status=JobStatus.PENDING, tags=["t1", "t2", "t3"]
+        )
+        filt = JobFilter(tags={"t1"})
+        assert filt.check(job)
+
+    def test_check_tags_intersect(self) -> None:
+        job = self._create_job(
+            owner="testuser", status=JobStatus.PENDING, tags=["t1", "t2"]
+        )
+        filt = JobFilter(tags={"t2", "t3"})
+        assert filt.check(job)
+
+    def test_check_tags_disjoint(self) -> None:
+        job = self._create_job(
+            owner="testuser", status=JobStatus.PENDING, tags=["t1", "t2"]
+        )
+        filt = JobFilter(tags={"t3", "t4"})
+        assert not filt.check(job)
+
     def test_check_owners(self) -> None:
         job = self._create_job(owner="testuser")
         assert not JobFilter(owners={"anotheruser"}).check(job)

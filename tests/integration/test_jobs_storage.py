@@ -322,6 +322,19 @@ class TestRedisJobsStorage:
         assert job.status == JobStatus.PENDING
 
     @pytest.mark.asyncio
+    async def test_try_create_job_with_tags(self, redis_client: aioredis.Redis) -> None:
+        storage = RedisJobsStorage(redis_client)
+
+        tags = ["tag1", "tag2"]
+        job = self._create_job(tags=tags)
+        async with storage.try_create_job(job) as job:
+            assert job.id == job.id
+            assert job.tags == tags
+
+        result_job = await storage.get_job(job.id)
+        assert result_job.tags == tags
+
+    @pytest.mark.asyncio
     async def test_get_non_existent(self, redis_client: aioredis.Redis) -> None:
         storage = RedisJobsStorage(redis_client)
         with pytest.raises(JobError, match="no such job unknown"):
@@ -398,6 +411,39 @@ class TestRedisJobsStorage:
         jobs = await storage.get_all_jobs(filters)
         job_ids = {job.id for job in jobs}
         assert job_ids == {succeeded_job.id, running_job.id}
+
+    @pytest.mark.asyncio
+    async def test_get_all_filter_by_tags(self, redis_client: aioredis.Redis) -> None:
+        tags1 = ["t1"]
+        tags2 = ["t1", "t2"]
+        tags3 = ["t3"]
+        job1 = self._create_job(tags=tags1)
+        job2 = self._create_job(tags=tags2)
+        job3 = self._create_job(tags=tags3)
+
+        storage = RedisJobsStorage(client=redis_client)
+        await storage.set_job(job1)
+        await storage.set_job(job2)
+        await storage.set_job(job3)
+
+        jobs = await storage.get_all_jobs()
+        job_ids = {job.id for job in jobs}
+        assert job_ids == {job1.id, job2.id, job3.id}
+
+        filters = JobFilter(tags={"t1"})
+        jobs = await storage.get_all_jobs(filters)
+        job_ids = {job.id for job in jobs}
+        assert job_ids == {job1.id, job2.id}
+
+        filters = JobFilter(tags={"t1", "t2"})
+        jobs = await storage.get_all_jobs(filters)
+        job_ids = {job.id for job in jobs}
+        assert job_ids == {job1.id, job2.id}
+
+        filters = JobFilter(tags={"t3"})
+        jobs = await storage.get_all_jobs(filters)
+        job_ids = {job.id for job in jobs}
+        assert job_ids == {job3.id}
 
     async def prepare_filtering_test(
         self, redis_client: aioredis.Redis
