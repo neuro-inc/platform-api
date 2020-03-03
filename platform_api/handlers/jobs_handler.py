@@ -532,6 +532,7 @@ class JobFilterFactory:
 
     def create_from_query(self, query: MultiDictProxy) -> JobFilter:  # type: ignore
         statuses = {JobStatus(s) for s in query.getall("status", [])}
+        tags = set(query.getall("tag", []))
         hostname = query.get("hostname")
         if hostname is None:
             job_name = self._job_name_validator.check(query.get("name"))
@@ -544,7 +545,11 @@ class JobFilterFactory:
                 for cluster_name in query.getall("cluster_name", [])
             }
             return JobFilter(
-                statuses=statuses, clusters=clusters, owners=owners, name=job_name
+                statuses=statuses,
+                clusters=clusters,
+                owners=owners,
+                name=job_name,
+                tags=tags,
             )
 
         if "name" in query or "owner" in query or "cluster_name" in query:
@@ -553,10 +558,10 @@ class JobFilterFactory:
         label = hostname.partition(".")[0]
         job_name, sep, owner = label.rpartition(JOB_USER_NAMES_SEPARATOR)
         if not sep:
-            return JobFilter(statuses=statuses, ids={label})
+            return JobFilter(statuses=statuses, ids={label}, tags=tags)
         job_name = self._job_name_validator.check(job_name)
         owner = self._user_name_validator.check(owner)
-        return JobFilter(statuses=statuses, owners={owner}, name=job_name)
+        return JobFilter(statuses=statuses, owners={owner}, name=job_name, tags=tags)
 
 
 @dataclass(frozen=True)
