@@ -1,5 +1,5 @@
 from datetime import timedelta
-from typing import Any, List, Optional
+from typing import Any
 
 import pytest
 
@@ -211,22 +211,18 @@ class TestInMemoryJobsStorage:
 
 
 class TestJobFilter:
-    def _create_job_request(self, tags: Optional[List[str]] = None) -> JobRequest:
+    def _create_job_request(self) -> JobRequest:
         return JobRequest.create(
             Container(
                 image="testimage", resources=ContainerResources(cpu=1, memory_mb=128)
             ),
-            tags=tags,
         )
 
     def _create_job(
-        self,
-        cluster_name: str = "test-cluster",
-        tags: Optional[List[str]] = None,
-        **kwargs: Any
+        self, cluster_name: str = "test-cluster", **kwargs: Any
     ) -> JobRecord:
         return JobRecord.create(
-            request=self._create_job_request(tags), cluster_name=cluster_name, **kwargs
+            request=self._create_job_request(), cluster_name=cluster_name, **kwargs
         )
 
     def test_check_empty_filter(self) -> None:

@@ -29,9 +29,7 @@ from tests.conftest import not_raises, random_str
 
 
 class TestRedisJobsStorage:
-    def _create_job_request(
-        self, with_gpu: bool = False, tags: Optional[List[str]] = None
-    ) -> JobRequest:
+    def _create_job_request(self, with_gpu: bool = False) -> JobRequest:
         if with_gpu:
             resources = ContainerResources(
                 cpu=0.1, memory_mb=256, gpu=1, gpu_model_id="nvidia-tesla-k80"
@@ -39,18 +37,13 @@ class TestRedisJobsStorage:
         else:
             resources = ContainerResources(cpu=0.1, memory_mb=256)
         container = Container(image="ubuntu", command="sleep 5", resources=resources)
-        return JobRequest.create(container, tags=tags)
+        return JobRequest.create(container)
 
     def _create_job(
-        self,
-        cluster_name: str = "test-cluster",
-        tags: Optional[List[str]] = None,
-        **kwargs: Any,
+        self, cluster_name: str = "test-cluster", **kwargs: Any,
     ) -> JobRecord:
         return JobRecord.create(
-            request=self._create_job_request(tags=tags),
-            cluster_name=cluster_name,
-            **kwargs,
+            request=self._create_job_request(), cluster_name=cluster_name, **kwargs,
         )
 
     def _create_pending_job(
@@ -330,19 +323,17 @@ class TestRedisJobsStorage:
         assert job.status == JobStatus.PENDING
 
     @pytest.mark.asyncio
-    async def test_try_create_job__with_tags(
-        self, redis_client: aioredis.Redis
-    ) -> None:
+    async def test_try_create_job_with_tags(self, redis_client: aioredis.Redis) -> None:
         storage = RedisJobsStorage(redis_client)
 
         tags = ["tag1", "tag2"]
         job = self._create_job(tags=tags)
         async with storage.try_create_job(job) as job:
             assert job.id == job.id
-            assert job.request.tags == tags
+            assert job.tags == tags
 
         result_job = await storage.get_job(job.id)
-        assert result_job.request.tags == tags
+        assert result_job.tags == tags
 
     @pytest.mark.asyncio
     async def test_get_non_existent(self, redis_client: aioredis.Redis) -> None:

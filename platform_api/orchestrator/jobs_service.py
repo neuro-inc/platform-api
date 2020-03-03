@@ -245,6 +245,7 @@ class JobsService:
         *,
         cluster_name: Optional[str] = None,
         job_name: Optional[str] = None,
+        tags: Optional[List[str]] = None,
         is_preemptible: bool = False,
         schedule_timeout: Optional[float] = None,
         max_run_time_minutes: Optional[int] = None,
@@ -297,6 +298,7 @@ class JobsService:
                 ]
             ),
             name=job_name,
+            tags=tags,
             is_preemptible=is_preemptible,
             schedule_timeout=schedule_timeout,
             max_run_time_minutes=max_run_time_minutes,

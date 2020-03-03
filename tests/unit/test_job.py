@@ -962,6 +962,19 @@ class TestJob:
             "max_run_time_minutes": 500,
         }
 
+    def test_to_primitive_with_tags(
+        self, mock_orchestrator: MockOrchestrator, job_request: JobRequest
+    ) -> None:
+        job = Job(
+            storage_config=mock_orchestrator.storage_config,
+            orchestrator_config=mock_orchestrator.config,
+            record=JobRecord.create(
+                request=job_request, cluster_name="test-cluster", tags=["t1", "t2"],
+            ),
+        )
+        primitive = job.to_primitive()
+        assert primitive["tags"] == ["t1", "t2"]
+
     def test_from_primitive(
         self, mock_orchestrator: MockOrchestrator, job_request_payload: Dict[str, Any]
     ) -> None:
@@ -1003,6 +1016,25 @@ class TestJob:
         )
         assert job.id == "testjob"
         assert job.name == "test-job-name"
+
+    def test_from_primitive_with_tags(
+        self, mock_orchestrator: MockOrchestrator, job_request_payload: Dict[str, Any]
+    ) -> None:
+        tags = ["tag1", "tag2"]
+        payload = {
+            "id": "testjob",
+            "owner": "testuser",
+            "tags": tags,
+            "request": job_request_payload,
+            "status": "succeeded",
+            "is_deleted": True,
+            "finished_at": datetime.now(timezone.utc).isoformat(),
+        }
+        job = Job.from_primitive(
+            mock_orchestrator.storage_config, mock_orchestrator.config, payload
+        )
+        assert job.id == "testjob"
+        assert job.tags == tags
 
     def test_from_primitive_with_statuses(
         self, mock_orchestrator: MockOrchestrator, job_request_payload: Dict[str, Any]
@@ -1333,16 +1365,6 @@ class TestJobRequest:
         )
         assert request.to_primitive() == job_request_payload
 
-    def test_to_primitive_with_tags(self, job_request_payload: Dict[str, Any]) -> None:
-        request = JobRequest(
-            job_id="testjob",
-            description="Description of the testjob",
-            container=Container("testimage", ContainerResources(cpu=1, memory_mb=128)),
-            tags=["t1", "t2", "t3"],
-        )
-        primitive = request.to_primitive()
-        assert primitive["tags"] == ["t1", "t2", "t3"]
-
     def test_to_primitive_with_entrypoint(
         self, job_request_payload: Dict[str, Any]
     ) -> None:
@@ -1407,13 +1429,6 @@ class TestJobRequest:
             ],
         )
         assert request.container == expected_container
-
-    def test_from_primitive_with_tags(
-        self, job_request_payload: Dict[str, Any]
-    ) -> None:
-        job_request_payload["tags"] = ["t1", "t2"]
-        request = JobRequest.from_primitive(job_request_payload)
-        assert request.tags == ["t1", "t2"]
 
     def test_from_primitive_with_ssh(self, job_request_payload: Dict[str, Any]) -> None:
         job_request_payload["container"]["ssh_server"] = {"port": 678}

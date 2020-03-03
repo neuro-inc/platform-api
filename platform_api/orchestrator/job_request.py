@@ -299,20 +299,13 @@ class JobRequest:
     job_id: str
     container: Container
     description: Optional[str] = None
-    tags: Optional[List[str]] = None
 
     @classmethod
     def create(
-        cls,
-        container: Container,
-        description: Optional[str] = None,
-        tags: Optional[List[str]] = None,
+        cls, container: Container, description: Optional[str] = None,
     ) -> "JobRequest":
         return cls(
-            job_id=f"job-{uuid.uuid4()}",
-            container=container,
-            description=description,
-            tags=tags,
+            job_id=f"job-{uuid.uuid4()}", container=container, description=description,
         )
 
     @classmethod
@@ -325,8 +318,6 @@ class JobRequest:
         result = {"job_id": self.job_id, "container": self.container.to_primitive()}
         if self.description:
             result["description"] = self.description
-        if self.tags:
-            result["tags"] = self.tags
         return result
 
 

@@ -75,7 +75,7 @@ class JobFilter:
             return False
         if self.ids and job.id not in self.ids:
             return False
-        if self.tags and self.tags.isdisjoint(job.request.tags or ()):
+        if self.tags and self.tags.isdisjoint(job.tags or ()):
             return False
         return True
 
@@ -413,9 +413,8 @@ class RedisJobsStorage(JobsStorage):
                 self._update_cluster_index(tr, job)
             if job.name:
                 self._update_name_index(tr, job)
-            if job.request.tags:
-                for tag in job.request.tags:
-                    tr.sadd(self._generate_jobs_tags_index_key(tag), job.id)
+            for tag in job.tags or []:
+                tr.sadd(self._generate_jobs_tags_index_key(tag), job.id)
 
         if job.is_deleted:
             tr.sadd(self._generate_jobs_deleted_index_key(), job.id)
