@@ -162,7 +162,7 @@ def clusters_payload(nfs_storage_payload: Dict[str, Any]) -> List[Dict[str, Any]
                 ],
                 "is_http_ingress_secure": True,
             },
-            "ssh": {"server": "ssh-auth-dev.neu.ro"},
+            "ssh": {"server": "ssh-auth-dev.neu.ro:12321"},
             "monitoring": {"url": "https://dev.neu.ro/api/v1/jobs"},
             **nfs_storage_payload,
         }
@@ -233,7 +233,7 @@ class TestClusterConfigFactory:
         orchestrator = cluster.orchestrator
         assert isinstance(orchestrator, KubeConfig)
 
-        assert orchestrator.ssh_auth_domain_name == ssh_payload["server"]
+        assert orchestrator.ssh_auth_server == ssh_payload["server"]
         assert (
             orchestrator.is_http_ingress_secure
             == orchestrator_payload["is_http_ingress_secure"]
