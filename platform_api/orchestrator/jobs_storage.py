@@ -485,6 +485,8 @@ class RedisJobsStorage(JobsStorage):
                     "*", self._glob_escape(name)
                 )
                 owner_keys = await self._client.keys(match)
+                if not owner_keys:
+                    return []
         else:
             owner_keys = [
                 self._generate_jobs_owner_index_key(owner) for owner in owners
