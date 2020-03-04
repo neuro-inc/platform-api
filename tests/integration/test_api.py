@@ -383,6 +383,35 @@ class TestJobs:
         await jobs_client.delete_job(job_id=job_id)
 
     @pytest.mark.asyncio
+    async def test_create_job_with_tty(
+        self,
+        api: ApiConfig,
+        client: aiohttp.ClientSession,
+        job_submit: Dict[str, Any],
+        jobs_client: JobsClient,
+        regular_user: _User,
+    ) -> None:
+        url = api.jobs_base_url
+        job_submit["container"]["tty"] = True
+        job_submit["container"]["command"] = "test -t 0"
+        async with client.post(
+            url, headers=regular_user.headers, json=job_submit
+        ) as response:
+            assert response.status == HTTPAccepted.status_code, await response.text()
+            result = await response.json()
+            assert result["status"] in ["pending"]
+            assert result["container"]["tty"] is True
+            job_id = result["id"]
+
+        response_payload = await jobs_client.long_polling_by_job_id(
+            job_id=job_id, status="succeeded"
+        )
+        await jobs_client.delete_job(job_id=job_id)
+
+        assert response_payload["container"]["tty"] is True
+        assert response_payload["history"]["exit_code"] == 0
+
+    @pytest.mark.asyncio
     async def test_create_job_set_max_run_time(
         self,
         api: ApiConfig,
