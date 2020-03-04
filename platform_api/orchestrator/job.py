@@ -623,8 +623,8 @@ class Job:
 
     @property
     def ssh_server(self) -> str:
-        ssh_auth_domain_name = self._orchestrator_config.ssh_auth_domain_name
-        return f"ssh://nobody@{ssh_auth_domain_name}:22"
+        ssh_auth_server = self._orchestrator_config.ssh_auth_server
+        return f"ssh://nobody@{ssh_auth_server}"
 
     @property
     def finished_at_str(self) -> Optional[str]:

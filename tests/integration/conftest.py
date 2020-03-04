@@ -134,7 +134,7 @@ def kube_config_factory(
         defaults = dict(
             jobs_ingress_class="nginx",
             jobs_domain_name_template="{job_id}.jobs.neu.ro",
-            ssh_auth_domain_name="ssh-auth.platform.neuromation.io",
+            ssh_auth_server="ssh-auth.platform.neuromation.io:22",
             endpoint_url=cluster["server"],
             cert_authority_data_pem=cert_authority_data_pem,
             cert_authority_path=None,  # disable, only `cert_authority_data_pem` works
