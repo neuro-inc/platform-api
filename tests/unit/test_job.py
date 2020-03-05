@@ -1023,6 +1023,7 @@ class TestJob:
         assert job.is_deleted
         assert job.finished_at
         assert job.description == "Description of the testjob"
+        assert not job.tags
         assert job.name is None
         assert job.owner == "testuser"
         assert not job.is_preemptible

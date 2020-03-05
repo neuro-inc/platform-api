@@ -236,7 +236,7 @@ class JobRecord:
     status_history: JobStatusHistory
     cluster_name: str
     name: Optional[str] = None
-    tags: Optional[List[str]] = None
+    tags: Sequence[str] = ()
     is_preemptible: bool = False
     is_deleted: bool = False
     max_run_time_minutes: Optional[int] = None
@@ -400,7 +400,7 @@ class JobRecord:
             owner=payload.get("owner") or orphaned_job_owner,
             cluster_name=payload.get("cluster_name") or "",
             name=payload.get("name"),
-            tags=payload.get("tags"),
+            tags=payload.get("tags", ()),
             is_preemptible=payload.get("is_preemptible", False),
             max_run_time_minutes=payload.get("max_run_time_minutes", None),
             internal_hostname=payload.get("internal_hostname", None),
@@ -470,7 +470,7 @@ class Job:
         return self._name
 
     @property
-    def tags(self) -> Optional[List[str]]:
+    def tags(self) -> Sequence[str]:
         return self._tags
 
     @property
