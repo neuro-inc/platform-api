@@ -19,6 +19,7 @@ from platform_api.orchestrator.kube_client import (
     ContainerStatus,
     Ingress,
     Resources,
+    SecretRef,
     ServiceType,
     SharedMemoryVolume,
     VolumeMount,
@@ -161,6 +162,7 @@ class TestPodDescriptor:
             resources=Resources(cpu=0.5, memory=1024, gpu=1),
             port=1234,
             ssh_port=2222,
+            tty=True,
             node_selector={"label": "value"},
             tolerations=tolerations,
             node_affinity=node_affinity,
@@ -196,6 +198,8 @@ class TestPodDescriptor:
                         },
                         "ports": [{"containerPort": 1234}, {"containerPort": 2222}],
                         "terminationMessagePolicy": "FallbackToLogsOnError",
+                        "stdin": True,
+                        "tty": True,
                     }
                 ],
                 "volumes": [],
@@ -491,15 +495,45 @@ class TestPodDescriptor:
         assert pod.annotations == {"tf-version.cloud-tpus.google.com": "1.14"}
         assert pod.priority_class_name is None
 
-    def test_from_primitive(self) -> None:
+    def test_from_primitive_defaults(self) -> None:
         payload = {
             "kind": "Pod",
             "metadata": {
                 "name": "testname",
                 "creationTimestamp": "2019-06-20T11:03:32Z",
             },
+            "spec": {"containers": [{"name": "testname", "image": "testimage"}]},
+        }
+        pod = PodDescriptor.from_primitive(payload)
+        assert pod.name == "testname"
+        assert pod.image == "testimage"
+        assert pod.status is None
+        assert pod.tolerations == []
+        assert pod.priority_class_name is None
+        assert pod.image_pull_secrets == []
+        assert pod.node_name is None
+        assert pod.command is None
+        assert pod.args is None
+        assert pod.tty is False
+        assert pod.labels == {}
+
+    def test_from_primitive(self) -> None:
+        payload = {
+            "kind": "Pod",
+            "metadata": {
+                "name": "testname",
+                "creationTimestamp": "2019-06-20T11:03:32Z",
+                "labels": {"testlabel": "testvalue"},
+            },
             "spec": {
-                "containers": [{"name": "testname", "image": "testimage"}],
+                "containers": [
+                    {
+                        "name": "testname",
+                        "image": "testimage",
+                        "tty": True,
+                        "stdin": True,
+                    }
+                ],
                 "tolerations": [
                     {
                         "key": "key1",
@@ -512,6 +546,7 @@ class TestPodDescriptor:
                     {"key": "key3"},
                 ],
                 "priorityClassName": "testpriority",
+                "imagePullSecrets": [{"name": "secret"}],
             },
             "status": {"phase": "Running"},
         }
@@ -529,6 +564,12 @@ class TestPodDescriptor:
             Toleration(key="key3", operator="Equal", value="", effect=""),
         ]
         assert pod.priority_class_name == "testpriority"
+        assert pod.image_pull_secrets == [SecretRef("secret")]
+        assert pod.node_name is None
+        assert pod.command is None
+        assert pod.args is None
+        assert pod.tty is True
+        assert pod.labels == {"testlabel": "testvalue"}
 
     def test_from_primitive_failure(self) -> None:
         payload = {"kind": "Status", "code": 409}

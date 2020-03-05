@@ -204,6 +204,7 @@ def create_container_validator(
                 }
             ),
             t.Key("ssh", optional=True): t.Dict({"port": t.Int(gte=0, lte=65535)}),
+            t.Key("tty", optional=True, default=False): t.Bool,
         }
     )
 

@@ -153,6 +153,8 @@ def convert_job_container_to_json(
         ret["ssh"] = {"port": container.ssh_server.port}
     for volume in container.volumes:
         ret["volumes"].append(convert_container_volume_to_json(volume, storage_config))
+    if container.tty:
+        ret["tty"] = True
     return ret
 
 

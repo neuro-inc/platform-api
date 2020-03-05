@@ -317,6 +317,7 @@ class TestContainerBuilder:
             resources=ContainerResources(cpu=0.1, memory_mb=128, gpu=1, shm=None),
             http_server=ContainerHTTPServer(port=80, health_check_path="/"),
             ssh_server=None,
+            tty=False,
         )
 
     def test_from_payload_build_gpu_model(self) -> None:
@@ -434,6 +435,33 @@ class TestContainerBuilder:
             http_server=ContainerHTTPServer(port=80, health_check_path="/"),
         )
 
+    def test_from_payload_build_with_tty(self) -> None:
+        storage_config = StorageConfig(host_mount_path=PurePath("/tmp"))
+        payload = {
+            "image": "testimage",
+            "entrypoint": "testentrypoint",
+            "command": "testcommand",
+            "env": {"TESTVAR": "testvalue"},
+            "resources": {"cpu": 0.1, "memory_mb": 128, "gpu": 1},
+            "http": {"port": 80},
+            "volumes": [],
+            "tty": True,
+        }
+        container = create_container_from_payload(
+            payload, storage_config=storage_config, cluster_name="test-cluster"
+        )
+        assert container == Container(
+            image="testimage",
+            entrypoint="testentrypoint",
+            command="testcommand",
+            env={"TESTVAR": "testvalue"},
+            volumes=[],
+            resources=ContainerResources(cpu=0.1, memory_mb=128, gpu=1, shm=None),
+            http_server=ContainerHTTPServer(port=80, health_check_path="/"),
+            ssh_server=None,
+            tty=True,
+        )
+
 
 @pytest.fixture
 def job_request_payload() -> Dict[str, Any]:
@@ -455,6 +483,7 @@ def job_request_payload() -> Dict[str, Any]:
             ],
             "http_server": None,
             "ssh_server": None,
+            "tty": False,
         },
     }
 
@@ -1404,6 +1433,29 @@ class TestJobRequest:
                 )
             ],
             ssh_server=ContainerSSHServer(678),
+        )
+        request = JobRequest(
+            job_id="testjob",
+            description="Description of the testjob",
+            container=container,
+        )
+        assert request.to_primitive() == job_request_payload
+
+    def test_to_primitive_with_tty(self, job_request_payload: Dict[str, Any]) -> None:
+        job_request_payload["container"]["tty"] = True
+
+        container = Container(
+            image="testimage",
+            env={"testvar": "testval"},
+            resources=ContainerResources(cpu=1, memory_mb=128),
+            volumes=[
+                ContainerVolume(
+                    uri=URL("storage://path"),
+                    src_path=PurePath("/src/path"),
+                    dst_path=PurePath("/dst/path"),
+                )
+            ],
+            tty=True,
         )
         request = JobRequest(
             job_id="testjob",

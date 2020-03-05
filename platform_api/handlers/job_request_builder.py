@@ -47,6 +47,7 @@ def create_container_from_payload(
         resources=create_resources_from_payload(payload["resources"]),
         http_server=http_server,
         ssh_server=ssh_server,
+        tty=payload.get("tty", False),
     )
 
 
