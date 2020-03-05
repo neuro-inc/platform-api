@@ -421,6 +421,14 @@ class JobsService:
         records = await self._jobs_storage.get_all_jobs(job_filter)
         return [await self._get_cluster_job(record) for record in records]
 
+    async def get_job_by_name(self, job_name: str, owner: User) -> Job:
+        job_filter = JobFilter(owners={owner.name}, name=job_name)
+        records = await self._jobs_storage.get_all_jobs(job_filter)
+        if not records:
+            raise JobError(f"no such job {job_name}")
+        record = records[-1]
+        return await self._get_cluster_job(record)
+
     async def get_jobs_by_ids(
         self, job_ids: Iterable[str], job_filter: Optional[JobFilter] = None
     ) -> List[Job]:
