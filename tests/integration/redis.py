@@ -78,7 +78,7 @@ async def wait_for_redis_server(
             try:
                 async with create_redis_client(redis_config) as redis_client:
                     response = await redis_client.ping()
-                    if response == b"PONG":
+                    if response == "PONG":
                         break
             except (OSError, aioredis.errors.RedisError):
                 pass

@@ -248,14 +248,8 @@ class InMemoryJobsStorage(JobsStorage):
 
 
 class RedisJobsStorage(JobsStorage):
-    def __init__(self, client: aioredis.Redis, encoding: str = "utf8") -> None:
+    def __init__(self, client: aioredis.Redis) -> None:
         self._client = client
-        # TODO (ajuszkowski 1-mar-2019) I think it's better to somehow get encoding
-        # from redis configuration (client or server?), e.g. 'self._client.encoding'
-        self._encoding = encoding
-
-    def _decode(self, value: bytes) -> str:
-        return value.decode(self._encoding)
 
     def _generate_job_key(self, job_id: str) -> str:
         return f"jobs:{job_id}"
@@ -441,7 +435,7 @@ class RedisJobsStorage(JobsStorage):
             job_ids_key, start=-1, stop=-1
         )
         if last_job_id_singleton:
-            last_job_id = self._decode(last_job_id_singleton[0])
+            last_job_id = last_job_id_singleton[0]
             return last_job_id
         return None
 
@@ -515,7 +509,7 @@ class RedisJobsStorage(JobsStorage):
         tr.delete(target)
         *_, payloads, _ = await tr.execute()
 
-        return [job_id.decode() for job_id in payloads]
+        return payloads
 
     def _intersect_keys(self, tr: Pipeline, target: str, keys: List[str]) -> None:
         """Intersects `target` with `keys` and stores the result in `target`. """
@@ -535,7 +529,7 @@ class RedisJobsStorage(JobsStorage):
             self._generate_jobs_deleted_index_key(),
         )
         failed, succeeded = await tr.execute()
-        return [id_.decode() for id_ in itertools.chain(failed, succeeded)]
+        return [*failed, *succeeded]
 
     async def get_all_jobs(
         self, job_filter: Optional[JobFilter] = None
@@ -672,5 +666,5 @@ class RedisJobsStorage(JobsStorage):
     async def _iter_all_jobs(self) -> AsyncIterator[JobRecord]:
         jobs_key = self._generate_jobs_index_key()
         async for job_id in self._client.isscan(jobs_key):
-            job = await self.get_job(job_id.decode())
+            job = await self.get_job(job_id)
             yield job
