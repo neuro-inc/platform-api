@@ -135,6 +135,10 @@ class JobsStorage(ABC):
         )
 
     @abstractmethod
+    async def get_tags(self, owner: str) -> List[str]:
+        pass
+
+    @abstractmethod
     async def get_aggregated_run_time_by_clusters(
         self, job_filter: JobFilter
     ) -> Dict[str, AggregatedRunTime]:
@@ -150,6 +154,8 @@ class InMemoryJobsStorage(JobsStorage):
         self._job_records: Dict[str, str] = {}
         # job_name+owner to job_id mapping:
         self._last_alive_job_records: Dict[Tuple[str, str], str] = {}
+        # owner to job tags mapping:
+        self._owner_to_tags: Dict[str, List[str]] = {}
 
     @asynccontextmanager
     async def try_create_job(self, job: JobRecord) -> AsyncIterator[JobRecord]:
@@ -161,6 +167,14 @@ class InMemoryJobsStorage(JobsStorage):
                 if not same_name_job.is_finished:
                     raise JobStorageJobFoundError(job.name, job.owner, same_name_job_id)
             self._last_alive_job_records[key] = job.id
+
+        if job.owner not in self._owner_to_tags:
+            self._owner_to_tags[job.owner] = list()
+        for tag in sorted(job.tags)[::-1]:
+            if tag in self._owner_to_tags[job.owner]:
+                self._owner_to_tags[job.owner].remove(tag)
+            self._owner_to_tags[job.owner].insert(0, tag)
+
         yield job
         await self.set_job(job)
 
@@ -246,6 +260,9 @@ class InMemoryJobsStorage(JobsStorage):
             if job.should_be_deleted(delay=delay)
         ]
 
+    async def get_tags(self, owner: str) -> List[str]:
+        return self._owner_to_tags.get(owner, [])
+
 
 class RedisJobsStorage(JobsStorage):
     def __init__(self, client: aioredis.Redis) -> None:
@@ -267,6 +284,9 @@ class RedisJobsStorage(JobsStorage):
         assert owner, "job owner is not defined"
         assert job_name, "job name is not defined"
         return f"jobs.name.{owner}.{job_name}"
+
+    def _generate_tags_owner_index_zset_key(self, owner: str) -> str:
+        return f"tags.owner.{owner}"
 
     def _generate_jobs_deleted_index_key(self) -> str:
         return "jobs.deleted"
@@ -394,6 +414,14 @@ class RedisJobsStorage(JobsStorage):
         name_key = self._generate_jobs_name_index_zset_key(job.owner, job.name)
         tr.zadd(name_key, job.status_history.created_at_timestamp, job.id)
 
+    def _update_tags_indexes(self, tr: Pipeline, job: JobRecord) -> None:
+        for tag in job.tags:
+            # use negative score + ZRANGE instead of positive score + ZREVRANGE
+            # so that tags submitted with a single job go in lexicographic order
+            neg_score = -job.status_history.created_at_timestamp
+            tr.zadd(self._generate_tags_owner_index_zset_key(job.owner), neg_score, tag)
+            tr.sadd(self._generate_jobs_tags_index_key(tag), job.id)
+
     async def update_job_atomic(
         self, job: JobRecord, *, is_job_creation: bool, skip_index: bool = False
     ) -> None:
@@ -413,8 +441,7 @@ class RedisJobsStorage(JobsStorage):
                 self._update_cluster_index(tr, job)
             if job.name:
                 self._update_name_index(tr, job)
-            for tag in job.tags:
-                tr.sadd(self._generate_jobs_tags_index_key(tag), job.id)
+            self._update_tags_indexes(tr, job)
 
         if job.is_deleted:
             tr.sadd(self._generate_jobs_deleted_index_key(), job.id)
@@ -564,6 +591,10 @@ class RedisJobsStorage(JobsStorage):
         job_ids = await self._get_job_ids_for_deletion()
         jobs = await self._get_jobs(job_ids)
         return [job for job in jobs if job.should_be_deleted(delay=delay)]
+
+    async def get_tags(self, owner: str) -> List[str]:
+        key = self._generate_tags_owner_index_zset_key(owner)
+        return await self._client.zrange(key, 0, -1)
 
     async def get_aggregated_run_time_by_clusters(
         self, job_filter: JobFilter
