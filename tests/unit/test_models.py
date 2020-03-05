@@ -1,6 +1,6 @@
 from datetime import datetime, timedelta
 from pathlib import PurePath
-from typing import Any, Dict, Sequence
+from typing import Any, Dict, List, Sequence
 from unittest import mock
 
 import pytest
@@ -28,6 +28,7 @@ from platform_api.handlers.validators import (
     USER_NAME_MAX_LENGTH,
     create_container_request_validator,
     create_container_response_validator,
+    create_job_tags_validator,
 )
 from platform_api.orchestrator.job import (
     Job,
@@ -443,6 +444,43 @@ class TestJobRequestValidator:
         )
         with pytest.raises(DataError, match="value is less than"):
             validator.check(request)
+
+    @pytest.mark.parametrize(
+        "tags",
+        [
+            [],
+            ["a"],
+            ["a" * 256],
+            ["a"] * 256,
+            ["foo123"],
+            ["foo:bar123"],
+            ["foo:bar-baz123"],
+            ["pre/foo:bar-baz123"],
+            ["pre.org/foo:bar-baz123"],
+        ],
+    )
+    def test_job_tags_validator_valid(self, tags: List[str]) -> None:
+        validator = create_job_tags_validator()
+        assert validator.check(tags) == tags
+
+    @pytest.mark.parametrize(
+        "tags",
+        [
+            ["a" * 257],
+            ["a"] * 257,
+            ["foo-"],
+            ["-foo"],
+            ["foo--bar"],
+            ["foo::bar"],
+            ["foo//bar"],
+            ["foo..bar"],
+            ["foo.-bar"],
+        ],
+    )
+    def test_job_tags_validator_invalid(self, tags: List[str]) -> None:
+        validator = create_job_tags_validator()
+        with pytest.raises(DataError):
+            validator.check(tags)
 
 
 class TestJobContainerToJson:

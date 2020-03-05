@@ -12,6 +12,7 @@ from platform_api.resource import TPUResource
 JOB_NAME_PATTERN = r"\A[a-z](?:-?[a-z0-9])*\Z"
 USER_NAME_PATTERN = r"\A[a-z0-9](?:-?[a-z0-9])*\Z"
 CLUSTER_NAME_PATTERN = r"\A[a-z0-9](?:-?[a-z0-9])*\Z"
+JOB_TAG_PATTERN = r"\A[a-z](?:[-.:\/]?[a-z0-9])*\Z"
 
 # Since the client supports job-names to be interchangeable with job-IDs
 # (see PR https://github.com/neuromation/platform-client-python/pull/648)
@@ -265,3 +266,10 @@ def create_container_command_validator(
         return command
 
     return t.String() >> _validate
+
+
+def create_job_tags_validator() -> t.Trafaret:
+    return t.List(
+        t.String(min_length=1, max_length=256) & t.Regexp(JOB_TAG_PATTERN),
+        max_length=256,
+    )
