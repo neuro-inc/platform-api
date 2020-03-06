@@ -1,5 +1,3 @@
-import asyncio
-import itertools
 import json
 import logging
 from abc import ABC, abstractmethod
@@ -31,6 +29,9 @@ from .job_request import JobError, JobStatus
 
 
 logger = logging.getLogger(__name__)
+
+
+JOBS_CHUNK_SIZE = 1000
 
 
 class JobsStorageException(Exception):
@@ -444,20 +445,21 @@ class RedisJobsStorage(JobsStorage):
         if not ids:
             return jobs
         keys = [self._generate_job_key(id_) for id_ in ids]
-        payloads = await self._client.mget(*keys)
-        for chunk in self._iterate_in_chunks(payloads, chunk_size=10):
+        for chunk_ids in self._iterate_in_chunks(keys, chunk_size=JOBS_CHUNK_SIZE):
+            chunk = await self._client.mget(*chunk_ids)
             jobs.extend(
                 self._parse_job_payload(payload) for payload in chunk if payload
             )
-            await asyncio.sleep(0.0)
         return jobs
 
-    def _iterate_in_chunks(self, payloads: List[Any], chunk_size: int) -> Iterator[Any]:
+    def _iterate_in_chunks(
+        self, payloads: List[Any], chunk_size: int
+    ) -> Iterator[List[Any]]:
         # in case there are lots of jobs to retrieve, the parsing code below
         # blocks the concurrent execution for significant amount of time.
-        # to mitigate the issue, we call `asyncio.sleep` to let other
-        # coroutines execute too.
-        return itertools.zip_longest(*([iter(payloads)] * chunk_size))
+        # to mitigate the issue, we split passed long list by chunks,
+        for i in range(0, len(payloads), chunk_size):
+            yield payloads[i : i + chunk_size]
 
     async def _get_job_ids(
         self,
@@ -582,8 +584,10 @@ class RedisJobsStorage(JobsStorage):
         needs_additional_check = any(job_filter.clusters.values())
         zero_run_time = (timedelta(), timedelta())
         aggregated_run_times: Dict[str, Tuple[timedelta, timedelta]] = {}
-        for job_id_chunk in self._iterate_in_chunks(jobs_ids, chunk_size=10):
-            keys = [self._generate_job_key(job_id) for job_id in job_id_chunk if job_id]
+        for job_id_chunk in self._iterate_in_chunks(
+            jobs_ids, chunk_size=JOBS_CHUNK_SIZE
+        ):
+            keys = [self._generate_job_key(job_id) for job_id in job_id_chunk]
             jobs = [
                 self._parse_job_payload(payload)
                 for payload in await self._client.mget(*keys)
