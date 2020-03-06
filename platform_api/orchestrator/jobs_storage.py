@@ -444,12 +444,11 @@ class RedisJobsStorage(JobsStorage):
         if not ids:
             return jobs
         keys = [self._generate_job_key(id_) for id_ in ids]
-        payloads = await self._client.mget(*keys)
-        for chunk in self._iterate_in_chunks(payloads, chunk_size=10):
+        for chunk_ids in self._iterate_in_chunks(keys, chunk_size=1000):
+            chunk = await self._client.mget(*chunk_ids)
             jobs.extend(
                 self._parse_job_payload(payload) for payload in chunk if payload
             )
-            await asyncio.sleep(0.0)
         return jobs
 
     def _iterate_in_chunks(self, payloads: List[Any], chunk_size: int) -> Iterator[Any]:
@@ -582,7 +581,7 @@ class RedisJobsStorage(JobsStorage):
         needs_additional_check = any(job_filter.clusters.values())
         zero_run_time = (timedelta(), timedelta())
         aggregated_run_times: Dict[str, Tuple[timedelta, timedelta]] = {}
-        for job_id_chunk in self._iterate_in_chunks(jobs_ids, chunk_size=10):
+        for job_id_chunk in self._iterate_in_chunks(jobs_ids, chunk_size=1000):
             keys = [self._generate_job_key(job_id) for job_id in job_id_chunk if job_id]
             jobs = [
                 self._parse_job_payload(payload)
