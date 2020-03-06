@@ -457,8 +457,7 @@ class RedisJobsStorage(JobsStorage):
     ) -> Iterator[List[Any]]:
         # in case there are lots of jobs to retrieve, the parsing code below
         # blocks the concurrent execution for significant amount of time.
-        # to mitigate the issue, we call `asyncio.sleep` to let other
-        # coroutines execute too.
+        # to mitigate the issue, we split passed long list by chunks,
         for i in range(0, len(payloads), chunk_size):
             yield payloads[i : i + chunk_size]
 
@@ -588,7 +587,7 @@ class RedisJobsStorage(JobsStorage):
         for job_id_chunk in self._iterate_in_chunks(
             jobs_ids, chunk_size=JOBS_CHUNK_SIZE
         ):
-            keys = [self._generate_job_key(job_id) for job_id in job_id_chunk if job_id]
+            keys = [self._generate_job_key(job_id) for job_id in job_id_chunk]
             jobs = [
                 self._parse_job_payload(payload)
                 for payload in await self._client.mget(*keys)
