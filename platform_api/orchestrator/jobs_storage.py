@@ -283,9 +283,6 @@ class RedisJobsStorage(JobsStorage):
         """
         return f"temp_zset_{uuid4()}"
 
-    def _glob_escape(self, s: str) -> str:
-        return s.replace("*", r"\*").replace("?", r"\?").replace("[", r"\[")
-
     @asynccontextmanager
     async def _acquire_conn(self) -> AsyncIterator[aioredis.Redis]:
         pool = self._client.connection
@@ -469,18 +466,9 @@ class RedisJobsStorage(JobsStorage):
         name: Optional[str] = None,
     ) -> List[str]:
         if name:
-            if owners:
-                owner_keys = [
-                    self._generate_jobs_name_index_zset_key(owner, name)
-                    for owner in owners
-                ]
-            else:
-                match = self._generate_jobs_name_index_zset_key(
-                    "*", self._glob_escape(name)
-                )
-                owner_keys = [key async for key in self._client.iscan(match=match)]
-                if not owner_keys:
-                    return []
+            owner_keys = [
+                self._generate_jobs_name_index_zset_key(owner, name) for owner in owners
+            ]
         else:
             owner_keys = [
                 self._generate_jobs_owner_index_key(owner) for owner in owners
@@ -546,7 +534,9 @@ class RedisJobsStorage(JobsStorage):
             name=job_filter.name,
         )
         jobs = await self._get_jobs(job_ids)
-        if any(job_filter.clusters.values()):
+        if any(job_filter.clusters.values()) or (
+            job_filter.name and not job_filter.owners
+        ):
             jobs = [job for job in jobs if job_filter.check(job)]
         return jobs
 
@@ -579,7 +569,9 @@ class RedisJobsStorage(JobsStorage):
             tags=job_filter.tags,
         )
 
-        needs_additional_check = any(job_filter.clusters.values())
+        needs_additional_check = any(job_filter.clusters.values()) or (
+            job_filter.name and not job_filter.owners
+        )
         zero_run_time = (timedelta(), timedelta())
         aggregated_run_times: Dict[str, Tuple[timedelta, timedelta]] = {}
         for job_id_chunk in self._iterate_in_chunks(jobs_ids, chunk_size=10):
