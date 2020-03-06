@@ -449,7 +449,7 @@ class RedisJobsStorage(JobsStorage):
             )
         return jobs
 
-    def _iterate_in_chunks(self, payloads: List[Any], chunk_size: int) -> Iterator[Any]:
+    def _iterate_in_chunks(self, payloads: List[Any], chunk_size: int) -> Iterator[List[Any]]:
         # in case there are lots of jobs to retrieve, the parsing code below
         # blocks the concurrent execution for significant amount of time.
         # to mitigate the issue, we call `asyncio.sleep` to let other
