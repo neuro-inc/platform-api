@@ -978,7 +978,7 @@ class TestRedisJobsStorage:
                 pass
 
         tags_u1 = await jobs_storage.get_tags("another")
-        assert not tags_u1
+        assert tags_u1 == []
 
     @pytest.mark.asyncio
     async def test_get_tags_single(self, redis_client: aioredis.Redis) -> None:

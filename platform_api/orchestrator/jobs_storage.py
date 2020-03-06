@@ -168,12 +168,14 @@ class InMemoryJobsStorage(JobsStorage):
                     raise JobStorageJobFoundError(job.name, job.owner, same_name_job_id)
             self._last_alive_job_records[key] = job.id
 
-        if job.owner not in self._owner_to_tags:
-            self._owner_to_tags[job.owner] = list()
-        for tag in sorted(job.tags)[::-1]:
-            if tag in self._owner_to_tags[job.owner]:
-                self._owner_to_tags[job.owner].remove(tag)
-            self._owner_to_tags[job.owner].insert(0, tag)
+        if job.tags:
+            owner_tags = self._owner_to_tags[job.owner]
+            if job.owner not in self._owner_to_tags:
+                owner_tags = []
+            for tag in sorted(job.tags, reverse=True):
+                if tag in owner_tags:
+                    owner_tags.remove(tag)
+                owner_tags.insert(0, tag)
 
         yield job
         await self.set_job(job)
@@ -594,7 +596,7 @@ class RedisJobsStorage(JobsStorage):
 
     async def get_tags(self, owner: str) -> List[str]:
         key = self._generate_tags_owner_index_zset_key(owner)
-        return await self._client.zrange(key, 0, -1)
+        return await self._client.zrange(key)
 
     async def get_aggregated_run_time_by_clusters(
         self, job_filter: JobFilter
