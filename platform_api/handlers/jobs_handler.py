@@ -368,11 +368,16 @@ class JobsHandler:
             )
             try:
                 await check_permissions(request, permissions)
-            except aiohttp.web.HTTPForbidden:
+            except aiohttp.web.HTTPForbidden as exc:
                 permissions = infer_permissions_from_container(
                     user, container, cluster_config.registry, None,
                 )
-                await check_permissions(request, permissions)
+                try:
+                    await check_permissions(request, permissions)
+                except aiohttp.web.HTTPForbidden:
+                    # Re-raise the original exception containing information
+                    # about extended ACL.
+                    raise exc
         else:
             permissions = infer_permissions_from_container(
                 user, container, cluster_config.registry, None,
