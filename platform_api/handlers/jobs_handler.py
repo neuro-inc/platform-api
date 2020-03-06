@@ -362,13 +362,22 @@ class JobsHandler:
             cluster_name=cluster_name,
         )
 
-        permissions = infer_permissions_from_container(
-            user,
-            container,
-            cluster_config.registry,
-            cluster_name if self._config.use_cluster_names_in_uris else None,
-        )
-        await check_permissions(request, permissions)
+        if self._config.use_cluster_names_in_uris:
+            permissions = infer_permissions_from_container(
+                user, container, cluster_config.registry, cluster_name,
+            )
+            try:
+                await check_permissions(request, permissions)
+            except aiohttp.web.HTTPForbidden:
+                permissions = infer_permissions_from_container(
+                    user, container, cluster_config.registry, None,
+                )
+                await check_permissions(request, permissions)
+        else:
+            permissions = infer_permissions_from_container(
+                user, container, cluster_config.registry, None,
+            )
+            await check_permissions(request, permissions)
 
         name = request_payload.get("name")
         description = request_payload.get("description")
