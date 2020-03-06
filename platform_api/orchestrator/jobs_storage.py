@@ -1,4 +1,3 @@
-import itertools
 import json
 import logging
 from abc import ABC, abstractmethod
@@ -455,7 +454,11 @@ class RedisJobsStorage(JobsStorage):
         # blocks the concurrent execution for significant amount of time.
         # to mitigate the issue, we call `asyncio.sleep` to let other
         # coroutines execute too.
-        return itertools.zip_longest(*([iter(payloads)] * chunk_size))
+        s = len(payloads)
+        i = 0
+        while i < s:
+            yield payloads[i : i + chunk_size]
+            i += chunk_size
 
     async def _get_job_ids(
         self,
