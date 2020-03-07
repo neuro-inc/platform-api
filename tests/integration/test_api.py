@@ -450,7 +450,7 @@ class TestJobs:
         await jobs_client.long_polling_by_job_id(job_id, "succeeded")
 
         url = api.generate_job_url(job_id)
-        async with client.get(url, headers=headers, json=job_submit) as resp:
+        async with client.get(url, headers=headers) as resp:
             assert resp.status == HTTPOk.status_code, await resp.text()
             result = await resp.json()
             run_time = result["history"]["run_time_seconds"]

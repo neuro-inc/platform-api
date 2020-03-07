@@ -1,10 +1,9 @@
-import asyncio
-import itertools
 import json
 import logging
 from abc import ABC, abstractmethod
 from dataclasses import dataclass, field
 from datetime import timedelta
+from itertools import islice
 from typing import (
     AbstractSet,
     Any,
@@ -31,6 +30,9 @@ from .job_request import JobError, JobStatus
 
 
 logger = logging.getLogger(__name__)
+
+
+JOBS_CHUNK_SIZE = 1000
 
 
 class JobsStorageException(Exception):
@@ -75,7 +77,7 @@ class JobFilter:
             return False
         if self.ids and job.id not in self.ids:
             return False
-        if self.tags and self.tags.isdisjoint(job.tags or ()):
+        if self.tags and self.tags.isdisjoint(job.tags):
             return False
         return True
 
@@ -283,9 +285,6 @@ class RedisJobsStorage(JobsStorage):
         """
         return f"temp_zset_{uuid4()}"
 
-    def _glob_escape(self, s: str) -> str:
-        return s.replace("*", r"\*").replace("?", r"\?").replace("[", r"\[")
-
     @asynccontextmanager
     async def _acquire_conn(self) -> AsyncIterator[aioredis.Redis]:
         pool = self._client.connection
@@ -413,7 +412,7 @@ class RedisJobsStorage(JobsStorage):
                 self._update_cluster_index(tr, job)
             if job.name:
                 self._update_name_index(tr, job)
-            for tag in job.tags or []:
+            for tag in job.tags:
                 tr.sadd(self._generate_jobs_tags_index_key(tag), job.id)
 
         if job.is_deleted:
@@ -439,25 +438,33 @@ class RedisJobsStorage(JobsStorage):
             return last_job_id
         return None
 
-    async def _get_jobs(self, ids: Iterable[str]) -> List[JobRecord]:
-        jobs: List[JobRecord] = []
-        if not ids:
-            return jobs
-        keys = [self._generate_job_key(id_) for id_ in ids]
-        payloads = await self._client.mget(*keys)
-        for chunk in self._iterate_in_chunks(payloads, chunk_size=10):
-            jobs.extend(
-                self._parse_job_payload(payload) for payload in chunk if payload
-            )
-            await asyncio.sleep(0.0)
-        return jobs
+    async def _get_jobs_by_ids_in_chunks(
+        self, ids: Iterable[str], job_filter: Optional[JobFilter] = None
+    ) -> AsyncIterator[Iterable[JobRecord]]:
+        for chunk_ids in self._iterate_in_chunks(ids, JOBS_CHUNK_SIZE):
+            keys = map(self._generate_job_key, chunk_ids)
+            payloads = await self._client.mget(*keys)
+            jobs = map(self._parse_job_payload, filter(None, payloads))
+            if job_filter:
+                jobs = filter(job_filter.check, jobs)
+            yield jobs
 
-    def _iterate_in_chunks(self, payloads: List[Any], chunk_size: int) -> Iterator[Any]:
+    def _iterate_in_chunks(
+        self, items: Iterable[Any], chunk_size: int
+    ) -> Iterator[List[Any]]:
         # in case there are lots of jobs to retrieve, the parsing code below
         # blocks the concurrent execution for significant amount of time.
-        # to mitigate the issue, we call `asyncio.sleep` to let other
-        # coroutines execute too.
-        return itertools.zip_longest(*([iter(payloads)] * chunk_size))
+        # to mitigate the issue, we split passed long list by chunks,
+        if isinstance(items, list):
+            for i in range(0, len(items), chunk_size):
+                yield items[i : i + chunk_size]
+        else:
+            it = iter(items)
+            while True:
+                chunk = list(islice(it, 0, chunk_size))
+                if not chunk:
+                    break
+                yield chunk
 
     async def _get_job_ids(
         self,
@@ -469,18 +476,9 @@ class RedisJobsStorage(JobsStorage):
         name: Optional[str] = None,
     ) -> List[str]:
         if name:
-            if owners:
-                owner_keys = [
-                    self._generate_jobs_name_index_zset_key(owner, name)
-                    for owner in owners
-                ]
-            else:
-                match = self._generate_jobs_name_index_zset_key(
-                    "*", self._glob_escape(name)
-                )
-                owner_keys = await self._client.keys(match)
-                if not owner_keys:
-                    return []
+            owner_keys = [
+                self._generate_jobs_name_index_zset_key(owner, name) for owner in owners
+            ]
         else:
             owner_keys = [
                 self._generate_jobs_owner_index_key(owner) for owner in owners
@@ -534,62 +532,60 @@ class RedisJobsStorage(JobsStorage):
     async def get_all_jobs(
         self, job_filter: Optional[JobFilter] = None
     ) -> List[JobRecord]:
+        jobs: List[JobRecord] = []
+        async for chunk in self._get_all_jobs_in_chunks(job_filter):
+            jobs.extend(chunk)
+        return jobs
+
+    async def _get_all_jobs_in_chunks(
+        self, job_filter: Optional[JobFilter] = None
+    ) -> AsyncIterator[Iterable[JobRecord]]:
+        # NOTE (ajuszkowski 4-Apr-2019): because of possible high number of jobs
+        # submitted by a user, we need to process all job separately iterating
+        # by job-ids not by job objects in order not to store them all in memory
         if not job_filter:
             job_filter = JobFilter()
-        elif job_filter.ids:
-            return await self.get_jobs_by_ids(job_filter.ids, job_filter)
-        job_ids = await self._get_job_ids(
-            statuses=job_filter.statuses,
-            clusters=job_filter.clusters,
-            owners=job_filter.owners,
-            tags=job_filter.tags,
-            name=job_filter.name,
-        )
-        jobs = await self._get_jobs(job_ids)
-        if any(job_filter.clusters.values()):
-            jobs = [job for job in jobs if job_filter.check(job)]
-        return jobs
+        job_ids: Iterable[str] = job_filter.ids
+        if not job_ids:
+            job_ids = await self._get_job_ids(
+                statuses=job_filter.statuses,
+                clusters=job_filter.clusters,
+                owners=job_filter.owners,
+                tags=job_filter.tags,
+                name=job_filter.name,
+            )
+            if not (
+                any(job_filter.clusters.values())
+                or (job_filter.name and not job_filter.owners)
+            ):
+                job_filter = None
+
+        async for chunk in self._get_jobs_by_ids_in_chunks(job_ids, job_filter):
+            yield chunk
 
     async def get_jobs_by_ids(
         self, job_ids: Iterable[str], job_filter: Optional[JobFilter] = None
     ) -> List[JobRecord]:
-        jobs = await self._get_jobs(job_ids)
-        if job_filter:
-            jobs = [job for job in jobs if job_filter.check(job)]
+        jobs: List[JobRecord] = []
+        async for chunk in self._get_jobs_by_ids_in_chunks(job_ids, job_filter):
+            jobs.extend(chunk)
         return jobs
 
     async def get_jobs_for_deletion(
         self, *, delay: timedelta = timedelta()
     ) -> List[JobRecord]:
         job_ids = await self._get_job_ids_for_deletion()
-        jobs = await self._get_jobs(job_ids)
-        return [job for job in jobs if job.should_be_deleted(delay=delay)]
+        jobs: List[JobRecord] = []
+        async for chunk in self._get_jobs_by_ids_in_chunks(job_ids):
+            jobs.extend(job for job in chunk if job.should_be_deleted(delay=delay))
+        return jobs
 
     async def get_aggregated_run_time_by_clusters(
         self, job_filter: JobFilter
     ) -> Dict[str, AggregatedRunTime]:
-        # NOTE (ajuszkowski 4-Apr-2019): because of possible high number of jobs
-        # submitted by a user, we need to process all job separately iterating
-        # by job-ids not by job objects in order not to store them all in memory
-        jobs_ids = await self._get_job_ids(
-            statuses=job_filter.statuses,
-            clusters=job_filter.clusters,
-            owners=job_filter.owners,
-            name=job_filter.name,
-            tags=job_filter.tags,
-        )
-
-        needs_additional_check = any(job_filter.clusters.values())
         zero_run_time = (timedelta(), timedelta())
         aggregated_run_times: Dict[str, Tuple[timedelta, timedelta]] = {}
-        for job_id_chunk in self._iterate_in_chunks(jobs_ids, chunk_size=10):
-            keys = [self._generate_job_key(job_id) for job_id in job_id_chunk if job_id]
-            jobs = [
-                self._parse_job_payload(payload)
-                for payload in await self._client.mget(*keys)
-            ]
-            if needs_additional_check:
-                jobs = [job for job in jobs if job_filter.check(job)]
+        async for jobs in self._get_all_jobs_in_chunks(job_filter):
             for job in jobs:
                 gpu_run_time, non_gpu_run_time = aggregated_run_times.get(
                     job.cluster_name, zero_run_time
