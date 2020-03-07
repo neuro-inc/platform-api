@@ -169,9 +169,9 @@ class InMemoryJobsStorage(JobsStorage):
             self._last_alive_job_records[key] = job.id
 
         if job.tags:
-            owner_tags = self._owner_to_tags[job.owner]
             if job.owner not in self._owner_to_tags:
-                owner_tags = []
+                self._owner_to_tags[job.owner] = []
+            owner_tags = self._owner_to_tags[job.owner]
             for tag in sorted(job.tags, reverse=True):
                 if tag in owner_tags:
                     owner_tags.remove(tag)
