@@ -3,6 +3,7 @@ import logging
 from abc import ABC, abstractmethod
 from dataclasses import dataclass, field
 from datetime import timedelta
+from itertools import islice
 from typing import (
     AbstractSet,
     Any,
@@ -437,26 +438,33 @@ class RedisJobsStorage(JobsStorage):
             return last_job_id
         return None
 
-    async def _get_jobs(self, ids: Iterable[str]) -> List[JobRecord]:
-        jobs: List[JobRecord] = []
-        if not ids:
-            return jobs
-        keys = [self._generate_job_key(id_) for id_ in ids]
-        for chunk_ids in self._iterate_in_chunks(keys, chunk_size=JOBS_CHUNK_SIZE):
-            chunk = await self._client.mget(*chunk_ids)
-            jobs.extend(
-                self._parse_job_payload(payload) for payload in chunk if payload
-            )
-        return jobs
+    async def _get_jobs_by_ids_in_chunks(
+        self, ids: Iterable[str], job_filter: Optional[JobFilter] = None
+    ) -> AsyncIterator[Iterable[JobRecord]]:
+        for chunk_ids in self._iterate_in_chunks(ids, JOBS_CHUNK_SIZE):
+            keys = map(self._generate_job_key, chunk_ids)
+            payloads = await self._client.mget(*keys)
+            jobs = map(self._parse_job_payload, filter(None, payloads))
+            if job_filter:
+                jobs = filter(job_filter.check, jobs)
+            yield jobs
 
     def _iterate_in_chunks(
-        self, payloads: List[Any], chunk_size: int
+        self, items: Iterable[Any], chunk_size: int
     ) -> Iterator[List[Any]]:
         # in case there are lots of jobs to retrieve, the parsing code below
         # blocks the concurrent execution for significant amount of time.
         # to mitigate the issue, we split passed long list by chunks,
-        for i in range(0, len(payloads), chunk_size):
-            yield payloads[i : i + chunk_size]
+        if isinstance(items, list):
+            for i in range(0, len(items), chunk_size):
+                yield items[i : i + chunk_size]
+        else:
+            it = iter(items)
+            while True:
+                chunk = list(islice(it, 0, chunk_size))
+                if not chunk:
+                    break
+                yield chunk
 
     async def _get_job_ids(
         self,
@@ -524,69 +532,60 @@ class RedisJobsStorage(JobsStorage):
     async def get_all_jobs(
         self, job_filter: Optional[JobFilter] = None
     ) -> List[JobRecord]:
+        jobs: List[JobRecord] = []
+        async for chunk in self._get_all_jobs_in_chunks(job_filter):
+            jobs.extend(chunk)
+        return jobs
+
+    async def _get_all_jobs_in_chunks(
+        self, job_filter: Optional[JobFilter] = None
+    ) -> AsyncIterator[Iterable[JobRecord]]:
+        # NOTE (ajuszkowski 4-Apr-2019): because of possible high number of jobs
+        # submitted by a user, we need to process all job separately iterating
+        # by job-ids not by job objects in order not to store them all in memory
         if not job_filter:
             job_filter = JobFilter()
-        elif job_filter.ids:
-            return await self.get_jobs_by_ids(job_filter.ids, job_filter)
-        job_ids = await self._get_job_ids(
-            statuses=job_filter.statuses,
-            clusters=job_filter.clusters,
-            owners=job_filter.owners,
-            tags=job_filter.tags,
-            name=job_filter.name,
-        )
-        jobs = await self._get_jobs(job_ids)
-        if any(job_filter.clusters.values()) or (
-            job_filter.name and not job_filter.owners
-        ):
-            jobs = [job for job in jobs if job_filter.check(job)]
-        return jobs
+        job_ids: Iterable[str] = job_filter.ids
+        if not job_ids:
+            job_ids = await self._get_job_ids(
+                statuses=job_filter.statuses,
+                clusters=job_filter.clusters,
+                owners=job_filter.owners,
+                tags=job_filter.tags,
+                name=job_filter.name,
+            )
+            if not (
+                any(job_filter.clusters.values())
+                or (job_filter.name and not job_filter.owners)
+            ):
+                job_filter = None
+
+        async for chunk in self._get_jobs_by_ids_in_chunks(job_ids, job_filter):
+            yield chunk
 
     async def get_jobs_by_ids(
         self, job_ids: Iterable[str], job_filter: Optional[JobFilter] = None
     ) -> List[JobRecord]:
-        jobs = await self._get_jobs(job_ids)
-        if job_filter:
-            jobs = [job for job in jobs if job_filter.check(job)]
+        jobs: List[JobRecord] = []
+        async for chunk in self._get_jobs_by_ids_in_chunks(job_ids, job_filter):
+            jobs.extend(chunk)
         return jobs
 
     async def get_jobs_for_deletion(
         self, *, delay: timedelta = timedelta()
     ) -> List[JobRecord]:
         job_ids = await self._get_job_ids_for_deletion()
-        jobs = await self._get_jobs(job_ids)
-        return [job for job in jobs if job.should_be_deleted(delay=delay)]
+        jobs: List[JobRecord] = []
+        async for chunk in self._get_jobs_by_ids_in_chunks(job_ids):
+            jobs.extend(job for job in chunk if job.should_be_deleted(delay=delay))
+        return jobs
 
     async def get_aggregated_run_time_by_clusters(
         self, job_filter: JobFilter
     ) -> Dict[str, AggregatedRunTime]:
-        # NOTE (ajuszkowski 4-Apr-2019): because of possible high number of jobs
-        # submitted by a user, we need to process all job separately iterating
-        # by job-ids not by job objects in order not to store them all in memory
-        jobs_ids = await self._get_job_ids(
-            statuses=job_filter.statuses,
-            clusters=job_filter.clusters,
-            owners=job_filter.owners,
-            name=job_filter.name,
-            tags=job_filter.tags,
-        )
-
-        needs_additional_check = any(job_filter.clusters.values()) or (
-            job_filter.name and not job_filter.owners
-        )
         zero_run_time = (timedelta(), timedelta())
         aggregated_run_times: Dict[str, Tuple[timedelta, timedelta]] = {}
-        for job_id_chunk in self._iterate_in_chunks(
-            jobs_ids, chunk_size=JOBS_CHUNK_SIZE
-        ):
-            keys = [self._generate_job_key(job_id) for job_id in job_id_chunk]
-            jobs = [
-                self._parse_job_payload(payload)
-                for payload in await self._client.mget(*keys)
-                if payload
-            ]
-            if needs_additional_check:
-                jobs = [job for job in jobs if job_filter.check(job)]
+        async for jobs in self._get_all_jobs_in_chunks(job_filter):
             for job in jobs:
                 gpu_run_time, non_gpu_run_time = aggregated_run_times.get(
                     job.cluster_name, zero_run_time
