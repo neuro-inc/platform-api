@@ -582,7 +582,8 @@ class RedisJobsStorage(JobsStorage):
             keys = [self._generate_job_key(job_id) for job_id in job_id_chunk]
             jobs = [
                 self._parse_job_payload(payload)
-                for payload in await self._client.mget(*keys) if payload
+                for payload in await self._client.mget(*keys)
+                if payload
             ]
             if needs_additional_check:
                 jobs = [job for job in jobs if job_filter.check(job)]
