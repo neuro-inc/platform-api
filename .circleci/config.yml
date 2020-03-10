@@ -69,6 +69,7 @@ jobs:
       - run:
           name: Installing Dependencies
           command: |
+            pyenv install --list
             pyenv install 3.7.6
             pyenv global 3.7.6
             curl -s https://packages.cloud.google.com/apt/doc/apt-key.gpg | sudo apt-key add -
