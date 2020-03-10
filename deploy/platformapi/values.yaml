@@ -89,8 +89,8 @@ NP_GKE_GPU_MODELS:
   staging: nvidia-tesla-k80,nvidia-tesla-p4,nvidia-tesla-v100
   prod: nvidia-tesla-k80,nvidia-tesla-p4,nvidia-tesla-v100
 NP_OAUTH_BASE_URL:
-  _default: https://dev-neuromation.auth0.com
-  dev: https://dev-neuromation.auth0.com
+  _default: https://login-dev.neu.ro
+  dev: https://login-dev.neu.ro
   staging: https://staging-neuromation.auth0.com
   prod:
 NP_OAUTH_CLIENT_ID:
