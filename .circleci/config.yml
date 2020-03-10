@@ -6,7 +6,7 @@ defaults: &defaults
 
 cache: &cache
   keys:
-    - &cache_key v1-python-3.7.3-{{ checksum "requirements/syntax.txt" }}{{ checksum "requirements/test.txt" }}{{ checksum "setup.py" }}
+    - &cache_key v1-python-3.7.6-{{ checksum "requirements/syntax.txt" }}{{ checksum "requirements/test.txt" }}{{ checksum "setup.py" }}
 
 version: 2
 jobs:
@@ -69,8 +69,8 @@ jobs:
       - run:
           name: Installing Dependencies
           command: |
-            pyenv install --debug 3.7.3
-            pyenv global 3.7.3
+            pyenv install 3.7.6
+            pyenv global 3.7.6
             curl -s https://packages.cloud.google.com/apt/doc/apt-key.gpg | sudo apt-key add -
             sudo touch /etc/apt/sources.list.d/kubernetes.list
             echo "deb http://apt.kubernetes.io/ kubernetes-xenial main" | sudo tee -a /etc/apt/sources.list.d/kubernetes.list
@@ -117,7 +117,7 @@ jobs:
 
       - save_cache:
           paths:
-            - /opt/circleci/.pyenv/versions/3.7.3
+            - /opt/circleci/.pyenv/versions/3.7.6
             - ./venv/
           key: *cache_key
 
