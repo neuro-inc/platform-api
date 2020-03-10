@@ -825,20 +825,20 @@ class TestJobs:
         jobs_client: JobsClient,
     ) -> None:
         headers = regular_user.headers
-        job_submit["tags"] = ["tag1", "tag2"]
+        job_submit["tags"] = ["tag2", "tag1", "tag3", "tag1"]
 
         url = api.jobs_base_url
         async with client.post(url, headers=headers, json=job_submit) as response:
             assert response.status == HTTPAccepted.status_code, await response.text()
             payload = await response.json()
             job_id = payload["id"]
-            assert payload["tags"] == ["tag1", "tag2"]
+            assert payload["tags"] == ["tag1", "tag2", "tag3"]
 
         url = api.generate_job_url(job_id)
         async with client.get(url, headers=headers) as response:
             assert response.status == HTTPOk.status_code, await response.text()
             payload = await response.json()
-            assert payload["tags"] == ["tag1", "tag2"]
+            assert payload["tags"] == ["tag1", "tag2", "tag3"]
 
         # cleanup
         await jobs_client.delete_job(job_id)
