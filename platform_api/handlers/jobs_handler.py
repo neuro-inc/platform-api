@@ -376,7 +376,7 @@ class JobsHandler:
         await check_permissions(request, permissions)
 
         name = request_payload.get("name")
-        tags = request_payload.get("tags", ())
+        tags = sorted(set(request_payload.get("tags", [])))
         description = request_payload.get("description")
         is_preemptible = request_payload["is_preemptible"]
         schedule_timeout = request_payload.get("schedule_timeout")
