@@ -258,6 +258,10 @@ class JobsService:
             user_cluster = user.clusters[0]
         cluster_name = user_cluster.name
 
+        if job_name is not None and job_name.startswith("job-"):
+            raise JobsServiceException(
+                "Failed to create job: job name cannot start with 'job-' prefix."
+            )
         try:
             await self._raise_for_run_time_quota(
                 user,
