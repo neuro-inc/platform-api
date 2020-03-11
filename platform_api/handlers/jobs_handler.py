@@ -238,6 +238,7 @@ def infer_permissions_from_container(
     container: Container,
     registry_config: RegistryConfig,
     cluster_name: Optional[str],
+    legacy_storage_acl: bool = False,
 ) -> List[Permission]:
     permissions = [Permission(uri=str(user.to_job_uri(cluster_name)), action="write")]
     if container.belongs_to_registry(registry_config):
@@ -251,7 +252,7 @@ def infer_permissions_from_container(
         action = "read" if volume.read_only else "write"
         uri = volume.uri
         # XXX (serhiy 04-Feb-2020) Temporary patch the URI
-        if cluster_name:
+        if cluster_name and not legacy_storage_acl:
             if uri.scheme == "storage" and uri.host != cluster_name:
                 if uri.host:
                     assert uri.path[0] == "/"
@@ -370,7 +371,11 @@ class JobsHandler:
                 await check_permissions(request, permissions)
             except aiohttp.web.HTTPForbidden as exc:
                 permissions = infer_permissions_from_container(
-                    user, container, cluster_config.registry, None,
+                    user,
+                    container,
+                    cluster_config.registry,
+                    cluster_name,
+                    legacy_storage_acl=True,
                 )
                 try:
                     await check_permissions(request, permissions)

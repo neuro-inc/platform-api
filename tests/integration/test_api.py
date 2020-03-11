@@ -2142,7 +2142,7 @@ class TestJobs:
         }
 
     @pytest.mark.asyncio
-    async def test_create_with_custom_volumes_legacy(
+    async def test_create_with_custom_volumes_legacy_uris(
         self,
         jobs_client: JobsClient,
         api: ApiConfig,
@@ -2234,6 +2234,123 @@ class TestJobs:
                         "dst_path": "/var/storage",
                         "read_only": False,
                         "src_storage_uri": f"storage://{regular_user.name}",
+                    }
+                ],
+            },
+            "ssh_server": "ssh://nobody@ssh-auth.platform.neuromation.io:22",
+            "ssh_auth_server": "ssh://nobody@ssh-auth.platform.neuromation.io:22",
+            "is_preemptible": True,
+            "uri": f"job://test-cluster/{regular_user.name}/{job_id}",
+        }
+
+    @pytest.mark.asyncio
+    async def test_create_with_custom_volumes_legacy_acl(
+        self,
+        jobs_client: JobsClient,
+        api: ApiConfig,
+        client: aiohttp.ClientSession,
+        regular_user: _User,
+        auth_client: AuthClient,
+        admin_token: str,
+    ) -> None:
+        storage_uri = "storage://teststorage"
+        headers = auth_client._generate_headers(admin_token)
+        payload = [
+            {"uri": storage_uri, "action": "manage"},
+        ]
+        async with auth_client._request(
+            "POST",
+            f"/api/v1/users/{regular_user.name}/permissions",
+            headers=headers,
+            json=payload,
+        ) as p:
+            assert p.status == 201
+
+        request_payload = {
+            "container": {
+                "image": "ubuntu",
+                "command": "true",
+                "resources": {"cpu": 0.1, "memory_mb": 16},
+                "volumes": [
+                    {
+                        "src_storage_uri": storage_uri,
+                        "dst_path": "/var/storage",
+                        "read_only": False,
+                    }
+                ],
+            },
+            "is_preemptible": True,
+        }
+
+        async with client.post(
+            api.jobs_base_url, headers=regular_user.headers, json=request_payload
+        ) as response:
+            response_text = await response.text()
+            assert response.status == HTTPAccepted.status_code, response_text
+            response_payload = await response.json()
+            job_id = response_payload["id"]
+            assert response_payload == {
+                "id": mock.ANY,
+                "owner": regular_user.name,
+                "cluster_name": "test-cluster",
+                "internal_hostname": f"{job_id}.platformapi-tests",
+                "status": "pending",
+                "history": {
+                    "status": "pending",
+                    "reason": "Creating",
+                    "description": None,
+                    "created_at": mock.ANY,
+                    "run_time_seconds": 0,
+                },
+                "container": {
+                    "command": "true",
+                    "env": {},
+                    "image": "ubuntu",
+                    "resources": {"cpu": 0.1, "memory_mb": 16},
+                    "volumes": [
+                        {
+                            "dst_path": "/var/storage",
+                            "read_only": False,
+                            "src_storage_uri": storage_uri,
+                        }
+                    ],
+                },
+                "ssh_server": "ssh://nobody@ssh-auth.platform.neuromation.io:22",
+                "ssh_auth_server": "ssh://nobody@ssh-auth.platform.neuromation.io:22",
+                "is_preemptible": True,
+                "uri": f"job://test-cluster/{regular_user.name}/{job_id}",
+            }
+
+        response_payload = await jobs_client.long_polling_by_job_id(
+            job_id=job_id, status="succeeded"
+        )
+
+        assert response_payload == {
+            "id": job_id,
+            "owner": regular_user.name,
+            "cluster_name": "test-cluster",
+            "internal_hostname": f"{job_id}.platformapi-tests",
+            "status": "succeeded",
+            "history": {
+                "status": "succeeded",
+                "reason": None,
+                "description": None,
+                "exit_code": 0,
+                "created_at": mock.ANY,
+                "started_at": mock.ANY,
+                "finished_at": mock.ANY,
+                "run_time_seconds": mock.ANY,
+            },
+            "container": {
+                "command": "true",
+                "env": {},
+                "image": "ubuntu",
+                "resources": {"cpu": 0.1, "memory_mb": 16},
+                "volumes": [
+                    {
+                        "dst_path": "/var/storage",
+                        "read_only": False,
+                        "src_storage_uri": storage_uri,
                     }
                 ],
             },
