@@ -35,6 +35,7 @@ from .validators import (
     create_job_history_validator,
     create_job_name_validator,
     create_job_status_validator,
+    create_job_tags_validator,
     create_user_name_validator,
     sanitize_dns_name,
 )
@@ -58,6 +59,7 @@ def create_job_request_validator(
             ),
             t.Key("name", optional=True): create_job_name_validator(),
             t.Key("description", optional=True): t.String,
+            t.Key("tags", optional=True): create_job_tags_validator(),
             t.Key("is_preemptible", optional=True, default=False): t.Bool,
             t.Key("schedule_timeout", optional=True): t.Float(gte=1, lt=30 * 24 * 3600),
             t.Key("max_run_time_minutes", optional=True): t.Int(gte=0),
@@ -96,6 +98,7 @@ def create_job_response_validator() -> t.Trafaret:
             t.Key("internal_hostname", optional=True): t.String,
             t.Key("name", optional=True): create_job_name_validator(max_length=None),
             t.Key("description", optional=True): t.String,
+            t.Key("tags", optional=True): create_job_tags_validator(),
             t.Key("schedule_timeout", optional=True): t.Float,
             t.Key("max_run_time_minutes", optional=True): t.Int,
         }
@@ -210,6 +213,8 @@ def convert_job_to_job_response(
         response_payload["name"] = job.name
     if job.description:
         response_payload["description"] = job.description
+    if job.tags:
+        response_payload["tags"] = job.tags
     if job.has_http_server_exposed:
         response_payload["http_url"] = job.http_url
         if job.http_url_named:
@@ -371,6 +376,7 @@ class JobsHandler:
         await check_permissions(request, permissions)
 
         name = request_payload.get("name")
+        tags = sorted(set(request_payload.get("tags", [])))
         description = request_payload.get("description")
         is_preemptible = request_payload["is_preemptible"]
         schedule_timeout = request_payload.get("schedule_timeout")
@@ -381,6 +387,7 @@ class JobsHandler:
             user=user,
             cluster_name=cluster_name,
             job_name=name,
+            tags=tags,
             is_preemptible=is_preemptible,
             schedule_timeout=schedule_timeout,
             max_run_time_minutes=max_run_time_minutes,
