@@ -238,6 +238,8 @@ async def create_app(
                 ClusterRegistry(factory=create_cluster)
             )
 
+            logger.info("Loading clusters")
+            await exit_stack.enter_async_context(config.config_client)
             [
                 await cluster_registry.add(cluster_config)
                 for cluster_config in await cluster_configs_future
@@ -329,13 +331,12 @@ def _setup_cors(app: aiohttp.web.Application, config: CORSConfig) -> None:
 
 
 async def get_cluster_configs(config: Config) -> Sequence[ClusterConfig]:
-    async with config.config_client as client:
-        return await client.get_clusters(
-            jobs_ingress_class=config.jobs.jobs_ingress_class,
-            jobs_ingress_oauth_url=config.jobs.jobs_ingress_oauth_url,
-            registry_username=config.auth.service_name,
-            registry_password=config.auth.service_token,
-        )
+    return await config.config_client.get_clusters(
+        jobs_ingress_class=config.jobs.jobs_ingress_class,
+        jobs_ingress_oauth_url=config.jobs.jobs_ingress_oauth_url,
+        registry_username=config.auth.service_name,
+        registry_password=config.auth.service_token,
+    )
 
 
 def main() -> None:
