@@ -45,7 +45,6 @@ build_ssh_auth_k8s:
 	    -f deploy/ssh_auth/docker/Dockerfile.ssh-auth.k8s -t $(SSH_IMAGE_NAME):$(SSH_IMAGE_TAG) .
 
 build_api_k8s:
-	python --version
 	docker build --build-arg PIP_EXTRA_INDEX_URL \
 	    -f Dockerfile.k8s -t $(IMAGE_NAME):$(IMAGE_TAG) .
 
