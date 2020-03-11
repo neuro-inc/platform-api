@@ -70,7 +70,7 @@ jobs:
           name: Installing Dependencies
           command: |
             echo "Available Python 3.7 versions: $(pyenv install --list | grep 3.7.)"
-            pyenv install 3.7.2
+            pyenv install --skip-existing 3.7.2
             pyenv global 3.7.2
             curl -s https://packages.cloud.google.com/apt/doc/apt-key.gpg | sudo apt-key add -
             sudo touch /etc/apt/sources.list.d/kubernetes.list
