@@ -24,6 +24,7 @@ setup(
     version="0.0.1b1",
     url="https://github.com/neuromation/platform-api",
     packages=find_packages(),
+    python_requires=">=3.7.0",
     install_requires=install_requires,
     entry_points={
         "console_scripts": [
