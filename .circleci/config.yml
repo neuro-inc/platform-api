@@ -122,17 +122,17 @@ jobs:
             - ./venv/
           key: *cache_key
 
-      - run:
-          name: Running Static Code Analysis
-          command: |
-            source venv/bin/activate
-            make lint
-
-      - run:
-          name: Run Platform Tests
-          command: |
-            source venv/bin/activate
-            make test_k8s_platform_api
+#      - run:
+#          name: Running Static Code Analysis
+#          command: |
+#            source venv/bin/activate
+#            make lint
+#
+#      - run:
+#          name: Run Platform Tests
+#          command: |
+#            source venv/bin/activate
+#            make test_k8s_platform_api
 
       - run:
           name: Running E2E Test Suite
