@@ -12,6 +12,7 @@ from neuro_auth_client.security import AuthScheme, setup_security
 from notifications_client import Client as NotificationsClient
 from platform_logging import init_logging
 
+from platform_api.handlers.tags_handler import TagsHandler
 from platform_api.orchestrator.job_policy_enforcer import (
     JobPolicyEnforcePoller,
     PlatformApiClient,
@@ -209,6 +210,13 @@ async def create_stats_app(config: Config) -> aiohttp.web.Application:
     return stats_app
 
 
+async def create_tags_app(config: Config) -> aiohttp.web.Application:
+    tags_app = aiohttp.web.Application()
+    tags_handler = TagsHandler(app=tags_app, config=config)
+    tags_handler.register(tags_app)
+    return tags_app
+
+
 def create_cluster(config: ClusterConfig) -> Cluster:
     return KubeCluster(config)
 
@@ -262,6 +270,7 @@ async def create_app(
             app["api_v1_app"]["jobs_service"] = jobs_service
             app["jobs_app"]["jobs_service"] = jobs_service
             app["stats_app"]["jobs_service"] = jobs_service
+            app["tags_app"]["jobs_service"] = jobs_service
 
             logger.info("Initializing JobPolicyEnforcePoller")
             api_client = await exit_stack.enter_async_context(
@@ -305,6 +314,10 @@ async def create_app(
     stats_app = await create_stats_app(config=config)
     app["stats_app"] = stats_app
     api_v1_app.add_subapp("/stats", stats_app)
+
+    tags_app = await create_tags_app(config=config)
+    app["tags_app"] = tags_app
+    api_v1_app.add_subapp("/tags", tags_app)
 
     app.add_subapp("/api/v1", api_v1_app)
 
