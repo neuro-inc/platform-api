@@ -995,6 +995,62 @@ class TestJobs:
         assert job_ids == set()
 
     @pytest.mark.asyncio
+    async def test_get_all_jobs_filter_by_tags(
+        self,
+        api: ApiConfig,
+        client: aiohttp.ClientSession,
+        jobs_client: JobsClient,
+        regular_user: _User,
+        job_request_factory: Callable[[], Dict[str, Any]],
+    ) -> None:
+        url = api.jobs_base_url
+        headers = regular_user.headers
+        job_request = job_request_factory()
+        job_request["container"]["resources"]["memory_mb"] = 100_500
+
+        job_request["tags"] = ["tag1", "tag2"]
+        async with client.post(url, headers=headers, json=job_request) as resp:
+            assert resp.status == HTTPAccepted.status_code, await resp.text()
+            result = await resp.json()
+            job_1 = result["id"]
+
+        job_request["tags"] = ["tag2", "tag3"]
+        async with client.post(url, headers=headers, json=job_request) as resp:
+            assert resp.status == HTTPAccepted.status_code, await resp.text()
+            result = await resp.json()
+            job_2 = result["id"]
+
+        jobs = await jobs_client.get_all_jobs()
+        job_ids = {job["id"] for job in jobs}
+        assert job_ids == {job_1, job_2}
+
+        filters: Any
+        filters = {"tag": "tag1"}
+        jobs = await jobs_client.get_all_jobs(filters)
+        job_ids = {job["id"] for job in jobs}
+        assert job_ids == {job_1}
+
+        filters = {"tag": "tag2"}
+        jobs = await jobs_client.get_all_jobs(filters)
+        job_ids = {job["id"] for job in jobs}
+        assert job_ids == {job_1, job_2}
+
+        filters = [("tag", "tag1"), ("tag", "tag2")]
+        jobs = await jobs_client.get_all_jobs(filters)
+        job_ids = {job["id"] for job in jobs}
+        assert job_ids == {job_1, job_2}
+
+        filters = [("tag", "tag3"), ("tag", "tag-non-existing")]
+        jobs = await jobs_client.get_all_jobs(filters)
+        job_ids = {job["id"] for job in jobs}
+        assert job_ids == {job_2}
+
+        filters = {"tag": "tag-non-existing"}
+        jobs = await jobs_client.get_all_jobs(filters)
+        job_ids = {job["id"] for job in jobs}
+        assert not job_ids
+
+    @pytest.mark.asyncio
     async def test_get_all_jobs_filter_by_status_only(
         self,
         api: ApiConfig,
