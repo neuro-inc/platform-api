@@ -12,7 +12,6 @@ from neuro_auth_client.security import AuthScheme, setup_security
 from notifications_client import Client as NotificationsClient
 from platform_logging import init_logging
 
-from platform_api.handlers.tags_handler import TagsHandler
 from platform_api.orchestrator.job_policy_enforcer import (
     JobPolicyEnforcePoller,
     PlatformApiClient,
@@ -25,6 +24,7 @@ from .config import Config, CORSConfig
 from .config_factory import EnvironConfigFactory
 from .handlers import JobsHandler
 from .handlers.stats_handler import StatsHandler
+from .handlers.tags_handler import TagsHandler
 from .kube_cluster import KubeCluster
 from .orchestrator.job_request import JobException
 from .orchestrator.jobs_poller import JobsPoller
