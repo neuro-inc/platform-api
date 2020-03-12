@@ -1,12 +1,12 @@
 import asyncio
 import logging
+from contextlib import AsyncExitStack
 from typing import Any, AsyncIterator, Awaitable, Callable, Dict, Sequence
 
 import aiohttp.web
 import aiohttp_cors
 from aiohttp.web import HTTPUnauthorized
 from aiohttp_security import check_permission
-from async_exit_stack import AsyncExitStack
 from neuro_auth_client import AuthClient, Permission
 from neuro_auth_client.security import AuthScheme, setup_security
 from notifications_client import Client as NotificationsClient

@@ -5,9 +5,6 @@ install_requires = (
     "aiohttp==3.6.2",
     # WARN: aioredis does not support Redis Cluster yet
     "aioredis==1.3.0",
-    "async-exit-stack==1.0.1",  # backport from 3.7 stdlib
-    "async-generator==1.10",
-    "dataclasses==0.6",  # backport from 3.7 stdlib
     "iso8601==0.1.12",
     "trafaret==1.2.0",
     "neuro_auth_client==19.11.25",
@@ -27,6 +24,7 @@ setup(
     version="0.0.1b1",
     url="https://github.com/neuromation/platform-api",
     packages=find_packages(),
+    python_requires=">=3.7.0",
     install_requires=install_requires,
     entry_points={
         "console_scripts": [
