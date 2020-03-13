@@ -2502,7 +2502,7 @@ class TestJobs:
                 "started_at": mock.ANY,
                 "finished_at": mock.ANY,
                 "exit_code": 1,
-                "run_time_seconds": 0,
+                "run_time_seconds": mock.ANY,
             },
             "container": {
                 "command": 'bash -c "echo Failed!; false"',
