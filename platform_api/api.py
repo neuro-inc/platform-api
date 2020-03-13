@@ -1,12 +1,11 @@
 import asyncio
-import aiozipkin
-from .trace import store_span_middleware
 import logging
 from contextlib import AsyncExitStack
 from typing import Any, AsyncIterator, Awaitable, Callable, Dict, Sequence
 
 import aiohttp.web
 import aiohttp_cors
+import aiozipkin
 from aiohttp.web import HTTPUnauthorized
 from aiohttp_security import check_permission
 from neuro_auth_client import AuthClient, Permission
@@ -34,6 +33,7 @@ from .orchestrator.jobs_service import JobsService, JobsServiceException
 from .orchestrator.jobs_storage import RedisJobsStorage
 from .redis import create_redis_client
 from .resource import Preset
+from .trace import store_span_middleware
 from .user import authorized_user, untrusted_user
 
 
@@ -311,7 +311,9 @@ async def create_app(
 
             auth_client = await exit_stack.enter_async_context(
                 AuthClient(
-                    url=config.auth.server_endpoint_url, token=config.auth.service_token, trace_config=trace_config
+                    url=config.auth.server_endpoint_url,
+                    token=config.auth.service_token,
+                    trace_config=trace_config,
                 )
             )
             app["jobs_app"]["auth_client"] = auth_client
