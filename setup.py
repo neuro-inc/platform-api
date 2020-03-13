@@ -4,7 +4,7 @@ from setuptools import find_packages, setup
 install_requires = (
     "aiohttp==3.6.2",
     # WARN: aioredis does not support Redis Cluster yet
-    "aioredis==1.3.0",
+    "aioredis==1.3.1",
     "iso8601==0.1.12",
     "trafaret==1.2.0",
     "neuro_auth_client==19.11.25",
