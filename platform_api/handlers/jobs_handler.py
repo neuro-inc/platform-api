@@ -35,7 +35,7 @@ from .validators import (
     create_job_history_validator,
     create_job_name_validator,
     create_job_status_validator,
-    create_job_tags_validator,
+    create_tag_list_per_job_validator,
     create_user_name_validator,
     sanitize_dns_name,
 )
@@ -59,7 +59,7 @@ def create_job_request_validator(
             ),
             t.Key("name", optional=True): create_job_name_validator(),
             t.Key("description", optional=True): t.String,
-            t.Key("tags", optional=True): create_job_tags_validator(),
+            t.Key("tags", optional=True): create_tag_list_per_job_validator(),
             t.Key("is_preemptible", optional=True, default=False): t.Bool,
             t.Key("schedule_timeout", optional=True): t.Float(gte=1, lt=30 * 24 * 3600),
             t.Key("max_run_time_minutes", optional=True): t.Int(gte=0),
@@ -98,7 +98,7 @@ def create_job_response_validator() -> t.Trafaret:
             t.Key("internal_hostname", optional=True): t.String,
             t.Key("name", optional=True): create_job_name_validator(max_length=None),
             t.Key("description", optional=True): t.String,
-            t.Key("tags", optional=True): create_job_tags_validator(),
+            t.Key("tags", optional=True): create_tag_list_per_job_validator(),
             t.Key("schedule_timeout", optional=True): t.Float,
             t.Key("max_run_time_minutes", optional=True): t.Int,
         }

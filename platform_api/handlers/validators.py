@@ -268,8 +268,13 @@ def create_container_command_validator(
     return t.String() >> _validate
 
 
-def create_job_tags_validator() -> t.Trafaret:
-    return t.List(
-        t.String(min_length=1, max_length=256) & t.Regexp(JOB_TAG_PATTERN),
-        max_length=256,
-    )
+def create_job_tag_validator() -> t.Trafaret:
+    return t.String(min_length=1, max_length=256) & t.Regexp(JOB_TAG_PATTERN)
+
+
+def create_tag_list_per_job_validator() -> t.Trafaret:
+    return t.List(create_job_tag_validator(), max_length=256)
+
+
+def create_tag_list_per_user_validator() -> t.Trafaret:
+    return t.List(create_job_tag_validator())
