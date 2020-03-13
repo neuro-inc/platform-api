@@ -277,4 +277,4 @@ def create_tag_list_per_job_validator() -> t.Trafaret:
 
 
 def create_tag_list_per_user_validator() -> t.Trafaret:
-    return t.List(create_job_tag_validator())
+    return t.List(t.String)
