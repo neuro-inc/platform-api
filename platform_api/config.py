@@ -16,6 +16,12 @@ class ServerConfig:
 
 
 @dataclass(frozen=True)
+class ZipkinConfig:
+    url: URL
+    sample_rate: float
+
+
+@dataclass(frozen=True)
 class AuthConfig:
     server_endpoint_url: URL
     public_endpoint_url: URL
@@ -91,6 +97,7 @@ class Config:
 
     database: DatabaseConfig
     auth: AuthConfig
+    zipkin: ZipkinConfig
     notifications: NotificationsConfig
     job_policy_enforcer: JobPolicyEnforcerConfig
 

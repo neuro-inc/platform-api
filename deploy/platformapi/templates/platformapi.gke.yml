@@ -101,6 +101,11 @@ spec:
         - name: NP_USE_CLUSTER_NAMES_IN_URIS
           value: {{ printf "%s" (pluck .Values.global.env .Values.NP_USE_CLUSTER_NAMES_IN_URIS | first | default .Values.NP_USE_CLUSTER_NAMES_IN_URIS._default) | quote }}
 
+        - name: NP_STORAGE_ZIPKIN_URL
+          value: {{ .Values.NP_STORAGE_ZIPKIN_URL }}
+        - name: NP_STORAGE_ZIPKIN_SAMPLE_RATE
+          value: "{{ .Values.NP_STORAGE_ZIPKIN_SAMPLE_RATE }}"
+
       - name: kubeproxy
         image: lachlanevenson/k8s-kubectl:v1.10.3
         args: [proxy]

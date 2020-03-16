@@ -31,6 +31,7 @@ from platform_api.config import (
     NotificationsConfig,
     OAuthConfig,
     ServerConfig,
+    ZipkinConfig,
 )
 from platform_api.config_client import ConfigClient
 from platform_api.orchestrator.job_request import JobNotFoundException
@@ -554,6 +555,7 @@ def config_factory(
             cors=CORSConfig(allowed_origins=["https://neu.ro"]),
             admin_url=admin_url,
             use_cluster_names_in_uris=use_cluster_names_in_uris,
+            zipkin=ZipkinConfig(URL("https://zipkin:9411"), 1.0),
             **kwargs,
         )
 

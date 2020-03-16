@@ -5,6 +5,7 @@ from typing import Any, AsyncIterator, Awaitable, Callable, Dict, Sequence
 
 import aiohttp.web
 import aiohttp_cors
+import aiozipkin
 from aiohttp.web import HTTPUnauthorized
 from aiohttp_security import check_permission
 from neuro_auth_client import AuthClient, Permission
@@ -32,6 +33,7 @@ from .orchestrator.jobs_service import JobsService, JobsServiceException
 from .orchestrator.jobs_storage import RedisJobsStorage
 from .redis import create_redis_client
 from .resource import Preset
+from .trace import store_span_middleware
 from .user import authorized_user, untrusted_user
 
 
@@ -221,14 +223,31 @@ def create_cluster(config: ClusterConfig) -> Cluster:
     return KubeCluster(config)
 
 
+async def create_tracer(config: Config) -> aiozipkin.Tracer:
+    endpoint = aiozipkin.create_endpoint(
+        "platformapi",  # the same name as pod prefix on a cluster
+        ipv4=config.server.host,
+        port=config.server.port,
+    )
+
+    zipkin_address = config.zipkin.url / "api/v2/spans"
+    tracer = await aiozipkin.create(
+        str(zipkin_address), endpoint, sample_rate=config.zipkin.sample_rate
+    )
+    return tracer
+
+
 async def create_app(
     config: Config, cluster_configs_future: Awaitable[Sequence[ClusterConfig]]
 ) -> aiohttp.web.Application:
     app = aiohttp.web.Application(middlewares=[handle_exceptions])
     app["config"] = config
 
+    tracer = await create_tracer(config)
+
     async def _init_app(app: aiohttp.web.Application) -> AsyncIterator[None]:
         async with AsyncExitStack() as exit_stack:
+            trace_config = aiozipkin.make_trace_config(tracer)
 
             logger.info("Initializing Notifications client")
             notifications_client = NotificationsClient(
@@ -292,7 +311,9 @@ async def create_app(
 
             auth_client = await exit_stack.enter_async_context(
                 AuthClient(
-                    url=config.auth.server_endpoint_url, token=config.auth.service_token
+                    url=config.auth.server_endpoint_url,
+                    token=config.auth.service_token,
+                    trace_config=trace_config,
                 )
             )
             app["jobs_app"]["auth_client"] = auth_client
@@ -324,6 +345,10 @@ async def create_app(
     app.add_subapp("/api/v1", api_v1_app)
 
     _setup_cors(app, config.cors)
+
+    aiozipkin.setup(app, tracer)
+    app.middlewares.append(store_span_middleware)
+
     return app
 
 

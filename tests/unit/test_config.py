@@ -151,6 +151,8 @@ class TestEnvironConfigFactory:
             "NP_AUTH_PUBLIC_URL": "https://neu.ro/api/v1/users",
             "NP_ENFORCER_PLATFORM_API_URL": "http://platformapi:8080/api/v1",
             "NP_ENFORCER_TOKEN": "compute-token",
+            "NP_STORAGE_ZIPKIN_URL": "https://zipkin:9411",
+            "NP_STORAGE_ZIPKIN_SAMPLE_RATE": "1",
         }
         config = EnvironConfigFactory(environ=environ).create()
         cluster = EnvironConfigFactory(environ=environ).create_cluster("new-cluster")
@@ -234,6 +236,8 @@ class TestEnvironConfigFactory:
             "NP_ADMIN_URL": "https://neu.ro/apis/admin/v1",
             "NP_JOBS_INGRESS_OAUTH_AUTHORIZE_URL": "http://neu.ro/oauth/authorize",
             "NP_AUTH_PUBLIC_URL": "https://neu.ro/api/v1/users",
+            "NP_STORAGE_ZIPKIN_URL": "https://zipkin:9411",
+            "NP_STORAGE_ZIPKIN_SAMPLE_RATE": "1",
         }
         with pytest.raises(ValueError):
             EnvironConfigFactory(environ=environ).create()
@@ -288,6 +292,8 @@ class TestEnvironConfigFactory:
             "NP_ENFORCER_TOKEN": "compute-token",
             "NP_CORS_ORIGINS": "https://domain1.com,http://do.main",
             "NP_USE_CLUSTER_NAMES_IN_URIS": "1",
+            "NP_STORAGE_ZIPKIN_URL": "https://zipkin:9411",
+            "NP_STORAGE_ZIPKIN_SAMPLE_RATE": "1",
         }
         config = EnvironConfigFactory(environ=environ).create()
         cluster = EnvironConfigFactory(environ=environ).create_cluster("new-cluster")
