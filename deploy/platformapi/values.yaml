@@ -133,13 +133,13 @@ NP_USE_CLUSTER_NAMES_IN_URIS:
   dev: "1"
   staging: "0"
   prod: "0"
-NP_STORAGE_ZIPKIN_URL:
+NP_API_ZIPKIN_URL:
   _default: 'http://zipkin:9411'
   dev: 'http://zipkin:9411'
   staging: 'http://zipkin:9411'
   prod: 'http://zipkin:9411'
-NP_STORAGE_ZIPKIN_SAMPLE_RATE:
-  _defaukt: '1'  # 100% of traces are saved
+NP_API_ZIPKIN_SAMPLE_RATE:
+  _default: '1'  # 100% of traces are saved
   dev: '0.1'  # 10% of traces are saved
   staging: '0.1'  # 10% of traces are saved
   prod: '0.1'  # 10% of traces are saved
