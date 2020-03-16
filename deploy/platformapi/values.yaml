@@ -91,7 +91,7 @@ NP_GKE_GPU_MODELS:
 NP_OAUTH_BASE_URL:
   _default: https://login-dev.neu.ro
   dev: https://login-dev.neu.ro
-  staging: https://staging-neuromation.auth0.com
+  staging: https://login.neu.ro
   prod:
 NP_OAUTH_CLIENT_ID:
   _default: V7Jz87W9lhIlo0MyD0O6dufBvcXwM4DR
