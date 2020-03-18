@@ -292,9 +292,6 @@ class RedisJobsStorage(JobsStorage):
     def _generate_tags_owner_index_zset_key(self, owner: str) -> str:
         return f"tags.owner.{owner}"
 
-    def _generate_jobs_deleted_index_key(self) -> str:
-        return "jobs.deleted"
-
     def _generate_jobs_for_deletion_index_key(self) -> str:
         return f"jobs.for-deletion"
 
@@ -428,10 +425,11 @@ class RedisJobsStorage(JobsStorage):
 
     def _update_for_deletion_index(self, tr: Pipeline, job: JobRecord) -> None:
         index_key = self._generate_jobs_for_deletion_index_key()
-        if job.is_finished and not job.is_deleted:
-            tr.sadd(index_key, job.id)
-        else:
-            tr.srem(index_key, job.id)
+        if job.is_finished:
+            if job.is_deleted:
+                tr.srem(index_key, job.id)
+            else:
+                tr.sadd(index_key, job.id)
 
     async def update_job_atomic(
         self, job: JobRecord, *, is_job_creation: bool, skip_index: bool = False
