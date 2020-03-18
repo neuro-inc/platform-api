@@ -3,7 +3,7 @@ import logging
 from abc import ABC, abstractmethod
 from dataclasses import dataclass, field
 from datetime import timedelta
-from itertools import islice
+from itertools import islice, product
 from typing import (
     AbstractSet,
     Any,
@@ -307,6 +307,20 @@ class RedisJobsStorage(JobsStorage):
         """
         return f"temp_zset_{uuid4()}"
 
+    def _generate_jobs_composite_keys(
+        self,
+        *,
+        statuses: Iterable[str],
+        clusters: Iterable[str],
+        owners: Iterable[str],
+        tags: Iterable[str],
+        names: Iterable[str],
+    ) -> List[str]:
+        return [
+            "jobs.comp.{}.{}.{}.{}.{}".format(*params)
+            for params in product(statuses, clusters, owners, tags, names)
+        ]
+
     @asynccontextmanager
     async def _acquire_conn(self) -> AsyncIterator[aioredis.Redis]:
         pool = self._client.connection
@@ -431,6 +445,23 @@ class RedisJobsStorage(JobsStorage):
             else:
                 tr.sadd(index_key, job.id)
 
+    def _update_composite_index(self, tr: Pipeline, job: JobRecord) -> None:
+        statuses = [str(s) for s in JobStatus] + [""]
+        clusters = [job.cluster_name, ""]
+        owners = [job.owner, ""]
+        tags = [t for t in job.tags] + [""]
+        names = [job.name, ""] if job.name else [""]
+        for key in self._generate_jobs_composite_keys(
+            statuses=statuses, clusters=clusters, owners=owners, tags=tags, names=names,
+        ):
+            tr.zrem(key, job.id)
+
+        statuses = [str(job.status), ""]
+        for key in self._generate_jobs_composite_keys(
+            statuses=statuses, clusters=clusters, owners=owners, tags=tags, names=names,
+        ):
+            tr.zadd(key, job.status_history.created_at_timestamp, job.id)
+
     async def update_job_atomic(
         self, job: JobRecord, *, is_job_creation: bool, skip_index: bool = False
     ) -> None:
@@ -454,6 +485,9 @@ class RedisJobsStorage(JobsStorage):
 
         if not skip_index:
             self._update_for_deletion_index(tr, job)
+
+        if not skip_index:
+            self._update_composite_index(tr, job)
 
         await tr.execute()
 
@@ -513,46 +547,30 @@ class RedisJobsStorage(JobsStorage):
         tags: Iterable[str],
         name: Optional[str] = None,
     ) -> List[str]:
-        if name:
-            owner_keys = [
-                self._generate_jobs_name_index_zset_key(owner, name) for owner in owners
-            ]
-        else:
-            owner_keys = [
-                self._generate_jobs_owner_index_key(owner) for owner in owners
-            ]
-        cluster_keys = [
-            self._generate_jobs_cluster_index_key(cluster) for cluster in clusters
-        ]
-        status_keys = [self._generate_jobs_status_index_key(s) for s in statuses]
-        tags_keys = [self._generate_jobs_tags_index_key(t) for t in tags]
+        statuses_str = [str(s) for s in statuses] or [""]
+        clusters = clusters or [""]
+        owners = owners or [""]
+        tags = tags or [""]
+        names = [name or ""]
+        keys = self._generate_jobs_composite_keys(
+            statuses=statuses_str,
+            clusters=clusters,
+            owners=owners,
+            tags=tags,
+            names=names,
+        )
+
+        if len(keys) == 1:
+            return [job_id async for job_id, _ in self._client.izscan(keys[0])]
 
         target = self._generate_temp_zset_key()
         tr = self._client.multi_exec()
-
-        index_keys = [keys for keys in (owner_keys, cluster_keys, tags_keys) if keys]
-        if index_keys:
-            tr.zunionstore(target, *index_keys.pop(), aggregate=tr.ZSET_AGGREGATE_MAX)
-            if status_keys:
-                index_keys += [status_keys]
-            for keys in index_keys:
-                self._intersect_keys(tr, target, keys)
-            tr.zrange(target)
-        else:
-            status_keys = status_keys or [self._generate_jobs_index_key()]
-            tr.sunion(*status_keys)
-
+        tr.zunionstore(target, *keys, aggregate=tr.ZSET_AGGREGATE_MAX)
+        tr.zrange(target)
         tr.delete(target)
         *_, payloads, _ = await tr.execute()
 
         return payloads
-
-    def _intersect_keys(self, tr: Pipeline, target: str, keys: List[str]) -> None:
-        """Intersects `target` with `keys` and stores the result in `target`. """
-        temp_key = self._generate_temp_zset_key()
-        tr.zunionstore(temp_key, *keys, aggregate=tr.ZSET_AGGREGATE_MAX)
-        tr.zinterstore(target, target, temp_key, aggregate=tr.ZSET_AGGREGATE_MAX)
-        tr.delete(temp_key)
 
     async def _get_job_ids_for_deletion(self) -> List[str]:
         return [
@@ -656,9 +674,11 @@ class RedisJobsStorage(JobsStorage):
             await self._reindex_job_clusters()
         if version < 4:
             await self._reindex_jobs_for_deletion()
+        if version < 5:
+            await self._reindex_jobs_composite()
         else:
             return False
-        await self._client.set("version", "4")
+        await self._client.set("version", "5")
         return True
 
     async def _reindex_job_owners(self) -> None:
@@ -707,6 +727,16 @@ class RedisJobsStorage(JobsStorage):
         await tr.execute()
 
         logger.info("Finished reindexing jobs for deletion")
+
+    async def _reindex_jobs_composite(self) -> None:
+        logger.info("Starting reindexing jobs composite")
+
+        tr = self._client.pipeline()
+        async for job in self._iter_all_jobs():
+            self._update_composite_index(tr, job)
+        await tr.execute()
+
+        logger.info("Finished reindexing jobs composite")
 
     async def _iter_all_jobs(self) -> AsyncIterator[JobRecord]:
         jobs_key = self._generate_jobs_index_key()

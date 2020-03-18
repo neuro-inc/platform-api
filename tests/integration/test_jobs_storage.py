@@ -1302,6 +1302,8 @@ class TestRedisJobsStorage:
         jobs_for_deletion = await storage.get_jobs_for_deletion()
         assert jobs_for_deletion
 
+        assert not await storage.migrate()
+
     @pytest.mark.asyncio
     async def test_migrate(self, redis_client: aioredis.Redis) -> None:
         first_job = self._create_pending_job(owner="testuser")
@@ -1320,7 +1322,7 @@ class TestRedisJobsStorage:
 
         jobs = await storage.get_all_jobs()
         job_ids = {job.id for job in jobs}
-        assert job_ids == {first_job.id, second_job.id}
+        assert not job_ids
 
         filters = JobFilter(owners={"testuser"})
 
