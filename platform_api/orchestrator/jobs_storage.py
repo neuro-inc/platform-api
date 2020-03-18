@@ -295,6 +295,9 @@ class RedisJobsStorage(JobsStorage):
     def _generate_jobs_deleted_index_key(self) -> str:
         return "jobs.deleted"
 
+    def _generate_jobs_for_deletion_index_key(self) -> str:
+        return f"jobs.for-deletion"
+
     def _generate_jobs_tags_index_key(self, tag: str) -> str:
         return f"jobs.tags.{tag}"
 
@@ -423,6 +426,13 @@ class RedisJobsStorage(JobsStorage):
             tr.zadd(self._generate_tags_owner_index_zset_key(job.owner), neg_score, tag)
             tr.sadd(self._generate_jobs_tags_index_key(tag), job.id)
 
+    def _update_for_deletion_index(self, tr: Pipeline, job: JobRecord) -> None:
+        index_key = self._generate_jobs_for_deletion_index_key()
+        if job.is_finished and not job.is_deleted:
+            tr.sadd(index_key, job.id)
+        else:
+            tr.srem(index_key, job.id)
+
     async def update_job_atomic(
         self, job: JobRecord, *, is_job_creation: bool, skip_index: bool = False
     ) -> None:
@@ -444,8 +454,9 @@ class RedisJobsStorage(JobsStorage):
                 self._update_name_index(tr, job)
             self._update_tags_indexes(tr, job)
 
-        if job.is_deleted:
-            tr.sadd(self._generate_jobs_deleted_index_key(), job.id)
+        if not skip_index:
+            self._update_for_deletion_index(tr, job)
+
         await tr.execute()
 
     def _parse_job_payload(self, payload: str) -> JobRecord:
@@ -546,17 +557,12 @@ class RedisJobsStorage(JobsStorage):
         tr.delete(temp_key)
 
     async def _get_job_ids_for_deletion(self) -> List[str]:
-        tr = self._client.multi_exec()
-        tr.sdiff(
-            self._generate_jobs_status_index_key(JobStatus.FAILED),
-            self._generate_jobs_deleted_index_key(),
-        )
-        tr.sdiff(
-            self._generate_jobs_status_index_key(JobStatus.SUCCEEDED),
-            self._generate_jobs_deleted_index_key(),
-        )
-        failed, succeeded = await tr.execute()
-        return [*failed, *succeeded]
+        return [
+            job_id
+            async for job_id in self._client.isscan(
+                self._generate_jobs_for_deletion_index_key()
+            )
+        ]
 
     async def get_all_jobs(
         self, job_filter: Optional[JobFilter] = None
@@ -650,9 +656,11 @@ class RedisJobsStorage(JobsStorage):
         if version < 3:
             await self._update_job_cluster_names()
             await self._reindex_job_clusters()
+        if version < 4:
+            await self._reindex_jobs_for_deletion()
         else:
             return False
-        await self._client.set("version", "3")
+        await self._client.set("version", "4")
         return True
 
     async def _reindex_job_owners(self) -> None:
@@ -691,6 +699,16 @@ class RedisJobsStorage(JobsStorage):
         await tr.execute()
 
         logger.info(f"Finished updating job cluster names ({changed}/{total})")
+
+    async def _reindex_jobs_for_deletion(self) -> None:
+        logger.info("Starting reindexing jobs for deletion")
+
+        tr = self._client.pipeline()
+        async for job in self._iter_all_jobs():
+            self._update_for_deletion_index(tr, job)
+        await tr.execute()
+
+        logger.info("Finished reindexing jobs for deletion")
 
     async def _iter_all_jobs(self) -> AsyncIterator[JobRecord]:
         jobs_key = self._generate_jobs_index_key()
