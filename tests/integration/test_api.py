@@ -2033,6 +2033,7 @@ class TestJobs:
             job_id = result["id"]
             await jobs_client.long_polling_by_job_id(job_id=job_id, status="succeeded")
         await jobs_client.delete_job(job_id=job_id)
+        await jobs_client.long_polling_by_job_id(job_id, "succeeded")
 
         jobs = await jobs_client.get_all_jobs()
         assert len(jobs) == 1
