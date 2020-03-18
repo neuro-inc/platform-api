@@ -1,3 +1,4 @@
+import asyncio
 import json
 import logging
 from dataclasses import dataclass, replace
@@ -503,8 +504,10 @@ class JobsHandler:
         )
         await check_permissions(request, [permission])
 
-        await self._jobs_service.delete_job(job_id)
-        raise aiohttp.web.HTTPNoContent()
+        asyncio.create_task(self._jobs_service.delete_job(job_id))
+        await asyncio.sleep(0)
+
+        return aiohttp.web.HTTPNoContent()
 
     async def handle_put_status(
         self, request: aiohttp.web.Request

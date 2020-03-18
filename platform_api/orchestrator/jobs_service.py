@@ -416,6 +416,7 @@ class JobsService:
 
                     record.status = JobStatus.SUCCEEDED
                     record.is_deleted = True
+                logger.info("Job %s successfully deleted.", job_id)
                 return
             except JobStorageTransactionError:
                 logger.warning("Failed to mark a job %s as deleted. Retrying.", job_id)
