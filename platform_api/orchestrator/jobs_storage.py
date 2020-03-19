@@ -733,8 +733,9 @@ class RedisJobsStorage(JobsStorage):
 
         tr = self._client.pipeline()
         async for job in self._iter_all_jobs():
+            tr = self._client.pipeline()
             self._update_composite_index(tr, job)
-        await tr.execute()
+            await tr.execute()
 
         logger.info("Finished reindexing jobs composite")
 
