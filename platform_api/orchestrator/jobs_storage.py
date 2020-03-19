@@ -313,7 +313,6 @@ class RedisJobsStorage(JobsStorage):
         statuses: Iterable[str],
         clusters: Iterable[str],
         owners: Iterable[str],
-        tags: Iterable[str],
         names: Iterable[str],
         tags: Iterable[str],
     ) -> List[str]:
