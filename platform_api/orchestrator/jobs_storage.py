@@ -548,9 +548,9 @@ class RedisJobsStorage(JobsStorage):
         name: Optional[str] = None,
     ) -> List[str]:
         statuses_str = [str(s) for s in statuses] or [""]
-        clusters = clusters or [""]
-        owners = owners or [""]
-        tags = tags or [""]
+        clusters = list(clusters) or [""]
+        owners = list(owners) or [""]
+        tags = list(tags) or [""]
         names = [name or ""]
         keys = self._generate_jobs_composite_keys(
             statuses=statuses_str,
