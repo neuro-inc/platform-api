@@ -684,20 +684,22 @@ class RedisJobsStorage(JobsStorage):
     async def _reindex_job_owners(self) -> None:
         logger.info("Starting reindexing job owners")
 
-        tr = self._client.pipeline()
-        async for job in self._iter_all_jobs():
-            self._update_owner_index(tr, job)
-        await tr.execute()
+        async for chunk in self._iter_all_jobs_in_chunks():
+            tr = self._client.pipeline()
+            for job in chunk:
+                self._update_owner_index(tr, job)
+            await tr.execute()
 
         logger.info("Finished reindexing job owners")
 
     async def _reindex_job_clusters(self) -> None:
         logger.info("Starting reindexing job clusters")
 
-        tr = self._client.pipeline()
-        async for job in self._iter_all_jobs():
-            self._update_cluster_index(tr, job)
-        await tr.execute()
+        async for chunk in self._iter_all_jobs_in_chunks():
+            tr = self._client.pipeline()
+            for job in chunk:
+                self._update_cluster_index(tr, job)
+            await tr.execute()
 
         logger.info("Finished reindexing job clusters")
 
@@ -705,41 +707,44 @@ class RedisJobsStorage(JobsStorage):
         logger.info("Starting updating job cluster names")
 
         total = changed = 0
-        tr = self._client.pipeline()
-        async for job in self._iter_all_jobs():
-            total += 1
-            if job.cluster_name:
-                continue
-            changed += 1
-            job.cluster_name = "default"
-            payload = json.dumps(job.to_primitive())
-            tr.set(self._generate_job_key(job.id), payload)
-        await tr.execute()
+        async for chunk in self._iter_all_jobs_in_chunks():
+            tr = self._client.pipeline()
+            for job in chunk:
+                total += 1
+                if job.cluster_name:
+                    continue
+                changed += 1
+                job.cluster_name = "default"
+                payload = json.dumps(job.to_primitive())
+                tr.set(self._generate_job_key(job.id), payload)
+            await tr.execute()
 
         logger.info(f"Finished updating job cluster names ({changed}/{total})")
 
     async def _reindex_jobs_for_deletion(self) -> None:
         logger.info("Starting reindexing jobs for deletion")
 
-        tr = self._client.pipeline()
-        async for job in self._iter_all_jobs():
-            self._update_for_deletion_index(tr, job)
-        await tr.execute()
+        async for chunk in self._iter_all_jobs_in_chunks():
+            tr = self._client.pipeline()
+            for job in chunk:
+                self._update_for_deletion_index(tr, job)
+            await tr.execute()
 
         logger.info("Finished reindexing jobs for deletion")
 
     async def _reindex_jobs_composite(self) -> None:
         logger.info("Starting reindexing jobs composite")
 
-        tr = self._client.pipeline()
-        async for job in self._iter_all_jobs():
-            self._update_composite_index(tr, job)
-        await tr.execute()
+        async for chunk in self._iter_all_jobs_in_chunks():
+            tr = self._client.pipeline()
+            for job in chunk:
+                self._update_composite_index(tr, job)
+            await tr.execute()
 
         logger.info("Finished reindexing jobs composite")
 
-    async def _iter_all_jobs(self) -> AsyncIterator[JobRecord]:
+    async def _iter_all_jobs_in_chunks(self) -> AsyncIterator[Iterable[JobRecord]]:
         jobs_key = self._generate_jobs_index_key()
-        async for job_id in self._client.isscan(jobs_key):
-            job = await self.get_job(job_id)
-            yield job
+        job_ids = [job_id async for job_id in self._client.isscan(jobs_key)]
+        async for chunk in self._get_jobs_by_ids_in_chunks(job_ids):
+            yield chunk
