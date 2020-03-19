@@ -6,6 +6,7 @@ from pathlib import PurePath
 from typing import AbstractSet, Any, Dict, List, Optional, Sequence, Set
 
 import aiohttp.web
+import aiojobs
 import trafaret as t
 from aiohttp_security import check_authorized
 from multidict import MultiDictProxy
@@ -276,6 +277,8 @@ def infer_permissions_from_container(
 
 class JobsHandler:
     def __init__(self, *, app: aiohttp.web.Application, config: Config) -> None:
+        self._scheduler: Optional["aiojobs.Scheduler"] = None
+
         self._app = app
         self._config = config
 
@@ -285,6 +288,15 @@ class JobsHandler:
         self._bulk_jobs_response_validator = t.Dict(
             {"jobs": t.List(self._job_response_validator)}
         )
+
+    async def __aenter__(self) -> "JobsHandler":
+        assert self._scheduler is None
+        self._scheduler = await aiojobs.create_scheduler()
+        return self
+
+    async def __aexit__(self, *args: Any) -> None:
+        assert self._scheduler is not None
+        await self._scheduler.close()
 
     @property
     def _jobs_service(self) -> JobsService:
@@ -496,6 +508,8 @@ class JobsHandler:
     async def handle_delete(
         self, request: aiohttp.web.Request
     ) -> aiohttp.web.StreamResponse:
+        assert self._scheduler is not None
+
         job_id = request.match_info["job_id"]
         job = await self._jobs_service.get_job(job_id)
 
@@ -504,7 +518,7 @@ class JobsHandler:
         )
         await check_permissions(request, [permission])
 
-        asyncio.create_task(self._jobs_service.delete_job(job_id))
+        await self._scheduler.spawn(self._jobs_service.delete_job(job_id))
         await asyncio.sleep(0)
 
         raise aiohttp.web.HTTPNoContent()
