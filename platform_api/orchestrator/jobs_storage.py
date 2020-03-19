@@ -315,10 +315,11 @@ class RedisJobsStorage(JobsStorage):
         owners: Iterable[str],
         tags: Iterable[str],
         names: Iterable[str],
+        tags: Iterable[str],
     ) -> List[str]:
         return [
-            "jobs.comp.{}.{}.{}.{}.{}".format(*params)
-            for params in product(statuses, clusters, owners, tags, names)
+            "jobs.comp.{}|{}|{}|{}|{}".format(*params)
+            for params in product(statuses, clusters, owners, names, tags)
         ]
 
     @asynccontextmanager
