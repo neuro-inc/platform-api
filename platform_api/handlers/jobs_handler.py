@@ -508,7 +508,7 @@ class JobsHandler:
     async def handle_delete(
         self, request: aiohttp.web.Request
     ) -> aiohttp.web.StreamResponse:
-        assert self._scheduler is not None
+        assert self._scheduler is not None, "handler not initialized"
 
         job_id = request.match_info["job_id"]
         job = await self._jobs_service.get_job(job_id)

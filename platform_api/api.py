@@ -1,7 +1,7 @@
 import asyncio
 import logging
 from contextlib import AsyncExitStack
-from typing import Any, AsyncIterator, Awaitable, Callable, Dict, Sequence
+from typing import Any, AsyncIterator, Awaitable, Callable, Dict, Sequence, Tuple
 
 import aiohttp.web
 import aiohttp_cors
@@ -198,11 +198,13 @@ async def create_api_v1_app(config: Config) -> aiohttp.web.Application:
     return api_v1_app
 
 
-async def create_jobs_app(config: Config) -> aiohttp.web.Application:
+async def create_jobs_app(
+    config: Config,
+) -> Tuple[aiohttp.web.Application, JobsHandler]:
     jobs_app = aiohttp.web.Application()
     jobs_handler = JobsHandler(app=jobs_app, config=config)
     jobs_handler.register(jobs_app)
-    return jobs_app
+    return jobs_app, jobs_handler
 
 
 async def create_stats_app(config: Config) -> aiohttp.web.Application:
@@ -323,6 +325,10 @@ async def create_app(
                 app=app, auth_client=auth_client, auth_scheme=AuthScheme.BEARER
             )
 
+            jobs_app, jobs_handler = await create_jobs_app(config=config)
+            await exit_stack.enter_async_context(jobs_handler)
+            app["jobs_app"] = jobs_app
+
             yield
 
     app.cleanup_ctx.append(_init_app)
@@ -330,8 +336,7 @@ async def create_app(
     api_v1_app = await create_api_v1_app(config)
     app["api_v1_app"] = api_v1_app
 
-    jobs_app = await create_jobs_app(config=config)
-    app["jobs_app"] = jobs_app
+    jobs_app = app["jobs_app"]
     api_v1_app.add_subapp("/jobs", jobs_app)
 
     stats_app = await create_stats_app(config=config)
