@@ -325,27 +325,30 @@ async def create_app(
                 app=app, auth_client=auth_client, auth_scheme=AuthScheme.BEARER
             )
 
-            jobs_app, jobs_handler = await create_jobs_app(config=config)
-            await exit_stack.enter_async_context(jobs_handler)
-            app["jobs_app"] = jobs_app
-
             yield
 
     app.cleanup_ctx.append(_init_app)
 
+    async def _init_sub_app(app: aiohttp.web.Application) -> AsyncIterator[None]:
+        async with AsyncExitStack() as exit_stack:
+            jobs_app, jobs_handler = await create_jobs_app(config=config)
+            await exit_stack.enter_async_context(jobs_handler)
+            app["jobs_app"] = jobs_app
+            api_v1_app.add_subapp("/jobs", jobs_app)
+
+            stats_app = await create_stats_app(config=config)
+            app["stats_app"] = stats_app
+            api_v1_app.add_subapp("/stats", stats_app)
+
+            tags_app = await create_tags_app(config=config)
+            app["tags_app"] = tags_app
+            api_v1_app.add_subapp("/tags", tags_app)
+
+            yield
+
     api_v1_app = await create_api_v1_app(config)
+    api_v1_app.cleanup_ctx.append(_init_sub_app)
     app["api_v1_app"] = api_v1_app
-
-    jobs_app = app["jobs_app"]
-    api_v1_app.add_subapp("/jobs", jobs_app)
-
-    stats_app = await create_stats_app(config=config)
-    app["stats_app"] = stats_app
-    api_v1_app.add_subapp("/stats", stats_app)
-
-    tags_app = await create_tags_app(config=config)
-    app["tags_app"] = tags_app
-    api_v1_app.add_subapp("/tags", tags_app)
 
     app.add_subapp("/api/v1", api_v1_app)
 
