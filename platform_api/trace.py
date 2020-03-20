@@ -1,7 +1,7 @@
 import functools
 from contextlib import asynccontextmanager
 from contextvars import ContextVar
-from typing import Any, AsyncIterator, Awaitable, Callable
+from typing import Any, AsyncIterator, Awaitable, Callable, TypeVar, cast
 
 import aiozipkin
 from aiohttp import web
@@ -13,6 +13,9 @@ Handler = Callable[[web.Request], Awaitable[web.StreamResponse]]
 
 CURRENT_TRACER: ContextVar[aiozipkin.Tracer] = ContextVar("CURRENT_TRACER")
 CURRENT_SPAN: ContextVar[SpanAbc] = ContextVar("CURRENT_SPAN")
+
+
+T = TypeVar("T", bound=Callable[..., Any])
 
 
 @asynccontextmanager
@@ -37,13 +40,13 @@ async def tracing_cm(name: str) -> AsyncIterator[SpanAbc]:
         CURRENT_SPAN.reset(reset_token)
 
 
-def trace(func: Callable[..., Awaitable[Any]]) -> Callable[..., Awaitable[Any]]:
+def trace(func: T) -> T:
     @functools.wraps(func)
     async def tracer(*args: Any, **kwargs: Any) -> Any:
         async with tracing_cm(func.__qualname__):
             return await func(*args, **kwargs)
 
-    return tracer
+    return cast(T, tracer)
 
 
 @web.middleware
