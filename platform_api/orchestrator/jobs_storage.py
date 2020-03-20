@@ -3,7 +3,7 @@ import logging
 from abc import ABC, abstractmethod
 from dataclasses import dataclass, field
 from datetime import timedelta
-from itertools import islice, product
+from itertools import islice
 from typing import (
     AbstractSet,
     Any,
@@ -311,14 +311,18 @@ class RedisJobsStorage(JobsStorage):
         self,
         *,
         statuses: Iterable[str],
-        clusters: Iterable[str],
+        clusters: Dict[str, AbstractSet[str]],
         owners: Iterable[str],
         names: Iterable[str],
         tags: Iterable[str],
     ) -> List[str]:
         return [
-            "jobs.comp.{}|{}|{}|{}|{}".format(*params)
-            for params in product(statuses, clusters, owners, names, tags)
+            "jobs.comp.{status}|{cluster}|{owner}|{name}|{tag}"
+            for cluster, cluster_owners in clusters
+            for owner in cluster_owners or owners
+            for status in statuses
+            for name in names
+            for tag in tags
         ]
 
     @asynccontextmanager
@@ -447,7 +451,7 @@ class RedisJobsStorage(JobsStorage):
 
     def _update_composite_index(self, tr: Pipeline, job: JobRecord) -> None:
         statuses = [str(s) for s in JobStatus] + [""]
-        clusters = [job.cluster_name, ""]
+        clusters: Dict[str, AbstractSet[str]] = {job.cluster_name: set(), "": set()}
         owners = [job.owner, ""]
         tags = [t for t in job.tags] + [""]
         names = [job.name, ""] if job.name else [""]
@@ -541,23 +545,18 @@ class RedisJobsStorage(JobsStorage):
     async def _get_job_ids(
         self,
         *,
-        statuses: Iterable[JobStatus],
-        clusters: Iterable[str],
-        owners: Iterable[str],
-        tags: Iterable[str],
+        statuses: AbstractSet[JobStatus],
+        clusters: Dict[str, AbstractSet[str]],
+        owners: AbstractSet[str],
+        tags: AbstractSet[str],
         name: Optional[str] = None,
     ) -> List[str]:
-        statuses_str = [str(s) for s in statuses] or [""]
-        clusters = list(clusters) or [""]
-        owners = list(owners) or [""]
-        tags = list(tags) or [""]
-        names = [name or ""]
         keys = self._generate_jobs_composite_keys(
-            statuses=statuses_str,
-            clusters=clusters,
-            owners=owners,
-            tags=tags,
-            names=names,
+            statuses=[str(s) for s in statuses] or [""],
+            clusters=clusters or {"": set()},
+            owners=owners or [""],
+            tags=tags or [""],
+            names=[name or ""],
         )
 
         if len(keys) == 1:
@@ -605,11 +604,7 @@ class RedisJobsStorage(JobsStorage):
                 tags=job_filter.tags,
                 name=job_filter.name,
             )
-            if not (
-                any(job_filter.clusters.values())
-                or (job_filter.name and not job_filter.owners)
-            ):
-                job_filter = None
+            job_filter = None
 
         async for chunk in self._get_jobs_by_ids_in_chunks(job_ids, job_filter):
             yield chunk
