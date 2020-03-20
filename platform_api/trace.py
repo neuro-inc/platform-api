@@ -1,7 +1,7 @@
 import functools
 from contextlib import asynccontextmanager
 from contextvars import ContextVar
-from typing import Any, AsyncIterator, Awaitable, Callable
+from typing import Any, AsyncIterator, Awaitable, Callable, TypeVar, cast
 
 import aiozipkin
 from aiohttp import web
@@ -15,9 +15,17 @@ CURRENT_TRACER: ContextVar[aiozipkin.Tracer] = ContextVar("CURRENT_TRACER")
 CURRENT_SPAN: ContextVar[SpanAbc] = ContextVar("CURRENT_SPAN")
 
 
+T = TypeVar("T", bound=Callable[..., Any])
+
+
 @asynccontextmanager
 async def tracing_cm(name: str) -> AsyncIterator[SpanAbc]:
-    tracer = CURRENT_TRACER.get()
+    tracer = CURRENT_TRACER.get(None)  # type: ignore
+    if tracer is None:
+        # No tracer is set,
+        # the call is made from unittest most likely.
+        yield None
+        return
     try:
         span = CURRENT_SPAN.get()
         child = tracer.new_child(span.context)
@@ -32,13 +40,13 @@ async def tracing_cm(name: str) -> AsyncIterator[SpanAbc]:
         CURRENT_SPAN.reset(reset_token)
 
 
-def trace(func: Callable[..., Awaitable[Any]]) -> Callable[..., Awaitable[Any]]:
+def trace(func: T) -> T:
     @functools.wraps(func)
     async def tracer(*args: Any, **kwargs: Any) -> Any:
-        async with tracing_cm(func.__name__):
+        async with tracing_cm(func.__qualname__):
             return await func(*args, **kwargs)
 
-    return tracer
+    return cast(T, tracer)
 
 
 @web.middleware

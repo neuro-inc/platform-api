@@ -129,10 +129,10 @@ NP_CORS_ORIGINS:
   staging: https://neu.ro
   prod: https://neu.ro
 NP_USE_CLUSTER_NAMES_IN_URIS:
-  _default: "0"
+  _default: "1"
   dev: "1"
-  staging: "0"
-  prod: "0"
+  staging: "1"
+  prod: "1"
 NP_API_ZIPKIN_URL:
   _default: 'http://zipkin:9411'
   dev: 'http://zipkin:9411'

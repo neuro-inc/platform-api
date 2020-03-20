@@ -25,6 +25,8 @@ import aioredis
 from aioredis.commands import Pipeline
 from async_generator import asynccontextmanager
 
+from platform_api.trace import trace
+
 from .job import AggregatedRunTime, JobRecord
 from .job_request import JobError, JobStatus
 
@@ -462,6 +464,7 @@ class RedisJobsStorage(JobsStorage):
         ):
             tr.zadd(key, job.status_history.created_at_timestamp, job.id)
 
+    @trace
     async def update_job_atomic(
         self, job: JobRecord, *, is_job_creation: bool, skip_index: bool = False
     ) -> None:
@@ -580,6 +583,7 @@ class RedisJobsStorage(JobsStorage):
             )
         ]
 
+    @trace
     async def get_all_jobs(
         self, job_filter: Optional[JobFilter] = None
     ) -> List[JobRecord]:
@@ -614,6 +618,7 @@ class RedisJobsStorage(JobsStorage):
         async for chunk in self._get_jobs_by_ids_in_chunks(job_ids, job_filter):
             yield chunk
 
+    @trace
     async def get_jobs_by_ids(
         self, job_ids: Iterable[str], job_filter: Optional[JobFilter] = None
     ) -> List[JobRecord]:
@@ -622,6 +627,7 @@ class RedisJobsStorage(JobsStorage):
             jobs.extend(chunk)
         return jobs
 
+    @trace
     async def get_jobs_for_deletion(
         self, *, delay: timedelta = timedelta()
     ) -> List[JobRecord]:
@@ -635,6 +641,7 @@ class RedisJobsStorage(JobsStorage):
         key = self._generate_tags_owner_index_zset_key(owner)
         return await self._client.zrange(key)
 
+    @trace
     async def get_aggregated_run_time_by_clusters(
         self, job_filter: JobFilter
     ) -> Dict[str, AggregatedRunTime]:
