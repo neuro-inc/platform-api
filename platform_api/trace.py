@@ -17,7 +17,12 @@ CURRENT_SPAN: ContextVar[SpanAbc] = ContextVar("CURRENT_SPAN")
 
 @asynccontextmanager
 async def tracing_cm(name: str) -> AsyncIterator[SpanAbc]:
-    tracer = CURRENT_TRACER.get()
+    tracer = CURRENT_TRACER.get(None)  # type: ignore
+    if tracer is None:
+        # No tracer is set,
+        # the call is made from unittest most likely.
+        yield None
+        return
     try:
         span = CURRENT_SPAN.get()
         child = tracer.new_child(span.context)
@@ -35,7 +40,7 @@ async def tracing_cm(name: str) -> AsyncIterator[SpanAbc]:
 def trace(func: Callable[..., Awaitable[Any]]) -> Callable[..., Awaitable[Any]]:
     @functools.wraps(func)
     async def tracer(*args: Any, **kwargs: Any) -> Any:
-        async with tracing_cm(func.__name__):
+        async with tracing_cm(func.__qualname__):
             return await func(*args, **kwargs)
 
     return tracer
