@@ -317,7 +317,7 @@ class RedisJobsStorage(JobsStorage):
         tags: Iterable[str],
     ) -> List[str]:
         return [
-            "jobs.comp.{status}|{cluster}|{owner}|{name}|{tag}"
+            f"jobs.comp.{status}|{cluster}|{owner}|{name}|{tag}"
             for cluster, cluster_owners in clusters
             for owner in cluster_owners or owners
             for status in statuses
