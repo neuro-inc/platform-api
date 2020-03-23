@@ -101,14 +101,12 @@ class JobsStorage(ABC):
     def try_update_job(self, job_id: str) -> AsyncContextManager[JobRecord]:
         pass
 
-    @trace
     @abstractmethod
     async def get_all_jobs(
         self, job_filter: Optional[JobFilter] = None
     ) -> List[JobRecord]:
         pass
 
-    @trace
     @abstractmethod
     async def get_jobs_by_ids(
         self, job_ids: Iterable[str], job_filter: Optional[JobFilter] = None
@@ -119,7 +117,6 @@ class JobsStorage(ABC):
         filt = JobFilter(statuses={JobStatus.RUNNING})
         return await self.get_all_jobs(filt)
 
-    @trace
     @abstractmethod
     async def get_jobs_for_deletion(
         self, *, delay: timedelta = timedelta()
@@ -145,7 +142,6 @@ class JobsStorage(ABC):
     async def get_tags(self, owner: str) -> List[str]:
         pass
 
-    @trace
     @abstractmethod
     async def get_aggregated_run_time_by_clusters(
         self, job_filter: JobFilter
@@ -207,7 +203,6 @@ class InMemoryJobsStorage(JobsStorage):
         yield job
         await self.set_job(job)
 
-    @trace
     async def get_all_jobs(
         self, job_filter: Optional[JobFilter] = None
     ) -> List[JobRecord]:
@@ -219,7 +214,6 @@ class InMemoryJobsStorage(JobsStorage):
             jobs.append(job)
         return jobs
 
-    @trace
     async def get_jobs_by_ids(
         self, job_ids: Iterable[str], job_filter: Optional[JobFilter] = None
     ) -> List[JobRecord]:
@@ -234,7 +228,6 @@ class InMemoryJobsStorage(JobsStorage):
                 jobs.append(job)
         return jobs
 
-    @trace
     async def get_aggregated_run_time_by_clusters(
         self, job_filter: JobFilter
     ) -> Dict[str, AggregatedRunTime]:
@@ -264,7 +257,6 @@ class InMemoryJobsStorage(JobsStorage):
             ) in aggregated_run_times.items()
         }
 
-    @trace
     async def get_jobs_for_deletion(
         self, *, delay: timedelta = timedelta()
     ) -> List[JobRecord]:
