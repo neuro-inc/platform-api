@@ -88,7 +88,7 @@ class JobsService:
         )
         self._dummy_cluster_orchestrator_config = OrchestratorConfig(
             jobs_domain_name_template="{job_id}.missing-cluster",
-            ssh_auth_domain_name="missing-cluster",
+            ssh_auth_server="missing-cluster:22",
             resource_pool_types=(),
         )
 
@@ -245,6 +245,7 @@ class JobsService:
         *,
         cluster_name: Optional[str] = None,
         job_name: Optional[str] = None,
+        tags: Sequence[str] = (),
         is_preemptible: bool = False,
         schedule_timeout: Optional[float] = None,
         max_run_time_minutes: Optional[int] = None,
@@ -257,6 +258,10 @@ class JobsService:
             user_cluster = user.clusters[0]
         cluster_name = user_cluster.name
 
+        if job_name is not None and job_name.startswith("job-"):
+            raise JobsServiceException(
+                "Failed to create job: job name cannot start with 'job-' prefix."
+            )
         try:
             await self._raise_for_run_time_quota(
                 user,
@@ -297,6 +302,7 @@ class JobsService:
                 ]
             ),
             name=job_name,
+            tags=tags,
             is_preemptible=is_preemptible,
             schedule_timeout=schedule_timeout,
             max_run_time_minutes=max_run_time_minutes,

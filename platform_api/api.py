@@ -1,12 +1,13 @@
 import asyncio
 import logging
+from contextlib import AsyncExitStack
 from typing import Any, AsyncIterator, Awaitable, Callable, Dict, Sequence
 
 import aiohttp.web
 import aiohttp_cors
+import aiozipkin
 from aiohttp.web import HTTPUnauthorized
 from aiohttp_security import check_permission
-from async_exit_stack import AsyncExitStack
 from neuro_auth_client import AuthClient, Permission
 from neuro_auth_client.security import AuthScheme, setup_security
 from notifications_client import Client as NotificationsClient
@@ -24,6 +25,7 @@ from .config import Config, CORSConfig
 from .config_factory import EnvironConfigFactory
 from .handlers import JobsHandler
 from .handlers.stats_handler import StatsHandler
+from .handlers.tags_handler import TagsHandler
 from .kube_cluster import KubeCluster
 from .orchestrator.job_request import JobException
 from .orchestrator.jobs_poller import JobsPoller
@@ -31,6 +33,7 @@ from .orchestrator.jobs_service import JobsService, JobsServiceException
 from .orchestrator.jobs_storage import RedisJobsStorage
 from .redis import create_redis_client
 from .resource import Preset
+from .trace import store_span_middleware
 from .user import authorized_user, untrusted_user
 
 
@@ -209,8 +212,29 @@ async def create_stats_app(config: Config) -> aiohttp.web.Application:
     return stats_app
 
 
+async def create_tags_app(config: Config) -> aiohttp.web.Application:
+    tags_app = aiohttp.web.Application()
+    tags_handler = TagsHandler(app=tags_app, config=config)
+    tags_handler.register(tags_app)
+    return tags_app
+
+
 def create_cluster(config: ClusterConfig) -> Cluster:
     return KubeCluster(config)
+
+
+async def create_tracer(config: Config) -> aiozipkin.Tracer:
+    endpoint = aiozipkin.create_endpoint(
+        "platformapi",  # the same name as pod prefix on a cluster
+        ipv4=config.server.host,
+        port=config.server.port,
+    )
+
+    zipkin_address = config.zipkin.url / "api/v2/spans"
+    tracer = await aiozipkin.create(
+        str(zipkin_address), endpoint, sample_rate=config.zipkin.sample_rate
+    )
+    return tracer
 
 
 async def create_app(
@@ -219,8 +243,11 @@ async def create_app(
     app = aiohttp.web.Application(middlewares=[handle_exceptions])
     app["config"] = config
 
+    tracer = await create_tracer(config)
+
     async def _init_app(app: aiohttp.web.Application) -> AsyncIterator[None]:
         async with AsyncExitStack() as exit_stack:
+            trace_config = aiozipkin.make_trace_config(tracer)
 
             logger.info("Initializing Notifications client")
             notifications_client = NotificationsClient(
@@ -238,6 +265,8 @@ async def create_app(
                 ClusterRegistry(factory=create_cluster)
             )
 
+            logger.info("Loading clusters")
+            await exit_stack.enter_async_context(config.config_client)
             [
                 await cluster_registry.add(cluster_config)
                 for cluster_config in await cluster_configs_future
@@ -262,6 +291,7 @@ async def create_app(
             app["api_v1_app"]["jobs_service"] = jobs_service
             app["jobs_app"]["jobs_service"] = jobs_service
             app["stats_app"]["jobs_service"] = jobs_service
+            app["tags_app"]["jobs_service"] = jobs_service
 
             logger.info("Initializing JobPolicyEnforcePoller")
             api_client = await exit_stack.enter_async_context(
@@ -281,7 +311,9 @@ async def create_app(
 
             auth_client = await exit_stack.enter_async_context(
                 AuthClient(
-                    url=config.auth.server_endpoint_url, token=config.auth.service_token
+                    url=config.auth.server_endpoint_url,
+                    token=config.auth.service_token,
+                    trace_config=trace_config,
                 )
             )
             app["jobs_app"]["auth_client"] = auth_client
@@ -306,9 +338,17 @@ async def create_app(
     app["stats_app"] = stats_app
     api_v1_app.add_subapp("/stats", stats_app)
 
+    tags_app = await create_tags_app(config=config)
+    app["tags_app"] = tags_app
+    api_v1_app.add_subapp("/tags", tags_app)
+
     app.add_subapp("/api/v1", api_v1_app)
 
     _setup_cors(app, config.cors)
+
+    aiozipkin.setup(app, tracer)
+    app.middlewares.append(store_span_middleware)
+
     return app
 
 
@@ -329,13 +369,12 @@ def _setup_cors(app: aiohttp.web.Application, config: CORSConfig) -> None:
 
 
 async def get_cluster_configs(config: Config) -> Sequence[ClusterConfig]:
-    async with config.config_client as client:
-        return await client.get_clusters(
-            jobs_ingress_class=config.jobs.jobs_ingress_class,
-            jobs_ingress_oauth_url=config.jobs.jobs_ingress_oauth_url,
-            registry_username=config.auth.service_name,
-            registry_password=config.auth.service_token,
-        )
+    return await config.config_client.get_clusters(
+        jobs_ingress_class=config.jobs.jobs_ingress_class,
+        jobs_ingress_oauth_url=config.jobs.jobs_ingress_oauth_url,
+        registry_username=config.auth.service_name,
+        registry_password=config.auth.service_token,
+    )
 
 
 def main() -> None:

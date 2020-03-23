@@ -4,6 +4,9 @@ defaults: &defaults
     docker_layer_caching: true
   working_directory: ~/platform-api
 
+cache: &cache
+  keys:
+    - &cache_key v1-python-3.7.2-{{ checksum "requirements/syntax.txt" }}{{ checksum "requirements/test.txt" }}{{ checksum "setup.py" }}
 
 version: 2
 jobs:
@@ -52,6 +55,9 @@ jobs:
     steps:
       - checkout
 
+      - restore_cache:
+          <<: *cache
+
       - run:
           name: Configuring Docker Client
           command: |
@@ -63,8 +69,9 @@ jobs:
       - run:
           name: Installing Dependencies
           command: |
-            pyenv install --debug 3.6.3
-            pyenv global 3.6.3-debug
+            echo -e "Available Python 3.7 versions:\n$(pyenv install --list | grep 3.7.)"
+            pyenv install --skip-existing 3.7.2
+            pyenv global 3.7.2
             curl -s https://packages.cloud.google.com/apt/doc/apt-key.gpg | sudo apt-key add -
             sudo touch /etc/apt/sources.list.d/kubernetes.list
             echo "deb http://apt.kubernetes.io/ kubernetes-xenial main" | sudo tee -a /etc/apt/sources.list.d/kubernetes.list
@@ -108,6 +115,12 @@ jobs:
             pip install -U pip
             make setup
             pip uninstall -y hiredis
+
+      - save_cache:
+          paths:
+            - /opt/circleci/.pyenv/versions/3.7.2
+            - ./venv/
+          key: *cache_key
 
       - run:
           name: Running Static Code Analysis

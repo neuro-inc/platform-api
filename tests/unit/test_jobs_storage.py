@@ -102,6 +102,75 @@ class TestInMemoryJobsStorage:
         assert {job.id for job in jobs} == {succeeded_job.id}
 
     @pytest.mark.asyncio
+    async def test_get_tags_empty(self) -> None:
+        jobs_storage = InMemoryJobsStorage()
+        for job in [
+            self._create_job(owner="u", tags=["b"]),
+            self._create_job(owner="u", tags=["a"]),
+        ]:
+            async with jobs_storage.try_create_job(job):
+                pass
+
+        tags_u1 = await jobs_storage.get_tags("another")
+        assert tags_u1 == []
+
+    @pytest.mark.asyncio
+    async def test_get_tags_single(self) -> None:
+        jobs_storage = InMemoryJobsStorage()
+        for job in [
+            self._create_job(owner="u", tags=["b"]),
+            self._create_job(owner="u", tags=["a"]),
+            self._create_job(owner="u", tags=["c"]),
+        ]:
+            async with jobs_storage.try_create_job(job):
+                pass
+
+        tags_u1 = await jobs_storage.get_tags("u")
+        assert tags_u1 == ["c", "a", "b"]
+
+    @pytest.mark.asyncio
+    async def test_get_tags_multiple(self) -> None:
+        jobs_storage = InMemoryJobsStorage()
+        for job in [
+            self._create_job(owner="u", tags=["b", "a", "c"]),
+            self._create_job(owner="u", tags=["d"]),
+        ]:
+            async with jobs_storage.try_create_job(job):
+                pass
+
+        tags_u1 = await jobs_storage.get_tags("u")
+        assert tags_u1 == ["d", "a", "b", "c"]
+
+    @pytest.mark.asyncio
+    async def test_get_tags_overwrite_single(self) -> None:
+        jobs_storage = InMemoryJobsStorage()
+        for job in [
+            self._create_job(owner="u", tags=["a"]),
+            self._create_job(owner="u", tags=["b"]),
+            self._create_job(owner="u", tags=["a"]),
+            self._create_job(owner="u", tags=["c"]),
+        ]:
+            async with jobs_storage.try_create_job(job):
+                pass
+
+        tags_u1 = await jobs_storage.get_tags("u")
+        assert tags_u1 == ["c", "a", "b"]
+
+    @pytest.mark.asyncio
+    async def test_get_tags_overwrite_multiple(self) -> None:
+        jobs_storage = InMemoryJobsStorage()
+        for job in [
+            self._create_job(owner="u", tags=["a"]),
+            self._create_job(owner="u", tags=["b"]),
+            self._create_job(owner="u", tags=["c", "a"]),
+        ]:
+            async with jobs_storage.try_create_job(job):
+                pass
+
+        tags_u1 = await jobs_storage.get_tags("u")
+        assert tags_u1 == ["a", "c", "b"]
+
+    @pytest.mark.asyncio
     async def test_try_create_job(self) -> None:
         jobs_storage = InMemoryJobsStorage()
 
@@ -232,6 +301,56 @@ class TestJobFilter:
     def test_check_statuses(self) -> None:
         job = self._create_job(owner="testuser", status=JobStatus.PENDING)
         assert not JobFilter(statuses={JobStatus.RUNNING}).check(job)
+
+    def test_check_tags_job_zero_filter_zero(self) -> None:
+        job = self._create_job(owner="testuser", status=JobStatus.PENDING)
+        filt = JobFilter()
+        assert filt.check(job)
+
+    def test_check_tags_job_all_fileter_all(self) -> None:
+        job = self._create_job(
+            owner="testuser", status=JobStatus.PENDING, tags=["t1", "t2", "t3"]
+        )
+        filt = JobFilter(tags={"t1", "t2", "t3"})
+        assert filt.check(job)
+
+    def test_check_tags_job_zero_filter_all(self) -> None:
+        job = self._create_job(owner="testuser", status=JobStatus.PENDING)
+        filt = JobFilter(tags={"t1", "t2", "t3"})
+        assert not filt.check(job)
+
+    def test_check_tags_job_all_filter_zero(self) -> None:
+        job = self._create_job(
+            owner="testuser", status=JobStatus.PENDING, tags=["t1", "t2", "t3"]
+        )
+        filt = JobFilter()
+        assert filt.check(job)
+
+    def test_check_tags_job_less_filter_more(self) -> None:
+        job = self._create_job(owner="testuser", status=JobStatus.PENDING, tags=["t1"])
+        filt = JobFilter(tags={"t1", "t2", "t3"})
+        assert filt.check(job)
+
+    def test_check_tags_job_more_filter_less(self) -> None:
+        job = self._create_job(
+            owner="testuser", status=JobStatus.PENDING, tags=["t1", "t2", "t3"]
+        )
+        filt = JobFilter(tags={"t1"})
+        assert filt.check(job)
+
+    def test_check_tags_intersect(self) -> None:
+        job = self._create_job(
+            owner="testuser", status=JobStatus.PENDING, tags=["t1", "t2"]
+        )
+        filt = JobFilter(tags={"t2", "t3"})
+        assert filt.check(job)
+
+    def test_check_tags_disjoint(self) -> None:
+        job = self._create_job(
+            owner="testuser", status=JobStatus.PENDING, tags=["t1", "t2"]
+        )
+        filt = JobFilter(tags={"t3", "t4"})
+        assert not filt.check(job)
 
     def test_check_owners(self) -> None:
         job = self._create_job(owner="testuser")

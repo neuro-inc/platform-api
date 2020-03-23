@@ -62,6 +62,10 @@ class ApiConfig(NamedTuple):
     def stats_for_user_url(self, username: str) -> str:
         return f"{self.stats_base_url}/users/{username}"
 
+    @property
+    def tags_base_url(self) -> str:
+        return f"{self.endpoint}/tags"
+
 
 class AuthApiConfig(NamedTuple):
     server_endpoint_url: URL

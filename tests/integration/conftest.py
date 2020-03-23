@@ -31,6 +31,7 @@ from platform_api.config import (
     NotificationsConfig,
     OAuthConfig,
     ServerConfig,
+    ZipkinConfig,
 )
 from platform_api.config_client import ConfigClient
 from platform_api.orchestrator.job_request import JobNotFoundException
@@ -134,7 +135,7 @@ def kube_config_factory(
         defaults = dict(
             jobs_ingress_class="nginx",
             jobs_domain_name_template="{job_id}.jobs.neu.ro",
-            ssh_auth_domain_name="ssh-auth.platform.neuromation.io",
+            ssh_auth_server="ssh-auth.platform.neuromation.io:22",
             endpoint_url=cluster["server"],
             cert_authority_data_pem=cert_authority_data_pem,
             cert_authority_path=None,  # disable, only `cert_authority_data_pem` works
@@ -552,6 +553,7 @@ def config_factory(
             config_client=config_client,
             cors=CORSConfig(allowed_origins=["https://neu.ro"]),
             admin_url=admin_url,
+            zipkin=ZipkinConfig(URL("https://zipkin:9411"), 1.0),
             **kwargs,
         )
 
