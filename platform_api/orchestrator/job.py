@@ -236,6 +236,7 @@ class JobRecord:
     status_history: JobStatusHistory
     cluster_name: str
     name: Optional[str] = None
+    tags: Sequence[str] = ()
     is_preemptible: bool = False
     is_deleted: bool = False
     max_run_time_minutes: Optional[int] = None
@@ -378,6 +379,8 @@ class JobRecord:
             result["internal_hostname"] = self.internal_hostname
         if self.name:
             result["name"] = self.name
+        if self.tags:
+            result["tags"] = self.tags
         return result
 
     @classmethod
@@ -397,6 +400,7 @@ class JobRecord:
             owner=payload.get("owner") or orphaned_job_owner,
             cluster_name=payload.get("cluster_name") or "",
             name=payload.get("name"),
+            tags=payload.get("tags", ()),
             is_preemptible=payload.get("is_preemptible", False),
             max_run_time_minutes=payload.get("max_run_time_minutes", None),
             internal_hostname=payload.get("internal_hostname", None),
@@ -448,6 +452,7 @@ class Job:
 
         self._owner = record.owner
         self._name = record.name
+        self._tags = record.tags
 
         self._is_preemptible = record.is_preemptible
         self._is_forced_to_preemptible_pool = is_forced_to_preemptible_pool
@@ -463,6 +468,10 @@ class Job:
     @property
     def name(self) -> Optional[str]:
         return self._name
+
+    @property
+    def tags(self) -> Sequence[str]:
+        return self._tags
 
     @property
     def owner(self) -> str:
@@ -614,8 +623,8 @@ class Job:
 
     @property
     def ssh_server(self) -> str:
-        ssh_auth_domain_name = self._orchestrator_config.ssh_auth_domain_name
-        return f"ssh://nobody@{ssh_auth_domain_name}:22"
+        ssh_auth_server = self._orchestrator_config.ssh_auth_server
+        return f"ssh://nobody@{ssh_auth_server}"
 
     @property
     def finished_at_str(self) -> Optional[str]:

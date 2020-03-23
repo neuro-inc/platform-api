@@ -584,6 +584,7 @@ class PodDescriptor:
     port: Optional[int] = None
     ssh_port: Optional[int] = None
     health_check_path: str = "/"
+    tty: bool = False
 
     status: Optional["PodStatus"] = None
 
@@ -652,6 +653,7 @@ class PodDescriptor:
             port=container.port,
             ssh_port=container.ssh_port,
             health_check_path=container.health_check_path,
+            tty=container.tty,
             image_pull_secrets=image_pull_secrets,
             node_selector=node_selector or {},
             tolerations=tolerations or [],
@@ -683,6 +685,9 @@ class PodDescriptor:
             container_payload["args"] = self.args
         if self.resources:
             container_payload["resources"] = self.resources.to_primitive()
+        if self.tty:
+            container_payload["stdin"] = True
+            container_payload["tty"] = True
 
         ports = self._to_primitive_ports()
         if ports:
@@ -794,7 +799,7 @@ class PodDescriptor:
                 value=t.get("value", Toleration.value),
                 effect=t.get("effect", Toleration.effect),
             )
-            for t in payload["spec"].get("tolerations", {})
+            for t in payload["spec"].get("tolerations", ())
         ]
         return cls(
             name=metadata["name"],
@@ -805,6 +810,7 @@ class PodDescriptor:
             node_name=payload["spec"].get("nodeName"),
             command=container_payload.get("command"),
             args=container_payload.get("args"),
+            tty=container_payload.get("tty", False),
             tolerations=tolerations,
             labels=metadata.get("labels", {}),
             priority_class_name=payload["spec"].get("priorityClassName"),

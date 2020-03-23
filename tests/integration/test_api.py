@@ -383,6 +383,35 @@ class TestJobs:
         await jobs_client.delete_job(job_id=job_id)
 
     @pytest.mark.asyncio
+    async def test_create_job_with_tty(
+        self,
+        api: ApiConfig,
+        client: aiohttp.ClientSession,
+        job_submit: Dict[str, Any],
+        jobs_client: JobsClient,
+        regular_user: _User,
+    ) -> None:
+        url = api.jobs_base_url
+        job_submit["container"]["tty"] = True
+        job_submit["container"]["command"] = "test -t 0"
+        async with client.post(
+            url, headers=regular_user.headers, json=job_submit
+        ) as response:
+            assert response.status == HTTPAccepted.status_code, await response.text()
+            result = await response.json()
+            assert result["status"] in ["pending"]
+            assert result["container"]["tty"] is True
+            job_id = result["id"]
+
+        response_payload = await jobs_client.long_polling_by_job_id(
+            job_id=job_id, status="succeeded"
+        )
+        await jobs_client.delete_job(job_id=job_id)
+
+        assert response_payload["container"]["tty"] is True
+        assert response_payload["history"]["exit_code"] == 0
+
+    @pytest.mark.asyncio
     async def test_create_job_set_max_run_time(
         self,
         api: ApiConfig,
@@ -421,7 +450,7 @@ class TestJobs:
         await jobs_client.long_polling_by_job_id(job_id, "succeeded")
 
         url = api.generate_job_url(job_id)
-        async with client.get(url, headers=headers, json=job_submit) as resp:
+        async with client.get(url, headers=headers) as resp:
             assert resp.status == HTTPOk.status_code, await resp.text()
             result = await resp.json()
             run_time = result["history"]["run_time_seconds"]
@@ -787,6 +816,34 @@ class TestJobs:
         await jobs_client.delete_job(job_id)
 
     @pytest.mark.asyncio
+    async def test_create_job_with_tags(
+        self,
+        api: ApiConfig,
+        client: aiohttp.ClientSession,
+        job_submit: Dict[str, Any],
+        regular_user: _User,
+        jobs_client: JobsClient,
+    ) -> None:
+        headers = regular_user.headers
+        job_submit["tags"] = ["tag2", "tag1", "tag3", "tag1"]
+
+        url = api.jobs_base_url
+        async with client.post(url, headers=headers, json=job_submit) as response:
+            assert response.status == HTTPAccepted.status_code, await response.text()
+            payload = await response.json()
+            job_id = payload["id"]
+            assert payload["tags"] == ["tag1", "tag2", "tag3"]
+
+        url = api.generate_job_url(job_id)
+        async with client.get(url, headers=headers) as response:
+            assert response.status == HTTPOk.status_code, await response.text()
+            payload = await response.json()
+            assert payload["tags"] == ["tag1", "tag2", "tag3"]
+
+        # cleanup
+        await jobs_client.delete_job(job_id)
+
+    @pytest.mark.asyncio
     async def test_create_job_gpu_quota_allows(
         self,
         api: ApiConfig,
@@ -936,6 +993,62 @@ class TestJobs:
         jobs = await jobs_client.get_all_jobs(filters)
         job_ids = {job["id"] for job in jobs}
         assert job_ids == set()
+
+    @pytest.mark.asyncio
+    async def test_get_all_jobs_filter_by_tags(
+        self,
+        api: ApiConfig,
+        client: aiohttp.ClientSession,
+        jobs_client: JobsClient,
+        regular_user: _User,
+        job_request_factory: Callable[[], Dict[str, Any]],
+    ) -> None:
+        url = api.jobs_base_url
+        headers = regular_user.headers
+        job_request = job_request_factory()
+        job_request["container"]["resources"]["memory_mb"] = 100_500
+
+        job_request["tags"] = ["tag1", "tag2"]
+        async with client.post(url, headers=headers, json=job_request) as resp:
+            assert resp.status == HTTPAccepted.status_code, await resp.text()
+            result = await resp.json()
+            job_1 = result["id"]
+
+        job_request["tags"] = ["tag2", "tag3"]
+        async with client.post(url, headers=headers, json=job_request) as resp:
+            assert resp.status == HTTPAccepted.status_code, await resp.text()
+            result = await resp.json()
+            job_2 = result["id"]
+
+        jobs = await jobs_client.get_all_jobs()
+        job_ids = {job["id"] for job in jobs}
+        assert job_ids == {job_1, job_2}
+
+        filters: Any
+        filters = {"tag": "tag1"}
+        jobs = await jobs_client.get_all_jobs(filters)
+        job_ids = {job["id"] for job in jobs}
+        assert job_ids == {job_1}
+
+        filters = {"tag": "tag2"}
+        jobs = await jobs_client.get_all_jobs(filters)
+        job_ids = {job["id"] for job in jobs}
+        assert job_ids == {job_1, job_2}
+
+        filters = [("tag", "tag1"), ("tag", "tag2")]
+        jobs = await jobs_client.get_all_jobs(filters)
+        job_ids = {job["id"] for job in jobs}
+        assert job_ids == {job_1, job_2}
+
+        filters = [("tag", "tag3"), ("tag", "tag-non-existing")]
+        jobs = await jobs_client.get_all_jobs(filters)
+        job_ids = {job["id"] for job in jobs}
+        assert job_ids == {job_2}
+
+        filters = {"tag": "tag-non-existing"}
+        jobs = await jobs_client.get_all_jobs(filters)
+        job_ids = {job["id"] for job in jobs}
+        assert not job_ids
 
     @pytest.mark.asyncio
     async def test_get_all_jobs_filter_by_status_only(
@@ -2113,7 +2226,7 @@ class TestJobs:
         }
 
     @pytest.mark.asyncio
-    async def test_create_with_custom_volumes_legacy(
+    async def test_create_with_custom_volumes_legacy_uris(
         self,
         jobs_client: JobsClient,
         api: ApiConfig,
@@ -2215,6 +2328,123 @@ class TestJobs:
         }
 
     @pytest.mark.asyncio
+    async def test_create_with_custom_volumes_legacy_acl(
+        self,
+        jobs_client: JobsClient,
+        api: ApiConfig,
+        client: aiohttp.ClientSession,
+        regular_user: _User,
+        auth_client: AuthClient,
+        admin_token: str,
+    ) -> None:
+        storage_uri = "storage://teststorage"
+        headers = auth_client._generate_headers(admin_token)
+        payload = [
+            {"uri": storage_uri, "action": "manage"},
+        ]
+        async with auth_client._request(
+            "POST",
+            f"/api/v1/users/{regular_user.name}/permissions",
+            headers=headers,
+            json=payload,
+        ) as p:
+            assert p.status == 201
+
+        request_payload = {
+            "container": {
+                "image": "ubuntu",
+                "command": "true",
+                "resources": {"cpu": 0.1, "memory_mb": 16},
+                "volumes": [
+                    {
+                        "src_storage_uri": storage_uri,
+                        "dst_path": "/var/storage",
+                        "read_only": False,
+                    }
+                ],
+            },
+            "is_preemptible": True,
+        }
+
+        async with client.post(
+            api.jobs_base_url, headers=regular_user.headers, json=request_payload
+        ) as response:
+            response_text = await response.text()
+            assert response.status == HTTPAccepted.status_code, response_text
+            response_payload = await response.json()
+            job_id = response_payload["id"]
+            assert response_payload == {
+                "id": mock.ANY,
+                "owner": regular_user.name,
+                "cluster_name": "test-cluster",
+                "internal_hostname": f"{job_id}.platformapi-tests",
+                "status": "pending",
+                "history": {
+                    "status": "pending",
+                    "reason": "Creating",
+                    "description": None,
+                    "created_at": mock.ANY,
+                    "run_time_seconds": 0,
+                },
+                "container": {
+                    "command": "true",
+                    "env": {},
+                    "image": "ubuntu",
+                    "resources": {"cpu": 0.1, "memory_mb": 16},
+                    "volumes": [
+                        {
+                            "dst_path": "/var/storage",
+                            "read_only": False,
+                            "src_storage_uri": storage_uri,
+                        }
+                    ],
+                },
+                "ssh_server": "ssh://nobody@ssh-auth.platform.neuromation.io:22",
+                "ssh_auth_server": "ssh://nobody@ssh-auth.platform.neuromation.io:22",
+                "is_preemptible": True,
+                "uri": f"job://test-cluster/{regular_user.name}/{job_id}",
+            }
+
+        response_payload = await jobs_client.long_polling_by_job_id(
+            job_id=job_id, status="succeeded"
+        )
+
+        assert response_payload == {
+            "id": job_id,
+            "owner": regular_user.name,
+            "cluster_name": "test-cluster",
+            "internal_hostname": f"{job_id}.platformapi-tests",
+            "status": "succeeded",
+            "history": {
+                "status": "succeeded",
+                "reason": None,
+                "description": None,
+                "exit_code": 0,
+                "created_at": mock.ANY,
+                "started_at": mock.ANY,
+                "finished_at": mock.ANY,
+                "run_time_seconds": mock.ANY,
+            },
+            "container": {
+                "command": "true",
+                "env": {},
+                "image": "ubuntu",
+                "resources": {"cpu": 0.1, "memory_mb": 16},
+                "volumes": [
+                    {
+                        "dst_path": "/var/storage",
+                        "read_only": False,
+                        "src_storage_uri": storage_uri,
+                    }
+                ],
+            },
+            "ssh_server": "ssh://nobody@ssh-auth.platform.neuromation.io:22",
+            "ssh_auth_server": "ssh://nobody@ssh-auth.platform.neuromation.io:22",
+            "is_preemptible": True,
+            "uri": f"job://test-cluster/{regular_user.name}/{job_id}",
+        }
+
+    @pytest.mark.asyncio
     async def test_job_failed(
         self,
         jobs_client: JobsClient,
@@ -2272,7 +2502,7 @@ class TestJobs:
                 "started_at": mock.ANY,
                 "finished_at": mock.ANY,
                 "exit_code": 1,
-                "run_time_seconds": 0,
+                "run_time_seconds": mock.ANY,
             },
             "container": {
                 "command": 'bash -c "echo Failed!; false"',
@@ -2678,6 +2908,52 @@ class TestStats:
                     },
                 ],
             }
+
+
+class TestTags:
+    @pytest.mark.asyncio
+    async def test_user_tags_unauthorized(
+        self, api: ApiConfig, client: aiohttp.ClientSession, regular_user: _User
+    ) -> None:
+        url = api.tags_base_url
+        async with client.get(url) as resp:
+            assert resp.status == HTTPUnauthorized.status_code
+
+    @pytest.mark.asyncio
+    async def test_user_tags_authorized_empty(
+        self, api: ApiConfig, client: aiohttp.ClientSession, regular_user: _User
+    ) -> None:
+        url = api.tags_base_url
+        async with client.get(url, headers=regular_user.headers) as resp:
+            assert resp.status == HTTPOk.status_code, await resp.text()
+            result = await resp.json()
+            assert result == {"tags": []}
+
+    @pytest.mark.asyncio
+    async def test_user_tags_authorized(
+        self,
+        api: ApiConfig,
+        client: aiohttp.ClientSession,
+        regular_user: _User,
+        job_submit: Dict[str, Any],
+    ) -> None:
+        headers = regular_user.headers
+
+        job_submit["tags"] = ["t1"]
+        url = api.jobs_base_url
+        async with client.post(url, headers=headers, json=job_submit) as resp:
+            assert resp.status == HTTPAccepted.status_code, await resp.text()
+
+        job_submit["tags"] = ["t4", "t3", "t2"]
+        url = api.jobs_base_url
+        async with client.post(url, headers=headers, json=job_submit) as resp:
+            assert resp.status == HTTPAccepted.status_code, await resp.text()
+
+        url = api.tags_base_url
+        async with client.get(url, headers=regular_user.headers) as resp:
+            assert resp.status == HTTPOk.status_code, await resp.text()
+            result = await resp.json()
+            assert result == {"tags": ["t2", "t3", "t4", "t1"]}
 
 
 class TestJobPolicyEnforcer:

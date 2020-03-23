@@ -70,7 +70,7 @@ class TestStorageVolume:
         )
         kube_config = KubeConfig(
             jobs_domain_name_template="{job_id}.testdomain",
-            ssh_auth_domain_name="ssh-auth.domain",
+            ssh_auth_server="ssh-auth.domain",
             endpoint_url="http://1.2.3.4",
             resource_pool_types=[ResourcePoolType()],
         )
@@ -90,7 +90,7 @@ class TestStorageVolume:
         )
         kube_config = KubeConfig(
             jobs_domain_name_template="{job_id}.testdomain",
-            ssh_auth_domain_name="ssh-auth.domain",
+            ssh_auth_server="ssh-auth.domain",
             endpoint_url="http://1.2.3.4",
             resource_pool_types=[ResourcePoolType()],
         )
@@ -108,7 +108,7 @@ class TestStorageVolume:
         )
         kube_config = KubeConfig(
             jobs_domain_name_template="{job_id}.testdomain",
-            ssh_auth_domain_name="ssh-auth.domain",
+            ssh_auth_server="ssh-auth.domain",
             endpoint_url="http://1.2.3.4",
             resource_pool_types=[ResourcePoolType()],
         )
@@ -151,6 +151,8 @@ class TestEnvironConfigFactory:
             "NP_AUTH_PUBLIC_URL": "https://neu.ro/api/v1/users",
             "NP_ENFORCER_PLATFORM_API_URL": "http://platformapi:8080/api/v1",
             "NP_ENFORCER_TOKEN": "compute-token",
+            "NP_API_ZIPKIN_URL": "https://zipkin:9411",
+            "NP_API_ZIPKIN_SAMPLE_RATE": "1",
         }
         config = EnvironConfigFactory(environ=environ).create()
         cluster = EnvironConfigFactory(environ=environ).create_cluster("new-cluster")
@@ -192,7 +194,7 @@ class TestEnvironConfigFactory:
         assert cluster.orchestrator.client_conn_pool_size == 100
         assert not cluster.orchestrator.is_http_ingress_secure
         assert cluster.orchestrator.jobs_domain_name_template == "{job_id}.jobs.domain"
-        assert cluster.orchestrator.ssh_auth_domain_name == "ssh-auth.domain"
+        assert cluster.orchestrator.ssh_auth_server == "ssh-auth.domain"
 
         assert cluster.orchestrator.resource_pool_types == [ResourcePoolType()]
         assert cluster.orchestrator.node_label_gpu is None
@@ -234,6 +236,8 @@ class TestEnvironConfigFactory:
             "NP_ADMIN_URL": "https://neu.ro/apis/admin/v1",
             "NP_JOBS_INGRESS_OAUTH_AUTHORIZE_URL": "http://neu.ro/oauth/authorize",
             "NP_AUTH_PUBLIC_URL": "https://neu.ro/api/v1/users",
+            "NP_API_ZIPKIN_URL": "https://zipkin:9411",
+            "NP_API_ZIPKIN_SAMPLE_RATE": "1",
         }
         with pytest.raises(ValueError):
             EnvironConfigFactory(environ=environ).create()
@@ -288,6 +292,8 @@ class TestEnvironConfigFactory:
             "NP_ENFORCER_TOKEN": "compute-token",
             "NP_CORS_ORIGINS": "https://domain1.com,http://do.main",
             "NP_USE_CLUSTER_NAMES_IN_URIS": "1",
+            "NP_API_ZIPKIN_URL": "https://zipkin:9411",
+            "NP_API_ZIPKIN_SAMPLE_RATE": "1",
         }
         config = EnvironConfigFactory(environ=environ).create()
         cluster = EnvironConfigFactory(environ=environ).create_cluster("new-cluster")
@@ -330,7 +336,7 @@ class TestEnvironConfigFactory:
         )
         assert cluster.orchestrator.is_http_ingress_secure
         assert cluster.orchestrator.jobs_domain_name_template == "{job_id}.jobs.domain"
-        assert cluster.orchestrator.ssh_auth_domain_name == "ssh-auth.domain"
+        assert cluster.orchestrator.ssh_auth_server == "ssh-auth.domain"
 
         assert cluster.orchestrator.resource_pool_types == [
             ResourcePoolType(),
@@ -437,7 +443,7 @@ class TestOrchestratorConfig:
     def test_default_presets(self) -> None:
         config = OrchestratorConfig(
             jobs_domain_name_template="test",
-            ssh_auth_domain_name="test",
+            ssh_auth_server="test",
             resource_pool_types=(),
         )
         assert config.presets == DEFAULT_PRESETS
@@ -446,7 +452,7 @@ class TestOrchestratorConfig:
         presets = (Preset(name="test", cpu=1.0, memory_mb=1024),)
         config = OrchestratorConfig(
             jobs_domain_name_template="test",
-            ssh_auth_domain_name="test",
+            ssh_auth_server="test",
             resource_pool_types=(ResourcePoolType(presets=presets),),
         )
         assert config.presets == presets
@@ -465,7 +471,7 @@ class TestKubeConfig:
                 token_path="value",
                 namespace="value",
                 jobs_domain_name_template="value",
-                ssh_auth_domain_name="value",
+                ssh_auth_server="value",
                 resource_pool_types=[],
                 node_label_gpu="value",
                 node_label_preemptible="value",
@@ -484,7 +490,7 @@ class TestKubeConfig:
                 token_path="value",
                 namespace="value",
                 jobs_domain_name_template="value",
-                ssh_auth_domain_name="value",
+                ssh_auth_server="value",
                 resource_pool_types=[],
                 node_label_gpu="value",
                 node_label_preemptible="value",
@@ -504,7 +510,7 @@ class TestKubeConfig:
             token_path="value",
             namespace="value",
             jobs_domain_name_template="value",
-            ssh_auth_domain_name="value",
+            ssh_auth_server="value",
             resource_pool_types=[],
             node_label_gpu="value",
             node_label_preemptible="value",

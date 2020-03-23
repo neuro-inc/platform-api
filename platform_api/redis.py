@@ -15,7 +15,10 @@ class RedisConfig:
 @asynccontextmanager
 async def create_redis_client(config: RedisConfig) -> aioredis.Redis:
     client = await aioredis.create_redis_pool(
-        config.uri, maxsize=config.conn_pool_size, timeout=config.conn_timeout_s
+        config.uri,
+        maxsize=config.conn_pool_size,
+        timeout=config.conn_timeout_s,
+        encoding="utf-8",
     )
     try:
         yield client

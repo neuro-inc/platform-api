@@ -1293,3 +1293,17 @@ class TestJobServiceNotification:
         )
 
         assert notifications == mock_notifications_client.sent_notifications
+
+    @pytest.mark.asyncio
+    async def test_create_job_bad_name(
+        self, jobs_service: JobsService, mock_job_request: JobRequest
+    ) -> None:
+        user = User(cluster_name="test-cluster", name="testuser", token="")
+        with pytest.raises(JobsServiceException) as cm:
+            await jobs_service.create_job(
+                job_request=mock_job_request, user=user, job_name="job-name"
+            )
+        assert (
+            str(cm.value)
+            == "Failed to create job: job name cannot start with 'job-' prefix."
+        )

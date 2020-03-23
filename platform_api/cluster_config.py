@@ -120,7 +120,7 @@ class RegistryConfig:
 class OrchestratorConfig:
     jobs_domain_name_template: str
 
-    ssh_auth_domain_name: str
+    ssh_auth_server: str
 
     resource_pool_types: Sequence[ResourcePoolType]
 

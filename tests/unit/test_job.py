@@ -9,7 +9,7 @@ from neuro_auth_client.client import Quota
 from yarl import URL
 
 from platform_api.cluster_config import RegistryConfig, StorageConfig
-from platform_api.handlers.job_request_builder import ContainerBuilder
+from platform_api.handlers.job_request_builder import create_container_from_payload
 from platform_api.orchestrator.job import (
     AggregatedRunTime,
     Job,
@@ -298,9 +298,9 @@ class TestContainerBuilder:
                 }
             ],
         }
-        container = ContainerBuilder.from_container_payload(
+        container = create_container_from_payload(
             payload, storage_config=storage_config, cluster_name="test-cluster"
-        ).build()
+        )
         assert container == Container(
             image="testimage",
             entrypoint="testentrypoint",
@@ -317,6 +317,7 @@ class TestContainerBuilder:
             resources=ContainerResources(cpu=0.1, memory_mb=128, gpu=1, shm=None),
             http_server=ContainerHTTPServer(port=80, health_check_path="/"),
             ssh_server=None,
+            tty=False,
         )
 
     def test_from_payload_build_gpu_model(self) -> None:
@@ -330,9 +331,9 @@ class TestContainerBuilder:
                 "gpu_model": "gpumodel",
             },
         }
-        container = ContainerBuilder.from_container_payload(
+        container = create_container_from_payload(
             payload, storage_config=storage_config, cluster_name="test-cluster"
-        ).build()
+        )
         assert container == Container(
             image="testimage",
             resources=ContainerResources(
@@ -350,9 +351,9 @@ class TestContainerBuilder:
                 "tpu": {"type": "v2-8", "software_version": "1.14"},
             },
         }
-        container = ContainerBuilder.from_container_payload(
+        container = create_container_from_payload(
             payload, storage_config=storage_config, cluster_name="test-cluster"
-        ).build()
+        )
         assert container == Container(
             image="testimage",
             resources=ContainerResources(
@@ -379,9 +380,9 @@ class TestContainerBuilder:
                 }
             ],
         }
-        container = ContainerBuilder.from_container_payload(
+        container = create_container_from_payload(
             payload, storage_config=storage_config, cluster_name="test-cluster"
-        ).build()
+        )
         assert container == Container(
             image="testimage",
             command="testcommand",
@@ -415,9 +416,9 @@ class TestContainerBuilder:
                 }
             ],
         }
-        container = ContainerBuilder.from_container_payload(
+        container = create_container_from_payload(
             payload, storage_config=storage_config, cluster_name="test-cluster"
-        ).build()
+        )
         assert container == Container(
             image="testimage",
             command="testcommand",
@@ -432,6 +433,33 @@ class TestContainerBuilder:
             ],
             resources=ContainerResources(cpu=0.1, memory_mb=128, gpu=1, shm=True),
             http_server=ContainerHTTPServer(port=80, health_check_path="/"),
+        )
+
+    def test_from_payload_build_with_tty(self) -> None:
+        storage_config = StorageConfig(host_mount_path=PurePath("/tmp"))
+        payload = {
+            "image": "testimage",
+            "entrypoint": "testentrypoint",
+            "command": "testcommand",
+            "env": {"TESTVAR": "testvalue"},
+            "resources": {"cpu": 0.1, "memory_mb": 128, "gpu": 1},
+            "http": {"port": 80},
+            "volumes": [],
+            "tty": True,
+        }
+        container = create_container_from_payload(
+            payload, storage_config=storage_config, cluster_name="test-cluster"
+        )
+        assert container == Container(
+            image="testimage",
+            entrypoint="testentrypoint",
+            command="testcommand",
+            env={"TESTVAR": "testvalue"},
+            volumes=[],
+            resources=ContainerResources(cpu=0.1, memory_mb=128, gpu=1, shm=None),
+            http_server=ContainerHTTPServer(port=80, health_check_path="/"),
+            ssh_server=None,
+            tty=True,
         )
 
 
@@ -455,6 +483,7 @@ def job_request_payload() -> Dict[str, Any]:
             ],
             "http_server": None,
             "ssh_server": None,
+            "tty": False,
         },
     }
 
@@ -962,6 +991,19 @@ class TestJob:
             "max_run_time_minutes": 500,
         }
 
+    def test_to_primitive_with_tags(
+        self, mock_orchestrator: MockOrchestrator, job_request: JobRequest
+    ) -> None:
+        job = Job(
+            storage_config=mock_orchestrator.storage_config,
+            orchestrator_config=mock_orchestrator.config,
+            record=JobRecord.create(
+                request=job_request, cluster_name="test-cluster", tags=["t1", "t2"],
+            ),
+        )
+        primitive = job.to_primitive()
+        assert primitive["tags"] == ["t1", "t2"]
+
     def test_from_primitive(
         self, mock_orchestrator: MockOrchestrator, job_request_payload: Dict[str, Any]
     ) -> None:
@@ -981,6 +1023,7 @@ class TestJob:
         assert job.is_deleted
         assert job.finished_at
         assert job.description == "Description of the testjob"
+        assert not job.tags
         assert job.name is None
         assert job.owner == "testuser"
         assert not job.is_preemptible
@@ -1003,6 +1046,25 @@ class TestJob:
         )
         assert job.id == "testjob"
         assert job.name == "test-job-name"
+
+    def test_from_primitive_with_tags(
+        self, mock_orchestrator: MockOrchestrator, job_request_payload: Dict[str, Any]
+    ) -> None:
+        tags = ["tag1", "tag2"]
+        payload = {
+            "id": "testjob",
+            "owner": "testuser",
+            "tags": tags,
+            "request": job_request_payload,
+            "status": "succeeded",
+            "is_deleted": True,
+            "finished_at": datetime.now(timezone.utc).isoformat(),
+        }
+        job = Job.from_primitive(
+            mock_orchestrator.storage_config, mock_orchestrator.config, payload
+        )
+        assert job.id == "testjob"
+        assert job.tags == tags
 
     def test_from_primitive_with_statuses(
         self, mock_orchestrator: MockOrchestrator, job_request_payload: Dict[str, Any]
@@ -1372,6 +1434,29 @@ class TestJobRequest:
                 )
             ],
             ssh_server=ContainerSSHServer(678),
+        )
+        request = JobRequest(
+            job_id="testjob",
+            description="Description of the testjob",
+            container=container,
+        )
+        assert request.to_primitive() == job_request_payload
+
+    def test_to_primitive_with_tty(self, job_request_payload: Dict[str, Any]) -> None:
+        job_request_payload["container"]["tty"] = True
+
+        container = Container(
+            image="testimage",
+            env={"testvar": "testval"},
+            resources=ContainerResources(cpu=1, memory_mb=128),
+            volumes=[
+                ContainerVolume(
+                    uri=URL("storage://path"),
+                    src_path=PurePath("/src/path"),
+                    dst_path=PurePath("/dst/path"),
+                )
+            ],
+            tty=True,
         )
         request = JobRequest(
             job_id="testjob",

@@ -27,7 +27,7 @@ from platform_api.orchestrator.jobs_storage import JobFilter, JobStorageTransact
 from platform_api.resource import TPUResource
 from platform_api.user import User, authorized_user, untrusted_user
 
-from .job_request_builder import ContainerBuilder
+from .job_request_builder import create_container_from_payload
 from .validators import (
     create_cluster_name_validator,
     create_container_request_validator,
@@ -35,6 +35,7 @@ from .validators import (
     create_job_history_validator,
     create_job_name_validator,
     create_job_status_validator,
+    create_tag_list_per_job_validator,
     create_user_name_validator,
     sanitize_dns_name,
 )
@@ -58,6 +59,7 @@ def create_job_request_validator(
             ),
             t.Key("name", optional=True): create_job_name_validator(),
             t.Key("description", optional=True): t.String,
+            t.Key("tags", optional=True): create_tag_list_per_job_validator(),
             t.Key("is_preemptible", optional=True, default=False): t.Bool,
             t.Key("schedule_timeout", optional=True): t.Float(gte=1, lt=30 * 24 * 3600),
             t.Key("max_run_time_minutes", optional=True): t.Int(gte=0),
@@ -96,6 +98,7 @@ def create_job_response_validator() -> t.Trafaret:
             t.Key("internal_hostname", optional=True): t.String,
             t.Key("name", optional=True): create_job_name_validator(max_length=None),
             t.Key("description", optional=True): t.String,
+            t.Key("tags", optional=True): create_tag_list_per_job_validator(),
             t.Key("schedule_timeout", optional=True): t.Float,
             t.Key("max_run_time_minutes", optional=True): t.Int,
         }
@@ -153,6 +156,8 @@ def convert_job_container_to_json(
         ret["ssh"] = {"port": container.ssh_server.port}
     for volume in container.volumes:
         ret["volumes"].append(convert_container_volume_to_json(volume, storage_config))
+    if container.tty:
+        ret["tty"] = True
     return ret
 
 
@@ -208,6 +213,8 @@ def convert_job_to_job_response(
         response_payload["name"] = job.name
     if job.description:
         response_payload["description"] = job.description
+    if job.tags:
+        response_payload["tags"] = job.tags
     if job.has_http_server_exposed:
         response_payload["http_url"] = job.http_url
         if job.http_url_named:
@@ -236,6 +243,7 @@ def infer_permissions_from_container(
     container: Container,
     registry_config: RegistryConfig,
     cluster_name: Optional[str],
+    legacy_storage_acl: bool = False,
 ) -> List[Permission]:
     permissions = [Permission(uri=str(user.to_job_uri(cluster_name)), action="write")]
     if container.belongs_to_registry(registry_config):
@@ -249,7 +257,7 @@ def infer_permissions_from_container(
         action = "read" if volume.read_only else "write"
         uri = volume.uri
         # XXX (serhiy 04-Feb-2020) Temporary patch the URI
-        if cluster_name:
+        if cluster_name and not legacy_storage_acl:
             if uri.scheme == "storage" and uri.host != cluster_name:
                 if uri.host:
                     assert uri.path[0] == "/"
@@ -354,21 +362,40 @@ class JobsHandler:
         job_request_validator = await self._create_job_request_validator(cluster_config)
         request_payload = job_request_validator.check(request_payload)
 
-        container = ContainerBuilder.from_container_payload(
+        container = create_container_from_payload(
             request_payload["container"],
             storage_config=cluster_config.storage,
             cluster_name=cluster_name,
-        ).build()
-
-        permissions = infer_permissions_from_container(
-            user,
-            container,
-            cluster_config.registry,
-            cluster_name if self._config.use_cluster_names_in_uris else None,
         )
-        await check_permissions(request, permissions)
+
+        if self._config.use_cluster_names_in_uris:
+            permissions = infer_permissions_from_container(
+                user, container, cluster_config.registry, cluster_name,
+            )
+            try:
+                await check_permissions(request, permissions)
+            except aiohttp.web.HTTPForbidden as exc:
+                permissions = infer_permissions_from_container(
+                    user,
+                    container,
+                    cluster_config.registry,
+                    cluster_name,
+                    legacy_storage_acl=True,
+                )
+                try:
+                    await check_permissions(request, permissions)
+                except aiohttp.web.HTTPForbidden:
+                    # Re-raise the original exception containing information
+                    # about extended ACL.
+                    raise exc
+        else:
+            permissions = infer_permissions_from_container(
+                user, container, cluster_config.registry, None,
+            )
+            await check_permissions(request, permissions)
 
         name = request_payload.get("name")
+        tags = sorted(set(request_payload.get("tags", [])))
         description = request_payload.get("description")
         is_preemptible = request_payload["is_preemptible"]
         schedule_timeout = request_payload.get("schedule_timeout")
@@ -379,6 +406,7 @@ class JobsHandler:
             user=user,
             cluster_name=cluster_name,
             job_name=name,
+            tags=tags,
             is_preemptible=is_preemptible,
             schedule_timeout=schedule_timeout,
             max_run_time_minutes=max_run_time_minutes,
@@ -523,6 +551,7 @@ class JobFilterFactory:
 
     def create_from_query(self, query: MultiDictProxy) -> JobFilter:  # type: ignore
         statuses = {JobStatus(s) for s in query.getall("status", [])}
+        tags = set(query.getall("tag", []))
         hostname = query.get("hostname")
         if hostname is None:
             job_name = self._job_name_validator.check(query.get("name"))
@@ -535,7 +564,11 @@ class JobFilterFactory:
                 for cluster_name in query.getall("cluster_name", [])
             }
             return JobFilter(
-                statuses=statuses, clusters=clusters, owners=owners, name=job_name
+                statuses=statuses,
+                clusters=clusters,
+                owners=owners,
+                name=job_name,
+                tags=tags,
             )
 
         if "name" in query or "owner" in query or "cluster_name" in query:
@@ -544,10 +577,10 @@ class JobFilterFactory:
         label = hostname.partition(".")[0]
         job_name, sep, owner = label.rpartition(JOB_USER_NAMES_SEPARATOR)
         if not sep:
-            return JobFilter(statuses=statuses, ids={label})
+            return JobFilter(statuses=statuses, ids={label}, tags=tags)
         job_name = self._job_name_validator.check(job_name)
         owner = self._user_name_validator.check(owner)
-        return JobFilter(statuses=statuses, owners={owner}, name=job_name)
+        return JobFilter(statuses=statuses, owners={owner}, name=job_name, tags=tags)
 
 
 @dataclass(frozen=True)

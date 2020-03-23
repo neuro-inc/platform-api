@@ -28,6 +28,7 @@ from platform_api.handlers.validators import (
     USER_NAME_MAX_LENGTH,
     create_container_request_validator,
     create_container_response_validator,
+    create_job_tag_validator,
 )
 from platform_api.orchestrator.job import (
     Job,
@@ -308,9 +309,11 @@ class TestContainerResponseValidator:
             "image": "testimage",
             "resources": {"cpu": 0.1, "memory_mb": 16},
             "command": '"',
+            "tty": False,
         }
         validator = create_container_response_validator()
-        assert validator.check(payload) == payload
+        result = validator.check(payload)
+        assert result["command"] == '"'
 
 
 class TestJobClusterNameValidator:
@@ -441,6 +444,41 @@ class TestJobRequestValidator:
         )
         with pytest.raises(DataError, match="value is less than"):
             validator.check(request)
+
+    @pytest.mark.parametrize(
+        "tag",
+        [
+            "a",
+            "a" * 256,
+            "foo123",
+            "foo:bar123",
+            "foo:bar-baz123",
+            "pre/foo:bar-baz123",
+            "pre.org/foo:bar-baz123",
+        ],
+    )
+    def test_job_tags_validator_valid(self, tag: str) -> None:
+        validator = create_job_tag_validator()
+        assert validator.check(tag) == tag
+
+    @pytest.mark.parametrize(
+        "tag",
+        [
+            "",
+            "a" * 257,
+            "foo-",
+            "-foo",
+            "foo--bar",
+            "foo::bar",
+            "foo//bar",
+            "foo..bar",
+            "foo.-bar",
+        ],
+    )
+    def test_job_tags_validator_invalid(self, tag: str) -> None:
+        validator = create_job_tag_validator()
+        with pytest.raises(DataError):
+            validator.check(tag)
 
 
 class TestJobContainerToJson:
@@ -1325,6 +1363,38 @@ class TestInferPermissionsFromContainerLegacy:
         assert permissions == [
             Permission(uri="job://testuser", action="write"),
             Permission(uri="image://testuser/image", action="read"),
+        ]
+
+    def test_legacy_storage_acl(self) -> None:
+        user = User(name="testuser", token="")
+        container = Container(
+            image="example.com/testuser/image",
+            resources=ContainerResources(cpu=0.1, memory_mb=16),
+            volumes=[
+                ContainerVolume(
+                    uri=URL("storage://testuser/dataset"),
+                    src_path=PurePath("/"),
+                    dst_path=PurePath("/var/storage/testuser/dataset"),
+                    read_only=True,
+                ),
+                ContainerVolume(
+                    uri=URL("storage://testuser/result"),
+                    src_path=PurePath("/"),
+                    dst_path=PurePath("/var/storage/testuser/result"),
+                ),
+            ],
+        )
+        registry_config = RegistryConfig(
+            url=URL("http://example.com"), username="compute", password="compute_token"
+        )
+        permissions = infer_permissions_from_container(
+            user, container, registry_config, "test-cluster", legacy_storage_acl=True
+        )
+        assert permissions == [
+            Permission(uri="job://test-cluster/testuser", action="write"),
+            Permission(uri="image://test-cluster/testuser/image", action="read"),
+            Permission(uri="storage://testuser/dataset", action="read"),
+            Permission(uri="storage://testuser/result", action="write"),
         ]
 
 
