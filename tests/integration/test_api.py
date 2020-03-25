@@ -1038,12 +1038,17 @@ class TestJobs:
         filters = [("tag", "tag1"), ("tag", "tag2")]
         jobs = await jobs_client.get_all_jobs(filters)
         job_ids = {job["id"] for job in jobs}
-        assert job_ids == {job_1, job_2}
+        assert job_ids == {job_1}
+
+        filters = [("tag", "tag1"), ("tag", "tag3")]
+        jobs = await jobs_client.get_all_jobs(filters)
+        job_ids = {job["id"] for job in jobs}
+        assert not job_ids
 
         filters = [("tag", "tag3"), ("tag", "tag-non-existing")]
         jobs = await jobs_client.get_all_jobs(filters)
         job_ids = {job["id"] for job in jobs}
-        assert job_ids == {job_2}
+        assert not job_ids
 
         filters = {"tag": "tag-non-existing"}
         jobs = await jobs_client.get_all_jobs(filters)
