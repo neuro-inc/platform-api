@@ -582,7 +582,7 @@ class RedisJobsStorage(JobsStorage):
                 tags=job_filter.tags,
                 name=job_filter.name,
             )
-            job_filter = None
+            job_filter = JobFilter(tags=job_filter.tags)
 
         async for chunk in self._get_jobs_by_ids_in_chunks(job_ids, job_filter):
             yield chunk
