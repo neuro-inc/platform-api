@@ -1387,6 +1387,25 @@ class TestRedisJobsStorage:
 
         assert not await storage.migrate()
 
+    def test_migrate_storage_uri(self) -> None:
+        convert = RedisJobsStorage._migrate_storage_uri
+        assert convert(URL("storage://alice"), "test-cluster") == URL(
+            "storage://test-cluster/alice"
+        )
+        assert convert(URL("storage://bob/data"), "test-cluster") == URL(
+            "storage://test-cluster/bob/data"
+        )
+        assert convert(URL("storage://"), "test-cluster") == URL(
+            "storage://test-cluster/"
+        )
+        assert convert(URL("storage:"), "test-cluster") == URL(
+            "storage://test-cluster/"
+        )
+        with pytest.raises(AssertionError):
+            convert(URL("storage://test-cluster/alice"), "test-cluster")
+        with pytest.raises(AssertionError):
+            convert(URL("image://alice"), "test-cluster")
+
     @pytest.mark.asyncio
     async def test_get_aggregated_run_time_for_user(
         self, redis_client: aioredis.Redis

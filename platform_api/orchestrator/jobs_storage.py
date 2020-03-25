@@ -24,6 +24,7 @@ from uuid import uuid4
 import aioredis
 from aioredis.commands import Pipeline
 from async_generator import asynccontextmanager
+from yarl import URL
 
 from platform_api.trace import trace
 
@@ -694,6 +695,21 @@ class RedisJobsStorage(JobsStorage):
 
         logger.info("Finished reindexing jobs composite")
 
+    @staticmethod
+    def _migrate_storage_uri(uri: URL, cluster_name: str) -> URL:
+        assert uri.scheme == "storage"
+        assert uri.host != cluster_name
+        user_name = uri.host
+        path = uri.path.lstrip("/")
+        if user_name:
+            if path:
+                path = f"/{user_name}/{path}"
+            else:
+                path = f"/{user_name}"
+        else:
+            path = f"/{path}"
+        return URL.build(scheme=uri.scheme, host=cluster_name, path=path)
+
     async def _update_volume_storage_uris(self) -> None:
         logger.info("Starting updating volume storage URIs")
 
@@ -708,10 +724,7 @@ class RedisJobsStorage(JobsStorage):
                 for volume in job.request.container.volumes:
                     uri = volume.uri
                     if uri.scheme == "storage" and uri.host != job.cluster_name:
-                        user_name = uri.host
-                        uri = uri.with_host(job.cluster_name)
-                        if user_name:
-                            uri = uri.with_path(f"/{user_name}{uri.path}")
+                        uri = self._migrate_storage_uri(uri, job.cluster_name)
                         volume = replace(volume, uri=uri)
                         changed_job = True
                     volumes.append(volume)
