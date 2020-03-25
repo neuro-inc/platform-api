@@ -79,8 +79,10 @@ class JobFilter:
             return False
         if self.ids and job.id not in self.ids:
             return False
-        if self.tags and self.tags.isdisjoint(job.tags):
-            return False
+        if self.tags:
+            asked, actual = set(self.tags), set(job.tags)
+            if actual & asked < asked:
+                return False
         return True
 
 

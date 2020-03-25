@@ -329,7 +329,7 @@ class TestJobFilter:
     def test_check_tags_job_less_filter_more(self) -> None:
         job = self._create_job(owner="testuser", status=JobStatus.PENDING, tags=["t1"])
         filt = JobFilter(tags={"t1", "t2", "t3"})
-        assert filt.check(job)
+        assert not filt.check(job)
 
     def test_check_tags_job_more_filter_less(self) -> None:
         job = self._create_job(
