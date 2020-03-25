@@ -568,9 +568,6 @@ class RedisJobsStorage(JobsStorage):
     async def _get_all_jobs_in_chunks(
         self, job_filter: Optional[JobFilter] = None
     ) -> AsyncIterator[Iterable[JobRecord]]:
-        # NOTE (ajuszkowski 4-Apr-2019): because of possible high number of jobs
-        # submitted by a user, we need to process all job separately iterating
-        # by job-ids not by job objects in order not to store them all in memory
         if not job_filter:
             job_filter = JobFilter()
         job_ids: Iterable[str] = job_filter.ids
