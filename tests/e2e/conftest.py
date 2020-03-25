@@ -140,21 +140,8 @@ async def regular_user_factory(
         auth_clusters = [AuthCluster(name=cluster_name)]
         user = User(name=name, clusters=auth_clusters)
         await auth_client.add_user(user)
-        # Revoke world-wide permissions
-        headers = auth_client._generate_headers(admin_token)
-        payload: Any = [
-            ("uri", f"storage://{name}"),
-            ("uri", f"image://{name}"),
-            ("uri", f"job://{name}"),
-        ]
-        async with auth_client._request(
-            "DELETE",
-            f"/api/v1/users/{name}/permissions",
-            headers=headers,
-            params=payload,
-        ) as p:
-            assert p.status == 204
         # Grant cluster-specific permissions
+        headers = auth_client._generate_headers(admin_token)
         payload = [
             {"uri": f"storage://{cluster_name}/{name}", "action": "manage"},
             {"uri": f"image://{cluster_name}/{name}", "action": "manage"},
