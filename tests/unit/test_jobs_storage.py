@@ -343,7 +343,7 @@ class TestJobFilter:
             owner="testuser", status=JobStatus.PENDING, tags=["t1", "t2"]
         )
         filt = JobFilter(tags={"t2", "t3"})
-        assert filt.check(job)
+        assert not filt.check(job)
 
     def test_check_tags_disjoint(self) -> None:
         job = self._create_job(
