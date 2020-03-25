@@ -1,7 +1,7 @@
 import os
 import time
 from dataclasses import dataclass
-from typing import Any, AsyncIterator, Awaitable, Callable, Optional
+from typing import AsyncIterator, Awaitable, Callable, Optional
 
 import aiohttp
 import pytest
