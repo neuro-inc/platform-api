@@ -79,10 +79,8 @@ class JobFilter:
             return False
         if self.ids and job.id not in self.ids:
             return False
-        if self.tags:
-            asked, actual = set(self.tags), set(job.tags)
-            if actual & asked < asked:
-                return False
+        if any(asked not in job.tags for asked in self.tags):
+            return False
         return True
 
 
@@ -579,7 +577,10 @@ class RedisJobsStorage(JobsStorage):
                 tags=job_filter.tags,
                 name=job_filter.name,
             )
-            job_filter = JobFilter(tags=job_filter.tags)
+            if len(job_filter.tags) > 1:
+                job_filter = JobFilter(tags=job_filter.tags)
+            else:
+                job_filter = None
 
         async for chunk in self._get_jobs_by_ids_in_chunks(job_ids, job_filter):
             yield chunk
