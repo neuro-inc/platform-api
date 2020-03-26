@@ -48,9 +48,36 @@ kind: Service
 metadata:
   name: ssh-auth
 spec:
+  {{- if .Values.NODEPORT }}
+  type: "NodePort"
+  {{- else }}
   type: "LoadBalancer"
+  {{- end }}
   ports:
   - port: 22
     targetPort: 22
+    {{- if .Values.NODEPORT }}
+    nodePort: {{ .Values.NODEPORT }}
+    {{- end }}
   selector:
     service: ssh-auth
+---
+{{- if .Values.NODEPORT }}
+apiVersion: extensions/v1beta1
+kind: Ingress
+metadata:
+  annotations:
+    kubernetes.io/ingress.class: traefik
+  labels:
+    app: ssh-auth
+  name: ssh-auth-ingress
+spec:
+  rules:
+  - host:  {{ .Values.INGRESS_HOST }}
+    http:
+      paths:
+      - backend:
+          serviceName: ssh-auth
+          servicePort: 22
+        path: /
+{{- end }}
