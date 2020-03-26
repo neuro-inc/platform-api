@@ -1557,6 +1557,7 @@ class KubeClient:
         name: str,
         pod_labels: Dict[str, str],
         namespace_name: Optional[str] = None,
+        labels: Optional[Dict[str, str]] = None,
     ) -> Dict[str, Any]:
         assert pod_labels
         # https://tools.ietf.org/html/rfc1918#section-3
@@ -1590,7 +1591,11 @@ class KubeClient:
             {"to": [{"podSelector": {"matchLabels": pod_labels}}]},
         ]
         return await self.create_egress_network_policy(
-            name, pod_labels=pod_labels, rules=rules, namespace_name=namespace_name
+            name,
+            pod_labels=pod_labels,
+            rules=rules,
+            namespace_name=namespace_name,
+            labels=labels,
         )
 
     async def create_egress_network_policy(

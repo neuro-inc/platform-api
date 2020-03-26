@@ -193,9 +193,13 @@ class KubeOrchestrator(Orchestrator):
     async def _create_user_network_policy(self, job: Job) -> None:
         name = self._get_user_resource_name(job)
         pod_labels = self._get_user_pod_labels(job)
+        labels = self._get_pod_labels(job)
         try:
             await self._client.create_default_network_policy(
-                name, pod_labels, namespace_name=self._kube_config.namespace
+                name,
+                pod_labels,
+                namespace_name=self._kube_config.namespace,
+                labels=labels,
             )
             logger.info(f"Created default network policy for user '{job.owner}'")
         except AlreadyExistsException:
