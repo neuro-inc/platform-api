@@ -62,7 +62,7 @@ class JobFilter:
         default_factory=cast(Type[Dict[str, AbstractSet[str]]], dict)
     )
     owners: AbstractSet[str] = field(default_factory=cast(Type[Set[str]], set))
-    tags: AbstractSet[str] = field(default_factory=cast(Type[Set[str]], set))
+    tags: Set[str] = field(default_factory=cast(Type[Set[str]], set))
     name: Optional[str] = None
     ids: AbstractSet[str] = field(default_factory=cast(Type[Set[str]], set))
 
@@ -79,7 +79,7 @@ class JobFilter:
             return False
         if self.ids and job.id not in self.ids:
             return False
-        if any(asked not in job.tags for asked in self.tags):
+        if not self.tags.issubset(job.tags):
             return False
         return True
 
