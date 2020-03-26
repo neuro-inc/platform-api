@@ -1230,23 +1230,88 @@ class TestKubeOrchestrator:
         )
         assert toleration_expected in pod.tolerations
 
+    @pytest.mark.asyncio
+    async def test_get_all_job_resources_links(
+        self,
+        kube_client: MyKubeClient,
+        kube_orchestrator: KubeOrchestrator,
+        delete_job_later: Callable[[Job], Awaitable[None]],
+    ) -> None:
+        container = Container(
+            image="ubuntu",
+            command="sleep 1h",
+            http_server=ContainerHTTPServer(80),
+            resources=ContainerResources(cpu=0.1, memory_mb=128),
+        )
+        job = MyJob(
+            orchestrator=kube_orchestrator,
+            record=JobRecord.create(
+                request=JobRequest.create(container), cluster_name="default"
+            ),
+        )
+        await delete_job_later(job)
+        await job.start()
+
+        pod_url = URL(kube_client._generate_pod_url(job.id))
+        ingress_url = URL(kube_client._generate_ingress_url(job.id))
+        services_url = URL(kube_client._generate_service_url(job.id))
+
+        resources = await kube_orchestrator.get_all_job_resources_links()
+        # TODO(artem) networkpolicies missing
+        assert resources[job.id] == [
+            pod_url.path,
+            ingress_url.path,
+            services_url.path,
+        ]
+
+
+@pytest.fixture
+async def _delete_resource_later() -> AsyncIterator[
+    Callable[[Awaitable[None]], Awaitable[None]]
+]:
+    callbacks = []
+
+    async def _add(cb: Awaitable[None]) -> None:
+        callbacks.append(cb)
+
+    try:
+        yield _add
+    finally:
+        for cb in callbacks:
+            try:
+                await cb
+            except Exception:
+                pass
+
 
 @pytest.fixture
 async def delete_pod_later(
-    kube_client: KubeClient,
-) -> AsyncIterator[Callable[[PodDescriptor], Awaitable[None]]]:
-    pods = []
-
+    _delete_resource_later: Callable[..., Awaitable[None]], kube_client: KubeClient,
+) -> Callable[[PodDescriptor], Awaitable[None]]:
     async def _add_pod(pod: PodDescriptor) -> None:
-        pods.append(pod)
+        await _delete_resource_later(kube_client.delete_pod(pod.name))
 
-    yield _add_pod
+    return _add_pod
 
-    for pod in pods:
-        try:
-            await kube_client.delete_pod(pod.name)
-        except Exception:
-            pass
+
+@pytest.fixture
+async def delete_ingress_later(
+    _delete_resource_later: Callable[..., Awaitable[None]], kube_client: KubeClient,
+) -> Callable[[Ingress], Awaitable[None]]:
+    async def _add_ingress(ingress: Ingress) -> None:
+        await _delete_resource_later(kube_client.delete_ingress(ingress.name))
+
+    return _add_ingress
+
+
+@pytest.fixture
+async def delete_service_later(
+    _delete_resource_later: Callable[..., Awaitable[None]], kube_client: KubeClient,
+) -> Callable[[Service], Awaitable[None]]:
+    async def _add_service(service: Service) -> None:
+        await _delete_resource_later(kube_client.delete_service(service.name))
+
+    return _add_service
 
 
 class TestKubeClient:
@@ -1568,6 +1633,194 @@ class TestKubeClient:
         pod_status = await kube_client.get_pod_status(pod.name)
 
         assert pod_status.container_status.exit_code != 0
+
+    @pytest.fixture
+    async def create_pod(
+        self,
+        kube_client: KubeClient,
+        kube_orchestrator: KubeOrchestrator,
+        delete_pod_later: Callable[[PodDescriptor], Awaitable[None]],
+    ) -> Callable[[str], Awaitable[PodDescriptor]]:
+        async def _f(job_id: str) -> PodDescriptor:
+            labels = {"platform.neuromation.io/job": job_id}
+            container = Container(
+                image="ubuntu",
+                command="true",
+                resources=ContainerResources(cpu=0.1, memory_mb=128),
+            )
+            pod = PodDescriptor.from_job_request(
+                kube_orchestrator.create_storage_volume(),
+                JobRequest.create(container),
+                labels=labels,
+            )
+            await delete_pod_later(pod)
+            await kube_client.create_pod(pod)
+            return pod
+
+        return _f
+
+    @pytest.mark.asyncio
+    async def test_get_all_job_resources_links_pod(
+        self,
+        kube_client: MyKubeClient,
+        create_pod: Callable[[str], Awaitable[PodDescriptor]],
+    ) -> None:
+        job_id = f"job-{uuid.uuid4()}"
+        pod = await create_pod(job_id)
+        link = URL(kube_client._generate_pod_url(pod.name)).path
+
+        resources = await kube_client.get_all_job_resources_links()
+        assert resources[job_id] == [link]
+
+    @pytest.mark.asyncio
+    async def test_delete_resource_by_link_pod(
+        self,
+        kube_client: MyKubeClient,
+        create_pod: Callable[[str], Awaitable[PodDescriptor]],
+    ) -> None:
+        job_id = f"job-{uuid.uuid4()}"
+        pod = await create_pod(job_id)
+        link = URL(kube_client._generate_pod_url(pod.name)).path
+
+        await kube_client.delete_resource_by_link(link)
+        await kube_client.wait_pod_non_existent(pod.name)
+
+        with pytest.raises(JobNotFoundException):
+            await kube_client.get_pod(pod.name)
+
+    @pytest.fixture
+    async def create_ingress(
+        self,
+        kube_client: KubeClient,
+        delete_ingress_later: Callable[[Ingress], Awaitable[None]],
+    ) -> Callable[[str], Awaitable[Ingress]]:
+        async def _f(job_id: str) -> Ingress:
+            ingress_name = f"ingress-{uuid.uuid4().hex[:6]}"
+            labels = {"platform.neuromation.io/job": job_id}
+            ingress = await kube_client.create_ingress(ingress_name, labels=labels)
+            await delete_ingress_later(ingress)
+            return ingress
+
+        return _f
+
+    @pytest.mark.asyncio
+    async def test_get_all_job_resources_links_ingress(
+        self,
+        kube_client: KubeClient,
+        create_ingress: Callable[[str], Awaitable[Ingress]],
+    ) -> None:
+        job_id = f"job-{uuid.uuid4()}"
+        ingress = await create_ingress(job_id)
+        link = URL(kube_client._generate_ingress_url(ingress.name)).path
+
+        resources = await kube_client.get_all_job_resources_links()
+        assert resources[job_id] == [link]
+
+    @pytest.mark.asyncio
+    async def test_delete_resource_by_link_ingress(
+        self,
+        kube_client: KubeClient,
+        create_ingress: Callable[[str], Awaitable[Ingress]],
+    ) -> None:
+        job_id = f"job-{uuid.uuid4()}"
+        ingress = await create_ingress(job_id)
+
+        link = URL(kube_client._generate_ingress_url(ingress.name)).path
+        await kube_client.delete_resource_by_link(link)
+
+        with pytest.raises(JobNotFoundException):
+            await kube_client.get_ingress(ingress.name)
+
+    @pytest.fixture
+    async def create_service(
+        self,
+        kube_client: KubeClient,
+        delete_service_later: Callable[[Service], Awaitable[None]],
+    ) -> Callable[[str], Awaitable[Service]]:
+        async def _f(job_id: str) -> Service:
+            service_name = f"service-{uuid.uuid4().hex[:6]}"
+            labels = {"platform.neuromation.io/job": job_id}
+            service = Service(name=service_name, target_port=8080, labels=labels)
+            service = await kube_client.create_service(service)
+            await delete_service_later(service)
+            return service
+
+        return _f
+
+    @pytest.mark.asyncio
+    async def test_get_all_job_resources_links_service(
+        self,
+        kube_client: KubeClient,
+        create_service: Callable[[str], Awaitable[Service]],
+    ) -> None:
+        job_id = f"job-{uuid.uuid4()}"
+        service = await create_service(job_id)
+        link = URL(kube_client._generate_service_url(service.name)).path
+
+        resources = await kube_client.get_all_job_resources_links()
+        assert resources[job_id] == [link]
+
+    @pytest.mark.asyncio
+    async def test_delete_resource_by_link_service(
+        self,
+        kube_client: KubeClient,
+        create_service: Callable[[str], Awaitable[Service]],
+    ) -> None:
+        job_id = f"job-{uuid.uuid4()}"
+        service = await create_service(job_id)
+
+        link = URL(kube_client._generate_service_url(service.name)).path
+        await kube_client.delete_resource_by_link(link)
+
+        with pytest.raises(StatusException, match="NotFound"):
+            await kube_client.get_network_policy(service.name)
+
+    @pytest.fixture
+    async def create_network_policy(
+        self,
+        kube_client: KubeClient,
+        delete_network_policy_later: Callable[[str], Awaitable[None]],
+    ) -> Callable[[str], Awaitable[Dict[str, Any]]]:
+        async def _f(job_id: str) -> Dict[str, Any]:
+            np_name = f"networkpolicy-{uuid.uuid4().hex[:6]}"
+            labels = {"platform.neuromation.io/job": job_id}
+
+            await delete_network_policy_later(np_name)
+            payload = await kube_client.create_egress_network_policy(
+                np_name, pod_labels=labels, labels=labels, rules=[{}],
+            )
+            return payload
+
+        return _f
+
+    @pytest.mark.asyncio
+    async def test_get_all_job_resources_links_job_network_policy(
+        self,
+        kube_client: KubeClient,
+        create_network_policy: Callable[[str], Awaitable[Dict[str, Any]]],
+    ) -> None:
+        job_id = f"job-{uuid.uuid4()}"
+        payload = await create_network_policy(job_id)
+        link = payload["metadata"]["selfLink"]
+
+        resources = await kube_client.get_all_job_resources_links()
+        assert resources[job_id] == [link]
+
+    @pytest.mark.asyncio
+    async def test_delete_resource_by_link_network_policy(
+        self,
+        kube_client: KubeClient,
+        create_network_policy: Callable[[str], Awaitable[Dict[str, Any]]],
+    ) -> None:
+        job_id = f"job-{uuid.uuid4()}"
+        payload = await create_network_policy(job_id)
+        link = payload["metadata"]["selfLink"]
+        np_name = payload["metadata"]["name"]
+
+        await kube_client.delete_resource_by_link(link)
+
+        with pytest.raises(StatusException, match="NotFound"):
+            await kube_client.get_network_policy(np_name)
 
 
 @pytest.fixture
