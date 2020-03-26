@@ -79,7 +79,7 @@ class JobFilter:
             return False
         if self.ids and job.id not in self.ids:
             return False
-        if not self.tags.issubset(job.tags):
+        if self.tags and not self.tags.issubset(job.tags):
             return False
         return True
 
