@@ -61,23 +61,4 @@ spec:
     {{- end }}
   selector:
     service: ssh-auth
----
-{{- if .Values.NODEPORT }}
-apiVersion: extensions/v1beta1
-kind: Ingress
-metadata:
-  annotations:
-    kubernetes.io/ingress.class: traefik
-  labels:
-    app: ssh-auth
-  name: ssh-auth-ingress
-spec:
-  rules:
-  - host:  {{ .Values.INGRESS_HOST }}
-    http:
-      paths:
-      - backend:
-          serviceName: ssh-auth
-          servicePort: 22
-        path: /
-{{- end }}
+
