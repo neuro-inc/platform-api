@@ -1407,7 +1407,6 @@ class KubeClient:
             if payload["status"] == "Failure":
                 if payload.get("reason") == "AlreadyExists":
                     raise AlreadyExistsException(payload["reason"])
-                print(payload)
                 raise StatusException(payload["reason"])
 
     async def add_ingress_rule(self, name: str, rule: IngressRule) -> Ingress:
