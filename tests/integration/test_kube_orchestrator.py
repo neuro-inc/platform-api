@@ -21,7 +21,6 @@ from platform_api.orchestrator.job_request import (
     ContainerTPUResource,
     ContainerVolume,
     JobAlreadyExistsException,
-    JobError,
     JobNotFoundException,
     JobRequest,
     JobStatus,
@@ -263,7 +262,7 @@ class TestKubeOrchestrator:
             record=JobRecord.create(request=job_request, cluster_name="test-cluster"),
         )
 
-        with pytest.raises(JobError):
+        with pytest.raises(StatusException, match="Invalid"):
             await job.start()
 
     @pytest.mark.asyncio
