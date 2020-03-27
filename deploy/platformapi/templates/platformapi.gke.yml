@@ -142,7 +142,7 @@ spec:
         backend:
           serviceName: platformstorageapi
           servicePort: 8080
-      - path: /api/v1/obs
+      - path: /api/v1/blob
         backend:
           serviceName: platformobjectstorage
           servicePort: 8080
@@ -173,7 +173,7 @@ spec:
         backend:
           serviceName: platformstorageapi
           servicePort: 8080
-      - path: /api/v1/obs
+      - path: /api/v1/blob
         backend:
           serviceName: platformobjectstorage
           servicePort: 8080
