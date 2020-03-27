@@ -1472,6 +1472,7 @@ class KubeClient:
     async def get_service(self, name: str) -> Service:
         url = self._generate_service_url(name)
         payload = await self._request(method="GET", url=url)
+        self._check_status_payload(payload)
         return Service.from_primitive(payload)
 
     async def delete_service(self, name: str) -> None:

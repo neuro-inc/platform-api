@@ -1231,7 +1231,7 @@ class TestKubeOrchestrator:
         assert toleration_expected in pod.tolerations
 
     @pytest.mark.asyncio
-    async def test_get_all_job_resources_links(
+    async def test_get_all_job_resources_links_and_delete_resource_by_link(
         self,
         kube_client: MyKubeClient,
         kube_orchestrator: KubeOrchestrator,
@@ -1257,12 +1257,25 @@ class TestKubeOrchestrator:
         services_url = URL(kube_client._generate_service_url(job.id))
 
         resources = await kube_orchestrator.get_all_job_resources_links()
-        # TODO(artem) networkpolicies missing
-        assert resources[job.id] == [
-            pod_url.path,
-            ingress_url.path,
-            services_url.path,
-        ]
+        assert resources[job.id] == [pod_url.path, ingress_url.path, services_url.path]
+
+        for link in resources[job.id]:
+            await kube_orchestrator.delete_resource_by_link(link)
+
+        pod_name = ingress_name = service_name = networkpolicy_name = job.id
+
+        await kube_client.wait_pod_non_existent(pod_name, timeout_s=60.0)
+        with pytest.raises(JobNotFoundException):
+            await kube_client.get_pod(pod_name)
+
+        with pytest.raises(JobNotFoundException):
+            await kube_client.get_ingress(ingress_name)
+
+        with pytest.raises(StatusException, match="NotFound"):
+            await kube_client.get_service(service_name)
+
+        with pytest.raises(StatusException, match="NotFound"):
+            await kube_client.get_network_policy(networkpolicy_name)
 
 
 @pytest.fixture
@@ -1680,10 +1693,11 @@ class TestKubeClient:
     ) -> None:
         job_id = f"job-{uuid.uuid4()}"
         pod = await create_pod(job_id)
+        assert await kube_client.get_pod(pod.name)
         link = URL(kube_client._generate_pod_url(pod.name)).path
 
         await kube_client.delete_resource_by_link(link)
-        await kube_client.wait_pod_non_existent(pod.name)
+        await kube_client.wait_pod_non_existent(pod.name, timeout_s=60.0)
 
         with pytest.raises(JobNotFoundException):
             await kube_client.get_pod(pod.name)
@@ -1724,6 +1738,7 @@ class TestKubeClient:
     ) -> None:
         job_id = f"job-{uuid.uuid4()}"
         ingress = await create_ingress(job_id)
+        assert await kube_client.get_ingress(ingress.name)
 
         link = URL(kube_client._generate_ingress_url(ingress.name)).path
         await kube_client.delete_resource_by_link(link)
@@ -1768,12 +1783,13 @@ class TestKubeClient:
     ) -> None:
         job_id = f"job-{uuid.uuid4()}"
         service = await create_service(job_id)
+        assert await kube_client.get_service(service.name)
 
         link = URL(kube_client._generate_service_url(service.name)).path
         await kube_client.delete_resource_by_link(link)
 
         with pytest.raises(StatusException, match="NotFound"):
-            await kube_client.get_network_policy(service.name)
+            await kube_client.get_service(service.name)
 
     @pytest.fixture
     async def create_network_policy(
