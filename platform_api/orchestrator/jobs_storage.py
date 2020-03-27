@@ -62,7 +62,7 @@ class JobFilter:
         default_factory=cast(Type[Dict[str, AbstractSet[str]]], dict)
     )
     owners: AbstractSet[str] = field(default_factory=cast(Type[Set[str]], set))
-    tags: AbstractSet[str] = field(default_factory=cast(Type[Set[str]], set))
+    tags: Set[str] = field(default_factory=cast(Type[Set[str]], set))
     name: Optional[str] = None
     ids: AbstractSet[str] = field(default_factory=cast(Type[Set[str]], set))
 
@@ -79,7 +79,7 @@ class JobFilter:
             return False
         if self.ids and job.id not in self.ids:
             return False
-        if self.tags and self.tags.isdisjoint(job.tags):
+        if self.tags and not self.tags.issubset(job.tags):
             return False
         return True
 
@@ -566,9 +566,6 @@ class RedisJobsStorage(JobsStorage):
     async def _get_all_jobs_in_chunks(
         self, job_filter: Optional[JobFilter] = None
     ) -> AsyncIterator[Iterable[JobRecord]]:
-        # NOTE (ajuszkowski 4-Apr-2019): because of possible high number of jobs
-        # submitted by a user, we need to process all job separately iterating
-        # by job-ids not by job objects in order not to store them all in memory
         if not job_filter:
             job_filter = JobFilter()
         job_ids: Iterable[str] = job_filter.ids
@@ -580,7 +577,10 @@ class RedisJobsStorage(JobsStorage):
                 tags=job_filter.tags,
                 name=job_filter.name,
             )
-            job_filter = None
+            if len(job_filter.tags) > 1:
+                job_filter = JobFilter(tags=job_filter.tags)
+            else:
+                job_filter = None
 
         async for chunk in self._get_jobs_by_ids_in_chunks(job_ids, job_filter):
             yield chunk
