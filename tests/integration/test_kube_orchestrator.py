@@ -1231,7 +1231,7 @@ class TestKubeOrchestrator:
         assert toleration_expected in pod.tolerations
 
     @pytest.mark.asyncio
-    async def test_get_all_job_resources_links_and_delete_resource_by_link(
+    async def test_delete_all_job_resources(
         self,
         kube_client: MyKubeClient,
         kube_orchestrator: KubeOrchestrator,
@@ -1241,28 +1241,30 @@ class TestKubeOrchestrator:
             image="ubuntu",
             command="sleep 1h",
             http_server=ContainerHTTPServer(80),
-            resources=ContainerResources(cpu=0.1, memory_mb=128),
+            resources=ContainerResources(
+                cpu=0.1,
+                memory_mb=128,
+                tpu=ContainerTPUResource(type="v2-8", software_version="1.14"),
+            ),
         )
         job = MyJob(
             orchestrator=kube_orchestrator,
             record=JobRecord.create(
-                request=JobRequest.create(container), cluster_name="default"
+                request=JobRequest.create(container), cluster_name="test-cluster"
             ),
         )
         await delete_job_later(job)
-        await job.start()
-
-        pod_url = URL(kube_client._generate_pod_url(job.id))
-        ingress_url = URL(kube_client._generate_ingress_url(job.id))
-        services_url = URL(kube_client._generate_service_url(job.id))
-
-        resources = await kube_orchestrator.get_all_job_resources_links()
-        assert resources[job.id] == [pod_url.path, ingress_url.path, services_url.path]
-
-        for link in resources[job.id]:
-            await kube_orchestrator.delete_resource_by_link(link)
+        await kube_orchestrator.prepare_job(job)
+        await kube_orchestrator.start_job(job)
 
         pod_name = ingress_name = service_name = networkpolicy_name = job.id
+
+        assert await kube_client.get_pod(pod_name)
+        await kube_client.get_ingress(ingress_name)
+        await kube_client.get_service(service_name)
+        await kube_client.get_network_policy(networkpolicy_name)
+
+        await kube_orchestrator.delete_all_job_resources(job.id)
 
         await kube_client.wait_pod_non_existent(pod_name, timeout_s=60.0)
         with pytest.raises(JobNotFoundException):
@@ -1279,52 +1281,57 @@ class TestKubeOrchestrator:
 
 
 @pytest.fixture
-async def _delete_resource_later() -> AsyncIterator[
-    Callable[[Awaitable[None]], Awaitable[None]]
-]:
-    callbacks = []
-
-    async def _add(cb: Awaitable[None]) -> None:
-        callbacks.append(cb)
-
-    try:
-        yield _add
-    finally:
-        for cb in callbacks:
-            try:
-                await cb
-            except Exception:
-                pass
-
-
-@pytest.fixture
 async def delete_pod_later(
-    _delete_resource_later: Callable[..., Awaitable[None]], kube_client: KubeClient,
-) -> Callable[[PodDescriptor], Awaitable[None]]:
-    async def _add_pod(pod: PodDescriptor) -> None:
-        await _delete_resource_later(kube_client.delete_pod(pod.name))
+    kube_client: KubeClient,
+) -> AsyncIterator[Callable[[PodDescriptor], Awaitable[None]]]:
+    pods = []
 
-    return _add_pod
+    async def _add_pod(pod: PodDescriptor) -> None:
+        pods.append(pod)
+
+    yield _add_pod
+
+    for pod in pods:
+        try:
+            await kube_client.delete_pod(pod.name)
+        except Exception:
+            pass
 
 
 @pytest.fixture
 async def delete_ingress_later(
-    _delete_resource_later: Callable[..., Awaitable[None]], kube_client: KubeClient,
-) -> Callable[[Ingress], Awaitable[None]]:
-    async def _add_ingress(ingress: Ingress) -> None:
-        await _delete_resource_later(kube_client.delete_ingress(ingress.name))
+    kube_client: KubeClient,
+) -> AsyncIterator[Callable[[Ingress], Awaitable[None]]]:
+    ingresses = []
 
-    return _add_ingress
+    async def _add(ingress: Ingress) -> None:
+        ingresses.append(ingress)
+
+    yield _add
+
+    for ingress in ingresses:
+        try:
+            await kube_client.delete_ingress(ingress.name)
+        except Exception:
+            pass
 
 
 @pytest.fixture
 async def delete_service_later(
-    _delete_resource_later: Callable[..., Awaitable[None]], kube_client: KubeClient,
-) -> Callable[[Service], Awaitable[None]]:
-    async def _add_service(service: Service) -> None:
-        await _delete_resource_later(kube_client.delete_service(service.name))
+    kube_client: KubeClient,
+) -> AsyncIterator[Callable[[Service], Awaitable[None]]]:
+    services = []
 
-    return _add_service
+    async def _add(service: Service) -> None:
+        services.append(service)
+
+    yield _add
+
+    for service in services:
+        try:
+            await kube_client.delete_service(service.name)
+        except Exception:
+            pass
 
 
 class TestKubeClient:
@@ -1344,7 +1351,7 @@ class TestKubeClient:
         container = Container(
             image="ubuntu",
             command="true",
-            resources=ContainerResources(cpu=0.1, memory_mb=128),
+            resources=ContainerResources(cpu=0.1, memory_mb=16),
         )
         job_request = JobRequest.create(container)
         pod = PodDescriptor.from_job_request(
@@ -1682,8 +1689,8 @@ class TestKubeClient:
         pod = await create_pod(job_id)
         link = URL(kube_client._generate_pod_url(pod.name)).path
 
-        resources = await kube_client.get_all_job_resources_links()
-        assert resources[job_id] == [link]
+        resources = [r async for r in kube_client.get_all_job_resources_links(job_id)]
+        assert resources == [link]
 
     @pytest.mark.asyncio
     async def test_delete_resource_by_link_pod(
@@ -1727,8 +1734,8 @@ class TestKubeClient:
         ingress = await create_ingress(job_id)
         link = URL(kube_client._generate_ingress_url(ingress.name)).path
 
-        resources = await kube_client.get_all_job_resources_links()
-        assert resources[job_id] == [link]
+        resources = [r async for r in kube_client.get_all_job_resources_links(job_id)]
+        assert resources == [link]
 
     @pytest.mark.asyncio
     async def test_delete_resource_by_link_ingress(
@@ -1772,8 +1779,8 @@ class TestKubeClient:
         service = await create_service(job_id)
         link = URL(kube_client._generate_service_url(service.name)).path
 
-        resources = await kube_client.get_all_job_resources_links()
-        assert resources[job_id] == [link]
+        resources = [r async for r in kube_client.get_all_job_resources_links(job_id)]
+        assert resources == [link]
 
     @pytest.mark.asyncio
     async def test_delete_resource_by_link_service(
@@ -1819,8 +1826,8 @@ class TestKubeClient:
         payload = await create_network_policy(job_id)
         link = payload["metadata"]["selfLink"]
 
-        resources = await kube_client.get_all_job_resources_links()
-        assert resources[job_id] == [link]
+        resources = [r async for r in kube_client.get_all_job_resources_links(job_id)]
+        assert resources == [link]
 
     @pytest.mark.asyncio
     async def test_delete_resource_by_link_network_policy(

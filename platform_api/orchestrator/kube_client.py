@@ -6,7 +6,6 @@ import logging
 import re
 import ssl
 from base64 import b64encode
-from collections import defaultdict
 from contextlib import suppress
 from dataclasses import dataclass, field
 from datetime import datetime
@@ -15,6 +14,7 @@ from pathlib import Path, PurePath
 from types import TracebackType
 from typing import (
     Any,
+    AsyncIterator,
     ClassVar,
     DefaultDict,
     Dict,
@@ -1300,10 +1300,9 @@ class KubeClient:
             logging.debug("k8s response payload: %s", payload)
             return payload
 
-    async def get_all_job_resources_links(self) -> Dict[str, List[str]]:
-        resources: Dict[str, List[str]] = defaultdict(list)
+    async def get_all_job_resources_links(self, job_id: str) -> AsyncIterator[str]:
         job_label_name = "platform.neuromation.io/job"
-        params = {"labelSelector": job_label_name}
+        params = {"labelSelector": f"{job_label_name}={job_id}"}
         urls = [
             self._pods_url,
             self._ingresses_url,
@@ -1314,9 +1313,8 @@ class KubeClient:
             payload = await self._request(method="GET", url=url, params=params)
             for item in payload["items"]:
                 metadata = item["metadata"]
-                job_id = metadata["labels"][job_label_name]
-                resources[job_id].append(metadata["selfLink"])
-        return resources
+                assert metadata["labels"][job_label_name] == job_id
+                yield metadata["selfLink"]
 
     async def delete_resource_by_link(self, link: str) -> None:
         await self._delete_resource_url(f"{self._base_url}{link}")
