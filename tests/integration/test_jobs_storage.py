@@ -1287,6 +1287,24 @@ class TestRedisJobsStorage:
         assert not await storage.migrate()
 
     @pytest.mark.asyncio
+    async def test_migrate_version_4(self, redis_client: aioredis.Redis) -> None:
+        job = self._create_succeeded_job()
+
+        storage = RedisJobsStorage(client=redis_client)
+        async with storage.try_create_job(job, skip_index=True):
+            pass
+
+        jobs_for_deletion = await storage.get_jobs_for_deletion()
+        assert not jobs_for_deletion
+
+        await storage.migrate()
+
+        jobs_for_deletion = await storage.get_jobs_for_deletion()
+        assert jobs_for_deletion
+
+        assert not await storage.migrate()
+
+    @pytest.mark.asyncio
     async def test_migrate(self, redis_client: aioredis.Redis) -> None:
         first_job = self._create_pending_job(owner="testuser")
         second_job = self._create_running_job(owner="testuser")
@@ -1304,7 +1322,7 @@ class TestRedisJobsStorage:
 
         jobs = await storage.get_all_jobs()
         job_ids = {job.id for job in jobs}
-        assert job_ids == {first_job.id, second_job.id}
+        assert not job_ids
 
         filters = JobFilter(owners={"testuser"})
 

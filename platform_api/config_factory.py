@@ -246,8 +246,8 @@ class EnvironConfigFactory:
         )
 
     def create_zipkin(self) -> ZipkinConfig:
-        url = URL(self._environ["NP_STORAGE_ZIPKIN_URL"])
-        sample_rate = float(self._environ["NP_STORAGE_ZIPKIN_SAMPLE_RATE"])
+        url = URL(self._environ["NP_API_ZIPKIN_URL"])
+        sample_rate = float(self._environ["NP_API_ZIPKIN_SAMPLE_RATE"])
         return ZipkinConfig(url=url, sample_rate=sample_rate)
 
     def try_create_oauth(self) -> Optional[OAuthConfig]:

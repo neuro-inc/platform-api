@@ -91,7 +91,7 @@ NP_GKE_GPU_MODELS:
 NP_OAUTH_BASE_URL:
   _default: https://login-dev.neu.ro
   dev: https://login-dev.neu.ro
-  staging: https://staging-neuromation.auth0.com
+  staging: https://login.neu.ro
   prod:
 NP_OAUTH_CLIENT_ID:
   _default: V7Jz87W9lhIlo0MyD0O6dufBvcXwM4DR
@@ -129,17 +129,17 @@ NP_CORS_ORIGINS:
   staging: https://neu.ro
   prod: https://neu.ro
 NP_USE_CLUSTER_NAMES_IN_URIS:
-  _default: "0"
+  _default: "1"
   dev: "1"
-  staging: "0"
-  prod: "0"
-NP_STORAGE_ZIPKIN_URL:
+  staging: "1"
+  prod: "1"
+NP_API_ZIPKIN_URL:
   _default: 'http://zipkin:9411'
   dev: 'http://zipkin:9411'
   staging: 'http://zipkin:9411'
   prod: 'http://zipkin:9411'
-NP_STORAGE_ZIPKIN_SAMPLE_RATE:
-  _defaukt: '1'  # 100% of traces are saved
+NP_API_ZIPKIN_SAMPLE_RATE:
+  _default: '1'  # 100% of traces are saved
   dev: '0.1'  # 10% of traces are saved
   staging: '0.1'  # 10% of traces are saved
   prod: '0.1'  # 10% of traces are saved
