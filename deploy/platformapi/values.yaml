@@ -125,8 +125,8 @@ NP_ENFORCER_PLATFORM_API_URL:
   prod: http://localhost:8080/api/v1
 NP_CORS_ORIGINS:
   _default: https://neu.ro
-  dev: https://neu.ro
-  staging: https://neu.ro
+  dev: https://neu.ro,https://master--neuro-web.netlify.com,http://localhost:8000
+  staging: https://neu.ro,https://release--neuro-web.netlify.com,https://app.neu.ro
   prod: https://neu.ro
 NP_USE_CLUSTER_NAMES_IN_URIS:
   _default: "1"
