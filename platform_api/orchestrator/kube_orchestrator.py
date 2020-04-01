@@ -556,3 +556,7 @@ class KubeOrchestrator(Orchestrator):
             await self._client.delete_ingress(name)
         except Exception as e:
             logger.warning(f"Failed to remove ingress {name}: {e}")
+
+    async def delete_all_job_resources(self, job_id: str) -> None:
+        async for link in self._client.get_all_job_resources_links(job_id):
+            await self._client.delete_resource_by_link(link)

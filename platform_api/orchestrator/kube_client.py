@@ -14,6 +14,7 @@ from pathlib import Path, PurePath
 from types import TracebackType
 from typing import (
     Any,
+    AsyncIterator,
     ClassVar,
     DefaultDict,
     Dict,
@@ -1299,6 +1300,29 @@ class KubeClient:
             logging.debug("k8s response payload: %s", payload)
             return payload
 
+    async def get_all_job_resources_links(self, job_id: str) -> AsyncIterator[str]:
+        job_label_name = "platform.neuromation.io/job"
+        params = {"labelSelector": f"{job_label_name}={job_id}"}
+        urls = [
+            self._pods_url,
+            self._ingresses_url,
+            self._services_url,
+            self._generate_all_network_policies_url(),
+        ]
+        for url in urls:
+            payload = await self._request(method="GET", url=url, params=params)
+            for item in payload["items"]:
+                metadata = item["metadata"]
+                assert metadata["labels"][job_label_name] == job_id
+                yield metadata["selfLink"]
+
+    async def delete_resource_by_link(self, link: str) -> None:
+        await self._delete_resource_url(f"{self._base_url}{link}")
+
+    async def _delete_resource_url(self, url: str) -> None:
+        payload = await self._request(method="DELETE", url=url)
+        self._check_status_payload(payload)
+
     async def get_endpoint(
         self, name: str, namespace: Optional[str] = None
     ) -> Dict[str, Any]:
@@ -1330,8 +1354,7 @@ class KubeClient:
 
     async def delete_node(self, name: str) -> None:
         url = self._generate_node_url(name)
-        result = await self._request(method="DELETE", url=url)
-        self._check_status_payload(result)
+        await self._delete_resource_url(url)
 
     async def create_pod(self, descriptor: PodDescriptor) -> PodDescriptor:
         payload = await self._request(
@@ -1447,12 +1470,12 @@ class KubeClient:
     async def get_service(self, name: str) -> Service:
         url = self._generate_service_url(name)
         payload = await self._request(method="GET", url=url)
+        self._check_status_payload(payload)
         return Service.from_primitive(payload)
 
     async def delete_service(self, name: str) -> None:
         url = self._generate_service_url(name)
-        payload = await self._request(method="DELETE", url=url)
-        self._check_status_payload(payload)
+        await self._delete_resource_url(url)
 
     async def create_docker_secret(self, secret: DockerRegistrySecret) -> None:
         url = self._generate_all_secrets_url(secret.namespace)
@@ -1480,8 +1503,7 @@ class KubeClient:
         self, secret_name: str, namespace_name: Optional[str] = None
     ) -> None:
         url = self._generate_secret_url(secret_name, namespace_name)
-        payload = await self._request(method="DELETE", url=url)
-        self._check_status_payload(payload)
+        await self._delete_resource_url(url)
 
     async def get_pod_events(
         self, pod_id: str, namespace: str
@@ -1633,8 +1655,7 @@ class KubeClient:
         self, name: str, namespace_name: Optional[str] = None
     ) -> None:
         url = self._generate_network_policy_url(name, namespace_name)
-        payload = await self._request(method="DELETE", url=url)
-        self._check_status_payload(payload)
+        await self._delete_resource_url(url)
 
     def _generate_node_proxy_url(self, name: str, port: int) -> str:
         return f"{self._api_v1_url}/nodes/{name}:{port}/proxy"
