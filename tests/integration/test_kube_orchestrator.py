@@ -13,7 +13,13 @@ from aiohttp import web
 from yarl import URL
 
 from platform_api.cluster_config import StorageConfig
-from platform_api.orchestrator.job import Job, JobRecord, JobStatusItem, JobStatusReason
+from platform_api.orchestrator.job import (
+    Job,
+    JobRecord,
+    JobRestartPolicy,
+    JobStatusItem,
+    JobStatusReason,
+)
 from platform_api.orchestrator.job_request import (
     Container,
     ContainerHTTPServer,
@@ -2352,3 +2358,131 @@ class TestPreemption:
             JobNotFoundException, match=f"Pod '{pod_name}' not found. Job '{job.id}'"
         ):
             await kube_orchestrator.get_job_status(job)
+
+
+class TestRestartPolicy:
+    @pytest.mark.asyncio
+    async def test_restart_failing(
+        self,
+        kube_client: MyKubeClient,
+        delete_job_later: Callable[[Job], Awaitable[None]],
+        kube_orchestrator: KubeOrchestrator,
+    ) -> None:
+        container = Container(
+            image="ubuntu",
+            command="false",
+            resources=ContainerResources(cpu=0.1, memory_mb=16),
+        )
+        job = MyJob(
+            orchestrator=kube_orchestrator,
+            record=JobRecord.create(
+                request=JobRequest.create(container),
+                cluster_name="test-cluster",
+                restart_policy=JobRestartPolicy.ON_FAILURE,
+            ),
+        )
+        await delete_job_later(job)
+        await kube_orchestrator.prepare_job(job)
+        await kube_orchestrator.start_job(job)
+        pod_name = job.id
+
+        await kube_client.wait_pod_is_running(pod_name=pod_name, timeout_s=60.0)
+
+        status = await kube_orchestrator.get_job_status(job)
+        assert status == JobStatusItem.create(
+            status=JobStatus.RUNNING, reason=JobStatusReason.RESTARTING
+        )
+
+    @pytest.mark.asyncio
+    async def test_restart_failing_succeeded(
+        self,
+        kube_client: MyKubeClient,
+        delete_job_later: Callable[[Job], Awaitable[None]],
+        kube_orchestrator: KubeOrchestrator,
+    ) -> None:
+        container = Container(
+            image="ubuntu",
+            command="true",
+            resources=ContainerResources(cpu=0.1, memory_mb=16),
+        )
+        job = MyJob(
+            orchestrator=kube_orchestrator,
+            record=JobRecord.create(
+                request=JobRequest.create(container),
+                cluster_name="test-cluster",
+                restart_policy=JobRestartPolicy.ON_FAILURE,
+            ),
+        )
+        await delete_job_later(job)
+        await kube_orchestrator.prepare_job(job)
+        await kube_orchestrator.start_job(job)
+        pod_name = job.id
+
+        await kube_client.wait_pod_is_terminated(pod_name=pod_name, timeout_s=60.0)
+
+        status = await kube_orchestrator.get_job_status(job)
+        assert status == JobStatusItem.create(status=JobStatus.SUCCEEDED, exit_code=0)
+
+    @pytest.mark.asyncio
+    async def test_restart_always(
+        self,
+        kube_client: MyKubeClient,
+        delete_job_later: Callable[[Job], Awaitable[None]],
+        kube_orchestrator: KubeOrchestrator,
+    ) -> None:
+        container = Container(
+            image="ubuntu",
+            command="false",
+            resources=ContainerResources(cpu=0.1, memory_mb=16),
+        )
+        job = MyJob(
+            orchestrator=kube_orchestrator,
+            record=JobRecord.create(
+                request=JobRequest.create(container),
+                cluster_name="test-cluster",
+                restart_policy=JobRestartPolicy.ALWAYS,
+            ),
+        )
+        await delete_job_later(job)
+        await kube_orchestrator.prepare_job(job)
+        await kube_orchestrator.start_job(job)
+        pod_name = job.id
+
+        await kube_client.wait_pod_is_terminated(pod_name=pod_name, timeout_s=60.0)
+
+        status = await kube_orchestrator.get_job_status(job)
+        assert status == JobStatusItem.create(
+            status=JobStatus.RUNNING, reason=JobStatusReason.RESTARTING
+        )
+
+    @pytest.mark.asyncio
+    async def test_restart_always_succeeded(
+        self,
+        kube_client: MyKubeClient,
+        delete_job_later: Callable[[Job], Awaitable[None]],
+        kube_orchestrator: KubeOrchestrator,
+    ) -> None:
+        container = Container(
+            image="ubuntu",
+            command="true",
+            resources=ContainerResources(cpu=0.1, memory_mb=16),
+        )
+        job = MyJob(
+            orchestrator=kube_orchestrator,
+            record=JobRecord.create(
+                request=JobRequest.create(container),
+                cluster_name="test-cluster",
+                restart_policy=JobRestartPolicy.ALWAYS,
+            ),
+        )
+        await delete_job_later(job)
+        await kube_orchestrator.prepare_job(job)
+        await kube_orchestrator.start_job(job)
+        pod_name = job.id
+
+        await kube_client.wait_pod_is_terminated(pod_name=pod_name, timeout_s=60.0)
+
+        status = await kube_orchestrator.get_job_status(job)
+        assert status == JobStatusItem.create(
+            status=JobStatus.RUNNING, reason=JobStatusReason.RESTARTING
+        )
