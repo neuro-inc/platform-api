@@ -69,6 +69,7 @@ class JobStatusReason:
     CLUSTER_NOT_FOUND = "ClusterNotFound"
     CLUSTER_SCALING_UP = "ClusterScalingUp"
     CLUSTER_SCALE_UP_FAILED = "ClusterScaleUpFailed"
+    RESTARTING = "Restarting"
 
 
 @dataclass(frozen=True)
@@ -229,6 +230,19 @@ class JobStatusHistory:
         return None
 
 
+@enum.unique
+class JobRestartPolicy(str, enum.Enum):
+    ALWAYS = "always"
+    ON_FAILURE = "on-failure"
+    NEVER = "never"
+
+    def __str__(self) -> str:
+        return self.value
+
+    def __repr__(self) -> str:
+        return self.__str__().__repr__()
+
+
 @dataclass
 class JobRecord:
     request: JobRequest
@@ -242,6 +256,7 @@ class JobRecord:
     max_run_time_minutes: Optional[int] = None
     internal_hostname: Optional[str] = None
     schedule_timeout: Optional[float] = None
+    restart_policy: JobRestartPolicy = JobRestartPolicy.NEVER
 
     # for testing only
     allow_empty_cluster_name: bool = False
@@ -290,6 +305,13 @@ class JobRecord:
             value, current_datetime_factory=current_datetime_factory
         )
         self.status_history.current = item
+
+    @property
+    def is_restartable(self) -> bool:
+        return self.is_preemptible or self.restart_policy in (
+            JobRestartPolicy.ALWAYS,
+            JobRestartPolicy.ON_FAILURE,
+        )
 
     @property
     def is_finished(self) -> bool:
@@ -641,6 +663,14 @@ class Job:
     @property
     def is_preemptible(self) -> bool:
         return self._is_preemptible
+
+    @property
+    def restart_policy(self) -> JobRestartPolicy:
+        return self._record.restart_policy
+
+    @property
+    def is_restartable(self) -> bool:
+        return self._record.is_restartable
 
     @property
     def is_forced_to_preemptible_pool(self) -> bool:
