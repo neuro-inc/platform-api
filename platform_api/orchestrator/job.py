@@ -1,3 +1,4 @@
+import enum
 import logging
 import time
 from dataclasses import dataclass, field
@@ -392,6 +393,7 @@ class JobRecord:
             "is_deleted": self.is_deleted,
             "finished_at": self.finished_at_str,
             "is_preemptible": self.is_preemptible,
+            "restart_policy": str(self.restart_policy),
         }
         if self.schedule_timeout:
             result["schedule_timeout"] = self.schedule_timeout
@@ -427,6 +429,9 @@ class JobRecord:
             max_run_time_minutes=payload.get("max_run_time_minutes", None),
             internal_hostname=payload.get("internal_hostname", None),
             schedule_timeout=payload.get("schedule_timeout", None),
+            restart_policy=JobRestartPolicy(
+                payload.get("restart_policy", str(cls.restart_policy))
+            ),
         )
 
     @staticmethod

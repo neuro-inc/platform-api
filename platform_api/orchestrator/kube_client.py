@@ -832,7 +832,9 @@ class PodDescriptor:
             tolerations=tolerations,
             labels=metadata.get("labels", {}),
             priority_class_name=payload["spec"].get("priorityClassName"),
-            restart_policy=PodRestartPolicy(payload["spec"]["restartPolicy"]),
+            restart_policy=PodRestartPolicy(
+                payload["spec"].get("restartPolicy", str(cls.restart_policy))
+            ),
         )
 
 

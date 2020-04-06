@@ -14,6 +14,7 @@ from platform_api.orchestrator.job import (
     AggregatedRunTime,
     Job,
     JobRecord,
+    JobRestartPolicy,
     JobStatusHistory,
     JobStatusItem,
 )
@@ -957,6 +958,7 @@ class TestJob:
             ],
             "is_preemptible": True,
             "schedule_timeout": 15,
+            "restart_policy": "never",
         }
 
     def test_to_primitive_with_max_run_time(
@@ -989,6 +991,7 @@ class TestJob:
             "finished_at": None,
             "is_preemptible": False,
             "max_run_time_minutes": 500,
+            "restart_policy": "never",
         }
 
     def test_to_primitive_with_tags(
@@ -1028,6 +1031,7 @@ class TestJob:
         assert job.owner == "testuser"
         assert not job.is_preemptible
         assert job.max_run_time == timedelta.max
+        assert job.restart_policy == JobRestartPolicy.NEVER
 
     def test_from_primitive_check_name(
         self, mock_orchestrator: MockOrchestrator, job_request_payload: Dict[str, Any]
@@ -1365,6 +1369,7 @@ class TestJob:
             "is_deleted": "False",
             "finished_at": finished_at_str,
             "is_preemptible": False,
+            "restart_policy": str(JobRestartPolicy.ALWAYS),
         }
         actual = Job.to_primitive(
             Job.from_primitive(
