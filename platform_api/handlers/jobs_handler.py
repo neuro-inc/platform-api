@@ -5,6 +5,7 @@ from pathlib import PurePath
 from typing import AbstractSet, Any, Dict, List, Optional, Sequence, Set
 
 import aiohttp.web
+import iso8601
 import trafaret as t
 from aiohttp_security import check_authorized
 from multidict import MultiDictProxy
@@ -577,16 +578,21 @@ class JobFilterFactory:
                 self._cluster_name_validator.check(cluster_name): set()
                 for cluster_name in query.getall("cluster_name", [])
             }
+            since = query.get("since")
+            until = query.get("until")
             return JobFilter(
                 statuses=statuses,
                 clusters=clusters,
                 owners=owners,
                 name=job_name,
                 tags=tags,
+                since=iso8601.parse_date(since) if since else JobFilter.since,
+                until=iso8601.parse_date(until) if until else JobFilter.until,
             )
 
-        if "name" in query or "owner" in query or "cluster_name" in query:
-            raise ValueError("Invalid request")
+        for key in ("name", "owner", "cluster_name", "since", "until"):
+            if key in query:
+                raise ValueError("Invalid request")
 
         label = hostname.partition(".")[0]
         job_name, sep, owner = label.rpartition(JOB_USER_NAMES_SEPARATOR)
