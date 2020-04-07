@@ -2295,6 +2295,7 @@ class TestJobs:
                 "ssh_auth_server": "ssh://nobody@ssh-auth.platform.neuromation.io:22",
                 "is_preemptible": True,
                 "uri": f"job://test-cluster/{regular_user.name}/{job_id}",
+                "restart_policy": "never",
             }
 
         response_payload = await jobs_client.long_polling_by_job_id(
@@ -2334,6 +2335,7 @@ class TestJobs:
             "ssh_auth_server": "ssh://nobody@ssh-auth.platform.neuromation.io:22",
             "is_preemptible": True,
             "uri": f"job://test-cluster/{regular_user.name}/{job_id}",
+            "restart_policy": "never",
         }
 
     @pytest.mark.asyncio
