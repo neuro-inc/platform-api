@@ -341,6 +341,7 @@ class TestJobs:
     ) -> None:
         url = api.jobs_base_url
         job_submit["container"]["ssh"] = {"port": 7867}
+        job_submit["restart_policy"] = "on-failure"
         async with client.post(
             url, headers=regular_user.headers, json=job_submit
         ) as response:
@@ -354,8 +355,11 @@ class TestJobs:
         retrieved_job = await jobs_client.get_job_by_id(job_id=job_id)
         assert not retrieved_job["container"]["http"]["requires_auth"]
 
-        await jobs_client.long_polling_by_job_id(job_id=job_id, status="succeeded")
+        job_response_payload = await jobs_client.long_polling_by_job_id(
+            job_id=job_id, status="succeeded"
+        )
         await jobs_client.delete_job(job_id=job_id)
+        assert job_response_payload["restart_policy"] == "on-failure"
 
     @pytest.mark.asyncio
     async def test_create_job_with_ssh_only(

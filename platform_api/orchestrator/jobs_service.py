@@ -26,6 +26,7 @@ from .job import (
     ZERO_RUN_TIME,
     Job,
     JobRecord,
+    JobRestartPolicy,
     JobStatusHistory,
     JobStatusItem,
     JobStatusReason,
@@ -249,6 +250,7 @@ class JobsService:
         is_preemptible: bool = False,
         schedule_timeout: Optional[float] = None,
         max_run_time_minutes: Optional[int] = None,
+        restart_policy: JobRestartPolicy = JobRestartPolicy.NEVER,
     ) -> Tuple[Job, Status]:
         if cluster_name:
             user_cluster = user.get_cluster(cluster_name)
@@ -306,6 +308,7 @@ class JobsService:
             is_preemptible=is_preemptible,
             schedule_timeout=schedule_timeout,
             max_run_time_minutes=max_run_time_minutes,
+            restart_policy=restart_policy,
         )
         job_id = job_request.job_id
         try:
