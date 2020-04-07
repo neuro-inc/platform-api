@@ -226,6 +226,7 @@ class TestJobResponseValidator:
             "ssh_auth_server": "nobody@ssh-auth",
             "is_preemptible": False,
             "uri": "job://cluster-name/tests/test-job-id",
+            "restart_policy": "never",
         }
         validator = create_job_response_validator()
         assert validator.check(response)
@@ -255,6 +256,7 @@ class TestJobResponseValidator:
             "ssh_auth_server": "nobody@ssh-auth",
             "is_preemptible": False,
             "uri": "job://cluster-name/tests/test-job-id",
+            "restart_policy": "never",
         }
         validator = create_job_response_validator()
         assert validator.check(response)
@@ -282,6 +284,7 @@ class TestJobResponseValidator:
             "ssh_auth_server": "nobody@ssh-auth",
             "is_preemptible": False,
             "uri": "job://cluster-name/tests/test-job-id",
+            "restart_policy": "never",
         }
         validator = create_job_response_validator()
         assert validator.check(response)
@@ -313,6 +316,7 @@ class TestJobResponseValidator:
             "ssh_auth_server": "nobody@ssh-auth",
             "is_preemptible": False,
             "uri": "job://cluster-name/tests/test-job-id",
+            "restart_policy": "never",
         }
         validator = create_job_response_validator()
         assert validator.check(response)
@@ -344,6 +348,7 @@ class TestJobResponseValidator:
             "is_preemptible": False,
             "max_run_time_minutes": 10,
             "uri": "job://cluster-name/tests/test-job-id",
+            "restart_policy": "never",
         }
         validator = create_job_response_validator()
         assert validator.check(response)
@@ -374,6 +379,7 @@ class TestJobResponseValidator:
             "ssh_auth_server": "nobody@ssh-auth",
             "is_preemptible": False,
             "uri": "job://cluster-name/tests/test-job-id",
+            "restart_policy": "never",
         }
         validator = create_job_response_validator()
         with pytest.raises(t.DataError, match="value is less than 0"):

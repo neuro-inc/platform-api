@@ -15,7 +15,12 @@ from yarl import URL
 from platform_api.cluster_config import ClusterConfig, RegistryConfig, StorageConfig
 from platform_api.config import Config
 from platform_api.log import log_debug_time
-from platform_api.orchestrator.job import JOB_USER_NAMES_SEPARATOR, Job, JobStatusItem
+from platform_api.orchestrator.job import (
+    JOB_USER_NAMES_SEPARATOR,
+    Job,
+    JobRestartPolicy,
+    JobStatusItem,
+)
 from platform_api.orchestrator.job_request import (
     Container,
     ContainerVolume,
@@ -66,6 +71,10 @@ def create_job_request_validator(
             t.Key("schedule_timeout", optional=True): t.Float(gte=1, lt=30 * 24 * 3600),
             t.Key("max_run_time_minutes", optional=True): t.Int(gte=0),
             t.Key("cluster_name", default=cluster_name): t.Atom(cluster_name),
+            t.Key("restart_policy", default=str(JobRestartPolicy.NEVER)): t.Enum(
+                *[str(policy) for policy in JobRestartPolicy]
+            )
+            >> JobRestartPolicy,
         }
     )
 
@@ -103,6 +112,7 @@ def create_job_response_validator() -> t.Trafaret:
             t.Key("tags", optional=True): t.List(create_job_tag_validator()),
             t.Key("schedule_timeout", optional=True): t.Float,
             t.Key("max_run_time_minutes", optional=True): t.Int,
+            "restart_policy": t.String,
         }
     )
 
@@ -210,6 +220,7 @@ def convert_job_to_job_response(
         "ssh_auth_server": job.ssh_server,  # deprecated
         "is_preemptible": job.is_preemptible,
         "uri": str(job.to_uri(use_cluster_names_in_uris)),
+        "restart_policy": str(job.restart_policy),
     }
     if job.name:
         response_payload["name"] = job.name
@@ -412,6 +423,7 @@ class JobsHandler:
             is_preemptible=is_preemptible,
             schedule_timeout=schedule_timeout,
             max_run_time_minutes=max_run_time_minutes,
+            restart_policy=request_payload["restart_policy"],
         )
         response_payload = convert_job_to_job_response(
             job, self._config.use_cluster_names_in_uris
