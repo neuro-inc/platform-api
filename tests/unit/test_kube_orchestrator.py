@@ -1,5 +1,5 @@
 from pathlib import PurePath
-from typing import Any, Dict
+from typing import Any, Dict, List
 from unittest import mock
 
 import pytest
@@ -584,17 +584,24 @@ class TestPodDescriptor:
 
 class TestJobStatusItemFactory:
     @pytest.mark.parametrize(
-        "phase, expected_status",
+        "phase, container_statuses, expected_status",
         (
-            ("Succeeded", JobStatus.SUCCEEDED),
-            ("Failed", JobStatus.FAILED),
-            ("Unknown", JobStatus.FAILED),
-            ("Running", JobStatus.RUNNING),
-            ("NewPhase", JobStatus.PENDING),
+            ("Succeeded", [], JobStatus.SUCCEEDED),
+            ("Failed", [], JobStatus.FAILED),
+            ("Unknown", [], JobStatus.FAILED),
+            ("Running", [{"state": {"running": {}}}], JobStatus.RUNNING),
+            ("NewPhase", [], JobStatus.PENDING),
         ),
     )
-    def test_status(self, phase: str, expected_status: JobStatus) -> None:
-        payload = {"phase": phase}
+    def test_status(
+        self,
+        phase: str,
+        container_statuses: List[Dict[str, Any]],
+        expected_status: JobStatus,
+    ) -> None:
+        payload: Dict[str, Any] = {"phase": phase}
+        if container_statuses:
+            payload["containerStatuses"] = container_statuses
         pod_status = PodStatus.from_primitive(payload)
         job_status_item = JobStatusItemFactory(pod_status).create()
         assert job_status_item == JobStatusItem.create(expected_status)
@@ -639,6 +646,20 @@ class TestJobStatusItemFactory:
         job_status_item = JobStatusItemFactory(pod_status).create()
         assert job_status_item == JobStatusItem.create(
             JobStatus.PENDING, reason="SomeWeirdReason"
+        )
+
+    def test_status_running_restarting(self) -> None:
+        payload = {
+            "phase": "Running",
+            "containerStatuses": [
+                {"state": {"waiting": {"reason": "SomeWeirdReason"}}}
+            ],
+        }
+
+        pod_status = PodStatus.from_primitive(payload)
+        job_status_item = JobStatusItemFactory(pod_status).create()
+        assert job_status_item == JobStatusItem.create(
+            JobStatus.RUNNING, reason="Restarting"
         )
 
     def test_status_failure(self) -> None:

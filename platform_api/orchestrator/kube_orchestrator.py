@@ -12,7 +12,7 @@ from platform_api.cluster_config import (
 )
 
 from .base import Orchestrator
-from .job import Job, JobStatusItem, JobStatusReason
+from .job import Job, JobRestartPolicy, JobStatusItem, JobStatusReason
 from .job_request import (
     JobAlreadyExistsException,
     JobError,
@@ -32,6 +32,7 @@ from .kube_client import (
     NodeSelectorTerm,
     PodDescriptor,
     PodExec,
+    PodRestartPolicy,
     PodStatus,
     PVCVolume,
     Service,
@@ -68,6 +69,10 @@ class JobStatusItemFactory:
             return JobStatus.PENDING
 
     def _parse_reason(self) -> Optional[str]:
+        if self._status.is_running and (
+            self._container_status.is_waiting or self._container_status.is_terminated
+        ):
+            return JobStatusReason.RESTARTING
         if self._status in (JobStatus.PENDING, JobStatus.FAILED):
             return self._container_status.reason
         return None
@@ -81,16 +86,17 @@ class JobStatusItemFactory:
                 return self._container_status.message
         return None
 
+    def _parse_exit_code(self) -> Optional[int]:
+        if self._status.is_finished and self._container_status.is_terminated:
+            return self._container_status.exit_code
+        return None
+
     def create(self) -> JobStatusItem:
         return JobStatusItem.create(
             self._status,
             reason=self._parse_reason(),
             description=self._compose_description(),
-            exit_code=(
-                self._container_status.exit_code
-                if self._container_status.is_terminated
-                else None
-            ),
+            exit_code=self._parse_exit_code(),
         )
 
 
@@ -136,6 +142,12 @@ class KubeOrchestrator(Orchestrator):
 
         # TODO (A Danshyn 11/16/18): make this configurable at some point
         self._docker_secret_name_prefix = "neurouser-"
+
+        self._restart_policy_map = {
+            JobRestartPolicy.ALWAYS: PodRestartPolicy.ALWAYS,
+            JobRestartPolicy.ON_FAILURE: PodRestartPolicy.ON_FAILURE,
+            JobRestartPolicy.NEVER: PodRestartPolicy.NEVER,
+        }
 
     @property
     def config(self) -> OrchestratorConfig:
@@ -250,6 +262,7 @@ class KubeOrchestrator(Orchestrator):
             node_affinity=node_affinity,
             labels=labels,
             priority_class_name=self._kube_config.jobs_pod_priority_class_name,
+            restart_policy=self._get_pod_restart_policy(job),
         )
 
     def _get_user_pod_labels(self, job: Job) -> Dict[str, str]:
@@ -262,6 +275,9 @@ class KubeOrchestrator(Orchestrator):
         labels = self._get_job_labels(job)
         labels.update(self._get_user_pod_labels(job))
         return labels
+
+    def _get_pod_restart_policy(self, job: Job) -> PodRestartPolicy:
+        return self._restart_policy_map[job.restart_policy]
 
     async def prepare_job(self, job: Job) -> None:
         # TODO (A Yushkovskiy 31.10.2018): get namespace for the pod, not statically
@@ -383,8 +399,8 @@ class KubeOrchestrator(Orchestrator):
 
         # handling PENDING/RUNNING jobs
 
-        if job.is_preemptible:
-            pod = await self._check_preemptible_job_pod(job)
+        if job.is_restartable:
+            pod = await self._check_restartable_job_pod(job)
         else:
             pod = await self._client.get_pod(self._get_job_pod_name(job))
         return await self._get_pod_status(job, pod)
@@ -438,8 +454,8 @@ class KubeOrchestrator(Orchestrator):
             description="Failed to scale up the cluster to get more resources",
         )
 
-    async def _check_preemptible_job_pod(self, job: Job) -> PodDescriptor:
-        assert job.is_preemptible
+    async def _check_restartable_job_pod(self, job: Job) -> PodDescriptor:
+        assert job.is_restartable
 
         pod_name = self._get_job_pod_name(job)
         do_recreate_pod = False

@@ -566,6 +566,19 @@ class NodeAffinity:
         return payload
 
 
+@enum.unique
+class PodRestartPolicy(str, enum.Enum):
+    ALWAYS = "Always"
+    ON_FAILURE = "OnFailure"
+    NEVER = "Never"
+
+    def __str__(self) -> str:
+        return self.value
+
+    def __repr__(self) -> str:
+        return self.__str__().__repr__()
+
+
 @dataclass(frozen=True)
 class PodDescriptor:
     name: str
@@ -601,6 +614,8 @@ class PodDescriptor:
 
     tpu_version_annotation_key: ClassVar[str] = "tf-version.cloud-tpus.google.com"
 
+    restart_policy: PodRestartPolicy = PodRestartPolicy.NEVER
+
     @classmethod
     def from_job_request(
         cls,
@@ -612,6 +627,7 @@ class PodDescriptor:
         node_affinity: Optional[NodeAffinity] = None,
         labels: Optional[Dict[str, str]] = None,
         priority_class_name: Optional[str] = None,
+        restart_policy: PodRestartPolicy = PodRestartPolicy.NEVER,
     ) -> "PodDescriptor":
         container = job_request.container
         volume_mounts = [
@@ -662,6 +678,7 @@ class PodDescriptor:
             labels=labels or {},
             annotations=annotations,
             priority_class_name=priority_class_name,
+            restart_policy=restart_policy,
         )
 
     @property
@@ -718,7 +735,7 @@ class PodDescriptor:
                 "automountServiceAccountToken": False,
                 "containers": [container_payload],
                 "volumes": volumes,
-                "restartPolicy": "Never",
+                "restartPolicy": str(self.restart_policy),
                 "imagePullSecrets": [
                     secret.to_primitive() for secret in self.image_pull_secrets
                 ],
@@ -815,6 +832,9 @@ class PodDescriptor:
             tolerations=tolerations,
             labels=metadata.get("labels", {}),
             priority_class_name=payload["spec"].get("priorityClassName"),
+            restart_policy=PodRestartPolicy(
+                payload["spec"].get("restartPolicy", str(cls.restart_policy))
+            ),
         )
 
 
@@ -842,6 +862,7 @@ class ContainerStatus:
             'PodInitializing'
             'ContainerCreating'
             'ErrImagePull'
+            'CrashLoopBackOff'
         see
         https://github.com/kubernetes/kubernetes/blob/29232e3edc4202bb5e34c8c107bae4e8250cd883/pkg/kubelet/kubelet_pods.go#L1463-L1468
         https://github.com/kubernetes/kubernetes/blob/886e04f1fffbb04faf8a9f9ee141143b2684ae68/pkg/kubelet/images/types.go#L25-L43
