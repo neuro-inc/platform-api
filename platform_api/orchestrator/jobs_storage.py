@@ -542,12 +542,9 @@ class RedisJobsStorage(JobsStorage):
         )
 
         if len(keys) == 1:
-            return [
-                job_id
-                async for job_id in self._client.zrangebyscore(
-                    keys[0], since.timestamp(), until.timestamp()
-                )
-            ]
+            return await self._client.zrangebyscore(
+                keys[0], since.timestamp(), until.timestamp()
+            )
 
         target = self._generate_temp_zset_key()
         tr = self._client.multi_exec()
