@@ -107,9 +107,9 @@ class JobsStorage(ABC):
         pass
 
     @abstractmethod
-    async def get_all_jobs(
+    def iter_all_jobs(
         self, job_filter: Optional[JobFilter] = None
-    ) -> List[JobRecord]:
+    ) -> AsyncIterator[JobRecord]:
         pass
 
     @abstractmethod
@@ -118,8 +118,20 @@ class JobsStorage(ABC):
     ) -> List[JobRecord]:
         pass
 
+    # Only used in tests
+    async def get_all_jobs(
+        self, job_filter: Optional[JobFilter] = None
+    ) -> List[JobRecord]:
+        return [job async for job in self.iter_all_jobs(job_filter)]
+
+    # Only used in tests
     async def get_running_jobs(self) -> List[JobRecord]:
         filt = JobFilter(statuses={JobStatus.RUNNING})
+        return await self.get_all_jobs(filt)
+
+    # Only used in tests
+    async def get_unfinished_jobs(self) -> List[JobRecord]:
+        filt = JobFilter(statuses={JobStatus.PENDING, JobStatus.RUNNING})
         return await self.get_all_jobs(filt)
 
     @abstractmethod
@@ -127,10 +139,6 @@ class JobsStorage(ABC):
         self, *, delay: timedelta = timedelta()
     ) -> List[JobRecord]:
         pass
-
-    async def get_unfinished_jobs(self) -> List[JobRecord]:
-        filt = JobFilter(statuses={JobStatus.PENDING, JobStatus.RUNNING})
-        return await self.get_all_jobs(filt)
 
     async def get_aggregated_run_time(self, job_filter: JobFilter) -> AggregatedRunTime:
         run_times = await self.get_aggregated_run_time_by_clusters(job_filter)
@@ -208,16 +216,19 @@ class InMemoryJobsStorage(JobsStorage):
         yield job
         await self.set_job(job)
 
-    async def get_all_jobs(
+    async def iter_all_jobs(
         self, job_filter: Optional[JobFilter] = None
-    ) -> List[JobRecord]:
+    ) -> AsyncIterator[JobRecord]:
+        # Accumulate results in a list to avoid RuntimeError when
+        # the self._job_records dictionary is modified during iteration
         jobs = []
         for payload in self._job_records.values():
             job = self._parse_job_payload(payload)
             if job_filter and not job_filter.check(job):
                 continue
             jobs.append(job)
-        return jobs
+        for job in jobs:
+            yield job
 
     async def get_jobs_by_ids(
         self, job_ids: Iterable[str], job_filter: Optional[JobFilter] = None
@@ -236,10 +247,9 @@ class InMemoryJobsStorage(JobsStorage):
     async def get_aggregated_run_time_by_clusters(
         self, job_filter: JobFilter
     ) -> Dict[str, AggregatedRunTime]:
-        jobs = await self.get_all_jobs(job_filter)
         zero_run_time = (timedelta(), timedelta())
         aggregated_run_times: Dict[str, Tuple[timedelta, timedelta]] = {}
-        for job in jobs:
+        async for job in self.iter_all_jobs(job_filter):
             gpu_run_time, non_gpu_run_time = aggregated_run_times.get(
                 job.cluster_name, zero_run_time
             )
@@ -267,7 +277,7 @@ class InMemoryJobsStorage(JobsStorage):
     ) -> List[JobRecord]:
         return [
             job
-            for job in await self.get_all_jobs()
+            async for job in self.iter_all_jobs()
             if job.should_be_deleted(delay=delay)
         ]
 
@@ -563,18 +573,9 @@ class RedisJobsStorage(JobsStorage):
             )
         ]
 
-    @trace
-    async def get_all_jobs(
+    async def iter_all_jobs(
         self, job_filter: Optional[JobFilter] = None
-    ) -> List[JobRecord]:
-        jobs: List[JobRecord] = []
-        async for chunk in self._get_all_jobs_in_chunks(job_filter):
-            jobs.extend(chunk)
-        return jobs
-
-    async def _get_all_jobs_in_chunks(
-        self, job_filter: Optional[JobFilter] = None
-    ) -> AsyncIterator[Iterable[JobRecord]]:
+    ) -> AsyncIterator[JobRecord]:
         if not job_filter:
             job_filter = JobFilter()
         job_ids: Iterable[str] = job_filter.ids
@@ -594,7 +595,8 @@ class RedisJobsStorage(JobsStorage):
                 job_filter = None
 
         async for chunk in self._get_jobs_by_ids_in_chunks(job_ids, job_filter):
-            yield chunk
+            for job in chunk:
+                yield job
 
     @trace
     async def get_jobs_by_ids(
@@ -625,19 +627,18 @@ class RedisJobsStorage(JobsStorage):
     ) -> Dict[str, AggregatedRunTime]:
         zero_run_time = (timedelta(), timedelta())
         aggregated_run_times: Dict[str, Tuple[timedelta, timedelta]] = {}
-        async for jobs in self._get_all_jobs_in_chunks(job_filter):
-            for job in jobs:
-                gpu_run_time, non_gpu_run_time = aggregated_run_times.get(
-                    job.cluster_name, zero_run_time
-                )
-                if job.has_gpu:
-                    gpu_run_time += job.get_run_time()
-                else:
-                    non_gpu_run_time += job.get_run_time()
-                aggregated_run_times[job.cluster_name] = (
-                    gpu_run_time,
-                    non_gpu_run_time,
-                )
+        async for job in self.iter_all_jobs(job_filter):
+            gpu_run_time, non_gpu_run_time = aggregated_run_times.get(
+                job.cluster_name, zero_run_time
+            )
+            if job.has_gpu:
+                gpu_run_time += job.get_run_time()
+            else:
+                non_gpu_run_time += job.get_run_time()
+            aggregated_run_times[job.cluster_name] = (
+                gpu_run_time,
+                non_gpu_run_time,
+            )
 
         return {
             cluster_name: AggregatedRunTime(

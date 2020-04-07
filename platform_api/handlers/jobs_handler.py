@@ -2,7 +2,7 @@ import json
 import logging
 from dataclasses import dataclass, replace
 from pathlib import PurePath
-from typing import AbstractSet, Any, Dict, List, Optional, Sequence, Set
+from typing import AbstractSet, Any, AsyncIterator, Dict, List, Optional, Sequence, Set
 
 import aiohttp.web
 import iso8601
@@ -451,9 +451,13 @@ class JobsHandler:
             data=response_payload, status=aiohttp.web.HTTPOk.status_code
         )
 
+    def _accepts_ndjson(self, request: aiohttp.web.Request) -> bool:
+        accept = request.headers.get("Accept", "")
+        return "application/x-ndjson" in accept
+
     async def handle_get_all(
         self, request: aiohttp.web.Request
-    ) -> aiohttp.web.Response:
+    ) -> aiohttp.web.StreamResponse:
         # TODO (A Danshyn 10/08/18): remove once
         # AuthClient.get_permissions_tree accepts the token param
         await check_authorized(request)
@@ -462,50 +466,62 @@ class JobsHandler:
         with log_debug_time(f"Retrieved job access tree for user '{user.name}'"):
             tree = await self._auth_client.get_permissions_tree(user.name, "job:")
 
-        jobs: List[Job] = []
-
         try:
             bulk_job_filter = BulkJobFilterBuilder(
                 query_filter=self._job_filter_factory.create_from_query(request.query),
                 access_tree=tree,
                 use_cluster_names_in_uris=self._config.use_cluster_names_in_uris,
             ).build()
-
-            if bulk_job_filter.bulk_filter:
-                with log_debug_time(
-                    f"Read bulk jobs with {bulk_job_filter.bulk_filter}"
-                ):
-                    jobs.extend(
-                        await self._jobs_service.get_all_jobs(
-                            bulk_job_filter.bulk_filter
-                        )
-                    )
-
-            if bulk_job_filter.shared_ids:
-                with log_debug_time(
-                    f"Read shared jobs with {bulk_job_filter.shared_ids_filter}"
-                ):
-                    jobs.extend(
-                        await self._jobs_service.get_jobs_by_ids(
-                            bulk_job_filter.shared_ids,
-                            job_filter=bulk_job_filter.shared_ids_filter,
-                        )
-                    )
         except JobFilterException:
-            pass
+            bulk_job_filter = BulkJobFilter(
+                bulk_filter=None, shared_ids=set(), shared_ids_filter=None,
+            )
 
-        response_payload = {
-            "jobs": [
-                convert_job_to_job_response(
-                    job, self._config.use_cluster_names_in_uris,
+        if self._accepts_ndjson(request):
+            response = aiohttp.web.StreamResponse()
+            response.headers["Content-Type"] = "application/x-ndjson"
+            await response.prepare(request)
+            async for job in self._iter_filtered_jobs(bulk_job_filter):
+                response_payload = convert_job_to_job_response(
+                    job, self._config.use_cluster_names_in_uris
                 )
-                for job in jobs
-            ]
-        }
-        self._bulk_jobs_response_validator.check(response_payload)
-        return aiohttp.web.json_response(
-            data=response_payload, status=aiohttp.web.HTTPOk.status_code
-        )
+                self._job_response_validator.check(response_payload)
+                await response.write(json.dumps(response_payload).encode() + b"\n")
+            await response.write_eof()
+            return response
+        else:
+            response_payload = {
+                "jobs": [
+                    convert_job_to_job_response(
+                        job, self._config.use_cluster_names_in_uris,
+                    )
+                    async for job in self._iter_filtered_jobs(bulk_job_filter)
+                ]
+            }
+            self._bulk_jobs_response_validator.check(response_payload)
+            return aiohttp.web.json_response(
+                data=response_payload, status=aiohttp.web.HTTPOk.status_code
+            )
+
+    async def _iter_filtered_jobs(
+        self, bulk_job_filter: "BulkJobFilter"
+    ) -> AsyncIterator[Job]:
+        if bulk_job_filter.bulk_filter:
+            with log_debug_time(f"Read bulk jobs with {bulk_job_filter.bulk_filter}"):
+                async for job in self._jobs_service.iter_all_jobs(
+                    bulk_job_filter.bulk_filter
+                ):
+                    yield job
+
+        if bulk_job_filter.shared_ids:
+            with log_debug_time(
+                f"Read shared jobs with {bulk_job_filter.shared_ids_filter}"
+            ):
+                for job in await self._jobs_service.get_jobs_by_ids(
+                    bulk_job_filter.shared_ids,
+                    job_filter=bulk_job_filter.shared_ids_filter,
+                ):
+                    yield job
 
     async def handle_delete(
         self, request: aiohttp.web.Request

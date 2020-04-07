@@ -1,3 +1,4 @@
+import json
 from typing import Any, AsyncIterator, Awaitable, Callable, Dict, Iterator, List
 from unittest import mock
 
@@ -1574,16 +1575,21 @@ class TestJobs:
             job_id = result["id"]
 
         url = api.jobs_base_url
-        async with client.get(url, headers=owner.headers) as response:
+        headers = owner.headers.copy()
+        headers["Accept"] = "application/x-ndjson"
+        async with client.get(url, headers=headers) as response:
             assert response.status == HTTPOk.status_code, await response.text()
-            result = await response.json()
-            job_ids = {item["id"] for item in result["jobs"]}
+            assert response.headers["Content-Type"] == "application/x-ndjson"
+            job_ids = {json.loads(line)["id"] async for line in response.content}
             assert job_ids == {job_id}
 
+        headers = follower.headers.copy()
+        headers["Accept"] = "application/x-ndjson"
         async with client.get(url, headers=follower.headers) as response:
             assert response.status == HTTPOk.status_code, await response.text()
-            result = await response.json()
-            assert not result["jobs"]
+            assert response.headers["Content-Type"] == "application/x-ndjson"
+            job_ids = {json.loads(line)["id"] async for line in response.content}
+            assert not job_ids
 
         permission = Permission(
             uri=f"job://{cluster_name}/{owner.name}/{job_id}", action="read"
@@ -1592,8 +1598,11 @@ class TestJobs:
             follower.name, [permission], token=owner.token
         )
 
-        async with client.get(url, headers=follower.headers) as response:
+        async with client.get(url, headers=headers) as response:
             assert response.status == HTTPOk.status_code, await response.text()
+            assert response.headers["Content-Type"] == "application/x-ndjson"
+            job_ids = {json.loads(line)["id"] async for line in response.content}
+            assert job_ids == {job_id}
 
     @pytest.mark.asyncio
     async def test_get_shared_job(
