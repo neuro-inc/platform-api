@@ -2389,8 +2389,11 @@ class TestRestartPolicy:
         await kube_client.wait_pod_is_running(pod_name=pod_name, timeout_s=60.0)
 
         status = await kube_orchestrator.get_job_status(job)
-        assert status == JobStatusItem.create(
-            status=JobStatus.RUNNING, reason=JobStatusReason.RESTARTING
+        assert status in (
+            JobStatusItem.create(
+                status=JobStatus.RUNNING, reason=JobStatusReason.RESTARTING
+            ),
+            JobStatusItem.create(status=JobStatus.RUNNING),
         )
 
     @pytest.mark.asyncio
@@ -2451,8 +2454,11 @@ class TestRestartPolicy:
         await kube_client.wait_pod_is_terminated(pod_name=pod_name, timeout_s=60.0)
 
         status = await kube_orchestrator.get_job_status(job)
-        assert status == JobStatusItem.create(
-            status=JobStatus.RUNNING, reason=JobStatusReason.RESTARTING
+        assert status in (
+            JobStatusItem.create(
+                status=JobStatus.RUNNING, reason=JobStatusReason.RESTARTING
+            ),
+            JobStatusItem.create(status=JobStatus.RUNNING),
         )
 
     @pytest.mark.asyncio
@@ -2483,6 +2489,9 @@ class TestRestartPolicy:
         await kube_client.wait_pod_is_terminated(pod_name=pod_name, timeout_s=60.0)
 
         status = await kube_orchestrator.get_job_status(job)
-        assert status == JobStatusItem.create(
-            status=JobStatus.RUNNING, reason=JobStatusReason.RESTARTING
+        assert status in (
+            JobStatusItem.create(
+                status=JobStatus.RUNNING, reason=JobStatusReason.RESTARTING
+            ),
+            JobStatusItem.create(status=JobStatus.RUNNING),
         )
