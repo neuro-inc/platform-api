@@ -450,6 +450,54 @@ class TestRedisJobsStorage:
         job_ids = {job.id for job in jobs}
         assert not job_ids
 
+    @pytest.mark.asyncio
+    @pytest.mark.parametrize(
+        "statuses", [(), (JobStatus.PENDING, JobStatus.RUNNING)],
+    )
+    async def test_get_all_filter_by_date_range(
+        self, statuses: Tuple[JobStatus, ...], redis_client: aioredis.Redis
+    ) -> None:
+        t1 = current_datetime_factory()
+        job1 = self._create_job()
+        t2 = current_datetime_factory()
+        job2 = self._create_job()
+        t3 = current_datetime_factory()
+        job3 = self._create_job()
+        t4 = current_datetime_factory()
+
+        storage = RedisJobsStorage(client=redis_client)
+        await storage.set_job(job1)
+        await storage.set_job(job2)
+        await storage.set_job(job3)
+
+        job_filter = JobFilter(since=t1, until=t4)
+        job_ids = {job.id for job in await storage.get_all_jobs(job_filter)}
+        assert job_ids == {job1.id, job2.id, job3.id}
+
+        job_filter = JobFilter(since=t2)
+        job_ids = {job.id for job in await storage.get_all_jobs(job_filter)}
+        assert job_ids == {job2.id, job3.id}
+
+        job_filter = JobFilter(until=t2)
+        job_ids = {job.id for job in await storage.get_all_jobs(job_filter)}
+        assert job_ids == {job1.id}
+
+        job_filter = JobFilter(since=t3)
+        job_ids = {job.id for job in await storage.get_all_jobs(job_filter)}
+        assert job_ids == {job3.id}
+
+        job_filter = JobFilter(until=t3)
+        job_ids = {job.id for job in await storage.get_all_jobs(job_filter)}
+        assert job_ids == {job1.id, job2.id}
+
+        job_filter = JobFilter(since=t2, until=t3)
+        job_ids = {job.id for job in await storage.get_all_jobs(job_filter)}
+        assert job_ids == {job2.id}
+
+        job_filter = JobFilter(since=t3, until=t2)
+        job_ids = {job.id for job in await storage.get_all_jobs(job_filter)}
+        assert job_ids == set()
+
     async def prepare_filtering_test(
         self, redis_client: aioredis.Redis
     ) -> Tuple[RedisJobsStorage, List[JobRecord]]:
@@ -551,9 +599,9 @@ class TestRedisJobsStorage:
     )
     async def test_get_all_with_filters(
         self,
-        owners: Tuple[str],
+        owners: Tuple[str, ...],
         name: Optional[str],
-        statuses: Tuple[JobStatus],
+        statuses: Tuple[JobStatus, ...],
         redis_client: aioredis.Redis,
     ) -> None:
         def sort_jobs_as_primitives(array: List[JobRecord]) -> List[Dict[str, Any]]:
@@ -590,7 +638,7 @@ class TestRedisJobsStorage:
     async def test_get_all_filter_by_name_with_no_owner(
         self,
         name: Optional[str],
-        statuses: Tuple[JobStatus],
+        statuses: Tuple[JobStatus, ...],
         redis_client: aioredis.Redis,
     ) -> None:
         storage, jobs = await self.prepare_filtering_test(redis_client)

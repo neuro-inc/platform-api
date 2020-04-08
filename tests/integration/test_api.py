@@ -1122,6 +1122,56 @@ class TestJobs:
         for job_id in job_ids_alive:
             await jobs_client.delete_job(job_id=job_id)
 
+    @pytest.mark.asyncio
+    async def test_get_all_jobs_filter_by_date_range(
+        self,
+        api: ApiConfig,
+        client: aiohttp.ClientSession,
+        jobs_client: JobsClient,
+        regular_user: _User,
+        job_request_factory: Callable[[], Dict[str, Any]],
+    ) -> None:
+        url = api.jobs_base_url
+        headers = regular_user.headers
+        job_request = job_request_factory()
+
+        async with client.post(url, headers=headers, json=job_request) as resp:
+            assert resp.status == HTTPAccepted.status_code, await resp.text()
+            result = await resp.json()
+            job_1 = result["id"]
+            t1 = result["history"]["created_at"]
+
+        async with client.post(url, headers=headers, json=job_request) as resp:
+            assert resp.status == HTTPAccepted.status_code, await resp.text()
+            result = await resp.json()
+            job_2 = result["id"]
+            t2 = result["history"]["created_at"]
+
+        async with client.post(url, headers=headers, json=job_request) as resp:
+            assert resp.status == HTTPAccepted.status_code, await resp.text()
+            result = await resp.json()
+            job_3 = result["id"]
+            t3 = result["history"]["created_at"]
+
+        job_ids = {job["id"] for job in await jobs_client.get_all_jobs()}
+        assert job_ids == {job_1, job_2, job_3}
+
+        filters = {"since": t2}
+        job_ids = {job["id"] for job in await jobs_client.get_all_jobs(filters)}
+        assert job_ids == {job_2, job_3}
+
+        filters = {"until": t2}
+        job_ids = {job["id"] for job in await jobs_client.get_all_jobs(filters)}
+        assert job_ids == {job_1, job_2}
+
+        filters = {"since": t1, "until": t2}
+        job_ids = {job["id"] for job in await jobs_client.get_all_jobs(filters)}
+        assert job_ids == {job_1, job_2}
+
+        filters = {"since": t1, "until": t3}
+        job_ids = {job["id"] for job in await jobs_client.get_all_jobs(filters)}
+        assert job_ids == {job_1, job_2, job_3}
+
     @pytest.fixture
     async def run_job(
         self,

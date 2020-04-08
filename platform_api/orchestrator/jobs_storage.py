@@ -2,7 +2,7 @@ import json
 import logging
 from abc import ABC, abstractmethod
 from dataclasses import dataclass, field
-from datetime import timedelta
+from datetime import datetime, timedelta, timezone
 from itertools import islice
 from typing import (
     AbstractSet,
@@ -65,6 +65,8 @@ class JobFilter:
     tags: Set[str] = field(default_factory=cast(Type[Set[str]], set))
     name: Optional[str] = None
     ids: AbstractSet[str] = field(default_factory=cast(Type[Set[str]], set))
+    since: datetime = datetime(1, 1, 1, tzinfo=timezone.utc)
+    until: datetime = datetime(9999, 12, 31, 23, 59, 59, 999999, tzinfo=timezone.utc)
 
     def check(self, job: JobRecord) -> bool:
         if self.statuses and job.status not in self.statuses:
@@ -80,6 +82,9 @@ class JobFilter:
         if self.ids and job.id not in self.ids:
             return False
         if self.tags and not self.tags.issubset(job.tags):
+            return False
+        created_at = job.status_history.created_at
+        if not self.since <= created_at <= self.until:
             return False
         return True
 
@@ -524,7 +529,9 @@ class RedisJobsStorage(JobsStorage):
         clusters: Dict[str, AbstractSet[str]],
         owners: AbstractSet[str],
         tags: AbstractSet[str],
-        name: Optional[str] = None,
+        name: Optional[str],
+        since: datetime,
+        until: datetime,
     ) -> List[str]:
         keys = self._generate_jobs_composite_keys(
             statuses=[str(s) for s in statuses] or [""],
@@ -535,12 +542,14 @@ class RedisJobsStorage(JobsStorage):
         )
 
         if len(keys) == 1:
-            return [job_id async for job_id, _ in self._client.izscan(keys[0])]
+            return await self._client.zrangebyscore(
+                keys[0], since.timestamp(), until.timestamp()
+            )
 
         target = self._generate_temp_zset_key()
         tr = self._client.multi_exec()
         tr.zunionstore(target, *keys, aggregate=tr.ZSET_AGGREGATE_MAX)
-        tr.zrange(target)
+        tr.zrangebyscore(target, since.timestamp(), until.timestamp())
         tr.delete(target)
         *_, payloads, _ = await tr.execute()
 
@@ -576,6 +585,8 @@ class RedisJobsStorage(JobsStorage):
                 owners=job_filter.owners,
                 tags=job_filter.tags,
                 name=job_filter.name,
+                since=job_filter.since,
+                until=job_filter.until,
             )
             if len(job_filter.tags) > 1:
                 job_filter = JobFilter(tags=job_filter.tags)
