@@ -950,6 +950,42 @@ class TestJobs:
         assert jobs == []
 
     @pytest.mark.asyncio
+    async def test_get_all_jobs_not_streamed(
+        self,
+        api: ApiConfig,
+        client: aiohttp.ClientSession,
+        jobs_client: JobsClient,
+        regular_user: _User,
+        job_request_factory: Callable[[], Dict[str, Any]],
+    ) -> None:
+        url = api.jobs_base_url
+        headers = regular_user.headers
+        job_request = job_request_factory()
+        async with client.post(url, headers=headers, json=job_request) as resp:
+            assert resp.status == HTTPAccepted.status_code, await resp.text()
+            result = await resp.json()
+            job1_id = result["id"]
+        job_request = job_request_factory()
+        async with client.post(url, headers=headers, json=job_request) as resp:
+            assert resp.status == HTTPAccepted.status_code, await resp.text()
+            result = await resp.json()
+            job2_id = result["id"]
+
+        async with client.get(url, headers=headers) as response:
+            assert response.status == HTTPOk.status_code, await response.text()
+            assert response.headers["Content-Type"] == "application/json; charset=utf-8"
+            result = await response.json()
+
+        jobs = result["jobs"]
+        assert isinstance(jobs, list)
+        for job in jobs:
+            assert isinstance(job, dict)
+            for key in job:
+                assert isinstance(key, str)
+        job_ids = {job["id"] for job in jobs}
+        assert job_ids == {job1_id, job2_id}
+
+    @pytest.mark.asyncio
     async def test_get_all_jobs_filter_wrong_status(
         self,
         api: ApiConfig,
