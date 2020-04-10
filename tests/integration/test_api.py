@@ -1,3 +1,4 @@
+import json
 from typing import Any, AsyncIterator, Awaitable, Callable, Dict, Iterator, List
 from unittest import mock
 
@@ -949,6 +950,42 @@ class TestJobs:
         assert jobs == []
 
     @pytest.mark.asyncio
+    async def test_get_all_jobs_not_streamed(
+        self,
+        api: ApiConfig,
+        client: aiohttp.ClientSession,
+        jobs_client: JobsClient,
+        regular_user: _User,
+        job_request_factory: Callable[[], Dict[str, Any]],
+    ) -> None:
+        url = api.jobs_base_url
+        headers = regular_user.headers
+        job_request = job_request_factory()
+        async with client.post(url, headers=headers, json=job_request) as resp:
+            assert resp.status == HTTPAccepted.status_code, await resp.text()
+            result = await resp.json()
+            job1_id = result["id"]
+        job_request = job_request_factory()
+        async with client.post(url, headers=headers, json=job_request) as resp:
+            assert resp.status == HTTPAccepted.status_code, await resp.text()
+            result = await resp.json()
+            job2_id = result["id"]
+
+        async with client.get(url, headers=headers) as response:
+            assert response.status == HTTPOk.status_code, await response.text()
+            assert response.headers["Content-Type"] == "application/json; charset=utf-8"
+            result = await response.json()
+
+        jobs = result["jobs"]
+        assert isinstance(jobs, list)
+        for job in jobs:
+            assert isinstance(job, dict)
+            for key in job:
+                assert isinstance(key, str)
+        job_ids = {job["id"] for job in jobs}
+        assert job_ids == {job1_id, job2_id}
+
+    @pytest.mark.asyncio
     async def test_get_all_jobs_filter_wrong_status(
         self,
         api: ApiConfig,
@@ -1574,16 +1611,21 @@ class TestJobs:
             job_id = result["id"]
 
         url = api.jobs_base_url
-        async with client.get(url, headers=owner.headers) as response:
+        headers = owner.headers.copy()
+        headers["Accept"] = "application/x-ndjson"
+        async with client.get(url, headers=headers) as response:
             assert response.status == HTTPOk.status_code, await response.text()
-            result = await response.json()
-            job_ids = {item["id"] for item in result["jobs"]}
+            assert response.headers["Content-Type"] == "application/x-ndjson"
+            job_ids = {json.loads(line)["id"] async for line in response.content}
             assert job_ids == {job_id}
 
-        async with client.get(url, headers=follower.headers) as response:
+        headers = follower.headers.copy()
+        headers["Accept"] = "application/x-ndjson"
+        async with client.get(url, headers=headers) as response:
             assert response.status == HTTPOk.status_code, await response.text()
-            result = await response.json()
-            assert not result["jobs"]
+            assert response.headers["Content-Type"] == "application/x-ndjson"
+            job_ids = {json.loads(line)["id"] async for line in response.content}
+            assert not job_ids
 
         permission = Permission(
             uri=f"job://{cluster_name}/{owner.name}/{job_id}", action="read"
@@ -1592,8 +1634,11 @@ class TestJobs:
             follower.name, [permission], token=owner.token
         )
 
-        async with client.get(url, headers=follower.headers) as response:
+        async with client.get(url, headers=headers) as response:
             assert response.status == HTTPOk.status_code, await response.text()
+            assert response.headers["Content-Type"] == "application/x-ndjson"
+            job_ids = {json.loads(line)["id"] async for line in response.content}
+            assert job_ids == {job_id}
 
     @pytest.mark.asyncio
     async def test_get_shared_job(
