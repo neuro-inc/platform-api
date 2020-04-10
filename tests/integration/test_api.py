@@ -1585,7 +1585,7 @@ class TestJobs:
 
         headers = follower.headers.copy()
         headers["Accept"] = "application/x-ndjson"
-        async with client.get(url, headers=follower.headers) as response:
+        async with client.get(url, headers=headers) as response:
             assert response.status == HTTPOk.status_code, await response.text()
             assert response.headers["Content-Type"] == "application/x-ndjson"
             job_ids = {json.loads(line)["id"] async for line in response.content}
