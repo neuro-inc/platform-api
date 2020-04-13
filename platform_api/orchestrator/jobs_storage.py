@@ -562,7 +562,7 @@ class RedisJobsStorage(JobsStorage):
         for key in keys:
             tr.zrangebyscore(key, since.timestamp(), until.timestamp(), withscores=True)
         results = await tr.execute()
-        it = heapq.merge(results, key=operator.itemgetter(1))
+        it = heapq.merge(*results, key=operator.itemgetter(1))
 
         return map(operator.itemgetter(0), it)
 
