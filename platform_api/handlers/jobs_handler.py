@@ -2,7 +2,17 @@ import json
 import logging
 from dataclasses import dataclass, replace
 from pathlib import PurePath
-from typing import AbstractSet, Any, AsyncIterator, Dict, List, Optional, Sequence, Set
+from typing import (
+    AbstractSet,
+    Any,
+    AsyncIterator,
+    Dict,
+    List,
+    Optional,
+    Sequence,
+    Set,
+    Tuple,
+)
 
 import aiohttp.web
 import iso8601
@@ -506,22 +516,37 @@ class JobsHandler:
     async def _iter_filtered_jobs(
         self, bulk_job_filter: "BulkJobFilter"
     ) -> AsyncIterator[Job]:
-        if bulk_job_filter.bulk_filter:
-            with log_debug_time(f"Read bulk jobs with {bulk_job_filter.bulk_filter}"):
-                async for job in self._jobs_service.iter_all_jobs(
-                    bulk_job_filter.bulk_filter
-                ):
-                    yield job
+        def job_key(job: Job) -> Tuple[float, str, Job]:
+            return job.status_history.created_at_timestamp, job.id, job
 
         if bulk_job_filter.shared_ids:
             with log_debug_time(
                 f"Read shared jobs with {bulk_job_filter.shared_ids_filter}"
             ):
-                for job in await self._jobs_service.get_jobs_by_ids(
-                    bulk_job_filter.shared_ids,
-                    job_filter=bulk_job_filter.shared_ids_filter,
+                shared_jobs = [
+                    job_key(job)
+                    for job in await self._jobs_service.get_jobs_by_ids(
+                        bulk_job_filter.shared_ids,
+                        job_filter=bulk_job_filter.shared_ids_filter,
+                    )
+                ]
+                shared_jobs.sort(reverse=True)
+        else:
+            shared_jobs = []
+
+        if bulk_job_filter.bulk_filter:
+            with log_debug_time(f"Read bulk jobs with {bulk_job_filter.bulk_filter}"):
+                async for job in self._jobs_service.iter_all_jobs(
+                    bulk_job_filter.bulk_filter
                 ):
+                    key = job_key(job)
+                    # Merge shared jobs and bulk jobs in the creation order
+                    while shared_jobs and shared_jobs[-1] < key:
+                        yield shared_jobs.pop()[-1]
                     yield job
+
+        for key in reversed(shared_jobs):
+            yield key[-1]
 
     async def handle_delete(
         self, request: aiohttp.web.Request
