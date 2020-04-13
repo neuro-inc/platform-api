@@ -544,9 +544,9 @@ class JobsHandler:
                     while shared_jobs and shared_jobs[-1] < key:
                         yield shared_jobs.pop()[-1]
                     yield job
-        else:
-            for key in reversed(shared_jobs):
-                yield key[-1]
+
+        for key in reversed(shared_jobs):
+            yield key[-1]
 
     async def handle_delete(
         self, request: aiohttp.web.Request
