@@ -1363,9 +1363,9 @@ class TestJobs:
         job_usr1_with_name_killed = await run_job(usr1, job_req_with_name, do_kill=True)
         job_usr2_no_name = await run_job(usr2, job_req_no_name, do_kill=False)
         job_usr1_no_name_killed = await run_job(usr1, job_req_no_name, do_kill=True)
-        job_usr2_with_name = await run_job(usr2, job_req_with_name, do_kill=False)
-        job_usr1_no_name = await run_job(usr1, job_req_no_name, do_kill=False)
         job_usr2_with_name_killed = await run_job(usr2, job_req_with_name, do_kill=True)
+        job_usr1_no_name = await run_job(usr1, job_req_no_name, do_kill=False)
+        job_usr2_with_name = await run_job(usr2, job_req_with_name, do_kill=False)
         job_usr1_with_name = await run_job(usr1, job_req_with_name, do_kill=False)
         job_usr2_no_name_killed = await run_job(usr2, job_req_no_name, do_kill=True)
 
@@ -1428,9 +1428,9 @@ class TestJobs:
         await run_job(usr1, job_req_with_name, do_kill=True)
         job_usr2_no_name = await run_job(usr2, job_req_no_name, do_kill=False)
         await run_job(usr1, job_req_no_name, do_kill=True)
-        job_usr2_with_name = await run_job(usr2, job_req_with_name, do_kill=False)
-        await run_job(usr1, job_req_no_name, do_kill=False)
         job_usr2_with_name_killed = await run_job(usr2, job_req_with_name, do_kill=True)
+        await run_job(usr1, job_req_no_name, do_kill=False)
+        job_usr2_with_name = await run_job(usr2, job_req_with_name, do_kill=False)
         await run_job(usr1, job_req_with_name, do_kill=False)
         job_usr2_no_name_killed = await run_job(usr2, job_req_no_name, do_kill=True)
 
@@ -1446,8 +1446,8 @@ class TestJobs:
         job_ids = [job["id"] for job in jobs]
         assert job_ids == [
             job_usr2_no_name,
-            job_usr2_with_name,
             job_usr2_with_name_killed,
+            job_usr2_with_name,
             job_usr2_no_name_killed,
         ]
 
@@ -1455,7 +1455,7 @@ class TestJobs:
         filters = [("name", job_name), ("owner", usr2.name)]
         jobs = await jobs_client_usr1.get_all_jobs(filters)
         job_ids = [job["id"] for job in jobs]
-        assert job_ids == [job_usr2_with_name, job_usr2_with_name_killed]
+        assert job_ids == [job_usr2_with_name_killed, job_usr2_with_name]
 
         # filter: another owner + status
         filters = [("owner", usr2.name), ("status", "running")]
@@ -1493,9 +1493,9 @@ class TestJobs:
         job_usr1_with_name_killed = await run_job(usr1, job_req_with_name, do_kill=True)
         job_usr2_no_name = await run_job(usr2, job_req_no_name, do_kill=False)
         job_usr1_no_name_killed = await run_job(usr1, job_req_no_name, do_kill=True)
-        job_usr2_with_name = await run_job(usr2, job_req_with_name, do_kill=False)
-        job_usr1_no_name = await run_job(usr1, job_req_no_name, do_kill=False)
         job_usr2_with_name_killed = await run_job(usr2, job_req_with_name, do_kill=True)
+        job_usr1_no_name = await run_job(usr1, job_req_no_name, do_kill=False)
+        job_usr2_with_name = await run_job(usr2, job_req_with_name, do_kill=False)
         job_usr1_with_name = await run_job(usr1, job_req_with_name, do_kill=False)
         job_usr2_no_name_killed = await run_job(usr2, job_req_no_name, do_kill=True)
 
@@ -1513,9 +1513,9 @@ class TestJobs:
             job_usr1_with_name_killed,
             job_usr2_no_name,
             job_usr1_no_name_killed,
-            job_usr2_with_name,
-            job_usr1_no_name,
             job_usr2_with_name_killed,
+            job_usr1_no_name,
+            job_usr2_with_name,
             job_usr1_with_name,
             job_usr2_no_name_killed,
         ]
@@ -1526,8 +1526,8 @@ class TestJobs:
         job_ids = [job["id"] for job in jobs]
         assert job_ids == [
             job_usr1_with_name_killed,
-            job_usr2_with_name,
             job_usr2_with_name_killed,
+            job_usr2_with_name,
             job_usr1_with_name,
         ]
 
@@ -1537,8 +1537,8 @@ class TestJobs:
         job_ids = [job["id"] for job in jobs]
         assert job_ids == [
             job_usr2_no_name,
-            job_usr2_with_name,
             job_usr1_no_name,
+            job_usr2_with_name,
             job_usr1_with_name,
         ]
 
@@ -1565,8 +1565,8 @@ class TestJobs:
         job_ids = [job["id"] for job in jobs]
         assert job_ids == [
             job_usr1_with_name_killed,
-            job_usr2_with_name,
             job_usr2_with_name_killed,
+            job_usr2_with_name,
             job_usr1_with_name,
         ]
 
