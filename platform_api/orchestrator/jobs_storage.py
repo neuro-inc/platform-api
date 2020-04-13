@@ -1,11 +1,11 @@
 import heapq
 import json
 import logging
-import operator
 from abc import ABC, abstractmethod
 from dataclasses import dataclass, field
 from datetime import datetime, timedelta, timezone
-from itertools import islice
+from itertools import chain, groupby, islice
+from operator import itemgetter
 from typing import (
     AbstractSet,
     Any,
@@ -562,9 +562,14 @@ class RedisJobsStorage(JobsStorage):
         for key in keys:
             tr.zrangebyscore(key, since.timestamp(), until.timestamp(), withscores=True)
         results = await tr.execute()
-        it = heapq.merge(*results, key=operator.itemgetter(1))
+        it = heapq.merge(*results, key=itemgetter(1))
+        # Merge repeated job ids for multiple tags
+        if tags:
+            it = chain.from_iterable(
+                map(dict.fromkeys, map(itemgetter(1), groupby(it, itemgetter(1))))
+            )
 
-        return map(operator.itemgetter(0), it)
+        return map(itemgetter(0), it)
 
     async def _get_job_ids_for_deletion(self) -> List[str]:
         return [
