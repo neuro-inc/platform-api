@@ -1,5 +1,7 @@
+import heapq
 import json
 import logging
+import operator
 from abc import ABC, abstractmethod
 from dataclasses import dataclass, field
 from datetime import datetime, timedelta, timezone
@@ -542,7 +544,7 @@ class RedisJobsStorage(JobsStorage):
         name: Optional[str],
         since: datetime,
         until: datetime,
-    ) -> List[str]:
+    ) -> Iterable[str]:
         keys = self._generate_jobs_composite_keys(
             statuses=[str(s) for s in statuses] or [""],
             clusters=clusters or {"": set()},
@@ -556,14 +558,13 @@ class RedisJobsStorage(JobsStorage):
                 keys[0], since.timestamp(), until.timestamp()
             )
 
-        target = self._generate_temp_zset_key()
         tr = self._client.multi_exec()
-        tr.zunionstore(target, *keys, aggregate=tr.ZSET_AGGREGATE_MAX)
-        tr.zrangebyscore(target, since.timestamp(), until.timestamp())
-        tr.delete(target)
-        *_, payloads, _ = await tr.execute()
+        for key in keys:
+            tr.zrangebyscore(key, since.timestamp(), until.timestamp(), withscores=True)
+        results = await tr.execute()
+        it = heapq.merge(results, key=operator.itemgetter(1))
 
-        return payloads
+        return map(operator.itemgetter(0), it)
 
     async def _get_job_ids_for_deletion(self) -> List[str]:
         return [
