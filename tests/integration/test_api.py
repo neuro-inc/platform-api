@@ -2315,6 +2315,22 @@ class TestJobs:
             assert "is required" in response_payload["error"]
 
     @pytest.mark.asyncio
+    async def test_resolve_job_by_name(
+        self, job_submit: Dict[str, Any], jobs_client: JobsClient
+    ) -> None:
+        job_name = f"test-job-name-{random_str()}"
+        job_submit["name"] = job_name
+        result = await jobs_client.create_job(job_submit)
+        job_id = result["id"]
+        assert result["name"] == job_name
+
+        result = await jobs_client.get_job_by_id(job_name)
+        assert result["id"] == job_id
+        assert result["name"] == job_name
+
+        await jobs_client.delete_job(job_name)
+
+    @pytest.mark.asyncio
     async def test_create_with_custom_volumes(
         self,
         jobs_client: JobsClient,

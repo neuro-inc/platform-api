@@ -438,6 +438,12 @@ class JobsService:
     ) -> List[Job]:
         return [job async for job in self.iter_all_jobs(job_filter, reverse=reverse)]
 
+    async def get_job_by_name(self, job_name: str, owner: User) -> Job:
+        job_filter = JobFilter(owners={owner.name}, name=job_name)
+        async for record in self._jobs_storage.iter_all_jobs(job_filter, reverse=True):
+            return await self._get_cluster_job(record)
+        raise JobError(f"no such job {job_name}")
+
     async def get_jobs_by_ids(
         self, job_ids: Iterable[str], job_filter: Optional[JobFilter] = None
     ) -> List[Job]:
