@@ -1326,6 +1326,15 @@ class TestJobs:
             job_usr_with_name,
         ]
 
+        jobs = await jobs_client_usr1.get_all_jobs(filters + [("reverse", "1")])
+        job_ids = [job["id"] for job in jobs]
+        assert job_ids == [
+            job_usr_with_name,
+            job_usr_no_name,
+            job_usr_no_name_killed,
+            job_usr_with_name_killed,
+        ]
+
         # filter: name + status
         filters = [("name", job_name), ("status", "succeeded")]
         jobs = await jobs_client_usr1.get_all_jobs(filters)
@@ -1337,6 +1346,10 @@ class TestJobs:
         jobs = await jobs_client_usr1.get_all_jobs(filters)
         job_ids = [job["id"] for job in jobs]
         assert job_ids == [job_usr_with_name_killed, job_usr_with_name]
+
+        jobs = await jobs_client_usr1.get_all_jobs(filters + [("reverse", "1")])
+        job_ids = [job["id"] for job in jobs]
+        assert job_ids == [job_usr_with_name, job_usr_with_name_killed]
 
     @pytest.mark.asyncio
     async def test_get_all_jobs_filter_by_job_name_self_owner_and_statuses(
@@ -1386,17 +1399,34 @@ class TestJobs:
             job_usr1_with_name,
         ]
 
+        jobs = await jobs_client_usr1.get_all_jobs(filters + [("reverse", "1")])
+        job_ids = [job["id"] for job in jobs]
+        assert job_ids == [
+            job_usr1_with_name,
+            job_usr1_no_name,
+            job_usr1_no_name_killed,
+            job_usr1_with_name_killed,
+        ]
+
         # filter: self owner + job name
         filters = [("name", job_name), ("owner", usr1.name)]
         jobs = await jobs_client_usr1.get_all_jobs(filters)
         job_ids = [job["id"] for job in jobs]
         assert job_ids == [job_usr1_with_name_killed, job_usr1_with_name]
 
+        jobs = await jobs_client_usr1.get_all_jobs(filters + [("reverse", "1")])
+        job_ids = [job["id"] for job in jobs]
+        assert job_ids == [job_usr1_with_name, job_usr1_with_name_killed]
+
         # filter: self owner + status
         filters = [("owner", usr1.name), ("status", "running")]
         jobs = await jobs_client_usr1.get_all_jobs(filters)
         job_ids = [job["id"] for job in jobs]
         assert job_ids == [job_usr1_no_name, job_usr1_with_name]
+
+        jobs = await jobs_client_usr1.get_all_jobs(filters + [("reverse", "1")])
+        job_ids = [job["id"] for job in jobs]
+        assert job_ids == [job_usr1_with_name, job_usr1_with_name]
 
         # filter: self owner + name + status
         filters = [("owner", usr1.name), ("name", job_name), ("status", "succeeded")]
@@ -1451,17 +1481,34 @@ class TestJobs:
             job_usr2_no_name_killed,
         ]
 
+        jobs = await jobs_client_usr1.get_all_jobs(filters + [("reverse", "1")])
+        job_ids = [job["id"] for job in jobs]
+        assert job_ids == [
+            job_usr2_no_name_killed,
+            job_usr2_with_name,
+            job_usr2_with_name_killed,
+            job_usr2_no_name,
+        ]
+
         # filter: another owner + job name
         filters = [("name", job_name), ("owner", usr2.name)]
         jobs = await jobs_client_usr1.get_all_jobs(filters)
         job_ids = [job["id"] for job in jobs]
         assert job_ids == [job_usr2_with_name_killed, job_usr2_with_name]
 
+        jobs = await jobs_client_usr1.get_all_jobs(filters + [("reverse", "1")])
+        job_ids = [job["id"] for job in jobs]
+        assert job_ids == [job_usr2_with_name, job_usr2_with_name_killed]
+
         # filter: another owner + status
         filters = [("owner", usr2.name), ("status", "running")]
         jobs = await jobs_client_usr1.get_all_jobs(filters)
         job_ids = [job["id"] for job in jobs]
         assert job_ids == [job_usr2_no_name, job_usr2_with_name]
+
+        jobs = await jobs_client_usr1.get_all_jobs(filters + [("reverse", "1")])
+        job_ids = [job["id"] for job in jobs]
+        assert job_ids == [job_usr2_with_name, job_usr2_no_name]
 
         # filter: another owner + name + status
         filters = [("owner", usr2.name), ("name", job_name), ("status", "succeeded")]
@@ -1520,6 +1567,19 @@ class TestJobs:
             job_usr2_no_name_killed,
         ]
 
+        jobs = await jobs_client_usr1.get_all_jobs(filters + [("reverse", "1")])
+        job_ids = [job["id"] for job in jobs]
+        assert job_ids == [
+            job_usr2_no_name_killed,
+            job_usr1_with_name,
+            job_usr2_with_name,
+            job_usr1_no_name,
+            job_usr2_with_name_killed,
+            job_usr1_no_name_killed,
+            job_usr2_no_name,
+            job_usr1_with_name_killed,
+        ]
+
         # filter: multiple owners + job name
         filters = [("owner", usr1.name), ("owner", usr2.name), ("name", job_name)]
         jobs = await jobs_client_usr1.get_all_jobs(filters)
@@ -1529,6 +1589,15 @@ class TestJobs:
             job_usr2_with_name_killed,
             job_usr2_with_name,
             job_usr1_with_name,
+        ]
+
+        jobs = await jobs_client_usr1.get_all_jobs(filters + [("reverse", "1")])
+        job_ids = [job["id"] for job in jobs]
+        assert job_ids == [
+            job_usr1_with_name,
+            job_usr2_with_name,
+            job_usr2_with_name_killed,
+            job_usr1_with_name_killed,
         ]
 
         # filter: multiple owners + status
@@ -1542,6 +1611,15 @@ class TestJobs:
             job_usr1_with_name,
         ]
 
+        jobs = await jobs_client_usr1.get_all_jobs(filters + [("reverse", "1")])
+        job_ids = [job["id"] for job in jobs]
+        assert job_ids == [
+            job_usr1_with_name,
+            job_usr2_with_name,
+            job_usr1_no_name,
+            job_usr2_no_name,
+        ]
+
         # filter: multiple owners + name + status
         filters = [
             ("owner", usr1.name),
@@ -1552,6 +1630,10 @@ class TestJobs:
         jobs = await jobs_client_usr1.get_all_jobs(filters)
         job_ids = [job["id"] for job in jobs]
         assert job_ids == [job_usr1_with_name_killed, job_usr2_with_name_killed]
+
+        jobs = await jobs_client_usr1.get_all_jobs(filters + [("reverse", "1")])
+        job_ids = [job["id"] for job in jobs]
+        assert job_ids == [job_usr2_with_name_killed, job_usr1_with_name_killed]
 
         # filter: multiple owners + name + multiple statuses
         filters = [
@@ -1568,6 +1650,15 @@ class TestJobs:
             job_usr2_with_name_killed,
             job_usr2_with_name,
             job_usr1_with_name,
+        ]
+
+        jobs = await jobs_client_usr1.get_all_jobs(filters + [("reverse", "1")])
+        job_ids = [job["id"] for job in jobs]
+        assert job_ids == [
+            job_usr1_with_name,
+            job_usr2_with_name,
+            job_usr2_with_name_killed,
+            job_usr1_with_name_killed,
         ]
 
     @pytest.mark.asyncio

@@ -487,11 +487,13 @@ class JobsHandler:
                 bulk_filter=None, shared_ids=set(), shared_ids_filter=None,
             )
 
+        reverse = _parse_bool(request.query.get("reverse", "0"))
+
         if self._accepts_ndjson(request):
             response = aiohttp.web.StreamResponse()
             response.headers["Content-Type"] = "application/x-ndjson"
             await response.prepare(request)
-            async for job in self._iter_filtered_jobs(bulk_job_filter):
+            async for job in self._iter_filtered_jobs(bulk_job_filter, reverse):
                 response_payload = convert_job_to_job_response(
                     job, self._config.use_cluster_names_in_uris
                 )
@@ -505,7 +507,7 @@ class JobsHandler:
                     convert_job_to_job_response(
                         job, self._config.use_cluster_names_in_uris,
                     )
-                    async for job in self._iter_filtered_jobs(bulk_job_filter)
+                    async for job in self._iter_filtered_jobs(bulk_job_filter, reverse)
                 ]
             }
             self._bulk_jobs_response_validator.check(response_payload)
@@ -514,7 +516,7 @@ class JobsHandler:
             )
 
     async def _iter_filtered_jobs(
-        self, bulk_job_filter: "BulkJobFilter"
+        self, bulk_job_filter: "BulkJobFilter", reverse: bool
     ) -> AsyncIterator[Job]:
         def job_key(job: Job) -> Tuple[float, str, Job]:
             return job.status_history.created_at_timestamp, job.id, job
@@ -530,18 +532,20 @@ class JobsHandler:
                         job_filter=bulk_job_filter.shared_ids_filter,
                     )
                 ]
-                shared_jobs.sort(reverse=True)
+                shared_jobs.sort(reverse=not reverse)
         else:
             shared_jobs = []
 
         if bulk_job_filter.bulk_filter:
             with log_debug_time(f"Read bulk jobs with {bulk_job_filter.bulk_filter}"):
                 async for job in self._jobs_service.iter_all_jobs(
-                    bulk_job_filter.bulk_filter
+                    bulk_job_filter.bulk_filter, reverse=reverse
                 ):
                     key = job_key(job)
                     # Merge shared jobs and bulk jobs in the creation order
-                    while shared_jobs and shared_jobs[-1] < key:
+                    while shared_jobs and (
+                        shared_jobs[-1] > key if reverse else shared_jobs[-1] < key
+                    ):
                         yield shared_jobs.pop()[-1]
                     yield job
 
@@ -781,3 +785,13 @@ class BulkJobFilterBuilder:
             for cluster_owners in self._clusters_shared_any.values():
                 if cluster_owners == owners:
                     cluster_owners.clear()
+
+
+def _parse_bool(value: str) -> bool:
+    value = value.lower()
+    if value in ("0", "false"):
+        return False
+    elif value in ("1", "true"):
+        return True
+    else:
+        raise ValueError('Required "0", "1", "false" or "true"')
