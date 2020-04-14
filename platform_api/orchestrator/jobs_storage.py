@@ -110,7 +110,7 @@ class JobsStorage(ABC):
 
     @abstractmethod
     def iter_all_jobs(
-        self, job_filter: Optional[JobFilter] = None
+        self, job_filter: Optional[JobFilter] = None, *, reverse: bool = False
     ) -> AsyncIterator[JobRecord]:
         pass
 
@@ -122,9 +122,9 @@ class JobsStorage(ABC):
 
     # Only used in tests
     async def get_all_jobs(
-        self, job_filter: Optional[JobFilter] = None
+        self, job_filter: Optional[JobFilter] = None, reverse: bool = False
     ) -> List[JobRecord]:
-        return [job async for job in self.iter_all_jobs(job_filter)]
+        return [job async for job in self.iter_all_jobs(job_filter, reverse=reverse)]
 
     # Only used in tests
     async def get_running_jobs(self) -> List[JobRecord]:
@@ -219,7 +219,7 @@ class InMemoryJobsStorage(JobsStorage):
         await self.set_job(job)
 
     async def iter_all_jobs(
-        self, job_filter: Optional[JobFilter] = None
+        self, job_filter: Optional[JobFilter] = None, *, reverse: bool = False
     ) -> AsyncIterator[JobRecord]:
         # Accumulate results in a list to avoid RuntimeError when
         # the self._job_records dictionary is modified during iteration
@@ -229,6 +229,8 @@ class InMemoryJobsStorage(JobsStorage):
             if job_filter and not job_filter.check(job):
                 continue
             jobs.append(job)
+        if reverse:
+            jobs.reverse()
         for job in jobs:
             yield job
 
@@ -544,6 +546,7 @@ class RedisJobsStorage(JobsStorage):
         name: Optional[str],
         since: datetime,
         until: datetime,
+        reverse: bool,
     ) -> Iterable[str]:
         keys = self._generate_jobs_composite_keys(
             statuses=[str(s) for s in statuses] or [""],
@@ -554,15 +557,21 @@ class RedisJobsStorage(JobsStorage):
         )
 
         if len(keys) == 1:
-            return await self._client.zrangebyscore(
+            result = await self._client.zrangebyscore(
                 keys[0], since.timestamp(), until.timestamp()
             )
+            if reverse:
+                result.reverse()
+            return result
 
         tr = self._client.multi_exec()
         for key in keys:
             tr.zrangebyscore(key, since.timestamp(), until.timestamp(), withscores=True)
         results = await tr.execute()
-        it = heapq.merge(*results, key=itemgetter(1))
+        if reverse:
+            for x in results:
+                x.reverse()
+        it = heapq.merge(*results, key=itemgetter(1), reverse=reverse)
         # Merge repeated job ids for multiple tags
         if tags:
             it = chain.from_iterable(
@@ -580,7 +589,7 @@ class RedisJobsStorage(JobsStorage):
         ]
 
     async def iter_all_jobs(
-        self, job_filter: Optional[JobFilter] = None
+        self, job_filter: Optional[JobFilter] = None, *, reverse: bool = False
     ) -> AsyncIterator[JobRecord]:
         if not job_filter:
             job_filter = JobFilter()
@@ -594,6 +603,7 @@ class RedisJobsStorage(JobsStorage):
                 name=job_filter.name,
                 since=job_filter.since,
                 until=job_filter.until,
+                reverse=reverse,
             )
             if len(job_filter.tags) > 1:
                 job_filter = JobFilter(tags=job_filter.tags)
