@@ -728,12 +728,12 @@ class TestRedisJobsStorage:
         job1, job2 = islice(jobs, 2)
 
         job_filter = JobFilter(ids={job1.id})
-        job_ids = [job.id for job in await storage.get_all_jobs(job_filter)]
-        assert job_ids == [job1.id]
+        job_ids = {job.id for job in await storage.get_all_jobs(job_filter)}
+        assert job_ids == {job1.id}
 
         job_filter = JobFilter(ids={job1.id, job2.id})
-        job_ids = [job.id for job in await storage.get_all_jobs(job_filter)]
-        assert job_ids == [job1.id, job2.id]
+        job_ids = {job.id for job in await storage.get_all_jobs(job_filter)}
+        assert job_ids == {job1.id, job2.id}
 
     @pytest.mark.asyncio
     async def test_get_all_filter_by_hostname_and_status(
