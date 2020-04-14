@@ -1426,7 +1426,7 @@ class TestJobs:
 
         jobs = await jobs_client_usr1.get_all_jobs(filters + [("reverse", "1")])
         job_ids = [job["id"] for job in jobs]
-        assert job_ids == [job_usr1_with_name, job_usr1_with_name]
+        assert job_ids == [job_usr1_with_name, job_usr1_no_name]
 
         # filter: self owner + name + status
         filters = [("owner", usr1.name), ("name", job_name), ("status", "succeeded")]
