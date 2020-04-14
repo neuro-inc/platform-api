@@ -28,10 +28,12 @@ from platform_api.handlers.validators import (
     USER_NAME_MAX_LENGTH,
     create_container_request_validator,
     create_container_response_validator,
+    create_job_tag_validator,
 )
 from platform_api.orchestrator.job import (
     Job,
     JobRecord,
+    JobRestartPolicy,
     JobStatusHistory,
     JobStatusItem,
 )
@@ -375,6 +377,7 @@ class TestJobRequestValidator:
         )
         payload = validator.check(request)
         assert payload["cluster_name"] == "testcluster"
+        assert payload["restart_policy"] == JobRestartPolicy.NEVER
 
     def test_validator_explicit_cluster_name(self) -> None:
         container = {
@@ -442,6 +445,59 @@ class TestJobRequestValidator:
             allowed_gpu_models=(), allowed_tpu_resources=(), cluster_name=""
         )
         with pytest.raises(DataError, match="value is less than"):
+            validator.check(request)
+
+    @pytest.mark.parametrize(
+        "tag",
+        [
+            "a",
+            "a" * 256,
+            "foo123",
+            "foo:bar123",
+            "foo:bar-baz123",
+            "pre/foo:bar-baz123",
+            "pre.org/foo:bar-baz123",
+        ],
+    )
+    def test_job_tags_validator_valid(self, tag: str) -> None:
+        validator = create_job_tag_validator()
+        assert validator.check(tag) == tag
+
+    @pytest.mark.parametrize(
+        "tag",
+        [
+            "",
+            "a" * 257,
+            "foo-",
+            "-foo",
+            "foo--bar",
+            "foo::bar",
+            "foo//bar",
+            "foo..bar",
+            "foo.-bar",
+        ],
+    )
+    def test_job_tags_validator_invalid(self, tag: str) -> None:
+        validator = create_job_tag_validator()
+        with pytest.raises(DataError):
+            validator.check(tag)
+
+    def test_restart_policy(self) -> None:
+        container = {
+            "image": "testimage",
+            "command": "arg1 arg2 arg3",
+            "resources": {"cpu": 0.1, "memory_mb": 16, "shm": True},
+            "ssh": {"port": 666},
+        }
+        request = {
+            "container": container,
+            "cluster_name": "testcluster",
+            "restart_policy": "unknown",
+        }
+        validator = create_job_request_validator(
+            allowed_gpu_models=(), allowed_tpu_resources=(), cluster_name="testcluster"
+        )
+        with pytest.raises(DataError, match="restart_policy.+any variant"):
             validator.check(request)
 
 
@@ -1329,6 +1385,38 @@ class TestInferPermissionsFromContainerLegacy:
             Permission(uri="image://testuser/image", action="read"),
         ]
 
+    def test_legacy_storage_acl(self) -> None:
+        user = User(name="testuser", token="")
+        container = Container(
+            image="example.com/testuser/image",
+            resources=ContainerResources(cpu=0.1, memory_mb=16),
+            volumes=[
+                ContainerVolume(
+                    uri=URL("storage://testuser/dataset"),
+                    src_path=PurePath("/"),
+                    dst_path=PurePath("/var/storage/testuser/dataset"),
+                    read_only=True,
+                ),
+                ContainerVolume(
+                    uri=URL("storage://testuser/result"),
+                    src_path=PurePath("/"),
+                    dst_path=PurePath("/var/storage/testuser/result"),
+                ),
+            ],
+        )
+        registry_config = RegistryConfig(
+            url=URL("http://example.com"), username="compute", password="compute_token"
+        )
+        permissions = infer_permissions_from_container(
+            user, container, registry_config, "test-cluster", legacy_storage_acl=True
+        )
+        assert permissions == [
+            Permission(uri="job://test-cluster/testuser", action="write"),
+            Permission(uri="image://test-cluster/testuser/image", action="read"),
+            Permission(uri="storage://testuser/dataset", action="read"),
+            Permission(uri="storage://testuser/result", action="write"),
+        ]
+
 
 @pytest.mark.asyncio
 async def test_job_to_job_response(mock_orchestrator: MockOrchestrator) -> None:
@@ -1372,6 +1460,7 @@ async def test_job_to_job_response(mock_orchestrator: MockOrchestrator) -> None:
         "ssh_auth_server": "ssh://nobody@ssh-auth:22",
         "is_preemptible": False,
         "uri": f"job://test-cluster/compute/{job.id}",
+        "restart_policy": "never",
     }
 
 
@@ -1466,6 +1555,7 @@ async def test_job_to_job_response_with_job_name_and_http_exposed(
         "ssh_auth_server": "ssh://nobody@ssh-auth:22",
         "is_preemptible": False,
         "uri": f"job://test-cluster/{owner_name}/{job.id}",
+        "restart_policy": "never",
     }
 
 
@@ -1518,6 +1608,7 @@ async def test_job_to_job_response_with_job_name_and_http_exposed_too_long_name(
         "ssh_auth_server": "ssh://nobody@ssh-auth:22",
         "is_preemptible": False,
         "uri": f"job://test-cluster/{owner_name}/{job.id}",
+        "restart_policy": "never",
     }
 
 

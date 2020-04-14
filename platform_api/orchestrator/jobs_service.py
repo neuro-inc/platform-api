@@ -26,6 +26,7 @@ from .job import (
     ZERO_RUN_TIME,
     Job,
     JobRecord,
+    JobRestartPolicy,
     JobStatusHistory,
     JobStatusItem,
     JobStatusReason,
@@ -249,6 +250,7 @@ class JobsService:
         is_preemptible: bool = False,
         schedule_timeout: Optional[float] = None,
         max_run_time_minutes: Optional[int] = None,
+        restart_policy: JobRestartPolicy = JobRestartPolicy.NEVER,
     ) -> Tuple[Job, Status]:
         if cluster_name:
             user_cluster = user.get_cluster(cluster_name)
@@ -258,6 +260,10 @@ class JobsService:
             user_cluster = user.clusters[0]
         cluster_name = user_cluster.name
 
+        if job_name is not None and job_name.startswith("job-"):
+            raise JobsServiceException(
+                "Failed to create job: job name cannot start with 'job-' prefix."
+            )
         try:
             await self._raise_for_run_time_quota(
                 user,
@@ -302,6 +308,7 @@ class JobsService:
             is_preemptible=is_preemptible,
             schedule_timeout=schedule_timeout,
             max_run_time_minutes=max_run_time_minutes,
+            restart_policy=restart_policy,
         )
         job_id = job_request.job_id
         try:
@@ -417,9 +424,19 @@ class JobsService:
                 logger.warning("Failed to mark a job %s as deleted. Retrying.", job_id)
         logger.warning("Failed to mark a job %s as deleted. Giving up.", job_id)
 
-    async def get_all_jobs(self, job_filter: Optional[JobFilter] = None) -> List[Job]:
-        records = await self._jobs_storage.get_all_jobs(job_filter)
-        return [await self._get_cluster_job(record) for record in records]
+    async def iter_all_jobs(
+        self, job_filter: Optional[JobFilter] = None, *, reverse: bool = False
+    ) -> AsyncIterator[Job]:
+        async for record in self._jobs_storage.iter_all_jobs(
+            job_filter, reverse=reverse
+        ):
+            yield await self._get_cluster_job(record)
+
+    # Only used in tests
+    async def get_all_jobs(
+        self, job_filter: Optional[JobFilter] = None, *, reverse: bool = False
+    ) -> List[Job]:
+        return [job async for job in self.iter_all_jobs(job_filter, reverse=reverse)]
 
     async def get_job_by_name(self, job_name: str, owner: User) -> Job:
         job_filter = JobFilter(owners={owner.name}, name=job_name)

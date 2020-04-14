@@ -1,6 +1,5 @@
 import logging
-
-from async_exit_stack import AsyncExitStack
+from contextlib import AsyncExitStack
 
 from .cluster import Cluster
 from .cluster_config import ClusterConfig

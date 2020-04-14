@@ -1,4 +1,5 @@
 import asyncio
+import json
 import time
 from typing import (
     Any,
@@ -61,6 +62,10 @@ class ApiConfig(NamedTuple):
 
     def stats_for_user_url(self, username: str) -> str:
         return f"{self.stats_base_url}/users/{username}"
+
+    @property
+    def tags_base_url(self) -> str:
+        return f"{self.endpoint}/tags"
 
 
 class AuthApiConfig(NamedTuple):
@@ -141,14 +146,13 @@ class JobsClient:
 
     async def get_all_jobs(self, params: Any = None) -> List[Dict[str, Any]]:
         url = self._api_config.jobs_base_url
-        async with self._client.get(
-            url, headers=self._headers, params=params
-        ) as response:
-            response_text = await response.text()
-            assert response.status == HTTPOk.status_code, response_text
-            result = await response.json()
-        jobs = result["jobs"]
-        assert isinstance(jobs, list)
+        headers = self._headers.copy()
+        headers["Accept"] = "application/x-ndjson"
+        async with self._client.get(url, headers=headers, params=params) as response:
+            assert response.status == HTTPOk.status_code, await response.text()
+            assert response.headers["Content-Type"] == "application/x-ndjson"
+            jobs = [json.loads(line) async for line in response.content]
+
         for job in jobs:
             assert isinstance(job, dict)
             for key in job:

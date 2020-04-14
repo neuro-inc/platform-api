@@ -4,22 +4,20 @@ from setuptools import find_packages, setup
 install_requires = (
     "aiohttp==3.6.2",
     # WARN: aioredis does not support Redis Cluster yet
-    "aioredis==1.3.0",
-    "async-exit-stack==1.0.1",  # backport from 3.7 stdlib
-    "async-generator==1.10",
-    "dataclasses==0.6",  # backport from 3.7 stdlib
+    "aioredis==1.3.1",
     "iso8601==0.1.12",
     "trafaret==1.2.0",
     "neuro_auth_client==19.11.25",
     # Circle CI fails on the latest cryptography version
     # because the server has too old OpenSSL version
-    "cryptography==2.8",
+    "cryptography==2.9",
     "aiorwlock==0.6.0",
     "notifications-client==0.8.1",
     "platform-logging==0.3",
     "yarl==1.3.0",
     "multidict==4.7.5",
     "aiohttp-cors==0.7.0",
+    "aiozipkin==0.6.0",
 )
 
 setup(
@@ -27,6 +25,7 @@ setup(
     version="0.0.1b1",
     url="https://github.com/neuromation/platform-api",
     packages=find_packages(),
+    python_requires=">=3.7.0",
     install_requires=install_requires,
     entry_points={
         "console_scripts": [

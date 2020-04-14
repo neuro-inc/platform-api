@@ -13,7 +13,13 @@ from aiohttp import web
 from yarl import URL
 
 from platform_api.cluster_config import StorageConfig
-from platform_api.orchestrator.job import Job, JobRecord, JobStatusItem, JobStatusReason
+from platform_api.orchestrator.job import (
+    Job,
+    JobRecord,
+    JobRestartPolicy,
+    JobStatusItem,
+    JobStatusReason,
+)
 from platform_api.orchestrator.job_request import (
     Container,
     ContainerHTTPServer,
@@ -1230,6 +1236,55 @@ class TestKubeOrchestrator:
         )
         assert toleration_expected in pod.tolerations
 
+    @pytest.mark.asyncio
+    async def test_delete_all_job_resources(
+        self,
+        kube_client: MyKubeClient,
+        kube_orchestrator: KubeOrchestrator,
+        delete_job_later: Callable[[Job], Awaitable[None]],
+    ) -> None:
+        container = Container(
+            image="ubuntu",
+            command="sleep 1h",
+            http_server=ContainerHTTPServer(80),
+            resources=ContainerResources(
+                cpu=0.1,
+                memory_mb=128,
+                tpu=ContainerTPUResource(type="v2-8", software_version="1.14"),
+            ),
+        )
+        job = MyJob(
+            orchestrator=kube_orchestrator,
+            record=JobRecord.create(
+                request=JobRequest.create(container), cluster_name="test-cluster"
+            ),
+        )
+        await delete_job_later(job)
+        await kube_orchestrator.prepare_job(job)
+        await kube_orchestrator.start_job(job)
+
+        pod_name = ingress_name = service_name = networkpolicy_name = job.id
+
+        assert await kube_client.get_pod(pod_name)
+        await kube_client.get_ingress(ingress_name)
+        await kube_client.get_service(service_name)
+        await kube_client.get_network_policy(networkpolicy_name)
+
+        await kube_orchestrator.delete_all_job_resources(job.id)
+
+        await kube_client.wait_pod_non_existent(pod_name, timeout_s=60.0)
+        with pytest.raises(JobNotFoundException):
+            await kube_client.get_pod(pod_name)
+
+        with pytest.raises(JobNotFoundException):
+            await kube_client.get_ingress(ingress_name)
+
+        with pytest.raises(StatusException, match="NotFound"):
+            await kube_client.get_service(service_name)
+
+        with pytest.raises(StatusException, match="NotFound"):
+            await kube_client.get_network_policy(networkpolicy_name)
+
 
 @pytest.fixture
 async def delete_pod_later(
@@ -1245,6 +1300,42 @@ async def delete_pod_later(
     for pod in pods:
         try:
             await kube_client.delete_pod(pod.name)
+        except Exception:
+            pass
+
+
+@pytest.fixture
+async def delete_ingress_later(
+    kube_client: KubeClient,
+) -> AsyncIterator[Callable[[Ingress], Awaitable[None]]]:
+    ingresses = []
+
+    async def _add(ingress: Ingress) -> None:
+        ingresses.append(ingress)
+
+    yield _add
+
+    for ingress in ingresses:
+        try:
+            await kube_client.delete_ingress(ingress.name)
+        except Exception:
+            pass
+
+
+@pytest.fixture
+async def delete_service_later(
+    kube_client: KubeClient,
+) -> AsyncIterator[Callable[[Service], Awaitable[None]]]:
+    services = []
+
+    async def _add(service: Service) -> None:
+        services.append(service)
+
+    yield _add
+
+    for service in services:
+        try:
+            await kube_client.delete_service(service.name)
         except Exception:
             pass
 
@@ -1266,7 +1357,7 @@ class TestKubeClient:
         container = Container(
             image="ubuntu",
             command="true",
-            resources=ContainerResources(cpu=0.1, memory_mb=128),
+            resources=ContainerResources(cpu=0.1, memory_mb=16),
         )
         job_request = JobRequest.create(container)
         pod = PodDescriptor.from_job_request(
@@ -1568,6 +1659,197 @@ class TestKubeClient:
         pod_status = await kube_client.get_pod_status(pod.name)
 
         assert pod_status.container_status.exit_code != 0
+
+    @pytest.fixture
+    async def create_pod(
+        self,
+        kube_client: KubeClient,
+        kube_orchestrator: KubeOrchestrator,
+        delete_pod_later: Callable[[PodDescriptor], Awaitable[None]],
+    ) -> Callable[[str], Awaitable[PodDescriptor]]:
+        async def _f(job_id: str) -> PodDescriptor:
+            labels = {"platform.neuromation.io/job": job_id}
+            container = Container(
+                image="ubuntu",
+                command="true",
+                resources=ContainerResources(cpu=0.1, memory_mb=128),
+            )
+            pod = PodDescriptor.from_job_request(
+                kube_orchestrator.create_storage_volume(),
+                JobRequest.create(container),
+                labels=labels,
+            )
+            await delete_pod_later(pod)
+            await kube_client.create_pod(pod)
+            return pod
+
+        return _f
+
+    @pytest.mark.asyncio
+    async def test_get_all_job_resources_links_pod(
+        self,
+        kube_client: MyKubeClient,
+        create_pod: Callable[[str], Awaitable[PodDescriptor]],
+    ) -> None:
+        job_id = f"job-{uuid.uuid4()}"
+        pod = await create_pod(job_id)
+        link = URL(kube_client._generate_pod_url(pod.name)).path
+
+        resources = [r async for r in kube_client.get_all_job_resources_links(job_id)]
+        assert resources == [link]
+
+    @pytest.mark.asyncio
+    async def test_delete_resource_by_link_pod(
+        self,
+        kube_client: MyKubeClient,
+        create_pod: Callable[[str], Awaitable[PodDescriptor]],
+    ) -> None:
+        job_id = f"job-{uuid.uuid4()}"
+        pod = await create_pod(job_id)
+        assert await kube_client.get_pod(pod.name)
+        link = URL(kube_client._generate_pod_url(pod.name)).path
+
+        await kube_client.delete_resource_by_link(link)
+        await kube_client.wait_pod_non_existent(pod.name, timeout_s=60.0)
+
+        with pytest.raises(JobNotFoundException):
+            await kube_client.get_pod(pod.name)
+
+    @pytest.fixture
+    async def create_ingress(
+        self,
+        kube_client: KubeClient,
+        delete_ingress_later: Callable[[Ingress], Awaitable[None]],
+    ) -> Callable[[str], Awaitable[Ingress]]:
+        async def _f(job_id: str) -> Ingress:
+            ingress_name = f"ingress-{uuid.uuid4().hex[:6]}"
+            labels = {"platform.neuromation.io/job": job_id}
+            ingress = await kube_client.create_ingress(ingress_name, labels=labels)
+            await delete_ingress_later(ingress)
+            return ingress
+
+        return _f
+
+    @pytest.mark.asyncio
+    async def test_get_all_job_resources_links_ingress(
+        self,
+        kube_client: KubeClient,
+        create_ingress: Callable[[str], Awaitable[Ingress]],
+    ) -> None:
+        job_id = f"job-{uuid.uuid4()}"
+        ingress = await create_ingress(job_id)
+        link = URL(kube_client._generate_ingress_url(ingress.name)).path
+
+        resources = [r async for r in kube_client.get_all_job_resources_links(job_id)]
+        assert resources == [link]
+
+    @pytest.mark.asyncio
+    async def test_delete_resource_by_link_ingress(
+        self,
+        kube_client: KubeClient,
+        create_ingress: Callable[[str], Awaitable[Ingress]],
+    ) -> None:
+        job_id = f"job-{uuid.uuid4()}"
+        ingress = await create_ingress(job_id)
+        assert await kube_client.get_ingress(ingress.name)
+
+        link = URL(kube_client._generate_ingress_url(ingress.name)).path
+        await kube_client.delete_resource_by_link(link)
+
+        with pytest.raises(JobNotFoundException):
+            await kube_client.get_ingress(ingress.name)
+
+    @pytest.fixture
+    async def create_service(
+        self,
+        kube_client: KubeClient,
+        delete_service_later: Callable[[Service], Awaitable[None]],
+    ) -> Callable[[str], Awaitable[Service]]:
+        async def _f(job_id: str) -> Service:
+            service_name = f"service-{uuid.uuid4().hex[:6]}"
+            labels = {"platform.neuromation.io/job": job_id}
+            service = Service(name=service_name, target_port=8080, labels=labels)
+            service = await kube_client.create_service(service)
+            await delete_service_later(service)
+            return service
+
+        return _f
+
+    @pytest.mark.asyncio
+    async def test_get_all_job_resources_links_service(
+        self,
+        kube_client: KubeClient,
+        create_service: Callable[[str], Awaitable[Service]],
+    ) -> None:
+        job_id = f"job-{uuid.uuid4()}"
+        service = await create_service(job_id)
+        link = URL(kube_client._generate_service_url(service.name)).path
+
+        resources = [r async for r in kube_client.get_all_job_resources_links(job_id)]
+        assert resources == [link]
+
+    @pytest.mark.asyncio
+    async def test_delete_resource_by_link_service(
+        self,
+        kube_client: KubeClient,
+        create_service: Callable[[str], Awaitable[Service]],
+    ) -> None:
+        job_id = f"job-{uuid.uuid4()}"
+        service = await create_service(job_id)
+        assert await kube_client.get_service(service.name)
+
+        link = URL(kube_client._generate_service_url(service.name)).path
+        await kube_client.delete_resource_by_link(link)
+
+        with pytest.raises(StatusException, match="NotFound"):
+            await kube_client.get_service(service.name)
+
+    @pytest.fixture
+    async def create_network_policy(
+        self,
+        kube_client: KubeClient,
+        delete_network_policy_later: Callable[[str], Awaitable[None]],
+    ) -> Callable[[str], Awaitable[Dict[str, Any]]]:
+        async def _f(job_id: str) -> Dict[str, Any]:
+            np_name = f"networkpolicy-{uuid.uuid4().hex[:6]}"
+            labels = {"platform.neuromation.io/job": job_id}
+
+            await delete_network_policy_later(np_name)
+            payload = await kube_client.create_egress_network_policy(
+                np_name, pod_labels=labels, labels=labels, rules=[{}],
+            )
+            return payload
+
+        return _f
+
+    @pytest.mark.asyncio
+    async def test_get_all_job_resources_links_job_network_policy(
+        self,
+        kube_client: KubeClient,
+        create_network_policy: Callable[[str], Awaitable[Dict[str, Any]]],
+    ) -> None:
+        job_id = f"job-{uuid.uuid4()}"
+        payload = await create_network_policy(job_id)
+        link = payload["metadata"]["selfLink"]
+
+        resources = [r async for r in kube_client.get_all_job_resources_links(job_id)]
+        assert resources == [link]
+
+    @pytest.mark.asyncio
+    async def test_delete_resource_by_link_network_policy(
+        self,
+        kube_client: KubeClient,
+        create_network_policy: Callable[[str], Awaitable[Dict[str, Any]]],
+    ) -> None:
+        job_id = f"job-{uuid.uuid4()}"
+        payload = await create_network_policy(job_id)
+        link = payload["metadata"]["selfLink"]
+        np_name = payload["metadata"]["name"]
+
+        await kube_client.delete_resource_by_link(link)
+
+        with pytest.raises(StatusException, match="NotFound"):
+            await kube_client.get_network_policy(np_name)
 
 
 @pytest.fixture
@@ -2076,3 +2358,140 @@ class TestPreemption:
             JobNotFoundException, match=f"Pod '{pod_name}' not found. Job '{job.id}'"
         ):
             await kube_orchestrator.get_job_status(job)
+
+
+class TestRestartPolicy:
+    @pytest.mark.asyncio
+    async def test_restart_failing(
+        self,
+        kube_client: MyKubeClient,
+        delete_job_later: Callable[[Job], Awaitable[None]],
+        kube_orchestrator: KubeOrchestrator,
+    ) -> None:
+        container = Container(
+            image="ubuntu",
+            command="false",
+            resources=ContainerResources(cpu=0.1, memory_mb=16),
+        )
+        job = MyJob(
+            orchestrator=kube_orchestrator,
+            record=JobRecord.create(
+                request=JobRequest.create(container),
+                cluster_name="test-cluster",
+                restart_policy=JobRestartPolicy.ON_FAILURE,
+            ),
+        )
+        await delete_job_later(job)
+        await kube_orchestrator.prepare_job(job)
+        await kube_orchestrator.start_job(job)
+        pod_name = job.id
+
+        await kube_client.wait_pod_is_running(pod_name=pod_name, timeout_s=60.0)
+
+        status = await kube_orchestrator.get_job_status(job)
+        assert status in (
+            JobStatusItem.create(
+                status=JobStatus.RUNNING, reason=JobStatusReason.RESTARTING
+            ),
+            JobStatusItem.create(status=JobStatus.RUNNING),
+        )
+
+    @pytest.mark.asyncio
+    async def test_restart_failing_succeeded(
+        self,
+        kube_client: MyKubeClient,
+        delete_job_later: Callable[[Job], Awaitable[None]],
+        kube_orchestrator: KubeOrchestrator,
+    ) -> None:
+        container = Container(
+            image="ubuntu",
+            command="true",
+            resources=ContainerResources(cpu=0.1, memory_mb=16),
+        )
+        job = MyJob(
+            orchestrator=kube_orchestrator,
+            record=JobRecord.create(
+                request=JobRequest.create(container),
+                cluster_name="test-cluster",
+                restart_policy=JobRestartPolicy.ON_FAILURE,
+            ),
+        )
+        await delete_job_later(job)
+        await kube_orchestrator.prepare_job(job)
+        await kube_orchestrator.start_job(job)
+        pod_name = job.id
+
+        await kube_client.wait_pod_is_terminated(pod_name=pod_name, timeout_s=60.0)
+
+        status = await kube_orchestrator.get_job_status(job)
+        assert status == JobStatusItem.create(status=JobStatus.SUCCEEDED, exit_code=0)
+
+    @pytest.mark.asyncio
+    async def test_restart_always(
+        self,
+        kube_client: MyKubeClient,
+        delete_job_later: Callable[[Job], Awaitable[None]],
+        kube_orchestrator: KubeOrchestrator,
+    ) -> None:
+        container = Container(
+            image="ubuntu",
+            command="false",
+            resources=ContainerResources(cpu=0.1, memory_mb=16),
+        )
+        job = MyJob(
+            orchestrator=kube_orchestrator,
+            record=JobRecord.create(
+                request=JobRequest.create(container),
+                cluster_name="test-cluster",
+                restart_policy=JobRestartPolicy.ALWAYS,
+            ),
+        )
+        await delete_job_later(job)
+        await kube_orchestrator.prepare_job(job)
+        await kube_orchestrator.start_job(job)
+        pod_name = job.id
+
+        await kube_client.wait_pod_is_terminated(pod_name=pod_name, timeout_s=60.0)
+
+        status = await kube_orchestrator.get_job_status(job)
+        assert status in (
+            JobStatusItem.create(
+                status=JobStatus.RUNNING, reason=JobStatusReason.RESTARTING
+            ),
+            JobStatusItem.create(status=JobStatus.RUNNING),
+        )
+
+    @pytest.mark.asyncio
+    async def test_restart_always_succeeded(
+        self,
+        kube_client: MyKubeClient,
+        delete_job_later: Callable[[Job], Awaitable[None]],
+        kube_orchestrator: KubeOrchestrator,
+    ) -> None:
+        container = Container(
+            image="ubuntu",
+            command="true",
+            resources=ContainerResources(cpu=0.1, memory_mb=16),
+        )
+        job = MyJob(
+            orchestrator=kube_orchestrator,
+            record=JobRecord.create(
+                request=JobRequest.create(container),
+                cluster_name="test-cluster",
+                restart_policy=JobRestartPolicy.ALWAYS,
+            ),
+        )
+        await delete_job_later(job)
+        await kube_orchestrator.prepare_job(job)
+        await kube_orchestrator.start_job(job)
+        pod_name = job.id
+
+        await kube_client.wait_pod_is_terminated(pod_name=pod_name, timeout_s=60.0)
+
+        status = await kube_orchestrator.get_job_status(job)
+        assert status in (
+            JobStatusItem.create(
+                status=JobStatus.RUNNING, reason=JobStatusReason.RESTARTING
+            ),
+            JobStatusItem.create(status=JobStatus.RUNNING),
+        )

@@ -15,6 +15,7 @@ from platform_api.orchestrator.job import (
     JobRecord,
     JobStatusItem,
     JobStatusReason,
+    current_datetime_factory,
 )
 from platform_api.orchestrator.job_request import JobError, JobRequest, JobStatus
 from platform_api.orchestrator.jobs_service import (
@@ -303,7 +304,6 @@ class TestJobsService:
     async def test_get_all_filter_by_status(
         self,
         jobs_service: JobsService,
-        mock_orchestrator: MockOrchestrator,
         mock_jobs_storage: MockJobsStorage,
         job_request_factory: Callable[[], JobRequest],
     ) -> None:
@@ -391,6 +391,53 @@ class TestJobsService:
 
         with pytest.raises(JobError):
             await jobs_service.get_job_by_name("job2", otheruser)
+
+    @pytest.mark.asyncio
+    async def test_get_all_filter_by_date_range(
+        self, jobs_service: JobsService, job_request_factory: Callable[[], JobRequest],
+    ) -> None:
+        user = User(cluster_name="test-cluster", name="testuser", token="")
+
+        async def create_job() -> Job:
+            job_request = job_request_factory()
+            job, _ = await jobs_service.create_job(job_request=job_request, user=user)
+            return job
+
+        t1 = current_datetime_factory()
+        job1 = await create_job()
+        t2 = current_datetime_factory()
+        job2 = await create_job()
+        t3 = current_datetime_factory()
+        job3 = await create_job()
+        t4 = current_datetime_factory()
+
+        job_filter = JobFilter(since=t1, until=t4)
+        job_ids = {job.id for job in await jobs_service.get_all_jobs(job_filter)}
+        assert job_ids == {job1.id, job2.id, job3.id}
+
+        job_filter = JobFilter(since=t2)
+        job_ids = {job.id for job in await jobs_service.get_all_jobs(job_filter)}
+        assert job_ids == {job2.id, job3.id}
+
+        job_filter = JobFilter(until=t2)
+        job_ids = {job.id for job in await jobs_service.get_all_jobs(job_filter)}
+        assert job_ids == {job1.id}
+
+        job_filter = JobFilter(since=t3)
+        job_ids = {job.id for job in await jobs_service.get_all_jobs(job_filter)}
+        assert job_ids == {job3.id}
+
+        job_filter = JobFilter(until=t3)
+        job_ids = {job.id for job in await jobs_service.get_all_jobs(job_filter)}
+        assert job_ids == {job1.id, job2.id}
+
+        job_filter = JobFilter(since=t2, until=t3)
+        job_ids = {job.id for job in await jobs_service.get_all_jobs(job_filter)}
+        assert job_ids == {job2.id}
+
+        job_filter = JobFilter(since=t3, until=t2)
+        job_ids = {job.id for job in await jobs_service.get_all_jobs(job_filter)}
+        assert job_ids == set()
 
     @pytest.mark.asyncio
     async def test_update_jobs_statuses_running(
@@ -1333,3 +1380,17 @@ class TestJobServiceNotification:
         )
 
         assert notifications == mock_notifications_client.sent_notifications
+
+    @pytest.mark.asyncio
+    async def test_create_job_bad_name(
+        self, jobs_service: JobsService, mock_job_request: JobRequest
+    ) -> None:
+        user = User(cluster_name="test-cluster", name="testuser", token="")
+        with pytest.raises(JobsServiceException) as cm:
+            await jobs_service.create_job(
+                job_request=mock_job_request, user=user, job_name="job-name"
+            )
+        assert (
+            str(cm.value)
+            == "Failed to create job: job name cannot start with 'job-' prefix."
+        )

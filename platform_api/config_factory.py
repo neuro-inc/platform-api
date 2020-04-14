@@ -25,6 +25,7 @@ from .config import (
     PlatformConfig,
     ServerConfig,
     SSHAuthConfig,
+    ZipkinConfig,
 )
 from .orchestrator.kube_client import KubeClientAuthType
 from .orchestrator.kube_orchestrator import KubeConfig
@@ -51,6 +52,7 @@ class EnvironConfigFactory:
             server=self.create_server(),
             database=self.create_database(),
             auth=auth,
+            zipkin=self.create_zipkin(),
             oauth=self.try_create_oauth(),
             env_prefix=env_prefix,
             jobs=jobs,
@@ -242,6 +244,11 @@ class EnvironConfigFactory:
             service_name=name,
             public_endpoint_url=public_endpoint_url,
         )
+
+    def create_zipkin(self) -> ZipkinConfig:
+        url = URL(self._environ["NP_API_ZIPKIN_URL"])
+        sample_rate = float(self._environ["NP_API_ZIPKIN_SAMPLE_RATE"])
+        return ZipkinConfig(url=url, sample_rate=sample_rate)
 
     def try_create_oauth(self) -> Optional[OAuthConfig]:
         base_url = self._environ.get("NP_OAUTH_BASE_URL")

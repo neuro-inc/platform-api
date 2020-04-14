@@ -2,9 +2,20 @@ import json
 import logging
 from dataclasses import dataclass, replace
 from pathlib import PurePath
-from typing import AbstractSet, Any, Dict, List, Optional, Sequence, Set
+from typing import (
+    AbstractSet,
+    Any,
+    AsyncIterator,
+    Dict,
+    List,
+    Optional,
+    Sequence,
+    Set,
+    Tuple,
+)
 
 import aiohttp.web
+import iso8601
 import trafaret as t
 from aiohttp_security import check_authorized
 from multidict import MultiDictProxy
@@ -15,7 +26,12 @@ from yarl import URL
 from platform_api.cluster_config import ClusterConfig, RegistryConfig, StorageConfig
 from platform_api.config import Config
 from platform_api.log import log_debug_time
-from platform_api.orchestrator.job import JOB_USER_NAMES_SEPARATOR, Job, JobStatusItem
+from platform_api.orchestrator.job import (
+    JOB_USER_NAMES_SEPARATOR,
+    Job,
+    JobRestartPolicy,
+    JobStatusItem,
+)
 from platform_api.orchestrator.job_request import (
     Container,
     ContainerVolume,
@@ -36,6 +52,7 @@ from .validators import (
     create_job_history_validator,
     create_job_name_validator,
     create_job_status_validator,
+    create_job_tag_validator,
     create_user_name_validator,
     sanitize_dns_name,
 )
@@ -59,10 +76,17 @@ def create_job_request_validator(
             ),
             t.Key("name", optional=True): create_job_name_validator(),
             t.Key("description", optional=True): t.String,
+            t.Key("tags", optional=True): t.List(
+                create_job_tag_validator(), max_length=16
+            ),
             t.Key("is_preemptible", optional=True, default=False): t.Bool,
             t.Key("schedule_timeout", optional=True): t.Float(gte=1, lt=30 * 24 * 3600),
             t.Key("max_run_time_minutes", optional=True): t.Int(gte=0),
             t.Key("cluster_name", default=cluster_name): t.Atom(cluster_name),
+            t.Key("restart_policy", default=str(JobRestartPolicy.NEVER)): t.Enum(
+                *[str(policy) for policy in JobRestartPolicy]
+            )
+            >> JobRestartPolicy,
         }
     )
 
@@ -97,8 +121,10 @@ def create_job_response_validator() -> t.Trafaret:
             t.Key("internal_hostname", optional=True): t.String,
             t.Key("name", optional=True): create_job_name_validator(max_length=None),
             t.Key("description", optional=True): t.String,
+            t.Key("tags", optional=True): t.List(create_job_tag_validator()),
             t.Key("schedule_timeout", optional=True): t.Float,
             t.Key("max_run_time_minutes", optional=True): t.Int,
+            "restart_policy": t.String,
         }
     )
 
@@ -206,11 +232,14 @@ def convert_job_to_job_response(
         "ssh_auth_server": job.ssh_server,  # deprecated
         "is_preemptible": job.is_preemptible,
         "uri": str(job.to_uri(use_cluster_names_in_uris)),
+        "restart_policy": str(job.restart_policy),
     }
     if job.name:
         response_payload["name"] = job.name
     if job.description:
         response_payload["description"] = job.description
+    if job.tags:
+        response_payload["tags"] = job.tags
     if job.has_http_server_exposed:
         response_payload["http_url"] = job.http_url
         if job.http_url_named:
@@ -239,6 +268,7 @@ def infer_permissions_from_container(
     container: Container,
     registry_config: RegistryConfig,
     cluster_name: Optional[str],
+    legacy_storage_acl: bool = False,
 ) -> List[Permission]:
     permissions = [Permission(uri=str(user.to_job_uri(cluster_name)), action="write")]
     if container.belongs_to_registry(registry_config):
@@ -252,7 +282,7 @@ def infer_permissions_from_container(
         action = "read" if volume.read_only else "write"
         uri = volume.uri
         # XXX (serhiy 04-Feb-2020) Temporary patch the URI
-        if cluster_name:
+        if cluster_name and not legacy_storage_acl:
             if uri.scheme == "storage" and uri.host != cluster_name:
                 if uri.host:
                     assert uri.path[0] == "/"
@@ -363,15 +393,34 @@ class JobsHandler:
             cluster_name=cluster_name,
         )
 
-        permissions = infer_permissions_from_container(
-            user,
-            container,
-            cluster_config.registry,
-            cluster_name if self._config.use_cluster_names_in_uris else None,
-        )
-        await check_permissions(request, permissions)
+        if self._config.use_cluster_names_in_uris:
+            permissions = infer_permissions_from_container(
+                user, container, cluster_config.registry, cluster_name,
+            )
+            try:
+                await check_permissions(request, permissions)
+            except aiohttp.web.HTTPForbidden as exc:
+                permissions = infer_permissions_from_container(
+                    user,
+                    container,
+                    cluster_config.registry,
+                    cluster_name,
+                    legacy_storage_acl=True,
+                )
+                try:
+                    await check_permissions(request, permissions)
+                except aiohttp.web.HTTPForbidden:
+                    # Re-raise the original exception containing information
+                    # about extended ACL.
+                    raise exc
+        else:
+            permissions = infer_permissions_from_container(
+                user, container, cluster_config.registry, None,
+            )
+            await check_permissions(request, permissions)
 
         name = request_payload.get("name")
+        tags = sorted(set(request_payload.get("tags", [])))
         description = request_payload.get("description")
         is_preemptible = request_payload["is_preemptible"]
         schedule_timeout = request_payload.get("schedule_timeout")
@@ -382,9 +431,11 @@ class JobsHandler:
             user=user,
             cluster_name=cluster_name,
             job_name=name,
+            tags=tags,
             is_preemptible=is_preemptible,
             schedule_timeout=schedule_timeout,
             max_run_time_minutes=max_run_time_minutes,
+            restart_policy=request_payload["restart_policy"],
         )
         response_payload = convert_job_to_job_response(
             job, self._config.use_cluster_names_in_uris
@@ -419,9 +470,13 @@ class JobsHandler:
             data=response_payload, status=aiohttp.web.HTTPOk.status_code
         )
 
+    def _accepts_ndjson(self, request: aiohttp.web.Request) -> bool:
+        accept = request.headers.get("Accept", "")
+        return "application/x-ndjson" in accept
+
     async def handle_get_all(
         self, request: aiohttp.web.Request
-    ) -> aiohttp.web.Response:
+    ) -> aiohttp.web.StreamResponse:
         # TODO (A Danshyn 10/08/18): remove once
         # AuthClient.get_permissions_tree accepts the token param
         await check_authorized(request)
@@ -430,50 +485,81 @@ class JobsHandler:
         with log_debug_time(f"Retrieved job access tree for user '{user.name}'"):
             tree = await self._auth_client.get_permissions_tree(user.name, "job:")
 
-        jobs: List[Job] = []
-
         try:
             bulk_job_filter = BulkJobFilterBuilder(
                 query_filter=self._job_filter_factory.create_from_query(request.query),
                 access_tree=tree,
                 use_cluster_names_in_uris=self._config.use_cluster_names_in_uris,
             ).build()
-
-            if bulk_job_filter.bulk_filter:
-                with log_debug_time(
-                    f"Read bulk jobs with {bulk_job_filter.bulk_filter}"
-                ):
-                    jobs.extend(
-                        await self._jobs_service.get_all_jobs(
-                            bulk_job_filter.bulk_filter
-                        )
-                    )
-
-            if bulk_job_filter.shared_ids:
-                with log_debug_time(
-                    f"Read shared jobs with {bulk_job_filter.shared_ids_filter}"
-                ):
-                    jobs.extend(
-                        await self._jobs_service.get_jobs_by_ids(
-                            bulk_job_filter.shared_ids,
-                            job_filter=bulk_job_filter.shared_ids_filter,
-                        )
-                    )
         except JobFilterException:
-            pass
+            bulk_job_filter = BulkJobFilter(
+                bulk_filter=None, shared_ids=set(), shared_ids_filter=None,
+            )
 
-        response_payload = {
-            "jobs": [
-                convert_job_to_job_response(
-                    job, self._config.use_cluster_names_in_uris,
+        reverse = _parse_bool(request.query.get("reverse", "0"))
+
+        if self._accepts_ndjson(request):
+            response = aiohttp.web.StreamResponse()
+            response.headers["Content-Type"] = "application/x-ndjson"
+            await response.prepare(request)
+            async for job in self._iter_filtered_jobs(bulk_job_filter, reverse):
+                response_payload = convert_job_to_job_response(
+                    job, self._config.use_cluster_names_in_uris
                 )
-                for job in jobs
-            ]
-        }
-        self._bulk_jobs_response_validator.check(response_payload)
-        return aiohttp.web.json_response(
-            data=response_payload, status=aiohttp.web.HTTPOk.status_code
-        )
+                self._job_response_validator.check(response_payload)
+                await response.write(json.dumps(response_payload).encode() + b"\n")
+            await response.write_eof()
+            return response
+        else:
+            response_payload = {
+                "jobs": [
+                    convert_job_to_job_response(
+                        job, self._config.use_cluster_names_in_uris,
+                    )
+                    async for job in self._iter_filtered_jobs(bulk_job_filter, reverse)
+                ]
+            }
+            self._bulk_jobs_response_validator.check(response_payload)
+            return aiohttp.web.json_response(
+                data=response_payload, status=aiohttp.web.HTTPOk.status_code
+            )
+
+    async def _iter_filtered_jobs(
+        self, bulk_job_filter: "BulkJobFilter", reverse: bool
+    ) -> AsyncIterator[Job]:
+        def job_key(job: Job) -> Tuple[float, str, Job]:
+            return job.status_history.created_at_timestamp, job.id, job
+
+        if bulk_job_filter.shared_ids:
+            with log_debug_time(
+                f"Read shared jobs with {bulk_job_filter.shared_ids_filter}"
+            ):
+                shared_jobs = [
+                    job_key(job)
+                    for job in await self._jobs_service.get_jobs_by_ids(
+                        bulk_job_filter.shared_ids,
+                        job_filter=bulk_job_filter.shared_ids_filter,
+                    )
+                ]
+                shared_jobs.sort(reverse=not reverse)
+        else:
+            shared_jobs = []
+
+        if bulk_job_filter.bulk_filter:
+            with log_debug_time(f"Read bulk jobs with {bulk_job_filter.bulk_filter}"):
+                async for job in self._jobs_service.iter_all_jobs(
+                    bulk_job_filter.bulk_filter, reverse=reverse
+                ):
+                    key = job_key(job)
+                    # Merge shared jobs and bulk jobs in the creation order
+                    while shared_jobs and (
+                        shared_jobs[-1] > key if reverse else shared_jobs[-1] < key
+                    ):
+                        yield shared_jobs.pop()[-1]
+                    yield job
+
+        for key in reversed(shared_jobs):
+            yield key[-1]
 
     async def handle_delete(
         self, request: aiohttp.web.Request
@@ -533,6 +619,7 @@ class JobFilterFactory:
 
     def create_from_query(self, query: MultiDictProxy) -> JobFilter:  # type: ignore
         statuses = {JobStatus(s) for s in query.getall("status", [])}
+        tags = set(query.getall("tag", []))
         hostname = query.get("hostname")
         if hostname is None:
             job_name = self._job_name_validator.check(query.get("name"))
@@ -544,20 +631,29 @@ class JobFilterFactory:
                 self._cluster_name_validator.check(cluster_name): set()
                 for cluster_name in query.getall("cluster_name", [])
             }
+            since = query.get("since")
+            until = query.get("until")
             return JobFilter(
-                statuses=statuses, clusters=clusters, owners=owners, name=job_name
+                statuses=statuses,
+                clusters=clusters,
+                owners=owners,
+                name=job_name,
+                tags=tags,
+                since=iso8601.parse_date(since) if since else JobFilter.since,
+                until=iso8601.parse_date(until) if until else JobFilter.until,
             )
 
-        if "name" in query or "owner" in query or "cluster_name" in query:
-            raise ValueError("Invalid request")
+        for key in ("name", "owner", "cluster_name", "since", "until"):
+            if key in query:
+                raise ValueError("Invalid request")
 
         label = hostname.partition(".")[0]
         job_name, sep, owner = label.rpartition(JOB_USER_NAMES_SEPARATOR)
         if not sep:
-            return JobFilter(statuses=statuses, ids={label})
+            return JobFilter(statuses=statuses, ids={label}, tags=tags)
         job_name = self._job_name_validator.check(job_name)
         owner = self._user_name_validator.check(owner)
-        return JobFilter(statuses=statuses, owners={owner}, name=job_name)
+        return JobFilter(statuses=statuses, owners={owner}, name=job_name, tags=tags)
 
 
 @dataclass(frozen=True)
@@ -697,3 +793,13 @@ class BulkJobFilterBuilder:
             for cluster_owners in self._clusters_shared_any.values():
                 if cluster_owners == owners:
                     cluster_owners.clear()
+
+
+def _parse_bool(value: str) -> bool:
+    value = value.lower()
+    if value in ("0", "false"):
+        return False
+    elif value in ("1", "true"):
+        return True
+    else:
+        raise ValueError('Required "0", "1", "false" or "true"')
