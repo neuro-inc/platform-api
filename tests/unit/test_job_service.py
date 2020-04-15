@@ -353,6 +353,46 @@ class TestJobsService:
         assert job_ids == {job_running.id}
 
     @pytest.mark.asyncio
+    async def test_get_job_by_name(
+        self,
+        jobs_service: JobsService,
+        mock_orchestrator: MockOrchestrator,
+        mock_jobs_storage: MockJobsStorage,
+        job_request_factory: Callable[[], JobRequest],
+    ) -> None:
+        user = User(cluster_name="test-cluster", name="testuser", token="")
+        otheruser = User(cluster_name="test-cluster", name="otheruser", token="")
+
+        async def create_job(job_name: str, user: User) -> Job:
+            job_request = job_request_factory()
+            job, _ = await jobs_service.create_job(
+                job_request=job_request, job_name=job_name, user=user
+            )
+            return job
+
+        job1 = await create_job("job1", user)
+        async with mock_jobs_storage.try_update_job(job1.id) as record:
+            record.status = JobStatus.SUCCEEDED
+
+        await create_job("job2", user)
+        await create_job("job1", otheruser)
+
+        job = await jobs_service.get_job_by_name("job1", user)
+        assert job.id == job1.id
+
+        job2 = await create_job("job1", user)
+
+        job = await jobs_service.get_job_by_name("job1", user)
+        assert job.id != job1.id
+        assert job.id == job2.id
+
+        with pytest.raises(JobError):
+            await jobs_service.get_job_by_name("job3", user)
+
+        with pytest.raises(JobError):
+            await jobs_service.get_job_by_name("job2", otheruser)
+
+    @pytest.mark.asyncio
     async def test_get_all_filter_by_date_range(
         self, jobs_service: JobsService, job_request_factory: Callable[[], JobRequest],
     ) -> None:
