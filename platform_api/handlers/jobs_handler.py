@@ -497,12 +497,29 @@ class JobsHandler:
             )
 
         reverse = _parse_bool(request.query.get("reverse", "0"))
+        if "limit" in request.query:
+            limit = int(request.query["limit"])
+
+            async def limit_filter(it: AsyncIterator[Job]) -> AsyncIterator[Job]:
+                count = limit
+                async for x in it:
+                    yield x
+                    count -= 1
+                    if not count:
+                        break
+
+        else:
+
+            def limit_filter(it: AsyncIterator[Job]) -> AsyncIterator[Job]:
+                return it
 
         if self._accepts_ndjson(request):
             response = aiohttp.web.StreamResponse()
             response.headers["Content-Type"] = "application/x-ndjson"
             await response.prepare(request)
-            async for job in self._iter_filtered_jobs(bulk_job_filter, reverse):
+            async for job in limit_filter(
+                self._iter_filtered_jobs(bulk_job_filter, reverse)
+            ):
                 response_payload = convert_job_to_job_response(
                     job, self._config.use_cluster_names_in_uris
                 )
@@ -516,7 +533,9 @@ class JobsHandler:
                     convert_job_to_job_response(
                         job, self._config.use_cluster_names_in_uris,
                     )
-                    async for job in self._iter_filtered_jobs(bulk_job_filter, reverse)
+                    async for job in limit_filter(
+                        self._iter_filtered_jobs(bulk_job_filter, reverse)
+                    )
                 ]
             }
             self._bulk_jobs_response_validator.check(response_payload)

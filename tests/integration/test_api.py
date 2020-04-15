@@ -1580,6 +1580,26 @@ class TestJobs:
             job_usr1_with_name_killed,
         ]
 
+        jobs = await jobs_client_usr1.get_all_jobs(filters + [("limit", "4")])
+        job_ids = [job["id"] for job in jobs]
+        assert job_ids == [
+            job_usr1_with_name_killed,
+            job_usr2_no_name,
+            job_usr1_no_name_killed,
+            job_usr2_with_name_killed,
+        ]
+
+        jobs = await jobs_client_usr1.get_all_jobs(
+            filters + [("limit", "4"), ("reverse", "1")]
+        )
+        job_ids = [job["id"] for job in jobs]
+        assert job_ids == [
+            job_usr2_no_name_killed,
+            job_usr1_with_name,
+            job_usr2_with_name,
+            job_usr1_no_name,
+        ]
+
         # filter: multiple owners + job name
         filters = [("owner", usr1.name), ("owner", usr2.name), ("name", job_name)]
         jobs = await jobs_client_usr1.get_all_jobs(filters)
