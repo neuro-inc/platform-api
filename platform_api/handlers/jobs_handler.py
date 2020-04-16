@@ -499,6 +499,8 @@ class JobsHandler:
         reverse = _parse_bool(request.query.get("reverse", "0"))
         if "limit" in request.query:
             limit = int(request.query["limit"])
+            if limit <= 0:
+                raise ValueError("limit should be > 0")
 
             async def limit_filter(it: AsyncIterator[Job]) -> AsyncIterator[Job]:
                 count = limit

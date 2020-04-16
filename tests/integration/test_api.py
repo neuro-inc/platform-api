@@ -950,6 +950,36 @@ class TestJobs:
         assert jobs == []
 
     @pytest.mark.asyncio
+    async def test_get_all_jobs_bad_args(
+        self,
+        api: ApiConfig,
+        client: aiohttp.ClientSession,
+        jobs_client: JobsClient,
+        regular_user: _User,
+    ) -> None:
+        url = api.jobs_base_url
+        headers = regular_user.headers.copy()
+        headers["Accept"] = "application/x-ndjson"
+
+        params = [("reverse", "spam")]
+        async with client.get(url, headers=headers, params=params) as response:
+            assert response.status == HTTPBadRequest.status_code, await response.text()
+            data = await response.json()
+            assert 'Required "0", "1", "false" or "true"' in data["error"]
+
+        params = [("limit", "spam")]
+        async with client.get(url, headers=headers, params=params) as response:
+            assert response.status == HTTPBadRequest.status_code, await response.text()
+            data = await response.json()
+            assert "invalid literal for int" in data["error"]
+
+        params = [("limit", "0")]
+        async with client.get(url, headers=headers, params=params) as response:
+            assert response.status == HTTPBadRequest.status_code, await response.text()
+            data = await response.json()
+            assert "limit should be > 0" in data["error"]
+
+    @pytest.mark.asyncio
     async def test_get_all_jobs_not_streamed(
         self,
         api: ApiConfig,
