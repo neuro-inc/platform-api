@@ -249,7 +249,7 @@ class InMemoryJobsStorage(JobsStorage):
         if reverse:
             jobs.reverse()
         if limit is not None:
-            jobs = jobs[:limit]
+            del jobs[limit:]
         for job in jobs:
             yield job
 
@@ -533,9 +533,9 @@ class RedisJobsStorage(JobsStorage):
         job_filter: Optional[JobFilter] = None,
         limit: Optional[int] = None,
     ) -> AsyncIterator[Iterable[JobRecord]]:
+        if not job_filter and limit is not None:
+            ids = islice(ids, limit)
         for chunk_ids in self._iterate_in_chunks(ids, JOBS_CHUNK_SIZE):
-            if not job_filter and limit is not None and limit < len(chunk_ids):
-                chunk_ids = chunk_ids[:limit]
             keys = map(self._generate_job_key, chunk_ids)
             payloads = await self._client.mget(*keys)
             jobs = map(self._parse_job_payload, filter(None, payloads))
@@ -543,9 +543,12 @@ class RedisJobsStorage(JobsStorage):
                 jobs = filter(job_filter.check, jobs)
                 if limit is not None:
                     jobs = islice(jobs, limit)
-            jobs_list = list(jobs)
-            yield jobs_list
-            if limit is not None:
+
+            if limit is None or not job_filter:
+                yield jobs
+            else:
+                jobs_list = list(jobs)
+                yield jobs_list
                 limit -= len(jobs_list)
                 if not limit:
                     break
@@ -637,7 +640,8 @@ class RedisJobsStorage(JobsStorage):
             def merge_tags(
                 it: Iterator[Tuple[str, float]]
             ) -> Iterator[Tuple[str, float]]:
-                """Merge items and return only those which are repeated ntags times"""
+                """Merge repeated items and return only those which are
+                repeated ntags times."""
                 for item, count in Counter(it).items():
                     if count == ntags:
                         yield item
