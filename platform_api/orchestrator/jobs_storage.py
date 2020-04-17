@@ -590,31 +590,45 @@ class RedisJobsStorage(JobsStorage):
 
         offset = None if limit is None else 0
         if len(keys) == 1:
-            result = await self._client.zrangebyscore(
-                keys[0],
-                since.timestamp(),
-                until.timestamp(),
-                offset=offset,
-                count=limit,
-            )
             if reverse:
-                result.reverse()
+                result = await self._client.zrevrangebyscore(
+                    keys[0],
+                    until.timestamp(),
+                    since.timestamp(),
+                    offset=offset,
+                    count=limit,
+                )
+            else:
+                result = await self._client.zrangebyscore(
+                    keys[0],
+                    since.timestamp(),
+                    until.timestamp(),
+                    offset=offset,
+                    count=limit,
+                )
             return result
 
         tr = self._client.multi_exec()
         for key in keys:
-            tr.zrangebyscore(
-                key,
-                since.timestamp(),
-                until.timestamp(),
-                withscores=True,
-                offset=offset,
-                count=limit,
-            )
+            if reverse:
+                tr.zrevrangebyscore(
+                    key,
+                    until.timestamp(),
+                    since.timestamp(),
+                    withscores=True,
+                    offset=offset,
+                    count=limit,
+                )
+            else:
+                tr.zrangebyscore(
+                    key,
+                    since.timestamp(),
+                    until.timestamp(),
+                    withscores=True,
+                    offset=offset,
+                    count=limit,
+                )
         results = await tr.execute()
-        if reverse:
-            for x in results:
-                x.reverse()
         it = heapq.merge(*results, key=itemgetter(1), reverse=reverse)
         # Merge repeated job ids for multiple tags
         ntags = len(tags)
