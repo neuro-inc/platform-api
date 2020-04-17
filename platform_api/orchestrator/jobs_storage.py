@@ -2,6 +2,7 @@ import heapq
 import json
 import logging
 from abc import ABC, abstractmethod
+from collections import Counter
 from dataclasses import dataclass, field
 from datetime import datetime, timedelta, timezone
 from itertools import chain, groupby, islice
@@ -110,7 +111,11 @@ class JobsStorage(ABC):
 
     @abstractmethod
     def iter_all_jobs(
-        self, job_filter: Optional[JobFilter] = None, *, reverse: bool = False
+        self,
+        job_filter: Optional[JobFilter] = None,
+        *,
+        reverse: bool = False,
+        limit: Optional[int] = None,
     ) -> AsyncIterator[JobRecord]:
         pass
 
@@ -122,9 +127,17 @@ class JobsStorage(ABC):
 
     # Only used in tests
     async def get_all_jobs(
-        self, job_filter: Optional[JobFilter] = None, reverse: bool = False
+        self,
+        job_filter: Optional[JobFilter] = None,
+        reverse: bool = False,
+        limit: Optional[int] = None,
     ) -> List[JobRecord]:
-        return [job async for job in self.iter_all_jobs(job_filter, reverse=reverse)]
+        return [
+            job
+            async for job in self.iter_all_jobs(
+                job_filter, reverse=reverse, limit=limit
+            )
+        ]
 
     # Only used in tests
     async def get_running_jobs(self) -> List[JobRecord]:
@@ -219,7 +232,11 @@ class InMemoryJobsStorage(JobsStorage):
         await self.set_job(job)
 
     async def iter_all_jobs(
-        self, job_filter: Optional[JobFilter] = None, *, reverse: bool = False
+        self,
+        job_filter: Optional[JobFilter] = None,
+        *,
+        reverse: bool = False,
+        limit: Optional[int] = None,
     ) -> AsyncIterator[JobRecord]:
         # Accumulate results in a list to avoid RuntimeError when
         # the self._job_records dictionary is modified during iteration
@@ -231,6 +248,8 @@ class InMemoryJobsStorage(JobsStorage):
             jobs.append(job)
         if reverse:
             jobs.reverse()
+        if limit is not None:
+            del jobs[limit:]
         for job in jobs:
             yield job
 
@@ -509,15 +528,30 @@ class RedisJobsStorage(JobsStorage):
         return None
 
     async def _get_jobs_by_ids_in_chunks(
-        self, ids: Iterable[str], job_filter: Optional[JobFilter] = None
+        self,
+        ids: Iterable[str],
+        job_filter: Optional[JobFilter] = None,
+        limit: Optional[int] = None,
     ) -> AsyncIterator[Iterable[JobRecord]]:
+        if not job_filter and limit is not None:
+            ids = islice(ids, limit)
         for chunk_ids in self._iterate_in_chunks(ids, JOBS_CHUNK_SIZE):
             keys = map(self._generate_job_key, chunk_ids)
             payloads = await self._client.mget(*keys)
             jobs = map(self._parse_job_payload, filter(None, payloads))
             if job_filter:
                 jobs = filter(job_filter.check, jobs)
-            yield jobs
+                if limit is not None:
+                    jobs = islice(jobs, limit)
+
+            if limit is None or not job_filter:
+                yield jobs
+            else:
+                jobs_list = list(jobs)
+                yield jobs_list
+                limit -= len(jobs_list)
+                if not limit:
+                    break
 
     def _iterate_in_chunks(
         self, items: Iterable[Any], chunk_size: int
@@ -547,6 +581,7 @@ class RedisJobsStorage(JobsStorage):
         since: datetime,
         until: datetime,
         reverse: bool,
+        limit: Optional[int],
     ) -> Iterable[str]:
         keys = self._generate_jobs_composite_keys(
             statuses=[str(s) for s in statuses] or [""],
@@ -556,27 +591,66 @@ class RedisJobsStorage(JobsStorage):
             names=[name or ""],
         )
 
+        offset = None if limit is None else 0
         if len(keys) == 1:
-            result = await self._client.zrangebyscore(
-                keys[0], since.timestamp(), until.timestamp()
-            )
             if reverse:
-                result.reverse()
+                result = await self._client.zrevrangebyscore(
+                    keys[0],
+                    until.timestamp(),
+                    since.timestamp(),
+                    offset=offset,
+                    count=limit,
+                )
+            else:
+                result = await self._client.zrangebyscore(
+                    keys[0],
+                    since.timestamp(),
+                    until.timestamp(),
+                    offset=offset,
+                    count=limit,
+                )
             return result
 
         tr = self._client.multi_exec()
         for key in keys:
-            tr.zrangebyscore(key, since.timestamp(), until.timestamp(), withscores=True)
+            if reverse:
+                tr.zrevrangebyscore(
+                    key,
+                    until.timestamp(),
+                    since.timestamp(),
+                    withscores=True,
+                    offset=offset,
+                    count=limit,
+                )
+            else:
+                tr.zrangebyscore(
+                    key,
+                    since.timestamp(),
+                    until.timestamp(),
+                    withscores=True,
+                    offset=offset,
+                    count=limit,
+                )
         results = await tr.execute()
-        if reverse:
-            for x in results:
-                x.reverse()
         it = heapq.merge(*results, key=itemgetter(1), reverse=reverse)
         # Merge repeated job ids for multiple tags
-        if tags:
+        ntags = len(tags)
+        if ntags > 1:
+
+            def merge_tags(
+                it: Iterator[Tuple[str, float]]
+            ) -> Iterator[Tuple[str, float]]:
+                """Merge repeated items and return only those which are
+                repeated ntags times."""
+                for item, count in Counter(it).items():
+                    if count == ntags:
+                        yield item
+
             it = chain.from_iterable(
-                map(dict.fromkeys, map(itemgetter(1), groupby(it, itemgetter(1))))
+                map(merge_tags, map(itemgetter(1), groupby(it, itemgetter(1))))
             )
+        if limit is not None:
+            it = islice(it, 0, limit)
 
         return map(itemgetter(0), it)
 
@@ -589,7 +663,11 @@ class RedisJobsStorage(JobsStorage):
         ]
 
     async def iter_all_jobs(
-        self, job_filter: Optional[JobFilter] = None, *, reverse: bool = False
+        self,
+        job_filter: Optional[JobFilter] = None,
+        *,
+        reverse: bool = False,
+        limit: Optional[int] = None,
     ) -> AsyncIterator[JobRecord]:
         if not job_filter:
             job_filter = JobFilter()
@@ -604,13 +682,13 @@ class RedisJobsStorage(JobsStorage):
                 since=job_filter.since,
                 until=job_filter.until,
                 reverse=reverse,
+                limit=limit,
             )
-            if len(job_filter.tags) > 1:
-                job_filter = JobFilter(tags=job_filter.tags)
-            else:
-                job_filter = None
+            job_filter = None
+        else:
+            assert limit is None
 
-        async for chunk in self._get_jobs_by_ids_in_chunks(job_ids, job_filter):
+        async for chunk in self._get_jobs_by_ids_in_chunks(job_ids, job_filter, limit):
             for job in chunk:
                 yield job
 

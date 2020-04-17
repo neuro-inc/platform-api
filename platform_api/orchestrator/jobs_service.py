@@ -425,10 +425,14 @@ class JobsService:
         logger.warning("Failed to mark a job %s as deleted. Giving up.", job_id)
 
     async def iter_all_jobs(
-        self, job_filter: Optional[JobFilter] = None, *, reverse: bool = False
+        self,
+        job_filter: Optional[JobFilter] = None,
+        *,
+        reverse: bool = False,
+        limit: Optional[int] = None,
     ) -> AsyncIterator[Job]:
         async for record in self._jobs_storage.iter_all_jobs(
-            job_filter, reverse=reverse
+            job_filter, reverse=reverse, limit=limit
         ):
             yield await self._get_cluster_job(record)
 
@@ -440,7 +444,9 @@ class JobsService:
 
     async def get_job_by_name(self, job_name: str, owner: User) -> Job:
         job_filter = JobFilter(owners={owner.name}, name=job_name)
-        async for record in self._jobs_storage.iter_all_jobs(job_filter, reverse=True):
+        async for record in self._jobs_storage.iter_all_jobs(
+            job_filter, reverse=True, limit=1
+        ):
             return await self._get_cluster_job(record)
         raise JobError(f"no such job {job_name}")
 

@@ -406,6 +406,14 @@ class TestRedisJobsStorage:
         job_ids = [job.id for job in jobs]
         assert job_ids == [succeeded_job.id, running_job.id, pending_job.id]
 
+        jobs = await storage.get_all_jobs(limit=2)
+        job_ids = [job.id for job in jobs]
+        assert job_ids == [pending_job.id, running_job.id]
+
+        jobs = await storage.get_all_jobs(reverse=True, limit=2)
+        job_ids = [job.id for job in jobs]
+        assert job_ids == [succeeded_job.id, running_job.id]
+
         filters = JobFilter(statuses={JobStatus.FAILED})
         jobs = await storage.get_all_jobs(filters)
         job_ids = [job.id for job in jobs]
@@ -419,6 +427,14 @@ class TestRedisJobsStorage:
         jobs = await storage.get_all_jobs(filters, reverse=True)
         job_ids = [job.id for job in jobs]
         assert job_ids == [succeeded_job.id, running_job.id]
+
+        jobs = await storage.get_all_jobs(filters, limit=1)
+        job_ids = [job.id for job in jobs]
+        assert job_ids == [running_job.id]
+
+        jobs = await storage.get_all_jobs(filters, reverse=True, limit=1)
+        job_ids = [job.id for job in jobs]
+        assert job_ids == [succeeded_job.id]
 
     @pytest.mark.asyncio
     async def test_get_all_filter_by_tags(self, redis_client: aioredis.Redis) -> None:
@@ -487,6 +503,15 @@ class TestRedisJobsStorage:
         ]
         assert job_ids == [job3.id, job2.id, job1.id]
 
+        job_ids = [job.id for job in await storage.get_all_jobs(job_filter, limit=2)]
+        assert job_ids == [job1.id, job2.id]
+
+        job_ids = [
+            job.id
+            for job in await storage.get_all_jobs(job_filter, reverse=True, limit=2)
+        ]
+        assert job_ids == [job3.id, job2.id]
+
         job_filter = JobFilter(since=t2)
         job_ids = [job.id for job in await storage.get_all_jobs(job_filter)]
         assert job_ids == [job2.id, job3.id]
@@ -495,6 +520,15 @@ class TestRedisJobsStorage:
             job.id for job in await storage.get_all_jobs(job_filter, reverse=True)
         ]
         assert job_ids == [job3.id, job2.id]
+
+        job_ids = [job.id for job in await storage.get_all_jobs(job_filter, limit=1)]
+        assert job_ids == [job2.id]
+
+        job_ids = [
+            job.id
+            for job in await storage.get_all_jobs(job_filter, reverse=True, limit=1)
+        ]
+        assert job_ids == [job3.id]
 
         job_filter = JobFilter(until=t2)
         job_ids = [job.id for job in await storage.get_all_jobs(job_filter)]
@@ -512,6 +546,15 @@ class TestRedisJobsStorage:
             job.id for job in await storage.get_all_jobs(job_filter, reverse=True)
         ]
         assert job_ids == [job2.id, job1.id]
+
+        job_ids = [job.id for job in await storage.get_all_jobs(job_filter, limit=1)]
+        assert job_ids == [job1.id]
+
+        job_ids = [
+            job.id
+            for job in await storage.get_all_jobs(job_filter, reverse=True, limit=1)
+        ]
+        assert job_ids == [job2.id]
 
         job_filter = JobFilter(since=t2, until=t3)
         job_ids = [job.id for job in await storage.get_all_jobs(job_filter)]

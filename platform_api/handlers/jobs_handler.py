@@ -497,12 +497,30 @@ class JobsHandler:
             )
 
         reverse = _parse_bool(request.query.get("reverse", "0"))
+        if "limit" in request.query:
+            limit = int(request.query["limit"])
+            if limit <= 0:
+                raise ValueError("limit should be > 0")
+
+            async def limit_filter(it: AsyncIterator[Job]) -> AsyncIterator[Job]:
+                count = limit
+                async for x in it:
+                    yield x
+                    count -= 1
+                    if not count:
+                        break
+
+            jobs = limit_filter(
+                self._iter_filtered_jobs(bulk_job_filter, reverse, limit)
+            )
+        else:
+            jobs = self._iter_filtered_jobs(bulk_job_filter, reverse, None)
 
         if self._accepts_ndjson(request):
             response = aiohttp.web.StreamResponse()
             response.headers["Content-Type"] = "application/x-ndjson"
             await response.prepare(request)
-            async for job in self._iter_filtered_jobs(bulk_job_filter, reverse):
+            async for job in jobs:
                 response_payload = convert_job_to_job_response(
                     job, self._config.use_cluster_names_in_uris
                 )
@@ -516,7 +534,7 @@ class JobsHandler:
                     convert_job_to_job_response(
                         job, self._config.use_cluster_names_in_uris,
                     )
-                    async for job in self._iter_filtered_jobs(bulk_job_filter, reverse)
+                    async for job in jobs
                 ]
             }
             self._bulk_jobs_response_validator.check(response_payload)
@@ -525,7 +543,7 @@ class JobsHandler:
             )
 
     async def _iter_filtered_jobs(
-        self, bulk_job_filter: "BulkJobFilter", reverse: bool
+        self, bulk_job_filter: "BulkJobFilter", reverse: bool, limit: Optional[int]
     ) -> AsyncIterator[Job]:
         def job_key(job: Job) -> Tuple[float, str, Job]:
             return job.status_history.created_at_timestamp, job.id, job
@@ -548,7 +566,7 @@ class JobsHandler:
         if bulk_job_filter.bulk_filter:
             with log_debug_time(f"Read bulk jobs with {bulk_job_filter.bulk_filter}"):
                 async for job in self._jobs_service.iter_all_jobs(
-                    bulk_job_filter.bulk_filter, reverse=reverse
+                    bulk_job_filter.bulk_filter, reverse=reverse, limit=limit
                 ):
                     key = job_key(job)
                     # Merge shared jobs and bulk jobs in the creation order
