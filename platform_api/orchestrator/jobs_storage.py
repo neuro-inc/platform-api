@@ -686,7 +686,7 @@ class RedisJobsStorage(JobsStorage):
             )
             job_filter = None
         else:
-            limit = None
+            assert limit is None
 
         async for chunk in self._get_jobs_by_ids_in_chunks(job_ids, job_filter, limit):
             for job in chunk:
