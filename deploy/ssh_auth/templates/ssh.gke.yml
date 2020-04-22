@@ -48,9 +48,17 @@ kind: Service
 metadata:
   name: ssh-auth
 spec:
+  {{- if .Values.NODEPORT }}
+  type: "NodePort"
+  {{- else }}
   type: "LoadBalancer"
+  {{- end }}
   ports:
   - port: 22
     targetPort: 22
+    {{- if .Values.NODEPORT }}
+    nodePort: {{ .Values.NODEPORT }}
+    {{- end }}
   selector:
     service: ssh-auth
+
