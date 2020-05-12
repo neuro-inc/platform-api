@@ -70,7 +70,7 @@ INGRESS_MAIN_SITE_HOST:
   prod:
 INGRESS_FALLBACK_HOST:
   _default: 'default.jobs-dev.neu.ro'
-  dev: 'default.jobs-dev.neu.ro'
+  dev: 'job-app-dev.neu.ro'
   staging: 'default.jobs-staging.neu.ro'
   prod: 'default.jobs.neu.ro'
 NP_DB_REDIS_URI:
