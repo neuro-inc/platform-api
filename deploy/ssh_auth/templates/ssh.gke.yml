@@ -47,6 +47,10 @@ apiVersion: v1
 kind: Service
 metadata:
   name: ssh-auth
+{{- if .Values.service.annotations }}
+  annotations:
+{{ toYaml .Values.service.annotations | indent 4 }}
+{{- end }}
 spec:
   {{- if .Values.NODEPORT }}
   type: "NodePort"
