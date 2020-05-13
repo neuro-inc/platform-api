@@ -15,6 +15,7 @@ metadata:
   name: platformingressfallback
   annotations:
     kubernetes.io/ingress.class: traefik
+    traefik.ingress.kubernetes.io/preserve-host: "false"
     ingress.kubernetes.io/custom-response-headers: Cache-Control:no-store
 spec:
   rules:
@@ -32,6 +33,7 @@ metadata:
   annotations:
     kubernetes.io/ingress.class: traefik
     traefik.ingress.kubernetes.io/priority: "1"
+    traefik.ingress.kubernetes.io/preserve-host: "false"
     ingress.kubernetes.io/custom-response-headers: Cache-Control:no-store
 spec:
   backend:
