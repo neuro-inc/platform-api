@@ -1,41 +1,13 @@
-apiVersion: extensions/v1beta1
-kind: Deployment
-metadata:
-  name: platformingressfallback
-spec:
-  replicas: 1
-  selector:
-    matchLabels:
-      service: platformingressfallback
-  strategy:
-    rollingUpdate:
-      maxSurge: 1
-      maxUnavailable: 0
-    type: RollingUpdate
-  template:
-    metadata:
-      labels:
-        service: platformingressfallback
-    spec:
-      containers:
-      - name: platformingressfallback
-        image: {{ printf "%s" (pluck .Values.global.env .Values.INGRESS_FALLBACK_IMAGE | first | default .Values.INGRESS_FALLBACK_IMAGE._default) }}
-        imagePullPolicy: Always
-        env:
-        - name: INGRESS_FALLBACK_URL
-          value: https://{{ printf "%s" (pluck .Values.global.env .Values.INGRESS_FALLBACK_HOST | first | default .Values.INGRESS_FALLBACK_HOST._default) }}
----
 apiVersion: v1
 kind: Service
 metadata:
   name: platformingressfallback
 spec:
-  type: ClusterIP
+  type: ExternalName
+  externalName: {{ printf "%s" (pluck .Values.global.env .Values.INGRESS_FALLBACK_HOST | first | default .Values.INGRESS_FALLBACK_HOST._default) }}
   ports:
-  - port: 80
-    targetPort: 80
-  selector:
-    service: platformingressfallback
+  - name: https
+    port: 443
 ---
 apiVersion: extensions/v1beta1
 kind: Ingress
@@ -51,13 +23,7 @@ spec:
       paths:
       - backend:
           serviceName: platformingressfallback
-          servicePort: 80
-  - host: {{ printf "%s" (pluck .Values.global.env .Values.INGRESS_FALLBACK_HOST | first | default .Values.INGRESS_FALLBACK_HOST._default) }}
-    http:
-      paths:
-      - backend:
-          serviceName: platformingressfallback
-          servicePort: 80
+          servicePort: https
 ---
 apiVersion: extensions/v1beta1
 kind: Ingress
@@ -70,4 +36,4 @@ metadata:
 spec:
   backend:
     serviceName: platformingressfallback
-    servicePort: 80
+    servicePort: https
