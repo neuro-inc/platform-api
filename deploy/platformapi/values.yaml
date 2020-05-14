@@ -69,10 +69,10 @@ INGRESS_MAIN_SITE_HOST:
   staging: neu.ro
   prod:
 INGRESS_FALLBACK_HOST:
-  _default: 'default.jobs-dev.neu.ro'
+  _default: 'job-app-dev.neu.ro'
   dev: 'job-app-dev.neu.ro'
-  staging: 'default.jobs-staging.neu.ro'
-  prod: 'default.jobs.neu.ro'
+  staging: 'job-app.neu.ro'
+  prod: 'job-app.neu.ro'
 NP_DB_REDIS_URI:
   _default: redis://10.0.0.11:6379/0
   dev: redis://10.0.0.20:6379/0
