@@ -4,7 +4,7 @@ from aiohttp_security import check_authorized
 
 from platform_api.config import Config
 from platform_api.handlers.jobs_handler import JobFilterFactory
-from platform_api.handlers.validators import create_tag_list_per_user_validator
+from platform_api.handlers.validators import create_job_tag_validator
 from platform_api.orchestrator.jobs_service import JobsService
 from platform_api.orchestrator.jobs_storage import JobsStorage
 from platform_api.user import untrusted_user
@@ -17,7 +17,7 @@ class TagsHandler:
 
         self._job_filter_factory = JobFilterFactory()
         self._tags_response_validator = t.Dict(
-            {"tags": create_tag_list_per_user_validator()}
+            {"tags": t.List(create_job_tag_validator())}
         )
 
     @property

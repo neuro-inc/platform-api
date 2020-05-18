@@ -62,7 +62,7 @@ def event_loop() -> Iterator[asyncio.AbstractEventLoop]:
     loop = asyncio.get_event_loop_policy().new_event_loop()
     loop.set_debug(True)
 
-    watcher = asyncio.SafeChildWatcher()  # type: ignore
+    watcher = asyncio.SafeChildWatcher()
     watcher.attach_loop(loop)
     asyncio.get_event_loop_policy().set_child_watcher(watcher)
 
