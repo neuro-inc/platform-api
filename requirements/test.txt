@@ -5,4 +5,4 @@ pytest==5.4.1
 pytest-cov==2.8.1
 pytest-asyncio==0.10.0
 requests==2.23.0
-codecov==2.0.22
+codecov==2.1.1
