@@ -512,9 +512,7 @@ class Job:
     def storage_config(self) -> StorageConfig:
         return self._storage_config
 
-    def to_uri(
-        self, use_cluster_names_in_uris: bool = True, use_name: bool = False
-    ) -> URL:
+    def to_uri(self, use_cluster_names_in_uris: bool = True) -> URL:
         base_uri = "job:"
         if use_cluster_names_in_uris and self.cluster_name:
             base_uri += "//" + self.cluster_name
@@ -523,11 +521,7 @@ class Job:
         else:
             if self.owner:
                 base_uri += "//" + self.owner
-        if use_name and self.name:
-            name = self.name
-        else:
-            name = self.id
-        return URL(f"{base_uri}/{name}")
+        return URL(f"{base_uri}/{self.id}")
 
     @property
     def request(self) -> JobRequest:

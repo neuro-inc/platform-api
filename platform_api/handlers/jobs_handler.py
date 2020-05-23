@@ -455,15 +455,11 @@ class JobsHandler:
             user = await untrusted_user(request)
             job = await self._jobs_service.get_job_by_name(id_or_name, user)
 
-        permissions = [
-            Permission(
-                uri=str(job.to_uri(self._config.use_cluster_names_in_uris)),
-                action=action,
-            )
-        ]
+        uri = job.to_uri(self._config.use_cluster_names_in_uris)
+        permissions = [Permission(uri=str(uri), action=action)]
         if job.name:
             permissions.append(
-                Permission(uri=str(job.to_uri(use_name=True)), action=action)
+                Permission(uri=str(uri.with_name(job.name)), action=action)
             )
         await check_any_permissions(request, permissions)
         return job
