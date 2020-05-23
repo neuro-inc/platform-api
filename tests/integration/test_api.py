@@ -1282,9 +1282,11 @@ class TestJobs:
     async def share_job(
         self, auth_client: AuthClient, cluster_name: str,
     ) -> AsyncIterator[Callable[[_User, _User, Any], Awaitable[None]]]:
-        async def _impl(owner: _User, follower: _User, job_id: str) -> None:
+        async def _impl(
+            owner: _User, follower: _User, job_id: str, action: str = "read"
+        ) -> None:
             permission = Permission(
-                uri=f"job://{cluster_name}/{owner.name}/{job_id}", action="read"
+                uri=f"job://{cluster_name}/{owner.name}/{job_id}", action=action
             )
             await auth_client.grant_user_permissions(
                 follower.name, [permission], token=owner.token
@@ -2425,7 +2427,7 @@ class TestJobs:
         regular_user_factory: Callable[[], Any],
         jobs_client_factory: Callable[[_User], JobsClient],
         run_job: Callable[..., Awaitable[str]],
-        share_job: Callable[[_User, _User, Any], Awaitable[None]],
+        share_job: Callable[..., Awaitable[None]],
         create_job_request_with_name: Callable[[str], Dict[str, Any]],
         create_job_request_no_name: Callable[[], Dict[str, Any]],
     ) -> None:
@@ -2442,7 +2444,7 @@ class TestJobs:
         job4_id = await run_job(usr3, create_job_request_with_name(job_name))
 
         # usr2 shares a job with usr1 by name
-        await share_job(usr2, usr1, job_name)
+        await share_job(usr2, usr1, job_name, action="write")
 
         await jobs_client_usr1.delete_job(job1_id)
 
