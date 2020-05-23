@@ -445,22 +445,29 @@ class JobsHandler:
             data=response_payload, status=aiohttp.web.HTTPAccepted.status_code
         )
 
-    async def _resolve_job(self, request: aiohttp.web.Request) -> Job:
+    async def _resolve_job(self, request: aiohttp.web.Request, action: str) -> Job:
         id_or_name = request.match_info["job_id"]
         try:
-            return await self._jobs_service.get_job(id_or_name)
+            job = await self._jobs_service.get_job(id_or_name)
         except JobError:
             await check_authorized(request)
             user = await untrusted_user(request)
-            return await self._jobs_service.get_job_by_name(id_or_name, user)
-
-    async def handle_get(self, request: aiohttp.web.Request) -> aiohttp.web.Response:
-        job = await self._resolve_job(request)
+            job = await self._jobs_service.get_job_by_name(id_or_name, user)
 
         permission = Permission(
-            uri=str(job.to_uri(self._config.use_cluster_names_in_uris)), action="read"
+            uri=str(job.to_uri(self._config.use_cluster_names_in_uris)), action=action
         )
-        await check_permissions(request, [permission])
+        try:
+            await check_permissions(request, [permission])
+        except aiohttp.web.HTTPForbidden:
+            if not job.name:
+                raise
+            permission = Permission(uri=str(job.to_uri(use_name=True)), action=action)
+            await check_permissions(request, [permission])
+        return job
+
+    async def handle_get(self, request: aiohttp.web.Request) -> aiohttp.web.Response:
+        job = await self._resolve_job(request, "read")
 
         response_payload = convert_job_to_job_response(
             job, self._config.use_cluster_names_in_uris
@@ -582,12 +589,7 @@ class JobsHandler:
     async def handle_delete(
         self, request: aiohttp.web.Request
     ) -> aiohttp.web.StreamResponse:
-        job = await self._resolve_job(request)
-
-        permission = Permission(
-            uri=str(job.to_uri(self._config.use_cluster_names_in_uris)), action="write"
-        )
-        await check_permissions(request, [permission])
+        job = await self._resolve_job(request, "write")
 
         await self._jobs_service.delete_job(job.id)
         raise aiohttp.web.HTTPNoContent()

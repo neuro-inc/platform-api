@@ -2381,6 +2381,77 @@ class TestJobs:
         await jobs_client.delete_job(job_name)
 
     @pytest.mark.asyncio
+    async def test_get_job_shared_by_name(
+        self,
+        api: ApiConfig,
+        client: aiohttp.ClientSession,
+        regular_user_factory: Callable[[], Any],
+        jobs_client_factory: Callable[[_User], JobsClient],
+        run_job: Callable[..., Awaitable[str]],
+        share_job: Callable[[_User, _User, Any], Awaitable[None]],
+        create_job_request_with_name: Callable[[str], Dict[str, Any]],
+        create_job_request_no_name: Callable[[], Dict[str, Any]],
+    ) -> None:
+        job_name = "test-job-name"
+        job_name2 = "test-job-name2"
+        usr1 = await regular_user_factory()
+        usr2 = await regular_user_factory()
+        usr3 = await regular_user_factory()
+        jobs_client_usr1 = jobs_client_factory(usr1)
+
+        job1_id = await run_job(usr2, create_job_request_with_name(job_name))
+        job2_id = await run_job(usr2, create_job_request_with_name(job_name2))
+        job3_id = await run_job(usr2, create_job_request_no_name())
+        job4_id = await run_job(usr3, create_job_request_with_name(job_name))
+
+        # usr2 shares a job with usr1 by name
+        await share_job(usr2, usr1, job_name)
+
+        job = await jobs_client_usr1.get_job_by_id(job1_id)
+        assert job["id"] == job1_id
+        assert job["name"] == job_name
+        assert job["owner"] == usr2.name
+
+        for job_id in (job2_id, job3_id, job4_id):
+            url = api.generate_job_url(job_id)
+            async with client.get(url, headers=usr1.headers) as resp:
+                assert resp.status == HTTPForbidden.status_code, await resp.text()
+
+    @pytest.mark.asyncio
+    async def test_delete_job_shared_by_name(
+        self,
+        api: ApiConfig,
+        client: aiohttp.ClientSession,
+        regular_user_factory: Callable[[], Any],
+        jobs_client_factory: Callable[[_User], JobsClient],
+        run_job: Callable[..., Awaitable[str]],
+        share_job: Callable[[_User, _User, Any], Awaitable[None]],
+        create_job_request_with_name: Callable[[str], Dict[str, Any]],
+        create_job_request_no_name: Callable[[], Dict[str, Any]],
+    ) -> None:
+        job_name = "test-job-name"
+        job_name2 = "test-job-name2"
+        usr1 = await regular_user_factory()
+        usr2 = await regular_user_factory()
+        usr3 = await regular_user_factory()
+        jobs_client_usr1 = jobs_client_factory(usr1)
+
+        job1_id = await run_job(usr2, create_job_request_with_name(job_name))
+        job2_id = await run_job(usr2, create_job_request_with_name(job_name2))
+        job3_id = await run_job(usr2, create_job_request_no_name())
+        job4_id = await run_job(usr3, create_job_request_with_name(job_name))
+
+        # usr2 shares a job with usr1 by name
+        await share_job(usr2, usr1, job_name)
+
+        await jobs_client_usr1.delete_job(job1_id)
+
+        for job_id in (job2_id, job3_id, job4_id):
+            url = api.generate_job_url(job_id)
+            async with client.delete(url, headers=usr1.headers) as resp:
+                assert resp.status == HTTPForbidden.status_code, await resp.text()
+
+    @pytest.mark.asyncio
     async def test_create_with_custom_volumes(
         self,
         jobs_client: JobsClient,
