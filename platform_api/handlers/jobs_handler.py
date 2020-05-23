@@ -18,6 +18,7 @@ import aiohttp.web
 import iso8601
 import trafaret as t
 from aiohttp_security import check_authorized
+from aiohttp_security.api import AUTZ_KEY
 from multidict import MultiDictProxy
 from neuro_auth_client import AuthClient, Permission, check_permissions
 from neuro_auth_client.client import ClientAccessSubTreeView, ClientSubTreeViewRoot
@@ -454,16 +455,17 @@ class JobsHandler:
             user = await untrusted_user(request)
             job = await self._jobs_service.get_job_by_name(id_or_name, user)
 
-        permission = Permission(
-            uri=str(job.to_uri(self._config.use_cluster_names_in_uris)), action=action
-        )
-        try:
-            await check_permissions(request, [permission])
-        except aiohttp.web.HTTPForbidden:
-            if not job.name:
-                raise
-            permission = Permission(uri=str(job.to_uri(use_name=True)), action=action)
-            await check_permissions(request, [permission])
+        permissions = [
+            Permission(
+                uri=str(job.to_uri(self._config.use_cluster_names_in_uris)),
+                action=action,
+            )
+        ]
+        if job.name:
+            permissions.append(
+                Permission(uri=str(job.to_uri(use_name=True)), action=action)
+            )
+        await check_any_permissions(request, permissions)
         return job
 
     async def handle_get(self, request: aiohttp.web.Request) -> aiohttp.web.Response:
@@ -823,3 +825,28 @@ def _parse_bool(value: str) -> bool:
         return True
     else:
         raise ValueError('Required "0", "1", "false" or "true"')
+
+
+async def check_any_permissions(
+    request: aiohttp.web.Request, permissions: List[Permission]
+) -> None:
+    user_name = await check_authorized(request)
+    auth_policy = request.config_dict.get(AUTZ_KEY)
+    if not auth_policy:
+        raise RuntimeError("Auth policy not configured")
+
+    try:
+        missing = await auth_policy.get_missing_permissions(user_name, permissions)
+    except aiohttp.ClientError as e:
+        # re-wrap in order not to expose the client
+        raise RuntimeError(e) from e
+
+    if len(missing) >= len(permissions):
+        payload = {"missing": [_permission_to_primitive(p) for p in missing]}
+        raise aiohttp.web.HTTPForbidden(
+            text=json.dumps(payload), content_type="application/json"
+        )
+
+
+def _permission_to_primitive(perm: Permission) -> Dict[str, str]:
+    return {"uri": perm.uri, "action": perm.action}
