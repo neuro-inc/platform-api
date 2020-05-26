@@ -459,7 +459,7 @@ class JobsHandler:
         permissions = [Permission(uri=str(uri), action=action)]
         if job.name:
             permissions.append(
-                Permission(uri=str(uri.with_name(job.name)), action=action)
+                Permission(uri=str(_job_uri_with_name(uri, job.name)), action=action)
             )
         await check_any_permissions(request, permissions)
         return job
@@ -846,3 +846,10 @@ async def check_any_permissions(
 
 def _permission_to_primitive(perm: Permission) -> Dict[str, str]:
     return {"uri": perm.uri, "action": perm.action}
+
+
+def _job_uri_with_name(uri: URL, name: str) -> URL:
+    assert name
+    assert uri.host
+    assert uri.name
+    return uri.with_name(name)
