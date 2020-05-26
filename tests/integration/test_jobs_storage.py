@@ -88,7 +88,7 @@ class TestRedisJobsStorage:
     async def test_get_last_created_job_id__no_job_updated(
         self, redis_client: aioredis.Redis
     ) -> None:
-        job = self._create_pending_job(owner="me", job_name="job-1")
+        job = self._create_pending_job(owner="me", job_name="jobname1")
         storage = RedisJobsStorage(redis_client)
         job.status = JobStatus.RUNNING
 
@@ -107,7 +107,7 @@ class TestRedisJobsStorage:
         self, redis_client: aioredis.Redis
     ) -> None:
 
-        job = self._create_pending_job(owner="me", job_name="job-1")
+        job = self._create_pending_job(owner="me", job_name="jobname1")
         storage = RedisJobsStorage(redis_client)
         job.status = JobStatus.RUNNING
         await storage.update_job_atomic(job, is_job_creation=False)
@@ -124,7 +124,7 @@ class TestRedisJobsStorage:
     async def test_get_last_created_job_id__is_job_creation_true(
         self, redis_client: aioredis.Redis
     ) -> None:
-        job = self._create_pending_job(owner="me", job_name="job-1")
+        job = self._create_pending_job(owner="me", job_name="jobname1")
         storage = RedisJobsStorage(redis_client)
         job.status = JobStatus.RUNNING
         await storage.update_job_atomic(job, is_job_creation=True)
@@ -143,7 +143,7 @@ class TestRedisJobsStorage:
     ) -> None:
         storage = RedisJobsStorage(redis_client)
         owner = "me"
-        name = "job-name"
+        name = "jobnamename"
 
         job1 = self._create_pending_job(owner=owner, job_name=name)
         await storage.update_job_atomic(job1, is_job_creation=True)
@@ -371,10 +371,10 @@ class TestRedisJobsStorage:
         self, redis_client: aioredis.Redis
     ) -> None:
         original_jobs = [
-            self._create_pending_job(job_name="job-1"),
-            self._create_running_job(job_name="job-2"),
-            self._create_succeeded_job(job_name="job-3"),
-            self._create_failed_job(job_name="job-3"),
+            self._create_pending_job(job_name="jobname1"),
+            self._create_running_job(job_name="jobname2"),
+            self._create_succeeded_job(job_name="jobname3"),
+            self._create_failed_job(job_name="jobname3"),
         ]
         storage = RedisJobsStorage(redis_client)
         for job in original_jobs:
@@ -576,26 +576,26 @@ class TestRedisJobsStorage:
             self._create_running_job(owner="user2", job_name=None),
             self._create_succeeded_job(owner="user3", job_name=None),
             self._create_failed_job(owner="user3", job_name=None),
-            # user1, job-1:
-            self._create_succeeded_job(owner="user1", job_name="job-1"),
-            self._create_failed_job(owner="user1", job_name="job-1"),
-            self._create_pending_job(owner="user1", job_name="job-1"),
-            # user1, job-2:
-            self._create_succeeded_job(owner="user1", job_name="job-2"),
-            self._create_failed_job(owner="user1", job_name="job-2"),
-            self._create_running_job(owner="user1", job_name="job-2"),
-            # user2, job-2:
-            self._create_succeeded_job(owner="user2", job_name="job-2"),
-            self._create_failed_job(owner="user2", job_name="job-2"),
-            self._create_pending_job(owner="user2", job_name="job-2"),
-            # user2, job-3:
-            self._create_succeeded_job(owner="user2", job_name="job-3"),
-            self._create_failed_job(owner="user2", job_name="job-3"),
-            self._create_running_job(owner="user2", job_name="job-3"),
-            # user3, job-3:
-            self._create_succeeded_job(owner="user3", job_name="job-3"),
-            self._create_failed_job(owner="user3", job_name="job-3"),
-            self._create_pending_job(owner="user3", job_name="job-3"),
+            # user1, jobname1:
+            self._create_succeeded_job(owner="user1", job_name="jobname1"),
+            self._create_failed_job(owner="user1", job_name="jobname1"),
+            self._create_pending_job(owner="user1", job_name="jobname1"),
+            # user1, jobname2:
+            self._create_succeeded_job(owner="user1", job_name="jobname2"),
+            self._create_failed_job(owner="user1", job_name="jobname2"),
+            self._create_running_job(owner="user1", job_name="jobname2"),
+            # user2, jobname2:
+            self._create_succeeded_job(owner="user2", job_name="jobname2"),
+            self._create_failed_job(owner="user2", job_name="jobname2"),
+            self._create_pending_job(owner="user2", job_name="jobname2"),
+            # user2, jobname3:
+            self._create_succeeded_job(owner="user2", job_name="jobname3"),
+            self._create_failed_job(owner="user2", job_name="jobname3"),
+            self._create_running_job(owner="user2", job_name="jobname3"),
+            # user3, jobname3:
+            self._create_succeeded_job(owner="user3", job_name="jobname3"),
+            self._create_failed_job(owner="user3", job_name="jobname3"),
+            self._create_pending_job(owner="user3", job_name="jobname3"),
         ]
         storage = RedisJobsStorage(client=redis_client)
         for job in jobs:
@@ -654,16 +654,16 @@ class TestRedisJobsStorage:
             (None, ("user1", "user2"), (pend, runn)),
             (None, ("user1", "user2"), (succ, fail)),
             (None, ("user1", "user2"), (succ, fail, runn, pend)),
-            ("job-1", ("user1",), ()),
-            ("job-1", ("user1",), (pend,)),
-            ("job-1", ("user1",), (pend, runn)),
-            ("job-1", ("user1",), (succ, fail)),
-            ("job-1", ("user1",), (succ, fail, runn, pend)),
-            ("job-1", ("user1", "user2"), ()),
-            ("job-1", ("user1", "user2"), (pend,)),
-            ("job-1", ("user1", "user2"), (pend, runn)),
-            ("job-1", ("user1", "user2"), (succ, fail)),
-            ("job-1", ("user1", "user2"), (succ, fail, runn, pend)),
+            ("jobname1", ("user1",), ()),
+            ("jobname1", ("user1",), (pend,)),
+            ("jobname1", ("user1",), (pend, runn)),
+            ("jobname1", ("user1",), (succ, fail)),
+            ("jobname1", ("user1",), (succ, fail, runn, pend)),
+            ("jobname1", ("user1", "user2"), ()),
+            ("jobname1", ("user1", "user2"), (pend,)),
+            ("jobname1", ("user1", "user2"), (pend, runn)),
+            ("jobname1", ("user1", "user2"), (succ, fail)),
+            ("jobname1", ("user1", "user2"), (succ, fail, runn, pend)),
         ],
     )
     async def test_get_all_with_filters(
@@ -696,12 +696,12 @@ class TestRedisJobsStorage:
     @pytest.mark.parametrize(
         "name,statuses",
         [
-            ("job-1", ()),
-            ("job-1", (pend,)),
-            ("job-1", (pend, runn)),
-            ("job-1", (succ, fail)),
-            ("job-1", (succ, fail, runn)),
-            ("job-1", (succ, fail, runn, pend)),
+            ("jobname1", ()),
+            ("jobname1", (pend,)),
+            ("jobname1", (pend, runn)),
+            ("jobname1", (succ, fail)),
+            ("jobname1", (succ, fail, runn)),
+            ("jobname1", (succ, fail, runn, pend)),
         ],
     )
     async def test_get_all_filter_by_name_with_no_owner(
@@ -726,7 +726,7 @@ class TestRedisJobsStorage:
     ) -> None:
         storage, jobs = await self.prepare_filtering_test(redis_client)
 
-        name = "job-2"
+        name = "jobname2"
         owner = "user1"
 
         job_filter = JobFilter(name=name, owners={owner})
@@ -740,7 +740,7 @@ class TestRedisJobsStorage:
     ) -> None:
         storage, jobs = await self.prepare_filtering_test(redis_client)
 
-        name = "job-2"
+        name = "jobname2"
         owner = "user1"
         statuses = {JobStatus.RUNNING}
         job_filter = JobFilter(name=name, owners={owner}, statuses=statuses)
@@ -752,7 +752,7 @@ class TestRedisJobsStorage:
         ]
         assert job_ids == expected
 
-        name = "job-2"
+        name = "jobname2"
         owner = "user1"
         statuses = {JobStatus.SUCCEEDED}
         job_filter = JobFilter(name=name, owners={owner}, statuses=statuses)
@@ -764,7 +764,7 @@ class TestRedisJobsStorage:
         ]
         assert job_ids == expected
 
-        name = "job-2"
+        name = "jobname2"
         owner = "user1"
         statuses = {JobStatus.SUCCEEDED, JobStatus.RUNNING}
         job_filter = JobFilter(name=name, owners={owner}, statuses=statuses)
@@ -776,7 +776,7 @@ class TestRedisJobsStorage:
         ]
         assert job_ids == expected
 
-        name = "job-3"
+        name = "jobname3"
         owner = "user2"
         statuses = {JobStatus.FAILED}
         job_filter = JobFilter(name=name, owners={owner}, statuses=statuses)
@@ -785,6 +785,27 @@ class TestRedisJobsStorage:
             job.id
             for job in jobs
             if job.name == name and job.owner == owner and job.status in statuses
+        ]
+        assert job_ids == expected
+
+    @pytest.mark.asyncio
+    async def test_get_all_shared_by_name(self, redis_client: aioredis.Redis) -> None:
+        storage, jobs = await self.prepare_filtering_test(redis_client)
+
+        job_filter = JobFilter(
+            clusters={"test-cluster": {"user1": {"jobname2"}, "user2": {"jobname3"}}},
+            owners={"user1", "user2"},
+            statuses={JobStatus.FAILED},
+        )
+        job_ids = [job.id for job in await storage.get_all_jobs(job_filter)]
+        expected = [
+            job.id
+            for job in jobs
+            if job.status == JobStatus.FAILED
+            and (
+                (job.owner == "user1" and job.name == "jobname2")
+                or (job.owner == "user2" and job.name == "jobname3")
+            )
         ]
         assert job_ids == expected
 
@@ -858,13 +879,13 @@ class TestRedisJobsStorage:
         jobs = [
             self._create_running_job(owner="user1", cluster_name="test-cluster"),
             self._create_succeeded_job(
-                owner="user1", cluster_name="test-cluster", job_name="job-1"
+                owner="user1", cluster_name="test-cluster", job_name="jobname1"
             ),
             self._create_failed_job(
-                owner="user2", cluster_name="test-cluster", job_name="job-1"
+                owner="user2", cluster_name="test-cluster", job_name="jobname1"
             ),
             self._create_succeeded_job(
-                owner="user3", cluster_name="test-cluster", job_name="job-1"
+                owner="user3", cluster_name="test-cluster", job_name="jobname1"
             ),
             self._create_succeeded_job(owner="user1", cluster_name="my-cluster"),
             self._create_failed_job(owner="user3", cluster_name="my-cluster"),
@@ -886,15 +907,15 @@ class TestRedisJobsStorage:
             redis_client
         )
 
-        job_filter = JobFilter(clusters={"test-cluster": set()})
+        job_filter = JobFilter(clusters={"test-cluster": {}})
         job_ids = [job.id for job in await storage.get_all_jobs(job_filter)]
         assert job_ids == [job.id for job in jobs[:4]]
 
-        job_filter = JobFilter(clusters={"test-cluster": set(), "my-cluster": set()})
+        job_filter = JobFilter(clusters={"test-cluster": {}, "my-cluster": {}})
         job_ids = [job.id for job in await storage.get_all_jobs(job_filter)]
         assert job_ids == [job.id for job in jobs[:6]]
 
-        job_filter = JobFilter(clusters={"nonexisting-cluster": set()})
+        job_filter = JobFilter(clusters={"nonexisting-cluster": {}})
         job_ids = [job.id for job in await storage.get_all_jobs(job_filter)]
         assert job_ids == []
 
@@ -906,35 +927,36 @@ class TestRedisJobsStorage:
             redis_client
         )
 
-        job_filter = JobFilter(clusters={"test-cluster": set()}, owners={"user1"})
+        job_filter = JobFilter(clusters={"test-cluster": {}}, owners={"user1"})
         job_ids = [job.id for job in await storage.get_all_jobs(job_filter)]
         assert job_ids == [jobs[0].id, jobs[1].id]
 
         job_filter = JobFilter(
-            clusters={"test-cluster": set(), "my-cluster": set()}, owners={"user1"}
+            clusters={"test-cluster": {}, "my-cluster": {}}, owners={"user1"}
         )
         job_ids = [job.id for job in await storage.get_all_jobs(job_filter)]
         assert job_ids == [jobs[0].id, jobs[1].id, jobs[4].id]
 
-        job_filter = JobFilter(
-            clusters={"test-cluster": set()}, owners={"user1", "user2"}
-        )
+        job_filter = JobFilter(clusters={"test-cluster": {}}, owners={"user1", "user2"})
         job_ids = [job.id for job in await storage.get_all_jobs(job_filter)]
         assert job_ids == [jobs[0].id, jobs[1].id, jobs[2].id]
 
-        job_filter = JobFilter(clusters={"my-cluster": set()}, owners={"user2"})
+        job_filter = JobFilter(clusters={"my-cluster": {}}, owners={"user2"})
         job_ids = [job.id for job in await storage.get_all_jobs(job_filter)]
         assert job_ids == []
 
         job_filter = JobFilter(
-            clusters={"test-cluster": {"user1"}, "other-cluster": {"user2"}},
+            clusters={
+                "test-cluster": {"user1": set()},
+                "other-cluster": {"user2": set()},
+            },
             owners={"user1", "user2"},
         )
         job_ids = [job.id for job in await storage.get_all_jobs(job_filter)]
         assert job_ids == [jobs[0].id, jobs[1].id, jobs[7].id]
 
         job_filter = JobFilter(
-            clusters={"test-cluster": {"user1"}, "other-cluster": set()},
+            clusters={"test-cluster": {"user1": set()}, "other-cluster": {}},
             owners={"user1", "user2"},
         )
         job_ids = [job.id for job in await storage.get_all_jobs(job_filter)]
@@ -942,9 +964,9 @@ class TestRedisJobsStorage:
 
         job_filter = JobFilter(
             clusters={
-                "test-cluster": {"user1", "user2"},
-                "my-cluster": {"user2", "user3"},
-                "other-cluster": {"user2"},
+                "test-cluster": {"user1": set(), "user2": set()},
+                "my-cluster": {"user2": set(), "user3": set()},
+                "other-cluster": {"user2": set()},
             },
             owners={"user1", "user2", "user3"},
         )
@@ -952,7 +974,7 @@ class TestRedisJobsStorage:
         assert job_ids == [jobs[0].id, jobs[1].id, jobs[2].id, jobs[5].id, jobs[7].id]
 
         job_filter = JobFilter(
-            clusters={"test-cluster": {"user1"}, "other-cluster": set()},
+            clusters={"test-cluster": {"user1": set()}, "other-cluster": {}},
         )
         job_ids = [job.id for job in await storage.get_all_jobs(job_filter)]
         assert job_ids == [jobs[0].id, jobs[1].id, jobs[6].id, jobs[7].id, jobs[8].id]
@@ -966,22 +988,22 @@ class TestRedisJobsStorage:
         )
 
         job_filter = JobFilter(
-            clusters={"test-cluster": set()}, owners={"user1", "user2"}, name="job-1"
+            clusters={"test-cluster": {}}, owners={"user1", "user2"}, name="jobname1"
         )
         job_ids = [job.id for job in await storage.get_all_jobs(job_filter)]
         assert job_ids == [jobs[1].id, jobs[2].id]
 
-        job_filter = JobFilter(clusters={"test-cluster": set()}, name="job-1")
+        job_filter = JobFilter(clusters={"test-cluster": {}}, name="jobname1")
         job_ids = [job.id for job in await storage.get_all_jobs(job_filter)]
         assert job_ids == [jobs[1].id, jobs[2].id, jobs[3].id]
 
         job_filter = JobFilter(
-            clusters={"test-cluster": set()}, owners={"user1", "user2"}, name="job-2"
+            clusters={"test-cluster": {}}, owners={"user1", "user2"}, name="jobname2"
         )
         job_ids = [job.id for job in await storage.get_all_jobs(job_filter)]
         assert job_ids == []
 
-        job_filter = JobFilter(clusters={"test-cluster": set()}, name="job-2")
+        job_filter = JobFilter(clusters={"test-cluster": {}}, name="jobname2")
         job_ids = [job.id for job in await storage.get_all_jobs(job_filter)]
         assert job_ids == []
 
@@ -994,27 +1016,27 @@ class TestRedisJobsStorage:
         )
 
         job_filter = JobFilter(
-            clusters={"test-cluster": set()}, statuses={JobStatus.SUCCEEDED}
+            clusters={"test-cluster": {}}, statuses={JobStatus.SUCCEEDED}
         )
         job_ids = [job.id for job in await storage.get_all_jobs(job_filter)]
         assert job_ids == [jobs[1].id, jobs[3].id]
 
         job_filter = JobFilter(
-            clusters={"test-cluster": set(), "my-cluster": set()},
+            clusters={"test-cluster": {}, "my-cluster": {}},
             statuses={JobStatus.SUCCEEDED},
         )
         job_ids = [job.id for job in await storage.get_all_jobs(job_filter)]
         assert job_ids == [jobs[1].id, jobs[3].id, jobs[4].id]
 
         job_filter = JobFilter(
-            clusters={"test-cluster": set()},
+            clusters={"test-cluster": {}},
             statuses={JobStatus.RUNNING, JobStatus.SUCCEEDED},
         )
         job_ids = [job.id for job in await storage.get_all_jobs(job_filter)]
         assert job_ids == [jobs[0].id, jobs[1].id, jobs[3].id]
 
         job_filter = JobFilter(
-            clusters={"my-cluster": set()}, statuses={JobStatus.RUNNING}
+            clusters={"my-cluster": {}}, statuses={JobStatus.RUNNING}
         )
         job_ids = [job.id for job in await storage.get_all_jobs(job_filter)]
         assert job_ids == []
@@ -1451,7 +1473,7 @@ class TestRedisJobsStorage:
         jobs = await storage.get_all_jobs(filters)
         assert not jobs
 
-        filters2 = JobFilter(clusters={"default": set()})
+        filters2 = JobFilter(clusters={"default": {}})
 
         jobs = await storage.get_all_jobs(filters2)
         assert not jobs

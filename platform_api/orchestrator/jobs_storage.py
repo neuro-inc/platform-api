@@ -62,8 +62,8 @@ class JobFilter:
     statuses: AbstractSet[JobStatus] = field(
         default_factory=cast(Type[Set[JobStatus]], set)
     )
-    clusters: Dict[str, AbstractSet[str]] = field(
-        default_factory=cast(Type[Dict[str, AbstractSet[str]]], dict)
+    clusters: Dict[str, Dict[str, AbstractSet[str]]] = field(
+        default_factory=cast(Type[Dict[str, Dict[str, AbstractSet[str]]]], dict)
     )
     owners: AbstractSet[str] = field(default_factory=cast(Type[Set[str]], set))
     tags: Set[str] = field(default_factory=cast(Type[Set[str]], set))
@@ -79,8 +79,14 @@ class JobFilter:
             return False
         if self.clusters:
             owners = self.clusters.get(job.cluster_name)
-            if owners is None or (owners and job.owner not in owners):
+            if owners is None:
                 return False
+            if owners:
+                names = owners.get(job.owner)
+                if names is None:
+                    return False
+                if names and job.name not in names:
+                    return False
         if self.name and self.name != job.name:
             return False
         if self.ids and job.id not in self.ids:
@@ -340,7 +346,7 @@ class RedisJobsStorage(JobsStorage):
         self,
         *,
         statuses: Iterable[str],
-        clusters: Dict[str, AbstractSet[str]],
+        clusters: Dict[str, Dict[str, AbstractSet[str]]],
         owners: Iterable[str],
         names: Iterable[str],
         tags: Iterable[str],
@@ -349,8 +355,8 @@ class RedisJobsStorage(JobsStorage):
             f"jobs.comp.{status}|{cluster}|{owner}|{name}|{tag}"
             for cluster, cluster_owners in clusters.items()
             for owner in cluster_owners or owners
+            for name in cluster_owners.get(owner) or names
             for status in statuses
-            for name in names
             for tag in tags
         ]
 
@@ -469,7 +475,10 @@ class RedisJobsStorage(JobsStorage):
 
     def _update_composite_index(self, tr: Pipeline, job: JobRecord) -> None:
         statuses = [str(s) for s in JobStatus] + [""]
-        clusters: Dict[str, AbstractSet[str]] = {job.cluster_name: set(), "": set()}
+        clusters: Dict[str, Dict[str, AbstractSet[str]]] = {
+            job.cluster_name: {},
+            "": {},
+        }
         owners = [job.owner, ""]
         tags = [t for t in job.tags] + [""]
         names = [job.name, ""] if job.name else [""]
@@ -575,7 +584,7 @@ class RedisJobsStorage(JobsStorage):
         self,
         *,
         statuses: AbstractSet[JobStatus],
-        clusters: Dict[str, AbstractSet[str]],
+        clusters: Dict[str, Dict[str, AbstractSet[str]]],
         owners: AbstractSet[str],
         tags: AbstractSet[str],
         name: Optional[str],
@@ -586,7 +595,7 @@ class RedisJobsStorage(JobsStorage):
     ) -> Iterable[str]:
         keys = self._generate_jobs_composite_keys(
             statuses=[str(s) for s in statuses] or [""],
-            clusters=clusters or {"": set()},
+            clusters=clusters or {"": {}},
             owners=owners or [""],
             tags=tags or [""],
             names=[name or ""],

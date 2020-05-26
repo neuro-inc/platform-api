@@ -366,8 +366,8 @@ class TestJobFilter:
             owner="testuser",
             cluster_name="my-cluster",
         )
-        assert not JobFilter(clusters={"test-cluster": set()}).check(job)
-        assert JobFilter(clusters={"my-cluster": set()}).check(job)
+        assert not JobFilter(clusters={"test-cluster": {}}).check(job)
+        assert JobFilter(clusters={"my-cluster": {}}).check(job)
 
     def test_check_ids(self) -> None:
         job = self._create_job(owner="testuser", name="testname")
@@ -394,12 +394,12 @@ class TestJobFilter:
             statuses={JobStatus.PENDING},
             owners={"testuser"},
             name="testname",
-            clusters={"test-cluster": set()},
+            clusters={"test-cluster": {}},
         ).check(job)
 
     def test_check_clusters_and_owners(self) -> None:
         filter = JobFilter(
-            clusters={"cluster1": {"user2"}, "cluster2": {"user1"}},
+            clusters={"cluster1": {"user2": set()}, "cluster2": {"user1": set()}},
             owners={"user1", "user2"},
         )
         found = []
@@ -412,7 +412,7 @@ class TestJobFilter:
 
     def test_check_clusters_and_owners2(self) -> None:
         filter = JobFilter(
-            clusters={"cluster1": set(), "cluster2": {"user2"}},
+            clusters={"cluster1": {}, "cluster2": {"user2": set()}},
             owners={"user1", "user2"},
         )
         found = []
@@ -428,7 +428,7 @@ class TestJobFilter:
         ]
 
     def test_check_clusters_and_owners3(self) -> None:
-        filter = JobFilter(clusters={"cluster1": set(), "cluster2": {"user2"}},)
+        filter = JobFilter(clusters={"cluster1": {}, "cluster2": {"user2": set()}})
         found = []
         for cluster_name in ("cluster1", "cluster2", "cluster3"):
             for owner in ("user1", "user2", "user3"):
@@ -445,9 +445,9 @@ class TestJobFilter:
     def test_check_clusters_and_owners4(self) -> None:
         filter = JobFilter(
             clusters={
-                "cluster1": {"user1"},
-                "cluster2": {"user1", "user2"},
-                "cluster3": {"user1", "user3"},
+                "cluster1": {"user1": set()},
+                "cluster2": {"user1": set(), "user2": set()},
+                "cluster3": {"user1": set(), "user3": set()},
             },
             owners={"user1", "user2", "user3"},
         )
@@ -463,4 +463,35 @@ class TestJobFilter:
             ("cluster2", "user2"),
             ("cluster3", "user1"),
             ("cluster3", "user3"),
+        ]
+
+    def test_check_owners_and_names(self) -> None:
+        filter = JobFilter(
+            clusters={"test-cluster": {"user1": {"name1"}, "user2": {"name2"}}},
+            owners={"user1", "user2"},
+        )
+        found = []
+        for owner in ("user1", "user2", "user3"):
+            for name in ("name1", "name2", "name3", None):
+                job = self._create_job(owner=owner, name=name)
+                if filter.check(job):
+                    found.append((owner, name))
+        assert found == [("user1", "name1"), ("user2", "name2")]
+
+    def test_check_owners_and_names2(self) -> None:
+        filter = JobFilter(
+            clusters={"test-cluster": {"user1": set(), "user2": {"name2"}}},
+            owners={"user1", "user2"},
+        )
+        found = []
+        for owner in ("user1", "user2", "user3"):
+            for name in ("name1", "name2", None):
+                job = self._create_job(owner=owner, name=name)
+                if filter.check(job):
+                    found.append((owner, name))
+        assert found == [
+            ("user1", "name1"),
+            ("user1", "name2"),
+            ("user1", None),
+            ("user2", "name2"),
         ]

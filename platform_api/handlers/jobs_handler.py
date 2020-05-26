@@ -594,8 +594,8 @@ class JobFilterFactory:
                 self._user_name_validator.check(owner)
                 for owner in query.getall("owner", [])
             }
-            clusters: Dict[Any, AbstractSet[Any]] = {
-                self._cluster_name_validator.check(cluster_name): set()
+            clusters: Dict[str, Dict[str, AbstractSet[str]]] = {
+                self._cluster_name_validator.check(cluster_name): {}
                 for cluster_name in query.getall("cluster_name", [])
             }
             since = query.get("since")
@@ -640,7 +640,7 @@ class BulkJobFilterBuilder:
 
         self._has_access_to_all: bool = False
         self._has_clusters_shared_all: bool = False
-        self._clusters_shared_any: Dict[str, Set[str]] = {}
+        self._clusters_shared_any: Dict[str, Dict[str, Set[str]]] = {}
         self._owners_shared_all: Set[str] = set()
         self._shared_ids: Set[str] = set()
 
@@ -692,7 +692,7 @@ class BulkJobFilterBuilder:
                 # read/write/manage access to all jobs on the cluster =
                 # job://cluster
                 self._has_clusters_shared_all = True
-                self._clusters_shared_any[cluster_name] = set()
+                self._clusters_shared_any[cluster_name] = {}
             else:
                 self._traverse_owners(sub_tree, cluster_name)
 
@@ -712,16 +712,30 @@ class BulkJobFilterBuilder:
                 # job://cluster/owner
                 self._owners_shared_all.add(owner)
                 if cluster_name not in self._clusters_shared_any:
-                    self._clusters_shared_any[cluster_name] = set()
-                self._clusters_shared_any[cluster_name].add(owner)
+                    self._clusters_shared_any[cluster_name] = {}
+                self._clusters_shared_any[cluster_name][owner] = set()
             else:
-                # specific ids
-                self._traverse_jobs(sub_tree)
+                # specific ids or names
+                self._traverse_jobs(sub_tree, cluster_name, owner)
 
-    def _traverse_jobs(self, tree: ClientAccessSubTreeView) -> None:
-        self._shared_ids.update(
-            job_id for job_id, sub_tree in tree.children.items() if sub_tree.can_read()
-        )
+    def _traverse_jobs(
+        self, tree: ClientAccessSubTreeView, cluster_name: str, owner: str
+    ) -> None:
+        for name, sub_tree in tree.children.items():
+            if sub_tree.can_read():
+                if _is_job_id(name):
+                    self._shared_ids.add(name)
+                else:
+                    if self._query_filter.name and name != self._query_filter.name:
+                        # skipping name
+                        continue
+
+                    self._owners_shared_all.add(owner)
+                    if cluster_name not in self._clusters_shared_any:
+                        self._clusters_shared_any[cluster_name] = {}
+                    if owner not in self._clusters_shared_any[cluster_name]:
+                        self._clusters_shared_any[cluster_name][owner] = set()
+                    self._clusters_shared_any[cluster_name][owner].add(name)
 
     def _create_bulk_filter(self) -> Optional[JobFilter]:
         if not (
@@ -743,15 +757,30 @@ class BulkJobFilterBuilder:
         # if `self._clusters_shared_any` is empty, we still want to try to limit
         # the scope to the clusters passed in the query, otherwise pull all.
         if not self._has_access_to_all:
-            self._optimize_clusters_owners(bulk_filter.owners)
+            self._optimize_clusters_owners(bulk_filter.owners, bulk_filter.name)
             bulk_filter = replace(bulk_filter, clusters=self._clusters_shared_any)
         return bulk_filter
 
-    def _optimize_clusters_owners(self, owners: AbstractSet[str]) -> None:
-        if owners:
+    def _optimize_clusters_owners(
+        self, owners: AbstractSet[str], name: Optional[str]
+    ) -> None:
+        if owners or name:
+            names = {name}
             for cluster_owners in self._clusters_shared_any.values():
-                if cluster_owners == owners:
+                if name:
+                    for owner_names in cluster_owners.values():
+                        if owner_names == names:
+                            owner_names.clear()
+                if (
+                    owners
+                    and cluster_owners.keys() == owners
+                    and not any(cluster_owners.values())
+                ):
                     cluster_owners.clear()
+
+
+def _is_job_id(value: str) -> bool:
+    return value.startswith("job-")
 
 
 def _parse_bool(value: str) -> bool:

@@ -221,7 +221,7 @@ class JobsService:
             return
         quota = user_cluster.quota
         run_time_filter = JobFilter(
-            owners={user.name}, clusters={user_cluster.name: set()}
+            owners={user.name}, clusters={user_cluster.name: {}}
         )
         run_times = await self._jobs_storage.get_aggregated_run_time_by_clusters(
             run_time_filter
