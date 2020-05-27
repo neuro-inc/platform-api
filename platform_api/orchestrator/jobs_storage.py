@@ -3,7 +3,7 @@ import json
 import logging
 from abc import ABC, abstractmethod
 from collections import Counter
-from dataclasses import dataclass, field
+from dataclasses import dataclass, field, replace
 from datetime import datetime, timedelta, timezone
 from itertools import chain, groupby, islice
 from operator import itemgetter
@@ -27,11 +27,12 @@ from uuid import uuid4
 import aioredis
 from aioredis.commands import Pipeline
 from async_generator import asynccontextmanager
+from yarl import URL
 
 from platform_api.trace import trace
 
 from .job import AggregatedRunTime, JobRecord
-from .job_request import JobError, JobStatus
+from .job_request import ContainerVolume, JobError, JobStatus
 
 
 logger = logging.getLogger(__name__)
@@ -753,9 +754,11 @@ class RedisJobsStorage(JobsStorage):
             await self._reindex_jobs_for_deletion()
         if version < 5:
             await self._reindex_jobs_composite()
+        if version < 6:
+            await self._update_volume_storage_uris()
         else:
             return False
-        await self._client.set("version", "5")
+        await self._client.set("version", "6")
         return True
 
     async def _update_job_cluster_names(self) -> None:
@@ -797,6 +800,49 @@ class RedisJobsStorage(JobsStorage):
             await tr.execute()
 
         logger.info("Finished reindexing jobs composite")
+
+    @staticmethod
+    def _migrate_storage_uri(uri: URL, cluster_name: str) -> URL:
+        assert uri.scheme == "storage"
+        assert uri.host != cluster_name
+        user_name = uri.host
+        path = uri.path.lstrip("/")
+        if user_name:
+            if path:
+                path = f"/{user_name}/{path}"
+            else:
+                path = f"/{user_name}"
+        else:
+            path = f"/{path}"
+        return URL.build(scheme=uri.scheme, host=cluster_name, path=path)
+
+    async def _update_volume_storage_uris(self) -> None:
+        logger.info("Starting updating volume storage URIs")
+
+        total = changed = 0
+        async for chunk in self._iter_all_jobs_in_chunks():
+            tr = self._client.pipeline()
+            for job in chunk:
+                total += 1
+                assert job.cluster_name
+                volumes: List[ContainerVolume] = []
+                changed_job = False
+                for volume in job.request.container.volumes:
+                    uri = volume.uri
+                    if uri.scheme == "storage" and uri.host != job.cluster_name:
+                        uri = self._migrate_storage_uri(uri, job.cluster_name)
+                        volume = replace(volume, uri=uri)
+                        changed_job = True
+                    volumes.append(volume)
+                if changed_job:
+                    container = replace(job.request.container, volumes=volumes)
+                    job.request = replace(job.request, container=container)
+                    changed += 1
+                    payload = json.dumps(job.to_primitive())
+                    tr.set(self._generate_job_key(job.id), payload)
+            await tr.execute()
+
+        logger.info(f"Finished updating volume storage URIs ({changed}/{total})")
 
     async def _iter_all_jobs_in_chunks(self) -> AsyncIterator[Iterable[JobRecord]]:
         jobs_key = self._generate_jobs_index_key()
