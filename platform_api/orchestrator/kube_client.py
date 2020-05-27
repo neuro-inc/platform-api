@@ -14,6 +14,7 @@ from pathlib import Path, PurePath
 from types import TracebackType
 from typing import (
     Any,
+    AsyncIterator,
     ClassVar,
     DefaultDict,
     Dict,
@@ -565,6 +566,19 @@ class NodeAffinity:
         return payload
 
 
+@enum.unique
+class PodRestartPolicy(str, enum.Enum):
+    ALWAYS = "Always"
+    ON_FAILURE = "OnFailure"
+    NEVER = "Never"
+
+    def __str__(self) -> str:
+        return self.value
+
+    def __repr__(self) -> str:
+        return self.__str__().__repr__()
+
+
 @dataclass(frozen=True)
 class PodDescriptor:
     name: str
@@ -600,6 +614,8 @@ class PodDescriptor:
 
     tpu_version_annotation_key: ClassVar[str] = "tf-version.cloud-tpus.google.com"
 
+    restart_policy: PodRestartPolicy = PodRestartPolicy.NEVER
+
     @classmethod
     def from_job_request(
         cls,
@@ -611,6 +627,7 @@ class PodDescriptor:
         node_affinity: Optional[NodeAffinity] = None,
         labels: Optional[Dict[str, str]] = None,
         priority_class_name: Optional[str] = None,
+        restart_policy: PodRestartPolicy = PodRestartPolicy.NEVER,
     ) -> "PodDescriptor":
         container = job_request.container
         volume_mounts = [
@@ -661,6 +678,7 @@ class PodDescriptor:
             labels=labels or {},
             annotations=annotations,
             priority_class_name=priority_class_name,
+            restart_policy=restart_policy,
         )
 
     @property
@@ -717,7 +735,7 @@ class PodDescriptor:
                 "automountServiceAccountToken": False,
                 "containers": [container_payload],
                 "volumes": volumes,
-                "restartPolicy": "Never",
+                "restartPolicy": str(self.restart_policy),
                 "imagePullSecrets": [
                     secret.to_primitive() for secret in self.image_pull_secrets
                 ],
@@ -814,6 +832,9 @@ class PodDescriptor:
             tolerations=tolerations,
             labels=metadata.get("labels", {}),
             priority_class_name=payload["spec"].get("priorityClassName"),
+            restart_policy=PodRestartPolicy(
+                payload["spec"].get("restartPolicy", str(cls.restart_policy))
+            ),
         )
 
 
@@ -841,6 +862,7 @@ class ContainerStatus:
             'PodInitializing'
             'ContainerCreating'
             'ErrImagePull'
+            'CrashLoopBackOff'
         see
         https://github.com/kubernetes/kubernetes/blob/29232e3edc4202bb5e34c8c107bae4e8250cd883/pkg/kubelet/kubelet_pods.go#L1463-L1468
         https://github.com/kubernetes/kubernetes/blob/886e04f1fffbb04faf8a9f9ee141143b2684ae68/pkg/kubelet/images/types.go#L25-L43
@@ -1299,6 +1321,29 @@ class KubeClient:
             logging.debug("k8s response payload: %s", payload)
             return payload
 
+    async def get_all_job_resources_links(self, job_id: str) -> AsyncIterator[str]:
+        job_label_name = "platform.neuromation.io/job"
+        params = {"labelSelector": f"{job_label_name}={job_id}"}
+        urls = [
+            self._pods_url,
+            self._ingresses_url,
+            self._services_url,
+            self._generate_all_network_policies_url(),
+        ]
+        for url in urls:
+            payload = await self._request(method="GET", url=url, params=params)
+            for item in payload["items"]:
+                metadata = item["metadata"]
+                assert metadata["labels"][job_label_name] == job_id
+                yield metadata["selfLink"]
+
+    async def delete_resource_by_link(self, link: str) -> None:
+        await self._delete_resource_url(f"{self._base_url}{link}")
+
+    async def _delete_resource_url(self, url: str) -> None:
+        payload = await self._request(method="DELETE", url=url)
+        self._check_status_payload(payload)
+
     async def get_endpoint(
         self, name: str, namespace: Optional[str] = None
     ) -> Dict[str, Any]:
@@ -1330,8 +1375,7 @@ class KubeClient:
 
     async def delete_node(self, name: str) -> None:
         url = self._generate_node_url(name)
-        result = await self._request(method="DELETE", url=url)
-        self._check_status_payload(result)
+        await self._delete_resource_url(url)
 
     async def create_pod(self, descriptor: PodDescriptor) -> PodDescriptor:
         payload = await self._request(
@@ -1447,12 +1491,12 @@ class KubeClient:
     async def get_service(self, name: str) -> Service:
         url = self._generate_service_url(name)
         payload = await self._request(method="GET", url=url)
+        self._check_status_payload(payload)
         return Service.from_primitive(payload)
 
     async def delete_service(self, name: str) -> None:
         url = self._generate_service_url(name)
-        payload = await self._request(method="DELETE", url=url)
-        self._check_status_payload(payload)
+        await self._delete_resource_url(url)
 
     async def create_docker_secret(self, secret: DockerRegistrySecret) -> None:
         url = self._generate_all_secrets_url(secret.namespace)
@@ -1480,8 +1524,7 @@ class KubeClient:
         self, secret_name: str, namespace_name: Optional[str] = None
     ) -> None:
         url = self._generate_secret_url(secret_name, namespace_name)
-        payload = await self._request(method="DELETE", url=url)
-        self._check_status_payload(payload)
+        await self._delete_resource_url(url)
 
     async def get_pod_events(
         self, pod_id: str, namespace: str
@@ -1567,7 +1610,12 @@ class KubeClient:
                     {
                         "ipBlock": {
                             "cidr": "0.0.0.0/0",
-                            "except": ["10.0.0.0/8", "172.16.0.0/12", "192.168.0.0/16"],
+                            "except": [
+                                "10.0.0.0/8",
+                                "172.16.0.0/12",
+                                "192.168.0.0/16",
+                                "169.254.0.0/16",
+                            ],
                         }
                     }
                 ]
@@ -1580,6 +1628,7 @@ class KubeClient:
                     {"ipBlock": {"cidr": "10.0.0.0/8"}},
                     {"ipBlock": {"cidr": "172.16.0.0/12"}},
                     {"ipBlock": {"cidr": "192.168.0.0/16"}},
+                    {"ipBlock": {"cidr": "169.254.0.0/16"}},
                 ],
                 "ports": [
                     {"port": 53, "protocol": "UDP"},
@@ -1633,8 +1682,7 @@ class KubeClient:
         self, name: str, namespace_name: Optional[str] = None
     ) -> None:
         url = self._generate_network_policy_url(name, namespace_name)
-        payload = await self._request(method="DELETE", url=url)
-        self._check_status_payload(payload)
+        await self._delete_resource_url(url)
 
     def _generate_node_proxy_url(self, name: str, port: int) -> str:
         return f"{self._api_v1_url}/nodes/{name}:{port}/proxy"

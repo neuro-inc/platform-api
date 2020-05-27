@@ -33,6 +33,7 @@ from platform_api.handlers.validators import (
 from platform_api.orchestrator.job import (
     Job,
     JobRecord,
+    JobRestartPolicy,
     JobStatusHistory,
     JobStatusItem,
 )
@@ -376,6 +377,7 @@ class TestJobRequestValidator:
         )
         payload = validator.check(request)
         assert payload["cluster_name"] == "testcluster"
+        assert payload["restart_policy"] == JobRestartPolicy.NEVER
 
     def test_validator_explicit_cluster_name(self) -> None:
         container = {
@@ -479,6 +481,24 @@ class TestJobRequestValidator:
         validator = create_job_tag_validator()
         with pytest.raises(DataError):
             validator.check(tag)
+
+    def test_restart_policy(self) -> None:
+        container = {
+            "image": "testimage",
+            "command": "arg1 arg2 arg3",
+            "resources": {"cpu": 0.1, "memory_mb": 16, "shm": True},
+            "ssh": {"port": 666},
+        }
+        request = {
+            "container": container,
+            "cluster_name": "testcluster",
+            "restart_policy": "unknown",
+        }
+        validator = create_job_request_validator(
+            allowed_gpu_models=(), allowed_tpu_resources=(), cluster_name="testcluster"
+        )
+        with pytest.raises(DataError, match="restart_policy.+any variant"):
+            validator.check(request)
 
 
 class TestJobContainerToJson:
@@ -1440,6 +1460,7 @@ async def test_job_to_job_response(mock_orchestrator: MockOrchestrator) -> None:
         "ssh_auth_server": "ssh://nobody@ssh-auth:22",
         "is_preemptible": False,
         "uri": f"job://test-cluster/compute/{job.id}",
+        "restart_policy": "never",
     }
 
 
@@ -1534,6 +1555,7 @@ async def test_job_to_job_response_with_job_name_and_http_exposed(
         "ssh_auth_server": "ssh://nobody@ssh-auth:22",
         "is_preemptible": False,
         "uri": f"job://test-cluster/{owner_name}/{job.id}",
+        "restart_policy": "never",
     }
 
 
@@ -1586,6 +1608,7 @@ async def test_job_to_job_response_with_job_name_and_http_exposed_too_long_name(
         "ssh_auth_server": "ssh://nobody@ssh-auth:22",
         "is_preemptible": False,
         "uri": f"job://test-cluster/{owner_name}/{job.id}",
+        "restart_policy": "never",
     }
 
 

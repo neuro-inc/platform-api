@@ -1,3 +1,4 @@
+import json
 from typing import Any, AsyncIterator, Awaitable, Callable, Dict, Iterator, List
 from unittest import mock
 
@@ -341,6 +342,7 @@ class TestJobs:
     ) -> None:
         url = api.jobs_base_url
         job_submit["container"]["ssh"] = {"port": 7867}
+        job_submit["restart_policy"] = "on-failure"
         async with client.post(
             url, headers=regular_user.headers, json=job_submit
         ) as response:
@@ -354,8 +356,11 @@ class TestJobs:
         retrieved_job = await jobs_client.get_job_by_id(job_id=job_id)
         assert not retrieved_job["container"]["http"]["requires_auth"]
 
-        await jobs_client.long_polling_by_job_id(job_id=job_id, status="succeeded")
+        job_response_payload = await jobs_client.long_polling_by_job_id(
+            job_id=job_id, status="succeeded"
+        )
         await jobs_client.delete_job(job_id=job_id)
+        assert job_response_payload["restart_policy"] == "on-failure"
 
     @pytest.mark.asyncio
     async def test_create_job_with_ssh_only(
@@ -945,6 +950,72 @@ class TestJobs:
         assert jobs == []
 
     @pytest.mark.asyncio
+    async def test_get_all_jobs_bad_args(
+        self,
+        api: ApiConfig,
+        client: aiohttp.ClientSession,
+        jobs_client: JobsClient,
+        regular_user: _User,
+    ) -> None:
+        url = api.jobs_base_url
+        headers = regular_user.headers.copy()
+        headers["Accept"] = "application/x-ndjson"
+
+        params = [("reverse", "spam")]
+        async with client.get(url, headers=headers, params=params) as response:
+            assert response.status == HTTPBadRequest.status_code, await response.text()
+            data = await response.json()
+            assert 'Required "0", "1", "false" or "true"' in data["error"]
+
+        params = [("limit", "spam")]
+        async with client.get(url, headers=headers, params=params) as response:
+            assert response.status == HTTPBadRequest.status_code, await response.text()
+            data = await response.json()
+            assert "invalid literal for int" in data["error"]
+
+        params = [("limit", "0")]
+        async with client.get(url, headers=headers, params=params) as response:
+            assert response.status == HTTPBadRequest.status_code, await response.text()
+            data = await response.json()
+            assert "limit should be > 0" in data["error"]
+
+    @pytest.mark.asyncio
+    async def test_get_all_jobs_not_streamed(
+        self,
+        api: ApiConfig,
+        client: aiohttp.ClientSession,
+        jobs_client: JobsClient,
+        regular_user: _User,
+        job_request_factory: Callable[[], Dict[str, Any]],
+    ) -> None:
+        url = api.jobs_base_url
+        headers = regular_user.headers
+        job_request = job_request_factory()
+        async with client.post(url, headers=headers, json=job_request) as resp:
+            assert resp.status == HTTPAccepted.status_code, await resp.text()
+            result = await resp.json()
+            job1_id = result["id"]
+        job_request = job_request_factory()
+        async with client.post(url, headers=headers, json=job_request) as resp:
+            assert resp.status == HTTPAccepted.status_code, await resp.text()
+            result = await resp.json()
+            job2_id = result["id"]
+
+        async with client.get(url, headers=headers) as response:
+            assert response.status == HTTPOk.status_code, await response.text()
+            assert response.headers["Content-Type"] == "application/json; charset=utf-8"
+            result = await response.json()
+
+        jobs = result["jobs"]
+        assert isinstance(jobs, list)
+        for job in jobs:
+            assert isinstance(job, dict)
+            for key in job:
+                assert isinstance(key, str)
+        job_ids = {job["id"] for job in jobs}
+        assert job_ids == {job1_id, job2_id}
+
+    @pytest.mark.asyncio
     async def test_get_all_jobs_filter_wrong_status(
         self,
         api: ApiConfig,
@@ -1038,12 +1109,17 @@ class TestJobs:
         filters = [("tag", "tag1"), ("tag", "tag2")]
         jobs = await jobs_client.get_all_jobs(filters)
         job_ids = {job["id"] for job in jobs}
-        assert job_ids == {job_1, job_2}
+        assert job_ids == {job_1}
+
+        filters = [("tag", "tag1"), ("tag", "tag3")]
+        jobs = await jobs_client.get_all_jobs(filters)
+        job_ids = {job["id"] for job in jobs}
+        assert not job_ids
 
         filters = [("tag", "tag3"), ("tag", "tag-non-existing")]
         jobs = await jobs_client.get_all_jobs(filters)
         job_ids = {job["id"] for job in jobs}
-        assert job_ids == {job_2}
+        assert not job_ids
 
         filters = {"tag": "tag-non-existing"}
         jobs = await jobs_client.get_all_jobs(filters)
@@ -1113,6 +1189,56 @@ class TestJobs:
         for job_id in job_ids_alive:
             await jobs_client.delete_job(job_id=job_id)
 
+    @pytest.mark.asyncio
+    async def test_get_all_jobs_filter_by_date_range(
+        self,
+        api: ApiConfig,
+        client: aiohttp.ClientSession,
+        jobs_client: JobsClient,
+        regular_user: _User,
+        job_request_factory: Callable[[], Dict[str, Any]],
+    ) -> None:
+        url = api.jobs_base_url
+        headers = regular_user.headers
+        job_request = job_request_factory()
+
+        async with client.post(url, headers=headers, json=job_request) as resp:
+            assert resp.status == HTTPAccepted.status_code, await resp.text()
+            result = await resp.json()
+            job_1 = result["id"]
+            t1 = result["history"]["created_at"]
+
+        async with client.post(url, headers=headers, json=job_request) as resp:
+            assert resp.status == HTTPAccepted.status_code, await resp.text()
+            result = await resp.json()
+            job_2 = result["id"]
+            t2 = result["history"]["created_at"]
+
+        async with client.post(url, headers=headers, json=job_request) as resp:
+            assert resp.status == HTTPAccepted.status_code, await resp.text()
+            result = await resp.json()
+            job_3 = result["id"]
+            t3 = result["history"]["created_at"]
+
+        job_ids = {job["id"] for job in await jobs_client.get_all_jobs()}
+        assert job_ids == {job_1, job_2, job_3}
+
+        filters = {"since": t2}
+        job_ids = {job["id"] for job in await jobs_client.get_all_jobs(filters)}
+        assert job_ids == {job_2, job_3}
+
+        filters = {"until": t2}
+        job_ids = {job["id"] for job in await jobs_client.get_all_jobs(filters)}
+        assert job_ids == {job_1, job_2}
+
+        filters = {"since": t1, "until": t2}
+        job_ids = {job["id"] for job in await jobs_client.get_all_jobs(filters)}
+        assert job_ids == {job_1, job_2}
+
+        filters = {"since": t1, "until": t3}
+        job_ids = {job["id"] for job in await jobs_client.get_all_jobs(filters)}
+        assert job_ids == {job_1, job_2, job_3}
+
     @pytest.fixture
     async def run_job(
         self,
@@ -1156,9 +1282,11 @@ class TestJobs:
     async def share_job(
         self, auth_client: AuthClient, cluster_name: str,
     ) -> AsyncIterator[Callable[[_User, _User, Any], Awaitable[None]]]:
-        async def _impl(owner: _User, follower: _User, job_id: str) -> None:
+        async def _impl(
+            owner: _User, follower: _User, job_id: str, action: str = "read"
+        ) -> None:
             permission = Permission(
-                uri=f"job://{cluster_name}/{owner.name}/{job_id}", action="read"
+                uri=f"job://{cluster_name}/{owner.name}/{job_id}", action=action
             )
             await auth_client.grant_user_permissions(
                 follower.name, [permission], token=owner.token
@@ -1198,7 +1326,6 @@ class TestJobs:
         jobs_client_factory: Callable[[_User], JobsClient],
         job_request_factory: Callable[[], Dict[str, Any]],
         run_job: Callable[..., Awaitable[str]],
-        share_job: Callable[[_User, _User, Any], Awaitable[None]],
         create_job_request_no_name: Callable[[], Dict[str, Any]],
         create_job_request_with_name: Callable[[str], Dict[str, Any]],
     ) -> None:
@@ -1208,39 +1335,53 @@ class TestJobs:
         usr = await regular_user_factory()
         jobs_client_usr1 = jobs_client_factory(usr)
 
+        # Run jobs in mixed order
         job_usr_with_name_killed = await run_job(usr, job_req_with_name, do_kill=True)
         job_usr_no_name_killed = await run_job(usr, job_req_no_name, do_kill=True)
-        job_usr_with_name = await run_job(usr, job_req_with_name, do_kill=False)
         job_usr_no_name = await run_job(usr, job_req_no_name, do_kill=False)
+        job_usr_with_name = await run_job(usr, job_req_with_name, do_kill=False)
 
         # filter: job name
         filters = [("name", job_name)]
         jobs = await jobs_client_usr1.get_all_jobs(filters)
-        job_ids = {job["id"] for job in jobs}
-        assert job_ids == {job_usr_with_name_killed, job_usr_with_name}
+        job_ids = [job["id"] for job in jobs]
+        assert job_ids == [job_usr_with_name_killed, job_usr_with_name]
 
         # filter: multiple statuses
         filters = [("status", "running"), ("status", "succeeded")]
         jobs = await jobs_client_usr1.get_all_jobs(filters)
-        job_ids = {job["id"] for job in jobs}
-        assert job_ids == {
+        job_ids = [job["id"] for job in jobs]
+        assert job_ids == [
             job_usr_with_name_killed,
             job_usr_no_name_killed,
+            job_usr_no_name,
+            job_usr_with_name,
+        ]
+
+        jobs = await jobs_client_usr1.get_all_jobs(filters + [("reverse", "1")])
+        job_ids = [job["id"] for job in jobs]
+        assert job_ids == [
             job_usr_with_name,
             job_usr_no_name,
-        }
+            job_usr_no_name_killed,
+            job_usr_with_name_killed,
+        ]
 
         # filter: name + status
         filters = [("name", job_name), ("status", "succeeded")]
         jobs = await jobs_client_usr1.get_all_jobs(filters)
-        job_ids = {job["id"] for job in jobs}
-        assert job_ids == {job_usr_with_name_killed}
+        job_ids = [job["id"] for job in jobs]
+        assert job_ids == [job_usr_with_name_killed]
 
         # filter: name + multiple statuses
         filters = [("name", job_name), ("status", "running"), ("status", "succeeded")]
         jobs = await jobs_client_usr1.get_all_jobs(filters)
-        job_ids = {job["id"] for job in jobs}
-        assert job_ids == {job_usr_with_name_killed, job_usr_with_name}
+        job_ids = [job["id"] for job in jobs]
+        assert job_ids == [job_usr_with_name_killed, job_usr_with_name]
+
+        jobs = await jobs_client_usr1.get_all_jobs(filters + [("reverse", "1")])
+        job_ids = [job["id"] for job in jobs]
+        assert job_ids == [job_usr_with_name, job_usr_with_name_killed]
 
     @pytest.mark.asyncio
     async def test_get_all_jobs_filter_by_job_name_self_owner_and_statuses(
@@ -1263,15 +1404,15 @@ class TestJobs:
 
         jobs_client_usr1 = jobs_client_factory(usr1)
 
+        # Run jobs in mixed order
         job_usr1_with_name_killed = await run_job(usr1, job_req_with_name, do_kill=True)
-        job_usr1_no_name_killed = await run_job(usr1, job_req_no_name, do_kill=True)
-        job_usr1_with_name = await run_job(usr1, job_req_with_name, do_kill=False)
-        job_usr1_no_name = await run_job(usr1, job_req_no_name, do_kill=False)
-
-        job_usr2_with_name_killed = await run_job(usr2, job_req_with_name, do_kill=True)
-        job_usr2_no_name_killed = await run_job(usr2, job_req_no_name, do_kill=True)
-        job_usr2_with_name = await run_job(usr2, job_req_with_name, do_kill=False)
         job_usr2_no_name = await run_job(usr2, job_req_no_name, do_kill=False)
+        job_usr1_no_name_killed = await run_job(usr1, job_req_no_name, do_kill=True)
+        job_usr2_with_name_killed = await run_job(usr2, job_req_with_name, do_kill=True)
+        job_usr1_no_name = await run_job(usr1, job_req_no_name, do_kill=False)
+        job_usr2_with_name = await run_job(usr2, job_req_with_name, do_kill=False)
+        job_usr1_with_name = await run_job(usr1, job_req_with_name, do_kill=False)
+        job_usr2_no_name_killed = await run_job(usr2, job_req_no_name, do_kill=True)
 
         # usr2 shares their jobs with usr1
         await share_job(usr2, usr1, job_usr2_with_name_killed)
@@ -1282,31 +1423,48 @@ class TestJobs:
         # filter: self owner
         filters = [("owner", usr1.name)]
         jobs = await jobs_client_usr1.get_all_jobs(filters)
-        job_ids = {job["id"] for job in jobs}
-        assert job_ids == {
+        job_ids = [job["id"] for job in jobs]
+        assert job_ids == [
             job_usr1_with_name_killed,
             job_usr1_no_name_killed,
+            job_usr1_no_name,
+            job_usr1_with_name,
+        ]
+
+        jobs = await jobs_client_usr1.get_all_jobs(filters + [("reverse", "1")])
+        job_ids = [job["id"] for job in jobs]
+        assert job_ids == [
             job_usr1_with_name,
             job_usr1_no_name,
-        }
+            job_usr1_no_name_killed,
+            job_usr1_with_name_killed,
+        ]
 
         # filter: self owner + job name
         filters = [("name", job_name), ("owner", usr1.name)]
         jobs = await jobs_client_usr1.get_all_jobs(filters)
-        job_ids = {job["id"] for job in jobs}
-        assert job_ids == {job_usr1_with_name_killed, job_usr1_with_name}
+        job_ids = [job["id"] for job in jobs]
+        assert job_ids == [job_usr1_with_name_killed, job_usr1_with_name]
+
+        jobs = await jobs_client_usr1.get_all_jobs(filters + [("reverse", "1")])
+        job_ids = [job["id"] for job in jobs]
+        assert job_ids == [job_usr1_with_name, job_usr1_with_name_killed]
 
         # filter: self owner + status
         filters = [("owner", usr1.name), ("status", "running")]
         jobs = await jobs_client_usr1.get_all_jobs(filters)
-        job_ids = {job["id"] for job in jobs}
-        assert job_ids == {job_usr1_with_name, job_usr1_no_name}
+        job_ids = [job["id"] for job in jobs]
+        assert job_ids == [job_usr1_no_name, job_usr1_with_name]
+
+        jobs = await jobs_client_usr1.get_all_jobs(filters + [("reverse", "1")])
+        job_ids = [job["id"] for job in jobs]
+        assert job_ids == [job_usr1_with_name, job_usr1_no_name]
 
         # filter: self owner + name + status
         filters = [("owner", usr1.name), ("name", job_name), ("status", "succeeded")]
         jobs = await jobs_client_usr1.get_all_jobs(filters)
-        job_ids = {job["id"] for job in jobs}
-        assert job_ids == {job_usr1_with_name_killed}
+        job_ids = [job["id"] for job in jobs]
+        assert job_ids == [job_usr1_with_name_killed]
 
     @pytest.mark.asyncio
     async def test_get_all_jobs_filter_by_job_name_another_owner_and_statuses(
@@ -1328,15 +1486,15 @@ class TestJobs:
         usr2 = await regular_user_factory()
         jobs_client_usr1 = jobs_client_factory(usr1)
 
-        await run_job(usr1, job_req_with_name, do_kill=True)  # job_usr1_with_name_kiled
-        await run_job(usr1, job_req_no_name, do_kill=True)  # job_usr1_no_name_killed
-        await run_job(usr1, job_req_with_name, do_kill=False)  # job_usr1_with_name
-        await run_job(usr1, job_req_no_name, do_kill=False)  # job_usr1_no_name
-
-        job_usr2_with_name_killed = await run_job(usr2, job_req_with_name, do_kill=True)
-        job_usr2_no_name_killed = await run_job(usr2, job_req_no_name, do_kill=True)
-        job_usr2_with_name = await run_job(usr2, job_req_with_name, do_kill=False)
+        # Run jobs in mixed order
+        await run_job(usr1, job_req_with_name, do_kill=True)
         job_usr2_no_name = await run_job(usr2, job_req_no_name, do_kill=False)
+        await run_job(usr1, job_req_no_name, do_kill=True)
+        job_usr2_with_name_killed = await run_job(usr2, job_req_with_name, do_kill=True)
+        await run_job(usr1, job_req_no_name, do_kill=False)
+        job_usr2_with_name = await run_job(usr2, job_req_with_name, do_kill=False)
+        await run_job(usr1, job_req_with_name, do_kill=False)
+        job_usr2_no_name_killed = await run_job(usr2, job_req_no_name, do_kill=True)
 
         # usr2 shares their jobs with usr1
         await share_job(usr2, usr1, job_usr2_with_name_killed)
@@ -1347,31 +1505,48 @@ class TestJobs:
         # filter: another owner
         filters = [("owner", usr2.name)]
         jobs = await jobs_client_usr1.get_all_jobs(filters)
-        job_ids = {job["id"] for job in jobs}
-        assert job_ids == {
+        job_ids = [job["id"] for job in jobs]
+        assert job_ids == [
+            job_usr2_no_name,
             job_usr2_with_name_killed,
+            job_usr2_with_name,
+            job_usr2_no_name_killed,
+        ]
+
+        jobs = await jobs_client_usr1.get_all_jobs(filters + [("reverse", "1")])
+        job_ids = [job["id"] for job in jobs]
+        assert job_ids == [
             job_usr2_no_name_killed,
             job_usr2_with_name,
+            job_usr2_with_name_killed,
             job_usr2_no_name,
-        }
+        ]
 
         # filter: another owner + job name
         filters = [("name", job_name), ("owner", usr2.name)]
         jobs = await jobs_client_usr1.get_all_jobs(filters)
-        job_ids = {job["id"] for job in jobs}
-        assert job_ids == {job_usr2_with_name_killed, job_usr2_with_name}
+        job_ids = [job["id"] for job in jobs]
+        assert job_ids == [job_usr2_with_name_killed, job_usr2_with_name]
+
+        jobs = await jobs_client_usr1.get_all_jobs(filters + [("reverse", "1")])
+        job_ids = [job["id"] for job in jobs]
+        assert job_ids == [job_usr2_with_name, job_usr2_with_name_killed]
 
         # filter: another owner + status
         filters = [("owner", usr2.name), ("status", "running")]
         jobs = await jobs_client_usr1.get_all_jobs(filters)
-        job_ids = {job["id"] for job in jobs}
-        assert job_ids == {job_usr2_with_name, job_usr2_no_name}
+        job_ids = [job["id"] for job in jobs]
+        assert job_ids == [job_usr2_no_name, job_usr2_with_name]
+
+        jobs = await jobs_client_usr1.get_all_jobs(filters + [("reverse", "1")])
+        job_ids = [job["id"] for job in jobs]
+        assert job_ids == [job_usr2_with_name, job_usr2_no_name]
 
         # filter: another owner + name + status
         filters = [("owner", usr2.name), ("name", job_name), ("status", "succeeded")]
         jobs = await jobs_client_usr1.get_all_jobs(filters)
-        job_ids = {job["id"] for job in jobs}
-        assert job_ids == {job_usr2_with_name_killed}
+        job_ids = [job["id"] for job in jobs]
+        assert job_ids == [job_usr2_with_name_killed]
 
     @pytest.mark.asyncio
     async def test_get_all_jobs_filter_by_job_name_multiple_owners_and_statuses(
@@ -1393,15 +1568,15 @@ class TestJobs:
         usr2 = await regular_user_factory()
         jobs_client_usr1 = jobs_client_factory(usr1)
 
+        # Run jobs in mixed order
         job_usr1_with_name_killed = await run_job(usr1, job_req_with_name, do_kill=True)
-        job_usr1_no_name_killed = await run_job(usr1, job_req_no_name, do_kill=True)
-        job_usr1_with_name = await run_job(usr1, job_req_with_name, do_kill=False)
-        job_usr1_no_name = await run_job(usr1, job_req_no_name, do_kill=False)
-
-        job_usr2_with_name_killed = await run_job(usr2, job_req_with_name, do_kill=True)
-        job_usr2_no_name_killed = await run_job(usr2, job_req_no_name, do_kill=True)
-        job_usr2_with_name = await run_job(usr2, job_req_with_name, do_kill=False)
         job_usr2_no_name = await run_job(usr2, job_req_no_name, do_kill=False)
+        job_usr1_no_name_killed = await run_job(usr1, job_req_no_name, do_kill=True)
+        job_usr2_with_name_killed = await run_job(usr2, job_req_with_name, do_kill=True)
+        job_usr1_no_name = await run_job(usr1, job_req_no_name, do_kill=False)
+        job_usr2_with_name = await run_job(usr2, job_req_with_name, do_kill=False)
+        job_usr1_with_name = await run_job(usr1, job_req_with_name, do_kill=False)
+        job_usr2_no_name_killed = await run_job(usr2, job_req_no_name, do_kill=True)
 
         # usr2 shares their jobs with usr1
         await share_job(usr2, usr1, job_usr2_with_name_killed)
@@ -1412,39 +1587,90 @@ class TestJobs:
         # filter: multiple owners
         filters = [("owner", usr1.name), ("owner", usr2.name)]
         jobs = await jobs_client_usr1.get_all_jobs(filters)
-        job_ids = {job["id"] for job in jobs}
-        assert job_ids == {
-            job_usr1_no_name,
-            job_usr1_no_name_killed,
-            job_usr1_with_name,
+        job_ids = [job["id"] for job in jobs]
+        assert job_ids == [
             job_usr1_with_name_killed,
-            job_usr2_with_name_killed,
-            job_usr2_no_name_killed,
-            job_usr2_with_name,
             job_usr2_no_name,
-        }
+            job_usr1_no_name_killed,
+            job_usr2_with_name_killed,
+            job_usr1_no_name,
+            job_usr2_with_name,
+            job_usr1_with_name,
+            job_usr2_no_name_killed,
+        ]
+
+        jobs = await jobs_client_usr1.get_all_jobs(filters + [("reverse", "1")])
+        job_ids = [job["id"] for job in jobs]
+        assert job_ids == [
+            job_usr2_no_name_killed,
+            job_usr1_with_name,
+            job_usr2_with_name,
+            job_usr1_no_name,
+            job_usr2_with_name_killed,
+            job_usr1_no_name_killed,
+            job_usr2_no_name,
+            job_usr1_with_name_killed,
+        ]
+
+        jobs = await jobs_client_usr1.get_all_jobs(filters + [("limit", "4")])
+        job_ids = [job["id"] for job in jobs]
+        assert job_ids == [
+            job_usr1_with_name_killed,
+            job_usr2_no_name,
+            job_usr1_no_name_killed,
+            job_usr2_with_name_killed,
+        ]
+
+        jobs = await jobs_client_usr1.get_all_jobs(
+            filters + [("limit", "4"), ("reverse", "1")]
+        )
+        job_ids = [job["id"] for job in jobs]
+        assert job_ids == [
+            job_usr2_no_name_killed,
+            job_usr1_with_name,
+            job_usr2_with_name,
+            job_usr1_no_name,
+        ]
 
         # filter: multiple owners + job name
         filters = [("owner", usr1.name), ("owner", usr2.name), ("name", job_name)]
         jobs = await jobs_client_usr1.get_all_jobs(filters)
-        job_ids = {job["id"] for job in jobs}
-        assert job_ids == {
+        job_ids = [job["id"] for job in jobs]
+        assert job_ids == [
+            job_usr1_with_name_killed,
+            job_usr2_with_name_killed,
+            job_usr2_with_name,
+            job_usr1_with_name,
+        ]
+
+        jobs = await jobs_client_usr1.get_all_jobs(filters + [("reverse", "1")])
+        job_ids = [job["id"] for job in jobs]
+        assert job_ids == [
+            job_usr1_with_name,
             job_usr2_with_name,
             job_usr2_with_name_killed,
-            job_usr1_with_name,
             job_usr1_with_name_killed,
-        }
+        ]
 
         # filter: multiple owners + status
         filters = [("owner", usr1.name), ("owner", usr2.name), ("status", "running")]
         jobs = await jobs_client_usr1.get_all_jobs(filters)
-        job_ids = {job["id"] for job in jobs}
-        assert job_ids == {
-            job_usr2_with_name,
+        job_ids = [job["id"] for job in jobs]
+        assert job_ids == [
             job_usr2_no_name,
-            job_usr1_with_name,
             job_usr1_no_name,
-        }
+            job_usr2_with_name,
+            job_usr1_with_name,
+        ]
+
+        jobs = await jobs_client_usr1.get_all_jobs(filters + [("reverse", "1")])
+        job_ids = [job["id"] for job in jobs]
+        assert job_ids == [
+            job_usr1_with_name,
+            job_usr2_with_name,
+            job_usr1_no_name,
+            job_usr2_no_name,
+        ]
 
         # filter: multiple owners + name + status
         filters = [
@@ -1454,8 +1680,12 @@ class TestJobs:
             ("status", "succeeded"),
         ]
         jobs = await jobs_client_usr1.get_all_jobs(filters)
-        job_ids = {job["id"] for job in jobs}
-        assert job_ids == {job_usr1_with_name_killed, job_usr2_with_name_killed}
+        job_ids = [job["id"] for job in jobs]
+        assert job_ids == [job_usr1_with_name_killed, job_usr2_with_name_killed]
+
+        jobs = await jobs_client_usr1.get_all_jobs(filters + [("reverse", "1")])
+        job_ids = [job["id"] for job in jobs]
+        assert job_ids == [job_usr2_with_name_killed, job_usr1_with_name_killed]
 
         # filter: multiple owners + name + multiple statuses
         filters = [
@@ -1466,13 +1696,22 @@ class TestJobs:
             ("status", "succeeded"),
         ]
         jobs = await jobs_client_usr1.get_all_jobs(filters)
-        job_ids = {job["id"] for job in jobs}
-        assert job_ids == {
-            job_usr1_with_name,
+        job_ids = [job["id"] for job in jobs]
+        assert job_ids == [
             job_usr1_with_name_killed,
+            job_usr2_with_name_killed,
+            job_usr2_with_name,
+            job_usr1_with_name,
+        ]
+
+        jobs = await jobs_client_usr1.get_all_jobs(filters + [("reverse", "1")])
+        job_ids = [job["id"] for job in jobs]
+        assert job_ids == [
+            job_usr1_with_name,
             job_usr2_with_name,
             job_usr2_with_name_killed,
-        }
+            job_usr1_with_name_killed,
+        ]
 
     @pytest.mark.asyncio
     async def test_get_all_jobs_filter_by_job_name_owner_and_status_invalid_name(
@@ -1515,16 +1754,21 @@ class TestJobs:
             job_id = result["id"]
 
         url = api.jobs_base_url
-        async with client.get(url, headers=owner.headers) as response:
+        headers = owner.headers.copy()
+        headers["Accept"] = "application/x-ndjson"
+        async with client.get(url, headers=headers) as response:
             assert response.status == HTTPOk.status_code, await response.text()
-            result = await response.json()
-            job_ids = {item["id"] for item in result["jobs"]}
+            assert response.headers["Content-Type"] == "application/x-ndjson"
+            job_ids = {json.loads(line)["id"] async for line in response.content}
             assert job_ids == {job_id}
 
-        async with client.get(url, headers=follower.headers) as response:
+        headers = follower.headers.copy()
+        headers["Accept"] = "application/x-ndjson"
+        async with client.get(url, headers=headers) as response:
             assert response.status == HTTPOk.status_code, await response.text()
-            result = await response.json()
-            assert not result["jobs"]
+            assert response.headers["Content-Type"] == "application/x-ndjson"
+            job_ids = {json.loads(line)["id"] async for line in response.content}
+            assert not job_ids
 
         permission = Permission(
             uri=f"job://{cluster_name}/{owner.name}/{job_id}", action="read"
@@ -1533,8 +1777,11 @@ class TestJobs:
             follower.name, [permission], token=owner.token
         )
 
-        async with client.get(url, headers=follower.headers) as response:
+        async with client.get(url, headers=headers) as response:
             assert response.status == HTTPOk.status_code, await response.text()
+            assert response.headers["Content-Type"] == "application/x-ndjson"
+            job_ids = {json.loads(line)["id"] async for line in response.content}
+            assert job_ids == {job_id}
 
     @pytest.mark.asyncio
     async def test_get_shared_job(
@@ -2120,6 +2367,93 @@ class TestJobs:
             assert "is required" in response_payload["error"]
 
     @pytest.mark.asyncio
+    async def test_resolve_job_by_name(
+        self, job_submit: Dict[str, Any], jobs_client: JobsClient
+    ) -> None:
+        job_name = f"test-job-name-{random_str()}"
+        job_submit["name"] = job_name
+        result = await jobs_client.create_job(job_submit)
+        job_id = result["id"]
+        assert result["name"] == job_name
+
+        result = await jobs_client.get_job_by_id(job_name)
+        assert result["id"] == job_id
+        assert result["name"] == job_name
+
+        await jobs_client.delete_job(job_name)
+
+    @pytest.mark.asyncio
+    async def test_get_job_shared_by_name(
+        self,
+        api: ApiConfig,
+        client: aiohttp.ClientSession,
+        regular_user_factory: Callable[[], Any],
+        jobs_client_factory: Callable[[_User], JobsClient],
+        run_job: Callable[..., Awaitable[str]],
+        share_job: Callable[[_User, _User, Any], Awaitable[None]],
+        create_job_request_with_name: Callable[[str], Dict[str, Any]],
+        create_job_request_no_name: Callable[[], Dict[str, Any]],
+    ) -> None:
+        job_name = "test-job-name"
+        job_name2 = "test-job-name2"
+        usr1 = await regular_user_factory()
+        usr2 = await regular_user_factory()
+        usr3 = await regular_user_factory()
+        jobs_client_usr1 = jobs_client_factory(usr1)
+
+        job1_id = await run_job(usr2, create_job_request_with_name(job_name))
+        job2_id = await run_job(usr2, create_job_request_with_name(job_name2))
+        job3_id = await run_job(usr2, create_job_request_no_name())
+        job4_id = await run_job(usr3, create_job_request_with_name(job_name))
+
+        # usr2 shares a job with usr1 by name
+        await share_job(usr2, usr1, job_name)
+
+        job = await jobs_client_usr1.get_job_by_id(job1_id)
+        assert job["id"] == job1_id
+        assert job["name"] == job_name
+        assert job["owner"] == usr2.name
+
+        for job_id in (job2_id, job3_id, job4_id):
+            url = api.generate_job_url(job_id)
+            async with client.get(url, headers=usr1.headers) as resp:
+                assert resp.status == HTTPForbidden.status_code, await resp.text()
+
+    @pytest.mark.asyncio
+    async def test_delete_job_shared_by_name(
+        self,
+        api: ApiConfig,
+        client: aiohttp.ClientSession,
+        regular_user_factory: Callable[[], Any],
+        jobs_client_factory: Callable[[_User], JobsClient],
+        run_job: Callable[..., Awaitable[str]],
+        share_job: Callable[..., Awaitable[None]],
+        create_job_request_with_name: Callable[[str], Dict[str, Any]],
+        create_job_request_no_name: Callable[[], Dict[str, Any]],
+    ) -> None:
+        job_name = "test-job-name"
+        job_name2 = "test-job-name2"
+        usr1 = await regular_user_factory()
+        usr2 = await regular_user_factory()
+        usr3 = await regular_user_factory()
+        jobs_client_usr1 = jobs_client_factory(usr1)
+
+        job1_id = await run_job(usr2, create_job_request_with_name(job_name))
+        job2_id = await run_job(usr2, create_job_request_with_name(job_name2))
+        job3_id = await run_job(usr2, create_job_request_no_name())
+        job4_id = await run_job(usr3, create_job_request_with_name(job_name))
+
+        # usr2 shares a job with usr1 by name
+        await share_job(usr2, usr1, job_name, action="write")
+
+        await jobs_client_usr1.delete_job(job1_id)
+
+        for job_id in (job2_id, job3_id, job4_id):
+            url = api.generate_job_url(job_id)
+            async with client.delete(url, headers=usr1.headers) as resp:
+                assert resp.status == HTTPForbidden.status_code, await resp.text()
+
+    @pytest.mark.asyncio
     async def test_create_with_custom_volumes(
         self,
         jobs_client: JobsClient,
@@ -2183,6 +2517,7 @@ class TestJobs:
                 "ssh_auth_server": "ssh://nobody@ssh-auth.platform.neuromation.io:22",
                 "is_preemptible": True,
                 "uri": f"job://test-cluster/{regular_user.name}/{job_id}",
+                "restart_policy": "never",
             }
 
         response_payload = await jobs_client.long_polling_by_job_id(
@@ -2223,6 +2558,7 @@ class TestJobs:
             "ssh_auth_server": "ssh://nobody@ssh-auth.platform.neuromation.io:22",
             "is_preemptible": True,
             "uri": f"job://test-cluster/{regular_user.name}/{job_id}",
+            "restart_policy": "never",
         }
 
     @pytest.mark.asyncio
@@ -2286,6 +2622,7 @@ class TestJobs:
                 "ssh_auth_server": "ssh://nobody@ssh-auth.platform.neuromation.io:22",
                 "is_preemptible": True,
                 "uri": f"job://test-cluster/{regular_user.name}/{job_id}",
+                "restart_policy": "never",
             }
 
         response_payload = await jobs_client.long_polling_by_job_id(
@@ -2325,6 +2662,7 @@ class TestJobs:
             "ssh_auth_server": "ssh://nobody@ssh-auth.platform.neuromation.io:22",
             "is_preemptible": True,
             "uri": f"job://test-cluster/{regular_user.name}/{job_id}",
+            "restart_policy": "never",
         }
 
     @pytest.mark.asyncio
@@ -2403,6 +2741,7 @@ class TestJobs:
                 "ssh_auth_server": "ssh://nobody@ssh-auth.platform.neuromation.io:22",
                 "is_preemptible": True,
                 "uri": f"job://test-cluster/{regular_user.name}/{job_id}",
+                "restart_policy": "never",
             }
 
         response_payload = await jobs_client.long_polling_by_job_id(
@@ -2442,6 +2781,7 @@ class TestJobs:
             "ssh_auth_server": "ssh://nobody@ssh-auth.platform.neuromation.io:22",
             "is_preemptible": True,
             "uri": f"job://test-cluster/{regular_user.name}/{job_id}",
+            "restart_policy": "never",
         }
 
     @pytest.mark.asyncio
@@ -2528,6 +2868,7 @@ class TestJobs:
             "ssh_auth_server": "ssh://nobody@ssh-auth.platform.neuromation.io:22",
             "is_preemptible": False,
             "uri": f"job://test-cluster/{regular_user.name}/{job_id}",
+            "restart_policy": "never",
         }
 
     @pytest.mark.asyncio
@@ -2619,6 +2960,7 @@ class TestJobs:
                 "ssh_auth_server": "ssh://nobody@ssh-auth.platform.neuromation.io:22",
                 "is_preemptible": False,
                 "uri": f"job://test-cluster/{regular_user.name}/{job_id}",
+                "restart_policy": "never",
             }
 
     @pytest.mark.asyncio
@@ -2704,6 +3046,7 @@ class TestJobs:
                 "ssh_auth_server": "ssh://nobody@ssh-auth.platform.neuromation.io:22",
                 "is_preemptible": False,
                 "uri": f"job://test-cluster/{regular_user.name}/{job_id}",
+                "restart_policy": "never",
             }
 
 
