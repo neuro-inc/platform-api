@@ -1441,6 +1441,19 @@ class KubeClient:
         payload = await self._request(method="GET", url=url)
         return Ingress.from_primitive(payload)
 
+    async def delete_all_ingresses(
+        self, *, labels: Optional[Dict[str, str]] = None,
+    ) -> None:
+        params: Dict[str, str] = {}
+        if labels:
+            params["labelSelector"] = ",".join(
+                "=".join(item) for item in labels.items()
+            )
+        payload = await self._request(
+            method="DELETE", url=self._ingresses_url, params=params
+        )
+        self._check_status_payload(payload)
+
     async def delete_ingress(self, name: str) -> None:
         url = self._generate_ingress_url(name)
         payload = await self._request(method="DELETE", url=url)

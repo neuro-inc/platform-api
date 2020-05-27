@@ -555,15 +555,36 @@ class KubeOrchestrator(Orchestrator):
                 )
         return annotations
 
+    def _get_job_name_ingress_labels(
+        self, job: Job, service: Service
+    ) -> Dict[str, str]:
+        labels = self._get_user_pod_labels(job)
+        if job.name:
+            labels["platform.neuromation.io/job-name"] = job.name
+        return labels
+
+    def _get_ingress_labels(self, job: Job, service: Service) -> Dict[str, str]:
+        return {**service.labels, **self._get_job_name_ingress_labels(job, service)}
+
+    async def _delete_ingresses_by_job_name(self, job: Job, service: Service) -> None:
+        labels = self._get_job_name_ingress_labels(job, service)
+        try:
+            await self._client.delete_all_ingresses(labels=labels)
+        except Exception as e:
+            logger.warning(f"Failed to remove ingresses {labels}: {e}")
+
     async def _create_ingress(self, job: Job, service: Service) -> None:
+        if job.name:
+            await self._delete_ingresses_by_job_name(job, service)
         name = self._get_job_ingress_name(job)
         rules = [
             IngressRule.from_service(host=host, service=service)
             for host in job.http_hosts
         ]
+        labels = self._get_ingress_labels(job, service)
         annotations = self._get_ingress_annotations(job)
         await self._client.create_ingress(
-            name, rules=rules, annotations=annotations, labels=service.labels
+            name, rules=rules, annotations=annotations, labels=labels
         )
 
     async def _delete_ingress(self, job: Job) -> None:
