@@ -1430,36 +1430,16 @@ class TestRedisJobsStorage:
     async def test_migrate(self, redis_client: aioredis.Redis) -> None:
         first_job = self._create_pending_job(owner="testuser")
         second_job = self._create_running_job(owner="testuser")
-        third_job = self._create_running_job(owner="testuser")
 
         first_job.allow_empty_cluster_name = True
         first_job.cluster_name = ""
         second_job.allow_empty_cluster_name = True
         second_job.cluster_name = ""
 
-        third_job.request.container.volumes.extend(
-            [
-                ContainerVolume(
-                    uri=URL("storage://path/to/dir"),
-                    src_path=PurePath("/tmp/path/to/dir"),
-                    dst_path=PurePath("/container/path"),
-                    read_only=True,
-                ),
-                ContainerVolume(
-                    uri=URL(""),
-                    src_path=PurePath("/tmp/path/to/dir2"),
-                    dst_path=PurePath("/container/path2"),
-                    read_only=True,
-                ),
-            ]
-        )
-
         storage = RedisJobsStorage(client=redis_client)
         async with storage.try_create_job(first_job, skip_index=True):
             pass
         async with storage.try_create_job(second_job, skip_index=True):
-            pass
-        async with storage.try_create_job(third_job, skip_index=True):
             pass
 
         jobs = await storage.get_all_jobs()
@@ -1482,26 +1462,75 @@ class TestRedisJobsStorage:
         job_ids = [job.id for job in jobs]
         assert job_ids == [first_job.id, second_job.id]
         for job in jobs:
-            assert job.cluster_name in ("default", "test-cluster")
+            assert job.cluster_name == "default"
 
         jobs = await storage.get_all_jobs(filters2)
         job_ids = [job.id for job in jobs]
         assert job_ids == [first_job.id, second_job.id]
 
-        migrated_job = await storage.get_job(third_job.id)
+        assert not await storage.migrate()
+
+    @pytest.mark.asyncio
+    async def test_migrate_version_6(self, redis_client: aioredis.Redis) -> None:
+        job = self._create_running_job(owner="testuser")
+        volume1 = ContainerVolume(
+            uri=URL("storage://path/to/dir"),
+            src_path=PurePath("/tmp/path/to/dir"),
+            dst_path=PurePath("/container/path"),
+            read_only=True,
+        )
+        volume2 = ContainerVolume(
+            uri=URL("storage://testuser/path/to/dir2"),
+            src_path=PurePath("/tmp/path/to/dir2"),
+            dst_path=PurePath("/container/path2"),
+            read_only=True,
+        )
+        volume3 = ContainerVolume(
+            uri=URL("storage://test-cluster/testuser/path/to/dir3"),
+            src_path=PurePath("/tmp/path/to/dir3"),
+            dst_path=PurePath("/container/path3"),
+            read_only=True,
+        )
+        volume4 = ContainerVolume(
+            uri=URL(""),
+            src_path=PurePath("/tmp/path/to/dir4"),
+            dst_path=PurePath("/container/path4"),
+            read_only=True,
+        )
+        job.request.container.volumes.extend([volume1, volume2, volume3, volume4])
+
+        storage = RedisJobsStorage(client=redis_client)
+        async with storage.try_create_job(job):
+            pass
+
+        original_job = await storage.get_job(job.id)
+        assert original_job.request.container.volumes == [
+            volume1,
+            volume2,
+            volume3,
+            volume4,
+        ]
+
+        assert await storage.migrate()
+
+        migrated_job = await storage.get_job(job.id)
+        migrated_volume1 = ContainerVolume(
+            uri=URL("storage://test-cluster/path/to/dir"),
+            src_path=PurePath("/tmp/path/to/dir"),
+            dst_path=PurePath("/container/path"),
+            read_only=True,
+        )
+        migrated_volume2 = ContainerVolume(
+            uri=URL("storage://test-cluster/testuser/path/to/dir2"),
+            src_path=PurePath("/tmp/path/to/dir2"),
+            dst_path=PurePath("/container/path2"),
+            read_only=True,
+        )
         assert migrated_job.request.container.volumes == [
-            ContainerVolume(
-                uri=URL("storage://test-cluster/path/to/dir"),
-                src_path=PurePath("/tmp/path/to/dir"),
-                dst_path=PurePath("/container/path"),
-                read_only=True,
-            ),
-            ContainerVolume(
-                uri=URL(""),
-                src_path=PurePath("/tmp/path/to/dir2"),
-                dst_path=PurePath("/container/path2"),
-                read_only=True,
-            ),
+            migrated_volume1,
+            migrated_volume2,
+            volume3,
+            volume4,
         ]
 
         assert not await storage.migrate()
