@@ -18,6 +18,7 @@ import aiohttp.web
 import iso8601
 import trafaret as t
 from aiohttp_security import check_authorized
+from aiohttp_security.api import AUTZ_KEY
 from multidict import MultiDictProxy
 from neuro_auth_client import AuthClient, Permission, check_permissions
 from neuro_auth_client.client import ClientAccessSubTreeView, ClientSubTreeViewRoot
@@ -406,20 +407,26 @@ class JobsHandler:
             data=response_payload, status=aiohttp.web.HTTPAccepted.status_code
         )
 
-    async def _resolve_job(self, request: aiohttp.web.Request) -> Job:
+    async def _resolve_job(self, request: aiohttp.web.Request, action: str) -> Job:
         id_or_name = request.match_info["job_id"]
         try:
-            return await self._jobs_service.get_job(id_or_name)
+            job = await self._jobs_service.get_job(id_or_name)
         except JobError:
             await check_authorized(request)
             user = await untrusted_user(request)
-            return await self._jobs_service.get_job_by_name(id_or_name, user)
+            job = await self._jobs_service.get_job_by_name(id_or_name, user)
+
+        uri = job.to_uri()
+        permissions = [Permission(uri=str(uri), action=action)]
+        if job.name:
+            permissions.append(
+                Permission(uri=str(_job_uri_with_name(uri, job.name)), action=action)
+            )
+        await check_any_permissions(request, permissions)
+        return job
 
     async def handle_get(self, request: aiohttp.web.Request) -> aiohttp.web.Response:
-        job = await self._resolve_job(request)
-
-        permission = Permission(uri=str(job.to_uri()), action="read")
-        await check_permissions(request, [permission])
+        job = await self._resolve_job(request, "read")
 
         response_payload = convert_job_to_job_response(job)
         self._job_response_validator.check(response_payload)
@@ -531,10 +538,7 @@ class JobsHandler:
     async def handle_delete(
         self, request: aiohttp.web.Request
     ) -> aiohttp.web.StreamResponse:
-        job = await self._resolve_job(request)
-
-        permission = Permission(uri=str(job.to_uri()), action="write")
-        await check_permissions(request, [permission])
+        job = await self._resolve_job(request, "write")
 
         await self._jobs_service.delete_job(job.id)
         raise aiohttp.web.HTTPNoContent()
@@ -758,3 +762,35 @@ def _parse_bool(value: str) -> bool:
         return True
     else:
         raise ValueError('Required "0", "1", "false" or "true"')
+
+
+async def check_any_permissions(
+    request: aiohttp.web.Request, permissions: List[Permission]
+) -> None:
+    user_name = await check_authorized(request)
+    auth_policy = request.config_dict.get(AUTZ_KEY)
+    if not auth_policy:
+        raise RuntimeError("Auth policy not configured")
+
+    try:
+        missing = await auth_policy.get_missing_permissions(user_name, permissions)
+    except aiohttp.ClientError as e:
+        # re-wrap in order not to expose the client
+        raise RuntimeError(e) from e
+
+    if len(missing) >= len(permissions):
+        payload = {"missing": [_permission_to_primitive(p) for p in missing]}
+        raise aiohttp.web.HTTPForbidden(
+            text=json.dumps(payload), content_type="application/json"
+        )
+
+
+def _permission_to_primitive(perm: Permission) -> Dict[str, str]:
+    return {"uri": perm.uri, "action": perm.action}
+
+
+def _job_uri_with_name(uri: URL, name: str) -> URL:
+    assert name
+    assert uri.host
+    assert uri.name
+    return uri.with_name(name)

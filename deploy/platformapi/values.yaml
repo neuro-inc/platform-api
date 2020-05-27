@@ -104,10 +104,10 @@ NP_OAUTH_AUDIENCE:
   staging: https://platform.staging.neuromation.io
   prod: https://platform.prod.neuromation.io
 NP_OAUTH_SUCCESS_REDIRECT_URL:
-  _default: https://neu.ro/#running-your-first-job
-  dev: https://neu.ro/#running-your-first-job
-  staging: https://neu.ro/#running-your-first-job
-  prod: https://neu.ro/#running-your-first-job
+  _default: https://dev.neu.ro/oauth/login
+  dev: https://dev.neu.ro/oauth/login
+  staging: https://staging.neu.ro/oauth/login
+  prod: https://staging.neu.ro/oauth/login
 NP_OAUTH_HEADLESS_CALLBACK_URL:
   _default: https://staging.neu.ro/oauth/show-code
   dev: https://dev.neu.ro/oauth/show-code
