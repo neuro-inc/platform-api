@@ -1128,7 +1128,7 @@ class TestKubeOrchestrator:
         assert ingress.labels == {
             "platform.neuromation.io/job": job.id,
             "platform.neuromation.io/user": job.owner,
-            "job.neuromation.io/name": job.name,
+            "platform.neuromation.io/job-name": job.name,
         }
 
     @pytest.mark.asyncio

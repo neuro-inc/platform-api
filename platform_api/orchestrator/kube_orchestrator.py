@@ -560,7 +560,7 @@ class KubeOrchestrator(Orchestrator):
     ) -> Dict[str, str]:
         labels = self._get_user_pod_labels(job)
         if job.name:
-            labels["job.neuromation.io/name"] = job.name
+            labels["platform.neuromation.io/job-name"] = job.name
         return labels
 
     def _get_ingress_labels(self, job: Job, service: Service) -> Dict[str, str]:
