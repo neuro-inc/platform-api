@@ -120,8 +120,6 @@ spec:
           value: http://localhost:8080/api/v1
         - name: NP_ENFORCER_TOKEN
           value: eyJ0eXAiOiJKV1QiLCJhbGciOiJIUzI1NiJ9.eyJpZGVudGl0eSI6ImNvbXB1dGUifQ.IJDlKCfbiuNGZH9Sh6p-CdUL5KxEK5JStqzfDk4-RAA
-        - name: NP_USE_CLUSTER_NAMES_IN_URIS
-          value: "1"
         - name: NP_API_ZIPKIN_URL
           value: http://zipkin:9411
         - name: NP_API_ZIPKIN_SAMPLE_RATE

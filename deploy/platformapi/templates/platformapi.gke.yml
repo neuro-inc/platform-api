@@ -98,8 +98,6 @@ spec:
               key: compute_token
         - name: NP_CORS_ORIGINS
           value: {{ printf "%s" (pluck .Values.global.env .Values.NP_CORS_ORIGINS | first | default .Values.NP_CORS_ORIGINS._default) }}
-        - name: NP_USE_CLUSTER_NAMES_IN_URIS
-          value: {{ printf "%s" (pluck .Values.global.env .Values.NP_USE_CLUSTER_NAMES_IN_URIS | first | default .Values.NP_USE_CLUSTER_NAMES_IN_URIS._default) | quote }}
         - name: NP_API_ZIPKIN_URL
           value: {{ printf "%s" (pluck .Values.global.env .Values.NP_API_ZIPKIN_URL | first | default .Values.NP_API_ZIPKIN_URL._default) | quote }}
         - name: NP_API_ZIPKIN_SAMPLE_RATE
