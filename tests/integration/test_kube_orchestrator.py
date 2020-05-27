@@ -1340,6 +1340,67 @@ class TestKubeOrchestrator:
         with pytest.raises(StatusException, match="NotFound"):
             await kube_client.get_network_policy(networkpolicy_name)
 
+    @pytest.mark.asyncio
+    async def test_cleanup_old_named_ingresses(
+        self,
+        kube_client: MyKubeClient,
+        kube_orchestrator: KubeOrchestrator,
+        delete_job_later: Callable[[Job], Awaitable[None]],
+    ) -> None:
+        container = Container(
+            image="ubuntu",
+            command="sleep 1h",
+            http_server=ContainerHTTPServer(80),
+            resources=ContainerResources(cpu=0.1, memory_mb=16,),
+        )
+        name = f"job-{uuid.uuid4().hex[:6]}"
+        job1 = MyJob(
+            orchestrator=kube_orchestrator,
+            record=JobRecord.create(
+                name=name,
+                owner="owner1",
+                request=JobRequest.create(container),
+                cluster_name="test-cluster",
+            ),
+        )
+        job2 = MyJob(
+            orchestrator=kube_orchestrator,
+            record=JobRecord.create(
+                name=name,
+                owner="owner2",
+                request=JobRequest.create(container),
+                cluster_name="test-cluster",
+            ),
+        )
+        await delete_job_later(job1)
+        await kube_orchestrator.prepare_job(job1)
+        await kube_orchestrator.start_job(job1)
+
+        await delete_job_later(job2)
+        await kube_orchestrator.prepare_job(job2)
+        await kube_orchestrator.start_job(job2)
+
+        await kube_client.get_ingress(job1.id)
+        await kube_client.get_ingress(job2.id)
+
+        job3 = MyJob(
+            orchestrator=kube_orchestrator,
+            record=JobRecord.create(
+                name=name,
+                owner="owner1",
+                request=JobRequest.create(container),
+                cluster_name="test-cluster",
+            ),
+        )
+        await delete_job_later(job3)
+        await kube_orchestrator.prepare_job(job3)
+        await kube_orchestrator.start_job(job3)
+
+        with pytest.raises(JobNotFoundException):
+            await kube_client.get_ingress(job1.id)
+        await kube_client.get_ingress(job2.id)
+        await kube_client.get_ingress(job3.id)
+
 
 @pytest.fixture
 async def delete_pod_later(

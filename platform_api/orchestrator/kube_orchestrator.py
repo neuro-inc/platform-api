@@ -566,8 +566,16 @@ class KubeOrchestrator(Orchestrator):
     def _get_ingress_labels(self, job: Job, service: Service) -> Dict[str, str]:
         return {**service.labels, **self._get_job_name_ingress_labels(job, service)}
 
+    async def _delete_ingresses_by_job_name(self, job: Job, service: Service) -> None:
+        labels = self._get_job_name_ingress_labels(job, service)
+        try:
+            await self._client.delete_all_ingresses(labels=labels)
+        except Exception as e:
+            logger.warning(f"Failed to remove ingresses {labels}: {e}")
+
     async def _create_ingress(self, job: Job, service: Service) -> None:
-        # TODO: clean up existing ingress resources
+        if job.name:
+            await self._delete_ingresses_by_job_name(job, service)
         name = self._get_job_ingress_name(job)
         rules = [
             IngressRule.from_service(host=host, service=service)
