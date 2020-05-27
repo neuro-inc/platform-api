@@ -1049,7 +1049,7 @@ class TestKubeOrchestrator:
         ]
 
     @pytest.mark.asyncio
-    async def test_job_service_labels(
+    async def test_job_resource_labels(
         self,
         kube_config: KubeConfig,
         kube_orchestrator: KubeOrchestrator,
@@ -1081,8 +1081,15 @@ class TestKubeOrchestrator:
             "platform.neuromation.io/user": job.owner,
         }
 
+        ingress_name = job.id
+        ingress = await kube_client.get_ingress(ingress_name)
+        assert ingress.labels == {
+            "platform.neuromation.io/job": job.id,
+            "platform.neuromation.io/user": job.owner,
+        }
+
     @pytest.mark.asyncio
-    async def test_job_ingress_labels(
+    async def test_named_job_resource_labels(
         self,
         kube_config: KubeConfig,
         kube_orchestrator: KubeOrchestrator,
@@ -1098,7 +1105,9 @@ class TestKubeOrchestrator:
         job = MyJob(
             orchestrator=kube_orchestrator,
             record=JobRecord.create(
-                request=JobRequest.create(container), cluster_name="test-cluster"
+                name=f"test-{uuid.uuid4().hex[:6]}",
+                request=JobRequest.create(container),
+                cluster_name="test-cluster",
             ),
         )
         await delete_job_later(job)
@@ -1107,11 +1116,19 @@ class TestKubeOrchestrator:
         pod_name = job.id
         await kube_client.wait_pod_is_running(pod_name=pod_name, timeout_s=60.0)
 
+        service_name = job.id
+        service = await kube_client.get_service(service_name)
+        assert service.labels == {
+            "platform.neuromation.io/job": job.id,
+            "platform.neuromation.io/user": job.owner,
+        }
+
         ingress_name = job.id
         ingress = await kube_client.get_ingress(ingress_name)
         assert ingress.labels == {
             "platform.neuromation.io/job": job.id,
             "platform.neuromation.io/user": job.owner,
+            "job.neuromation.io/name": job.name,
         }
 
     @pytest.mark.asyncio
