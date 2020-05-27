@@ -223,8 +223,6 @@ class TestEnvironConfigFactory:
 
         assert not config.cors.allowed_origins
 
-        assert not config.use_cluster_names_in_uris
-
     def test_create_value_error_invalid_port(self) -> None:
         environ = {
             "NP_STORAGE_HOST_MOUNT_PATH": "/tmp",
@@ -291,7 +289,6 @@ class TestEnvironConfigFactory:
             "NP_ENFORCER_PLATFORM_API_URL": "http://platformapi:8080/api/v1",
             "NP_ENFORCER_TOKEN": "compute-token",
             "NP_CORS_ORIGINS": "https://domain1.com,http://do.main",
-            "NP_USE_CLUSTER_NAMES_IN_URIS": "1",
             "NP_API_ZIPKIN_URL": "https://zipkin:9411",
             "NP_API_ZIPKIN_SAMPLE_RATE": "1",
         }
@@ -365,8 +362,6 @@ class TestEnvironConfigFactory:
         assert config.config_client is not None
 
         assert config.cors.allowed_origins == ["https://domain1.com", "http://do.main"]
-
-        assert config.use_cluster_names_in_uris
 
     def test_create_nfs(self) -> None:
         environ = {

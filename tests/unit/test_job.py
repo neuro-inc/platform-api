@@ -138,17 +138,6 @@ class TestContainer:
         uri = container.to_image_uri(registry_config, "test-cluster")
         assert uri == URL("image://test-cluster/project/testimage")
 
-    def test_to_image_uri_no_cluster_name(self) -> None:
-        container = Container(
-            image="example.com/project/testimage",
-            resources=ContainerResources(cpu=1, memory_mb=128),
-        )
-        registry_config = RegistryConfig(
-            url=URL("http://example.com"), username="compute", password="compute_token"
-        )
-        uri = container.to_image_uri(registry_config, None)
-        assert uri == URL("image://project/testimage")
-
     def test_to_image_uri_registry_with_custom_port(self) -> None:
         container = Container(
             image="example.com:5000/project/testimage",
@@ -186,15 +175,9 @@ class TestContainerVolumeFactory:
             )
 
     @pytest.mark.parametrize(
-        "uri",
-        (
-            "storage:///",
-            "storage://",
-            "storage://test-cluster",
-            "storage://test-cluster/",
-        ),
+        "uri", ("storage://test-cluster", "storage://test-cluster/",),
     )
-    def test_invalid_storage_uri_path(self, uri: str) -> None:
+    def test_create_storage_root_path(self, uri: str) -> None:
         volume = ContainerVolumeFactory(
             uri,
             src_mount_path=PurePath("/host"),
@@ -211,10 +194,6 @@ class TestContainerVolumeFactory:
             "storage://test-cluster/path/to/dir",
             "storage://test-cluster/path/to//dir",
             "storage://test-cluster/path/to/./dir",
-            "storage://path/to/dir",
-            "storage://path/to//dir",
-            "storage://path/to/./dir",
-            "storage:///path/to/dir",
         ),
     )
     def test_create(self, uri: str) -> None:
@@ -232,10 +211,25 @@ class TestContainerVolumeFactory:
     @pytest.mark.parametrize(
         "uri",
         (
-            "storage:///../to/dir",
-            "storage://path/../dir",
-            "storage://test-cluster/path/../dir",
+            "storage:",
+            "storage:/",
+            "storage://",
+            "storage:/path/to/dir",
+            "storage://path/to/dir",
         ),
+    )
+    def test_create_invalid_uri(self, uri: str) -> None:
+        with pytest.raises(ValueError, match="Invalid URI cluster"):
+            ContainerVolumeFactory(
+                uri,
+                src_mount_path=PurePath("/host"),
+                dst_mount_path=PurePath("/container"),
+                cluster_name="test-cluster",
+            ).create()
+
+    @pytest.mark.parametrize(
+        "uri",
+        ("storage://test-cluster/../to/dir", "storage://test-cluster/path/../dir",),
     )
     def test_create_invalid_path(self, uri: str) -> None:
         with pytest.raises(ValueError, match="Invalid path"):
@@ -293,7 +287,7 @@ class TestContainerBuilder:
             "http": {"port": 80},
             "volumes": [
                 {
-                    "src_storage_uri": "storage://path/to/dir",
+                    "src_storage_uri": "storage://test-cluster/path/to/dir",
                     "dst_path": "/container/path",
                     "read_only": True,
                 }
@@ -309,7 +303,7 @@ class TestContainerBuilder:
             env={"TESTVAR": "testvalue"},
             volumes=[
                 ContainerVolume(
-                    uri=URL("storage://path/to/dir"),
+                    uri=URL("storage://test-cluster/path/to/dir"),
                     src_path=PurePath("/tmp/path/to/dir"),
                     dst_path=PurePath("/container/path"),
                     read_only=True,
@@ -375,7 +369,7 @@ class TestContainerBuilder:
             "ssh": {"port": 22},
             "volumes": [
                 {
-                    "src_storage_uri": "storage://path/to/dir",
+                    "src_storage_uri": "storage://test-cluster/path/to/dir",
                     "dst_path": "/container/path",
                     "read_only": True,
                 }
@@ -390,7 +384,7 @@ class TestContainerBuilder:
             env={"TESTVAR": "testvalue"},
             volumes=[
                 ContainerVolume(
-                    uri=URL("storage://path/to/dir"),
+                    uri=URL("storage://test-cluster/path/to/dir"),
                     src_path=PurePath("/tmp/path/to/dir"),
                     dst_path=PurePath("/container/path"),
                     read_only=True,
@@ -411,7 +405,7 @@ class TestContainerBuilder:
             "http": {"port": 80},
             "volumes": [
                 {
-                    "src_storage_uri": "storage://path/to/dir",
+                    "src_storage_uri": "storage://test-cluster/path/to/dir",
                     "dst_path": "/container/path",
                     "read_only": True,
                 }
@@ -426,7 +420,7 @@ class TestContainerBuilder:
             env={"TESTVAR": "testvalue"},
             volumes=[
                 ContainerVolume(
-                    uri=URL("storage://path/to/dir"),
+                    uri=URL("storage://test-cluster/path/to/dir"),
                     src_path=PurePath("/tmp/path/to/dir"),
                     dst_path=PurePath("/container/path"),
                     read_only=True,
@@ -1299,20 +1293,6 @@ class TestJob:
         )
         assert job.to_uri() == URL(f"job://test-cluster/compute/{job.id}")
 
-    def test_to_uri_no_use_cluster_name(
-        self, mock_orchestrator: MockOrchestrator, job_request: JobRequest
-    ) -> None:
-        job = Job(
-            mock_orchestrator.storage_config,
-            mock_orchestrator.config,
-            record=JobRecord.create(
-                request=job_request, cluster_name="test-cluster", owner="testuser"
-            ),
-        )
-        assert job.to_uri(use_cluster_names_in_uris=False) == URL(
-            f"job://testuser/{job.id}"
-        )
-
     def test_to_uri_no_cluster(
         self, mock_orchestrator: MockOrchestrator, job_request: JobRequest
     ) -> None:
@@ -1323,7 +1303,8 @@ class TestJob:
                 request=job_request, cluster_name="", owner="testuser"
             ),
         )
-        assert job.to_uri() == URL(f"job://testuser/{job.id}")
+        with pytest.raises(AssertionError):
+            job.to_uri()
 
     def test_to_uri_no_owner(
         self, mock_orchestrator: MockOrchestrator, job_request: JobRequest
@@ -1336,18 +1317,6 @@ class TestJob:
             ),
         )
         assert job.to_uri() == URL(f"job://test-cluster/{job.id}")
-
-    def test_to_uri_no_cluster_no_owner(
-        self, mock_orchestrator: MockOrchestrator, job_request: JobRequest
-    ) -> None:
-        job = Job(
-            mock_orchestrator.storage_config,
-            mock_orchestrator.config,
-            record=JobRecord.create(
-                request=job_request, cluster_name="", orphaned_job_owner=""
-            ),
-        )
-        assert job.to_uri() == URL(f"job:/{job.id}")
 
     def test_to_and_from_primitive(
         self, mock_orchestrator: MockOrchestrator, job_request_payload: Dict[str, Any]

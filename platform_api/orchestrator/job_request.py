@@ -191,19 +191,13 @@ class Container:
         prefix = f"{registry_config.host}/"
         return self.image.startswith(prefix)
 
-    def to_image_uri(
-        self, registry_config: RegistryConfig, cluster_name: Optional[str]
-    ) -> URL:
+    def to_image_uri(self, registry_config: RegistryConfig, cluster_name: str) -> URL:
         assert self.belongs_to_registry(registry_config), "Unknown registry"
         prefix = f"{registry_config.host}/"
         repo = self.image.replace(prefix, "", 1)
-        # XXX (serhiy 04-Feb-2020) Temporary patch the URI
-        if cluster_name:
-            uri = URL(f"image://{cluster_name}/{repo}")
-        else:
-            uri = URL(f"image://{repo}")
-        path, *_ = uri.path.split(":", 1)
-        return uri.with_path(path)
+        path, *_ = repo.split(":", 1)
+        assert cluster_name
+        return URL(f"image://{cluster_name}/{path}")
 
     @property
     def port(self) -> Optional[int]:
@@ -407,10 +401,9 @@ class ContainerVolumeFactory:
         url = urlsplit(self._uri)
         if url.scheme != self._scheme:
             raise ValueError(f"Invalid URI scheme: {self._uri}")
-        if url.netloc == self._cluster_name:
-            path = PurePath(url.path)
-        else:
-            path = PurePath(url.netloc + url.path)
+        if url.netloc != self._cluster_name:
+            raise ValueError(f"Invalid URI cluster: {self._uri}")
+        path = PurePath(url.path)
         if path.is_absolute():
             path = path.relative_to("/")
         self._check_dots_in_path(path)
