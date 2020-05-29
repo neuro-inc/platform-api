@@ -1,5 +1,6 @@
 import json
 import logging
+from collections import defaultdict
 from dataclasses import dataclass, replace
 from pathlib import PurePath
 from typing import (
@@ -645,7 +646,9 @@ class BulkJobFilterBuilder:
 
         self._has_access_to_all: bool = False
         self._has_clusters_shared_all: bool = False
-        self._clusters_shared_any: Dict[str, Dict[str, Set[str]]] = {}
+        self._clusters_shared_any: Dict[str, Dict[str, Set[str]]] = defaultdict(
+            lambda: defaultdict(set)
+        )
         self._owners_shared_any: Set[str] = set()
         self._shared_ids: Set[str] = set()
 
@@ -716,8 +719,6 @@ class BulkJobFilterBuilder:
                 # read/write/manage access to all owner's jobs =
                 # job://cluster/owner
                 self._owners_shared_any.add(owner)
-                if cluster_name not in self._clusters_shared_any:
-                    self._clusters_shared_any[cluster_name] = {}
                 self._clusters_shared_any[cluster_name][owner] = set()
             else:
                 # specific ids or names
@@ -737,10 +738,6 @@ class BulkJobFilterBuilder:
                     continue
 
                 self._owners_shared_any.add(owner)
-                if cluster_name not in self._clusters_shared_any:
-                    self._clusters_shared_any[cluster_name] = {}
-                if owner not in self._clusters_shared_any[cluster_name]:
-                    self._clusters_shared_any[cluster_name][owner] = set()
                 self._clusters_shared_any[cluster_name][owner].add(name)
 
     def _create_bulk_filter(self) -> Optional[JobFilter]:
@@ -764,7 +761,13 @@ class BulkJobFilterBuilder:
         # the scope to the clusters passed in the query, otherwise pull all.
         if not self._has_access_to_all:
             self._optimize_clusters_owners(bulk_filter.owners, bulk_filter.name)
-            bulk_filter = replace(bulk_filter, clusters=self._clusters_shared_any)
+            bulk_filter = replace(
+                bulk_filter,
+                clusters={
+                    cluster_name: dict(owners)
+                    for cluster_name, owners in self._clusters_shared_any.items()
+                },
+            )
         return bulk_filter
 
     def _optimize_clusters_owners(
