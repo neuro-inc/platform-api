@@ -117,17 +117,17 @@ aws_docker_push: build_api_k8s build_ssh_auth_k8s
 	docker tag $(SSH_IMAGE_NAME):$(SSH_IMAGE_TAG) $(SSH_K8S_AWS):latest
 	docker tag $(SSH_IMAGE_NAME):$(SSH_IMAGE_TAG) $(SSH_K8S_AWS):$(CIRCLE_SHA1)
 
-	docker push $(IMAGE_K8S):latest
-	docker push $(IMAGE_K8S):$(CIRCLE_SHA1)
-	docker push $(SSH_K8S):latest
-	docker push $(SSH_K8S):$(CIRCLE_SHA1)
+	docker push $(IMAGE_K8S_AWS):latest
+	docker push $(IMAGE_K8S_AWS):$(CIRCLE_SHA1)
+	docker push $(SSH_K8S_AWS):latest
+	docker push $(SSH_K8S_AWS):$(CIRCLE_SHA1)
 
 	make -C platform_ingress_fallback IMAGE_NAME=$(INGRESS_FALLBACK_IMAGE_NAME) build
 
 	docker tag $(INGRESS_FALLBACK_IMAGE_NAME):latest $(INGRESS_FALLBACK_IMAGE_K8S_AWS):latest
 	docker tag $(INGRESS_FALLBACK_IMAGE_NAME):latest $(INGRESS_FALLBACK_IMAGE_K8S_AWS):$(CIRCLE_SHA1)
-	docker push $(INGRESS_FALLBACK_IMAGE_K8S):latest
-	docker push $(INGRESS_FALLBACK_IMAGE_K8S):$(CIRCLE_SHA1)
+	docker push $(INGRESS_FALLBACK_IMAGE_K8S_AWS):latest
+	docker push $(INGRESS_FALLBACK_IMAGE_K8S_AWS):$(CIRCLE_SHA1)
 
 gke_k8s_deploy: _helm
 	gcloud --quiet container clusters get-credentials $(GKE_CLUSTER_NAME) $(CLUSTER_ZONE_REGION)
