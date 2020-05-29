@@ -308,6 +308,12 @@ workflows:
 
   aws-dev:
     jobs:
+      - test:
+          context: org-dev
+          filters:
+            branches:
+              only:
+                - deploy-to-aws
       - aws_deploy:
           context: org-dev
           requires:
