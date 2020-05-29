@@ -17,6 +17,7 @@ from platform_api.orchestrator.job import (
     JobRestartPolicy,
     JobStatusHistory,
     JobStatusItem,
+    maybe_job_id,
 )
 from platform_api.orchestrator.job_request import (
     Container,
@@ -1790,3 +1791,9 @@ class TestUser:
         )
         user = User(name="name", token="token", quota=quota)
         assert not user.has_quota()
+
+
+def test_maybe_job_id() -> None:
+    assert maybe_job_id("job-1")
+    assert not maybe_job_id("")
+    assert not maybe_job_id("jobname")

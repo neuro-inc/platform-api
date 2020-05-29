@@ -721,3 +721,8 @@ class JobStats:
     gpu_memory: Optional[float] = None
 
     timestamp: float = field(default_factory=time.time)
+
+
+def maybe_job_id(value: str) -> bool:
+    """Check whether the string looks like a job id"""
+    return value.startswith("job-")

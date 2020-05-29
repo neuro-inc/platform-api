@@ -32,6 +32,7 @@ from platform_api.orchestrator.job import (
     Job,
     JobRestartPolicy,
     JobStatusItem,
+    maybe_job_id,
 )
 from platform_api.orchestrator.job_request import (
     Container,
@@ -41,7 +42,11 @@ from platform_api.orchestrator.job_request import (
     JobStatus,
 )
 from platform_api.orchestrator.jobs_service import JobsService
-from platform_api.orchestrator.jobs_storage import JobFilter, JobStorageTransactionError
+from platform_api.orchestrator.jobs_storage import (
+    ClusterOwnerNameSet,
+    JobFilter,
+    JobStorageTransactionError,
+)
 from platform_api.resource import TPUResource
 from platform_api.user import User, authorized_user, untrusted_user
 
@@ -594,7 +599,7 @@ class JobFilterFactory:
                 self._user_name_validator.check(owner)
                 for owner in query.getall("owner", [])
             }
-            clusters: Dict[str, Dict[str, AbstractSet[str]]] = {
+            clusters: ClusterOwnerNameSet = {
                 self._cluster_name_validator.check(cluster_name): {}
                 for cluster_name in query.getall("cluster_name", [])
             }
@@ -641,7 +646,7 @@ class BulkJobFilterBuilder:
         self._has_access_to_all: bool = False
         self._has_clusters_shared_all: bool = False
         self._clusters_shared_any: Dict[str, Dict[str, Set[str]]] = {}
-        self._owners_shared_all: Set[str] = set()
+        self._owners_shared_any: Set[str] = set()
         self._shared_ids: Set[str] = set()
 
     def build(self) -> BulkJobFilter:
@@ -670,7 +675,7 @@ class BulkJobFilterBuilder:
 
         if (
             not self._clusters_shared_any
-            and not self._owners_shared_all
+            and not self._owners_shared_any
             and not self._shared_ids
         ):
             # no job resources whatsoever
@@ -710,7 +715,7 @@ class BulkJobFilterBuilder:
             if sub_tree.can_read():
                 # read/write/manage access to all owner's jobs =
                 # job://cluster/owner
-                self._owners_shared_all.add(owner)
+                self._owners_shared_any.add(owner)
                 if cluster_name not in self._clusters_shared_any:
                     self._clusters_shared_any[cluster_name] = {}
                 self._clusters_shared_any[cluster_name][owner] = set()
@@ -723,35 +728,36 @@ class BulkJobFilterBuilder:
     ) -> None:
         for name, sub_tree in tree.children.items():
             if sub_tree.can_read():
-                if _is_job_id(name):
+                if maybe_job_id(name):
                     self._shared_ids.add(name)
-                else:
-                    if self._query_filter.name and name != self._query_filter.name:
-                        # skipping name
-                        continue
+                    continue
 
-                    self._owners_shared_all.add(owner)
-                    if cluster_name not in self._clusters_shared_any:
-                        self._clusters_shared_any[cluster_name] = {}
-                    if owner not in self._clusters_shared_any[cluster_name]:
-                        self._clusters_shared_any[cluster_name][owner] = set()
-                    self._clusters_shared_any[cluster_name][owner].add(name)
+                if self._query_filter.name and name != self._query_filter.name:
+                    # skipping name
+                    continue
+
+                self._owners_shared_any.add(owner)
+                if cluster_name not in self._clusters_shared_any:
+                    self._clusters_shared_any[cluster_name] = {}
+                if owner not in self._clusters_shared_any[cluster_name]:
+                    self._clusters_shared_any[cluster_name][owner] = set()
+                self._clusters_shared_any[cluster_name][owner].add(name)
 
     def _create_bulk_filter(self) -> Optional[JobFilter]:
         if not (
             self._has_access_to_all
             or self._clusters_shared_any
-            or self._owners_shared_all
+            or self._owners_shared_any
         ):
             return None
         bulk_filter = self._query_filter
-        # `self._owners_shared_all` is already filtered against
+        # `self._owners_shared_any` is already filtered against
         # `self._query_filter.owners`.
-        # if `self._owners_shared_all` is empty and no clusters share full
+        # if `self._owners_shared_any` is empty and no clusters share full
         # access, we still want to try to limit the scope to the owners
         # passed in the query, otherwise pull all.
-        if not self._has_clusters_shared_all and self._owners_shared_all:
-            bulk_filter = replace(bulk_filter, owners=self._owners_shared_all)
+        if not self._has_clusters_shared_all and self._owners_shared_any:
+            bulk_filter = replace(bulk_filter, owners=self._owners_shared_any)
         # `self._clusters_shared_any` is already filtered against
         # `self._query_filter.clusters`.
         # if `self._clusters_shared_any` is empty, we still want to try to limit
@@ -777,10 +783,6 @@ class BulkJobFilterBuilder:
                     and not any(cluster_owners.values())
                 ):
                     cluster_owners.clear()
-
-
-def _is_job_id(value: str) -> bool:
-    return value.startswith("job-")
 
 
 def _parse_bool(value: str) -> bool:

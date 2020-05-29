@@ -57,13 +57,16 @@ class JobStorageJobFoundError(JobsStorageException):
         )
 
 
+ClusterOwnerNameSet = Dict[str, Dict[str, AbstractSet[str]]]
+
+
 @dataclass(frozen=True)
 class JobFilter:
     statuses: AbstractSet[JobStatus] = field(
         default_factory=cast(Type[Set[JobStatus]], set)
     )
-    clusters: Dict[str, Dict[str, AbstractSet[str]]] = field(
-        default_factory=cast(Type[Dict[str, Dict[str, AbstractSet[str]]]], dict)
+    clusters: ClusterOwnerNameSet = field(
+        default_factory=cast(Type[ClusterOwnerNameSet], dict)
     )
     owners: AbstractSet[str] = field(default_factory=cast(Type[Set[str]], set))
     tags: Set[str] = field(default_factory=cast(Type[Set[str]], set))
@@ -346,7 +349,7 @@ class RedisJobsStorage(JobsStorage):
         self,
         *,
         statuses: Iterable[str],
-        clusters: Dict[str, Dict[str, AbstractSet[str]]],
+        clusters: ClusterOwnerNameSet,
         owners: Iterable[str],
         names: Iterable[str],
         tags: Iterable[str],
@@ -475,10 +478,7 @@ class RedisJobsStorage(JobsStorage):
 
     def _update_composite_index(self, tr: Pipeline, job: JobRecord) -> None:
         statuses = [str(s) for s in JobStatus] + [""]
-        clusters: Dict[str, Dict[str, AbstractSet[str]]] = {
-            job.cluster_name: {},
-            "": {},
-        }
+        clusters: ClusterOwnerNameSet = {job.cluster_name: {}, "": {}}
         owners = [job.owner, ""]
         tags = [t for t in job.tags] + [""]
         names = [job.name, ""] if job.name else [""]
@@ -584,7 +584,7 @@ class RedisJobsStorage(JobsStorage):
         self,
         *,
         statuses: AbstractSet[JobStatus],
-        clusters: Dict[str, Dict[str, AbstractSet[str]]],
+        clusters: ClusterOwnerNameSet,
         owners: AbstractSet[str],
         tags: AbstractSet[str],
         name: Optional[str],

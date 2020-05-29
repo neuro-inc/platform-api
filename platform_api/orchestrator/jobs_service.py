@@ -30,6 +30,7 @@ from .job import (
     JobStatusHistory,
     JobStatusItem,
     JobStatusReason,
+    maybe_job_id,
 )
 from .job_request import (
     JobAlreadyExistsException,
@@ -260,7 +261,7 @@ class JobsService:
             user_cluster = user.clusters[0]
         cluster_name = user_cluster.name
 
-        if job_name is not None and job_name.startswith("job-"):
+        if job_name is not None and maybe_job_id(job_name):
             raise JobsServiceException(
                 "Failed to create job: job name cannot start with 'job-' prefix."
             )
