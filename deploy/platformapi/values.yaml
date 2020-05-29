@@ -13,7 +13,7 @@ INGRESS_FALLBACK_IMAGE:
 NP_STORAGE_NFS_SERVER:
   _default: '10.76.126.154'
   dev: '10.76.126.154'
-  dev-aws: 'fs-28cc1fab.efs.us-east-1.amazonaws.com'
+  dev-aws: 'none'
   staging: '10.69.59.50'
   prod: '10.47.20.74'
 NP_STORAGE_NFS_PATH:
@@ -91,7 +91,7 @@ INGRESS_FALLBACK_HOST:
 NP_DB_REDIS_URI:
   _default: redis://10.0.0.11:6379/0
   dev: redis://10.0.0.20:6379/0
-  dev-aws: master.dev-staging-redis-redis.weetmn.use1.cache.amazonaws.com:6379
+  dev-aws: dev-staging-redis-redis.weetmn.ng.0001.use1.cache.amazonaws.com:6379/0
   staging: redis://10.0.0.28:6379/1
   prod: redis://10.0.0.3:6379/0
 NP_REGISTRY_HOST:
