@@ -49,9 +49,8 @@ jobs:
           command: |
             make gke_k8s_deploy_ssh_auth
 
- aws_deploy:
+ aws2_deploy:
     <<: *defaults
-
     steps:
       - checkout
 
