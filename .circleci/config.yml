@@ -49,15 +49,14 @@ jobs:
           command: |
             make gke_k8s_deploy_ssh_auth
 
- aws2_deploy:
+  aws_deploy:
     <<: *defaults
     steps:
       - checkout
-
       - run:
           name: AWS Auth
           command: |
-            make aws_login
+            make -s aws_login
 
       - run:
           name: AWS Docker Push
