@@ -49,6 +49,31 @@ jobs:
           command: |
             make gke_k8s_deploy_ssh_auth
 
+ aws_deploy:
+    <<: *defaults
+
+    steps:
+      - checkout
+
+      - run:
+          name: AWS Auth
+          command: |
+            make aws_login
+
+      - run:
+          name: AWS Docker Push
+          command: |
+            make aws_docker_push
+
+      - run:
+          name: AWS K8s platformapi Deploy
+          command: |
+            make aws_k8s_deploy
+
+      - run:
+          name: AWS K8s ssh-auth Deploy
+          command: |
+            make aws_k8s_deploy_ssh_auth
 
   test:
     <<: *defaults
@@ -281,3 +306,11 @@ workflows:
               only:
                 - /artifactory.*/
 
+  aws-dev:
+    jobs:
+      - aws_deploy:
+          context: org-dev
+          filters:
+            branches:
+              only:
+                - deploy-to-aws
