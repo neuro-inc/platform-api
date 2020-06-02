@@ -30,6 +30,7 @@ from .job import (
     JobStatusHistory,
     JobStatusItem,
     JobStatusReason,
+    maybe_job_id,
 )
 from .job_request import (
     JobAlreadyExistsException,
@@ -221,7 +222,7 @@ class JobsService:
             return
         quota = user_cluster.quota
         run_time_filter = JobFilter(
-            owners={user.name}, clusters={user_cluster.name: set()}
+            owners={user.name}, clusters={user_cluster.name: {}}
         )
         run_times = await self._jobs_storage.get_aggregated_run_time_by_clusters(
             run_time_filter
@@ -260,7 +261,7 @@ class JobsService:
             user_cluster = user.clusters[0]
         cluster_name = user_cluster.name
 
-        if job_name is not None and job_name.startswith("job-"):
+        if job_name is not None and maybe_job_id(job_name):
             raise JobsServiceException(
                 "Failed to create job: job name cannot start with 'job-' prefix."
             )

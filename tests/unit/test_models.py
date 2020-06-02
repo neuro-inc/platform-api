@@ -783,7 +783,7 @@ class TestBulkJobFilterBuilder:
             BulkJobFilterBuilder(query_filter, tree).build()
 
     def test_no_access_with_clusters(self) -> None:
-        query_filter = JobFilter(clusters={"somecluster": set()})
+        query_filter = JobFilter(clusters={"somecluster": {}})
         tree = make_access_tree({"test-cluster/testuser": "read"})
         with pytest.raises(JobFilterException, match="no jobs"):
             BulkJobFilterBuilder(query_filter, tree).build()
@@ -807,13 +807,11 @@ class TestBulkJobFilterBuilder:
         )
 
     def test_full_access_with_clusters(self) -> None:
-        query_filter = JobFilter(clusters={"test-cluster": set(), "somecluster": set()})
+        query_filter = JobFilter(clusters={"test-cluster": {}, "somecluster": {}})
         tree = make_access_tree({"": "manage"})
         bulk_filter = BulkJobFilterBuilder(query_filter, tree).build()
         assert bulk_filter == BulkJobFilter(
-            bulk_filter=JobFilter(
-                clusters={"test-cluster": set(), "somecluster": set()}
-            ),
+            bulk_filter=JobFilter(clusters={"test-cluster": {}, "somecluster": {}}),
             shared_ids=set(),
             shared_ids_filter=None,
         )
@@ -823,9 +821,7 @@ class TestBulkJobFilterBuilder:
         tree = make_access_tree({"test-cluster": "read", "anothercluster": "read"})
         bulk_filter = BulkJobFilterBuilder(query_filter, tree).build()
         assert bulk_filter == BulkJobFilter(
-            bulk_filter=JobFilter(
-                clusters={"test-cluster": set(), "anothercluster": set()}
-            ),
+            bulk_filter=JobFilter(clusters={"test-cluster": {}, "anothercluster": {}}),
             shared_ids=set(),
             shared_ids_filter=None,
         )
@@ -836,7 +832,7 @@ class TestBulkJobFilterBuilder:
         bulk_filter = BulkJobFilterBuilder(query_filter, tree).build()
         assert bulk_filter == BulkJobFilter(
             bulk_filter=JobFilter(
-                clusters={"test-cluster": set(), "anothercluster": set()},
+                clusters={"test-cluster": {}, "anothercluster": {}},
                 owners={"testuser", "someuser"},
             ),
             shared_ids=set(),
@@ -844,11 +840,11 @@ class TestBulkJobFilterBuilder:
         )
 
     def test_cluster_access_with_clusters(self) -> None:
-        query_filter = JobFilter(clusters={"test-cluster": set(), "somecluster": set()})
+        query_filter = JobFilter(clusters={"test-cluster": {}, "somecluster": {}})
         tree = make_access_tree({"test-cluster": "read", "anothercluster": "read"})
         bulk_filter = BulkJobFilterBuilder(query_filter, tree).build()
         assert bulk_filter == BulkJobFilter(
-            bulk_filter=JobFilter(clusters={"test-cluster": set()}),
+            bulk_filter=JobFilter(clusters={"test-cluster": {}}),
             shared_ids=set(),
             shared_ids_filter=None,
         )
@@ -861,7 +857,7 @@ class TestBulkJobFilterBuilder:
         bulk_filter = BulkJobFilterBuilder(query_filter, tree).build()
         assert bulk_filter == BulkJobFilter(
             bulk_filter=JobFilter(
-                clusters={"test-cluster": set(), "anothercluster": set()},
+                clusters={"test-cluster": {}, "anothercluster": {}},
                 owners={"testuser"},
             ),
             shared_ids=set(),
@@ -876,7 +872,7 @@ class TestBulkJobFilterBuilder:
         bulk_filter = BulkJobFilterBuilder(query_filter, tree).build()
         assert bulk_filter == BulkJobFilter(
             bulk_filter=JobFilter(
-                clusters={"test-cluster": set()}, owners={"testuser", "anotheruser"}
+                clusters={"test-cluster": {}}, owners={"testuser", "anotheruser"}
             ),
             shared_ids=set(),
             shared_ids_filter=None,
@@ -891,8 +887,8 @@ class TestBulkJobFilterBuilder:
         assert bulk_filter == BulkJobFilter(
             bulk_filter=JobFilter(
                 clusters={
-                    "test-cluster": {"testuser"},
-                    "anothercluster": {"anotheruser"},
+                    "test-cluster": {"testuser": set()},
+                    "anothercluster": {"anotheruser": set()},
                 },
                 owners={"testuser", "anotheruser"},
             ),
@@ -912,7 +908,7 @@ class TestBulkJobFilterBuilder:
         bulk_filter = BulkJobFilterBuilder(query_filter, tree).build()
         assert bulk_filter == BulkJobFilter(
             bulk_filter=JobFilter(
-                clusters={"test-cluster": set(), "anothercluster": {"testuser"}},
+                clusters={"test-cluster": {}, "anothercluster": {"testuser": set()}},
                 owners={"testuser", "anotheruser"},
             ),
             shared_ids=set(),
@@ -934,9 +930,9 @@ class TestBulkJobFilterBuilder:
         assert bulk_filter == BulkJobFilter(
             bulk_filter=JobFilter(
                 clusters={
-                    "test-cluster": {"testuser", "anotheruser"},
-                    "anothercluster": {"testuser", "thirduser"},
-                    "thirdcluster": {"testuser"},
+                    "test-cluster": {"testuser": set(), "anotheruser": set()},
+                    "anothercluster": {"testuser": set(), "thirduser": set()},
+                    "thirdcluster": {"testuser": set()},
                 },
                 owners={"testuser", "anotheruser", "thirduser"},
             ),
@@ -957,8 +953,8 @@ class TestBulkJobFilterBuilder:
         assert bulk_filter == BulkJobFilter(
             bulk_filter=JobFilter(
                 clusters={
-                    "test-cluster": {"testuser", "anotheruser"},
-                    "anothercluster": set(),
+                    "test-cluster": {"testuser": set(), "anotheruser": set()},
+                    "anothercluster": {},
                 },
             ),
             shared_ids=set(),
@@ -977,9 +973,7 @@ class TestBulkJobFilterBuilder:
         )
         bulk_filter = BulkJobFilterBuilder(query_filter, tree).build()
         assert bulk_filter == BulkJobFilter(
-            bulk_filter=JobFilter(
-                clusters={"test-cluster": set()}, owners={"testuser"}
-            ),
+            bulk_filter=JobFilter(clusters={"test-cluster": {}}, owners={"testuser"}),
             shared_ids={"job-test-1"},
             shared_ids_filter=JobFilter(),
         )
@@ -996,9 +990,7 @@ class TestBulkJobFilterBuilder:
         )
         bulk_filter = BulkJobFilterBuilder(query_filter, tree).build()
         assert bulk_filter == BulkJobFilter(
-            bulk_filter=JobFilter(
-                clusters={"test-cluster": set()}, owners={"testuser"}
-            ),
+            bulk_filter=JobFilter(clusters={"test-cluster": {}}, owners={"testuser"}),
             shared_ids=set(),
             shared_ids_filter=None,
         )
@@ -1037,7 +1029,7 @@ class TestBulkJobFilterBuilder:
         bulk_filter = BulkJobFilterBuilder(query_filter, tree).build()
         assert bulk_filter == BulkJobFilter(
             bulk_filter=JobFilter(
-                clusters={"test-cluster": set()},
+                clusters={"test-cluster": {}},
                 owners={"testuser"},
                 statuses={JobStatus.PENDING},
                 name="testname",
@@ -1048,6 +1040,107 @@ class TestBulkJobFilterBuilder:
                 statuses={JobStatus.PENDING},
                 name="testname",
             ),
+        )
+
+    def test_shared_by_name(self) -> None:
+        query_filter = JobFilter()
+        tree = make_access_tree(
+            {
+                "test-cluster/testuser": "read",
+                "test-cluster/anotheruser/job-test-1": "read",
+                "test-cluster/anotheruser/testname": "read",
+            }
+        )
+        bulk_filter = BulkJobFilterBuilder(query_filter, tree).build()
+        assert bulk_filter == BulkJobFilter(
+            bulk_filter=JobFilter(
+                clusters={
+                    "test-cluster": {"testuser": set(), "anotheruser": {"testname"}}
+                },
+                owners={"testuser", "anotheruser"},
+            ),
+            shared_ids={"job-test-1"},
+            shared_ids_filter=JobFilter(),
+        )
+
+    def test_shared_by_name_with_name(self) -> None:
+        query_filter = JobFilter(name="testname")
+        tree = make_access_tree(
+            {
+                "test-cluster/testuser": "read",
+                "test-cluster/anotheruser/job-test-1": "read",
+                "test-cluster/anotheruser/testname": "read",
+                "test-cluster/anotheruser/testname2": "read",
+                "test-cluster/thirduser/testname": "read",
+                "test-cluster/forthduser/testname2": "read",
+            }
+        )
+        bulk_filter = BulkJobFilterBuilder(query_filter, tree).build()
+        assert bulk_filter == BulkJobFilter(
+            bulk_filter=JobFilter(
+                clusters={"test-cluster": {}},
+                owners={"testuser", "anotheruser", "thirduser"},
+                name="testname",
+            ),
+            shared_ids={"job-test-1"},
+            shared_ids_filter=JobFilter(name="testname"),
+        )
+
+    def test_shared_by_name_with_owners(self) -> None:
+        query_filter = JobFilter(owners={"anotheruser", "someuser"})
+        tree = make_access_tree(
+            {
+                "test-cluster/testuser": "read",
+                "test-cluster/anotheruser/job-test-1": "read",
+                "test-cluster/anotheruser/testname": "read",
+                "test-cluster/thirduser/testname": "read",
+            }
+        )
+        bulk_filter = BulkJobFilterBuilder(query_filter, tree).build()
+        assert bulk_filter == BulkJobFilter(
+            bulk_filter=JobFilter(
+                clusters={"test-cluster": {"anotheruser": {"testname"}}},
+                owners={"anotheruser"},
+            ),
+            shared_ids={"job-test-1"},
+            shared_ids_filter=JobFilter(owners={"anotheruser", "someuser"}),
+        )
+
+    def test_shared_by_name_with_owner_and_name(self) -> None:
+        query_filter = JobFilter(owners={"anotheruser"}, name="testname")
+        tree = make_access_tree(
+            {
+                "test-cluster/testuser": "read",
+                "test-cluster/anotheruser/job-test-1": "read",
+                "test-cluster/anotheruser/testname": "read",
+                "test-cluster/anotheruser/testname2": "read",
+                "test-cluster/thirduser/testname": "read",
+            }
+        )
+        bulk_filter = BulkJobFilterBuilder(query_filter, tree).build()
+        assert bulk_filter == BulkJobFilter(
+            bulk_filter=JobFilter(
+                clusters={"test-cluster": {}}, owners={"anotheruser"}, name="testname",
+            ),
+            shared_ids={"job-test-1"},
+            shared_ids_filter=JobFilter(owners={"anotheruser"}, name="testname"),
+        )
+
+    def test_shared_by_name_with_owner_and_name_2(self) -> None:
+        query_filter = JobFilter(owners={"anotheruser"}, name="testname")
+        tree = make_access_tree(
+            {
+                "test-cluster/testuser": "read",
+                "test-cluster/anotheruser/job-test-1": "read",
+                "test-cluster/anotheruser/testname2": "read",
+                "test-cluster/thirduser/testname": "read",
+            }
+        )
+        bulk_filter = BulkJobFilterBuilder(query_filter, tree).build()
+        assert bulk_filter == BulkJobFilter(
+            bulk_filter=None,
+            shared_ids={"job-test-1"},
+            shared_ids_filter=JobFilter(owners={"anotheruser"}, name="testname"),
         )
 
 
