@@ -137,6 +137,7 @@ class TestPodDescriptor:
                         "env": [],
                         "volumeMounts": [],
                         "terminationMessagePolicy": "FallbackToLogsOnError",
+                        "stdin": True,
                     }
                 ],
                 "volumes": [],
@@ -268,6 +269,7 @@ class TestPodDescriptor:
                             "periodSeconds": 1,
                         },
                         "terminationMessagePolicy": "FallbackToLogsOnError",
+                        "stdin": True,
                     }
                 ],
                 "volumes": [],
@@ -322,6 +324,7 @@ class TestPodDescriptor:
                             "periodSeconds": 1,
                         },
                         "terminationMessagePolicy": "FallbackToLogsOnError",
+                        "stdin": True,
                     }
                 ],
                 "volumes": [],
@@ -368,6 +371,7 @@ class TestPodDescriptor:
                             }
                         },
                         "terminationMessagePolicy": "FallbackToLogsOnError",
+                        "stdin": True,
                     }
                 ],
                 "volumes": [],
@@ -431,6 +435,7 @@ class TestPodDescriptor:
                         },
                         "ports": [{"containerPort": 1234}],
                         "terminationMessagePolicy": "FallbackToLogsOnError",
+                        "stdin": True,
                     }
                 ],
                 "volumes": [{"name": "dshm", "emptyDir": {"medium": "Memory"}}],
