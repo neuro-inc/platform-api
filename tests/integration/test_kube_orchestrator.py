@@ -1510,11 +1510,7 @@ class TestKubeClient:
     @pytest.mark.asyncio
     @pytest.mark.parametrize(
         "entrypoint,command",
-        [
-            (None, "/bin/echo false"),
-            ("/bin/echo false", None),
-            ("/bin/echo", "false"),
-        ],
+        [(None, "/bin/echo false"), ("/bin/echo false", None), ("/bin/echo", "false"),],
     )
     async def test_run_check_entrypoint_and_command(
         self,
