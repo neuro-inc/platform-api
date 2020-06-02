@@ -1511,7 +1511,6 @@ class TestKubeClient:
     @pytest.mark.parametrize(
         "entrypoint,command",
         [
-            (None, None),
             (None, "/bin/echo false"),
             ("/bin/echo false", None),
             ("/bin/echo", "false"),
