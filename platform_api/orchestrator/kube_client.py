@@ -704,8 +704,8 @@ class PodDescriptor:
         if self.resources:
             container_payload["resources"] = self.resources.to_primitive()
         if self.tty:
-            container_payload["stdin"] = True
             container_payload["tty"] = True
+        container_payload["stdin"] = True
 
         ports = self._to_primitive_ports()
         if ports:
