@@ -335,7 +335,7 @@ workflows:
           filters:
             branches:
               only:
-                - deploy-to-aws
+                - master
       - aws_ssh_auth_deploy:
           context: org-dev
           requires:
@@ -343,4 +343,4 @@ workflows:
           filters:
             branches:
               only:
-                - deploy-to-aws
+                - master
