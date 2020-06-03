@@ -110,17 +110,24 @@ gke_docker_push: build_api_k8s build_ssh_auth_k8s
 	docker tag $(INGRESS_FALLBACK_IMAGE_NAME):latest $(INGRESS_FALLBACK_IMAGE_K8S):$(CIRCLE_SHA1)
 	docker push $(INGRESS_FALLBACK_IMAGE_K8S)
 
-aws_docker_push: build_api_k8s build_ssh_auth_k8s
+gcr_login:
+	@echo $(GKE_ACCT_AUTH) | base64 --decode | docker login -u _json_key --password-stdin https://gcr.io
+
+ecr_login:
 	$$(aws ecr get-login --no-include-email --region $(AWS_REGION) )
-	docker tag $(IMAGE_NAME):$(IMAGE_TAG) $(IMAGE_K8S_AWS):latest
-	docker tag $(IMAGE_NAME):$(IMAGE_TAG) $(IMAGE_K8S_AWS):$(CIRCLE_SHA1)
+
+
+aws_ssh_auth_docker_push: build_ssh_auth_k8s ecr_login
 	docker tag $(SSH_IMAGE_NAME):$(SSH_IMAGE_TAG) $(SSH_K8S_AWS):latest
 	docker tag $(SSH_IMAGE_NAME):$(SSH_IMAGE_TAG) $(SSH_K8S_AWS):$(CIRCLE_SHA1)
-
-	docker push $(IMAGE_K8S_AWS):latest
-	docker push $(IMAGE_K8S_AWS):$(CIRCLE_SHA1)
 	docker push $(SSH_K8S_AWS):latest
 	docker push $(SSH_K8S_AWS):$(CIRCLE_SHA1)
+
+aws_docker_push: build_api_k8s ecr_login
+	docker tag $(IMAGE_NAME):$(IMAGE_TAG) $(IMAGE_K8S_AWS):latest
+	docker tag $(IMAGE_NAME):$(IMAGE_TAG) $(IMAGE_K8S_AWS):$(CIRCLE_SHA1)
+	docker push $(IMAGE_K8S_AWS):latest
+	docker push $(IMAGE_K8S_AWS):$(CIRCLE_SHA1)
 
 	make -C platform_ingress_fallback IMAGE_NAME=$(INGRESS_FALLBACK_IMAGE_NAME) build
 
