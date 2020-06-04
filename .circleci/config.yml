@@ -49,6 +49,45 @@ jobs:
           command: |
             make gke_k8s_deploy_ssh_auth
 
+  aws_deploy:
+    <<: *defaults
+    steps:
+      - checkout
+      - run:
+          name: AWS Auth
+          command: |
+            make -s aws_login
+
+      - run:
+          name: AWS Docker Push
+          command: |
+            make aws_docker_push
+
+      - run:
+          name: AWS K8s platformapi Deploy
+          command: |
+            make aws_k8s_deploy
+
+
+
+  aws_ssh_auth_deploy:
+    <<: *defaults
+    steps:
+      - checkout
+      - run:
+          name: AWS Auth
+          command: |
+            make -s aws_login
+
+      - run:
+          name: AWS Docker Push
+          command: |
+            make aws_ssh_auth_docker_push
+
+      - run:
+          name: AWS K8s ssh-auth Deploy
+          command: |
+            make aws_k8s_deploy_ssh_auth
 
   test:
     <<: *defaults
@@ -61,7 +100,7 @@ jobs:
       - run:
           name: Configuring Docker Client
           command: |
-            make -s gke_login
+            make -s gcr_login
             # docker-credential-gcloud still relies on Python 2.7,
             # thus we'd better pull testing images before we set up Python 3
             make gke_docker_pull_test
@@ -281,3 +320,27 @@ workflows:
               only:
                 - /artifactory.*/
 
+  dev-aws:
+    jobs:
+      - test:
+          context: org-dev
+          filters:
+            branches:
+              only:
+                - deploy-to-aws
+      - aws_deploy:
+          context: org-dev
+          requires:
+            - test
+          filters:
+            branches:
+              only:
+                - master
+      - aws_ssh_auth_deploy:
+          context: org-dev
+          requires:
+            - test
+          filters:
+            branches:
+              only:
+                - master
