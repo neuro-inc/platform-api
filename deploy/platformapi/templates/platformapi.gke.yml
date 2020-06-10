@@ -132,6 +132,10 @@ spec:
   - host: {{ printf "%s" (pluck .Values.global.env .Values.INGRESS_HOST | first | default .Values.INGRESS_HOST._default) }}
     http:
       paths:
+      - path: /secrets
+        backend:
+          serviceName: platformsecrets
+          servicePort: 8080
       - path: /oauth
         backend:
           serviceName: platformingressauth
