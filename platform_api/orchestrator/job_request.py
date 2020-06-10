@@ -4,6 +4,7 @@ import uuid
 from dataclasses import asdict, dataclass, field
 from pathlib import PurePath
 from typing import Any, Dict, List, Optional
+from urllib.parse import urlsplit
 
 from yarl import URL
 
@@ -372,8 +373,8 @@ class ContainerVolumeFactory:
             If True, append the parsed path from the URI to `dst_mount_path`,
             otherwise use `dst_mount_path` as is. Defaults to True.
         """
-        self._uri = URL(uri)
-        path = PurePath(self._uri.path)
+        self._uri = uri
+        path = PurePath(urlsplit(uri).path)
         if path.is_absolute():
             path = path.relative_to("/")
         self._path = path
@@ -393,7 +394,7 @@ class ContainerVolumeFactory:
         if self._extend_dst_mount_path:
             dst_path /= self._path
         return ContainerVolume(
-            uri=self._uri,
+            uri=URL(self._uri),
             src_path=src_path,
             dst_path=dst_path,
             read_only=self._read_only,

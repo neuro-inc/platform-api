@@ -408,26 +408,34 @@ class TestVolumesValidator:
     def test_destination_paths_are_unique(self) -> None:
         value = [
             {
-                "src_storage_uri": "storage://uri1",
+                "src_storage_uri": "storage://test-cluster/uri1",
                 "dst_path": "path",
                 "read_only": True,
             },
             {
-                "src_storage_uri": "storage://uri2",
+                "src_storage_uri": "storage://test-cluster/uri2",
                 "dst_path": "path",
                 "read_only": True,
             },
         ]
-        validator = create_volumes_validator()
+        validator = create_volumes_validator(cluster_name="test-cluster")
         with pytest.raises(t.DataError):
             assert validator.check(value)
 
     def test_volumes_are_unique(self) -> None:
         value = [
-            {"src_storage_uri": "storage://uri", "dst_path": "path", "read_only": True},
-            {"src_storage_uri": "storage://uri", "dst_path": "path", "read_only": True},
+            {
+                "src_storage_uri": "storage://test-cluster/uri",
+                "dst_path": "path",
+                "read_only": True,
+            },
+            {
+                "src_storage_uri": "storage://test-cluster/uri",
+                "dst_path": "path",
+                "read_only": True,
+            },
         ]
-        validator = create_volumes_validator()
+        validator = create_volumes_validator(cluster_name="test-cluster")
         with pytest.raises(t.DataError):
             assert validator.check(value)
 

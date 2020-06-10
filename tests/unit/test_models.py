@@ -60,7 +60,12 @@ class TestContainerRequestValidator:
         return {
             "image": "testimage",
             "resources": {"cpu": 0.1, "memory_mb": 16},
-            "volumes": [{"src_storage_uri": "storage:///", "dst_path": "/var/storage"}],
+            "volumes": [
+                {
+                    "src_storage_uri": "storage://test-cluster/",
+                    "dst_path": "/var/storage",
+                }
+            ],
         }
 
     @pytest.fixture
@@ -68,7 +73,12 @@ class TestContainerRequestValidator:
         return {
             "image": "testimage",
             "resources": {"cpu": 0.1, "memory_mb": 16, "gpu": 0},
-            "volumes": [{"src_storage_uri": "storage:///", "dst_path": "/var/storage"}],
+            "volumes": [
+                {
+                    "src_storage_uri": "storage://test-cluster/",
+                    "dst_path": "/var/storage",
+                }
+            ],
         }
 
     @pytest.fixture
@@ -76,7 +86,12 @@ class TestContainerRequestValidator:
         return {
             "image": "testimage",
             "resources": {"cpu": 0.1, "memory_mb": 16, "gpu": -1},
-            "volumes": [{"src_storage_uri": "storage:///", "dst_path": "/var/storage"}],
+            "volumes": [
+                {
+                    "src_storage_uri": "storage://test-cluster/",
+                    "dst_path": "/var/storage",
+                }
+            ],
         }
 
     @pytest.fixture
@@ -84,7 +99,12 @@ class TestContainerRequestValidator:
         return {
             "image": "testimage",
             "resources": {"cpu": 0.1, "memory_mb": 16, "gpu": 1},
-            "volumes": [{"src_storage_uri": "storage:///", "dst_path": "/var/storage"}],
+            "volumes": [
+                {
+                    "src_storage_uri": "storage://test-cluster/",
+                    "dst_path": "/var/storage",
+                }
+            ],
         }
 
     @pytest.fixture
@@ -92,7 +112,12 @@ class TestContainerRequestValidator:
         return {
             "image": "testimage",
             "resources": {"cpu": 0.1, "memory_mb": 16, "gpu": 130},
-            "volumes": [{"src_storage_uri": "storage:///", "dst_path": "/var/storage"}],
+            "volumes": [
+                {
+                    "src_storage_uri": "storage://test-cluster/",
+                    "dst_path": "/var/storage",
+                }
+            ],
         }
 
     @pytest.fixture
@@ -100,7 +125,12 @@ class TestContainerRequestValidator:
         return {
             "image": "testimage",
             "resources": {"cpu": 0.1, "memory_mb": 16, "shm": True},
-            "volumes": [{"src_storage_uri": "storage:///", "dst_path": "/var/storage"}],
+            "volumes": [
+                {
+                    "src_storage_uri": "storage://test-cluster/",
+                    "dst_path": "/var/storage",
+                }
+            ],
         }
 
     @pytest.fixture
@@ -108,12 +138,19 @@ class TestContainerRequestValidator:
         return {
             "image": "testimage",
             "resources": {"cpu": 0.1, "memory_mb": 16, "shm": True},
-            "volumes": [{"src_storage_uri": "storage:///", "dst_path": "/var/storage"}],
+            "volumes": [
+                {
+                    "src_storage_uri": "storage://test-cluster/",
+                    "dst_path": "/var/storage",
+                }
+            ],
             "ssh": {"port": 666},
         }
 
     def test_allowed_volumes(self, payload: Dict[str, Any]) -> None:
-        validator = create_container_request_validator(allow_volumes=True)
+        validator = create_container_request_validator(
+            allow_volumes=True, cluster_name="test-cluster"
+        )
         result = validator.check(payload)
         assert result["volumes"][0]["read_only"]
         assert "shm" not in result["resources"]
@@ -121,41 +158,53 @@ class TestContainerRequestValidator:
     def test_allowed_volumes_with_shm(
         self, payload_with_dev_shm: Dict[str, Any]
     ) -> None:
-        validator = create_container_request_validator(allow_volumes=True)
+        validator = create_container_request_validator(
+            allow_volumes=True, cluster_name="test-cluster"
+        )
         result = validator.check(payload_with_dev_shm)
         assert result["volumes"][0]["read_only"]
         assert result["resources"]["shm"]
 
     def test_disallowed_volumes(self, payload: Dict[str, Any]) -> None:
-        validator = create_container_request_validator()
+        validator = create_container_request_validator(cluster_name="test-cluster")
         with pytest.raises(ValueError, match="volumes is not allowed key"):
             validator.check(payload)
 
     def test_with_zero_gpu(self, payload_with_zero_gpu: Dict[str, Any]) -> None:
-        validator = create_container_request_validator(allow_volumes=True)
+        validator = create_container_request_validator(
+            allow_volumes=True, cluster_name="test-cluster"
+        )
         result = validator.check(payload_with_zero_gpu)
         assert result["resources"]["gpu"] == 0
 
     def test_with_ssh(self, payload_with_ssh: Dict[str, Any]) -> None:
-        validator = create_container_request_validator(allow_volumes=True)
+        validator = create_container_request_validator(
+            allow_volumes=True, cluster_name="test-cluster"
+        )
         result = validator.check(payload_with_ssh)
         assert result["ssh"]
         assert result["ssh"]["port"]
         assert result["ssh"]["port"] == 666
 
     def test_with_one_gpu(self, payload_with_one_gpu: Dict[str, Any]) -> None:
-        validator = create_container_request_validator(allow_volumes=True)
+        validator = create_container_request_validator(
+            allow_volumes=True, cluster_name="test-cluster"
+        )
         result = validator.check(payload_with_one_gpu)
         assert result["resources"]["gpu"]
         assert result["resources"]["gpu"] == 1
 
     def test_with_too_many_gpu(self, payload_with_too_many_gpu: Dict[str, Any]) -> None:
-        validator = create_container_request_validator(allow_volumes=True)
+        validator = create_container_request_validator(
+            allow_volumes=True, cluster_name="test-cluster"
+        )
         with pytest.raises(ValueError, match="gpu"):
             validator.check(payload_with_too_many_gpu)
 
     def test_with_negative_gpu(self, payload_with_negative_gpu: Dict[str, Any]) -> None:
-        validator = create_container_request_validator(allow_volumes=True)
+        validator = create_container_request_validator(
+            allow_volumes=True, cluster_name="test-cluster"
+        )
         with pytest.raises(ValueError, match="gpu"):
             validator.check(payload_with_negative_gpu)
 
@@ -244,7 +293,7 @@ class TestContainerRequestValidator:
         validator = create_container_request_validator(
             allowed_tpu_resources=[
                 TPUResource(types=["v2-8"], software_versions=["1.14"])
-            ],
+            ]
         )
         result = validator.check(payload)
         assert result["resources"]["tpu"] == {
@@ -255,20 +304,22 @@ class TestContainerRequestValidator:
     def test_with_entrypoint_and_cmd(self, payload: Dict[str, Any]) -> None:
         payload["entrypoint"] = "/script.sh"
         payload["command"] = "arg1 arg2 arg3"
-        validator = create_container_request_validator(allow_volumes=True)
+        validator = create_container_request_validator(
+            allow_volumes=True, cluster_name="test-cluster"
+        )
         result = validator.check(payload)
         assert result["entrypoint"] == "/script.sh"
         assert result["command"] == "arg1 arg2 arg3"
 
     def test_invalid_entrypoint(self, payload: Dict[str, Any]) -> None:
         payload["entrypoint"] = '"'
-        validator = create_container_request_validator()
+        validator = create_container_request_validator(cluster_name="test-cluster")
         with pytest.raises(DataError, match="invalid command format"):
             validator.check(payload)
 
     def test_invalid_command(self, payload: Dict[str, Any]) -> None:
         payload["command"] = '"'
-        validator = create_container_request_validator()
+        validator = create_container_request_validator(cluster_name="test-cluster")
         with pytest.raises(DataError, match="invalid command format"):
             validator.check(payload)
 
@@ -373,7 +424,7 @@ class TestJobRequestValidator:
             "container": container,
         }
         validator = create_job_request_validator(
-            allowed_gpu_models=(), allowed_tpu_resources=(), cluster_name="testcluster",
+            allowed_gpu_models=(), allowed_tpu_resources=(), cluster_name="testcluster"
         )
         payload = validator.check(request)
         assert payload["cluster_name"] == "testcluster"
@@ -391,7 +442,7 @@ class TestJobRequestValidator:
             "cluster_name": "testcluster",
         }
         validator = create_job_request_validator(
-            allowed_gpu_models=(), allowed_tpu_resources=(), cluster_name="testcluster",
+            allowed_gpu_models=(), allowed_tpu_resources=(), cluster_name="testcluster"
         )
         payload = validator.check(request)
         assert payload["cluster_name"] == "testcluster"
@@ -408,9 +459,9 @@ class TestJobRequestValidator:
             "cluster_name": "testcluster",
         }
         validator = create_job_request_validator(
-            allowed_gpu_models=(), allowed_tpu_resources=(), cluster_name="",
+            allowed_gpu_models=(), allowed_tpu_resources=(), cluster_name="another",
         )
-        with pytest.raises(DataError, match="value is not exactly ''"):
+        with pytest.raises(DataError, match="value is not exactly 'another'"):
             validator.check(request)
 
     @pytest.mark.parametrize("limit_minutes", [0, 1])
@@ -426,7 +477,7 @@ class TestJobRequestValidator:
             "max_run_time_minutes": limit_minutes,
         }
         validator = create_job_request_validator(
-            allowed_gpu_models=(), allowed_tpu_resources=(), cluster_name="",
+            allowed_gpu_models=(), allowed_tpu_resources=(), cluster_name="test-cluster"
         )
         validator.check(request)
 
@@ -442,7 +493,7 @@ class TestJobRequestValidator:
             "max_run_time_minutes": -1,
         }
         validator = create_job_request_validator(
-            allowed_gpu_models=(), allowed_tpu_resources=(), cluster_name="",
+            allowed_gpu_models=(), allowed_tpu_resources=(), cluster_name="test-cluster"
         )
         with pytest.raises(DataError, match="value is less than"):
             validator.check(request)
@@ -495,7 +546,7 @@ class TestJobRequestValidator:
             "restart_policy": "unknown",
         }
         validator = create_job_request_validator(
-            allowed_gpu_models=(), allowed_tpu_resources=(), cluster_name="testcluster",
+            allowed_gpu_models=(), allowed_tpu_resources=(), cluster_name="testcluster"
         )
         with pytest.raises(DataError, match="restart_policy.+any variant"):
             validator.check(request)
