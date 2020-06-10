@@ -39,5 +39,3 @@ Dev :
 
 Staging :
 	```helm --set "global.env=staging" upgrade --install ssh-auth ssh_auth```
-
-
