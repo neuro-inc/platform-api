@@ -392,17 +392,17 @@ class TestVolumesValidator:
     def test_valid_volumes(self) -> None:
         value = [
             {
-                "src_storage_uri": "storage://uri1",
-                "dst_path": "path1",
+                "src_storage_uri": "storage://test-cluster/uri1",
+                "dst_path": "/path1",
                 "read_only": True,
             },
             {
-                "src_storage_uri": "storage://uri2",
-                "dst_path": "path2",
+                "src_storage_uri": "storage://test-cluster/uri2",
+                "dst_path": "/path2",
                 "read_only": True,
             },
         ]
-        validator = create_volumes_validator()
+        validator = create_volumes_validator(cluster_name="test-cluster")
         assert validator.check(value)
 
     def test_destination_paths_are_unique(self) -> None:
@@ -436,7 +436,9 @@ class TestPathUriValidator:
     def test_invalid_uri_scheme(self) -> None:
         cluster = "test-cluster"
         uri = f"invalid://{cluster}/path"
-        validator = create_path_uri_validator(scheme="storage", cluster_name=cluster)
+        validator = create_path_uri_validator(
+            storage_scheme="storage", cluster_name=cluster
+        )
         with pytest.raises(t.DataError, match="Invalid URI scheme"):
             assert validator.check(uri)
 
@@ -452,7 +454,9 @@ class TestPathUriValidator:
     )
     def test_create_invalid_uri(self, uri: str) -> None:
         cluster = "test-cluster"
-        validator = create_path_uri_validator(scheme="storage", cluster_name=cluster)
+        validator = create_path_uri_validator(
+            storage_scheme="storage", cluster_name=cluster
+        )
         with pytest.raises(t.DataError, match="Invalid URI cluster"):
             validator.check(uri)
 
@@ -462,7 +466,9 @@ class TestPathUriValidator:
     )
     def test_create_invalid_path(self, uri: str) -> None:
         cluster = "test-cluster"
-        validator = create_path_uri_validator(scheme="storage", cluster_name=cluster)
+        validator = create_path_uri_validator(
+            storage_scheme="storage", cluster_name=cluster
+        )
         with pytest.raises(t.DataError, match="Invalid path"):
             validator.check(uri)
 

@@ -73,14 +73,16 @@ def create_job_request_validator(
     allowed_gpu_models: Sequence[str],
     allowed_tpu_resources: Sequence[TPUResource],
     cluster_name: str,
+    storage_scheme: str = "storage",
 ) -> t.Trafaret:
     return t.Dict(
         {
             "container": create_container_request_validator(
-                cluster_name=cluster_name,
                 allow_volumes=True,
                 allowed_gpu_models=allowed_gpu_models,
                 allowed_tpu_resources=allowed_tpu_resources,
+                storage_scheme=storage_scheme,
+                cluster_name=cluster_name,
             ),
             t.Key("name", optional=True): create_job_name_validator(),
             t.Key("description", optional=True): t.String,
@@ -341,6 +343,7 @@ class JobsHandler:
             allowed_gpu_models=gpu_models,
             allowed_tpu_resources=cluster_config.orchestrator.tpu_resources,
             cluster_name=cluster_config.name,
+            storage_scheme=cluster_config.storage.uri_scheme,
         )
 
     def _get_cluster_config(

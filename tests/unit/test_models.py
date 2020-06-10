@@ -244,7 +244,7 @@ class TestContainerRequestValidator:
         validator = create_container_request_validator(
             allowed_tpu_resources=[
                 TPUResource(types=["v2-8"], software_versions=["1.14"])
-            ]
+            ],
         )
         result = validator.check(payload)
         assert result["resources"]["tpu"] == {
@@ -373,7 +373,7 @@ class TestJobRequestValidator:
             "container": container,
         }
         validator = create_job_request_validator(
-            allowed_gpu_models=(), allowed_tpu_resources=(), cluster_name="testcluster"
+            allowed_gpu_models=(), allowed_tpu_resources=(), cluster_name="testcluster",
         )
         payload = validator.check(request)
         assert payload["cluster_name"] == "testcluster"
@@ -391,7 +391,7 @@ class TestJobRequestValidator:
             "cluster_name": "testcluster",
         }
         validator = create_job_request_validator(
-            allowed_gpu_models=(), allowed_tpu_resources=(), cluster_name="testcluster"
+            allowed_gpu_models=(), allowed_tpu_resources=(), cluster_name="testcluster",
         )
         payload = validator.check(request)
         assert payload["cluster_name"] == "testcluster"
@@ -408,7 +408,7 @@ class TestJobRequestValidator:
             "cluster_name": "testcluster",
         }
         validator = create_job_request_validator(
-            allowed_gpu_models=(), allowed_tpu_resources=(), cluster_name=""
+            allowed_gpu_models=(), allowed_tpu_resources=(), cluster_name="",
         )
         with pytest.raises(DataError, match="value is not exactly ''"):
             validator.check(request)
@@ -426,7 +426,7 @@ class TestJobRequestValidator:
             "max_run_time_minutes": limit_minutes,
         }
         validator = create_job_request_validator(
-            allowed_gpu_models=(), allowed_tpu_resources=(), cluster_name=""
+            allowed_gpu_models=(), allowed_tpu_resources=(), cluster_name="",
         )
         validator.check(request)
 
@@ -442,7 +442,7 @@ class TestJobRequestValidator:
             "max_run_time_minutes": -1,
         }
         validator = create_job_request_validator(
-            allowed_gpu_models=(), allowed_tpu_resources=(), cluster_name=""
+            allowed_gpu_models=(), allowed_tpu_resources=(), cluster_name="",
         )
         with pytest.raises(DataError, match="value is less than"):
             validator.check(request)
@@ -495,7 +495,7 @@ class TestJobRequestValidator:
             "restart_policy": "unknown",
         }
         validator = create_job_request_validator(
-            allowed_gpu_models=(), allowed_tpu_resources=(), cluster_name="testcluster"
+            allowed_gpu_models=(), allowed_tpu_resources=(), cluster_name="testcluster",
         )
         with pytest.raises(DataError, match="restart_policy.+any variant"):
             validator.check(request)

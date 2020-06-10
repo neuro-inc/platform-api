@@ -81,6 +81,5 @@ def create_volume_from_payload(
         dst_mount_path=dst_path,
         extend_dst_mount_path=False,
         read_only=bool(payload.get("read_only")),
-        scheme=storage_config.uri_scheme,
         cluster_name=cluster_name,
     )

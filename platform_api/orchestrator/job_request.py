@@ -35,7 +35,7 @@ class ContainerVolume:
     read_only: bool = False
 
     @staticmethod
-    def create(uri: URL, *args: Any, **kwargs: Any) -> "ContainerVolume":
+    def create(uri: str, *args: Any, **kwargs: Any) -> "ContainerVolume":
         return ContainerVolumeFactory(uri, *args, **kwargs).create()
 
     @classmethod
@@ -358,7 +358,7 @@ class JobStatus(str, enum.Enum):
 class ContainerVolumeFactory:
     def __init__(
         self,
-        uri: URL,
+        uri: str,
         *,
         src_mount_path: PurePath,
         dst_mount_path: PurePath,
@@ -372,8 +372,8 @@ class ContainerVolumeFactory:
             If True, append the parsed path from the URI to `dst_mount_path`,
             otherwise use `dst_mount_path` as is. Defaults to True.
         """
-        self._uri: URL = uri
-        path = PurePath(uri.path)
+        self._uri = URL(uri)
+        path = PurePath(self._uri.path)
         if path.is_absolute():
             path = path.relative_to("/")
         self._path = path

@@ -73,20 +73,24 @@ def _check_dots_in_path(path: PurePath) -> None:
         raise t.DataError(f"Invalid path: {path}")
 
 
-def create_path_uri_validator(scheme: str, cluster_name: str) -> t.Trafaret:
-    assert scheme
+def create_path_uri_validator(storage_scheme: str, cluster_name: str) -> t.Trafaret:
+    assert storage_scheme
 
-    def _validate(uri_str: str) -> URL:
+    def _validate(uri_str: str) -> str:
         # TODO: don't use urlsplit at all
         url = urlsplit(uri_str)
-        if url.scheme != scheme:
-            raise t.DataError(f"Invalid URI scheme: {uri_str}")
+        if url.scheme != storage_scheme:
+            raise t.DataError(
+                f"Invalid URI scheme: '{url.scheme}' != '{storage_scheme}'"
+            )
         if url.netloc != cluster_name:
-            raise t.DataError(f"Invalid URI cluster: {uri_str}")
+            raise t.DataError(
+                f"Invalid URI cluster: '{url.netloc}' != '{cluster_name}'"
+            )
         # TODO (yartem) path can have '?' and '#' so should include query and fragment
         path = PurePath(url.path)
         _check_dots_in_path(path)
-        return URL.build(scheme=scheme, host=cluster_name, path=str(path))
+        return f"{url.scheme}://{url.netloc}/{url.path}?{url.query}{url.fragment}"
 
     return t.Call(_validate)
 
@@ -95,7 +99,7 @@ def create_mount_path_validator() -> t.Trafaret:
     def _validate(path_str: str) -> str:
         path = PurePath(path_str)
         if not path.is_absolute():
-            raise t.DataError(f"Mount path must be absolute: {path}")
+            raise t.DataError(f"Mount path must be absolute: '{path}'")
         _check_dots_in_path(path)
         return str(path)
 
@@ -118,11 +122,13 @@ def _validate_unique_volume_paths(
     return volumes
 
 
-def create_volumes_validator(cluster_name: str = "") -> t.Trafaret:
+def create_volumes_validator(
+    storage_scheme: str = "storage", cluster_name: str = ""
+) -> t.Trafaret:
     single_volume_validator: t.Trafaret = t.Dict(
         {
             "src_storage_uri": create_path_uri_validator(
-                scheme="storage", cluster_name=cluster_name
+                storage_scheme=storage_scheme, cluster_name=cluster_name
             ),
             "dst_path": create_mount_path_validator(),
             t.Key("read_only", optional=True, default=True): t.Bool(),
@@ -204,6 +210,7 @@ def create_tpu_validator(
 
 def create_container_validator(
     *,
+    storage_scheme: str = "",
     cluster_name: str = "",
     allow_volumes: bool = False,
     allow_any_gpu_models: bool = False,
@@ -252,7 +259,7 @@ def create_container_validator(
         validator += t.Dict(
             {
                 t.Key("volumes", optional=True): create_volumes_validator(
-                    cluster_name=cluster_name
+                    storage_scheme=storage_scheme, cluster_name=cluster_name
                 )
             }
         )
@@ -262,30 +269,33 @@ def create_container_validator(
 
 def create_container_request_validator(
     *,
-    cluster_name: str = "",
     allow_volumes: bool = False,
     allowed_gpu_models: Optional[Sequence[str]] = None,
     allow_any_tpu: bool = False,
     allowed_tpu_resources: Sequence[TPUResource] = (),
+    storage_scheme: str = "storage",
+    cluster_name: str = "",
 ) -> t.Trafaret:
     return create_container_validator(
-        cluster_name=cluster_name,
         allow_volumes=allow_volumes,
         allowed_gpu_models=allowed_gpu_models,
         allow_any_tpu=allow_any_tpu,
         allowed_tpu_resources=allowed_tpu_resources,
+        storage_scheme=storage_scheme,
+        cluster_name=cluster_name,
     )
 
 
 def create_container_response_validator(
-    cluster_name: str = "",  # TODO: or 'default' ?
+    cluster_name: str = "", storage_scheme: str = "storage"
 ) -> t.Trafaret:
     return create_container_validator(
-        cluster_name=cluster_name,
         allow_volumes=True,
         allow_any_gpu_models=True,
         allow_any_tpu=True,
         allow_any_command=True,
+        storage_scheme=storage_scheme,
+        cluster_name=cluster_name,
     )
 
 
