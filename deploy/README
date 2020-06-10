@@ -24,12 +24,11 @@ SSH-Auth
 
 ## Platform api
 
-Dev : 
+Dev :
 	```helm --set "global.env=dev" upgrade --install platformapi platformapi```
 
 Staging :
 	```helm --set "global.env=staging" upgrade --install platformapi platformapi```
-
 
 
 ## SSH-Auth
