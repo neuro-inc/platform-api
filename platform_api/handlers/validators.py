@@ -81,7 +81,6 @@ def create_path_uri_validator(
         assert cluster_name
 
     def _validate(uri_str: str) -> str:
-        # TODO: don't use urlsplit at all
         url = urlsplit(uri_str)
         if url.scheme != storage_scheme:
             raise t.DataError(
