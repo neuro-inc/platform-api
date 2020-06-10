@@ -8,6 +8,8 @@ from platform_api.handlers.validators import (
     JOB_NAME_MAX_LENGTH,
     USER_NAME_MAX_LENGTH,
     create_job_name_validator,
+    create_mount_path_validator,
+    create_path_uri_validator,
     create_user_name_validator,
     create_volumes_validator,
 )
@@ -428,3 +430,52 @@ class TestVolumesValidator:
         validator = create_volumes_validator()
         with pytest.raises(t.DataError):
             assert validator.check(value)
+
+
+class TestPathUriValidator:
+    def test_invalid_uri_scheme(self) -> None:
+        cluster = "test-cluster"
+        uri = f"invalid://{cluster}/path"
+        validator = create_path_uri_validator(scheme="storage", cluster_name=cluster)
+        with pytest.raises(t.DataError, match="Invalid URI scheme"):
+            assert validator.check(uri)
+
+    @pytest.mark.parametrize(
+        "uri",
+        (
+            "storage:",
+            "storage:/",
+            "storage://",
+            "storage:/path/to/dir",
+            "storage://path/to/dir",
+        ),
+    )
+    def test_create_invalid_uri(self, uri: str) -> None:
+        cluster = "test-cluster"
+        validator = create_path_uri_validator(scheme="storage", cluster_name=cluster)
+        with pytest.raises(t.DataError, match="Invalid URI cluster"):
+            validator.check(uri)
+
+    @pytest.mark.parametrize(
+        "uri",
+        ("storage://test-cluster/../to/dir", "storage://test-cluster/path/../dir"),
+    )
+    def test_create_invalid_path(self, uri: str) -> None:
+        cluster = "test-cluster"
+        validator = create_path_uri_validator(scheme="storage", cluster_name=cluster)
+        with pytest.raises(t.DataError, match="Invalid path"):
+            validator.check(uri)
+
+
+class TestMountPathValidator:
+    def test_relative_dst_mount_path(self) -> None:
+        mount_path = "container/relative/path"
+        validator = create_mount_path_validator()
+        with pytest.raises(t.DataError, match="Mount path must be absolute"):
+            validator.check(mount_path)
+
+    def test_dots_dst_mount_path(self) -> None:
+        mount_path = "/container/../path"
+        validator = create_mount_path_validator()
+        with pytest.raises(ValueError, match="Invalid path"):
+            validator.check(mount_path)

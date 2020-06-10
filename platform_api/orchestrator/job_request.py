@@ -4,7 +4,6 @@ import uuid
 from dataclasses import asdict, dataclass, field
 from pathlib import PurePath
 from typing import Any, Dict, List, Optional
-from urllib.parse import urlsplit
 
 from yarl import URL
 
@@ -36,8 +35,8 @@ class ContainerVolume:
     read_only: bool = False
 
     @staticmethod
-    def create(*args: Any, **kwargs: Any) -> "ContainerVolume":
-        return ContainerVolumeFactory(*args, **kwargs).create()
+    def create(uri: URL, *args: Any, **kwargs: Any) -> "ContainerVolume":
+        return ContainerVolumeFactory(uri, *args, **kwargs).create()
 
     @classmethod
     def from_primitive(cls, payload: Dict[str, Any]) -> "ContainerVolume":
@@ -359,7 +358,7 @@ class JobStatus(str, enum.Enum):
 class ContainerVolumeFactory:
     def __init__(
         self,
-        uri: str,
+        uri: URL,
         *,
         src_mount_path: PurePath,
         dst_mount_path: PurePath,
@@ -373,8 +372,12 @@ class ContainerVolumeFactory:
             If True, append the parsed path from the URI to `dst_mount_path`,
             otherwise use `dst_mount_path` as is. Defaults to True.
         """
-        self._uri = uri
-        self._path: PurePath = PurePath("")
+        self._uri: URL = uri
+        path = PurePath(uri.path)
+        if path.is_absolute():
+            path = path.relative_to("/")
+        self._path = path
+
         assert cluster_name
         self._cluster_name = cluster_name
 
@@ -390,7 +393,7 @@ class ContainerVolumeFactory:
         if self._extend_dst_mount_path:
             dst_path /= self._path
         return ContainerVolume(
-            uri=URL(self._uri),
+            uri=self._uri,
             src_path=src_path,
             dst_path=dst_path,
             read_only=self._read_only,

@@ -164,6 +164,56 @@ class TestContainer:
         assert uri == URL("image://test-cluster/project/testimage")
 
 
+class TestContainerVolumeFactory:
+    @pytest.mark.parametrize(
+        "uri", ("storage://test-cluster", "storage://test-cluster/",),
+    )
+    def test_create_storage_root_path(self, uri: str) -> None:
+        volume = ContainerVolumeFactory(
+            URL(uri),
+            src_mount_path=PurePath("/host"),
+            dst_mount_path=PurePath("/container"),
+            cluster_name="test-cluster",
+        ).create()
+        assert volume.src_path == PurePath("/host")
+        assert volume.dst_path == PurePath("/container")
+        assert not volume.read_only
+
+    @pytest.mark.parametrize(
+        "uri",
+        (
+            "storage://test-cluster/path/to/dir",
+            "storage://test-cluster/path/to//dir",
+            "storage://test-cluster/path/to/./dir",
+        ),
+    )
+    def test_create(self, uri: str) -> None:
+        volume = ContainerVolume.create(
+            URL(uri),
+            src_mount_path=PurePath("/host"),
+            dst_mount_path=PurePath("/container"),
+            read_only=True,
+            cluster_name="test-cluster",
+        )
+        assert volume.src_path == PurePath("/host/path/to/dir")
+        assert volume.dst_path == PurePath("/container/path/to/dir")
+        assert volume.read_only
+
+    def test_create_without_extending_dst_mount_path(self) -> None:
+        uri = URL("storage://test-cluster/path/to/dir")
+        volume = ContainerVolume.create(
+            uri,
+            src_mount_path=PurePath("/host"),
+            dst_mount_path=PurePath("/container"),
+            read_only=True,
+            extend_dst_mount_path=False,
+            cluster_name="test-cluster",
+        )
+        assert volume.src_path == PurePath("/host/path/to/dir")
+        assert volume.dst_path == PurePath("/container")
+        assert volume.read_only
+
+
 class TestContainerBuilder:
     def test_from_payload_build(self) -> None:
         storage_config = StorageConfig(host_mount_path=PurePath("/tmp"))

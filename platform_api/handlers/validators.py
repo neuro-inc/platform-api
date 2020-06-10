@@ -1,6 +1,6 @@
 import shlex
 from pathlib import PurePath
-from typing import Any, Callable, Dict, Optional, Sequence, Set
+from typing import Any, Dict, Optional, Sequence, Set
 from urllib.parse import urlsplit
 
 import trafaret as t
@@ -68,10 +68,16 @@ def create_job_history_validator() -> t.Trafaret:
     )
 
 
-def _validate_path_uri(*, scheme: str, cluster_name: str) -> Callable[..., str]:
+def _check_dots_in_path(path: PurePath) -> None:
+    if ".." in path.parts:
+        raise t.DataError(f"Invalid path: {path}")
+
+
+def create_path_uri_validator(scheme: str, cluster_name: str) -> t.Trafaret:
     assert scheme
 
-    def _validate(uri_str: str) -> str:
+    def _validate(uri_str: str) -> URL:
+        # TODO: don't use urlsplit at all
         url = urlsplit(uri_str)
         if url.scheme != scheme:
             raise t.DataError(f"Invalid URI scheme: {uri_str}")
@@ -79,24 +85,21 @@ def _validate_path_uri(*, scheme: str, cluster_name: str) -> Callable[..., str]:
             raise t.DataError(f"Invalid URI cluster: {uri_str}")
         # TODO (yartem) path can have '?' and '#' so should include query and fragment
         path = PurePath(url.path)
-        if path.is_absolute():
-            path = path.relative_to("/")
         _check_dots_in_path(path)
-        return str(URL.build(scheme=scheme, host=cluster_name, path=str(path)))
+        return URL.build(scheme=scheme, host=cluster_name, path=str(path))
 
-    return _validate
-
-
-def _check_dots_in_path(path: PurePath) -> None:
-    if ".." in path.parts:
-        raise t.DataError(f"Invalid path: {path}")
+    return t.Call(_validate)
 
 
-def _validate_mount_path(path: PurePath) -> str:
-    if not path.is_absolute():
-        raise ValueError(f"Mount path must be absolute: {path}")
-    _check_dots_in_path(path)
-    return str(path)
+def create_mount_path_validator() -> t.Trafaret:
+    def _validate(path_str: str) -> str:
+        path = PurePath(path_str)
+        if not path.is_absolute():
+            raise t.DataError(f"Mount path must be absolute: {path}")
+        _check_dots_in_path(path)
+        return str(path)
+
+    return t.Call(_validate)
 
 
 def _validate_unique_volume_paths(
@@ -115,13 +118,13 @@ def _validate_unique_volume_paths(
     return volumes
 
 
-def create_volumes_validator(cluster_name: str) -> t.Trafaret:
+def create_volumes_validator(cluster_name: str = "") -> t.Trafaret:
     single_volume_validator: t.Trafaret = t.Dict(
         {
-            "src_storage_uri": t.Call(
-                _validate_path_uri(scheme="storage", cluster_name=cluster_name)
+            "src_storage_uri": create_path_uri_validator(
+                scheme="storage", cluster_name=cluster_name
             ),
-            "dst_path": t.Call(_validate_mount_path),
+            "dst_path": create_mount_path_validator(),
             t.Key("read_only", optional=True, default=True): t.Bool(),
         }
     )
@@ -259,7 +262,7 @@ def create_container_validator(
 
 def create_container_request_validator(
     *,
-    cluster_name: str = "",  ## TODO: or 'default' ?
+    cluster_name: str = "",
     allow_volumes: bool = False,
     allowed_gpu_models: Optional[Sequence[str]] = None,
     allow_any_tpu: bool = False,
