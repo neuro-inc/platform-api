@@ -77,6 +77,7 @@ def create_job_request_validator(
     return t.Dict(
         {
             "container": create_container_request_validator(
+                cluster_name=cluster_name,
                 allow_volumes=True,
                 allowed_gpu_models=allowed_gpu_models,
                 allowed_tpu_resources=allowed_tpu_resources,

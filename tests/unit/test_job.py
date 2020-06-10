@@ -164,118 +164,6 @@ class TestContainer:
         assert uri == URL("image://test-cluster/project/testimage")
 
 
-class TestContainerVolumeFactory:
-    def test_invalid_storage_uri_scheme(self) -> None:
-        uri = "invalid://path"
-        with pytest.raises(ValueError, match="Invalid URI scheme"):
-            ContainerVolumeFactory(
-                uri,
-                src_mount_path=PurePath("/"),
-                dst_mount_path=PurePath("/"),
-                cluster_name="test-cluster",
-            )
-
-    @pytest.mark.parametrize(
-        "uri", ("storage://test-cluster", "storage://test-cluster/",),
-    )
-    def test_create_storage_root_path(self, uri: str) -> None:
-        volume = ContainerVolumeFactory(
-            uri,
-            src_mount_path=PurePath("/host"),
-            dst_mount_path=PurePath("/container"),
-            cluster_name="test-cluster",
-        ).create()
-        assert volume.src_path == PurePath("/host")
-        assert volume.dst_path == PurePath("/container")
-        assert not volume.read_only
-
-    @pytest.mark.parametrize(
-        "uri",
-        (
-            "storage://test-cluster/path/to/dir",
-            "storage://test-cluster/path/to//dir",
-            "storage://test-cluster/path/to/./dir",
-        ),
-    )
-    def test_create(self, uri: str) -> None:
-        volume = ContainerVolume.create(
-            uri,
-            src_mount_path=PurePath("/host"),
-            dst_mount_path=PurePath("/container"),
-            read_only=True,
-            cluster_name="test-cluster",
-        )
-        assert volume.src_path == PurePath("/host/path/to/dir")
-        assert volume.dst_path == PurePath("/container/path/to/dir")
-        assert volume.read_only
-
-    @pytest.mark.parametrize(
-        "uri",
-        (
-            "storage:",
-            "storage:/",
-            "storage://",
-            "storage:/path/to/dir",
-            "storage://path/to/dir",
-        ),
-    )
-    def test_create_invalid_uri(self, uri: str) -> None:
-        with pytest.raises(ValueError, match="Invalid URI cluster"):
-            ContainerVolumeFactory(
-                uri,
-                src_mount_path=PurePath("/host"),
-                dst_mount_path=PurePath("/container"),
-                cluster_name="test-cluster",
-            ).create()
-
-    @pytest.mark.parametrize(
-        "uri",
-        ("storage://test-cluster/../to/dir", "storage://test-cluster/path/../dir",),
-    )
-    def test_create_invalid_path(self, uri: str) -> None:
-        with pytest.raises(ValueError, match="Invalid path"):
-            ContainerVolumeFactory(
-                uri,
-                src_mount_path=PurePath("/host"),
-                dst_mount_path=PurePath("/container"),
-                cluster_name="test-cluster",
-            ).create()
-
-    def test_create_without_extending_dst_mount_path(self) -> None:
-        uri = "storage://test-cluster/path/to/dir"
-        volume = ContainerVolume.create(
-            uri,
-            src_mount_path=PurePath("/host"),
-            dst_mount_path=PurePath("/container"),
-            read_only=True,
-            extend_dst_mount_path=False,
-            cluster_name="test-cluster",
-        )
-        assert volume.src_path == PurePath("/host/path/to/dir")
-        assert volume.dst_path == PurePath("/container")
-        assert volume.read_only
-
-    def test_relative_dst_mount_path(self) -> None:
-        uri = "storage://test-cluster/path/to/dir"
-        with pytest.raises(ValueError, match="Mount path must be absolute"):
-            ContainerVolumeFactory(
-                uri,
-                src_mount_path=PurePath("/host"),
-                dst_mount_path=PurePath("container"),
-                cluster_name="test-cluster",
-            )
-
-    def test_dots_dst_mount_path(self) -> None:
-        uri = "storage://test-cluster/path/to/dir"
-        with pytest.raises(ValueError, match="Invalid path"):
-            ContainerVolumeFactory(
-                uri,
-                src_mount_path=PurePath("/host"),
-                dst_mount_path=PurePath("/container/../path"),
-                cluster_name="test-cluster",
-            )
-
-
 class TestContainerBuilder:
     def test_from_payload_build(self) -> None:
         storage_config = StorageConfig(host_mount_path=PurePath("/tmp"))
@@ -481,19 +369,6 @@ def job_request_payload() -> Dict[str, Any]:
             "ssh_server": None,
             "tty": False,
         },
-    }
-
-
-@pytest.fixture
-def job_payload(job_request_payload: Any) -> Dict[str, Any]:
-    finished_at_str = datetime.now(timezone.utc).isoformat()
-    return {
-        "id": "testjob",
-        "request": job_request_payload,
-        "status": "succeeded",
-        "is_deleted": True,
-        "finished_at": finished_at_str,
-        "statuses": [{"status": "failed", "transition_time": finished_at_str}],
     }
 
 

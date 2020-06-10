@@ -1,5 +1,7 @@
 import shlex
-from typing import Any, Dict, Optional, Sequence, Set
+from pathlib import PurePath
+from typing import Any, Callable, Dict, Optional, Sequence, Set
+from urllib.parse import urlsplit
 
 import trafaret as t
 from yarl import URL
@@ -66,6 +68,37 @@ def create_job_history_validator() -> t.Trafaret:
     )
 
 
+def _validate_path_uri(*, scheme: str, cluster_name: str) -> Callable[..., str]:
+    assert scheme
+
+    def _validate(uri_str: str) -> str:
+        url = urlsplit(uri_str)
+        if url.scheme != scheme:
+            raise t.DataError(f"Invalid URI scheme: {uri_str}")
+        if url.netloc != cluster_name:
+            raise t.DataError(f"Invalid URI cluster: {uri_str}")
+        # TODO (yartem) path can have '?' and '#' so should include query and fragment
+        path = PurePath(url.path)
+        if path.is_absolute():
+            path = path.relative_to("/")
+        _check_dots_in_path(path)
+        return str(URL.build(scheme=scheme, host=cluster_name, path=str(path)))
+
+    return _validate
+
+
+def _check_dots_in_path(path: PurePath) -> None:
+    if ".." in path.parts:
+        raise t.DataError(f"Invalid path: {path}")
+
+
+def _validate_mount_path(path: PurePath) -> str:
+    if not path.is_absolute():
+        raise ValueError(f"Mount path must be absolute: {path}")
+    _check_dots_in_path(path)
+    return str(path)
+
+
 def _validate_unique_volume_paths(
     volumes: Sequence[Dict[str, Any]]
 ) -> Sequence[Dict[str, Any]]:
@@ -82,11 +115,13 @@ def _validate_unique_volume_paths(
     return volumes
 
 
-def create_volumes_validator() -> t.Trafaret:
+def create_volumes_validator(cluster_name: str) -> t.Trafaret:
     single_volume_validator: t.Trafaret = t.Dict(
         {
-            "src_storage_uri": t.String,
-            "dst_path": t.String,
+            "src_storage_uri": t.Call(
+                _validate_path_uri(scheme="storage", cluster_name=cluster_name)
+            ),
+            "dst_path": t.Call(_validate_mount_path),
             t.Key("read_only", optional=True, default=True): t.Bool(),
         }
     )
@@ -166,6 +201,7 @@ def create_tpu_validator(
 
 def create_container_validator(
     *,
+    cluster_name: str = "",
     allow_volumes: bool = False,
     allow_any_gpu_models: bool = False,
     allowed_gpu_models: Optional[Sequence[str]] = None,
@@ -211,7 +247,11 @@ def create_container_validator(
 
     if allow_volumes:
         validator += t.Dict(
-            {t.Key("volumes", optional=True): create_volumes_validator()}
+            {
+                t.Key("volumes", optional=True): create_volumes_validator(
+                    cluster_name=cluster_name
+                )
+            }
         )
 
     return validator
@@ -219,12 +259,14 @@ def create_container_validator(
 
 def create_container_request_validator(
     *,
+    cluster_name: str = "",  ## TODO: or 'default' ?
     allow_volumes: bool = False,
     allowed_gpu_models: Optional[Sequence[str]] = None,
     allow_any_tpu: bool = False,
     allowed_tpu_resources: Sequence[TPUResource] = (),
 ) -> t.Trafaret:
     return create_container_validator(
+        cluster_name=cluster_name,
         allow_volumes=allow_volumes,
         allowed_gpu_models=allowed_gpu_models,
         allow_any_tpu=allow_any_tpu,
@@ -232,8 +274,11 @@ def create_container_request_validator(
     )
 
 
-def create_container_response_validator() -> t.Trafaret:
+def create_container_response_validator(
+    cluster_name: str = "",  # TODO: or 'default' ?
+) -> t.Trafaret:
     return create_container_validator(
+        cluster_name=cluster_name,
         allow_volumes=True,
         allow_any_gpu_models=True,
         allow_any_tpu=True,
