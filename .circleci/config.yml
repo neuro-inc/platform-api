@@ -322,16 +322,26 @@ workflows:
 
   staging-aws:
     jobs:
+      - test:
+          context: org-staging
+          filters:
+            branches:
+              only:
+                - /release.*/
       - aws_deploy:
           context: org-staging
+          requires:
+            - test
           filters:
             branches:
               only:
-                - aws-staging
+                - /release.*/
       - aws_ssh_auth_deploy:
           context: org-staging
+          requires:
+            - test
           filters:
             branches:
               only:
-                - aws-staging
+                - /release.*/
 
