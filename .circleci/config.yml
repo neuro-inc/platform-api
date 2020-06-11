@@ -322,24 +322,14 @@ workflows:
 
   staging-aws:
     jobs:
-      - test:
-          context: org-staging
-          filters:
-            branches:
-              only:
-                - aws-staging
       - aws_deploy:
           context: org-staging
-          requires:
-            - test
           filters:
             branches:
               only:
                 - aws-staging
       - aws_ssh_auth_deploy:
           context: org-staging
-          requires:
-            - test
           filters:
             branches:
               only:
