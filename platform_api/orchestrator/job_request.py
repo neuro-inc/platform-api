@@ -363,7 +363,6 @@ class ContainerVolumeFactory:
         *,
         src_mount_path: PurePath,
         dst_mount_path: PurePath,
-        cluster_name: str,
         extend_dst_mount_path: bool = True,
         read_only: bool = False,
     ) -> None:
@@ -378,9 +377,6 @@ class ContainerVolumeFactory:
         if path.is_absolute():
             path = path.relative_to("/")
         self._path = path
-
-        assert cluster_name
-        self._cluster_name = cluster_name
 
         self._read_only = read_only
 

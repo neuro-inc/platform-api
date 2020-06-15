@@ -383,9 +383,7 @@ class JobsHandler:
         request_payload = job_request_validator.check(request_payload)
 
         container = create_container_from_payload(
-            request_payload["container"],
-            storage_config=cluster_config.storage,
-            cluster_name=cluster_name,
+            request_payload["container"], storage_config=cluster_config.storage,
         )
 
         permissions = infer_permissions_from_container(

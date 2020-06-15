@@ -173,7 +173,6 @@ class TestContainerVolumeFactory:
             uri,
             src_mount_path=PurePath("/host"),
             dst_mount_path=PurePath("/container"),
-            cluster_name="test-cluster",
         ).create()
         assert volume.src_path == PurePath("/host")
         assert volume.dst_path == PurePath("/container")
@@ -193,7 +192,6 @@ class TestContainerVolumeFactory:
             src_mount_path=PurePath("/host"),
             dst_mount_path=PurePath("/container"),
             read_only=True,
-            cluster_name="test-cluster",
         )
         assert volume.src_path == PurePath("/host/path/to/dir")
         assert volume.dst_path == PurePath("/container/path/to/dir")
@@ -207,7 +205,6 @@ class TestContainerVolumeFactory:
             dst_mount_path=PurePath("/container"),
             read_only=True,
             extend_dst_mount_path=False,
-            cluster_name="test-cluster",
         )
         assert volume.src_path == PurePath("/host/path/to/dir")
         assert volume.dst_path == PurePath("/container")
@@ -233,7 +230,7 @@ class TestContainerBuilder:
             ],
         }
         container = create_container_from_payload(
-            payload, storage_config=storage_config, cluster_name="test-cluster"
+            payload, storage_config=storage_config
         )
         assert container == Container(
             image="testimage",
@@ -266,7 +263,7 @@ class TestContainerBuilder:
             },
         }
         container = create_container_from_payload(
-            payload, storage_config=storage_config, cluster_name="test-cluster"
+            payload, storage_config=storage_config
         )
         assert container == Container(
             image="testimage",
@@ -286,7 +283,7 @@ class TestContainerBuilder:
             },
         }
         container = create_container_from_payload(
-            payload, storage_config=storage_config, cluster_name="test-cluster"
+            payload, storage_config=storage_config
         )
         assert container == Container(
             image="testimage",
@@ -315,7 +312,7 @@ class TestContainerBuilder:
             ],
         }
         container = create_container_from_payload(
-            payload, storage_config=storage_config, cluster_name="test-cluster"
+            payload, storage_config=storage_config
         )
         assert container == Container(
             image="testimage",
@@ -351,7 +348,7 @@ class TestContainerBuilder:
             ],
         }
         container = create_container_from_payload(
-            payload, storage_config=storage_config, cluster_name="test-cluster"
+            payload, storage_config=storage_config
         )
         assert container == Container(
             image="testimage",
@@ -382,7 +379,7 @@ class TestContainerBuilder:
             "tty": True,
         }
         container = create_container_from_payload(
-            payload, storage_config=storage_config, cluster_name="test-cluster"
+            payload, storage_config=storage_config
         )
         assert container == Container(
             image="testimage",

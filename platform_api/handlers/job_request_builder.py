@@ -13,7 +13,7 @@ from platform_api.orchestrator.job_request import (
 
 
 def create_container_from_payload(
-    payload: Dict[str, Any], *, storage_config: StorageConfig, cluster_name: str
+    payload: Dict[str, Any], *, storage_config: StorageConfig
 ) -> Container:
     http_server = None
     http = payload.get("http", {})
@@ -34,7 +34,7 @@ def create_container_from_payload(
     volumes = []
     for volume_payload in payload.get("volumes", ()):
         volume = create_volume_from_payload(
-            volume_payload, storage_config=storage_config, cluster_name=cluster_name
+            volume_payload, storage_config=storage_config
         )
         volumes.append(volume)
 
@@ -72,7 +72,7 @@ def create_tpu_resource_from_payload(payload: Dict[str, Any]) -> ContainerTPURes
 
 
 def create_volume_from_payload(
-    payload: Dict[str, Any], *, storage_config: StorageConfig, cluster_name: str
+    payload: Dict[str, Any], *, storage_config: StorageConfig
 ) -> ContainerVolume:
     dst_path = PurePath(payload["dst_path"])
     return ContainerVolume.create(
@@ -81,5 +81,4 @@ def create_volume_from_payload(
         dst_mount_path=dst_path,
         extend_dst_mount_path=False,
         read_only=bool(payload.get("read_only")),
-        cluster_name=cluster_name,
     )

@@ -1,7 +1,7 @@
 import shlex
 from pathlib import PurePath
 from typing import Any, Dict, Optional, Sequence, Set, Union
-from urllib.parse import urlsplit, urlunsplit
+from urllib.parse import urlsplit
 
 import trafaret as t
 from yarl import URL
@@ -81,18 +81,17 @@ def create_path_uri_validator(
         assert cluster_name
 
     def _validate(uri_str: str) -> str:
-        url = urlsplit(uri_str)
-        if url.scheme != storage_scheme:
+        uri = urlsplit(uri_str)
+        if uri.scheme != storage_scheme:
             raise t.DataError(
-                f"Invalid URI scheme: '{url.scheme}' != '{storage_scheme}'"
+                f"Invalid URI scheme: '{uri.scheme}' != '{storage_scheme}'"
             )
-        if check_cluster and url.netloc != cluster_name:
+        if check_cluster and uri.netloc != cluster_name:
             raise t.DataError(
-                f"Invalid URI cluster: '{url.netloc}' != '{cluster_name}'"
+                f"Invalid URI cluster: '{uri.netloc}' != '{cluster_name}'"
             )
-        _check_dots_in_path(url.path)
-        # TODO (yartem) path can have '?' and '#' so should include query and fragment
-        return urlunsplit(url)
+        _check_dots_in_path(uri.path)
+        return uri_str
 
     return t.Call(_validate)
 
