@@ -70,7 +70,7 @@ def create_job_history_validator() -> t.Trafaret:
 
 def _check_dots_in_path(path: Union[str, PurePath]) -> None:
     if ".." in PurePath(path).parts:
-        raise t.DataError(f"Invalid path: {path}")
+        raise t.DataError(f"Invalid path: '{path}'")
 
 
 def create_path_uri_validator(
