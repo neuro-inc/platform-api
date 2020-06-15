@@ -124,19 +124,24 @@ def _validate_unique_volume_paths(
 
 
 def create_volumes_validator(
-    storage_scheme: str = "storage", cluster_name: str = "", check_cluster: bool = True
+    uri_key: str = "src_storage_uri",
+    has_read_only_key: bool = True,
+    storage_scheme: str = "storage",
+    cluster_name: str = "",
+    check_cluster: bool = True,
 ) -> t.Trafaret:
-    single_volume_validator: t.Trafaret = t.Dict(
-        {
-            "src_storage_uri": create_path_uri_validator(
-                storage_scheme=storage_scheme,
-                cluster_name=cluster_name,
-                check_cluster=check_cluster,
-            ),
-            "dst_path": create_mount_path_validator(),
-            t.Key("read_only", optional=True, default=True): t.Bool(),
-        }
-    )
+    template_dict = {
+        uri_key: create_path_uri_validator(
+            storage_scheme=storage_scheme,
+            cluster_name=cluster_name,
+            check_cluster=check_cluster,
+        ),
+        "dst_path": create_mount_path_validator(),
+    }
+    if has_read_only_key:
+        template_dict[t.Key("read_only", optional=True, default=True)] = t.Bool()
+
+    single_volume_validator: t.Trafaret = t.Dict(template_dict)
     return t.List(single_volume_validator) & t.Call(_validate_unique_volume_paths)
 
 
@@ -181,10 +186,6 @@ def create_resources_validator(
 
     if tpu_validator:
         validators.append(common_resources_validator + t.Dict({"tpu": tpu_validator}))
-
-    tpu_validator = create_tpu_validator(
-        allow_any=allow_any_tpu, allowed=allowed_tpu_resources
-    )
 
     return t.Or(*validators)
 
@@ -256,6 +257,21 @@ def create_container_validator(
             ),
             t.Key("ssh", optional=True): t.Dict({"port": t.Int(gte=0, lte=65535)}),
             t.Key("tty", optional=True, default=False): t.Bool,
+            t.Key("secret_env", optional=True): t.Mapping(
+                t.String,
+                create_path_uri_validator(
+                    storage_scheme="secret",
+                    cluster_name=cluster_name,
+                    check_cluster=check_cluster,
+                ),
+            ),
+            t.Key("secret_volumes", optional=True): create_volumes_validator(
+                uri_key="src_secret_uri",
+                has_read_only_key=False,
+                storage_scheme="secret",
+                cluster_name=cluster_name,
+                check_cluster=check_cluster,
+            ),
         }
     )
 
@@ -263,6 +279,8 @@ def create_container_validator(
         validator += t.Dict(
             {
                 t.Key("volumes", optional=True): create_volumes_validator(
+                    uri_key="src_storage_uri",
+                    has_read_only_key=True,
                     storage_scheme=storage_scheme,
                     cluster_name=cluster_name,
                     check_cluster=check_cluster,

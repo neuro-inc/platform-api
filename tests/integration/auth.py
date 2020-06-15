@@ -177,6 +177,7 @@ async def regular_user_factory(
                     {"uri": f"storage://{cluster.name}/{name}", "action": "manage"},
                     {"uri": f"image://{cluster.name}/{name}", "action": "manage"},
                     {"uri": f"job://{cluster.name}/{name}", "action": "manage"},
+                    {"uri": f"secret://{cluster.name}/{name}", "action": "write"},
                 ]
             )
         async with auth_client._request(

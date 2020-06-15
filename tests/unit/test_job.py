@@ -420,6 +420,19 @@ def job_request_payload() -> Dict[str, Any]:
 
 
 @pytest.fixture
+def job_payload(job_request_payload: Any) -> Dict[str, Any]:
+    finished_at_str = datetime.now(timezone.utc).isoformat()
+    return {
+        "id": "testjob",
+        "request": job_request_payload,
+        "status": "succeeded",
+        "is_deleted": True,
+        "finished_at": finished_at_str,
+        "statuses": [{"status": "failed", "transition_time": finished_at_str}],
+    }
+
+
+@pytest.fixture
 def job_request_payload_with_shm(job_request_payload: Dict[str, Any]) -> Dict[str, Any]:
     data = job_request_payload
     data["container"]["resources"]["shm"] = True
@@ -1449,6 +1462,32 @@ class TestJobRequest:
         actual = JobRequest.to_primitive(JobRequest.from_primitive(job_request_payload))
         assert actual == job_request_payload
 
+    def test_to_and_from_primitive_with_secret_env(
+        self, job_request_payload: Dict[str, Any]
+    ) -> None:
+        job_request_payload["container"]["secret_env"] = {
+            "ENV_SECRET1": "secret://clustername/username/key1",
+            "ENV_SECRET2": "secret://clustername/username/key2",
+        }
+        actual = JobRequest.to_primitive(JobRequest.from_primitive(job_request_payload))
+        assert actual == job_request_payload
+
+    def test_to_and_from_primitive_with_secret_volumes(
+        self, job_request_payload: Dict[str, Any]
+    ) -> None:
+        job_request_payload["container"]["secret_volumes"] = [
+            {
+                "src_secret_uri": "secret://clustername/username/key1",
+                "dst_path": "/container/path1",
+            },
+            {
+                "src_secret_uri": "secret://clustername/username/key2",
+                "dst_path": "/container/path2",
+            },
+        ]
+        actual = JobRequest.to_primitive(JobRequest.from_primitive(job_request_payload))
+        assert actual == job_request_payload
+
 
 class TestContainerHTTPServer:
     def test_from_primitive(self) -> None:
@@ -1703,7 +1742,7 @@ class TestUser:
             ),
         ],
     )
-    def test_user_has_quota_true(self, quota: Quota) -> None:
+    def test_user_has_quota_true(self, quota: AggregatedRunTime) -> None:
         user = User(name="name", token="token", quota=quota)
         assert user.has_quota()
 

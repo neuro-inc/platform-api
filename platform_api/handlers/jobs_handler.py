@@ -41,6 +41,7 @@ from platform_api.orchestrator.job_request import (
     JobError,
     JobRequest,
     JobStatus,
+    SecretVolume,
 )
 from platform_api.orchestrator.jobs_service import JobsService
 from platform_api.orchestrator.jobs_storage import (
@@ -190,6 +191,15 @@ def convert_job_container_to_json(
         ret["ssh"] = {"port": container.ssh_server.port}
     for volume in container.volumes:
         ret["volumes"].append(convert_container_volume_to_json(volume, storage_config))
+    for sec_volume in container.secret_volumes:
+        if "secret_volumes" not in ret:
+            ret["secret_volumes"] = []
+        ret["secret_volumes"].append(convert_secret_volume_to_json(sec_volume))
+    for env_name, sec_env_uri in container.secret_env.items():
+        if "secret_env" not in ret:
+            ret["secret_env"] = {}
+        ret["secret_env"][env_name] = str(sec_env_uri)
+
     if container.tty:
         ret["tty"] = True
     return ret
@@ -212,6 +222,13 @@ def convert_container_volume_to_json(
         "src_storage_uri": uri,
         "dst_path": str(volume.dst_path),
         "read_only": volume.read_only,
+    }
+
+
+def convert_secret_volume_to_json(volume: SecretVolume) -> Dict[str, Any]:
+    return {
+        "src_secret_uri": str(volume.src_secret_uri),
+        "dst_path": str(volume.dst_path),
     }
 
 
@@ -285,6 +302,8 @@ def infer_permissions_from_container(
                 action="read",
             )
         )
+    for secret_uri in container.get_secret_uris():
+        permissions.append(Permission(uri=str(secret_uri), action="read",))
     for volume in container.volumes:
         action = "read" if volume.read_only else "write"
         permission = Permission(uri=str(volume.uri), action=action)

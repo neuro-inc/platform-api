@@ -3,7 +3,7 @@ import shlex
 import uuid
 from dataclasses import asdict, dataclass, field
 from pathlib import PurePath
-from typing import Any, Dict, List, Optional
+from typing import Any, Dict, List, Optional, Sequence
 from urllib.parse import urlsplit
 
 from yarl import URL
@@ -55,6 +55,25 @@ class ContainerVolume:
         payload["src_path"] = str(payload["src_path"])
         payload["dst_path"] = str(payload["dst_path"])
         return payload
+
+
+@dataclass(frozen=True)
+class SecretVolume:
+    src_secret_uri: URL
+    dst_path: PurePath
+
+    @classmethod
+    def from_primitive(cls, payload: Dict[str, Any]) -> "SecretVolume":
+        return cls(
+            src_secret_uri=URL(payload["src_secret_uri"]),
+            dst_path=PurePath(payload["dst_path"]),
+        )
+
+    def to_primitive(self) -> Dict[str, Any]:
+        return {
+            "src_secret_uri": str(self.src_secret_uri),
+            "dst_path": str(self.dst_path),
+        }
 
 
 @dataclass(frozen=True)
@@ -183,6 +202,8 @@ class Container:
     command: Optional[str] = None
     env: Dict[str, str] = field(default_factory=dict)
     volumes: List[ContainerVolume] = field(default_factory=list)
+    secret_env: Dict[str, URL] = field(default_factory=dict)
+    secret_volumes: List[SecretVolume] = field(default_factory=list)
     http_server: Optional[ContainerHTTPServer] = None
     ssh_server: Optional[ContainerSSHServer] = None
     tty: bool = False
@@ -198,6 +219,11 @@ class Container:
         path, *_ = repo.split(":", 1)
         assert cluster_name
         return URL(f"image://{cluster_name}/{path}")
+
+    def get_secret_uris(self) -> Sequence[URL]:
+        env_uris = list(self.secret_env.values())
+        vol_uris = [vol.src_secret_uri for vol in self.secret_volumes]
+        return list(set(env_uris + vol_uris))
 
     @property
     def port(self) -> Optional[int]:
@@ -250,6 +276,13 @@ class Container:
         kwargs["volumes"] = [
             ContainerVolume.from_primitive(item) for item in kwargs["volumes"]
         ]
+        kwargs["secret_volumes"] = [
+            SecretVolume.from_primitive(item)
+            for item in kwargs.get("secret_volumes", [])
+        ]
+        kwargs["secret_env"] = {
+            k: URL(v) for k, v in kwargs.get("secret_env", {}).items()
+        }
 
         if kwargs.get("http_server"):
             kwargs["http_server"] = ContainerHTTPServer.from_primitive(
@@ -276,6 +309,19 @@ class Container:
         payload: Dict[str, Any] = asdict(self)
         payload["resources"] = self.resources.to_primitive()
         payload["volumes"] = [volume.to_primitive() for volume in self.volumes]
+
+        secret_volumes = [v.to_primitive() for v in self.secret_volumes]
+        if secret_volumes:
+            payload["secret_volumes"] = secret_volumes
+        else:
+            payload.pop("secret_volumes")
+
+        secret_env = {k: str(v) for k, v in payload.get("secret_env", {}).items()}
+        if secret_env:
+            payload["secret_env"] = secret_env
+        else:
+            payload.pop("secret_env", None)
+
         if self.http_server:
             payload["http_server"] = self.http_server.to_primitive()
         if self.ssh_server:
