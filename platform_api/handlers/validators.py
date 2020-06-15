@@ -1,5 +1,7 @@
 import shlex
-from typing import Any, Dict, Optional, Sequence, Set
+from pathlib import PurePath
+from typing import Any, Dict, Optional, Sequence, Set, Union
+from urllib.parse import urlsplit
 
 import trafaret as t
 from yarl import URL
@@ -66,6 +68,45 @@ def create_job_history_validator() -> t.Trafaret:
     )
 
 
+def _check_dots_in_path(path: Union[str, PurePath]) -> None:
+    if ".." in PurePath(path).parts:
+        raise t.DataError(f"Invalid path: '{path}'")
+
+
+def create_path_uri_validator(
+    storage_scheme: str, cluster_name: str = "", check_cluster: bool = True
+) -> t.Trafaret:
+    assert storage_scheme
+    if check_cluster:
+        assert cluster_name
+
+    def _validate(uri_str: str) -> str:
+        uri = urlsplit(uri_str)
+        if uri.scheme != storage_scheme:
+            raise t.DataError(
+                f"Invalid URI scheme: '{uri.scheme}' != '{storage_scheme}'"
+            )
+        if check_cluster and uri.netloc != cluster_name:
+            raise t.DataError(
+                f"Invalid URI cluster: '{uri.netloc}' != '{cluster_name}'"
+            )
+        _check_dots_in_path(uri.path)
+        return uri_str
+
+    return t.Call(_validate)
+
+
+def create_mount_path_validator() -> t.Trafaret:
+    def _validate(path_str: str) -> str:
+        path = PurePath(path_str)
+        if not path.is_absolute():
+            raise t.DataError(f"Mount path must be absolute: '{path}'")
+        _check_dots_in_path(path)
+        return str(path)
+
+    return t.Call(_validate)
+
+
 def _validate_unique_volume_paths(
     volumes: Sequence[Dict[str, Any]]
 ) -> Sequence[Dict[str, Any]]:
@@ -82,11 +123,17 @@ def _validate_unique_volume_paths(
     return volumes
 
 
-def create_volumes_validator() -> t.Trafaret:
+def create_volumes_validator(
+    storage_scheme: str = "storage", cluster_name: str = "", check_cluster: bool = True
+) -> t.Trafaret:
     single_volume_validator: t.Trafaret = t.Dict(
         {
-            "src_storage_uri": t.String,
-            "dst_path": t.String,
+            "src_storage_uri": create_path_uri_validator(
+                storage_scheme=storage_scheme,
+                cluster_name=cluster_name,
+                check_cluster=check_cluster,
+            ),
+            "dst_path": create_mount_path_validator(),
             t.Key("read_only", optional=True, default=True): t.Bool(),
         }
     )
@@ -172,6 +219,9 @@ def create_container_validator(
     allow_any_tpu: bool = False,
     allowed_tpu_resources: Sequence[TPUResource] = (),
     allow_any_command: bool = False,
+    storage_scheme: str = "storage",
+    cluster_name: str = "",
+    check_cluster: bool = True,
 ) -> t.Trafaret:
     """Create a validator for primitive container objects.
 
@@ -211,7 +261,13 @@ def create_container_validator(
 
     if allow_volumes:
         validator += t.Dict(
-            {t.Key("volumes", optional=True): create_volumes_validator()}
+            {
+                t.Key("volumes", optional=True): create_volumes_validator(
+                    storage_scheme=storage_scheme,
+                    cluster_name=cluster_name,
+                    check_cluster=check_cluster,
+                )
+            }
         )
 
     return validator
@@ -223,12 +279,17 @@ def create_container_request_validator(
     allowed_gpu_models: Optional[Sequence[str]] = None,
     allow_any_tpu: bool = False,
     allowed_tpu_resources: Sequence[TPUResource] = (),
+    storage_scheme: str = "storage",
+    cluster_name: str = "",
 ) -> t.Trafaret:
     return create_container_validator(
         allow_volumes=allow_volumes,
         allowed_gpu_models=allowed_gpu_models,
         allow_any_tpu=allow_any_tpu,
         allowed_tpu_resources=allowed_tpu_resources,
+        storage_scheme=storage_scheme,
+        cluster_name=cluster_name,
+        check_cluster=True,
     )
 
 
@@ -238,6 +299,7 @@ def create_container_response_validator() -> t.Trafaret:
         allow_any_gpu_models=True,
         allow_any_tpu=True,
         allow_any_command=True,
+        check_cluster=False,
     )
 
 

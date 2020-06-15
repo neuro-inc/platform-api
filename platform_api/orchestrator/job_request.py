@@ -36,8 +36,8 @@ class ContainerVolume:
     read_only: bool = False
 
     @staticmethod
-    def create(*args: Any, **kwargs: Any) -> "ContainerVolume":
-        return ContainerVolumeFactory(*args, **kwargs).create()
+    def create(uri: str, *args: Any, **kwargs: Any) -> "ContainerVolume":
+        return ContainerVolumeFactory(uri, *args, **kwargs).create()
 
     @classmethod
     def from_primitive(cls, payload: Dict[str, Any]) -> "ContainerVolume":
@@ -357,22 +357,14 @@ class JobStatus(str, enum.Enum):
 
 
 class ContainerVolumeFactory:
-    """A factory class for :class:`ContainerVolume`.
-
-    Responsible for parsing the specified storage URI and making sure
-    that the resulting path is valid.
-    """
-
     def __init__(
         self,
         uri: str,
         *,
         src_mount_path: PurePath,
         dst_mount_path: PurePath,
-        cluster_name: str,
         extend_dst_mount_path: bool = True,
         read_only: bool = False,
-        scheme: str = "storage",
     ) -> None:
         """Check constructor parameters and initialize the factory instance.
 
@@ -381,43 +373,16 @@ class ContainerVolumeFactory:
             otherwise use `dst_mount_path` as is. Defaults to True.
         """
         self._uri = uri
-        self._scheme = scheme
-        self._path: PurePath = PurePath("")
-        assert cluster_name
-        self._cluster_name = cluster_name
-
-        self._parse_uri()
+        path = PurePath(urlsplit(uri).path)
+        if path.is_absolute():
+            path = path.relative_to("/")
+        self._path = path
 
         self._read_only = read_only
-
-        self._check_mount_path(src_mount_path)
-        self._check_mount_path(dst_mount_path)
 
         self._src_mount_path: PurePath = src_mount_path
         self._dst_mount_path: PurePath = dst_mount_path
         self._extend_dst_mount_path = extend_dst_mount_path
-
-    def _parse_uri(self) -> None:
-        url = urlsplit(self._uri)
-        if url.scheme != self._scheme:
-            raise ValueError(f"Invalid URI scheme: {self._uri}")
-        if url.netloc != self._cluster_name:
-            raise ValueError(f"Invalid URI cluster: {self._uri}")
-        path = PurePath(url.path)
-        if path.is_absolute():
-            path = path.relative_to("/")
-        self._check_dots_in_path(path)
-
-        self._path = path
-
-    def _check_dots_in_path(self, path: PurePath) -> None:
-        if ".." in path.parts:
-            raise ValueError(f"Invalid path: {path}")
-
-    def _check_mount_path(self, path: PurePath) -> None:
-        if not path.is_absolute():
-            raise ValueError(f"Mount path must be absolute: {path}")
-        self._check_dots_in_path(path)
 
     def create(self) -> ContainerVolume:
         src_path = self._src_mount_path / self._path

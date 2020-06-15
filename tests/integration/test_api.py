@@ -464,6 +464,105 @@ class TestJobs:
             assert 3 - 2 < run_time < 3 + 2
 
     @pytest.mark.asyncio
+    async def test_create_job_volume_wrong_storage_scheme(
+        self,
+        api: ApiConfig,
+        client: aiohttp.ClientSession,
+        job_submit: Dict[str, Any],
+        jobs_client: JobsClient,
+        regular_user: _User,
+    ) -> None:
+        headers = regular_user.headers
+        url = api.jobs_base_url
+        job_submit["container"]["volumes"] = [
+            {
+                "src_storage_uri": f"wrong-scheme://{regular_user.cluster_name}/"
+                f"{regular_user.name}",
+                "dst_path": "/var/storage",
+                "read_only": False,
+            }
+        ]
+        async with client.post(url, headers=headers, json=job_submit) as resp:
+            assert resp.status == HTTPBadRequest.status_code, await resp.text()
+            payload = await resp.json()
+            err = "Invalid URI scheme: 'wrong-scheme'"
+            assert err in payload["error"]
+
+    @pytest.mark.asyncio
+    async def test_create_job_volume_wrong_cluster_name(
+        self,
+        api: ApiConfig,
+        client: aiohttp.ClientSession,
+        job_submit: Dict[str, Any],
+        jobs_client: JobsClient,
+        regular_user: _User,
+    ) -> None:
+        headers = regular_user.headers
+        url = api.jobs_base_url
+        job_submit["container"]["volumes"] = [
+            {
+                "src_storage_uri": "storage://wrong-cluster/" f"{regular_user.name}",
+                "dst_path": "/var/storage",
+                "read_only": False,
+            }
+        ]
+        async with client.post(url, headers=headers, json=job_submit) as resp:
+            assert resp.status == HTTPBadRequest.status_code, await resp.text()
+            payload = await resp.json()
+            err = "Invalid URI cluster: 'wrong-cluster' != 'test-cluster'"
+            assert err in payload["error"]
+
+    @pytest.mark.asyncio
+    async def test_create_job_volume_wrong_path_with_dots(
+        self,
+        api: ApiConfig,
+        client: aiohttp.ClientSession,
+        job_submit: Dict[str, Any],
+        jobs_client: JobsClient,
+        regular_user: _User,
+    ) -> None:
+        headers = regular_user.headers
+        url = api.jobs_base_url
+        job_submit["container"]["volumes"] = [
+            {
+                "src_storage_uri": f"storage://{regular_user.cluster_name}/"
+                f"{regular_user.name}",
+                "dst_path": "/var/storage/../another",
+                "read_only": False,
+            }
+        ]
+        async with client.post(url, headers=headers, json=job_submit) as resp:
+            assert resp.status == HTTPBadRequest.status_code, await resp.text()
+            payload = await resp.json()
+            err = "Invalid path: '/var/storage/../another'"
+            assert err in payload["error"]
+
+    @pytest.mark.asyncio
+    async def test_create_job_volume_wrong_path_not_absolute(
+        self,
+        api: ApiConfig,
+        client: aiohttp.ClientSession,
+        job_submit: Dict[str, Any],
+        jobs_client: JobsClient,
+        regular_user: _User,
+    ) -> None:
+        headers = regular_user.headers
+        url = api.jobs_base_url
+        job_submit["container"]["volumes"] = [
+            {
+                "src_storage_uri": f"storage://{regular_user.cluster_name}/"
+                f"{regular_user.name}",
+                "dst_path": "var/storage",
+                "read_only": False,
+            }
+        ]
+        async with client.post(url, headers=headers, json=job_submit) as resp:
+            assert resp.status == HTTPBadRequest.status_code, await resp.text()
+            payload = await resp.json()
+            err = "Mount path must be absolute: 'var/storage'"
+            assert err in payload["error"]
+
+    @pytest.mark.asyncio
     async def test_incorrect_request(
         self, api: ApiConfig, client: aiohttp.ClientSession, regular_user: _User
     ) -> None:
