@@ -960,7 +960,7 @@ class TestJob:
         assert job.name is None
         assert job.owner == "testuser"
         assert not job.is_preemptible
-        assert job.max_run_time == timedelta.max
+        assert job.max_run_time_minutes is None
         assert job.restart_policy == JobRestartPolicy.NEVER
 
     def test_from_primitive_check_name(
@@ -1145,7 +1145,7 @@ class TestJob:
         job = Job.from_primitive(
             mock_orchestrator.storage_config, mock_orchestrator.config, payload
         )
-        assert job.max_run_time == timedelta(minutes=100)
+        assert job.max_run_time_minutes == 100
 
     def test_from_primitive_with_max_run_time_minutes_none(
         self, mock_orchestrator: MockOrchestrator, job_request_payload: Dict[str, Any]
@@ -1163,49 +1163,7 @@ class TestJob:
         job = Job.from_primitive(
             mock_orchestrator.storage_config, mock_orchestrator.config, payload
         )
-        assert job.max_run_time == timedelta.max
-
-    def test_from_primitive_with_max_run_time_minutes_zero(
-        self, mock_orchestrator: MockOrchestrator, job_request_payload: Dict[str, Any]
-    ) -> None:
-        payload = {
-            "id": "testjob",
-            "name": "test-job-name",
-            "owner": "testuser",
-            "request": job_request_payload,
-            "status": "succeeded",
-            "is_deleted": True,
-            "finished_at": datetime.now(timezone.utc).isoformat(),
-            "max_run_time_minutes": 0,
-        }
-        job = Job.from_primitive(
-            mock_orchestrator.storage_config, mock_orchestrator.config, payload
-        )
-        with pytest.raises(
-            AssertionError, match="max_run_time_minutes must be positive, got: 0"
-        ):
-            job.max_run_time
-
-    def test_from_primitive_with_max_run_time_minutes_negative(
-        self, mock_orchestrator: MockOrchestrator, job_request_payload: Dict[str, Any]
-    ) -> None:
-        payload = {
-            "id": "testjob",
-            "name": "test-job-name",
-            "owner": "testuser",
-            "request": job_request_payload,
-            "status": "succeeded",
-            "is_deleted": True,
-            "finished_at": datetime.now(timezone.utc).isoformat(),
-            "max_run_time_minutes": -1,
-        }
-        job = Job.from_primitive(
-            mock_orchestrator.storage_config, mock_orchestrator.config, payload
-        )
-        with pytest.raises(
-            AssertionError, match="max_run_time_minutes must be positive, got: -1"
-        ):
-            job.max_run_time
+        assert job.max_run_time_minutes is None
 
     def test_to_uri(
         self, mock_orchestrator: MockOrchestrator, job_request: JobRequest
