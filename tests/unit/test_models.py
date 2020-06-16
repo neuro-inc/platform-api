@@ -209,15 +209,17 @@ class TestContainerRequestValidator:
             validator.check(payload_with_negative_gpu)
 
     def test_gpu_model_but_no_gpu(self) -> None:
+        cluster = "test-cluster"
         payload = {
             "image": "testimage",
             "resources": {"cpu": 0.1, "memory_mb": 16, "gpu_model": "unknown"},
         }
-        validator = create_container_request_validator()
+        validator = create_container_request_validator(cluster_name=cluster)
         with pytest.raises(ValueError, match="gpu_model is not allowed key"):
             validator.check(payload)
 
     def test_gpu_model_unknown(self) -> None:
+        cluster = "test-cluster"
         payload = {
             "image": "testimage",
             "resources": {
@@ -227,11 +229,12 @@ class TestContainerRequestValidator:
                 "gpu_model": "unknown",
             },
         }
-        validator = create_container_request_validator()
+        validator = create_container_request_validator(cluster_name=cluster)
         with pytest.raises(ValueError, match="value doesn't match any variant"):
             validator.check(payload)
 
     def test_gpu_model(self) -> None:
+        cluster = "test-cluster"
         payload = {
             "image": "testimage",
             "resources": {
@@ -241,12 +244,15 @@ class TestContainerRequestValidator:
                 "gpu_model": "unknown",
             },
         }
-        validator = create_container_request_validator(allowed_gpu_models=["unknown"])
+        validator = create_container_request_validator(
+            allowed_gpu_models=["unknown"], cluster_name=cluster
+        )
         result = validator.check(payload)
         assert result["resources"]["gpu"] == 1
         assert result["resources"]["gpu_model"] == "unknown"
 
     def test_gpu_tpu_conflict(self) -> None:
+        cluster = "test-cluster"
         payload = {
             "image": "testimage",
             "resources": {
@@ -256,7 +262,7 @@ class TestContainerRequestValidator:
                 "tpu": {"type": "v2-8", "software_version": "1.14"},
             },
         }
-        validator = create_container_request_validator()
+        validator = create_container_request_validator(cluster_name=cluster)
         with pytest.raises(ValueError, match="tpu is not allowed key"):
             validator.check(payload)
 
@@ -267,6 +273,7 @@ class TestContainerRequestValidator:
     def test_tpu_unavailable(
         self, allowed_tpu_resources: Sequence[TPUResource]
     ) -> None:
+        cluster = "test-cluster"
         payload = {
             "image": "testimage",
             "resources": {
@@ -276,12 +283,13 @@ class TestContainerRequestValidator:
             },
         }
         validator = create_container_request_validator(
-            allowed_tpu_resources=allowed_tpu_resources
+            allowed_tpu_resources=allowed_tpu_resources, cluster_name=cluster,
         )
         with pytest.raises(ValueError):
             validator.check(payload)
 
     def test_tpu(self) -> None:
+        cluster = "test-cluster"
         payload = {
             "image": "testimage",
             "resources": {
@@ -293,7 +301,8 @@ class TestContainerRequestValidator:
         validator = create_container_request_validator(
             allowed_tpu_resources=[
                 TPUResource(types=["v2-8"], software_versions=["1.14"])
-            ]
+            ],
+            cluster_name=cluster,
         )
         result = validator.check(payload)
         assert result["resources"]["tpu"] == {
@@ -550,6 +559,46 @@ class TestJobRequestValidator:
         )
         with pytest.raises(DataError, match="restart_policy.+any variant"):
             validator.check(request)
+
+    def test_job_with_secret_env(self) -> None:
+        container = {
+            "image": "testimage",
+            "resources": {"cpu": 0.1, "memory_mb": 16},
+            "secret_env": {
+                "ENV_SECRET1": "secret://clustername/username/key1",
+                "ENV_SECRET2": "secret://clustername/username/key2",
+            },
+        }
+        request = {
+            "container": container,
+        }
+        validator = create_job_request_validator(
+            allowed_gpu_models=(), allowed_tpu_resources=(), cluster_name="clustername"
+        )
+        validator.check(request)
+
+    def test_job_with_secret_volumes(self) -> None:
+        container = {
+            "image": "testimage",
+            "resources": {"cpu": 0.1, "memory_mb": 16},
+            "secret_volumes": [
+                {
+                    "src_secret_uri": "secret://clustername/username/key1",
+                    "dst_path": "/container/path1",
+                },
+                {
+                    "src_secret_uri": "secret://clustername/username/key2",
+                    "dst_path": "/container/path2",
+                },
+            ],
+        }
+        request = {
+            "container": container,
+        }
+        validator = create_job_request_validator(
+            allowed_gpu_models=(), allowed_tpu_resources=(), cluster_name="clustername"
+        )
+        validator.check(request)
 
 
 class TestJobContainerToJson:

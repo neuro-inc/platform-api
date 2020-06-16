@@ -440,6 +440,46 @@ class TestVolumesValidator:
             assert validator.check(value)
 
 
+class TestSecretVolumesValidator:
+    def test_valid_volumes(self) -> None:
+        value = [
+            {"src_secret_uri": "storage://test-cluster/uri1", "dst_path": "/path1"},
+            {"src_secret_uri": "storage://test-cluster/uri2", "dst_path": "/path2"},
+        ]
+        validator = create_volumes_validator(
+            uri_key="src_secret_uri",
+            has_read_only_key=False,
+            cluster_name="test-cluster",
+        )
+        assert validator.check(value)
+
+    def test_destination_paths_are_unique(self) -> None:
+        value = [
+            {"src_secret_uri": "storage://test-cluster/uri1", "dst_path": "path"},
+            {"src_secret_uri": "storage://test-cluster/uri2", "dst_path": "path"},
+        ]
+        validator = create_volumes_validator(
+            uri_key="src_secret_uri",
+            has_read_only_key=False,
+            cluster_name="test-cluster",
+        )
+        with pytest.raises(t.DataError):
+            assert validator.check(value)
+
+    def test_volumes_are_unique(self) -> None:
+        value = [
+            {"src_secret_uri": "storage://test-cluster/uri", "dst_path": "path"},
+            {"src_secret_uri": "storage://test-cluster/uri", "dst_path": "path"},
+        ]
+        validator = create_volumes_validator(
+            uri_key="src_secret_uri",
+            has_read_only_key=False,
+            cluster_name="test-cluster",
+        )
+        with pytest.raises(t.DataError):
+            assert validator.check(value)
+
+
 class TestPathUriValidator:
     def test_invalid_uri_scheme(self) -> None:
         cluster = "test-cluster"

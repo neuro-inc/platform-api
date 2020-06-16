@@ -417,6 +417,390 @@ class TestJobs:
         assert response_payload["history"]["exit_code"] == 0
 
     @pytest.mark.asyncio
+    async def test_create_job_with_secret_env(
+        self,
+        api: ApiConfig,
+        client: aiohttp.ClientSession,
+        job_submit: Dict[str, Any],
+        jobs_client: JobsClient,
+        regular_user: _User,
+    ) -> None:
+        url = api.jobs_base_url
+        user = regular_user
+        secret_env = {
+            "ENV_SECRET1": f"secret://{user.cluster_name}/{user.name}/key_1",
+            "ENV_SECRET2": f"secret://{user.cluster_name}/{user.name}/key_2",
+        }
+        job_submit["container"]["secret_env"] = secret_env
+        async with client.post(url, headers=user.headers, json=job_submit) as resp:
+            assert resp.status == HTTPAccepted.status_code, await resp.text()
+            result = await resp.json()
+            assert result["status"] in ["pending"]
+            assert result["container"]["secret_env"] == secret_env
+            job_id = result["id"]
+        await jobs_client.delete_job(job_id=job_id)
+
+        response_payload = await jobs_client.long_polling_by_job_id(
+            job_id=job_id, status="succeeded"
+        )
+        await jobs_client.delete_job(job_id=job_id)
+        assert response_payload["container"]["secret_env"] == secret_env
+
+    @pytest.mark.asyncio
+    async def test_create_job_with_secret_volumes(
+        self,
+        api: ApiConfig,
+        client: aiohttp.ClientSession,
+        job_submit: Dict[str, Any],
+        jobs_client: JobsClient,
+        regular_user: _User,
+    ) -> None:
+        url = api.jobs_base_url
+        user = regular_user
+        secret_uri_1 = f"secret://{user.cluster_name}/{user.name}/key_1"
+        secret_uri_2 = f"secret://{user.cluster_name}/{user.name}/key_2"
+        secret_volumes = [
+            {"src_secret_uri": secret_uri_1, "dst_path": "/container/path_1"},
+            {"src_secret_uri": secret_uri_2, "dst_path": "/container/path_2"},
+        ]
+        job_submit["container"]["secret_volumes"] = secret_volumes
+        async with client.post(url, headers=user.headers, json=job_submit) as resp:
+            assert resp.status == HTTPAccepted.status_code, await resp.text()
+            result = await resp.json()
+            assert result["status"] in ["pending"]
+            assert result["container"]["secret_volumes"] == secret_volumes
+            job_id = result["id"]
+        await jobs_client.delete_job(job_id=job_id)
+
+        response_payload = await jobs_client.long_polling_by_job_id(
+            job_id=job_id, status="succeeded"
+        )
+        await jobs_client.delete_job(job_id=job_id)
+        assert response_payload["container"]["secret_volumes"] == secret_volumes
+
+    @pytest.mark.asyncio
+    async def test_create_job_with_secret_env_and_secret_volumes(
+        self,
+        api: ApiConfig,
+        client: aiohttp.ClientSession,
+        job_submit: Dict[str, Any],
+        jobs_client: JobsClient,
+        regular_user: _User,
+    ) -> None:
+        url = api.jobs_base_url
+        user = regular_user
+
+        secret_uri_a = f"secret://{user.cluster_name}/{user.name}/key_a"
+        secret_uri_b = f"secret://{user.cluster_name}/{user.name}/key_b"
+        secret_uri_c = f"secret://{user.cluster_name}/{user.name}/key_c"
+        secret_env = {
+            "ENV_SECRET_A": secret_uri_a,
+            "ENV_SECRET_B": secret_uri_b,
+            "ENV_SECRET_C": secret_uri_c,
+        }
+        secret_uri_1 = f"secret://{user.cluster_name}/{user.name}/key_1"
+        secret_uri_2 = f"secret://{user.cluster_name}/{user.name}/key_2"
+        secret_uri_3 = f"secret://{user.cluster_name}/{user.name}/key_3"
+        secret_volumes = [
+            {"src_secret_uri": secret_uri_1, "dst_path": "/container/path_1"},
+            {"src_secret_uri": secret_uri_2, "dst_path": "/container/path_2"},
+            {"src_secret_uri": secret_uri_3, "dst_path": "/container/path_3"},
+        ]
+        job_submit["container"]["secret_env"] = secret_env
+        job_submit["container"]["secret_volumes"] = secret_volumes
+        async with client.post(url, headers=user.headers, json=job_submit) as resp:
+            assert resp.status == HTTPAccepted.status_code, await resp.text()
+            result = await resp.json()
+            assert result["status"] in ["pending"]
+            assert result["container"]["secret_env"] == secret_env
+            assert result["container"]["secret_volumes"] == secret_volumes
+            job_id = result["id"]
+        await jobs_client.delete_job(job_id=job_id)
+
+        response_payload = await jobs_client.long_polling_by_job_id(
+            job_id=job_id, status="succeeded"
+        )
+        await jobs_client.delete_job(job_id=job_id)
+        assert response_payload["container"]["secret_env"] == secret_env
+        assert response_payload["container"]["secret_volumes"] == secret_volumes
+
+    @pytest.mark.asyncio
+    async def test_create_job_with_secret_same_secret_in_env_and_secret_volumes(
+        self,
+        api: ApiConfig,
+        client: aiohttp.ClientSession,
+        job_submit: Dict[str, Any],
+        jobs_client: JobsClient,
+        regular_user: _User,
+    ) -> None:
+        url = api.jobs_base_url
+        user = regular_user
+        secret_uri_1 = f"secret://{user.cluster_name}/{user.name}/key_1"
+        secret_uri_2 = f"secret://{user.cluster_name}/{user.name}/key_2"
+        secret_uri_3 = f"secret://{user.cluster_name}/{user.name}/key_3"
+        secret_env = {
+            "ENV_SECRET_A": secret_uri_1,
+            "ENV_SECRET_B": secret_uri_2,
+        }
+        secret_volumes = [
+            {"src_secret_uri": secret_uri_1, "dst_path": "/container/path_a"},
+            {"src_secret_uri": secret_uri_3, "dst_path": "/container/path_b"},
+        ]
+        job_submit["container"]["secret_env"] = secret_env
+        job_submit["container"]["secret_volumes"] = secret_volumes
+        async with client.post(url, headers=user.headers, json=job_submit) as resp:
+            assert resp.status == HTTPAccepted.status_code, await resp.text()
+            result = await resp.json()
+            assert result["status"] in ["pending"]
+            assert result["container"]["secret_env"] == secret_env
+            assert result["container"]["secret_volumes"] == secret_volumes
+            job_id = result["id"]
+        await jobs_client.delete_job(job_id=job_id)
+
+        response_payload = await jobs_client.long_polling_by_job_id(
+            job_id=job_id, status="succeeded"
+        )
+        await jobs_client.delete_job(job_id=job_id)
+        assert response_payload["container"]["secret_env"] == secret_env
+        assert response_payload["container"]["secret_volumes"] == secret_volumes
+
+    @pytest.mark.asyncio
+    async def test_create_job_with_secret_same_secret_in_multiple_env_vars(
+        self,
+        api: ApiConfig,
+        client: aiohttp.ClientSession,
+        job_submit: Dict[str, Any],
+        jobs_client: JobsClient,
+        regular_user: _User,
+    ) -> None:
+        url = api.jobs_base_url
+        user = regular_user
+        secret_uri_1 = f"secret://{user.cluster_name}/{user.name}/key_1"
+        secret_uri_2 = f"secret://{user.cluster_name}/{user.name}/key_2"
+        secret_env = {
+            "ENV_SECRET_A": secret_uri_1,
+            "ENV_SECRET_B": secret_uri_2,
+            "ENV_SECRET_C": secret_uri_2,
+        }
+        job_submit["container"]["secret_env"] = secret_env
+        async with client.post(url, headers=user.headers, json=job_submit) as resp:
+            assert resp.status == HTTPAccepted.status_code, await resp.text()
+            result = await resp.json()
+            assert result["status"] in ["pending"]
+            assert result["container"]["secret_env"] == secret_env
+            job_id = result["id"]
+        await jobs_client.delete_job(job_id=job_id)
+
+        response_payload = await jobs_client.long_polling_by_job_id(
+            job_id=job_id, status="succeeded"
+        )
+        await jobs_client.delete_job(job_id=job_id)
+        assert response_payload["container"]["secret_env"] == secret_env
+
+    @pytest.mark.asyncio
+    async def test_create_job_with_secret_same_secret_in_multiple_secret_volumes(
+        self,
+        api: ApiConfig,
+        client: aiohttp.ClientSession,
+        job_submit: Dict[str, Any],
+        jobs_client: JobsClient,
+        regular_user: _User,
+    ) -> None:
+        url = api.jobs_base_url
+        user = regular_user
+        secret_uri_1 = f"secret://{user.cluster_name}/{user.name}/key_1"
+        secret_uri_2 = f"secret://{user.cluster_name}/{user.name}/key_2"
+        secret_volumes = [
+            {"src_secret_uri": secret_uri_1, "dst_path": "/container/path_a"},
+            {"src_secret_uri": secret_uri_2, "dst_path": "/container/path_b"},
+            {"src_secret_uri": secret_uri_2, "dst_path": "/container/path_c"},
+        ]
+        job_submit["container"]["secret_volumes"] = secret_volumes
+        async with client.post(url, headers=user.headers, json=job_submit) as resp:
+            assert resp.status == HTTPAccepted.status_code, await resp.text()
+            result = await resp.json()
+            assert result["status"] in ["pending"]
+            assert result["container"]["secret_volumes"] == secret_volumes
+            job_id = result["id"]
+        await jobs_client.delete_job(job_id=job_id)
+
+        response_payload = await jobs_client.long_polling_by_job_id(
+            job_id=job_id, status="succeeded"
+        )
+        await jobs_client.delete_job(job_id=job_id)
+        assert response_payload["container"]["secret_volumes"] == secret_volumes
+
+    @pytest.mark.asyncio
+    async def test_create_job_with_secret_env_wrong_scheme(
+        self,
+        api: ApiConfig,
+        client: aiohttp.ClientSession,
+        job_submit: Dict[str, Any],
+        jobs_client: JobsClient,
+        regular_user: _User,
+    ) -> None:
+        url = api.jobs_base_url
+        user = regular_user
+        wrong_scheme = "wrong-scheme"
+        secret_uri_good = f"secret://{user.cluster_name}/{user.name}/key_1"
+        secret_uri_wrong = f"{wrong_scheme}://{user.cluster_name}/{user.name}/key_2"
+        secret_env = {
+            "ENV_SECRET_A": secret_uri_good,
+            "ENV_SECRET_B": secret_uri_wrong,
+        }
+        job_submit["container"]["secret_env"] = secret_env
+        async with client.post(url, headers=user.headers, json=job_submit) as resp:
+            assert resp.status == HTTPBadRequest.status_code, await resp.text()
+            msg = await resp.json()
+            err = f"Invalid URI scheme: '{wrong_scheme}' != 'secret'"
+            assert err in msg["error"], msg
+
+    @pytest.mark.asyncio
+    async def test_create_job_with_secret_volume_wrong_scheme(
+        self,
+        api: ApiConfig,
+        client: aiohttp.ClientSession,
+        job_submit: Dict[str, Any],
+        jobs_client: JobsClient,
+        regular_user: _User,
+    ) -> None:
+        url = api.jobs_base_url
+        user = regular_user
+        wrong_scheme = "wrong-scheme"
+        secret_uri_good = f"secret://{user.cluster_name}/{user.name}/key_1"
+        secret_uri_wrong = f"{wrong_scheme}://{user.cluster_name}/{user.name}/key_2"
+        secret_volumes = [
+            {"src_secret_uri": secret_uri_wrong, "dst_path": "/container/path_1"},
+            {"src_secret_uri": secret_uri_good, "dst_path": "/container/path_2"},
+        ]
+        job_submit["container"]["secret_volumes"] = secret_volumes
+        async with client.post(url, headers=user.headers, json=job_submit) as resp:
+            assert resp.status == HTTPBadRequest.status_code, await resp.text()
+            msg = await resp.json()
+            err = f"Invalid URI scheme: '{wrong_scheme}' != 'secret'"
+            assert err in msg["error"], msg
+
+    @pytest.mark.asyncio
+    async def test_create_job_with_secret_env_wrong_cluster(
+        self,
+        api: ApiConfig,
+        client: aiohttp.ClientSession,
+        job_submit: Dict[str, Any],
+        jobs_client: JobsClient,
+        regular_user: _User,
+    ) -> None:
+        url = api.jobs_base_url
+        user = regular_user
+        wrong_cluster = "wrong-cluster-name"
+        secret_uri_good = f"secret://{user.cluster_name}/{user.name}/key_1"
+        secret_uri_wrong = f"secret://{wrong_cluster}/{user.name}/key_2"
+        secret_env = {
+            "ENV_SECRET_A": secret_uri_good,
+            "ENV_SECRET_B": secret_uri_wrong,
+        }
+        job_submit["container"]["secret_env"] = secret_env
+        async with client.post(url, headers=user.headers, json=job_submit) as resp:
+            assert resp.status == HTTPBadRequest.status_code, await resp.text()
+            msg = await resp.json()
+            err = f"Invalid URI cluster: '{wrong_cluster}' != '{user.cluster_name}'"
+            assert err in msg["error"], msg
+
+    @pytest.mark.asyncio
+    async def test_create_job_with_secret_volume_wrong_cluster(
+        self,
+        api: ApiConfig,
+        client: aiohttp.ClientSession,
+        job_submit: Dict[str, Any],
+        jobs_client: JobsClient,
+        regular_user: _User,
+    ) -> None:
+        url = api.jobs_base_url
+        user = regular_user
+        wrong_cluster = "wrong-cluster-name"
+        secret_uri_good = f"secret://{user.cluster_name}/{user.name}/key_1"
+        secret_uri_wrong = f"secret://{wrong_cluster}/{user.name}/key_2"
+        secret_volumes = [
+            {"src_secret_uri": secret_uri_good, "dst_path": "/container/path_1"},
+            {"src_secret_uri": secret_uri_wrong, "dst_path": "/container/path_2"},
+        ]
+        job_submit["container"]["secret_volumes"] = secret_volumes
+        async with client.post(url, headers=user.headers, json=job_submit) as resp:
+            assert resp.status == HTTPBadRequest.status_code, await resp.text()
+            msg = await resp.json()
+            err = f"Invalid URI cluster: '{wrong_cluster}' != '{user.cluster_name}'"
+            assert err in msg["error"], msg
+
+    @pytest.mark.asyncio
+    async def test_create_job_with_secret_volume_invalid_mount_with_dots(
+        self,
+        api: ApiConfig,
+        client: aiohttp.ClientSession,
+        job_submit: Dict[str, Any],
+        jobs_client: JobsClient,
+        regular_user: _User,
+    ) -> None:
+        url = api.jobs_base_url
+        user = regular_user
+        secret_uri = f"secret://{user.cluster_name}/{user.name}/key_1"
+        invalid_path = "/container/path_1/../path_2"
+        secret_volumes = [
+            {"src_secret_uri": secret_uri, "dst_path": invalid_path},
+        ]
+        job_submit["container"]["secret_volumes"] = secret_volumes
+        async with client.post(url, headers=user.headers, json=job_submit) as resp:
+            assert resp.status == HTTPBadRequest.status_code, await resp.text()
+            msg = await resp.json()
+            err = f"Invalid path: '{invalid_path}'"
+            assert err in msg["error"], msg
+
+    @pytest.mark.asyncio
+    async def test_create_job_with_secret_volume_invalid_mount_relative(
+        self,
+        api: ApiConfig,
+        client: aiohttp.ClientSession,
+        job_submit: Dict[str, Any],
+        jobs_client: JobsClient,
+        regular_user: _User,
+    ) -> None:
+        url = api.jobs_base_url
+        user = regular_user
+        secret_uri = f"secret://{user.cluster_name}/{user.name}/key_1"
+        invalid_path = "container/path_1"
+        secret_volumes = [
+            {"src_secret_uri": secret_uri, "dst_path": invalid_path},
+        ]
+        job_submit["container"]["secret_volumes"] = secret_volumes
+        async with client.post(url, headers=user.headers, json=job_submit) as resp:
+            assert resp.status == HTTPBadRequest.status_code, await resp.text()
+            msg = await resp.json()
+            err = f"Mount path must be absolute: '{invalid_path}'"
+            assert err in msg["error"], msg
+
+    @pytest.mark.asyncio
+    async def test_create_job_with_and_secret_volumes_same_mount_points(
+        self,
+        api: ApiConfig,
+        client: aiohttp.ClientSession,
+        job_submit: Dict[str, Any],
+        jobs_client: JobsClient,
+        regular_user: _User,
+    ) -> None:
+        url = api.jobs_base_url
+        user = regular_user
+        secret_uri_1 = f"secret://{user.cluster_name}/{user.name}/key_1"
+        secret_uri_2 = f"secret://{user.cluster_name}/{user.name}/key_2"
+        secret_volumes = [
+            {"src_secret_uri": secret_uri_1, "dst_path": "/container/path"},
+            {"src_secret_uri": secret_uri_2, "dst_path": "/container/path"},
+        ]
+        job_submit["container"]["secret_volumes"] = secret_volumes
+        async with client.post(url, headers=user.headers, json=job_submit) as resp:
+            assert resp.status == HTTPBadRequest.status_code, await resp.text()
+            msg = await resp.json()
+            err = "destination path '/container/path' was encountered multiple times"
+            assert err in msg["error"], msg["error"]
+
+    @pytest.mark.asyncio
     async def test_create_job_set_max_run_time(
         self,
         api: ApiConfig,

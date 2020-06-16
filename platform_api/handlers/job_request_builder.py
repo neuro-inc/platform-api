@@ -1,6 +1,8 @@
 from pathlib import PurePath
 from typing import Any, Dict
 
+from yarl import URL
+
 from platform_api.cluster_config import StorageConfig
 from platform_api.orchestrator.job_request import (
     Container,
@@ -9,6 +11,7 @@ from platform_api.orchestrator.job_request import (
     ContainerSSHServer,
     ContainerTPUResource,
     ContainerVolume,
+    SecretVolume,
 )
 
 
@@ -38,12 +41,20 @@ def create_container_from_payload(
         )
         volumes.append(volume)
 
+    secret_volumes = [
+        create_secret_volume_from_payload(volume_payload)
+        for volume_payload in payload.get("secret_volumes", ())
+    ]
+    secret_env = {name: URL(val) for name, val in payload.get("secret_env", {}).items()}
+
     return Container(
         image=payload["image"],
         entrypoint=payload.get("entrypoint"),
         command=payload.get("command"),
         env=payload.get("env", {}),
         volumes=volumes,
+        secret_env=secret_env,
+        secret_volumes=secret_volumes,
         resources=create_resources_from_payload(payload["resources"]),
         http_server=http_server,
         ssh_server=ssh_server,
@@ -81,4 +92,11 @@ def create_volume_from_payload(
         dst_mount_path=dst_path,
         extend_dst_mount_path=False,
         read_only=bool(payload.get("read_only")),
+    )
+
+
+def create_secret_volume_from_payload(payload: Dict[str, Any]) -> SecretVolume:
+    return SecretVolume(
+        src_secret_uri=URL(payload["src_secret_uri"]),
+        dst_path=PurePath(payload["dst_path"]),
     )
