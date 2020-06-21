@@ -3,7 +3,7 @@ import shlex
 import uuid
 from dataclasses import asdict, dataclass, field
 from pathlib import PurePath
-from typing import Any, Dict, List, Optional, Sequence, Union
+from typing import Any, Dict, List, Optional, Sequence
 from urllib.parse import urlsplit
 
 from yarl import URL
@@ -59,14 +59,19 @@ class ContainerVolume:
 
 @dataclass(frozen=True)
 class SecretVolume(ContainerVolume):
-    @classmethod
-    def create_secret(cls, uri: Union[str, URL], dst_path: PurePath) -> "SecretVolume":
-        return cls(uri=URL(uri), dst_path=dst_path, read_only=True, src_path=PurePath())
+    @staticmethod
+    def create(uri: str, *args: Any, **kwargs: Any) -> "SecretVolume":
+        assert not args
+        dst_path = kwargs.pop("dst_path")
+        assert not kwargs
+        return SecretVolume(
+            URL(uri), dst_path=dst_path, src_path=PurePath(""), read_only=True,
+        )
 
     @classmethod
     def from_primitive(cls, payload: Dict[str, Any]) -> "SecretVolume":
-        return cls.create_secret(
-            uri=URL(payload["src_secret_uri"]), dst_path=PurePath(payload["dst_path"]),
+        return cls.create(
+            payload["src_secret_uri"], dst_path=PurePath(payload["dst_path"]),
         )
 
     def to_primitive(self) -> Dict[str, Any]:
