@@ -96,7 +96,6 @@ def create_volume_from_payload(
 
 
 def create_secret_volume_from_payload(payload: Dict[str, Any]) -> SecretVolume:
-    return SecretVolume(
-        src_secret_uri=URL(payload["src_secret_uri"]),
-        dst_path=PurePath(payload["dst_path"]),
+    return SecretVolume.create_secret(
+        uri=payload["src_secret_uri"], dst_path=PurePath(payload["dst_path"]),
     )

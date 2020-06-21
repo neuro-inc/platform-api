@@ -227,7 +227,7 @@ def convert_container_volume_to_json(
 
 def convert_secret_volume_to_json(volume: SecretVolume) -> Dict[str, Any]:
     return {
-        "src_secret_uri": str(volume.src_secret_uri),
+        "src_secret_uri": str(volume.uri),
         "dst_path": str(volume.dst_path),
     }
 
