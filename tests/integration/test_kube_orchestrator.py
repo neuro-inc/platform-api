@@ -1302,7 +1302,7 @@ class TestKubeOrchestrator:
         delete_job_later: Callable[[Job], Awaitable[None]],
     ) -> None:
         secret_uri = "secret://test-cluster/test-user/test-secret"
-        secret_volume = SecretVolume.create(secret_uri, PurePath("/foo"))
+        secret_volume = SecretVolume.create(secret_uri, dst_path=PurePath("/foo"))
         container = Container(
             image="ubuntu",
             command="sleep 1h",
@@ -1404,8 +1404,8 @@ class TestKubeOrchestrator:
             }
         ]
 
-        container = raw["spec"]["containers"][0]
-        assert container["volumeMounts"] == [
+        volume_mounts = raw["spec"]["containers"][0]["volumeMounts"]
+        assert volume_mounts == [
             {
                 "name": volume_name,
                 "readOnly": True,

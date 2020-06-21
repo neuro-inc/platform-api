@@ -686,9 +686,9 @@ class Job:
     def max_run_time_minutes(self) -> Optional[int]:
         return self._record.max_run_time_minutes
 
-    def get_secret_uris(self) -> List[URL]:
+    def has_secrets(self) -> bool:
         # TODO: test
-        return self._record.request.container.get_secret_uris()
+        return bool(self._record.request.container.get_secret_uris())
 
     def to_primitive(self) -> Dict[str, Any]:
         return self._record.to_primitive()

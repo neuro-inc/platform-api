@@ -22,7 +22,6 @@ from .job_request import (
     JobNotFoundException,
     JobStatus,
     SecretNotFoundException,
-    SecretVolume as SecretVolumeRequest,
 )
 from .kube_client import (
     AlreadyExistsException,
@@ -203,17 +202,15 @@ class KubeOrchestrator(Orchestrator):
         assert parts[0] == "/"
         return parts[1], parts[2]
 
-    async def _asset_secret_exists(self, secret_uri: URL) -> None:
-        user_name, _ = self._split_uri(secret_uri)
+    async def _asset_user_secret_exists(self, user_name: str) -> None:
         secret_name = self._get_secret_name(user_name)
         try:
             await self._client.get_raw_secret(secret_name, self._kube_config.namespace)
         except StatusException:
-            raise SecretNotFoundException(str(secret_uri))
+            raise SecretNotFoundException(f"Secret for user '{user_name}' not found")
 
     def create_secret_volume(self, user_name: str) -> SecretVolume:
         return SecretVolume(
-            # TODO: check: should be the same name? not unique for each pod?
             name=self._kube_config.secret_volume_name,
             secret_name=self._get_secret_name(user_name),
         )
@@ -323,8 +320,8 @@ class KubeOrchestrator(Orchestrator):
         await self._create_user_network_policy(job)
         try:
             await self._create_pod_network_policy(job)
-            for secret_uri in job.get_secret_uris():
-                await self._asset_secret_exists(secret_uri)
+            if job.has_secrets():
+                await self._asset_user_secret_exists(job.owner)
 
             descriptor = await self._create_pod_descriptor(job)
             pod = await self._client.create_pod(descriptor)

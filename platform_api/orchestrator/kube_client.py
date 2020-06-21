@@ -162,8 +162,8 @@ class SecretVolume(Volume):
             "secret": {"secretName": self.secret_name},
         }
 
-    def create_mount(self, container_volume: SecretVolumeRequest) -> "VolumeMount":
-        assert isinstance(container_volume, SecretVolumeRequest), type(container_volume)
+    def create_mount(self, container_volume: ContainerVolume) -> "VolumeMount":
+        assert isinstance(container_volume, SecretVolumeRequest), container_volume
         return VolumeMount(
             volume=self, mount_path=container_volume.dst_path, read_only=True,
         )
@@ -1579,7 +1579,7 @@ class KubeClient:
 
     async def get_raw_secret(
         self, secret_name: str, namespace_name: Optional[str] = None
-    ) -> None:
+    ) -> Dict[str, Any]:
         url = self._generate_secret_url(secret_name, namespace_name)
         payload = await self._request(method="GET", url=url)
         self._check_status_payload(payload)
