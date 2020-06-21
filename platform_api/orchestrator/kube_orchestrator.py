@@ -3,7 +3,10 @@ import logging
 import operator
 from dataclasses import replace
 from datetime import datetime, timezone
-from typing import Any, Dict, Iterable, List, Optional, Union
+from pathlib import PurePath
+from typing import Any, Dict, Iterable, List, Optional, Tuple, Union
+
+from yarl import URL
 
 from platform_api.cluster_config import (
     OrchestratorConfig,
@@ -18,6 +21,8 @@ from .job_request import (
     JobError,
     JobNotFoundException,
     JobStatus,
+    SecretNotFoundException,
+    SecretVolume as SecretVolumeRequest,
 )
 from .kube_client import (
     AlreadyExistsException,
@@ -35,7 +40,9 @@ from .kube_client import (
     PodRestartPolicy,
     PodStatus,
     PVCVolume,
+    SecretVolume,
     Service,
+    StatusException,
     Toleration,
     Volume,
 )
@@ -184,6 +191,33 @@ class KubeOrchestrator(Orchestrator):
             path=self._storage_config.host_mount_path,
         )
 
+    def _get_secret_name(self, user_name: str) -> str:
+        return f"user--{user_name}--secrets"
+
+    def _split_uri(self, secret_uri: URL) -> Tuple[str, str]:
+        """ Splits secret URI in normal form `secret://clustername/username/secretname`
+        into two parts: (username, secretname)
+        """
+        parts = PurePath(secret_uri.path).parts
+        assert len(parts) == 3, parts
+        assert parts[0] == "/"
+        return parts[1], parts[2]
+
+    async def _asset_secret_exists(self, secret_uri: URL) -> None:
+        user_name, _ = self._split_uri(secret_uri)
+        secret_name = self._get_secret_name(user_name)
+        try:
+            await self._client.get_raw_secret(secret_name, self._kube_config.namespace)
+        except StatusException:
+            raise SecretNotFoundException(str(secret_uri))
+
+    def create_secret_volume(self, user_name: str) -> SecretVolume:
+        return SecretVolume(
+            # TODO: check: should be the same name? not unique for each pod?
+            name=self._kube_config.secret_volume_name,
+            secret_name=self._get_secret_name(user_name),
+        )
+
     def _get_user_resource_name(self, job: Job) -> str:
         return (self._docker_secret_name_prefix + job.owner).lower()
 
@@ -246,17 +280,18 @@ class KubeOrchestrator(Orchestrator):
             logger.warning(f"Failed to remove network policy {name}: {e}")
 
     async def _create_pod_descriptor(self, job: Job) -> PodDescriptor:
-        secret_names = [self._get_docker_secret_name(job)]
         node_selector = await self._get_pod_node_selector(job)
         tolerations = self._get_pod_tolerations(job)
         node_affinity = self._get_pod_node_affinity(job)
         labels = self._get_pod_labels(job)
         # NOTE: both node selector and affinity must be satisfied for the pod
         # to be scheduled onto a node.
+
         return PodDescriptor.from_job_request(
             self._storage_volume,
             job.request,
-            secret_names,
+            secret_volume=self.create_secret_volume(job.owner),
+            image_pull_secret_names=[self._get_docker_secret_name(job)],
             node_selector=node_selector,
             tolerations=tolerations,
             node_affinity=node_affinity,
@@ -288,6 +323,8 @@ class KubeOrchestrator(Orchestrator):
         await self._create_user_network_policy(job)
         try:
             await self._create_pod_network_policy(job)
+            for secret_uri in job.get_secret_uris():
+                await self._asset_secret_exists(secret_uri)
 
             descriptor = await self._create_pod_descriptor(job)
             pod = await self._client.create_pod(descriptor)

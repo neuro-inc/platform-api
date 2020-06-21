@@ -201,6 +201,18 @@ async def kube_ingress_ip(kube_config_cluster_payload: Dict[str, Any]) -> str:
 
 
 class MyKubeClient(KubeClient):
+    async def create_empty_secret(self, secret_name: str, namespace: str) -> None:
+        url = self._generate_all_secrets_url(namespace)
+        primitive = {
+            "apiVersion": "v1",
+            "kind": "Secret",
+            "metadata": {"name": secret_name},
+            "data": {},
+            "type": "Opaque",
+        }
+        payload = await self._request(method="POST", url=url, json=primitive,)
+        self._check_status_payload(payload)
+
     async def wait_pod_scheduled(
         self,
         pod_name: str,

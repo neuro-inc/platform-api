@@ -37,6 +37,7 @@ class KubeConfig(OrchestratorConfig):
     jobs_pod_priority_class_name: Optional[str] = None
 
     storage_volume_name: str = "storage"
+    secret_volume_name: str = "secret"
 
     node_label_gpu: Optional[str] = None
     node_label_preemptible: Optional[str] = None

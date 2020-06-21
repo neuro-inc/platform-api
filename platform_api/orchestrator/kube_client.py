@@ -45,6 +45,7 @@ from .job_request import (
     JobError,
     JobNotFoundException,
     JobRequest,
+    SecretVolume as SecretVolumeRequest,
 )
 from .kube_config import KubeClientAuthType
 
@@ -152,6 +153,23 @@ class PVCVolume(PathVolume):
 
 
 @dataclass(frozen=True)
+class SecretVolume(Volume):
+    secret_name: str
+
+    def to_primitive(self) -> Dict[str, Any]:
+        return {
+            "name": self.name,
+            "secret": {"secretName": self.secret_name},
+        }
+
+    def create_mount(self, container_volume: SecretVolumeRequest) -> "VolumeMount":
+        assert isinstance(container_volume, SecretVolumeRequest), type(container_volume)
+        return VolumeMount(
+            volume=self, mount_path=container_volume.dst_path, read_only=True,
+        )
+
+
+@dataclass(frozen=True)
 class VolumeMount:
     volume: Volume
     mount_path: PurePath
@@ -159,12 +177,24 @@ class VolumeMount:
     read_only: bool = False
 
     def to_primitive(self) -> Dict[str, Any]:
-        return {
+        sub_path = str(self.sub_path)
+        raw = {
             "name": self.volume.name,
             "mountPath": str(self.mount_path),
             "readOnly": self.read_only,
-            "subPath": str(self.sub_path),
         }
+        if sub_path:
+            raw["subPath"] = sub_path
+        return raw
+
+    @classmethod
+    def from_primitive(cls, payload: Dict[str, Any], volume: Volume) -> "VolumeMount":
+        return cls(
+            volume=volume,
+            mount_path=PurePath(payload["mountPath"]),
+            sub_path=PurePath(payload["subPath"]),
+            read_only=payload["readOnly"],
+        )
 
 
 @dataclass(frozen=True)
@@ -621,7 +651,8 @@ class PodDescriptor:
         cls,
         volume: Volume,
         job_request: JobRequest,
-        secret_names: Optional[List[str]] = None,
+        secret_volume: Optional[SecretVolume] = None,
+        image_pull_secret_names: Optional[List[str]] = None,
         node_selector: Optional[Dict[str, str]] = None,
         tolerations: Optional[List[Toleration]] = None,
         node_affinity: Optional[NodeAffinity] = None,
@@ -636,6 +667,16 @@ class PodDescriptor:
         ]
         volumes = [volume]
 
+        if container.secret_volumes:
+            assert secret_volume
+            volume_mounts.extend(
+                [
+                    secret_volume.create_mount(container_secret_volume)
+                    for container_secret_volume in container.secret_volumes
+                ]
+            )
+            volumes.append(secret_volume)
+
         if job_request.container.resources.shm:
             dev_shm_volume = SharedMemoryVolume(name="dshm")
             container_volume = ContainerVolume(
@@ -647,9 +688,12 @@ class PodDescriptor:
             volume_mounts.append(dev_shm_volume.create_mount(container_volume))
             volumes.append(dev_shm_volume)
 
+        env = container.env.copy()
+        # TODO: if container.secret_env
+
         resources = Resources.from_container_resources(container.resources)
-        if secret_names is not None:
-            image_pull_secrets = [SecretRef(name) for name in secret_names]
+        if image_pull_secret_names is not None:
+            image_pull_secrets = [SecretRef(name) for name in image_pull_secret_names]
         else:
             image_pull_secrets = []
 
@@ -663,7 +707,7 @@ class PodDescriptor:
             image=container.image,
             command=container.entrypoint_list,
             args=container.command_list,
-            env=container.env.copy(),
+            env=env,
             volume_mounts=volume_mounts,
             volumes=volumes,
             resources=resources,
@@ -1532,6 +1576,14 @@ class KubeClient:
                 raise
 
             await self.create_docker_secret(secret)
+
+    async def get_raw_secret(
+        self, secret_name: str, namespace_name: Optional[str] = None
+    ) -> None:
+        url = self._generate_secret_url(secret_name, namespace_name)
+        payload = await self._request(method="GET", url=url)
+        self._check_status_payload(payload)
+        return payload
 
     async def delete_secret(
         self, secret_name: str, namespace_name: Optional[str] = None

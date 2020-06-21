@@ -31,6 +31,8 @@ from platform_api.orchestrator.job_request import (
     JobNotFoundException,
     JobRequest,
     JobStatus,
+    SecretNotFoundException,
+    SecretVolume,
 )
 from platform_api.orchestrator.kube_client import (
     AlreadyExistsException,
@@ -1292,6 +1294,127 @@ class TestKubeOrchestrator:
         assert toleration_expected in pod.tolerations
 
     @pytest.mark.asyncio
+    async def test_job_pod_secret_volumes_secret_not_found(
+        self,
+        kube_config: KubeConfig,
+        kube_orchestrator: KubeOrchestrator,
+        kube_client: MyKubeClient,
+        delete_job_later: Callable[[Job], Awaitable[None]],
+    ) -> None:
+        secret_uri = "secret://test-cluster/test-user/test-secret"
+        secret_volume = SecretVolume.create(secret_uri, PurePath("/foo"))
+        container = Container(
+            image="ubuntu",
+            command="sleep 1h",
+            resources=ContainerResources(cpu=0.1, memory_mb=16),
+            http_server=ContainerHTTPServer(port=80),
+            secret_volumes=[secret_volume],
+        )
+        job = MyJob(
+            orchestrator=kube_orchestrator,
+            record=JobRecord.create(
+                request=JobRequest.create(container), cluster_name="test-cluster"
+            ),
+        )
+        with pytest.raises(SecretNotFoundException):
+            await job.start()
+
+    @pytest.mark.asyncio
+    async def test_job_pod_secret_env_secret_not_found(
+        self,
+        kube_config: KubeConfig,
+        kube_orchestrator: KubeOrchestrator,
+        kube_client: MyKubeClient,
+        delete_job_later: Callable[[Job], Awaitable[None]],
+    ) -> None:
+        secret_uri = "secret://test-cluster/test-user/test-secret"
+        container = Container(
+            image="ubuntu",
+            command="sleep 1h",
+            resources=ContainerResources(cpu=0.1, memory_mb=16),
+            http_server=ContainerHTTPServer(port=80),
+            secret_env={"ENV_NAME": URL(secret_uri)},
+        )
+        job = MyJob(
+            orchestrator=kube_orchestrator,
+            record=JobRecord.create(
+                request=JobRequest.create(container), cluster_name="test-cluster"
+            ),
+        )
+        with pytest.raises(SecretNotFoundException):
+            await job.start()
+
+    @pytest.fixture
+    async def user_with_secret(
+        self, kube_config: KubeConfig, kube_client: MyKubeClient
+    ) -> AsyncIterator[str]:
+        user_name = f"user-{uuid.uuid4()}"
+        secret_name = f"user--{user_name}--secrets"
+        try:
+            await kube_client.create_empty_secret(secret_name, kube_config.namespace)
+            yield user_name
+        finally:
+            await kube_client.delete_secret(secret_name, kube_config.namespace)
+
+    @pytest.mark.asyncio
+    async def test_job_pod_secret_env_secret_ok(
+        self,
+        kube_config: KubeConfig,
+        kube_orchestrator: KubeOrchestrator,
+        kube_client: MyKubeClient,
+        delete_job_later: Callable[[Job], Awaitable[None]],
+        cluster_name: str,
+        user_with_secret: str,
+    ) -> None:
+        secret_uri = f"secret://{cluster_name}/{user_with_secret}/secret-name"
+        mount_path = "/foo"
+        secret_volume = SecretVolume.create(secret_uri, dst_path=PurePath(mount_path))
+        container = Container(
+            image="ubuntu",
+            command="sleep 1h",
+            resources=ContainerResources(cpu=0.1, memory_mb=16),
+            http_server=ContainerHTTPServer(port=80),
+            secret_volumes=[secret_volume],
+        )
+        job = MyJob(
+            orchestrator=kube_orchestrator,
+            record=JobRecord.create(
+                request=JobRequest.create(container),
+                cluster_name=cluster_name,
+                owner=user_with_secret,
+            ),
+        )
+        await delete_job_later(job)
+        await job.start()
+
+        pod_name = job.id
+        await kube_client.wait_pod_is_running(pod_name=pod_name, timeout_s=60.0)
+
+        raw = await kube_client.get_raw_pod(pod_name)
+        volume_name = kube_config.secret_volume_name
+
+        secret_volumes = [v for v in raw["spec"]["volumes"] if v["name"] == volume_name]
+        assert secret_volumes == [
+            {
+                "name": kube_config.secret_volume_name,
+                "secret": {
+                    "secretName": f"user--{user_with_secret}--secrets",
+                    "defaultMode": 420,
+                },
+            }
+        ]
+
+        container = raw["spec"]["containers"][0]
+        assert container["volumeMounts"] == [
+            {
+                "name": volume_name,
+                "readOnly": True,
+                "mountPath": mount_path,
+                "subPath": ".",
+            }
+        ]
+
+    @pytest.mark.asyncio
     async def test_delete_all_job_resources(
         self,
         kube_client: MyKubeClient,
@@ -1643,6 +1766,28 @@ class TestKubeClient:
 
         await kube_client.update_docker_secret(docker_secret, create_non_existent=True)
         await kube_client.update_docker_secret(docker_secret)
+
+    @pytest.mark.asyncio
+    async def test_get_raw_secret(
+        self, kube_config: KubeConfig, kube_client: KubeClient
+    ) -> None:
+        name = str(uuid.uuid4())
+        docker_secret = DockerRegistrySecret(
+            name=name,
+            namespace=kube_config.namespace,
+            username="testuser",
+            password="testpassword",
+            email="testuser@example.com",
+            registry_server="registry.example.com",
+        )
+        with pytest.raises(StatusException, match="NotFound"):
+            await kube_client.get_raw_secret(name, kube_config.namespace)
+
+        await kube_client.update_docker_secret(docker_secret, create_non_existent=True)
+        raw = await kube_client.get_raw_secret(name, kube_config.namespace)
+        assert raw["metadata"]["name"] == name
+        assert raw["metadata"]["namespace"] == kube_config.namespace
+        assert raw["data"] == docker_secret.to_primitive()["data"]
 
     @pytest.fixture
     async def delete_network_policy_later(

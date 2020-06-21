@@ -28,6 +28,10 @@ class JobAlreadyExistsException(JobException):
     pass
 
 
+class SecretNotFoundException(JobException):
+    pass
+
+
 @dataclass(frozen=True)
 class ContainerVolume:
     uri: URL
@@ -61,9 +65,9 @@ class ContainerVolume:
 class SecretVolume(ContainerVolume):
     @staticmethod
     def create(uri: str, *args: Any, **kwargs: Any) -> "SecretVolume":
-        assert not args
+        assert not args, "only named argument 'dst_path' allowed"
         dst_path = kwargs.pop("dst_path")
-        assert not kwargs
+        assert not kwargs, "only named argument 'dst_path' allowed"
         return SecretVolume(
             URL(uri), dst_path=dst_path, src_path=PurePath(""), read_only=True,
         )
