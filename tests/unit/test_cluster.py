@@ -69,6 +69,22 @@ class TestClusterRegistry:
             assert cluster.name == config.name
 
     @pytest.mark.asyncio
+    async def test_add_raises(self) -> None:
+        class _NotAvailableCluster(_TestCluster):
+            async def init(self) -> None:
+                raise RuntimeError("Unexpected")
+
+        registry = ClusterRegistry(factory=_NotAvailableCluster)
+        config = create_cluster_config(name="test")
+
+        with pytest.raises(Exception):
+            await registry.replace(config)
+
+        with pytest.raises(ClusterNotFound):
+            async with registry.get(config.name):
+                pass
+
+    @pytest.mark.asyncio
     async def test_get(self) -> None:
         registry = ClusterRegistry(factory=_TestCluster)
         config = create_cluster_config(
