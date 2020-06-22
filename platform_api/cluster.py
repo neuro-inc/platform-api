@@ -191,6 +191,8 @@ class ClusterRegistry:
         logger.info(f"Unregistered cluster '{name}'")
 
         async with record.lock.writer:
+            record.mark_cluster_closed()
+
             await self._close_cluster(record.cluster)
 
     async def _close_cluster(self, cluster: Cluster) -> None:
