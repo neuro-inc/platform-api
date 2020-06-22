@@ -149,10 +149,6 @@ class JobStatusHistory:
         return None
 
     @property
-    def _first_pending(self) -> Optional[JobStatusItem]:
-        return self._find_with_status(self._items, (JobStatus.PENDING,))
-
-    @property
     def _first_running(self) -> Optional[JobStatusItem]:
         return self._find_with_status(self._items, (JobStatus.RUNNING,))
 
@@ -216,12 +212,12 @@ class JobStatusHistory:
 
     @property
     def is_finished(self) -> bool:
-        return bool(self._first_finished)
+        return self.last.is_finished
 
     @property
     def finished_at(self) -> Optional[datetime]:
-        if self._first_finished:
-            return self._first_finished.transition_time
+        if self.last.is_finished:
+            return self.last.transition_time
         return None
 
     @property

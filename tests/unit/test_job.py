@@ -1669,6 +1669,24 @@ class TestJobStatusHistory:
         assert history.finished_at == finished_item.transition_time
         assert history.finished_at_str == (finished_item.transition_time.isoformat())
 
+    def test_resurraction(self) -> None:
+        pending_item = JobStatusItem.create(JobStatus.PENDING)
+        running_item = JobStatusItem.create(JobStatus.RUNNING)
+        finished_item = JobStatusItem.create(JobStatus.SUCCEEDED)
+        items = [pending_item, running_item, finished_item, running_item]
+        history = JobStatusHistory(items=items)
+        assert history.first == pending_item
+        assert history.last == running_item
+        assert history.current == running_item
+        assert history.created_at == pending_item.transition_time
+        assert history.created_at_str == (pending_item.transition_time.isoformat())
+        assert history.started_at == running_item.transition_time
+        assert history.started_at_str == (running_item.transition_time.isoformat())
+        assert not history.is_finished
+        assert history.is_running
+        assert not history.finished_at
+        assert not history.finished_at_str
+
     def test_current_update(self) -> None:
         pending_item = JobStatusItem.create(JobStatus.PENDING)
         running_item = JobStatusItem.create(JobStatus.RUNNING)
