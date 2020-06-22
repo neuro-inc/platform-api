@@ -1201,6 +1201,8 @@ class KubeClient:
         return ssl_context
 
     async def init(self) -> None:
+        if self._client:
+            return
         connector = aiohttp.TCPConnector(
             limit=self._conn_pool_size, ssl=self._create_ssl_context()
         )

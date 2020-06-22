@@ -146,12 +146,12 @@ class ClusterRegistry:
             await self.remove(name)
 
     async def replace(self, config: ClusterConfig) -> None:
-        old_cluster: Optional[Cluster] = None
         new_cluster = self._factory(config)
 
+        cluster_registered = False
         record = self._records.get(config.name)
         if record:
-            old_cluster = record.cluster
+            cluster_registered = True
         else:
             record = ClusterRegistryRecord(new_cluster)
             self._records[config.name] = record
@@ -159,9 +159,17 @@ class ClusterRegistry:
         logger.info(f"Registered cluster '{config.name}'")
 
         async with record.lock.writer:
-            if old_cluster and old_cluster.config == config:
-                logger.info(f"Cluster '{config.name}' didn't change")
-                return
+            old_cluster: Optional[Cluster] = None
+            if cluster_registered:
+                old_cluster = record.cluster
+                if old_cluster.config == config:
+                    # Make sure current cluster is initialized
+                    # in case replace was called in two separate requests
+                    # for new cluster and first request was cancelled right before
+                    # performing initialization or initialization failed
+                    await old_cluster.init()
+                    logger.info(f"Cluster '{config.name}' didn't change")
+                    return
 
             try:
                 logger.info(f"Initializing cluster '{config.name}'")
