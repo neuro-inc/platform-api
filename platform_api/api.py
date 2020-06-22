@@ -76,7 +76,7 @@ class ApiHandler:
         cluster_registry = self._jobs_service._cluster_registry
         old_record_count = len(cluster_registry)
         [
-            await cluster_registry.add(cluster_config)
+            await cluster_registry.replace(cluster_config)
             for cluster_config in cluster_configs
         ]
         await cluster_registry.cleanup(cluster_configs)
@@ -268,7 +268,7 @@ async def create_app(
             logger.info("Loading clusters")
             await exit_stack.enter_async_context(config.config_client)
             [
-                await cluster_registry.add(cluster_config)
+                await cluster_registry.replace(cluster_config)
                 for cluster_config in await cluster_configs_future
             ]
 

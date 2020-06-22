@@ -901,7 +901,7 @@ class TestJobsServiceCluster:
             jobs_config=jobs_config,
             notifications_client=mock_notifications_client,
         )
-        await cluster_registry.add(cluster_config)
+        await cluster_registry.replace(cluster_config)
 
         async with cluster_registry.get(cluster_config.name) as cluster:
 
@@ -938,7 +938,7 @@ class TestJobsServiceCluster:
             jobs_config=jobs_config,
             notifications_client=mock_notifications_client,
         )
-        await cluster_registry.add(cluster_config)
+        await cluster_registry.replace(cluster_config)
 
         user = User(name="testuser", token="testtoken", cluster_name="test-cluster")
         job, _ = await jobs_service.create_job(mock_job_request, user)
@@ -974,7 +974,7 @@ class TestJobsServiceCluster:
             jobs_config=jobs_config,
             notifications_client=mock_notifications_client,
         )
-        await cluster_registry.add(cluster_config)
+        await cluster_registry.replace(cluster_config)
 
         user = User(name="testuser", token="testtoken", cluster_name="test-cluster")
         job, _ = await jobs_service.create_job(mock_job_request, user)
@@ -1009,9 +1009,9 @@ class TestJobsServiceCluster:
             jobs_config=jobs_config,
             notifications_client=mock_notifications_client,
         )
-        await cluster_registry.add(cluster_config)  # "test-cluster"
-        await cluster_registry.add(replace(cluster_config, name="default"))
-        await cluster_registry.add(replace(cluster_config, name="missing"))
+        await cluster_registry.replace(cluster_config)  # "test-cluster"
+        await cluster_registry.replace(replace(cluster_config, name="default"))
+        await cluster_registry.replace(replace(cluster_config, name="missing"))
 
         user = User(name="testuser", token="testtoken", cluster_name="missing")
         job, _ = await jobs_service.create_job(mock_job_request, user)
@@ -1047,7 +1047,7 @@ class TestJobsServiceCluster:
         cluster_config = replace(
             cluster_config, circuit_breaker=CircuitBreakerConfig(open_threshold=1)
         )
-        await cluster_registry.add(cluster_config)  # "test-cluster"
+        await cluster_registry.replace(cluster_config)  # "test-cluster"
 
         user = User(name="testuser", token="testtoken", cluster_name="test-cluster")
         job, _ = await jobs_service.create_job(mock_job_request, user)
@@ -1078,7 +1078,7 @@ class TestJobsServiceCluster:
             jobs_config=jobs_config,
             notifications_client=mock_notifications_client,
         )
-        await cluster_registry.add(cluster_config)
+        await cluster_registry.replace(cluster_config)
 
         user = User(cluster_name="test-cluster", name="testuser", token="testtoken")
         job, _ = await jobs_service.create_job(mock_job_request, user)
@@ -1107,7 +1107,7 @@ class TestJobsServiceCluster:
             jobs_config=jobs_config,
             notifications_client=mock_notifications_client,
         )
-        await cluster_registry.add(cluster_config)
+        await cluster_registry.replace(cluster_config)
 
         async with cluster_registry.get(cluster_config.name) as cluster:
 
