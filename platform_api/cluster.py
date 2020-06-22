@@ -159,6 +159,8 @@ class ClusterRegistry:
         logger.info(f"Registered cluster '{config.name}'")
 
         async with record.lock.writer:
+            # Get fresh version of current cluster in record in case it was
+            # changed in another request
             old_cluster: Optional[Cluster] = None
             if cluster_registered:
                 old_cluster = record.cluster
