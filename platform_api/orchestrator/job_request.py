@@ -58,20 +58,25 @@ class ContainerVolume:
 
 
 @dataclass(frozen=True)
-class SecretVolume:
-    src_secret_uri: URL
-    dst_path: PurePath
+class SecretVolume(ContainerVolume):
+    @staticmethod
+    def create(uri: str, *args: Any, **kwargs: Any) -> "SecretVolume":
+        assert not args
+        dst_path = kwargs.pop("dst_path")
+        assert not kwargs
+        return SecretVolume(
+            URL(uri), dst_path=dst_path, src_path=PurePath(""), read_only=True,
+        )
 
     @classmethod
     def from_primitive(cls, payload: Dict[str, Any]) -> "SecretVolume":
-        return cls(
-            src_secret_uri=URL(payload["src_secret_uri"]),
-            dst_path=PurePath(payload["dst_path"]),
+        return cls.create(
+            payload["src_secret_uri"], dst_path=PurePath(payload["dst_path"]),
         )
 
     def to_primitive(self) -> Dict[str, Any]:
         return {
-            "src_secret_uri": str(self.src_secret_uri),
+            "src_secret_uri": str(self.uri),
             "dst_path": str(self.dst_path),
         }
 
@@ -222,7 +227,7 @@ class Container:
 
     def get_secret_uris(self) -> Sequence[URL]:
         env_uris = list(self.secret_env.values())
-        vol_uris = [vol.src_secret_uri for vol in self.secret_volumes]
+        vol_uris = [vol.uri for vol in self.secret_volumes]
         return list(set(env_uris + vol_uris))
 
     @property
