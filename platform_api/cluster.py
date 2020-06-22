@@ -161,7 +161,6 @@ class ClusterRegistry:
             record.cluster = new_cluster
         else:
             record = ClusterRegistryRecord(new_cluster)
-            self._records[config.name] = record
 
         logger.info(f"Registered cluster '{config.name}'")
 
@@ -169,6 +168,7 @@ class ClusterRegistry:
             try:
                 logger.info(f"Initializing cluster '{config.name}'")
                 await new_cluster.init()
+                self._records[config.name] = record
                 logger.info(f"Initialized cluster '{config.name}'")
             finally:
                 if old_cluster:
