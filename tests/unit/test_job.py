@@ -962,6 +962,45 @@ class TestJob:
         assert not job.is_preemptible
         assert job.max_run_time_minutes is None
         assert job.restart_policy == JobRestartPolicy.NEVER
+        assert not job.has_secrets
+
+    def test_from_primitive_has_secrets_volume(
+        self, mock_orchestrator: MockOrchestrator, job_request_payload: Dict[str, Any]
+    ) -> None:
+        job_request_payload["container"]["secret_volumes"] = [
+            {"src_secret_uri": "secret://cluster/user/sec", "dst_path": "/dst/path"}
+        ]
+        payload = {
+            "id": "testjob",
+            "owner": "testuser",
+            "request": job_request_payload,
+            "status": "succeeded",
+            "is_deleted": True,
+            "finished_at": datetime.now(timezone.utc).isoformat(),
+        }
+        job = Job.from_primitive(
+            mock_orchestrator.storage_config, mock_orchestrator.config, payload
+        )
+        assert job.has_secrets
+
+    def test_from_primitive_has_secrets_env(
+        self, mock_orchestrator: MockOrchestrator, job_request_payload: Dict[str, Any]
+    ) -> None:
+        job_request_payload["container"]["secret_env"] = {
+            "SECRET_ENV": "secret://cluster/user/sec",
+        }
+        payload = {
+            "id": "testjob",
+            "owner": "testuser",
+            "request": job_request_payload,
+            "status": "succeeded",
+            "is_deleted": True,
+            "finished_at": datetime.now(timezone.utc).isoformat(),
+        }
+        job = Job.from_primitive(
+            mock_orchestrator.storage_config, mock_orchestrator.config, payload
+        )
+        assert job.has_secrets
 
     def test_from_primitive_check_name(
         self, mock_orchestrator: MockOrchestrator, job_request_payload: Dict[str, Any]

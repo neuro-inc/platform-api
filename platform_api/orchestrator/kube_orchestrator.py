@@ -320,7 +320,7 @@ class KubeOrchestrator(Orchestrator):
         await self._create_user_network_policy(job)
         try:
             await self._create_pod_network_policy(job)
-            if job.has_secrets():
+            if job.has_secrets:
                 await self._asset_user_secret_exists(job.owner)
 
             descriptor = await self._create_pod_descriptor(job)
