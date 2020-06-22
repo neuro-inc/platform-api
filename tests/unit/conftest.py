@@ -225,7 +225,7 @@ async def cluster_registry(
         return MockCluster(config, mock_orchestrator)
 
     async with ClusterRegistry(factory=_cluster_factory) as registry:
-        await registry.add(cluster_config)
+        await registry.replace(cluster_config)
         yield registry
 
 

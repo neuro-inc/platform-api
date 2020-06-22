@@ -59,17 +59,21 @@ ClusterFactory = Callable[[ClusterConfig], Cluster]
 
 class ClusterRegistryRecord:
     def __init__(self, cluster: Cluster) -> None:
-        self._cluster = cluster
         self._lock = RWLock()
-        self._is_cluster_closed = False
-        self._breaker = CircuitBreaker(
-            open_threshold=cluster.config.circuit_breaker.open_threshold,
-            open_timeout_s=cluster.config.circuit_breaker.open_timeout_s,
-        )
+        self.cluster = cluster
 
     @property
     def cluster(self) -> Cluster:
         return self._cluster
+
+    @cluster.setter
+    def cluster(self, cluster: Cluster) -> None:
+        self._is_cluster_closed = False
+        self._cluster = cluster
+        self._breaker = CircuitBreaker(
+            open_threshold=cluster.config.circuit_breaker.open_threshold,
+            open_timeout_s=cluster.config.circuit_breaker.open_timeout_s,
+        )
 
     @property
     def lock(self) -> RWLock:
@@ -114,10 +118,6 @@ class ClusterRegistry:
         self._factory = factory
         self._records: Dict[str, ClusterRegistryRecord] = {}
 
-    def _add(self, record: ClusterRegistryRecord) -> None:
-        assert record.name not in self._records
-        self._records[record.name] = record
-
     def _remove(self, name: str) -> ClusterRegistryRecord:
         record = self._records.pop(name, None)
         if not record:
@@ -137,20 +137,49 @@ class ClusterRegistry:
         for name in list(self._records):
             await self.remove(name)
 
-    async def add(self, config: ClusterConfig) -> None:
-        try:
-            await self.remove(config.name)
-        except ClusterNotFound:
-            pass
+    async def replace(self, config: ClusterConfig) -> None:
+        record = self._records.get(config.name)
+        if record:
+            async with record.lock.writer:
+                if config.name not in self._records:  # pragma: no cover
+                    raise ClusterNotFound(config.name)
 
-        logger.info(f"Initializing cluster '{config.name}'")
-        cluster = self._factory(config)
-        await cluster.init()
-        logger.info(f"Initialized cluster '{config.name}'")
+                old_cluster = record.cluster
+                if old_cluster.config == config:
+                    logger.info(f"Cluster '{config.name}' didn't change")
+                    return
 
-        record = ClusterRegistryRecord(cluster=cluster)
-        self._add(record)
-        logger.info(f"Registered cluster '{config.name}'")
+                new_cluster = self._factory(config)
+                logger.info(f"Initializing cluster '{config.name}'")
+                await new_cluster.init()
+                logger.info(f"Initialized cluster '{config.name}'")
+                record.cluster = new_cluster
+                logger.info(f"Registered cluster '{config.name}'")
+
+                logger.info(f"Closing cluster '{config.name}'")
+                try:
+                    await old_cluster.close()
+                except asyncio.CancelledError:  # pragma: no cover
+                    raise
+                except Exception:
+                    logger.exception(f"Failed to close cluster '{config.name}'")
+                logger.info(f"Closed cluster '{config.name}'")
+        else:
+            new_cluster = self._factory(config)
+            record = ClusterRegistryRecord(new_cluster)
+            self._records[config.name] = record
+            logger.info(f"Registered new cluster '{config.name}'")
+
+            async with record.lock.writer:
+                logger.info(f"Initializing cluster '{config.name}'")
+                try:
+                    await new_cluster.init()
+                except Exception:
+                    record.mark_cluster_closed()
+                    self._remove(record.name)
+                    logger.info(f"Failed to initialize cluster '{config.name}'")
+                    raise
+                logger.info(f"Initialized cluster '{config.name}'")
 
     async def remove(self, name: str) -> None:
         record = self._remove(name)
@@ -175,7 +204,10 @@ class ClusterRegistry:
             cluster_config.name for cluster_config in keep_clusters
         )
         for cluster_for_removal in all_cluster_names - keep_clusters_with_names:
-            await self.remove(cluster_for_removal)
+            try:
+                await self.remove(cluster_for_removal)
+            except ClusterNotFound:
+                pass
 
     @asynccontextmanager
     async def get(
