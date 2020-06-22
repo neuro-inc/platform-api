@@ -176,7 +176,6 @@ class ClusterRegistry:
             new_cluster = self._factory(config)
             record = ClusterRegistryRecord(new_cluster)
             self._records[config.name] = record
-
             logger.info(f"Registered new cluster '{config.name}'")
 
             async with record.lock.writer:
