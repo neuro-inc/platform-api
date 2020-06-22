@@ -30,6 +30,7 @@ from platform_api.orchestrator.job_request import (
     JobError,
     JobRequest,
     JobStatus,
+    SecretVolume,
 )
 from platform_api.user import User
 
@@ -196,6 +197,28 @@ class TestContainerVolumeFactory:
         assert volume.src_path == PurePath("/host/path/to/dir")
         assert volume.dst_path == PurePath("/container/path/to/dir")
         assert volume.read_only
+
+    def test_create_secret(self) -> None:
+        uri = "secret://test-cluster/test-user/test-secret"
+        volume = SecretVolume.create(uri, dst_path=PurePath("/container"),)
+        assert volume.uri == URL(uri)
+        assert volume.src_path == PurePath(".")
+        assert volume.dst_path == PurePath("/container")
+        assert volume.read_only
+
+    def test_create_secret_wrong_named_argument(self) -> None:
+        uri = "secret://test-cluster/test-user/test-secret"
+        with pytest.raises(AssertionError, match="only named argument 'dst_path'"):
+            SecretVolume.create(
+                uri, dst_path=PurePath("/container"), read_only=True,
+            )
+
+    def test_create_secret_wrong_positional_argument(self) -> None:
+        uri = "secret://test-cluster/test-user/test-secret"
+        with pytest.raises(AssertionError, match="only named argument 'dst_path'"):
+            SecretVolume.create(
+                uri, PurePath("/container"),
+            )
 
     def test_create_without_extending_dst_mount_path(self) -> None:
         uri = "storage://test-cluster/path/to/dir"
