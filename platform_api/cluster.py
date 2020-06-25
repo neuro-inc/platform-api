@@ -238,9 +238,9 @@ class ClusterRegistry:
         # once it is released, the underlying cluster is considered to be
         # closed, therefore we have to check the state explicitly.
         async with record.lock.reader:
-            if not record.is_cluster_initialized:  # pragma: no cover
-                raise ClusterNotAvailable.create(name)
-            if record.is_cluster_closed:  # pragma: no cover
+            if (
+                record.is_cluster_closed or not record.is_cluster_initialized
+            ):  # pragma: no cover
                 raise ClusterNotFound.create(name)
             if skip_circuit_breaker:
                 yield record.cluster
