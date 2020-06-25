@@ -68,6 +68,7 @@ class ClusterRegistryRecord:
 
     @cluster.setter
     def cluster(self, cluster: Cluster) -> None:
+        self._is_cluster_initialized = False
         self._is_cluster_closed = False
         self._cluster = cluster
         self._breaker = CircuitBreaker(
@@ -80,8 +81,15 @@ class ClusterRegistryRecord:
         return self._lock
 
     @property
+    def is_cluster_initialized(self) -> bool:
+        return self._is_cluster_initialized
+
+    @property
     def is_cluster_closed(self) -> bool:
         return self._is_cluster_closed
+
+    def mark_cluster_initialized(self) -> None:
+        self._is_cluster_initialized = True
 
     def mark_cluster_closed(self) -> None:
         self._is_cluster_closed = True
@@ -158,6 +166,7 @@ class ClusterRegistry:
                 await new_cluster.init()
                 logger.info(f"Initialized cluster '{config.name}'")
                 record.cluster = new_cluster
+                record.mark_cluster_initialized()
                 logger.info(f"Registered cluster '{config.name}'")
 
                 await self._close_cluster(old_cluster)
@@ -178,6 +187,7 @@ class ClusterRegistry:
         logger.info(f"Initializing cluster '{record.name}'")
         try:
             await record.cluster.init()
+            record.mark_cluster_initialized()
         except Exception:
             record.mark_cluster_closed()
             self._remove(record.name)
@@ -228,6 +238,8 @@ class ClusterRegistry:
         # once it is released, the underlying cluster is considered to be
         # closed, therefore we have to check the state explicitly.
         async with record.lock.reader:
+            if not record.is_cluster_initialized:  # pragma: no cover
+                raise ClusterNotAvailable.create(name)
             if record.is_cluster_closed:  # pragma: no cover
                 raise ClusterNotFound.create(name)
             if skip_circuit_breaker:
