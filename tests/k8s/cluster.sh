@@ -3,40 +3,27 @@
 # based on
 # https://github.com/kubernetes/minikube#linux-continuous-integration-without-vm-support
 
-function k8s::install_kubectl {
-    local kubectl_version=$(curl -s https://storage.googleapis.com/kubernetes-release/release/stable.txt)
-    curl -Lo kubectl https://storage.googleapis.com/kubernetes-release/release/${kubectl_version}/bin/linux/amd64/kubectl
-    chmod +x kubectl
-    sudo mv kubectl /usr/local/bin/
-}
 function k8s::install_minikube {
     local minikube_version="v1.11.0"
     curl -Lo minikube https://storage.googleapis.com/minikube/releases/${minikube_version}/minikube-linux-amd64
     chmod +x minikube
     sudo mv minikube /usr/local/bin/
-    sudo -E minikube config set WantReportErrorPrompt false
-    sudo -E minikube config set WantUpdateNotification false
-    sudo -E minikube config set WantNoneDriverWarning false
 }
 
 function k8s::install {
-    k8s::install_kubectl
     k8s::install_minikube
 }
 
 function k8s::start {
-    export KUBECONFIG=$HOME/.kube/config
-    mkdir -p $(dirname $KUBECONFIG)
-    touch $KUBECONFIG
-
     export MINIKUBE_WANTUPDATENOTIFICATION=false
     export MINIKUBE_WANTREPORTERRORPROMPT=false
     export MINIKUBE_HOME=$HOME
-    export CHANGE_MINIKUBE_NONE_USER=true
 
     sudo -E mkdir -p ~/.minikube/files/files
     sudo -E minikube config set WantReportErrorPrompt false
-    sudo -E minikube start --vm-driver=none --kubernetes-version=v1.13.0
+    sudo -E minikube config set WantUpdateNotification false
+    sudo -E minikube config set WantNoneDriverWarning false
+    sudo -E minikube start --vm-driver=none --kubernetes-version=v1.14.10
 
     k8s::wait k8s::setup_namespace
     k8s::wait "kubectl get po --all-namespaces"

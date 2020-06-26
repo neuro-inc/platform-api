@@ -74,7 +74,7 @@ jobs:
           flags: integration
           name: codecov-integration
       - name: Run e2e tests
-        run: make test_k8s_platform_api_e2e
+        run: make test_k8s_e2e
   deploy_dev:
     name: Deploy on dev
     runs-on: ubuntu-latest

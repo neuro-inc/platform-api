@@ -44,4 +44,4 @@ echo $PLATFORM_API_URL
 echo $AUTH_API_URL
 echo $SSH_AUTH_URL
 
-pytest -vv tests/e2e
+make test_e2e

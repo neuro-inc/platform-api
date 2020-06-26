@@ -38,8 +38,8 @@ test_unit:
 test_integration:
 	pytest -vv --maxfail=3 --cov platform_api --cov-config=setup.cfg --cov-report xml:.coverage-integration.xml tests/integration
 
-test_e2e: docker_build docker_build_ssh_auth
-	./run_e2e_tests.sh
+test_e2e:
+	pytest -vv tests/e2e
 
 docker_build_ssh_auth:
 	docker build --build-arg PIP_EXTRA_INDEX_URL \
