@@ -62,7 +62,9 @@ jobs:
           sudo modprobe nfs
           sudo modprobe nfsd
       - name: Start minikube
-        run: make start_k8s
+        run: |
+          make install_k8s
+          make start_k8s
       - name: Pull test images
         run: make docker_pull_test_images
       - name: Run integration tests

@@ -26,10 +26,11 @@ function k8s::start {
     sudo -E minikube config set WantNoneDriverWarning false
     sudo -E minikube start --vm-driver=none --kubernetes-version=v1.14.10
 
+    sudo -E minikube addons enable ingress
+
     k8s::wait k8s::setup_namespace
     k8s::wait "kubectl get po --all-namespaces"
     k8s::wait k8s::start_nfs
-    k8s::wait k8s::setup_ingress
 }
 
 function k8s::wait {
@@ -65,10 +66,6 @@ function k8s::setup_registry {
         --docker-username $DOCKER_USER \
         --docker-password $DOCKER_PASS \
         --docker-email $DOCKER_EMAIL
-}
-
-function k8s::setup_ingress {
-    sudo -E minikube addons enable ingress
 }
 
 function k8s::test {
