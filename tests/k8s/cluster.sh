@@ -10,11 +10,11 @@ function k8s::install_minikube {
     sudo mv minikube /usr/local/bin/
 }
 
-function k8s::install {
-    k8s::install_minikube
-}
-
 function k8s::start {
+    export KUBECONFIG=$HOME/.kube/config
+    mkdir -p $(dirname $KUBECONFIG)
+    touch $KUBECONFIG
+
     export MINIKUBE_WANTUPDATENOTIFICATION=false
     export MINIKUBE_WANTREPORTERRORPROMPT=false
     export MINIKUBE_HOME=$HOME
@@ -96,7 +96,7 @@ function k8s::stop_nfs {
 
 case "${1:-}" in
     install)
-        k8s::install
+        k8s::install_minikube
         ;;
     up)
         k8s::start
