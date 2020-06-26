@@ -18,6 +18,7 @@ function k8s::start {
     export MINIKUBE_WANTUPDATENOTIFICATION=false
     export MINIKUBE_WANTREPORTERRORPROMPT=false
     export MINIKUBE_HOME=$HOME
+    export CHANGE_MINIKUBE_NONE_USER=true
 
     sudo -E mkdir -p ~/.minikube/files/files
     sudo -E minikube config set WantReportErrorPrompt false

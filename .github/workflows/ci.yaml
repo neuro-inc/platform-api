@@ -57,6 +57,7 @@ jobs:
             containerd.io=1.2.5-1
       - name: Install NFS
         run: |
+          sudo apt-get -q update
           sudo apt-get install -y nfs-common
           sudo modprobe nfs
           sudo modprobe nfsd
