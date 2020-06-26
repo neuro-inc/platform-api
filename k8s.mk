@@ -24,15 +24,3 @@ clean_k8s: stop_k8s
 	$(K8S_CLUSTER_CMD) clean
 	-docker stop $$(docker ps -a -q)
 	-docker rm $$(docker ps -a -q)
-
-test_k8s_platform_api:
-	kubectl config view
-	make test_unit
-	mv .coverage .coverage.unit
-	make test_integration
-	mv .coverage .coverage.integration
-	coverage combine
-	codecov
-
-test_k8s_platform_api_e2e: build_api_k8s build_ssh_auth_k8s
-	./run_e2e_tests.sh
