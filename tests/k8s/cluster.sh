@@ -68,12 +68,6 @@ function k8s::setup_registry {
 
 function k8s::setup_ingress {
     sudo -E minikube addons enable ingress
-    # NOTE: minikube --vm-driver=none --kubernetes-version=v1.10.0 stopped
-    # launching the ingress services for some unknown reason!
-    find /etc/kubernetes/addons/ -name ingress* | xargs -L 1 sudo kubectl -n kube-system apply -f
-    # Configuration of kube-dns below was necessary for minikube v0.25.2 running on Ubuntu 14.04 (image circleci/classic:201711-01)
-    # On Ubuntu 16.04 (circle-CI image ubuntu-1604:201903-01), there's no kube-dns addons. However, DNS on minikube v1.4.0 works without it.
-    #find /etc/kubernetes/addons/ -name kube-dns* | xargs -L 1 sudo kubectl -n kube-system apply -f
 }
 
 function k8s::test {
