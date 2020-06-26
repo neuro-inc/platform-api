@@ -592,9 +592,7 @@ class TestJobRequestValidator:
                 },
             ],
         }
-        request = {
-            "container": container,
-        }
+        request = {"container": container}
         validator = create_job_request_validator(
             allowed_gpu_models=(), allowed_tpu_resources=(), cluster_name="clustername"
         )

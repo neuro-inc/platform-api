@@ -202,7 +202,7 @@ async def kube_ingress_ip(kube_config_cluster_payload: Dict[str, Any]) -> str:
 
 
 class MyKubeClient(KubeClient):
-    async def write_secret(
+    async def update_or_create_secret(
         self, secret_name: str, namespace: str, data: Optional[Dict[str, str]] = None
     ) -> None:
         url = self._generate_all_secrets_url(namespace)
@@ -261,7 +261,6 @@ class MyKubeClient(KubeClient):
             async with timeout(timeout_s):
                 while True:
                     pod_status = await self.get_pod_status(pod_name)
-                    print(pod_status._payload, pod_status._container_status)
                     if pod_status.container_status.is_terminated:
                         return
                     await asyncio.sleep(interval_s)

@@ -1310,7 +1310,7 @@ class TestKubeOrchestrator:
 
         secret_name = "key1"
         secret = Secret(secret_name, user_name, cluster_name)
-        await kube_client.write_secret(
+        await kube_client.update_or_create_secret(
             secret.k8s_secret_name, ns, data={secret_name: "vvvv"}
         )
 
@@ -1366,7 +1366,7 @@ class TestKubeOrchestrator:
 
         assert secret1.k8s_secret_name == secret2.k8s_secret_name
         k8s_secret_name = secret1.k8s_secret_name
-        await kube_client.write_secret(
+        await kube_client.update_or_create_secret(
             k8s_secret_name, ns, data={secret_name_1: "vvvv", secret_name_2: "vvvv"}
         )
 
@@ -1424,7 +1424,7 @@ class TestKubeOrchestrator:
 
         secret_name = "key1"
         secret = Secret(secret_name, user_name, cluster_name)
-        await kube_client.write_secret(
+        await kube_client.update_or_create_secret(
             secret.k8s_secret_name, ns, data={secret_name: "vvvv"}
         )
 
@@ -1495,7 +1495,7 @@ class TestKubeOrchestrator:
         assert sec1.k8s_secret_name == sec2.k8s_secret_name
         k8s_sec_name = sec1.k8s_secret_name
 
-        await kube_client.write_secret(
+        await kube_client.update_or_create_secret(
             k8s_sec_name, ns, data={sec_name_1: "vvvv", sec_name_2: "vvvv"},
         )
 
@@ -1573,7 +1573,7 @@ class TestKubeOrchestrator:
             for s in [secret_a, secret_b1, secret_b2, secret_bc]
         )
 
-        await kube_client.write_secret(
+        await kube_client.update_or_create_secret(
             k8s_sec_name,
             ns,
             data={

@@ -179,7 +179,7 @@ class SecretVolume(Volume):
 
 @dataclass(frozen=True)
 class SecretEnvVar:
-    name: str  # "ENV_VAR"
+    name: str
     secret: Secret
 
     @classmethod
@@ -1694,21 +1694,6 @@ class KubeClient:
         return PodExec(ws)
 
     async def wait_pod_is_running(
-        self, pod_name: str, timeout_s: float = 10.0 * 60, interval_s: float = 1.0
-    ) -> None:
-        """Wait until the pod transitions from the waiting state.
-
-        Raise JobError if there is no such pod.
-        Raise asyncio.TimeoutError if it takes too long for the pod.
-        """
-        async with timeout(timeout_s):
-            while True:
-                pod_status = await self.get_pod_status(pod_name)
-                if not pod_status.container_status.is_waiting:
-                    return
-                await asyncio.sleep(interval_s)
-
-    async def wait_pod_is_initialized(
         self, pod_name: str, timeout_s: float = 10.0 * 60, interval_s: float = 1.0
     ) -> None:
         """Wait until the pod transitions from the waiting state.

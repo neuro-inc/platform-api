@@ -72,16 +72,12 @@ class Secret:
 
     @classmethod
     def create(cls, secret_uri: Union[str, URL]) -> "Secret":
-        assert isinstance(secret_uri, (str, URL)), (type(secret_uri), secret_uri)
+        # Note: format of `secret_uri` is enforced by validators
         uri = URL(secret_uri)
         cluster_name = uri.host
-        assert cluster_name, f"invalid secret URI: no cluster name: '{uri}'"
-
+        assert cluster_name, uri  # for lint
         parts = PurePath(uri.path).parts
-        assert len(parts) == 3, parts  # TODO: validation
-        assert parts[0] == "/", parts
         user_name, secret_name = parts[1], parts[2]
-
         return cls(
             secret_name=secret_name, cluster_name=cluster_name, user_name=user_name
         )
