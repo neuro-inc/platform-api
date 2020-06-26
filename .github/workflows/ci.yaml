@@ -110,8 +110,8 @@ jobs:
         run: |
           make helm_deploy
           make helm_deploy_ssh_auth
-  deploy_prod:
-    name: Deploy on prod
+  deploy_staging:
+    name: Deploy on staging
     runs-on: ubuntu-latest
     needs: test
     if: startsWith(github.ref, 'refs/heads/release/')
@@ -119,7 +119,7 @@ jobs:
       PIP_EXTRA_INDEX_URL: ${{ format('https://{0}:{1}@{2}/{0}/{3}', secrets.DEVPI_USER, secrets.DEVPI_PASS, secrets.DEVPI_HOST, secrets.DEVPI_INDEX) }}
       AWS_ACCOUNT_ID: ${{ secrets.AWS_ACCOUNT_ID }}
       AWS_REGION: ${{ secrets.AWS_REGION }}
-      AWS_CLUSTER_NAME: ${{ secrets.AWS_PROD_CLUSTER_NAME }}
+      AWS_CLUSTER_NAME: ${{ secrets.AWS_STAGING_CLUSTER_NAME }}
       HELM_ENV: staging
     steps:
       - name: Checkout commit
