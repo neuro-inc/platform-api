@@ -6,6 +6,7 @@ import logging
 import re
 import ssl
 from base64 import b64encode
+from collections import defaultdict
 from contextlib import suppress
 from dataclasses import dataclass, field
 from datetime import datetime
@@ -45,6 +46,8 @@ from .job_request import (
     JobError,
     JobNotFoundException,
     JobRequest,
+    Secret,
+    SecretContainerVolume,
 )
 from .kube_config import KubeClientAuthType
 
@@ -152,6 +155,50 @@ class PVCVolume(PathVolume):
 
 
 @dataclass(frozen=True)
+class SecretVolume(Volume):
+    k8s_secret_name: str  # "user--{user_name}--secrets"
+    items: Dict[str, PurePath] = field(default_factory=dict)  # key1: ./file.txt
+
+    def to_primitive(self) -> Dict[str, Any]:
+        raw: Dict[str, Any] = {
+            "name": self.name,
+            "secret": {"secretName": self.k8s_secret_name},
+        }
+        if self.items:
+            for key, path in self.items.items():
+                assert isinstance(key, str), (type(key), key)
+                assert isinstance(path, PurePath), (type(path), path)
+            raw["secret"]["items"] = [
+                {"key": key, "path": str(path)} for key, path in self.items.items()
+            ]
+        return raw
+
+    def create_secret_mount(self, mount_path: PurePath) -> "VolumeMount":
+        return VolumeMount(volume=self, mount_path=mount_path, read_only=True)
+
+
+@dataclass(frozen=True)
+class SecretEnvVar:
+    name: str  # "ENV_VAR"
+    secret: Secret
+
+    @classmethod
+    def create(cls, name: str, secret: Secret) -> "SecretEnvVar":
+        return cls(name=name, secret=secret)
+
+    def to_primitive(self) -> Dict[str, Any]:
+        return {
+            "name": self.name,
+            "valueFrom": {
+                "secretKeyRef": {
+                    "name": self.secret.k8s_secret_name,
+                    "key": self.secret.secret_name,
+                }
+            },
+        }
+
+
+@dataclass(frozen=True)
 class VolumeMount:
     volume: Volume
     mount_path: PurePath
@@ -159,12 +206,24 @@ class VolumeMount:
     read_only: bool = False
 
     def to_primitive(self) -> Dict[str, Any]:
-        return {
+        sub_path = str(self.sub_path)
+        raw = {
             "name": self.volume.name,
             "mountPath": str(self.mount_path),
             "readOnly": self.read_only,
-            "subPath": str(self.sub_path),
         }
+        if sub_path:
+            raw["subPath"] = sub_path
+        return raw
+
+    @classmethod
+    def from_primitive(cls, payload: Dict[str, Any], volume: Volume) -> "VolumeMount":
+        return cls(
+            volume=volume,
+            mount_path=PurePath(payload["mountPath"]),
+            sub_path=PurePath(payload.get("subPath", "")),
+            read_only=payload["readOnly"],
+        )
 
 
 @dataclass(frozen=True)
@@ -586,6 +645,8 @@ class PodDescriptor:
     command: List[str] = field(default_factory=list)
     args: List[str] = field(default_factory=list)
     env: Dict[str, str] = field(default_factory=dict)
+    # TODO (artem): create base type `EnvVar` and merge `env` and `secret_env`
+    secret_env_list: List[SecretEnvVar] = field(default_factory=list)
     volume_mounts: List[VolumeMount] = field(default_factory=list)
     volumes: List[Volume] = field(default_factory=list)
     resources: Optional[Resources] = None
@@ -617,11 +678,42 @@ class PodDescriptor:
     restart_policy: PodRestartPolicy = PodRestartPolicy.NEVER
 
     @classmethod
+    def _build_secret_volumes(
+        cls, secret_volumes: List[SecretContainerVolume]
+    ) -> Dict[PurePath, SecretVolume]:
+        sec_items: Dict[PurePath, Dict[str, PurePath]] = defaultdict(dict)
+        mounts: Dict[PurePath, List[str]] = defaultdict(list)
+        k8s_sec_name: Optional[str] = None
+        for volume in secret_volumes:
+            sec = volume.secret
+            path = volume.dst_path
+            mount_dir, file_name = path.parent, path.name
+            if file_name in mounts[mount_dir]:
+                # another key is already mounted to `{mount_dir}/{file_name}`
+                continue
+            mounts[mount_dir].append(file_name)
+            sec_items[mount_dir][sec.secret_name] = PurePath(file_name)
+
+            if k8s_sec_name and k8s_sec_name != sec.k8s_secret_name:
+                raise ValueError("Mounting other user's secrets not supported")
+            k8s_sec_name = sec.k8s_secret_name
+
+        result: Dict[PurePath, SecretVolume] = {}
+        for idx, mount_dir in enumerate(sorted(sec_items.keys()), 1):
+            assert k8s_sec_name, "no k8s sec"
+            result[mount_dir] = SecretVolume(
+                name=f"secret-volume-{idx}",
+                k8s_secret_name=k8s_sec_name,
+                items=sec_items[mount_dir],
+            )
+        return result
+
+    @classmethod
     def from_job_request(
         cls,
         volume: Volume,
         job_request: JobRequest,
-        secret_names: Optional[List[str]] = None,
+        image_pull_secret_names: Optional[List[str]] = None,
         node_selector: Optional[Dict[str, str]] = None,
         tolerations: Optional[List[Toleration]] = None,
         node_affinity: Optional[NodeAffinity] = None,
@@ -636,6 +728,17 @@ class PodDescriptor:
         ]
         volumes = [volume]
 
+        secret_volumes = cls._build_secret_volumes(container.secret_volumes)
+        for mount_path, sec_volume in secret_volumes.items():
+            volumes.append(sec_volume)
+            mount = sec_volume.create_secret_mount(mount_path)
+            volume_mounts.append(mount)
+
+        secret_env_list = [
+            SecretEnvVar.create(env_name, secret)
+            for env_name, secret in container.secret_env.items()
+        ]
+
         if job_request.container.resources.shm:
             dev_shm_volume = SharedMemoryVolume(name="dshm")
             container_volume = ContainerVolume(
@@ -648,8 +751,8 @@ class PodDescriptor:
             volumes.append(dev_shm_volume)
 
         resources = Resources.from_container_resources(container.resources)
-        if secret_names is not None:
-            image_pull_secrets = [SecretRef(name) for name in secret_names]
+        if image_pull_secret_names is not None:
+            image_pull_secrets = [SecretRef(name) for name in image_pull_secret_names]
         else:
             image_pull_secrets = []
 
@@ -664,6 +767,7 @@ class PodDescriptor:
             command=container.entrypoint_list,
             args=container.command_list,
             env=container.env.copy(),
+            secret_env_list=secret_env_list,
             volume_mounts=volume_mounts,
             volumes=volumes,
             resources=resources,
@@ -688,12 +792,13 @@ class PodDescriptor:
     def to_primitive(self) -> Dict[str, Any]:
         volume_mounts = [mount.to_primitive() for mount in self.volume_mounts]
         volumes = [volume.to_primitive() for volume in self.volumes]
+        env_list = self.env_list + [env.to_primitive() for env in self.secret_env_list]
 
         container_payload = {
             "name": f"{self.name}",
             "image": f"{self.image}",
             "imagePullPolicy": "Always",
-            "env": self.env_list,
+            "env": env_list,
             "volumeMounts": volume_mounts,
             "terminationMessagePolicy": "FallbackToLogsOnError",
         }
@@ -1535,6 +1640,14 @@ class KubeClient:
 
             await self.create_docker_secret(secret)
 
+    async def get_raw_secret(
+        self, secret_name: str, namespace_name: Optional[str] = None
+    ) -> Dict[str, Any]:
+        url = self._generate_secret_url(secret_name, namespace_name)
+        payload = await self._request(method="GET", url=url)
+        self._check_status_payload(payload)
+        return payload
+
     async def delete_secret(
         self, secret_name: str, namespace_name: Optional[str] = None
     ) -> None:
@@ -1581,6 +1694,21 @@ class KubeClient:
         return PodExec(ws)
 
     async def wait_pod_is_running(
+        self, pod_name: str, timeout_s: float = 10.0 * 60, interval_s: float = 1.0
+    ) -> None:
+        """Wait until the pod transitions from the waiting state.
+
+        Raise JobError if there is no such pod.
+        Raise asyncio.TimeoutError if it takes too long for the pod.
+        """
+        async with timeout(timeout_s):
+            while True:
+                pod_status = await self.get_pod_status(pod_name)
+                if not pod_status.container_status.is_waiting:
+                    return
+                await asyncio.sleep(interval_s)
+
+    async def wait_pod_is_initialized(
         self, pod_name: str, timeout_s: float = 10.0 * 60, interval_s: float = 1.0
     ) -> None:
         """Wait until the pod transitions from the waiting state.

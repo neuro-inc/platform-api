@@ -520,6 +520,30 @@ class TestPathUriValidator:
         with pytest.raises(t.DataError, match="Invalid path"):
             validator.check(uri)
 
+    @pytest.mark.parametrize(
+        "uri", ("secret://test-cluster", "secret://test-cluster/"),
+    )
+    def test_create_assert_username_missing(self, uri: str) -> None:
+        cluster = "test-cluster"
+        validator = create_path_uri_validator(
+            storage_scheme="secret", cluster_name=cluster, assert_username="usr1"
+        )
+        with pytest.raises(
+            t.DataError, match="Invalid URI path: Not enough path items"
+        ):
+            validator.check(uri)
+
+    def test_create_assert_username_wrong(self) -> None:
+        cluster = "test-cluster"
+        uri = "secret://test-cluster/usr2/key1"
+        validator = create_path_uri_validator(
+            storage_scheme="secret", cluster_name=cluster, assert_username="usr1"
+        )
+        with pytest.raises(
+            t.DataError, match="Invalid URI: Invalid user in path: 'usr2' != 'usr1'"
+        ):
+            validator.check(uri)
+
 
 class TestMountPathValidator:
     def test_relative_dst_mount_path(self) -> None:

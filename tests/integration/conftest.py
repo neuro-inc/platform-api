@@ -52,6 +52,7 @@ pytest_plugins = [
     "tests.integration.docker",
     "tests.integration.redis",
     "tests.integration.auth",
+    "tests.integration.secrets",
     "tests.integration.notifications",
 ]
 
@@ -201,6 +202,21 @@ async def kube_ingress_ip(kube_config_cluster_payload: Dict[str, Any]) -> str:
 
 
 class MyKubeClient(KubeClient):
+    async def write_secret(
+        self, secret_name: str, namespace: str, data: Optional[Dict[str, str]] = None
+    ) -> None:
+        url = self._generate_all_secrets_url(namespace)
+        data = data or {}
+        primitive = {
+            "apiVersion": "v1",
+            "kind": "Secret",
+            "metadata": {"name": secret_name},
+            "data": data,
+            "type": "Opaque",
+        }
+        payload = await self._request(method="POST", url=url, json=primitive)
+        self._check_status_payload(payload)
+
     async def wait_pod_scheduled(
         self,
         pod_name: str,
@@ -245,6 +261,7 @@ class MyKubeClient(KubeClient):
             async with timeout(timeout_s):
                 while True:
                     pod_status = await self.get_pod_status(pod_name)
+                    print(pod_status._payload, pod_status._container_status)
                     if pod_status.container_status.is_terminated:
                         return
                     await asyncio.sleep(interval_s)

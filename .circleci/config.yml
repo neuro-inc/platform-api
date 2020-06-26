@@ -103,6 +103,7 @@ jobs:
             make -s gcr_login
             # docker-credential-gcloud still relies on Python 2.7,
             # thus we'd better pull testing images before we set up Python 3
+            make artifactory_docker_pull_test
             make gke_docker_pull_test
 
       - run:

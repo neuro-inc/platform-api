@@ -1,4 +1,5 @@
 IMAGE_NAME ?= platformapi
+DOCKER_REPO ?= neuro-docker-local-public.jfrog.io
 ARTIFACTORY_TAG ?=$(shell echo "$(CIRCLE_TAG)" | awk -F/ '{print $$2}')
 IMAGE_TAG ?= latest
 
@@ -87,6 +88,11 @@ aws_login:
 	pip install --upgrade awscli
 	aws eks --region $(AWS_REGION) update-kubeconfig --name $(AWS_CLUSTER_NAME)
 
+docker_login:
+	@docker login $(DOCKER_REPO) \
+		--username=$(ARTIFACTORY_USERNAME) \
+		--password=$(ARTIFACTORY_PASSWORD)
+
 gke_docker_pull_test:
 	docker pull $$(cat AUTH_SERVER_IMAGE_NAME)
 	# use old platformconfig image that supports loading of config from storage
@@ -159,9 +165,15 @@ aws_k8s_deploy_ssh_auth: _helm
 	helm -f deploy/ssh_auth/values-$(HELM_ENV)-aws.yaml --set "IMAGE=$(SSH_K8S_AWS):$(CIRCLE_SHA1)" upgrade --install ssh-auth deploy/ssh_auth/ --wait --timeout 600 --namespace platform
 
 
-artifactory_ssh_auth_docker_push: build_ssh_auth_k8s
-	docker tag $(SSH_IMAGE_NAME):$(SSH_IMAGE_TAG) $(ARTIFACTORY_DOCKER_REPO)/$(SSH_IMAGE_NAME):$(ARTIFACTORY_TAG)
+artifactory_docker_login:
 	docker login $(ARTIFACTORY_DOCKER_REPO) --username=$(ARTIFACTORY_USERNAME) --password=$(ARTIFACTORY_PASSWORD)
+
+artifactory_docker_pull_test: artifactory_docker_login
+	docker pull $(shell cat SECRETS_SERVER_IMAGE_NAME)
+	docker tag $(shell cat SECRETS_SERVER_IMAGE_NAME) platformsecrets:latest
+
+artifactory_ssh_auth_docker_push: artifactory_docker_login build_ssh_auth_k8s
+	docker tag $(SSH_IMAGE_NAME):$(SSH_IMAGE_TAG) $(ARTIFACTORY_DOCKER_REPO)/$(SSH_IMAGE_NAME):$(ARTIFACTORY_TAG)
 	docker push $(ARTIFACTORY_DOCKER_REPO)/$(SSH_IMAGE_NAME):$(ARTIFACTORY_TAG)
 
 artifactory_ssh_auth_helm_push: _helm
