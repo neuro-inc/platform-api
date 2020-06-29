@@ -1297,6 +1297,31 @@ class TestKubeOrchestrator:
         return f"user-{uuid.uuid4().hex[:6]}"
 
     @pytest.mark.asyncio
+    async def test_get_missing_secrets(
+        self,
+        kube_config_factory: Callable[..., KubeConfig],
+        kube_orchestrator_factory: Callable[..., KubeOrchestrator],
+        kube_client_factory: Callable[..., MyKubeClient],
+    ) -> None:
+        user_name = self._create_username()
+
+        kube_config = kube_config_factory(jobs_ingress_class="traefik")
+        async with kube_orchestrator_factory(kube_config=kube_config) as orchestrator:
+            async with kube_client_factory(kube_config) as kube_client:
+
+                secret = Secret("key2", user_name, cluster_name)
+                await kube_client.update_or_create_secret(  # type: ignore
+                    secret.k8s_secret_name,
+                    kube_config.namespace,
+                    data={secret.secret_name: "vvvv"},
+                )
+
+                missing = await orchestrator.get_missing_secrets(
+                    user_name, secret_names=["key3", "key2", "key1"]
+                )
+                assert missing == ["key3", "key1"]
+
+    @pytest.mark.asyncio
     async def test_job_pod_with_secret_env_ok(
         self,
         kube_config: KubeConfig,
