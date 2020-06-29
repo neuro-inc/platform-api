@@ -754,12 +754,14 @@ class TestJobs:
 
         key_1, key_2, key_3 = "key_1", "key_2", "key_3"
         key_a, key_b, key_c = "key_a", "key_b", "key_c"
-        await regular_secrets_client.create_secret(key_1, "value_1")
-        await regular_secrets_client.create_secret(key_2, "value_2")
-        await regular_secrets_client.create_secret(key_3, "value_3")
-        await regular_secrets_client.create_secret(key_a, "value_a")
-        await regular_secrets_client.create_secret(key_b, "value_b")
-        await regular_secrets_client.create_secret(key_c, "value_c")
+        value_1, value_2, value_3 = "value_1", "value_2", "value_3"
+        value_a, value_b, value_c = "value_a", "value_b", "value_c"
+        await regular_secrets_client.create_secret(key_1, value_1)
+        await regular_secrets_client.create_secret(key_2, value_2)
+        await regular_secrets_client.create_secret(key_3, value_3)
+        await regular_secrets_client.create_secret(key_a, value_a)
+        await regular_secrets_client.create_secret(key_b, value_b)
+        await regular_secrets_client.create_secret(key_c, value_c)
 
         secret_uri_1 = f"secret://{user.cluster_name}/{user.name}/{key_1}"
         secret_uri_2 = f"secret://{user.cluster_name}/{user.name}/{key_2}"
@@ -768,18 +770,38 @@ class TestJobs:
         secret_uri_b = f"secret://{user.cluster_name}/{user.name}/{key_b}"
         secret_uri_c = f"secret://{user.cluster_name}/{user.name}/{key_c}"
 
+        env_var_a = "ENV_SECRET_A"
+        env_var_b = "ENV_SECRET_B"
+        env_var_c = "ENV_SECRET_C"
         secret_env = {
-            "ENV_SECRET_A": secret_uri_a,
-            "ENV_SECRET_B": secret_uri_b,
-            "ENV_SECRET_C": secret_uri_c,
+            env_var_a: secret_uri_a,
+            env_var_b: secret_uri_b,
+            env_var_c: secret_uri_c,
         }
-        secret_volumes = [
-            {"src_secret_uri": secret_uri_1, "dst_path": "/container/path_1"},
-            {"src_secret_uri": secret_uri_2, "dst_path": "/container/path_2"},
-            {"src_secret_uri": secret_uri_3, "dst_path": "/container/path_3"},
-        ]
         job_submit["container"]["secret_env"] = secret_env
+
+        sec_path_1 = "/container/file_1.txt"
+        sec_path_2 = "/container/file_2.txt"
+        sec_path_3 = "/container/file_3.txt"
+        secret_volumes = [
+            {"src_secret_uri": secret_uri_1, "dst_path": sec_path_1},
+            {"src_secret_uri": secret_uri_2, "dst_path": sec_path_2},
+            {"src_secret_uri": secret_uri_3, "dst_path": sec_path_3},
+        ]
         job_submit["container"]["secret_volumes"] = secret_volumes
+
+        asserts = " && ".join(
+            [
+                f'[ "${env_var_a}" == "{value_a}" ]',
+                f'[ "${env_var_b}" == "{value_b}" ]',
+                f'[ "${env_var_c}" == "{value_c}" ]',
+                f'[ "$(cat {sec_path_1})" == "{value_1}" ]',
+                f'[ "$(cat {sec_path_2})" == "{value_2}" ]',
+                f'[ "$(cat {sec_path_3})" == "{value_3}" ]',
+            ]
+        )
+        cmd = f"bash -c '" + asserts + "'"
+        job_submit["container"]["command"] = cmd
 
         job_id = ""
         try:
@@ -815,25 +837,45 @@ class TestJobs:
         and a secret env simultaneously.
         """
         user = regular_user
-        key_1, key_2, key_3 = "key_1", "key_2", "key_3"
-        await regular_secrets_client.create_secret(key_1, "value_1")
-        await regular_secrets_client.create_secret(key_2, "value_2")
-        await regular_secrets_client.create_secret(key_3, "value_3")
+        key_common, key_env, key_vol = "key_1", "key_2", "key_3"
+        secret_value_common = "value1"
+        secret_value_env = "value2"
+        secret_value_vol = "value3"
+        await regular_secrets_client.create_secret(key_common, secret_value_common)
+        await regular_secrets_client.create_secret(key_env, secret_value_env)
+        await regular_secrets_client.create_secret(key_vol, secret_value_vol)
 
-        secret_uri_common = f"secret://{user.cluster_name}/{user.name}/{key_1}"
-        secret_uri_env = f"secret://{user.cluster_name}/{user.name}/{key_2}"
-        secret_uri_vol = f"secret://{user.cluster_name}/{user.name}/{key_3}"
+        secret_uri_common = f"secret://{user.cluster_name}/{user.name}/{key_common}"
+        secret_uri_env = f"secret://{user.cluster_name}/{user.name}/{key_env}"
+        secret_uri_vol = f"secret://{user.cluster_name}/{user.name}/{key_vol}"
+
+        env_var_common = "ENV_SECRET_A"
+        env_var_env = "ENV_SECRET_B"
+        sec_path_common = "/container/file_a.txt"
+        sec_path_vol = "/container/file_b.txt"
 
         secret_env = {
-            "ENV_SECRET_A": secret_uri_common,
-            "ENV_SECRET_B": secret_uri_env,
+            env_var_common: secret_uri_common,
+            env_var_env: secret_uri_env,
         }
-        secret_volumes = [
-            {"src_secret_uri": secret_uri_common, "dst_path": "/container/path_a"},
-            {"src_secret_uri": secret_uri_vol, "dst_path": "/container/path_b"},
-        ]
         job_submit["container"]["secret_env"] = secret_env
+        secret_volumes = [
+            {"src_secret_uri": secret_uri_common, "dst_path": sec_path_common},
+            {"src_secret_uri": secret_uri_vol, "dst_path": sec_path_vol},
+        ]
         job_submit["container"]["secret_volumes"] = secret_volumes
+
+        asserts = " && ".join(
+            [
+                f'[ "${env_var_common}" == "{secret_value_common}" ]',
+                f'[ "${env_var_env}" == "{secret_value_env}" ]',
+                f'[ "$(cat {sec_path_common})" == "{secret_value_common}" ]',
+                f'[ "$(cat {sec_path_vol})" == "{secret_value_vol}" ]',
+            ]
+        )
+        cmd = f"bash -c '" + asserts + "'"
+        job_submit["container"]["command"] = cmd
+
         job_id = ""
         try:
             url = api.jobs_base_url
@@ -865,19 +907,36 @@ class TestJobs:
     ) -> None:
         user = regular_user
         key_1, key_2, key_3 = "key_1", "key_2", "key_3"
-        await regular_secrets_client.create_secret(key_1, "value_1")
-        await regular_secrets_client.create_secret(key_2, "value_2")
-        await regular_secrets_client.create_secret(key_3, "value_3")
+        secret_value_1 = "value1"
+        secret_value_2 = "value2"
+        secret_value_3 = "value3"
+        await regular_secrets_client.create_secret(key_1, secret_value_1)
+        await regular_secrets_client.create_secret(key_2, secret_value_2)
+        await regular_secrets_client.create_secret(key_3, secret_value_3)
 
         secret_uri_1 = f"secret://{user.cluster_name}/{user.name}/{key_1}"
         secret_uri_2 = f"secret://{user.cluster_name}/{user.name}/{key_2}"
 
+        env_var_a = "ENV_SECRET_A"
+        env_var_b = "ENV_SECRET_B"
+        env_var_c = "ENV_SECRET_C"
+
         secret_env = {
-            "ENV_SECRET_A": secret_uri_1,
-            "ENV_SECRET_B": secret_uri_2,
-            "ENV_SECRET_C": secret_uri_2,
+            env_var_a: secret_uri_1,
+            env_var_b: secret_uri_2,
+            env_var_c: secret_uri_2,
         }
         job_submit["container"]["secret_env"] = secret_env
+
+        asserts = " && ".join(
+            [
+                f'[ "${env_var_a}" == "{secret_value_1}" ]',
+                f'[ "${env_var_b}" == "{secret_value_2}" ]',
+                f'[ "${env_var_c}" == "{secret_value_2}" ]',
+            ]
+        )
+        cmd = f"bash -c '" + asserts + "'"
+        job_submit["container"]["command"] = cmd
 
         job_id = ""
         try:
@@ -898,7 +957,7 @@ class TestJobs:
                 await jobs_client.delete_job(job_id=job_id)
 
     @pytest.mark.asyncio
-    async def test_create_job_with_secret_same_secret_volumes_ok(
+    async def test_create_job_with_secret_same_secret_volumes_different_directories_ok(
         self,
         api: ApiConfig,
         client: aiohttp.ClientSession,
@@ -909,19 +968,99 @@ class TestJobs:
     ) -> None:
         user = regular_user
         key_1, key_2, key_3 = "key_1", "key_2", "key_3"
-        await regular_secrets_client.create_secret(key_1, "value_1")
-        await regular_secrets_client.create_secret(key_2, "value_2")
-        await regular_secrets_client.create_secret(key_3, "value_3")
+        secret_value_1 = "value1"
+        secret_value_2 = "value2"
+        secret_value_3 = "value3"
+        await regular_secrets_client.create_secret(key_1, secret_value_1)
+        await regular_secrets_client.create_secret(key_2, secret_value_2)
+        await regular_secrets_client.create_secret(key_3, secret_value_3)
 
         secret_uri_1 = f"secret://{user.cluster_name}/{user.name}/{key_1}"
         secret_uri_2 = f"secret://{user.cluster_name}/{user.name}/{key_2}"
 
+        secret_path_a = "/etc/path_a/file.txt"
+        secret_path_b = "/etc/path_b/file.txt"
+        secret_path_c = "/etc/path_c/file.txt"
+
         secret_volumes = [
-            {"src_secret_uri": secret_uri_1, "dst_path": "/container/path_a"},
-            {"src_secret_uri": secret_uri_2, "dst_path": "/container/path_b"},
-            {"src_secret_uri": secret_uri_2, "dst_path": "/container/path_c"},
+            {"src_secret_uri": secret_uri_1, "dst_path": secret_path_a},
+            {"src_secret_uri": secret_uri_2, "dst_path": secret_path_b},
+            {"src_secret_uri": secret_uri_2, "dst_path": secret_path_c},
         ]
         job_submit["container"]["secret_volumes"] = secret_volumes
+
+        asserts = " && ".join(
+            [
+                f'[ "$(cat {secret_path_a})" == "{secret_value_1}" ]',
+                f'[ "$(cat {secret_path_b})" == "{secret_value_2}" ]',
+                f'[ "$(cat {secret_path_c})" == "{secret_value_2}" ]',
+            ]
+        )
+        cmd = f"bash -c '" + asserts + "'"
+        job_submit["container"]["command"] = cmd
+
+        job_id = ""
+        try:
+            url = api.jobs_base_url
+            async with client.post(url, headers=user.headers, json=job_submit) as resp:
+                assert resp.status == HTTPAccepted.status_code, await resp.text()
+                result = await resp.json()
+                job_id = result["id"]
+                assert result["status"] in ["pending"]
+                assert result["container"]["secret_volumes"] == secret_volumes
+
+            response_payload = await jobs_client.long_polling_by_job_id(
+                job_id=job_id, status="succeeded"
+            )
+            await jobs_client.delete_job(job_id=job_id)
+            assert response_payload["container"]["secret_volumes"] == secret_volumes
+
+        finally:
+            if job_id:
+                await jobs_client.delete_job(job_id=job_id)
+
+    @pytest.mark.asyncio
+    async def test_create_job_with_secret_same_secret_volumes_same_directory_ok(
+        self,
+        api: ApiConfig,
+        client: aiohttp.ClientSession,
+        job_submit: Dict[str, Any],
+        jobs_client: JobsClient,
+        regular_user: _User,
+        regular_secrets_client: SecretsClient,
+    ) -> None:
+        user = regular_user
+        key_1, key_2, key_3 = "key_1", "key_2", "key_3"
+        secret_value_1 = "value1"
+        secret_value_2 = "value2"
+        secret_value_3 = "value3"
+        await regular_secrets_client.create_secret(key_1, secret_value_1)
+        await regular_secrets_client.create_secret(key_2, secret_value_2)
+        await regular_secrets_client.create_secret(key_3, secret_value_3)
+
+        secret_uri_1 = f"secret://{user.cluster_name}/{user.name}/{key_1}"
+        secret_uri_2 = f"secret://{user.cluster_name}/{user.name}/{key_2}"
+
+        secret_path_a = "/etc/path/file_a.txt"
+        secret_path_b = "/etc/path/file_b.txt"
+        secret_path_c = "/etc/path/file_c.txt"
+
+        secret_volumes = [
+            {"src_secret_uri": secret_uri_1, "dst_path": secret_path_a},
+            {"src_secret_uri": secret_uri_2, "dst_path": secret_path_b},
+            {"src_secret_uri": secret_uri_2, "dst_path": secret_path_c},
+        ]
+        job_submit["container"]["secret_volumes"] = secret_volumes
+
+        asserts = " && ".join(
+            [
+                f'[ "$(cat {secret_path_a})" == "{secret_value_1}" ]',
+                f'[ "$(cat {secret_path_b})" == "{secret_value_2}" ]',
+                f'[ "$(cat {secret_path_c})" == "{secret_value_2}" ]',
+            ]
+        )
+        cmd = f"bash -c '" + asserts + "'"
+        job_submit["container"]["command"] = cmd
 
         job_id = ""
         try:

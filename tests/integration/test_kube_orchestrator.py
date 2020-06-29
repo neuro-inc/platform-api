@@ -1535,7 +1535,10 @@ class TestKubeOrchestrator:
                 "secret": {
                     "secretName": k8s_sec_name,
                     "defaultMode": 420,
-                    "items": [{"key": sec_name_1, "path": sec_file}],
+                    "items": [
+                        {"key": sec_name_1, "path": sec_file},
+                        {"key": sec_name_2, "path": sec_file},
+                    ],
                 },
             },
         ]
@@ -1567,7 +1570,7 @@ class TestKubeOrchestrator:
         secret_b2 = Secret("bbb-2", user_name, cluster_name)
         secret_bc = Secret("bbb-ccc", user_name, cluster_name)
 
-        k8s_sec_name = secret_b1.k8s_secret_name
+        k8s_sec_name = secret_a.k8s_secret_name
         assert all(
             s.k8s_secret_name == k8s_sec_name
             for s in [secret_a, secret_b1, secret_b2, secret_bc]

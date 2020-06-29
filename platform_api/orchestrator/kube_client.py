@@ -157,7 +157,7 @@ class PVCVolume(PathVolume):
 @dataclass(frozen=True)
 class SecretVolume(Volume):
     k8s_secret_name: str  # "user--{user_name}--secrets"
-    items: Dict[str, PurePath] = field(default_factory=dict)  # key1: ./file.txt
+    items: List[Tuple[str, str]] = field(default_factory=list)  # key1: ./file.txt
 
     def to_primitive(self) -> Dict[str, Any]:
         raw: Dict[str, Any] = {
@@ -165,11 +165,8 @@ class SecretVolume(Volume):
             "secret": {"secretName": self.k8s_secret_name},
         }
         if self.items:
-            for key, path in self.items.items():
-                assert isinstance(key, str), (type(key), key)
-                assert isinstance(path, PurePath), (type(path), path)
             raw["secret"]["items"] = [
-                {"key": key, "path": str(path)} for key, path in self.items.items()
+                {"key": key, "path": file_name} for key, file_name in self.items
             ]
         return raw
 
@@ -681,18 +678,14 @@ class PodDescriptor:
     def _build_secret_volumes(
         cls, secret_volumes: List[SecretContainerVolume]
     ) -> Dict[PurePath, SecretVolume]:
-        sec_items: Dict[PurePath, Dict[str, PurePath]] = defaultdict(dict)
-        mounts: Dict[PurePath, List[str]] = defaultdict(list)
+        sec_items: Dict[PurePath, List[Tuple[str, str]]] = defaultdict(list)
         k8s_sec_name: Optional[str] = None
         for volume in secret_volumes:
             sec = volume.secret
             path = volume.dst_path
             mount_dir, file_name = path.parent, path.name
-            if file_name in mounts[mount_dir]:
-                # another key is already mounted to `{mount_dir}/{file_name}`
-                continue
-            mounts[mount_dir].append(file_name)
-            sec_items[mount_dir][sec.secret_name] = PurePath(file_name)
+            pair = (sec.secret_name, file_name)
+            sec_items[mount_dir].append(pair)
 
             if k8s_sec_name and k8s_sec_name != sec.k8s_secret_name:
                 raise ValueError("Mounting other user's secrets not supported")
@@ -700,7 +693,8 @@ class PodDescriptor:
 
         result: Dict[PurePath, SecretVolume] = {}
         for idx, mount_dir in enumerate(sorted(sec_items.keys()), 1):
-            assert k8s_sec_name, "no k8s sec"
+            assert k8s_sec_name, "no k8s secret found"
+            assert sec_items[mount_dir], "no secret key-filename pairs found"
             result[mount_dir] = SecretVolume(
                 name=f"secret-volume-{idx}",
                 k8s_secret_name=k8s_sec_name,
