@@ -13,13 +13,16 @@ from platform_api.orchestrator.job_request import (
     ContainerVolume,
     JobRequest,
     JobStatus,
+    Secret,
 )
 from platform_api.orchestrator.kube_client import (
     AlreadyExistsException,
     ContainerStatus,
     Ingress,
     Resources,
+    SecretEnvVar,
     SecretRef,
+    SecretVolume,
     ServiceType,
     SharedMemoryVolume,
     VolumeMount,
@@ -98,6 +101,59 @@ class TestPVCVolume:
         assert volume.to_primitive() == {
             "name": "testvolume",
             "persistentVolumeClaim": {"claimName": "testclaim"},
+        }
+
+
+class TestSecretVolume:
+    def test_to_primitive_no_items(self) -> None:
+        secret_name = "user--alice--secrets"
+        volume = SecretVolume("testvolume", k8s_secret_name=secret_name)
+        assert volume.to_primitive() == {
+            "name": "testvolume",
+            "secret": {"secretName": secret_name},
+        }
+
+    def test_to_primitive_with_items(self) -> None:
+        secret_name = "user--alice--secrets"
+        volume = SecretVolume(
+            "testvolume",
+            k8s_secret_name=secret_name,
+            items=[("key1", "file1.txt"), ("key2", "file2.txt")],
+        )
+        assert volume.to_primitive() == {
+            "name": "testvolume",
+            "secret": {
+                "secretName": secret_name,
+                "items": [
+                    {"key": "key1", "path": "file1.txt"},
+                    {"key": "key2", "path": "file2.txt"},
+                ],
+            },
+        }
+
+    def test_create_secret_mount(self) -> None:
+        secret_name = "user--alice--secrets"
+        volume = SecretVolume(
+            "testvolume",
+            k8s_secret_name=secret_name,
+            items=[("key1", "file1.txt"), ("key2", "file2.txt")],
+        )
+        path = PurePath("/container/path")
+        mount = volume.create_secret_mount(path)
+        assert mount == VolumeMount(
+            volume=volume, mount_path=path, sub_path=PurePath("."), read_only=True,
+        )
+
+
+class TestSecretEnvVar:
+    def test_to_primitive(self) -> None:
+        sec = Secret.create("secret://test-cluster/test-user/sec1")
+        sec_env_var = SecretEnvVar.create("sec-name", secret=sec)
+        assert sec_env_var.to_primitive() == {
+            "name": "sec-name",
+            "valueFrom": {
+                "secretKeyRef": {"name": "user--test-user--secrets", "key": "sec1"}
+            },
         }
 
 

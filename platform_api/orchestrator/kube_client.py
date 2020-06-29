@@ -213,15 +213,6 @@ class VolumeMount:
             raw["subPath"] = sub_path
         return raw
 
-    @classmethod
-    def from_primitive(cls, payload: Dict[str, Any], volume: Volume) -> "VolumeMount":
-        return cls(
-            volume=volume,
-            mount_path=PurePath(payload["mountPath"]),
-            sub_path=PurePath(payload.get("subPath", "")),
-            read_only=payload["readOnly"],
-        )
-
 
 @dataclass(frozen=True)
 class Resources:
