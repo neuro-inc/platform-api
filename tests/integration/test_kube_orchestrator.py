@@ -2030,7 +2030,7 @@ class TestPodContainerDevShmSettings:
     @pytest.fixture
     def command_assert_shm_64_mb(self) -> str:
         df = "/bin/df --block-size M --output=avail /dev/shm"
-        return f"/bin/bash -c '{df} | grep -q 64M'"
+        return f"/bin/bash -c '{df} | grep -q \"^\\s*64M\"'"
 
     @pytest.mark.asyncio
     async def test_shm_extended_request_parameter_omitted(
