@@ -83,11 +83,10 @@ eks_login:
 	aws eks --region $(AWS_REGION) update-kubeconfig --name $(AWS_CLUSTER_NAME)
 
 docker_pull_test_images:
-	@eval $$(minikube docker-env); \
-		docker pull $(PLATFORMAUTHAPI_IMAGE); \
-		docker pull $(PLATFORMCONFIG_IMAGE); \
-		docker tag $(PLATFORMAUTHAPI_IMAGE) platformauthapi:latest; \
-		docker tag $(PLATFORMCONFIG_IMAGE) platformconfig:latest
+	docker pull $(PLATFORMAUTHAPI_IMAGE)
+	docker pull $(PLATFORMCONFIG_IMAGE)
+	docker tag $(PLATFORMAUTHAPI_IMAGE) platformauthapi:latest
+	docker tag $(PLATFORMCONFIG_IMAGE) platformconfig:latest
 
 helm_install:
 	curl https://raw.githubusercontent.com/kubernetes/helm/master/scripts/get | bash -s -- -v v2.11.0

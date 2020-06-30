@@ -25,5 +25,5 @@ clean_k8s: stop_k8s
 	-docker stop $$(docker ps -a -q)
 	-docker rm $$(docker ps -a -q)
 
-test_k8s_e2e: docker_build docker_build_ssh_auth
+test_k8s_e2e:
 	./run_e2e_tests.sh

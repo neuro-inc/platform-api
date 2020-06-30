@@ -3,6 +3,13 @@ set -o verbose
 
 export MINIKUBE_IN_STYLE=true
 
+eval $(minikube docker-env)
+make docker_build
+make docker_build_ssh_auth
+make docker_pull_test_images
+
+kubectl config use-context minikube
+
 kubectl delete -f deploy/platformapi/templates/rb.default.gke.yml
 kubectl delete -f tests/k8s/platformapi.yml
 kubectl delete -f tests/k8s/platformconfig.yml
