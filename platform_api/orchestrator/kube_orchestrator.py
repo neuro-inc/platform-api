@@ -309,7 +309,6 @@ class KubeOrchestrator(Orchestrator):
             await self._create_pod_network_policy(job)
 
             descriptor = await self._create_pod_descriptor(job)
-            # TODO (artem) Check again that the job's secrets exist (issue #1254)
             pod = await self._client.create_pod(descriptor)
 
             logger.info(f"Starting Service for {job.id}.")

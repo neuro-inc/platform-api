@@ -1083,6 +1083,64 @@ class TestJobs:
                 await jobs_client.delete_job(job_id=job_id)
 
     @pytest.mark.asyncio
+    async def test_create_job_with_secret_volumes_relative_directory_ok(
+        self,
+        api: ApiConfig,
+        client: aiohttp.ClientSession,
+        job_submit: Dict[str, Any],
+        jobs_client: JobsClient,
+        regular_user: _User,
+        regular_secrets_client: SecretsClient,
+    ) -> None:
+        user = regular_user
+        key_1, key_2 = "key_1", "key_2"
+        secret_value_1 = "value1"
+        secret_value_2 = "value2"
+        await regular_secrets_client.create_secret(key_1, secret_value_1)
+        await regular_secrets_client.create_secret(key_2, secret_value_2)
+
+        secret_uri_1 = f"secret://{user.cluster_name}/{user.name}/{key_1}"
+        secret_uri_2 = f"secret://{user.cluster_name}/{user.name}/{key_2}"
+
+        secret_path_a = "/foo/file_a.txt"
+        secret_path_b = "/foo/bar/file_b.txt"
+
+        secret_volumes = [
+            {"src_secret_uri": secret_uri_1, "dst_path": secret_path_a},
+            {"src_secret_uri": secret_uri_2, "dst_path": secret_path_b},
+        ]
+        job_submit["container"]["secret_volumes"] = secret_volumes
+
+        asserts = " && ".join(
+            [
+                f'[ "$(cat {secret_path_a})" == "{secret_value_1}" ]',
+                f'[ "$(cat {secret_path_b})" == "{secret_value_2}" ]',
+            ]
+        )
+        cmd = f"bash -c '" + asserts + "'"
+        job_submit["container"]["command"] = cmd
+
+        job_id = ""
+        try:
+            url = api.jobs_base_url
+            async with client.post(url, headers=user.headers, json=job_submit) as resp:
+                assert resp.status == HTTPAccepted.status_code, await resp.text()
+                result = await resp.json()
+                job_id = result["id"]
+                assert result["status"] in ["pending"]
+                assert result["container"]["secret_volumes"] == secret_volumes
+
+            response_payload = await jobs_client.long_polling_by_job_id(
+                job_id=job_id, status="succeeded"
+            )
+            await jobs_client.delete_job(job_id=job_id)
+            assert response_payload["container"]["secret_volumes"] == secret_volumes
+
+        finally:
+            if job_id:
+                await jobs_client.delete_job(job_id=job_id)
+
+    @pytest.mark.asyncio
     async def test_create_job_with_secret_env_wrong_scheme(
         self,
         api: ApiConfig,
