@@ -1,7 +1,15 @@
 import asyncio
 import logging
 from abc import ABC, abstractmethod
-from typing import Any, AsyncContextManager, AsyncIterator, Callable, Dict, Sequence
+from typing import (
+    Any,
+    AsyncContextManager,
+    AsyncIterator,
+    Callable,
+    Dict,
+    Optional,
+    Sequence,
+)
 
 from aiorwlock import RWLock
 from async_generator import asynccontextmanager
@@ -145,9 +153,21 @@ class ClusterRegistry:
         for name in list(self._records):
             await self.remove(name)
 
-    async def replace(self, config: ClusterConfig) -> None:
+    async def replace(
+        self,
+        config: ClusterConfig,
+        record_assigned: Optional[asyncio.Event] = None,  # used for testing
+        record_ready: Optional[asyncio.Event] = None,  # used for testing
+    ) -> None:
         record = self._records.get(config.name)
+
         if record:
+            if record_ready:
+                # used only for testing
+                if record_assigned:
+                    record_assigned.set()
+                await record_ready.wait()
+
             async with record.lock.writer:
                 if config.name not in self._records:  # pragma: no cover
                     record = self._add_record(config)
@@ -173,6 +193,12 @@ class ClusterRegistry:
         else:
             record = self._add_record(config)
 
+            if record_ready:
+                # used only for testing
+                if record_assigned:
+                    record_assigned.set()
+                await record_ready.wait()
+
             async with record.lock.writer:
                 await self._init_cluster(record)
 
@@ -184,6 +210,9 @@ class ClusterRegistry:
         return record
 
     async def _init_cluster(self, record: ClusterRegistryRecord) -> None:
+        if record is not self._records.get(record.name):
+            return
+
         logger.info(f"Initializing cluster '{record.name}'")
         try:
             await record.cluster.init()
