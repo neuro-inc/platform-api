@@ -25,13 +25,18 @@ function k8s::start {
     sudo -E minikube config set WantUpdateNotification false
     sudo -E minikube config set WantNoneDriverWarning false
 
-    sudo -E minikube start --vm-driver=none --kubernetes-version=v1.14.10
-
-    sudo -E minikube addons enable ingress
+    sudo -E minikube start \
+        --vm-driver=none \
+        --kubernetes-version=v1.14.10 \
+        --memory=4096m \
+        --install-addons=true \
+        --addons=ingress \
+        --wait=all \
+        --wait-timeout=5m
 
     k8s::wait k8s::setup_namespace
-    k8s::wait "kubectl get po --all-namespaces"
     k8s::wait k8s::start_nfs
+    k8s::wait "kubectl get po --all-namespaces"
 }
 
 function k8s::wait {
