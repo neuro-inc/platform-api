@@ -1,12 +1,10 @@
 IMAGE_NAME ?= platformapi
-ARTIFACTORY_TAG ?=$(shell echo "$(CIRCLE_TAG)" | awk -F/ '{print $$2}')
-IMAGE_TAG ?= latest
 
 IMAGE_K8S ?= $(GKE_DOCKER_REGISTRY)/$(GKE_PROJECT_ID)/$(IMAGE_NAME)
 IMAGE_K8S_AWS ?= $(AWS_ACCOUNT_ID).dkr.ecr.$(AWS_REGION).amazonaws.com/$(IMAGE_NAME)
+IMAGE_TAG ?= $(GITHUB_SHA)
 
 SSH_IMAGE_NAME ?= ssh-auth
-SSH_IMAGE_TAG ?= latest
 SSH_K8S ?= $(GKE_DOCKER_REGISTRY)/$(GKE_PROJECT_ID)/$(SSH_IMAGE_NAME)
 SSH_K8S_AWS ?= $(AWS_ACCOUNT_ID).dkr.ecr.$(AWS_REGION).amazonaws.com/$(SSH_IMAGE_NAME)
 
@@ -14,12 +12,10 @@ INGRESS_FALLBACK_IMAGE_NAME ?= platformingressfallback
 INGRESS_FALLBACK_IMAGE_K8S ?= $(GKE_DOCKER_REGISTRY)/$(GKE_PROJECT_ID)/$(INGRESS_FALLBACK_IMAGE_NAME)
 INGRESS_FALLBACK_IMAGE_K8S_AWS ?= $(AWS_ACCOUNT_ID).dkr.ecr.$(AWS_REGION).amazonaws.com/$(INGRESS_FALLBACK_IMAGE_NAME)
 
-ifdef CIRCLECI
-    PIP_EXTRA_INDEX_URL ?= https://$(DEVPI_USER):$(DEVPI_PASS)@$(DEVPI_HOST)/$(DEVPI_USER)/$(DEVPI_INDEX)
-else
-    PIP_EXTRA_INDEX_URL ?= $(shell python pip_extra_index_url.py)
-endif
-export PIP_EXTRA_INDEX_URL
+PLATFORMAUTHAPI_IMAGE = $(shell cat PLATFORMAUTHAPI_IMAGE)
+PLATFORMCONFIG_IMAGE = $(shell cat PLATFORMCONFIG_IMAGE)
+
+export PIP_EXTRA_INDEX_URL ?= $(shell python pip_extra_index_url.py)
 
 include k8s.mk
 
@@ -37,21 +33,21 @@ format:
 	black platform_api tests setup.py
 
 test_unit:
-	pytest -vv --cov-config=setup.cfg --cov platform_api tests/unit
+	pytest -vv --cov platform_api --cov-config=setup.cfg --cov-report xml:.coverage-unit.xml tests/unit
 
 test_integration:
-	pytest -vv --maxfail=3 --cov-config=setup.cfg --cov platform_api tests/integration
+	pytest -vv --maxfail=3 --cov platform_api --cov-config=setup.cfg --cov-report xml:.coverage-integration.xml tests/integration
 
 test_e2e:
 	pytest -vv tests/e2e
 
-build_ssh_auth_k8s:
+docker_build_ssh_auth:
 	docker build --build-arg PIP_EXTRA_INDEX_URL \
-	    -f deploy/ssh_auth/docker/Dockerfile.ssh-auth.k8s -t $(SSH_IMAGE_NAME):$(SSH_IMAGE_TAG) .
+		-f deploy/ssh_auth/docker/Dockerfile.ssh-auth.k8s -t $(SSH_IMAGE_NAME):latest .
 
-build_api_k8s:
+docker_build:
 	docker build --build-arg PIP_EXTRA_INDEX_URL \
-	    -f Dockerfile.k8s -t $(IMAGE_NAME):$(IMAGE_TAG) .
+		-f Dockerfile.k8s -t $(IMAGE_NAME):latest .
 
 run_api_k8s:
 	NP_STORAGE_HOST_MOUNT_PATH=/tmp \
@@ -83,84 +79,58 @@ gke_login:
 	gcloud config set $(SET_CLUSTER_ZONE_REGION)
 	gcloud auth configure-docker
 
-aws_login:
-	pip install --upgrade awscli
+eks_login:
 	aws eks --region $(AWS_REGION) update-kubeconfig --name $(AWS_CLUSTER_NAME)
 
-gke_docker_pull_test:
-	docker pull $$(cat AUTH_SERVER_IMAGE_NAME)
-	# use old platformconfig image that supports loading of config from storage
-	docker pull $(GKE_DOCKER_REGISTRY)/$(GKE_PROJECT_ID)/platformconfig:9d7cea532a7ab0e45871cb48cf355427a274dbd9
+docker_pull_test_images:
+	docker pull $(PLATFORMAUTHAPI_IMAGE)
+	docker pull $(PLATFORMCONFIG_IMAGE)
+	docker tag $(PLATFORMAUTHAPI_IMAGE) platformauthapi:latest
+	docker tag $(PLATFORMCONFIG_IMAGE) platformconfig:latest
 
-_helm:
+helm_install:
 	curl https://raw.githubusercontent.com/kubernetes/helm/master/scripts/get | bash -s -- -v v2.11.0
-
-gke_docker_push: build_api_k8s build_ssh_auth_k8s
-	docker tag $(IMAGE_NAME):$(IMAGE_TAG) $(IMAGE_K8S):latest
-	docker tag $(IMAGE_NAME):$(IMAGE_TAG) $(IMAGE_K8S):$(CIRCLE_SHA1)
-	docker tag $(SSH_IMAGE_NAME):$(SSH_IMAGE_TAG) $(SSH_K8S):latest
-	docker tag $(SSH_IMAGE_NAME):$(SSH_IMAGE_TAG) $(SSH_K8S):$(CIRCLE_SHA1)
-
-	docker push $(IMAGE_K8S)
-	docker push $(SSH_K8S)
-
-	make -C platform_ingress_fallback IMAGE_NAME=$(INGRESS_FALLBACK_IMAGE_NAME) build
-
-	docker tag $(INGRESS_FALLBACK_IMAGE_NAME):latest $(INGRESS_FALLBACK_IMAGE_K8S):latest
-	docker tag $(INGRESS_FALLBACK_IMAGE_NAME):latest $(INGRESS_FALLBACK_IMAGE_K8S):$(CIRCLE_SHA1)
-	docker push $(INGRESS_FALLBACK_IMAGE_K8S)
+	helm init --wait
 
 gcr_login:
 	@echo $(GKE_ACCT_AUTH) | base64 --decode | docker login -u _json_key --password-stdin https://gcr.io
 
 ecr_login:
-	$$(aws ecr get-login --no-include-email --region $(AWS_REGION) )
+	$$(aws ecr get-login --no-include-email --region $(AWS_REGION))
 
-
-aws_ssh_auth_docker_push: build_ssh_auth_k8s ecr_login
-	docker tag $(SSH_IMAGE_NAME):$(SSH_IMAGE_TAG) $(SSH_K8S_AWS):latest
-	docker tag $(SSH_IMAGE_NAME):$(SSH_IMAGE_TAG) $(SSH_K8S_AWS):$(CIRCLE_SHA1)
+docker_push_ssh_auth: docker_build_ssh_auth
+	docker tag $(SSH_IMAGE_NAME):latest $(SSH_K8S_AWS):latest
+	docker tag $(SSH_IMAGE_NAME):latest $(SSH_K8S_AWS):$(IMAGE_TAG)
 	docker push $(SSH_K8S_AWS):latest
-	docker push $(SSH_K8S_AWS):$(CIRCLE_SHA1)
+	docker push $(SSH_K8S_AWS):$(IMAGE_TAG)
 
-aws_docker_push: build_api_k8s ecr_login
-	docker tag $(IMAGE_NAME):$(IMAGE_TAG) $(IMAGE_K8S_AWS):latest
-	docker tag $(IMAGE_NAME):$(IMAGE_TAG) $(IMAGE_K8S_AWS):$(CIRCLE_SHA1)
+docker_push: docker_build
+	docker tag $(IMAGE_NAME):latest $(IMAGE_K8S_AWS):latest
+	docker tag $(IMAGE_NAME):latest $(IMAGE_K8S_AWS):$(IMAGE_TAG)
 	docker push $(IMAGE_K8S_AWS):latest
-	docker push $(IMAGE_K8S_AWS):$(CIRCLE_SHA1)
+	docker push $(IMAGE_K8S_AWS):$(IMAGE_TAG)
 
 	make -C platform_ingress_fallback IMAGE_NAME=$(INGRESS_FALLBACK_IMAGE_NAME) build
 
 	docker tag $(INGRESS_FALLBACK_IMAGE_NAME):latest $(INGRESS_FALLBACK_IMAGE_K8S_AWS):latest
-	docker tag $(INGRESS_FALLBACK_IMAGE_NAME):latest $(INGRESS_FALLBACK_IMAGE_K8S_AWS):$(CIRCLE_SHA1)
+	docker tag $(INGRESS_FALLBACK_IMAGE_NAME):latest $(INGRESS_FALLBACK_IMAGE_K8S_AWS):$(IMAGE_TAG)
 	docker push $(INGRESS_FALLBACK_IMAGE_K8S_AWS):latest
-	docker push $(INGRESS_FALLBACK_IMAGE_K8S_AWS):$(CIRCLE_SHA1)
+	docker push $(INGRESS_FALLBACK_IMAGE_K8S_AWS):$(IMAGE_TAG)
 
-gke_k8s_deploy: _helm
-	gcloud --quiet container clusters get-credentials $(GKE_CLUSTER_NAME) $(CLUSTER_ZONE_REGION)
-	helm \
-		--set "global.env=$(HELM_ENV)" \
-		--set "IMAGE.$(HELM_ENV)=$(IMAGE_K8S):$(CIRCLE_SHA1)" \
-		--set "INGRESS_FALLBACK_IMAGE.$(HELM_ENV)=$(INGRESS_FALLBACK_IMAGE_K8S):$(CIRCLE_SHA1)" \
-		upgrade --install platformapi deploy/platformapi/ --wait --timeout 600
-
-gke_k8s_deploy_ssh_auth: _helm
-	gcloud --quiet container clusters get-credentials $(GKE_CLUSTER_NAME) $(CLUSTER_ZONE_REGION)
-	helm -f deploy/ssh_auth/values-$(HELM_ENV).yaml --set "IMAGE=$(SSH_K8S):$(CIRCLE_SHA1)" upgrade --install ssh-auth deploy/ssh_auth/ --wait --timeout 600
-
-aws_k8s_deploy: _helm
+helm_deploy:
 	helm \
 		--set "global.env=$(HELM_ENV)-aws" \
-		--set "IMAGE.$(HELM_ENV)-aws=$(IMAGE_K8S_AWS):$(CIRCLE_SHA1)" \
-		--set "INGRESS_FALLBACK_IMAGE.$(HELM_ENV)-aws=$(INGRESS_FALLBACK_IMAGE_K8S_AWS):$(CIRCLE_SHA1)" \
+		--set "IMAGE.$(HELM_ENV)-aws=$(IMAGE_K8S_AWS):$(IMAGE_TAG)" \
 		upgrade --install platformapi deploy/platformapi/ --wait --timeout 600 --namespace platform
 
-aws_k8s_deploy_ssh_auth: _helm
-	helm -f deploy/ssh_auth/values-$(HELM_ENV)-aws.yaml --set "IMAGE=$(SSH_K8S_AWS):$(CIRCLE_SHA1)" upgrade --install ssh-auth deploy/ssh_auth/ --wait --timeout 600 --namespace platform
+helm_deploy_ssh_auth:
+	helm \
+		-f deploy/ssh_auth/values-$(HELM_ENV)-aws.yaml \
+		--set "IMAGE=$(SSH_K8S_AWS):$(IMAGE_TAG)" \
+		upgrade --install ssh-auth deploy/ssh_auth/ --wait --timeout 600 --namespace platform
 
-
-artifactory_ssh_auth_docker_push: build_ssh_auth_k8s
-	docker tag $(SSH_IMAGE_NAME):$(SSH_IMAGE_TAG) $(ARTIFACTORY_DOCKER_REPO)/$(SSH_IMAGE_NAME):$(ARTIFACTORY_TAG)
+artifactory_ssh_auth_docker_push: docker_build_ssh_auth
+	docker tag $(SSH_IMAGE_NAME):latest $(ARTIFACTORY_DOCKER_REPO)/$(SSH_IMAGE_NAME):$(ARTIFACTORY_TAG)
 	docker login $(ARTIFACTORY_DOCKER_REPO) --username=$(ARTIFACTORY_USERNAME) --password=$(ARTIFACTORY_PASSWORD)
 	docker push $(ARTIFACTORY_DOCKER_REPO)/$(SSH_IMAGE_NAME):$(ARTIFACTORY_TAG)
 

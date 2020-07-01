@@ -33,7 +33,7 @@ from tests.conftest import random_str
 
 @pytest.fixture(scope="session")
 def auth_server_image_name() -> str:
-    with open("AUTH_SERVER_IMAGE_NAME", "r") as f:
+    with open("PLATFORMAUTHAPI_IMAGE", "r") as f:
         return f.read()
 
 
@@ -41,10 +41,9 @@ def auth_server_image_name() -> str:
 async def auth_server(
     docker: aiodocker.Docker, reuse_docker: bool, auth_server_image_name: str
 ) -> AsyncIterator[AuthConfig]:
-    image_name = "gcr.io/light-reality-205619/platformauthapi:latest"
     container_name = "auth_server"
     container_config = {
-        "Image": image_name,
+        "Image": auth_server_image_name,
         "AttachStdout": False,
         "AttachStderr": False,
         "HostConfig": {"PublishAllPorts": True},
@@ -63,9 +62,9 @@ async def auth_server(
             pass
 
     try:
-        await docker.images.inspect(image_name)
+        await docker.images.inspect(auth_server_image_name)
     except aiodocker.exceptions.DockerError:
-        await docker.images.pull(image_name)
+        await docker.images.pull(auth_server_image_name)
 
     container = await docker.containers.create_or_replace(
         name=container_name, config=container_config
