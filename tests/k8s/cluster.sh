@@ -24,6 +24,7 @@ function k8s::start {
     sudo -E minikube config set WantReportErrorPrompt false
     sudo -E minikube config set WantUpdateNotification false
     sudo -E minikube config set WantNoneDriverWarning false
+
     sudo -E minikube start --vm-driver=none --kubernetes-version=v1.14.10
 
     sudo -E minikube addons enable ingress
