@@ -96,7 +96,7 @@ docker_login:
 		--password=$(ARTIFACTORY_PASSWORD)
 
 gke_docker_pull_test:
-	docker pull $$(cat AUTH_SERVER_IMAGE_NAME)
+	docker pull $$(cat PLATFORMAUTHAPI_IMAGE)
 	# use old platformconfig image that supports loading of config from storage
 	docker pull $(GKE_DOCKER_REGISTRY)/$(GKE_PROJECT_ID)/platformconfig:9d7cea532a7ab0e45871cb48cf355427a274dbd9
 
@@ -151,8 +151,8 @@ artifactory_docker_login:
 	docker login $(ARTIFACTORY_DOCKER_REPO) --username=$(ARTIFACTORY_USERNAME) --password=$(ARTIFACTORY_PASSWORD)
 
 artifactory_docker_pull_test: artifactory_docker_login
-	docker pull $(shell cat SECRETS_SERVER_IMAGE_NAME)
-	docker tag $(shell cat SECRETS_SERVER_IMAGE_NAME) platformsecrets:latest
+	docker pull $(shell cat PLATFORMSECRETS_IMAGE)
+	docker tag $(shell cat PLATFORMSECRETS_IMAGE) platformsecrets:latest
 
 artifactory_ssh_auth_docker_push: docker_build_ssh_auth artifactory_docker_login
 	docker tag $(SSH_IMAGE_NAME):latest $(ARTIFACTORY_DOCKER_REPO)/$(SSH_IMAGE_NAME):$(ARTIFACTORY_TAG)

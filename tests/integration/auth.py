@@ -33,7 +33,7 @@ from tests.conftest import random_str
 
 @pytest.fixture(scope="session")
 def auth_server_image_name() -> str:
-    with open("AUTH_SERVER_IMAGE_NAME", "r") as f:
+    with open("PLATFORMAUTHAPI_IMAGE", "r") as f:
         return f.read().strip()
 
 
