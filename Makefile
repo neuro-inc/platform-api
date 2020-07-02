@@ -17,6 +17,7 @@ INGRESS_FALLBACK_IMAGE_K8S_AWS ?= $(AWS_ACCOUNT_ID).dkr.ecr.$(AWS_REGION).amazon
 
 PLATFORMAUTHAPI_IMAGE = $(shell cat PLATFORMAUTHAPI_IMAGE)
 PLATFORMCONFIG_IMAGE = $(shell cat PLATFORMCONFIG_IMAGE)
+PLATFORMSECRETS_IMAGE = $(shell cat PLATFORMSECRETS_IMAGE)
 
 ifdef CIRCLECI
     PIP_EXTRA_INDEX_URL ?= https://$(DEVPI_USER):$(DEVPI_PASS)@$(DEVPI_HOST)/$(DEVPI_USER)/$(DEVPI_INDEX)
@@ -95,16 +96,13 @@ docker_login:
 		--username=$(ARTIFACTORY_USERNAME) \
 		--password=$(ARTIFACTORY_PASSWORD)
 
-gke_docker_pull_test:
-	docker pull $$(cat PLATFORMAUTHAPI_IMAGE)
-	# use old platformconfig image that supports loading of config from storage
-	docker pull $(GKE_DOCKER_REGISTRY)/$(GKE_PROJECT_ID)/platformconfig:9d7cea532a7ab0e45871cb48cf355427a274dbd9
-
-docker_pull_test_images:
+docker_pull_test_images: artifactory_docker_login
 	docker pull $(PLATFORMAUTHAPI_IMAGE)
 	docker pull $(PLATFORMCONFIG_IMAGE)
+	docker pull $(PLATFORMSECRETS_IMAGE)
 	docker tag $(PLATFORMAUTHAPI_IMAGE) platformauthapi:latest
 	docker tag $(PLATFORMCONFIG_IMAGE) platformconfig:latest
+	docker tag $(PLATFORMSECRETS_IMAGE) platformsecrets:latest
 
 helm_install:
 	curl https://raw.githubusercontent.com/kubernetes/helm/master/scripts/get | bash -s -- -v v2.11.0
@@ -150,10 +148,6 @@ helm_deploy_ssh_auth:
 artifactory_docker_login:
 	docker login $(ARTIFACTORY_DOCKER_REPO) --username=$(ARTIFACTORY_USERNAME) --password=$(ARTIFACTORY_PASSWORD)
 
-artifactory_docker_pull_test: artifactory_docker_login
-	docker pull $(shell cat PLATFORMSECRETS_IMAGE)
-	docker tag $(shell cat PLATFORMSECRETS_IMAGE) platformsecrets:latest
-
 artifactory_ssh_auth_docker_push: docker_build_ssh_auth artifactory_docker_login
 	docker tag $(SSH_IMAGE_NAME):latest $(ARTIFACTORY_DOCKER_REPO)/$(SSH_IMAGE_NAME):$(ARTIFACTORY_TAG)
 	docker push $(ARTIFACTORY_DOCKER_REPO)/$(SSH_IMAGE_NAME):$(ARTIFACTORY_TAG)
@@ -168,4 +162,3 @@ artifactory_ssh_auth_helm_push: _helm
 	helm package --app-version=$(ARTIFACTORY_TAG) --version=$(ARTIFACTORY_TAG) temp_deploy/$(SSH_IMAGE_NAME)/
 	helm plugin install https://github.com/belitre/helm-push-artifactory-plugin
 	helm push-artifactory $(SSH_IMAGE_NAME)-$(ARTIFACTORY_TAG).tgz $(ARTIFACTORY_HELM_REPO) --username $(ARTIFACTORY_USERNAME) --password $(ARTIFACTORY_PASSWORD)
-
