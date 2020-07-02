@@ -274,7 +274,7 @@ async def test_port_forward_nonexposed(
                 break
         except asyncio.TimeoutError:
             break
-    with pytest.raises(aiohttp.ServerDisconnectedError):
+    with pytest.raises(aiohttp.ClientConnectionError):
         await client.get(f"http://{LOCALHOST}:{port}")
     proc.kill()
     await proc.wait()
