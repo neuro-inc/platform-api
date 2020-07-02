@@ -5,7 +5,8 @@
 1. Install minikube (https://github.com/kubernetes/minikube#installation);
 2. Launch minikube:
 ```shell
-./minikube.sh
+mkdir -p ~/.minikube/files/files
+minikube start --kubernetes-version=v1.13.0	
 ```
 3. Check the minikube k8s cluster status:
 ```shell
