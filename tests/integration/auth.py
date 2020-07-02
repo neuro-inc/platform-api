@@ -33,26 +33,18 @@ from tests.conftest import random_str
 
 @pytest.fixture(scope="session")
 def auth_server_image_name() -> str:
-<<<<<<< HEAD
     with open("AUTH_SERVER_IMAGE_NAME", "r") as f:
         return f.read().strip()
-=======
-    with open("PLATFORMAUTHAPI_IMAGE", "r") as f:
-        return f.read()
->>>>>>> master
 
 
 @pytest.fixture(scope="session")
 async def auth_server(
     docker: aiodocker.Docker, reuse_docker: bool, auth_server_image_name: str
 ) -> AsyncIterator[AuthConfig]:
-<<<<<<< HEAD
     image_name = auth_server_image_name
-=======
->>>>>>> master
     container_name = "auth_server"
     container_config = {
-        "Image": auth_server_image_name,
+        "Image": image_name,
         "AttachStdout": False,
         "AttachStderr": False,
         "HostConfig": {"PublishAllPorts": True},

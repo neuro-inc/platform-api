@@ -150,15 +150,12 @@ helm_deploy_ssh_auth:
 artifactory_docker_login:
 	docker login $(ARTIFACTORY_DOCKER_REPO) --username=$(ARTIFACTORY_USERNAME) --password=$(ARTIFACTORY_PASSWORD)
 
-artifactory_ssh_auth_docker_push: docker_build_ssh_auth
-	docker tag $(SSH_IMAGE_NAME):latest $(ARTIFACTORY_DOCKER_REPO)/$(SSH_IMAGE_NAME):$(ARTIFACTORY_TAG)
-
 artifactory_docker_pull_test: artifactory_docker_login
 	docker pull $(shell cat SECRETS_SERVER_IMAGE_NAME)
 	docker tag $(shell cat SECRETS_SERVER_IMAGE_NAME) platformsecrets:latest
 
-artifactory_ssh_auth_docker_push: artifactory_docker_login build_ssh_auth_k8s
-	docker tag $(SSH_IMAGE_NAME):$(SSH_IMAGE_TAG) $(ARTIFACTORY_DOCKER_REPO)/$(SSH_IMAGE_NAME):$(ARTIFACTORY_TAG)
+artifactory_ssh_auth_docker_push: docker_build_ssh_auth artifactory_docker_login
+	docker tag $(SSH_IMAGE_NAME):latest $(ARTIFACTORY_DOCKER_REPO)/$(SSH_IMAGE_NAME):$(ARTIFACTORY_TAG)
 	docker push $(ARTIFACTORY_DOCKER_REPO)/$(SSH_IMAGE_NAME):$(ARTIFACTORY_TAG)
 
 artifactory_ssh_auth_helm_push: _helm
