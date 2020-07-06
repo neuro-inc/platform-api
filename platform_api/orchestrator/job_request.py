@@ -59,7 +59,7 @@ class ContainerVolume:
 
 @dataclass(frozen=True)
 class Secret:
-    secret_name: str  # `sec` in `secret://cluster/user/sec`
+    secret_key: str  # `sec` in `secret://cluster/user/sec`
     user_name: str  # `user` in `secret://cluster/user/sec`
     cluster_name: str  # `cluster` in `secret://cluster/user/sec`
 
@@ -68,7 +68,7 @@ class Secret:
         return f"user--{self.user_name}--secrets"
 
     def to_uri(self) -> URL:
-        return URL(f"secret://{self.cluster_name}/{self.user_name}/{self.secret_name}")
+        return URL(f"secret://{self.cluster_name}/{self.user_name}/{self.secret_key}")
 
     @classmethod
     def create(cls, secret_uri: Union[str, URL]) -> "Secret":
@@ -77,9 +77,9 @@ class Secret:
         cluster_name = uri.host
         assert cluster_name, uri  # for lint
         parts = PurePath(uri.path).parts
-        user_name, secret_name = parts[1], parts[2]
+        user_name, secret_key = parts[1], parts[2]
         return cls(
-            secret_name=secret_name, cluster_name=cluster_name, user_name=user_name
+            secret_key=secret_key, cluster_name=cluster_name, user_name=user_name
         )
 
 

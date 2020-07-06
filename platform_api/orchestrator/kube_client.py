@@ -6,7 +6,6 @@ import logging
 import re
 import ssl
 from base64 import b64encode
-from collections import defaultdict
 from contextlib import suppress
 from dataclasses import dataclass, field
 from datetime import datetime
@@ -155,26 +154,6 @@ class PVCVolume(PathVolume):
 
 
 @dataclass(frozen=True)
-class SecretVolume(Volume):
-    k8s_secret_name: str  # "user--{user_name}--secrets"
-    items: List[Tuple[str, str]] = field(default_factory=list)  # key1: ./file.txt
-
-    def to_primitive(self) -> Dict[str, Any]:
-        raw: Dict[str, Any] = {
-            "name": self.name,
-            "secret": {"secretName": self.k8s_secret_name},
-        }
-        if self.items:
-            raw["secret"]["items"] = [
-                {"key": key, "path": file_name} for key, file_name in self.items
-            ]
-        return raw
-
-    def create_secret_mount(self, mount_path: PurePath) -> "VolumeMount":
-        return VolumeMount(volume=self, mount_path=mount_path, read_only=True)
-
-
-@dataclass(frozen=True)
 class SecretEnvVar:
     name: str
     secret: Secret
@@ -189,7 +168,7 @@ class SecretEnvVar:
             "valueFrom": {
                 "secretKeyRef": {
                     "name": self.secret.k8s_secret_name,
-                    "key": self.secret.secret_name,
+                    "key": self.secret.secret_key,
                 }
             },
         }
@@ -212,6 +191,25 @@ class VolumeMount:
         if sub_path:
             raw["subPath"] = sub_path
         return raw
+
+
+@dataclass(frozen=True)
+class SecretVolume(Volume):
+    k8s_secret_name: str
+
+    def create_secret_mount(self, sec_volume: SecretContainerVolume) -> "VolumeMount":
+        return VolumeMount(
+            volume=self,
+            mount_path=sec_volume.dst_path,
+            sub_path=PurePath(sec_volume.secret.secret_key),
+            read_only=True,
+        )
+
+    def to_primitive(self) -> Dict[str, Any]:
+        return {
+            "name": self.name,
+            "secret": {"secretName": self.k8s_secret_name},
+        }
 
 
 @dataclass(frozen=True)
@@ -666,38 +664,11 @@ class PodDescriptor:
     restart_policy: PodRestartPolicy = PodRestartPolicy.NEVER
 
     @classmethod
-    def _build_secret_volumes(
-        cls, secret_volumes: List[SecretContainerVolume]
-    ) -> Dict[PurePath, SecretVolume]:
-        sec_items: Dict[PurePath, List[Tuple[str, str]]] = defaultdict(list)
-        k8s_sec_name: Optional[str] = None
-        for volume in secret_volumes:
-            sec = volume.secret
-            path = volume.dst_path
-            mount_dir, file_name = path.parent, path.name
-            pair = (sec.secret_name, file_name)
-            sec_items[mount_dir].append(pair)
-
-            if k8s_sec_name and k8s_sec_name != sec.k8s_secret_name:
-                raise ValueError("Mounting other user's secrets not supported")
-            k8s_sec_name = sec.k8s_secret_name
-
-        result: Dict[PurePath, SecretVolume] = {}
-        for idx, mount_dir in enumerate(sorted(sec_items.keys()), 1):
-            assert k8s_sec_name, "no k8s secret found"
-            assert sec_items[mount_dir], "no secret key-filename pairs found"
-            result[mount_dir] = SecretVolume(
-                name=f"secret-volume-{idx}",
-                k8s_secret_name=k8s_sec_name,
-                items=sec_items[mount_dir],
-            )
-        return result
-
-    @classmethod
     def from_job_request(
         cls,
         volume: Volume,
         job_request: JobRequest,
+        secret_volume: Optional[SecretVolume] = None,
         image_pull_secret_names: Optional[List[str]] = None,
         node_selector: Optional[Dict[str, str]] = None,
         tolerations: Optional[List[Toleration]] = None,
@@ -713,13 +684,13 @@ class PodDescriptor:
         ]
         volumes = [volume]
 
-        secret_volumes = cls._build_secret_volumes(container.secret_volumes)
-        for mount_path, sec_volume in secret_volumes.items():
-            volumes.append(sec_volume)
-            mount = sec_volume.create_secret_mount(mount_path)
-            volume_mounts.append(mount)
+        if container.secret_volumes:
+            assert secret_volume
+            volumes.append(secret_volume)
+            for sec_volume in container.secret_volumes:
+                volume_mounts.append(secret_volume.create_secret_mount(sec_volume))
 
-        secret_env_list = [
+        sec_env_list = [
             SecretEnvVar.create(env_name, secret)
             for env_name, secret in container.secret_env.items()
         ]
@@ -752,7 +723,7 @@ class PodDescriptor:
             command=container.entrypoint_list,
             args=container.command_list,
             env=container.env.copy(),
-            secret_env_list=secret_env_list,
+            secret_env_list=sec_env_list,
             volume_mounts=volume_mounts,
             volumes=volumes,
             resources=resources,

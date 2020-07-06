@@ -12,6 +12,7 @@ from platform_api.cluster_config import (
     StorageType,
 )
 from platform_api.config_factory import EnvironConfigFactory
+from platform_api.orchestrator.kube_client import SecretVolume
 from platform_api.orchestrator.kube_orchestrator import (
     HostVolume,
     KubeConfig,
@@ -120,6 +121,29 @@ class TestStorageVolume:
         volume = kube_orchestrator.create_storage_volume()
         assert volume == PVCVolume(
             name="storage", path=PurePath("/tmp"), claim_name="testclaim"
+        )
+
+
+class TestSecretVolume:
+    def test_create_secret_volume(self, registry_config: RegistryConfig) -> None:
+        storage_config = StorageConfig(
+            host_mount_path=PurePath("/tmp"), type=StorageType.PVC, pvc_name="testclaim"
+        )
+        kube_config = KubeConfig(
+            jobs_domain_name_template="{job_id}.testdomain",
+            ssh_auth_server="ssh-auth.domain",
+            endpoint_url="http://1.2.3.4",
+            resource_pool_types=[ResourcePoolType()],
+        )
+        kube_orchestrator = KubeOrchestrator(
+            storage_config=storage_config,
+            registry_config=registry_config,
+            kube_config=kube_config,
+        )
+        user_name = "test-user"
+        volume = kube_orchestrator.create_secret_volume(user_name)
+        assert volume == SecretVolume(
+            name="secret", k8s_secret_name="user--test-user--secrets",
         )
 
 

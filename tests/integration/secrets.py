@@ -47,7 +47,7 @@ async def kube_proxy_url(docker_host: str) -> AsyncIterator[str]:
         prefix = "Starting to serve on "
         assert proc.stdout, proc
         line = proc.stdout.readline().decode().strip()
-        err = f"Error while running command `{cmd}`: First line of output `{line}`"
+        err = f"Error while running command `{cmd}`: output `{line}`"
         if "error" in line.lower():
             raise RuntimeError(f"{err}: Error detected")
         if not line.startswith(prefix):

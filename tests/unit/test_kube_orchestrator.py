@@ -14,6 +14,7 @@ from platform_api.orchestrator.job_request import (
     JobRequest,
     JobStatus,
     Secret,
+    SecretContainerVolume,
 )
 from platform_api.orchestrator.kube_client import (
     AlreadyExistsException,
@@ -115,34 +116,39 @@ class TestSecretVolume:
 
     def test_to_primitive_with_items(self) -> None:
         secret_name = "user--alice--secrets"
-        volume = SecretVolume(
-            "testvolume",
-            k8s_secret_name=secret_name,
-            items=[("key1", "file1.txt"), ("key2", "file2.txt")],
-        )
+        volume = SecretVolume("testvolume", k8s_secret_name=secret_name)
         assert volume.to_primitive() == {
             "name": "testvolume",
-            "secret": {
-                "secretName": secret_name,
-                "items": [
-                    {"key": "key1", "path": "file1.txt"},
-                    {"key": "key2", "path": "file2.txt"},
-                ],
-            },
+            "secret": {"secretName": secret_name},
         }
 
-    def test_create_secret_mount(self) -> None:
+    def test_create_secret_mounts(self) -> None:
         secret_name = "user--alice--secrets"
-        volume = SecretVolume(
-            "testvolume",
-            k8s_secret_name=secret_name,
-            items=[("key1", "file1.txt"), ("key2", "file2.txt")],
-        )
-        path = PurePath("/container/path")
-        mount = volume.create_secret_mount(path)
-        assert mount == VolumeMount(
-            volume=volume, mount_path=path, sub_path=PurePath("."), read_only=True,
-        )
+        volume = SecretVolume("testvolume", k8s_secret_name=secret_name)
+        container_volumes = [
+            SecretContainerVolume.create(
+                "secret://clustername/alice/sec1", PurePath("/etc/foo/file1.txt"),
+            ),
+            SecretContainerVolume.create(
+                "secret://clustername/alice/sec2", PurePath("/etc/foo/file2.txt"),
+            ),
+        ]
+        mounts = [volume.create_secret_mount(vol) for vol in container_volumes]
+
+        assert mounts == [
+            VolumeMount(
+                volume=volume,
+                mount_path=PurePath("/etc/foo/file1.txt"),
+                sub_path=PurePath("sec1"),
+                read_only=True,
+            ),
+            VolumeMount(
+                volume=volume,
+                mount_path=PurePath("/etc/foo/file2.txt"),
+                sub_path=PurePath("sec2"),
+                read_only=True,
+            ),
+        ]
 
 
 class TestSecretEnvVar:

@@ -1313,13 +1313,13 @@ class TestKubeOrchestrator:
                 await kube_client.update_or_create_secret(  # type: ignore
                     secret.k8s_secret_name,
                     kube_config.namespace,
-                    data={secret.secret_name: "vvvv"},
+                    data={secret.secret_key: "vvvv"},
                 )
 
                 missing = await orchestrator.get_missing_secrets(
                     user_name, secret_names=["key3", "key2", "key1"]
                 )
-                assert missing == ["key3", "key1"]
+                assert missing == ["key1", "key3"]
 
     @pytest.mark.asyncio
     async def test_job_pod_with_secret_env_ok(
@@ -1479,31 +1479,26 @@ class TestKubeOrchestrator:
 
         raw = await kube_client.get_raw_pod(pod_name)
 
-        volume_name = "secret-volume-1"  # generated inside kube-client
-        sec_volumes_raw = [vol for vol in raw["spec"]["volumes"] if "secret" in vol]
+        sec_volumes_raw = [v for v in raw["spec"]["volumes"] if v["name"] == "secret"]
         assert sec_volumes_raw == [
             {
-                "name": volume_name,
-                "secret": {
-                    "secretName": secret.k8s_secret_name,
-                    "defaultMode": 420,
-                    "items": [{"key": secret_name, "path": secret_file}],
-                },
+                "name": "secret",
+                "secret": {"secretName": secret.k8s_secret_name, "defaultMode": 420},
             }
         ]
 
         container_raw = raw["spec"]["containers"][0]
         assert container_raw["volumeMounts"] == [
             {
-                "name": volume_name,
+                "name": "secret",
                 "readOnly": True,
-                "mountPath": str(secret_path),
-                "subPath": ".",
+                "mountPath": str(secret_path / secret_file),
+                "subPath": secret_name,
             }
         ]
 
     @pytest.mark.asyncio
-    async def test_job_pod_with_secret_volumes_same_mounts_ok(
+    async def test_job_pod_with_secret_volumes_same_mounts_fail(
         self,
         kube_config: KubeConfig,
         kube_orchestrator: KubeOrchestrator,
@@ -1544,39 +1539,8 @@ class TestKubeOrchestrator:
                 owner=user_name,
             ),
         )
-        await delete_job_later(job)
-        await job.start()
-
-        pod_name = job.id
-        await kube_client.wait_pod_is_running(pod_name=pod_name, timeout_s=60.0)
-
-        raw = await kube_client.get_raw_pod(pod_name)
-
-        volume_name = "secret-volume-1"  # generated inside kube-client
-        sec_volumes_raw = [vol for vol in raw["spec"]["volumes"] if "secret" in vol]
-        assert sec_volumes_raw == [
-            {
-                "name": volume_name,
-                "secret": {
-                    "secretName": k8s_sec_name,
-                    "defaultMode": 420,
-                    "items": [
-                        {"key": sec_name_1, "path": sec_file},
-                        {"key": sec_name_2, "path": sec_file},
-                    ],
-                },
-            },
-        ]
-
-        container_raw = raw["spec"]["containers"][0]
-        assert container_raw["volumeMounts"] == [
-            {
-                "name": volume_name,
-                "readOnly": True,
-                "mountPath": str(sec_path),
-                "subPath": ".",
-            },
-        ]
+        with pytest.raises(JobError):
+            await job.start()
 
     @pytest.mark.asyncio
     async def test_job_pod_with_secret_volumes_overlapping_mounts_ok(
@@ -1605,10 +1569,10 @@ class TestKubeOrchestrator:
             k8s_sec_name,
             ns,
             data={
-                secret_a.secret_name: "vvvv",
-                secret_b1.secret_name: "vvvv",
-                secret_b2.secret_name: "vvvv",
-                secret_bc.secret_name: "vvvv",
+                secret_a.secret_key: "vvvv",
+                secret_b1.secret_key: "vvvv",
+                secret_b2.secret_key: "vvvv",
+                secret_bc.secret_key: "vvvv",
             },
         )
 
@@ -1648,62 +1612,39 @@ class TestKubeOrchestrator:
         await kube_client.wait_pod_is_running(pod_name=pod_name, timeout_s=60.0)
 
         raw = await kube_client.get_raw_pod(pod_name)
-
-        # secret volumes are generated inside kube-client
-        volume_name_1 = "secret-volume-1"
-        volume_name_2 = "secret-volume-2"
-        volume_name_3 = "secret-volume-3"
-        sec_volumes_raw = [vol for vol in raw["spec"]["volumes"] if "secret" in vol]
-
+        sec_volumes_raw = [v for v in raw["spec"]["volumes"] if v["name"] == "secret"]
         assert sec_volumes_raw == [
             {
-                "name": volume_name_1,
-                "secret": {
-                    "secretName": k8s_sec_name,
-                    "defaultMode": 420,
-                    "items": [{"key": secret_a.secret_name, "path": file_a}],
-                },
-            },
-            {
-                "name": volume_name_2,
-                "secret": {
-                    "secretName": k8s_sec_name,
-                    "defaultMode": 420,
-                    "items": [
-                        {"key": secret_b1.secret_name, "path": file_b1},
-                        {"key": secret_b2.secret_name, "path": file_b2},
-                    ],
-                },
-            },
-            {
-                "name": volume_name_3,
-                "secret": {
-                    "secretName": k8s_sec_name,
-                    "defaultMode": 420,
-                    "items": [{"key": secret_bc.secret_name, "path": file_bc}],
-                },
+                "name": "secret",
+                "secret": {"secretName": k8s_sec_name, "defaultMode": 420},
             },
         ]
 
         container_raw = raw["spec"]["containers"][0]
         assert container_raw["volumeMounts"] == [
             {
-                "name": volume_name_1,
+                "name": "secret",
                 "readOnly": True,
-                "mountPath": str(path_a),
-                "subPath": ".",
+                "mountPath": str(path_a / file_a),
+                "subPath": secret_a.secret_key,
             },
             {
-                "name": volume_name_2,
+                "name": "secret",
                 "readOnly": True,
-                "mountPath": str(path_b),
-                "subPath": ".",
+                "mountPath": str(path_b / file_b1),
+                "subPath": secret_b1.secret_key,
             },
             {
-                "name": volume_name_3,
+                "name": "secret",
                 "readOnly": True,
-                "mountPath": str(path_bc),
-                "subPath": ".",
+                "mountPath": str(path_b / file_b2),
+                "subPath": secret_b2.secret_key,
+            },
+            {
+                "name": "secret",
+                "readOnly": True,
+                "mountPath": str(path_bc / file_bc),
+                "subPath": secret_bc.secret_key,
             },
         ]
 

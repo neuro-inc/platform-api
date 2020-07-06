@@ -206,7 +206,7 @@ class TestSecret:
         sec = Secret.create(uri)
         assert sec.cluster_name == "test-cluster"
         assert sec.user_name == "test-user"
-        assert sec.secret_name == "test-secret"
+        assert sec.secret_key == "test-secret"
 
     def test_create_uri_eq_str(self) -> None:
         uri = "secret://test-cluster/test-user/test-secret"
@@ -229,7 +229,7 @@ class TestSecretContainerVolume:
         volume = SecretContainerVolume.create(uri, dst_path=PurePath("/container"))
         assert volume.secret.cluster_name == "test-cluster"
         assert volume.secret.user_name == "test-user"
-        assert volume.secret.secret_name == "test-secret"
+        assert volume.secret.secret_key == "test-secret"
         assert volume.dst_path == PurePath("/container")
 
     def test_to_and_from_primitive(self) -> None:

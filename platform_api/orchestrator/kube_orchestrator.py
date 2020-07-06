@@ -35,6 +35,7 @@ from .kube_client import (
     PodRestartPolicy,
     PodStatus,
     PVCVolume,
+    SecretVolume,
     Service,
     StatusException,
     Toleration,
@@ -185,6 +186,12 @@ class KubeOrchestrator(Orchestrator):
             path=self._storage_config.host_mount_path,
         )
 
+    def create_secret_volume(self, user_name: str) -> SecretVolume:
+        return SecretVolume(
+            name=self._kube_config.secret_volume_name,
+            k8s_secret_name=self._get_k8s_secret_name(user_name),
+        )
+
     def _get_k8s_secret_name(self, user_name: str) -> str:
         return f"user--{user_name}--secrets"
 
@@ -256,9 +263,11 @@ class KubeOrchestrator(Orchestrator):
         labels = self._get_pod_labels(job)
         # NOTE: both node selector and affinity must be satisfied for the pod
         # to be scheduled onto a node.
+
         return PodDescriptor.from_job_request(
             self._storage_volume,
             job.request,
+            secret_volume=self.create_secret_volume(job.owner),
             image_pull_secret_names=[self._get_docker_secret_name(job)],
             node_selector=node_selector,
             tolerations=tolerations,
@@ -293,7 +302,7 @@ class KubeOrchestrator(Orchestrator):
             )
             keys = raw.get("data", {}).keys()
             missing = set(secret_names) - set(keys)
-            return list(missing)
+            return sorted(missing)
 
         except StatusException:
             return secret_names
