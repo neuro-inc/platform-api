@@ -34,16 +34,17 @@ from tests.conftest import random_str
 @pytest.fixture(scope="session")
 def auth_server_image_name() -> str:
     with open("PLATFORMAUTHAPI_IMAGE", "r") as f:
-        return f.read()
+        return f.read().strip()
 
 
 @pytest.fixture(scope="session")
 async def auth_server(
     docker: aiodocker.Docker, reuse_docker: bool, auth_server_image_name: str
 ) -> AsyncIterator[AuthConfig]:
+    image_name = auth_server_image_name
     container_name = "auth_server"
     container_config = {
-        "Image": auth_server_image_name,
+        "Image": image_name,
         "AttachStdout": False,
         "AttachStderr": False,
         "HostConfig": {"PublishAllPorts": True},
@@ -151,13 +152,21 @@ class _User(User):
 
 
 @pytest.fixture
+def test_cluster_name() -> str:
+    return "test-cluster"
+
+
+@pytest.fixture
 async def regular_user_factory(
-    auth_client: AuthClient, token_factory: Callable[[str], str], admin_token: str
+    auth_client: AuthClient,
+    token_factory: Callable[[str], str],
+    admin_token: str,
+    test_cluster_name: str,
 ) -> Callable[[Optional[str], Optional[Quota], str], Awaitable[_User]]:
     async def _factory(
         name: Optional[str] = None,
         quota: Optional[Quota] = None,
-        cluster_name: str = "test-cluster",
+        cluster_name: str = test_cluster_name,
         auth_clusters: Optional[Sequence[AuthCluster]] = None,
     ) -> _User:
         if not name:
@@ -205,12 +214,12 @@ async def regular_user_with_missing_cluster_name(
 
 @pytest.fixture
 async def regular_user_with_custom_quota(
-    regular_user_factory: Callable[..., Awaitable[_User]],
+    regular_user_factory: Callable[..., Awaitable[_User]], test_cluster_name: str
 ) -> _User:
     return await regular_user_factory(
         auth_clusters=[
             AuthCluster(
-                name="test-cluster",
+                name=test_cluster_name,
                 quota=Quota(
                     total_gpu_run_time_minutes=123, total_non_gpu_run_time_minutes=321
                 ),

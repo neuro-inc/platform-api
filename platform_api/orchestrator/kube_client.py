@@ -45,6 +45,8 @@ from .job_request import (
     JobError,
     JobNotFoundException,
     JobRequest,
+    Secret,
+    SecretContainerVolume,
 )
 from .kube_config import KubeClientAuthType
 
@@ -152,6 +154,27 @@ class PVCVolume(PathVolume):
 
 
 @dataclass(frozen=True)
+class SecretEnvVar:
+    name: str
+    secret: Secret
+
+    @classmethod
+    def create(cls, name: str, secret: Secret) -> "SecretEnvVar":
+        return cls(name=name, secret=secret)
+
+    def to_primitive(self) -> Dict[str, Any]:
+        return {
+            "name": self.name,
+            "valueFrom": {
+                "secretKeyRef": {
+                    "name": self.secret.k8s_secret_name,
+                    "key": self.secret.secret_key,
+                }
+            },
+        }
+
+
+@dataclass(frozen=True)
 class VolumeMount:
     volume: Volume
     mount_path: PurePath
@@ -159,11 +182,33 @@ class VolumeMount:
     read_only: bool = False
 
     def to_primitive(self) -> Dict[str, Any]:
-        return {
+        sub_path = str(self.sub_path)
+        raw = {
             "name": self.volume.name,
             "mountPath": str(self.mount_path),
             "readOnly": self.read_only,
-            "subPath": str(self.sub_path),
+        }
+        if sub_path:
+            raw["subPath"] = sub_path
+        return raw
+
+
+@dataclass(frozen=True)
+class SecretVolume(Volume):
+    k8s_secret_name: str
+
+    def create_secret_mount(self, sec_volume: SecretContainerVolume) -> "VolumeMount":
+        return VolumeMount(
+            volume=self,
+            mount_path=sec_volume.dst_path,
+            sub_path=PurePath(sec_volume.secret.secret_key),
+            read_only=True,
+        )
+
+    def to_primitive(self) -> Dict[str, Any]:
+        return {
+            "name": self.name,
+            "secret": {"secretName": self.k8s_secret_name},
         }
 
 
@@ -586,6 +631,8 @@ class PodDescriptor:
     command: List[str] = field(default_factory=list)
     args: List[str] = field(default_factory=list)
     env: Dict[str, str] = field(default_factory=dict)
+    # TODO (artem): create base type `EnvVar` and merge `env` and `secret_env`
+    secret_env_list: List[SecretEnvVar] = field(default_factory=list)
     volume_mounts: List[VolumeMount] = field(default_factory=list)
     volumes: List[Volume] = field(default_factory=list)
     resources: Optional[Resources] = None
@@ -621,7 +668,8 @@ class PodDescriptor:
         cls,
         volume: Volume,
         job_request: JobRequest,
-        secret_names: Optional[List[str]] = None,
+        secret_volume: Optional[SecretVolume] = None,
+        image_pull_secret_names: Optional[List[str]] = None,
         node_selector: Optional[Dict[str, str]] = None,
         tolerations: Optional[List[Toleration]] = None,
         node_affinity: Optional[NodeAffinity] = None,
@@ -636,6 +684,17 @@ class PodDescriptor:
         ]
         volumes = [volume]
 
+        if container.secret_volumes:
+            assert secret_volume
+            volumes.append(secret_volume)
+            for sec_volume in container.secret_volumes:
+                volume_mounts.append(secret_volume.create_secret_mount(sec_volume))
+
+        sec_env_list = [
+            SecretEnvVar.create(env_name, secret)
+            for env_name, secret in container.secret_env.items()
+        ]
+
         if job_request.container.resources.shm:
             dev_shm_volume = SharedMemoryVolume(name="dshm")
             container_volume = ContainerVolume(
@@ -648,8 +707,8 @@ class PodDescriptor:
             volumes.append(dev_shm_volume)
 
         resources = Resources.from_container_resources(container.resources)
-        if secret_names is not None:
-            image_pull_secrets = [SecretRef(name) for name in secret_names]
+        if image_pull_secret_names is not None:
+            image_pull_secrets = [SecretRef(name) for name in image_pull_secret_names]
         else:
             image_pull_secrets = []
 
@@ -664,6 +723,7 @@ class PodDescriptor:
             command=container.entrypoint_list,
             args=container.command_list,
             env=container.env.copy(),
+            secret_env_list=sec_env_list,
             volume_mounts=volume_mounts,
             volumes=volumes,
             resources=resources,
@@ -688,12 +748,13 @@ class PodDescriptor:
     def to_primitive(self) -> Dict[str, Any]:
         volume_mounts = [mount.to_primitive() for mount in self.volume_mounts]
         volumes = [volume.to_primitive() for volume in self.volumes]
+        env_list = self.env_list + [env.to_primitive() for env in self.secret_env_list]
 
         container_payload = {
             "name": f"{self.name}",
             "image": f"{self.image}",
             "imagePullPolicy": "Always",
-            "env": self.env_list,
+            "env": env_list,
             "volumeMounts": volume_mounts,
             "terminationMessagePolicy": "FallbackToLogsOnError",
         }
@@ -1534,6 +1595,14 @@ class KubeClient:
                 raise
 
             await self.create_docker_secret(secret)
+
+    async def get_raw_secret(
+        self, secret_name: str, namespace_name: Optional[str] = None
+    ) -> Dict[str, Any]:
+        url = self._generate_secret_url(secret_name, namespace_name)
+        payload = await self._request(method="GET", url=url)
+        self._check_status_payload(payload)
+        return payload
 
     async def delete_secret(
         self, secret_name: str, namespace_name: Optional[str] = None

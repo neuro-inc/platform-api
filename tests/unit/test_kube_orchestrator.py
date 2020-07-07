@@ -13,13 +13,17 @@ from platform_api.orchestrator.job_request import (
     ContainerVolume,
     JobRequest,
     JobStatus,
+    Secret,
+    SecretContainerVolume,
 )
 from platform_api.orchestrator.kube_client import (
     AlreadyExistsException,
     ContainerStatus,
     Ingress,
     Resources,
+    SecretEnvVar,
     SecretRef,
+    SecretVolume,
     ServiceType,
     SharedMemoryVolume,
     VolumeMount,
@@ -98,6 +102,64 @@ class TestPVCVolume:
         assert volume.to_primitive() == {
             "name": "testvolume",
             "persistentVolumeClaim": {"claimName": "testclaim"},
+        }
+
+
+class TestSecretVolume:
+    def test_to_primitive_no_items(self) -> None:
+        secret_name = "user--alice--secrets"
+        volume = SecretVolume("testvolume", k8s_secret_name=secret_name)
+        assert volume.to_primitive() == {
+            "name": "testvolume",
+            "secret": {"secretName": secret_name},
+        }
+
+    def test_to_primitive_with_items(self) -> None:
+        secret_name = "user--alice--secrets"
+        volume = SecretVolume("testvolume", k8s_secret_name=secret_name)
+        assert volume.to_primitive() == {
+            "name": "testvolume",
+            "secret": {"secretName": secret_name},
+        }
+
+    def test_create_secret_mounts(self) -> None:
+        secret_name = "user--alice--secrets"
+        volume = SecretVolume("testvolume", k8s_secret_name=secret_name)
+        container_volumes = [
+            SecretContainerVolume.create(
+                "secret://clustername/alice/sec1", PurePath("/etc/foo/file1.txt"),
+            ),
+            SecretContainerVolume.create(
+                "secret://clustername/alice/sec2", PurePath("/etc/foo/file2.txt"),
+            ),
+        ]
+        mounts = [volume.create_secret_mount(vol) for vol in container_volumes]
+
+        assert mounts == [
+            VolumeMount(
+                volume=volume,
+                mount_path=PurePath("/etc/foo/file1.txt"),
+                sub_path=PurePath("sec1"),
+                read_only=True,
+            ),
+            VolumeMount(
+                volume=volume,
+                mount_path=PurePath("/etc/foo/file2.txt"),
+                sub_path=PurePath("sec2"),
+                read_only=True,
+            ),
+        ]
+
+
+class TestSecretEnvVar:
+    def test_to_primitive(self) -> None:
+        sec = Secret.create("secret://test-cluster/test-user/sec1")
+        sec_env_var = SecretEnvVar.create("sec-name", secret=sec)
+        assert sec_env_var.to_primitive() == {
+            "name": "sec-name",
+            "valueFrom": {
+                "secretKeyRef": {"name": "user--test-user--secrets", "key": "sec1"}
+            },
         }
 
 

@@ -31,6 +31,8 @@ from platform_api.orchestrator.job_request import (
     JobNotFoundException,
     JobRequest,
     JobStatus,
+    Secret,
+    SecretContainerVolume,
 )
 from platform_api.orchestrator.kube_client import (
     AlreadyExistsException,
@@ -1291,6 +1293,361 @@ class TestKubeOrchestrator:
         )
         assert toleration_expected in pod.tolerations
 
+    def _create_username(self) -> str:
+        return f"user-{uuid.uuid4().hex[:6]}"
+
+    @pytest.mark.asyncio
+    async def test_get_missing_secrets(
+        self,
+        kube_config_factory: Callable[..., KubeConfig],
+        kube_orchestrator_factory: Callable[..., KubeOrchestrator],
+        kube_client_factory: Callable[..., MyKubeClient],
+    ) -> None:
+        user_name = self._create_username()
+
+        kube_config = kube_config_factory(jobs_ingress_class="traefik")
+        async with kube_orchestrator_factory(kube_config=kube_config) as orchestrator:
+            async with kube_client_factory(kube_config) as kube_client:
+
+                secret = Secret("key2", user_name, cluster_name)
+                await kube_client.update_or_create_secret(  # type: ignore
+                    secret.k8s_secret_name,
+                    kube_config.namespace,
+                    data={secret.secret_key: "vvvv"},
+                )
+
+                missing = await orchestrator.get_missing_secrets(
+                    user_name, secret_names=["key3", "key2", "key1"]
+                )
+                assert missing == ["key1", "key3"]
+
+    @pytest.mark.asyncio
+    async def test_job_pod_with_secret_env_ok(
+        self,
+        kube_config: KubeConfig,
+        kube_orchestrator: KubeOrchestrator,
+        kube_client: MyKubeClient,
+        delete_job_later: Callable[[Job], Awaitable[None]],
+        cluster_name: str,
+    ) -> None:
+        user_name = self._create_username()
+        ns = kube_config.namespace
+
+        secret_name = "key1"
+        secret = Secret(secret_name, user_name, cluster_name)
+        await kube_client.update_or_create_secret(
+            secret.k8s_secret_name, ns, data={secret_name: "vvvv"}
+        )
+
+        secret_env = {"SECRET_VAR": secret}
+        container = Container(
+            image="ubuntu",
+            command="sleep infinity",
+            resources=ContainerResources(cpu=0.1, memory_mb=16),
+            http_server=ContainerHTTPServer(port=80),
+            secret_env=secret_env,
+        )
+        job = MyJob(
+            orchestrator=kube_orchestrator,
+            record=JobRecord.create(
+                request=JobRequest.create(container),
+                cluster_name=cluster_name,
+                owner=user_name,
+            ),
+        )
+        await delete_job_later(job)
+        await job.start()
+
+        pod_name = job.id
+        await kube_client.wait_pod_is_running(pod_name=pod_name, timeout_s=60.0)
+
+        raw = await kube_client.get_raw_pod(pod_name)
+
+        container_raw = raw["spec"]["containers"][0]
+        assert container_raw["env"] == [
+            {
+                "name": "SECRET_VAR",
+                "valueFrom": {
+                    "secretKeyRef": {"key": secret_name, "name": secret.k8s_secret_name}
+                },
+            }
+        ]
+
+    @pytest.mark.asyncio
+    async def test_job_pod_with_secret_env_same_secret_ok(
+        self,
+        kube_config: KubeConfig,
+        kube_orchestrator: KubeOrchestrator,
+        kube_client: MyKubeClient,
+        delete_job_later: Callable[[Job], Awaitable[None]],
+        cluster_name: str,
+    ) -> None:
+        user_name = self._create_username()
+        ns = kube_config.namespace
+
+        secret_name_1, secret_name_2 = "key1", "key2"
+        secret1 = Secret(secret_name_1, user_name, cluster_name)
+        secret2 = Secret(secret_name_2, user_name, cluster_name)
+
+        assert secret1.k8s_secret_name == secret2.k8s_secret_name
+        k8s_secret_name = secret1.k8s_secret_name
+        await kube_client.update_or_create_secret(
+            k8s_secret_name, ns, data={secret_name_1: "vvvv", secret_name_2: "vvvv"}
+        )
+
+        secret_env = {"SECRET_VAR_1": secret1, "SECRET_VAR_2": secret2}
+        container = Container(
+            image="ubuntu",
+            command="sleep infinity",
+            resources=ContainerResources(cpu=0.1, memory_mb=16),
+            http_server=ContainerHTTPServer(port=80),
+            secret_env=secret_env,
+        )
+        job = MyJob(
+            orchestrator=kube_orchestrator,
+            record=JobRecord.create(
+                request=JobRequest.create(container),
+                cluster_name=cluster_name,
+                owner=user_name,
+            ),
+        )
+        await delete_job_later(job)
+        await job.start()
+
+        pod_name = job.id
+        await kube_client.wait_pod_is_running(pod_name=pod_name, timeout_s=60.0)
+
+        raw = await kube_client.get_raw_pod(pod_name)
+
+        container_raw = raw["spec"]["containers"][0]
+        assert container_raw["env"] == [
+            {
+                "name": "SECRET_VAR_1",
+                "valueFrom": {
+                    "secretKeyRef": {"key": secret_name_1, "name": k8s_secret_name}
+                },
+            },
+            {
+                "name": "SECRET_VAR_2",
+                "valueFrom": {
+                    "secretKeyRef": {"key": secret_name_2, "name": k8s_secret_name}
+                },
+            },
+        ]
+
+    @pytest.mark.asyncio
+    async def test_job_pod_with_secret_volume_simple_ok(
+        self,
+        kube_config: KubeConfig,
+        kube_orchestrator: KubeOrchestrator,
+        kube_client: MyKubeClient,
+        delete_job_later: Callable[[Job], Awaitable[None]],
+        cluster_name: str,
+    ) -> None:
+        user_name = self._create_username()
+        ns = kube_config.namespace
+
+        secret_name = "key1"
+        secret = Secret(secret_name, user_name, cluster_name)
+        await kube_client.update_or_create_secret(
+            secret.k8s_secret_name, ns, data={secret_name: "vvvv"}
+        )
+
+        secret_path, secret_file = PurePath("/foo/bar"), "secret.txt"
+        container = Container(
+            image="ubuntu",
+            command="sleep infinity",
+            resources=ContainerResources(cpu=0.1, memory_mb=16),
+            http_server=ContainerHTTPServer(port=80),
+            secret_volumes=[
+                SecretContainerVolume(secret=secret, dst_path=secret_path / secret_file)
+            ],
+        )
+        job = MyJob(
+            orchestrator=kube_orchestrator,
+            record=JobRecord.create(
+                request=JobRequest.create(container),
+                cluster_name=cluster_name,
+                owner=user_name,
+            ),
+        )
+        await delete_job_later(job)
+        await job.start()
+
+        pod_name = job.id
+        await kube_client.wait_pod_is_running(pod_name=pod_name, timeout_s=60.0)
+
+        raw = await kube_client.get_raw_pod(pod_name)
+
+        sec_volumes_raw = [v for v in raw["spec"]["volumes"] if v["name"] == "secret"]
+        assert sec_volumes_raw == [
+            {
+                "name": "secret",
+                "secret": {"secretName": secret.k8s_secret_name, "defaultMode": 420},
+            }
+        ]
+
+        container_raw = raw["spec"]["containers"][0]
+        assert container_raw["volumeMounts"] == [
+            {
+                "name": "secret",
+                "readOnly": True,
+                "mountPath": str(secret_path / secret_file),
+                "subPath": secret_name,
+            }
+        ]
+
+    @pytest.mark.asyncio
+    async def test_job_pod_with_secret_volumes_same_mounts_fail(
+        self,
+        kube_config: KubeConfig,
+        kube_orchestrator: KubeOrchestrator,
+        kube_client: MyKubeClient,
+        delete_job_later: Callable[[Job], Awaitable[None]],
+        cluster_name: str,
+    ) -> None:
+        user_name = self._create_username()
+        ns = kube_config.namespace
+
+        sec_name_1, sec_name_2 = "key1", "key2"
+        sec1 = Secret(sec_name_1, user_name, cluster_name)
+        sec2 = Secret(sec_name_2, user_name, cluster_name)
+        assert sec1.k8s_secret_name == sec2.k8s_secret_name
+        k8s_sec_name = sec1.k8s_secret_name
+
+        await kube_client.update_or_create_secret(
+            k8s_sec_name, ns, data={sec_name_1: "vvvv", sec_name_2: "vvvv"},
+        )
+
+        sec_path, sec_file = PurePath("/foo/bar"), "secret.txt"
+
+        container = Container(
+            image="ubuntu",
+            command="sleep infinity",
+            resources=ContainerResources(cpu=0.1, memory_mb=16),
+            http_server=ContainerHTTPServer(port=80),
+            secret_volumes=[
+                SecretContainerVolume(secret=sec1, dst_path=sec_path / sec_file),
+                SecretContainerVolume(secret=sec2, dst_path=sec_path / sec_file),
+            ],
+        )
+        job = MyJob(
+            orchestrator=kube_orchestrator,
+            record=JobRecord.create(
+                request=JobRequest.create(container),
+                cluster_name=cluster_name,
+                owner=user_name,
+            ),
+        )
+        with pytest.raises(JobError):
+            await job.start()
+
+    @pytest.mark.asyncio
+    async def test_job_pod_with_secret_volumes_overlapping_mounts_ok(
+        self,
+        kube_config: KubeConfig,
+        kube_orchestrator: KubeOrchestrator,
+        kube_client: MyKubeClient,
+        delete_job_later: Callable[[Job], Awaitable[None]],
+        cluster_name: str,
+    ) -> None:
+        user_name = self._create_username()
+        ns = kube_config.namespace
+
+        secret_a = Secret("aaa", user_name, cluster_name)
+        secret_b1 = Secret("bbb-1", user_name, cluster_name)
+        secret_b2 = Secret("bbb-2", user_name, cluster_name)
+        secret_bc = Secret("bbb-ccc", user_name, cluster_name)
+
+        k8s_sec_name = secret_a.k8s_secret_name
+        assert all(
+            s.k8s_secret_name == k8s_sec_name
+            for s in [secret_a, secret_b1, secret_b2, secret_bc]
+        )
+
+        await kube_client.update_or_create_secret(
+            k8s_sec_name,
+            ns,
+            data={
+                secret_a.secret_key: "vvvv",
+                secret_b1.secret_key: "vvvv",
+                secret_b2.secret_key: "vvvv",
+                secret_bc.secret_key: "vvvv",
+            },
+        )
+
+        path_a = PurePath("/aaa")
+        path_b = PurePath("/bbb")
+        path_bc = PurePath("/bbb/ccc")
+
+        file_a = "secret1.txt"
+        file_b1 = "secret2.txt"
+        file_b2 = "secret3.txt"
+        file_bc = "secret4.txt"
+
+        container = Container(
+            image="ubuntu",
+            command="sleep infinity",
+            resources=ContainerResources(cpu=0.1, memory_mb=16),
+            http_server=ContainerHTTPServer(port=80),
+            secret_volumes=[
+                SecretContainerVolume(secret_a, dst_path=path_a / file_a),
+                SecretContainerVolume(secret_b1, dst_path=path_b / file_b1),
+                SecretContainerVolume(secret_b2, dst_path=path_b / file_b2),
+                SecretContainerVolume(secret_bc, dst_path=path_bc / file_bc),
+            ],
+        )
+        job = MyJob(
+            orchestrator=kube_orchestrator,
+            record=JobRecord.create(
+                request=JobRequest.create(container),
+                cluster_name=cluster_name,
+                owner=user_name,
+            ),
+        )
+        await delete_job_later(job)
+        await job.start()
+
+        pod_name = job.id
+        await kube_client.wait_pod_is_running(pod_name=pod_name, timeout_s=60.0)
+
+        raw = await kube_client.get_raw_pod(pod_name)
+        sec_volumes_raw = [v for v in raw["spec"]["volumes"] if v["name"] == "secret"]
+        assert sec_volumes_raw == [
+            {
+                "name": "secret",
+                "secret": {"secretName": k8s_sec_name, "defaultMode": 420},
+            },
+        ]
+
+        container_raw = raw["spec"]["containers"][0]
+        assert container_raw["volumeMounts"] == [
+            {
+                "name": "secret",
+                "readOnly": True,
+                "mountPath": str(path_a / file_a),
+                "subPath": secret_a.secret_key,
+            },
+            {
+                "name": "secret",
+                "readOnly": True,
+                "mountPath": str(path_b / file_b1),
+                "subPath": secret_b1.secret_key,
+            },
+            {
+                "name": "secret",
+                "readOnly": True,
+                "mountPath": str(path_b / file_b2),
+                "subPath": secret_b2.secret_key,
+            },
+            {
+                "name": "secret",
+                "readOnly": True,
+                "mountPath": str(path_bc / file_bc),
+                "subPath": secret_bc.secret_key,
+            },
+        ]
+
     @pytest.mark.asyncio
     async def test_delete_all_job_resources(
         self,
@@ -1643,6 +2000,28 @@ class TestKubeClient:
 
         await kube_client.update_docker_secret(docker_secret, create_non_existent=True)
         await kube_client.update_docker_secret(docker_secret)
+
+    @pytest.mark.asyncio
+    async def test_get_raw_secret(
+        self, kube_config: KubeConfig, kube_client: KubeClient
+    ) -> None:
+        name = str(uuid.uuid4())
+        docker_secret = DockerRegistrySecret(
+            name=name,
+            namespace=kube_config.namespace,
+            username="testuser",
+            password="testpassword",
+            email="testuser@example.com",
+            registry_server="registry.example.com",
+        )
+        with pytest.raises(StatusException, match="NotFound"):
+            await kube_client.get_raw_secret(name, kube_config.namespace)
+
+        await kube_client.update_docker_secret(docker_secret, create_non_existent=True)
+        raw = await kube_client.get_raw_secret(name, kube_config.namespace)
+        assert raw["metadata"]["name"] == name
+        assert raw["metadata"]["namespace"] == kube_config.namespace
+        assert raw["data"] == docker_secret.to_primitive()["data"]
 
     @pytest.fixture
     async def delete_network_policy_later(

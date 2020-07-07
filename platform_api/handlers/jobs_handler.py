@@ -41,7 +41,7 @@ from platform_api.orchestrator.job_request import (
     JobError,
     JobRequest,
     JobStatus,
-    SecretVolume,
+    SecretContainerVolume,
 )
 from platform_api.orchestrator.jobs_service import JobsService
 from platform_api.orchestrator.jobs_storage import (
@@ -74,6 +74,7 @@ def create_job_request_validator(
     allowed_gpu_models: Sequence[str],
     allowed_tpu_resources: Sequence[TPUResource],
     cluster_name: str,
+    user_name: Optional[str] = None,
     storage_scheme: str = "storage",
 ) -> t.Trafaret:
     return t.Dict(
@@ -84,6 +85,7 @@ def create_job_request_validator(
                 allowed_tpu_resources=allowed_tpu_resources,
                 storage_scheme=storage_scheme,
                 cluster_name=cluster_name,
+                user_name=user_name,
             ),
             t.Key("name", optional=True): create_job_name_validator(),
             t.Key("description", optional=True): t.String,
@@ -195,10 +197,10 @@ def convert_job_container_to_json(
         if "secret_volumes" not in ret:
             ret["secret_volumes"] = []
         ret["secret_volumes"].append(convert_secret_volume_to_json(sec_volume))
-    for env_name, sec_env_uri in container.secret_env.items():
+    for env_name, sec_env in container.secret_env.items():
         if "secret_env" not in ret:
             ret["secret_env"] = {}
-        ret["secret_env"][env_name] = str(sec_env_uri)
+        ret["secret_env"][env_name] = str(sec_env.to_uri())
 
     if container.tty:
         ret["tty"] = True
@@ -225,9 +227,9 @@ def convert_container_volume_to_json(
     }
 
 
-def convert_secret_volume_to_json(volume: SecretVolume) -> Dict[str, Any]:
+def convert_secret_volume_to_json(volume: SecretContainerVolume) -> Dict[str, Any]:
     return {
-        "src_secret_uri": str(volume.uri),
+        "src_secret_uri": str(volume.to_uri()),
         "dst_path": str(volume.dst_path),
     }
 
@@ -352,7 +354,7 @@ class JobsHandler:
             )
 
     async def _create_job_request_validator(
-        self, cluster_config: ClusterConfig
+        self, cluster_config: ClusterConfig, user_name: str
     ) -> t.Trafaret:
         # TODO: rework `gpu_models` to be retrieved from `cluster_config`
         gpu_models = await self._jobs_service.get_available_gpu_models(
@@ -362,6 +364,7 @@ class JobsHandler:
             allowed_gpu_models=gpu_models,
             allowed_tpu_resources=cluster_config.orchestrator.tpu_resources,
             cluster_name=cluster_config.name,
+            user_name=user_name,
             storage_scheme=cluster_config.storage.uri_scheme,
         )
 
@@ -398,7 +401,9 @@ class JobsHandler:
         self._check_user_can_submit_jobs(cluster_configs)
         cluster_name = request_payload["cluster_name"]
         cluster_config = self._get_cluster_config(cluster_configs, cluster_name)
-        job_request_validator = await self._create_job_request_validator(cluster_config)
+        job_request_validator = await self._create_job_request_validator(
+            cluster_config, user.name
+        )
         request_payload = job_request_validator.check(request_payload)
 
         container = create_container_from_payload(

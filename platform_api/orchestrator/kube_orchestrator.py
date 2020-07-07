@@ -35,7 +35,9 @@ from .kube_client import (
     PodRestartPolicy,
     PodStatus,
     PVCVolume,
+    SecretVolume,
     Service,
+    StatusException,
     Toleration,
     Volume,
 )
@@ -184,6 +186,15 @@ class KubeOrchestrator(Orchestrator):
             path=self._storage_config.host_mount_path,
         )
 
+    def create_secret_volume(self, user_name: str) -> SecretVolume:
+        return SecretVolume(
+            name=self._kube_config.secret_volume_name,
+            k8s_secret_name=self._get_k8s_secret_name(user_name),
+        )
+
+    def _get_k8s_secret_name(self, user_name: str) -> str:
+        return f"user--{user_name}--secrets"
+
     def _get_user_resource_name(self, job: Job) -> str:
         return (self._docker_secret_name_prefix + job.owner).lower()
 
@@ -246,17 +257,18 @@ class KubeOrchestrator(Orchestrator):
             logger.warning(f"Failed to remove network policy {name}: {e}")
 
     async def _create_pod_descriptor(self, job: Job) -> PodDescriptor:
-        secret_names = [self._get_docker_secret_name(job)]
         node_selector = await self._get_pod_node_selector(job)
         tolerations = self._get_pod_tolerations(job)
         node_affinity = self._get_pod_node_affinity(job)
         labels = self._get_pod_labels(job)
         # NOTE: both node selector and affinity must be satisfied for the pod
         # to be scheduled onto a node.
+
         return PodDescriptor.from_job_request(
             self._storage_volume,
             job.request,
-            secret_names,
+            secret_volume=self.create_secret_volume(job.owner),
+            image_pull_secret_names=[self._get_docker_secret_name(job)],
             node_selector=node_selector,
             tolerations=tolerations,
             node_affinity=node_affinity,
@@ -278,6 +290,22 @@ class KubeOrchestrator(Orchestrator):
 
     def _get_pod_restart_policy(self, job: Job) -> PodRestartPolicy:
         return self._restart_policy_map[job.restart_policy]
+
+    async def get_missing_secrets(
+        self, user_name: str, secret_names: List[str]
+    ) -> List[str]:
+        assert secret_names, "no sec names"
+        user_secret_name = self._get_k8s_secret_name(user_name)
+        try:
+            raw = await self._client.get_raw_secret(
+                user_secret_name, self._kube_config.namespace
+            )
+            keys = raw.get("data", {}).keys()
+            missing = set(secret_names) - set(keys)
+            return sorted(missing)
+
+        except StatusException:
+            return secret_names
 
     async def prepare_job(self, job: Job) -> None:
         # TODO (A Yushkovskiy 31.10.2018): get namespace for the pod, not statically

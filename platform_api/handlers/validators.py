@@ -74,7 +74,10 @@ def _check_dots_in_path(path: Union[str, PurePath]) -> None:
 
 
 def create_path_uri_validator(
-    storage_scheme: str, cluster_name: str = "", check_cluster: bool = True
+    storage_scheme: str,
+    cluster_name: str = "",
+    check_cluster: bool = True,
+    assert_username: Optional[str] = None,
 ) -> t.Trafaret:
     assert storage_scheme
     if check_cluster:
@@ -83,13 +86,28 @@ def create_path_uri_validator(
     def _validate(uri_str: str) -> str:
         uri = urlsplit(uri_str)
         if uri.scheme != storage_scheme:
+            # validate `scheme` in `scheme://cluster/username/path/to`
             raise t.DataError(
                 f"Invalid URI scheme: '{uri.scheme}' != '{storage_scheme}'"
             )
         if check_cluster and uri.netloc != cluster_name:
+            # validate `cluster` in `scheme://cluster/username/path/to`
             raise t.DataError(
                 f"Invalid URI cluster: '{uri.netloc}' != '{cluster_name}'"
             )
+
+        if assert_username is not None:
+            # validate `username` in `scheme://cluster/username/path/to`
+            parts = PurePath(uri.path).parts
+            if len(parts) < 3:
+                raise t.DataError("Invalid URI path: Not enough path items")
+            assert parts[0] == "/", (uri, parts)
+            usr = parts[1]
+            if usr != assert_username:
+                raise t.DataError(
+                    f"Invalid URI: Invalid user in path: '{usr}' != '{assert_username}'"
+                )
+
         _check_dots_in_path(uri.path)
         return uri_str
 
@@ -129,12 +147,14 @@ def create_volumes_validator(
     storage_scheme: str = "storage",
     cluster_name: str = "",
     check_cluster: bool = True,
+    assert_username: Optional[str] = None,
 ) -> t.Trafaret:
     template_dict = {
         uri_key: create_path_uri_validator(
             storage_scheme=storage_scheme,
             cluster_name=cluster_name,
             check_cluster=check_cluster,
+            assert_username=assert_username,
         ),
         "dst_path": create_mount_path_validator(),
     }
@@ -223,6 +243,7 @@ def create_container_validator(
     storage_scheme: str = "storage",
     cluster_name: str = "",
     check_cluster: bool = True,
+    user_name: Optional[str] = None,
 ) -> t.Trafaret:
     """Create a validator for primitive container objects.
 
@@ -263,6 +284,7 @@ def create_container_validator(
                     storage_scheme="secret",
                     cluster_name=cluster_name,
                     check_cluster=check_cluster,
+                    assert_username=user_name,
                 ),
             ),
             t.Key("secret_volumes", optional=True): create_volumes_validator(
@@ -271,6 +293,7 @@ def create_container_validator(
                 storage_scheme="secret",
                 cluster_name=cluster_name,
                 check_cluster=check_cluster,
+                assert_username=user_name,
             ),
         }
     )
@@ -299,6 +322,7 @@ def create_container_request_validator(
     allowed_tpu_resources: Sequence[TPUResource] = (),
     storage_scheme: str = "storage",
     cluster_name: str = "",
+    user_name: Optional[str] = None,
 ) -> t.Trafaret:
     return create_container_validator(
         allow_volumes=allow_volumes,
@@ -308,6 +332,7 @@ def create_container_request_validator(
         storage_scheme=storage_scheme,
         cluster_name=cluster_name,
         check_cluster=True,
+        user_name=user_name,
     )
 
 

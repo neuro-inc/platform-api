@@ -3,7 +3,7 @@ import shlex
 import uuid
 from dataclasses import asdict, dataclass, field
 from pathlib import PurePath
-from typing import Any, Dict, List, Optional, Sequence
+from typing import Any, Dict, List, Optional, Sequence, Union
 from urllib.parse import urlsplit
 
 from yarl import URL
@@ -58,25 +58,52 @@ class ContainerVolume:
 
 
 @dataclass(frozen=True)
-class SecretVolume(ContainerVolume):
-    @staticmethod
-    def create(uri: str, *args: Any, **kwargs: Any) -> "SecretVolume":
-        assert not args
-        dst_path = kwargs.pop("dst_path")
-        assert not kwargs
-        return SecretVolume(
-            URL(uri), dst_path=dst_path, src_path=PurePath(""), read_only=True,
-        )
+class Secret:
+    secret_key: str  # `sec` in `secret://cluster/user/sec`
+    user_name: str  # `user` in `secret://cluster/user/sec`
+    cluster_name: str  # `cluster` in `secret://cluster/user/sec`
+
+    @property
+    def k8s_secret_name(self) -> str:
+        return f"user--{self.user_name}--secrets"
+
+    def to_uri(self) -> URL:
+        return URL(f"secret://{self.cluster_name}/{self.user_name}/{self.secret_key}")
 
     @classmethod
-    def from_primitive(cls, payload: Dict[str, Any]) -> "SecretVolume":
+    def create(cls, secret_uri: Union[str, URL]) -> "Secret":
+        # Note: format of `secret_uri` is enforced by validators
+        uri = URL(secret_uri)
+        cluster_name = uri.host
+        assert cluster_name, uri  # for lint
+        parts = PurePath(uri.path).parts
+        user_name, secret_key = parts[1], parts[2]
+        return cls(
+            secret_key=secret_key, cluster_name=cluster_name, user_name=user_name
+        )
+
+
+@dataclass(frozen=True)
+class SecretContainerVolume:
+    secret: Secret
+    dst_path: PurePath
+
+    def to_uri(self) -> URL:
+        return self.secret.to_uri()
+
+    @classmethod
+    def create(cls, uri: str, dst_path: PurePath) -> "SecretContainerVolume":
+        return cls(secret=Secret.create(uri), dst_path=dst_path)
+
+    @classmethod
+    def from_primitive(cls, payload: Dict[str, Any]) -> "SecretContainerVolume":
         return cls.create(
-            payload["src_secret_uri"], dst_path=PurePath(payload["dst_path"]),
+            uri=payload["src_secret_uri"], dst_path=PurePath(payload["dst_path"]),
         )
 
     def to_primitive(self) -> Dict[str, Any]:
         return {
-            "src_secret_uri": str(self.uri),
+            "src_secret_uri": str(self.to_uri()),
             "dst_path": str(self.dst_path),
         }
 
@@ -207,8 +234,8 @@ class Container:
     command: Optional[str] = None
     env: Dict[str, str] = field(default_factory=dict)
     volumes: List[ContainerVolume] = field(default_factory=list)
-    secret_env: Dict[str, URL] = field(default_factory=dict)
-    secret_volumes: List[SecretVolume] = field(default_factory=list)
+    secret_env: Dict[str, Secret] = field(default_factory=dict)
+    secret_volumes: List[SecretContainerVolume] = field(default_factory=list)
     http_server: Optional[ContainerHTTPServer] = None
     ssh_server: Optional[ContainerSSHServer] = None
     tty: bool = False
@@ -226,8 +253,8 @@ class Container:
         return URL(f"image://{cluster_name}/{path}")
 
     def get_secret_uris(self) -> Sequence[URL]:
-        env_uris = list(self.secret_env.values())
-        vol_uris = [vol.uri for vol in self.secret_volumes]
+        env_uris = [sec.to_uri() for sec in self.secret_env.values()]
+        vol_uris = [vol.to_uri() for vol in self.secret_volumes]
         return list(set(env_uris + vol_uris))
 
     @property
@@ -282,11 +309,12 @@ class Container:
             ContainerVolume.from_primitive(item) for item in kwargs["volumes"]
         ]
         kwargs["secret_volumes"] = [
-            SecretVolume.from_primitive(item)
+            SecretContainerVolume.from_primitive(item)
             for item in kwargs.get("secret_volumes", [])
         ]
         kwargs["secret_env"] = {
-            k: URL(v) for k, v in kwargs.get("secret_env", {}).items()
+            key: Secret.create(value)
+            for key, value in kwargs.get("secret_env", {}).items()
         }
 
         if kwargs.get("http_server"):
@@ -321,11 +349,11 @@ class Container:
         else:
             payload.pop("secret_volumes")
 
-        secret_env = {k: str(v) for k, v in payload.get("secret_env", {}).items()}
-        if secret_env:
-            payload["secret_env"] = secret_env
-        else:
-            payload.pop("secret_env", None)
+        payload.pop("secret_env", None)
+        if self.secret_env:
+            payload["secret_env"] = {
+                name: str(sec.to_uri()) for name, sec in self.secret_env.items()
+            }
 
         if self.http_server:
             payload["http_server"] = self.http_server.to_primitive()

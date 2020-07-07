@@ -3,6 +3,7 @@ tests/logs
 tests/sandbox
 platform-api
 coverage.txt
+.coverage-*
 tests/.docker/config.json
 
 # Byte-compiled / optimized / DLL files

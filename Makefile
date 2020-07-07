@@ -1,4 +1,7 @@
 IMAGE_NAME ?= platformapi
+DOCKER_REPO ?= neuro-docker-local-public.jfrog.io
+ARTIFACTORY_TAG ?=$(shell echo "$(CIRCLE_TAG)" | awk -F/ '{print $$2}')
+IMAGE_TAG ?= latest
 
 IMAGE_K8S ?= $(GKE_DOCKER_REGISTRY)/$(GKE_PROJECT_ID)/$(IMAGE_NAME)
 IMAGE_K8S_AWS ?= $(AWS_ACCOUNT_ID).dkr.ecr.$(AWS_REGION).amazonaws.com/$(IMAGE_NAME)
@@ -14,8 +17,14 @@ INGRESS_FALLBACK_IMAGE_K8S_AWS ?= $(AWS_ACCOUNT_ID).dkr.ecr.$(AWS_REGION).amazon
 
 PLATFORMAUTHAPI_IMAGE = $(shell cat PLATFORMAUTHAPI_IMAGE)
 PLATFORMCONFIG_IMAGE = $(shell cat PLATFORMCONFIG_IMAGE)
+PLATFORMSECRETS_IMAGE = $(shell cat PLATFORMSECRETS_IMAGE)
 
-export PIP_EXTRA_INDEX_URL ?= $(shell python pip_extra_index_url.py)
+ifdef CIRCLECI
+    PIP_EXTRA_INDEX_URL ?= https://$(DEVPI_USER):$(DEVPI_PASS)@$(DEVPI_HOST)/$(DEVPI_USER)/$(DEVPI_INDEX)
+else
+    PIP_EXTRA_INDEX_URL ?= $(shell python pip_extra_index_url.py)
+endif
+export PIP_EXTRA_INDEX_URL
 
 include k8s.mk
 
@@ -82,11 +91,18 @@ gke_login:
 eks_login:
 	aws eks --region $(AWS_REGION) update-kubeconfig --name $(AWS_CLUSTER_NAME)
 
-docker_pull_test_images:
+docker_login:
+	@docker login $(DOCKER_REPO) \
+		--username=$(ARTIFACTORY_USERNAME) \
+		--password=$(ARTIFACTORY_PASSWORD)
+
+docker_pull_test_images: artifactory_docker_login
 	docker pull $(PLATFORMAUTHAPI_IMAGE)
 	docker pull $(PLATFORMCONFIG_IMAGE)
+	docker pull $(PLATFORMSECRETS_IMAGE)
 	docker tag $(PLATFORMAUTHAPI_IMAGE) platformauthapi:latest
 	docker tag $(PLATFORMCONFIG_IMAGE) platformconfig:latest
+	docker tag $(PLATFORMSECRETS_IMAGE) platformsecrets:latest
 
 helm_install:
 	curl https://raw.githubusercontent.com/kubernetes/helm/master/scripts/get | bash -s -- -v v2.11.0
@@ -129,9 +145,11 @@ helm_deploy_ssh_auth:
 		--set "IMAGE=$(SSH_K8S_AWS):$(IMAGE_TAG)" \
 		upgrade --install ssh-auth deploy/ssh_auth/ --wait --timeout 600 --namespace platform
 
-artifactory_ssh_auth_docker_push: docker_build_ssh_auth
-	docker tag $(SSH_IMAGE_NAME):latest $(ARTIFACTORY_DOCKER_REPO)/$(SSH_IMAGE_NAME):$(ARTIFACTORY_TAG)
+artifactory_docker_login:
 	docker login $(ARTIFACTORY_DOCKER_REPO) --username=$(ARTIFACTORY_USERNAME) --password=$(ARTIFACTORY_PASSWORD)
+
+artifactory_ssh_auth_docker_push: docker_build_ssh_auth artifactory_docker_login
+	docker tag $(SSH_IMAGE_NAME):latest $(ARTIFACTORY_DOCKER_REPO)/$(SSH_IMAGE_NAME):$(ARTIFACTORY_TAG)
 	docker push $(ARTIFACTORY_DOCKER_REPO)/$(SSH_IMAGE_NAME):$(ARTIFACTORY_TAG)
 
 artifactory_ssh_auth_helm_push: _helm
@@ -144,4 +162,3 @@ artifactory_ssh_auth_helm_push: _helm
 	helm package --app-version=$(ARTIFACTORY_TAG) --version=$(ARTIFACTORY_TAG) temp_deploy/$(SSH_IMAGE_NAME)/
 	helm plugin install https://github.com/belitre/helm-push-artifactory-plugin
 	helm push-artifactory $(SSH_IMAGE_NAME)-$(ARTIFACTORY_TAG).tgz $(ARTIFACTORY_HELM_REPO) --username $(ARTIFACTORY_USERNAME) --password $(ARTIFACTORY_PASSWORD)
-

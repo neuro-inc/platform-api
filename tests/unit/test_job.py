@@ -30,6 +30,8 @@ from platform_api.orchestrator.job_request import (
     JobError,
     JobRequest,
     JobStatus,
+    Secret,
+    SecretContainerVolume,
 )
 from platform_api.user import User
 
@@ -196,6 +198,47 @@ class TestContainerVolumeFactory:
         assert volume.src_path == PurePath("/host/path/to/dir")
         assert volume.dst_path == PurePath("/container/path/to/dir")
         assert volume.read_only
+
+
+class TestSecret:
+    def test_create(self) -> None:
+        uri = "secret://test-cluster/test-user/test-secret"
+        sec = Secret.create(uri)
+        assert sec.cluster_name == "test-cluster"
+        assert sec.user_name == "test-user"
+        assert sec.secret_key == "test-secret"
+
+    def test_create_uri_eq_str(self) -> None:
+        uri = "secret://test-cluster/test-user/test-secret"
+        assert Secret.create(URL(uri)) == Secret.create(uri)
+
+    def test_k8s_secret_name(self) -> None:
+        uri = "secret://test-cluster/test-user/test-secret"
+        sec = Secret.create(uri)
+        assert sec.k8s_secret_name == "user--test-user--secrets"
+
+    def test_to_uri(self) -> None:
+        uri = "secret://test-cluster/test-user/test-secret"
+        sec = Secret.create(uri)
+        assert sec.to_uri() == URL(uri)
+
+
+class TestSecretContainerVolume:
+    def test_create(self) -> None:
+        uri = "secret://test-cluster/test-user/test-secret"
+        volume = SecretContainerVolume.create(uri, dst_path=PurePath("/container"))
+        assert volume.secret.cluster_name == "test-cluster"
+        assert volume.secret.user_name == "test-user"
+        assert volume.secret.secret_key == "test-secret"
+        assert volume.dst_path == PurePath("/container")
+
+    def test_to_and_from_primitive(self) -> None:
+        primitive = {
+            "src_secret_uri": "secret://test-cluster/test-user/test-secret",
+            "dst_path": "/container",
+        }
+        volume = SecretContainerVolume.from_primitive(primitive)
+        assert volume.to_primitive() == primitive
 
     def test_create_without_extending_dst_mount_path(self) -> None:
         uri = "storage://test-cluster/path/to/dir"
