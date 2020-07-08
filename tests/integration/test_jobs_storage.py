@@ -441,21 +441,20 @@ class TestRedisJobsStorage:
 
     @pytest.mark.asyncio
     async def test_get_all_filter_by_tags(self, redis_client: aioredis.Redis) -> None:
-        tags1 = ["t1"]
-        tags2 = ["t1", "t2"]
-        tags3 = ["t3"]
-        job1 = self._create_job(tags=tags1)
-        job2 = self._create_job(tags=tags2)
-        job3 = self._create_job(tags=tags3)
+        job1 = self._create_job(tags=["t1"])
+        job2 = self._create_job(tags=["t1", "t2"])
+        job3 = self._create_job(tags=["t2"])
+        job4 = self._create_job(tags=["t3"])
 
         storage = RedisJobsStorage(client=redis_client)
         await storage.set_job(job1)
         await storage.set_job(job2)
         await storage.set_job(job3)
+        await storage.set_job(job4)
 
         jobs = await storage.get_all_jobs()
         job_ids = [job.id for job in jobs]
-        assert job_ids == [job1.id, job2.id, job3.id]
+        assert job_ids == [job1.id, job2.id, job3.id, job4.id]
 
         filters = JobFilter(tags={"t1"})
         jobs = await storage.get_all_jobs(filters)
@@ -467,10 +466,18 @@ class TestRedisJobsStorage:
         job_ids = [job.id for job in jobs]
         assert job_ids == [job2.id]
 
+        jobs = await storage.get_all_jobs(filters, limit=1)
+        job_ids = [job.id for job in jobs]
+        assert job_ids == [job2.id]
+
+        jobs = await storage.get_all_jobs(filters, limit=1, reverse=True)
+        job_ids = [job.id for job in jobs]
+        assert job_ids == [job2.id]
+
         filters = JobFilter(tags={"t3"})
         jobs = await storage.get_all_jobs(filters)
         job_ids = [job.id for job in jobs]
-        assert job_ids == [job3.id]
+        assert job_ids == [job4.id]
 
         filters = JobFilter(tags={"t1", "t2", "t3"})
         jobs = await storage.get_all_jobs(filters)

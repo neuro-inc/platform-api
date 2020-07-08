@@ -601,7 +601,9 @@ class RedisJobsStorage(JobsStorage):
             names=[name or ""],
         )
 
-        offset = None if limit is None else 0
+        ntags = len(tags)
+        count = None if ntags > 1 else limit
+        offset = None if count is None else 0
         if len(keys) == 1:
             if reverse:
                 result = await self._client.zrevrangebyscore(
@@ -609,7 +611,7 @@ class RedisJobsStorage(JobsStorage):
                     until.timestamp(),
                     since.timestamp(),
                     offset=offset,
-                    count=limit,
+                    count=count,
                 )
             else:
                 result = await self._client.zrangebyscore(
@@ -617,7 +619,7 @@ class RedisJobsStorage(JobsStorage):
                     since.timestamp(),
                     until.timestamp(),
                     offset=offset,
-                    count=limit,
+                    count=count,
                 )
             return result
 
@@ -630,7 +632,7 @@ class RedisJobsStorage(JobsStorage):
                     since.timestamp(),
                     withscores=True,
                     offset=offset,
-                    count=limit,
+                    count=count,
                 )
             else:
                 tr.zrangebyscore(
@@ -639,12 +641,11 @@ class RedisJobsStorage(JobsStorage):
                     until.timestamp(),
                     withscores=True,
                     offset=offset,
-                    count=limit,
+                    count=count,
                 )
         results = await tr.execute()
         it = heapq.merge(*results, key=itemgetter(1), reverse=reverse)
         # Merge repeated job ids for multiple tags
-        ntags = len(tags)
         if ntags > 1:
 
             def merge_tags(
