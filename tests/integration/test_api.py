@@ -219,6 +219,7 @@ class TestApi:
                 "storage_url": "https://neu.ro/api/v1/storage",
                 "users_url": "https://neu.ro/api/v1/users",
                 "monitoring_url": "https://neu.ro/api/v1/monitoring",
+                "secrets_url": "https://neu.ro/api/v1/secrets",
                 "resource_presets": [
                     {
                         "name": "gpu-small",
@@ -284,6 +285,7 @@ class TestApi:
                 "storage_url": "https://neu.ro/api/v1/storage",
                 "users_url": "https://neu.ro/api/v1/users",
                 "monitoring_url": "https://neu.ro/api/v1/monitoring",
+                "secrets_url": "https://neu.ro/api/v1/secrets",
                 "resource_presets": [
                     {
                         "name": "gpu-small",
