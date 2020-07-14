@@ -155,6 +155,7 @@ class OrchestratorConfig:
 class IngressConfig:
     storage_url: URL
     monitoring_url: URL
+    secrets_url: URL
 
 
 @dataclass(frozen=True)

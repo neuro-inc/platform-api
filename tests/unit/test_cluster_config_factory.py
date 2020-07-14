@@ -164,6 +164,7 @@ def clusters_payload(nfs_storage_payload: Dict[str, Any]) -> List[Dict[str, Any]
             },
             "ssh": {"server": "ssh-auth-dev.neu.ro:12321"},
             "monitoring": {"url": "https://dev.neu.ro/api/v1/jobs"},
+            "secrets": {"url": "https://dev.neu.ro/api/v1/secrets"},
             **nfs_storage_payload,
         }
     ]
@@ -196,6 +197,7 @@ class TestClusterConfigFactory:
         orchestrator_payload = clusters_payload[0]["orchestrator"]
         kube_payload = orchestrator_payload["kubernetes"]
         monitoring_payload = clusters_payload[0]["monitoring"]
+        secrets_payload = clusters_payload[0]["secrets"]
         ssh_payload = clusters_payload[0]["ssh"]
 
         factory = ClusterConfigFactory()
@@ -216,6 +218,7 @@ class TestClusterConfigFactory:
         ingress = cluster.ingress
         assert ingress.storage_url == URL(storage_payload["url"])
         assert ingress.monitoring_url == URL(monitoring_payload["url"])
+        assert ingress.secrets_url == URL(secrets_payload["url"])
 
         registry = cluster.registry
         assert registry.url == URL(registry_payload["url"])

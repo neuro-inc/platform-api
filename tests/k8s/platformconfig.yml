@@ -44,6 +44,10 @@ data:
 
             "monitoring": {
                 "url": "http://platformapi/api/v1/jobs"
+            },
+
+            "secrets": {
+                "url": "http://platformapi/api/v1/secrets"
             }
         }
     ]

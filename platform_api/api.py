@@ -132,6 +132,7 @@ class ApiHandler:
             "storage_url": str(cluster_config.ingress.storage_url),
             "users_url": str(self._config.auth.public_endpoint_url),
             "monitoring_url": str(cluster_config.ingress.monitoring_url),
+            "secrets_url": str(cluster_config.ingress.secrets_url),
             "resource_presets": presets,
         }
 

@@ -208,7 +208,9 @@ def cluster_config(registry_config: RegistryConfig) -> ClusterConfig:
         storage=storage_config,
         registry=registry_config,
         orchestrator=orchestrator_config,
-        ingress=IngressConfig(storage_url=URL(), monitoring_url=URL()),
+        ingress=IngressConfig(
+            storage_url=URL(), monitoring_url=URL(), secrets_url=URL()
+        ),
     )
 
 
