@@ -1,11 +1,11 @@
 IMAGE_NAME ?= platformapi
 DOCKER_REPO ?= neuro-docker-local-public.jfrog.io
 ARTIFACTORY_TAG ?=$(shell echo "$(CIRCLE_TAG)" | awk -F/ '{print $$2}')
+IMAGE_TAG ?= $(GITHUB_SHA)
 IMAGE_TAG ?= latest
 
 IMAGE_K8S ?= $(GKE_DOCKER_REGISTRY)/$(GKE_PROJECT_ID)/$(IMAGE_NAME)
 IMAGE_K8S_AWS ?= $(AWS_ACCOUNT_ID).dkr.ecr.$(AWS_REGION).amazonaws.com/$(IMAGE_NAME)
-IMAGE_TAG ?= $(GITHUB_SHA)
 
 SSH_IMAGE_NAME ?= ssh-auth
 SSH_K8S ?= $(GKE_DOCKER_REGISTRY)/$(GKE_PROJECT_ID)/$(SSH_IMAGE_NAME)
@@ -19,12 +19,7 @@ PLATFORMAUTHAPI_IMAGE = $(shell cat PLATFORMAUTHAPI_IMAGE)
 PLATFORMCONFIG_IMAGE = $(shell cat PLATFORMCONFIG_IMAGE)
 PLATFORMSECRETS_IMAGE = $(shell cat PLATFORMSECRETS_IMAGE)
 
-ifdef CIRCLECI
-    PIP_EXTRA_INDEX_URL ?= https://$(DEVPI_USER):$(DEVPI_PASS)@$(DEVPI_HOST)/$(DEVPI_USER)/$(DEVPI_INDEX)
-else
-    PIP_EXTRA_INDEX_URL ?= $(shell python pip_extra_index_url.py)
-endif
-export PIP_EXTRA_INDEX_URL
+export PIP_EXTRA_INDEX_URL ?= $(shell python pip_extra_index_url.py)
 
 include k8s.mk
 
