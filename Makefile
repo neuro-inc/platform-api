@@ -19,12 +19,7 @@ PLATFORMAUTHAPI_IMAGE = $(shell cat PLATFORMAUTHAPI_IMAGE)
 PLATFORMCONFIG_IMAGE = $(shell cat PLATFORMCONFIG_IMAGE)
 PLATFORMSECRETS_IMAGE = $(shell cat PLATFORMSECRETS_IMAGE)
 
-ifdef CIRCLECI
-    PIP_EXTRA_INDEX_URL ?= https://$(DEVPI_USER):$(DEVPI_PASS)@$(DEVPI_HOST)/$(DEVPI_USER)/$(DEVPI_INDEX)
-else
-    PIP_EXTRA_INDEX_URL ?= $(shell python pip_extra_index_url.py)
-endif
-export PIP_EXTRA_INDEX_URL
+export PIP_EXTRA_INDEX_URL ?= $(shell python pip_extra_index_url.py)
 
 include k8s.mk
 
