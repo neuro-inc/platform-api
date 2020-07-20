@@ -252,7 +252,9 @@ async def create_app(
 
             logger.info("Initializing Notifications client")
             notifications_client = NotificationsClient(
-                url=config.notifications.url, token=config.notifications.token
+                url=config.notifications.url,
+                token=config.notifications.token,
+                trace_config=trace_config,
             )
             await exit_stack.enter_async_context(notifications_client)
 
