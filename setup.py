@@ -17,7 +17,7 @@ install_requires = (
     "yarl==1.3.0",
     "multidict==4.7.5",
     "aiohttp-cors==0.7.0",
-    "aiozipkin==0.6.0",
+    "aiozipkin==0.7.0",
 )
 
 setup(
