@@ -278,7 +278,7 @@ async def create_app(
                     trace_config=trace_config,
                 )
             )
-            app["config_client"] = config_client
+            app["api_v1_app"]["config_client"] = config_client
 
             if clusters:
                 client_clusters = clusters
