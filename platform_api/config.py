@@ -5,7 +5,6 @@ from typing import Optional, Sequence
 
 from yarl import URL
 
-from .config_client import ConfigClient
 from .redis import RedisConfig
 
 
@@ -91,8 +90,6 @@ class CORSConfig:
 
 @dataclass(frozen=True)
 class Config:
-    config_client: ConfigClient
-
     server: ServerConfig
 
     database: DatabaseConfig
@@ -101,6 +98,7 @@ class Config:
     notifications: NotificationsConfig
     job_policy_enforcer: JobPolicyEnforcerConfig
 
+    config_url: URL
     admin_url: URL
 
     oauth: Optional[OAuthConfig] = None

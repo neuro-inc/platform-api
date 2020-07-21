@@ -181,6 +181,7 @@ class TestEnvironConfigFactory:
         config = EnvironConfigFactory(environ=environ).create()
         cluster = EnvironConfigFactory(environ=environ).create_cluster("new-cluster")
 
+        assert config.config_url == URL("http://platformconfig:8080/api/v1")
         assert config.admin_url == URL("https://neu.ro/apis/admin/v1")
 
         assert config.server.host == "0.0.0.0"
@@ -243,8 +244,6 @@ class TestEnvironConfigFactory:
 
         assert cluster.registry.host == "registry.dev.neuromation.io"
 
-        assert config.config_client is not None
-
         assert not config.cors.allowed_origins
 
     def test_create_value_error_invalid_port(self) -> None:
@@ -256,6 +255,8 @@ class TestEnvironConfigFactory:
             "NP_AUTH_TOKEN": "token",
             "NP_API_URL": "https://neu.ro/api/v1",
             "NP_ADMIN_URL": "https://neu.ro/apis/admin/v1",
+            "NP_ADMIN_URL": "https://neu.ro/apis/admin/v1",
+            "NP_PLATFORM_CONFIG_URI": "http://platformconfig:8080/api/v1",
             "NP_JOBS_INGRESS_OAUTH_AUTHORIZE_URL": "http://neu.ro/oauth/authorize",
             "NP_AUTH_PUBLIC_URL": "https://neu.ro/api/v1/users",
             "NP_API_ZIPKIN_URL": "https://zipkin:9411",
@@ -383,8 +384,6 @@ class TestEnvironConfigFactory:
         assert cluster.registry.email == "registry@neuromation.io"
         assert cluster.registry.host == "testregistry:5000"
         assert cluster.registry.url == URL("https://testregistry:5000")
-
-        assert config.config_client is not None
 
         assert config.cors.allowed_origins == ["https://domain1.com", "http://do.main"]
 
