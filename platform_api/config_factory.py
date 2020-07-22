@@ -4,8 +4,6 @@ from typing import Any, Dict, List, Optional, Sequence
 
 from yarl import URL
 
-import platform_api
-
 from .cluster_config import (
     ClusterConfig,
     IngressConfig,
@@ -48,6 +46,7 @@ class EnvironConfigFactory:
         auth = self.create_auth()
         jobs = self.create_jobs(orphaned_job_owner=auth.service_name)
         admin_url = URL(self._environ["NP_ADMIN_URL"])
+        config_url = URL(self._environ["NP_PLATFORM_CONFIG_URI"])
         return Config(
             server=self.create_server(),
             database=self.create_database(),
@@ -57,9 +56,9 @@ class EnvironConfigFactory:
             env_prefix=env_prefix,
             jobs=jobs,
             job_policy_enforcer=self.create_job_policy_enforcer(),
-            config_client=self.create_config_client(),
             notifications=self.create_notifications(),
             cors=self.create_cors(),
+            config_url=config_url,
             admin_url=admin_url,
         )
 
@@ -287,12 +286,6 @@ class EnvironConfigFactory:
             storage_url=base_url / "storage",
             monitoring_url=base_url / "jobs",
             secrets_url=base_url / "secrets",
-        )
-
-    def create_config_client(self) -> platform_api.config_client.ConfigClient:
-        platform_config_url = URL(self._environ["NP_PLATFORM_CONFIG_URI"])
-        return platform_api.config_client.ConfigClient(
-            base_url=platform_config_url, service_token=self._environ["NP_AUTH_TOKEN"]
         )
 
     def create_notifications(self) -> NotificationsConfig:

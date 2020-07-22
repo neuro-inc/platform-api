@@ -33,7 +33,6 @@ from platform_api.config import (
     ServerConfig,
     ZipkinConfig,
 )
-from platform_api.config_client import ConfigClient
 from platform_api.orchestrator.job_request import JobNotFoundException
 from platform_api.orchestrator.kube_client import KubeClient, NodeTaint, Resources
 from platform_api.orchestrator.kube_orchestrator import KubeConfig, KubeOrchestrator
@@ -557,7 +556,7 @@ def config_factory(
             quota_notification_threshold=0.1,
         )
         database_config = DatabaseConfig(redis=redis_config)
-        config_client = ConfigClient(base_url=URL("http://localhost:8082/api/v1"))
+        config_url = URL("http://localhost:8082/api/v1")
         admin_url = URL("http://localhost:8080/apis/admin/v1")
         return Config(
             server=server_config,
@@ -566,8 +565,8 @@ def config_factory(
             jobs=jobs_config,
             job_policy_enforcer=job_policy_enforcer,
             notifications=notifications_config,
-            config_client=config_client,
             cors=CORSConfig(allowed_origins=["https://neu.ro"]),
+            config_url=config_url,
             admin_url=admin_url,
             zipkin=ZipkinConfig(URL("https://zipkin:9411"), 1.0),
             **kwargs,

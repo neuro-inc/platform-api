@@ -22,6 +22,7 @@ from platform_api.orchestrator.job_policy_enforcer import (
 
 from .cluster import Cluster, ClusterConfig, ClusterRegistry
 from .config import Config, CORSConfig
+from .config_client import ConfigClient
 from .config_factory import EnvironConfigFactory
 from .handlers import JobsHandler
 from .handlers.stats_handler import StatsHandler
@@ -58,6 +59,10 @@ class ApiHandler:
     def _jobs_service(self) -> JobsService:
         return self._app["jobs_service"]
 
+    @property
+    def _config_client(self) -> ConfigClient:
+        return self._app["config_client"]
+
     async def handle_ping(self, request: aiohttp.web.Request) -> aiohttp.web.Response:
         return aiohttp.web.Response()
 
@@ -69,10 +74,7 @@ class ApiHandler:
         logger.info("Checking whether %r has %r", user, permission)
         await check_permission(request, permission.action, [permission])
 
-        cluster_configs_future = get_cluster_configs(self._config)
-        cluster_configs = [
-            cluster_config for cluster_config in await cluster_configs_future
-        ]
+        cluster_configs = await get_cluster_configs(self._config, self._config_client)
         cluster_registry = self._jobs_service._cluster_registry
         old_record_count = len(cluster_registry)
         [
@@ -239,7 +241,7 @@ async def create_tracer(config: Config) -> aiozipkin.Tracer:
 
 
 async def create_app(
-    config: Config, cluster_configs_future: Awaitable[Sequence[ClusterConfig]]
+    config: Config, clusters: Sequence[ClusterConfig] = ()
 ) -> aiohttp.web.Application:
     app = aiohttp.web.Application(middlewares=[handle_exceptions])
     app["config"] = config
@@ -252,7 +254,9 @@ async def create_app(
 
             logger.info("Initializing Notifications client")
             notifications_client = NotificationsClient(
-                url=config.notifications.url, token=config.notifications.token
+                url=config.notifications.url,
+                token=config.notifications.token,
+                trace_config=trace_config,
             )
             await exit_stack.enter_async_context(notifications_client)
 
@@ -266,12 +270,24 @@ async def create_app(
                 ClusterRegistry(factory=create_cluster)
             )
 
+            logger.info("Initializing Config client")
+            config_client = await exit_stack.enter_async_context(
+                ConfigClient(
+                    base_url=config.config_url,
+                    service_token=config.auth.service_token,
+                    trace_config=trace_config,
+                )
+            )
+            app["api_v1_app"]["config_client"] = config_client
+
+            if clusters:
+                client_clusters = clusters
+            else:
+                client_clusters = await get_cluster_configs(config, config_client)
+
             logger.info("Loading clusters")
-            await exit_stack.enter_async_context(config.config_client)
-            [
-                await cluster_registry.replace(cluster_config)
-                for cluster_config in await cluster_configs_future
-            ]
+            for cluster in client_clusters:
+                await cluster_registry.replace(cluster)
 
             logger.info("Initializing JobsStorage")
             jobs_storage = RedisJobsStorage(redis_client)
@@ -369,8 +385,10 @@ def _setup_cors(app: aiohttp.web.Application, config: CORSConfig) -> None:
         cors.add(route)
 
 
-async def get_cluster_configs(config: Config) -> Sequence[ClusterConfig]:
-    return await config.config_client.get_clusters(
+async def get_cluster_configs(
+    config: Config, config_client: ConfigClient
+) -> Sequence[ClusterConfig]:
+    return await config_client.get_clusters(
         jobs_ingress_class=config.jobs.jobs_ingress_class,
         jobs_ingress_oauth_url=config.jobs.jobs_ingress_oauth_url,
         registry_username=config.auth.service_name,
@@ -385,5 +403,5 @@ def main() -> None:
 
     loop = asyncio.get_event_loop()
 
-    app = loop.run_until_complete(create_app(config, get_cluster_configs(config)))
+    app = loop.run_until_complete(create_app(config))
     aiohttp.web.run_app(app, host=config.server.host, port=config.server.port)
