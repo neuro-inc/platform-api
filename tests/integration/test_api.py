@@ -1038,7 +1038,10 @@ class TestJobs:
         async with client.post(url, headers=usr_1.headers, json=job_submit) as resp:
             assert resp.status == HTTPBadRequest.status_code, await resp.text()
             result = await resp.json()
-            err = f"Invalid URI: Invalid user in path: '{usr_2.name}' != '{usr_1.name}'"
+            err = (
+                fr"Invalid URI: Invalid user in path: \\\\\\\'{usr_2.name}\\\\\\\'"
+                fr" != \\\\\\\'{usr_1.name}\\\\\\\'"
+            )
             assert err in result["error"]
 
     @pytest.mark.asyncio
@@ -1074,7 +1077,10 @@ class TestJobs:
         async with client.post(url, headers=user.headers, json=job_submit) as resp:
             assert resp.status == HTTPBadRequest.status_code, await resp.text()
             msg = await resp.json()
-            err = f"Invalid URI scheme: '{wrong_scheme}' != 'secret'"
+            err = (
+                fr"Invalid URI scheme: \\\\\\\'{wrong_scheme}\\\\\\\'"
+                fr" != \\\\\\\'secret\\\\\\\'"
+            )
             assert err in msg["error"], msg
 
     @pytest.mark.asyncio
