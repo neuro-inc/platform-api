@@ -1477,6 +1477,7 @@ async def test_job_to_job_response_with_job_name_and_http_exposed_too_long_name(
         "cluster_name": "test-cluster",
         "name": job_name,
         "http_url": f"http://{job.id}.jobs",
+        "http_url_named": f"http://{job_name}--{owner_name}.jobs",
         # NOTE: field `http_url_named` is cut off when it is invalid
         "status": "pending",
         "history": {
