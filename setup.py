@@ -6,7 +6,7 @@ install_requires = (
     # WARN: aioredis does not support Redis Cluster yet
     "aioredis==1.3.1",
     "iso8601==0.1.12",
-    "trafaret==1.2.0",
+    "trafaret==2.0.2",
     "neuro_auth_client==19.11.25",
     # Circle CI fails on the latest cryptography version
     # because the server has too old OpenSSL version
