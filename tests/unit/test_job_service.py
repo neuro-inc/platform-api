@@ -216,7 +216,7 @@ class TestJobsService:
         request = job_request_factory()
 
         with pytest.raises(
-            JobsServiceException, match=f"Failed to create job: transaction failed"
+            JobsServiceException, match="Failed to create job: transaction failed"
         ):
             job, _ = await jobs_service.create_job(request, user, job_name=job_name)
             # check that the job was cleaned up:
@@ -239,7 +239,7 @@ class TestJobsService:
         request = job_request_factory()
 
         with pytest.raises(
-            JobsServiceException, match=f"Failed to create job: transaction failed"
+            JobsServiceException, match="Failed to create job: transaction failed"
         ):
             job, _ = await jobs_service.create_job(request, user, job_name=job_name)
             # check that the job failed to be cleaned up (failure ignored):

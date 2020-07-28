@@ -334,7 +334,7 @@ class RedisJobsStorage(JobsStorage):
         return f"tags.owner.{owner}"
 
     def _generate_jobs_for_deletion_index_key(self) -> str:
-        return f"jobs.for-deletion"
+        return "jobs.for-deletion"
 
     def _generate_jobs_index_key(self) -> str:
         return "jobs"
