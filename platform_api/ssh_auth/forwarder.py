@@ -30,7 +30,7 @@ def try_kill(proc: Process) -> None:
 
 class NCForwarder(Forwarder):
     async def forward(self, job_id: str, job_port: int) -> int:
-        log.debug(f"Forwarding")
+        log.debug("Forwarding")
         job_domain = f"{job_id}.{self._jobs_namespace}"
         for i in range(MAX_ATTEMPT):
             port = random.randint(MIN_PORT, MAX_PORT)
@@ -61,13 +61,13 @@ class NCForwarder(Forwarder):
             log.debug(f"Port {port} is not available")
         else:
             raise OSError("No ports are available")
-        log.debug(f"Redirecting input/output")
+        log.debug("Redirecting input/output")
         command = ["nc", "-q", "3", "127.0.0.1", str(port)]
         nc_proc = await asyncio.create_subprocess_exec(*command)
         try:
             await nc_proc.wait()
         finally:
-            log.debug(f"Cleanup")
+            log.debug("Cleanup")
             try_kill(ssh_proc)
             try_kill(nc_proc)
             return 0

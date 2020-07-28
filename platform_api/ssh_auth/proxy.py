@@ -151,4 +151,4 @@ class ExecProxy:
         elif isinstance(request, PortForwardRequest):
             return await self.process_port_forward_request(request)
         else:
-            raise IllegalArgumentError(f"Unknown request type")
+            raise IllegalArgumentError("Unknown request type")

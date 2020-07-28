@@ -269,7 +269,7 @@ class TestKubernetesEvent:
                 "name": "job-cd109c3b-c36e-47d4-b3d6-8bb05a5e63ab.15a870d7e2bb228b",
                 "namespace": "namespace",
                 "selfLink": (
-                    f"/api/v1/namespaces/namespace" "/events/{pod_id}.15a870d7e2bb228b"
+                    "/api/v1/namespaces/namespace/events/{pod_id}.15a870d7e2bb228b"
                 ),
                 "uid": "cb886f64-8f96-11e9-9251-42010a800038",
             },

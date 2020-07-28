@@ -568,7 +568,7 @@ class TestJobs:
                 f'[ "$(cat {secret_path_b})" == "{secret_value_2}" ]',
             ]
         )
-        cmd = f"bash -c '" + asserts + "'"
+        cmd = f"bash -c '{asserts}'"
         job_submit["container"]["command"] = cmd
 
         await _run_job_with_secrets(job_submit, user, secret_volumes=secret_volumes)
@@ -637,7 +637,7 @@ class TestJobs:
                 f'[ "$(cat {sec_path_3})" == "{value_3}" ]',
             ]
         )
-        cmd = f"bash -c '" + asserts + "'"
+        cmd = f"bash -c '{asserts}'"
         job_submit["container"]["command"] = cmd
 
         await _run_job_with_secrets(
@@ -695,7 +695,7 @@ class TestJobs:
                 f'[ "$(cat {sec_path_vol})" == "{secret_value_vol}" ]',
             ]
         )
-        cmd = f"bash -c '" + asserts + "'"
+        cmd = f"bash -c '{asserts}'"
         job_submit["container"]["command"] = cmd
 
         await _run_job_with_secrets(
@@ -743,7 +743,7 @@ class TestJobs:
                 f'[ "${env_var_c}" == "{secret_value_2}" ]',
             ]
         )
-        cmd = f"bash -c '" + asserts + "'"
+        cmd = f"bash -c '{asserts}'"
         job_submit["container"]["command"] = cmd
 
         await _run_job_with_secrets(job_submit, user, secret_env=secret_env)
@@ -789,7 +789,7 @@ class TestJobs:
                 f'[ "$(cat {secret_path_c})" == "{secret_value_2}" ]',
             ]
         )
-        cmd = f"bash -c '" + asserts + "'"
+        cmd = f"bash -c '{asserts}'"
         job_submit["container"]["command"] = cmd
 
         await _run_job_with_secrets(job_submit, user, secret_volumes=secret_volumes)
@@ -835,7 +835,7 @@ class TestJobs:
                 f'[ "$(cat {secret_path_c})" == "{secret_value_2}" ]',
             ]
         )
-        cmd = f"bash -c '" + asserts + "'"
+        cmd = f"bash -c '{asserts}'"
         job_submit["container"]["command"] = cmd
 
         await _run_job_with_secrets(job_submit, user, secret_volumes=secret_volumes)
@@ -876,7 +876,7 @@ class TestJobs:
                 f'[ "$(cat {secret_path_b})" == "{secret_value_2}" ]',
             ]
         )
-        cmd = f"bash -c '" + asserts + "'"
+        cmd = f"bash -c '{asserts}'"
         job_submit["container"]["command"] = cmd
 
         await _run_job_with_secrets(job_submit, user, secret_volumes=secret_volumes)
@@ -913,7 +913,7 @@ class TestJobs:
         async with client.post(url, headers=user.headers, json=job_submit) as resp:
             assert resp.status == HTTPBadRequest.status_code, await resp.text()
             result = await resp.json()
-            assert result["error"] == f"Missing secrets: 'key1', 'key2'"
+            assert result["error"] == "Missing secrets: 'key1', 'key2'"
 
     @pytest.mark.asyncio
     @pytest.mark.parametrize("secret_kind", ["secret_env", "secret_volumes"])
@@ -954,7 +954,7 @@ class TestJobs:
         async with client.post(url, headers=user.headers, json=job_submit) as resp:
             assert resp.status == HTTPBadRequest.status_code, await resp.text()
             result = await resp.json()
-            assert result["error"] == f"Missing secrets: 'key1', 'key2'"
+            assert result["error"] == "Missing secrets: 'key1', 'key2'"
 
     @pytest.mark.asyncio
     @pytest.mark.parametrize("secret_kind", ["secret_env", "secret_volumes"])
@@ -991,7 +991,7 @@ class TestJobs:
         async with client.post(url, headers=user.headers, json=job_submit) as resp:
             assert resp.status == HTTPBadRequest.status_code, await resp.text()
             result = await resp.json()
-            assert result["error"] == f"Missing secrets: 'key2'"
+            assert result["error"] == "Missing secrets: 'key2'"
 
     @pytest.mark.asyncio
     @pytest.mark.parametrize("secret_kind", ["secret_env", "secret_volumes"])
@@ -1427,7 +1427,7 @@ class TestJobs:
     ) -> None:
         payload = {
             "container": {
-                "image": f"registry.dev.neuromation.io/anotheruser/image:tag",
+                "image": "registry.dev.neuromation.io/anotheruser/image:tag",
                 "command": "true",
                 "resources": {"cpu": 0.1, "memory_mb": 16},
             }
