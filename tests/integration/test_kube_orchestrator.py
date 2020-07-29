@@ -1302,6 +1302,7 @@ class TestKubeOrchestrator:
         kube_config_factory: Callable[..., KubeConfig],
         kube_orchestrator_factory: Callable[..., KubeOrchestrator],
         kube_client_factory: Callable[..., MyKubeClient],
+        cluster_name: str,
     ) -> None:
         user_name = self._create_username()
 
