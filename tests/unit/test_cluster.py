@@ -17,6 +17,7 @@ from platform_api.cluster import (
 )
 from platform_api.cluster_config import CircuitBreakerConfig, StorageConfig
 from platform_api.orchestrator.base import Orchestrator
+from tests.conftest import not_raises
 
 
 class _TestCluster(Cluster):
@@ -247,7 +248,7 @@ class TestClusterRegistry:
 
         new_config = replace(config, storage=StorageConfig(host_mount_path=Path("/")))
 
-        with pytest.not_raises(Exception):
+        with not_raises(Exception):
             await registry.replace(new_config)
 
     @pytest.mark.asyncio
@@ -331,7 +332,7 @@ class TestClusterRegistry:
 
         await registry.replace(config)
 
-        with pytest.not_raises(Exception):
+        with not_raises(Exception):
             await registry.remove(name)
 
     @pytest.mark.asyncio
@@ -365,7 +366,7 @@ class TestClusterRegistry:
         async with registry.get(name):
             pass
 
-        with pytest.not_raises(Exception):
+        with not_raises(Exception):
             await registry.cleanup([])
 
 
