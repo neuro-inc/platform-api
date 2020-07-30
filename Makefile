@@ -100,8 +100,8 @@ docker_pull_test_images: artifactory_docker_login
 	docker tag $(PLATFORMSECRETS_IMAGE) platformsecrets:latest
 
 helm_install:
-	curl https://raw.githubusercontent.com/kubernetes/helm/master/scripts/get | bash -s -- -v v2.11.0
-	helm init --wait
+	curl https://raw.githubusercontent.com/kubernetes/helm/master/scripts/get | bash -s -- -v $(HELM_VERSION)
+	helm init --client-only
 
 gcr_login:
 	@echo $(GKE_ACCT_AUTH) | base64 --decode | docker login -u _json_key --password-stdin https://gcr.io
