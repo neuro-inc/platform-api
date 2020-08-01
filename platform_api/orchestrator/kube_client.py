@@ -630,7 +630,7 @@ class PodDescriptor:
     image: str
     command: List[str] = field(default_factory=list)
     args: List[str] = field(default_factory=list)
-    working_dir: Optional[PurePath] = None
+    working_dir: Optional[str] = None
     env: Dict[str, str] = field(default_factory=dict)
     # TODO (artem): create base type `EnvVar` and merge `env` and `secret_env`
     secret_env_list: List[SecretEnvVar] = field(default_factory=list)
@@ -770,7 +770,7 @@ class PodDescriptor:
             container_payload["tty"] = True
         container_payload["stdin"] = True
         if self.working_dir is not None:
-            container_payload["workingDir"] = str(self.working_dir)
+            container_payload["workingDir"] = self.working_dir
 
         ports = self._to_primitive_ports()
         if ports:
@@ -884,7 +884,6 @@ class PodDescriptor:
             )
             for t in payload["spec"].get("tolerations", ())
         ]
-        working_dir = container_payload.get("workingDir")
         return cls(
             name=metadata["name"],
             created_at=iso8601.parse_date(metadata["creationTimestamp"]),
@@ -901,7 +900,7 @@ class PodDescriptor:
             restart_policy=PodRestartPolicy(
                 payload["spec"].get("restartPolicy", str(cls.restart_policy))
             ),
-            working_dir=PurePath(working_dir) if working_dir is not None else None,
+            working_dir=container_payload.get("workingDir"),
         )
 
 

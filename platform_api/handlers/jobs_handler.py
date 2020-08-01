@@ -205,7 +205,7 @@ def convert_job_container_to_json(
     if container.tty:
         ret["tty"] = True
     if container.working_dir is not None:
-        ret["working_dir"] = str(container.working_dir)
+        ret["working_dir"] = container.working_dir
     return ret
 
 

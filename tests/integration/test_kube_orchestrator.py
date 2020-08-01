@@ -552,7 +552,7 @@ class TestKubeOrchestrator:
     async def test_working_dir(self, kube_orchestrator: KubeOrchestrator) -> None:
         container = Container(
             image="ubuntu",
-            working_dir=PurePath("/var/log"),
+            working_dir="/var/log",
             command="""bash -c '[ "$(pwd)" == "/var/log" ]'""",
             resources=ContainerResources(cpu=0.1, memory_mb=128),
         )

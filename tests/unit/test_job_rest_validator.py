@@ -379,7 +379,7 @@ class TestJobResponseValidator:
             "restart_policy": "never",
         }
         validator = create_job_response_validator()
-        with pytest.raises(t.DataError, match="working dir should be an absolute path"):
+        with pytest.raises(t.DataError):
             validator.check(response)
 
     def test_with_max_run_time_minutes(self) -> None:

@@ -232,7 +232,7 @@ class TestPodDescriptor:
             labels={"testlabel": "testvalue"},
             annotations={"testa": "testv"},
             priority_class_name="testpriority",
-            working_dir=PurePath("/working/dir"),
+            working_dir="/working/dir",
         )
         assert pod.name == "testname"
         assert pod.image == "testimage"
@@ -520,7 +520,7 @@ class TestPodDescriptor:
         container = Container(
             image="testimage",
             command="testcommand 123",
-            working_dir=PurePath("/working/dir"),
+            working_dir="/working/dir",
             env={"TESTVAR": "testvalue"},
             volumes=[
                 ContainerVolume(
@@ -549,7 +549,7 @@ class TestPodDescriptor:
         assert pod.volumes == [volume]
         assert pod.resources == Resources(cpu=1, memory=128, gpu=1)
         assert pod.priority_class_name == "testpriority"
-        assert pod.working_dir == PurePath("/working/dir")
+        assert pod.working_dir == "/working/dir"
 
     def test_from_job_request_tpu(self) -> None:
         container = Container(
@@ -642,7 +642,7 @@ class TestPodDescriptor:
         assert pod.args is None
         assert pod.tty is True
         assert pod.labels == {"testlabel": "testvalue"}
-        assert pod.working_dir == PurePath("/working/dir")
+        assert pod.working_dir == "/working/dir"
 
     def test_from_primitive_failure(self) -> None:
         payload = {"kind": "Status", "code": 409}

@@ -239,7 +239,7 @@ class Container:
     http_server: Optional[ContainerHTTPServer] = None
     ssh_server: Optional[ContainerSSHServer] = None
     tty: bool = False
-    working_dir: Optional[PurePath] = None
+    working_dir: Optional[str] = None
 
     def belongs_to_registry(self, registry_config: RegistryConfig) -> bool:
         prefix = f"{registry_config.host}/"
@@ -337,10 +337,6 @@ class Container:
         if "entrypoint" not in kwargs:
             kwargs["entrypoint"] = None
 
-        working_dir = kwargs.get("working_dir")
-        if working_dir is not None:
-            kwargs["working_dir"] = PurePath(working_dir)
-
         return cls(**kwargs)
 
     def to_primitive(self) -> Dict[str, Any]:
@@ -370,9 +366,7 @@ class Container:
         if entrypoint is None:
             payload.pop("entrypoint", None)
 
-        if self.working_dir is not None:
-            payload["working_dir"] = str(self.working_dir)
-        else:
+        if payload["working_dir"] is None:
             del payload["working_dir"]
 
         return payload

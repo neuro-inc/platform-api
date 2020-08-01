@@ -665,7 +665,7 @@ class TestJobContainerToJson:
         container = Container(
             image="image",
             resources=ContainerResources(cpu=0.1, memory_mb=16),
-            working_dir=PurePath("/working/dir"),
+            working_dir="/working/dir",
         )
         assert convert_job_container_to_json(container, storage_config) == {
             "env": {},

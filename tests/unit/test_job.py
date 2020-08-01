@@ -280,7 +280,7 @@ class TestContainerBuilder:
             image="testimage",
             entrypoint="testentrypoint",
             command="testcommand",
-            working_dir=PurePath("/working/dir"),
+            working_dir="/working/dir",
             env={"TESTVAR": "testvalue"},
             volumes=[
                 ContainerVolume(
@@ -1338,7 +1338,7 @@ class TestJobRequest:
         job_request_payload["container"]["working_dir"] = "/working/dir"
         container = Container(
             image="testimage",
-            working_dir=PurePath("/working/dir"),
+            working_dir="/working/dir",
             env={"testvar": "testval"},
             resources=ContainerResources(cpu=1, memory_mb=128),
             volumes=[
@@ -1429,7 +1429,7 @@ class TestJobRequest:
         assert request.description == "Description of the testjob"
         expected_container = Container(
             image="testimage",
-            working_dir=PurePath("/working/dir"),
+            working_dir="/working/dir",
             env={"testvar": "testval"},
             resources=ContainerResources(cpu=1, memory_mb=128),
             volumes=[

@@ -48,7 +48,6 @@ def create_container_from_payload(
         env_var: Secret.create(value)
         for env_var, value in payload.get("secret_env", {}).items()
     }
-    working_dir = payload.get("working_dir")
 
     return Container(
         image=payload["image"],
@@ -62,7 +61,7 @@ def create_container_from_payload(
         http_server=http_server,
         ssh_server=ssh_server,
         tty=payload.get("tty", False),
-        working_dir=PurePath(working_dir) if working_dir is not None else None,
+        working_dir=payload.get("working_dir"),
     )
 
 

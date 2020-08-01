@@ -375,13 +375,7 @@ def create_container_command_validator(
 
 
 def create_working_dir_validator() -> t.Trafaret:
-    def _validate(path: str) -> str:
-        value = PurePath(path)
-        if not value.is_absolute():
-            raise t.DataError("working dir should be an absolute path")
-        return path
-
-    return t.String() >> _validate
+    return t.String() & t.Regexp("/.*")
 
 
 def create_job_tag_validator() -> t.Trafaret:
