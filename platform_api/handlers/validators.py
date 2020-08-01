@@ -295,6 +295,7 @@ def create_container_validator(
                 check_cluster=check_cluster,
                 assert_username=user_name,
             ),
+            t.Key("working_dir", optional=True): create_working_dir_validator(),
         }
     )
 
@@ -369,6 +370,16 @@ def create_container_command_validator(
             except ValueError:
                 raise t.DataError("invalid command format")
         return command
+
+    return t.String() >> _validate
+
+
+def create_working_dir_validator() -> t.Trafaret:
+    def _validate(path: str) -> str:
+        value = PurePath(path)
+        if not value.is_absolute():
+            raise t.DataError("working dir should be an absolute path")
+        return path
 
     return t.String() >> _validate
 

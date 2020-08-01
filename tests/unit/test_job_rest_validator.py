@@ -323,6 +323,65 @@ class TestJobResponseValidator:
         validator = create_job_response_validator()
         assert validator.check(response)
 
+    def test_with_absolute_working_dir(self) -> None:
+        container = {
+            "image": "testimage",
+            "command": "arg1 arg2 arg3",
+            "working_dir": "/working/dir",
+            "resources": {"cpu": 0.1, "memory_mb": 16, "shm": True},
+        }
+        response = {
+            "id": "test-job-id",
+            "owner": "tests",
+            "cluster_name": "cluster-name",
+            "status": "pending",
+            "history": {
+                "status": "pending",
+                "reason": None,
+                "description": None,
+                "created_at": "now",
+                "run_time_seconds": 10,
+            },
+            "container": container,
+            "ssh_server": "nobody@ssh-auth",
+            "ssh_auth_server": "nobody@ssh-auth",
+            "is_preemptible": False,
+            "uri": "job://cluster-name/tests/test-job-id",
+            "restart_policy": "never",
+        }
+        validator = create_job_response_validator()
+        assert validator.check(response)
+
+    def test_with_relative_working_dir(self) -> None:
+        container = {
+            "image": "testimage",
+            "command": "arg1 arg2 arg3",
+            "working_dir": "working/dir",
+            "resources": {"cpu": 0.1, "memory_mb": 16, "shm": True},
+        }
+        response = {
+            "id": "test-job-id",
+            "owner": "tests",
+            "cluster_name": "cluster-name",
+            "status": "pending",
+            "history": {
+                "status": "pending",
+                "reason": None,
+                "description": None,
+                "created_at": "now",
+                "run_time_seconds": 10,
+            },
+            "container": container,
+            "ssh_server": "nobody@ssh-auth",
+            "ssh_auth_server": "nobody@ssh-auth",
+            "is_preemptible": False,
+            "uri": "job://cluster-name/tests/test-job-id",
+            "restart_policy": "never",
+        }
+        validator = create_job_response_validator()
+        with pytest.raises(t.DataError, match="working dir should be an absolute path"):
+            validator.check(response)
+
     def test_with_max_run_time_minutes(self) -> None:
         container = {
             "image": "testimage",

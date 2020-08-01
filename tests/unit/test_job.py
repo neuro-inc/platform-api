@@ -261,6 +261,7 @@ class TestContainerBuilder:
             "image": "testimage",
             "entrypoint": "testentrypoint",
             "command": "testcommand",
+            "working_dir": "/working/dir",
             "env": {"TESTVAR": "testvalue"},
             "resources": {"cpu": 0.1, "memory_mb": 128, "gpu": 1},
             "http": {"port": 80},
@@ -279,6 +280,7 @@ class TestContainerBuilder:
             image="testimage",
             entrypoint="testentrypoint",
             command="testcommand",
+            working_dir=PurePath("/working/dir"),
             env={"TESTVAR": "testvalue"},
             volumes=[
                 ContainerVolume(
@@ -1330,6 +1332,30 @@ class TestJobRequest:
         )
         assert request.to_primitive() == job_request_payload
 
+    def test_to_primitive_with_working_dir(
+        self, job_request_payload: Dict[str, Any]
+    ) -> None:
+        job_request_payload["container"]["working_dir"] = "/working/dir"
+        container = Container(
+            image="testimage",
+            working_dir=PurePath("/working/dir"),
+            env={"testvar": "testval"},
+            resources=ContainerResources(cpu=1, memory_mb=128),
+            volumes=[
+                ContainerVolume(
+                    uri=URL("storage://path"),
+                    src_path=PurePath("/src/path"),
+                    dst_path=PurePath("/dst/path"),
+                )
+            ],
+        )
+        request = JobRequest(
+            job_id="testjob",
+            description="Description of the testjob",
+            container=container,
+        )
+        assert request.to_primitive() == job_request_payload
+
     def test_to_primitive_with_ssh(self, job_request_payload: Dict[str, Any]) -> None:
         job_request_payload["container"]["ssh_server"] = {"port": 678}
 
@@ -1382,6 +1408,28 @@ class TestJobRequest:
         assert request.description == "Description of the testjob"
         expected_container = Container(
             image="testimage",
+            env={"testvar": "testval"},
+            resources=ContainerResources(cpu=1, memory_mb=128),
+            volumes=[
+                ContainerVolume(
+                    uri=URL("storage://path"),
+                    src_path=PurePath("/src/path"),
+                    dst_path=PurePath("/dst/path"),
+                )
+            ],
+        )
+        assert request.container == expected_container
+
+    def test_from_primitive_with_working_dir(
+        self, job_request_payload: Dict[str, Any]
+    ) -> None:
+        job_request_payload["container"]["working_dir"] = "/working/dir"
+        request = JobRequest.from_primitive(job_request_payload)
+        assert request.job_id == "testjob"
+        assert request.description == "Description of the testjob"
+        expected_container = Container(
+            image="testimage",
+            working_dir=PurePath("/working/dir"),
             env={"testvar": "testval"},
             resources=ContainerResources(cpu=1, memory_mb=128),
             volumes=[
