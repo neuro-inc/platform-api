@@ -661,6 +661,20 @@ class TestJobContainerToJson:
             "ssh": {"port": 777},
         }
 
+    def test_with_working_dir(self, storage_config: StorageConfig) -> None:
+        container = Container(
+            image="image",
+            resources=ContainerResources(cpu=0.1, memory_mb=16),
+            working_dir="/working/dir",
+        )
+        assert convert_job_container_to_json(container, storage_config) == {
+            "env": {},
+            "image": "image",
+            "resources": {"cpu": 0.1, "memory_mb": 16},
+            "volumes": [],
+            "working_dir": "/working/dir",
+        }
+
     def test_src_storage_uri_fallback_default(
         self, storage_config: StorageConfig
     ) -> None:

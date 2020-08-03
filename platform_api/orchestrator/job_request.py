@@ -239,6 +239,7 @@ class Container:
     http_server: Optional[ContainerHTTPServer] = None
     ssh_server: Optional[ContainerSSHServer] = None
     tty: bool = False
+    working_dir: Optional[str] = None
 
     def belongs_to_registry(self, registry_config: RegistryConfig) -> bool:
         prefix = f"{registry_config.host}/"
@@ -361,9 +362,12 @@ class Container:
             payload["ssh_server"] = self.ssh_server.to_primitive()
 
         # NOTE: not to serialize `entrypoint` if it's `None` (see issue #804)
-        entrypoint = payload.get("entrypoint", None)
+        entrypoint = payload.get("entrypoint")
         if entrypoint is None:
             payload.pop("entrypoint", None)
+
+        if payload["working_dir"] is None:
+            del payload["working_dir"]
 
         return payload
 

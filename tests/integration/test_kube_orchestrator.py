@@ -548,6 +548,28 @@ class TestKubeOrchestrator:
         finally:
             await job.delete()
 
+    @pytest.mark.asyncio
+    async def test_working_dir(self, kube_orchestrator: KubeOrchestrator) -> None:
+        container = Container(
+            image="ubuntu",
+            working_dir="/var/log",
+            command="""bash -c '[ "$(pwd)" == "/var/log" ]'""",
+            resources=ContainerResources(cpu=0.1, memory_mb=128),
+        )
+        job = MyJob(
+            orchestrator=kube_orchestrator,
+            record=JobRecord.create(
+                request=JobRequest.create(container), cluster_name="test-cluster"
+            ),
+        )
+
+        try:
+            await job.start()
+            status = await self.wait_for_completion(job)
+            assert status == JobStatus.SUCCEEDED
+        finally:
+            await job.delete()
+
     @pytest.fixture
     async def ingress(self, kube_client: KubeClient) -> AsyncIterator[Ingress]:
         ingress_name = str(uuid.uuid4())
