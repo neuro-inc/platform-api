@@ -286,6 +286,7 @@ class EnvironConfigFactory:
             storage_url=base_url / "storage",
             monitoring_url=base_url / "jobs",
             secrets_url=base_url / "secrets",
+            metrics_url=base_url / "metrics",
         )
 
     def create_notifications(self) -> NotificationsConfig:
