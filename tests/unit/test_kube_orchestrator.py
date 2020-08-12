@@ -1048,8 +1048,20 @@ class TestService:
             },
         }
 
+    def test_job_name_is_same_for_as_name_by_default(self) -> None:
+        service = Service(name="test", target_port=8080)
+        assert service.job_name == "test"
+
     def test_to_primitive(self, service_payload: Dict[str, Dict[str, Any]]) -> None:
         service = Service(name="testservice", target_port=8080)
+        assert service.to_primitive() == service_payload
+
+    def test_to_primitive_with_job_name(
+        self, service_payload: Dict[str, Dict[str, Any]]
+    ) -> None:
+        service = Service(name="testservice", job_name="testjob", target_port=8080)
+        expected_payload = service_payload.copy()
+        expected_payload["spec"]["selector"]["job"] = "testjob"
         assert service.to_primitive() == service_payload
 
     def test_to_primitive_with_labels(
