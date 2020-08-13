@@ -26,7 +26,6 @@ from typing import (
     Tuple,
     Type,
     Union,
-    cast,
 )
 from urllib.parse import urlsplit
 
@@ -280,18 +279,13 @@ class Resources:
 class Service:
     name: str
     target_port: Optional[int]
-    job_name: str = cast(str, None)  # Will be fixed by __post_init__
+    selector: Dict[str, str] = field(default_factory=dict)
     ssh_target_port: Optional[int] = None
     port: int = 80
     ssh_port: int = 22
     service_type: ServiceType = ServiceType.CLUSTER_IP
     cluster_ip: Optional[str] = None
     labels: Dict[str, str] = field(default_factory=dict)
-
-    def __post_init__(self) -> None:
-        if self.job_name is None:
-            # Set value same same way as generated __init__ does
-            object.__setattr__(self, "job_name", self.name)
 
     def _add_port_map(
         self,
@@ -309,7 +303,7 @@ class Service:
             "spec": {
                 "type": self.service_type.value,
                 "ports": [],
-                "selector": {"job": self.job_name},
+                "selector": self.selector,
             },
         }
 
@@ -333,7 +327,7 @@ class Service:
     def create_for_pod(cls, pod: "PodDescriptor") -> "Service":
         return cls(
             name=pod.name,
-            job_name=pod.name,
+            selector=pod.labels,
             target_port=pod.port,
             ssh_target_port=pod.ssh_port,
             labels=pod.labels,
@@ -344,7 +338,7 @@ class Service:
         http_port = pod.port or cls.port
         return cls(
             name=pod.name,
-            job_name=pod.name,
+            selector=pod.labels,
             cluster_ip="None",
             target_port=http_port,
             ssh_target_port=pod.ssh_port,
@@ -370,7 +364,7 @@ class Service:
         service_type = payload["spec"].get("type", Service.service_type.value)
         return cls(
             name=payload["metadata"]["name"],
-            job_name=payload["spec"]["selector"]["job"],
+            selector=payload["spec"].get("selector", {}),
             target_port=http_payload.get("targetPort", None),
             port=http_payload.get("port", Service.port),
             ssh_target_port=ssh_payload.get("targetPort", None),
@@ -792,11 +786,6 @@ class PodDescriptor:
         if readiness_probe:
             container_payload["readinessProbe"] = readiness_probe
 
-        labels = self.labels.copy()
-        # TODO (A Danshyn 12/04/18): the job is left for backward
-        # compatibility
-        labels["job"] = self.name
-
         tolerations = self.tolerations.copy()
         if self.resources and self.resources.gpu:
             tolerations.append(
@@ -808,7 +797,7 @@ class PodDescriptor:
         payload: Dict[str, Any] = {
             "kind": "Pod",
             "apiVersion": "v1",
-            "metadata": {"name": self.name, "labels": labels},
+            "metadata": {"name": self.name},
             "spec": {
                 "automountServiceAccountToken": False,
                 "containers": [container_payload],
@@ -822,6 +811,8 @@ class PodDescriptor:
                 ],
             },
         }
+        if self.labels:
+            payload["metadata"]["labels"] = self.labels
         if self.annotations:
             payload["metadata"]["annotations"] = self.annotations.copy()
         if self.node_selector:

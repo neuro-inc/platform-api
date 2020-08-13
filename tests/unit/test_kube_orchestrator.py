@@ -188,7 +188,7 @@ class TestPodDescriptor:
         assert pod.to_primitive() == {
             "kind": "Pod",
             "apiVersion": "v1",
-            "metadata": {"name": "testname", "labels": {"job": "testname"}},
+            "metadata": {"name": "testname"},
             "spec": {
                 "automountServiceAccountToken": False,
                 "containers": [
@@ -241,7 +241,7 @@ class TestPodDescriptor:
             "apiVersion": "v1",
             "metadata": {
                 "name": "testname",
-                "labels": {"job": "testname", "testlabel": "testvalue"},
+                "labels": {"testlabel": "testvalue"},
                 "annotations": {"testa": "testv"},
             },
             "spec": {
@@ -309,7 +309,7 @@ class TestPodDescriptor:
         assert pod.to_primitive() == {
             "kind": "Pod",
             "apiVersion": "v1",
-            "metadata": {"name": "testname", "labels": {"job": "testname"}},
+            "metadata": {"name": "testname"},
             "spec": {
                 "automountServiceAccountToken": False,
                 "containers": [
@@ -364,7 +364,7 @@ class TestPodDescriptor:
         assert pod.to_primitive() == {
             "kind": "Pod",
             "apiVersion": "v1",
-            "metadata": {"name": "testname", "labels": {"job": "testname"}},
+            "metadata": {"name": "testname"},
             "spec": {
                 "automountServiceAccountToken": False,
                 "containers": [
@@ -417,7 +417,7 @@ class TestPodDescriptor:
         assert pod.to_primitive() == {
             "kind": "Pod",
             "apiVersion": "v1",
-            "metadata": {"name": "testname", "labels": {"job": "testname"}},
+            "metadata": {"name": "testname"},
             "spec": {
                 "automountServiceAccountToken": False,
                 "containers": [
@@ -473,7 +473,7 @@ class TestPodDescriptor:
         assert pod.to_primitive() == {
             "kind": "Pod",
             "apiVersion": "v1",
-            "metadata": {"name": "testname", "labels": {"job": "testname"}},
+            "metadata": {"name": "testname"},
             "spec": {
                 "automountServiceAccountToken": False,
                 "containers": [
@@ -1048,20 +1048,12 @@ class TestService:
             },
         }
 
-    def test_job_name_is_same_for_as_name_by_default(self) -> None:
-        service = Service(name="test", target_port=8080)
-        assert service.job_name == "test"
-
     def test_to_primitive(self, service_payload: Dict[str, Dict[str, Any]]) -> None:
-        service = Service(name="testservice", target_port=8080)
-        assert service.to_primitive() == service_payload
-
-    def test_to_primitive_with_job_name(
-        self, service_payload: Dict[str, Dict[str, Any]]
-    ) -> None:
-        service = Service(name="testservice", job_name="testjob", target_port=8080)
-        expected_payload = service_payload.copy()
-        expected_payload["spec"]["selector"]["job"] = "testjob"
+        service = Service(
+            name="testservice",
+            selector=service_payload["spec"]["selector"],
+            target_port=8080,
+        )
         assert service.to_primitive() == service_payload
 
     def test_to_primitive_with_labels(
@@ -1070,14 +1062,22 @@ class TestService:
         labels = {"label-name": "label-value"}
         expected_payload = service_payload.copy()
         expected_payload["metadata"]["labels"] = labels
-        service = Service(name="testservice", target_port=8080, labels=labels)
+        service = Service(
+            name="testservice",
+            selector=expected_payload["spec"]["selector"],
+            target_port=8080,
+            labels=labels,
+        )
         assert service.to_primitive() == expected_payload
 
     def test_to_primitive_load_balancer(
         self, service_payload: Dict[str, Dict[str, Any]]
     ) -> None:
         service = Service(
-            name="testservice", target_port=8080, service_type=ServiceType.LOAD_BALANCER
+            name="testservice",
+            selector=service_payload["spec"]["selector"],
+            target_port=8080,
+            service_type=ServiceType.LOAD_BALANCER,
         )
         service_payload["spec"]["type"] = "LoadBalancer"
         assert service.to_primitive() == service_payload
@@ -1085,13 +1085,22 @@ class TestService:
     def test_to_primitive_headless(
         self, service_payload: Dict[str, Dict[str, Any]]
     ) -> None:
-        service = Service(name="testservice", target_port=8080, cluster_ip="None")
+        service = Service(
+            name="testservice",
+            selector=service_payload["spec"]["selector"],
+            target_port=8080,
+            cluster_ip="None",
+        )
         service_payload["spec"]["clusterIP"] = "None"
         assert service.to_primitive() == service_payload
 
     def test_from_primitive(self, service_payload: Dict[str, Dict[str, Any]]) -> None:
         service = Service.from_primitive(service_payload)
-        assert service == Service(name="testservice", target_port=8080)
+        assert service == Service(
+            name="testservice",
+            selector=service_payload["spec"]["selector"],
+            target_port=8080,
+        )
 
     def test_from_primitive_with_labels(
         self, service_payload: Dict[str, Dict[str, Any]]
@@ -1100,7 +1109,12 @@ class TestService:
         input_payload = service_payload.copy()
         input_payload["metadata"]["labels"] = labels
         service = Service.from_primitive(input_payload)
-        assert service == Service(name="testservice", target_port=8080, labels=labels)
+        assert service == Service(
+            name="testservice",
+            selector=service_payload["spec"]["selector"],
+            target_port=8080,
+            labels=labels,
+        )
 
     def test_from_primitive_node_port(
         self, service_payload: Dict[str, Dict[str, Any]]
@@ -1108,7 +1122,10 @@ class TestService:
         service_payload["spec"]["type"] = "NodePort"
         service = Service.from_primitive(service_payload)
         assert service == Service(
-            name="testservice", target_port=8080, service_type=ServiceType.NODE_PORT
+            name="testservice",
+            selector=service_payload["spec"]["selector"],
+            target_port=8080,
+            service_type=ServiceType.NODE_PORT,
         )
 
     def test_from_primitive_headless(
@@ -1117,7 +1134,10 @@ class TestService:
         service_payload["spec"]["clusterIP"] = "None"
         service = Service.from_primitive(service_payload)
         assert service == Service(
-            name="testservice", cluster_ip="None", target_port=8080
+            name="testservice",
+            selector=service_payload["spec"]["selector"],
+            cluster_ip="None",
+            target_port=8080,
         )
 
     def test_create_for_pod(self) -> None:
@@ -1145,7 +1165,11 @@ class TestServiceWithSSHOnly:
 
     def test_to_primitive(self, service_payload: Dict[str, Dict[str, Any]]) -> None:
         service = Service(
-            name="testservice", target_port=None, ssh_port=89, ssh_target_port=8181
+            name="testservice",
+            selector=service_payload["spec"]["selector"],
+            target_port=None,
+            ssh_port=89,
+            ssh_target_port=8181,
         )
         assert service.to_primitive() == service_payload
 
@@ -1153,13 +1177,19 @@ class TestServiceWithSSHOnly:
         self, service_payload: Dict[str, Dict[str, Any]]
     ) -> None:
         service_payload["spec"]["ports"][0]["port"] = 22
-        service = Service(name="testservice", target_port=None, ssh_target_port=8181)
+        service = Service(
+            name="testservice",
+            selector=service_payload["spec"]["selector"],
+            target_port=None,
+            ssh_target_port=8181,
+        )
         assert service.to_primitive() == service_payload
 
     def test_from_primitive(self, service_payload: Dict[str, Dict[str, Any]]) -> None:
         service = Service.from_primitive(service_payload)
         assert service == Service(
             name="testservice",
+            selector=service_payload["spec"]["selector"],
             target_port=None,
             port=80,
             ssh_target_port=8181,

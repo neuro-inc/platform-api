@@ -307,18 +307,17 @@ class KubeOrchestrator(Orchestrator):
         except StatusException:
             return secret_names
 
-    def _service_name_for_named(self, job: Job) -> str:
+    def _get_service_name_for_named(self, job: Job) -> str:
         from platform_api.handlers.validators import JOB_USER_NAMES_SEPARATOR
 
         return f"{job.name}{JOB_USER_NAMES_SEPARATOR}{job.owner}"
 
     async def prepare_job(self, job: Job) -> None:
         # TODO (A Yushkovskiy 31.10.2018): get namespace for the pod, not statically
-        hostname_template = f"{{}}.{self._kube_config.namespace}"
-        job.internal_hostname = hostname_template.format(job.id)
+        job.internal_hostname = f"{job.id}.{self._kube_config.namespace}"
         if job.is_named:
-            job.internal_hostname_named = hostname_template.format(
-                self._service_name_for_named(job)
+            job.internal_hostname_named = (
+                f"{self._get_service_name_for_named(job)}.{self._kube_config.namespace}"
             )
 
     async def start_job(self, job: Job) -> JobStatus:
@@ -335,7 +334,7 @@ class KubeOrchestrator(Orchestrator):
             if job.is_named:
                 # As job deletion can fail, we have to try to remove old service
                 # with same name just to be sure
-                service_name = self._service_name_for_named(job)
+                service_name = self._get_service_name_for_named(job)
                 await self._delete_service(service_name)
                 await self._create_service(descriptor, name=service_name)
 
@@ -569,7 +568,7 @@ class KubeOrchestrator(Orchestrator):
 
         await self._delete_service(self._get_job_pod_name(job))
         if job.is_named:
-            await self._delete_service(self._service_name_for_named(job))
+            await self._delete_service(self._get_service_name_for_named(job))
 
         await self._delete_pod_network_policy(job)
 

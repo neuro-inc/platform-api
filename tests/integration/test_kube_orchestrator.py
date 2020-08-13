@@ -1046,7 +1046,6 @@ class TestKubeOrchestrator:
         await kube_client.wait_pod_is_running(pod_name=pod_name, timeout_s=60.0)
         raw_pod = await kube_client.get_raw_pod(pod_name)
         assert raw_pod["metadata"]["labels"] == {
-            "job": job.id,
             "platform.neuromation.io/job": job.id,
             "platform.neuromation.io/user": job.owner,
         }
