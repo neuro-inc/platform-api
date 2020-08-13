@@ -307,9 +307,18 @@ class KubeOrchestrator(Orchestrator):
         except StatusException:
             return secret_names
 
+    def _get_service_name_for_named(self, job: Job) -> str:
+        from platform_api.handlers.validators import JOB_USER_NAMES_SEPARATOR
+
+        return f"{job.name}{JOB_USER_NAMES_SEPARATOR}{job.owner}"
+
     async def prepare_job(self, job: Job) -> None:
         # TODO (A Yushkovskiy 31.10.2018): get namespace for the pod, not statically
         job.internal_hostname = f"{job.id}.{self._kube_config.namespace}"
+        if job.is_named:
+            job.internal_hostname_named = (
+                f"{self._get_service_name_for_named(job)}.{self._kube_config.namespace}"
+            )
 
     async def start_job(self, job: Job) -> JobStatus:
         await self._create_docker_secret(job)
@@ -322,6 +331,12 @@ class KubeOrchestrator(Orchestrator):
 
             logger.info(f"Starting Service for {job.id}.")
             service = await self._create_service(descriptor)
+            if job.is_named:
+                # As job deletion can fail, we have to try to remove old service
+                # with same name just to be sure
+                service_name = self._get_service_name_for_named(job)
+                await self._delete_service(service_name)
+                await self._create_service(descriptor, name=service_name)
 
             if job.has_http_server_exposed:
                 logger.info(f"Starting Ingress for {job.id}")
@@ -533,21 +548,27 @@ class KubeOrchestrator(Orchestrator):
     ) -> PodExec:
         return await self._client.exec_pod(job_id, command, tty=tty)
 
-    async def _create_service(self, pod: PodDescriptor) -> Service:
-        return await self._client.create_service(Service.create_headless_for_pod(pod))
+    async def _create_service(
+        self, pod: PodDescriptor, name: Optional[str] = None
+    ) -> Service:
+        service = Service.create_headless_for_pod(pod)
+        if name is not None:
+            service = service.make_named(name)
+        return await self._client.create_service(service)
 
-    async def _delete_service(self, job: Job) -> None:
-        pod_id = self._get_job_pod_name(job)
+    async def _delete_service(self, name: str) -> None:
         try:
-            await self._client.delete_service(name=pod_id)
+            await self._client.delete_service(name=name)
         except Exception:
-            logger.exception(f"Failed to remove service {pod_id}")
+            logger.exception(f"Failed to remove service {name}")
 
     async def delete_job(self, job: Job) -> JobStatus:
         if job.has_http_server_exposed:
             await self._delete_ingress(job)
 
-        await self._delete_service(job)
+        await self._delete_service(self._get_job_pod_name(job))
+        if job.is_named:
+            await self._delete_service(self._get_service_name_for_named(job))
 
         await self._delete_pod_network_policy(job)
 

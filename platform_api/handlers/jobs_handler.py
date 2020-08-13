@@ -132,6 +132,7 @@ def create_job_response_validator() -> t.Trafaret:
             "container": create_container_response_validator(),
             "is_preemptible": t.Bool,
             t.Key("internal_hostname", optional=True): t.String,
+            t.Key("internal_hostname_named", optional=True): t.String,
             t.Key("name", optional=True): create_job_name_validator(max_length=None),
             t.Key("description", optional=True): t.String,
             t.Key("tags", optional=True): t.List(create_job_tag_validator()),
@@ -279,6 +280,8 @@ def convert_job_to_job_response(job: Job) -> Dict[str, Any]:
                 response_payload["http_url_named"] = http_url_named_sanitized
     if job.internal_hostname:
         response_payload["internal_hostname"] = job.internal_hostname
+    if job.internal_hostname_named:
+        response_payload["internal_hostname_named"] = job.internal_hostname_named
     if job.schedule_timeout is not None:
         response_payload["schedule_timeout"] = job.schedule_timeout
     if job.max_run_time_minutes is not None:

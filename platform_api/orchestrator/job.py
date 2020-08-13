@@ -252,6 +252,7 @@ class JobRecord:
     is_deleted: bool = False
     max_run_time_minutes: Optional[int] = None
     internal_hostname: Optional[str] = None
+    internal_hostname_named: Optional[str] = None
     schedule_timeout: Optional[float] = None
     restart_policy: JobRestartPolicy = JobRestartPolicy.NEVER
 
@@ -397,6 +398,8 @@ class JobRecord:
             result["max_run_time_minutes"] = self.max_run_time_minutes
         if self.internal_hostname:
             result["internal_hostname"] = self.internal_hostname
+        if self.internal_hostname_named:
+            result["internal_hostname_named"] = self.internal_hostname_named
         if self.name:
             result["name"] = self.name
         if self.tags:
@@ -424,6 +427,7 @@ class JobRecord:
             is_preemptible=payload.get("is_preemptible", False),
             max_run_time_minutes=payload.get("max_run_time_minutes", None),
             internal_hostname=payload.get("internal_hostname", None),
+            internal_hostname_named=payload.get("internal_hostname_named", None),
             schedule_timeout=payload.get("schedule_timeout", None),
             restart_policy=JobRestartPolicy(
                 payload.get("restart_policy", str(cls.restart_policy))
@@ -491,6 +495,10 @@ class Job:
     @property
     def name(self) -> Optional[str]:
         return self._name
+
+    @property
+    def is_named(self) -> bool:
+        return self.name is not None
 
     @property
     def tags(self) -> Sequence[str]:
@@ -656,6 +664,14 @@ class Job:
     @internal_hostname.setter
     def internal_hostname(self, value: Optional[str]) -> None:
         self._record.internal_hostname = value
+
+    @property
+    def internal_hostname_named(self) -> Optional[str]:
+        return self._record.internal_hostname_named
+
+    @internal_hostname_named.setter
+    def internal_hostname_named(self, value: Optional[str]) -> None:
+        self._record.internal_hostname_named = value
 
     @property
     def is_preemptible(self) -> bool:
