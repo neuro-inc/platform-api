@@ -3,6 +3,7 @@ from datetime import timedelta
 from pathlib import Path
 from typing import Optional, Sequence
 
+from alembic.config import Config as AlembicConfig
 from yarl import URL
 
 from .redis import RedisConfig
@@ -58,6 +59,21 @@ class DatabaseConfig:
 
 
 @dataclass(frozen=True)
+class PostgresConfig:
+    postgres_dsn: str
+
+    alembic: AlembicConfig
+
+    # based on defaults
+    # https://magicstack.github.io/asyncpg/current/api/index.html#asyncpg.connection.connect
+    pool_min_size: int = 10
+    pool_max_size: int = 10
+
+    connect_timeout_s: float = 60.0
+    command_timeout_s: Optional[float] = 60.0
+
+
+@dataclass(frozen=True)
 class JobsConfig:
     deletion_delay_s: int = 0
     orphaned_job_owner: str = ""
@@ -93,6 +109,7 @@ class Config:
     server: ServerConfig
 
     database: DatabaseConfig
+    postgres: PostgresConfig
     auth: AuthConfig
     zipkin: ZipkinConfig
     notifications: NotificationsConfig

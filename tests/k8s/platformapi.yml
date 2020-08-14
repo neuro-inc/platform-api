@@ -30,6 +30,35 @@ spec:
 apiVersion: apps/v1
 kind: ReplicaSet
 metadata:
+  name: platformpostgres
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      service: platformpostgres
+  template:
+    metadata:
+      labels:
+        service: platformpostgres
+    spec:
+      containers:
+      - name: platformpostgres
+        image: postgres:11.3
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: platformpostgres
+spec:
+  ports:
+  - port: 5432
+    targetPort: 5432
+  selector:
+    service: platformpostgres
+---
+apiVersion: apps/v1
+kind: ReplicaSet
+metadata:
   name: platformauthapi
 spec:
   replicas: 1
@@ -98,6 +127,8 @@ spec:
           value: ssh.platform.dev.neuromation.io
         - name: NP_DB_REDIS_URI
           value: redis://platformredis:6379/0
+        - name: NP_DB_POSTGRES_URI
+          value: postgresql://postgres@platformpostgres:5432/postgres
         - name: NP_OAUTH_HEADLESS_CALLBACK_URL
           value: https://dev.neu.ro/oauth/show-code
         - name: NP_AUTH_URL
