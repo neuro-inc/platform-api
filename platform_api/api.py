@@ -19,6 +19,7 @@ from platform_api.orchestrator.job_policy_enforcer import (
     QuotaEnforcer,
     RuntimeLimitEnforcer,
 )
+from platform_api.orchestrator.jobs_storage.proxy import ProxyJobStorage
 
 from .cluster import Cluster, ClusterConfig, ClusterRegistry
 from .config import Config, CORSConfig
@@ -291,8 +292,12 @@ async def create_app(
                 await cluster_registry.replace(cluster)
 
             logger.info("Initializing JobsStorage")
-            jobs_storage = RedisJobsStorage(redis_client)
-            await jobs_storage.migrate()
+            redis_jobs_storage = RedisJobsStorage(redis_client)
+            await redis_jobs_storage.migrate()
+
+            jobs_storage = ProxyJobStorage(
+                primary_storage=redis_jobs_storage, secondary_storages=()
+            )
 
             logger.info("Initializing JobsService")
             jobs_service = JobsService(
