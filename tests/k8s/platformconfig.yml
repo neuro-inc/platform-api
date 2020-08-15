@@ -48,6 +48,10 @@ data:
 
             "secrets": {
                 "url": "http://platformapi/api/v1/secrets"
+            },
+
+            "metrics": {
+                "url": "http://metrics.dev.neu.ro"
             }
         }
     ]

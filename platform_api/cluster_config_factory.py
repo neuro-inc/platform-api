@@ -76,6 +76,7 @@ class ClusterConfigFactory:
             storage_url=URL(payload["storage"]["url"]),
             monitoring_url=URL(payload["monitoring"]["url"]),
             secrets_url=URL(payload["secrets"]["url"]),
+            metrics_url=URL(payload["metrics"]["url"]),
         )
 
     def _create_presets(self, payload: Dict[str, Any]) -> List[Preset]:

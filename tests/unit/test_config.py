@@ -330,6 +330,7 @@ class TestEnvironConfigFactory:
         assert cluster.ingress.storage_url == URL("https://neu.ro/api/v1/storage")
         assert cluster.ingress.monitoring_url == URL("https://neu.ro/api/v1/jobs")
         assert cluster.ingress.secrets_url == URL("https://neu.ro/api/v1/secrets")
+        assert cluster.ingress.metrics_url == URL("https://neu.ro/api/v1/metrics")
 
         assert config.jobs.deletion_delay_s == 3600
         assert config.jobs.deletion_delay == timedelta(seconds=3600)

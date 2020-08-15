@@ -61,6 +61,7 @@ def create_container_from_payload(
         http_server=http_server,
         ssh_server=ssh_server,
         tty=payload.get("tty", False),
+        working_dir=payload.get("working_dir"),
     )
 
 

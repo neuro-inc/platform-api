@@ -661,6 +661,20 @@ class TestJobContainerToJson:
             "ssh": {"port": 777},
         }
 
+    def test_with_working_dir(self, storage_config: StorageConfig) -> None:
+        container = Container(
+            image="image",
+            resources=ContainerResources(cpu=0.1, memory_mb=16),
+            working_dir="/working/dir",
+        )
+        assert convert_job_container_to_json(container, storage_config) == {
+            "env": {},
+            "image": "image",
+            "resources": {"cpu": 0.1, "memory_mb": 16},
+            "volumes": [],
+            "working_dir": "/working/dir",
+        }
+
     def test_src_storage_uri_fallback_default(
         self, storage_config: StorageConfig
     ) -> None:
@@ -1477,6 +1491,7 @@ async def test_job_to_job_response_with_job_name_and_http_exposed_too_long_name(
         "cluster_name": "test-cluster",
         "name": job_name,
         "http_url": f"http://{job.id}.jobs",
+        "http_url_named": f"http://{job_name}--{owner_name}.jobs",
         # NOTE: field `http_url_named` is cut off when it is invalid
         "status": "pending",
         "history": {

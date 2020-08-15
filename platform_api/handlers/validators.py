@@ -295,6 +295,7 @@ def create_container_validator(
                 check_cluster=check_cluster,
                 assert_username=user_name,
             ),
+            t.Key("working_dir", optional=True): create_working_dir_validator(),
         }
     )
 
@@ -371,6 +372,10 @@ def create_container_command_validator(
         return command
 
     return t.String() >> _validate
+
+
+def create_working_dir_validator() -> t.Trafaret:
+    return t.String() & t.Regexp("/.*")
 
 
 def create_job_tag_validator() -> t.Trafaret:

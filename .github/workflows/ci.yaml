@@ -92,6 +92,7 @@ jobs:
       AWS_REGION: ${{ secrets.AWS_REGION }}
       AWS_CLUSTER_NAME: ${{ secrets.AWS_DEV_CLUSTER_NAME }}
       HELM_ENV: dev
+      HELM_VERSION: ${{ secrets.HELM_VERSION }}
     steps:
       - name: Checkout commit
         uses: actions/checkout@v2
@@ -126,6 +127,7 @@ jobs:
       AWS_REGION: ${{ secrets.AWS_REGION }}
       AWS_CLUSTER_NAME: ${{ secrets.AWS_STAGING_CLUSTER_NAME }}
       HELM_ENV: staging
+      HELM_VERSION: ${{ secrets.HELM_VERSION }}
     steps:
       - name: Checkout commit
         uses: actions/checkout@v2

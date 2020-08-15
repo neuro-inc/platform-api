@@ -7,7 +7,7 @@ import re
 import ssl
 from base64 import b64encode
 from contextlib import suppress
-from dataclasses import dataclass, field
+from dataclasses import dataclass, field, replace
 from datetime import datetime
 from enum import Enum
 from pathlib import Path, PurePath
@@ -279,6 +279,7 @@ class Resources:
 class Service:
     name: str
     target_port: Optional[int]
+    selector: Dict[str, str] = field(default_factory=dict)
     ssh_target_port: Optional[int] = None
     port: int = 80
     ssh_port: int = 22
@@ -302,7 +303,7 @@ class Service:
             "spec": {
                 "type": self.service_type.value,
                 "ports": [],
-                "selector": {"job": self.name},
+                "selector": self.selector,
             },
         }
 
@@ -325,7 +326,8 @@ class Service:
     @classmethod
     def create_for_pod(cls, pod: "PodDescriptor") -> "Service":
         return cls(
-            pod.name,
+            name=pod.name,
+            selector=pod.labels,
             target_port=pod.port,
             ssh_target_port=pod.ssh_port,
             labels=pod.labels,
@@ -336,11 +338,15 @@ class Service:
         http_port = pod.port or cls.port
         return cls(
             name=pod.name,
+            selector=pod.labels,
             cluster_ip="None",
             target_port=http_port,
             ssh_target_port=pod.ssh_port,
             labels=pod.labels,
         )
+
+    def make_named(self, name: str) -> "Service":
+        return replace(self, name=name)
 
     @classmethod
     def _find_port_by_name(
@@ -358,6 +364,7 @@ class Service:
         service_type = payload["spec"].get("type", Service.service_type.value)
         return cls(
             name=payload["metadata"]["name"],
+            selector=payload["spec"].get("selector", {}),
             target_port=http_payload.get("targetPort", None),
             port=http_payload.get("port", Service.port),
             ssh_target_port=ssh_payload.get("targetPort", None),
@@ -630,6 +637,7 @@ class PodDescriptor:
     image: str
     command: List[str] = field(default_factory=list)
     args: List[str] = field(default_factory=list)
+    working_dir: Optional[str] = None
     env: Dict[str, str] = field(default_factory=dict)
     # TODO (artem): create base type `EnvVar` and merge `env` and `secret_env`
     secret_env_list: List[SecretEnvVar] = field(default_factory=list)
@@ -722,6 +730,7 @@ class PodDescriptor:
             image=container.image,
             command=container.entrypoint_list,
             args=container.command_list,
+            working_dir=container.working_dir,
             env=container.env.copy(),
             secret_env_list=sec_env_list,
             volume_mounts=volume_mounts,
@@ -767,6 +776,8 @@ class PodDescriptor:
         if self.tty:
             container_payload["tty"] = True
         container_payload["stdin"] = True
+        if self.working_dir is not None:
+            container_payload["workingDir"] = self.working_dir
 
         ports = self._to_primitive_ports()
         if ports:
@@ -774,11 +785,6 @@ class PodDescriptor:
         readiness_probe = self._to_primitive_readiness_probe()
         if readiness_probe:
             container_payload["readinessProbe"] = readiness_probe
-
-        labels = self.labels.copy()
-        # TODO (A Danshyn 12/04/18): the job is left for backward
-        # compatibility
-        labels["job"] = self.name
 
         tolerations = self.tolerations.copy()
         if self.resources and self.resources.gpu:
@@ -791,7 +797,7 @@ class PodDescriptor:
         payload: Dict[str, Any] = {
             "kind": "Pod",
             "apiVersion": "v1",
-            "metadata": {"name": self.name, "labels": labels},
+            "metadata": {"name": self.name},
             "spec": {
                 "automountServiceAccountToken": False,
                 "containers": [container_payload],
@@ -805,6 +811,8 @@ class PodDescriptor:
                 ],
             },
         }
+        if self.labels:
+            payload["metadata"]["labels"] = self.labels
         if self.annotations:
             payload["metadata"]["annotations"] = self.annotations.copy()
         if self.node_selector:
@@ -896,6 +904,7 @@ class PodDescriptor:
             restart_policy=PodRestartPolicy(
                 payload["spec"].get("restartPolicy", str(cls.restart_policy))
             ),
+            working_dir=container_payload.get("workingDir"),
         )
 
 
