@@ -1,2 +1,2 @@
 # Temporary fix for https://github.com/gforcada/flake8-isort/issues/88
-isort<5.0.0
+isort<6.0.0
