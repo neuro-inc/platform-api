@@ -1,9 +1,10 @@
 import asyncio
 from contextlib import asynccontextmanager
 
-import alembic
 from asyncpg import create_pool
 from asyncpg.pool import Pool
+
+import alembic
 
 from .config import PostgresConfig
 

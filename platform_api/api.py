@@ -19,7 +19,9 @@ from platform_api.orchestrator.job_policy_enforcer import (
     QuotaEnforcer,
     RuntimeLimitEnforcer,
 )
+from platform_api.orchestrator.jobs_storage.postgres import PostgresJobsStorage
 from platform_api.orchestrator.jobs_storage.proxy import ProxyJobStorage
+from platform_api.postgres import create_postgres_pool
 
 from .cluster import Cluster, ClusterConfig, ClusterRegistry
 from .config import Config, CORSConfig
@@ -267,6 +269,14 @@ async def create_app(
                 create_redis_client(config.database.redis)
             )
 
+            if config.postgres.postgres_dsn:
+                logger.info("Initializing Postgres connection pool")
+                postgres_pool = await exit_stack.enter_async_context(
+                    create_postgres_pool(config.postgres)
+                )
+            else:
+                postgres_pool = None
+
             logger.info("Initializing Cluster Registry")
             cluster_registry = await exit_stack.enter_async_context(
                 ClusterRegistry(factory=create_cluster)
@@ -291,12 +301,20 @@ async def create_app(
             for cluster in client_clusters:
                 await cluster_registry.replace(cluster)
 
-            logger.info("Initializing JobsStorage")
+            secondary_storages = []
+
+            logger.info("Initializing RedisJobsStorage")
             redis_jobs_storage = RedisJobsStorage(redis_client)
             await redis_jobs_storage.migrate()
 
+            if postgres_pool:
+                logger.info("Initializing PostgresJobsStorage")
+                postgres_jobs_storage = PostgresJobsStorage(postgres_pool)
+                secondary_storages.append(postgres_jobs_storage)
+
             jobs_storage = ProxyJobStorage(
-                primary_storage=redis_jobs_storage, secondary_storages=()
+                primary_storage=redis_jobs_storage,
+                secondary_storages=secondary_storages,
             )
 
             logger.info("Initializing JobsService")
