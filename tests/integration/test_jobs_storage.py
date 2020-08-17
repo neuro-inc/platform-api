@@ -33,7 +33,7 @@ from platform_api.orchestrator.jobs_storage.postgres import PostgresJobsStorage
 from tests.conftest import not_raises, random_str
 
 
-class TestRedisJobsStorage:
+class TestJobsStorage:
     @pytest.fixture(params=["redis", "postgres"])
     def storage(
         self, request: Any, redis_client: aioredis.Redis, postgres_pool: Pool
@@ -170,10 +170,7 @@ class TestRedisJobsStorage:
         assert job_id_last_created == job3.id
 
     @pytest.mark.asyncio
-    async def test_try_create_job__no_name__ok(
-        self, redis_client: aioredis.Redis
-    ) -> None:
-        storage = RedisJobsStorage(redis_client)
+    async def test_try_create_job__no_name__ok(self, storage: JobsStorage) -> None:
 
         pending_job = self._create_pending_job()
         async with storage.try_create_job(pending_job) as job:
@@ -193,9 +190,8 @@ class TestRedisJobsStorage:
 
     @pytest.mark.asyncio
     async def test_try_create_job__no_name__job_changed_while_creation(
-        self, redis_client: aioredis.Redis
+        self, storage: JobsStorage
     ) -> None:
-        storage = RedisJobsStorage(redis_client)
         job = self._create_pending_job()
 
         # process-1
@@ -227,9 +223,8 @@ class TestRedisJobsStorage:
 
     @pytest.mark.asyncio
     async def test_try_create_job__different_name_same_owner__ok(
-        self, redis_client: aioredis.Redis
+        self, storage: JobsStorage
     ) -> None:
-        storage = RedisJobsStorage(redis_client)
 
         owner = "test-user-1"
         job_name_1 = "some-test-job-name-1"
@@ -253,9 +248,8 @@ class TestRedisJobsStorage:
 
     @pytest.mark.asyncio
     async def test_try_create_job__same_name_different_owner__ok(
-        self, redis_client: aioredis.Redis
+        self, storage: JobsStorage
     ) -> None:
-        storage = RedisJobsStorage(redis_client)
 
         owner_1 = "test-user-1"
         job_name_1 = "some-test-job-name-1"
@@ -281,9 +275,8 @@ class TestRedisJobsStorage:
     @pytest.mark.asyncio
     @pytest.mark.parametrize("first_job_status", [JobStatus.PENDING, JobStatus.RUNNING])
     async def test_try_create_job__same_name_with_an_active_job__conflict(
-        self, redis_client: aioredis.Redis, first_job_status: JobStatus
+        self, storage: JobsStorage, first_job_status: JobStatus
     ) -> None:
-        storage = RedisJobsStorage(redis_client)
 
         owner = "test-user"
         job_name = "some-test-job-name"
@@ -311,9 +304,8 @@ class TestRedisJobsStorage:
         "first_job_status", [JobStatus.SUCCEEDED, JobStatus.FAILED]
     )
     async def test_try_create_job__same_name_with_a_terminated_job__ok(
-        self, redis_client: aioredis.Redis, first_job_status: JobStatus
+        self, storage: JobsStorage, first_job_status: JobStatus
     ) -> None:
-        storage = RedisJobsStorage(redis_client)
         owner = "test-user"
         job_name = "some-test-job-name"
 
@@ -337,8 +329,7 @@ class TestRedisJobsStorage:
         assert job.status == JobStatus.PENDING
 
     @pytest.mark.asyncio
-    async def test_try_create_job_with_tags(self, redis_client: aioredis.Redis) -> None:
-        storage = RedisJobsStorage(redis_client)
+    async def test_try_create_job_with_tags(self, storage: JobsStorage) -> None:
 
         tags = ["tag1", "tag2"]
         job = self._create_job(tags=tags)
@@ -350,8 +341,7 @@ class TestRedisJobsStorage:
         assert result_job.tags == tags
 
     @pytest.mark.asyncio
-    async def test_get_non_existent(self, redis_client: aioredis.Redis) -> None:
-        storage = RedisJobsStorage(redis_client)
+    async def test_get_non_existent(self, storage: JobsStorage) -> None:
         with pytest.raises(JobError, match="no such job unknown"):
             await storage.get_job("unknown")
 
@@ -1284,10 +1274,7 @@ class TestRedisJobsStorage:
         assert not jobs
 
     @pytest.mark.asyncio
-    async def test_try_update_job__no_name__ok(
-        self, redis_client: aioredis.Redis
-    ) -> None:
-        storage = RedisJobsStorage(redis_client)
+    async def test_try_update_job__no_name__ok(self, storage: JobsStorage) -> None:
         pending_job = self._create_pending_job()
         await storage.set_job(pending_job)
 
@@ -1299,10 +1286,7 @@ class TestRedisJobsStorage:
         assert running_job.status == JobStatus.RUNNING
 
     @pytest.mark.asyncio
-    async def test_try_update_job__not_found(
-        self, redis_client: aioredis.Redis
-    ) -> None:
-        storage = RedisJobsStorage(redis_client)
+    async def test_try_update_job__not_found(self, storage: JobsStorage) -> None:
         pending_job = self._create_pending_job()
 
         with pytest.raises(JobError, match=f"no such job {pending_job.id}"):
@@ -1311,9 +1295,8 @@ class TestRedisJobsStorage:
 
     @pytest.mark.asyncio
     async def test_try_update_job__no_name__job_changed_while_creation(
-        self, redis_client: aioredis.Redis
+        self, storage: JobsStorage
     ) -> None:
-        storage = RedisJobsStorage(redis_client)
         job = self._create_pending_job()
         await storage.set_job(job)
 
@@ -1346,9 +1329,8 @@ class TestRedisJobsStorage:
 
     @pytest.mark.asyncio
     async def test_try_update_job__different_name_same_owner__ok(
-        self, redis_client: aioredis.Redis
+        self, storage: JobsStorage
     ) -> None:
-        storage = RedisJobsStorage(redis_client)
 
         owner = "test-user-1"
         job_name_1 = "some-test-job-name-1"
@@ -1375,9 +1357,8 @@ class TestRedisJobsStorage:
 
     @pytest.mark.asyncio
     async def test_try_update_job__same_name_different_owner__ok(
-        self, redis_client: aioredis.Redis
+        self, storage: JobsStorage
     ) -> None:
-        storage = RedisJobsStorage(redis_client)
 
         owner_1 = "test-user-1"
         owner_2 = "test-user-2"
@@ -1407,9 +1388,8 @@ class TestRedisJobsStorage:
         "first_job_status", [JobStatus.SUCCEEDED, JobStatus.FAILED]
     )
     async def test_try_update_job__same_name_with_a_terminated_job__ok(
-        self, redis_client: aioredis.Redis, first_job_status: JobStatus
+        self, storage: JobsStorage, first_job_status: JobStatus
     ) -> None:
-        storage = RedisJobsStorage(redis_client)
         owner = "test-user"
         job_name = "some-test-job-name"
 

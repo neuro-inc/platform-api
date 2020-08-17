@@ -31,11 +31,15 @@ def upgrade() -> None:
         sa.Column("internal_hostname_named", sa.String(), nullable=True),
         sa.Column("schedule_timeout", sa.Float(), nullable=True),
         sa.Column("restart_policy", sa.String(), nullable=True),
+        sa.Column("status", sa.String(), nullable=False),
+        sa.Column("finished_at", sa.DateTime(timezone=True), nullable=True),
         sa.Column("request", sapg.JSONB(), nullable=False),
         sa.Column("statuses", sapg.JSONB(), nullable=False),
         sa.Column("tags", sapg.JSONB(), nullable=True),
     )
-    op.create_unique_constraint('jobs_name_owner_uq', 'jobs', ['name', 'owner'])
+    # Index to simulate conditional unique constraint
+    op.create_index('jobs_name_owner_uq', 'jobs', ['name', 'owner'], unique=True,
+                    postgresql_where=sa.text("(jobs.status != 'succeeded' AND jobs.status != 'failed')"))
 
 
 def downgrade() -> None:
