@@ -1,11 +1,7 @@
 import json
 from dataclasses import dataclass
 from datetime import timedelta
-from typing import (
-    Any,
-    Dict,
-    Optional, Mapping, AsyncIterator, Iterable, List,
-)
+from typing import Any, AsyncIterator, Dict, Iterable, List, Mapping, Optional
 
 import asyncpgsa
 import sqlalchemy as sa
@@ -16,11 +12,10 @@ from asyncpg import Connection, SerializationError, UniqueViolationError
 from asyncpg.pool import Pool
 from asyncpg.protocol.protocol import Record
 
-from platform_api.orchestrator.job import JobRecord, AggregatedRunTime
-from platform_api.orchestrator.job_request import JobError
-from platform_api.orchestrator.job_request import JobStatus
-from .base import JobStorageJobFoundError, JobFilter
-from .base import JobsStorage, JobStorageTransactionError
+from platform_api.orchestrator.job import AggregatedRunTime, JobRecord
+from platform_api.orchestrator.job_request import JobError, JobStatus
+from platform_api.orchestrator.jobs_storage import JobFilter
+from .base import JobsStorage, JobStorageJobFoundError, JobStorageTransactionError
 
 
 @dataclass(frozen=True)
