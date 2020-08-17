@@ -21,6 +21,22 @@ spec:
       - name: platformapi
         image: {{ printf "%s" (pluck .Values.global.env .Values.IMAGE | first | default .Values.IMAGE._default) }}
         imagePullPolicy: Always
+        livenessProbe:
+          httpGet:
+            path: /api/v1/ping
+            port: tcp-web
+          initialDelaySeconds: 10
+          periodSeconds: 5
+        readinessProbe:
+          httpGet:
+            path: /api/v1/ping
+            port: tcp-web
+          initialDelaySeconds: 10
+          periodSeconds: 10
+        ports:
+          - containerPort: 8080
+            name: tcp-web
+            protocol: TCP
         env:
         - name: NP_K8S_API_URL
           value: http://localhost:8001
@@ -115,7 +131,7 @@ spec:
   type: ClusterIP
   ports:
   - port: 8080
-    targetPort: 8080
+    targetPort: tcp-web
   selector:
     service: platformapi
 ---
