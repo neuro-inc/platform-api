@@ -62,13 +62,15 @@ class ProxyJobStorage(JobsStorage):
     def _pass_through_aiter(
         self, method_name: str, *args: Any, **kwargs: Any
     ) -> AsyncIterator[Any]:
-        async def iter_through(aiter: AsyncIterator[Any]) -> None:
+        async def iter_secondary(secondary_storage: JobsStorage) -> None:
+            aiter = getattr(secondary_storage, method_name)(*args, **kwargs)
             async for _ in aiter:
                 pass
 
         for secondary in self._secondary_storages:
-            aiter = getattr(secondary, method_name)(*args, **kwargs)
-            asyncio.create_task(self._run_secondary(iter_through(aiter), method_name))
+            asyncio.create_task(
+                self._run_secondary(iter_secondary(secondary), method_name)
+            )
         return getattr(self._primary_storage, method_name)(*args, **kwargs)
 
     @asynccontextmanager
@@ -79,8 +81,8 @@ class ProxyJobStorage(JobsStorage):
         async with primary_manager as primary_job, AsyncExitStack() as stack:
             secondary_managers = []
             for secondary in self._secondary_storages:
-                manager = getattr(secondary, method_name)(*args, **kwargs)
                 try:
+                    manager = getattr(secondary, method_name)(*args, **kwargs)
                     secondary_job = await manager.__aenter__()
                 except asyncio.CancelledError:
                     raise
