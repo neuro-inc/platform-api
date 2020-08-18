@@ -32,7 +32,8 @@ def upgrade() -> None:
         sa.Column("schedule_timeout", sa.Float(), nullable=True),
         sa.Column("restart_policy", sa.String(), nullable=True),
         sa.Column("status", sa.String(), nullable=False),
-        sa.Column("finished_at", sa.DateTime(timezone=True), nullable=True),
+        sa.Column("created_at", sapg.TIMESTAMP(timezone=True, precision=6), nullable=False),
+        sa.Column("finished_at", sapg.TIMESTAMP(timezone=True, precision=6), nullable=True),
         sa.Column("request", sapg.JSONB(), nullable=False),
         sa.Column("statuses", sapg.JSONB(), nullable=False),
         sa.Column("tags", sapg.JSONB(), nullable=True),
@@ -40,6 +41,18 @@ def upgrade() -> None:
     # Index to simulate conditional unique constraint
     op.create_index('jobs_name_owner_uq', 'jobs', ['name', 'owner'], unique=True,
                     postgresql_where=sa.text("(jobs.status != 'succeeded' AND jobs.status != 'failed')"))
+    op.execute("""\
+create or replace function sort_json_str_array(jsonb)
+returns jsonb language sql as $$
+    select jsonb_agg(value order by value)
+    from jsonb_array_elements_text($1)
+$$;
+create or replace function enumerate_json_array(jsonb)
+returns jsonb language sql as $$
+    select jsonb_agg(t order by index)
+    from jsonb_array_elements($1) with ordinality as t(value, index)
+$$;
+""")
 
 
 def downgrade() -> None:

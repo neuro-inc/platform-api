@@ -3,7 +3,6 @@ from datetime import timedelta
 from pathlib import Path
 from typing import Optional, Sequence
 
-from alembic.config import Config as AlembicConfig
 from yarl import URL
 
 from alembic.config import Config as AlembicConfig

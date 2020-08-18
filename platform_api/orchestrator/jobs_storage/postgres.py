@@ -1,5 +1,5 @@
 import json
-from dataclasses import dataclass
+from dataclasses import dataclass, replace
 from datetime import timedelta
 from typing import Any, AsyncIterator, Dict, Iterable, List, Mapping, Optional
 
@@ -9,12 +9,15 @@ import sqlalchemy.dialects.postgresql as sapg
 import sqlalchemy.sql as sasql
 from async_generator import asynccontextmanager
 from asyncpg import Connection, SerializationError, UniqueViolationError
+from asyncpg.cursor import CursorFactory
 from asyncpg.pool import Pool
 from asyncpg.protocol.protocol import Record
+from sqlalchemy import Integer, and_, asc, desc, not_, or_, select
 
 from platform_api.orchestrator.job import AggregatedRunTime, JobRecord
 from platform_api.orchestrator.job_request import JobError, JobStatus
 from platform_api.orchestrator.jobs_storage import JobFilter
+
 from .base import JobsStorage, JobStorageJobFoundError, JobStorageTransactionError
 
 
@@ -44,7 +47,12 @@ class JobTables:
             sa.Column("tags", sapg.JSONB(), nullable=True),
             # Field for optimized access/unique constrains checks
             sa.Column("status", sa.String(), nullable=False),
-            sa.Column("finished_at", sa.DateTime(timezone=True), nullable=True),
+            sa.Column(
+                "created_at", sapg.TIMESTAMP(timezone=True, precision=6), nullable=False
+            ),
+            sa.Column(
+                "finished_at", sapg.TIMESTAMP(timezone=True, precision=6), nullable=True
+            ),
         )
         return cls(jobs=jobs_table,)
 
@@ -58,10 +66,10 @@ class PostgresJobsStorage(JobsStorage):
 
     async def _execute(
         self, query: sasql.ClauseElement, conn: Optional[Connection] = None
-    ) -> None:
+    ) -> str:
         query_string, params = asyncpgsa.compile_query(query)
         conn = conn or self._pool
-        await conn.execute(query_string, *params)
+        return await conn.execute(query_string, *params)
 
     async def _fetchrow(
         self, query: sasql.ClauseElement, conn: Optional[Connection] = None
@@ -70,11 +78,24 @@ class PostgresJobsStorage(JobsStorage):
         conn = conn or self._pool
         return await conn.fetchrow(query_string, *params)
 
+    async def _fetch(
+        self, query: sasql.ClauseElement, conn: Optional[Connection] = None
+    ) -> List[Record]:
+        query_string, params = asyncpgsa.compile_query(query)
+        conn = conn or self._pool
+        return await conn.fetch(query_string, *params)
+
+    def _cursor(self, query: sasql.ClauseElement, conn: Connection) -> CursorFactory:
+        query_string, params = asyncpgsa.compile_query(query)
+        return conn.cursor(query_string, *params)
+
     # Parsing/serialization
 
     def _job_to_values(self, job: JobRecord) -> Dict[str, Any]:
         values = job.to_primitive()
-        values["finished_at"] = job.finished_at
+        values["status"] = job.status_history.current.status
+        values["created_at"] = job.status_history.created_at
+        values["finished_at"] = job.status_history.finished_at
         return values
 
     def _record_to_job(self, record: Record) -> JobRecord:
@@ -141,10 +162,12 @@ class PostgresJobsStorage(JobsStorage):
         query = (
             self._tables.jobs.update()
             .values(values)
-            .where(self._tables.jobs.c.id == job_id,)
+            .where(self._tables.jobs.c.id == job_id)
         )
-        result = await self._fetchrow(query)
-        if result:
+        result = await self._execute(query)
+        if result != "UPDATE 0":
+            # Docs on status messages are placed here:
+            # https://www.postgresql.org/docs/current/protocol-message-formats.html
             return
         # There was no row with such id, lets insert it.
         values["id"] = job_id
@@ -190,27 +213,132 @@ class PostgresJobsStorage(JobsStorage):
                 "Job {" + self._make_description(values) + "} has changed"
             )
 
-    def iter_all_jobs(
+    def _clause_for_filter(self, job_filter: JobFilter) -> sasql.ClauseElement:
+        clauses = []
+        if job_filter.statuses:
+            clauses.append(self._tables.jobs.c.status.in_(job_filter.statuses))
+        if job_filter.owners:
+            clauses.append(self._tables.jobs.c.owner.in_(job_filter.owners))
+        if job_filter.clusters:
+            cluster_clauses = []
+            clusters_empty_owners = []
+            for cluster, owners in job_filter.clusters.items():
+                if not owners:
+                    clusters_empty_owners.append(cluster)
+                    continue
+                owners_empty_names = []
+                for owner, names in owners.items():
+                    if not names:
+                        owners_empty_names.append(owner)
+                        continue
+                    cluster_clauses.append(
+                        (self._tables.jobs.c.cluster_name == cluster)
+                        & (self._tables.jobs.c.owner == owner)
+                        & self._tables.jobs.c.name.in_(names)
+                    )
+                cluster_clauses.append(
+                    (self._tables.jobs.c.cluster_name == cluster)
+                    & self._tables.jobs.c.owner.in_(owners_empty_names)
+                )
+            cluster_clauses.append(
+                self._tables.jobs.c.cluster_name.in_(clusters_empty_owners)
+            )
+            clauses.append(or_(*cluster_clauses))
+        if job_filter.name:
+            clauses.append(self._tables.jobs.c.name == job_filter.name)
+        if job_filter.ids:
+            clauses.append(self._tables.jobs.c.id.in_(job_filter.ids))
+        if job_filter.tags:
+            clauses.append(self._tables.jobs.c.tags.contains(list(job_filter.tags)))
+        clauses.append(
+            (job_filter.since <= self._tables.jobs.c.created_at)
+            & (self._tables.jobs.c.created_at <= job_filter.until)
+        )
+        return and_(*clauses)
+
+    async def iter_all_jobs(
         self,
         job_filter: Optional[JobFilter] = None,
         *,
         reverse: bool = False,
         limit: Optional[int] = None,
     ) -> AsyncIterator[JobRecord]:
-        raise NotImplementedError
+        query = self._tables.jobs.select()
+        if job_filter is not None:
+            query = query.where(self._clause_for_filter(job_filter))
+        if reverse:
+            query = query.order_by(desc(self._tables.jobs.c.created_at))
+        else:
+            query = query.order_by(asc(self._tables.jobs.c.created_at))
+        if limit:
+            query = query.limit(limit)
+        async with self._pool.acquire() as conn, conn.transaction():
+            async for record in self._cursor(query, conn=conn):
+                yield self._record_to_job(record)
 
     async def get_jobs_by_ids(
         self, job_ids: Iterable[str], job_filter: Optional[JobFilter] = None
     ) -> List[JobRecord]:
-        raise NotImplementedError
+        if job_filter is None:
+            job_filter = JobFilter()
+        if job_filter.ids:
+            job_filter = replace(job_filter, ids=set(job_ids) & job_filter.ids)
+        all_jobs = []
+        async for job in self.iter_all_jobs(job_filter):
+            all_jobs.append(job)
+        # Restore ordering
+        id_to_job = {job.id: job for job in all_jobs}
+        all_jobs = [id_to_job[job_id] for job_id in job_ids]
+        return all_jobs
 
     async def get_jobs_for_deletion(
         self, *, delay: timedelta = timedelta()
     ) -> List[JobRecord]:
-        raise NotImplementedError
+        query = (
+            self._tables.jobs.select()
+            .where(self._tables.jobs.c.status.in_(JobStatus.finished_values()))
+            .where(not_(self._tables.jobs.c.is_deleted))
+        )
+        for_deletion = []
+        async with self._pool.acquire() as conn, conn.transaction():
+            async for record in self._cursor(query, conn=conn):
+                job = self._record_to_job(record)
+                if job.should_be_deleted(delay=delay):
+                    for_deletion.append(job)
+        return for_deletion
 
     async def get_tags(self, owner: str) -> List[str]:
-        raise NotImplementedError
+        sorted_tags = sasql.func.sort_json_str_array(self._tables.jobs.c.tags)
+        enumerated_tags = sasql.func.enumerate_json_array(sorted_tags)
+        tag = sasql.func.jsonb_array_elements(enumerated_tags).alias("tag")
+        tag_col = sa.column("value", type_=sapg.JSONB)
+        tag_name = tag_col["value"].astext.label("tag_name")
+
+        sub_query = (
+            select(
+                [
+                    tag_name,
+                    self._tables.jobs.c.created_at,
+                    tag_col["index"].astext.cast(Integer).label("index"),
+                ]
+            )
+            .distinct(tag_name)
+            .select_from(self._tables.jobs)
+            .select_from(tag)
+            .where(self._tables.jobs.c.owner == owner)
+            .order_by(
+                tag_name,
+                desc(self._tables.jobs.c.created_at),
+                tag_col["index"].astext.cast(Integer),
+            )
+            .alias()
+        )
+        query = (
+            select([sub_query.c.tag_name])
+            .select_from(sub_query)
+            .order_by(desc(sub_query.c.created_at), sub_query.c.index)
+        )
+        return [record[0] for record in await self._fetch(query)]
 
     async def get_aggregated_run_time_by_clusters(
         self, job_filter: JobFilter
