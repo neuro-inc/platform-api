@@ -3,8 +3,9 @@ import pathlib
 from pathlib import Path, PurePath
 from typing import Any, Dict, List, Optional, Sequence
 
-from alembic.config import Config as AlembicConfig
 from yarl import URL
+
+from alembic.config import Config as AlembicConfig
 
 from .cluster_config import (
     ClusterConfig,

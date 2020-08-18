@@ -28,13 +28,13 @@ setup:
 	pip install --no-binary cryptography -r requirements/test.txt -c requirements/constraints.txt
 
 lint:
-	isort --check-only --diff platform_api tests setup.py
+	isort --recursive --check-only --diff platform_api tests setup.py
 	black --check platform_api tests setup.py
 	flake8 platform_api tests setup.py
 	mypy platform_api tests setup.py
 
 format:
-	isort platform_api tests setup.py
+	isort --apply --recursive platform_api tests setup.py
 	black platform_api tests setup.py
 
 test_unit:
