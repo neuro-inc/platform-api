@@ -30,6 +30,7 @@ from platform_api.config import (
     JobsConfig,
     NotificationsConfig,
     OAuthConfig,
+    PostgresConfig,
     ServerConfig,
     ZipkinConfig,
 )
@@ -53,6 +54,7 @@ pytest_plugins = [
     "tests.integration.auth",
     "tests.integration.secrets",
     "tests.integration.notifications",
+    "tests.integration.postgres",
 ]
 
 
@@ -542,6 +544,7 @@ def jobs_config() -> JobsConfig:
 def config_factory(
     kube_config: KubeConfig,
     redis_config: RedisConfig,
+    postgres_config: PostgresConfig,
     auth_config: AuthConfig,
     jobs_config: JobsConfig,
     notifications_config: NotificationsConfig,
@@ -561,6 +564,7 @@ def config_factory(
         return Config(
             server=server_config,
             database=database_config,
+            postgres=postgres_config,
             auth=auth_config,
             jobs=jobs_config,
             job_policy_enforcer=job_policy_enforcer,

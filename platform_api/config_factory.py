@@ -1,7 +1,9 @@
 import os
+import pathlib
 from pathlib import Path, PurePath
 from typing import Any, Dict, List, Optional, Sequence
 
+from alembic.config import Config as AlembicConfig
 from yarl import URL
 
 from .cluster_config import (
@@ -21,6 +23,7 @@ from .config import (
     NotificationsConfig,
     OAuthConfig,
     PlatformConfig,
+    PostgresConfig,
     ServerConfig,
     SSHAuthConfig,
     ZipkinConfig,
@@ -50,6 +53,7 @@ class EnvironConfigFactory:
         return Config(
             server=self.create_server(),
             database=self.create_database(),
+            postgres=self.create_postgres(),
             auth=auth,
             zipkin=self.create_zipkin(),
             oauth=self.try_create_oauth(),
@@ -300,3 +304,43 @@ class EnvironConfigFactory:
         if origins_str:
             origins = origins_str.split(",")
         return CORSConfig(allowed_origins=origins)
+
+    def create_postgres(self) -> PostgresConfig:
+        try:
+            postgres_dsn = self._environ["NP_ADMIN_POSTGRES_DSN"]
+        except KeyError:
+            # Temporary fix until postgres deployment is set
+            postgres_dsn = ""
+        pool_min_size = int(
+            self._environ.get("NP_DB_POSTGRES_POOL_MIN", PostgresConfig.pool_min_size)
+        )
+        pool_max_size = int(
+            self._environ.get("NP_DB_POSTGRES_POOL_MAX", PostgresConfig.pool_max_size)
+        )
+        connect_timeout_s = float(
+            self._environ.get(
+                "NP_DB_POSTGRES_CONNECT_TIMEOUT", PostgresConfig.connect_timeout_s
+            )
+        )
+        command_timeout_s = PostgresConfig.command_timeout_s
+        if self._environ.get("NP_ADMIN_POSTGRES_COMMAND_TIMEOUT"):
+            command_timeout_s = float(
+                self._environ["NP_ADMIN_POSTGRES_COMMAND_TIMEOUT"]
+            )
+        return PostgresConfig(
+            postgres_dsn=postgres_dsn,
+            alembic=self.create_alembic(postgres_dsn),
+            pool_min_size=pool_min_size,
+            pool_max_size=pool_max_size,
+            connect_timeout_s=connect_timeout_s,
+            command_timeout_s=command_timeout_s,
+        )
+
+    def create_alembic(self, postgres_dsn: str) -> AlembicConfig:
+        parent_path = pathlib.Path(__file__).resolve().parent.parent
+        ini_path = str(parent_path / "alembic.ini")
+        script_path = str(parent_path / "alembic")
+        config = AlembicConfig(ini_path)
+        config.set_main_option("script_location", script_path)
+        config.set_main_option("sqlalchemy.url", postgres_dsn)
+        return config
