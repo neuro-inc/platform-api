@@ -170,8 +170,18 @@ class JobsClient:
                 JobStatus.SUCCEEDED.value,
                 JobStatus.FAILED.value,
             ],
-            JobStatus.SUCCEEDED.value: [JobStatus.FAILED.value],
-            JobStatus.FAILED.value: [JobStatus.SUCCEEDED],
+            JobStatus.SUCCEEDED.value: [
+                JobStatus.FAILED.value,
+                JobStatus.CANCELLED.value,
+            ],
+            JobStatus.FAILED.value: [
+                JobStatus.SUCCEEDED.value,
+                JobStatus.CANCELLED.value,
+            ],
+            JobStatus.CANCELLED.value: [
+                JobStatus.SUCCEEDED.value,
+                JobStatus.FAILED.value,
+            ],
         }
         stop_statuses: List[str] = []
         if unreachable_optimization and status in unreachable_statuses_map:

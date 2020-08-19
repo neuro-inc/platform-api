@@ -74,6 +74,13 @@ class TestRedisJobsStorage:
             name=job_name, status=JobStatus.FAILED, owner=owner, **kwargs
         )
 
+    def _create_cancelled_job(
+        self, owner: str = "compute", job_name: Optional[str] = None, **kwargs: Any
+    ) -> JobRecord:
+        return self._create_job(
+            name=job_name, status=JobStatus.CANCELLED, owner=owner, **kwargs
+        )
+
     @pytest.mark.asyncio
     async def test_set_get(self, redis_client: aioredis.Redis) -> None:
         original_job = self._create_pending_job()
@@ -583,25 +590,31 @@ class TestRedisJobsStorage:
             self._create_running_job(owner="user2", job_name=None),
             self._create_succeeded_job(owner="user3", job_name=None),
             self._create_failed_job(owner="user3", job_name=None),
+            self._create_cancelled_job(owner="user3", job_name=None),
             # user1, jobname1:
             self._create_succeeded_job(owner="user1", job_name="jobname1"),
             self._create_failed_job(owner="user1", job_name="jobname1"),
+            self._create_cancelled_job(owner="user1", job_name="jobname1"),
             self._create_pending_job(owner="user1", job_name="jobname1"),
             # user1, jobname2:
             self._create_succeeded_job(owner="user1", job_name="jobname2"),
             self._create_failed_job(owner="user1", job_name="jobname2"),
+            self._create_cancelled_job(owner="user1", job_name="jobname2"),
             self._create_running_job(owner="user1", job_name="jobname2"),
             # user2, jobname2:
             self._create_succeeded_job(owner="user2", job_name="jobname2"),
             self._create_failed_job(owner="user2", job_name="jobname2"),
+            self._create_cancelled_job(owner="user2", job_name="jobname2"),
             self._create_pending_job(owner="user2", job_name="jobname2"),
             # user2, jobname3:
             self._create_succeeded_job(owner="user2", job_name="jobname3"),
             self._create_failed_job(owner="user2", job_name="jobname3"),
+            self._create_cancelled_job(owner="user2", job_name="jobname3"),
             self._create_running_job(owner="user2", job_name="jobname3"),
             # user3, jobname3:
             self._create_succeeded_job(owner="user3", job_name="jobname3"),
             self._create_failed_job(owner="user3", job_name="jobname3"),
+            self._create_cancelled_job(owner="user3", job_name="jobname3"),
             self._create_pending_job(owner="user3", job_name="jobname3"),
         ]
         storage = RedisJobsStorage(client=redis_client)
@@ -639,6 +652,7 @@ class TestRedisJobsStorage:
     pend = JobStatus.PENDING
     runn = JobStatus.RUNNING
     succ = JobStatus.SUCCEEDED
+    canc = JobStatus.CANCELLED
     fail = JobStatus.FAILED
 
     @pytest.mark.asyncio
@@ -651,26 +665,31 @@ class TestRedisJobsStorage:
             (None, (), (succ, fail)),
             (None, (), (succ, fail, runn)),
             (None, (), (succ, fail, runn, pend)),
+            (None, (), (succ, canc, fail, runn, pend)),
             (None, ("user1",), ()),
             (None, ("user1",), (pend,)),
             (None, ("user1",), (pend, runn)),
             (None, ("user1",), (succ, fail)),
             (None, ("user1",), (succ, fail, runn, pend)),
+            (None, ("user1",), (succ, canc, fail, runn, pend)),
             (None, ("user1", "user2"), ()),
             (None, ("user1", "user2"), (pend,)),
             (None, ("user1", "user2"), (pend, runn)),
             (None, ("user1", "user2"), (succ, fail)),
             (None, ("user1", "user2"), (succ, fail, runn, pend)),
+            (None, ("user1", "user2"), (succ, canc, fail, runn, pend)),
             ("jobname1", ("user1",), ()),
             ("jobname1", ("user1",), (pend,)),
             ("jobname1", ("user1",), (pend, runn)),
             ("jobname1", ("user1",), (succ, fail)),
             ("jobname1", ("user1",), (succ, fail, runn, pend)),
+            ("jobname1", ("user1",), (succ, canc, fail, runn, pend)),
             ("jobname1", ("user1", "user2"), ()),
             ("jobname1", ("user1", "user2"), (pend,)),
             ("jobname1", ("user1", "user2"), (pend, runn)),
             ("jobname1", ("user1", "user2"), (succ, fail)),
             ("jobname1", ("user1", "user2"), (succ, fail, runn, pend)),
+            ("jobname1", ("user1", "user2"), (succ, canc, fail, runn, pend)),
         ],
     )
     async def test_get_all_with_filters(

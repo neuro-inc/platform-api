@@ -14,4 +14,10 @@ class TestStatus:
         assert status.value == JobStatus.FAILED
 
     def test_values(self) -> None:
-        assert JobStatus.values() == ["pending", "running", "succeeded", "failed"]
+        assert JobStatus.values() == [
+            "pending",
+            "running",
+            "succeeded",
+            "cancelled",
+            "failed",
+        ]

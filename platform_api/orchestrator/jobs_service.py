@@ -439,7 +439,7 @@ class JobsService:
                     logger.info("Deleting job %s", job_id)
                     await self._delete_cluster_job(record)
 
-                    record.status = JobStatus.SUCCEEDED
+                    record.status = JobStatus.CANCELLED
                     record.is_deleted = True
                 return
             except JobStorageTransactionError:
