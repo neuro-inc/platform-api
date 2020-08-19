@@ -193,7 +193,7 @@ class JobStatusHistory:
 
         In case the job terminated instantly without an explicit transition to
         the RUNNING state, it is assumed that `started_at` gets its value from
-        the transition time of the next state (either SUCCEEDED or FINISHED or
+        the transition time of the next state (either SUCCEEDED or FAILED or
         CANCELLED).
         """
         item = self._first_running or self._first_finished
