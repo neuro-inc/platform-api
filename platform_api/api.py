@@ -31,7 +31,7 @@ from .kube_cluster import KubeCluster
 from .orchestrator.job_request import JobException
 from .orchestrator.jobs_poller import JobsPoller
 from .orchestrator.jobs_service import JobsService, JobsServiceException
-from .orchestrator.jobs_storage import RedisJobsStorage
+from .orchestrator.jobs_storage import ProxyJobStorage, RedisJobsStorage
 from .redis import create_redis_client
 from .resource import Preset
 from .trace import store_span_middleware
@@ -291,8 +291,12 @@ async def create_app(
                 await cluster_registry.replace(cluster)
 
             logger.info("Initializing JobsStorage")
-            jobs_storage = RedisJobsStorage(redis_client)
-            await jobs_storage.migrate()
+            redis_jobs_storage = RedisJobsStorage(redis_client)
+            await redis_jobs_storage.migrate()
+
+            jobs_storage = ProxyJobStorage(
+                primary_storage=redis_jobs_storage, secondary_storages=()
+            )
 
             logger.info("Initializing JobsService")
             jobs_service = JobsService(
