@@ -25,7 +25,7 @@ include k8s.mk
 
 setup:
 	pip install -U pip
-	pip install --no-binary cryptography -r requirements/test.txt -c requirements/constraints.txt
+	pip install --no-binary cryptography -r requirements/test.txt
 
 lint:
 	isort --check-only --diff platform_api tests setup.py
