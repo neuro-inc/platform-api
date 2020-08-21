@@ -1,3 +1,4 @@
+import asyncio
 import json
 import logging
 from collections import defaultdict
@@ -520,10 +521,21 @@ class JobsHandler:
             response = aiohttp.web.StreamResponse()
             response.headers["Content-Type"] = "application/x-ndjson"
             await response.prepare(request)
-            async for job in jobs:
-                response_payload = convert_job_to_job_response(job)
-                self._job_response_validator.check(response_payload)
-                await response.write(json.dumps(response_payload).encode() + b"\n")
+            try:
+                async for job in jobs:
+                    response_payload = convert_job_to_job_response(job)
+                    self._job_response_validator.check(response_payload)
+                    await response.write(json.dumps(response_payload).encode() + b"\n")
+            except asyncio.CancelledError:
+                raise
+            except Exception as e:
+                msg_str = (
+                    f"Unexpected exception {e.__class__.__name__}: {str(e)}. "
+                    f"Path with query: {request.path_qs}."
+                )
+                logging.exception(msg_str)
+                payload = {"error": msg_str}
+                await response.write(json.dumps(payload).encode())
             await response.write_eof()
             return response
         else:
