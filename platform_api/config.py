@@ -52,6 +52,10 @@ class OAuthConfig:
     def token_url(self) -> URL:
         return self.base_url / "oauth/token"
 
+    @property
+    def logout_url(self) -> URL:
+        return self.base_url / "v2/logout"
+
 
 @dataclass(frozen=True)
 class DatabaseConfig:

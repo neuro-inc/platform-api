@@ -109,6 +109,7 @@ class ApiHandler:
         if self._config.oauth:
             data["auth_url"] = str(self._config.oauth.auth_url)
             data["token_url"] = str(self._config.oauth.token_url)
+            data["logout_url"] = str(self._config.oauth.logout_url)
             data["client_id"] = self._config.oauth.client_id
             data["audience"] = self._config.oauth.audience
             data["callback_urls"] = [str(u) for u in self._config.oauth.callback_urls]
