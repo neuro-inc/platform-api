@@ -1,7 +1,6 @@
-import asyncio
 import dataclasses
 import logging
-from contextlib import AsyncExitStack, asynccontextmanager
+from contextlib import asynccontextmanager
 from datetime import timedelta
 from typing import (
     Any,
@@ -25,12 +24,13 @@ logger = logging.getLogger(__name__)
 class ProxyJobStorage(JobsStorage):
     """Proxy JobStorage for passing calls to real storages
 
-    Always has single primary JobStorage and, in addition to ie, can have
-    any number for secondary storages. Calls are passed to all storages,
-    but result only returned from primary one.
+    Always has single primary JobStorage and, in addition to it, can have
+    any number for secondary storages. Write calls are passed to all storages,
+    but result only returned from primary one. Read calls are only passed
+    to primary storage.
 
     Main goal of this class to allow smooth transition from one storage
-    engine to another while new storage is still in development.
+    engine to another by maintaining same data in storages.
     """
 
     _primary_storage: JobsStorage
@@ -42,76 +42,29 @@ class ProxyJobStorage(JobsStorage):
         self._primary_storage = primary_storage
         self._secondary_storages = list(secondary_storages)
 
-    async def _pass_through_call(
-        self, method_name: str, *args: Any, **kwargs: Any
-    ) -> Any:
-        for secondary in self._secondary_storages:
-            try:
-                await getattr(secondary, method_name)(*args, **kwargs)
-            except Exception:
-                logger.exception(
-                    f"Secondary jobs storage {secondary.__class__.__name__} failed "
-                    f"to run {method_name}"
-                )
-        return await getattr(self._primary_storage, method_name)(*args, **kwargs)
-
-    async def _pass_through_aiter(
-        self, method_name: str, *args: Any, **kwargs: Any
-    ) -> AsyncIterator[Any]:
-        for secondary in self._secondary_storages:
-            try:
-                aiter = getattr(secondary, method_name)(*args, **kwargs)
-                async for _ in aiter:
-                    pass
-            except Exception:
-                logger.exception(
-                    f"Secondary jobs storage {secondary.__class__.__name__} failed "
-                    f"to run {method_name}"
-                )
-        async for item in getattr(self._primary_storage, method_name)(*args, **kwargs):
-            yield item
-
     @asynccontextmanager
     async def _pass_through_job_context_manager(
         self, method_name: str, *args: Any, **kwargs: Any
     ) -> AsyncIterator[JobRecord]:
         primary_manager = getattr(self._primary_storage, method_name)(*args, **kwargs)
-        async with primary_manager as primary_job, AsyncExitStack() as stack:
-            secondary_managers = []
-            for secondary in self._secondary_storages:
-                try:
-                    manager = getattr(secondary, method_name)(*args, **kwargs)
-                    secondary_job = await manager.__aenter__()
-                except asyncio.CancelledError:
-                    raise
-                except Exception:
-                    logger.exception(
-                        f"Secondary jobs storage {secondary.__class__.__name__}"
-                        f" failed to enter context manager {method_name}"
-                    )
-                else:
-                    stack.push_async_exit(manager)
-                    secondary_managers.append((manager, secondary_job))
+        async with primary_manager as primary_job:
             yield primary_job
-            for manager, secondary_job in secondary_managers:
+        for secondary in self._secondary_storages:
+            manager = getattr(secondary, method_name)(*args, **kwargs)
+            async with manager as secondary_job:
                 # Sync up secondary job with primary
                 for field in dataclasses.fields(secondary_job):
                     setattr(secondary_job, field.name, getattr(primary_job, field.name))
-            try:
-                await stack.aclose()
-            except asyncio.CancelledError:
-                raise
-            except Exception:
-                logger.exception(
-                    f"Secondary jobs storage failed to exit context"
-                    f" manager {method_name}"
-                )
 
     async def set_job(self, job: JobRecord) -> None:
-        return await self._pass_through_call("set_job", job)
+        # Order here is important: if primary raises something,
+        # we should not touch secondary
+        await self._primary_storage.set_job(job)
+        for secondary in self._secondary_storages:
+            await secondary.set_job(job)
 
     async def get_job(self, job_id: str) -> JobRecord:
-        return await self._pass_through_call("get_job", job_id)
+        return await self._primary_storage.get_job(job_id)
 
     def try_create_job(self, job: JobRecord) -> AsyncContextManager[JobRecord]:
         return self._pass_through_job_context_manager("try_create_job", job)
@@ -126,28 +79,26 @@ class ProxyJobStorage(JobsStorage):
         reverse: bool = False,
         limit: Optional[int] = None,
     ) -> AsyncIterator[JobRecord]:
-        return self._pass_through_aiter(
-            "iter_all_jobs", job_filter, reverse=reverse, limit=limit
+        return self._primary_storage.iter_all_jobs(
+            job_filter, reverse=reverse, limit=limit
         )
 
     async def get_jobs_by_ids(
         self, job_ids: Iterable[str], job_filter: Optional[JobFilter] = None
     ) -> List[JobRecord]:
-        return await self._pass_through_call(
-            "get_jobs_by_ids", list(job_ids), job_filter
-        )
+        return await self._primary_storage.get_jobs_by_ids(job_ids, job_filter)
 
     async def get_jobs_for_deletion(
         self, *, delay: timedelta = timedelta()
     ) -> List[JobRecord]:
-        return await self._pass_through_call("get_jobs_for_deletion", delay=delay)
+        return await self._primary_storage.get_jobs_for_deletion(delay=delay)
 
     async def get_tags(self, owner: str) -> List[str]:
-        return await self._pass_through_call("get_tags", owner)
+        return await self._primary_storage.get_tags(owner=owner)
 
     async def get_aggregated_run_time_by_clusters(
         self, job_filter: JobFilter
     ) -> Dict[str, AggregatedRunTime]:
-        return await self._pass_through_call(
-            "get_aggregated_run_time_by_clusters", job_filter
+        return await self._primary_storage.get_aggregated_run_time_by_clusters(
+            job_filter
         )
