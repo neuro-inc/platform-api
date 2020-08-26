@@ -13,13 +13,20 @@ from platform_api.orchestrator.job import (
     JobStatus,
     current_datetime_factory,
 )
-from platform_api.orchestrator.job_request import Container, ContainerResources
+from platform_api.orchestrator.job_request import (
+    Container,
+    ContainerResources,
+    JobError,
+)
 from platform_api.orchestrator.jobs_storage import (
     InMemoryJobsStorage,
     JobFilter,
     JobStorageJobFoundError,
 )
-from platform_api.orchestrator.jobs_storage.proxy import ProxyJobStorage
+from platform_api.orchestrator.jobs_storage.proxy import (
+    ProxyJobStorage,
+    SecondaryStorageError,
+)
 
 
 class TestInMemoryJobsStorage:
@@ -660,3 +667,25 @@ class TestProxyJobStorage:
             job_from_storage = await storage.get_job(job.id)
             assert job_from_storage.id == job_copy.id
             assert job_from_storage.request == job_copy.request
+
+    @pytest.mark.asyncio
+    async def test_pass_through_try_update_job_error_in_primary(
+        self, proxy_setup: ProxyJobStorageSetup
+    ) -> None:
+        job = self._create_job()
+        for storage in proxy_setup.secondary:
+            await storage.set_job(job)
+        with pytest.raises(JobError):
+            async with proxy_setup.proxy.try_update_job(job.id) as job_for_update:
+                job_for_update.owner = "42"
+
+    @pytest.mark.asyncio
+    async def test_pass_through_try_update_job_error_in_secondary(
+        self, proxy_setup: ProxyJobStorageSetup
+    ) -> None:
+        job = self._create_job()
+        await proxy_setup.primary.set_job(job)
+
+        with pytest.raises(SecondaryStorageError):
+            async with proxy_setup.proxy.try_update_job(job.id) as job_for_update:
+                job_for_update.owner = "42"

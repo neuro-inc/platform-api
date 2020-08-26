@@ -1,6 +1,7 @@
+import asyncio
 import dataclasses
 import logging
-from contextlib import asynccontextmanager
+from contextlib import AsyncExitStack, asynccontextmanager
 from datetime import timedelta
 from typing import (
     Any,
@@ -19,6 +20,10 @@ from .base import JobsStorage
 
 
 logger = logging.getLogger(__name__)
+
+
+class SecondaryStorageError(Exception):
+    pass
 
 
 class ProxyJobStorage(JobsStorage):
@@ -47,21 +52,46 @@ class ProxyJobStorage(JobsStorage):
         self, method_name: str, *args: Any, **kwargs: Any
     ) -> AsyncIterator[JobRecord]:
         primary_manager = getattr(self._primary_storage, method_name)(*args, **kwargs)
-        async with primary_manager as primary_job:
-            yield primary_job
-        for secondary in self._secondary_storages:
-            manager = getattr(secondary, method_name)(*args, **kwargs)
-            async with manager as secondary_job:
+        stack = AsyncExitStack()
+        secondary_managers = []
+        try:
+            for secondary in self._secondary_storages:
+                manager = getattr(secondary, method_name)(*args, **kwargs)
+                secondary_job = await stack.enter_async_context(manager)
+                secondary_managers.append((manager, secondary_job))
+        except asyncio.CancelledError:
+            raise
+        except Exception:
+            raise SecondaryStorageError
+        try:
+            async with primary_manager as primary_job:
+                yield primary_job
+        except Exception:
+            canceled_error = asyncio.CancelledError()
+            await stack.__aexit__(asyncio.CancelledError, canceled_error, None)
+            raise
+        try:
+            for manager, secondary_job in secondary_managers:
                 # Sync up secondary job with primary
                 for field in dataclasses.fields(secondary_job):
                     setattr(secondary_job, field.name, getattr(primary_job, field.name))
+            await stack.aclose()
+        except asyncio.CancelledError:
+            raise
+        except Exception:
+            raise SecondaryStorageError
 
     async def set_job(self, job: JobRecord) -> None:
         # Order here is important: if primary raises something,
         # we should not touch secondary
         await self._primary_storage.set_job(job)
-        for secondary in self._secondary_storages:
-            await secondary.set_job(job)
+        try:
+            for secondary in self._secondary_storages:
+                await secondary.set_job(job)
+        except asyncio.CancelledError:
+            raise
+        except Exception:
+            raise SecondaryStorageError
 
     async def get_job(self, job_id: str) -> JobRecord:
         return await self._primary_storage.get_job(job_id)
