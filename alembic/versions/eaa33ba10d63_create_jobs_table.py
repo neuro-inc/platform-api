@@ -1,0 +1,42 @@
+"""create jobs table
+
+Revision ID: eaa33ba10d63
+Revises: 
+Create Date: 2020-08-17 12:04:17.252280
+
+"""
+from alembic import op
+import sqlalchemy as sa
+import sqlalchemy.dialects.postgresql as sapg
+
+
+# revision identifiers, used by Alembic.
+revision = 'eaa33ba10d63'
+down_revision = None
+branch_labels = None
+depends_on = None
+
+
+def upgrade() -> None:
+    op.create_table(
+        "jobs",
+        sa.Column("id", sa.String(), primary_key=True),
+        sa.Column("owner", sa.String(), nullable=False),
+        sa.Column("name", sa.String(), nullable=True),
+        sa.Column("cluster_name", sa.String(), nullable=False),
+        sa.Column("is_preemptible", sa.Boolean(), nullable=False),
+        sa.Column("is_deleted", sa.Boolean(), nullable=True),
+        sa.Column("max_run_time_minutes", sa.String(), nullable=True),
+        sa.Column("internal_hostname", sa.String(), nullable=True),
+        sa.Column("internal_hostname_named", sa.String(), nullable=True),
+        sa.Column("schedule_timeout", sa.Float(), nullable=True),
+        sa.Column("restart_policy", sa.String(), nullable=True),
+        sa.Column("request", sapg.JSONB(), nullable=False),
+        sa.Column("statuses", sapg.JSONB(), nullable=False),
+        sa.Column("tags", sapg.JSONB(), nullable=True),
+    )
+    op.create_unique_constraint('jobs_name_owner_uq', 'jobs', ['name', 'owner'])
+
+
+def downgrade() -> None:
+    op.drop_table("jobs")
