@@ -50,6 +50,9 @@ class JobTables:
             sa.Column("request", sapg.JSONB(), nullable=False),
             sa.Column("statuses", sapg.JSONB(), nullable=False),
             sa.Column("tags", sapg.JSONB(), nullable=True),
+            # Field for optimized access/unique constrains checks
+            sa.Column("status", sa.String(), nullable=False),
+            sa.Column("finished_at", sa.DateTime(timezone=True), nullable=True),
         )
         return cls(jobs=jobs_table,)
 
@@ -73,9 +76,7 @@ class PostgresJobsStorage(JobsStorage):
 
     def _job_to_values(self, job: JobRecord) -> Dict[str, Any]:
         values = job.to_primitive()
-        # Drop unused fields
-        values.pop("status")
-        values.pop("finished_at")
+        values["finished_at"] = job.finished_at
         return values
 
     def _record_to_job(self, record: Record) -> JobRecord:
