@@ -92,7 +92,7 @@ async def untrusted_user(request: Request) -> User:
 
 async def authorized_user(request: Request) -> User:
     """Request auth-server for authenticated information on the user and
-     return the `User` object with all necessary information
+    return the `User` object with all necessary information
     """
     identity = await _get_identity(request)
 

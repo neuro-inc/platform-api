@@ -429,7 +429,7 @@ class TestJobs:
 
     @pytest.fixture
     async def _run_job_with_secrets(
-        self, api: ApiConfig, client: aiohttp.ClientSession, jobs_client: JobsClient,
+        self, api: ApiConfig, client: aiohttp.ClientSession, jobs_client: JobsClient
     ) -> Callable[..., Awaitable[None]]:
         async def _run(
             job_submit: Dict[str, Any],
@@ -588,7 +588,7 @@ class TestJobs:
         regular_secrets_client: SecretsClient,
         _run_job_with_secrets: Callable[..., Awaitable[None]],
     ) -> None:
-        """ Mount multiple different secrets as both secret env and
+        """Mount multiple different secrets as both secret env and
         secret volumes in a single job.
         """
         user = regular_user
@@ -659,7 +659,7 @@ class TestJobs:
         regular_secrets_client: SecretsClient,
         _run_job_with_secrets: Callable[..., Awaitable[None]],
     ) -> None:
-        """ Same secret key is allowed to be mounted as a secret volume
+        """Same secret key is allowed to be mounted as a secret volume
         and a secret env simultaneously.
         """
         user = regular_user
@@ -931,7 +931,7 @@ class TestJobs:
         regular_secrets_client: SecretsClient,
         secret_kind: str,
     ) -> None:
-        """ This test checks the case when the user's k8s secret
+        """This test checks the case when the user's k8s secret
         'user--{user_name}--secrets' is present, but requested secret
         key not found
         """
@@ -2150,7 +2150,7 @@ class TestJobs:
 
     @pytest.fixture
     async def share_job(
-        self, auth_client: AuthClient, cluster_name: str,
+        self, auth_client: AuthClient, cluster_name: str
     ) -> AsyncIterator[Callable[[_User, _User, Any], Awaitable[None]]]:
         async def _impl(
             owner: _User, follower: _User, job_id: str, action: str = "read"
@@ -3225,7 +3225,7 @@ class TestJobs:
 
     @pytest.mark.asyncio
     async def test_create_validation_failure(
-        self, api: ApiConfig, client: aiohttp.ClientSession, regular_user: _User,
+        self, api: ApiConfig, client: aiohttp.ClientSession, regular_user: _User
     ) -> None:
         request_payload: Dict[str, Any] = {}
         async with client.post(

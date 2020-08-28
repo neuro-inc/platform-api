@@ -1561,7 +1561,7 @@ class TestKubeOrchestrator:
         k8s_sec_name = sec1.k8s_secret_name
 
         await kube_client.update_or_create_secret(
-            k8s_sec_name, ns, data={sec_name_1: "vvvv", sec_name_2: "vvvv"},
+            k8s_sec_name, ns, data={sec_name_1: "vvvv", sec_name_2: "vvvv"}
         )
 
         sec_path, sec_file = PurePath("/foo/bar"), "secret.txt"
@@ -1753,7 +1753,7 @@ class TestKubeOrchestrator:
             image="ubuntu",
             command="sleep 1h",
             http_server=ContainerHTTPServer(80),
-            resources=ContainerResources(cpu=0.1, memory_mb=16,),
+            resources=ContainerResources(cpu=0.1, memory_mb=16),
         )
         name = f"job-{uuid.uuid4().hex[:6]}"
         job1 = MyJob(
@@ -2351,7 +2351,7 @@ class TestKubeClient:
 
             await delete_network_policy_later(np_name)
             payload = await kube_client.create_egress_network_policy(
-                np_name, pod_labels=labels, labels=labels, rules=[{}],
+                np_name, pod_labels=labels, labels=labels, rules=[{}]
             )
             return payload
 

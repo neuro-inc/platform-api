@@ -124,7 +124,7 @@ class TestJobNameValidator:
 
 
 class TestUserNameValidator:
-    """ Almost the same test suite as used for the same
+    """Almost the same test suite as used for the same
     user-name validation method in platform-auth
     """
 
@@ -579,9 +579,7 @@ class TestPathUriValidator:
         with pytest.raises(t.DataError, match="Invalid path"):
             validator.check(uri)
 
-    @pytest.mark.parametrize(
-        "uri", ("secret://test-cluster", "secret://test-cluster/"),
-    )
+    @pytest.mark.parametrize("uri", ("secret://test-cluster", "secret://test-cluster/"))
     def test_create_assert_username_missing(self, uri: str) -> None:
         cluster = "test-cluster"
         validator = create_path_uri_validator(

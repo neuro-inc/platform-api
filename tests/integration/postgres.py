@@ -56,7 +56,7 @@ async def _postgres_dsn(
         await container.delete(force=True)
 
 
-async def _make_postgres_dsn(container: aiodocker.containers.DockerContainer,) -> str:
+async def _make_postgres_dsn(container: aiodocker.containers.DockerContainer) -> str:
     host = "0.0.0.0"
     port = int((await container.port(5432))[0]["HostPort"])
     return f"postgresql://postgres@{host}:{port}/postgres"

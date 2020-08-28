@@ -311,7 +311,7 @@ def infer_permissions_from_container(
             )
         )
     for secret_uri in container.get_secret_uris():
-        permissions.append(Permission(uri=str(secret_uri), action="read",))
+        permissions.append(Permission(uri=str(secret_uri), action="read"))
     for volume in container.volumes:
         action = "read" if volume.read_only else "write"
         permission = Permission(uri=str(volume.uri), action=action)
@@ -413,11 +413,11 @@ class JobsHandler:
         request_payload = job_request_validator.check(request_payload)
 
         container = create_container_from_payload(
-            request_payload["container"], storage_config=cluster_config.storage,
+            request_payload["container"], storage_config=cluster_config.storage
         )
 
         permissions = infer_permissions_from_container(
-            user, container, cluster_config.registry, cluster_name,
+            user, container, cluster_config.registry, cluster_name
         )
         await check_permissions(request, permissions)
 
@@ -494,7 +494,7 @@ class JobsHandler:
             ).build()
         except JobFilterException:
             bulk_job_filter = BulkJobFilter(
-                bulk_filter=None, shared_ids=set(), shared_ids_filter=None,
+                bulk_filter=None, shared_ids=set(), shared_ids_filter=None
             )
 
         reverse = _parse_bool(request.query.get("reverse", "0"))
@@ -682,7 +682,7 @@ class BulkJobFilter:
 
 class BulkJobFilterBuilder:
     def __init__(
-        self, query_filter: JobFilter, access_tree: ClientSubTreeViewRoot,
+        self, query_filter: JobFilter, access_tree: ClientSubTreeViewRoot
     ) -> None:
         self._query_filter = query_filter
         self._access_tree = access_tree

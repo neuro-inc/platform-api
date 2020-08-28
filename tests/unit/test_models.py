@@ -283,7 +283,7 @@ class TestContainerRequestValidator:
             },
         }
         validator = create_container_request_validator(
-            allowed_tpu_resources=allowed_tpu_resources, cluster_name=cluster,
+            allowed_tpu_resources=allowed_tpu_resources, cluster_name=cluster
         )
         with pytest.raises(ValueError):
             validator.check(payload)
@@ -468,7 +468,7 @@ class TestJobRequestValidator:
             "cluster_name": "testcluster",
         }
         validator = create_job_request_validator(
-            allowed_gpu_models=(), allowed_tpu_resources=(), cluster_name="another",
+            allowed_gpu_models=(), allowed_tpu_resources=(), cluster_name="another"
         )
         with pytest.raises(DataError, match="value is not exactly 'another'"):
             validator.check(request)
@@ -1232,7 +1232,7 @@ class TestBulkJobFilterBuilder:
         bulk_filter = BulkJobFilterBuilder(query_filter, tree).build()
         assert bulk_filter == BulkJobFilter(
             bulk_filter=JobFilter(
-                clusters={"test-cluster": {}}, owners={"anotheruser"}, name="testname",
+                clusters={"test-cluster": {}}, owners={"anotheruser"}, name="testname"
             ),
             shared_ids={"job-test-1"},
             shared_ids_filter=JobFilter(owners={"anotheruser"}, name="testname"),
@@ -1260,7 +1260,7 @@ class TestInferPermissionsFromContainer:
     def test_no_volumes(self) -> None:
         user = User(name="testuser", token="")
         container = Container(
-            image="image", resources=ContainerResources(cpu=0.1, memory_mb=16),
+            image="image", resources=ContainerResources(cpu=0.1, memory_mb=16)
         )
         registry_config = RegistryConfig(
             url=URL("http://example.com"), username="compute", password="compute_token"

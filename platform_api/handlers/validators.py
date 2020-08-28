@@ -348,7 +348,7 @@ def create_container_response_validator() -> t.Trafaret:
 
 
 def sanitize_dns_name(value: str) -> Optional[str]:
-    """ This is a TEMPORARY METHOD used to sanitize DNS names so that they are parseable
+    """This is a TEMPORARY METHOD used to sanitize DNS names so that they are parseable
     by the client (issue #642).
     :param value: String representing a DNS name
     :return: `value` if it can be parsed by `yarl.URL`, `None` otherwise

@@ -393,7 +393,7 @@ class JobsService:
             # to be able to render a proper HTTP response, therefore we have
             # the fallback logic that uses the default cluster instead.
             logger.warning(
-                "Falling back to dummy cluster config to retrieve job '%s'", record.id,
+                "Falling back to dummy cluster config to retrieve job '%s'", record.id
             )
             # NOTE: we may rather want to fall back to some dummy
             # OrchestratorConfig instead.

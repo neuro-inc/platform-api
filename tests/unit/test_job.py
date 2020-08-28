@@ -168,7 +168,7 @@ class TestContainer:
 
 class TestContainerVolumeFactory:
     @pytest.mark.parametrize(
-        "uri", ("storage://test-cluster", "storage://test-cluster/",),
+        "uri", ("storage://test-cluster", "storage://test-cluster/")
     )
     def test_create_storage_root_path(self, uri: str) -> None:
         volume = ContainerVolumeFactory(
@@ -976,7 +976,7 @@ class TestJob:
             storage_config=mock_orchestrator.storage_config,
             orchestrator_config=mock_orchestrator.config,
             record=JobRecord.create(
-                request=job_request, cluster_name="test-cluster", tags=["t1", "t2"],
+                request=job_request, cluster_name="test-cluster", tags=["t1", "t2"]
             ),
         )
         primitive = job.to_primitive()

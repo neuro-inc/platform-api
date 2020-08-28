@@ -127,10 +127,10 @@ class TestSecretVolume:
         volume = SecretVolume("testvolume", k8s_secret_name=secret_name)
         container_volumes = [
             SecretContainerVolume.create(
-                "secret://clustername/alice/sec1", PurePath("/etc/foo/file1.txt"),
+                "secret://clustername/alice/sec1", PurePath("/etc/foo/file1.txt")
             ),
             SecretContainerVolume.create(
-                "secret://clustername/alice/sec2", PurePath("/etc/foo/file2.txt"),
+                "secret://clustername/alice/sec2", PurePath("/etc/foo/file2.txt")
             ),
         ]
         mounts = [volume.create_secret_mount(vol) for vol in container_volumes]

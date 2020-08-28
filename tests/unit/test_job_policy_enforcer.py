@@ -285,13 +285,13 @@ class TestJobs:
                 **kwargs,
             )
 
-        job1 = _Job(id="j1", owner="u1", is_gpu=False, cluster_name="c1",)
-        job2 = _Job(id="j2", owner="u1", is_gpu=True, cluster_name="c1",)
-        job3 = _Job(id="j3", owner="u2", is_gpu=False, cluster_name="c1",)
-        job4 = _Job(id="j4", owner="u2", is_gpu=True, cluster_name="c2",)
-        job5 = _Job(id="j5", owner="u2", is_gpu=False, cluster_name="c2",)
-        job6 = _Job(id="j6", owner="u2", is_gpu=True, cluster_name="c1",)
-        job7 = _Job(id="j7", owner="u1", is_gpu=False, cluster_name="c1",)
+        job1 = _Job(id="j1", owner="u1", is_gpu=False, cluster_name="c1")
+        job2 = _Job(id="j2", owner="u1", is_gpu=True, cluster_name="c1")
+        job3 = _Job(id="j3", owner="u2", is_gpu=False, cluster_name="c1")
+        job4 = _Job(id="j4", owner="u2", is_gpu=True, cluster_name="c2")
+        job5 = _Job(id="j5", owner="u2", is_gpu=False, cluster_name="c2")
+        job6 = _Job(id="j6", owner="u2", is_gpu=True, cluster_name="c1")
+        job7 = _Job(id="j7", owner="u1", is_gpu=False, cluster_name="c1")
         jobs: List[JobInfo] = [job1, job2, job3, job4, job5, job6, job7]
         groups = Jobs.group_by_user(jobs)
         assert groups == [

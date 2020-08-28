@@ -485,9 +485,7 @@ class TestRedisJobsStorage:
         assert not job_ids
 
     @pytest.mark.asyncio
-    @pytest.mark.parametrize(
-        "statuses", [(), (JobStatus.PENDING, JobStatus.RUNNING)],
-    )
+    @pytest.mark.parametrize("statuses", [(), (JobStatus.PENDING, JobStatus.RUNNING)])
     async def test_get_all_filter_by_date_range(
         self, statuses: Tuple[JobStatus, ...], redis_client: aioredis.Redis
     ) -> None:

@@ -219,7 +219,7 @@ class TestInMemoryJobsStorage:
         )
         await jobs_storage.set_job(
             self._create_finished_job(
-                cluster_name="test-cluster-2", run_time=timedelta(minutes=5),
+                cluster_name="test-cluster-2", run_time=timedelta(minutes=5)
             )
         )
         result = await jobs_storage.get_aggregated_run_time(JobFilter())
@@ -262,7 +262,7 @@ class TestInMemoryJobsStorage:
         )
         await jobs_storage.set_job(
             self._create_finished_job(
-                cluster_name="test-cluster-2", run_time=timedelta(minutes=5),
+                cluster_name="test-cluster-2", run_time=timedelta(minutes=5)
             )
         )
         result = await jobs_storage.get_aggregated_run_time_by_clusters(JobFilter())
