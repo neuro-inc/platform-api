@@ -670,7 +670,7 @@ class TestJobsService:
         await jobs_service.delete_job(original_job.id)
 
         job = await jobs_service.get_job(original_job.id)
-        assert job.status == JobStatus.SUCCEEDED
+        assert job.status == JobStatus.CANCELLED
         assert job.is_finished
         assert job.finished_at
         assert job.is_deleted
@@ -695,7 +695,7 @@ class TestJobsService:
         assert f"Could not delete job '{original_job.id}'. Reason: ''" in caplog.text
 
         job = await jobs_service.get_job(original_job.id)
-        assert job.status == JobStatus.SUCCEEDED
+        assert job.status == JobStatus.CANCELLED
         assert job.is_finished
         assert job.finished_at
         assert job.is_deleted
@@ -1088,7 +1088,7 @@ class TestJobsServiceCluster:
         await jobs_service.delete_job(job.id)
 
         record = await mock_jobs_storage.get_job(job.id)
-        assert record.status == JobStatus.SUCCEEDED
+        assert record.status == JobStatus.CANCELLED
         assert record.is_deleted
 
     @pytest.mark.asyncio
@@ -1123,7 +1123,7 @@ class TestJobsServiceCluster:
         await jobs_service.delete_job(job.id)
 
         record = await mock_jobs_storage.get_job(job.id)
-        assert record.status == JobStatus.SUCCEEDED
+        assert record.status == JobStatus.CANCELLED
         assert record.is_deleted
 
 

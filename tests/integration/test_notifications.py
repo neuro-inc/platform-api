@@ -131,7 +131,7 @@ class TestJobTransition:
                     await jobs_client.long_polling_by_job_id(job_id, "running")
                     if do_kill:
                         await jobs_client.delete_job(job_id)
-                        await jobs_client.long_polling_by_job_id(job_id, "succeeded")
+                        await jobs_client.long_polling_by_job_id(job_id, "cancelled")
                 else:
                     cleanup_pairs.append((jobs_client, job_id))
             return job_id
@@ -198,11 +198,11 @@ class TestJobTransition:
                 )
             elif payload["status"] == "running":
                 assert payload["prev_status"] == "pending"
-            elif payload["status"] == "succeeded":
+            elif payload["status"] == "cancelled":
                 assert payload["prev_status"] == "running"
             else:
                 raise AssertionError(f"Unexpected JobTransition payload: {payload}")
-        assert states == {"pending", "running", "succeeded"}
+        assert states == {"pending", "running", "cancelled"}
 
     @pytest.mark.asyncio
     async def test_failed_job_workflow(
@@ -272,7 +272,7 @@ class TestQuotaWillBeReachedSoon:
                     await jobs_client.long_polling_by_job_id(job_id, "running")
                     if do_kill:
                         await jobs_client.delete_job(job_id)
-                        await jobs_client.long_polling_by_job_id(job_id, "succeeded")
+                        await jobs_client.long_polling_by_job_id(job_id, "cancelled")
                 else:
                     cleanup_pairs.append((jobs_client, job_id))
             return job_id

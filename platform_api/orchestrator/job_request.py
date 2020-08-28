@@ -406,14 +406,15 @@ class JobStatus(str, enum.Enum):
     possibly waiting for) sufficient amount of resources, pulling an image
     from a registry etc.
     RUNNING: a job is being run.
-    SUCCEEDED: a job terminated with the 0 exit code or a running job was
-    manually terminated/deleted.
+    SUCCEEDED: a job terminated with the 0 exit code.
+    CANCELLED: a running job was manually terminated/deleted.
     FAILED: a job terminated with a non-0 exit code.
     """
 
     PENDING = "pending"
     RUNNING = "running"
     SUCCEEDED = "succeeded"
+    CANCELLED = "cancelled"
     FAILED = "failed"
 
     @property
@@ -426,7 +427,7 @@ class JobStatus(str, enum.Enum):
 
     @property
     def is_finished(self) -> bool:
-        return self in (self.SUCCEEDED, self.FAILED)
+        return self in (self.SUCCEEDED, self.FAILED, self.CANCELLED)
 
     @classmethod
     def values(cls) -> List[str]:

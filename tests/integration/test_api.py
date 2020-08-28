@@ -1809,7 +1809,7 @@ class TestJobs:
 
         await jobs_client.long_polling_by_job_id(job_id, status="running")
         await jobs_client.delete_job(job_id)
-        await jobs_client.long_polling_by_job_id(job_id, status="succeeded")
+        await jobs_client.long_polling_by_job_id(job_id, status="cancelled")
 
         async with client.post(url, headers=headers, json=job_submit) as response:
             assert response.status == HTTPAccepted.status_code, await response.text()
@@ -2025,7 +2025,7 @@ class TestJobs:
 
         for job_id in job_ids_killed:
             await jobs_client.delete_job(job_id=job_id)
-            await jobs_client.long_polling_by_job_id(job_id, status="succeeded")
+            await jobs_client.long_polling_by_job_id(job_id, status="cancelled")
 
         # two statuses, actually filter out values
         filters = [("status", "pending"), ("status", "running")]
@@ -2044,13 +2044,14 @@ class TestJobs:
             ("status", "running"),
             ("status", "failed"),
             ("status", "succeeded"),
+            ("status", "cancelled"),
         ]
         jobs = await jobs_client.get_all_jobs(filters)
         job_ids = {job["id"] for job in jobs}
         assert job_ids == job_ids_all
 
         # single status, actually filter out values
-        filters2 = {"status": "succeeded"}
+        filters2 = {"status": "cancelled"}
         jobs = await jobs_client.get_all_jobs(filters2)
         job_ids = {job["id"] for job in jobs}
         assert job_ids == job_ids_killed
@@ -2138,7 +2139,7 @@ class TestJobs:
                     await jobs_client.long_polling_by_job_id(job_id, "running")
                 if do_kill:
                     await jobs_client.delete_job(job_id)
-                    await jobs_client.long_polling_by_job_id(job_id, "succeeded")
+                    await jobs_client.long_polling_by_job_id(job_id, "cancelled")
                 else:
                     cleanup_pairs.append((jobs_client, job_id))
             return job_id
@@ -2218,7 +2219,11 @@ class TestJobs:
         assert job_ids == [job_usr_with_name_killed, job_usr_with_name]
 
         # filter: multiple statuses
-        filters = [("status", "running"), ("status", "succeeded")]
+        filters = [
+            ("status", "running"),
+            ("status", "cancelled"),
+            ("status", "succeeded"),
+        ]
         jobs = await jobs_client_usr1.get_all_jobs(filters)
         job_ids = [job["id"] for job in jobs]
         assert job_ids == [
@@ -2238,13 +2243,18 @@ class TestJobs:
         ]
 
         # filter: name + status
-        filters = [("name", job_name), ("status", "succeeded")]
+        filters = [("name", job_name), ("status", "cancelled")]
         jobs = await jobs_client_usr1.get_all_jobs(filters)
         job_ids = [job["id"] for job in jobs]
         assert job_ids == [job_usr_with_name_killed]
 
         # filter: name + multiple statuses
-        filters = [("name", job_name), ("status", "running"), ("status", "succeeded")]
+        filters = [
+            ("name", job_name),
+            ("status", "running"),
+            ("status", "succeeded"),
+            ("status", "cancelled"),
+        ]
         jobs = await jobs_client_usr1.get_all_jobs(filters)
         job_ids = [job["id"] for job in jobs]
         assert job_ids == [job_usr_with_name_killed, job_usr_with_name]
@@ -2331,7 +2341,7 @@ class TestJobs:
         assert job_ids == [job_usr1_with_name, job_usr1_no_name]
 
         # filter: self owner + name + status
-        filters = [("owner", usr1.name), ("name", job_name), ("status", "succeeded")]
+        filters = [("owner", usr1.name), ("name", job_name), ("status", "cancelled")]
         jobs = await jobs_client_usr1.get_all_jobs(filters)
         job_ids = [job["id"] for job in jobs]
         assert job_ids == [job_usr1_with_name_killed]
@@ -2413,7 +2423,7 @@ class TestJobs:
         assert job_ids == [job_usr2_with_name, job_usr2_no_name]
 
         # filter: another owner + name + status
-        filters = [("owner", usr2.name), ("name", job_name), ("status", "succeeded")]
+        filters = [("owner", usr2.name), ("name", job_name), ("status", "cancelled")]
         jobs = await jobs_client_usr1.get_all_jobs(filters)
         job_ids = [job["id"] for job in jobs]
         assert job_ids == [job_usr2_with_name_killed]
@@ -2547,7 +2557,7 @@ class TestJobs:
             ("owner", usr1.name),
             ("owner", usr2.name),
             ("name", job_name),
-            ("status", "succeeded"),
+            ("status", "cancelled"),
         ]
         jobs = await jobs_client_usr1.get_all_jobs(filters)
         job_ids = [job["id"] for job in jobs]
@@ -2563,6 +2573,7 @@ class TestJobs:
             ("owner", usr2.name),
             ("name", job_name),
             ("status", "running"),
+            ("status", "cancelled"),
             ("status", "succeeded"),
         ]
         jobs = await jobs_client_usr1.get_all_jobs(filters)
@@ -2747,6 +2758,7 @@ class TestJobs:
                     ("status", "pending"),
                     ("status", "failed"),
                     ("status", "succeeded"),
+                    ("status", "cancelled"),
                 ]
             ),
         ],
@@ -2779,7 +2791,7 @@ class TestJobs:
                 # let only the last job be running
                 if i < n_jobs - 1:
                     await jobs_client.delete_job(job_id)
-                    await jobs_client.long_polling_by_job_id(job_id, status="succeeded")
+                    await jobs_client.long_polling_by_job_id(job_id, status="cancelled")
 
         jobs_ls = await jobs_client.get_all_jobs(params=filters)
         jobs_ls = [job["id"] for job in jobs_ls]
@@ -4043,7 +4055,7 @@ class TestJobPolicyEnforcer:
         await user_jobs_client.long_polling_by_job_id(
             job_id=job_default["id"],
             interval_s=0.1,
-            status="succeeded",
+            status="cancelled",
             max_time=max_enforcing_time,
         )
 
@@ -4079,7 +4091,7 @@ class TestRuntimeLimitEnforcer:
         await user_jobs_client.long_polling_by_job_id(
             job_id=job_default["id"],
             interval_s=0.1,
-            status="succeeded",
+            status="cancelled",
             max_time=max_enforcing_time,
         )
 
