@@ -189,7 +189,7 @@ async def regular_user_factory(
                 ]
             )
         async with auth_client._request(
-            "POST", f"/api/v1/users/{name}/permissions", headers=headers, json=payload,
+            "POST", f"/api/v1/users/{name}/permissions", headers=headers, json=payload
         ) as p:
             assert p.status == 201
         user_token = token_factory(user.name)

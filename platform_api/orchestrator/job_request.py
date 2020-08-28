@@ -98,7 +98,7 @@ class SecretContainerVolume:
     @classmethod
     def from_primitive(cls, payload: Dict[str, Any]) -> "SecretContainerVolume":
         return cls.create(
-            uri=payload["src_secret_uri"], dst_path=PurePath(payload["dst_path"]),
+            uri=payload["src_secret_uri"], dst_path=PurePath(payload["dst_path"])
         )
 
     def to_primitive(self) -> Dict[str, Any]:

@@ -1514,7 +1514,7 @@ class KubeClient:
         return Ingress.from_primitive(payload)
 
     async def delete_all_ingresses(
-        self, *, labels: Optional[Dict[str, str]] = None,
+        self, *, labels: Optional[Dict[str, str]] = None
     ) -> None:
         params: Dict[str, str] = {}
         if labels:

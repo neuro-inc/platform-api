@@ -364,9 +364,7 @@ class QuotaEnforcer(JobPolicyEnforcer):
 
 
 class RuntimeLimitEnforcer(JobPolicyEnforcer):
-    def __init__(
-        self, platform_api_client: PlatformApiClient,
-    ):
+    def __init__(self, platform_api_client: PlatformApiClient):
         self._platform_api_client = platform_api_client
 
     async def enforce(self) -> None:
@@ -390,7 +388,7 @@ class RuntimeLimitEnforcer(JobPolicyEnforcer):
 
 class JobPolicyEnforcePoller:
     def __init__(
-        self, config: JobPolicyEnforcerConfig, enforcers: List[JobPolicyEnforcer],
+        self, config: JobPolicyEnforcerConfig, enforcers: List[JobPolicyEnforcer]
     ) -> None:
         self._loop: asyncio.AbstractEventLoop = asyncio.get_event_loop()
         self._enforcers = enforcers

@@ -394,7 +394,7 @@ class TestJobsService:
 
     @pytest.mark.asyncio
     async def test_get_all_filter_by_date_range(
-        self, jobs_service: JobsService, job_request_factory: Callable[[], JobRequest],
+        self, jobs_service: JobsService, job_request_factory: Callable[[], JobRequest]
     ) -> None:
         user = User(cluster_name="test-cluster", name="testuser", token="")
 
@@ -748,7 +748,7 @@ class TestJobsService:
 
     @pytest.mark.asyncio
     async def test_raise_for_quota_raise_for_gpu_second_job(
-        self, jobs_service: JobsService, job_request_factory: Callable[..., JobRequest],
+        self, jobs_service: JobsService, job_request_factory: Callable[..., JobRequest]
     ) -> None:
         quota = create_quota(time_gpu_minutes=100)
         user = User(
@@ -793,7 +793,7 @@ class TestJobsService:
 
     @pytest.mark.asyncio
     async def test_raise_for_quota_raise_for_non_gpu_second_job(
-        self, jobs_service: JobsService, job_request_factory: Callable[..., JobRequest],
+        self, jobs_service: JobsService, job_request_factory: Callable[..., JobRequest]
     ) -> None:
         quota = create_quota(time_non_gpu_minutes=100)
         user = User(

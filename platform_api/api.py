@@ -377,7 +377,7 @@ def _setup_cors(app: aiohttp.web.Application, config: CORSConfig) -> None:
 
     logger.info(f"Setting up CORS with allowed origins: {config.allowed_origins}")
     default_options = aiohttp_cors.ResourceOptions(
-        allow_credentials=True, expose_headers="*", allow_headers="*",
+        allow_credentials=True, expose_headers="*", allow_headers="*"
     )
     cors = aiohttp_cors.setup(
         app, defaults={origin: default_options for origin in config.allowed_origins}

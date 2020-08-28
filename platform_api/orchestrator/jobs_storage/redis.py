@@ -65,7 +65,7 @@ class RedisJobsStorage(JobsStorage):
         return "jobs"
 
     def _generate_temp_zset_key(self) -> str:
-        """ Temporary index used for storing the result of operations over
+        """Temporary index used for storing the result of operations over
         Z-sets (union, intersection)
         """
         return f"temp_zset_{uuid4()}"
@@ -133,8 +133,7 @@ class RedisJobsStorage(JobsStorage):
 
     @asynccontextmanager
     async def try_update_job(self, job_id: str) -> AsyncIterator[JobRecord]:
-        """ NOTE: this method yields the job retrieved from the database
-        """
+        """NOTE: this method yields the job retrieved from the database"""
         async with self._watch_job_id_key(job_id) as storage:
             # NOTE: this method does not need to WATCH the job-last-created key as it
             # does not rely on this key
@@ -146,7 +145,7 @@ class RedisJobsStorage(JobsStorage):
     async def try_create_job(
         self, job: JobRecord, *, skip_index: bool = False
     ) -> AsyncIterator[JobRecord]:
-        """ NOTE: this method yields the job, the same object as it came as an argument
+        """NOTE: this method yields the job, the same object as it came as an argument
 
         :param bool skip_index:
             Prevents indexing the job by owner and cluster for testing purposes.
@@ -208,13 +207,13 @@ class RedisJobsStorage(JobsStorage):
         tags = [t for t in job.tags] + [""]
         names = [job.name, ""] if job.name else [""]
         for key in self._generate_jobs_composite_keys(
-            statuses=statuses, clusters=clusters, owners=owners, tags=tags, names=names,
+            statuses=statuses, clusters=clusters, owners=owners, tags=tags, names=names
         ):
             tr.zrem(key, job.id)
 
         statuses = [str(job.status), ""]
         for key in self._generate_jobs_composite_keys(
-            statuses=statuses, clusters=clusters, owners=owners, tags=tags, names=names,
+            statuses=statuses, clusters=clusters, owners=owners, tags=tags, names=names
         ):
             tr.zadd(key, job.status_history.created_at_timestamp, job.id)
 
