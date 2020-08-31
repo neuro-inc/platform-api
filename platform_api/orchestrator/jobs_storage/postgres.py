@@ -40,21 +40,21 @@ class JobTables:
             sa.Column("owner", sa.String(), nullable=False),
             sa.Column("name", sa.String(), nullable=True),
             sa.Column("cluster_name", sa.String(), nullable=False),
-            sa.Column("is_preemptible", sa.Boolean(), nullable=False),
-            sa.Column("is_deleted", sa.Boolean(), nullable=True),
-            sa.Column("max_run_time_minutes", sa.String(), nullable=True),
-            sa.Column("internal_hostname", sa.String(), nullable=True),
-            sa.Column("internal_hostname_named", sa.String(), nullable=True),
-            sa.Column("schedule_timeout", sa.Float(), nullable=True),
-            sa.Column("restart_policy", sa.String(), nullable=True),
-            sa.Column("request", sapg.JSONB(), nullable=False),
-            sa.Column("statuses", sapg.JSONB(), nullable=False),
             sa.Column("tags", sapg.JSONB(), nullable=True),
-            # Field for optimized access/unique constrains checks
+            # Denormalized fields for optimized access/unique constrains checks
             sa.Column("status", sa.String(), nullable=False),
-            sa.Column("finished_at", sa.DateTime(timezone=True), nullable=True),
+            sa.Column(
+                "created_at", sapg.TIMESTAMP(timezone=True, precision=6), nullable=False
+            ),
+            sa.Column(
+                "finished_at", sapg.TIMESTAMP(timezone=True, precision=6), nullable=True
+            ),
+            # All other fields
+            sa.Column("payload", sapg.JSONB(), nullable=False),
         )
-        return cls(jobs=jobs_table,)
+        return cls(
+            jobs=jobs_table,
+        )
 
 
 class PostgresJobsStorage(JobsStorage):
@@ -75,16 +75,27 @@ class PostgresJobsStorage(JobsStorage):
     # Parsing/serialization
 
     def _job_to_values(self, job: JobRecord) -> Dict[str, Any]:
-        values = job.to_primitive()
-        values["finished_at"] = job.finished_at
-        return values
+        payload = job.to_primitive()
+        return {
+            "id": payload.pop("id"),
+            "owner": payload.pop("owner"),
+            "name": payload.pop("name", None),
+            "cluster_name": payload.pop("cluster_name"),
+            "tags": payload.pop("tags", None),
+            "status": job.status_history.current.status,
+            "created_at": job.status_history.created_at,
+            "finished_at": job.status_history.finished_at,
+            "payload": payload,
+        }
 
     def _record_to_job(self, record: Record) -> JobRecord:
-        payload = dict(**record)
-        payload["request"] = json.loads(payload["request"])
-        payload["statuses"] = json.loads(payload["statuses"])
-        if payload["tags"] is not None:
-            payload["tags"] = json.loads(payload["tags"])
+        payload = json.loads(record["payload"])
+        payload["id"] = record["id"]
+        payload["owner"] = record["owner"]
+        payload["name"] = record["name"]
+        payload["cluster_name"] = record["cluster_name"]
+        if record["tags"] is not None:
+            payload["tags"] = json.loads(record["tags"])
         return JobRecord.from_primitive(payload)
 
     # Public api
@@ -96,7 +107,9 @@ class PostgresJobsStorage(JobsStorage):
         query = (
             self._tables.jobs.update()
             .values(values)
-            .where(self._tables.jobs.c.id == job_id,)
+            .where(
+                self._tables.jobs.c.id == job_id,
+            )
         )
         result = await self._fetchrow(query)
         if result:
