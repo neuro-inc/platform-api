@@ -18,6 +18,7 @@ INGRESS_FALLBACK_IMAGE_K8S_AWS ?= $(AWS_ACCOUNT_ID).dkr.ecr.$(AWS_REGION).amazon
 PLATFORMAUTHAPI_IMAGE = $(shell cat PLATFORMAUTHAPI_IMAGE)
 PLATFORMCONFIG_IMAGE = $(shell cat PLATFORMCONFIG_IMAGE)
 PLATFORMSECRETS_IMAGE = $(shell cat PLATFORMSECRETS_IMAGE)
+PLATFORMDISKAPI_IMAGE = $(shell cat PLATFORMDISKAPI_IMAGE)
 
 export PIP_EXTRA_INDEX_URL ?= $(shell python pip_extra_index_url.py)
 
@@ -96,9 +97,11 @@ docker_pull_test_images: artifactory_docker_login
 	docker pull $(PLATFORMAUTHAPI_IMAGE)
 	docker pull $(PLATFORMCONFIG_IMAGE)
 	docker pull $(PLATFORMSECRETS_IMAGE)
+	docker pull $(PLATFORMDISKAPI_IMAGE)
 	docker tag $(PLATFORMAUTHAPI_IMAGE) platformauthapi:latest
 	docker tag $(PLATFORMCONFIG_IMAGE) platformconfig:latest
 	docker tag $(PLATFORMSECRETS_IMAGE) platformsecrets:latest
+	docker tag $(PLATFORMDISKAPI_IMAGE) platformdiskapi:latest
 
 helm_install:
 	curl https://raw.githubusercontent.com/kubernetes/helm/master/scripts/get | bash -s -- -v $(HELM_VERSION)

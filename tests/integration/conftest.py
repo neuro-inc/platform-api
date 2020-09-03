@@ -203,6 +203,26 @@ async def kube_ingress_ip(kube_config_cluster_payload: Dict[str, Any]) -> str:
 
 
 class MyKubeClient(KubeClient):
+    async def create_pvc(
+        self, pvc_name: str, namespace: str, storage: Optional[int] = None
+    ) -> None:
+        url = self._generate_all_pvcs_url(namespace)
+        storage = storage or 1024 * 1024
+        primitive = {
+            "apiVersion": "v1",
+            "kind": "PersistentVolumeClaim",
+            "metadata": {"name": pvc_name},
+            "spec": {
+                "accessModes": ["ReadWriteOnce"],
+                "volumeMode": "Filesystem",
+                "resources": {"requests": {"storage": storage}},
+                # From `tests/k8s/storageclass.yml`:
+                "storageClassName": "test-storage-class",
+            },
+        }
+        payload = await self._request(method="POST", url=url, json=primitive)
+        self._check_status_payload(payload)
+
     async def update_or_create_secret(
         self, secret_name: str, namespace: str, data: Optional[Dict[str, str]] = None
     ) -> None:

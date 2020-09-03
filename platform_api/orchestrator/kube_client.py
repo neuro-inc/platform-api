@@ -42,6 +42,7 @@ from .job_request import (
     ContainerResources,
     ContainerTPUResource,
     ContainerVolume,
+    DiskContainerVolume,
     JobError,
     JobNotFoundException,
     JobRequest,
@@ -209,6 +210,24 @@ class SecretVolume(Volume):
         return {
             "name": self.name,
             "secret": {"secretName": self.k8s_secret_name},
+        }
+
+
+@dataclass(frozen=True)
+class PVCDiskVolume(Volume):
+    claim_name: str
+
+    def create_disk_mount(self, disk_volume: DiskContainerVolume) -> "VolumeMount":
+        return VolumeMount(
+            volume=self,
+            mount_path=disk_volume.dst_path,
+            read_only=disk_volume.read_only,
+        )
+
+    def to_primitive(self) -> Dict[str, Any]:
+        return {
+            "name": self.name,
+            "persistentVolumeClaim": {"claimName": self.claim_name},
         }
 
 
@@ -697,6 +716,17 @@ class PodDescriptor:
             volumes.append(secret_volume)
             for sec_volume in container.secret_volumes:
                 volume_mounts.append(secret_volume.create_secret_mount(sec_volume))
+
+        pvc_volumes: Dict[str, PVCDiskVolume] = dict()
+        for index, disk_volume in enumerate(container.disk_volumes, 1):
+            pvc_volume = pvc_volumes.get(disk_volume.disk.disk_id)
+            if pvc_volume is None:
+                pvc_volume = PVCDiskVolume(
+                    name=f"disk-{index}", claim_name=disk_volume.disk.disk_id
+                )
+                volumes.append(pvc_volume)
+                pvc_volumes[disk_volume.disk.disk_id] = pvc_volume
+            volume_mounts.append(pvc_volume.create_disk_mount(disk_volume))
 
         sec_env_list = [
             SecretEnvVar.create(env_name, secret)
@@ -1379,11 +1409,22 @@ class KubeClient:
         namespace_url = self._generate_namespace_url(namespace_name)
         return f"{namespace_url}/secrets"
 
+    def _generate_all_pvcs_url(self, namespace_name: Optional[str] = None) -> str:
+        namespace_name = namespace_name or self._namespace
+        namespace_url = self._generate_namespace_url(namespace_name)
+        return f"{namespace_url}/persistentvolumeclaims"
+
     def _generate_secret_url(
         self, secret_name: str, namespace_name: Optional[str] = None
     ) -> str:
         all_secrets_url = self._generate_all_secrets_url(namespace_name)
         return f"{all_secrets_url}/{secret_name}"
+
+    def _generate_pvc_url(
+        self, pvc_name: str, namespace_name: Optional[str] = None
+    ) -> str:
+        all_pvcs_url = self._generate_all_pvcs_url(namespace_name)
+        return f"{all_pvcs_url}/{pvc_name}"
 
     async def _request(self, *args: Any, **kwargs: Any) -> Dict[str, Any]:
         assert self._client
@@ -1618,6 +1659,14 @@ class KubeClient:
     ) -> None:
         url = self._generate_secret_url(secret_name, namespace_name)
         await self._delete_resource_url(url)
+
+    async def get_raw_pvc(
+        self, pvc_name: str, namespace_name: Optional[str] = None
+    ) -> Dict[str, Any]:
+        url = self._generate_pvc_url(pvc_name, namespace_name)
+        payload = await self._request(method="GET", url=url)
+        self._check_status_payload(payload)
+        return payload
 
     async def get_pod_events(
         self, pod_id: str, namespace: str

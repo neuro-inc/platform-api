@@ -35,6 +35,7 @@ function k8s::start {
         --wait-timeout=5m
 
     k8s::wait k8s::setup_namespace
+    k8s::wait k8s::setup_storageclass
     k8s::wait k8s::start_nfs
     k8s::wait "kubectl get po --all-namespaces"
 }
@@ -62,6 +63,10 @@ function k8s::stop {
 
 function k8s::setup_namespace {
     kubectl apply -f tests/k8s/namespace.yml
+}
+
+function k8s::setup_storageclass {
+    kubectl apply -f tests/k8s/storageclass.yml
 }
 
 function k8s::setup_registry {

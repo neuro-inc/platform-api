@@ -27,6 +27,8 @@ from platform_api.orchestrator.job_request import (
     ContainerTPUResource,
     ContainerVolume,
     ContainerVolumeFactory,
+    Disk,
+    DiskContainerVolume,
     JobError,
     JobRequest,
     JobStatus,
@@ -198,6 +200,46 @@ class TestContainerVolumeFactory:
         assert volume.src_path == PurePath("/host/path/to/dir")
         assert volume.dst_path == PurePath("/container/path/to/dir")
         assert volume.read_only
+
+
+class TestDisk:
+    def test_create(self) -> None:
+        uri = "disk://test-cluster/test-user/test-disk"
+        disk = Disk.create(uri)
+        assert disk.cluster_name == "test-cluster"
+        assert disk.user_name == "test-user"
+        assert disk.disk_id == "test-disk"
+
+    def test_create_uri_eq_str(self) -> None:
+        uri = "disk://test-cluster/test-user/test-disk"
+        assert Disk.create(URL(uri)) == Disk.create(uri)
+
+    def test_to_uri(self) -> None:
+        uri = "disk://test-cluster/test-user/test-disk"
+        disk = Disk.create(uri)
+        assert disk.to_uri() == URL(uri)
+
+
+class TestDiskContainerVolume:
+    def test_create(self) -> None:
+        uri = "disk://test-cluster/test-user/test-disk"
+        volume = DiskContainerVolume.create(
+            uri, dst_path=PurePath("/container"), read_only=False
+        )
+        assert volume.disk.cluster_name == "test-cluster"
+        assert volume.disk.user_name == "test-user"
+        assert volume.disk.disk_id == "test-disk"
+        assert volume.dst_path == PurePath("/container")
+        assert not volume.read_only
+
+    def test_to_and_from_primitive(self) -> None:
+        primitive = {
+            "src_disk_uri": "disk://test-cluster/test-user/test-disk",
+            "dst_path": "/container",
+            "read_only": True,
+        }
+        volume = DiskContainerVolume.from_primitive(primitive)
+        assert volume.to_primitive() == primitive
 
 
 class TestSecret:
@@ -1532,6 +1574,24 @@ class TestJobRequest:
             {
                 "src_secret_uri": "secret://clustername/username/key2",
                 "dst_path": "/container/path2",
+            },
+        ]
+        actual = JobRequest.to_primitive(JobRequest.from_primitive(job_request_payload))
+        assert actual == job_request_payload
+
+    def test_to_and_from_primitive_with_disk_volumes(
+        self, job_request_payload: Dict[str, Any]
+    ) -> None:
+        job_request_payload["container"]["disk_volumes"] = [
+            {
+                "src_disk_uri": "disk://clustername/username/disk-id-1",
+                "dst_path": "/container/path1",
+                "read_only": True,
+            },
+            {
+                "src_disk_uri": "disk://clustername/username/disk-id-2",
+                "dst_path": "/container/path2",
+                "read_only": False,
             },
         ]
         actual = JobRequest.to_primitive(JobRequest.from_primitive(job_request_payload))
