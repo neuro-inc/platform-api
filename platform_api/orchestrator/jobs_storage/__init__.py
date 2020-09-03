@@ -7,6 +7,7 @@ from .base import (
     JobStorageTransactionError,
 )
 from .in_memory import InMemoryJobsStorage
+from .postgres import PostgresJobsStorage
 from .redis import RedisJobsStorage
 
 
@@ -20,4 +21,5 @@ __all__ = (
     # Engines:
     "InMemoryJobsStorage",
     "RedisJobsStorage",
+    "PostgresJobsStorage",
 )

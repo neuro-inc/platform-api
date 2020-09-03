@@ -5,6 +5,7 @@ from typing import Any, Dict, List, Optional, Tuple
 
 import aioredis
 import pytest
+from asyncpg.pool import Pool
 from yarl import URL
 
 from platform_api.orchestrator.job import (
@@ -23,14 +24,26 @@ from platform_api.orchestrator.job_request import (
 )
 from platform_api.orchestrator.jobs_storage import (
     JobFilter,
+    JobsStorage,
     JobStorageJobFoundError,
     JobStorageTransactionError,
     RedisJobsStorage,
 )
+from platform_api.orchestrator.jobs_storage.postgres import PostgresJobsStorage
 from tests.conftest import not_raises, random_str
 
 
 class TestRedisJobsStorage:
+    @pytest.fixture(params=["redis", "postgres"])
+    def storage(
+        self, request: Any, redis_client: aioredis.Redis, postgres_pool: Pool
+    ) -> JobsStorage:
+        if request.param == "redis":
+            return RedisJobsStorage(redis_client)
+        if request.param == "postgres":
+            return PostgresJobsStorage(postgres_pool)
+        raise Exception(f"Unknown job storage engine {request.param}.")
+
     def _create_job_request(self, with_gpu: bool = False) -> JobRequest:
         if with_gpu:
             resources = ContainerResources(
@@ -82,9 +95,8 @@ class TestRedisJobsStorage:
         )
 
     @pytest.mark.asyncio
-    async def test_set_get(self, redis_client: aioredis.Redis) -> None:
+    async def test_set_get(self, storage: JobsStorage) -> None:
         original_job = self._create_pending_job()
-        storage = RedisJobsStorage(redis_client)
         await storage.set_job(original_job)
 
         job = await storage.get_job(original_job.id)
