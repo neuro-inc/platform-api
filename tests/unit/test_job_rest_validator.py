@@ -601,6 +601,23 @@ class TestPathUriValidator:
         ):
             validator.check(uri)
 
+    @pytest.mark.parametrize(
+        "uri",
+        (
+            "storage://test-cluster",
+            "storage://test-cluster/",
+            "storage://test-cluster/to" "storage://test-cluster/to/more/that",
+            "storage://test-cluster/to/more/that/expected",
+        ),
+    )
+    def test_invalid_parts_count(self, uri: str) -> None:
+        cluster = "test-cluster"
+        validator = create_path_uri_validator(
+            storage_scheme="storage", cluster_name=cluster, assert_parts_count=3
+        )
+        with pytest.raises(t.DataError, match="Invalid URI path"):
+            validator.check(uri)
+
 
 class TestMountPathValidator:
     def test_relative_dst_mount_path(self) -> None:

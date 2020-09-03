@@ -35,6 +35,7 @@ from tests.integration.test_config_client import create_config_api
 from .api import ApiConfig, AuthApiConfig, JobsClient
 from .auth import AuthClient, _User
 from .conftest import MyKubeClient
+from .diskapi import DiskAPIClient
 
 
 @pytest.fixture
@@ -535,6 +536,488 @@ class TestJobs:
         finally:
             if job_id:
                 await jobs_client.delete_job(job_id)
+
+    @pytest.mark.asyncio
+    async def test_create_job_with_disk_volume_single_ok(
+        self,
+        api: ApiConfig,
+        client: aiohttp.ClientSession,
+        job_submit: Dict[str, Any],
+        jobs_client: JobsClient,
+        regular_user: _User,
+        regular_disk_api_client: DiskAPIClient,
+    ) -> None:
+        disk_path = "/mnt/disk"
+
+        disk = await regular_disk_api_client.create_disk(storage=1024 * 1024)
+
+        disk_volumes = [
+            {
+                "src_disk_uri": str(disk.to_uri()),
+                "dst_path": disk_path,
+                "read_only": False,
+            },
+        ]
+        job_submit["container"]["disk_volumes"] = disk_volumes
+
+        cmd = (
+            f'bash -c \'echo "value" > {disk_path}/test.txt '
+            f"&& cat {disk_path}/test.txt'"
+        )
+        job_submit["container"]["command"] = cmd
+
+        job_id = ""
+        try:
+            url = api.jobs_base_url
+            async with client.post(
+                url, headers=regular_user.headers, json=job_submit
+            ) as resp:
+                assert resp.status == HTTPAccepted.status_code, await resp.text()
+                result = await resp.json()
+                job_id = result["id"]
+                assert result["status"] in ["pending"]
+                assert result["container"]["disk_volumes"] == disk_volumes
+
+            response_payload = await jobs_client.long_polling_by_job_id(
+                job_id=job_id, status="succeeded"
+            )
+            assert response_payload["container"]["disk_volumes"] == disk_volumes
+
+        finally:
+            if job_id:
+                await jobs_client.delete_job(job_id)
+
+    @pytest.mark.asyncio
+    async def test_create_job_with_one_disk_volume_multiple_mounts_ok(
+        self,
+        api: ApiConfig,
+        client: aiohttp.ClientSession,
+        job_submit: Dict[str, Any],
+        jobs_client: JobsClient,
+        regular_user: _User,
+        regular_disk_api_client: DiskAPIClient,
+    ) -> None:
+        disk_path1 = "/mnt/disk1"
+        disk_path2 = "/mnt/disk2"
+
+        disk = await regular_disk_api_client.create_disk(storage=1024 * 1024)
+
+        disk_volumes = [
+            {
+                "src_disk_uri": str(disk.to_uri()),
+                "dst_path": disk_path1,
+                "read_only": False,
+            },
+            {
+                "src_disk_uri": str(disk.to_uri()),
+                "dst_path": disk_path2,
+                "read_only": False,
+            },
+        ]
+        job_submit["container"]["disk_volumes"] = disk_volumes
+
+        cmd = (
+            f'bash -c \'echo "value1" > {disk_path1}/test.txt '
+            f"&& cat {disk_path2}/test.txt'"
+        )
+        job_submit["container"]["command"] = cmd
+
+        job_id = ""
+        try:
+            url = api.jobs_base_url
+            async with client.post(
+                url, headers=regular_user.headers, json=job_submit
+            ) as resp:
+                assert resp.status == HTTPAccepted.status_code, await resp.text()
+                result = await resp.json()
+                job_id = result["id"]
+                assert result["status"] in ["pending"]
+                assert result["container"]["disk_volumes"] == disk_volumes
+
+            response_payload = await jobs_client.long_polling_by_job_id(
+                job_id=job_id, status="succeeded"
+            )
+            assert response_payload["container"]["disk_volumes"] == disk_volumes
+
+        finally:
+            if job_id:
+                await jobs_client.delete_job(job_id)
+
+    @pytest.mark.asyncio
+    async def test_create_job_with_multiple_disk_volumes_ok(
+        self,
+        api: ApiConfig,
+        client: aiohttp.ClientSession,
+        job_submit: Dict[str, Any],
+        jobs_client: JobsClient,
+        regular_user: _User,
+        regular_disk_api_client: DiskAPIClient,
+    ) -> None:
+        disk_path1 = "/mnt/disk1"
+        disk_path2 = "/mnt/disk2"
+
+        disk1 = await regular_disk_api_client.create_disk(storage=1024 * 1024)
+        disk2 = await regular_disk_api_client.create_disk(storage=1024 * 1024)
+
+        disk_volumes = [
+            {
+                "src_disk_uri": str(disk1.to_uri()),
+                "dst_path": disk_path1,
+                "read_only": False,
+            },
+            {
+                "src_disk_uri": str(disk2.to_uri()),
+                "dst_path": disk_path2,
+                "read_only": False,
+            },
+        ]
+        job_submit["container"]["disk_volumes"] = disk_volumes
+
+        cmd = (
+            f'bash -c \'echo "value1" > {disk_path1}/test.txt '
+            f'&& echo "value1" > {disk_path2}/test.txt '
+            f"&& cat {disk_path1}/test.txt "
+            f"&& cat {disk_path2}/test.txt'"
+        )
+
+        job_submit["container"]["command"] = cmd
+
+        job_id = ""
+        try:
+            url = api.jobs_base_url
+            async with client.post(
+                url, headers=regular_user.headers, json=job_submit
+            ) as resp:
+                assert resp.status == HTTPAccepted.status_code, await resp.text()
+                result = await resp.json()
+                job_id = result["id"]
+                assert result["status"] in ["pending"]
+                assert result["container"]["disk_volumes"] == disk_volumes
+
+            response_payload = await jobs_client.long_polling_by_job_id(
+                job_id=job_id, status="succeeded"
+            )
+            assert response_payload["container"]["disk_volumes"] == disk_volumes
+
+        finally:
+            if job_id:
+                await jobs_client.delete_job(job_id)
+
+    @pytest.mark.asyncio
+    async def test_disk_volume_data_persisted_between_jobs(
+        self,
+        api: ApiConfig,
+        client: aiohttp.ClientSession,
+        job_submit: Dict[str, Any],
+        jobs_client: JobsClient,
+        regular_user: _User,
+        regular_disk_api_client: DiskAPIClient,
+    ) -> None:
+        disk_path = "/mnt/disk1"
+        file_name = "test.txt"
+        value = "value"
+
+        disk = await regular_disk_api_client.create_disk(storage=1024 * 1024)
+
+        disk_volumes = [
+            {
+                "src_disk_uri": str(disk.to_uri()),
+                "dst_path": disk_path,
+                "read_only": False,
+            },
+        ]
+        job_submit["container"]["disk_volumes"] = disk_volumes
+
+        cmd1 = f"bash -c 'echo \"{value}\" > {disk_path}/{file_name}'"
+        cmd2 = f'bash -c \'[ "$(cat {disk_path}/{file_name})" == "{value}" ]\''
+
+        job1_id, job2_id = "", ""
+        try:
+            url = api.jobs_base_url
+            job_submit["container"]["command"] = cmd1
+            async with client.post(
+                url, headers=regular_user.headers, json=job_submit
+            ) as resp:
+                assert resp.status == HTTPAccepted.status_code, await resp.text()
+                result = await resp.json()
+                job1_id = result["id"]
+                assert result["status"] in ["pending"]
+                assert result["container"]["disk_volumes"] == disk_volumes
+
+            await jobs_client.long_polling_by_job_id(job_id=job1_id, status="succeeded")
+
+            job_submit["container"]["command"] = cmd2
+            async with client.post(
+                url, headers=regular_user.headers, json=job_submit
+            ) as resp:
+                assert resp.status == HTTPAccepted.status_code, await resp.text()
+                result = await resp.json()
+                job2_id = result["id"]
+                assert result["status"] in ["pending"]
+                assert result["container"]["disk_volumes"] == disk_volumes
+
+            await jobs_client.long_polling_by_job_id(job_id=job2_id, status="succeeded")
+
+        finally:
+            if job1_id:
+                await jobs_client.delete_job(job1_id)
+            if job2_id:
+                await jobs_client.delete_job(job2_id)
+
+    @pytest.mark.asyncio
+    async def test_disk_volume_race_between_jobs_ok(
+        self,
+        api: ApiConfig,
+        client: aiohttp.ClientSession,
+        job_submit: Dict[str, Any],
+        jobs_client: JobsClient,
+        regular_user: _User,
+        regular_disk_api_client: DiskAPIClient,
+    ) -> None:
+        disk_path = "/mnt/disk1"
+        file_name = "test.txt"
+        jobs_in_race = 5
+        value = "value"
+        expected_string = value * jobs_in_race
+
+        disk = await regular_disk_api_client.create_disk(storage=1024 * 1024)
+
+        disk_volumes = [
+            {
+                "src_disk_uri": str(disk.to_uri()),
+                "dst_path": disk_path,
+                "read_only": False,
+            },
+        ]
+        job_submit["container"]["disk_volumes"] = disk_volumes
+
+        cmd1 = f"bash -c 'echo -n \"{value}\" >> {disk_path}/{file_name}'"
+        cmd2 = (
+            f'bash -c \'[ "$(cat {disk_path}/{file_name})" == "{expected_string}" ]\''
+        )
+
+        job_ids = []
+        try:
+            url = api.jobs_base_url
+            job_submit["container"]["command"] = cmd1
+            for _ in range(jobs_in_race):
+                async with client.post(
+                    url, headers=regular_user.headers, json=job_submit
+                ) as resp:
+                    assert resp.status == HTTPAccepted.status_code, await resp.text()
+                    result = await resp.json()
+                    job_ids.append(result["id"])
+                    assert result["status"] in ["pending"]
+                    assert result["container"]["disk_volumes"] == disk_volumes
+
+            for job_id in job_ids:
+                await jobs_client.long_polling_by_job_id(
+                    job_id=job_id, status="succeeded"
+                )
+
+            job_submit["container"]["command"] = cmd2
+            async with client.post(
+                url, headers=regular_user.headers, json=job_submit
+            ) as resp:
+                assert resp.status == HTTPAccepted.status_code, await resp.text()
+                result = await resp.json()
+                checker_job_id = result["id"]
+                job_ids.append(checker_job_id)
+                assert result["status"] in ["pending"]
+                assert result["container"]["disk_volumes"] == disk_volumes
+
+            await jobs_client.long_polling_by_job_id(
+                job_id=checker_job_id, status="succeeded"
+            )
+
+        finally:
+            for job_id in job_ids:
+                await jobs_client.delete_job(job_id)
+
+    @pytest.mark.asyncio
+    async def test_create_job_disk_volumes_unexisting_fail(
+        self,
+        api: ApiConfig,
+        client: aiohttp.ClientSession,
+        job_submit: Dict[str, Any],
+        jobs_client: JobsClient,
+        regular_user: _User,
+    ) -> None:
+        url = api.jobs_base_url
+        user = regular_user
+        disk_uri = f"disk://{user.cluster_name}/{user.name}/disk-1"
+        disk_volumes = [
+            {"src_disk_uri": disk_uri, "dst_path": "/mnt/disk"},
+        ]
+        job_submit["container"]["disk_volumes"] = disk_volumes
+        async with client.post(url, headers=user.headers, json=job_submit) as resp:
+            assert resp.status == HTTPBadRequest.status_code, await resp.text()
+            msg = await resp.json()
+            err = "Missing disks: 'disk-1'"
+            assert err in msg["error"], msg["error"]
+
+    @pytest.mark.asyncio
+    @pytest.mark.parametrize("read_only", [True, False])
+    async def test_create_job_with_other_user_disk_fail(
+        self,
+        api: ApiConfig,
+        client: aiohttp.ClientSession,
+        job_submit: Dict[str, Any],
+        jobs_client: JobsClient,
+        test_cluster_name: str,
+        regular_user_factory: Callable[..., Awaitable[_User]],
+        disk_client_factory: Callable[..., AsyncContextManager[DiskAPIClient]],
+        read_only: bool,
+    ) -> None:
+        cluster = test_cluster_name
+        usr_1 = await regular_user_factory(cluster_name=cluster)
+        usr_2 = await regular_user_factory(cluster_name=cluster)
+
+        async with disk_client_factory(usr_1) as disk_client:
+            disk = await disk_client.create_disk(storage=1024 * 1024)
+
+        disk_volumes = [
+            {
+                "src_disk_uri": str(disk.to_uri()),
+                "dst_path": "/mnt/disk",
+                "read_only": read_only,
+            },
+        ]
+        job_submit["container"]["disk_volumes"] = disk_volumes
+
+        url = api.jobs_base_url
+        async with client.post(url, headers=usr_2.headers, json=job_submit) as resp:
+            assert resp.status == HTTPForbidden.status_code, await resp.text()
+            result = await resp.json()
+            perm = {
+                "uri": str(disk.to_uri()),
+                "action": "read" if read_only else "write",
+            }
+            assert perm in result["missing"]
+
+    @pytest.mark.asyncio
+    async def test_create_job_with_disk_volume_wrong_scheme_fail(
+        self,
+        api: ApiConfig,
+        client: aiohttp.ClientSession,
+        job_submit: Dict[str, Any],
+        jobs_client: JobsClient,
+        regular_user: _User,
+    ) -> None:
+        url = api.jobs_base_url
+        user = regular_user
+        wrong_scheme = "wrong-scheme"
+        disk_uri_good = f"disk://{user.cluster_name}/{user.name}/key_1"
+        disk_uri_wrong = f"{wrong_scheme}://{user.cluster_name}/{user.name}/key_2"
+
+        disk_volumes = [
+            {"src_disk_uri": disk_uri_good, "dst_path": "/container/path_1"},
+            {"src_disk_uri": disk_uri_wrong, "dst_path": "/container/path_2"},
+        ]
+        job_submit["container"]["disk_volumes"] = disk_volumes
+
+        async with client.post(url, headers=user.headers, json=job_submit) as resp:
+            assert resp.status == HTTPBadRequest.status_code, await resp.text()
+            msg = await resp.json()
+            err = f"Invalid URI scheme: '{wrong_scheme}' != 'disk'"
+            assert err in msg["error"], msg
+
+    @pytest.mark.asyncio
+    async def test_create_job_with_disk_volume_wrong_cluster_fail(
+        self,
+        api: ApiConfig,
+        client: aiohttp.ClientSession,
+        job_submit: Dict[str, Any],
+        jobs_client: JobsClient,
+        regular_user: _User,
+    ) -> None:
+        url = api.jobs_base_url
+        user = regular_user
+        wrong_cluster = "wrong-cluster-name"
+        disk_uri_good = f"disk://{user.cluster_name}/{user.name}/key_1"
+        disk_uri_wrong = f"disk://{wrong_cluster}/{user.name}/key_2"
+
+        disk_volumes = [
+            {"src_disk_uri": disk_uri_good, "dst_path": "/container/path_1"},
+            {"src_disk_uri": disk_uri_wrong, "dst_path": "/container/path_2"},
+        ]
+        job_submit["container"]["disk_volumes"] = disk_volumes
+
+        async with client.post(url, headers=user.headers, json=job_submit) as resp:
+            assert resp.status == HTTPBadRequest.status_code, await resp.text()
+            msg = await resp.json()
+            err = f"Invalid URI cluster: '{wrong_cluster}' != '{user.cluster_name}'"
+            assert err in msg["error"], msg
+
+    @pytest.mark.asyncio
+    async def test_create_job_with_disk_volume_invalid_mount_with_dots_fail(
+        self,
+        api: ApiConfig,
+        client: aiohttp.ClientSession,
+        job_submit: Dict[str, Any],
+        jobs_client: JobsClient,
+        regular_user: _User,
+    ) -> None:
+        url = api.jobs_base_url
+        user = regular_user
+        disk_uri = f"disk://{user.cluster_name}/{user.name}/key_1"
+        invalid_path = "/container/path_1/../path_2"
+        disk_volumes = [
+            {"src_disk_uri": disk_uri, "dst_path": invalid_path},
+        ]
+        job_submit["container"]["disk_volumes"] = disk_volumes
+        async with client.post(url, headers=user.headers, json=job_submit) as resp:
+            assert resp.status == HTTPBadRequest.status_code, await resp.text()
+            msg = await resp.json()
+            err = f"Invalid path: '{invalid_path}'"
+            assert err in msg["error"], msg
+
+    @pytest.mark.asyncio
+    async def test_create_job_with_disk_volume_invalid_mount_relative_fail(
+        self,
+        api: ApiConfig,
+        client: aiohttp.ClientSession,
+        job_submit: Dict[str, Any],
+        jobs_client: JobsClient,
+        regular_user: _User,
+    ) -> None:
+        url = api.jobs_base_url
+        user = regular_user
+        disk_uri = f"disk://{user.cluster_name}/{user.name}/disk-1"
+        invalid_path = "container/path_1"
+        disk_volumes = [
+            {"src_disk_uri": disk_uri, "dst_path": invalid_path},
+        ]
+        job_submit["container"]["disk_volumes"] = disk_volumes
+        async with client.post(url, headers=user.headers, json=job_submit) as resp:
+            assert resp.status == HTTPBadRequest.status_code, await resp.text()
+            msg = await resp.json()
+            err = f"Mount path must be absolute: '{invalid_path}'"
+            assert err in msg["error"], msg
+
+    @pytest.mark.asyncio
+    async def test_create_job_disk_volumes_same_mount_points_fail(
+        self,
+        api: ApiConfig,
+        client: aiohttp.ClientSession,
+        job_submit: Dict[str, Any],
+        jobs_client: JobsClient,
+        regular_user: _User,
+    ) -> None:
+        url = api.jobs_base_url
+        user = regular_user
+        disk_uri_1 = f"disk://{user.cluster_name}/{user.name}/disk-1"
+        disk_uri_2 = f"disk://{user.cluster_name}/{user.name}/disk-2"
+        disk_volumes = [
+            {"src_disk_uri": disk_uri_1, "dst_path": "/container/path"},
+            {"src_disk_uri": disk_uri_2, "dst_path": "/container/path"},
+        ]
+        job_submit["container"]["disk_volumes"] = disk_volumes
+        async with client.post(url, headers=user.headers, json=job_submit) as resp:
+            assert resp.status == HTTPBadRequest.status_code, await resp.text()
+            msg = await resp.json()
+            err = "destination path '/container/path' was encountered multiple times"
+            assert err in msg["error"], msg["error"]
 
     @pytest.mark.asyncio
     async def test_create_job_with_secret_volumes_different_dirs_same_filenames_ok(

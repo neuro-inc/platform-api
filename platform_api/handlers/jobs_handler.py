@@ -39,6 +39,7 @@ from platform_api.orchestrator.job import (
 from platform_api.orchestrator.job_request import (
     Container,
     ContainerVolume,
+    DiskContainerVolume,
     JobError,
     JobRequest,
     JobStatus,
@@ -199,6 +200,10 @@ def convert_job_container_to_json(
         if "secret_volumes" not in ret:
             ret["secret_volumes"] = []
         ret["secret_volumes"].append(convert_secret_volume_to_json(sec_volume))
+    for disk_volume in container.disk_volumes:
+        if "disk_volumes" not in ret:
+            ret["disk_volumes"] = []
+        ret["disk_volumes"].append(convert_disk_volume_to_json(disk_volume))
     for env_name, sec_env in container.secret_env.items():
         if "secret_env" not in ret:
             ret["secret_env"] = {}
@@ -235,6 +240,14 @@ def convert_secret_volume_to_json(volume: SecretContainerVolume) -> Dict[str, An
     return {
         "src_secret_uri": str(volume.to_uri()),
         "dst_path": str(volume.dst_path),
+    }
+
+
+def convert_disk_volume_to_json(volume: DiskContainerVolume) -> Dict[str, Any]:
+    return {
+        "src_disk_uri": str(volume.disk.to_uri()),
+        "dst_path": str(volume.dst_path),
+        "read_only": volume.read_only,
     }
 
 
@@ -315,6 +328,10 @@ def infer_permissions_from_container(
     for volume in container.volumes:
         action = "read" if volume.read_only else "write"
         permission = Permission(uri=str(volume.uri), action=action)
+        permissions.append(permission)
+    for disk_volume in container.disk_volumes:
+        action = "read" if disk_volume.read_only else "write"
+        permission = Permission(uri=str(disk_volume.disk.to_uri()), action=action)
         permissions.append(permission)
     return permissions
 
