@@ -41,7 +41,7 @@ def upgrade() -> None:
         ["name", "owner"],
         unique=True,
         postgresql_where=sa.text(
-            "(jobs.status != 'succeeded' AND jobs.status != 'failed' AND jobs.status != 'canceled')"
+            "(jobs.status != 'succeeded' AND jobs.status != 'failed' AND jobs.status != 'cancelled')"
         ),
     )
 

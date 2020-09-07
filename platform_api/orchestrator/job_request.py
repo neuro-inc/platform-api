@@ -437,6 +437,10 @@ class JobStatus(str, enum.Enum):
     def active_values(cls) -> List[str]:
         return [item.value for item in cls if not item.is_finished]
 
+    @classmethod
+    def finished_values(cls) -> List[str]:
+        return [item.value for item in cls if item.is_finished]
+
     def __repr__(self) -> str:
         return f"JobStatus.{self.name}"
 
