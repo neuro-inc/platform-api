@@ -59,9 +59,9 @@ class ContainerVolume:
 
 @dataclass(frozen=True)
 class Disk:
-    disk_id: str  # `sec` in `secret://cluster/user/sec`
-    user_name: str  # `user` in `secret://cluster/user/sec`
-    cluster_name: str  # `cluster` in `secret://cluster/user/sec`
+    disk_id: str  # `disk-id` in `disk://cluster/user/disk-id`
+    user_name: str  # `user` in `disk://cluster/user/disk-id`
+    cluster_name: str  # `cluster` in `disk://cluster/user/disk-id`
 
     def to_uri(self) -> URL:
         return URL(f"disk://{self.cluster_name}/{self.user_name}/{self.disk_id}")
