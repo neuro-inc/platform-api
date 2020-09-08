@@ -160,6 +160,14 @@ spec:
         backend:
           serviceName: platformsecrets
           servicePort: 8080
+      - path: /api/v1/disk
+        backend:
+          serviceName: platformdiskapi
+          servicePort: 8080
+      - path: /api/docs/v1/disk
+        backend:
+          serviceName: platformdiskapi
+          servicePort: 8080
       - path: /api/v1/storage
         backend:
           serviceName: platformstorageapi
