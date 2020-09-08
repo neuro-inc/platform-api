@@ -172,9 +172,10 @@ class PostgresJobsStorage(JobsStorage):
             self._tables.jobs.update()
             .values(values)
             .where(self._tables.jobs.c.id == job_id)
+            .returning(self._tables.jobs.c.id)
         )
-        result = await self._execute(query)
-        if result != "UPDATE 0":
+        result = await self._fetchrow(query)
+        if result:
             # Docs on status messages are placed here:
             # https://www.postgresql.org/docs/current/protocol-message-formats.html
             return
