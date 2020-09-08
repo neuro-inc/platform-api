@@ -9,6 +9,7 @@ from platform_api.orchestrator.job_request import (
     ContainerSSHServer,
     ContainerTPUResource,
     ContainerVolume,
+    DiskContainerVolume,
     Secret,
     SecretContainerVolume,
 )
@@ -44,6 +45,10 @@ def create_container_from_payload(
         create_secret_volume_from_payload(volume_payload)
         for volume_payload in payload.get("secret_volumes", ())
     ]
+    disk_volumes = [
+        create_disk_volume_from_payload(volume_payload)
+        for volume_payload in payload.get("disk_volumes", ())
+    ]
     secret_env = {
         env_var: Secret.create(value)
         for env_var, value in payload.get("secret_env", {}).items()
@@ -57,6 +62,7 @@ def create_container_from_payload(
         volumes=volumes,
         secret_env=secret_env,
         secret_volumes=secret_volumes,
+        disk_volumes=disk_volumes,
         resources=create_resources_from_payload(payload["resources"]),
         http_server=http_server,
         ssh_server=ssh_server,
@@ -101,4 +107,12 @@ def create_volume_from_payload(
 def create_secret_volume_from_payload(payload: Dict[str, Any]) -> SecretContainerVolume:
     return SecretContainerVolume.create(
         uri=payload["src_secret_uri"], dst_path=PurePath(payload["dst_path"])
+    )
+
+
+def create_disk_volume_from_payload(payload: Dict[str, Any]) -> DiskContainerVolume:
+    return DiskContainerVolume.create(
+        uri=payload["src_disk_uri"],
+        dst_path=PurePath(payload["dst_path"]),
+        read_only=payload["read_only"],
     )

@@ -78,6 +78,7 @@ def create_path_uri_validator(
     cluster_name: str = "",
     check_cluster: bool = True,
     assert_username: Optional[str] = None,
+    assert_parts_count: Optional[int] = None,
 ) -> t.Trafaret:
     assert storage_scheme
     if check_cluster:
@@ -95,11 +96,14 @@ def create_path_uri_validator(
             raise t.DataError(
                 f"Invalid URI cluster: '{uri.netloc}' != '{cluster_name}'"
             )
-
+        if assert_parts_count:
+            parts = PurePath(uri.path).parts
+            if len(parts) != assert_parts_count:
+                raise t.DataError("Invalid URI path: Wrong number of path items")
         if assert_username is not None:
             # validate `username` in `scheme://cluster/username/path/to`
             parts = PurePath(uri.path).parts
-            if len(parts) < 3:
+            if len(parts) < 2:
                 raise t.DataError("Invalid URI path: Not enough path items")
             assert parts[0] == "/", (uri, parts)
             usr = parts[1]
@@ -107,7 +111,6 @@ def create_path_uri_validator(
                 raise t.DataError(
                     f"Invalid URI: Invalid user in path: '{usr}' != '{assert_username}'"
                 )
-
         _check_dots_in_path(uri.path)
         return uri_str
 
@@ -148,6 +151,7 @@ def create_volumes_validator(
     cluster_name: str = "",
     check_cluster: bool = True,
     assert_username: Optional[str] = None,
+    assert_parts_count: Optional[int] = None,
 ) -> t.Trafaret:
     template_dict = {
         uri_key: create_path_uri_validator(
@@ -155,12 +159,12 @@ def create_volumes_validator(
             cluster_name=cluster_name,
             check_cluster=check_cluster,
             assert_username=assert_username,
+            assert_parts_count=assert_parts_count,
         ),
         "dst_path": create_mount_path_validator(),
     }
     if has_read_only_key:
         template_dict[t.Key("read_only", optional=True, default=True)] = t.Bool()
-
     single_volume_validator: t.Trafaret = t.Dict(template_dict)
     return t.List(single_volume_validator) & t.Call(_validate_unique_volume_paths)
 
@@ -285,6 +289,7 @@ def create_container_validator(
                     cluster_name=cluster_name,
                     check_cluster=check_cluster,
                     assert_username=user_name,
+                    assert_parts_count=3,
                 ),
             ),
             t.Key("secret_volumes", optional=True): create_volumes_validator(
@@ -294,6 +299,17 @@ def create_container_validator(
                 cluster_name=cluster_name,
                 check_cluster=check_cluster,
                 assert_username=user_name,
+                # Should exactly include ("/", "username", "secret_name")
+                assert_parts_count=3,
+            ),
+            t.Key("disk_volumes", optional=True): create_volumes_validator(
+                uri_key="src_disk_uri",
+                has_read_only_key=True,
+                storage_scheme="disk",
+                cluster_name=cluster_name,
+                check_cluster=check_cluster,
+                # Should exactly include ("/", "username", "disk_name")
+                assert_parts_count=3,
             ),
             t.Key("working_dir", optional=True): create_working_dir_validator(),
         }

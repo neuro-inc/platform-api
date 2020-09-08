@@ -691,6 +691,42 @@ class PodDescriptor:
     restart_policy: PodRestartPolicy = PodRestartPolicy.NEVER
 
     @classmethod
+    def _process_secret_volumes(
+        cls,
+        secret_volume: Optional[SecretVolume],
+        secret_volumes: List[SecretContainerVolume],
+    ) -> Tuple[List[SecretVolume], List[VolumeMount]]:
+        pod_volumes = []
+        volume_mounts = []
+
+        if secret_volumes:
+            assert secret_volume
+            pod_volumes = [secret_volume]
+            for sec_volume in secret_volumes:
+                volume_mounts.append(secret_volume.create_secret_mount(sec_volume))
+
+        return pod_volumes, volume_mounts
+
+    @classmethod
+    def _process_disk_volumes(
+        cls, disk_volumes: List[DiskContainerVolume]
+    ) -> Tuple[List[PVCDiskVolume], List[VolumeMount]]:
+        pod_volumes = []
+        volume_mounts = []
+
+        pvc_volumes: Dict[str, PVCDiskVolume] = dict()
+        for index, disk_volume in enumerate(disk_volumes, 1):
+            pvc_volume = pvc_volumes.get(disk_volume.disk.disk_id)
+            if pvc_volume is None:
+                pvc_volume = PVCDiskVolume(
+                    name=f"disk-{index}", claim_name=disk_volume.disk.disk_id
+                )
+                pod_volumes.append(pvc_volume)
+                pvc_volumes[disk_volume.disk.disk_id] = pvc_volume
+            volume_mounts.append(pvc_volume.create_disk_mount(disk_volume))
+        return pod_volumes, volume_mounts
+
+    @classmethod
     def from_job_request(
         cls,
         volume: Volume,
@@ -705,28 +741,23 @@ class PodDescriptor:
         restart_policy: PodRestartPolicy = PodRestartPolicy.NEVER,
     ) -> "PodDescriptor":
         container = job_request.container
+
+        secret_volumes, secret_volume_mounts = cls._process_secret_volumes(
+            secret_volume, container.secret_volumes
+        )
+        disk_volumes, disk_volume_mounts = cls._process_disk_volumes(
+            container.disk_volumes
+        )
+
+        volumes = [volume, *secret_volumes, *disk_volumes]
         volume_mounts = [
-            volume.create_mount(container_volume)
-            for container_volume in container.volumes
+            *(
+                volume.create_mount(container_volume)
+                for container_volume in container.volumes
+            ),
+            *secret_volume_mounts,
+            *disk_volume_mounts,
         ]
-        volumes = [volume]
-
-        if container.secret_volumes:
-            assert secret_volume
-            volumes.append(secret_volume)
-            for sec_volume in container.secret_volumes:
-                volume_mounts.append(secret_volume.create_secret_mount(sec_volume))
-
-        pvc_volumes: Dict[str, PVCDiskVolume] = dict()
-        for index, disk_volume in enumerate(container.disk_volumes, 1):
-            pvc_volume = pvc_volumes.get(disk_volume.disk.disk_id)
-            if pvc_volume is None:
-                pvc_volume = PVCDiskVolume(
-                    name=f"disk-{index}", claim_name=disk_volume.disk.disk_id
-                )
-                volumes.append(pvc_volume)
-                pvc_volumes[disk_volume.disk.disk_id] = pvc_volume
-            volume_mounts.append(pvc_volume.create_disk_mount(disk_volume))
 
         sec_env_list = [
             SecretEnvVar.create(env_name, secret)

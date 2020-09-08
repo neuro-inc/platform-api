@@ -148,6 +148,7 @@ async def regular_user_factory(
             {"uri": f"image://{cluster_name}/{name}", "action": "manage"},
             {"uri": f"job://{cluster_name}/{name}", "action": "manage"},
             {"uri": f"secret://{cluster_name}/{name}", "action": "write"},
+            {"uri": f"disk://{cluster_name}/{name}", "action": "write"},
         ]
         async with auth_client._request(
             "POST", f"/api/v1/users/{name}/permissions", headers=headers, json=payload
