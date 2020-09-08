@@ -1,7 +1,16 @@
 import json
 from dataclasses import dataclass, replace
-from datetime import timedelta
-from typing import Any, AsyncIterator, Dict, Iterable, List, Mapping, Optional
+from datetime import datetime, timedelta
+from typing import (
+    AbstractSet,
+    Any,
+    AsyncIterator,
+    Dict,
+    Iterable,
+    List,
+    Mapping,
+    Optional,
+)
 
 import asyncpgsa
 import sqlalchemy as sa
@@ -18,7 +27,12 @@ from platform_api.orchestrator.job import AggregatedRunTime, JobRecord
 from platform_api.orchestrator.job_request import JobError, JobStatus
 from platform_api.orchestrator.jobs_storage import JobFilter
 
-from .base import JobsStorage, JobStorageJobFoundError, JobStorageTransactionError
+from .base import (
+    ClusterOwnerNameSet,
+    JobsStorage,
+    JobStorageJobFoundError,
+    JobStorageTransactionError,
+)
 
 
 @dataclass(frozen=True)
@@ -224,47 +238,7 @@ class PostgresJobsStorage(JobsStorage):
             )
 
     def _clause_for_filter(self, job_filter: JobFilter) -> sasql.ClauseElement:
-        clauses = []
-        if job_filter.statuses:
-            clauses.append(self._tables.jobs.c.status.in_(job_filter.statuses))
-        if job_filter.owners:
-            clauses.append(self._tables.jobs.c.owner.in_(job_filter.owners))
-        if job_filter.clusters:
-            cluster_clauses = []
-            clusters_empty_owners = []
-            for cluster, owners in job_filter.clusters.items():
-                if not owners:
-                    clusters_empty_owners.append(cluster)
-                    continue
-                owners_empty_names = []
-                for owner, names in owners.items():
-                    if not names:
-                        owners_empty_names.append(owner)
-                        continue
-                    cluster_clauses.append(
-                        (self._tables.jobs.c.cluster_name == cluster)
-                        & (self._tables.jobs.c.owner == owner)
-                        & self._tables.jobs.c.name.in_(names)
-                    )
-                cluster_clauses.append(
-                    (self._tables.jobs.c.cluster_name == cluster)
-                    & self._tables.jobs.c.owner.in_(owners_empty_names)
-                )
-            cluster_clauses.append(
-                self._tables.jobs.c.cluster_name.in_(clusters_empty_owners)
-            )
-            clauses.append(or_(*cluster_clauses))
-        if job_filter.name:
-            clauses.append(self._tables.jobs.c.name == job_filter.name)
-        if job_filter.ids:
-            clauses.append(self._tables.jobs.c.id.in_(job_filter.ids))
-        if job_filter.tags:
-            clauses.append(self._tables.jobs.c.tags.contains(list(job_filter.tags)))
-        clauses.append(
-            (job_filter.since <= self._tables.jobs.c.created_at)
-            & (self._tables.jobs.c.created_at <= job_filter.until)
-        )
-        return and_(*clauses)
+        return JobFilterClauseBuilder.by_job_filter(job_filter, self._tables)
 
     async def iter_all_jobs(
         self,
@@ -324,3 +298,80 @@ class PostgresJobsStorage(JobsStorage):
         self, job_filter: JobFilter
     ) -> Dict[str, AggregatedRunTime]:
         raise NotImplementedError
+
+
+class JobFilterClauseBuilder:
+    def __init__(self, tables: JobTables):
+        self._clauses: List[sasql.ClauseElement] = []
+        self._tables = tables
+
+    def filter_statuses(self, statuses: AbstractSet[JobStatus]) -> None:
+        self._clauses.append(self._tables.jobs.c.status.in_(statuses))
+
+    def filter_owners(self, owners: AbstractSet[str]) -> None:
+        self._clauses.append(self._tables.jobs.c.owner.in_(owners))
+
+    def filter_clusters(self, clusters: ClusterOwnerNameSet) -> None:
+        cluster_clauses = []
+        clusters_empty_owners = []
+        for cluster, owners in clusters.items():
+            if not owners:
+                clusters_empty_owners.append(cluster)
+                continue
+            owners_empty_names = []
+            for owner, names in owners.items():
+                if not names:
+                    owners_empty_names.append(owner)
+                    continue
+                cluster_clauses.append(
+                    (self._tables.jobs.c.cluster_name == cluster)
+                    & (self._tables.jobs.c.owner == owner)
+                    & self._tables.jobs.c.name.in_(names)
+                )
+            cluster_clauses.append(
+                (self._tables.jobs.c.cluster_name == cluster)
+                & self._tables.jobs.c.owner.in_(owners_empty_names)
+            )
+        cluster_clauses.append(
+            self._tables.jobs.c.cluster_name.in_(clusters_empty_owners)
+        )
+        self._clauses.append(or_(*cluster_clauses))
+
+    def filter_name(self, name: str) -> None:
+        self._clauses.append(self._tables.jobs.c.name == name)
+
+    def filter_ids(self, ids: AbstractSet[str]) -> None:
+        self._clauses.append(self._tables.jobs.c.id.in_(ids))
+
+    def filter_tags(self, tags: AbstractSet[str]) -> None:
+        self._clauses.append(self._tables.jobs.c.tags.contains(list(tags)))
+
+    def filter_since(self, since: datetime) -> None:
+        self._clauses.append(since <= self._tables.jobs.c.created_at)
+
+    def filter_until(self, until: datetime) -> None:
+        self._clauses.append(self._tables.jobs.c.created_at <= until)
+
+    def build(self) -> sasql.ClauseElement:
+        return and_(*self._clauses)
+
+    @classmethod
+    def by_job_filter(
+        cls, job_filter: JobFilter, tables: JobTables
+    ) -> sasql.ClauseElement:
+        builder = cls(tables)
+        if job_filter.statuses:
+            builder.filter_statuses(job_filter.statuses)
+        if job_filter.owners:
+            builder.filter_owners(job_filter.owners)
+        if job_filter.clusters:
+            builder.filter_clusters(job_filter.clusters)
+        if job_filter.name:
+            builder.filter_name(job_filter.name)
+        if job_filter.ids:
+            builder.filter_ids(job_filter.ids)
+        if job_filter.tags:
+            builder.filter_tags(job_filter.tags)
+        builder.filter_since(job_filter.since)
+        builder.filter_until(job_filter.until)
+        return builder.build()
