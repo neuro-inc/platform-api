@@ -1555,9 +1555,7 @@ class TestJobsStorage:
             convert(URL("image://alice"), "test-cluster")
 
     @pytest.mark.asyncio
-    async def test_get_aggregated_run_time_for_user(
-        self, redis_client: aioredis.Redis
-    ) -> None:
+    async def test_get_aggregated_run_time_for_user(self, storage: JobsStorage) -> None:
         test_started_at = current_datetime_factory()
         owner = f"test-user-{random_str()}"
 
@@ -1610,7 +1608,6 @@ class TestJobsStorage:
             create_job(cluster_name="test-cluster2", with_gpu=False, finished=True),
             create_job(cluster_name="test-cluster2", with_gpu=False, finished=True),
         ]
-        storage = RedisJobsStorage(redis_client)
         for job in jobs_with_gpu + jobs_no_gpu:
             async with storage.try_create_job(job):
                 pass

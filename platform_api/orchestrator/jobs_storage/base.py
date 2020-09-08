@@ -11,6 +11,7 @@ from typing import (
     List,
     Optional,
     Set,
+    Tuple,
     Type,
     cast,
 )
@@ -161,11 +162,33 @@ class JobsStorage(ABC):
     async def get_tags(self, owner: str) -> List[str]:
         pass
 
-    @abstractmethod
     async def get_aggregated_run_time_by_clusters(
         self, job_filter: JobFilter
     ) -> Dict[str, AggregatedRunTime]:
-        pass
+        zero_run_time = (timedelta(), timedelta())
+        aggregated_run_times: Dict[str, Tuple[timedelta, timedelta]] = {}
+        async for job in self.iter_all_jobs(job_filter):
+            gpu_run_time, non_gpu_run_time = aggregated_run_times.get(
+                job.cluster_name, zero_run_time
+            )
+            if job.has_gpu:
+                gpu_run_time += job.get_run_time()
+            else:
+                non_gpu_run_time += job.get_run_time()
+            aggregated_run_times[job.cluster_name] = (
+                gpu_run_time,
+                non_gpu_run_time,
+            )
+        return {
+            cluster_name: AggregatedRunTime(
+                total_gpu_run_time_delta=gpu_run_time,
+                total_non_gpu_run_time_delta=non_gpu_run_time,
+            )
+            for cluster_name, (
+                gpu_run_time,
+                non_gpu_run_time,
+            ) in aggregated_run_times.items()
+        }
 
     async def migrate(self) -> bool:
         return False

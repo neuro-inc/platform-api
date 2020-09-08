@@ -4,7 +4,7 @@ from typing import AsyncIterator, Dict, Iterable, List, Optional, Tuple
 
 from async_generator import asynccontextmanager
 
-from platform_api.orchestrator.job import AggregatedRunTime, JobRecord
+from platform_api.orchestrator.job import JobRecord
 from platform_api.orchestrator.job_request import JobError
 
 from .base import JobFilter, JobsStorage, JobStorageJobFoundError
@@ -96,34 +96,6 @@ class InMemoryJobsStorage(JobsStorage):
             if not job_filter or job_filter.check(job):
                 jobs.append(job)
         return jobs
-
-    async def get_aggregated_run_time_by_clusters(
-        self, job_filter: JobFilter
-    ) -> Dict[str, AggregatedRunTime]:
-        zero_run_time = (timedelta(), timedelta())
-        aggregated_run_times: Dict[str, Tuple[timedelta, timedelta]] = {}
-        async for job in self.iter_all_jobs(job_filter):
-            gpu_run_time, non_gpu_run_time = aggregated_run_times.get(
-                job.cluster_name, zero_run_time
-            )
-            if job.has_gpu:
-                gpu_run_time += job.get_run_time()
-            else:
-                non_gpu_run_time += job.get_run_time()
-            aggregated_run_times[job.cluster_name] = (
-                gpu_run_time,
-                non_gpu_run_time,
-            )
-        return {
-            cluster_name: AggregatedRunTime(
-                total_gpu_run_time_delta=gpu_run_time,
-                total_non_gpu_run_time_delta=non_gpu_run_time,
-            )
-            for cluster_name, (
-                gpu_run_time,
-                non_gpu_run_time,
-            ) in aggregated_run_times.items()
-        }
 
     async def get_jobs_for_deletion(
         self, *, delay: timedelta = timedelta()
