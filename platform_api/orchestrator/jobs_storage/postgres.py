@@ -21,7 +21,7 @@ from asyncpg import Connection, SerializationError, UniqueViolationError
 from asyncpg.cursor import CursorFactory
 from asyncpg.pool import Pool
 from asyncpg.protocol.protocol import Record
-from sqlalchemy import Boolean, and_, asc, desc, not_, or_
+from sqlalchemy import Boolean, Integer, and_, asc, desc, not_, or_, select
 
 from platform_api.orchestrator.job import AggregatedRunTime, JobRecord
 from platform_api.orchestrator.job_request import JobError, JobStatus
@@ -292,7 +292,37 @@ class PostgresJobsStorage(JobsStorage):
         return for_deletion
 
     async def get_tags(self, owner: str) -> List[str]:
-        raise NotImplementedError
+        sorted_tags = sasql.func.sort_json_str_array(self._tables.jobs.c.tags)
+        enumerated_tags = sasql.func.enumerate_json_array(sorted_tags)
+        tag = sasql.func.jsonb_array_elements(enumerated_tags).alias("tag")
+        tag_col = sa.column("value", type_=sapg.JSONB)
+        tag_name = tag_col["value"].astext.label("tag_name")
+
+        sub_query = (
+            select(
+                [
+                    tag_name,
+                    self._tables.jobs.c.created_at,
+                    tag_col["index"].astext.cast(Integer).label("index"),
+                ]
+            )
+            .distinct(tag_name)
+            .select_from(self._tables.jobs)
+            .select_from(tag)
+            .where(self._tables.jobs.c.owner == owner)
+            .order_by(
+                tag_name,
+                desc(self._tables.jobs.c.created_at),
+                tag_col["index"].astext.cast(Integer),
+            )
+            .alias()
+        )
+        query = (
+            select([sub_query.c.tag_name])
+            .select_from(sub_query)
+            .order_by(desc(sub_query.c.created_at), sub_query.c.index)
+        )
+        return [record[0] for record in await self._fetch(query)]
 
     async def get_aggregated_run_time_by_clusters(
         self, job_filter: JobFilter
