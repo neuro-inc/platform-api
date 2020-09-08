@@ -21,6 +21,7 @@ kubectl config use-context minikube
 minikube addons enable ingress
 kubectl apply -f tests/k8s/namespace.yml
 kubectl apply -f tests/k8s/nfs.yml
+kubectl apply -f tests/k8s/storageclass.yml
 ```
 6. Create a new virtual environment with Python 3.6:
 ```shell

@@ -332,6 +332,17 @@ class JobsService:
             if missing:
                 details = ", ".join(f"'{s}'" for s in sorted(missing))
                 raise JobsServiceException(f"Missing secrets: {details}")
+        job_disks = [
+            disk_volume.disk.disk_id
+            for disk_volume in job_request.container.disk_volumes
+        ]
+        if job_disks:
+            async with self._get_cluster(cluster_name) as cluster:
+                # Warning: contextmanager '_get_cluster' suppresses all exceptions
+                missing = await cluster.orchestrator.get_missing_disks(job_disks)
+            if missing:
+                details = ", ".join(f"'{s}'" for s in sorted(missing))
+                raise JobsServiceException(f"Missing disks: {details}")
 
         try:
             async with self._create_job_in_storage(record) as record:

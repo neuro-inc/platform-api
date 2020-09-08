@@ -26,6 +26,8 @@ from platform_api.orchestrator.job_request import (
     ContainerResources,
     ContainerTPUResource,
     ContainerVolume,
+    Disk,
+    DiskContainerVolume,
     JobAlreadyExistsException,
     JobError,
     JobNotFoundException,
@@ -1365,6 +1367,127 @@ class TestKubeOrchestrator:
                     user_name, secret_names=["key3", "key2", "key1"]
                 )
                 assert missing == ["key1", "key3"]
+
+    @pytest.mark.asyncio
+    async def test_get_missing_disks(
+        self,
+        kube_config_factory: Callable[..., KubeConfig],
+        kube_orchestrator_factory: Callable[..., KubeOrchestrator],
+        kube_client_factory: Callable[..., MyKubeClient],
+        cluster_name: str,
+    ) -> None:
+        kube_config = kube_config_factory(jobs_ingress_class="traefik")
+        async with kube_orchestrator_factory(kube_config=kube_config) as orchestrator:
+            async with kube_client_factory(kube_config) as kube_client:
+                await kube_client.create_pvc(  # type: ignore
+                    "disk-2",
+                    kube_config.namespace,
+                )
+
+                missing = await orchestrator.get_missing_disks(
+                    disk_names=["disk-3", "disk-2", "disk-1"]
+                )
+                assert missing == ["disk-1", "disk-3"]
+
+    @pytest.mark.asyncio
+    async def test_job_pod_with_disk_volume_simple_ok(
+        self,
+        kube_config: KubeConfig,
+        kube_orchestrator: KubeOrchestrator,
+        kube_client: MyKubeClient,
+        delete_job_later: Callable[[Job], Awaitable[None]],
+        cluster_name: str,
+    ) -> None:
+        user_name = self._create_username()
+        ns = kube_config.namespace
+
+        disk_id = f"disk-{str(uuid.uuid4())}"
+        disk = Disk(disk_id=disk_id, user_name=user_name, cluster_name=cluster_name)
+        await kube_client.create_pvc(disk_id, ns)
+
+        mount_path = PurePath("/mnt/disk")
+        container = Container(
+            image="ubuntu",
+            command="sleep infinity",
+            resources=ContainerResources(cpu=0.1, memory_mb=16),
+            http_server=ContainerHTTPServer(port=80),
+            disk_volumes=[
+                DiskContainerVolume(disk=disk, dst_path=mount_path, read_only=False)
+            ],
+        )
+        job = MyJob(
+            orchestrator=kube_orchestrator,
+            record=JobRecord.create(
+                request=JobRequest.create(container),
+                cluster_name=cluster_name,
+                owner=user_name,
+            ),
+        )
+        await delete_job_later(job)
+        await job.start()
+
+        pod_name = job.id
+        await kube_client.wait_pod_is_running(pod_name=pod_name, timeout_s=60.0)
+
+        raw = await kube_client.get_raw_pod(pod_name)
+
+        disk_volumes_raw = [
+            v
+            for v in raw["spec"]["volumes"]
+            if v.get("persistentVolumeClaim", dict()).get("claimName") == disk_id
+        ]
+        assert len(disk_volumes_raw) == 1
+
+        container_raw = raw["spec"]["containers"][0]
+        assert container_raw["volumeMounts"] == [
+            {
+                "name": disk_volumes_raw[0]["name"],
+                "mountPath": str(mount_path),
+                "subPath": ".",
+            }
+        ]
+
+    @pytest.mark.asyncio
+    async def test_job_pod_with_disk_volumes_same_mounts_fail(
+        self,
+        kube_config: KubeConfig,
+        kube_orchestrator: KubeOrchestrator,
+        kube_client: MyKubeClient,
+        delete_job_later: Callable[[Job], Awaitable[None]],
+        cluster_name: str,
+    ) -> None:
+        user_name = self._create_username()
+        ns = kube_config.namespace
+
+        disk_id_1, disk_id_2 = f"disk-{str(uuid.uuid4())}", f"disk-{str(uuid.uuid4())}"
+        disk1 = Disk(disk_id_1, user_name, cluster_name)
+        disk2 = Disk(disk_id_2, user_name, cluster_name)
+
+        await kube_client.create_pvc(disk_id_1, ns)
+        await kube_client.create_pvc(disk_id_2, ns)
+
+        mount_path = PurePath("/mnt/disk")
+
+        container = Container(
+            image="ubuntu",
+            command="sleep infinity",
+            resources=ContainerResources(cpu=0.1, memory_mb=16),
+            http_server=ContainerHTTPServer(port=80),
+            disk_volumes=[
+                DiskContainerVolume(disk=disk1, dst_path=mount_path),
+                DiskContainerVolume(disk=disk2, dst_path=mount_path),
+            ],
+        )
+        job = MyJob(
+            orchestrator=kube_orchestrator,
+            record=JobRecord.create(
+                request=JobRequest.create(container),
+                cluster_name=cluster_name,
+                owner=user_name,
+            ),
+        )
+        with pytest.raises(JobError):
+            await job.start()
 
     @pytest.mark.asyncio
     async def test_job_pod_with_secret_env_ok(

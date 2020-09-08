@@ -58,6 +58,57 @@ class ContainerVolume:
 
 
 @dataclass(frozen=True)
+class Disk:
+    disk_id: str  # `disk-id` in `disk://cluster/user/disk-id`
+    user_name: str  # `user` in `disk://cluster/user/disk-id`
+    cluster_name: str  # `cluster` in `disk://cluster/user/disk-id`
+
+    def to_uri(self) -> URL:
+        return URL(f"disk://{self.cluster_name}/{self.user_name}/{self.disk_id}")
+
+    @classmethod
+    def create(cls, disk_uri: Union[str, URL]) -> "Disk":
+        # Note: format of `disk_uri` is enforced by validators
+        uri = URL(disk_uri)
+        cluster_name = uri.host
+        assert cluster_name, uri  # for lint
+        parts = PurePath(uri.path).parts
+        user_name, disk_id = parts[1], parts[2]
+        return cls(disk_id=disk_id, cluster_name=cluster_name, user_name=user_name)
+
+
+@dataclass(frozen=True)
+class DiskContainerVolume:
+    disk: Disk
+    dst_path: PurePath
+    read_only: bool = False
+
+    def to_uri(self) -> URL:
+        return self.disk.to_uri()
+
+    @classmethod
+    def create(
+        cls, uri: str, dst_path: PurePath, read_only: bool = False
+    ) -> "DiskContainerVolume":
+        return cls(disk=Disk.create(uri), dst_path=dst_path, read_only=read_only)
+
+    @classmethod
+    def from_primitive(cls, payload: Dict[str, Any]) -> "DiskContainerVolume":
+        return cls.create(
+            uri=payload["src_disk_uri"],
+            dst_path=PurePath(payload["dst_path"]),
+            read_only=payload["read_only"],
+        )
+
+    def to_primitive(self) -> Dict[str, Any]:
+        return {
+            "src_disk_uri": str(self.to_uri()),
+            "dst_path": str(self.dst_path),
+            "read_only": self.read_only,
+        }
+
+
+@dataclass(frozen=True)
 class Secret:
     secret_key: str  # `sec` in `secret://cluster/user/sec`
     user_name: str  # `user` in `secret://cluster/user/sec`
@@ -236,6 +287,7 @@ class Container:
     volumes: List[ContainerVolume] = field(default_factory=list)
     secret_env: Dict[str, Secret] = field(default_factory=dict)
     secret_volumes: List[SecretContainerVolume] = field(default_factory=list)
+    disk_volumes: List[DiskContainerVolume] = field(default_factory=list)
     http_server: Optional[ContainerHTTPServer] = None
     ssh_server: Optional[ContainerSSHServer] = None
     tty: bool = False
@@ -313,6 +365,10 @@ class Container:
             SecretContainerVolume.from_primitive(item)
             for item in kwargs.get("secret_volumes", [])
         ]
+        kwargs["disk_volumes"] = [
+            DiskContainerVolume.from_primitive(item)
+            for item in kwargs.get("disk_volumes", [])
+        ]
         kwargs["secret_env"] = {
             key: Secret.create(value)
             for key, value in kwargs.get("secret_env", {}).items()
@@ -349,6 +405,12 @@ class Container:
             payload["secret_volumes"] = secret_volumes
         else:
             payload.pop("secret_volumes")
+
+        disk_volumes = [v.to_primitive() for v in self.disk_volumes]
+        if disk_volumes:
+            payload["disk_volumes"] = disk_volumes
+        else:
+            payload.pop("disk_volumes")
 
         payload.pop("secret_env", None)
         if self.secret_env:

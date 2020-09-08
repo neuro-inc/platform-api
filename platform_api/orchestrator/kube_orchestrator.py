@@ -291,6 +291,16 @@ class KubeOrchestrator(Orchestrator):
     def _get_pod_restart_policy(self, job: Job) -> PodRestartPolicy:
         return self._restart_policy_map[job.restart_policy]
 
+    async def get_missing_disks(self, disk_names: List[str]) -> List[str]:
+        assert disk_names, "no disk names"
+        missing = []
+        for disk in disk_names:
+            try:
+                await self._client.get_raw_pvc(disk, self._kube_config.namespace)
+            except StatusException:
+                missing.append(disk)
+        return sorted(missing)
+
     async def get_missing_secrets(
         self, user_name: str, secret_names: List[str]
     ) -> List[str]:
