@@ -44,6 +44,20 @@ def upgrade() -> None:
             "(jobs.status != 'succeeded' AND jobs.status != 'failed' AND jobs.status != 'cancelled')"
         ),
     )
+    op.execute(
+        """\
+create or replace function sort_json_str_array(jsonb)
+returns jsonb language sql as $$
+    select jsonb_agg(value order by value)
+    from jsonb_array_elements_text($1)
+$$;
+create or replace function enumerate_json_array(jsonb)
+returns jsonb language sql as $$
+    select jsonb_agg(t order by index)
+    from jsonb_array_elements($1) with ordinality as t(value, index)
+$$;
+"""
+    )
 
 
 def downgrade() -> None:
