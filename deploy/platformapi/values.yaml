@@ -194,3 +194,17 @@ NP_API_ZIPKIN_SAMPLE_RATE:
   staging-aws: '0.1'  # 10% of traces are saved
   staging: '0.1'  # 10% of traces are saved
   prod: '0.1'  # 10% of traces are saved
+NP_RESOURCES_CPU_REQUEST:
+  _default: "1"
+  dev: "1"
+  dev-aws: "1"
+  staging-aws: "1"
+  staging: "1"
+  prod: "1"
+NP_RESOURCES_MEMORY_REQUEST:
+  _default: 1Gi
+  dev: 1Gi
+  dev-aws: 1Gi
+  staging-aws: 1Gi
+  staging: 1Gi
+  prod: 1Gi

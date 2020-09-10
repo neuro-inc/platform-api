@@ -37,6 +37,10 @@ spec:
           - containerPort: 8080
             name: tcp-web
             protocol: TCP
+        resources:
+          requests:
+            cpu: "{{ printf "%s" (pluck .Values.global.env .Values.NP_RESOURCES_CPU_REQUEST | first | default .Values.NP_RESOURCES_CPU_REQUEST._default) }}"
+            memory: "{{ printf "%s" (pluck .Values.global.env .Values.NP_RESOURCES_MEMORY_REQUEST | first | default .Values.NP_RESOURCES_MEMORY_REQUEST._default) }}"
         env:
         - name: NP_K8S_API_URL
           value: http://localhost:8001
