@@ -23,7 +23,7 @@ from asyncpg.pool import Pool
 from asyncpg.protocol.protocol import Record
 from sqlalchemy import Boolean, Integer, and_, asc, desc, not_, or_, select
 
-from platform_api.orchestrator.job import AggregatedRunTime, JobRecord
+from platform_api.orchestrator.job import JobRecord
 from platform_api.orchestrator.job_request import JobError, JobStatus
 from platform_api.orchestrator.jobs_storage import JobFilter
 
@@ -341,11 +341,6 @@ class PostgresJobsStorage(JobsStorage):
             .order_by(desc(sub_query.c.created_at), sub_query.c.index)
         )
         return [record[0] for record in await self._fetch(query)]
-
-    async def get_aggregated_run_time_by_clusters(
-        self, job_filter: JobFilter
-    ) -> Dict[str, AggregatedRunTime]:
-        raise NotImplementedError
 
 
 class JobFilterClauseBuilder:
