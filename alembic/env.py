@@ -63,6 +63,11 @@ def run_migrations_online() -> None:
         db_config = EnvironConfigFactory().create_postgres()
         config.set_main_option("sqlalchemy.url", db_config.postgres_dsn)
 
+    if not config.get_main_option("redis_url"):
+        redis_config = EnvironConfigFactory().create_redis()
+        if redis_config:
+            config.set_main_option("redis_url", redis_config.uri)
+
     connectable = engine_from_config(
         config.get_section(config.config_ini_section),
         prefix="sqlalchemy.",

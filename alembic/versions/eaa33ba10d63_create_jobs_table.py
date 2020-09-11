@@ -1,13 +1,13 @@
 """create jobs table
 
 Revision ID: eaa33ba10d63
-Revises: 
+Revises:
 Create Date: 2020-08-17 12:04:17.252280
 
 """
-from alembic import op
 import sqlalchemy as sa
 import sqlalchemy.dialects.postgresql as sapg
+from alembic import op
 
 
 # revision identifiers, used by Alembic.
@@ -41,7 +41,7 @@ def upgrade() -> None:
         ["name", "owner"],
         unique=True,
         postgresql_where=sa.text(
-            "(jobs.status != 'succeeded' AND jobs.status != 'failed' AND jobs.status != 'cancelled')"
+            "(jobs.status != 'succeeded' AND jobs.status != 'failed' AND jobs.status != 'cancelled')"  # noqa
         ),
     )
     op.execute(

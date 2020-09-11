@@ -1,0 +1,23 @@
+apiVersion: batch/v1
+kind: Job
+metadata:
+  name: platformadmin-migrations
+  annotations:
+    "helm.sh/hook": pre-install,pre-upgrade
+    "helm.sh/hook-delete-policy": hook-succeeded,before-hook-creation
+spec:
+  template:
+    spec:
+      restartPolicy: Never
+      containers:
+      - name: platformapi-migrations
+        image: {{ printf "%s" (pluck .Values.global.env .Values.IMAGE | first | default .Values.IMAGE._default) }}
+        imagePullPolicy: Always
+        command: ["alembic", "upgrade", "head"]
+        env:
+        - name: NP_DB_REDIS_URI
+          value: "{{ printf "%s" (pluck .Values.global.env .Values.NP_DB_REDIS_URI | first | default .Values.NP_DB_REDIS_URI._default) }}"
+        - name: NP_DB_POSTGRES_DSN
+          value: "{{ printf "%s" (pluck .Values.global.env .Values.NP_DB_POSTGRES_DSN | first | default .Values.NP_DB_POSTGRES_DSN._default) }}"
+
+  backoffLimit: 0

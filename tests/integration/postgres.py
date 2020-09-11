@@ -11,6 +11,7 @@ from asyncpg.pool import Pool
 from platform_api.config import PostgresConfig
 from platform_api.config_factory import EnvironConfigFactory
 from platform_api.postgres import MigrationRunner, create_postgres_pool
+from platform_api.redis import RedisConfig
 
 
 @pytest.fixture(scope="session")
@@ -78,11 +79,13 @@ async def _wait_for_postgres_server(
 
 
 @pytest.fixture
-async def postgres_config(_postgres_dsn: str) -> AsyncIterator[PostgresConfig]:
+async def postgres_config(
+    _postgres_dsn: str, redis_config: RedisConfig
+) -> AsyncIterator[PostgresConfig]:
 
     db_config = PostgresConfig(
         postgres_dsn=_postgres_dsn,
-        alembic=EnvironConfigFactory().create_alembic(_postgres_dsn),
+        alembic=EnvironConfigFactory().create_alembic(_postgres_dsn, redis_config.uri),
     )
     migration_runner = MigrationRunner(db_config)
     await migration_runner.upgrade()

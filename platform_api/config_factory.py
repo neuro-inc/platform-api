@@ -336,11 +336,15 @@ class EnvironConfigFactory:
             command_timeout_s=command_timeout_s,
         )
 
-    def create_alembic(self, postgres_dsn: str) -> AlembicConfig:
+    def create_alembic(
+        self, postgres_dsn: str, redis_url: Optional[str] = None
+    ) -> AlembicConfig:
         parent_path = pathlib.Path(__file__).resolve().parent.parent
         ini_path = str(parent_path / "alembic.ini")
         script_path = str(parent_path / "alembic")
         config = AlembicConfig(ini_path)
         config.set_main_option("script_location", script_path)
         config.set_main_option("sqlalchemy.url", postgres_dsn)
+        if redis_url:
+            config.set_main_option("redis_url", redis_url)
         return config
