@@ -58,11 +58,6 @@ class OAuthConfig:
 
 
 @dataclass(frozen=True)
-class DatabaseConfig:
-    redis: Optional[RedisConfig] = None
-
-
-@dataclass(frozen=True)
 class PostgresConfig:
     postgres_dsn: str
 
@@ -75,6 +70,12 @@ class PostgresConfig:
 
     connect_timeout_s: float = 60.0
     command_timeout_s: Optional[float] = 60.0
+
+
+@dataclass(frozen=True)
+class DatabaseConfig:
+    redis: Optional[RedisConfig] = None
+    postgres: Optional[PostgresConfig] = None
 
 
 @dataclass(frozen=True)
@@ -113,7 +114,6 @@ class Config:
     server: ServerConfig
 
     database: DatabaseConfig
-    postgres: PostgresConfig
     auth: AuthConfig
     zipkin: ZipkinConfig
     notifications: NotificationsConfig

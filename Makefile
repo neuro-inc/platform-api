@@ -93,7 +93,7 @@ docker_login:
 		--username=$(ARTIFACTORY_USERNAME) \
 		--password=$(ARTIFACTORY_PASSWORD)
 
-docker_pull_test_images: artifactory_docker_login
+docker_pull_test_images:
 	docker pull $(PLATFORMAUTHAPI_IMAGE)
 	docker pull $(PLATFORMCONFIG_IMAGE)
 	docker pull $(PLATFORMSECRETS_IMAGE)

@@ -13,12 +13,15 @@ kubectl config use-context minikube
 kubectl delete -f deploy/platformapi/templates/rb.default.gke.yml
 kubectl delete -f tests/k8s/platformapi.yml
 kubectl delete -f tests/k8s/platformconfig.yml
-kubectl delete -f tests/k8s/platformapi_migraions.yml
+kubectl delete -f tests/k8s/platformapi_migrations.yml
 
 kubectl create -f deploy/platformapi/templates/rb.default.gke.yml
 kubectl create -f tests/k8s/platformconfig.yml
 kubectl create -f tests/k8s/platformapi.yml
-kubectl create -f tests/k8s/platformapi_migraions.yml
+
+# Wait for DB server to start
+sleep 15
+kubectl create -f tests/k8s/platformapi_migrations.yml
 
 # wait for containers to start
 

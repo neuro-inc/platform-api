@@ -31,8 +31,13 @@ from .kube_cluster import KubeCluster
 from .orchestrator.job_request import JobException
 from .orchestrator.jobs_poller import JobsPoller
 from .orchestrator.jobs_service import JobsService, JobsServiceException
-from .orchestrator.jobs_storage import PostgresJobsStorage
+from .orchestrator.jobs_storage import (
+    JobsStorage,
+    PostgresJobsStorage,
+    RedisJobsStorage,
+)
 from .postgres import create_postgres_pool
+from .redis import create_redis_client
 from .resource import Preset
 from .trace import store_span_middleware
 from .user import authorized_user, untrusted_user
@@ -262,11 +267,6 @@ async def create_app(
             )
             await exit_stack.enter_async_context(notifications_client)
 
-            logger.info("Initializing Redis client")
-            postgres_pool = await exit_stack.enter_async_context(
-                create_postgres_pool(config.postgres)
-            )
-
             logger.info("Initializing Cluster Registry")
             cluster_registry = await exit_stack.enter_async_context(
                 ClusterRegistry(factory=create_cluster)
@@ -291,9 +291,26 @@ async def create_app(
             for cluster in client_clusters:
                 await cluster_registry.replace(cluster)
 
-            logger.info("Initializing JobsStorage")
-            jobs_storage = PostgresJobsStorage(postgres_pool)
-            await jobs_storage.migrate()
+            if config.database.postgres:
+                logger.info("Initializing Postgres connection pool")
+                postgres_pool = await exit_stack.enter_async_context(
+                    create_postgres_pool(config.database.postgres)
+                )
+
+                logger.info("Initializing JobsStorage")
+                jobs_storage: JobsStorage = PostgresJobsStorage(postgres_pool)
+                await jobs_storage.migrate()
+            elif config.database.redis:
+                logger.info("Initializing Redis client")
+                redis_client = await exit_stack.enter_async_context(
+                    create_redis_client(config.database.redis)
+                )
+
+                logger.info("Initializing JobsStorage")
+                jobs_storage = RedisJobsStorage(redis_client)
+                await jobs_storage.migrate()
+            else:
+                raise Exception("Either postgres or redis storage should be set.")
 
             logger.info("Initializing JobsService")
             jobs_service = JobsService(

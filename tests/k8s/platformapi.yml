@@ -127,7 +127,7 @@ spec:
           value: ssh.platform.dev.neuromation.io
         - name: NP_DB_REDIS_URI
           value: redis://platformredis:6379/0
-        - name: NP_DB_POSTGRES_URI
+        - name: NP_DB_POSTGRES_DSN
           value: postgresql://postgres@platformpostgres:5432/postgres
         - name: NP_OAUTH_HEADLESS_CALLBACK_URL
           value: https://dev.neu.ro/oauth/show-code
