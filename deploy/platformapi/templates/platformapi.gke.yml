@@ -124,7 +124,11 @@ spec:
           value: {{ printf "%s" (pluck .Values.global.env .Values.NP_API_ZIPKIN_URL | first | default .Values.NP_API_ZIPKIN_URL._default) | quote }}
         - name: NP_API_ZIPKIN_SAMPLE_RATE
           value: {{ printf "%s" (pluck .Values.global.env .Values.NP_API_ZIPKIN_SAMPLE_RATE | first | default .Values.NP_API_ZIPKIN_SAMPLE_RATE._default) | quote }}
-
+        - name: NP_DB_POSTGRES_DSN
+          valueFrom:
+            secretKeyRef:
+              name: platformapi-postgres
+              key: platformapi-dsn
       - name: kubeproxy
         image: lachlanevenson/k8s-kubectl:v1.10.3
         args: [proxy]
