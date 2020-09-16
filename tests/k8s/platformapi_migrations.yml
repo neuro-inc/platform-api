@@ -5,7 +5,7 @@ metadata:
 spec:
   template:
     spec:
-      restartPolicy: Never
+      restartPolicy: OnFailure
       containers:
       - name: platformapi-migrations
         image: platformapi:latest
@@ -16,4 +16,4 @@ spec:
             value: redis://platformredis:6379/0
           - name: NP_DB_POSTGRES_DSN
             value: postgresql://postgres@platformpostgres:5432/postgres
-  backoffLimit: 0
+  backoffLimit: 10
