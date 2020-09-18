@@ -18,6 +18,9 @@ spec:
         - name: NP_DB_REDIS_URI
           value: "{{ printf "%s" (pluck .Values.global.env .Values.NP_DB_REDIS_URI | first | default .Values.NP_DB_REDIS_URI._default) }}"
         - name: NP_DB_POSTGRES_DSN
-          value: "{{ printf "%s" (pluck .Values.global.env .Values.NP_DB_POSTGRES_DSN | first | default .Values.NP_DB_POSTGRES_DSN._default) }}"
+          valueFrom:
+            secretKeyRef:
+              name: platformapi-postgres
+              key: platformapi-dsn
 
   backoffLimit: 0
