@@ -53,7 +53,6 @@ class EnvironConfigFactory:
         return Config(
             server=self.create_server(),
             database=self.create_database(),
-            postgres=self.create_postgres(),
             auth=auth,
             zipkin=self.create_zipkin(),
             oauth=self.try_create_oauth(),
@@ -217,7 +216,8 @@ class EnvironConfigFactory:
 
     def create_database(self) -> DatabaseConfig:
         redis = self.create_redis()
-        return DatabaseConfig(redis=redis)
+        postgres = self.create_postgres()
+        return DatabaseConfig(redis=redis, postgres=postgres)
 
     def create_redis(self) -> Optional[RedisConfig]:
         uri = self._environ.get("NP_DB_REDIS_URI")
@@ -307,7 +307,7 @@ class EnvironConfigFactory:
 
     def create_postgres(self) -> PostgresConfig:
         try:
-            postgres_dsn = self._environ["NP_ADMIN_POSTGRES_DSN"]
+            postgres_dsn = self._environ["NP_DB_POSTGRES_DSN"]
         except KeyError:
             # Temporary fix until postgres deployment is set
             postgres_dsn = ""
@@ -323,10 +323,8 @@ class EnvironConfigFactory:
             )
         )
         command_timeout_s = PostgresConfig.command_timeout_s
-        if self._environ.get("NP_ADMIN_POSTGRES_COMMAND_TIMEOUT"):
-            command_timeout_s = float(
-                self._environ["NP_ADMIN_POSTGRES_COMMAND_TIMEOUT"]
-            )
+        if self._environ.get("NP_DB_POSTGRES_COMMAND_TIMEOUT"):
+            command_timeout_s = float(self._environ["NP_DB_POSTGRES_COMMAND_TIMEOUT"])
         return PostgresConfig(
             postgres_dsn=postgres_dsn,
             alembic=self.create_alembic(postgres_dsn),
@@ -336,11 +334,15 @@ class EnvironConfigFactory:
             command_timeout_s=command_timeout_s,
         )
 
-    def create_alembic(self, postgres_dsn: str) -> AlembicConfig:
+    def create_alembic(
+        self, postgres_dsn: str, redis_url: Optional[str] = None
+    ) -> AlembicConfig:
         parent_path = pathlib.Path(__file__).resolve().parent.parent
         ini_path = str(parent_path / "alembic.ini")
         script_path = str(parent_path / "alembic")
         config = AlembicConfig(ini_path)
         config.set_main_option("script_location", script_path)
         config.set_main_option("sqlalchemy.url", postgres_dsn)
+        if redis_url:
+            config.set_main_option("redis_url", redis_url)
         return config

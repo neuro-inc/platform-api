@@ -29,14 +29,14 @@ setup:
 	pip install --no-binary cryptography -r requirements/test.txt
 
 lint:
-	isort --check-only --diff platform_api tests setup.py
-	black --check platform_api tests setup.py
-	flake8 platform_api tests setup.py
-	mypy platform_api tests setup.py
+	isort --check-only --diff platform_api tests setup.py alembic
+	black --check platform_api tests setup.py alembic
+	flake8 platform_api tests setup.py alembic
+	mypy platform_api tests setup.py alembic
 
 format:
-	isort platform_api tests setup.py
-	black platform_api tests setup.py
+	isort platform_api tests setup.py alembic
+	black platform_api tests setup.py alembic
 
 test_unit:
 	pytest -vv --cov platform_api --cov-config=setup.cfg --cov-report xml:.coverage-unit.xml tests/unit
@@ -93,7 +93,7 @@ docker_login:
 		--username=$(ARTIFACTORY_USERNAME) \
 		--password=$(ARTIFACTORY_PASSWORD)
 
-docker_pull_test_images: artifactory_docker_login
+docker_pull_test_images:
 	docker pull $(PLATFORMAUTHAPI_IMAGE)
 	docker pull $(PLATFORMCONFIG_IMAGE)
 	docker pull $(PLATFORMSECRETS_IMAGE)

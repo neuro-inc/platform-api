@@ -288,6 +288,9 @@ class TestEnvironConfigFactory:
             "NP_DB_REDIS_URI": "redis://localhost:6379/0",
             "NP_DB_REDIS_CONN_POOL_SIZE": "444",
             "NP_DB_REDIS_CONN_TIMEOUT": "555",
+            "NP_DB_POSTGRES_DSN": "postgresql://postgres@localhost:5432/postgres",
+            "NP_DB_POSTGRES_POOL_MIN": "50",
+            "NP_DB_POSTGRES_POOL_MAX": "500",
             "NP_AUTH_URL": "https://auth",
             "NP_AUTH_TOKEN": "token",
             "NP_AUTH_NAME": "servicename",
@@ -375,6 +378,14 @@ class TestEnvironConfigFactory:
         assert config.database.redis.uri == "redis://localhost:6379/0"
         assert config.database.redis.conn_pool_size == 444
         assert config.database.redis.conn_timeout_s == 555.0
+
+        assert config.database.postgres is not None
+        assert (
+            config.database.postgres.postgres_dsn
+            == "postgresql://postgres@localhost:5432/postgres"
+        )
+        assert config.database.postgres.pool_min_size == 50
+        assert config.database.postgres.pool_max_size == 500
 
         assert config.env_prefix == "TEST"
 

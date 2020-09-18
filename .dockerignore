@@ -2,4 +2,6 @@
 # python
 !setup.py
 !platform_api
+!alembic
+!alembic.ini
 **/*.pyc
