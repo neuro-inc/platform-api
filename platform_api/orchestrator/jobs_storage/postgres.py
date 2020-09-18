@@ -113,11 +113,6 @@ class PostgresJobsStorage(JobsStorage):
             "finished_at": job.status_history.finished_at,
             "payload": payload,
         }
-        values = job.to_primitive()
-        values["status"] = job.status_history.current.status
-        values["created_at"] = job.status_history.created_at
-        values["finished_at"] = job.status_history.finished_at
-        return values
 
     def _record_to_job(self, record: Record) -> JobRecord:
         payload = json.loads(record["payload"])

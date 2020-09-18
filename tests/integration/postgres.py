@@ -15,7 +15,7 @@ from platform_api.redis import RedisConfig
 
 
 @pytest.fixture(scope="session")
-async def _postgres_dsn(
+async def postgres_dsn(
     docker: aiodocker.Docker, reuse_docker: bool
 ) -> AsyncIterator[str]:
     image_name = "postgres:11.3"
@@ -80,12 +80,12 @@ async def _wait_for_postgres_server(
 
 @pytest.fixture
 async def postgres_config(
-    _postgres_dsn: str, redis_config: RedisConfig
+    postgres_dsn: str, redis_config: RedisConfig
 ) -> AsyncIterator[PostgresConfig]:
 
     db_config = PostgresConfig(
-        postgres_dsn=_postgres_dsn,
-        alembic=EnvironConfigFactory().create_alembic(_postgres_dsn, redis_config.uri),
+        postgres_dsn=postgres_dsn,
+        alembic=EnvironConfigFactory().create_alembic(postgres_dsn, redis_config.uri),
     )
     migration_runner = MigrationRunner(db_config)
     await migration_runner.upgrade()
