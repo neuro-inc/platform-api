@@ -17,7 +17,7 @@ install_requires = (
     "yarl==1.5.1",
     "multidict==4.7.6",
     "aiohttp-cors==0.7.0",
-    "aiozipkin==0.7.0",
+    "aiozipkin==0.7.1",
     "asyncpg==0.21.0",
     "sqlalchemy==1.3.19",
     "asyncpgsa==0.26.3",
