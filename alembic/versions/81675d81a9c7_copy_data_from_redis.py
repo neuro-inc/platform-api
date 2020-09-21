@@ -6,6 +6,7 @@ Create Date: 2020-09-11 18:19:36.310016
 
 """
 import asyncio
+from typing import Any, Dict
 
 import sqlalchemy as sa
 import sqlalchemy.dialects.postgresql as sapg
@@ -54,6 +55,17 @@ async def move_redis_to_postgres(redis_config: RedisConfig):
 
         async for job in redis_storage.iter_all_jobs():
             payload = job.to_primitive()
+            # Fix bad unicode values:
+
+            def fix_dict(d: Dict[str, Any]) -> None:
+                for key, value in d.items():
+                    if isinstance(value, dict):
+                        fix_dict(value)
+                    elif isinstance(value, str):
+                        d[key] = value.encode("utf-8", "replace").decode("utf-8")
+
+            fix_dict(payload)
+
             values = {
                 "id": payload.pop("id"),
                 "owner": payload.pop("owner"),
