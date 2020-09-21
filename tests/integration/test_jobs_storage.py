@@ -8,6 +8,8 @@ import pytest
 from asyncpg.pool import Pool
 from yarl import URL
 
+from platform_api.config import PostgresConfig
+from platform_api.config_factory import EnvironConfigFactory
 from platform_api.orchestrator.job import (
     JobRecord,
     JobStatusHistory,
@@ -30,6 +32,8 @@ from platform_api.orchestrator.jobs_storage import (
     RedisJobsStorage,
 )
 from platform_api.orchestrator.jobs_storage.postgres import PostgresJobsStorage
+from platform_api.postgres import MigrationRunner, create_postgres_pool
+from platform_api.redis import RedisConfig
 from tests.conftest import not_raises, random_str
 
 
@@ -1671,3 +1675,101 @@ class TestJobsStorage:
         )
         job_ids = [job.id for job in jobs]
         assert job_ids == [first_job.id]
+
+    def check_same_job_sets(
+        self, jobs1: List[JobRecord], jobs2: List[JobRecord]
+    ) -> None:
+        assert len(jobs1) == len(jobs2)
+        for job1 in jobs1:
+            try:
+                job2 = next(job for job in jobs2 if job.id == job1.id)
+            except StopIteration:
+                raise AssertionError(f"Job with id {job1.id} is missing in job2 set!")
+            assert job1.to_primitive() == job2.to_primitive()
+
+    async def prepare_jobs_for_data_migration(
+        self, storage: JobsStorage
+    ) -> List[JobRecord]:
+        jobs = [
+            self._create_running_job(owner="user1", cluster_name="test-cluster"),
+            self._create_succeeded_job(
+                owner="user1", cluster_name="test-cluster", job_name="jobname1"
+            ),
+            self._create_failed_job(
+                owner="user2", cluster_name="test-cluster", job_name="jobname1"
+            ),
+            self._create_succeeded_job(
+                owner="user3", cluster_name="test-cluster", job_name="jobname1"
+            ),
+            self._create_succeeded_job(owner="user1", cluster_name="my-cluster"),
+            self._create_failed_job(owner="user3", cluster_name="my-cluster"),
+            self._create_failed_job(owner="user1", cluster_name="other-cluster"),
+            self._create_succeeded_job(owner="user2", cluster_name="other-cluster"),
+            self._create_running_job(owner="user3", cluster_name="other-cluster"),
+        ]
+
+        for job in jobs:
+            async with storage.try_create_job(job):
+                pass
+        return jobs
+
+    @pytest.mark.asyncio
+    async def test_data_migration_from_redis_to_postgres(
+        self, redis_config: RedisConfig, redis_client: aioredis.Redis, postgres_dsn: str
+    ) -> None:
+        # Load data to redis
+        redis_storage = RedisJobsStorage(redis_client)
+        some_jobs = await self.prepare_jobs_for_data_migration(redis_storage)
+
+        # Setup postgres and run migrations
+        postgres_config = PostgresConfig(
+            postgres_dsn=postgres_dsn,
+            alembic=EnvironConfigFactory().create_alembic(
+                postgres_dsn, redis_config.uri
+            ),
+        )
+        migration_runner = MigrationRunner(postgres_config)
+        await migration_runner.upgrade()
+
+        try:
+            # Check that postgres contains same data
+            async with create_postgres_pool(postgres_config) as pool:
+                postgres_storage = PostgresJobsStorage(pool)
+                jobs_in_postgres = []
+                async for job in postgres_storage.iter_all_jobs():
+                    jobs_in_postgres.append(job)
+                self.check_same_job_sets(some_jobs, jobs_in_postgres)
+        finally:
+            # Downgrade
+            await migration_runner.downgrade()
+
+    @pytest.mark.asyncio
+    async def test_data_migration_from_postgres_to_redis(
+        self, redis_config: RedisConfig, redis_client: aioredis.Redis, postgres_dsn: str
+    ) -> None:
+
+        # Setup postgres and run migrations
+        postgres_config = PostgresConfig(
+            postgres_dsn=postgres_dsn,
+            alembic=EnvironConfigFactory().create_alembic(
+                postgres_dsn, redis_config.uri
+            ),
+        )
+        migration_runner = MigrationRunner(postgres_config)
+        await migration_runner.upgrade()
+
+        try:
+            # Load data to postges
+            async with create_postgres_pool(postgres_config) as pool:
+                postgres_storage = PostgresJobsStorage(pool)
+                some_jobs = await self.prepare_jobs_for_data_migration(postgres_storage)
+        finally:
+            # Downgrade
+            await migration_runner.downgrade()
+
+        # Check that redis contains same data
+        redis_storage = RedisJobsStorage(redis_client)
+        jobs_in_redis = []
+        async for job in redis_storage.iter_all_jobs():
+            jobs_in_redis.append(job)
+        self.check_same_job_sets(some_jobs, jobs_in_redis)
