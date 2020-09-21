@@ -1676,6 +1676,9 @@ class TestJobsStorage:
         job_ids = [job.id for job in jobs]
         assert job_ids == [first_job.id]
 
+    def _fix_utf8(self, value: str) -> str:
+        return value.encode("utf-8", "replace").decode("utf-8")
+
     def check_same_job_sets(
         self, jobs1: List[JobRecord], jobs2: List[JobRecord]
     ) -> None:
@@ -1685,10 +1688,19 @@ class TestJobsStorage:
                 job2 = next(job for job in jobs2 if job.id == job1.id)
             except StopIteration:
                 raise AssertionError(f"Job with id {job1.id} is missing in job2 set!")
-            assert job1.to_primitive() == job2.to_primitive()
+            job1_primitive = job1.to_primitive()
+            job2_primitive = job2.to_primitive()
+            # If data contains bad utf8 string, it is ok to replace it with ?
+            job1_primitive["request"]["container"]["command"] = self._fix_utf8(
+                job1_primitive["request"]["container"]["command"]
+            )
+            job2_primitive["request"]["container"]["command"] = self._fix_utf8(
+                job2_primitive["request"]["container"]["command"]
+            )
+            assert job1_primitive == job2_primitive
 
     async def prepare_jobs_for_data_migration(
-        self, storage: JobsStorage
+        self, storage: JobsStorage, include_bad_utf8: bool = False
     ) -> List[JobRecord]:
         jobs = [
             self._create_running_job(owner="user1", cluster_name="test-cluster"),
@@ -1707,6 +1719,16 @@ class TestJobsStorage:
             self._create_succeeded_job(owner="user2", cluster_name="other-cluster"),
             self._create_running_job(owner="user3", cluster_name="other-cluster"),
         ]
+        if include_bad_utf8:
+            job_bad_command_str = self._create_running_job(
+                owner="user-bad-utf-8", cluster_name="test-cluster"
+            )
+            job_primitive = job_bad_command_str.to_primitive()
+            # Some value from wild nature:
+            job_primitive["request"]["container"][
+                "command"
+            ] = "python -c 'print('\"'\"'wandb: Starting wandb agent \ud83d️'\"'\"')'"
+            jobs += [JobRecord.from_primitive(job_primitive)]
 
         for job in jobs:
             async with storage.try_create_job(job):
@@ -1719,7 +1741,9 @@ class TestJobsStorage:
     ) -> None:
         # Load data to redis
         redis_storage = RedisJobsStorage(redis_client)
-        some_jobs = await self.prepare_jobs_for_data_migration(redis_storage)
+        some_jobs = await self.prepare_jobs_for_data_migration(
+            redis_storage, include_bad_utf8=True
+        )
 
         # Setup postgres and run migrations
         postgres_config = PostgresConfig(
