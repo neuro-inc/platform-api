@@ -328,6 +328,10 @@ class JobRecord:
     def has_gpu(self) -> bool:
         return bool(self.request.container.resources.gpu)
 
+    @property
+    def gpu_model_id(self) -> Optional[str]:
+        return self.request.container.resources.gpu_model_id
+
     def get_run_time(
         self,
         *,
@@ -531,6 +535,10 @@ class Job:
     @property
     def has_gpu(self) -> bool:
         return self._record.has_gpu
+
+    @property
+    def gpu_model_id(self) -> Optional[str]:
+        return self._record.gpu_model_id
 
     @property
     def status(self) -> JobStatus:

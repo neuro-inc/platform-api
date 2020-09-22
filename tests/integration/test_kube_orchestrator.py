@@ -1097,6 +1097,45 @@ class TestKubeOrchestrator:
         ]
 
     @pytest.mark.asyncio
+    async def test_gpu_job_pod_labels(
+        self,
+        kube_config: KubeConfig,
+        kube_client: MyKubeClient,
+        delete_job_later: Callable[[Job], Awaitable[None]],
+        kube_orchestrator: KubeOrchestrator,
+        kube_node_gpu: str,
+    ) -> None:
+        node_name = kube_node_gpu
+        container = Container(
+            image="ubuntu",
+            command="true",
+            resources=ContainerResources(
+                cpu=0.1, memory_mb=128, gpu=1, gpu_model_id="gpumodel"
+            ),
+        )
+        job = MyJob(
+            orchestrator=kube_orchestrator,
+            record=JobRecord.create(
+                request=JobRequest.create(container), cluster_name="test-cluster"
+            ),
+        )
+        await delete_job_later(job)
+        await job.start()
+
+        pod_name = job.id
+
+        await kube_client.wait_pod_scheduled(
+            pod_name=pod_name, node_name=node_name, timeout_s=60.0
+        )
+        raw_pod = await kube_client.get_raw_pod(pod_name)
+
+        assert raw_pod["metadata"]["labels"] == {
+            "platform.neuromation.io/job": job.id,
+            "platform.neuromation.io/user": job.owner,
+            "platform.neuromation.io/gpu-model": job.gpu_model_id,
+        }
+
+    @pytest.mark.asyncio
     async def test_job_resource_labels(
         self,
         kube_config: KubeConfig,

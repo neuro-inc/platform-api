@@ -233,7 +233,7 @@ class KubeOrchestrator(Orchestrator):
             return
 
         name = self._get_job_pod_name(job)
-        pod_labels = self._get_job_labels(job)
+        pod_labels = self._get_network_policy_pod_selector_labels(job)
         rules: List[Dict[str, Any]] = [
             # allowing the pod to connect to TPU nodes within internal network
             {"to": [{"ipBlock": {"cidr": tpu_ipv4_cidr_block}}]}
@@ -283,9 +283,20 @@ class KubeOrchestrator(Orchestrator):
     def _get_job_labels(self, job: Job) -> Dict[str, str]:
         return {"platform.neuromation.io/job": job.id}
 
+    def _get_gpu_labels(self, job: Job) -> Dict[str, str]:
+        if not job.has_gpu or not job.gpu_model_id:
+            return {}
+        return {"platform.neuromation.io/gpu-model": job.gpu_model_id}
+
+    def _get_network_policy_pod_selector_labels(self, job: Job) -> Dict[str, str]:
+        labels = self._get_job_labels(job)
+        labels.update(self._get_user_pod_labels(job))
+        return labels
+
     def _get_pod_labels(self, job: Job) -> Dict[str, str]:
         labels = self._get_job_labels(job)
         labels.update(self._get_user_pod_labels(job))
+        labels.update(self._get_gpu_labels(job))
         return labels
 
     def _get_pod_restart_policy(self, job: Job) -> PodRestartPolicy:
