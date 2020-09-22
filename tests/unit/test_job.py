@@ -661,6 +661,28 @@ class TestJob:
     def _mocked_datetime_factory(self) -> datetime:
         return datetime(year=2019, month=1, day=1)
 
+    def test_job_gpu_model_id(
+        self, mock_orchestrator: MockOrchestrator, job_request_with_gpu: JobRequest
+    ) -> None:
+        job = Job(
+            storage_config=mock_orchestrator.storage_config,
+            orchestrator_config=mock_orchestrator.config,
+            record=JobRecord.create(
+                request=job_request_with_gpu, cluster_name="test-cluster"
+            ),
+        )
+        assert job.gpu_model_id == "nvidia-tesla-k80"
+
+    def test_job_gpu_model_id_none(
+        self, mock_orchestrator: MockOrchestrator, job_request: JobRequest
+    ) -> None:
+        job = Job(
+            storage_config=mock_orchestrator.storage_config,
+            orchestrator_config=mock_orchestrator.config,
+            record=JobRecord.create(request=job_request, cluster_name="test-cluster"),
+        )
+        assert job.gpu_model_id is None
+
     @pytest.fixture
     def job_factory(
         self, mock_orchestrator: MockOrchestrator, job_request: JobRequest
