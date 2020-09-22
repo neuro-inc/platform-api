@@ -469,23 +469,39 @@ class KubeOrchestrator(Orchestrator):
         assert pod_status is not None  # should always be present
         job_status = convert_pod_status_to_job_status(pod_status)
 
-        if pod_status.is_scheduled:
+        if not pod_status.is_phase_pending:
             return job_status
 
-        # Pod in pending state, and not scheduled yet.
+        # Pod in pending state.
         # Possible we are observing the case when Container requested
-        # too much resources, check events for NotTriggerScaleUp event
+        # too much resources -- we will check for NotTriggerScaleUp event.
+        # Or it tries to mount disk that is used by another job
+        # -- we will check for FailedAttachVolume event.
         now = datetime.now(timezone.utc)
         assert pod.created_at is not None
+        pod_events = await self._client.get_pod_events(
+            self._get_job_pod_name(job), self._kube_config.namespace
+        )
 
+        if pod_status.is_scheduled:
+            failed_volume_events = [
+                e for e in pod_events if e.reason == "FailedAttachVolume"
+            ]
+            failed_volume_events.sort(key=operator.attrgetter("last_timestamp"))
+            if failed_volume_events:
+                return JobStatusItem.create(
+                    JobStatus.PENDING,
+                    transition_time=now,
+                    reason=JobStatusReason.DISK_UNAVAILABLE,
+                    description="Waiting for another job to release disk resource",
+                )
+            return job_status
+
+        logger.info(f"Found unscheduled pod. Job '{job.id}'")
         schedule_timeout = (
             job.schedule_timeout or self._kube_config.job_schedule_timeout
         )
 
-        logger.info(f"Found pod that requested too much resources. Job '{job.id}'")
-        pod_events = await self._client.get_pod_events(
-            self._get_job_pod_name(job), self._kube_config.namespace
-        )
         scaleup_events = [e for e in pod_events if e.reason == "TriggeredScaleUp"]
         scaleup_events.sort(key=operator.attrgetter("last_timestamp"))
         if scaleup_events and (

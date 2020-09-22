@@ -71,6 +71,7 @@ class JobStatusReason:
     CLUSTER_SCALING_UP = "ClusterScalingUp"
     CLUSTER_SCALE_UP_FAILED = "ClusterScaleUpFailed"
     RESTARTING = "Restarting"
+    DISK_UNAVAILABLE = "DiskUnavailable"
 
 
 @dataclass(frozen=True)
