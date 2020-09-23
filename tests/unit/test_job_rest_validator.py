@@ -569,7 +569,20 @@ class TestPathUriValidator:
 
     @pytest.mark.parametrize(
         "uri",
-        ("storage://test-cluster/../to/dir", "storage://test-cluster/path/../dir"),
+        (
+            "storage://test-cluster/../to/dir",
+            "storage://test-cluster/%2e./to/dir",
+            "storage://test-cluster/.%2E/to/dir",
+            "storage://test-cluster/%2E%2e/to/dir",
+            "storage://test-cluster/..%2fto/dir",
+            "storage://test-cluster/..%2Fto/dir",
+            "storage://test-cluster/path/../dir",
+            "storage://test-cluster/path/%2e./dir",
+            "storage://test-cluster/path/.%2E/dir",
+            "storage://test-cluster/path/%2E%2e/dir",
+            "storage://test-cluster/path/..%2fdir",
+            "storage://test-cluster/path/..%2Fdir",
+        ),
     )
     def test_create_invalid_path(self, uri: str) -> None:
         cluster = "test-cluster"
@@ -604,10 +617,43 @@ class TestPathUriValidator:
     @pytest.mark.parametrize(
         "uri",
         (
+            "storage://test-cluster/user/path/to#",
+            "storage://test-cluster/user/path/to#fragment",
+        ),
+    )
+    def test_create_with_fragment(self, uri: str) -> None:
+        cluster = "test-cluster"
+        validator = create_path_uri_validator(
+            storage_scheme="storage", cluster_name=cluster
+        )
+        with pytest.raises(t.DataError, match="Fragment part is not allowed in URI"):
+            validator.check(uri)
+
+    @pytest.mark.parametrize(
+        "uri",
+        (
+            "storage://test-cluster/user/path/to?",
+            "storage://test-cluster/user/path/to?key=value",
+        ),
+    )
+    def test_create_with_query(self, uri: str) -> None:
+        cluster = "test-cluster"
+        validator = create_path_uri_validator(
+            storage_scheme="storage", cluster_name=cluster
+        )
+        with pytest.raises(t.DataError, match="Query part is not allowed in URI"):
+            validator.check(uri)
+
+    @pytest.mark.parametrize(
+        "uri",
+        (
             "storage://test-cluster",
             "storage://test-cluster/",
-            "storage://test-cluster/to" "storage://test-cluster/to/more/that",
+            "storage://test-cluster/to",
+            "storage://test-cluster/to/more/that",
             "storage://test-cluster/to/more/that/expected",
+            "storage://test-cluster/to%2fmore/that",
+            "storage://test-cluster/to%2Fmore/that",
         ),
     )
     def test_invalid_parts_count(self, uri: str) -> None:

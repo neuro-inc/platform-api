@@ -690,6 +690,21 @@ class TestJobContainerToJson:
             "read_only": False,
         }
 
+    def test_src_storage_uri_fallback_special_chars(
+        self, storage_config: StorageConfig
+    ) -> None:
+        volume = ContainerVolume(
+            uri=URL(""),
+            src_path=PurePath("/"),
+            dst_path=PurePath("/var/storage/username/dataset%25#?"),
+        )
+        payload = convert_container_volume_to_json(volume, storage_config)
+        assert URL(payload["src_storage_uri"]) == URL(
+            "storage://username/dataset%2525%23%3F"
+        )
+        assert URL(payload["src_storage_uri"]).path == "/dataset%25#?"
+        assert payload["dst_path"] == "/var/storage/username/dataset%25#?"
+
     def test_src_storage_uri_fallback_root(self, storage_config: StorageConfig) -> None:
         volume = ContainerVolume(
             uri=URL(""), src_path=PurePath("/"), dst_path=PurePath("/var/storage")

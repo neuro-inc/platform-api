@@ -4,7 +4,6 @@ import uuid
 from dataclasses import asdict, dataclass, field
 from pathlib import PurePath
 from typing import Any, Dict, List, Optional, Sequence, Union
-from urllib.parse import urlsplit
 
 from yarl import URL
 
@@ -64,7 +63,11 @@ class Disk:
     cluster_name: str  # `cluster` in `disk://cluster/user/disk-id`
 
     def to_uri(self) -> URL:
-        return URL(f"disk://{self.cluster_name}/{self.user_name}/{self.disk_id}")
+        return (
+            URL.build(scheme="disk", host=self.cluster_name)
+            / self.user_name
+            / self.disk_id
+        )
 
     @classmethod
     def create(cls, disk_uri: Union[str, URL]) -> "Disk":
@@ -119,7 +122,11 @@ class Secret:
         return f"user--{self.user_name}--secrets"
 
     def to_uri(self) -> URL:
-        return URL(f"secret://{self.cluster_name}/{self.user_name}/{self.secret_key}")
+        return (
+            URL.build(scheme="secret", host=self.cluster_name)
+            / self.user_name
+            / self.secret_key
+        )
 
     @classmethod
     def create(cls, secret_uri: Union[str, URL]) -> "Secret":
@@ -300,10 +307,10 @@ class Container:
     def to_image_uri(self, registry_config: RegistryConfig, cluster_name: str) -> URL:
         assert self.belongs_to_registry(registry_config), "Unknown registry"
         prefix = f"{registry_config.host}/"
-        repo = self.image.replace(prefix, "", 1)
+        repo = self.image[len(prefix) :]
         path, *_ = repo.split(":", 1)
         assert cluster_name
-        return URL(f"image://{cluster_name}/{path}")
+        return URL.build(scheme="image", host=cluster_name) / path
 
     def get_secret_uris(self) -> Sequence[URL]:
         env_uris = [sec.to_uri() for sec in self.secret_env.values()]
@@ -527,7 +534,7 @@ class ContainerVolumeFactory:
             otherwise use `dst_mount_path` as is. Defaults to True.
         """
         self._uri = uri
-        path = PurePath(urlsplit(uri).path)
+        path = PurePath(URL(uri).path)
         if path.is_absolute():
             path = path.relative_to("/")
         self._path = path

@@ -228,7 +228,9 @@ def convert_container_volume_to_json(
         except ValueError:
             rel_dst_path = PurePath()
         dst_path = PurePath("/") / rel_dst_path
-        uri = str(URL(f"{storage_config.uri_scheme}:/{dst_path}"))
+        file_uri = dst_path.as_uri()
+        assert file_uri[:8] == "file:///"
+        uri = str(URL(f"{storage_config.uri_scheme}://{file_uri[8:]}"))
     return {
         "src_storage_uri": uri,
         "dst_path": str(volume.dst_path),

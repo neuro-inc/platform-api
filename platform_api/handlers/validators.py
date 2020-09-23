@@ -1,7 +1,7 @@
 import shlex
 from pathlib import PurePath
 from typing import Any, Dict, Optional, Sequence, Set, Union
-from urllib.parse import urlsplit
+from urllib.parse import unquote, urlsplit
 
 import trafaret as t
 from yarl import URL
@@ -91,18 +91,23 @@ def create_path_uri_validator(
             raise t.DataError(
                 f"Invalid URI scheme: '{uri.scheme}' != '{storage_scheme}'"
             )
+        if "#" in uri_str:
+            raise t.DataError("Fragment part is not allowed in URI")
+        if "?" in uri_str:
+            raise t.DataError("Query part is not allowed in URI")
         if check_cluster and uri.netloc != cluster_name:
             # validate `cluster` in `scheme://cluster/username/path/to`
             raise t.DataError(
                 f"Invalid URI cluster: '{uri.netloc}' != '{cluster_name}'"
             )
+        path = unquote(uri.path)
         if assert_parts_count:
-            parts = PurePath(uri.path).parts
+            parts = PurePath(path).parts
             if len(parts) != assert_parts_count:
                 raise t.DataError("Invalid URI path: Wrong number of path items")
         if assert_username is not None:
             # validate `username` in `scheme://cluster/username/path/to`
-            parts = PurePath(uri.path).parts
+            parts = PurePath(path).parts
             if len(parts) < 2:
                 raise t.DataError("Invalid URI path: Not enough path items")
             assert parts[0] == "/", (uri, parts)
@@ -111,7 +116,7 @@ def create_path_uri_validator(
                 raise t.DataError(
                     f"Invalid URI: Invalid user in path: '{usr}' != '{assert_username}'"
                 )
-        _check_dots_in_path(uri.path)
+        _check_dots_in_path(path)
         return uri_str
 
     return t.Call(_validate)

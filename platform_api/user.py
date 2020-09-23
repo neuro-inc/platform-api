@@ -60,7 +60,7 @@ class User:
 
     def to_job_uri(self, cluster_name: str) -> URL:
         assert cluster_name
-        return URL(f"job://{cluster_name}/{self.name}")
+        return URL.build(scheme="job", host=cluster_name) / self.name
 
     @classmethod
     def create_from_auth_user(cls, auth_user: AuthUser, *, token: str = "") -> "User":
