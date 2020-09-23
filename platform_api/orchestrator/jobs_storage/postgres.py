@@ -324,6 +324,7 @@ class PostgresJobsStorage(JobsStorage):
             .select_from(self._tables.jobs)
             .select_from(tag)
             .where(self._tables.jobs.c.owner == owner)
+            .where(self._tables.jobs.c.tags != "null")
             .order_by(
                 tag_name,
                 desc(self._tables.jobs.c.created_at),
