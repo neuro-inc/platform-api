@@ -66,7 +66,7 @@ class Disk:
         return (
             URL.build(scheme="disk", host=self.cluster_name)
             / self.user_name
-            / self.disk_id
+            / self.disk_id.replace("%", "%25")
         )
 
     @classmethod
@@ -125,7 +125,7 @@ class Secret:
         return (
             URL.build(scheme="secret", host=self.cluster_name)
             / self.user_name
-            / self.secret_key
+            / self.secret_key.replace("%", "%25")
         )
 
     @classmethod
@@ -310,7 +310,7 @@ class Container:
         repo = self.image[len(prefix) :]
         path, *_ = repo.split(":", 1)
         assert cluster_name
-        return URL.build(scheme="image", host=cluster_name) / path
+        return URL.build(scheme="image", host=cluster_name) / path.replace("%", "%25")
 
     def get_secret_uris(self) -> Sequence[URL]:
         env_uris = [sec.to_uri() for sec in self.secret_env.values()]
