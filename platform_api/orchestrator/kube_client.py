@@ -209,7 +209,7 @@ class SecretVolume(Volume):
     def to_primitive(self) -> Dict[str, Any]:
         return {
             "name": self.name,
-            "secret": {"secretName": self.k8s_secret_name},
+            "secret": {"secretName": self.k8s_secret_name, "defaultMode": 0o400},
         }
 
 
