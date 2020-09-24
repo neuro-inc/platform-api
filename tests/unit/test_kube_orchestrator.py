@@ -111,15 +111,7 @@ class TestSecretVolume:
         volume = SecretVolume("testvolume", k8s_secret_name=secret_name)
         assert volume.to_primitive() == {
             "name": "testvolume",
-            "secret": {"secretName": secret_name},
-        }
-
-    def test_to_primitive_with_items(self) -> None:
-        secret_name = "user--alice--secrets"
-        volume = SecretVolume("testvolume", k8s_secret_name=secret_name)
-        assert volume.to_primitive() == {
-            "name": "testvolume",
-            "secret": {"secretName": secret_name},
+            "secret": {"secretName": secret_name, "defaultMode": 0o400},
         }
 
     def test_create_secret_mounts(self) -> None:
