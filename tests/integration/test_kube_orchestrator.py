@@ -1690,7 +1690,7 @@ class TestKubeOrchestrator:
         assert sec_volumes_raw == [
             {
                 "name": "secret",
-                "secret": {"secretName": secret.k8s_secret_name, "defaultMode": 420},
+                "secret": {"secretName": secret.k8s_secret_name, "defaultMode": 0o400},
             }
         ]
 
@@ -1823,7 +1823,7 @@ class TestKubeOrchestrator:
         assert sec_volumes_raw == [
             {
                 "name": "secret",
-                "secret": {"secretName": k8s_sec_name, "defaultMode": 420},
+                "secret": {"secretName": k8s_sec_name, "defaultMode": 0o400},
             },
         ]
 
