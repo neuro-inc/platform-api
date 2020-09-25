@@ -127,6 +127,8 @@ spec:
             secretKeyRef:
               name: platformapi-postgres
               key: platformapi-dsn
+        - name: NP_DB_POSTGRES_ENABLED
+          value: {{ printf "%s" (pluck .Values.global.env .Values.NP_DB_POSTGRES_ENABLED | first | default .Values.NP_DB_POSTGRES_ENABLED._default) | quote }}
       - name: kubeproxy
         image: lachlanevenson/k8s-kubectl:v1.10.3
         args: [proxy]
