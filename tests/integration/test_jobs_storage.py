@@ -1115,6 +1115,7 @@ class TestJobsStorage:
         for job in [
             self._create_job(owner="u", tags=["b"]),
             self._create_job(owner="u", tags=["a"]),
+            self._create_job(owner="u", tags=()),
         ]:
             async with storage.try_create_job(job):
                 pass
@@ -1132,6 +1133,7 @@ class TestJobsStorage:
             self._create_job(owner="u", current_datetime_factory=f1, tags=["b"]),
             self._create_job(owner="u", current_datetime_factory=f2, tags=["a"]),
             self._create_job(owner="u", current_datetime_factory=f3, tags=["c"]),
+            self._create_job(owner="u", tags=()),
         ]:
             async with storage.try_create_job(job):
                 pass
@@ -1149,6 +1151,7 @@ class TestJobsStorage:
                 owner="u", current_datetime_factory=f1, tags=["b", "a", "c"]
             ),
             self._create_job(owner="u", current_datetime_factory=f2, tags=["d"]),
+            self._create_job(owner="u", tags=()),
         ]:
             async with storage.try_create_job(job):
                 pass
@@ -1168,6 +1171,7 @@ class TestJobsStorage:
             self._create_job(owner="u", current_datetime_factory=f2, tags=["b"]),
             self._create_job(owner="u", current_datetime_factory=f3, tags=["a"]),
             self._create_job(owner="u", current_datetime_factory=f4, tags=["c"]),
+            self._create_job(owner="u", tags=()),
         ]:
             async with storage.try_create_job(job):
                 pass
@@ -1188,6 +1192,7 @@ class TestJobsStorage:
             self._create_job(owner="u", current_datetime_factory=f1, tags=["a"]),
             self._create_job(owner="u", current_datetime_factory=f2, tags=["b"]),
             self._create_job(owner="u", current_datetime_factory=f3, tags=["c", "a"]),
+            self._create_job(owner="u", tags=()),
         ]:
             async with storage.try_create_job(job):
                 pass
