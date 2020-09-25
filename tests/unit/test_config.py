@@ -288,6 +288,7 @@ class TestEnvironConfigFactory:
             "NP_DB_REDIS_URI": "redis://localhost:6379/0",
             "NP_DB_REDIS_CONN_POOL_SIZE": "444",
             "NP_DB_REDIS_CONN_TIMEOUT": "555",
+            "NP_DB_POSTGRES_ENABLED": "true",
             "NP_DB_POSTGRES_DSN": "postgresql://postgres@localhost:5432/postgres",
             "NP_DB_POSTGRES_POOL_MIN": "50",
             "NP_DB_POSTGRES_POOL_MAX": "500",
@@ -373,6 +374,8 @@ class TestEnvironConfigFactory:
         ]
         assert cluster.orchestrator.node_label_gpu == "testlabel"
         assert cluster.orchestrator.node_label_preemptible == "testpreempt"
+
+        assert config.database.postgres_enabled
 
         assert config.database.redis is not None
         assert config.database.redis.uri == "redis://localhost:6379/0"

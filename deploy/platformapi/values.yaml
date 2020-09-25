@@ -103,6 +103,13 @@ INGRESS_FALLBACK_HOST:
   staging-aws: 'job-app.neu.ro'
   staging: 'job-app.neu.ro'
   prod: 'job-app.neu.ro'
+NP_DB_POSTGRES_ENABLED:
+  _default: false
+  dev: true
+  dev-aws: true
+  staging-aws: false
+  staging: false
+  prod: false
 NP_DB_REDIS_URI:
   _default: redis://10.0.0.11:6379/0
   dev: redis://10.0.0.20:6379/0

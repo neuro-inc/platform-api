@@ -217,7 +217,13 @@ class EnvironConfigFactory:
     def create_database(self) -> DatabaseConfig:
         redis = self.create_redis()
         postgres = self.create_postgres()
-        return DatabaseConfig(redis=redis, postgres=postgres)
+        return DatabaseConfig(
+            postgres_enabled=self._get_bool(
+                "NP_DB_POSTGRES_ENABLED", DatabaseConfig.postgres_enabled
+            ),
+            redis=redis,
+            postgres=postgres,
+        )
 
     def create_redis(self) -> Optional[RedisConfig]:
         uri = self._environ.get("NP_DB_REDIS_URI")

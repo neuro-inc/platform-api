@@ -579,7 +579,9 @@ def config_factory(
             interval_sec=1,
             quota_notification_threshold=0.1,
         )
-        database_config = DatabaseConfig(redis=redis_config, postgres=postgres_config)
+        database_config = DatabaseConfig(
+            postgres_enabled=True, redis=redis_config, postgres=postgres_config
+        )
         config_url = URL("http://localhost:8082/api/v1")
         admin_url = URL("http://localhost:8080/apis/admin/v1")
         return Config(
