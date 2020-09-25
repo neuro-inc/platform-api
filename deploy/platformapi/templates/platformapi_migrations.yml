@@ -1,4 +1,4 @@
-{{- if (pluck .Values.global.env .Values.INGRESS_HOST | first | default .Values.INGRESS_HOST._default) }}
+{{- if (pluck .Values.global.env .Values.NP_DB_POSTGRES_ENABLED | first | default .Values.NP_DB_POSTGRES_ENABLED._default) }}
 apiVersion: batch/v1
 kind: Job
 metadata:
