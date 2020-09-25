@@ -311,7 +311,7 @@ class MyKubeClient(KubeClient):
             "message": "TriggeredScaleUp",
             "metadata": {
                 "creationTimestamp": now_str,
-                "name": "job-cd109c3b-c36e-47d4-b3d6-8bb05a5e63ab.15a870d7e2bb228b",
+                "name": f"{pod_id}.{uuid.uuid4()}",
                 "namespace": self._namespace,
                 "selfLink": (
                     f"/api/v1/namespaces/{self._namespace}"
@@ -324,6 +324,45 @@ class MyKubeClient(KubeClient):
             "reportingInstance": "",
             "source": {"component": "cluster-autoscaler"},
             "type": "Normal",
+        }
+
+        await self._request(method="POST", url=url, json=data)
+
+    async def create_failed_attach_volume_event(self, pod_id: str) -> None:
+        url = f"{self._namespace_url}/events"
+        now = datetime.now(timezone.utc)
+        now_str = now.strftime("%Y-%m-%dT%H:%M:%SZ")
+        data = {
+            "apiVersion": "v1",
+            "count": 1,
+            "eventTime": None,
+            "firstTimestamp": now_str,
+            "involvedObject": {
+                "apiVersion": "v1",
+                "kind": "Pod",
+                "name": pod_id,
+                "namespace": self._namespace,
+                "resourceVersion": "48102193",
+                "uid": "eddfe678-86e9-11e9-9d65-42010a800018",
+            },
+            "kind": "Event",
+            "lastTimestamp": now_str,
+            "message": "FailedAttachVolume",
+            "metadata": {
+                "creationTimestamp": now_str,
+                "name": f"{pod_id}.{uuid.uuid4()}",
+                "namespace": self._namespace,
+                "selfLink": (
+                    f"/api/v1/namespaces/{self._namespace}"
+                    f"/events/{pod_id}.15a870d7e2bb228b"
+                ),
+                "uid": "cb886f64-8f96-11e9-9251-42010a800038",
+            },
+            "reason": "FailedAttachVolume",
+            "reportingComponent": "",
+            "reportingInstance": "",
+            "source": {"component": "attachdetach-controller"},
+            "type": "Warning",
         }
 
         await self._request(method="POST", url=url, json=data)
