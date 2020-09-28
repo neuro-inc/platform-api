@@ -1,6 +1,5 @@
 IMAGE_NAME ?= platformapi
 DOCKER_REPO ?= neuro-docker-local-public.jfrog.io
-ARTIFACTORY_TAG ?=$(shell echo "$(GITHUB_REF)" | awk -F/ '{print $$NF}')
 IMAGE_TAG ?= $(GITHUB_SHA)
 IMAGE_TAG ?= latest
 
