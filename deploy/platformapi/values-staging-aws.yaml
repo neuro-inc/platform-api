@@ -2,7 +2,7 @@ IMAGE: 771188043543.dkr.ecr.us-east-1.amazonaws.com/platformapi:latest
 INGRESS_FALLBACK_IMAGE: 771188043543.dkr.ecr.us-east-1.amazonaws.com/platformingressfallback:latest
 NP_STORAGE_NFS_SERVER: 'none'
 NP_STORAGE_NFS_PATH: '/'
-NP_K8S_JOBS_INGRESS_DOMAIN_NAME_TEMPLATE: '{job_id}.jobs-dev.neu.ro'
+NP_K8S_JOBS_INGRESS_DOMAIN_NAME_TEMPLATE: '{job_id}.jobs-staging.neu.ro'
 NP_K8S_NAMED_JOBS_INGRESS_DOMAIN_NAME_TEMPLATE: '{job_name}-{job_owner}.jobs-staging.neu.ro'
 NP_K8S_SSH_AUTH_INGRESS_DOMAIN_NAME: ssh-auth-staging.neu.ro
 NP_API_URL: https://staging.neu.ro/api/v1
