@@ -3,6 +3,7 @@ name: Continuous Integration
 on: push
 
 jobs:
+
   test:
     name: Run tests
     runs-on: ubuntu-latest
@@ -81,6 +82,7 @@ jobs:
           name: codecov-integration
       - name: Run e2e tests
         run: make test_k8s_e2e
+
   deploy_dev:
     name: Deploy on dev
     runs-on: ubuntu-latest
@@ -105,17 +107,14 @@ jobs:
       - name: Login to AWS ECR
         uses: aws-actions/amazon-ecr-login@v1
       - name: Push images to ECR
-        run: |
-          make docker_push
-          make docker_push_ssh_auth
+        run: make docker_push
       - name: Update kube config
         run: make eks_login
       - name: Install helm
         run: make helm_install
       - name: Deploy to kubernetes
-        run: |
-          make helm_deploy
-          make helm_deploy_ssh_auth
+        run: make helm_deploy
+
   deploy_staging:
     name: Deploy on staging
     runs-on: ubuntu-latest
