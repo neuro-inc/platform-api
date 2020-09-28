@@ -74,6 +74,7 @@ class PostgresConfig:
 
 @dataclass(frozen=True)
 class DatabaseConfig:
+    postgres_enabled: bool = False
     redis: Optional[RedisConfig] = None
     postgres: Optional[PostgresConfig] = None
 

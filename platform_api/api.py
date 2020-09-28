@@ -291,7 +291,11 @@ async def create_app(
             for cluster in client_clusters:
                 await cluster_registry.replace(cluster)
 
-            if config.database.postgres:
+            if config.database.postgres_enabled:
+                assert config.database.postgres, (
+                    "Postgres config should be available when "
+                    "NP_DB_POSTGRES_ENABLED is set"
+                )
                 logger.info("Initializing Postgres connection pool")
                 postgres_pool = await exit_stack.enter_async_context(
                     create_postgres_pool(config.database.postgres)

@@ -1,0 +1,217 @@
+IMAGE:
+  _default: gcr.io/light-reality-205619/platformapi:latest
+  dev: gcr.io/light-reality-205619/platformapi:latest
+  dev-aws: 771188043543.dkr.ecr.us-east-1.amazonaws.com/platformapi:latest
+  staging-aws: 771188043543.dkr.ecr.us-east-1.amazonaws.com/platformapi:latest
+  staging: gcr.io/light-reality-205619/platformapi:latest
+  prod: gcr.io/production-228907/platformapi:latest
+INGRESS_FALLBACK_IMAGE:
+  _default: gcr.io/light-reality-205619/platformingressfallback:latest
+  dev: gcr.io/light-reality-205619/platformingressfallback:latest
+  dev-aws: 771188043543.dkr.ecr.us-east-1.amazonaws.com/platformingressfallback:latest
+  staging-aws: 771188043543.dkr.ecr.us-east-1.amazonaws.com/platformingressfallback:latest
+  staging: gcr.io/light-reality-205619/platformingressfallback:latest
+  prod: gcr.io/production-228907/platformingressfallback:latest
+NP_STORAGE_NFS_SERVER:
+  _default: '10.76.126.154'
+  dev: '10.76.126.154'
+  dev-aws: 'none'
+  staging-aws: 'none'
+  staging: '10.69.59.50'
+  prod: '10.47.20.74'
+NP_STORAGE_NFS_PATH:
+  _default: '/dev2premium'
+  dev: '/dev2premium'
+  dev-aws: '/'
+  staging-aws: '/'
+  staging: '/devpremium'
+  prod: '/prodpremium'
+NP_K8S_JOBS_INGRESS_DOMAIN_NAME_TEMPLATE:
+  _default: '{job_id}.jobs-dev.neu.ro'
+  dev: '{job_id}.jobs-dev.neu.ro'
+  dev-aws: '{job_id}.jobs-dev.neu.ro'
+  staging-aws: '{job_id}.jobs-staging.neu.ro'
+  staging: '{job_id}.jobs-staging.neu.ro'
+  prod: '{job_id}.jobs.neu.ro'
+NP_K8S_NAMED_JOBS_INGRESS_DOMAIN_NAME_TEMPLATE:
+  _default: '{job_name}-{job_owner}.jobs-dev.neu.ro'
+  dev: '{job_name}-{job_owner}.jobs-dev.neu.ro'
+  dev-aws: '{job_name}-{job_owner}.jobs-dev.neu.ro'
+  staging-aws: '{job_name}-{job_owner}.jobs-staging.neu.ro'
+  staging: '{job_name}-{job_owner}.jobs-staging.neu.ro'
+  prod: '{job_name}-{job_owner}.jobs.neu.ro'
+NP_K8S_SSH_AUTH_INGRESS_DOMAIN_NAME:
+  _default: ssh-auth-dev.neu.ro
+  dev: ssh-auth-dev.neu.ro
+  dev-aws: ssh-auth-dev.neu.ro
+  staging-aws: ssh-auth-staging.neu.ro
+  staging: ssh-auth-staging.neu.ro
+  prod: ssh-auth.neu.ro
+NP_API_URL:
+  _default: https://dev.neu.ro/api/v1
+  dev: https://dev.neu.ro/api/v1
+  dev-aws: https://dev.neu.ro/api/v1
+  staging-aws: https://staging.neu.ro/api/v1
+  staging: https://staging.neu.ro/api/v1
+  prod: https://neu.ro/api/v1
+NP_ADMIN_URL:
+  _default: https://dev.neu.ro/apis/admin/v1
+  dev: https://dev.neu.ro/apis/admin/v1
+  dev-aws: https://dev.neu.ro/apis/admin/v1
+  staging-aws: https://staging.neu.ro/apis/admin/v1
+  staging: https://staging.neu.ro/apis/admin/v1
+  prod: https://neu.ro/apis/admin/v1
+NP_AUTH_PUBLIC_URL:
+  _default: https://dev.neu.ro/api/v1/users
+  dev: https://dev.neu.ro/api/v1/users
+  dev-aws: https://dev.neu.ro/api/v1/users
+  staging-aws: https://staging.neu.ro/api/v1/users
+  staging: https://staging.neu.ro/api/v1/users
+  prod: https://neu.ro/api/v1/users
+NP_JOBS_INGRESS_OAUTH_AUTHORIZE_URL:
+  _default: https://dev.neu.ro/oauth/authorize
+  dev: https://dev.neu.ro/oauth/authorize
+  dev-aws: https://dev.neu.ro/oauth/authorize
+  staging-aws: https://staging.neu.ro/oauth/authorize
+  staging: https://staging.neu.ro/oauth/authorize
+  prod: https://neu.ro/oauth/authorize
+INGRESS_HOST:
+  _default: dev.neu.ro
+  dev: dev.neu.ro
+  dev-aws: dev.neu.ro
+  staging-aws: staging.neu.ro
+  staging: staging.neu.ro
+  prod: neu.ro
+INGRESS_PLATFORM_MONITORING_DOMAIN_NAME:
+  _default: monitoring-dev.neu.ro
+  dev: monitoring-dev.neu.ro
+  dev-aws: monitoring-dev.neu.ro
+  staging-aws: monitoring-staging.neu.ro
+  staging: monitoring-staging.neu.ro
+  prod: monitoring-neu.ro
+INGRESS_MAIN_SITE_HOST:
+  _default: neu.ro
+  dev:
+  dev-aws:
+  staging-aws: neu.ro
+  staging: neu.ro
+  prod:
+INGRESS_FALLBACK_HOST:
+  _default: 'job-app-dev.neu.ro'
+  dev: 'job-app-dev.neu.ro'
+  dev-aws: 'job-app-dev.neu.ro'
+  staging-aws: 'job-app.neu.ro'
+  staging: 'job-app.neu.ro'
+  prod: 'job-app.neu.ro'
+NP_DB_POSTGRES_ENABLED:
+  _default: false
+  dev: true
+  dev-aws: true
+  staging-aws: false
+  staging: false
+  prod: false
+NP_DB_REDIS_URI:
+  _default: redis://10.0.0.11:6379/0
+  dev: redis://10.0.0.20:6379/0
+  dev-aws: redis://dev-staging-redis-redis.weetmn.ng.0001.use1.cache.amazonaws.com:6379/0
+  staging-aws: redis://staging-redis-redis.weetmn.ng.0001.use1.cache.amazonaws.com:6379/1
+  staging: redis://10.0.0.28:6379/1
+  prod: redis://10.0.0.3:6379/0
+NP_REGISTRY_HOST:
+  _default: registry-dev.neu.ro
+  dev: registry-dev.neu.ro
+  dev-aws: registry-dev.neu.ro
+  staging-aws: registry-staging.neu.ro
+  staging: registry-staging.neu.ro
+  prod: registry.neu.ro
+NP_GKE_GPU_MODELS:
+  _default: nvidia-tesla-k80,nvidia-tesla-p4,nvidia-tesla-v100
+  dev: nvidia-tesla-k80,nvidia-tesla-p4,nvidia-tesla-v100
+  dev-aws: nvidia-tesla-k80,nvidia-tesla-p4,nvidia-tesla-v100
+  staging-aws: nvidia-tesla-k80,nvidia-tesla-p4,nvidia-tesla-v100
+  staging: nvidia-tesla-k80,nvidia-tesla-p4,nvidia-tesla-v100
+  prod: nvidia-tesla-k80,nvidia-tesla-p4,nvidia-tesla-v100
+NP_OAUTH_BASE_URL:
+  _default: https://login-dev.neu.ro
+  dev: https://login-dev.neu.ro
+  dev-aws: https://login-dev.neu.ro
+  staging-aws: https://login.neu.ro
+  staging: https://login.neu.ro
+  prod:
+NP_OAUTH_CLIENT_ID:
+  _default: V7Jz87W9lhIlo0MyD0O6dufBvcXwM4DR
+  dev: V7Jz87W9lhIlo0MyD0O6dufBvcXwM4DR
+  dev-aws: V7Jz87W9lhIlo0MyD0O6dufBvcXwM4DR
+  staging-aws: uJV0pm5JPdHkXsSd525rlhFDVcEuUnaV
+  staging: uJV0pm5JPdHkXsSd525rlhFDVcEuUnaV
+  prod:
+NP_OAUTH_AUDIENCE:
+  _default: https://platform.dev.neuromation.io
+  dev: https://platform.dev.neuromation.io
+  dev-aws: https://platform.dev.neuromation.io
+  staging-aws: https://platform.staging.neuromation.io
+  staging: https://platform.staging.neuromation.io
+  prod: https://platform.prod.neuromation.io
+NP_OAUTH_SUCCESS_REDIRECT_URL:
+  _default: https://dev.neu.ro/oauth/login
+  dev: https://dev.neu.ro/oauth/login
+  dev-aws: https://dev.neu.ro/oauth/login
+  staging-aws: https://staging.neu.ro/oauth/login
+  staging: https://staging.neu.ro/oauth/login
+  prod: https://staging.neu.ro/oauth/login
+NP_OAUTH_HEADLESS_CALLBACK_URL:
+  _default: https://staging.neu.ro/oauth/show-code
+  dev: https://dev.neu.ro/oauth/show-code
+  dev-aws: https://dev.neu.ro/oauth/show-code
+  staging-aws: https://staging.neu.ro/oauth/show-code
+  staging: https://staging.neu.ro/oauth/show-code
+  prod: https://prod.neu.ro/oauth/show-code
+NP_PLATFORM_CONFIG_URI:
+  _default: http://platformconfig:8080/api/v1
+  dev: http://platformconfig:8080/api/v1
+  dev-aws: http://platformconfig:8080/api/v1
+  staging-aws: http://platformconfig:8080/api/v1
+  staging: http://platformconfig:8080/api/v1
+  prod: http://platformconfig:8080/api/v1
+NP_ENFORCER_PLATFORM_API_URL:
+  _default: http://localhost:8080/api/v1
+  dev: http://localhost:8080/api/v1
+  dev-aws: http://localhost:8080/api/v1
+  staging-aws: http://localhost:8080/api/v1
+  staging: http://localhost:8080/api/v1
+  prod: http://localhost:8080/api/v1
+NP_CORS_ORIGINS:
+  _default: https://neu.ro
+  dev: https://neu.ro,https://master--neuro-web.netlify.com,http://localhost:8000
+  dev-aws: https://neu.ro,https://master--neuro-web.netlify.com,http://localhost:8000
+  staging-aws: https://neu.ro,https://release--neuro-web.netlify.com,https://app.neu.ro
+  staging: https://neu.ro,https://release--neuro-web.netlify.com,https://app.neu.ro
+  prod: https://neu.ro
+NP_API_ZIPKIN_URL:
+  _default: 'http://zipkin:9411'
+  dev: 'http://zipkin:9411'
+  dev-aws: 'http://zipkin:9411'
+  staging-aws: 'http://zipkin:9411'
+  staging: 'http://zipkin:9411'
+  prod: 'http://zipkin:9411'
+NP_API_ZIPKIN_SAMPLE_RATE:
+  _default: '1'  # 100% of traces are saved
+  dev: '0.1'  # 10% of traces are saved
+  dev-aws: '0.1'  # 10% of traces are saved
+  staging-aws: '0.1'  # 10% of traces are saved
+  staging: '0.1'  # 10% of traces are saved
+  prod: '0.1'  # 10% of traces are saved
+NP_RESOURCES_CPU_REQUEST:
+  _default: "1"
+  dev: "1"
+  dev-aws: "1"
+  staging-aws: "1"
+  staging: "1"
+  prod: "1"
+NP_RESOURCES_MEMORY_REQUEST:
+  _default: 1Gi
+  dev: 1Gi
+  dev-aws: 1Gi
+  staging-aws: 1Gi
+  staging: 1Gi
+  prod: 1Gi

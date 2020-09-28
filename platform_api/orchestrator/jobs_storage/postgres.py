@@ -261,7 +261,8 @@ class PostgresJobsStorage(JobsStorage):
         if job_filter is None:
             job_filter = JobFilter()
         if job_filter.ids:
-            job_filter = replace(job_filter, ids=set(job_ids) & job_filter.ids)
+            job_ids = set(job_ids) & job_filter.ids
+        job_filter = replace(job_filter, ids=job_ids)
         all_jobs = []
         async for job in self.iter_all_jobs(job_filter):
             all_jobs.append(job)
@@ -323,6 +324,7 @@ class PostgresJobsStorage(JobsStorage):
             .select_from(self._tables.jobs)
             .select_from(tag)
             .where(self._tables.jobs.c.owner == owner)
+            .where(self._tables.jobs.c.tags != "null")
             .order_by(
                 tag_name,
                 desc(self._tables.jobs.c.created_at),
