@@ -126,6 +126,7 @@ docker_push: docker_build
 helm_deploy:
 	helm \
 		-f deploy/platformapi/values-$(HELM_ENV)-aws.yaml \
+		--set "ENV=$(HELM_ENV)" \
 		--set "IMAGE=$(IMAGE_K8S_AWS):$(IMAGE_TAG)" \
 		upgrade --install platformapi deploy/platformapi/ --wait --timeout 600 --namespace platform
 
