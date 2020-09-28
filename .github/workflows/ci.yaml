@@ -1,6 +1,7 @@
 name: Continuous Integration
 
-on: push
+on:
+  push:
   release:
     types: [published]
     tags:
