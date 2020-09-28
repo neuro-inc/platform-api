@@ -201,7 +201,7 @@ spec:
         backend:
           serviceName: platformmonitoringapi
           servicePort: 8080
-{{- if eq .Values.global.env "staging" }}
+{{- if eq .Values.ENV "staging" }}
   - host: {{ .Values.INGRESS_MAIN_SITE_HOST }}
     http:
       paths:
