@@ -1,8 +1,13 @@
 name: Continuous Integration
 
 on: push
-
+  release:
+    types: [published]
+    tags:
+      - artifactory/*
+      -
 jobs:
+
   test:
     name: Run tests
     runs-on: ubuntu-latest
@@ -81,6 +86,7 @@ jobs:
           name: codecov-integration
       - name: Run e2e tests
         run: make test_k8s_e2e
+
   deploy_dev:
     name: Deploy on dev
     runs-on: ubuntu-latest
@@ -116,6 +122,7 @@ jobs:
         run: |
           make helm_deploy
           make helm_deploy_ssh_auth
+
   deploy_staging:
     name: Deploy on staging
     runs-on: ubuntu-latest
@@ -147,3 +154,23 @@ jobs:
         run: make helm_install
       - name: Deploy to kubernetes
         run: make helm_deploy
+
+  deploy_artifactory:
+    name: Deploy on artifactory
+    runs-on: ubuntu-latest
+    needs: test
+    if: github.event_name == 'release'
+    env:
+      PIP_EXTRA_INDEX_URL: ${{ format('https://{0}:{1}@{2}/{0}/{3}', secrets.DEVPI_USER, secrets.DEVPI_PASS, secrets.DEVPI_HOST, secrets.DEVPI_INDEX) }}
+      ARTIFACTORY_DOCKER_REPO: ${{ secrets.ARTIFACTORY_DOCKER_REPO }}
+      ARTIFACTORY_HELM_REPO: ${{ secrets.ARTIFACTORY_HELM_REPO }}
+      ARTIFACTORY_USERNAME: ${{ secrets.ARTIFACTORY_USERNAME }}
+      ARTIFACTORY_PASSWORD: ${{ secrets.ARTIFACTORY_PASSWORD }}
+      HELM_VERSION: ${{ secrets.HELM_VERSION }}
+    steps:
+      - name: Checkout commit
+        uses: actions/checkout@v2
+      - name: Artifactory Docker Push
+        run: make artifactory_docker_push
+      - name: Artifactory Helm Push
+        run: make artifactory_helm_push

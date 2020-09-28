@@ -19,7 +19,7 @@ spec:
     spec:
       containers:
       - name: platformapi
-        image: {{ printf "%s" (pluck .Values.global.env .Values.IMAGE | first | default .Values.IMAGE._default) }}
+        image: {{ .Values.IMAGE }}
         imagePullPolicy: Always
         livenessProbe:
           httpGet:
@@ -39,8 +39,8 @@ spec:
             protocol: TCP
         resources:
           requests:
-            cpu: "{{ printf "%s" (pluck .Values.global.env .Values.NP_RESOURCES_CPU_REQUEST | first | default .Values.NP_RESOURCES_CPU_REQUEST._default) }}"
-            memory: "{{ printf "%s" (pluck .Values.global.env .Values.NP_RESOURCES_MEMORY_REQUEST | first | default .Values.NP_RESOURCES_MEMORY_REQUEST._default) }}"
+            cpu: "{{ .Values.NP_RESOURCES_CPU_REQUEST }}"
+            memory: "{{ .Values.NP_RESOURCES_MEMORY_REQUEST }}"
         env:
         - name: NP_K8S_API_URL
           value: http://localhost:8001
@@ -49,21 +49,21 @@ spec:
         - name: NP_STORAGE_TYPE
           value: nfs
         - name: NP_STORAGE_NFS_SERVER
-          value: "{{ printf "%s" (pluck .Values.global.env .Values.NP_STORAGE_NFS_SERVER | first | default .Values.NP_STORAGE_NFS_SERVER._default) }}"
+          value: "{{ .Values.NP_STORAGE_NFS_SERVER }}"
         - name: NP_STORAGE_NFS_PATH
-          value: "{{ printf "%s" (pluck .Values.global.env .Values.NP_STORAGE_NFS_PATH | first | default .Values.NP_STORAGE_NFS_PATH._default) }}"
+          value: "{{ .Values.NP_STORAGE_NFS_PATH }}"
         - name: NP_STORAGE_HOST_MOUNT_PATH
-          value: "{{ printf "%s" (pluck .Values.global.env .Values.NP_STORAGE_NFS_PATH | first | default .Values.NP_STORAGE_NFS_PATH._default) }}"
+          value: "{{ .Values.NP_STORAGE_NFS_PATH }}"
         - name: NP_K8S_JOBS_INGRESS_HTTPS
           value: "true"
         - name: NP_K8S_JOBS_INGRESS_DOMAIN_NAME_TEMPLATE
-          value: "{{ printf "%s" (pluck .Values.global.env .Values.NP_K8S_JOBS_INGRESS_DOMAIN_NAME_TEMPLATE | first | default .Values.NP_K8S_JOBS_INGRESS_DOMAIN_NAME_TEMPLATE._default) }}"
+          value: "{{ .Values.NP_K8S_JOBS_INGRESS_DOMAIN_NAME_TEMPLATE }}"
         - name: NP_K8S_NAMED_JOBS_INGRESS_DOMAIN_NAME_TEMPLATE
-          value: "{{ printf "%s" (pluck .Values.global.env .Values.NP_K8S_NAMED_JOBS_INGRESS_DOMAIN_NAME_TEMPLATE | first | default .Values.NP_K8S_NAMED_JOBS_INGRESS_DOMAIN_NAME_TEMPLATE._default) }}"
+          value: "{{ .Values.NP_K8S_NAMED_JOBS_INGRESS_DOMAIN_NAME_TEMPLATE }}"
         - name: NP_K8S_SSH_AUTH_INGRESS_DOMAIN_NAME
-          value: "{{ printf "%s" (pluck .Values.global.env .Values.NP_K8S_SSH_AUTH_INGRESS_DOMAIN_NAME | first | default .Values.NP_K8S_SSH_AUTH_INGRESS_DOMAIN_NAME._default) }}"
+          value: "{{ .Values.NP_K8S_SSH_AUTH_INGRESS_DOMAIN_NAME }}"
         - name: NP_DB_REDIS_URI
-          value: "{{ printf "%s" (pluck .Values.global.env .Values.NP_DB_REDIS_URI | first | default .Values.NP_DB_REDIS_URI._default) }}"
+          value: "{{ .Values.NP_DB_REDIS_URI }}"
         - name: NP_AUTH_URL
           value: http://platformauthapi:8080
         - name: NP_AUTH_TOKEN
@@ -72,35 +72,35 @@ spec:
               name: platformservices-secret
               key: compute_token
         - name: NP_OAUTH_BASE_URL
-          value: "{{ printf "%s" (pluck .Values.global.env .Values.NP_OAUTH_BASE_URL | first | default .Values.NP_OAUTH_BASE_URL._default) }}"
+          value: "{{ .Values.NP_OAUTH_BASE_URL }}"
         - name: NP_OAUTH_CLIENT_ID
-          value: "{{ printf "%s" (pluck .Values.global.env .Values.NP_OAUTH_CLIENT_ID | first | default .Values.NP_OAUTH_CLIENT_ID._default) }}"
+          value: "{{ .Values.NP_OAUTH_CLIENT_ID }}"
         - name: NP_OAUTH_AUDIENCE
-          value: "{{ printf "%s" (pluck .Values.global.env .Values.NP_OAUTH_AUDIENCE | first | default .Values.NP_OAUTH_AUDIENCE._default) }}"
+          value: "{{ .Values.NP_OAUTH_AUDIENCE }}"
         - name: NP_OAUTH_SUCCESS_REDIRECT_URL
-          value: "{{ printf "%s" (pluck .Values.global.env .Values.NP_OAUTH_SUCCESS_REDIRECT_URL | first | default .Values.NP_OAUTH_SUCCESS_REDIRECT_URL._default) }}"
+          value: "{{ .Values.NP_OAUTH_SUCCESS_REDIRECT_URL }}"
         - name: NP_OAUTH_HEADLESS_CALLBACK_URL
-          value: "{{ printf "%s" (pluck .Values.global.env .Values.NP_OAUTH_HEADLESS_CALLBACK_URL | first | default .Values.NP_OAUTH_HEADLESS_CALLBACK_URL._default) }}"
+          value: "{{ .Values.NP_OAUTH_HEADLESS_CALLBACK_URL }}"
         - name: NP_REGISTRY_HOST
-          value: "{{ printf "%s" (pluck .Values.global.env .Values.NP_REGISTRY_HOST | first | default .Values.NP_REGISTRY_HOST._default) }}"
+          value: "{{ .Values.NP_REGISTRY_HOST }}"
         - name: NP_REGISTRY_HTTPS
           value: "true"
         - name: NP_K8S_NODE_LABEL_GPU
           value: cloud.google.com/gke-accelerator
         - name: NP_GKE_GPU_MODELS
-          value: "{{ printf "%s" (pluck .Values.global.env .Values.NP_GKE_GPU_MODELS | first | default .Values.NP_GKE_GPU_MODELS._default) }}"
+          value: "{{ .Values.NP_GKE_GPU_MODELS }}"
         - name: NP_K8S_NODE_LABEL_PREEMPTIBLE
           value: cloud.google.com/gke-preemptible
         - name: NP_API_URL
-          value: "{{ printf "%s" (pluck .Values.global.env .Values.NP_API_URL | first | default .Values.NP_API_URL._default) }}"
+          value: "{{ .Values.NP_API_URL }}"
         - name: NP_ADMIN_URL
-          value: "{{ printf "%s" (pluck .Values.global.env .Values.NP_ADMIN_URL | first | default .Values.NP_ADMIN_URL._default) }}"
+          value: "{{ .Values.NP_ADMIN_URL }}"
         - name: NP_JOBS_INGRESS_OAUTH_AUTHORIZE_URL
-          value: "{{ printf "%s" (pluck .Values.global.env .Values.NP_JOBS_INGRESS_OAUTH_AUTHORIZE_URL | first | default .Values.NP_JOBS_INGRESS_OAUTH_AUTHORIZE_URL._default) }}"
+          value: "{{ .Values.NP_JOBS_INGRESS_OAUTH_AUTHORIZE_URL }}"
         - name: NP_PLATFORM_CONFIG_URI
-          value: {{ printf "%s" (pluck .Values.global.env .Values.NP_PLATFORM_CONFIG_URI | first | default .Values.NP_PLATFORM_CONFIG_URI._default) }}
+          value: {{ .Values.NP_PLATFORM_CONFIG_URI }}
         - name: NP_AUTH_PUBLIC_URL
-          value: {{ printf "%s" (pluck .Values.global.env .Values.NP_AUTH_PUBLIC_URL | first | default .Values.NP_AUTH_PUBLIC_URL._default) }}
+          value: {{ .Values.NP_AUTH_PUBLIC_URL }}
         - name: NP_NOTIFICATIONS_URL
           value: http://platformnotificationsapi:8080/
         - name: NP_NOTIFICATIONS_TOKEN
@@ -110,18 +110,18 @@ spec:
               key: compute_token
 
         - name: NP_ENFORCER_PLATFORM_API_URL
-          value: {{ printf "%s" (pluck .Values.global.env .Values.NP_ENFORCER_PLATFORM_API_URL | first | default .Values.NP_ENFORCER_PLATFORM_API_URL._default) }}
+          value: {{ .Values.NP_ENFORCER_PLATFORM_API_URL }}
         - name: NP_ENFORCER_TOKEN
           valueFrom:
             secretKeyRef:
               name: platformservices-secret
               key: compute_token
         - name: NP_CORS_ORIGINS
-          value: {{ printf "%s" (pluck .Values.global.env .Values.NP_CORS_ORIGINS | first | default .Values.NP_CORS_ORIGINS._default) }}
+          value: "{{ .Values.NP_CORS_ORIGINS }}"
         - name: NP_API_ZIPKIN_URL
-          value: {{ printf "%s" (pluck .Values.global.env .Values.NP_API_ZIPKIN_URL | first | default .Values.NP_API_ZIPKIN_URL._default) | quote }}
+          value: "{{ .Values.NP_API_ZIPKIN_URL }}"
         - name: NP_API_ZIPKIN_SAMPLE_RATE
-          value: {{ printf "%s" (pluck .Values.global.env .Values.NP_API_ZIPKIN_SAMPLE_RATE | first | default .Values.NP_API_ZIPKIN_SAMPLE_RATE._default) | quote }}
+          value: "{{ .Values.NP_API_ZIPKIN_SAMPLE_RATE }}"
         - name: NP_DB_POSTGRES_DSN
           valueFrom:
             secretKeyRef:
@@ -153,7 +153,7 @@ metadata:
     external-dns.platform.neuromation.io: "true"
 spec:
   rules:
-  - host: {{ printf "%s" (pluck .Values.global.env .Values.INGRESS_HOST | first | default .Values.INGRESS_HOST._default) }}
+  - host: {{ .Values.INGRESS_HOST }}
     http:
       paths:
       - path: /secrets
@@ -192,7 +192,7 @@ spec:
         backend:
           serviceName: platformapi
           servicePort: 8080
-  - host: {{ printf "%s" (pluck .Values.global.env .Values.INGRESS_PLATFORM_MONITORING_DOMAIN_NAME | first | default .Values.INGRESS_PLATFORM_MONITORING_DOMAIN_NAME._default) }}
+  - host: {{ .Values.INGRESS_PLATFORM_MONITORING_DOMAIN_NAME }}
     http:
       paths:
       - path: /api/v1/jobs
@@ -200,7 +200,7 @@ spec:
           serviceName: platformmonitoringapi
           servicePort: 8080
 {{- if eq .Values.global.env "staging" }}
-  - host: {{ printf "%s" (pluck .Values.global.env .Values.INGRESS_MAIN_SITE_HOST | first | default .Values.INGRESS_MAIN_SITE_HOST._default) }}
+  - host: {{ .Values.INGRESS_MAIN_SITE_HOST }}
     http:
       paths:
       - path: /oauth
