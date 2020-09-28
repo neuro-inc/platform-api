@@ -1,12 +1,7 @@
 name: Continuous Integration
 
-on:
-  push:
-  release:
-    types: [published]
-    tags:
-      - artifactory/*
-      -
+on: push
+
 jobs:
 
   test:
