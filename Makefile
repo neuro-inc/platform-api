@@ -124,5 +124,3 @@ helm_deploy:
 		--set "IMAGE=$(IMAGE_K8S_AWS):$(IMAGE_TAG)" \
 		upgrade --install platformapi deploy/platformapi/ --wait --timeout 600 --namespace platform
 
-artifactory_docker_login:
-	docker login $(ARTIFACTORY_DOCKER_REPO) --username=$(ARTIFACTORY_USERNAME) --password=$(ARTIFACTORY_PASSWORD)
