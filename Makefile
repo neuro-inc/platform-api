@@ -161,18 +161,3 @@ artifactory_ssh_auth_helm_push: _helm
 	helm package --app-version=$(ARTIFACTORY_TAG) --version=$(ARTIFACTORY_TAG) temp_deploy/$(SSH_IMAGE_NAME)/
 	helm plugin install https://github.com/belitre/helm-push-artifactory-plugin
 	helm push-artifactory $(SSH_IMAGE_NAME)-$(ARTIFACTORY_TAG).tgz $(ARTIFACTORY_HELM_REPO) --username $(ARTIFACTORY_USERNAME) --password $(ARTIFACTORY_PASSWORD)
-
-
-artifactory_docker_push: docker_build artifactory_docker_login
-	docker tag $(IMAGE_NAME):latest $(ARTIFACTORY_DOCKER_REPO)/$(IMAGE_NAME):$(ARTIFACTORY_TAG)
-	docker push $(ARTIFACTORY_DOCKER_REPO)/$(IMAGE_NAME):$(ARTIFACTORY_TAG)
-
-artifactory_helm_push: helm_install
-	mkdir -p temp_deploy/$(IMAGE_NAME)
-	cp -Rf deploy/$(IMAGE_NAME)/.  temp_deploy/$(IMAGE_NAME)
-	cp temp_deploy/$(IMAGE_NAME)/values-template.yaml temp_deploy/$(IMAGE_NAME)/values.yaml
-	sed -i "s/IMAGE_TAG/$(ARTIFACTORY_TAG)/g" temp_deploy/$(IMAGE_NAME)/values.yaml
-	find temp_deploy/$(IMAGE_NAME) -type f -name 'values-*' -delete
-	helm package --app-version=$(ARTIFACTORY_TAG) --version=$(ARTIFACTORY_TAG) temp_deploy/$(IMAGE_NAME)/
-	helm plugin install https://github.com/belitre/helm-push-artifactory-plugin
-	helm push-artifactory $(IMAGE_NAME)-$(ARTIFACTORY_TAG).tgz $(ARTIFACTORY_HELM_REPO) --username $(ARTIFACTORY_USERNAME) --password $(ARTIFACTORY_PASSWORD)
