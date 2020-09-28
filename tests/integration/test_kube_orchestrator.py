@@ -431,6 +431,64 @@ class TestKubeOrchestrator:
         assert found_scaleup
 
     @pytest.mark.asyncio
+    async def test_job_disk_unavailable(
+        self,
+        kube_config: KubeConfig,
+        kube_orchestrator: KubeOrchestrator,
+        kube_client: MyKubeClient,
+        delete_job_later: Callable[[Job], Awaitable[None]],
+        cluster_name: str,
+    ) -> None:
+        user_name = self._create_username()
+        ns = kube_config.namespace
+
+        disk_id = f"disk-{str(uuid.uuid4())}"
+        disk = Disk(disk_id=disk_id, user_name=user_name, cluster_name=cluster_name)
+        await kube_client.create_pvc(disk_id, ns)
+
+        mount_path = PurePath("/mnt/disk")
+        container = Container(
+            image="ubuntu",
+            command="sleep 10",
+            resources=ContainerResources(cpu=0.1, memory_mb=32),
+            disk_volumes=[
+                DiskContainerVolume(disk=disk, dst_path=mount_path, read_only=False)
+            ],
+        )
+        job = MyJob(
+            orchestrator=kube_orchestrator,
+            record=JobRecord.create(
+                request=JobRequest.create(container),
+                cluster_name="test-cluster",
+            ),
+        )
+        await delete_job_later(job)
+        await job.start()
+        await kube_client.create_failed_attach_volume_event(job.id)
+
+        status_item = await kube_orchestrator.get_job_status(job)
+        assert status_item.status == JobStatus.PENDING
+
+        t0 = time.monotonic()
+        while not status_item.status.is_finished:
+            t1 = time.monotonic()
+            if status_item.reason == JobStatusReason.DISK_UNAVAILABLE:
+                break
+            assert t1 - t0 < 30, (
+                f"Wait for job failure is timed out "
+                f"after {t1 - t0} secs [{status_item}]"
+            )
+            status_item = await kube_orchestrator.get_job_status(job)
+
+        assert status_item == JobStatusItem.create(
+            JobStatus.PENDING,
+            reason=JobStatusReason.DISK_UNAVAILABLE,
+            description="Waiting for another job to release disk resource",
+        )
+
+        await kube_orchestrator.delete_job(job)
+
+    @pytest.mark.asyncio
     async def test_volumes(
         self,
         storage_config_host: StorageConfig,
