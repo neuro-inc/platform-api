@@ -14,7 +14,7 @@ install_requires = (
     "aiorwlock==0.6.0",
     "notifications-client==0.8.2",
     "platform-logging==0.3",
-    "yarl==1.5.1",
+    "yarl==1.6.0",
     "multidict==4.7.6",
     "aiohttp-cors==0.7.0",
     "aiozipkin==0.7.1",
