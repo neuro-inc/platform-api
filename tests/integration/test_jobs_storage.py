@@ -1681,6 +1681,12 @@ class TestJobsStorage:
         job_ids = [job.id for job in jobs]
         assert job_ids == [first_job.id]
 
+        jobs = await storage.get_jobs_by_ids(
+            set(),
+            job_filter=job_filter,
+        )
+        assert jobs == []
+
     def _fix_utf8(self, value: str) -> str:
         return value.encode("utf-8", "replace").decode("utf-8")
 

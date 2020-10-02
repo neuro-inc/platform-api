@@ -262,6 +262,8 @@ class PostgresJobsStorage(JobsStorage):
             job_filter = JobFilter()
         if job_filter.ids:
             job_ids = set(job_ids) & job_filter.ids
+        if not list(job_ids):
+            return []
         job_filter = replace(job_filter, ids=job_ids)
         all_jobs = []
         async for job in self.iter_all_jobs(job_filter):
