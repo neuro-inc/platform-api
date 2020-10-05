@@ -1,25 +1,18 @@
 import asyncio
+import json
 import time
-from typing import (
-    Any,
-    AsyncIterator,
-    Callable,
-    Dict,
-    Iterator,
-    List,
-    NamedTuple,
-    Sequence,
-)
+from typing import Any, AsyncIterator, Callable, Dict, List, NamedTuple, Optional
 
 import aiohttp
 import aiohttp.web
 import pytest
 from aiohttp.client import ClientSession
 from aiohttp.web import HTTPAccepted, HTTPNoContent, HTTPOk
+from yarl import URL
 
 from platform_api.api import create_app
 from platform_api.cluster_config import ClusterConfig
-from platform_api.config import Config
+from platform_api.config import AuthConfig, Config
 from platform_api.orchestrator.job import JobStatus
 
 from .auth import _User
@@ -61,18 +54,33 @@ class ApiConfig(NamedTuple):
     def stats_for_user_url(self, username: str) -> str:
         return f"{self.stats_base_url}/users/{username}"
 
+    @property
+    def tags_base_url(self) -> str:
+        return f"{self.endpoint}/tags"
 
-async def get_cluster_configs(
-    cluster_configs: Sequence[ClusterConfig],
-) -> Sequence[ClusterConfig]:
-    return cluster_configs
+
+class AuthApiConfig(NamedTuple):
+    server_endpoint_url: URL
+
+    @property
+    def endpoint(self) -> str:
+        return f"{self.server_endpoint_url}/api/v1/users"
+
+    def auth_for_user_url(self, username: str) -> str:
+        return f"{self.endpoint}/{username}"
 
 
 @pytest.fixture
 async def api(
-    config: Config, cluster_config: ClusterConfig
+    config: Config, cluster_config_factory: Callable[..., ClusterConfig]
 ) -> AsyncIterator[ApiConfig]:
-    app = await create_app(config, get_cluster_configs([cluster_config]))
+    app = await create_app(
+        config,
+        [
+            cluster_config_factory("test-cluster"),
+            cluster_config_factory("testcluster2"),
+        ],
+    )
     runner = ApiRunner(app, port=8080)
     api_address = await runner.run()
     api_config = ApiConfig(host=api_address.host, port=api_address.port, runner=runner)
@@ -84,12 +92,17 @@ async def api(
 async def api_with_oauth(
     config_with_oauth: Config, cluster_config: ClusterConfig
 ) -> AsyncIterator[ApiConfig]:
-    app = await create_app(config_with_oauth, get_cluster_configs([cluster_config]))
+    app = await create_app(config_with_oauth, [cluster_config])
     runner = ApiRunner(app, port=8081)
     api_address = await runner.run()
     api_config = ApiConfig(host=api_address.host, port=api_address.port, runner=runner)
     yield api_config
     await runner.close()
+
+
+@pytest.fixture
+async def auth_api(auth_config: AuthConfig) -> AuthApiConfig:
+    return AuthApiConfig(server_endpoint_url=auth_config.server_endpoint_url)
 
 
 @pytest.fixture
@@ -106,16 +119,23 @@ class JobsClient:
         self._client = client
         self._headers = headers
 
+    async def create_job(self, payload: Dict[str, Any]) -> Dict[str, Any]:
+        url = self._api_config.jobs_base_url
+        async with self._client.post(url, headers=self._headers, json=payload) as resp:
+            assert resp.status == HTTPAccepted.status_code, await resp.text()
+            result = await resp.json()
+            assert result["status"] == "pending"
+            return result
+
     async def get_all_jobs(self, params: Any = None) -> List[Dict[str, Any]]:
         url = self._api_config.jobs_base_url
-        async with self._client.get(
-            url, headers=self._headers, params=params
-        ) as response:
-            response_text = await response.text()
-            assert response.status == HTTPOk.status_code, response_text
-            result = await response.json()
-        jobs = result["jobs"]
-        assert isinstance(jobs, list)
+        headers = self._headers.copy()
+        headers["Accept"] = "application/x-ndjson"
+        async with self._client.get(url, headers=headers, params=params) as response:
+            assert response.status == HTTPOk.status_code, await response.text()
+            assert response.headers["Content-Type"] == "application/x-ndjson"
+            jobs = [json.loads(line) async for line in response.content]
+
         for job in jobs:
             assert isinstance(job, dict)
             for key in job:
@@ -150,8 +170,18 @@ class JobsClient:
                 JobStatus.SUCCEEDED.value,
                 JobStatus.FAILED.value,
             ],
-            JobStatus.SUCCEEDED.value: [JobStatus.FAILED.value],
-            JobStatus.FAILED.value: [JobStatus.SUCCEEDED],
+            JobStatus.SUCCEEDED.value: [
+                JobStatus.FAILED.value,
+                JobStatus.CANCELLED.value,
+            ],
+            JobStatus.FAILED.value: [
+                JobStatus.SUCCEEDED.value,
+                JobStatus.CANCELLED.value,
+            ],
+            JobStatus.CANCELLED.value: [
+                JobStatus.SUCCEEDED.value,
+                JobStatus.FAILED.value,
+            ],
         }
         stop_statuses: List[str] = []
         if unreachable_optimization and status in unreachable_statuses_map:
@@ -197,13 +227,27 @@ class JobsClient:
 
 
 @pytest.fixture
-def jobs_client_factory(
+async def jobs_client_factory(
     api: ApiConfig, client: ClientSession
-) -> Iterator[Callable[[_User], JobsClient]]:
+) -> AsyncIterator[Callable[[_User], JobsClient]]:
+    jobs_clients: List[JobsClient] = []
+
     def impl(user: _User) -> JobsClient:
-        return JobsClient(api, client, headers=user.headers)
+        jobs_client = JobsClient(api, client, headers=user.headers)
+        jobs_clients.append(jobs_client)
+        return jobs_client
 
     yield impl
+
+    params = [("status", "pending"), ("status", "running")]
+    for jobs_client in jobs_clients:
+        try:
+            jobs = await jobs_client.get_all_jobs(params)
+        except aiohttp.ClientConnectorError:
+            # server might be down
+            continue
+        for job in jobs:
+            await jobs_client.delete_job(job["id"], assert_success=False)
 
 
 @pytest.fixture
@@ -242,9 +286,9 @@ async def infinite_job(
 
 @pytest.fixture
 def job_request_factory() -> Callable[[], Dict[str, Any]]:
-    def _factory() -> Dict[str, Any]:
+    def _factory(cluster_name: Optional[str] = None) -> Dict[str, Any]:
         # Note: Optional fields (as "name") should not have a value here
-        return {
+        request = {
             "container": {
                 "image": "ubuntu",
                 "command": "true",
@@ -253,6 +297,9 @@ def job_request_factory() -> Callable[[], Dict[str, Any]]:
             },
             "description": "test job submitted by neuro job submit",
         }
+        if cluster_name:
+            request["cluster_name"] = cluster_name
+        return request
 
     return _factory
 

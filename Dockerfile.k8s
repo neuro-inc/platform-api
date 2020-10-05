@@ -1,4 +1,4 @@
-FROM python:3.6.6-stretch
+FROM python:3.7.2-stretch
 
 WORKDIR /neuromation
 
@@ -11,6 +11,8 @@ RUN \
     pip uninstall -y platform-api
 
 # installing platform-api
+COPY alembic.ini alembic.ini
+COPY alembic alembic
 COPY platform_api platform_api
 RUN pip install -e .
 # generage new OpenSSH keys

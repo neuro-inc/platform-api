@@ -1,4 +1,3 @@
-
 #MANUAL DEPLOY
 
 
@@ -24,12 +23,11 @@ SSH-Auth
 
 ## Platform api
 
-Dev : 
+Dev :
 	```helm --set "global.env=dev" upgrade --install platformapi platformapi```
 
 Staging :
 	```helm --set "global.env=staging" upgrade --install platformapi platformapi```
-
 
 
 ## SSH-Auth
@@ -39,5 +37,3 @@ Dev :
 
 Staging :
 	```helm --set "global.env=staging" upgrade --install ssh-auth ssh_auth```
-
-

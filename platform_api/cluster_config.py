@@ -109,8 +109,7 @@ class RegistryConfig:
 
     @property
     def host(self) -> str:
-        """Returns registry hostname with port (if specified)
-        """
+        """Returns registry hostname with port (if specified)"""
         port = self.url.explicit_port  # type: ignore
         suffix = f":{port}" if port is not None else ""
         return f"{self.url.host}{suffix}"
@@ -120,7 +119,7 @@ class RegistryConfig:
 class OrchestratorConfig:
     jobs_domain_name_template: str
 
-    ssh_auth_domain_name: str
+    ssh_auth_server: str
 
     resource_pool_types: Sequence[ResourcePoolType]
 
@@ -155,6 +154,8 @@ class OrchestratorConfig:
 class IngressConfig:
     storage_url: URL
     monitoring_url: URL
+    secrets_url: URL
+    metrics_url: URL
 
 
 @dataclass(frozen=True)

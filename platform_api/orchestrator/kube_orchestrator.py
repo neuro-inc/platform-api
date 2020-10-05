@@ -12,8 +12,13 @@ from platform_api.cluster_config import (
 )
 
 from .base import Orchestrator
-from .job import Job, JobStatusItem, JobStatusReason
-from .job_request import JobError, JobNotFoundException, JobStatus
+from .job import Job, JobRestartPolicy, JobStatusItem, JobStatusReason
+from .job_request import (
+    JobAlreadyExistsException,
+    JobError,
+    JobNotFoundException,
+    JobStatus,
+)
 from .kube_client import (
     AlreadyExistsException,
     DockerRegistrySecret,
@@ -27,9 +32,12 @@ from .kube_client import (
     NodeSelectorTerm,
     PodDescriptor,
     PodExec,
+    PodRestartPolicy,
     PodStatus,
     PVCVolume,
+    SecretVolume,
     Service,
+    StatusException,
     Toleration,
     Volume,
 )
@@ -63,6 +71,10 @@ class JobStatusItemFactory:
             return JobStatus.PENDING
 
     def _parse_reason(self) -> Optional[str]:
+        if self._status.is_running and (
+            self._container_status.is_waiting or self._container_status.is_terminated
+        ):
+            return JobStatusReason.RESTARTING
         if self._status in (JobStatus.PENDING, JobStatus.FAILED):
             return self._container_status.reason
         return None
@@ -76,16 +88,17 @@ class JobStatusItemFactory:
                 return self._container_status.message
         return None
 
+    def _parse_exit_code(self) -> Optional[int]:
+        if self._status.is_finished and self._container_status.is_terminated:
+            return self._container_status.exit_code
+        return None
+
     def create(self) -> JobStatusItem:
         return JobStatusItem.create(
             self._status,
             reason=self._parse_reason(),
             description=self._compose_description(),
-            exit_code=(
-                self._container_status.exit_code
-                if self._container_status.is_terminated
-                else None
-            ),
+            exit_code=self._parse_exit_code(),
         )
 
 
@@ -132,6 +145,12 @@ class KubeOrchestrator(Orchestrator):
         # TODO (A Danshyn 11/16/18): make this configurable at some point
         self._docker_secret_name_prefix = "neurouser-"
 
+        self._restart_policy_map = {
+            JobRestartPolicy.ALWAYS: PodRestartPolicy.ALWAYS,
+            JobRestartPolicy.ON_FAILURE: PodRestartPolicy.ON_FAILURE,
+            JobRestartPolicy.NEVER: PodRestartPolicy.NEVER,
+        }
+
     @property
     def config(self) -> OrchestratorConfig:
         return self._kube_config
@@ -166,6 +185,15 @@ class KubeOrchestrator(Orchestrator):
             name=self._kube_config.storage_volume_name,
             path=self._storage_config.host_mount_path,
         )
+
+    def create_secret_volume(self, user_name: str) -> SecretVolume:
+        return SecretVolume(
+            name=self._kube_config.secret_volume_name,
+            k8s_secret_name=self._get_k8s_secret_name(user_name),
+        )
+
+    def _get_k8s_secret_name(self, user_name: str) -> str:
+        return f"user--{user_name}--secrets"
 
     def _get_user_resource_name(self, job: Job) -> str:
         return (self._docker_secret_name_prefix + job.owner).lower()
@@ -229,22 +257,24 @@ class KubeOrchestrator(Orchestrator):
             logger.warning(f"Failed to remove network policy {name}: {e}")
 
     async def _create_pod_descriptor(self, job: Job) -> PodDescriptor:
-        secret_names = [self._get_docker_secret_name(job)]
         node_selector = await self._get_pod_node_selector(job)
         tolerations = self._get_pod_tolerations(job)
         node_affinity = self._get_pod_node_affinity(job)
         labels = self._get_pod_labels(job)
         # NOTE: both node selector and affinity must be satisfied for the pod
         # to be scheduled onto a node.
+
         return PodDescriptor.from_job_request(
             self._storage_volume,
             job.request,
-            secret_names,
+            secret_volume=self.create_secret_volume(job.owner),
+            image_pull_secret_names=[self._get_docker_secret_name(job)],
             node_selector=node_selector,
             tolerations=tolerations,
             node_affinity=node_affinity,
             labels=labels,
             priority_class_name=self._kube_config.jobs_pod_priority_class_name,
+            restart_policy=self._get_pod_restart_policy(job),
         )
 
     def _get_user_pod_labels(self, job: Job) -> Dict[str, str]:
@@ -253,29 +283,82 @@ class KubeOrchestrator(Orchestrator):
     def _get_job_labels(self, job: Job) -> Dict[str, str]:
         return {"platform.neuromation.io/job": job.id}
 
+    def _get_gpu_labels(self, job: Job) -> Dict[str, str]:
+        if not job.has_gpu or not job.gpu_model_id:
+            return {}
+        return {"platform.neuromation.io/gpu-model": job.gpu_model_id}
+
     def _get_pod_labels(self, job: Job) -> Dict[str, str]:
         labels = self._get_job_labels(job)
         labels.update(self._get_user_pod_labels(job))
+        labels.update(self._get_gpu_labels(job))
         return labels
+
+    def _get_pod_restart_policy(self, job: Job) -> PodRestartPolicy:
+        return self._restart_policy_map[job.restart_policy]
+
+    async def get_missing_disks(self, disk_names: List[str]) -> List[str]:
+        assert disk_names, "no disk names"
+        missing = []
+        for disk in disk_names:
+            try:
+                await self._client.get_raw_pvc(disk, self._kube_config.namespace)
+            except StatusException:
+                missing.append(disk)
+        return sorted(missing)
+
+    async def get_missing_secrets(
+        self, user_name: str, secret_names: List[str]
+    ) -> List[str]:
+        assert secret_names, "no sec names"
+        user_secret_name = self._get_k8s_secret_name(user_name)
+        try:
+            raw = await self._client.get_raw_secret(
+                user_secret_name, self._kube_config.namespace
+            )
+            keys = raw.get("data", {}).keys()
+            missing = set(secret_names) - set(keys)
+            return sorted(missing)
+
+        except StatusException:
+            return secret_names
+
+    def _get_service_name_for_named(self, job: Job) -> str:
+        from platform_api.handlers.validators import JOB_USER_NAMES_SEPARATOR
+
+        return f"{job.name}{JOB_USER_NAMES_SEPARATOR}{job.owner}"
 
     async def prepare_job(self, job: Job) -> None:
         # TODO (A Yushkovskiy 31.10.2018): get namespace for the pod, not statically
         job.internal_hostname = f"{job.id}.{self._kube_config.namespace}"
+        if job.is_named:
+            job.internal_hostname_named = (
+                f"{self._get_service_name_for_named(job)}.{self._kube_config.namespace}"
+            )
 
     async def start_job(self, job: Job) -> JobStatus:
         await self._create_docker_secret(job)
         await self._create_user_network_policy(job)
-        await self._create_pod_network_policy(job)
+        try:
+            await self._create_pod_network_policy(job)
 
-        descriptor = await self._create_pod_descriptor(job)
-        pod = await self._client.create_pod(descriptor)
+            descriptor = await self._create_pod_descriptor(job)
+            pod = await self._client.create_pod(descriptor)
 
-        logger.info(f"Starting Service for {job.id}.")
-        service = await self._create_service(descriptor)
+            logger.info(f"Starting Service for {job.id}.")
+            service = await self._create_service(descriptor)
+            if job.is_named:
+                # As job deletion can fail, we have to try to remove old service
+                # with same name just to be sure
+                service_name = self._get_service_name_for_named(job)
+                await self._delete_service(service_name)
+                await self._create_service(descriptor, name=service_name)
 
-        if job.has_http_server_exposed:
-            logger.info(f"Starting Ingress for {job.id}")
-            await self._create_ingress(job, service)
+            if job.has_http_server_exposed:
+                logger.info(f"Starting Ingress for {job.id}")
+                await self._create_ingress(job, service)
+        except AlreadyExistsException as e:
+            raise JobAlreadyExistsException(str(e))
 
         job.status_history.current = await self._get_pod_status(job, pod)
         return job.status
@@ -375,8 +458,8 @@ class KubeOrchestrator(Orchestrator):
 
         # handling PENDING/RUNNING jobs
 
-        if job.is_preemptible:
-            pod = await self._check_preemptible_job_pod(job)
+        if job.is_restartable:
+            pod = await self._check_restartable_job_pod(job)
         else:
             pod = await self._client.get_pod(self._get_job_pod_name(job))
         return await self._get_pod_status(job, pod)
@@ -386,23 +469,39 @@ class KubeOrchestrator(Orchestrator):
         assert pod_status is not None  # should always be present
         job_status = convert_pod_status_to_job_status(pod_status)
 
-        if pod_status.is_scheduled:
+        if not pod_status.is_phase_pending:
             return job_status
 
-        # Pod in pending state, and not scheduled yet.
+        # Pod in pending state.
         # Possible we are observing the case when Container requested
-        # too much resources, check events for NotTriggerScaleUp event
+        # too much resources -- we will check for NotTriggerScaleUp event.
+        # Or it tries to mount disk that is used by another job
+        # -- we will check for FailedAttachVolume event.
         now = datetime.now(timezone.utc)
         assert pod.created_at is not None
+        pod_events = await self._client.get_pod_events(
+            self._get_job_pod_name(job), self._kube_config.namespace
+        )
 
+        if pod_status.is_scheduled:
+            failed_volume_events = [
+                e for e in pod_events if e.reason == "FailedAttachVolume"
+            ]
+            failed_volume_events.sort(key=operator.attrgetter("last_timestamp"))
+            if failed_volume_events:
+                return JobStatusItem.create(
+                    JobStatus.PENDING,
+                    transition_time=now,
+                    reason=JobStatusReason.DISK_UNAVAILABLE,
+                    description="Waiting for another job to release disk resource",
+                )
+            return job_status
+
+        logger.info(f"Found unscheduled pod. Job '{job.id}'")
         schedule_timeout = (
             job.schedule_timeout or self._kube_config.job_schedule_timeout
         )
 
-        logger.info(f"Found pod that requested too much resources. Job '{job.id}'")
-        pod_events = await self._client.get_pod_events(
-            self._get_job_pod_name(job), self._kube_config.namespace
-        )
         scaleup_events = [e for e in pod_events if e.reason == "TriggeredScaleUp"]
         scaleup_events.sort(key=operator.attrgetter("last_timestamp"))
         if scaleup_events and (
@@ -430,8 +529,8 @@ class KubeOrchestrator(Orchestrator):
             description="Failed to scale up the cluster to get more resources",
         )
 
-    async def _check_preemptible_job_pod(self, job: Job) -> PodDescriptor:
-        assert job.is_preemptible
+    async def _check_restartable_job_pod(self, job: Job) -> PodDescriptor:
+        assert job.is_restartable
 
         pod_name = self._get_job_pod_name(job)
         do_recreate_pod = False
@@ -481,21 +580,27 @@ class KubeOrchestrator(Orchestrator):
     ) -> PodExec:
         return await self._client.exec_pod(job_id, command, tty=tty)
 
-    async def _create_service(self, pod: PodDescriptor) -> Service:
-        return await self._client.create_service(Service.create_headless_for_pod(pod))
+    async def _create_service(
+        self, pod: PodDescriptor, name: Optional[str] = None
+    ) -> Service:
+        service = Service.create_headless_for_pod(pod)
+        if name is not None:
+            service = service.make_named(name)
+        return await self._client.create_service(service)
 
-    async def _delete_service(self, job: Job) -> None:
-        pod_id = self._get_job_pod_name(job)
+    async def _delete_service(self, name: str) -> None:
         try:
-            await self._client.delete_service(name=pod_id)
+            await self._client.delete_service(name=name)
         except Exception:
-            logger.exception(f"Failed to remove service {pod_id}")
+            logger.exception(f"Failed to remove service {name}")
 
     async def delete_job(self, job: Job) -> JobStatus:
         if job.has_http_server_exposed:
             await self._delete_ingress(job)
 
-        await self._delete_service(job)
+        await self._delete_service(self._get_job_pod_name(job))
+        if job.is_named:
+            await self._delete_service(self._get_service_name_for_named(job))
 
         await self._delete_pod_network_policy(job)
 
@@ -531,15 +636,36 @@ class KubeOrchestrator(Orchestrator):
                 )
         return annotations
 
+    def _get_job_name_ingress_labels(
+        self, job: Job, service: Service
+    ) -> Dict[str, str]:
+        labels = self._get_user_pod_labels(job)
+        if job.name:
+            labels["platform.neuromation.io/job-name"] = job.name
+        return labels
+
+    def _get_ingress_labels(self, job: Job, service: Service) -> Dict[str, str]:
+        return {**service.labels, **self._get_job_name_ingress_labels(job, service)}
+
+    async def _delete_ingresses_by_job_name(self, job: Job, service: Service) -> None:
+        labels = self._get_job_name_ingress_labels(job, service)
+        try:
+            await self._client.delete_all_ingresses(labels=labels)
+        except Exception as e:
+            logger.warning(f"Failed to remove ingresses {labels}: {e}")
+
     async def _create_ingress(self, job: Job, service: Service) -> None:
+        if job.name:
+            await self._delete_ingresses_by_job_name(job, service)
         name = self._get_job_ingress_name(job)
         rules = [
             IngressRule.from_service(host=host, service=service)
             for host in job.http_hosts
         ]
+        labels = self._get_ingress_labels(job, service)
         annotations = self._get_ingress_annotations(job)
         await self._client.create_ingress(
-            name, rules=rules, annotations=annotations, labels=service.labels
+            name, rules=rules, annotations=annotations, labels=labels
         )
 
     async def _delete_ingress(self, job: Job) -> None:
@@ -552,5 +678,9 @@ class KubeOrchestrator(Orchestrator):
     async def get_all_resource_links(self) -> Dict[str, List[str]]:
         return await self._client.get_all_resource_links()
 
-    async def delete_resource_link(self, url: str) -> None:
-        await self._client.delete_resource_link(url)
+    async def delete_resource_by_link(self, url: str) -> None:
+        await self._client.delete_resource_by_link(url)
+
+    async def delete_all_job_resources(self, job_id: str) -> None:
+        async for link in self._client.get_all_job_resources_links(job_id):
+            await self._client.delete_resource_by_link(link)

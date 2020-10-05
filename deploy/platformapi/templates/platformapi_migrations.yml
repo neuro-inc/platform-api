@@ -1,0 +1,28 @@
+{{- if .Values.NP_DB_POSTGRES_ENABLED }}
+apiVersion: batch/v1
+kind: Job
+metadata:
+  name: platformapi-migrations
+  annotations:
+    "helm.sh/hook": pre-install,pre-upgrade
+    "helm.sh/hook-delete-policy": hook-succeeded,before-hook-creation
+spec:
+  template:
+    spec:
+      restartPolicy: Never
+      containers:
+      - name: platformapi-migrations
+        image: {{ .Values.IMAGE }}
+        imagePullPolicy: Always
+        command: ["alembic", "upgrade", "head"]
+        env:
+        - name: NP_DB_REDIS_URI
+          value: "{{ .Values.NP_DB_REDIS_URI }}"
+        - name: NP_DB_POSTGRES_DSN
+          valueFrom:
+            secretKeyRef:
+              name: platformapi-postgres
+              key: platformapi-dsn
+
+  backoffLimit: 0
+{{- end }}

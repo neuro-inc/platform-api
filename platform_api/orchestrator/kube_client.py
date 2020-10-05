@@ -8,13 +8,14 @@ import ssl
 from base64 import b64encode
 from collections import defaultdict
 from contextlib import suppress
-from dataclasses import dataclass, field
+from dataclasses import dataclass, field, replace
 from datetime import datetime
 from enum import Enum
 from pathlib import Path, PurePath
 from types import TracebackType
 from typing import (
     Any,
+    AsyncIterator,
     ClassVar,
     DefaultDict,
     Dict,
@@ -42,9 +43,12 @@ from .job_request import (
     ContainerResources,
     ContainerTPUResource,
     ContainerVolume,
+    DiskContainerVolume,
     JobError,
     JobNotFoundException,
     JobRequest,
+    Secret,
+    SecretContainerVolume,
 )
 from .kube_config import KubeClientAuthType
 
@@ -72,7 +76,7 @@ class AlreadyExistsException(StatusException):
 
 def _raise_status_job_exception(pod: Dict[str, Any], job_id: Optional[str]) -> NoReturn:
     if pod["code"] == 409:
-        raise JobError(f"job with {job_id} already exist")
+        raise AlreadyExistsException(pod.get("reason", "job already exists"))
     elif pod["code"] == 404:
         raise JobNotFoundException(f"job {job_id} was not found")
     elif pod["code"] == 422:
@@ -152,6 +156,27 @@ class PVCVolume(PathVolume):
 
 
 @dataclass(frozen=True)
+class SecretEnvVar:
+    name: str
+    secret: Secret
+
+    @classmethod
+    def create(cls, name: str, secret: Secret) -> "SecretEnvVar":
+        return cls(name=name, secret=secret)
+
+    def to_primitive(self) -> Dict[str, Any]:
+        return {
+            "name": self.name,
+            "valueFrom": {
+                "secretKeyRef": {
+                    "name": self.secret.k8s_secret_name,
+                    "key": self.secret.secret_key,
+                }
+            },
+        }
+
+
+@dataclass(frozen=True)
 class VolumeMount:
     volume: Volume
     mount_path: PurePath
@@ -159,11 +184,51 @@ class VolumeMount:
     read_only: bool = False
 
     def to_primitive(self) -> Dict[str, Any]:
-        return {
+        sub_path = str(self.sub_path)
+        raw = {
             "name": self.volume.name,
             "mountPath": str(self.mount_path),
             "readOnly": self.read_only,
-            "subPath": str(self.sub_path),
+        }
+        if sub_path:
+            raw["subPath"] = sub_path
+        return raw
+
+
+@dataclass(frozen=True)
+class SecretVolume(Volume):
+    k8s_secret_name: str
+
+    def create_secret_mount(self, sec_volume: SecretContainerVolume) -> "VolumeMount":
+        return VolumeMount(
+            volume=self,
+            mount_path=sec_volume.dst_path,
+            sub_path=PurePath(sec_volume.secret.secret_key),
+            read_only=True,
+        )
+
+    def to_primitive(self) -> Dict[str, Any]:
+        return {
+            "name": self.name,
+            "secret": {"secretName": self.k8s_secret_name, "defaultMode": 0o400},
+        }
+
+
+@dataclass(frozen=True)
+class PVCDiskVolume(Volume):
+    claim_name: str
+
+    def create_disk_mount(self, disk_volume: DiskContainerVolume) -> "VolumeMount":
+        return VolumeMount(
+            volume=self,
+            mount_path=disk_volume.dst_path,
+            read_only=disk_volume.read_only,
+        )
+
+    def to_primitive(self) -> Dict[str, Any]:
+        return {
+            "name": self.name,
+            "persistentVolumeClaim": {"claimName": self.claim_name},
         }
 
 
@@ -234,6 +299,7 @@ class Resources:
 class Service:
     name: str
     target_port: Optional[int]
+    selector: Dict[str, str] = field(default_factory=dict)
     ssh_target_port: Optional[int] = None
     port: int = 80
     ssh_port: int = 22
@@ -257,7 +323,7 @@ class Service:
             "spec": {
                 "type": self.service_type.value,
                 "ports": [],
-                "selector": {"job": self.name},
+                "selector": self.selector,
             },
         }
 
@@ -280,7 +346,8 @@ class Service:
     @classmethod
     def create_for_pod(cls, pod: "PodDescriptor") -> "Service":
         return cls(
-            pod.name,
+            name=pod.name,
+            selector=pod.labels,
             target_port=pod.port,
             ssh_target_port=pod.ssh_port,
             labels=pod.labels,
@@ -291,11 +358,15 @@ class Service:
         http_port = pod.port or cls.port
         return cls(
             name=pod.name,
+            selector=pod.labels,
             cluster_ip="None",
             target_port=http_port,
             ssh_target_port=pod.ssh_port,
             labels=pod.labels,
         )
+
+    def make_named(self, name: str) -> "Service":
+        return replace(self, name=name)
 
     @classmethod
     def _find_port_by_name(
@@ -313,6 +384,7 @@ class Service:
         service_type = payload["spec"].get("type", Service.service_type.value)
         return cls(
             name=payload["metadata"]["name"],
+            selector=payload["spec"].get("selector", {}),
             target_port=http_payload.get("targetPort", None),
             port=http_payload.get("port", Service.port),
             ssh_target_port=ssh_payload.get("targetPort", None),
@@ -566,13 +638,29 @@ class NodeAffinity:
         return payload
 
 
+@enum.unique
+class PodRestartPolicy(str, enum.Enum):
+    ALWAYS = "Always"
+    ON_FAILURE = "OnFailure"
+    NEVER = "Never"
+
+    def __str__(self) -> str:
+        return self.value
+
+    def __repr__(self) -> str:
+        return self.__str__().__repr__()
+
+
 @dataclass(frozen=True)
 class PodDescriptor:
     name: str
     image: str
     command: List[str] = field(default_factory=list)
     args: List[str] = field(default_factory=list)
+    working_dir: Optional[str] = None
     env: Dict[str, str] = field(default_factory=dict)
+    # TODO (artem): create base type `EnvVar` and merge `env` and `secret_env`
+    secret_env_list: List[SecretEnvVar] = field(default_factory=list)
     volume_mounts: List[VolumeMount] = field(default_factory=list)
     volumes: List[Volume] = field(default_factory=list)
     resources: Optional[Resources] = None
@@ -585,6 +673,7 @@ class PodDescriptor:
     port: Optional[int] = None
     ssh_port: Optional[int] = None
     health_check_path: str = "/"
+    tty: bool = False
 
     status: Optional["PodStatus"] = None
 
@@ -600,24 +689,81 @@ class PodDescriptor:
 
     tpu_version_annotation_key: ClassVar[str] = "tf-version.cloud-tpus.google.com"
 
+    restart_policy: PodRestartPolicy = PodRestartPolicy.NEVER
+
+    @classmethod
+    def _process_secret_volumes(
+        cls,
+        secret_volume: Optional[SecretVolume],
+        secret_volumes: List[SecretContainerVolume],
+    ) -> Tuple[List[SecretVolume], List[VolumeMount]]:
+        pod_volumes = []
+        volume_mounts = []
+
+        if secret_volumes:
+            assert secret_volume
+            pod_volumes = [secret_volume]
+            for sec_volume in secret_volumes:
+                volume_mounts.append(secret_volume.create_secret_mount(sec_volume))
+
+        return pod_volumes, volume_mounts
+
+    @classmethod
+    def _process_disk_volumes(
+        cls, disk_volumes: List[DiskContainerVolume]
+    ) -> Tuple[List[PVCDiskVolume], List[VolumeMount]]:
+        pod_volumes = []
+        volume_mounts = []
+
+        pvc_volumes: Dict[str, PVCDiskVolume] = dict()
+        for index, disk_volume in enumerate(disk_volumes, 1):
+            pvc_volume = pvc_volumes.get(disk_volume.disk.disk_id)
+            if pvc_volume is None:
+                pvc_volume = PVCDiskVolume(
+                    name=f"disk-{index}", claim_name=disk_volume.disk.disk_id
+                )
+                pod_volumes.append(pvc_volume)
+                pvc_volumes[disk_volume.disk.disk_id] = pvc_volume
+            volume_mounts.append(pvc_volume.create_disk_mount(disk_volume))
+        return pod_volumes, volume_mounts
+
     @classmethod
     def from_job_request(
         cls,
         volume: Volume,
         job_request: JobRequest,
-        secret_names: Optional[List[str]] = None,
+        secret_volume: Optional[SecretVolume] = None,
+        image_pull_secret_names: Optional[List[str]] = None,
         node_selector: Optional[Dict[str, str]] = None,
         tolerations: Optional[List[Toleration]] = None,
         node_affinity: Optional[NodeAffinity] = None,
         labels: Optional[Dict[str, str]] = None,
         priority_class_name: Optional[str] = None,
+        restart_policy: PodRestartPolicy = PodRestartPolicy.NEVER,
     ) -> "PodDescriptor":
         container = job_request.container
+
+        secret_volumes, secret_volume_mounts = cls._process_secret_volumes(
+            secret_volume, container.secret_volumes
+        )
+        disk_volumes, disk_volume_mounts = cls._process_disk_volumes(
+            container.disk_volumes
+        )
+
+        volumes = [volume, *secret_volumes, *disk_volumes]
         volume_mounts = [
-            volume.create_mount(container_volume)
-            for container_volume in container.volumes
+            *(
+                volume.create_mount(container_volume)
+                for container_volume in container.volumes
+            ),
+            *secret_volume_mounts,
+            *disk_volume_mounts,
         ]
-        volumes = [volume]
+
+        sec_env_list = [
+            SecretEnvVar.create(env_name, secret)
+            for env_name, secret in container.secret_env.items()
+        ]
 
         if job_request.container.resources.shm:
             dev_shm_volume = SharedMemoryVolume(name="dshm")
@@ -631,8 +777,8 @@ class PodDescriptor:
             volumes.append(dev_shm_volume)
 
         resources = Resources.from_container_resources(container.resources)
-        if secret_names is not None:
-            image_pull_secrets = [SecretRef(name) for name in secret_names]
+        if image_pull_secret_names is not None:
+            image_pull_secrets = [SecretRef(name) for name in image_pull_secret_names]
         else:
             image_pull_secrets = []
 
@@ -646,13 +792,16 @@ class PodDescriptor:
             image=container.image,
             command=container.entrypoint_list,
             args=container.command_list,
+            working_dir=container.working_dir,
             env=container.env.copy(),
+            secret_env_list=sec_env_list,
             volume_mounts=volume_mounts,
             volumes=volumes,
             resources=resources,
             port=container.port,
             ssh_port=container.ssh_port,
             health_check_path=container.health_check_path,
+            tty=container.tty,
             image_pull_secrets=image_pull_secrets,
             node_selector=node_selector or {},
             tolerations=tolerations or [],
@@ -660,6 +809,7 @@ class PodDescriptor:
             labels=labels or {},
             annotations=annotations,
             priority_class_name=priority_class_name,
+            restart_policy=restart_policy,
         )
 
     @property
@@ -669,12 +819,13 @@ class PodDescriptor:
     def to_primitive(self) -> Dict[str, Any]:
         volume_mounts = [mount.to_primitive() for mount in self.volume_mounts]
         volumes = [volume.to_primitive() for volume in self.volumes]
+        env_list = self.env_list + [env.to_primitive() for env in self.secret_env_list]
 
         container_payload = {
             "name": f"{self.name}",
             "image": f"{self.image}",
             "imagePullPolicy": "Always",
-            "env": self.env_list,
+            "env": env_list,
             "volumeMounts": volume_mounts,
             "terminationMessagePolicy": "FallbackToLogsOnError",
         }
@@ -684,6 +835,11 @@ class PodDescriptor:
             container_payload["args"] = self.args
         if self.resources:
             container_payload["resources"] = self.resources.to_primitive()
+        if self.tty:
+            container_payload["tty"] = True
+        container_payload["stdin"] = True
+        if self.working_dir is not None:
+            container_payload["workingDir"] = self.working_dir
 
         ports = self._to_primitive_ports()
         if ports:
@@ -691,11 +847,6 @@ class PodDescriptor:
         readiness_probe = self._to_primitive_readiness_probe()
         if readiness_probe:
             container_payload["readinessProbe"] = readiness_probe
-
-        labels = self.labels.copy()
-        # TODO (A Danshyn 12/04/18): the job is left for backward
-        # compatibility
-        labels["job"] = self.name
 
         tolerations = self.tolerations.copy()
         if self.resources and self.resources.gpu:
@@ -708,12 +859,12 @@ class PodDescriptor:
         payload: Dict[str, Any] = {
             "kind": "Pod",
             "apiVersion": "v1",
-            "metadata": {"name": self.name, "labels": labels},
+            "metadata": {"name": self.name},
             "spec": {
                 "automountServiceAccountToken": False,
                 "containers": [container_payload],
                 "volumes": volumes,
-                "restartPolicy": "Never",
+                "restartPolicy": str(self.restart_policy),
                 "imagePullSecrets": [
                     secret.to_primitive() for secret in self.image_pull_secrets
                 ],
@@ -722,6 +873,8 @@ class PodDescriptor:
                 ],
             },
         }
+        if self.labels:
+            payload["metadata"]["labels"] = self.labels
         if self.annotations:
             payload["metadata"]["annotations"] = self.annotations.copy()
         if self.node_selector:
@@ -795,7 +948,7 @@ class PodDescriptor:
                 value=t.get("value", Toleration.value),
                 effect=t.get("effect", Toleration.effect),
             )
-            for t in payload["spec"].get("tolerations", {})
+            for t in payload["spec"].get("tolerations", ())
         ]
         return cls(
             name=metadata["name"],
@@ -806,9 +959,14 @@ class PodDescriptor:
             node_name=payload["spec"].get("nodeName"),
             command=container_payload.get("command"),
             args=container_payload.get("args"),
+            tty=container_payload.get("tty", False),
             tolerations=tolerations,
             labels=metadata.get("labels", {}),
             priority_class_name=payload["spec"].get("priorityClassName"),
+            restart_policy=PodRestartPolicy(
+                payload["spec"].get("restartPolicy", str(cls.restart_policy))
+            ),
+            working_dir=container_payload.get("workingDir"),
         )
 
 
@@ -836,6 +994,7 @@ class ContainerStatus:
             'PodInitializing'
             'ContainerCreating'
             'ErrImagePull'
+            'CrashLoopBackOff'
         see
         https://github.com/kubernetes/kubernetes/blob/29232e3edc4202bb5e34c8c107bae4e8250cd883/pkg/kubelet/kubelet_pods.go#L1463-L1468
         https://github.com/kubernetes/kubernetes/blob/886e04f1fffbb04faf8a9f9ee141143b2684ae68/pkg/kubelet/images/types.go#L25-L43
@@ -1174,6 +1333,8 @@ class KubeClient:
         return ssl_context
 
     async def init(self) -> None:
+        if self._client:
+            return
         connector = aiohttp.TCPConnector(
             limit=self._conn_pool_size, ssl=self._create_ssl_context()
         )
@@ -1280,11 +1441,22 @@ class KubeClient:
         namespace_url = self._generate_namespace_url(namespace_name)
         return f"{namespace_url}/secrets"
 
+    def _generate_all_pvcs_url(self, namespace_name: Optional[str] = None) -> str:
+        namespace_name = namespace_name or self._namespace
+        namespace_url = self._generate_namespace_url(namespace_name)
+        return f"{namespace_url}/persistentvolumeclaims"
+
     def _generate_secret_url(
         self, secret_name: str, namespace_name: Optional[str] = None
     ) -> str:
         all_secrets_url = self._generate_all_secrets_url(namespace_name)
         return f"{all_secrets_url}/{secret_name}"
+
+    def _generate_pvc_url(
+        self, pvc_name: str, namespace_name: Optional[str] = None
+    ) -> str:
+        all_pvcs_url = self._generate_all_pvcs_url(namespace_name)
+        return f"{all_pvcs_url}/{pvc_name}"
 
     async def _request(self, *args: Any, **kwargs: Any) -> Dict[str, Any]:
         assert self._client
@@ -1312,7 +1484,23 @@ class KubeClient:
                 resources[job_id].append(metadata["selfLink"])
         return resources
 
-    async def delete_resource_link(self, link: str) -> None:
+    async def get_all_job_resources_links(self, job_id: str) -> AsyncIterator[str]:
+        job_label_name = "platform.neuromation.io/job"
+        params = {"labelSelector": f"{job_label_name}={job_id}"}
+        urls = [
+            self._pods_url,
+            self._ingresses_url,
+            self._services_url,
+            self._generate_all_network_policies_url(),
+        ]
+        for url in urls:
+            payload = await self._request(method="GET", url=url, params=params)
+            for item in payload["items"]:
+                metadata = item["metadata"]
+                assert metadata["labels"][job_label_name] == job_id
+                yield metadata["selfLink"]
+
+    async def delete_resource_by_link(self, link: str) -> None:
         await self._delete_resource_url(f"{self._base_url}{link}")
 
     async def _delete_resource_url(self, url: str) -> None:
@@ -1416,6 +1604,19 @@ class KubeClient:
         payload = await self._request(method="GET", url=url)
         return Ingress.from_primitive(payload)
 
+    async def delete_all_ingresses(
+        self, *, labels: Optional[Dict[str, str]] = None
+    ) -> None:
+        params: Dict[str, str] = {}
+        if labels:
+            params["labelSelector"] = ",".join(
+                "=".join(item) for item in labels.items()
+            )
+        payload = await self._request(
+            method="DELETE", url=self._ingresses_url, params=params
+        )
+        self._check_status_payload(payload)
+
     async def delete_ingress(self, name: str) -> None:
         url = self._generate_ingress_url(name)
         await self._delete_resource_url(url)
@@ -1465,6 +1666,7 @@ class KubeClient:
     async def get_service(self, name: str) -> Service:
         url = self._generate_service_url(name)
         payload = await self._request(method="GET", url=url)
+        self._check_status_payload(payload)
         return Service.from_primitive(payload)
 
     async def delete_service(self, name: str) -> None:
@@ -1493,11 +1695,27 @@ class KubeClient:
 
             await self.create_docker_secret(secret)
 
+    async def get_raw_secret(
+        self, secret_name: str, namespace_name: Optional[str] = None
+    ) -> Dict[str, Any]:
+        url = self._generate_secret_url(secret_name, namespace_name)
+        payload = await self._request(method="GET", url=url)
+        self._check_status_payload(payload)
+        return payload
+
     async def delete_secret(
         self, secret_name: str, namespace_name: Optional[str] = None
     ) -> None:
         url = self._generate_secret_url(secret_name, namespace_name)
         await self._delete_resource_url(url)
+
+    async def get_raw_pvc(
+        self, pvc_name: str, namespace_name: Optional[str] = None
+    ) -> Dict[str, Any]:
+        url = self._generate_pvc_url(pvc_name, namespace_name)
+        payload = await self._request(method="GET", url=url)
+        self._check_status_payload(payload)
+        return payload
 
     async def get_pod_events(
         self, pod_id: str, namespace: str
@@ -1583,7 +1801,12 @@ class KubeClient:
                     {
                         "ipBlock": {
                             "cidr": "0.0.0.0/0",
-                            "except": ["10.0.0.0/8", "172.16.0.0/12", "192.168.0.0/16"],
+                            "except": [
+                                "10.0.0.0/8",
+                                "172.16.0.0/12",
+                                "192.168.0.0/16",
+                                "169.254.0.0/16",
+                            ],
                         }
                     }
                 ]
@@ -1596,6 +1819,7 @@ class KubeClient:
                     {"ipBlock": {"cidr": "10.0.0.0/8"}},
                     {"ipBlock": {"cidr": "172.16.0.0/12"}},
                     {"ipBlock": {"cidr": "192.168.0.0/16"}},
+                    {"ipBlock": {"cidr": "169.254.0.0/16"}},
                 ],
                 "ports": [
                     {"port": 53, "protocol": "UDP"},

@@ -25,14 +25,16 @@ from platform_api.cluster_config import (
 from platform_api.config import (
     AuthConfig,
     Config,
+    CORSConfig,
     DatabaseConfig,
     JobPolicyEnforcerConfig,
     JobsConfig,
     NotificationsConfig,
     OAuthConfig,
+    PostgresConfig,
     ServerConfig,
+    ZipkinConfig,
 )
-from platform_api.config_client import ConfigClient
 from platform_api.orchestrator.job_request import JobNotFoundException
 from platform_api.orchestrator.kube_client import KubeClient, NodeTaint, Resources
 from platform_api.orchestrator.kube_orchestrator import KubeConfig, KubeOrchestrator
@@ -51,7 +53,10 @@ pytest_plugins = [
     "tests.integration.docker",
     "tests.integration.redis",
     "tests.integration.auth",
+    "tests.integration.secrets",
+    "tests.integration.diskapi",
     "tests.integration.notifications",
+    "tests.integration.postgres",
 ]
 
 
@@ -61,7 +66,7 @@ def event_loop() -> Iterator[asyncio.AbstractEventLoop]:
     loop = asyncio.get_event_loop_policy().new_event_loop()
     loop.set_debug(True)
 
-    watcher = asyncio.SafeChildWatcher()  # type: ignore
+    watcher = asyncio.SafeChildWatcher()
     watcher.attach_loop(loop)
     asyncio.get_event_loop_policy().set_child_watcher(watcher)
 
@@ -134,7 +139,7 @@ def kube_config_factory(
         defaults = dict(
             jobs_ingress_class="nginx",
             jobs_domain_name_template="{job_id}.jobs.neu.ro",
-            ssh_auth_domain_name="ssh-auth.platform.neuromation.io",
+            ssh_auth_server="ssh-auth.platform.neuromation.io:22",
             endpoint_url=cluster["server"],
             cert_authority_data_pem=cert_authority_data_pem,
             cert_authority_path=None,  # disable, only `cert_authority_data_pem` works
@@ -200,6 +205,41 @@ async def kube_ingress_ip(kube_config_cluster_payload: Dict[str, Any]) -> str:
 
 
 class MyKubeClient(KubeClient):
+    async def create_pvc(
+        self, pvc_name: str, namespace: str, storage: Optional[int] = None
+    ) -> None:
+        url = self._generate_all_pvcs_url(namespace)
+        storage = storage or 1024 * 1024
+        primitive = {
+            "apiVersion": "v1",
+            "kind": "PersistentVolumeClaim",
+            "metadata": {"name": pvc_name},
+            "spec": {
+                "accessModes": ["ReadWriteOnce"],
+                "volumeMode": "Filesystem",
+                "resources": {"requests": {"storage": storage}},
+                # From `tests/k8s/storageclass.yml`:
+                "storageClassName": "test-storage-class",
+            },
+        }
+        payload = await self._request(method="POST", url=url, json=primitive)
+        self._check_status_payload(payload)
+
+    async def update_or_create_secret(
+        self, secret_name: str, namespace: str, data: Optional[Dict[str, str]] = None
+    ) -> None:
+        url = self._generate_all_secrets_url(namespace)
+        data = data or {}
+        primitive = {
+            "apiVersion": "v1",
+            "kind": "Secret",
+            "metadata": {"name": secret_name},
+            "data": data,
+            "type": "Opaque",
+        }
+        payload = await self._request(method="POST", url=url, json=primitive)
+        self._check_status_payload(payload)
+
     async def wait_pod_scheduled(
         self,
         pod_name: str,
@@ -272,7 +312,7 @@ class MyKubeClient(KubeClient):
             "message": "TriggeredScaleUp",
             "metadata": {
                 "creationTimestamp": now_str,
-                "name": "job-cd109c3b-c36e-47d4-b3d6-8bb05a5e63ab.15a870d7e2bb228b",
+                "name": f"{pod_id}.{uuid.uuid4()}",
                 "namespace": self._namespace,
                 "selfLink": (
                     f"/api/v1/namespaces/{self._namespace}"
@@ -285,6 +325,45 @@ class MyKubeClient(KubeClient):
             "reportingInstance": "",
             "source": {"component": "cluster-autoscaler"},
             "type": "Normal",
+        }
+
+        await self._request(method="POST", url=url, json=data)
+
+    async def create_failed_attach_volume_event(self, pod_id: str) -> None:
+        url = f"{self._namespace_url}/events"
+        now = datetime.now(timezone.utc)
+        now_str = now.strftime("%Y-%m-%dT%H:%M:%SZ")
+        data = {
+            "apiVersion": "v1",
+            "count": 1,
+            "eventTime": None,
+            "firstTimestamp": now_str,
+            "involvedObject": {
+                "apiVersion": "v1",
+                "kind": "Pod",
+                "name": pod_id,
+                "namespace": self._namespace,
+                "resourceVersion": "48102193",
+                "uid": "eddfe678-86e9-11e9-9d65-42010a800018",
+            },
+            "kind": "Event",
+            "lastTimestamp": now_str,
+            "message": "FailedAttachVolume",
+            "metadata": {
+                "creationTimestamp": now_str,
+                "name": f"{pod_id}.{uuid.uuid4()}",
+                "namespace": self._namespace,
+                "selfLink": (
+                    f"/api/v1/namespaces/{self._namespace}"
+                    f"/events/{pod_id}.15a870d7e2bb228b"
+                ),
+                "uid": "cb886f64-8f96-11e9-9251-42010a800038",
+            },
+            "reason": "FailedAttachVolume",
+            "reportingComponent": "",
+            "reportingInstance": "",
+            "source": {"component": "attachdetach-controller"},
+            "type": "Warning",
         }
 
         await self._request(method="POST", url=url, json=data)
@@ -523,9 +602,9 @@ def jobs_config() -> JobsConfig:
 
 
 @pytest.fixture
-def garbage_collector_config(admin_token: str,) -> GarbageCollectorConfig:
+def garbage_collector_config(admin_token: str) -> GarbageCollectorConfig:
     return GarbageCollectorConfig(
-        platform_api_url=URL("http://localhost:8080/api/v1"), token=admin_token,
+        platform_api_url=URL("http://localhost:8080/api/v1"), token=admin_token
     )
 
 
@@ -533,21 +612,26 @@ def garbage_collector_config(admin_token: str,) -> GarbageCollectorConfig:
 def config_factory(
     kube_config: KubeConfig,
     redis_config: RedisConfig,
+    postgres_config: PostgresConfig,
     auth_config: AuthConfig,
     jobs_config: JobsConfig,
     notifications_config: NotificationsConfig,
-    admin_token: str,
     garbage_collector_config: GarbageCollectorConfig,
+    token_factory: Callable[[str], str],
 ) -> Callable[..., Config]:
     def _factory(**kwargs: Any) -> Config:
         server_config = ServerConfig()
         job_policy_enforcer = JobPolicyEnforcerConfig(
             platform_api_url=URL("http://localhost:8080/api/v1"),
-            token=admin_token,
+            token=token_factory("compute"),
             interval_sec=1,
+            quota_notification_threshold=0.1,
         )
-        database_config = DatabaseConfig(redis=redis_config)
-        config_client = ConfigClient(base_url=URL("http://localhost:8082/api/v1"))
+        database_config = DatabaseConfig(
+            postgres_enabled=True, redis=redis_config, postgres=postgres_config
+        )
+        config_url = URL("http://localhost:8082/api/v1")
+        admin_url = URL("http://localhost:8080/apis/admin/v1")
         return Config(
             server=server_config,
             database=database_config,
@@ -555,8 +639,11 @@ def config_factory(
             jobs=jobs_config,
             job_policy_enforcer=job_policy_enforcer,
             notifications=notifications_config,
-            config_client=config_client,
             garbage_collector=garbage_collector_config,
+            cors=CORSConfig(allowed_origins=["https://neu.ro"]),
+            config_url=config_url,
+            admin_url=admin_url,
+            zipkin=ZipkinConfig(URL("https://zipkin:9411"), 1.0),
             **kwargs,
         )
 
@@ -564,24 +651,36 @@ def config_factory(
 
 
 @pytest.fixture
-def cluster_config(
+def cluster_config_factory(
     kube_config: KubeConfig,
     storage_config_host: StorageConfig,
     registry_config: RegistryConfig,
     garbage_collector_config: GarbageCollectorConfig,
+) -> Callable[..., ClusterConfig]:
+    def _f(cluster_name: str = "test-cluster") -> ClusterConfig:
+        ingress_config = IngressConfig(
+            storage_url=URL("https://neu.ro/api/v1/storage"),
+            monitoring_url=URL("https://neu.ro/api/v1/monitoring"),
+            secrets_url=URL("https://neu.ro/api/v1/secrets"),
+            metrics_url=URL("https://neu.ro/api/v1/metrics"),
+        )
+        return ClusterConfig(
+            name=cluster_name,
+            orchestrator=kube_config,
+            ingress=ingress_config,
+            storage=storage_config_host,
+            registry=registry_config,
+            garbage_collector=garbage_collector_config,
+        )
+
+    return _f
+
+
+@pytest.fixture
+def cluster_config(
+    cluster_config_factory: Callable[..., ClusterConfig]
 ) -> ClusterConfig:
-    ingress_config = IngressConfig(
-        storage_url=URL("https://neu.ro/api/v1/storage"),
-        monitoring_url=URL("https://neu.ro/api/v1/monitoring"),
-    )
-    return ClusterConfig(
-        name="default",
-        orchestrator=kube_config,
-        ingress=ingress_config,
-        storage=storage_config_host,
-        registry=registry_config,
-        garbage_collector=garbage_collector_config,
-    )
+    return cluster_config_factory()
 
 
 @pytest.fixture

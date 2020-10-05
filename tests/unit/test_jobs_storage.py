@@ -1,8 +1,15 @@
+from datetime import timedelta
 from typing import Any
 
 import pytest
 
-from platform_api.orchestrator.job import JobRecord, JobRequest, JobStatus
+from platform_api.orchestrator.job import (
+    AggregatedRunTime,
+    JobRecord,
+    JobRequest,
+    JobStatus,
+    current_datetime_factory,
+)
 from platform_api.orchestrator.job_request import Container, ContainerResources
 from platform_api.orchestrator.jobs_storage import (
     InMemoryJobsStorage,
@@ -18,10 +25,15 @@ class TestInMemoryJobsStorage:
         jobs = await jobs_storage.get_all_jobs()
         assert not jobs
 
-    def _create_job_request(self) -> JobRequest:
+    def _create_job_request(self, is_gpu_job: bool = False) -> JobRequest:
         return JobRequest.create(
             Container(
-                image="testimage", resources=ContainerResources(cpu=1, memory_mb=128)
+                image="testimage",
+                resources=ContainerResources(
+                    cpu=1, memory_mb=128, gpu=1, gpu_model_id="nvidia-tesla-k80"
+                )
+                if is_gpu_job
+                else ContainerResources(cpu=1, memory_mb=128),
             )
         )
 
@@ -31,6 +43,26 @@ class TestInMemoryJobsStorage:
         return JobRecord.create(
             request=self._create_job_request(), cluster_name=cluster_name, **kwargs
         )
+
+    def _create_finished_job(
+        self,
+        run_time: timedelta,
+        is_gpu_job: bool = False,
+        job_status: JobStatus = JobStatus.SUCCEEDED,
+        cluster_name: str = "test-cluster",
+        **kwargs: Any
+    ) -> JobRecord:
+        job = JobRecord.create(
+            request=self._create_job_request(is_gpu_job=is_gpu_job),
+            cluster_name=cluster_name,
+            **kwargs
+        )
+        current_time = current_datetime_factory()
+        job.set_status(
+            JobStatus.RUNNING, current_datetime_factory=lambda: current_time - run_time
+        )
+        job.set_status(job_status, current_datetime_factory=lambda: current_time)
+        return job
 
     @pytest.mark.asyncio
     async def test_set_get_job(self) -> None:
@@ -70,6 +102,75 @@ class TestInMemoryJobsStorage:
         assert {job.id for job in jobs} == {succeeded_job.id}
 
     @pytest.mark.asyncio
+    async def test_get_tags_empty(self) -> None:
+        jobs_storage = InMemoryJobsStorage()
+        for job in [
+            self._create_job(owner="u", tags=["b"]),
+            self._create_job(owner="u", tags=["a"]),
+        ]:
+            async with jobs_storage.try_create_job(job):
+                pass
+
+        tags_u1 = await jobs_storage.get_tags("another")
+        assert tags_u1 == []
+
+    @pytest.mark.asyncio
+    async def test_get_tags_single(self) -> None:
+        jobs_storage = InMemoryJobsStorage()
+        for job in [
+            self._create_job(owner="u", tags=["b"]),
+            self._create_job(owner="u", tags=["a"]),
+            self._create_job(owner="u", tags=["c"]),
+        ]:
+            async with jobs_storage.try_create_job(job):
+                pass
+
+        tags_u1 = await jobs_storage.get_tags("u")
+        assert tags_u1 == ["c", "a", "b"]
+
+    @pytest.mark.asyncio
+    async def test_get_tags_multiple(self) -> None:
+        jobs_storage = InMemoryJobsStorage()
+        for job in [
+            self._create_job(owner="u", tags=["b", "a", "c"]),
+            self._create_job(owner="u", tags=["d"]),
+        ]:
+            async with jobs_storage.try_create_job(job):
+                pass
+
+        tags_u1 = await jobs_storage.get_tags("u")
+        assert tags_u1 == ["d", "a", "b", "c"]
+
+    @pytest.mark.asyncio
+    async def test_get_tags_overwrite_single(self) -> None:
+        jobs_storage = InMemoryJobsStorage()
+        for job in [
+            self._create_job(owner="u", tags=["a"]),
+            self._create_job(owner="u", tags=["b"]),
+            self._create_job(owner="u", tags=["a"]),
+            self._create_job(owner="u", tags=["c"]),
+        ]:
+            async with jobs_storage.try_create_job(job):
+                pass
+
+        tags_u1 = await jobs_storage.get_tags("u")
+        assert tags_u1 == ["c", "a", "b"]
+
+    @pytest.mark.asyncio
+    async def test_get_tags_overwrite_multiple(self) -> None:
+        jobs_storage = InMemoryJobsStorage()
+        for job in [
+            self._create_job(owner="u", tags=["a"]),
+            self._create_job(owner="u", tags=["b"]),
+            self._create_job(owner="u", tags=["c", "a"]),
+        ]:
+            async with jobs_storage.try_create_job(job):
+                pass
+
+        tags_u1 = await jobs_storage.get_tags("u")
+        assert tags_u1 == ["a", "c", "b"]
+
+    @pytest.mark.asyncio
     async def test_try_create_job(self) -> None:
         jobs_storage = InMemoryJobsStorage()
 
@@ -84,6 +185,98 @@ class TestInMemoryJobsStorage:
         with pytest.raises(JobStorageJobFoundError):
             async with jobs_storage.try_create_job(job):
                 pass
+
+    @pytest.mark.asyncio
+    async def test_get_aggregated_run_time(self) -> None:
+        jobs_storage = InMemoryJobsStorage()
+        await jobs_storage.set_job(
+            self._create_finished_job(
+                cluster_name="test-cluster-1",
+                is_gpu_job=False,
+                run_time=timedelta(minutes=1),
+            )
+        )
+        await jobs_storage.set_job(
+            self._create_finished_job(
+                cluster_name="test-cluster-1",
+                is_gpu_job=False,
+                run_time=timedelta(minutes=2),
+            )
+        )
+        await jobs_storage.set_job(
+            self._create_finished_job(
+                cluster_name="test-cluster-1",
+                is_gpu_job=True,
+                run_time=timedelta(minutes=3),
+            )
+        )
+        await jobs_storage.set_job(
+            self._create_finished_job(
+                cluster_name="test-cluster-1",
+                is_gpu_job=True,
+                run_time=timedelta(minutes=4),
+            )
+        )
+        await jobs_storage.set_job(
+            self._create_finished_job(
+                cluster_name="test-cluster-2", run_time=timedelta(minutes=5)
+            )
+        )
+        result = await jobs_storage.get_aggregated_run_time(JobFilter())
+
+        assert result == AggregatedRunTime(
+            total_gpu_run_time_delta=timedelta(minutes=7),
+            total_non_gpu_run_time_delta=timedelta(minutes=8),
+        )
+
+    @pytest.mark.asyncio
+    async def test_get_aggregated_run_time_by_clusters(self) -> None:
+        jobs_storage = InMemoryJobsStorage()
+        await jobs_storage.set_job(
+            self._create_finished_job(
+                cluster_name="test-cluster-1",
+                is_gpu_job=False,
+                run_time=timedelta(minutes=1),
+            )
+        )
+        await jobs_storage.set_job(
+            self._create_finished_job(
+                cluster_name="test-cluster-1",
+                is_gpu_job=False,
+                run_time=timedelta(minutes=2),
+            )
+        )
+        await jobs_storage.set_job(
+            self._create_finished_job(
+                cluster_name="test-cluster-1",
+                is_gpu_job=True,
+                run_time=timedelta(minutes=3),
+            )
+        )
+        await jobs_storage.set_job(
+            self._create_finished_job(
+                cluster_name="test-cluster-1",
+                is_gpu_job=True,
+                run_time=timedelta(minutes=4),
+            )
+        )
+        await jobs_storage.set_job(
+            self._create_finished_job(
+                cluster_name="test-cluster-2", run_time=timedelta(minutes=5)
+            )
+        )
+        result = await jobs_storage.get_aggregated_run_time_by_clusters(JobFilter())
+
+        assert result == {
+            "test-cluster-1": AggregatedRunTime(
+                total_gpu_run_time_delta=timedelta(minutes=7),
+                total_non_gpu_run_time_delta=timedelta(minutes=3),
+            ),
+            "test-cluster-2": AggregatedRunTime(
+                total_gpu_run_time_delta=timedelta(),
+                total_non_gpu_run_time_delta=timedelta(minutes=5),
+            ),
+        }
 
 
 class TestJobFilter:
@@ -109,6 +302,56 @@ class TestJobFilter:
         job = self._create_job(owner="testuser", status=JobStatus.PENDING)
         assert not JobFilter(statuses={JobStatus.RUNNING}).check(job)
 
+    def test_check_tags_job_zero_filter_zero(self) -> None:
+        job = self._create_job(owner="testuser", status=JobStatus.PENDING)
+        filt = JobFilter()
+        assert filt.check(job)
+
+    def test_check_tags_job_all_fileter_all(self) -> None:
+        job = self._create_job(
+            owner="testuser", status=JobStatus.PENDING, tags=["t1", "t2", "t3"]
+        )
+        filt = JobFilter(tags={"t1", "t2", "t3"})
+        assert filt.check(job)
+
+    def test_check_tags_job_zero_filter_all(self) -> None:
+        job = self._create_job(owner="testuser", status=JobStatus.PENDING)
+        filt = JobFilter(tags={"t1", "t2", "t3"})
+        assert not filt.check(job)
+
+    def test_check_tags_job_all_filter_zero(self) -> None:
+        job = self._create_job(
+            owner="testuser", status=JobStatus.PENDING, tags=["t1", "t2", "t3"]
+        )
+        filt = JobFilter()
+        assert filt.check(job)
+
+    def test_check_tags_job_less_filter_more(self) -> None:
+        job = self._create_job(owner="testuser", status=JobStatus.PENDING, tags=["t1"])
+        filt = JobFilter(tags={"t1", "t2", "t3"})
+        assert not filt.check(job)
+
+    def test_check_tags_job_more_filter_less(self) -> None:
+        job = self._create_job(
+            owner="testuser", status=JobStatus.PENDING, tags=["t1", "t2", "t3"]
+        )
+        filt = JobFilter(tags={"t1"})
+        assert filt.check(job)
+
+    def test_check_tags_intersect(self) -> None:
+        job = self._create_job(
+            owner="testuser", status=JobStatus.PENDING, tags=["t1", "t2"]
+        )
+        filt = JobFilter(tags={"t2", "t3"})
+        assert not filt.check(job)
+
+    def test_check_tags_disjoint(self) -> None:
+        job = self._create_job(
+            owner="testuser", status=JobStatus.PENDING, tags=["t1", "t2"]
+        )
+        filt = JobFilter(tags={"t3", "t4"})
+        assert not filt.check(job)
+
     def test_check_owners(self) -> None:
         job = self._create_job(owner="testuser")
         assert not JobFilter(owners={"anotheruser"}).check(job)
@@ -123,8 +366,8 @@ class TestJobFilter:
             owner="testuser",
             cluster_name="my-cluster",
         )
-        assert not JobFilter(clusters={"default"}).check(job)
-        assert JobFilter(clusters={"my-cluster"}).check(job)
+        assert not JobFilter(clusters={"test-cluster": {}}).check(job)
+        assert JobFilter(clusters={"my-cluster": {}}).check(job)
 
     def test_check_ids(self) -> None:
         job = self._create_job(owner="testuser", name="testname")
@@ -151,5 +394,104 @@ class TestJobFilter:
             statuses={JobStatus.PENDING},
             owners={"testuser"},
             name="testname",
-            clusters={"test-cluster"},
+            clusters={"test-cluster": {}},
         ).check(job)
+
+    def test_check_clusters_and_owners(self) -> None:
+        filter = JobFilter(
+            clusters={"cluster1": {"user2": set()}, "cluster2": {"user1": set()}},
+            owners={"user1", "user2"},
+        )
+        found = []
+        for cluster_name in ("cluster1", "cluster2", "cluster3"):
+            for owner in ("user1", "user2", "user3"):
+                job = self._create_job(cluster_name=cluster_name, owner=owner)
+                if filter.check(job):
+                    found.append((cluster_name, owner))
+        assert found == [("cluster1", "user2"), ("cluster2", "user1")]
+
+    def test_check_clusters_and_owners2(self) -> None:
+        filter = JobFilter(
+            clusters={"cluster1": {}, "cluster2": {"user2": set()}},
+            owners={"user1", "user2"},
+        )
+        found = []
+        for cluster_name in ("cluster1", "cluster2", "cluster3"):
+            for owner in ("user1", "user2", "user3"):
+                job = self._create_job(cluster_name=cluster_name, owner=owner)
+                if filter.check(job):
+                    found.append((cluster_name, owner))
+        assert found == [
+            ("cluster1", "user1"),
+            ("cluster1", "user2"),
+            ("cluster2", "user2"),
+        ]
+
+    def test_check_clusters_and_owners3(self) -> None:
+        filter = JobFilter(clusters={"cluster1": {}, "cluster2": {"user2": set()}})
+        found = []
+        for cluster_name in ("cluster1", "cluster2", "cluster3"):
+            for owner in ("user1", "user2", "user3"):
+                job = self._create_job(cluster_name=cluster_name, owner=owner)
+                if filter.check(job):
+                    found.append((cluster_name, owner))
+        assert found == [
+            ("cluster1", "user1"),
+            ("cluster1", "user2"),
+            ("cluster1", "user3"),
+            ("cluster2", "user2"),
+        ]
+
+    def test_check_clusters_and_owners4(self) -> None:
+        filter = JobFilter(
+            clusters={
+                "cluster1": {"user1": set()},
+                "cluster2": {"user1": set(), "user2": set()},
+                "cluster3": {"user1": set(), "user3": set()},
+            },
+            owners={"user1", "user2", "user3"},
+        )
+        found = []
+        for cluster_name in ("cluster1", "cluster2", "cluster3", "cluster4"):
+            for owner in ("user1", "user2", "user3", "user4"):
+                job = self._create_job(cluster_name=cluster_name, owner=owner)
+                if filter.check(job):
+                    found.append((cluster_name, owner))
+        assert found == [
+            ("cluster1", "user1"),
+            ("cluster2", "user1"),
+            ("cluster2", "user2"),
+            ("cluster3", "user1"),
+            ("cluster3", "user3"),
+        ]
+
+    def test_check_owners_and_names(self) -> None:
+        filter = JobFilter(
+            clusters={"test-cluster": {"user1": {"name1"}, "user2": {"name2"}}},
+            owners={"user1", "user2"},
+        )
+        found = []
+        for owner in ("user1", "user2", "user3"):
+            for name in ("name1", "name2", "name3", None):
+                job = self._create_job(owner=owner, name=name)
+                if filter.check(job):
+                    found.append((owner, name))
+        assert found == [("user1", "name1"), ("user2", "name2")]
+
+    def test_check_owners_and_names2(self) -> None:
+        filter = JobFilter(
+            clusters={"test-cluster": {"user1": set(), "user2": {"name2"}}},
+            owners={"user1", "user2"},
+        )
+        found = []
+        for owner in ("user1", "user2", "user3"):
+            for name in ("name1", "name2", None):
+                job = self._create_job(owner=owner, name=name)
+                if filter.check(job):
+                    found.append((owner, name))
+        assert found == [
+            ("user1", "name1"),
+            ("user1", "name2"),
+            ("user1", None),
+            ("user2", "name2"),
+        ]

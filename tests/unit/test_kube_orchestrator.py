@@ -1,5 +1,5 @@
 from pathlib import PurePath
-from typing import Any, Dict
+from typing import Any, Dict, List
 from unittest import mock
 
 import pytest
@@ -11,14 +11,19 @@ from platform_api.orchestrator.job_request import (
     ContainerResources,
     ContainerTPUResource,
     ContainerVolume,
-    JobError,
     JobRequest,
     JobStatus,
+    Secret,
+    SecretContainerVolume,
 )
 from platform_api.orchestrator.kube_client import (
+    AlreadyExistsException,
     ContainerStatus,
     Ingress,
     Resources,
+    SecretEnvVar,
+    SecretRef,
+    SecretVolume,
     ServiceType,
     SharedMemoryVolume,
     VolumeMount,
@@ -100,6 +105,56 @@ class TestPVCVolume:
         }
 
 
+class TestSecretVolume:
+    def test_to_primitive_no_items(self) -> None:
+        secret_name = "user--alice--secrets"
+        volume = SecretVolume("testvolume", k8s_secret_name=secret_name)
+        assert volume.to_primitive() == {
+            "name": "testvolume",
+            "secret": {"secretName": secret_name, "defaultMode": 0o400},
+        }
+
+    def test_create_secret_mounts(self) -> None:
+        secret_name = "user--alice--secrets"
+        volume = SecretVolume("testvolume", k8s_secret_name=secret_name)
+        container_volumes = [
+            SecretContainerVolume.create(
+                "secret://clustername/alice/sec1", PurePath("/etc/foo/file1.txt")
+            ),
+            SecretContainerVolume.create(
+                "secret://clustername/alice/sec2", PurePath("/etc/foo/file2.txt")
+            ),
+        ]
+        mounts = [volume.create_secret_mount(vol) for vol in container_volumes]
+
+        assert mounts == [
+            VolumeMount(
+                volume=volume,
+                mount_path=PurePath("/etc/foo/file1.txt"),
+                sub_path=PurePath("sec1"),
+                read_only=True,
+            ),
+            VolumeMount(
+                volume=volume,
+                mount_path=PurePath("/etc/foo/file2.txt"),
+                sub_path=PurePath("sec2"),
+                read_only=True,
+            ),
+        ]
+
+
+class TestSecretEnvVar:
+    def test_to_primitive(self) -> None:
+        sec = Secret.create("secret://test-cluster/test-user/sec1")
+        sec_env_var = SecretEnvVar.create("sec-name", secret=sec)
+        assert sec_env_var.to_primitive() == {
+            "name": "sec-name",
+            "valueFrom": {
+                "secretKeyRef": {"name": "user--test-user--secrets", "key": "sec1"}
+            },
+        }
+
+
 class TestVolumeMount:
     def test_to_primitive(self) -> None:
         volume = HostVolume(name="testvolume", path=PurePath("/tmp"))
@@ -125,7 +180,7 @@ class TestPodDescriptor:
         assert pod.to_primitive() == {
             "kind": "Pod",
             "apiVersion": "v1",
-            "metadata": {"name": "testname", "labels": {"job": "testname"}},
+            "metadata": {"name": "testname"},
             "spec": {
                 "automountServiceAccountToken": False,
                 "containers": [
@@ -136,6 +191,7 @@ class TestPodDescriptor:
                         "env": [],
                         "volumeMounts": [],
                         "terminationMessagePolicy": "FallbackToLogsOnError",
+                        "stdin": True,
                     }
                 ],
                 "volumes": [],
@@ -161,12 +217,14 @@ class TestPodDescriptor:
             resources=Resources(cpu=0.5, memory=1024, gpu=1),
             port=1234,
             ssh_port=2222,
+            tty=True,
             node_selector={"label": "value"},
             tolerations=tolerations,
             node_affinity=node_affinity,
             labels={"testlabel": "testvalue"},
             annotations={"testa": "testv"},
             priority_class_name="testpriority",
+            working_dir="/working/dir",
         )
         assert pod.name == "testname"
         assert pod.image == "testimage"
@@ -175,7 +233,7 @@ class TestPodDescriptor:
             "apiVersion": "v1",
             "metadata": {
                 "name": "testname",
-                "labels": {"job": "testname", "testlabel": "testvalue"},
+                "labels": {"testlabel": "testvalue"},
                 "annotations": {"testa": "testv"},
             },
             "spec": {
@@ -196,6 +254,9 @@ class TestPodDescriptor:
                         },
                         "ports": [{"containerPort": 1234}, {"containerPort": 2222}],
                         "terminationMessagePolicy": "FallbackToLogsOnError",
+                        "stdin": True,
+                        "tty": True,
+                        "workingDir": "/working/dir",
                     }
                 ],
                 "volumes": [],
@@ -240,7 +301,7 @@ class TestPodDescriptor:
         assert pod.to_primitive() == {
             "kind": "Pod",
             "apiVersion": "v1",
-            "metadata": {"name": "testname", "labels": {"job": "testname"}},
+            "metadata": {"name": "testname"},
             "spec": {
                 "automountServiceAccountToken": False,
                 "containers": [
@@ -264,6 +325,7 @@ class TestPodDescriptor:
                             "periodSeconds": 1,
                         },
                         "terminationMessagePolicy": "FallbackToLogsOnError",
+                        "stdin": True,
                     }
                 ],
                 "volumes": [],
@@ -294,7 +356,7 @@ class TestPodDescriptor:
         assert pod.to_primitive() == {
             "kind": "Pod",
             "apiVersion": "v1",
-            "metadata": {"name": "testname", "labels": {"job": "testname"}},
+            "metadata": {"name": "testname"},
             "spec": {
                 "automountServiceAccountToken": False,
                 "containers": [
@@ -318,6 +380,7 @@ class TestPodDescriptor:
                             "periodSeconds": 1,
                         },
                         "terminationMessagePolicy": "FallbackToLogsOnError",
+                        "stdin": True,
                     }
                 ],
                 "volumes": [],
@@ -346,7 +409,7 @@ class TestPodDescriptor:
         assert pod.to_primitive() == {
             "kind": "Pod",
             "apiVersion": "v1",
-            "metadata": {"name": "testname", "labels": {"job": "testname"}},
+            "metadata": {"name": "testname"},
             "spec": {
                 "automountServiceAccountToken": False,
                 "containers": [
@@ -364,6 +427,7 @@ class TestPodDescriptor:
                             }
                         },
                         "terminationMessagePolicy": "FallbackToLogsOnError",
+                        "stdin": True,
                     }
                 ],
                 "volumes": [],
@@ -401,7 +465,7 @@ class TestPodDescriptor:
         assert pod.to_primitive() == {
             "kind": "Pod",
             "apiVersion": "v1",
-            "metadata": {"name": "testname", "labels": {"job": "testname"}},
+            "metadata": {"name": "testname"},
             "spec": {
                 "automountServiceAccountToken": False,
                 "containers": [
@@ -427,6 +491,7 @@ class TestPodDescriptor:
                         },
                         "ports": [{"containerPort": 1234}],
                         "terminationMessagePolicy": "FallbackToLogsOnError",
+                        "stdin": True,
                     }
                 ],
                 "volumes": [{"name": "dshm", "emptyDir": {"medium": "Memory"}}],
@@ -447,6 +512,7 @@ class TestPodDescriptor:
         container = Container(
             image="testimage",
             command="testcommand 123",
+            working_dir="/working/dir",
             env={"TESTVAR": "testvalue"},
             volumes=[
                 ContainerVolume(
@@ -475,6 +541,7 @@ class TestPodDescriptor:
         assert pod.volumes == [volume]
         assert pod.resources == Resources(cpu=1, memory=128, gpu=1)
         assert pod.priority_class_name == "testpriority"
+        assert pod.working_dir == "/working/dir"
 
     def test_from_job_request_tpu(self) -> None:
         container = Container(
@@ -491,15 +558,46 @@ class TestPodDescriptor:
         assert pod.annotations == {"tf-version.cloud-tpus.google.com": "1.14"}
         assert pod.priority_class_name is None
 
-    def test_from_primitive(self) -> None:
+    def test_from_primitive_defaults(self) -> None:
         payload = {
             "kind": "Pod",
             "metadata": {
                 "name": "testname",
                 "creationTimestamp": "2019-06-20T11:03:32Z",
             },
+            "spec": {"containers": [{"name": "testname", "image": "testimage"}]},
+        }
+        pod = PodDescriptor.from_primitive(payload)
+        assert pod.name == "testname"
+        assert pod.image == "testimage"
+        assert pod.status is None
+        assert pod.tolerations == []
+        assert pod.priority_class_name is None
+        assert pod.image_pull_secrets == []
+        assert pod.node_name is None
+        assert pod.command is None
+        assert pod.args is None
+        assert pod.tty is False
+        assert pod.labels == {}
+
+    def test_from_primitive(self) -> None:
+        payload = {
+            "kind": "Pod",
+            "metadata": {
+                "name": "testname",
+                "creationTimestamp": "2019-06-20T11:03:32Z",
+                "labels": {"testlabel": "testvalue"},
+            },
             "spec": {
-                "containers": [{"name": "testname", "image": "testimage"}],
+                "containers": [
+                    {
+                        "name": "testname",
+                        "image": "testimage",
+                        "tty": True,
+                        "stdin": True,
+                        "workingDir": "/working/dir",
+                    }
+                ],
                 "tolerations": [
                     {
                         "key": "key1",
@@ -512,6 +610,7 @@ class TestPodDescriptor:
                     {"key": "key3"},
                 ],
                 "priorityClassName": "testpriority",
+                "imagePullSecrets": [{"name": "secret"}],
             },
             "status": {"phase": "Running"},
         }
@@ -529,10 +628,17 @@ class TestPodDescriptor:
             Toleration(key="key3", operator="Equal", value="", effect=""),
         ]
         assert pod.priority_class_name == "testpriority"
+        assert pod.image_pull_secrets == [SecretRef("secret")]
+        assert pod.node_name is None
+        assert pod.command is None
+        assert pod.args is None
+        assert pod.tty is True
+        assert pod.labels == {"testlabel": "testvalue"}
+        assert pod.working_dir == "/working/dir"
 
     def test_from_primitive_failure(self) -> None:
         payload = {"kind": "Status", "code": 409}
-        with pytest.raises(JobError, match="already exist"):
+        with pytest.raises(AlreadyExistsException, match="already exist"):
             PodDescriptor.from_primitive(payload)
 
     def test_from_primitive_unknown_kind(self) -> None:
@@ -543,17 +649,24 @@ class TestPodDescriptor:
 
 class TestJobStatusItemFactory:
     @pytest.mark.parametrize(
-        "phase, expected_status",
+        "phase, container_statuses, expected_status",
         (
-            ("Succeeded", JobStatus.SUCCEEDED),
-            ("Failed", JobStatus.FAILED),
-            ("Unknown", JobStatus.FAILED),
-            ("Running", JobStatus.RUNNING),
-            ("NewPhase", JobStatus.PENDING),
+            ("Succeeded", [], JobStatus.SUCCEEDED),
+            ("Failed", [], JobStatus.FAILED),
+            ("Unknown", [], JobStatus.FAILED),
+            ("Running", [{"state": {"running": {}}}], JobStatus.RUNNING),
+            ("NewPhase", [], JobStatus.PENDING),
         ),
     )
-    def test_status(self, phase: str, expected_status: JobStatus) -> None:
-        payload = {"phase": phase}
+    def test_status(
+        self,
+        phase: str,
+        container_statuses: List[Dict[str, Any]],
+        expected_status: JobStatus,
+    ) -> None:
+        payload: Dict[str, Any] = {"phase": phase}
+        if container_statuses:
+            payload["containerStatuses"] = container_statuses
         pod_status = PodStatus.from_primitive(payload)
         job_status_item = JobStatusItemFactory(pod_status).create()
         assert job_status_item == JobStatusItem.create(expected_status)
@@ -598,6 +711,20 @@ class TestJobStatusItemFactory:
         job_status_item = JobStatusItemFactory(pod_status).create()
         assert job_status_item == JobStatusItem.create(
             JobStatus.PENDING, reason="SomeWeirdReason"
+        )
+
+    def test_status_running_restarting(self) -> None:
+        payload = {
+            "phase": "Running",
+            "containerStatuses": [
+                {"state": {"waiting": {"reason": "SomeWeirdReason"}}}
+            ],
+        }
+
+        pod_status = PodStatus.from_primitive(payload)
+        job_status_item = JobStatusItemFactory(pod_status).create()
+        assert job_status_item == JobStatusItem.create(
+            JobStatus.RUNNING, reason="Restarting"
         )
 
     def test_status_failure(self) -> None:
@@ -914,7 +1041,11 @@ class TestService:
         }
 
     def test_to_primitive(self, service_payload: Dict[str, Dict[str, Any]]) -> None:
-        service = Service(name="testservice", target_port=8080)
+        service = Service(
+            name="testservice",
+            selector=service_payload["spec"]["selector"],
+            target_port=8080,
+        )
         assert service.to_primitive() == service_payload
 
     def test_to_primitive_with_labels(
@@ -923,14 +1054,22 @@ class TestService:
         labels = {"label-name": "label-value"}
         expected_payload = service_payload.copy()
         expected_payload["metadata"]["labels"] = labels
-        service = Service(name="testservice", target_port=8080, labels=labels)
+        service = Service(
+            name="testservice",
+            selector=expected_payload["spec"]["selector"],
+            target_port=8080,
+            labels=labels,
+        )
         assert service.to_primitive() == expected_payload
 
     def test_to_primitive_load_balancer(
         self, service_payload: Dict[str, Dict[str, Any]]
     ) -> None:
         service = Service(
-            name="testservice", target_port=8080, service_type=ServiceType.LOAD_BALANCER
+            name="testservice",
+            selector=service_payload["spec"]["selector"],
+            target_port=8080,
+            service_type=ServiceType.LOAD_BALANCER,
         )
         service_payload["spec"]["type"] = "LoadBalancer"
         assert service.to_primitive() == service_payload
@@ -938,13 +1077,22 @@ class TestService:
     def test_to_primitive_headless(
         self, service_payload: Dict[str, Dict[str, Any]]
     ) -> None:
-        service = Service(name="testservice", target_port=8080, cluster_ip="None")
+        service = Service(
+            name="testservice",
+            selector=service_payload["spec"]["selector"],
+            target_port=8080,
+            cluster_ip="None",
+        )
         service_payload["spec"]["clusterIP"] = "None"
         assert service.to_primitive() == service_payload
 
     def test_from_primitive(self, service_payload: Dict[str, Dict[str, Any]]) -> None:
         service = Service.from_primitive(service_payload)
-        assert service == Service(name="testservice", target_port=8080)
+        assert service == Service(
+            name="testservice",
+            selector=service_payload["spec"]["selector"],
+            target_port=8080,
+        )
 
     def test_from_primitive_with_labels(
         self, service_payload: Dict[str, Dict[str, Any]]
@@ -953,7 +1101,12 @@ class TestService:
         input_payload = service_payload.copy()
         input_payload["metadata"]["labels"] = labels
         service = Service.from_primitive(input_payload)
-        assert service == Service(name="testservice", target_port=8080, labels=labels)
+        assert service == Service(
+            name="testservice",
+            selector=service_payload["spec"]["selector"],
+            target_port=8080,
+            labels=labels,
+        )
 
     def test_from_primitive_node_port(
         self, service_payload: Dict[str, Dict[str, Any]]
@@ -961,7 +1114,10 @@ class TestService:
         service_payload["spec"]["type"] = "NodePort"
         service = Service.from_primitive(service_payload)
         assert service == Service(
-            name="testservice", target_port=8080, service_type=ServiceType.NODE_PORT
+            name="testservice",
+            selector=service_payload["spec"]["selector"],
+            target_port=8080,
+            service_type=ServiceType.NODE_PORT,
         )
 
     def test_from_primitive_headless(
@@ -970,7 +1126,10 @@ class TestService:
         service_payload["spec"]["clusterIP"] = "None"
         service = Service.from_primitive(service_payload)
         assert service == Service(
-            name="testservice", cluster_ip="None", target_port=8080
+            name="testservice",
+            selector=service_payload["spec"]["selector"],
+            cluster_ip="None",
+            target_port=8080,
         )
 
     def test_create_for_pod(self) -> None:
@@ -998,7 +1157,11 @@ class TestServiceWithSSHOnly:
 
     def test_to_primitive(self, service_payload: Dict[str, Dict[str, Any]]) -> None:
         service = Service(
-            name="testservice", target_port=None, ssh_port=89, ssh_target_port=8181
+            name="testservice",
+            selector=service_payload["spec"]["selector"],
+            target_port=None,
+            ssh_port=89,
+            ssh_target_port=8181,
         )
         assert service.to_primitive() == service_payload
 
@@ -1006,13 +1169,19 @@ class TestServiceWithSSHOnly:
         self, service_payload: Dict[str, Dict[str, Any]]
     ) -> None:
         service_payload["spec"]["ports"][0]["port"] = 22
-        service = Service(name="testservice", target_port=None, ssh_target_port=8181)
+        service = Service(
+            name="testservice",
+            selector=service_payload["spec"]["selector"],
+            target_port=None,
+            ssh_target_port=8181,
+        )
         assert service.to_primitive() == service_payload
 
     def test_from_primitive(self, service_payload: Dict[str, Dict[str, Any]]) -> None:
         service = Service.from_primitive(service_payload)
         assert service == Service(
             name="testservice",
+            selector=service_payload["spec"]["selector"],
             target_port=None,
             port=80,
             ssh_target_port=8181,

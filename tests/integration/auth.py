@@ -1,6 +1,14 @@
 import asyncio
 from dataclasses import dataclass
-from typing import AsyncGenerator, AsyncIterator, Awaitable, Callable, Dict, Optional
+from typing import (
+    AsyncGenerator,
+    AsyncIterator,
+    Awaitable,
+    Callable,
+    Dict,
+    Optional,
+    Sequence,
+)
 
 import aiodocker
 import pytest
@@ -9,8 +17,12 @@ from aiohttp.hdrs import AUTHORIZATION
 from async_generator import asynccontextmanager
 from async_timeout import timeout
 from jose import jwt
-from neuro_auth_client import AuthClient, User as AuthClientUser
-from neuro_auth_client.client import Quota
+from neuro_auth_client import (
+    AuthClient,
+    Cluster as AuthCluster,
+    Quota,
+    User as AuthClientUser,
+)
 from yarl import URL
 
 from platform_api.config import AuthConfig, OAuthConfig
@@ -21,15 +33,15 @@ from tests.conftest import random_str
 
 @pytest.fixture(scope="session")
 def auth_server_image_name() -> str:
-    with open("AUTH_SERVER_IMAGE_NAME", "r") as f:
-        return f.read()
+    with open("PLATFORMAUTHAPI_IMAGE", "r") as f:
+        return f.read().strip()
 
 
 @pytest.fixture(scope="session")
 async def auth_server(
     docker: aiodocker.Docker, reuse_docker: bool, auth_server_image_name: str
 ) -> AsyncIterator[AuthConfig]:
-    image_name = "gcr.io/light-reality-205619/platformauthapi:latest"
+    image_name = auth_server_image_name
     container_name = "auth_server"
     container_config = {
         "Image": image_name,
@@ -51,9 +63,9 @@ async def auth_server(
             pass
 
     try:
-        await docker.images.inspect(image_name)
+        await docker.images.inspect(auth_server_image_name)
     except aiodocker.exceptions.DockerError:
-        await docker.images.pull(image_name)
+        await docker.images.pull(auth_server_image_name)
 
     container = await docker.containers.create_or_replace(
         name=container_name, config=container_config
@@ -91,7 +103,7 @@ async def create_auth_config(
     port = int((await container.port(8080))[0]["HostPort"])
     url = URL(f"http://{host}:{port}")
     token = create_token("compute")
-    public_endpoint_url = URL(f"https://neu.ro/api/v1/users")
+    public_endpoint_url = URL("https://neu.ro/api/v1/users")
     return AuthConfig(
         server_endpoint_url=url,
         service_token=token,
@@ -140,27 +152,49 @@ class _User(User):
 
 
 @pytest.fixture
+def test_cluster_name() -> str:
+    return "test-cluster"
+
+
+@pytest.fixture
 async def regular_user_factory(
-    auth_client: AuthClient, token_factory: Callable[[str], str], admin_token: str
+    auth_client: AuthClient,
+    token_factory: Callable[[str], str],
+    admin_token: str,
+    test_cluster_name: str,
 ) -> Callable[[Optional[str], Optional[Quota], str], Awaitable[_User]]:
     async def _factory(
         name: Optional[str] = None,
         quota: Optional[Quota] = None,
-        cluster_name: str = "default",
+        cluster_name: str = test_cluster_name,
+        auth_clusters: Optional[Sequence[AuthCluster]] = None,
     ) -> _User:
         if not name:
             name = random_str()
         quota = quota or Quota()
-        user = AuthClientUser(name=name, quota=quota, cluster_name=cluster_name)
+        if auth_clusters is None:
+            auth_clusters = [AuthCluster(name=cluster_name, quota=quota)]
+        user = AuthClientUser(name=name, clusters=auth_clusters)
         await auth_client.add_user(user, token=admin_token)
+        # Grant cluster-specific permissions
+        headers = auth_client._generate_headers(admin_token)
+        payload = []
+        for cluster in auth_clusters:
+            payload.extend(
+                [
+                    {"uri": f"storage://{cluster.name}/{name}", "action": "manage"},
+                    {"uri": f"image://{cluster.name}/{name}", "action": "manage"},
+                    {"uri": f"job://{cluster.name}/{name}", "action": "manage"},
+                    {"uri": f"secret://{cluster.name}/{name}", "action": "write"},
+                    {"uri": f"disk://{cluster_name}/{name}", "action": "write"},
+                ]
+            )
+        async with auth_client._request(
+            "POST", f"/api/v1/users/{name}/permissions", headers=headers, json=payload
+        ) as p:
+            assert p.status == 201
         user_token = token_factory(user.name)
-        user_quota = AggregatedRunTime.from_quota(user.quota)
-        return _User(  # noqa
-            name=user.name,
-            token=user_token,
-            quota=user_quota,
-            cluster_name=cluster_name,
-        )
+        return _User.create_from_auth_user(user, token=user_token)  # type: ignore
 
     return _factory
 
@@ -181,14 +215,18 @@ async def regular_user_with_missing_cluster_name(
 
 @pytest.fixture
 async def regular_user_with_custom_quota(
-    regular_user_factory: Callable[
-        [Optional[str], Optional[Quota], Optional[str]], Awaitable[_User]
-    ],
+    regular_user_factory: Callable[..., Awaitable[_User]], test_cluster_name: str
 ) -> _User:
     return await regular_user_factory(
-        None,
-        Quota(total_gpu_run_time_minutes=123, total_non_gpu_run_time_minutes=321),
-        None,
+        auth_clusters=[
+            AuthCluster(
+                name=test_cluster_name,
+                quota=Quota(
+                    total_gpu_run_time_minutes=123, total_non_gpu_run_time_minutes=321
+                ),
+            ),
+            AuthCluster(name="testcluster2"),
+        ]
     )
 
 

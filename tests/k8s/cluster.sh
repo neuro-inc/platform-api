@@ -3,25 +3,11 @@
 # based on
 # https://github.com/kubernetes/minikube#linux-continuous-integration-without-vm-support
 
-function k8s::install_kubectl {
-    local kubectl_version=$(curl -s https://storage.googleapis.com/kubernetes-release/release/stable.txt)
-    curl -Lo kubectl https://storage.googleapis.com/kubernetes-release/release/${kubectl_version}/bin/linux/amd64/kubectl
-    chmod +x kubectl
-    sudo mv kubectl /usr/local/bin/
-}
 function k8s::install_minikube {
-    # we have to pin this version in order to run minikube on CircleCI
-    # Ubuntu 14 VMs. The newer versions depend on systemd.
-    local minikube_version="v0.25.2"
+    local minikube_version="v1.11.0"
     curl -Lo minikube https://storage.googleapis.com/minikube/releases/${minikube_version}/minikube-linux-amd64
     chmod +x minikube
     sudo mv minikube /usr/local/bin/
-    sudo -E minikube config set WantReportErrorPrompt false
-}
-
-function k8s::install {
-    k8s::install_kubectl
-    k8s::install_minikube
 }
 
 function k8s::start {
@@ -35,14 +21,23 @@ function k8s::start {
     export CHANGE_MINIKUBE_NONE_USER=true
 
     sudo -E mkdir -p ~/.minikube/files/files
-
     sudo -E minikube config set WantReportErrorPrompt false
-    sudo -E minikube start --vm-driver=none --kubernetes-version=v1.10.0
+    sudo -E minikube config set WantUpdateNotification false
+    sudo -E minikube config set WantNoneDriverWarning false
+
+    sudo -E minikube start \
+        --vm-driver=none \
+        --kubernetes-version=v1.14.10 \
+        --memory=4096m \
+        --install-addons=true \
+        --addons=ingress \
+        --wait=all \
+        --wait-timeout=5m
 
     k8s::wait k8s::setup_namespace
-    k8s::wait "kubectl get po --all-namespaces"
+    k8s::wait k8s::setup_storageclass
     k8s::wait k8s::start_nfs
-    k8s::wait k8s::setup_ingress
+    k8s::wait "kubectl get po --all-namespaces"
 }
 
 function k8s::wait {
@@ -70,6 +65,10 @@ function k8s::setup_namespace {
     kubectl apply -f tests/k8s/namespace.yml
 }
 
+function k8s::setup_storageclass {
+    kubectl apply -f tests/k8s/storageclass.yml
+}
+
 function k8s::setup_registry {
     local DOCKER_REGISTRY=registry.neuromation.io
     kubectl delete secret np-docker-reg-secret || :
@@ -78,14 +77,6 @@ function k8s::setup_registry {
         --docker-username $DOCKER_USER \
         --docker-password $DOCKER_PASS \
         --docker-email $DOCKER_EMAIL
-}
-
-function k8s::setup_ingress {
-    sudo -E minikube addons enable ingress
-    # NOTE: minikube --vm-driver=none --kubernetes-version=v1.10.0 stopped
-    # launching the ingress services for some unknown reason!
-    find /etc/kubernetes/addons/ -name ingress* | xargs -L 1 sudo kubectl -n kube-system apply -f
-    find /etc/kubernetes/addons/ -name kube-dns* | xargs -L 1 sudo kubectl -n kube-system apply -f
 }
 
 function k8s::test {
@@ -114,7 +105,7 @@ function k8s::stop_nfs {
 
 case "${1:-}" in
     install)
-        k8s::install
+        k8s::install_minikube
         ;;
     up)
         k8s::start

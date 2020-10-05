@@ -1,3 +1,4 @@
+from datetime import datetime, timedelta
 from pathlib import PurePath
 from typing import Any, Dict, Sequence
 from unittest import mock
@@ -18,6 +19,8 @@ from platform_api.handlers.jobs_handler import (
     convert_container_volume_to_json,
     convert_job_container_to_json,
     convert_job_to_job_response,
+    create_job_cluster_name_validator,
+    create_job_request_validator,
     infer_permissions_from_container,
 )
 from platform_api.handlers.validators import (
@@ -25,8 +28,15 @@ from platform_api.handlers.validators import (
     USER_NAME_MAX_LENGTH,
     create_container_request_validator,
     create_container_response_validator,
+    create_job_tag_validator,
 )
-from platform_api.orchestrator.job import Job, JobRecord
+from platform_api.orchestrator.job import (
+    Job,
+    JobRecord,
+    JobRestartPolicy,
+    JobStatusHistory,
+    JobStatusItem,
+)
 from platform_api.orchestrator.job_request import (
     Container,
     ContainerHTTPServer,
@@ -50,7 +60,12 @@ class TestContainerRequestValidator:
         return {
             "image": "testimage",
             "resources": {"cpu": 0.1, "memory_mb": 16},
-            "volumes": [{"src_storage_uri": "storage:///", "dst_path": "/var/storage"}],
+            "volumes": [
+                {
+                    "src_storage_uri": "storage://test-cluster/",
+                    "dst_path": "/var/storage",
+                }
+            ],
         }
 
     @pytest.fixture
@@ -58,7 +73,12 @@ class TestContainerRequestValidator:
         return {
             "image": "testimage",
             "resources": {"cpu": 0.1, "memory_mb": 16, "gpu": 0},
-            "volumes": [{"src_storage_uri": "storage:///", "dst_path": "/var/storage"}],
+            "volumes": [
+                {
+                    "src_storage_uri": "storage://test-cluster/",
+                    "dst_path": "/var/storage",
+                }
+            ],
         }
 
     @pytest.fixture
@@ -66,7 +86,12 @@ class TestContainerRequestValidator:
         return {
             "image": "testimage",
             "resources": {"cpu": 0.1, "memory_mb": 16, "gpu": -1},
-            "volumes": [{"src_storage_uri": "storage:///", "dst_path": "/var/storage"}],
+            "volumes": [
+                {
+                    "src_storage_uri": "storage://test-cluster/",
+                    "dst_path": "/var/storage",
+                }
+            ],
         }
 
     @pytest.fixture
@@ -74,7 +99,12 @@ class TestContainerRequestValidator:
         return {
             "image": "testimage",
             "resources": {"cpu": 0.1, "memory_mb": 16, "gpu": 1},
-            "volumes": [{"src_storage_uri": "storage:///", "dst_path": "/var/storage"}],
+            "volumes": [
+                {
+                    "src_storage_uri": "storage://test-cluster/",
+                    "dst_path": "/var/storage",
+                }
+            ],
         }
 
     @pytest.fixture
@@ -82,7 +112,12 @@ class TestContainerRequestValidator:
         return {
             "image": "testimage",
             "resources": {"cpu": 0.1, "memory_mb": 16, "gpu": 130},
-            "volumes": [{"src_storage_uri": "storage:///", "dst_path": "/var/storage"}],
+            "volumes": [
+                {
+                    "src_storage_uri": "storage://test-cluster/",
+                    "dst_path": "/var/storage",
+                }
+            ],
         }
 
     @pytest.fixture
@@ -90,7 +125,12 @@ class TestContainerRequestValidator:
         return {
             "image": "testimage",
             "resources": {"cpu": 0.1, "memory_mb": 16, "shm": True},
-            "volumes": [{"src_storage_uri": "storage:///", "dst_path": "/var/storage"}],
+            "volumes": [
+                {
+                    "src_storage_uri": "storage://test-cluster/",
+                    "dst_path": "/var/storage",
+                }
+            ],
         }
 
     @pytest.fixture
@@ -98,12 +138,19 @@ class TestContainerRequestValidator:
         return {
             "image": "testimage",
             "resources": {"cpu": 0.1, "memory_mb": 16, "shm": True},
-            "volumes": [{"src_storage_uri": "storage:///", "dst_path": "/var/storage"}],
+            "volumes": [
+                {
+                    "src_storage_uri": "storage://test-cluster/",
+                    "dst_path": "/var/storage",
+                }
+            ],
             "ssh": {"port": 666},
         }
 
     def test_allowed_volumes(self, payload: Dict[str, Any]) -> None:
-        validator = create_container_request_validator(allow_volumes=True)
+        validator = create_container_request_validator(
+            allow_volumes=True, cluster_name="test-cluster"
+        )
         result = validator.check(payload)
         assert result["volumes"][0]["read_only"]
         assert "shm" not in result["resources"]
@@ -111,54 +158,68 @@ class TestContainerRequestValidator:
     def test_allowed_volumes_with_shm(
         self, payload_with_dev_shm: Dict[str, Any]
     ) -> None:
-        validator = create_container_request_validator(allow_volumes=True)
+        validator = create_container_request_validator(
+            allow_volumes=True, cluster_name="test-cluster"
+        )
         result = validator.check(payload_with_dev_shm)
         assert result["volumes"][0]["read_only"]
         assert result["resources"]["shm"]
 
     def test_disallowed_volumes(self, payload: Dict[str, Any]) -> None:
-        validator = create_container_request_validator()
+        validator = create_container_request_validator(cluster_name="test-cluster")
         with pytest.raises(ValueError, match="volumes is not allowed key"):
             validator.check(payload)
 
     def test_with_zero_gpu(self, payload_with_zero_gpu: Dict[str, Any]) -> None:
-        validator = create_container_request_validator(allow_volumes=True)
+        validator = create_container_request_validator(
+            allow_volumes=True, cluster_name="test-cluster"
+        )
         result = validator.check(payload_with_zero_gpu)
         assert result["resources"]["gpu"] == 0
 
     def test_with_ssh(self, payload_with_ssh: Dict[str, Any]) -> None:
-        validator = create_container_request_validator(allow_volumes=True)
+        validator = create_container_request_validator(
+            allow_volumes=True, cluster_name="test-cluster"
+        )
         result = validator.check(payload_with_ssh)
         assert result["ssh"]
         assert result["ssh"]["port"]
         assert result["ssh"]["port"] == 666
 
     def test_with_one_gpu(self, payload_with_one_gpu: Dict[str, Any]) -> None:
-        validator = create_container_request_validator(allow_volumes=True)
+        validator = create_container_request_validator(
+            allow_volumes=True, cluster_name="test-cluster"
+        )
         result = validator.check(payload_with_one_gpu)
         assert result["resources"]["gpu"]
         assert result["resources"]["gpu"] == 1
 
     def test_with_too_many_gpu(self, payload_with_too_many_gpu: Dict[str, Any]) -> None:
-        validator = create_container_request_validator(allow_volumes=True)
+        validator = create_container_request_validator(
+            allow_volumes=True, cluster_name="test-cluster"
+        )
         with pytest.raises(ValueError, match="gpu"):
             validator.check(payload_with_too_many_gpu)
 
     def test_with_negative_gpu(self, payload_with_negative_gpu: Dict[str, Any]) -> None:
-        validator = create_container_request_validator(allow_volumes=True)
+        validator = create_container_request_validator(
+            allow_volumes=True, cluster_name="test-cluster"
+        )
         with pytest.raises(ValueError, match="gpu"):
             validator.check(payload_with_negative_gpu)
 
     def test_gpu_model_but_no_gpu(self) -> None:
+        cluster = "test-cluster"
         payload = {
             "image": "testimage",
             "resources": {"cpu": 0.1, "memory_mb": 16, "gpu_model": "unknown"},
         }
-        validator = create_container_request_validator()
+        validator = create_container_request_validator(cluster_name=cluster)
         with pytest.raises(ValueError, match="gpu_model is not allowed key"):
             validator.check(payload)
 
     def test_gpu_model_unknown(self) -> None:
+        cluster = "test-cluster"
         payload = {
             "image": "testimage",
             "resources": {
@@ -168,11 +229,12 @@ class TestContainerRequestValidator:
                 "gpu_model": "unknown",
             },
         }
-        validator = create_container_request_validator()
+        validator = create_container_request_validator(cluster_name=cluster)
         with pytest.raises(ValueError, match="value doesn't match any variant"):
             validator.check(payload)
 
     def test_gpu_model(self) -> None:
+        cluster = "test-cluster"
         payload = {
             "image": "testimage",
             "resources": {
@@ -182,12 +244,15 @@ class TestContainerRequestValidator:
                 "gpu_model": "unknown",
             },
         }
-        validator = create_container_request_validator(allowed_gpu_models=["unknown"])
+        validator = create_container_request_validator(
+            allowed_gpu_models=["unknown"], cluster_name=cluster
+        )
         result = validator.check(payload)
         assert result["resources"]["gpu"] == 1
         assert result["resources"]["gpu_model"] == "unknown"
 
     def test_gpu_tpu_conflict(self) -> None:
+        cluster = "test-cluster"
         payload = {
             "image": "testimage",
             "resources": {
@@ -197,7 +262,7 @@ class TestContainerRequestValidator:
                 "tpu": {"type": "v2-8", "software_version": "1.14"},
             },
         }
-        validator = create_container_request_validator()
+        validator = create_container_request_validator(cluster_name=cluster)
         with pytest.raises(ValueError, match="tpu is not allowed key"):
             validator.check(payload)
 
@@ -208,6 +273,7 @@ class TestContainerRequestValidator:
     def test_tpu_unavailable(
         self, allowed_tpu_resources: Sequence[TPUResource]
     ) -> None:
+        cluster = "test-cluster"
         payload = {
             "image": "testimage",
             "resources": {
@@ -217,12 +283,13 @@ class TestContainerRequestValidator:
             },
         }
         validator = create_container_request_validator(
-            allowed_tpu_resources=allowed_tpu_resources
+            allowed_tpu_resources=allowed_tpu_resources, cluster_name=cluster
         )
         with pytest.raises(ValueError):
             validator.check(payload)
 
     def test_tpu(self) -> None:
+        cluster = "test-cluster"
         payload = {
             "image": "testimage",
             "resources": {
@@ -234,7 +301,8 @@ class TestContainerRequestValidator:
         validator = create_container_request_validator(
             allowed_tpu_resources=[
                 TPUResource(types=["v2-8"], software_versions=["1.14"])
-            ]
+            ],
+            cluster_name=cluster,
         )
         result = validator.check(payload)
         assert result["resources"]["tpu"] == {
@@ -245,10 +313,24 @@ class TestContainerRequestValidator:
     def test_with_entrypoint_and_cmd(self, payload: Dict[str, Any]) -> None:
         payload["entrypoint"] = "/script.sh"
         payload["command"] = "arg1 arg2 arg3"
-        validator = create_container_request_validator(allow_volumes=True)
+        validator = create_container_request_validator(
+            allow_volumes=True, cluster_name="test-cluster"
+        )
         result = validator.check(payload)
         assert result["entrypoint"] == "/script.sh"
         assert result["command"] == "arg1 arg2 arg3"
+
+    def test_invalid_entrypoint(self, payload: Dict[str, Any]) -> None:
+        payload["entrypoint"] = '"'
+        validator = create_container_request_validator(cluster_name="test-cluster")
+        with pytest.raises(DataError, match="invalid command format"):
+            validator.check(payload)
+
+    def test_invalid_command(self, payload: Dict[str, Any]) -> None:
+        payload["command"] = '"'
+        validator = create_container_request_validator(cluster_name="test-cluster")
+        with pytest.raises(DataError, match="invalid command format"):
+            validator.check(payload)
 
 
 class TestContainerResponseValidator:
@@ -282,6 +364,239 @@ class TestContainerResponseValidator:
             "type": "v2-8",
             "software_version": "1.14",
         }
+
+    def test_invalid_command(self) -> None:
+        payload = {
+            "image": "testimage",
+            "resources": {"cpu": 0.1, "memory_mb": 16},
+            "command": '"',
+            "tty": False,
+        }
+        validator = create_container_response_validator()
+        result = validator.check(payload)
+        assert result["command"] == '"'
+
+
+class TestJobClusterNameValidator:
+    def test_without_cluster_name(self) -> None:
+        container = {
+            "image": "testimage",
+            "command": "arg1 arg2 arg3",
+            "resources": {"cpu": 0.1, "memory_mb": 16, "shm": True},
+            "ssh": {"port": 666},
+        }
+        request = {
+            "container": container,
+        }
+        validator = create_job_cluster_name_validator("default")
+        payload = validator.check(request)
+        assert payload["cluster_name"] == "default"
+
+    def test_with_cluster_name(self) -> None:
+        container = {
+            "image": "testimage",
+            "command": "arg1 arg2 arg3",
+            "resources": {"cpu": 0.1, "memory_mb": 16, "shm": True},
+            "ssh": {"port": 666},
+        }
+        request = {
+            "cluster_name": "testcluster",
+            "container": container,
+        }
+        validator = create_job_cluster_name_validator("default")
+        payload = validator.check(request)
+        assert payload["cluster_name"] == "testcluster"
+
+    def test_invalid_payload_type(self) -> None:
+        validator = create_job_cluster_name_validator("default")
+        with pytest.raises(DataError):
+            validator.check([])
+
+    def test_invalid_cluster_name_type(self) -> None:
+        request = {
+            "cluster_name": 123,
+        }
+        validator = create_job_cluster_name_validator("default")
+        with pytest.raises(DataError, match="value is not a string"):
+            validator.check(request)
+
+
+class TestJobRequestValidator:
+    def test_validator(self) -> None:
+        container = {
+            "image": "testimage",
+            "command": "arg1 arg2 arg3",
+            "resources": {"cpu": 0.1, "memory_mb": 16, "shm": True},
+            "ssh": {"port": 666},
+        }
+        request = {
+            "container": container,
+        }
+        validator = create_job_request_validator(
+            allowed_gpu_models=(), allowed_tpu_resources=(), cluster_name="testcluster"
+        )
+        payload = validator.check(request)
+        assert payload["cluster_name"] == "testcluster"
+        assert payload["restart_policy"] == JobRestartPolicy.NEVER
+
+    def test_validator_explicit_cluster_name(self) -> None:
+        container = {
+            "image": "testimage",
+            "command": "arg1 arg2 arg3",
+            "resources": {"cpu": 0.1, "memory_mb": 16, "shm": True},
+            "ssh": {"port": 666},
+        }
+        request = {
+            "container": container,
+            "cluster_name": "testcluster",
+        }
+        validator = create_job_request_validator(
+            allowed_gpu_models=(), allowed_tpu_resources=(), cluster_name="testcluster"
+        )
+        payload = validator.check(request)
+        assert payload["cluster_name"] == "testcluster"
+
+    def test_validator_invalid_cluster_name(self) -> None:
+        container = {
+            "image": "testimage",
+            "command": "arg1 arg2 arg3",
+            "resources": {"cpu": 0.1, "memory_mb": 16, "shm": True},
+            "ssh": {"port": 666},
+        }
+        request = {
+            "container": container,
+            "cluster_name": "testcluster",
+        }
+        validator = create_job_request_validator(
+            allowed_gpu_models=(), allowed_tpu_resources=(), cluster_name="another"
+        )
+        with pytest.raises(DataError, match="value is not exactly 'another'"):
+            validator.check(request)
+
+    @pytest.mark.parametrize("limit_minutes", [0, 1])
+    def test_with_max_run_time_minutes_valid(self, limit_minutes: int) -> None:
+        container = {
+            "image": "testimage",
+            "command": "arg1 arg2 arg3",
+            "resources": {"cpu": 0.1, "memory_mb": 16, "shm": True},
+            "ssh": {"port": 666},
+        }
+        request = {
+            "container": container,
+            "max_run_time_minutes": limit_minutes,
+        }
+        validator = create_job_request_validator(
+            allowed_gpu_models=(), allowed_tpu_resources=(), cluster_name="test-cluster"
+        )
+        validator.check(request)
+
+    def test_with_max_run_time_minutes_invalid_negative(self) -> None:
+        container = {
+            "image": "testimage",
+            "command": "arg1 arg2 arg3",
+            "resources": {"cpu": 0.1, "memory_mb": 16, "shm": True},
+            "ssh": {"port": 666},
+        }
+        request = {
+            "container": container,
+            "max_run_time_minutes": -1,
+        }
+        validator = create_job_request_validator(
+            allowed_gpu_models=(), allowed_tpu_resources=(), cluster_name="test-cluster"
+        )
+        with pytest.raises(DataError, match="value is less than"):
+            validator.check(request)
+
+    @pytest.mark.parametrize(
+        "tag",
+        [
+            "a",
+            "a" * 256,
+            "foo123",
+            "foo:bar123",
+            "foo:bar-baz123",
+            "pre/foo:bar-baz123",
+            "pre.org/foo:bar-baz123",
+        ],
+    )
+    def test_job_tags_validator_valid(self, tag: str) -> None:
+        validator = create_job_tag_validator()
+        assert validator.check(tag) == tag
+
+    @pytest.mark.parametrize(
+        "tag",
+        [
+            "",
+            "a" * 257,
+            "foo-",
+            "-foo",
+            "foo--bar",
+            "foo::bar",
+            "foo//bar",
+            "foo..bar",
+            "foo.-bar",
+        ],
+    )
+    def test_job_tags_validator_invalid(self, tag: str) -> None:
+        validator = create_job_tag_validator()
+        with pytest.raises(DataError):
+            validator.check(tag)
+
+    def test_restart_policy(self) -> None:
+        container = {
+            "image": "testimage",
+            "command": "arg1 arg2 arg3",
+            "resources": {"cpu": 0.1, "memory_mb": 16, "shm": True},
+            "ssh": {"port": 666},
+        }
+        request = {
+            "container": container,
+            "cluster_name": "testcluster",
+            "restart_policy": "unknown",
+        }
+        validator = create_job_request_validator(
+            allowed_gpu_models=(), allowed_tpu_resources=(), cluster_name="testcluster"
+        )
+        with pytest.raises(DataError, match="restart_policy.+any variant"):
+            validator.check(request)
+
+    def test_job_with_secret_env(self) -> None:
+        container = {
+            "image": "testimage",
+            "resources": {"cpu": 0.1, "memory_mb": 16},
+            "secret_env": {
+                "ENV_SECRET1": "secret://clustername/username/key1",
+                "ENV_SECRET2": "secret://clustername/username/key2",
+            },
+        }
+        request = {
+            "container": container,
+        }
+        validator = create_job_request_validator(
+            allowed_gpu_models=(), allowed_tpu_resources=(), cluster_name="clustername"
+        )
+        validator.check(request)
+
+    def test_job_with_secret_volumes(self) -> None:
+        container = {
+            "image": "testimage",
+            "resources": {"cpu": 0.1, "memory_mb": 16},
+            "secret_volumes": [
+                {
+                    "src_secret_uri": "secret://clustername/username/key1",
+                    "dst_path": "/container/path1",
+                },
+                {
+                    "src_secret_uri": "secret://clustername/username/key2",
+                    "dst_path": "/container/path2",
+                },
+            ],
+        }
+        request = {"container": container}
+        validator = create_job_request_validator(
+            allowed_gpu_models=(), allowed_tpu_resources=(), cluster_name="clustername"
+        )
+        validator.check(request)
 
 
 class TestJobContainerToJson:
@@ -344,6 +659,20 @@ class TestJobContainerToJson:
             "resources": {"cpu": 0.1, "memory_mb": 16, "gpu": 1, "shm": True},
             "volumes": [],
             "ssh": {"port": 777},
+        }
+
+    def test_with_working_dir(self, storage_config: StorageConfig) -> None:
+        container = Container(
+            image="image",
+            resources=ContainerResources(cpu=0.1, memory_mb=16),
+            working_dir="/working/dir",
+        )
+        assert convert_job_container_to_json(container, storage_config) == {
+            "env": {},
+            "image": "image",
+            "resources": {"cpu": 0.1, "memory_mb": 16},
+            "volumes": [],
+            "working_dir": "/working/dir",
         }
 
     def test_src_storage_uri_fallback_default(
@@ -525,129 +854,268 @@ class TestJobFilterFactory:
             factory(MultiDict(query))  # type: ignore # noqa
 
 
+def make_access_tree(perm_dict: Dict[str, str]) -> ClientSubTreeViewRoot:
+    tree = ClientSubTreeViewRoot(
+        path="/",
+        sub_tree=ClientAccessSubTreeView(
+            action="list" if perm_dict else "deny", children={}
+        ),
+    )
+    for path, action in perm_dict.items():
+        node = tree.sub_tree
+        if path:
+            for name in path.split("/"):
+                if name not in node.children:
+                    node.children[name] = ClientAccessSubTreeView(
+                        action="list", children={}
+                    )
+                node = node.children[name]
+        node.action = action
+    return tree
+
+
 class TestBulkJobFilterBuilder:
     def test_no_access(self) -> None:
         query_filter = JobFilter()
-        tree = ClientSubTreeViewRoot(
-            path="/", sub_tree=ClientAccessSubTreeView(action="deny", children={})
-        )
+        tree = make_access_tree({})
         with pytest.raises(JobFilterException, match="no jobs"):
             BulkJobFilterBuilder(query_filter, tree).build()
 
     def test_no_access_with_owners(self) -> None:
         query_filter = JobFilter(owners={"someuser"})
-        tree = ClientSubTreeViewRoot(
-            path="/",
-            sub_tree=ClientAccessSubTreeView(
-                action="list",
-                children={
-                    "testuser": ClientAccessSubTreeView(action="read", children={}),
-                    "anotheruser": ClientAccessSubTreeView(
-                        action="list",
-                        children={
-                            "job-test-1": ClientAccessSubTreeView("read", children={}),
-                            "job-test-2": ClientAccessSubTreeView("deny", children={}),
-                        },
-                    ),
-                    "someuser": ClientAccessSubTreeView(action="deny", children={}),
-                },
-            ),
+        tree = make_access_tree(
+            {
+                "test-cluster/testuser": "read",
+                "test-cluster/anotheruser/job-test-1": "read",
+                "test-cluster/anotheruser/job-test-2": "deny",
+                "test-cluster/someuser": "deny",
+            }
         )
+        with pytest.raises(JobFilterException, match="no jobs"):
+            BulkJobFilterBuilder(query_filter, tree).build()
+
+    def test_no_access_with_clusters(self) -> None:
+        query_filter = JobFilter(clusters={"somecluster": {}})
+        tree = make_access_tree({"test-cluster/testuser": "read"})
         with pytest.raises(JobFilterException, match="no jobs"):
             BulkJobFilterBuilder(query_filter, tree).build()
 
     def test_full_access_no_owners(self) -> None:
         query_filter = JobFilter()
-        tree = ClientSubTreeViewRoot(
-            path="/", sub_tree=ClientAccessSubTreeView(action="manage", children={})
-        )
+        tree = make_access_tree({"": "manage"})
         bulk_filter = BulkJobFilterBuilder(query_filter, tree).build()
         assert bulk_filter == BulkJobFilter(
             bulk_filter=JobFilter(), shared_ids=set(), shared_ids_filter=None
         )
 
     def test_full_access_with_owners(self) -> None:
-        query_filter = JobFilter(owners={"testuser"})
-        tree = ClientSubTreeViewRoot(
-            path="/", sub_tree=ClientAccessSubTreeView(action="manage", children={})
+        query_filter = JobFilter(owners={"testuser", "someuser"})
+        tree = make_access_tree({"": "manage"})
+        bulk_filter = BulkJobFilterBuilder(query_filter, tree).build()
+        assert bulk_filter == BulkJobFilter(
+            bulk_filter=JobFilter(owners={"testuser", "someuser"}),
+            shared_ids=set(),
+            shared_ids_filter=None,
+        )
+
+    def test_full_access_with_clusters(self) -> None:
+        query_filter = JobFilter(clusters={"test-cluster": {}, "somecluster": {}})
+        tree = make_access_tree({"": "manage"})
+        bulk_filter = BulkJobFilterBuilder(query_filter, tree).build()
+        assert bulk_filter == BulkJobFilter(
+            bulk_filter=JobFilter(clusters={"test-cluster": {}, "somecluster": {}}),
+            shared_ids=set(),
+            shared_ids_filter=None,
+        )
+
+    def test_cluster_access_no_owners(self) -> None:
+        query_filter = JobFilter()
+        tree = make_access_tree({"test-cluster": "read", "anothercluster": "read"})
+        bulk_filter = BulkJobFilterBuilder(query_filter, tree).build()
+        assert bulk_filter == BulkJobFilter(
+            bulk_filter=JobFilter(clusters={"test-cluster": {}, "anothercluster": {}}),
+            shared_ids=set(),
+            shared_ids_filter=None,
+        )
+
+    def test_cluster_access_with_owners(self) -> None:
+        query_filter = JobFilter(owners={"testuser", "someuser"})
+        tree = make_access_tree({"test-cluster": "read", "anothercluster": "read"})
+        bulk_filter = BulkJobFilterBuilder(query_filter, tree).build()
+        assert bulk_filter == BulkJobFilter(
+            bulk_filter=JobFilter(
+                clusters={"test-cluster": {}, "anothercluster": {}},
+                owners={"testuser", "someuser"},
+            ),
+            shared_ids=set(),
+            shared_ids_filter=None,
+        )
+
+    def test_cluster_access_with_clusters(self) -> None:
+        query_filter = JobFilter(clusters={"test-cluster": {}, "somecluster": {}})
+        tree = make_access_tree({"test-cluster": "read", "anothercluster": "read"})
+        bulk_filter = BulkJobFilterBuilder(query_filter, tree).build()
+        assert bulk_filter == BulkJobFilter(
+            bulk_filter=JobFilter(clusters={"test-cluster": {}}),
+            shared_ids=set(),
+            shared_ids_filter=None,
+        )
+
+    def test_user_access_same_user(self) -> None:
+        query_filter = JobFilter()
+        tree = make_access_tree(
+            {"test-cluster/testuser": "read", "anothercluster/testuser": "read"}
         )
         bulk_filter = BulkJobFilterBuilder(query_filter, tree).build()
         assert bulk_filter == BulkJobFilter(
-            bulk_filter=JobFilter(owners={"testuser"}),
+            bulk_filter=JobFilter(
+                clusters={"test-cluster": {}, "anothercluster": {}},
+                owners={"testuser"},
+            ),
+            shared_ids=set(),
+            shared_ids_filter=None,
+        )
+
+    def test_user_access_same_cluster(self) -> None:
+        query_filter = JobFilter()
+        tree = make_access_tree(
+            {"test-cluster/testuser": "read", "test-cluster/anotheruser": "read"}
+        )
+        bulk_filter = BulkJobFilterBuilder(query_filter, tree).build()
+        assert bulk_filter == BulkJobFilter(
+            bulk_filter=JobFilter(
+                clusters={"test-cluster": {}}, owners={"testuser", "anotheruser"}
+            ),
+            shared_ids=set(),
+            shared_ids_filter=None,
+        )
+
+    def test_user_access_different_users_and_clusters(self) -> None:
+        query_filter = JobFilter()
+        tree = make_access_tree(
+            {"test-cluster/testuser": "read", "anothercluster/anotheruser": "read"}
+        )
+        bulk_filter = BulkJobFilterBuilder(query_filter, tree).build()
+        assert bulk_filter == BulkJobFilter(
+            bulk_filter=JobFilter(
+                clusters={
+                    "test-cluster": {"testuser": set()},
+                    "anothercluster": {"anotheruser": set()},
+                },
+                owners={"testuser", "anotheruser"},
+            ),
+            shared_ids=set(),
+            shared_ids_filter=None,
+        )
+
+    def test_user_access_mixed_users_and_clusters(self) -> None:
+        query_filter = JobFilter()
+        tree = make_access_tree(
+            {
+                "test-cluster/testuser": "read",
+                "test-cluster/anotheruser": "read",
+                "anothercluster/testuser": "read",
+            }
+        )
+        bulk_filter = BulkJobFilterBuilder(query_filter, tree).build()
+        assert bulk_filter == BulkJobFilter(
+            bulk_filter=JobFilter(
+                clusters={"test-cluster": {}, "anothercluster": {"testuser": set()}},
+                owners={"testuser", "anotheruser"},
+            ),
+            shared_ids=set(),
+            shared_ids_filter=None,
+        )
+
+    def test_user_access_mixed_users_and_clusters2(self) -> None:
+        query_filter = JobFilter()
+        tree = make_access_tree(
+            {
+                "test-cluster/testuser": "read",
+                "test-cluster/anotheruser": "read",
+                "anothercluster/testuser": "read",
+                "anothercluster/thirduser": "read",
+                "thirdcluster/testuser": "read",
+            }
+        )
+        bulk_filter = BulkJobFilterBuilder(query_filter, tree).build()
+        assert bulk_filter == BulkJobFilter(
+            bulk_filter=JobFilter(
+                clusters={
+                    "test-cluster": {"testuser": set(), "anotheruser": set()},
+                    "anothercluster": {"testuser": set(), "thirduser": set()},
+                    "thirdcluster": {"testuser": set()},
+                },
+                owners={"testuser", "anotheruser", "thirduser"},
+            ),
+            shared_ids=set(),
+            shared_ids_filter=None,
+        )
+
+    def test_mixed_cluster_user_access(self) -> None:
+        query_filter = JobFilter()
+        tree = make_access_tree(
+            {
+                "test-cluster/testuser": "read",
+                "test-cluster/anotheruser": "read",
+                "anothercluster": "read",
+            }
+        )
+        bulk_filter = BulkJobFilterBuilder(query_filter, tree).build()
+        assert bulk_filter == BulkJobFilter(
+            bulk_filter=JobFilter(
+                clusters={
+                    "test-cluster": {"testuser": set(), "anotheruser": set()},
+                    "anothercluster": {},
+                },
+            ),
             shared_ids=set(),
             shared_ids_filter=None,
         )
 
     def test_mixed_access_no_owners(self) -> None:
         query_filter = JobFilter()
-        tree = ClientSubTreeViewRoot(
-            path="/",
-            sub_tree=ClientAccessSubTreeView(
-                action="list",
-                children={
-                    "testuser": ClientAccessSubTreeView(action="read", children={}),
-                    "anotheruser": ClientAccessSubTreeView(
-                        action="list",
-                        children={
-                            "job-test-1": ClientAccessSubTreeView("read", children={}),
-                            "job-test-2": ClientAccessSubTreeView("deny", children={}),
-                        },
-                    ),
-                    "someuser": ClientAccessSubTreeView(action="deny", children={}),
-                },
-            ),
+        tree = make_access_tree(
+            {
+                "test-cluster/testuser": "read",
+                "test-cluster/anotheruser/job-test-1": "read",
+                "test-cluster/anotheruser/job-test-2": "deny",
+                "test-cluster/someuser": "deny",
+            }
         )
         bulk_filter = BulkJobFilterBuilder(query_filter, tree).build()
         assert bulk_filter == BulkJobFilter(
-            bulk_filter=JobFilter(owners={"testuser"}),
+            bulk_filter=JobFilter(clusters={"test-cluster": {}}, owners={"testuser"}),
             shared_ids={"job-test-1"},
             shared_ids_filter=JobFilter(),
         )
 
     def test_mixed_access_owners_shared_all(self) -> None:
         query_filter = JobFilter(owners={"testuser"})
-        tree = ClientSubTreeViewRoot(
-            path="/",
-            sub_tree=ClientAccessSubTreeView(
-                action="list",
-                children={
-                    "testuser": ClientAccessSubTreeView(action="read", children={}),
-                    "anotheruser": ClientAccessSubTreeView(
-                        action="list",
-                        children={
-                            "job-test-1": ClientAccessSubTreeView("read", children={}),
-                            "job-test-2": ClientAccessSubTreeView("deny", children={}),
-                        },
-                    ),
-                    "someuser": ClientAccessSubTreeView(action="deny", children={}),
-                },
-            ),
+        tree = make_access_tree(
+            {
+                "test-cluster/testuser": "read",
+                "test-cluster/anotheruser/job-test-1": "read",
+                "test-cluster/anotheruser/job-test-2": "deny",
+                "test-cluster/someuser": "deny",
+            }
         )
         bulk_filter = BulkJobFilterBuilder(query_filter, tree).build()
         assert bulk_filter == BulkJobFilter(
-            bulk_filter=JobFilter(owners={"testuser"}),
+            bulk_filter=JobFilter(clusters={"test-cluster": {}}, owners={"testuser"}),
             shared_ids=set(),
             shared_ids_filter=None,
         )
 
     def test_mixed_access_shared_ids_only(self) -> None:
         query_filter = JobFilter(owners={"anotheruser"})
-        tree = ClientSubTreeViewRoot(
-            path="/",
-            sub_tree=ClientAccessSubTreeView(
-                action="list",
-                children={
-                    "testuser": ClientAccessSubTreeView(action="read", children={}),
-                    "anotheruser": ClientAccessSubTreeView(
-                        action="list",
-                        children={
-                            "job-test-1": ClientAccessSubTreeView("read", children={}),
-                            "job-test-2": ClientAccessSubTreeView("deny", children={}),
-                        },
-                    ),
-                    "someuser": ClientAccessSubTreeView(action="deny", children={}),
-                },
-            ),
+        tree = make_access_tree(
+            {
+                "test-cluster/testuser": "read",
+                "test-cluster/anotheruser/job-test-1": "read",
+                "test-cluster/anotheruser/job-test-2": "deny",
+                "test-cluster/someuser": "deny",
+            }
         )
         bulk_filter = BulkJobFilterBuilder(query_filter, tree).build()
         assert bulk_filter == BulkJobFilter(
@@ -662,27 +1130,21 @@ class TestBulkJobFilterBuilder:
             statuses={JobStatus.PENDING},
             name="testname",
         )
-        tree = ClientSubTreeViewRoot(
-            path="/",
-            sub_tree=ClientAccessSubTreeView(
-                action="list",
-                children={
-                    "testuser": ClientAccessSubTreeView(action="read", children={}),
-                    "anotheruser": ClientAccessSubTreeView(
-                        action="list",
-                        children={
-                            "job-test-1": ClientAccessSubTreeView("read", children={}),
-                            "job-test-2": ClientAccessSubTreeView("deny", children={}),
-                        },
-                    ),
-                    "someuser": ClientAccessSubTreeView(action="deny", children={}),
-                },
-            ),
+        tree = make_access_tree(
+            {
+                "test-cluster/testuser": "read",
+                "test-cluster/anotheruser/job-test-1": "read",
+                "test-cluster/anotheruser/job-test-2": "deny",
+                "test-cluster/someuser": "deny",
+            }
         )
         bulk_filter = BulkJobFilterBuilder(query_filter, tree).build()
         assert bulk_filter == BulkJobFilter(
             bulk_filter=JobFilter(
-                owners={"testuser"}, statuses={JobStatus.PENDING}, name="testname"
+                clusters={"test-cluster": {}},
+                owners={"testuser"},
+                statuses={JobStatus.PENDING},
+                name="testname",
             ),
             shared_ids={"job-test-1"},
             shared_ids_filter=JobFilter(
@@ -690,6 +1152,107 @@ class TestBulkJobFilterBuilder:
                 statuses={JobStatus.PENDING},
                 name="testname",
             ),
+        )
+
+    def test_shared_by_name(self) -> None:
+        query_filter = JobFilter()
+        tree = make_access_tree(
+            {
+                "test-cluster/testuser": "read",
+                "test-cluster/anotheruser/job-test-1": "read",
+                "test-cluster/anotheruser/testname": "read",
+            }
+        )
+        bulk_filter = BulkJobFilterBuilder(query_filter, tree).build()
+        assert bulk_filter == BulkJobFilter(
+            bulk_filter=JobFilter(
+                clusters={
+                    "test-cluster": {"testuser": set(), "anotheruser": {"testname"}}
+                },
+                owners={"testuser", "anotheruser"},
+            ),
+            shared_ids={"job-test-1"},
+            shared_ids_filter=JobFilter(),
+        )
+
+    def test_shared_by_name_with_name(self) -> None:
+        query_filter = JobFilter(name="testname")
+        tree = make_access_tree(
+            {
+                "test-cluster/testuser": "read",
+                "test-cluster/anotheruser/job-test-1": "read",
+                "test-cluster/anotheruser/testname": "read",
+                "test-cluster/anotheruser/testname2": "read",
+                "test-cluster/thirduser/testname": "read",
+                "test-cluster/forthduser/testname2": "read",
+            }
+        )
+        bulk_filter = BulkJobFilterBuilder(query_filter, tree).build()
+        assert bulk_filter == BulkJobFilter(
+            bulk_filter=JobFilter(
+                clusters={"test-cluster": {}},
+                owners={"testuser", "anotheruser", "thirduser"},
+                name="testname",
+            ),
+            shared_ids={"job-test-1"},
+            shared_ids_filter=JobFilter(name="testname"),
+        )
+
+    def test_shared_by_name_with_owners(self) -> None:
+        query_filter = JobFilter(owners={"anotheruser", "someuser"})
+        tree = make_access_tree(
+            {
+                "test-cluster/testuser": "read",
+                "test-cluster/anotheruser/job-test-1": "read",
+                "test-cluster/anotheruser/testname": "read",
+                "test-cluster/thirduser/testname": "read",
+            }
+        )
+        bulk_filter = BulkJobFilterBuilder(query_filter, tree).build()
+        assert bulk_filter == BulkJobFilter(
+            bulk_filter=JobFilter(
+                clusters={"test-cluster": {"anotheruser": {"testname"}}},
+                owners={"anotheruser"},
+            ),
+            shared_ids={"job-test-1"},
+            shared_ids_filter=JobFilter(owners={"anotheruser", "someuser"}),
+        )
+
+    def test_shared_by_name_with_owner_and_name(self) -> None:
+        query_filter = JobFilter(owners={"anotheruser"}, name="testname")
+        tree = make_access_tree(
+            {
+                "test-cluster/testuser": "read",
+                "test-cluster/anotheruser/job-test-1": "read",
+                "test-cluster/anotheruser/testname": "read",
+                "test-cluster/anotheruser/testname2": "read",
+                "test-cluster/thirduser/testname": "read",
+            }
+        )
+        bulk_filter = BulkJobFilterBuilder(query_filter, tree).build()
+        assert bulk_filter == BulkJobFilter(
+            bulk_filter=JobFilter(
+                clusters={"test-cluster": {}}, owners={"anotheruser"}, name="testname"
+            ),
+            shared_ids={"job-test-1"},
+            shared_ids_filter=JobFilter(owners={"anotheruser"}, name="testname"),
+        )
+
+    def test_shared_by_name_with_owner_and_name_2(self) -> None:
+        query_filter = JobFilter(owners={"anotheruser"}, name="testname")
+        tree = make_access_tree(
+            {
+                "test-cluster/testuser": "read",
+                "test-cluster/anotheruser/job-test-1": "read",
+                "test-cluster/anotheruser/testname2": "read",
+                "test-cluster/thirduser/testname": "read",
+            }
+        )
+        bulk_filter = BulkJobFilterBuilder(query_filter, tree).build()
+        assert bulk_filter == BulkJobFilter(
+            bulk_filter=None,
+            shared_ids={"job-test-1"},
+            shared_ids_filter=JobFilter(owners={"anotheruser"}, name="testname"),
         )
 
 
@@ -702,8 +1265,12 @@ class TestInferPermissionsFromContainer:
         registry_config = RegistryConfig(
             url=URL("http://example.com"), username="compute", password="compute_token"
         )
-        permissions = infer_permissions_from_container(user, container, registry_config)
-        assert permissions == [Permission(uri="job://testuser", action="write")]
+        permissions = infer_permissions_from_container(
+            user, container, registry_config, "test-cluster"
+        )
+        assert permissions == [
+            Permission(uri="job://test-cluster/testuser", action="write")
+        ]
 
     def test_volumes(self) -> None:
         user = User(name="testuser", token="")
@@ -712,13 +1279,13 @@ class TestInferPermissionsFromContainer:
             resources=ContainerResources(cpu=0.1, memory_mb=16),
             volumes=[
                 ContainerVolume(
-                    uri=URL("storage://testuser/dataset"),
+                    uri=URL("storage://test-cluster/testuser/dataset"),
                     src_path=PurePath("/"),
                     dst_path=PurePath("/var/storage/testuser/dataset"),
                     read_only=True,
                 ),
                 ContainerVolume(
-                    uri=URL("storage://testuser/result"),
+                    uri=URL("storage://test-cluster/testuser/result"),
                     src_path=PurePath("/"),
                     dst_path=PurePath("/var/storage/testuser/result"),
                 ),
@@ -727,11 +1294,13 @@ class TestInferPermissionsFromContainer:
         registry_config = RegistryConfig(
             url=URL("http://example.com"), username="compute", password="compute_token"
         )
-        permissions = infer_permissions_from_container(user, container, registry_config)
+        permissions = infer_permissions_from_container(
+            user, container, registry_config, "test-cluster"
+        )
         assert permissions == [
-            Permission(uri="job://testuser", action="write"),
-            Permission(uri="storage://testuser/dataset", action="read"),
-            Permission(uri="storage://testuser/result", action="write"),
+            Permission(uri="job://test-cluster/testuser", action="write"),
+            Permission(uri="storage://test-cluster/testuser/dataset", action="read"),
+            Permission(uri="storage://test-cluster/testuser/result", action="write"),
         ]
 
     def test_image(self) -> None:
@@ -743,10 +1312,12 @@ class TestInferPermissionsFromContainer:
         registry_config = RegistryConfig(
             url=URL("http://example.com"), username="compute", password="compute_token"
         )
-        permissions = infer_permissions_from_container(user, container, registry_config)
+        permissions = infer_permissions_from_container(
+            user, container, registry_config, "test-cluster"
+        )
         assert permissions == [
-            Permission(uri="job://testuser", action="write"),
-            Permission(uri="image://testuser/image", action="read"),
+            Permission(uri="job://test-cluster/testuser", action="write"),
+            Permission(uri="image://test-cluster/testuser/image", action="read"),
         ]
 
 
@@ -767,17 +1338,18 @@ async def test_job_to_job_response(mock_orchestrator: MockOrchestrator) -> None:
             name="test-job-name",
         ),
     )
-    response = convert_job_to_job_response(job, cluster_name="my-cluster")
+    response = convert_job_to_job_response(job)
     assert response == {
         "id": job.id,
         "owner": "compute",
-        "cluster_name": "my-cluster",
+        "cluster_name": "test-cluster",
         "status": "pending",
         "history": {
             "status": "pending",
             "reason": None,
             "description": None,
             "created_at": mock.ANY,
+            "run_time_seconds": 0,
         },
         "container": {
             "image": "testimage",
@@ -790,7 +1362,51 @@ async def test_job_to_job_response(mock_orchestrator: MockOrchestrator) -> None:
         "ssh_server": "ssh://nobody@ssh-auth:22",
         "ssh_auth_server": "ssh://nobody@ssh-auth:22",
         "is_preemptible": False,
+        "uri": f"job://test-cluster/compute/{job.id}",
+        "restart_policy": "never",
     }
+
+
+@pytest.mark.asyncio
+async def test_job_to_job_response_nonzero_runtime(
+    mock_orchestrator: MockOrchestrator,
+) -> None:
+    def _mocked_datetime_factory() -> datetime:
+        return datetime(year=2019, month=1, day=1)
+
+    time_now = _mocked_datetime_factory()
+    started_ago_delta = timedelta(minutes=10)  # job started 10 min ago: pending
+    pending_delta = timedelta(
+        minutes=5, seconds=30
+    )  # after 5 min: running (still running)
+    pending_at = time_now - started_ago_delta
+    running_at = pending_at + pending_delta
+    items = [
+        JobStatusItem.create(JobStatus.PENDING, transition_time=pending_at),
+        JobStatusItem.create(JobStatus.RUNNING, transition_time=running_at),
+    ]
+    status_history = JobStatusHistory(items)
+
+    job = Job(
+        storage_config=mock_orchestrator.storage_config,
+        orchestrator_config=mock_orchestrator.config,
+        record=JobRecord.create(
+            request=JobRequest.create(
+                Container(
+                    image="testimage",
+                    resources=ContainerResources(cpu=1, memory_mb=128),
+                ),
+                description="test test description",
+            ),
+            status_history=status_history,
+            cluster_name="test-cluster",
+            name="test-job-name",
+        ),
+        current_datetime_factory=_mocked_datetime_factory,
+    )
+    response = convert_job_to_job_response(job)
+    run_time = response["history"]["run_time_seconds"]
+    assert run_time == (time_now - running_at).total_seconds()
 
 
 @pytest.mark.asyncio
@@ -815,11 +1431,11 @@ async def test_job_to_job_response_with_job_name_and_http_exposed(
             name=job_name,
         ),
     )
-    response = convert_job_to_job_response(job, cluster_name="my-cluster")
+    response = convert_job_to_job_response(job)
     assert response == {
         "id": job.id,
         "owner": owner_name,
-        "cluster_name": "my-cluster",
+        "cluster_name": "test-cluster",
         "name": job_name,
         "http_url": f"http://{job.id}.jobs",
         "http_url_named": f"http://{job_name}--{owner_name}.jobs",
@@ -829,6 +1445,7 @@ async def test_job_to_job_response_with_job_name_and_http_exposed(
             "reason": None,
             "description": None,
             "created_at": mock.ANY,
+            "run_time_seconds": 0,
         },
         "container": {
             "image": "testimage",
@@ -840,6 +1457,8 @@ async def test_job_to_job_response_with_job_name_and_http_exposed(
         "ssh_server": "ssh://nobody@ssh-auth:22",
         "ssh_auth_server": "ssh://nobody@ssh-auth:22",
         "is_preemptible": False,
+        "uri": f"job://test-cluster/{owner_name}/{job.id}",
+        "restart_policy": "never",
     }
 
 
@@ -860,18 +1479,19 @@ async def test_job_to_job_response_with_job_name_and_http_exposed_too_long_name(
                     http_server=ContainerHTTPServer(port=80),
                 )
             ),
-            cluster_name="",
+            cluster_name="test-cluster",
             owner=owner_name,
             name=job_name,
         ),
     )
-    response = convert_job_to_job_response(job, cluster_name="my-cluster")
+    response = convert_job_to_job_response(job)
     assert response == {
         "id": job.id,
         "owner": owner_name,
-        "cluster_name": "my-cluster",
+        "cluster_name": "test-cluster",
         "name": job_name,
         "http_url": f"http://{job.id}.jobs",
+        "http_url_named": f"http://{job_name}--{owner_name}.jobs",
         # NOTE: field `http_url_named` is cut off when it is invalid
         "status": "pending",
         "history": {
@@ -879,6 +1499,7 @@ async def test_job_to_job_response_with_job_name_and_http_exposed_too_long_name(
             "reason": None,
             "description": None,
             "created_at": mock.ANY,
+            "run_time_seconds": 0,
         },
         "container": {
             "image": "testimage",
@@ -890,6 +1511,8 @@ async def test_job_to_job_response_with_job_name_and_http_exposed_too_long_name(
         "ssh_server": "ssh://nobody@ssh-auth:22",
         "ssh_auth_server": "ssh://nobody@ssh-auth:22",
         "is_preemptible": False,
+        "uri": f"job://test-cluster/{owner_name}/{job.id}",
+        "restart_policy": "never",
     }
 
 
@@ -911,4 +1534,4 @@ async def test_job_to_job_response_assert_non_empty_cluster_name(
         ),
     )
     with pytest.raises(AssertionError, match="must be already replaced"):
-        convert_job_to_job_response(job, cluster_name="")
+        convert_job_to_job_response(job)

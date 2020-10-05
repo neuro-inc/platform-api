@@ -6,7 +6,7 @@ data:
   clusters.json: |-
     [
         {
-            "name": "default",
+            "name": "test-cluster",
 
             "storage": {
                 "host": {"mount_path": "/tmp"},
@@ -44,6 +44,14 @@ data:
 
             "monitoring": {
                 "url": "http://platformapi/api/v1/jobs"
+            },
+
+            "secrets": {
+                "url": "http://platformapi/api/v1/secrets"
+            },
+
+            "metrics": {
+                "url": "http://metrics.dev.neu.ro"
             }
         }
     ]

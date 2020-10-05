@@ -30,6 +30,35 @@ spec:
 apiVersion: apps/v1
 kind: ReplicaSet
 metadata:
+  name: platformpostgres
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      service: platformpostgres
+  template:
+    metadata:
+      labels:
+        service: platformpostgres
+    spec:
+      containers:
+      - name: platformpostgres
+        image: postgres:11.3
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: platformpostgres
+spec:
+  ports:
+  - port: 5432
+    targetPort: 5432
+  selector:
+    service: platformpostgres
+---
+apiVersion: apps/v1
+kind: ReplicaSet
+metadata:
   name: platformauthapi
 spec:
   replicas: 1
@@ -98,6 +127,8 @@ spec:
           value: ssh.platform.dev.neuromation.io
         - name: NP_DB_REDIS_URI
           value: redis://platformredis:6379/0
+        - name: NP_DB_POSTGRES_DSN
+          value: postgresql://postgres@platformpostgres:5432/postgres
         - name: NP_OAUTH_HEADLESS_CALLBACK_URL
           value: https://dev.neu.ro/oauth/show-code
         - name: NP_AUTH_URL
@@ -108,6 +139,8 @@ spec:
           value: http://platformauthapi:8080/api/v1/users
         - name: NP_API_URL
           value: http://platformapi/api/v1
+        - name: NP_ADMIN_URL
+          value: http://platformapi/apis/admin/v1
         - name: NP_PLATFORM_CONFIG_URI
           value: http://platformconfig:8080/api/v1
         - name: NP_NOTIFICATIONS_URL
@@ -118,10 +151,17 @@ spec:
           value: http://localhost:8080/api/v1
         - name: NP_ENFORCER_TOKEN
           value: eyJ0eXAiOiJKV1QiLCJhbGciOiJIUzI1NiJ9.eyJpZGVudGl0eSI6ImNvbXB1dGUifQ.IJDlKCfbiuNGZH9Sh6p-CdUL5KxEK5JStqzfDk4-RAA
+<<<<<<< HEAD
         - name: NP_GC_PLATFORM_API_URL
           value: http://localhost:8080/api/v1
         - name: NP_GC_TOKEN
           value: eyJ0eXAiOiJKV1QiLCJhbGciOiJIUzI1NiJ9.eyJpZGVudGl0eSI6ImNvbXB1dGUifQ.IJDlKCfbiuNGZH9Sh6p-CdUL5KxEK5JStqzfDk4-RAA
+=======
+        - name: NP_API_ZIPKIN_URL
+          value: http://zipkin:9411
+        - name: NP_API_ZIPKIN_SAMPLE_RATE
+          value: "1"
+>>>>>>> master
       - name: kubeproxy
         image: lachlanevenson/k8s-kubectl:v1.10.3
         args: [proxy]
@@ -184,3 +224,32 @@ spec:
     targetPort: 22
   selector:
     service: ssh-auth
+---
+apiVersion: apps/v1
+kind: ReplicaSet
+metadata:
+  name: zipkin
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      service: zipkin
+  template:
+    metadata:
+      labels:
+        service: zipkin
+    spec:
+      containers:
+      - name: zipkin
+        image: openzipkin/zipkin-slim:latest
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: zipkin
+spec:
+  ports:
+  - port: 9411
+    targetPort: 9411
+  selector:
+    service: zipkin

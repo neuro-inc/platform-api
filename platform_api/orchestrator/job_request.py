@@ -3,7 +3,7 @@ import shlex
 import uuid
 from dataclasses import asdict, dataclass, field
 from pathlib import PurePath
-from typing import Any, Dict, List, Optional
+from typing import Any, Dict, List, Optional, Sequence, Union
 from urllib.parse import urlsplit
 
 from yarl import URL
@@ -24,6 +24,10 @@ class JobNotFoundException(JobException):
     pass
 
 
+class JobAlreadyExistsException(JobException):
+    pass
+
+
 @dataclass(frozen=True)
 class ContainerVolume:
     uri: URL
@@ -32,8 +36,8 @@ class ContainerVolume:
     read_only: bool = False
 
     @staticmethod
-    def create(*args: Any, **kwargs: Any) -> "ContainerVolume":
-        return ContainerVolumeFactory(*args, **kwargs).create()
+    def create(uri: str, *args: Any, **kwargs: Any) -> "ContainerVolume":
+        return ContainerVolumeFactory(uri, *args, **kwargs).create()
 
     @classmethod
     def from_primitive(cls, payload: Dict[str, Any]) -> "ContainerVolume":
@@ -51,6 +55,108 @@ class ContainerVolume:
         payload["src_path"] = str(payload["src_path"])
         payload["dst_path"] = str(payload["dst_path"])
         return payload
+
+
+@dataclass(frozen=True)
+class Disk:
+    disk_id: str  # `disk-id` in `disk://cluster/user/disk-id`
+    user_name: str  # `user` in `disk://cluster/user/disk-id`
+    cluster_name: str  # `cluster` in `disk://cluster/user/disk-id`
+
+    def to_uri(self) -> URL:
+        return URL(f"disk://{self.cluster_name}/{self.user_name}/{self.disk_id}")
+
+    @classmethod
+    def create(cls, disk_uri: Union[str, URL]) -> "Disk":
+        # Note: format of `disk_uri` is enforced by validators
+        uri = URL(disk_uri)
+        cluster_name = uri.host
+        assert cluster_name, uri  # for lint
+        parts = PurePath(uri.path).parts
+        user_name, disk_id = parts[1], parts[2]
+        return cls(disk_id=disk_id, cluster_name=cluster_name, user_name=user_name)
+
+
+@dataclass(frozen=True)
+class DiskContainerVolume:
+    disk: Disk
+    dst_path: PurePath
+    read_only: bool = False
+
+    def to_uri(self) -> URL:
+        return self.disk.to_uri()
+
+    @classmethod
+    def create(
+        cls, uri: str, dst_path: PurePath, read_only: bool = False
+    ) -> "DiskContainerVolume":
+        return cls(disk=Disk.create(uri), dst_path=dst_path, read_only=read_only)
+
+    @classmethod
+    def from_primitive(cls, payload: Dict[str, Any]) -> "DiskContainerVolume":
+        return cls.create(
+            uri=payload["src_disk_uri"],
+            dst_path=PurePath(payload["dst_path"]),
+            read_only=payload["read_only"],
+        )
+
+    def to_primitive(self) -> Dict[str, Any]:
+        return {
+            "src_disk_uri": str(self.to_uri()),
+            "dst_path": str(self.dst_path),
+            "read_only": self.read_only,
+        }
+
+
+@dataclass(frozen=True)
+class Secret:
+    secret_key: str  # `sec` in `secret://cluster/user/sec`
+    user_name: str  # `user` in `secret://cluster/user/sec`
+    cluster_name: str  # `cluster` in `secret://cluster/user/sec`
+
+    @property
+    def k8s_secret_name(self) -> str:
+        return f"user--{self.user_name}--secrets"
+
+    def to_uri(self) -> URL:
+        return URL(f"secret://{self.cluster_name}/{self.user_name}/{self.secret_key}")
+
+    @classmethod
+    def create(cls, secret_uri: Union[str, URL]) -> "Secret":
+        # Note: format of `secret_uri` is enforced by validators
+        uri = URL(secret_uri)
+        cluster_name = uri.host
+        assert cluster_name, uri  # for lint
+        parts = PurePath(uri.path).parts
+        user_name, secret_key = parts[1], parts[2]
+        return cls(
+            secret_key=secret_key, cluster_name=cluster_name, user_name=user_name
+        )
+
+
+@dataclass(frozen=True)
+class SecretContainerVolume:
+    secret: Secret
+    dst_path: PurePath
+
+    def to_uri(self) -> URL:
+        return self.secret.to_uri()
+
+    @classmethod
+    def create(cls, uri: str, dst_path: PurePath) -> "SecretContainerVolume":
+        return cls(secret=Secret.create(uri), dst_path=dst_path)
+
+    @classmethod
+    def from_primitive(cls, payload: Dict[str, Any]) -> "SecretContainerVolume":
+        return cls.create(
+            uri=payload["src_secret_uri"], dst_path=PurePath(payload["dst_path"])
+        )
+
+    def to_primitive(self) -> Dict[str, Any]:
+        return {
+            "src_secret_uri": str(self.to_uri()),
+            "dst_path": str(self.dst_path),
+        }
 
 
 @dataclass(frozen=True)
@@ -179,20 +285,30 @@ class Container:
     command: Optional[str] = None
     env: Dict[str, str] = field(default_factory=dict)
     volumes: List[ContainerVolume] = field(default_factory=list)
+    secret_env: Dict[str, Secret] = field(default_factory=dict)
+    secret_volumes: List[SecretContainerVolume] = field(default_factory=list)
+    disk_volumes: List[DiskContainerVolume] = field(default_factory=list)
     http_server: Optional[ContainerHTTPServer] = None
     ssh_server: Optional[ContainerSSHServer] = None
+    tty: bool = False
+    working_dir: Optional[str] = None
 
     def belongs_to_registry(self, registry_config: RegistryConfig) -> bool:
         prefix = f"{registry_config.host}/"
         return self.image.startswith(prefix)
 
-    def to_image_uri(self, registry_config: RegistryConfig) -> URL:
+    def to_image_uri(self, registry_config: RegistryConfig, cluster_name: str) -> URL:
         assert self.belongs_to_registry(registry_config), "Unknown registry"
         prefix = f"{registry_config.host}/"
         repo = self.image.replace(prefix, "", 1)
-        uri = URL(f"image://{repo}")
-        path, *_ = uri.path.split(":", 1)
-        return uri.with_path(path)
+        path, *_ = repo.split(":", 1)
+        assert cluster_name
+        return URL(f"image://{cluster_name}/{path}")
+
+    def get_secret_uris(self) -> Sequence[URL]:
+        env_uris = [sec.to_uri() for sec in self.secret_env.values()]
+        vol_uris = [vol.to_uri() for vol in self.secret_volumes]
+        return list(set(env_uris + vol_uris))
 
     @property
     def port(self) -> Optional[int]:
@@ -212,16 +328,22 @@ class Container:
             return self.http_server.health_check_path
         return ContainerHTTPServer.health_check_path
 
+    def _parse_command(self, command: str) -> List[str]:
+        try:
+            return shlex.split(command)
+        except ValueError:
+            raise JobError("invalid command format")
+
     @property
     def entrypoint_list(self) -> List[str]:
         if self.entrypoint:
-            return shlex.split(self.entrypoint)
+            return self._parse_command(self.entrypoint)
         return []
 
     @property
     def command_list(self) -> List[str]:
         if self.command:
-            return shlex.split(self.command)
+            return self._parse_command(self.command)
         return []
 
     @property
@@ -239,6 +361,18 @@ class Container:
         kwargs["volumes"] = [
             ContainerVolume.from_primitive(item) for item in kwargs["volumes"]
         ]
+        kwargs["secret_volumes"] = [
+            SecretContainerVolume.from_primitive(item)
+            for item in kwargs.get("secret_volumes", [])
+        ]
+        kwargs["disk_volumes"] = [
+            DiskContainerVolume.from_primitive(item)
+            for item in kwargs.get("disk_volumes", [])
+        ]
+        kwargs["secret_env"] = {
+            key: Secret.create(value)
+            for key, value in kwargs.get("secret_env", {}).items()
+        }
 
         if kwargs.get("http_server"):
             kwargs["http_server"] = ContainerHTTPServer.from_primitive(
@@ -265,15 +399,37 @@ class Container:
         payload: Dict[str, Any] = asdict(self)
         payload["resources"] = self.resources.to_primitive()
         payload["volumes"] = [volume.to_primitive() for volume in self.volumes]
+
+        secret_volumes = [v.to_primitive() for v in self.secret_volumes]
+        if secret_volumes:
+            payload["secret_volumes"] = secret_volumes
+        else:
+            payload.pop("secret_volumes")
+
+        disk_volumes = [v.to_primitive() for v in self.disk_volumes]
+        if disk_volumes:
+            payload["disk_volumes"] = disk_volumes
+        else:
+            payload.pop("disk_volumes")
+
+        payload.pop("secret_env", None)
+        if self.secret_env:
+            payload["secret_env"] = {
+                name: str(sec.to_uri()) for name, sec in self.secret_env.items()
+            }
+
         if self.http_server:
             payload["http_server"] = self.http_server.to_primitive()
         if self.ssh_server:
             payload["ssh_server"] = self.ssh_server.to_primitive()
 
         # NOTE: not to serialize `entrypoint` if it's `None` (see issue #804)
-        entrypoint = payload.get("entrypoint", None)
+        entrypoint = payload.get("entrypoint")
         if entrypoint is None:
             payload.pop("entrypoint", None)
+
+        if payload["working_dir"] is None:
+            del payload["working_dir"]
 
         return payload
 
@@ -312,14 +468,15 @@ class JobStatus(str, enum.Enum):
     possibly waiting for) sufficient amount of resources, pulling an image
     from a registry etc.
     RUNNING: a job is being run.
-    SUCCEEDED: a job terminated with the 0 exit code or a running job was
-    manually terminated/deleted.
+    SUCCEEDED: a job terminated with the 0 exit code.
+    CANCELLED: a running job was manually terminated/deleted.
     FAILED: a job terminated with a non-0 exit code.
     """
 
     PENDING = "pending"
     RUNNING = "running"
     SUCCEEDED = "succeeded"
+    CANCELLED = "cancelled"
     FAILED = "failed"
 
     @property
@@ -332,11 +489,19 @@ class JobStatus(str, enum.Enum):
 
     @property
     def is_finished(self) -> bool:
-        return self in (self.SUCCEEDED, self.FAILED)
+        return self in (self.SUCCEEDED, self.FAILED, self.CANCELLED)
 
     @classmethod
     def values(cls) -> List[str]:
         return [item.value for item in cls]
+
+    @classmethod
+    def active_values(cls) -> List[str]:
+        return [item.value for item in cls if not item.is_finished]
+
+    @classmethod
+    def finished_values(cls) -> List[str]:
+        return [item.value for item in cls if item.is_finished]
 
     def __repr__(self) -> str:
         return f"JobStatus.{self.name}"
@@ -346,12 +511,6 @@ class JobStatus(str, enum.Enum):
 
 
 class ContainerVolumeFactory:
-    """A factory class for :class:`ContainerVolume`.
-
-    Responsible for parsing the specified storage URI and making sure
-    that the resulting path is valid.
-    """
-
     def __init__(
         self,
         uri: str,
@@ -360,7 +519,6 @@ class ContainerVolumeFactory:
         dst_mount_path: PurePath,
         extend_dst_mount_path: bool = True,
         read_only: bool = False,
-        scheme: str = "storage",
     ) -> None:
         """Check constructor parameters and initialize the factory instance.
 
@@ -369,40 +527,16 @@ class ContainerVolumeFactory:
             otherwise use `dst_mount_path` as is. Defaults to True.
         """
         self._uri = uri
-        self._scheme = scheme
-        self._path: PurePath = PurePath("")
-
-        self._parse_uri()
+        path = PurePath(urlsplit(uri).path)
+        if path.is_absolute():
+            path = path.relative_to("/")
+        self._path = path
 
         self._read_only = read_only
-
-        self._check_mount_path(src_mount_path)
-        self._check_mount_path(dst_mount_path)
 
         self._src_mount_path: PurePath = src_mount_path
         self._dst_mount_path: PurePath = dst_mount_path
         self._extend_dst_mount_path = extend_dst_mount_path
-
-    def _parse_uri(self) -> None:
-        url = urlsplit(self._uri)
-        if url.scheme != self._scheme:
-            raise ValueError(f"Invalid URI scheme: {self._uri}")
-
-        path = PurePath(url.netloc + url.path)
-        if path.is_absolute():
-            path = path.relative_to("/")
-        self._check_dots_in_path(path)
-
-        self._path = path
-
-    def _check_dots_in_path(self, path: PurePath) -> None:
-        if ".." in path.parts:
-            raise ValueError(f"Invalid path: {path}")
-
-    def _check_mount_path(self, path: PurePath) -> None:
-        if not path.is_absolute():
-            raise ValueError(f"Mount path must be absolute: {path}")
-        self._check_dots_in_path(path)
 
     def create(self) -> ContainerVolume:
         src_path = self._src_mount_path / self._path

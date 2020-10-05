@@ -21,7 +21,7 @@ logger = logging.getLogger(__name__)
 
 class GarbageCollectorPoller:
     def __init__(
-        self, *, config: GarbageCollectorConfig, orchestrator: KubeOrchestrator,
+        self, *, config: GarbageCollectorConfig, orchestrator: KubeOrchestrator
     ) -> None:
         self._loop = asyncio.get_event_loop()
 
@@ -120,4 +120,4 @@ class GarbageCollectorPoller:
                 logger.info("Collecting resources for job %s", job_id)
                 for url in resources[job_id]:
                     logger.info("Collecting resource URL %s for job %s", url, job_id)
-                    await self._orchestrator.delete_resource_link(url)
+                    await self._orchestrator.delete_resource_by_link(url)

@@ -1,10 +1,10 @@
 import os
+import pathlib
 from pathlib import Path, PurePath
-from typing import Any, Dict, List, Optional
+from typing import Any, Dict, List, Optional, Sequence
 
+from alembic.config import Config as AlembicConfig
 from yarl import URL
-
-import platform_api
 
 from .cluster_config import (
     ClusterConfig,
@@ -17,14 +17,17 @@ from .cluster_config import (
 from .config import (
     AuthConfig,
     Config,
+    CORSConfig,
     DatabaseConfig,
     JobPolicyEnforcerConfig,
     JobsConfig,
     NotificationsConfig,
     OAuthConfig,
     PlatformConfig,
+    PostgresConfig,
     ServerConfig,
     SSHAuthConfig,
+    ZipkinConfig,
 )
 from .orchestrator.kube_client import KubeClientAuthType
 from .orchestrator.kube_orchestrator import KubeConfig
@@ -46,22 +49,27 @@ class EnvironConfigFactory:
         env_prefix = self._environ.get("NP_ENV_PREFIX", Config.env_prefix)
         auth = self.create_auth()
         jobs = self.create_jobs(orphaned_job_owner=auth.service_name)
+        admin_url = URL(self._environ["NP_ADMIN_URL"])
+        config_url = URL(self._environ["NP_PLATFORM_CONFIG_URI"])
         return Config(
             server=self.create_server(),
             database=self.create_database(),
             auth=auth,
+            zipkin=self.create_zipkin(),
             oauth=self.try_create_oauth(),
             env_prefix=env_prefix,
             jobs=jobs,
             job_policy_enforcer=self.create_job_policy_enforcer(),
             garbage_collector=self.create_garbage_collector(),
-            config_client=self.create_config_client(),
             notifications=self.create_notifications(),
+            cors=self.create_cors(),
+            config_url=config_url,
+            admin_url=admin_url,
         )
 
-    def create_cluster(self) -> ClusterConfig:
+    def create_cluster(self, name: str) -> ClusterConfig:
         return ClusterConfig(
-            name=JobsConfig.default_cluster_name,
+            name=name,
             storage=self.create_storage(),
             registry=self.create_registry(),
             orchestrator=self.create_orchestrator(),
@@ -87,7 +95,7 @@ class EnvironConfigFactory:
         return JobPolicyEnforcerConfig(
             platform_api_url=URL(self._environ["NP_ENFORCER_PLATFORM_API_URL"]),
             token=self._environ["NP_ENFORCER_TOKEN"],
-            interval_sec=int(
+            interval_sec=float(
                 self._environ.get("NP_ENFORCER_INTERVAL_SEC")
                 or JobPolicyEnforcerConfig.interval_sec
             ),
@@ -203,7 +211,7 @@ class EnvironConfigFactory:
             jobs_domain_name_template=self._environ[
                 "NP_K8S_JOBS_INGRESS_DOMAIN_NAME_TEMPLATE"
             ],
-            ssh_auth_domain_name=self._environ["NP_K8S_SSH_AUTH_INGRESS_DOMAIN_NAME"],
+            ssh_auth_server=self._environ["NP_K8S_SSH_AUTH_INGRESS_DOMAIN_NAME"],
             resource_pool_types=pool_types,
             node_label_gpu=self._environ.get("NP_K8S_NODE_LABEL_GPU"),
             node_label_preemptible=self._environ.get("NP_K8S_NODE_LABEL_PREEMPTIBLE"),
@@ -224,7 +232,14 @@ class EnvironConfigFactory:
 
     def create_database(self) -> DatabaseConfig:
         redis = self.create_redis()
-        return DatabaseConfig(redis=redis)
+        postgres = self.create_postgres()
+        return DatabaseConfig(
+            postgres_enabled=self._get_bool(
+                "NP_DB_POSTGRES_ENABLED", DatabaseConfig.postgres_enabled
+            ),
+            redis=redis,
+            postgres=postgres,
+        )
 
     def create_redis(self) -> Optional[RedisConfig]:
         uri = self._environ.get("NP_DB_REDIS_URI")
@@ -251,6 +266,11 @@ class EnvironConfigFactory:
             service_name=name,
             public_endpoint_url=public_endpoint_url,
         )
+
+    def create_zipkin(self) -> ZipkinConfig:
+        url = URL(self._environ["NP_API_ZIPKIN_URL"])
+        sample_rate = float(self._environ["NP_API_ZIPKIN_SAMPLE_RATE"])
+        return ZipkinConfig(url=url, sample_rate=sample_rate)
 
     def try_create_oauth(self) -> Optional[OAuthConfig]:
         base_url = self._environ.get("NP_OAUTH_BASE_URL")
@@ -289,16 +309,62 @@ class EnvironConfigFactory:
     def create_ingress(self) -> IngressConfig:
         base_url = URL(self._environ["NP_API_URL"])
         return IngressConfig(
-            storage_url=base_url / "storage", monitoring_url=base_url / "jobs"
-        )
-
-    def create_config_client(self) -> platform_api.config_client.ConfigClient:
-        platform_config_url = URL(self._environ["NP_PLATFORM_CONFIG_URI"])
-        return platform_api.config_client.ConfigClient(
-            base_url=platform_config_url, service_token=self._environ["NP_AUTH_TOKEN"]
+            storage_url=base_url / "storage",
+            monitoring_url=base_url / "jobs",
+            secrets_url=base_url / "secrets",
+            metrics_url=base_url / "metrics",
         )
 
     def create_notifications(self) -> NotificationsConfig:
         url = URL(self._environ["NP_NOTIFICATIONS_URL"])
         token = self._environ["NP_NOTIFICATIONS_TOKEN"]
         return NotificationsConfig(url=url, token=token)
+
+    def create_cors(self) -> CORSConfig:
+        origins: Sequence[str] = CORSConfig.allowed_origins
+        origins_str = self._environ.get("NP_CORS_ORIGINS", "").strip()
+        if origins_str:
+            origins = origins_str.split(",")
+        return CORSConfig(allowed_origins=origins)
+
+    def create_postgres(self) -> PostgresConfig:
+        try:
+            postgres_dsn = self._environ["NP_DB_POSTGRES_DSN"]
+        except KeyError:
+            # Temporary fix until postgres deployment is set
+            postgres_dsn = ""
+        pool_min_size = int(
+            self._environ.get("NP_DB_POSTGRES_POOL_MIN", PostgresConfig.pool_min_size)
+        )
+        pool_max_size = int(
+            self._environ.get("NP_DB_POSTGRES_POOL_MAX", PostgresConfig.pool_max_size)
+        )
+        connect_timeout_s = float(
+            self._environ.get(
+                "NP_DB_POSTGRES_CONNECT_TIMEOUT", PostgresConfig.connect_timeout_s
+            )
+        )
+        command_timeout_s = PostgresConfig.command_timeout_s
+        if self._environ.get("NP_DB_POSTGRES_COMMAND_TIMEOUT"):
+            command_timeout_s = float(self._environ["NP_DB_POSTGRES_COMMAND_TIMEOUT"])
+        return PostgresConfig(
+            postgres_dsn=postgres_dsn,
+            alembic=self.create_alembic(postgres_dsn),
+            pool_min_size=pool_min_size,
+            pool_max_size=pool_max_size,
+            connect_timeout_s=connect_timeout_s,
+            command_timeout_s=command_timeout_s,
+        )
+
+    def create_alembic(
+        self, postgres_dsn: str, redis_url: Optional[str] = None
+    ) -> AlembicConfig:
+        parent_path = pathlib.Path(__file__).resolve().parent.parent
+        ini_path = str(parent_path / "alembic.ini")
+        script_path = str(parent_path / "alembic")
+        config = AlembicConfig(ini_path)
+        config.set_main_option("script_location", script_path)
+        config.set_main_option("sqlalchemy.url", postgres_dsn)
+        if redis_url:
+            config.set_main_option("redis_url", redis_url)
+        return config

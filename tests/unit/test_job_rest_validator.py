@@ -8,6 +8,8 @@ from platform_api.handlers.validators import (
     JOB_NAME_MAX_LENGTH,
     USER_NAME_MAX_LENGTH,
     create_job_name_validator,
+    create_mount_path_validator,
+    create_path_uri_validator,
     create_user_name_validator,
     create_volumes_validator,
 )
@@ -71,6 +73,7 @@ class TestJobNameValidator:
             "abc.",
             "abc?",
             "abc#",
+            "abc\n",
         ],
     )
     def test_invalid_job_names__contains_illegal_char(self, value: str) -> None:
@@ -121,7 +124,7 @@ class TestJobNameValidator:
 
 
 class TestUserNameValidator:
-    """ Almost the same test suite as used for the same
+    """Almost the same test suite as used for the same
     user-name validation method in platform-auth
     """
 
@@ -188,6 +191,7 @@ class TestUserNameValidator:
             ("foo~", 1),
             ("foo,", 1),
             ("foo.", 1),
+            ("foo\n", 1),
             ("46CAC3A6-2956-481B-B4AA-A80A6EAF2CDE", 1),  # regression test
         ],
     )
@@ -217,11 +221,14 @@ class TestJobResponseValidator:
                 "reason": None,
                 "description": None,
                 "created_at": "now",
+                "run_time_seconds": 10,
             },
             "container": container,
             "ssh_server": "nobody@ssh-auth",
             "ssh_auth_server": "nobody@ssh-auth",
             "is_preemptible": False,
+            "uri": "job://cluster-name/tests/test-job-id",
+            "restart_policy": "never",
         }
         validator = create_job_response_validator()
         assert validator.check(response)
@@ -244,11 +251,14 @@ class TestJobResponseValidator:
                 "reason": None,
                 "description": "",
                 "created_at": "now",
+                "run_time_seconds": 10,
             },
             "container": container,
             "ssh_server": "nobody@ssh-auth",
             "ssh_auth_server": "nobody@ssh-auth",
             "is_preemptible": False,
+            "uri": "job://cluster-name/tests/test-job-id",
+            "restart_policy": "never",
         }
         validator = create_job_response_validator()
         assert validator.check(response)
@@ -269,11 +279,14 @@ class TestJobResponseValidator:
                 "reason": None,
                 "description": None,
                 "created_at": "now",
+                "run_time_seconds": 10,
             },
             "container": container,
             "ssh_server": "nobody@ssh-auth",
             "ssh_auth_server": "nobody@ssh-auth",
             "is_preemptible": False,
+            "uri": "job://cluster-name/tests/test-job-id",
+            "restart_policy": "never",
         }
         validator = create_job_response_validator()
         assert validator.check(response)
@@ -298,55 +311,323 @@ class TestJobResponseValidator:
                 "reason": None,
                 "description": None,
                 "created_at": "now",
+                "run_time_seconds": 10,
             },
             "container": container,
             "ssh_server": "nobody@ssh-auth",
             "ssh_auth_server": "nobody@ssh-auth",
             "is_preemptible": False,
+            "uri": "job://cluster-name/tests/test-job-id",
+            "restart_policy": "never",
         }
         validator = create_job_response_validator()
         assert validator.check(response)
+
+    def test_with_absolute_working_dir(self) -> None:
+        container = {
+            "image": "testimage",
+            "command": "arg1 arg2 arg3",
+            "working_dir": "/working/dir",
+            "resources": {"cpu": 0.1, "memory_mb": 16, "shm": True},
+        }
+        response = {
+            "id": "test-job-id",
+            "owner": "tests",
+            "cluster_name": "cluster-name",
+            "status": "pending",
+            "history": {
+                "status": "pending",
+                "reason": None,
+                "description": None,
+                "created_at": "now",
+                "run_time_seconds": 10,
+            },
+            "container": container,
+            "ssh_server": "nobody@ssh-auth",
+            "ssh_auth_server": "nobody@ssh-auth",
+            "is_preemptible": False,
+            "uri": "job://cluster-name/tests/test-job-id",
+            "restart_policy": "never",
+        }
+        validator = create_job_response_validator()
+        assert validator.check(response)
+
+    def test_with_relative_working_dir(self) -> None:
+        container = {
+            "image": "testimage",
+            "command": "arg1 arg2 arg3",
+            "working_dir": "working/dir",
+            "resources": {"cpu": 0.1, "memory_mb": 16, "shm": True},
+        }
+        response = {
+            "id": "test-job-id",
+            "owner": "tests",
+            "cluster_name": "cluster-name",
+            "status": "pending",
+            "history": {
+                "status": "pending",
+                "reason": None,
+                "description": None,
+                "created_at": "now",
+                "run_time_seconds": 10,
+            },
+            "container": container,
+            "ssh_server": "nobody@ssh-auth",
+            "ssh_auth_server": "nobody@ssh-auth",
+            "is_preemptible": False,
+            "uri": "job://cluster-name/tests/test-job-id",
+            "restart_policy": "never",
+        }
+        validator = create_job_response_validator()
+        with pytest.raises(t.DataError):
+            validator.check(response)
+
+    def test_with_max_run_time_minutes(self) -> None:
+        container = {
+            "image": "testimage",
+            "command": "arg1 arg2 arg3",
+            "resources": {"cpu": 0.1, "memory_mb": 16, "shm": True},
+            "ssh": {"port": 666},
+        }
+        response = {
+            "id": "test-job-id",
+            "owner": "tests",
+            "cluster_name": "cluster-name",
+            "status": "pending",
+            "name": "test-job-name",
+            "description": "test-job",
+            "history": {
+                "status": "pending",
+                "reason": None,
+                "description": None,
+                "created_at": "now",
+                "run_time_seconds": 10,
+            },
+            "container": container,
+            "ssh_server": "nobody@ssh-auth",
+            "ssh_auth_server": "nobody@ssh-auth",
+            "is_preemptible": False,
+            "max_run_time_minutes": 10,
+            "uri": "job://cluster-name/tests/test-job-id",
+            "restart_policy": "never",
+        }
+        validator = create_job_response_validator()
+        assert validator.check(response)
+
+    def test_with_invalid_run_time_seconds(self) -> None:
+        container = {
+            "image": "testimage",
+            "command": "arg1 arg2 arg3",
+            "resources": {"cpu": 0.1, "memory_mb": 16, "shm": True},
+            "ssh": {"port": 666},
+        }
+        response = {
+            "id": "test-job-id",
+            "owner": "tests",
+            "cluster_name": "cluster-name",
+            "status": "pending",
+            "name": "test-job-name",
+            "description": "test-job",
+            "history": {
+                "status": "pending",
+                "reason": None,
+                "description": None,
+                "created_at": "now",
+                "run_time_seconds": -10.0,
+            },
+            "container": container,
+            "ssh_server": "nobody@ssh-auth",
+            "ssh_auth_server": "nobody@ssh-auth",
+            "is_preemptible": False,
+            "uri": "job://cluster-name/tests/test-job-id",
+            "restart_policy": "never",
+        }
+        validator = create_job_response_validator()
+        with pytest.raises(t.DataError, match="value is less than 0"):
+            assert validator.check(response)
 
 
 class TestVolumesValidator:
     def test_valid_volumes(self) -> None:
         value = [
             {
-                "src_storage_uri": "storage://uri1",
-                "dst_path": "path1",
+                "src_storage_uri": "storage://test-cluster/uri1",
+                "dst_path": "/path1",
                 "read_only": True,
             },
             {
-                "src_storage_uri": "storage://uri2",
-                "dst_path": "path2",
+                "src_storage_uri": "storage://test-cluster/uri2",
+                "dst_path": "/path2",
                 "read_only": True,
             },
         ]
-        validator = create_volumes_validator()
+        validator = create_volumes_validator(cluster_name="test-cluster")
         assert validator.check(value)
 
     def test_destination_paths_are_unique(self) -> None:
         value = [
             {
-                "src_storage_uri": "storage://uri1",
+                "src_storage_uri": "storage://test-cluster/uri1",
                 "dst_path": "path",
                 "read_only": True,
             },
             {
-                "src_storage_uri": "storage://uri2",
+                "src_storage_uri": "storage://test-cluster/uri2",
                 "dst_path": "path",
                 "read_only": True,
             },
         ]
-        validator = create_volumes_validator()
+        validator = create_volumes_validator(cluster_name="test-cluster")
         with pytest.raises(t.DataError):
             assert validator.check(value)
 
     def test_volumes_are_unique(self) -> None:
         value = [
-            {"src_storage_uri": "storage://uri", "dst_path": "path", "read_only": True},
-            {"src_storage_uri": "storage://uri", "dst_path": "path", "read_only": True},
+            {
+                "src_storage_uri": "storage://test-cluster/uri",
+                "dst_path": "path",
+                "read_only": True,
+            },
+            {
+                "src_storage_uri": "storage://test-cluster/uri",
+                "dst_path": "path",
+                "read_only": True,
+            },
         ]
-        validator = create_volumes_validator()
+        validator = create_volumes_validator(cluster_name="test-cluster")
         with pytest.raises(t.DataError):
             assert validator.check(value)
+
+
+class TestSecretVolumesValidator:
+    def test_valid_volumes(self) -> None:
+        value = [
+            {"src_secret_uri": "storage://test-cluster/uri1", "dst_path": "/path1"},
+            {"src_secret_uri": "storage://test-cluster/uri2", "dst_path": "/path2"},
+        ]
+        validator = create_volumes_validator(
+            uri_key="src_secret_uri",
+            has_read_only_key=False,
+            cluster_name="test-cluster",
+        )
+        assert validator.check(value)
+
+    def test_destination_paths_are_unique(self) -> None:
+        value = [
+            {"src_secret_uri": "storage://test-cluster/uri1", "dst_path": "path"},
+            {"src_secret_uri": "storage://test-cluster/uri2", "dst_path": "path"},
+        ]
+        validator = create_volumes_validator(
+            uri_key="src_secret_uri",
+            has_read_only_key=False,
+            cluster_name="test-cluster",
+        )
+        with pytest.raises(t.DataError):
+            assert validator.check(value)
+
+    def test_volumes_are_unique(self) -> None:
+        value = [
+            {"src_secret_uri": "storage://test-cluster/uri", "dst_path": "path"},
+            {"src_secret_uri": "storage://test-cluster/uri", "dst_path": "path"},
+        ]
+        validator = create_volumes_validator(
+            uri_key="src_secret_uri",
+            has_read_only_key=False,
+            cluster_name="test-cluster",
+        )
+        with pytest.raises(t.DataError):
+            assert validator.check(value)
+
+
+class TestPathUriValidator:
+    def test_invalid_uri_scheme(self) -> None:
+        cluster = "test-cluster"
+        uri = f"invalid://{cluster}/path"
+        validator = create_path_uri_validator(
+            storage_scheme="storage", cluster_name=cluster
+        )
+        with pytest.raises(t.DataError, match="Invalid URI scheme"):
+            assert validator.check(uri)
+
+    @pytest.mark.parametrize(
+        "uri",
+        (
+            "storage:",
+            "storage:/",
+            "storage://",
+            "storage:/path/to/dir",
+            "storage://path/to/dir",
+        ),
+    )
+    def test_create_invalid_uri(self, uri: str) -> None:
+        cluster = "test-cluster"
+        validator = create_path_uri_validator(
+            storage_scheme="storage", cluster_name=cluster
+        )
+        with pytest.raises(t.DataError, match="Invalid URI cluster"):
+            validator.check(uri)
+
+    @pytest.mark.parametrize(
+        "uri",
+        ("storage://test-cluster/../to/dir", "storage://test-cluster/path/../dir"),
+    )
+    def test_create_invalid_path(self, uri: str) -> None:
+        cluster = "test-cluster"
+        validator = create_path_uri_validator(
+            storage_scheme="storage", cluster_name=cluster
+        )
+        with pytest.raises(t.DataError, match="Invalid path"):
+            validator.check(uri)
+
+    @pytest.mark.parametrize("uri", ("secret://test-cluster", "secret://test-cluster/"))
+    def test_create_assert_username_missing(self, uri: str) -> None:
+        cluster = "test-cluster"
+        validator = create_path_uri_validator(
+            storage_scheme="secret", cluster_name=cluster, assert_username="usr1"
+        )
+        with pytest.raises(
+            t.DataError, match="Invalid URI path: Not enough path items"
+        ):
+            validator.check(uri)
+
+    def test_create_assert_username_wrong(self) -> None:
+        cluster = "test-cluster"
+        uri = "secret://test-cluster/usr2/key1"
+        validator = create_path_uri_validator(
+            storage_scheme="secret", cluster_name=cluster, assert_username="usr1"
+        )
+        with pytest.raises(
+            t.DataError, match="Invalid URI: Invalid user in path: 'usr2' != 'usr1'"
+        ):
+            validator.check(uri)
+
+    @pytest.mark.parametrize(
+        "uri",
+        (
+            "storage://test-cluster",
+            "storage://test-cluster/",
+            "storage://test-cluster/to" "storage://test-cluster/to/more/that",
+            "storage://test-cluster/to/more/that/expected",
+        ),
+    )
+    def test_invalid_parts_count(self, uri: str) -> None:
+        cluster = "test-cluster"
+        validator = create_path_uri_validator(
+            storage_scheme="storage", cluster_name=cluster, assert_parts_count=3
+        )
+        with pytest.raises(t.DataError, match="Invalid URI path"):
+            validator.check(uri)
+
+
+class TestMountPathValidator:
+    def test_relative_dst_mount_path(self) -> None:
+        mount_path = "container/relative/path"
+        validator = create_mount_path_validator()
+        with pytest.raises(t.DataError, match="Mount path must be absolute"):
+            validator.check(mount_path)
+
+    def test_dots_dst_mount_path(self) -> None:
+        mount_path = "/container/../path"
+        validator = create_mount_path_validator()
+        with pytest.raises(ValueError, match="Invalid path"):
+            validator.check(mount_path)

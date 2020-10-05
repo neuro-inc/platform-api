@@ -1,6 +1,5 @@
 import logging
-
-from async_exit_stack import AsyncExitStack
+from contextlib import AsyncExitStack
 
 from .cluster import Cluster
 from .cluster_config import ClusterConfig
@@ -39,7 +38,7 @@ class KubeCluster(Cluster):
             kube_config=self._config.orchestrator,
         )
         garbage_collector = GarbageCollectorPoller(
-            config=self._config.garbage_collector, orchestrator=orchestrator,
+            config=self._config.garbage_collector, orchestrator=orchestrator
         )
         await self._exit_stack.enter_async_context(orchestrator)
         await self._exit_stack.enter_async_context(garbage_collector)

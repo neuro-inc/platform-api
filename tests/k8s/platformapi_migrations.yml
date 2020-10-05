@@ -1,0 +1,19 @@
+apiVersion: batch/v1
+kind: Job
+metadata:
+  name: platformapi-migrations
+spec:
+  template:
+    spec:
+      restartPolicy: OnFailure
+      containers:
+      - name: platformapi-migrations
+        image: platformapi:latest
+        imagePullPolicy: Never
+        command: ["alembic", "upgrade", "head"]
+        env:
+          - name: NP_DB_REDIS_URI
+            value: redis://platformredis:6379/0
+          - name: NP_DB_POSTGRES_DSN
+            value: postgresql://postgres@platformpostgres:5432/postgres
+  backoffLimit: 10

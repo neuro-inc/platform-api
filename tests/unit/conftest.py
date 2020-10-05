@@ -132,10 +132,10 @@ class MockNotificationsClient(NotificationsClient):
     async def notify(self, notification: AbstractNotification) -> None:
         self._sent_notifications.append(notification)
 
-    def init(self) -> None:
+    async def init(self) -> None:
         pass
 
-    def close(self) -> None:
+    async def close(self) -> None:
         pass
 
     @property
@@ -200,16 +200,21 @@ def cluster_config(registry_config: RegistryConfig) -> ClusterConfig:
     storage_config = StorageConfig(host_mount_path=PurePath("/tmp"))
     orchestrator_config = KubeConfig(
         jobs_domain_name_template="{job_id}.jobs",
-        ssh_auth_domain_name="ssh-auth",
+        ssh_auth_server="ssh-auth:22",
         endpoint_url="http://k8s:1234",
         resource_pool_types=[ResourcePoolType()],
     )
     return ClusterConfig(
-        name="default",
+        name="test-cluster",
         storage=storage_config,
         registry=registry_config,
         orchestrator=orchestrator_config,
-        ingress=IngressConfig(storage_url=URL(), monitoring_url=URL()),
+        ingress=IngressConfig(
+            storage_url=URL(),
+            monitoring_url=URL(),
+            secrets_url=URL(),
+            metrics_url=URL(),
+        ),
         garbage_collector=GarbageCollectorConfig(platform_api_url=URL(), token=""),
     )
 
@@ -227,7 +232,7 @@ async def cluster_registry(
         return MockCluster(config, mock_orchestrator)
 
     async with ClusterRegistry(factory=_cluster_factory) as registry:
-        await registry.add(cluster_config)
+        await registry.replace(cluster_config)
         yield registry
 
 

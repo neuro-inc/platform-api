@@ -1,8 +1,10 @@
 import logging
 from dataclasses import dataclass, field
+from typing import List, Optional
 
 from aiohttp.web import HTTPUnauthorized, Request
 from aiohttp_security.api import AUTZ_KEY, IDENTITY_KEY
+from neuro_auth_client import Cluster as AuthCluster, User as AuthUser
 from yarl import URL
 
 from platform_api.orchestrator.job import (
@@ -15,17 +17,60 @@ logger = logging.getLogger(__name__)
 
 
 @dataclass(frozen=True)
-class User:
+class UserCluster:
     name: str
-    token: str = field(repr=False)
     quota: AggregatedRunTime = field(default=DEFAULT_QUOTA_NO_RESTRICTIONS)
-    cluster_name: str = ""
 
     def has_quota(self) -> bool:
         return self.quota != DEFAULT_QUOTA_NO_RESTRICTIONS
 
-    def to_job_uri(self) -> URL:
-        return URL(f"job://{self.name}")
+    @classmethod
+    def create_from_auth_cluster(cls, cluster: AuthCluster) -> "UserCluster":
+        return cls(name=cluster.name, quota=AggregatedRunTime.from_quota(cluster.quota))
+
+
+@dataclass(frozen=True)
+class User:
+    name: str
+    token: str = field(repr=False)
+
+    # NOTE: left this for backward compatibility with existing tests
+    quota: AggregatedRunTime = field(default=DEFAULT_QUOTA_NO_RESTRICTIONS)
+    cluster_name: str = ""
+
+    clusters: List[UserCluster] = field(default_factory=list)
+
+    # NOTE: left this for backward compatibility with existing tests
+    def __post_init__(self) -> None:
+        if self.clusters:
+            object.__setattr__(self, "cluster_name", self.clusters[0].name)
+            object.__setattr__(self, "quota", self.clusters[0].quota)
+        else:
+            self.clusters.append(UserCluster(name=self.cluster_name, quota=self.quota))
+
+    # NOTE: left this for backward compatibility with existing tests
+    def has_quota(self) -> bool:
+        return self.quota != DEFAULT_QUOTA_NO_RESTRICTIONS
+
+    def get_cluster(self, name: str) -> Optional[UserCluster]:
+        for cluster in self.clusters:
+            if cluster.name == name:
+                return cluster
+        return None
+
+    def to_job_uri(self, cluster_name: str) -> URL:
+        assert cluster_name
+        return URL(f"job://{cluster_name}/{self.name}")
+
+    @classmethod
+    def create_from_auth_user(cls, auth_user: AuthUser, *, token: str = "") -> "User":
+        return cls(
+            name=auth_user.name,
+            token=token,
+            clusters=[
+                UserCluster.create_from_auth_cluster(c) for c in auth_user.clusters
+            ],
+        )
 
 
 async def untrusted_user(request: Request) -> User:
@@ -47,7 +92,7 @@ async def untrusted_user(request: Request) -> User:
 
 async def authorized_user(request: Request) -> User:
     """Request auth-server for authenticated information on the user and
-     return the `User` object with all necessary information
+    return the `User` object with all necessary information
     """
     identity = await _get_identity(request)
 
@@ -55,14 +100,7 @@ async def authorized_user(request: Request) -> User:
     autz_user = await autz_policy.authorized_user(identity)
     if autz_user is None:
         raise HTTPUnauthorized()
-    quota = AggregatedRunTime.from_quota(autz_user.quota)
-
-    return User(
-        name=autz_user.name,
-        cluster_name=autz_user.cluster_name,
-        token=identity,
-        quota=quota,
-    )
+    return User.create_from_auth_user(autz_user, token=identity)
 
 
 async def _get_identity(request: Request) -> str:

@@ -6,7 +6,7 @@ from typing import AsyncIterator, Awaitable, Callable, Optional
 import aiohttp
 import pytest
 from jose import jwt
-from neuro_auth_client import AuthClient, User
+from neuro_auth_client import AuthClient, Cluster as AuthCluster, User
 from yarl import URL
 
 from tests.conftest import random_str
@@ -88,17 +88,25 @@ async def client() -> AsyncIterator[aiohttp.ClientSession]:
 async def api(api_config: PlatformConfig, client: aiohttp.ClientSession) -> None:
     url = api_config.ping_url
     interval_s = 1
-    max_attempts = 30
-    for _ in range(max_attempts):
+    attempts = 30
+    while True:
+        attempts -= 1
         try:
             response = await client.get(url)
             if response.status == 200:
                 break
+            if attempts <= 0:
+                assert (
+                    response.status == 200
+                ), f"Unable to connect to Platform API: {url}" "\nresponse: " + repr(
+                    await response.text()
+                )
+                break
         except OSError:
+            if attempts <= 0:
+                raise
             pass
         time.sleep(interval_s)
-    else:
-        pytest.fail(f"Unable to connect to Platform API: {url}")
 
 
 @pytest.fixture
@@ -109,6 +117,11 @@ async def auth_client(
         yield client
 
 
+@pytest.fixture
+def cluster_name() -> str:
+    return "test-cluster"
+
+
 @dataclass
 class _User:
     name: str
@@ -117,13 +130,30 @@ class _User:
 
 @pytest.fixture
 async def regular_user_factory(
-    auth_client: AuthClient, token_factory: Callable[[str], str]
+    auth_client: AuthClient,
+    token_factory: Callable[[str], str],
+    admin_token: str,
+    cluster_name: str,
 ) -> Callable[[Optional[str]], Awaitable[_User]]:
     async def _factory(name: Optional[str] = None) -> _User:
         if not name:
             name = random_str()
-        user = User(name=name)
+        auth_clusters = [AuthCluster(name=cluster_name)]
+        user = User(name=name, clusters=auth_clusters)
         await auth_client.add_user(user)
+        # Grant cluster-specific permissions
+        headers = auth_client._generate_headers(admin_token)
+        payload = [
+            {"uri": f"storage://{cluster_name}/{name}", "action": "manage"},
+            {"uri": f"image://{cluster_name}/{name}", "action": "manage"},
+            {"uri": f"job://{cluster_name}/{name}", "action": "manage"},
+            {"uri": f"secret://{cluster_name}/{name}", "action": "write"},
+            {"uri": f"disk://{cluster_name}/{name}", "action": "write"},
+        ]
+        async with auth_client._request(
+            "POST", f"/api/v1/users/{name}/permissions", headers=headers, json=payload
+        ) as p:
+            assert p.status == 201
         return _User(name=user.name, token=token_factory(user.name))
 
     return _factory

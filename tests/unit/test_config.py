@@ -12,6 +12,7 @@ from platform_api.cluster_config import (
     StorageType,
 )
 from platform_api.config_factory import EnvironConfigFactory
+from platform_api.orchestrator.kube_client import SecretVolume
 from platform_api.orchestrator.kube_orchestrator import (
     HostVolume,
     KubeConfig,
@@ -70,7 +71,7 @@ class TestStorageVolume:
         )
         kube_config = KubeConfig(
             jobs_domain_name_template="{job_id}.testdomain",
-            ssh_auth_domain_name="ssh-auth.domain",
+            ssh_auth_server="ssh-auth.domain",
             endpoint_url="http://1.2.3.4",
             resource_pool_types=[ResourcePoolType()],
         )
@@ -90,7 +91,7 @@ class TestStorageVolume:
         )
         kube_config = KubeConfig(
             jobs_domain_name_template="{job_id}.testdomain",
-            ssh_auth_domain_name="ssh-auth.domain",
+            ssh_auth_server="ssh-auth.domain",
             endpoint_url="http://1.2.3.4",
             resource_pool_types=[ResourcePoolType()],
         )
@@ -108,7 +109,7 @@ class TestStorageVolume:
         )
         kube_config = KubeConfig(
             jobs_domain_name_template="{job_id}.testdomain",
-            ssh_auth_domain_name="ssh-auth.domain",
+            ssh_auth_server="ssh-auth.domain",
             endpoint_url="http://1.2.3.4",
             resource_pool_types=[ResourcePoolType()],
         )
@@ -120,6 +121,29 @@ class TestStorageVolume:
         volume = kube_orchestrator.create_storage_volume()
         assert volume == PVCVolume(
             name="storage", path=PurePath("/tmp"), claim_name="testclaim"
+        )
+
+
+class TestSecretVolume:
+    def test_create_secret_volume(self, registry_config: RegistryConfig) -> None:
+        storage_config = StorageConfig(
+            host_mount_path=PurePath("/tmp"), type=StorageType.PVC, pvc_name="testclaim"
+        )
+        kube_config = KubeConfig(
+            jobs_domain_name_template="{job_id}.testdomain",
+            ssh_auth_server="ssh-auth.domain",
+            endpoint_url="http://1.2.3.4",
+            resource_pool_types=[ResourcePoolType()],
+        )
+        kube_orchestrator = KubeOrchestrator(
+            storage_config=storage_config,
+            registry_config=registry_config,
+            kube_config=kube_config,
+        )
+        user_name = "test-user"
+        volume = kube_orchestrator.create_secret_volume(user_name)
+        assert volume == SecretVolume(
+            name="secret", k8s_secret_name="user--test-user--secrets"
         )
 
 
@@ -144,6 +168,7 @@ class TestEnvironConfigFactory:
             "NP_OAUTH_SUCCESS_REDIRECT_URL": "https://platform-default-url",
             "NP_OAUTH_HEADLESS_CALLBACK_URL": "https://dev.neu.ro/oauth/show-code",
             "NP_API_URL": "https://neu.ro/api/v1",
+            "NP_ADMIN_URL": "https://neu.ro/apis/admin/v1",
             "NP_PLATFORM_CONFIG_URI": "http://platformconfig:8080/api/v1",
             "NP_NOTIFICATIONS_URL": "http://notifications:8080",
             "NP_NOTIFICATIONS_TOKEN": "token",
@@ -152,9 +177,14 @@ class TestEnvironConfigFactory:
             "NP_ENFORCER_TOKEN": "compute-token",
             "NP_GC_PLATFORM_API_URL": "http://platformapi:8080/api/v1",
             "NP_GC_TOKEN": "compute-token",
+            "NP_API_ZIPKIN_URL": "https://zipkin:9411",
+            "NP_API_ZIPKIN_SAMPLE_RATE": "1",
         }
         config = EnvironConfigFactory(environ=environ).create()
-        cluster = EnvironConfigFactory(environ=environ).create_cluster()
+        cluster = EnvironConfigFactory(environ=environ).create_cluster("new-cluster")
+
+        assert config.config_url == URL("http://platformconfig:8080/api/v1")
+        assert config.admin_url == URL("https://neu.ro/apis/admin/v1")
 
         assert config.server.host == "0.0.0.0"
         assert config.server.port == 8080
@@ -191,7 +221,7 @@ class TestEnvironConfigFactory:
         assert cluster.orchestrator.client_conn_pool_size == 100
         assert not cluster.orchestrator.is_http_ingress_secure
         assert cluster.orchestrator.jobs_domain_name_template == "{job_id}.jobs.domain"
-        assert cluster.orchestrator.ssh_auth_domain_name == "ssh-auth.domain"
+        assert cluster.orchestrator.ssh_auth_server == "ssh-auth.domain"
 
         assert cluster.orchestrator.resource_pool_types == [ResourcePoolType()]
         assert cluster.orchestrator.node_label_gpu is None
@@ -216,7 +246,7 @@ class TestEnvironConfigFactory:
 
         assert cluster.registry.host == "registry.dev.neuromation.io"
 
-        assert config.config_client is not None
+        assert not config.cors.allowed_origins
 
     def test_create_value_error_invalid_port(self) -> None:
         environ = {
@@ -226,8 +256,13 @@ class TestEnvironConfigFactory:
             "NP_AUTH_URL": "https://auth",
             "NP_AUTH_TOKEN": "token",
             "NP_API_URL": "https://neu.ro/api/v1",
+            "NP_ADMIN_URL": "https://neu.ro/apis/admin/v1",
+            "NP_ADMIN_URL": "https://neu.ro/apis/admin/v1",
+            "NP_PLATFORM_CONFIG_URI": "http://platformconfig:8080/api/v1",
             "NP_JOBS_INGRESS_OAUTH_AUTHORIZE_URL": "http://neu.ro/oauth/authorize",
             "NP_AUTH_PUBLIC_URL": "https://neu.ro/api/v1/users",
+            "NP_API_ZIPKIN_URL": "https://zipkin:9411",
+            "NP_API_ZIPKIN_SAMPLE_RATE": "1",
         }
         with pytest.raises(ValueError):
             EnvironConfigFactory(environ=environ).create()
@@ -255,6 +290,10 @@ class TestEnvironConfigFactory:
             "NP_DB_REDIS_URI": "redis://localhost:6379/0",
             "NP_DB_REDIS_CONN_POOL_SIZE": "444",
             "NP_DB_REDIS_CONN_TIMEOUT": "555",
+            "NP_DB_POSTGRES_ENABLED": "true",
+            "NP_DB_POSTGRES_DSN": "postgresql://postgres@localhost:5432/postgres",
+            "NP_DB_POSTGRES_POOL_MIN": "50",
+            "NP_DB_POSTGRES_POOL_MAX": "500",
             "NP_AUTH_URL": "https://auth",
             "NP_AUTH_TOKEN": "token",
             "NP_AUTH_NAME": "servicename",
@@ -272,6 +311,7 @@ class TestEnvironConfigFactory:
             ),
             "NP_K8S_NODE_LABEL_PREEMPTIBLE": "testpreempt",
             "NP_API_URL": "https://neu.ro/api/v1",
+            "NP_ADMIN_URL": "https://neu.ro/apis/admin/v1",
             "NP_OAUTH_HEADLESS_CALLBACK_URL": "https://oauth/show-code",
             "NP_PLATFORM_CONFIG_URI": "http://platformconfig:8080/api/v1",
             "NP_NOTIFICATIONS_URL": "http://notifications:8080",
@@ -281,9 +321,12 @@ class TestEnvironConfigFactory:
             "NP_ENFORCER_TOKEN": "compute-token",
             "NP_GC_PLATFORM_API_URL": "http://platformapi:8080/api/v1",
             "NP_GC_TOKEN": "compute-token",
+            "NP_CORS_ORIGINS": "https://domain1.com,http://do.main",
+            "NP_API_ZIPKIN_URL": "https://zipkin:9411",
+            "NP_API_ZIPKIN_SAMPLE_RATE": "1",
         }
         config = EnvironConfigFactory(environ=environ).create()
-        cluster = EnvironConfigFactory(environ=environ).create_cluster()
+        cluster = EnvironConfigFactory(environ=environ).create_cluster("new-cluster")
 
         assert config.server.host == "0.0.0.0"
         assert config.server.port == 1111
@@ -294,6 +337,8 @@ class TestEnvironConfigFactory:
 
         assert cluster.ingress.storage_url == URL("https://neu.ro/api/v1/storage")
         assert cluster.ingress.monitoring_url == URL("https://neu.ro/api/v1/jobs")
+        assert cluster.ingress.secrets_url == URL("https://neu.ro/api/v1/secrets")
+        assert cluster.ingress.metrics_url == URL("https://neu.ro/api/v1/metrics")
 
         assert config.jobs.deletion_delay_s == 3600
         assert config.jobs.deletion_delay == timedelta(seconds=3600)
@@ -323,7 +368,7 @@ class TestEnvironConfigFactory:
         )
         assert cluster.orchestrator.is_http_ingress_secure
         assert cluster.orchestrator.jobs_domain_name_template == "{job_id}.jobs.domain"
-        assert cluster.orchestrator.ssh_auth_domain_name == "ssh-auth.domain"
+        assert cluster.orchestrator.ssh_auth_server == "ssh-auth.domain"
 
         assert cluster.orchestrator.resource_pool_types == [
             ResourcePoolType(),
@@ -334,10 +379,20 @@ class TestEnvironConfigFactory:
         assert cluster.orchestrator.node_label_gpu == "testlabel"
         assert cluster.orchestrator.node_label_preemptible == "testpreempt"
 
+        assert config.database.postgres_enabled
+
         assert config.database.redis is not None
         assert config.database.redis.uri == "redis://localhost:6379/0"
         assert config.database.redis.conn_pool_size == 444
         assert config.database.redis.conn_timeout_s == 555.0
+
+        assert config.database.postgres is not None
+        assert (
+            config.database.postgres.postgres_dsn
+            == "postgresql://postgres@localhost:5432/postgres"
+        )
+        assert config.database.postgres.pool_min_size == 50
+        assert config.database.postgres.pool_max_size == 500
 
         assert config.env_prefix == "TEST"
 
@@ -349,7 +404,7 @@ class TestEnvironConfigFactory:
         assert cluster.registry.host == "testregistry:5000"
         assert cluster.registry.url == URL("https://testregistry:5000")
 
-        assert config.config_client is not None
+        assert config.cors.allowed_origins == ["https://domain1.com", "http://do.main"]
 
     def test_create_nfs(self) -> None:
         environ = {
@@ -362,6 +417,7 @@ class TestEnvironConfigFactory:
             "NP_JOBS_INGRESS_OAUTH_AUTHORIZE_URL": "http://neu.ro/oauth/authorize",
             "NP_K8S_SSH_AUTH_INGRESS_DOMAIN_NAME": "ssh-auth.domain",
             "NP_API_URL": "https://neu.ro/api/v1",
+            "NP_ADMIN_URL": "https://neu.ro/apis/admin/v1",
             "NP_AUTH_URL": "https://auth",
             "NP_AUTH_TOKEN": "token",
             "NP_OAUTH_HEADLESS_CALLBACK_URL": "https://oauth/show-code",
@@ -371,7 +427,7 @@ class TestEnvironConfigFactory:
             "NP_GC_PLATFORM_API_URL": "http://platformapi:8080/api/v1",
             "NP_GC_TOKEN": "compute-token",
         }
-        cluster = EnvironConfigFactory(environ=environ).create_cluster()
+        cluster = EnvironConfigFactory(environ=environ).create_cluster("new-cluster")
         assert cluster.storage.nfs_server == "1.2.3.4"
         assert cluster.storage.nfs_export_path == PurePath("/tmp")
 
@@ -427,7 +483,7 @@ class TestOrchestratorConfig:
     def test_default_presets(self) -> None:
         config = OrchestratorConfig(
             jobs_domain_name_template="test",
-            ssh_auth_domain_name="test",
+            ssh_auth_server="test",
             resource_pool_types=(),
         )
         assert config.presets == DEFAULT_PRESETS
@@ -436,7 +492,7 @@ class TestOrchestratorConfig:
         presets = (Preset(name="test", cpu=1.0, memory_mb=1024),)
         config = OrchestratorConfig(
             jobs_domain_name_template="test",
-            ssh_auth_domain_name="test",
+            ssh_auth_server="test",
             resource_pool_types=(ResourcePoolType(presets=presets),),
         )
         assert config.presets == presets
@@ -455,7 +511,7 @@ class TestKubeConfig:
                 token_path="value",
                 namespace="value",
                 jobs_domain_name_template="value",
-                ssh_auth_domain_name="value",
+                ssh_auth_server="value",
                 resource_pool_types=[],
                 node_label_gpu="value",
                 node_label_preemptible="value",
@@ -474,7 +530,7 @@ class TestKubeConfig:
                 token_path="value",
                 namespace="value",
                 jobs_domain_name_template="value",
-                ssh_auth_domain_name="value",
+                ssh_auth_server="value",
                 resource_pool_types=[],
                 node_label_gpu="value",
                 node_label_preemptible="value",
@@ -494,7 +550,7 @@ class TestKubeConfig:
             token_path="value",
             namespace="value",
             jobs_domain_name_template="value",
-            ssh_auth_domain_name="value",
+            ssh_auth_server="value",
             resource_pool_types=[],
             node_label_gpu="value",
             node_label_preemptible="value",

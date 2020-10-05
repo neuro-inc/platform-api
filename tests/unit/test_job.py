@@ -1,7 +1,7 @@
 import dataclasses
 from datetime import datetime, timedelta, timezone
 from pathlib import PurePath
-from typing import Any, Dict
+from typing import Any, Callable, Dict
 from unittest import mock
 
 import pytest
@@ -9,13 +9,15 @@ from neuro_auth_client.client import Quota
 from yarl import URL
 
 from platform_api.cluster_config import RegistryConfig, StorageConfig
-from platform_api.handlers.job_request_builder import ContainerBuilder
+from platform_api.handlers.job_request_builder import create_container_from_payload
 from platform_api.orchestrator.job import (
     AggregatedRunTime,
     Job,
     JobRecord,
+    JobRestartPolicy,
     JobStatusHistory,
     JobStatusItem,
+    maybe_job_id,
 )
 from platform_api.orchestrator.job_request import (
     Container,
@@ -25,8 +27,13 @@ from platform_api.orchestrator.job_request import (
     ContainerTPUResource,
     ContainerVolume,
     ContainerVolumeFactory,
+    Disk,
+    DiskContainerVolume,
+    JobError,
     JobRequest,
     JobStatus,
+    Secret,
+    SecretContainerVolume,
 )
 from platform_api.user import User
 
@@ -48,6 +55,24 @@ class TestContainer:
             resources=ContainerResources(cpu=1, memory_mb=128),
         )
         assert container.command_list == ["bash", "-c", "date"]
+
+    def test_command_list_invalid(self) -> None:
+        container = Container(
+            image="testimage",
+            command='"',
+            resources=ContainerResources(cpu=1, memory_mb=128),
+        )
+        with pytest.raises(JobError, match="invalid command format"):
+            container.command_list
+
+    def test_entrypoint_list_invalid(self) -> None:
+        container = Container(
+            image="testimage",
+            entrypoint='"',
+            resources=ContainerResources(cpu=1, memory_mb=128),
+        )
+        with pytest.raises(JobError, match="invalid command format"):
+            container.entrypoint_list
 
     def test_entrypoint_list_non_empty(self) -> None:
         container = Container(
@@ -105,7 +130,7 @@ class TestContainer:
             url=URL("http://example.com"), username="compute", password="compute_token"
         )
         with pytest.raises(AssertionError, match="Unknown registry"):
-            container.to_image_uri(registry_config)
+            container.to_image_uri(registry_config, "test-cluster")
 
     def test_to_image_uri(self) -> None:
         container = Container(
@@ -115,8 +140,8 @@ class TestContainer:
         registry_config = RegistryConfig(
             url=URL("http://example.com"), username="compute", password="compute_token"
         )
-        uri = container.to_image_uri(registry_config)
-        assert uri == URL("image://project/testimage")
+        uri = container.to_image_uri(registry_config, "test-cluster")
+        assert uri == URL("image://test-cluster/project/testimage")
 
     def test_to_image_uri_registry_with_custom_port(self) -> None:
         container = Container(
@@ -128,8 +153,8 @@ class TestContainer:
             username="compute",
             password="compute_token",
         )
-        uri = container.to_image_uri(registry_config)
-        assert uri == URL("image://project/testimage")
+        uri = container.to_image_uri(registry_config, "test-cluster")
+        assert uri == URL("image://test-cluster/project/testimage")
 
     def test_to_image_uri_ignore_tag(self) -> None:
         container = Container(
@@ -139,22 +164,19 @@ class TestContainer:
         registry_config = RegistryConfig(
             url=URL("http://example.com"), username="compute", password="compute_token"
         )
-        uri = container.to_image_uri(registry_config)
-        assert uri == URL("image://project/testimage")
+        uri = container.to_image_uri(registry_config, "test-cluster")
+        assert uri == URL("image://test-cluster/project/testimage")
 
 
 class TestContainerVolumeFactory:
-    def test_invalid_storage_uri_scheme(self) -> None:
-        uri = "invalid://path"
-        with pytest.raises(ValueError, match="Invalid URI scheme"):
-            ContainerVolumeFactory(
-                uri, src_mount_path=PurePath("/"), dst_mount_path=PurePath("/")
-            )
-
-    @pytest.mark.parametrize("uri", ("storage:///", "storage://"))
-    def test_invalid_storage_uri_path(self, uri: str) -> None:
+    @pytest.mark.parametrize(
+        "uri", ("storage://test-cluster", "storage://test-cluster/")
+    )
+    def test_create_storage_root_path(self, uri: str) -> None:
         volume = ContainerVolumeFactory(
-            uri, src_mount_path=PurePath("/host"), dst_mount_path=PurePath("/container")
+            uri,
+            src_mount_path=PurePath("/host"),
+            dst_mount_path=PurePath("/container"),
         ).create()
         assert volume.src_path == PurePath("/host")
         assert volume.dst_path == PurePath("/container")
@@ -163,10 +185,9 @@ class TestContainerVolumeFactory:
     @pytest.mark.parametrize(
         "uri",
         (
-            "storage:///path/to/dir",
-            "storage:///path/to//dir",
-            "storage:///path/to/./dir",
-            "storage://path/to/dir",
+            "storage://test-cluster/path/to/dir",
+            "storage://test-cluster/path/to//dir",
+            "storage://test-cluster/path/to/./dir",
         ),
     )
     def test_create(self, uri: str) -> None:
@@ -180,17 +201,89 @@ class TestContainerVolumeFactory:
         assert volume.dst_path == PurePath("/container/path/to/dir")
         assert volume.read_only
 
-    @pytest.mark.parametrize("uri", ("storage:///../to/dir", "storage://path/../dir"))
-    def test_create_invalid_path(self, uri: str) -> None:
-        with pytest.raises(ValueError, match="Invalid path"):
-            ContainerVolumeFactory(
-                uri,
-                src_mount_path=PurePath("/host"),
-                dst_mount_path=PurePath("/container"),
-            ).create()
+
+class TestDisk:
+    def test_create(self) -> None:
+        uri = "disk://test-cluster/test-user/test-disk"
+        disk = Disk.create(uri)
+        assert disk.cluster_name == "test-cluster"
+        assert disk.user_name == "test-user"
+        assert disk.disk_id == "test-disk"
+
+    def test_create_uri_eq_str(self) -> None:
+        uri = "disk://test-cluster/test-user/test-disk"
+        assert Disk.create(URL(uri)) == Disk.create(uri)
+
+    def test_to_uri(self) -> None:
+        uri = "disk://test-cluster/test-user/test-disk"
+        disk = Disk.create(uri)
+        assert disk.to_uri() == URL(uri)
+
+
+class TestDiskContainerVolume:
+    def test_create(self) -> None:
+        uri = "disk://test-cluster/test-user/test-disk"
+        volume = DiskContainerVolume.create(
+            uri, dst_path=PurePath("/container"), read_only=False
+        )
+        assert volume.disk.cluster_name == "test-cluster"
+        assert volume.disk.user_name == "test-user"
+        assert volume.disk.disk_id == "test-disk"
+        assert volume.dst_path == PurePath("/container")
+        assert not volume.read_only
+
+    def test_to_and_from_primitive(self) -> None:
+        primitive = {
+            "src_disk_uri": "disk://test-cluster/test-user/test-disk",
+            "dst_path": "/container",
+            "read_only": True,
+        }
+        volume = DiskContainerVolume.from_primitive(primitive)
+        assert volume.to_primitive() == primitive
+
+
+class TestSecret:
+    def test_create(self) -> None:
+        uri = "secret://test-cluster/test-user/test-secret"
+        sec = Secret.create(uri)
+        assert sec.cluster_name == "test-cluster"
+        assert sec.user_name == "test-user"
+        assert sec.secret_key == "test-secret"
+
+    def test_create_uri_eq_str(self) -> None:
+        uri = "secret://test-cluster/test-user/test-secret"
+        assert Secret.create(URL(uri)) == Secret.create(uri)
+
+    def test_k8s_secret_name(self) -> None:
+        uri = "secret://test-cluster/test-user/test-secret"
+        sec = Secret.create(uri)
+        assert sec.k8s_secret_name == "user--test-user--secrets"
+
+    def test_to_uri(self) -> None:
+        uri = "secret://test-cluster/test-user/test-secret"
+        sec = Secret.create(uri)
+        assert sec.to_uri() == URL(uri)
+
+
+class TestSecretContainerVolume:
+    def test_create(self) -> None:
+        uri = "secret://test-cluster/test-user/test-secret"
+        volume = SecretContainerVolume.create(uri, dst_path=PurePath("/container"))
+        assert volume.secret.cluster_name == "test-cluster"
+        assert volume.secret.user_name == "test-user"
+        assert volume.secret.secret_key == "test-secret"
+        assert volume.dst_path == PurePath("/container")
+
+    def test_to_and_from_primitive(self) -> None:
+        primitive = {
+            "src_secret_uri": "secret://test-cluster/test-user/test-secret",
+            "dst_path": "/container",
+        }
+        volume = SecretContainerVolume.from_primitive(primitive)
+        assert volume.to_primitive() == primitive
 
     def test_create_without_extending_dst_mount_path(self) -> None:
-        uri = "storage:///path/to/dir"
+        uri = "storage://test-cluster/path/to/dir"
         volume = ContainerVolume.create(
             uri,
             src_mount_path=PurePath("/host"),
@@ -202,24 +295,6 @@ class TestContainerVolumeFactory:
         assert volume.dst_path == PurePath("/container")
         assert volume.read_only
 
-    def test_relative_dst_mount_path(self) -> None:
-        uri = "storage:///path/to/dir"
-        with pytest.raises(ValueError, match="Mount path must be absolute"):
-            ContainerVolumeFactory(
-                uri,
-                src_mount_path=PurePath("/host"),
-                dst_mount_path=PurePath("container"),
-            )
-
-    def test_dots_dst_mount_path(self) -> None:
-        uri = "storage:///path/to/dir"
-        with pytest.raises(ValueError, match="Invalid path"):
-            ContainerVolumeFactory(
-                uri,
-                src_mount_path=PurePath("/host"),
-                dst_mount_path=PurePath("/container/../path"),
-            )
-
 
 class TestContainerBuilder:
     def test_from_payload_build(self) -> None:
@@ -228,28 +303,30 @@ class TestContainerBuilder:
             "image": "testimage",
             "entrypoint": "testentrypoint",
             "command": "testcommand",
+            "working_dir": "/working/dir",
             "env": {"TESTVAR": "testvalue"},
             "resources": {"cpu": 0.1, "memory_mb": 128, "gpu": 1},
             "http": {"port": 80},
             "volumes": [
                 {
-                    "src_storage_uri": "storage://path/to/dir",
+                    "src_storage_uri": "storage://test-cluster/path/to/dir",
                     "dst_path": "/container/path",
                     "read_only": True,
                 }
             ],
         }
-        container = ContainerBuilder.from_container_payload(
+        container = create_container_from_payload(
             payload, storage_config=storage_config
-        ).build()
+        )
         assert container == Container(
             image="testimage",
             entrypoint="testentrypoint",
             command="testcommand",
+            working_dir="/working/dir",
             env={"TESTVAR": "testvalue"},
             volumes=[
                 ContainerVolume(
-                    uri=URL("storage://path/to/dir"),
+                    uri=URL("storage://test-cluster/path/to/dir"),
                     src_path=PurePath("/tmp/path/to/dir"),
                     dst_path=PurePath("/container/path"),
                     read_only=True,
@@ -258,6 +335,7 @@ class TestContainerBuilder:
             resources=ContainerResources(cpu=0.1, memory_mb=128, gpu=1, shm=None),
             http_server=ContainerHTTPServer(port=80, health_check_path="/"),
             ssh_server=None,
+            tty=False,
         )
 
     def test_from_payload_build_gpu_model(self) -> None:
@@ -271,9 +349,9 @@ class TestContainerBuilder:
                 "gpu_model": "gpumodel",
             },
         }
-        container = ContainerBuilder.from_container_payload(
+        container = create_container_from_payload(
             payload, storage_config=storage_config
-        ).build()
+        )
         assert container == Container(
             image="testimage",
             resources=ContainerResources(
@@ -291,9 +369,9 @@ class TestContainerBuilder:
                 "tpu": {"type": "v2-8", "software_version": "1.14"},
             },
         }
-        container = ContainerBuilder.from_container_payload(
+        container = create_container_from_payload(
             payload, storage_config=storage_config
-        ).build()
+        )
         assert container == Container(
             image="testimage",
             resources=ContainerResources(
@@ -314,22 +392,22 @@ class TestContainerBuilder:
             "ssh": {"port": 22},
             "volumes": [
                 {
-                    "src_storage_uri": "storage://path/to/dir",
+                    "src_storage_uri": "storage://test-cluster/path/to/dir",
                     "dst_path": "/container/path",
                     "read_only": True,
                 }
             ],
         }
-        container = ContainerBuilder.from_container_payload(
+        container = create_container_from_payload(
             payload, storage_config=storage_config
-        ).build()
+        )
         assert container == Container(
             image="testimage",
             command="testcommand",
             env={"TESTVAR": "testvalue"},
             volumes=[
                 ContainerVolume(
-                    uri=URL("storage://path/to/dir"),
+                    uri=URL("storage://test-cluster/path/to/dir"),
                     src_path=PurePath("/tmp/path/to/dir"),
                     dst_path=PurePath("/container/path"),
                     read_only=True,
@@ -350,22 +428,22 @@ class TestContainerBuilder:
             "http": {"port": 80},
             "volumes": [
                 {
-                    "src_storage_uri": "storage://path/to/dir",
+                    "src_storage_uri": "storage://test-cluster/path/to/dir",
                     "dst_path": "/container/path",
                     "read_only": True,
                 }
             ],
         }
-        container = ContainerBuilder.from_container_payload(
+        container = create_container_from_payload(
             payload, storage_config=storage_config
-        ).build()
+        )
         assert container == Container(
             image="testimage",
             command="testcommand",
             env={"TESTVAR": "testvalue"},
             volumes=[
                 ContainerVolume(
-                    uri=URL("storage://path/to/dir"),
+                    uri=URL("storage://test-cluster/path/to/dir"),
                     src_path=PurePath("/tmp/path/to/dir"),
                     dst_path=PurePath("/container/path"),
                     read_only=True,
@@ -373,6 +451,33 @@ class TestContainerBuilder:
             ],
             resources=ContainerResources(cpu=0.1, memory_mb=128, gpu=1, shm=True),
             http_server=ContainerHTTPServer(port=80, health_check_path="/"),
+        )
+
+    def test_from_payload_build_with_tty(self) -> None:
+        storage_config = StorageConfig(host_mount_path=PurePath("/tmp"))
+        payload = {
+            "image": "testimage",
+            "entrypoint": "testentrypoint",
+            "command": "testcommand",
+            "env": {"TESTVAR": "testvalue"},
+            "resources": {"cpu": 0.1, "memory_mb": 128, "gpu": 1},
+            "http": {"port": 80},
+            "volumes": [],
+            "tty": True,
+        }
+        container = create_container_from_payload(
+            payload, storage_config=storage_config
+        )
+        assert container == Container(
+            image="testimage",
+            entrypoint="testentrypoint",
+            command="testcommand",
+            env={"TESTVAR": "testvalue"},
+            volumes=[],
+            resources=ContainerResources(cpu=0.1, memory_mb=128, gpu=1, shm=None),
+            http_server=ContainerHTTPServer(port=80, health_check_path="/"),
+            ssh_server=None,
+            tty=True,
         )
 
 
@@ -396,6 +501,7 @@ def job_request_payload() -> Dict[str, Any]:
             ],
             "http_server": None,
             "ssh_server": None,
+            "tty": False,
         },
     }
 
@@ -552,46 +658,186 @@ class TestJob:
         )
         assert job.has_gpu
 
-    def test_job_get_run_time_active_job(
-        self, mock_orchestrator: MockOrchestrator, job_request: JobRequest
-    ) -> None:
-        def mocked_datetime_factory() -> datetime:
-            return datetime(year=2099, month=1, day=1)
+    def _mocked_datetime_factory(self) -> datetime:
+        return datetime(year=2019, month=1, day=1)
 
-        started_at = datetime(year=2019, month=1, day=1)
-        first_item = JobStatusItem.create(JobStatus.PENDING, transition_time=started_at)
+    def test_job_gpu_model_id(
+        self, mock_orchestrator: MockOrchestrator, job_request_with_gpu: JobRequest
+    ) -> None:
         job = Job(
             storage_config=mock_orchestrator.storage_config,
             orchestrator_config=mock_orchestrator.config,
             record=JobRecord.create(
-                request=job_request,
-                cluster_name="test-cluster",
-                status_history=JobStatusHistory(items=[first_item]),
-                current_datetime_factory=mocked_datetime_factory,
+                request=job_request_with_gpu, cluster_name="test-cluster"
             ),
-            current_datetime_factory=mocked_datetime_factory,
         )
-        expected_timedelta = mocked_datetime_factory() - started_at
+        assert job.gpu_model_id == "nvidia-tesla-k80"
+
+    def test_job_gpu_model_id_none(
+        self, mock_orchestrator: MockOrchestrator, job_request: JobRequest
+    ) -> None:
+        job = Job(
+            storage_config=mock_orchestrator.storage_config,
+            orchestrator_config=mock_orchestrator.config,
+            record=JobRecord.create(request=job_request, cluster_name="test-cluster"),
+        )
+        assert job.gpu_model_id is None
+
+    @pytest.fixture
+    def job_factory(
+        self, mock_orchestrator: MockOrchestrator, job_request: JobRequest
+    ) -> Callable[..., Job]:
+        current_datetime_factory = self._mocked_datetime_factory
+
+        def _f(
+            job_status_history: JobStatusHistory, is_preemptible: bool = False
+        ) -> Job:
+            return Job(
+                storage_config=mock_orchestrator.storage_config,
+                orchestrator_config=mock_orchestrator.config,
+                record=JobRecord.create(
+                    request=job_request,
+                    cluster_name="test-cluster",
+                    status_history=job_status_history,
+                    current_datetime_factory=current_datetime_factory,
+                    is_preemptible=is_preemptible,
+                ),
+                current_datetime_factory=current_datetime_factory,
+            )
+
+        return _f
+
+    def test_job_get_run_time_pending_job(
+        self, mock_orchestrator: MockOrchestrator, job_factory: Callable[..., Job]
+    ) -> None:
+        time_now = self._mocked_datetime_factory()
+        started_at = time_now - timedelta(minutes=30)
+        items = [JobStatusItem.create(JobStatus.PENDING, transition_time=started_at)]
+
+        job = job_factory(JobStatusHistory(items))
+        # job is still pending
+        expected_timedelta = timedelta(0)
         assert job.get_run_time() == expected_timedelta
 
+    def test_job_get_run_time_pending_job_preemptible(
+        self, mock_orchestrator: MockOrchestrator, job_factory: Callable[..., Job]
+    ) -> None:
+        time_now = self._mocked_datetime_factory()
+        started_at = time_now - timedelta(minutes=30)
+        items = [JobStatusItem.create(JobStatus.PENDING, transition_time=started_at)]
+
+        job = job_factory(JobStatusHistory(items), is_preemptible=True)
+        # job is still pending
+        expected_timedelta = timedelta(0)
+        assert job.get_run_time() == expected_timedelta
+
+    def test_job_get_run_time_running_job(
+        self, mock_orchestrator: MockOrchestrator, job_factory: Callable[..., Job]
+    ) -> None:
+        time_now = self._mocked_datetime_factory()
+
+        started_ago_delta = timedelta(hours=1)  # job started 1 hour ago: pending
+        pending_delta = timedelta(minutes=5)  # after 5 min: running (still running)
+        running_delta = started_ago_delta - pending_delta
+
+        pending_at = time_now - started_ago_delta
+        running_at = pending_at + pending_delta
+        items = [
+            JobStatusItem.create(JobStatus.PENDING, transition_time=pending_at),
+            JobStatusItem.create(JobStatus.RUNNING, transition_time=running_at),
+        ]
+        job = job_factory(JobStatusHistory(items))
+
+        assert job.get_run_time() == running_delta
+
+    def test_job_get_run_time_running_job_preemptible(
+        self, mock_orchestrator: MockOrchestrator, job_factory: Callable[..., Job]
+    ) -> None:
+        time_now = self._mocked_datetime_factory()
+
+        started_ago_delta = timedelta(hours=1)  # job started 1 hour ago: pending
+        pending1_delta = timedelta(minutes=3)  # after 3 min: running
+        running1_delta = timedelta(minutes=4)  # after 4 min: pending
+        pending2_delta = timedelta(minutes=5)  # after 5 min: running (still running)
+        running2_delta = (
+            started_ago_delta - pending1_delta - running1_delta - pending2_delta
+        )
+        running_sum_delta = running1_delta + running2_delta
+
+        pending1_at = time_now - started_ago_delta
+        running1_at = pending1_at + pending1_delta
+        pending2_at = running1_at + running1_delta
+        running2_at = pending2_at + pending2_delta
+        items = [
+            JobStatusItem.create(JobStatus.PENDING, transition_time=pending1_at),
+            JobStatusItem.create(JobStatus.RUNNING, transition_time=running1_at),
+            JobStatusItem.create(JobStatus.PENDING, transition_time=pending2_at),
+            JobStatusItem.create(JobStatus.RUNNING, transition_time=running2_at),
+        ]
+        job = job_factory(JobStatusHistory(items), is_preemptible=True)
+
+        assert job.get_run_time() == running_sum_delta
+
+    @pytest.mark.parametrize(
+        "terminated_status", [JobStatus.SUCCEEDED, JobStatus.FAILED]
+    )
     def test_job_get_run_time_terminated_job(
-        self, mock_orchestrator: MockOrchestrator, job_request: JobRequest
+        self,
+        mock_orchestrator: MockOrchestrator,
+        job_factory: Callable[..., Job],
+        terminated_status: JobStatus,
     ) -> None:
-        started_at = datetime(year=2019, month=3, day=1)
-        finished_at = datetime(year=2019, month=3, day=2)
-        first_item = JobStatusItem.create(JobStatus.PENDING, transition_time=started_at)
-        last_item = JobStatusItem.create(JobStatus.FAILED, transition_time=finished_at)
-        job = Job(
-            storage_config=mock_orchestrator.storage_config,
-            orchestrator_config=mock_orchestrator.config,
-            record=JobRecord.create(
-                request=job_request,
-                cluster_name="test-cluster",
-                status_history=JobStatusHistory(items=[first_item, last_item]),
-            ),
-        )
-        expected_timedelta = finished_at - started_at
-        assert job.get_run_time() == expected_timedelta
+        time_now = self._mocked_datetime_factory()
+
+        started_ago_delta = timedelta(hours=1)  # job started 1 hour ago: pending
+        pending_delta = timedelta(minutes=5)  # after 5 min: running
+        running_delta = timedelta(minutes=6)  # after 6 min: succeeded
+
+        pending_at = time_now - started_ago_delta
+        running_at = pending_at + pending_delta
+        terminated_at = running_at + running_delta
+        items = [
+            JobStatusItem.create(JobStatus.PENDING, transition_time=pending_at),
+            JobStatusItem.create(JobStatus.RUNNING, transition_time=running_at),
+            JobStatusItem.create(terminated_status, transition_time=terminated_at),
+        ]
+        job = job_factory(JobStatusHistory(items))
+
+        assert job.get_run_time() == running_delta
+
+    @pytest.mark.parametrize(
+        "terminated_status", [JobStatus.SUCCEEDED, JobStatus.FAILED]
+    )
+    def test_job_get_run_time_terminated_job_preemptible(
+        self,
+        mock_orchestrator: MockOrchestrator,
+        job_factory: Callable[..., Job],
+        terminated_status: JobStatus,
+    ) -> None:
+        time_now = self._mocked_datetime_factory()
+
+        started_ago_delta = timedelta(hours=1)  # job started 1 hour ago: pending
+        pending1_delta = timedelta(minutes=3)  # after 3 min: running
+        running1_delta = timedelta(minutes=4)  # after 4 min: pending
+        pending2_delta = timedelta(minutes=5)  # after 5 min: running
+        running2_delta = timedelta(minutes=6)  # after 6 min: succeeded (still)
+        running_sum_delta = running1_delta + running2_delta
+
+        pending1_at = time_now - started_ago_delta
+        running1_at = pending1_at + pending1_delta
+        pending2_at = running1_at + running1_delta
+        running2_at = pending2_at + pending2_delta
+        terminated_at = running2_at + running2_delta
+        items = [
+            JobStatusItem.create(JobStatus.PENDING, transition_time=pending1_at),
+            JobStatusItem.create(JobStatus.RUNNING, transition_time=running1_at),
+            JobStatusItem.create(JobStatus.PENDING, transition_time=pending2_at),
+            JobStatusItem.create(JobStatus.RUNNING, transition_time=running2_at),
+            JobStatusItem.create(terminated_status, transition_time=terminated_at),
+        ]
+        job = job_factory(JobStatusHistory(items), is_preemptible=True)
+
+        assert job.get_run_time() == running_sum_delta
 
     def test_http_url(
         self, mock_orchestrator: MockOrchestrator, job_request: JobRequest
@@ -751,6 +997,7 @@ class TestJob:
             ],
             "is_preemptible": True,
             "schedule_timeout": 15,
+            "restart_policy": "never",
         }
 
     def test_to_primitive_with_max_run_time(
@@ -783,7 +1030,21 @@ class TestJob:
             "finished_at": None,
             "is_preemptible": False,
             "max_run_time_minutes": 500,
+            "restart_policy": "never",
         }
+
+    def test_to_primitive_with_tags(
+        self, mock_orchestrator: MockOrchestrator, job_request: JobRequest
+    ) -> None:
+        job = Job(
+            storage_config=mock_orchestrator.storage_config,
+            orchestrator_config=mock_orchestrator.config,
+            record=JobRecord.create(
+                request=job_request, cluster_name="test-cluster", tags=["t1", "t2"]
+            ),
+        )
+        primitive = job.to_primitive()
+        assert primitive["tags"] == ["t1", "t2"]
 
     def test_from_primitive(
         self, mock_orchestrator: MockOrchestrator, job_request_payload: Dict[str, Any]
@@ -804,10 +1065,12 @@ class TestJob:
         assert job.is_deleted
         assert job.finished_at
         assert job.description == "Description of the testjob"
+        assert not job.tags
         assert job.name is None
         assert job.owner == "testuser"
         assert not job.is_preemptible
-        assert job.max_run_time == timedelta.max
+        assert job.max_run_time_minutes is None
+        assert job.restart_policy == JobRestartPolicy.NEVER
 
     def test_from_primitive_check_name(
         self, mock_orchestrator: MockOrchestrator, job_request_payload: Dict[str, Any]
@@ -826,6 +1089,25 @@ class TestJob:
         )
         assert job.id == "testjob"
         assert job.name == "test-job-name"
+
+    def test_from_primitive_with_tags(
+        self, mock_orchestrator: MockOrchestrator, job_request_payload: Dict[str, Any]
+    ) -> None:
+        tags = ["tag1", "tag2"]
+        payload = {
+            "id": "testjob",
+            "owner": "testuser",
+            "tags": tags,
+            "request": job_request_payload,
+            "status": "succeeded",
+            "is_deleted": True,
+            "finished_at": datetime.now(timezone.utc).isoformat(),
+        }
+        job = Job.from_primitive(
+            mock_orchestrator.storage_config, mock_orchestrator.config, payload
+        )
+        assert job.id == "testjob"
+        assert job.tags == tags
 
     def test_from_primitive_with_statuses(
         self, mock_orchestrator: MockOrchestrator, job_request_payload: Dict[str, Any]
@@ -972,7 +1254,7 @@ class TestJob:
         job = Job.from_primitive(
             mock_orchestrator.storage_config, mock_orchestrator.config, payload
         )
-        assert job.max_run_time == timedelta(minutes=100)
+        assert job.max_run_time_minutes == 100
 
     def test_from_primitive_with_max_run_time_minutes_none(
         self, mock_orchestrator: MockOrchestrator, job_request_payload: Dict[str, Any]
@@ -990,49 +1272,7 @@ class TestJob:
         job = Job.from_primitive(
             mock_orchestrator.storage_config, mock_orchestrator.config, payload
         )
-        assert job.max_run_time == timedelta.max
-
-    def test_from_primitive_with_max_run_time_minutes_zero(
-        self, mock_orchestrator: MockOrchestrator, job_request_payload: Dict[str, Any]
-    ) -> None:
-        payload = {
-            "id": "testjob",
-            "name": "test-job-name",
-            "owner": "testuser",
-            "request": job_request_payload,
-            "status": "succeeded",
-            "is_deleted": True,
-            "finished_at": datetime.now(timezone.utc).isoformat(),
-            "max_run_time_minutes": 0,
-        }
-        job = Job.from_primitive(
-            mock_orchestrator.storage_config, mock_orchestrator.config, payload
-        )
-        with pytest.raises(
-            AssertionError, match="max_run_time_minutes must be positive, got: 0"
-        ):
-            job.max_run_time
-
-    def test_from_primitive_with_max_run_time_minutes_negative(
-        self, mock_orchestrator: MockOrchestrator, job_request_payload: Dict[str, Any]
-    ) -> None:
-        payload = {
-            "id": "testjob",
-            "name": "test-job-name",
-            "owner": "testuser",
-            "request": job_request_payload,
-            "status": "succeeded",
-            "is_deleted": True,
-            "finished_at": datetime.now(timezone.utc).isoformat(),
-            "max_run_time_minutes": -1,
-        }
-        job = Job.from_primitive(
-            mock_orchestrator.storage_config, mock_orchestrator.config, payload
-        )
-        with pytest.raises(
-            AssertionError, match="max_run_time_minutes must be positive, got: -1"
-        ):
-            job.max_run_time
+        assert job.max_run_time_minutes is None
 
     def test_to_uri(
         self, mock_orchestrator: MockOrchestrator, job_request: JobRequest
@@ -1044,7 +1284,7 @@ class TestJob:
                 request=job_request, cluster_name="test-cluster", owner="testuser"
             ),
         )
-        assert job.to_uri() == URL(f"job://testuser/{job.id}")
+        assert job.to_uri() == URL(f"job://test-cluster/testuser/{job.id}")
 
     def test_to_uri_orphaned(
         self, mock_orchestrator: MockOrchestrator, job_request: JobRequest
@@ -1054,7 +1294,20 @@ class TestJob:
             mock_orchestrator.config,
             record=JobRecord.create(request=job_request, cluster_name="test-cluster"),
         )
-        assert job.to_uri() == URL(f"job://compute/{job.id}")
+        assert job.to_uri() == URL(f"job://test-cluster/compute/{job.id}")
+
+    def test_to_uri_no_cluster(
+        self, mock_orchestrator: MockOrchestrator, job_request: JobRequest
+    ) -> None:
+        job = Job(
+            mock_orchestrator.storage_config,
+            mock_orchestrator.config,
+            record=JobRecord.create(
+                request=job_request, cluster_name="", owner="testuser"
+            ),
+        )
+        with pytest.raises(AssertionError):
+            job.to_uri()
 
     def test_to_uri_no_owner(
         self, mock_orchestrator: MockOrchestrator, job_request: JobRequest
@@ -1066,7 +1319,7 @@ class TestJob:
                 request=job_request, cluster_name="test-cluster", orphaned_job_owner=""
             ),
         )
-        assert job.to_uri() == URL(f"job:/{job.id}")
+        assert job.to_uri() == URL(f"job://test-cluster/{job.id}")
 
     def test_to_and_from_primitive(
         self, mock_orchestrator: MockOrchestrator, job_request_payload: Dict[str, Any]
@@ -1088,6 +1341,7 @@ class TestJob:
             "is_deleted": "False",
             "finished_at": finished_at_str,
             "is_preemptible": False,
+            "restart_policy": str(JobRestartPolicy.ALWAYS),
         }
         actual = Job.to_primitive(
             Job.from_primitive(
@@ -1142,6 +1396,30 @@ class TestJobRequest:
         )
         assert request.to_primitive() == job_request_payload
 
+    def test_to_primitive_with_working_dir(
+        self, job_request_payload: Dict[str, Any]
+    ) -> None:
+        job_request_payload["container"]["working_dir"] = "/working/dir"
+        container = Container(
+            image="testimage",
+            working_dir="/working/dir",
+            env={"testvar": "testval"},
+            resources=ContainerResources(cpu=1, memory_mb=128),
+            volumes=[
+                ContainerVolume(
+                    uri=URL("storage://path"),
+                    src_path=PurePath("/src/path"),
+                    dst_path=PurePath("/dst/path"),
+                )
+            ],
+        )
+        request = JobRequest(
+            job_id="testjob",
+            description="Description of the testjob",
+            container=container,
+        )
+        assert request.to_primitive() == job_request_payload
+
     def test_to_primitive_with_ssh(self, job_request_payload: Dict[str, Any]) -> None:
         job_request_payload["container"]["ssh_server"] = {"port": 678}
 
@@ -1165,12 +1443,57 @@ class TestJobRequest:
         )
         assert request.to_primitive() == job_request_payload
 
+    def test_to_primitive_with_tty(self, job_request_payload: Dict[str, Any]) -> None:
+        job_request_payload["container"]["tty"] = True
+
+        container = Container(
+            image="testimage",
+            env={"testvar": "testval"},
+            resources=ContainerResources(cpu=1, memory_mb=128),
+            volumes=[
+                ContainerVolume(
+                    uri=URL("storage://path"),
+                    src_path=PurePath("/src/path"),
+                    dst_path=PurePath("/dst/path"),
+                )
+            ],
+            tty=True,
+        )
+        request = JobRequest(
+            job_id="testjob",
+            description="Description of the testjob",
+            container=container,
+        )
+        assert request.to_primitive() == job_request_payload
+
     def test_from_primitive(self, job_request_payload: Dict[str, Any]) -> None:
         request = JobRequest.from_primitive(job_request_payload)
         assert request.job_id == "testjob"
         assert request.description == "Description of the testjob"
         expected_container = Container(
             image="testimage",
+            env={"testvar": "testval"},
+            resources=ContainerResources(cpu=1, memory_mb=128),
+            volumes=[
+                ContainerVolume(
+                    uri=URL("storage://path"),
+                    src_path=PurePath("/src/path"),
+                    dst_path=PurePath("/dst/path"),
+                )
+            ],
+        )
+        assert request.container == expected_container
+
+    def test_from_primitive_with_working_dir(
+        self, job_request_payload: Dict[str, Any]
+    ) -> None:
+        job_request_payload["container"]["working_dir"] = "/working/dir"
+        request = JobRequest.from_primitive(job_request_payload)
+        assert request.job_id == "testjob"
+        assert request.description == "Description of the testjob"
+        expected_container = Container(
+            image="testimage",
+            working_dir="/working/dir",
             env={"testvar": "testval"},
             resources=ContainerResources(cpu=1, memory_mb=128),
             volumes=[
@@ -1249,6 +1572,50 @@ class TestJobRequest:
             "type": "v2-8",
             "software_version": "1.14",
         }
+        actual = JobRequest.to_primitive(JobRequest.from_primitive(job_request_payload))
+        assert actual == job_request_payload
+
+    def test_to_and_from_primitive_with_secret_env(
+        self, job_request_payload: Dict[str, Any]
+    ) -> None:
+        job_request_payload["container"]["secret_env"] = {
+            "ENV_SECRET1": "secret://clustername/username/key1",
+            "ENV_SECRET2": "secret://clustername/username/key2",
+        }
+        actual = JobRequest.to_primitive(JobRequest.from_primitive(job_request_payload))
+        assert actual == job_request_payload
+
+    def test_to_and_from_primitive_with_secret_volumes(
+        self, job_request_payload: Dict[str, Any]
+    ) -> None:
+        job_request_payload["container"]["secret_volumes"] = [
+            {
+                "src_secret_uri": "secret://clustername/username/key1",
+                "dst_path": "/container/path1",
+            },
+            {
+                "src_secret_uri": "secret://clustername/username/key2",
+                "dst_path": "/container/path2",
+            },
+        ]
+        actual = JobRequest.to_primitive(JobRequest.from_primitive(job_request_payload))
+        assert actual == job_request_payload
+
+    def test_to_and_from_primitive_with_disk_volumes(
+        self, job_request_payload: Dict[str, Any]
+    ) -> None:
+        job_request_payload["container"]["disk_volumes"] = [
+            {
+                "src_disk_uri": "disk://clustername/username/disk-id-1",
+                "dst_path": "/container/path1",
+                "read_only": True,
+            },
+            {
+                "src_disk_uri": "disk://clustername/username/disk-id-2",
+                "dst_path": "/container/path2",
+                "read_only": False,
+            },
+        ]
         actual = JobRequest.to_primitive(JobRequest.from_primitive(job_request_payload))
         assert actual == job_request_payload
 
@@ -1413,6 +1780,24 @@ class TestJobStatusHistory:
         assert history.finished_at == finished_item.transition_time
         assert history.finished_at_str == (finished_item.transition_time.isoformat())
 
+    def test_resurraction(self) -> None:
+        pending_item = JobStatusItem.create(JobStatus.PENDING)
+        running_item = JobStatusItem.create(JobStatus.RUNNING)
+        finished_item = JobStatusItem.create(JobStatus.SUCCEEDED)
+        items = [pending_item, running_item, finished_item, running_item]
+        history = JobStatusHistory(items=items)
+        assert history.first == pending_item
+        assert history.last == running_item
+        assert history.current == running_item
+        assert history.created_at == pending_item.transition_time
+        assert history.created_at_str == (pending_item.transition_time.isoformat())
+        assert history.started_at == running_item.transition_time
+        assert history.started_at_str == (running_item.transition_time.isoformat())
+        assert not history.is_finished
+        assert history.is_running
+        assert not history.finished_at
+        assert not history.finished_at_str
+
     def test_current_update(self) -> None:
         pending_item = JobStatusItem.create(JobStatus.PENDING)
         running_item = JobStatusItem.create(JobStatus.RUNNING)
@@ -1506,7 +1891,7 @@ class TestUser:
             ),
         ],
     )
-    def test_user_has_quota_true(self, quota: Quota) -> None:
+    def test_user_has_quota_true(self, quota: AggregatedRunTime) -> None:
         user = User(name="name", token="token", quota=quota)
         assert user.has_quota()
 
@@ -1516,3 +1901,9 @@ class TestUser:
         )
         user = User(name="name", token="token", quota=quota)
         assert not user.has_quota()
+
+
+def test_maybe_job_id() -> None:
+    assert maybe_job_id("job-1")
+    assert not maybe_job_id("")
+    assert not maybe_job_id("jobname")

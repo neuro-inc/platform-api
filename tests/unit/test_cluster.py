@@ -1,4 +1,6 @@
 import asyncio
+from dataclasses import replace
+from pathlib import Path
 from typing import Any
 
 import pytest
@@ -13,8 +15,9 @@ from platform_api.cluster import (
     ClusterRegistry,
     ClusterRegistryRecord,
 )
-from platform_api.cluster_config import CircuitBreakerConfig
+from platform_api.cluster_config import CircuitBreakerConfig, StorageConfig
 from platform_api.orchestrator.base import Orchestrator
+from tests.conftest import not_raises
 
 
 class _TestCluster(Cluster):
@@ -62,10 +65,26 @@ class TestClusterRegistry:
         registry = ClusterRegistry(factory=_TestCluster)
         config = create_cluster_config(name="test")
 
-        await registry.add(config)
+        await registry.replace(config)
 
         async with registry.get(config.name) as cluster:
             assert cluster.name == config.name
+
+    @pytest.mark.asyncio
+    async def test_add_raises(self) -> None:
+        class _NotAvailableCluster(_TestCluster):
+            async def init(self) -> None:
+                raise RuntimeError("Unexpected")
+
+        registry = ClusterRegistry(factory=_NotAvailableCluster)
+        config = create_cluster_config(name="test")
+
+        with pytest.raises(Exception):
+            await registry.replace(config)
+
+        with pytest.raises(ClusterNotFound):
+            async with registry.get(config.name):
+                pass
 
     @pytest.mark.asyncio
     async def test_get(self) -> None:
@@ -74,7 +93,7 @@ class TestClusterRegistry:
             name="test", circuit_breaker=CircuitBreakerConfig(open_threshold=1)
         )
 
-        await registry.add(config)
+        await registry.replace(config)
 
         async with registry.get(config.name):
             raise RuntimeError("test")
@@ -87,7 +106,84 @@ class TestClusterRegistry:
             assert cluster.name == config.name
 
     @pytest.mark.asyncio
-    async def test_add_existing(self) -> None:
+    async def test_replace_existing_and_remove_at_once(self) -> None:
+        registry = ClusterRegistry(factory=_TestCluster)
+        name = "test"
+        config = create_cluster_config(name=name)
+
+        await registry.replace(config)
+
+        old_cluster = None
+        async with registry.get(name) as cluster:
+            old_cluster = cluster
+
+        config = create_cluster_config(name=name)
+        record_assigned = asyncio.Event()
+        record_ready = asyncio.Event()
+
+        async def _replace() -> None:
+            await registry.replace(
+                config, record_assigned=record_assigned, record_ready=record_ready
+            )
+
+        async def _remove() -> None:
+            await record_assigned.wait()
+            await registry.remove(config.name)
+
+            with pytest.raises(ClusterNotFound):
+                async with registry.get(config.name):
+                    pass
+
+            record_ready.set()
+
+        await asyncio.wait(
+            [asyncio.create_task(_replace()), asyncio.create_task(_remove())]
+        )
+
+        new_cluster = None
+        async with registry.get(name) as cluster:
+            new_cluster = cluster
+
+        assert new_cluster.name == config.name
+        assert old_cluster is not new_cluster
+
+    @pytest.mark.asyncio
+    async def test_replace_new_and_remove_at_once(self) -> None:
+        class _NotInitingCluster(_TestCluster):
+            async def init(self) -> None:
+                raise RuntimeError("Unexpected")
+
+        registry = ClusterRegistry(factory=_NotInitingCluster)
+        name = "test"
+        config = create_cluster_config(name=name)
+        record_assigned = asyncio.Event()
+        record_ready = asyncio.Event()
+
+        async def _replace() -> None:
+            await registry.replace(
+                config, record_assigned=record_assigned, record_ready=record_ready
+            )
+
+        async def _remove() -> None:
+            await record_assigned.wait()
+            await registry.remove(config.name)
+
+            with pytest.raises(ClusterNotFound):
+                async with registry.get(config.name):
+                    pass
+
+            record_ready.set()
+
+        await asyncio.wait(
+            [asyncio.create_task(_replace()), asyncio.create_task(_remove())]
+        )
+
+        with pytest.raises(ClusterNotFound):
+            async with registry.get(config.name):
+                pass
+
+    @pytest.mark.asyncio
+    async def test_replace_if_existing_changed(self) -> None:
         registry = ClusterRegistry(factory=_TestCluster)
         name = "test"
         config = create_cluster_config(name=name)
@@ -96,21 +192,65 @@ class TestClusterRegistry:
             async with registry.get(name):
                 pass
 
-        await registry.add(config)
+        await registry.replace(config)
 
         old_cluster = None
         async with registry.get(config.name) as cluster:
             assert cluster.name == config.name
             old_cluster = cluster
 
-        await registry.add(config)
+        new_config = replace(config, storage=StorageConfig(host_mount_path=Path("/")))
+        await registry.replace(new_config)
+
+        new_cluster = None
+        async with registry.get(new_config.name) as cluster:
+            assert cluster.name == new_config.name
+            new_cluster = cluster
+
+        assert old_cluster is not new_cluster
+
+    @pytest.mark.asyncio
+    async def test_replace_if_existing_not_changed(self) -> None:
+        registry = ClusterRegistry(factory=_TestCluster)
+        name = "test"
+        config = create_cluster_config(name=name)
+
+        with pytest.raises(ClusterNotFound, match=f"Cluster '{name}' not found"):
+            async with registry.get(name):
+                pass
+
+        await registry.replace(config)
+
+        old_cluster = None
+        async with registry.get(config.name) as cluster:
+            assert cluster.name == config.name
+            old_cluster = cluster
+
+        await registry.replace(config)
 
         new_cluster = None
         async with registry.get(config.name) as cluster:
             assert cluster.name == config.name
             new_cluster = cluster
 
-        assert old_cluster is not new_cluster
+        assert old_cluster is new_cluster
+
+    @pytest.mark.asyncio
+    async def test_replace_close_failure(self) -> None:
+        class _NotClosingCluster(_TestCluster):
+            async def close(self) -> None:
+                raise RuntimeError("Unexpected")
+
+        registry = ClusterRegistry(factory=_NotClosingCluster)
+        name = "test"
+        config = create_cluster_config(name=name)
+
+        await registry.replace(config)
+
+        new_config = replace(config, storage=StorageConfig(host_mount_path=Path("/")))
+
+        with not_raises(Exception):
+            await registry.replace(new_config)
 
     @pytest.mark.asyncio
     async def test_remove_missing(self) -> None:
@@ -130,7 +270,7 @@ class TestClusterRegistry:
             async with registry.get(name):
                 pass
 
-        await registry.add(config)
+        await registry.replace(config)
 
         async with registry.get(config.name) as cluster:
             assert cluster.name == config.name
@@ -147,7 +287,7 @@ class TestClusterRegistry:
         name = "test"
         config = create_cluster_config(name=name)
 
-        await registry.add(config)
+        await registry.replace(config)
 
         async with registry.get(name):
             with pytest.raises(asyncio.TimeoutError):
@@ -162,8 +302,8 @@ class TestClusterRegistry:
         config = create_cluster_config(name="test1")
         anotherconfig = create_cluster_config(name="test2")
 
-        await registry.add(config)
-        await registry.add(anotherconfig)
+        await registry.replace(config)
+        await registry.replace(anotherconfig)
 
         async with registry.get(config.name):
             async with registry.get(anotherconfig.name):
@@ -191,9 +331,9 @@ class TestClusterRegistry:
             async with registry.get(name):
                 pass
 
-        await registry.add(config)
+        await registry.replace(config)
 
-        with pytest.not_raises(Exception):
+        with not_raises(Exception):
             await registry.remove(name)
 
     @pytest.mark.asyncio
@@ -203,7 +343,7 @@ class TestClusterRegistry:
         config = create_cluster_config(name=name)
 
         async with registry:
-            await registry.add(config)
+            await registry.replace(config)
 
             async with registry.get(name):
                 pass
@@ -211,6 +351,24 @@ class TestClusterRegistry:
         with pytest.raises(ClusterNotFound, match=f"Cluster '{name}' not found"):
             async with registry.get(name):
                 pass
+
+    @pytest.mark.asyncio
+    async def test_cleanup_not_found(self) -> None:
+        class _NotFoundCluster(_TestCluster):
+            async def close(self) -> None:
+                raise ClusterNotFound("test")
+
+        registry = ClusterRegistry(factory=_NotFoundCluster)
+        name = "test"
+        config = create_cluster_config(name=name)
+
+        await registry.replace(config)
+
+        async with registry.get(name):
+            pass
+
+        with not_raises(Exception):
+            await registry.cleanup([])
 
 
 class TestClusterRegistryRecord:

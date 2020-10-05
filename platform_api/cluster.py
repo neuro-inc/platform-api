@@ -1,7 +1,15 @@
 import asyncio
 import logging
 from abc import ABC, abstractmethod
-from typing import Any, AsyncContextManager, AsyncIterator, Callable, Dict, Sequence
+from typing import (
+    Any,
+    AsyncContextManager,
+    AsyncIterator,
+    Callable,
+    Dict,
+    Optional,
+    Sequence,
+)
 
 from aiorwlock import RWLock
 from async_generator import asynccontextmanager
@@ -59,25 +67,37 @@ ClusterFactory = Callable[[ClusterConfig], Cluster]
 
 class ClusterRegistryRecord:
     def __init__(self, cluster: Cluster) -> None:
-        self._cluster = cluster
         self._lock = RWLock()
+        self.cluster = cluster
+
+    @property
+    def cluster(self) -> Cluster:
+        return self._cluster
+
+    @cluster.setter
+    def cluster(self, cluster: Cluster) -> None:
+        self._is_cluster_initialized = False
         self._is_cluster_closed = False
+        self._cluster = cluster
         self._breaker = CircuitBreaker(
             open_threshold=cluster.config.circuit_breaker.open_threshold,
             open_timeout_s=cluster.config.circuit_breaker.open_timeout_s,
         )
 
     @property
-    def cluster(self) -> Cluster:
-        return self._cluster
-
-    @property
     def lock(self) -> RWLock:
         return self._lock
 
     @property
+    def is_cluster_initialized(self) -> bool:
+        return self._is_cluster_initialized
+
+    @property
     def is_cluster_closed(self) -> bool:
         return self._is_cluster_closed
+
+    def mark_cluster_initialized(self) -> None:
+        self._is_cluster_initialized = True
 
     def mark_cluster_closed(self) -> None:
         self._is_cluster_closed = True
@@ -114,10 +134,6 @@ class ClusterRegistry:
         self._factory = factory
         self._records: Dict[str, ClusterRegistryRecord] = {}
 
-    def _add(self, record: ClusterRegistryRecord) -> None:
-        assert record.name not in self._records
-        self._records[record.name] = record
-
     def _remove(self, name: str) -> ClusterRegistryRecord:
         record = self._records.pop(name, None)
         if not record:
@@ -137,20 +153,76 @@ class ClusterRegistry:
         for name in list(self._records):
             await self.remove(name)
 
-    async def add(self, config: ClusterConfig) -> None:
+    async def replace(
+        self,
+        config: ClusterConfig,
+        record_assigned: Optional[asyncio.Event] = None,  # used for testing
+        record_ready: Optional[asyncio.Event] = None,  # used for testing
+    ) -> None:
+        record = self._records.get(config.name)
+
+        if record:
+            if record_ready:
+                # used only for testing
+                if record_assigned:
+                    record_assigned.set()
+                await record_ready.wait()
+
+            async with record.lock.writer:
+                if config.name not in self._records:  # pragma: no cover
+                    record = self._add_record(config)
+
+                    async with record.lock.writer:
+                        await self._init_cluster(record)
+                    return
+
+                old_cluster = record.cluster
+                if old_cluster.config == config:
+                    logger.info(f"Cluster '{config.name}' didn't change")
+                    return
+
+                new_cluster = self._factory(config)
+                logger.info(f"Initializing cluster '{config.name}'")
+                await new_cluster.init()
+                logger.info(f"Initialized cluster '{config.name}'")
+                record.cluster = new_cluster
+                record.mark_cluster_initialized()
+                logger.info(f"Registered cluster '{config.name}'")
+
+                await self._close_cluster(old_cluster)
+        else:
+            record = self._add_record(config)
+
+            if record_ready:
+                # used only for testing
+                if record_assigned:
+                    record_assigned.set()
+                await record_ready.wait()
+
+            async with record.lock.writer:
+                await self._init_cluster(record)
+
+    def _add_record(self, config: ClusterConfig) -> ClusterRegistryRecord:
+        new_cluster = self._factory(config)
+        record = ClusterRegistryRecord(new_cluster)
+        self._records[config.name] = record
+        logger.info(f"Registered new cluster '{config.name}'")
+        return record
+
+    async def _init_cluster(self, record: ClusterRegistryRecord) -> None:
+        if record is not self._records.get(record.name):
+            return
+
+        logger.info(f"Initializing cluster '{record.name}'")
         try:
-            await self.remove(config.name)
-        except ClusterNotFound:
-            pass
-
-        logger.info(f"Initializing cluster '{config.name}'")
-        cluster = self._factory(config)
-        await cluster.init()
-        logger.info(f"Initialized cluster '{config.name}'")
-
-        record = ClusterRegistryRecord(cluster=cluster)
-        self._add(record)
-        logger.info(f"Registered cluster '{config.name}'")
+            await record.cluster.init()
+            record.mark_cluster_initialized()
+        except Exception:
+            record.mark_cluster_closed()
+            self._remove(record.name)
+            logger.info(f"Failed to initialize cluster '{record.name}'")
+            raise
+        logger.info(f"Initialized cluster '{record.name}'")
 
     async def remove(self, name: str) -> None:
         record = self._remove(name)
@@ -160,14 +232,17 @@ class ClusterRegistry:
         async with record.lock.writer:
             record.mark_cluster_closed()
 
-            logger.info(f"Closing cluster '{name}'")
-            try:
-                await record.cluster.close()
-            except asyncio.CancelledError:  # pragma: no cover
-                raise
-            except Exception:
-                logger.exception(f"Failed to close cluster '{name}'")
-            logger.info(f"Closed cluster '{name}'")
+            await self._close_cluster(record.cluster)
+
+    async def _close_cluster(self, cluster: Cluster) -> None:
+        logger.info(f"Closing cluster '{cluster.name}'")
+        try:
+            await cluster.close()
+        except asyncio.CancelledError:  # pragma: no cover
+            raise
+        except Exception:
+            logger.exception(f"Failed to close cluster '{cluster.name}'")
+        logger.info(f"Closed cluster '{cluster.name}'")
 
     async def cleanup(self, keep_clusters: Sequence[ClusterConfig]) -> None:
         all_cluster_names = set(self._records.keys())
@@ -175,7 +250,10 @@ class ClusterRegistry:
             cluster_config.name for cluster_config in keep_clusters
         )
         for cluster_for_removal in all_cluster_names - keep_clusters_with_names:
-            await self.remove(cluster_for_removal)
+            try:
+                await self.remove(cluster_for_removal)
+            except ClusterNotFound:
+                pass
 
     @asynccontextmanager
     async def get(
@@ -189,7 +267,9 @@ class ClusterRegistry:
         # once it is released, the underlying cluster is considered to be
         # closed, therefore we have to check the state explicitly.
         async with record.lock.reader:
-            if record.is_cluster_closed:  # pragma: no cover
+            if (
+                record.is_cluster_closed or not record.is_cluster_initialized
+            ):  # pragma: no cover
                 raise ClusterNotFound.create(name)
             if skip_circuit_breaker:
                 yield record.cluster

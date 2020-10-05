@@ -67,7 +67,7 @@ def main() -> None:
             log.error(f"{type(error)}:{error}")
             sys.exit(os.EX_NOPERM)
         except AuthorizationError as error:
-            print(f"Permission denied")
+            print("Permission denied")
             log.error(f"{type(error)}:{error}")
             sys.exit(os.EX_NOPERM)
         except IllegalArgumentError as error:

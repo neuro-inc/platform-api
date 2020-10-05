@@ -3,6 +3,7 @@ from datetime import timedelta
 from pathlib import Path
 from typing import Optional, Sequence
 
+from alembic.config import Config as AlembicConfig
 from yarl import URL
 
 from .cluster_config import GarbageCollectorConfig
@@ -14,6 +15,12 @@ from .redis import RedisConfig
 class ServerConfig:
     host: str = "0.0.0.0"
     port: int = 8080
+
+
+@dataclass(frozen=True)
+class ZipkinConfig:
+    url: URL
+    sample_rate: float
 
 
 @dataclass(frozen=True)
@@ -47,15 +54,35 @@ class OAuthConfig:
     def token_url(self) -> URL:
         return self.base_url / "oauth/token"
 
+    @property
+    def logout_url(self) -> URL:
+        return self.base_url / "v2/logout"
+
+
+@dataclass(frozen=True)
+class PostgresConfig:
+    postgres_dsn: str
+
+    alembic: AlembicConfig
+
+    # based on defaults
+    # https://magicstack.github.io/asyncpg/current/api/index.html#asyncpg.connection.connect
+    pool_min_size: int = 10
+    pool_max_size: int = 10
+
+    connect_timeout_s: float = 60.0
+    command_timeout_s: Optional[float] = 60.0
+
 
 @dataclass(frozen=True)
 class DatabaseConfig:
+    postgres_enabled: bool = False
     redis: Optional[RedisConfig] = None
+    postgres: Optional[PostgresConfig] = None
 
 
 @dataclass(frozen=True)
 class JobsConfig:
-    default_cluster_name: str = "default"
     deletion_delay_s: int = 0
     orphaned_job_owner: str = ""
     jobs_ingress_class: str = "traefik"
@@ -76,24 +103,33 @@ class NotificationsConfig:
 class JobPolicyEnforcerConfig:
     platform_api_url: URL
     token: str
-    interval_sec: int = 60
+    interval_sec: float = 60
+    quota_notification_threshold: float = 0.9
+
+
+@dataclass(frozen=True)
+class CORSConfig:
+    allowed_origins: Sequence[str] = ()
 
 
 @dataclass(frozen=True)
 class Config:
-    config_client: ConfigClient
-
     server: ServerConfig
 
     database: DatabaseConfig
     auth: AuthConfig
+    zipkin: ZipkinConfig
     notifications: NotificationsConfig
     job_policy_enforcer: JobPolicyEnforcerConfig
     garbage_collector: GarbageCollectorConfig
 
+    config_url: URL
+    admin_url: URL
+
     oauth: Optional[OAuthConfig] = None
 
     jobs: JobsConfig = JobsConfig()
+    cors: CORSConfig = CORSConfig()
 
     # used for generating environment variable names and
     # sourcing them inside containers.

@@ -1,8 +1,8 @@
 -e .
 -r syntax.txt
-aiodocker==0.17.0
-pytest==5.2.1
-pytest-cov==2.8.1
-pytest-asyncio==0.10.0
-requests==2.20.0
-codecov==2.0.15
+aiodocker==0.19.1
+pytest==6.0.2
+pytest-cov==2.10.1
+pytest-asyncio==0.14.0
+requests==2.24.0
+codecov==2.1.9

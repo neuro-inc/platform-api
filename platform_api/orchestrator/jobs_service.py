@@ -1,4 +1,5 @@
 import logging
+from pathlib import PurePath
 from typing import AsyncIterator, Iterable, List, Optional, Sequence, Tuple
 
 from async_generator import asynccontextmanager
@@ -6,7 +7,9 @@ from notifications_client import (
     Client as NotificationsClient,
     JobCannotStartQuotaReached,
     JobTransition,
+    QuotaResourceType,
 )
+from yarl import URL
 
 from platform_api.cluster import (
     Cluster,
@@ -15,12 +18,23 @@ from platform_api.cluster import (
     ClusterNotFound,
     ClusterRegistry,
 )
+from platform_api.cluster_config import OrchestratorConfig, StorageConfig
 from platform_api.config import JobsConfig
-from platform_api.user import User
+from platform_api.user import User, UserCluster
 
 from .base import Orchestrator
-from .job import Job, JobRecord, JobStatusHistory, JobStatusItem, JobStatusReason
+from .job import (
+    ZERO_RUN_TIME,
+    Job,
+    JobRecord,
+    JobRestartPolicy,
+    JobStatusHistory,
+    JobStatusItem,
+    JobStatusReason,
+    maybe_job_id,
+)
 from .job_request import (
+    JobAlreadyExistsException,
     JobError,
     JobException,
     JobNotFoundException,
@@ -70,20 +84,23 @@ class JobsService:
         self._jobs_config = jobs_config
         self._notifications_client = notifications_client
 
-        self._max_deletion_attempts = 3
+        self._max_deletion_attempts = 10
 
-    def get_cluster_name(self, job: Job) -> str:
-        return self._get_cluster_name(job.cluster_name)
-
-    def _get_cluster_name(self, cluster_name: str) -> str:
-        return cluster_name or self._jobs_config.default_cluster_name
+        self._dummy_cluster_storage_config = StorageConfig(
+            host_mount_path=PurePath("/<dummy>")
+        )
+        self._dummy_cluster_orchestrator_config = OrchestratorConfig(
+            jobs_domain_name_template="{job_id}.missing-cluster",
+            ssh_auth_server="missing-cluster:22",
+            resource_pool_types=(),
+        )
 
     @asynccontextmanager
     async def _get_cluster(
         self, name: str, tolerate_unavailable: bool = False
     ) -> AsyncIterator[Cluster]:
         async with self._cluster_registry.get(
-            self._get_cluster_name(name), skip_circuit_breaker=tolerate_unavailable
+            name, skip_circuit_breaker=tolerate_unavailable
         ) as cluster:
             yield cluster
 
@@ -147,6 +164,10 @@ class JobsService:
             try:
                 await orchestrator.start_job(job)
                 status_item = job.status_history.current
+            except JobAlreadyExistsException:
+                logger.info(f"Job '{job.id}' already exists.")
+                # Terminate the transaction. The exception will be ignored.
+                raise JobStorageTransactionError
             except JobError as exc:
                 logger.exception("Failed to start job %s. Reason: %s", job.id, exc)
                 status_item = JobStatusItem.create(
@@ -195,14 +216,24 @@ class JobsService:
             # the job may have been changed and a retry is needed.
             pass
 
-    async def _raise_for_run_time_quota(self, user: User, gpu_requested: bool) -> None:
-        if not user.has_quota():
+    async def _raise_for_run_time_quota(
+        self, user: User, user_cluster: UserCluster, gpu_requested: bool
+    ) -> None:
+        if not user_cluster.has_quota():
             return
-        quota = user.quota
-        run_time_filter = JobFilter(owners={user.name})
-        run_time = await self._jobs_storage.get_aggregated_run_time(run_time_filter)
-        # Even GPU jobs require CPU, so always check CPU quota
-        if run_time.total_non_gpu_run_time_delta >= quota.total_non_gpu_run_time_delta:
+        quota = user_cluster.quota
+        run_time_filter = JobFilter(
+            owners={user.name}, clusters={user_cluster.name: {}}
+        )
+        run_times = await self._jobs_storage.get_aggregated_run_time_by_clusters(
+            run_time_filter
+        )
+        run_time = run_times.get(user_cluster.name, ZERO_RUN_TIME)
+        if (
+            not gpu_requested
+            and run_time.total_non_gpu_run_time_delta
+            >= quota.total_non_gpu_run_time_delta
+        ):
             raise NonGpuQuotaExceededError(user.name)
         if (
             gpu_requested
@@ -210,26 +241,64 @@ class JobsService:
         ):
             raise GpuQuotaExceededError(user.name)
 
+    def _get_secret_name(self, secret_uri: URL) -> str:
+        parts = PurePath(secret_uri.path).parts
+        assert len(parts) == 3, parts
+        return parts[2]
+
     async def create_job(
         self,
         job_request: JobRequest,
         user: User,
+        *,
+        cluster_name: Optional[str] = None,
         job_name: Optional[str] = None,
+        tags: Sequence[str] = (),
         is_preemptible: bool = False,
         schedule_timeout: Optional[float] = None,
+        max_run_time_minutes: Optional[int] = None,
+        restart_policy: JobRestartPolicy = JobRestartPolicy.NEVER,
     ) -> Tuple[Job, Status]:
+        if cluster_name:
+            user_cluster = user.get_cluster(cluster_name)
+            assert user_cluster
+        else:
+            # NOTE: left this for backward compatibility with existing tests
+            user_cluster = user.clusters[0]
+        cluster_name = user_cluster.name
 
+        if job_name is not None and maybe_job_id(job_name):
+            raise JobsServiceException(
+                "Failed to create job: job name cannot start with 'job-' prefix."
+            )
         try:
             await self._raise_for_run_time_quota(
-                user, gpu_requested=bool(job_request.container.resources.gpu)
+                user,
+                user_cluster,
+                gpu_requested=bool(job_request.container.resources.gpu),
             )
-        except QuotaException:
+        except GpuQuotaExceededError:
+            quota = user_cluster.quota.total_gpu_run_time_delta
             await self._notifications_client.notify(
-                JobCannotStartQuotaReached(user.name)
+                JobCannotStartQuotaReached(
+                    user_id=user.name,
+                    resource=QuotaResourceType.GPU,
+                    quota=quota.total_seconds(),
+                    cluster_name=cluster_name,
+                )
             )
             raise
-        # XXX cluster_name should be set for regular users
-        cluster_name = self._get_cluster_name(user.cluster_name)
+        except NonGpuQuotaExceededError:
+            quota = user_cluster.quota.total_non_gpu_run_time_delta
+            await self._notifications_client.notify(
+                JobCannotStartQuotaReached(
+                    user_id=user.name,
+                    resource=QuotaResourceType.NON_GPU,
+                    quota=quota.total_seconds(),
+                    cluster_name=cluster_name,
+                )
+            )
+            raise
         record = JobRecord.create(
             request=job_request,
             owner=user.name,
@@ -242,10 +311,39 @@ class JobsService:
                 ]
             ),
             name=job_name,
+            tags=tags,
             is_preemptible=is_preemptible,
             schedule_timeout=schedule_timeout,
+            max_run_time_minutes=max_run_time_minutes,
+            restart_policy=restart_policy,
         )
         job_id = job_request.job_id
+
+        job_secrets = [
+            self._get_secret_name(uri)
+            for uri in job_request.container.get_secret_uris()
+        ]
+        if job_secrets:
+            async with self._get_cluster(cluster_name) as cluster:
+                # Warning: contextmanager '_get_cluster' suppresses all exceptions
+                missing = await cluster.orchestrator.get_missing_secrets(
+                    user.name, job_secrets
+                )
+            if missing:
+                details = ", ".join(f"'{s}'" for s in sorted(missing))
+                raise JobsServiceException(f"Missing secrets: {details}")
+        job_disks = [
+            disk_volume.disk.disk_id
+            for disk_volume in job_request.container.disk_volumes
+        ]
+        if job_disks:
+            async with self._get_cluster(cluster_name) as cluster:
+                # Warning: contextmanager '_get_cluster' suppresses all exceptions
+                missing = await cluster.orchestrator.get_missing_disks(job_disks)
+            if missing:
+                details = ", ".join(f"'{s}'" for s in sorted(missing))
+                raise JobsServiceException(f"Missing disks: {details}")
+
         try:
             async with self._create_job_in_storage(record) as record:
                 async with self._get_cluster(record.cluster_name) as cluster:
@@ -306,20 +404,15 @@ class JobsService:
             # to be able to render a proper HTTP response, therefore we have
             # the fallback logic that uses the default cluster instead.
             logger.warning(
-                "Falling back to cluster '%s' to retrieve job '%s'",
-                self._jobs_config.default_cluster_name,
-                record.id,
+                "Falling back to dummy cluster config to retrieve job '%s'", record.id
             )
             # NOTE: we may rather want to fall back to some dummy
             # OrchestratorConfig instead.
-            async with self._get_cluster(
-                self._jobs_config.default_cluster_name
-            ) as cluster:
-                return Job(
-                    storage_config=cluster.config.storage,
-                    orchestrator_config=cluster.orchestrator.config,
-                    record=record,
-                )
+            return Job(
+                storage_config=self._dummy_cluster_storage_config,
+                orchestrator_config=self._dummy_cluster_orchestrator_config,
+                record=record,
+            )
 
     async def get_job(self, job_id: str) -> Job:
         record = await self._jobs_storage.get_job(job_id)
@@ -357,16 +450,38 @@ class JobsService:
                     logger.info("Deleting job %s", job_id)
                     await self._delete_cluster_job(record)
 
-                    record.status = JobStatus.SUCCEEDED
+                    record.status = JobStatus.CANCELLED
                     record.is_deleted = True
                 return
             except JobStorageTransactionError:
                 logger.warning("Failed to mark a job %s as deleted. Retrying.", job_id)
         logger.warning("Failed to mark a job %s as deleted. Giving up.", job_id)
 
-    async def get_all_jobs(self, job_filter: Optional[JobFilter] = None) -> List[Job]:
-        records = await self._jobs_storage.get_all_jobs(job_filter)
-        return [await self._get_cluster_job(record) for record in records]
+    async def iter_all_jobs(
+        self,
+        job_filter: Optional[JobFilter] = None,
+        *,
+        reverse: bool = False,
+        limit: Optional[int] = None,
+    ) -> AsyncIterator[Job]:
+        async for record in self._jobs_storage.iter_all_jobs(
+            job_filter, reverse=reverse, limit=limit
+        ):
+            yield await self._get_cluster_job(record)
+
+    # Only used in tests
+    async def get_all_jobs(
+        self, job_filter: Optional[JobFilter] = None, *, reverse: bool = False
+    ) -> List[Job]:
+        return [job async for job in self.iter_all_jobs(job_filter, reverse=reverse)]
+
+    async def get_job_by_name(self, job_name: str, owner: User) -> Job:
+        job_filter = JobFilter(owners={owner.name}, name=job_name)
+        async for record in self._jobs_storage.iter_all_jobs(
+            job_filter, reverse=True, limit=1
+        ):
+            return await self._get_cluster_job(record)
+        raise JobError(f"no such job {job_name}")
 
     async def get_jobs_by_ids(
         self, job_ids: Iterable[str], job_filter: Optional[JobFilter] = None
@@ -376,13 +491,25 @@ class JobsService:
         )
         return [await self._get_cluster_job(record) for record in records]
 
-    async def get_available_gpu_models(self, user: User) -> Sequence[str]:
-        async with self._get_cluster(user.cluster_name) as cluster:
+    async def get_available_gpu_models(self, name: str) -> Sequence[str]:
+        async with self._get_cluster(name) as cluster:
             return await cluster.orchestrator.get_available_gpu_models()
 
-    async def get_cluster_config(self, user: User) -> ClusterConfig:
-        async with self._get_cluster(user.cluster_name) as cluster:
+    async def get_cluster_config(self, name: str) -> ClusterConfig:
+        async with self._get_cluster(name) as cluster:
             return cluster.config
+
+    async def get_user_cluster_configs(self, user: User) -> List[ClusterConfig]:
+        configs = []
+        for user_cluster in user.clusters:
+            try:
+                async with self._get_cluster(
+                    user_cluster.name, tolerate_unavailable=True
+                ) as cluster:
+                    configs.append(cluster.config)
+            except ClusterNotFound:
+                pass
+        return configs
 
     @asynccontextmanager
     async def _create_job_in_storage(

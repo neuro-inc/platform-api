@@ -1,3 +1,4 @@
+import enum
 import logging
 import time
 from dataclasses import dataclass, field
@@ -38,6 +39,10 @@ class AggregatedRunTime:
         )
 
 
+ZERO_RUN_TIME = AggregatedRunTime(
+    total_gpu_run_time_delta=timedelta(), total_non_gpu_run_time_delta=timedelta()
+)
+
 DEFAULT_QUOTA_NO_RESTRICTIONS: AggregatedRunTime = AggregatedRunTime.from_quota(Quota())
 DEFAULT_ORPHANED_JOB_OWNER = "compute"
 
@@ -65,6 +70,8 @@ class JobStatusReason:
     CLUSTER_NOT_FOUND = "ClusterNotFound"
     CLUSTER_SCALING_UP = "ClusterScalingUp"
     CLUSTER_SCALE_UP_FAILED = "ClusterScaleUpFailed"
+    RESTARTING = "Restarting"
+    DISK_UNAVAILABLE = "DiskUnavailable"
 
 
 @dataclass(frozen=True)
@@ -143,17 +150,13 @@ class JobStatusHistory:
         return None
 
     @property
-    def _first_pending(self) -> Optional[JobStatusItem]:
-        return self._find_with_status(self._items, (JobStatus.PENDING,))
-
-    @property
     def _first_running(self) -> Optional[JobStatusItem]:
         return self._find_with_status(self._items, (JobStatus.RUNNING,))
 
     @property
     def _first_finished(self) -> Optional[JobStatusItem]:
         return self._find_with_status(
-            self._items, (JobStatus.SUCCEEDED, JobStatus.FAILED)
+            self._items, (JobStatus.SUCCEEDED, JobStatus.CANCELLED, JobStatus.FAILED)
         )
 
     @property
@@ -191,7 +194,8 @@ class JobStatusHistory:
 
         In case the job terminated instantly without an explicit transition to
         the RUNNING state, it is assumed that `started_at` gets its value from
-        the transition time of the next state (either SUCCEEDED or FINISHED).
+        the transition time of the next state (either SUCCEEDED or FAILED or
+        CANCELLED).
         """
         item = self._first_running or self._first_finished
         if item:
@@ -210,12 +214,12 @@ class JobStatusHistory:
 
     @property
     def is_finished(self) -> bool:
-        return bool(self._first_finished)
+        return self.last.is_finished
 
     @property
     def finished_at(self) -> Optional[datetime]:
-        if self._first_finished:
-            return self._first_finished.transition_time
+        if self.last.is_finished:
+            return self.last.transition_time
         return None
 
     @property
@@ -225,6 +229,19 @@ class JobStatusHistory:
         return None
 
 
+@enum.unique
+class JobRestartPolicy(str, enum.Enum):
+    ALWAYS = "always"
+    ON_FAILURE = "on-failure"
+    NEVER = "never"
+
+    def __str__(self) -> str:
+        return self.value
+
+    def __repr__(self) -> str:
+        return self.__str__().__repr__()
+
+
 @dataclass
 class JobRecord:
     request: JobRequest
@@ -232,11 +249,14 @@ class JobRecord:
     status_history: JobStatusHistory
     cluster_name: str
     name: Optional[str] = None
+    tags: Sequence[str] = ()
     is_preemptible: bool = False
     is_deleted: bool = False
     max_run_time_minutes: Optional[int] = None
     internal_hostname: Optional[str] = None
+    internal_hostname_named: Optional[str] = None
     schedule_timeout: Optional[float] = None
+    restart_policy: JobRestartPolicy = JobRestartPolicy.NEVER
 
     # for testing only
     allow_empty_cluster_name: bool = False
@@ -287,6 +307,13 @@ class JobRecord:
         self.status_history.current = item
 
     @property
+    def is_restartable(self) -> bool:
+        return self.is_preemptible or self.restart_policy in (
+            JobRestartPolicy.ALWAYS,
+            JobRestartPolicy.ON_FAILURE,
+        )
+
+    @property
     def is_finished(self) -> bool:
         return self.status_history.is_finished
 
@@ -302,14 +329,25 @@ class JobRecord:
     def has_gpu(self) -> bool:
         return bool(self.request.container.resources.gpu)
 
+    @property
+    def gpu_model_id(self) -> Optional[str]:
+        return self.request.container.resources.gpu_model_id
+
     def get_run_time(
         self,
         *,
         current_datetime_factory: Callable[[], datetime] = current_datetime_factory,
     ) -> timedelta:
-        end_time = self.finished_at or current_datetime_factory()
-        start_time = self.status_history.created_at
-        return end_time - start_time
+        run_time = timedelta()
+        prev_time: Optional[datetime] = None
+        for item in self.status_history.all:
+            if prev_time:
+                run_time += item.transition_time - prev_time
+            prev_time = item.transition_time if item.status.is_running else None
+        if prev_time:
+            # job still running
+            run_time += current_datetime_factory() - prev_time
+        return run_time
 
     def _is_time_for_deletion(
         self, delay: timedelta, current_datetime_factory: Callable[[], datetime]
@@ -358,15 +396,20 @@ class JobRecord:
             "is_deleted": self.is_deleted,
             "finished_at": self.finished_at_str,
             "is_preemptible": self.is_preemptible,
+            "restart_policy": str(self.restart_policy),
         }
         if self.schedule_timeout:
             result["schedule_timeout"] = self.schedule_timeout
-        if self.max_run_time_minutes:
+        if self.max_run_time_minutes is not None:
             result["max_run_time_minutes"] = self.max_run_time_minutes
         if self.internal_hostname:
             result["internal_hostname"] = self.internal_hostname
+        if self.internal_hostname_named:
+            result["internal_hostname_named"] = self.internal_hostname_named
         if self.name:
             result["name"] = self.name
+        if self.tags:
+            result["tags"] = self.tags
         return result
 
     @classmethod
@@ -386,10 +429,15 @@ class JobRecord:
             owner=payload.get("owner") or orphaned_job_owner,
             cluster_name=payload.get("cluster_name") or "",
             name=payload.get("name"),
+            tags=payload.get("tags", ()),
             is_preemptible=payload.get("is_preemptible", False),
             max_run_time_minutes=payload.get("max_run_time_minutes", None),
             internal_hostname=payload.get("internal_hostname", None),
+            internal_hostname_named=payload.get("internal_hostname_named", None),
             schedule_timeout=payload.get("schedule_timeout", None),
+            restart_policy=JobRestartPolicy(
+                payload.get("restart_policy", str(cls.restart_policy))
+            ),
         )
 
     @staticmethod
@@ -437,6 +485,7 @@ class Job:
 
         self._owner = record.owner
         self._name = record.name
+        self._tags = record.tags
 
         self._is_preemptible = record.is_preemptible
         self._is_forced_to_preemptible_pool = is_forced_to_preemptible_pool
@@ -454,6 +503,14 @@ class Job:
         return self._name
 
     @property
+    def is_named(self) -> bool:
+        return self.name is not None
+
+    @property
+    def tags(self) -> Sequence[str]:
+        return self._tags
+
+    @property
     def owner(self) -> str:
         return self._owner
 
@@ -466,9 +523,10 @@ class Job:
         return self._storage_config
 
     def to_uri(self) -> URL:
-        base_uri = "job:"
+        assert self.cluster_name
+        base_uri = "job://" + self.cluster_name
         if self.owner:
-            base_uri += "//" + self.owner
+            base_uri += "/" + self.owner
         return URL(f"{base_uri}/{self.id}")
 
     @property
@@ -478,6 +536,10 @@ class Job:
     @property
     def has_gpu(self) -> bool:
         return self._record.has_gpu
+
+    @property
+    def gpu_model_id(self) -> Optional[str]:
+        return self._record.gpu_model_id
 
     @property
     def status(self) -> JobStatus:
@@ -598,8 +660,8 @@ class Job:
 
     @property
     def ssh_server(self) -> str:
-        ssh_auth_domain_name = self._orchestrator_config.ssh_auth_domain_name
-        return f"ssh://nobody@{ssh_auth_domain_name}:22"
+        ssh_auth_server = self._orchestrator_config.ssh_auth_server
+        return f"ssh://nobody@{ssh_auth_server}"
 
     @property
     def finished_at_str(self) -> Optional[str]:
@@ -614,8 +676,24 @@ class Job:
         self._record.internal_hostname = value
 
     @property
+    def internal_hostname_named(self) -> Optional[str]:
+        return self._record.internal_hostname_named
+
+    @internal_hostname_named.setter
+    def internal_hostname_named(self, value: Optional[str]) -> None:
+        self._record.internal_hostname_named = value
+
+    @property
     def is_preemptible(self) -> bool:
         return self._is_preemptible
+
+    @property
+    def restart_policy(self) -> JobRestartPolicy:
+        return self._record.restart_policy
+
+    @property
+    def is_restartable(self) -> bool:
+        return self._record.is_restartable
 
     @property
     def is_forced_to_preemptible_pool(self) -> bool:
@@ -627,12 +705,8 @@ class Job:
         )
 
     @property
-    def max_run_time(self) -> timedelta:
-        mrt = self._record.max_run_time_minutes
-        if mrt is None:
-            return timedelta.max
-        assert mrt > 0, f"max_run_time_minutes must be positive, got: {mrt}"
-        return timedelta(minutes=mrt)
+    def max_run_time_minutes(self) -> Optional[int]:
+        return self._record.max_run_time_minutes
 
     def to_primitive(self) -> Dict[str, Any]:
         return self._record.to_primitive()
@@ -661,3 +735,8 @@ class JobStats:
     gpu_memory: Optional[float] = None
 
     timestamp: float = field(default_factory=time.time)
+
+
+def maybe_job_id(value: str) -> bool:
+    """Check whether the string looks like a job id"""
+    return value.startswith("job-")

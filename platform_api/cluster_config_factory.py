@@ -80,6 +80,8 @@ class ClusterConfigFactory:
         return IngressConfig(
             storage_url=URL(payload["storage"]["url"]),
             monitoring_url=URL(payload["monitoring"]["url"]),
+            secrets_url=URL(payload["secrets"]["url"]),
+            metrics_url=URL(payload["metrics"]["url"]),
         )
 
     def _create_presets(self, payload: Dict[str, Any]) -> List[Preset]:
@@ -111,7 +113,7 @@ class ClusterConfigFactory:
         kube = orchestrator["kubernetes"]
         ssh = payload["ssh"]
         return KubeConfig(
-            ssh_auth_domain_name=ssh["server"],
+            ssh_auth_server=ssh["server"],
             is_http_ingress_secure=orchestrator["is_http_ingress_secure"],
             jobs_domain_name_template=orchestrator["job_hostname_template"],
             resource_pool_types=[

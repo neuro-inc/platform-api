@@ -1,27 +1,45 @@
 import asyncio
 import logging
+from contextlib import AsyncExitStack
 from typing import Any, AsyncIterator, Awaitable, Callable, Dict, Sequence
 
 import aiohttp.web
+import aiohttp_cors
+import aiozipkin
 from aiohttp.web import HTTPUnauthorized
 from aiohttp_security import check_permission
-from async_exit_stack import AsyncExitStack
 from neuro_auth_client import AuthClient, Permission
 from neuro_auth_client.security import AuthScheme, setup_security
 from notifications_client import Client as NotificationsClient
 from platform_logging import init_logging
 
+from platform_api.orchestrator.job_policy_enforcer import (
+    JobPolicyEnforcePoller,
+    PlatformApiClient,
+    QuotaEnforcer,
+    RuntimeLimitEnforcer,
+)
+
 from .cluster import Cluster, ClusterConfig, ClusterRegistry
-from .config import Config
+from .config import Config, CORSConfig
+from .config_client import ConfigClient
 from .config_factory import EnvironConfigFactory
 from .handlers import JobsHandler
 from .handlers.stats_handler import StatsHandler
+from .handlers.tags_handler import TagsHandler
 from .kube_cluster import KubeCluster
 from .orchestrator.job_request import JobException
 from .orchestrator.jobs_poller import JobsPoller
 from .orchestrator.jobs_service import JobsService, JobsServiceException
-from .orchestrator.jobs_storage import RedisJobsStorage
+from .orchestrator.jobs_storage import (
+    JobsStorage,
+    PostgresJobsStorage,
+    RedisJobsStorage,
+)
+from .postgres import create_postgres_pool
 from .redis import create_redis_client
+from .resource import Preset
+from .trace import store_span_middleware
 from .user import authorized_user, untrusted_user
 
 
@@ -46,6 +64,10 @@ class ApiHandler:
     def _jobs_service(self) -> JobsService:
         return self._app["jobs_service"]
 
+    @property
+    def _config_client(self) -> ConfigClient:
+        return self._app["config_client"]
+
     async def handle_ping(self, request: aiohttp.web.Request) -> aiohttp.web.Response:
         return aiohttp.web.Response()
 
@@ -57,14 +79,11 @@ class ApiHandler:
         logger.info("Checking whether %r has %r", user, permission)
         await check_permission(request, permission.action, [permission])
 
-        cluster_configs_future = get_cluster_configs(self._config)
-        cluster_configs = [
-            cluster_config for cluster_config in await cluster_configs_future
-        ]
+        cluster_configs = await get_cluster_configs(self._config, self._config_client)
         cluster_registry = self._jobs_service._cluster_registry
         old_record_count = len(cluster_registry)
         for cluster_config in cluster_configs:
-            await cluster_registry.add(cluster_config)
+            await cluster_registry.replace(cluster_config)
         await cluster_registry.cleanup(cluster_configs)
 
         new_record_count = len(cluster_registry)
@@ -78,41 +97,22 @@ class ApiHandler:
 
         try:
             user = await authorized_user(request)
-            cluster_config = await self._jobs_service.get_cluster_config(user)
-            presets = []
-            for preset in cluster_config.orchestrator.presets:
-                preset_dict: Dict[str, Any] = {"name": preset.name}
-                preset_dict["cpu"] = preset.cpu
-                preset_dict["memory_mb"] = preset.memory_mb
-                preset_dict["is_preemptible"] = preset.is_preemptible
+            cluster_configs = await self._jobs_service.get_user_cluster_configs(user)
+            data["clusters"] = [
+                self._convert_cluster_config_to_payload(c) for c in cluster_configs
+            ]
+            # NOTE: adding the cluster payload to the root document for
+            # backward compatibility
+            data.update(data["clusters"][0])
 
-                if preset.gpu is not None:
-                    preset_dict["gpu"] = preset.gpu
-                if preset.gpu_model is not None:
-                    preset_dict["gpu_model"] = preset.gpu_model
-
-                if preset.tpu:
-                    preset_dict["tpu"] = {
-                        "type": preset.tpu.type,
-                        "software_version": preset.tpu.software_version,
-                    }
-
-                presets.append(preset_dict)
-            data.update(
-                {
-                    "registry_url": str(cluster_config.registry.url),
-                    "storage_url": str(cluster_config.ingress.storage_url),
-                    "users_url": str(self._config.auth.public_endpoint_url),
-                    "monitoring_url": str(cluster_config.ingress.monitoring_url),
-                    "resource_presets": presets,
-                }
-            )
+            data["admin_url"] = str(self._config.admin_url)
         except HTTPUnauthorized:
             pass
 
         if self._config.oauth:
             data["auth_url"] = str(self._config.oauth.auth_url)
             data["token_url"] = str(self._config.oauth.token_url)
+            data["logout_url"] = str(self._config.oauth.logout_url)
             data["client_id"] = self._config.oauth.client_id
             data["audience"] = self._config.oauth.audience
             data["callback_urls"] = [str(u) for u in self._config.oauth.callback_urls]
@@ -124,6 +124,43 @@ class ApiHandler:
                 data["success_redirect_url"] = str(redirect_url)
 
         return aiohttp.web.json_response(data)
+
+    def _convert_cluster_config_to_payload(
+        self, cluster_config: ClusterConfig
+    ) -> Dict[str, Any]:
+        presets = [
+            self._convert_preset_to_payload(preset)
+            for preset in cluster_config.orchestrator.presets
+        ]
+        return {
+            "name": cluster_config.name,
+            "registry_url": str(cluster_config.registry.url),
+            "storage_url": str(cluster_config.ingress.storage_url),
+            "users_url": str(self._config.auth.public_endpoint_url),
+            "monitoring_url": str(cluster_config.ingress.monitoring_url),
+            "secrets_url": str(cluster_config.ingress.secrets_url),
+            "metrics_url": str(cluster_config.ingress.metrics_url),
+            "resource_presets": presets,
+        }
+
+    def _convert_preset_to_payload(self, preset: Preset) -> Dict[str, Any]:
+        payload: Dict[str, Any] = {
+            "name": preset.name,
+            "cpu": preset.cpu,
+            "memory_mb": preset.memory_mb,
+            "is_preemptible": preset.is_preemptible,
+        }
+        if preset.gpu is not None:
+            payload["gpu"] = preset.gpu
+        if preset.gpu_model is not None:
+            payload["gpu_model"] = preset.gpu_model
+
+        if preset.tpu:
+            payload["tpu"] = {
+                "type": preset.tpu.type,
+                "software_version": preset.tpu.software_version,
+            }
+        return payload
 
 
 @aiohttp.web.middleware
@@ -183,43 +220,99 @@ async def create_stats_app(config: Config) -> aiohttp.web.Application:
     return stats_app
 
 
+async def create_tags_app(config: Config) -> aiohttp.web.Application:
+    tags_app = aiohttp.web.Application()
+    tags_handler = TagsHandler(app=tags_app, config=config)
+    tags_handler.register(tags_app)
+    return tags_app
+
+
 def create_cluster(config: ClusterConfig) -> Cluster:
     return KubeCluster(config)
 
 
+async def create_tracer(config: Config) -> aiozipkin.Tracer:
+    endpoint = aiozipkin.create_endpoint(
+        "platformapi",  # the same name as pod prefix on a cluster
+        ipv4=config.server.host,
+        port=config.server.port,
+    )
+
+    zipkin_address = config.zipkin.url / "api/v2/spans"
+    tracer = await aiozipkin.create(
+        str(zipkin_address), endpoint, sample_rate=config.zipkin.sample_rate
+    )
+    return tracer
+
+
 async def create_app(
-    config: Config, cluster_configs_future: Awaitable[Sequence[ClusterConfig]]
+    config: Config, clusters: Sequence[ClusterConfig] = ()
 ) -> aiohttp.web.Application:
     app = aiohttp.web.Application(middlewares=[handle_exceptions])
     app["config"] = config
 
+    tracer = await create_tracer(config)
+
     async def _init_app(app: aiohttp.web.Application) -> AsyncIterator[None]:
         async with AsyncExitStack() as exit_stack:
+            trace_config = aiozipkin.make_trace_config(tracer)
 
             logger.info("Initializing Notifications client")
             notifications_client = NotificationsClient(
-                url=config.notifications.url, token=config.notifications.token
+                url=config.notifications.url,
+                token=config.notifications.token,
+                trace_config=trace_config,
             )
             await exit_stack.enter_async_context(notifications_client)
-
-            logger.info("Initializing Redis client")
-            redis_client = await exit_stack.enter_async_context(
-                create_redis_client(config.database.redis)
-            )
 
             logger.info("Initializing Cluster Registry")
             cluster_registry = await exit_stack.enter_async_context(
                 ClusterRegistry(factory=create_cluster)
             )
 
-            [
-                await cluster_registry.add(cluster_config)
-                for cluster_config in await cluster_configs_future
-            ]
+            logger.info("Initializing Config client")
+            config_client = await exit_stack.enter_async_context(
+                ConfigClient(
+                    base_url=config.config_url,
+                    service_token=config.auth.service_token,
+                    trace_config=trace_config,
+                )
+            )
+            app["api_v1_app"]["config_client"] = config_client
 
-            logger.info("Initializing JobsStorage")
-            jobs_storage = RedisJobsStorage(redis_client)
-            await jobs_storage.migrate()
+            if clusters:
+                client_clusters = clusters
+            else:
+                client_clusters = await get_cluster_configs(config, config_client)
+
+            logger.info("Loading clusters")
+            for cluster in client_clusters:
+                await cluster_registry.replace(cluster)
+
+            if config.database.postgres_enabled:
+                assert config.database.postgres, (
+                    "Postgres config should be available when "
+                    "NP_DB_POSTGRES_ENABLED is set"
+                )
+                logger.info("Initializing Postgres connection pool")
+                postgres_pool = await exit_stack.enter_async_context(
+                    create_postgres_pool(config.database.postgres)
+                )
+
+                logger.info("Initializing JobsStorage")
+                jobs_storage: JobsStorage = PostgresJobsStorage(postgres_pool)
+                await jobs_storage.migrate()
+            elif config.database.redis:
+                logger.info("Initializing Redis client")
+                redis_client = await exit_stack.enter_async_context(
+                    create_redis_client(config.database.redis)
+                )
+
+                logger.info("Initializing JobsStorage")
+                jobs_storage = RedisJobsStorage(redis_client)
+                await jobs_storage.migrate()
+            else:
+                raise Exception("Either postgres or redis storage should be set.")
 
             logger.info("Initializing JobsService")
             jobs_service = JobsService(
@@ -236,10 +329,29 @@ async def create_app(
             app["api_v1_app"]["jobs_service"] = jobs_service
             app["jobs_app"]["jobs_service"] = jobs_service
             app["stats_app"]["jobs_service"] = jobs_service
+            app["tags_app"]["jobs_service"] = jobs_service
+
+            logger.info("Initializing JobPolicyEnforcePoller")
+            api_client = await exit_stack.enter_async_context(
+                PlatformApiClient(config.job_policy_enforcer)
+            )
+            await exit_stack.enter_async_context(
+                JobPolicyEnforcePoller(
+                    config.job_policy_enforcer,
+                    enforcers=[
+                        QuotaEnforcer(
+                            api_client, notifications_client, config.job_policy_enforcer
+                        ),
+                        RuntimeLimitEnforcer(api_client),
+                    ],
+                )
+            )
 
             auth_client = await exit_stack.enter_async_context(
                 AuthClient(
-                    url=config.auth.server_endpoint_url, token=config.auth.service_token
+                    url=config.auth.server_endpoint_url,
+                    token=config.auth.service_token,
+                    trace_config=trace_config,
                 )
             )
             app["jobs_app"]["auth_client"] = auth_client
@@ -264,19 +376,46 @@ async def create_app(
     app["stats_app"] = stats_app
     api_v1_app.add_subapp("/stats", stats_app)
 
+    tags_app = await create_tags_app(config=config)
+    app["tags_app"] = tags_app
+    api_v1_app.add_subapp("/tags", tags_app)
+
     app.add_subapp("/api/v1", api_v1_app)
+
+    _setup_cors(app, config.cors)
+
+    aiozipkin.setup(app, tracer)
+    app.middlewares.append(store_span_middleware)
+
     return app
 
 
-async def get_cluster_configs(config: Config) -> Sequence[ClusterConfig]:
-    async with config.config_client as client:
-        return await client.get_clusters(
-            jobs_ingress_class=config.jobs.jobs_ingress_class,
-            jobs_ingress_oauth_url=config.jobs.jobs_ingress_oauth_url,
-            registry_username=config.auth.service_name,
-            registry_password=config.auth.service_token,
-            garbage_collector=config.garbage_collector,
-        )
+def _setup_cors(app: aiohttp.web.Application, config: CORSConfig) -> None:
+    if not config.allowed_origins:
+        return
+
+    logger.info(f"Setting up CORS with allowed origins: {config.allowed_origins}")
+    default_options = aiohttp_cors.ResourceOptions(
+        allow_credentials=True, expose_headers="*", allow_headers="*"
+    )
+    cors = aiohttp_cors.setup(
+        app, defaults={origin: default_options for origin in config.allowed_origins}
+    )
+    for route in app.router.routes():
+        logger.debug(f"Setting up CORS for {route}")
+        cors.add(route)
+
+
+async def get_cluster_configs(
+    config: Config, config_client: ConfigClient
+) -> Sequence[ClusterConfig]:
+    return await config_client.get_clusters(
+        jobs_ingress_class=config.jobs.jobs_ingress_class,
+        jobs_ingress_oauth_url=config.jobs.jobs_ingress_oauth_url,
+        registry_username=config.auth.service_name,
+        registry_password=config.auth.service_token,
+        garbage_collector=config.garbage_collector,
+    )
 
 
 def main() -> None:
@@ -286,5 +425,5 @@ def main() -> None:
 
     loop = asyncio.get_event_loop()
 
-    app = loop.run_until_complete(create_app(config, get_cluster_configs(config)))
+    app = loop.run_until_complete(create_app(config))
     aiohttp.web.run_app(app, host=config.server.host, port=config.server.port)
