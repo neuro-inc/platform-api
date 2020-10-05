@@ -7,7 +7,6 @@ from alembic.config import Config as AlembicConfig
 from yarl import URL
 
 from .cluster_config import GarbageCollectorConfig
-from .config_client import ConfigClient
 from .redis import RedisConfig
 
 
