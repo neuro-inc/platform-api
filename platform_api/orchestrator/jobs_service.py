@@ -1,6 +1,7 @@
 import logging
+from collections import defaultdict
 from pathlib import PurePath
-from typing import AsyncIterator, Iterable, List, Optional, Sequence, Tuple
+from typing import AsyncIterator, Dict, Iterable, List, Optional, Sequence, Tuple
 
 from async_generator import asynccontextmanager
 from notifications_client import (
@@ -40,6 +41,7 @@ from .job_request import (
     JobNotFoundException,
     JobRequest,
     JobStatus,
+    Secret,
 )
 from .jobs_storage import (
     JobFilter,
@@ -246,6 +248,26 @@ class JobsService:
         assert len(parts) == 3, parts
         return parts[2]
 
+    async def _check_secrets(
+        self, cluster_name: str, secrets: Sequence[Secret]
+    ) -> None:
+        if not secrets:
+            return
+
+        grouped_secrets: Dict[str, List[Secret]] = defaultdict(list)
+        for secret in secrets:
+            grouped_secrets[secret.user_name].append(secret)
+
+        async with self._get_cluster(cluster_name) as cluster:
+            # Warning: contextmanager '_get_cluster' suppresses all exceptions
+            for user_name, user_secrets in grouped_secrets.items():
+                missing = await cluster.orchestrator.get_missing_secrets(
+                    user_name, [secret.secret_key for secret in user_secrets]
+                )
+                if missing:
+                    details = ", ".join(f"'{s}'" for s in sorted(missing))
+                    raise JobsServiceException(f"Missing secrets: {details}")
+
     async def create_job(
         self,
         job_request: JobRequest,
@@ -319,19 +341,8 @@ class JobsService:
         )
         job_id = job_request.job_id
 
-        job_secrets = [
-            self._get_secret_name(uri)
-            for uri in job_request.container.get_secret_uris()
-        ]
-        if job_secrets:
-            async with self._get_cluster(cluster_name) as cluster:
-                # Warning: contextmanager '_get_cluster' suppresses all exceptions
-                missing = await cluster.orchestrator.get_missing_secrets(
-                    user.name, job_secrets
-                )
-            if missing:
-                details = ", ".join(f"'{s}'" for s in sorted(missing))
-                raise JobsServiceException(f"Missing secrets: {details}")
+        await self._check_secrets(cluster_name, job_request.container.get_secrets())
+
         job_disks = [
             disk_volume.disk.disk_id
             for disk_volume in job_request.container.disk_volumes

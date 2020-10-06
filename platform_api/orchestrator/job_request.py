@@ -305,6 +305,11 @@ class Container:
         assert cluster_name
         return URL(f"image://{cluster_name}/{path}")
 
+    def get_secrets(self) -> List[Secret]:
+        return list(
+            set([*self.secret_env.values(), *[v.secret for v in self.secret_volumes]])
+        )
+
     def get_secret_uris(self) -> Sequence[URL]:
         env_uris = [sec.to_uri() for sec in self.secret_env.values()]
         vol_uris = [vol.to_uri() for vol in self.secret_volumes]
