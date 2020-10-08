@@ -1523,10 +1523,9 @@ class TestJobs:
 
         url = api.jobs_base_url
         async with client.post(url, headers=usr_1.headers, json=job_submit) as resp:
-            assert resp.status == HTTPBadRequest.status_code, await resp.text()
+            assert resp.status == HTTPForbidden.status_code, await resp.text()
             result = await resp.json()
-            err = f"Invalid URI: Invalid user in path: '{usr_2.name}' != '{usr_1.name}'"
-            assert err in result["error"]
+            assert result == {"missing": [{"uri": secret_uri_2, "action": "read"}]}
 
     @pytest.mark.asyncio
     @pytest.mark.parametrize("secret_kind", ["secret_env", "secret_volumes"])
