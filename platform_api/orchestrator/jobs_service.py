@@ -251,15 +251,18 @@ class JobsService:
         if not grouped_secrets:
             return
 
+        missing = []
         async with self._get_cluster(cluster_name) as cluster:
             # Warning: contextmanager '_get_cluster' suppresses all exceptions
             for user_name, user_secrets in grouped_secrets.items():
-                missing = await cluster.orchestrator.get_missing_secrets(
-                    user_name, [secret.secret_key for secret in user_secrets]
+                missing.extend(
+                    await cluster.orchestrator.get_missing_secrets(
+                        user_name, [secret.secret_key for secret in user_secrets]
+                    )
                 )
-                if missing:
-                    details = ", ".join(f"'{s}'" for s in sorted(missing))
-                    raise JobsServiceException(f"Missing secrets: {details}")
+        if missing:
+            details = ", ".join(f"'{s}'" for s in sorted(missing))
+            raise JobsServiceException(f"Missing secrets: {details}")
 
     async def create_job(
         self,
