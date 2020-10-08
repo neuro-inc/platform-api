@@ -186,12 +186,12 @@ class KubeOrchestrator(Orchestrator):
             path=self._storage_config.host_mount_path,
         )
 
+    @classmethod
     def create_secret_volume(self, user_name: str) -> SecretVolume:
-        return SecretVolume(
-            name=self._kube_config.secret_volume_name,
-            k8s_secret_name=self._get_k8s_secret_name(user_name),
-        )
+        name = self._get_k8s_secret_name(user_name)
+        return SecretVolume(name=name, k8s_secret_name=name)
 
+    @classmethod
     def _get_k8s_secret_name(self, user_name: str) -> str:
         return f"user--{user_name}--secrets"
 
@@ -267,7 +267,7 @@ class KubeOrchestrator(Orchestrator):
         return PodDescriptor.from_job_request(
             self._storage_volume,
             job.request,
-            secret_volume=self.create_secret_volume(job.owner),
+            secret_volume_factory=self.create_secret_volume,
             image_pull_secret_names=[self._get_docker_secret_name(job)],
             node_selector=node_selector,
             tolerations=tolerations,

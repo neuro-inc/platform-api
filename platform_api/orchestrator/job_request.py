@@ -1,6 +1,7 @@
 import enum
 import shlex
 import uuid
+from collections import defaultdict
 from dataclasses import asdict, dataclass, field
 from pathlib import PurePath
 from typing import Any, Dict, List, Optional, Sequence, Union
@@ -309,6 +310,18 @@ class Container:
         return list(
             set([*self.secret_env.values(), *[v.secret for v in self.secret_volumes]])
         )
+
+    def get_user_secrets(self) -> Dict[str, List[Secret]]:
+        user_secrets: Dict[str, List[Secret]] = defaultdict(list)
+        for secret in self.get_secrets():
+            user_secrets[secret.user_name].append(secret)
+        return user_secrets
+
+    def get_user_secret_volumes(self) -> Dict[str, List[SecretContainerVolume]]:
+        user_volumes: Dict[str, List[SecretContainerVolume]] = defaultdict(list)
+        for volume in self.secret_volumes:
+            user_volumes[volume.secret.user_name].append(volume)
+        return user_volumes
 
     def get_secret_uris(self) -> Sequence[URL]:
         env_uris = [sec.to_uri() for sec in self.secret_env.values()]

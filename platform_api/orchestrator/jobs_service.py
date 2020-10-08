@@ -1,7 +1,6 @@
 import logging
-from collections import defaultdict
 from pathlib import PurePath
-from typing import AsyncIterator, Dict, Iterable, List, Optional, Sequence, Tuple
+from typing import AsyncIterator, Iterable, List, Optional, Sequence, Tuple
 
 from async_generator import asynccontextmanager
 from notifications_client import (
@@ -41,7 +40,6 @@ from .job_request import (
     JobNotFoundException,
     JobRequest,
     JobStatus,
-    Secret,
 )
 from .jobs_storage import (
     JobFilter,
@@ -248,15 +246,10 @@ class JobsService:
         assert len(parts) == 3, parts
         return parts[2]
 
-    async def _check_secrets(
-        self, cluster_name: str, secrets: Sequence[Secret]
-    ) -> None:
-        if not secrets:
+    async def _check_secrets(self, cluster_name: str, job_request: JobRequest) -> None:
+        grouped_secrets = job_request.container.get_user_secrets()
+        if not grouped_secrets:
             return
-
-        grouped_secrets: Dict[str, List[Secret]] = defaultdict(list)
-        for secret in secrets:
-            grouped_secrets[secret.user_name].append(secret)
 
         async with self._get_cluster(cluster_name) as cluster:
             # Warning: contextmanager '_get_cluster' suppresses all exceptions
@@ -341,7 +334,7 @@ class JobsService:
         )
         job_id = job_request.job_id
 
-        await self._check_secrets(cluster_name, job_request.container.get_secrets())
+        await self._check_secrets(cluster_name, job_request)
 
         job_disks = [
             disk_volume.disk.disk_id

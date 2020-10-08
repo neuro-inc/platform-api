@@ -15,6 +15,7 @@ from types import TracebackType
 from typing import (
     Any,
     AsyncIterator,
+    Callable,
     ClassVar,
     DefaultDict,
     Dict,
@@ -39,6 +40,7 @@ from yarl import URL
 from platform_api.utils.stream import Stream
 
 from .job_request import (
+    Container,
     ContainerResources,
     ContainerTPUResource,
     ContainerVolume,
@@ -693,17 +695,22 @@ class PodDescriptor:
     @classmethod
     def _process_secret_volumes(
         cls,
-        secret_volume: Optional[SecretVolume],
-        secret_volumes: List[SecretContainerVolume],
+        container: Container,
+        secret_volume_factory: Optional[Callable[[str], SecretVolume]] = None,
     ) -> Tuple[List[SecretVolume], List[VolumeMount]]:
+        user_volumes = container.get_user_secret_volumes()
+        if not secret_volume_factory or not user_volumes:
+            return [], []
+
         pod_volumes = []
         volume_mounts = []
 
-        if secret_volumes:
-            assert secret_volume
-            pod_volumes = [secret_volume]
+        for user_name, secret_volumes in user_volumes.items():
+            volume = secret_volume_factory(user_name)
+            pod_volumes.append(volume)
+
             for sec_volume in secret_volumes:
-                volume_mounts.append(secret_volume.create_secret_mount(sec_volume))
+                volume_mounts.append(volume.create_secret_mount(sec_volume))
 
         return pod_volumes, volume_mounts
 
@@ -731,7 +738,7 @@ class PodDescriptor:
         cls,
         volume: Volume,
         job_request: JobRequest,
-        secret_volume: Optional[SecretVolume] = None,
+        secret_volume_factory: Optional[Callable[[str], SecretVolume]] = None,
         image_pull_secret_names: Optional[List[str]] = None,
         node_selector: Optional[Dict[str, str]] = None,
         tolerations: Optional[List[Toleration]] = None,
@@ -743,7 +750,7 @@ class PodDescriptor:
         container = job_request.container
 
         secret_volumes, secret_volume_mounts = cls._process_secret_volumes(
-            secret_volume, container.secret_volumes
+            container, secret_volume_factory
         )
         disk_volumes, disk_volume_mounts = cls._process_disk_volumes(
             container.disk_volumes
