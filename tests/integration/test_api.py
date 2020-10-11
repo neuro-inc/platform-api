@@ -455,7 +455,9 @@ class TestJobs:
                         assert result["container"]["secret_volumes"] == secret_volumes
 
                 result = await jobs_client.long_polling_by_job_id(
-                    job_id=job_id, status="succeeded"
+                    job_id=job_id,
+                    status="succeeded",
+                    headers=user.headers,
                 )
                 if secret_env:
                     assert result["container"]["secret_env"] == secret_env
@@ -463,7 +465,7 @@ class TestJobs:
                     assert result["container"]["secret_volumes"] == secret_volumes
             finally:
                 if job_id:
-                    await jobs_client.delete_job(job_id)
+                    await jobs_client.delete_job(job_id, headers=user.headers)
 
         return _run
 
@@ -1526,6 +1528,84 @@ class TestJobs:
             assert resp.status == HTTPForbidden.status_code, await resp.text()
             result = await resp.json()
             assert result == {"missing": [{"uri": secret_uri_2, "action": "read"}]}
+
+    @pytest.mark.asyncio
+    @pytest.mark.parametrize("secret_kind", ["secret_env", "secret_volumes"])
+    async def test_create_job_with_secret_env_use_other_user_secret_success(
+        self,
+        api: ApiConfig,
+        client: aiohttp.ClientSession,
+        job_submit: Dict[str, Any],
+        jobs_client: JobsClient,
+        test_cluster_name: str,
+        regular_user_factory: Callable[..., Awaitable[_User]],
+        secrets_client_factory: Callable[..., AsyncContextManager[SecretsClient]],
+        secret_kind: str,
+        share_secret: Callable[..., Awaitable[None]],
+        _run_job_with_secrets: Callable[..., Awaitable[None]],
+    ) -> None:
+        cluster_name = test_cluster_name
+        usr_1 = await regular_user_factory(cluster_name=cluster_name)
+        usr_2 = await regular_user_factory(cluster_name=cluster_name)
+
+        key_1, key_2, key_3 = "key_1", "key_2", "key_3"
+        key_a, key_b, key_c = "key_a", "key_b", "key_c"
+        value_1, value_2, value_3 = "value_1", "value_2", "value_3"
+        value_a, value_b, value_c = "value_a", "value_b", "value_c"
+        async with secrets_client_factory(usr_1) as sec_client:
+            await sec_client.create_secret(key_1, value_1)
+            await sec_client.create_secret(key_2, value_2)
+            await sec_client.create_secret(key_3, value_3)
+            await sec_client.create_secret(key_a, value_a)
+            await sec_client.create_secret(key_b, value_b)
+            await sec_client.create_secret(key_c, value_c)
+
+        for key in (key_1, key_2, key_3, key_a, key_b, key_c):
+            await share_secret(usr_1, usr_2, key)
+
+        secret_uri_1 = f"secret://{cluster_name}/{usr_1.name}/{key_1}"
+        secret_uri_2 = f"secret://{cluster_name}/{usr_1.name}/{key_2}"
+        secret_uri_3 = f"secret://{cluster_name}/{usr_1.name}/{key_3}"
+        secret_uri_a = f"secret://{cluster_name}/{usr_1.name}/{key_a}"
+        secret_uri_b = f"secret://{cluster_name}/{usr_1.name}/{key_b}"
+        secret_uri_c = f"secret://{cluster_name}/{usr_1.name}/{key_c}"
+
+        env_var_a = "ENV_SECRET_A"
+        env_var_b = "ENV_SECRET_B"
+        env_var_c = "ENV_SECRET_C"
+        secret_env = {
+            env_var_a: secret_uri_a,
+            env_var_b: secret_uri_b,
+            env_var_c: secret_uri_c,
+        }
+        job_submit["container"]["secret_env"] = secret_env
+
+        sec_path_1 = "/container/file_1.txt"
+        sec_path_2 = "/container/file_2.txt"
+        sec_path_3 = "/container/file_3.txt"
+        secret_volumes = [
+            {"src_secret_uri": secret_uri_1, "dst_path": sec_path_1},
+            {"src_secret_uri": secret_uri_2, "dst_path": sec_path_2},
+            {"src_secret_uri": secret_uri_3, "dst_path": sec_path_3},
+        ]
+        job_submit["container"]["secret_volumes"] = secret_volumes
+
+        asserts = " && ".join(
+            [
+                f'[ "${env_var_a}" == "{value_a}" ]',
+                f'[ "${env_var_b}" == "{value_b}" ]',
+                f'[ "${env_var_c}" == "{value_c}" ]',
+                f'[ "$(cat {sec_path_1})" == "{value_1}" ]',
+                f'[ "$(cat {sec_path_2})" == "{value_2}" ]',
+                f'[ "$(cat {sec_path_3})" == "{value_3}" ]',
+            ]
+        )
+        cmd = f"bash -c '{asserts}'"
+        job_submit["container"]["command"] = cmd
+
+        await _run_job_with_secrets(
+            job_submit, usr_2, secret_env=secret_env, secret_volumes=secret_volumes
+        )
 
     @pytest.mark.asyncio
     @pytest.mark.parametrize("secret_kind", ["secret_env", "secret_volumes"])
@@ -2640,6 +2720,22 @@ class TestJobs:
         ) -> None:
             permission = Permission(
                 uri=f"job://{cluster_name}/{owner.name}/{job_id}", action=action
+            )
+            await auth_client.grant_user_permissions(
+                follower.name, [permission], token=owner.token
+            )
+
+        yield _impl
+
+    @pytest.fixture
+    async def share_secret(
+        self, auth_client: AuthClient, cluster_name: str
+    ) -> AsyncIterator[Callable[[_User, _User, Any], Awaitable[None]]]:
+        async def _impl(
+            owner: _User, follower: _User, secret_name: str, action: str = "read"
+        ) -> None:
+            permission = Permission(
+                uri=f"secret://{cluster_name}/{owner.name}/{secret_name}", action=action
             )
             await auth_client.grant_user_permissions(
                 follower.name, [permission], token=owner.token

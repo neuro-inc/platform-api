@@ -142,9 +142,13 @@ class JobsClient:
                 assert isinstance(key, str)
         return jobs
 
-    async def get_job_by_id(self, job_id: str) -> Dict[str, Any]:
+    async def get_job_by_id(
+        self,
+        job_id: str,
+        headers: Optional[Dict[str, str]] = None,
+    ) -> Dict[str, Any]:
         url = self._api_config.generate_job_url(job_id)
-        async with self._client.get(url, headers=self._headers) as response:
+        async with self._client.get(url, headers=headers or self._headers) as response:
             response_text = await response.text()
             assert response.status == HTTPOk.status_code, response_text
             result = await response.json()
@@ -157,6 +161,7 @@ class JobsClient:
         interval_s: float = 0.5,
         max_time: float = 300,
         unreachable_optimization: bool = True,
+        headers: Optional[Dict[str, str]] = None,
     ) -> Dict[str, Any]:
 
         # A little optimization with unreachable statuses
@@ -189,7 +194,7 @@ class JobsClient:
 
         t0 = time.monotonic()
         while True:
-            response = await self.get_job_by_id(job_id)
+            response = await self.get_job_by_id(job_id, headers=headers)
             if response["status"] == status:
                 return response
             if response["status"] in stop_statuses:
@@ -217,9 +222,16 @@ class JobsClient:
                 pytest.fail(f"too long: {current_time:.3f} sec; resp: {response}")
             interval_s *= 1.5
 
-    async def delete_job(self, job_id: str, assert_success: bool = True) -> None:
+    async def delete_job(
+        self,
+        job_id: str,
+        assert_success: bool = True,
+        headers: Optional[Dict[str, str]] = None,
+    ) -> None:
         url = self._api_config.generate_job_url(job_id)
-        async with self._client.delete(url, headers=self._headers) as response:
+        async with self._client.delete(
+            url, headers=headers or self._headers
+        ) as response:
             if assert_success:
                 assert (
                     response.status == HTTPNoContent.status_code
