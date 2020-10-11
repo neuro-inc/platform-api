@@ -3,14 +3,23 @@ DOCKER_REPO ?= neuro-docker-local-public.jfrog.io
 IMAGE_TAG ?= $(GITHUB_SHA)
 IMAGE_TAG ?= latest
 
-IMAGE_K8S ?= $(GKE_DOCKER_REGISTRY)/$(GKE_PROJECT_ID)/$(IMAGE_NAME)
-IMAGE_K8S_AWS ?= $(AWS_ACCOUNT_ID).dkr.ecr.$(AWS_REGION).amazonaws.com/$(IMAGE_NAME)
+#IMAGE_K8S ?= $(GKE_DOCKER_REGISTRY)/$(GKE_PROJECT_ID)/$(IMAGE_NAME)
+#IMAGE_K8S_AWS ?= $(AWS_ACCOUNT_ID).dkr.ecr.$(AWS_REGION).amazonaws.com/$(IMAGE_NAME)
+
+CLOUD_IMAGE_gke   ?= $(GKE_DOCKER_REGISTRY)/$(GKE_PROJECT_ID)/$(IMAGE_NAME)
+CLOUD_IMAGE_aws   ?= $(AWS_ACCOUNT_ID).dkr.ecr.$(AWS_REGION).amazonaws.com/$(IMAGE_NAME)
+CLOUD_IMAGE_azure ?= $(AZURE_DEV_ACR_NAME).azurecr.io/$(IMAGE_NAME)
+
+CLOUD_IMAGE  = ${CLOUD_IMAGE_${CLOUD_PROVIDER}}
 
 SSH_IMAGE_NAME ?= ssh-auth
 
 INGRESS_FALLBACK_IMAGE_NAME ?= platformingressfallback
-INGRESS_FALLBACK_IMAGE_K8S ?= $(GKE_DOCKER_REGISTRY)/$(GKE_PROJECT_ID)/$(INGRESS_FALLBACK_IMAGE_NAME)
-INGRESS_FALLBACK_IMAGE_K8S_AWS ?= $(AWS_ACCOUNT_ID).dkr.ecr.$(AWS_REGION).amazonaws.com/$(INGRESS_FALLBACK_IMAGE_NAME)
+INGRESS_FALLBACK_CLOUD_IMAGE_gke ?= $(GKE_DOCKER_REGISTRY)/$(GKE_PROJECT_ID)/$(INGRESS_FALLBACK_IMAGE_NAME)
+INGRESS_FALLBACK_CLOUD_IMAGE_aws ?= $(AWS_ACCOUNT_ID).dkr.ecr.$(AWS_REGION).amazonaws.com/$(INGRESS_FALLBACK_IMAGE_NAME)
+INGRESS_FALLBACK_CLOUD_IMAGE_azure ?= $(AZURE_DEV_ACR_NAME).azurecr.io/$(INGRESS_FALLBACK_IMAGE_NAME)
+
+INGRESS_FALLBACK_CLOUD_IMAGE  = ${CLOUD_IMAGE_${CLOUD_PROVIDER}}
 
 PLATFORMAUTHAPI_IMAGE = $(shell cat PLATFORMAUTHAPI_IMAGE)
 PLATFORMCONFIG_IMAGE = $(shell cat PLATFORMCONFIG_IMAGE)
@@ -85,6 +94,9 @@ gke_login:
 eks_login:
 	aws eks --region $(AWS_REGION) update-kubeconfig --name $(AWS_CLUSTER_NAME)
 
+aks_login:
+	az aks get-credentials --resource-group $(AZURE_DEV_RG_NAME) --name $(CLUSTER_NAME)
+
 docker_login:
 	@docker login $(DOCKER_REPO) \
 		--username=$(ARTIFACTORY_USERNAME) \
@@ -111,22 +123,22 @@ ecr_login:
 	$$(aws ecr get-login --no-include-email --region $(AWS_REGION))
 
 docker_push: docker_build
-	docker tag $(IMAGE_NAME):latest $(IMAGE_K8S_AWS):latest
-	docker tag $(IMAGE_NAME):latest $(IMAGE_K8S_AWS):$(IMAGE_TAG)
-	docker push $(IMAGE_K8S_AWS):latest
-	docker push $(IMAGE_K8S_AWS):$(IMAGE_TAG)
+	docker tag $(IMAGE_NAME):latest $(CLOUD_IMAGE):latest
+	docker tag $(IMAGE_NAME):latest $(CLOUD_IMAGE):$(IMAGE_TAG)
+	docker push $(CLOUD_IMAGE):latest
+	docker push $(CLOUD_IMAGE):$(IMAGE_TAG)
 
 	make -C platform_ingress_fallback IMAGE_NAME=$(INGRESS_FALLBACK_IMAGE_NAME) build
 
-	docker tag $(INGRESS_FALLBACK_IMAGE_NAME):latest $(INGRESS_FALLBACK_IMAGE_K8S_AWS):latest
-	docker tag $(INGRESS_FALLBACK_IMAGE_NAME):latest $(INGRESS_FALLBACK_IMAGE_K8S_AWS):$(IMAGE_TAG)
-	docker push $(INGRESS_FALLBACK_IMAGE_K8S_AWS):latest
-	docker push $(INGRESS_FALLBACK_IMAGE_K8S_AWS):$(IMAGE_TAG)
+	docker tag $(INGRESS_FALLBACK_IMAGE_NAME):latest $(INGRESS_FALLBACK_CLOUD_IMAGE):latest
+	docker tag $(INGRESS_FALLBACK_IMAGE_NAME):latest $(INGRESS_FALLBACK_CLOUD_IMAGE):$(IMAGE_TAG)
+	docker push $(INGRESS_FALLBACK_CLOUD_IMAGE):latest
+	docker push $(INGRESS_FALLBACK_CLOUD_IMAGE):$(IMAGE_TAG)
 
 helm_deploy:
 	helm \
-		-f deploy/platformapi/values-$(HELM_ENV)-aws.yaml \
+		-f deploy/platformapi/values-$(HELM_ENV)-$(CLOUD_PROVIDER).yaml \
 		--set "ENV=$(HELM_ENV)" \
-		--set "IMAGE=$(IMAGE_K8S_AWS):$(IMAGE_TAG)" \
+		--set "IMAGE=$(CLOUD_IMAGE):$(IMAGE_TAG)" \
 		upgrade --install platformapi deploy/platformapi/ --wait --timeout 600 --namespace platform
 
