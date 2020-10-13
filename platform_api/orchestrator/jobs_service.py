@@ -9,7 +9,6 @@ from notifications_client import (
     JobTransition,
     QuotaResourceType,
 )
-from yarl import URL
 
 from platform_api.cluster import (
     Cluster,
