@@ -241,11 +241,6 @@ class JobsService:
         ):
             raise GpuQuotaExceededError(user.name)
 
-    def _get_secret_name(self, secret_uri: URL) -> str:
-        parts = PurePath(secret_uri.path).parts
-        assert len(parts) == 3, parts
-        return parts[2]
-
     async def _check_secrets(self, cluster_name: str, job_request: JobRequest) -> None:
         grouped_secrets = job_request.container.get_user_secrets()
         if not grouped_secrets:

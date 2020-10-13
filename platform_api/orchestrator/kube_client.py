@@ -699,7 +699,7 @@ class PodDescriptor:
         secret_volume_factory: Optional[Callable[[str], SecretVolume]] = None,
     ) -> Tuple[List[SecretVolume], List[VolumeMount]]:
         user_volumes = container.get_user_secret_volumes()
-        if not secret_volume_factory or not user_volumes:
+        if not secret_volume_factory:
             return [], []
 
         pod_volumes = []

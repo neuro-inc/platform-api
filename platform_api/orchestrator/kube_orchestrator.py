@@ -187,12 +187,12 @@ class KubeOrchestrator(Orchestrator):
         )
 
     @classmethod
-    def create_secret_volume(self, user_name: str) -> SecretVolume:
-        name = self._get_k8s_secret_name(user_name)
+    def create_secret_volume(cls, user_name: str) -> SecretVolume:
+        name = cls._get_k8s_secret_name(user_name)
         return SecretVolume(name=name, k8s_secret_name=name)
 
     @classmethod
-    def _get_k8s_secret_name(self, user_name: str) -> str:
+    def _get_k8s_secret_name(cls, user_name: str) -> str:
         return f"user--{user_name}--secrets"
 
     def _get_user_resource_name(self, job: Job) -> str:
