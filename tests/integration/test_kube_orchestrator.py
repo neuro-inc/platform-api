@@ -1744,10 +1744,12 @@ class TestKubeOrchestrator:
 
         raw = await kube_client.get_raw_pod(pod_name)
 
-        sec_volumes_raw = [v for v in raw["spec"]["volumes"] if v["name"] == "secret"]
+        sec_volumes_raw = [
+            v for v in raw["spec"]["volumes"] if v["name"] == secret.k8s_secret_name
+        ]
         assert sec_volumes_raw == [
             {
-                "name": "secret",
+                "name": secret.k8s_secret_name,
                 "secret": {"secretName": secret.k8s_secret_name, "defaultMode": 0o400},
             }
         ]
@@ -1755,7 +1757,7 @@ class TestKubeOrchestrator:
         container_raw = raw["spec"]["containers"][0]
         assert container_raw["volumeMounts"] == [
             {
-                "name": "secret",
+                "name": secret.k8s_secret_name,
                 "readOnly": True,
                 "mountPath": str(secret_path / secret_file),
                 "subPath": secret_name,
@@ -1877,10 +1879,12 @@ class TestKubeOrchestrator:
         await kube_client.wait_pod_is_running(pod_name=pod_name, timeout_s=60.0)
 
         raw = await kube_client.get_raw_pod(pod_name)
-        sec_volumes_raw = [v for v in raw["spec"]["volumes"] if v["name"] == "secret"]
+        sec_volumes_raw = [
+            v for v in raw["spec"]["volumes"] if v["name"] == k8s_sec_name
+        ]
         assert sec_volumes_raw == [
             {
-                "name": "secret",
+                "name": k8s_sec_name,
                 "secret": {"secretName": k8s_sec_name, "defaultMode": 0o400},
             },
         ]
@@ -1888,25 +1892,25 @@ class TestKubeOrchestrator:
         container_raw = raw["spec"]["containers"][0]
         assert container_raw["volumeMounts"] == [
             {
-                "name": "secret",
+                "name": k8s_sec_name,
                 "readOnly": True,
                 "mountPath": str(path_a / file_a),
                 "subPath": secret_a.secret_key,
             },
             {
-                "name": "secret",
+                "name": k8s_sec_name,
                 "readOnly": True,
                 "mountPath": str(path_b / file_b1),
                 "subPath": secret_b1.secret_key,
             },
             {
-                "name": "secret",
+                "name": k8s_sec_name,
                 "readOnly": True,
                 "mountPath": str(path_b / file_b2),
                 "subPath": secret_b2.secret_key,
             },
             {
-                "name": "secret",
+                "name": k8s_sec_name,
                 "readOnly": True,
                 "mountPath": str(path_bc / file_bc),
                 "subPath": secret_bc.secret_key,

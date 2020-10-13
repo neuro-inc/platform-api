@@ -288,7 +288,6 @@ def create_container_validator(
                     storage_scheme="secret",
                     cluster_name=cluster_name,
                     check_cluster=check_cluster,
-                    assert_username=user_name,
                     assert_parts_count=3,
                 ),
             ),
@@ -298,7 +297,6 @@ def create_container_validator(
                 storage_scheme="secret",
                 cluster_name=cluster_name,
                 check_cluster=check_cluster,
-                assert_username=user_name,
                 # Should exactly include ("/", "username", "secret_name")
                 assert_parts_count=3,
             ),
