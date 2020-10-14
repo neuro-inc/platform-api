@@ -116,6 +116,7 @@ jobs:
       - name: Deploy to kubernetes
         run: make helm_deploy
 
+
   deploy_dev_azure:
     name: Deploy on dev Azure
     runs-on: ubuntu-latest
