@@ -472,6 +472,16 @@ class TestEnvironConfigFactory:
         )
         assert config.host == "registry.com:5000"
 
+    def test_alembic_with_escaped_symbol(self) -> None:
+        config = EnvironConfigFactory(environ={}).create_alembic(
+            "postgresql://postgres%40@localhost:5432/postgres"
+        )
+
+        assert (
+            config.get_main_option("sqlalchemy.url")
+            == "postgresql://postgres%40@localhost:5432/postgres"
+        )
+
 
 class TestOrchestratorConfig:
     def test_default_presets(self) -> None:
