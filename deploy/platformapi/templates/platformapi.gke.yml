@@ -126,7 +126,7 @@ spec:
           valueFrom:
             secretKeyRef:
               name: platformapi-postgres
-              key: platformapi-postgres-dsn
+              key: platformapi-service-dsn
         - name: NP_DB_POSTGRES_ENABLED
           value: "{{ .Values.NP_DB_POSTGRES_ENABLED }}"
       - name: kubeproxy
