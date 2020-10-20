@@ -13,7 +13,7 @@ INGRESS_HOST: dev.neu.ro
 INGRESS_PLATFORM_MONITORING_DOMAIN_NAME: monitoring-dev.neu.ro
 INGRESS_MAIN_SITE_HOST:
 INGRESS_FALLBACK_HOST: 'job-app-dev.neu.ro'
-NP_DB_REDIS_URI: ""
+NP_DB_REDIS_URI: "redis://neuro-redis-dev-azure-p1.redis.cache.windows.net:6379/0"
 #  redis://dev-staging-redis-redis.weetmn.ng.0001.use1.cache.amazonaws.com:6379/0
 NP_REGISTRY_HOST: registry-dev.neu.ro
 NP_GKE_GPU_MODELS: nvidia-tesla-k80,nvidia-tesla-p4,nvidia-tesla-v100
