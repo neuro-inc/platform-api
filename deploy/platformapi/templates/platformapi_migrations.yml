@@ -22,7 +22,7 @@ spec:
           valueFrom:
             secretKeyRef:
               name: platformapi-postgres
-              key: platformapi-dsn
+              key: platformapi-migrations-dsn
 
   backoffLimit: 0
 {{- end }}
