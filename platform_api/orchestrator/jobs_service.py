@@ -9,7 +9,6 @@ from notifications_client import (
     JobTransition,
     QuotaResourceType,
 )
-from yarl import URL
 
 from platform_api.cluster import (
     Cluster,
@@ -241,10 +240,23 @@ class JobsService:
         ):
             raise GpuQuotaExceededError(user.name)
 
-    def _get_secret_name(self, secret_uri: URL) -> str:
-        parts = PurePath(secret_uri.path).parts
-        assert len(parts) == 3, parts
-        return parts[2]
+    async def _check_secrets(self, cluster_name: str, job_request: JobRequest) -> None:
+        grouped_secrets = job_request.container.get_user_secrets()
+        if not grouped_secrets:
+            return
+
+        missing = []
+        async with self._get_cluster(cluster_name) as cluster:
+            # Warning: contextmanager '_get_cluster' suppresses all exceptions
+            for user_name, user_secrets in grouped_secrets.items():
+                missing.extend(
+                    await cluster.orchestrator.get_missing_secrets(
+                        user_name, [secret.secret_key for secret in user_secrets]
+                    )
+                )
+        if missing:
+            details = ", ".join(f"'{s}'" for s in sorted(missing))
+            raise JobsServiceException(f"Missing secrets: {details}")
 
     async def create_job(
         self,
@@ -319,19 +331,8 @@ class JobsService:
         )
         job_id = job_request.job_id
 
-        job_secrets = [
-            self._get_secret_name(uri)
-            for uri in job_request.container.get_secret_uris()
-        ]
-        if job_secrets:
-            async with self._get_cluster(cluster_name) as cluster:
-                # Warning: contextmanager '_get_cluster' suppresses all exceptions
-                missing = await cluster.orchestrator.get_missing_secrets(
-                    user.name, job_secrets
-                )
-            if missing:
-                details = ", ".join(f"'{s}'" for s in sorted(missing))
-                raise JobsServiceException(f"Missing secrets: {details}")
+        await self._check_secrets(cluster_name, job_request)
+
         job_disks = [
             disk_volume.disk.disk_id
             for disk_volume in job_request.container.disk_volumes
