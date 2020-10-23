@@ -7,79 +7,79 @@ env:
 
 jobs:
 
- test:
-   name: Run tests
-   runs-on: ubuntu-latest
-   steps:
-     - name: Checkout commit
-       uses: actions/checkout@v2
-     - name: Install python
-       uses: actions/setup-python@v2
-       with:
-         python-version: "3.7.7"
-     - name: Cache packages
-       uses: actions/cache@v1
-       with:
-         path: ~/.cache/pip
-         key: ${{ runner.os }}-py-3.7.7-${{ hashFiles('requirements/*.txt') }}-${{ hashFiles('setup.py') }}
-     - name: Install dependencies
-       run: make setup
-     - name: Lint
-       run: make lint
-     - name: Run unit tests
-       run: make test_unit
-     - name: Upload coverage to Codecov
-       uses: codecov/codecov-action@v1
-       with:
-         token: ${{ secrets.CODECOV_TOKEN }}
-         file: .coverage-unit.xml
-         flags: unit
-         name: codecov-unit
-     - name: Configure AWS credentials
-       uses: aws-actions/configure-aws-credentials@v1
-       with:
-         aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
-         aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
-         aws-region: ${{ secrets.AWS_REGION }}
-     - name: Login to AWS ECR
-       uses: aws-actions/amazon-ecr-login@v1
-     - name: Install containerd
-       run: |
-         # without containerd, tests TestTopApi won't work
-         # see https://github.com/neuromation/platform-api/pull/928/files#diff-1d37e48f9ceff6d8030570cd36286a61R76
-         export DEBIAN_FRONTEND=noninteractive
-         export RELEASE=$(lsb_release -cs)
-         curl -fsSL https://download.docker.com/linux/ubuntu/gpg | sudo apt-key add -
-         sudo add-apt-repository -y \
-           "deb [arch=amd64] https://download.docker.com/linux/ubuntu $RELEASE stable"
-         sudo apt-get -q update
-         sudo apt-get -q install -y \
-           docker-ce=5:18.09.4~3-0~ubuntu-$RELEASE \
-           docker-ce-cli=5:18.09.4~3-0~ubuntu-$RELEASE \
-           containerd.io=1.2.5-1
-     - name: Install NFS
-       run: |
-         sudo apt-get -q update
-         sudo apt-get -q install -y nfs-common
-         sudo modprobe nfs
-         sudo modprobe nfsd
-     - name: Start minikube
-       run: |
-         make install_k8s
-         make start_k8s
-     - name: Pull test images
-       run: make docker_pull_test_images
-     - name: Run integration tests
-       run: make test_integration
-     - name: Upload coverage to Codecov
-       uses: codecov/codecov-action@v1
-       with:
-         token: ${{ secrets.CODECOV_TOKEN }}
-         file: .coverage-integration.xml
-         flags: integration
-         name: codecov-integration
-     - name: Run e2e tests
-       run: make test_k8s_e2e
+  test:
+    name: Run tests
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout commit
+        uses: actions/checkout@v2
+      - name: Install python
+        uses: actions/setup-python@v2
+        with:
+          python-version: "3.7.7"
+      - name: Cache packages
+        uses: actions/cache@v1
+        with:
+          path: ~/.cache/pip
+          key: ${{ runner.os }}-py-3.7.7-${{ hashFiles('requirements/*.txt') }}-${{ hashFiles('setup.py') }}
+      - name: Install dependencies
+        run: make setup
+      - name: Lint
+        run: make lint
+      - name: Run unit tests
+        run: make test_unit
+      - name: Upload coverage to Codecov
+        uses: codecov/codecov-action@v1
+        with:
+          token: ${{ secrets.CODECOV_TOKEN }}
+          file: .coverage-unit.xml
+          flags: unit
+          name: codecov-unit
+      - name: Configure AWS credentials
+        uses: aws-actions/configure-aws-credentials@v1
+        with:
+          aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
+          aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+          aws-region: ${{ secrets.AWS_REGION }}
+      - name: Login to AWS ECR
+        uses: aws-actions/amazon-ecr-login@v1
+      - name: Install containerd
+        run: |
+          # without containerd, tests TestTopApi won't work
+          # see https://github.com/neuromation/platform-api/pull/928/files#diff-1d37e48f9ceff6d8030570cd36286a61R76
+          export DEBIAN_FRONTEND=noninteractive
+          export RELEASE=$(lsb_release -cs)
+          curl -fsSL https://download.docker.com/linux/ubuntu/gpg | sudo apt-key add -
+          sudo add-apt-repository -y \
+            "deb [arch=amd64] https://download.docker.com/linux/ubuntu $RELEASE stable"
+          sudo apt-get -q update
+          sudo apt-get -q install -y \
+            docker-ce=5:18.09.4~3-0~ubuntu-$RELEASE \
+            docker-ce-cli=5:18.09.4~3-0~ubuntu-$RELEASE \
+            containerd.io=1.2.5-1
+      - name: Install NFS
+        run: |
+          sudo apt-get -q update
+          sudo apt-get -q install -y nfs-common
+          sudo modprobe nfs
+          sudo modprobe nfsd
+      - name: Start minikube
+        run: |
+          make install_k8s
+          make start_k8s
+      - name: Pull test images
+        run: make docker_pull_test_images
+      - name: Run integration tests
+        run: make test_integration
+      - name: Upload coverage to Codecov
+        uses: codecov/codecov-action@v1
+        with:
+          token: ${{ secrets.CODECOV_TOKEN }}
+          file: .coverage-integration.xml
+          flags: integration
+          name: codecov-integration
+      - name: Run e2e tests
+        run: make test_k8s_e2e
 
   deploy_dev:
     name: Deploy on dev
