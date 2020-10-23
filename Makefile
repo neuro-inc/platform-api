@@ -91,10 +91,10 @@ gke_login:
 	gcloud config set $(SET_CLUSTER_ZONE_REGION)
 	gcloud auth configure-docker
 
-eks_login:
+aws_k8s_login:
 	aws eks --region $(AWS_REGION) update-kubeconfig --name $(AWS_CLUSTER_NAME)
 
-aks_login:
+azure_k8s_login:
 	az aks get-credentials --resource-group $(AZURE_DEV_RG_NAME) --name $(CLUSTER_NAME)
 
 docker_login:
@@ -118,9 +118,6 @@ helm_install:
 
 gcr_login:
 	@echo $(GKE_ACCT_AUTH) | base64 --decode | docker login -u _json_key --password-stdin https://gcr.io
-
-ecr_login:
-	$$(aws ecr get-login --no-include-email --region $(AWS_REGION))
 
 docker_push: docker_build
 	docker tag $(IMAGE_NAME):latest $(CLOUD_IMAGE):latest
