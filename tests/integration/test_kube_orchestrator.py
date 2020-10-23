@@ -1115,44 +1115,6 @@ class TestKubeOrchestrator:
         assert raw_policy["spec"]["podSelector"]["matchLabels"] == {
             "platform.neuromation.io/user": job.owner
         }
-        assert raw_policy["spec"]["egress"] == [
-            {
-                "to": [
-                    {
-                        "ipBlock": {
-                            "cidr": "0.0.0.0/0",
-                            "except": [
-                                "10.0.0.0/8",
-                                "172.16.0.0/12",
-                                "192.168.0.0/16",
-                                "169.254.0.0/16",
-                            ],
-                        }
-                    }
-                ]
-            },
-            {
-                "ports": [
-                    {"protocol": "UDP", "port": 53},
-                    {"protocol": "TCP", "port": 53},
-                ],
-                "to": [
-                    {"ipBlock": {"cidr": "10.0.0.0/8"}},
-                    {"ipBlock": {"cidr": "172.16.0.0/12"}},
-                    {"ipBlock": {"cidr": "192.168.0.0/16"}},
-                    {"ipBlock": {"cidr": "169.254.0.0/16"}},
-                ],
-            },
-            {
-                "to": [
-                    {
-                        "podSelector": {
-                            "matchLabels": {"platform.neuromation.io/user": job.owner}
-                        }
-                    }
-                ]
-            },
-        ]
 
     @pytest.mark.asyncio
     async def test_gpu_job_pod_labels(
