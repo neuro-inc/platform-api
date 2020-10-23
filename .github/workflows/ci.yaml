@@ -10,8 +10,6 @@ jobs:
  test:
    name: Run tests
    runs-on: ubuntu-latest
-   env:
-     PIP_EXTRA_INDEX_URL: ${{ format('https://{0}:{1}@{2}/{0}/{3}', secrets.DEVPI_USER, secrets.DEVPI_PASS, secrets.DEVPI_HOST, secrets.DEVPI_INDEX) }}
    steps:
      - name: Checkout commit
        uses: actions/checkout@v2
