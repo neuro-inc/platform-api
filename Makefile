@@ -3,9 +3,6 @@ DOCKER_REPO ?= neuro-docker-local-public.jfrog.io
 IMAGE_TAG ?= $(GITHUB_SHA)
 IMAGE_TAG ?= latest
 
-#IMAGE_K8S ?= $(GKE_DOCKER_REGISTRY)/$(GKE_PROJECT_ID)/$(IMAGE_NAME)
-#IMAGE_K8S_AWS ?= $(AWS_ACCOUNT_ID).dkr.ecr.$(AWS_REGION).amazonaws.com/$(IMAGE_NAME)
-
 CLOUD_IMAGE_gke   ?= $(GKE_DOCKER_REGISTRY)/$(GKE_PROJECT_ID)/$(IMAGE_NAME)
 CLOUD_IMAGE_aws   ?= $(AWS_ACCOUNT_ID).dkr.ecr.$(AWS_REGION).amazonaws.com/$(IMAGE_NAME)
 CLOUD_IMAGE_azure ?= $(AZURE_DEV_ACR_NAME).azurecr.io/$(IMAGE_NAME)
@@ -78,7 +75,7 @@ run_api_k8s_container:
 	    -e NP_K8S_CA_PATH=$$HOME/.minikube/ca.crt \
 	    -e NP_K8S_AUTH_CERT_PATH=$$HOME/.minikube/client.crt \
 	    -e NP_K8S_AUTH_CERT_KEY_PATH=$$HOME/.minikube/client.key \
-	    $(IMAGE_K8S):latest
+	    $(IMAGE_NAME):latest
 
 gke_login:
 	sudo /opt/google-cloud-sdk/bin/gcloud --quiet components update --version 204.0.0
@@ -96,11 +93,6 @@ aws_k8s_login:
 
 azure_k8s_login:
 	az aks get-credentials --resource-group $(AZURE_DEV_RG_NAME) --name $(CLUSTER_NAME)
-
-docker_login:
-	@docker login $(DOCKER_REPO) \
-		--username=$(ARTIFACTORY_USERNAME) \
-		--password=$(ARTIFACTORY_PASSWORD)
 
 docker_pull_test_images:
 	docker pull $(PLATFORMAUTHAPI_IMAGE)
