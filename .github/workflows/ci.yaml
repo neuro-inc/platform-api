@@ -56,9 +56,9 @@ jobs:
         if: env.CLOUD_PROVIDER == 'azure'
         uses: azure/docker-login@v1
         with:
-          login-server: ${{ secrets.AZURE_STAGING_ACR_SERVER }}
-          username: ${{ secrets.AZURE_STAGING_ACR_USERNAME }}
-          password: ${{ secrets.AZURE_STAGING_ACR_PASSWORD }}
+          login-server: ${{ secrets.AZURE_DEV_ACR_SERVER }}
+          username: ${{ secrets.AZURE_DEV_ACR_USERNAME }}
+          password: ${{ secrets.AZURE_DEV_ACR_PASSWORD }}
       - name: Install containerd
         run: |
           # without containerd, tests TestTopApi won't work
