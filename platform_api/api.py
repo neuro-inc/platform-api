@@ -30,7 +30,7 @@ from .handlers.tags_handler import TagsHandler
 from .kube_cluster import KubeCluster
 from .orchestrator.job_request import JobException
 from .orchestrator.jobs_poller import JobsPoller
-from .orchestrator.jobs_service import JobsService, JobsServiceException
+from .orchestrator.jobs_service import JobsScheduler, JobsService, JobsServiceException
 from .orchestrator.jobs_storage import (
     JobsStorage,
     PostgresJobsStorage,
@@ -322,6 +322,7 @@ async def create_app(
                 jobs_storage=jobs_storage,
                 jobs_config=config.jobs,
                 notifications_client=notifications_client,
+                scheduler=JobsScheduler(config.scheduler),
             )
 
             logger.info("Initializing JobsPoller")

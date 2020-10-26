@@ -195,7 +195,7 @@ class RedisJobsStorage(JobsStorage):
     def _update_for_deletion_index(self, tr: Pipeline, job: JobRecord) -> None:
         index_key = self._generate_jobs_for_deletion_index_key()
         if job.is_finished:
-            if job.is_deleted:
+            if not job.materialized:
                 tr.srem(index_key, job.id)
             else:
                 tr.sadd(index_key, job.id)

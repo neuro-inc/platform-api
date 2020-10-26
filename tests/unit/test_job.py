@@ -513,7 +513,7 @@ def job_payload(job_request_payload: Any) -> Dict[str, Any]:
         "id": "testjob",
         "request": job_request_payload,
         "status": "succeeded",
-        "is_deleted": True,
+        "materialized": False,
         "finished_at": finished_at_str,
         "statuses": [{"status": "failed", "transition_time": finished_at_str}],
     }
@@ -548,7 +548,10 @@ class TestJobRecord:
         self, mock_orchestrator: MockOrchestrator, job_request: JobRequest
     ) -> None:
         record = JobRecord.create(
-            status=JobStatus.FAILED, request=job_request, cluster_name="test-cluster"
+            status=JobStatus.FAILED,
+            request=job_request,
+            cluster_name="test-cluster",
+            materialized=True,
         )
         assert record.finished_at
         assert record.should_be_deleted(delay=timedelta(0))
@@ -969,7 +972,7 @@ class TestJob:
             ),
         )
         job.status = JobStatus.FAILED
-        job.is_deleted = True
+        job.materialized = False
         assert job.finished_at
         expected_finished_at = job.finished_at.isoformat()
         assert job.to_primitive() == {
@@ -979,7 +982,7 @@ class TestJob:
             "cluster_name": "test-cluster",
             "request": job_request.to_primitive(),
             "status": "failed",
-            "is_deleted": True,
+            "materialized": False,
             "finished_at": expected_finished_at,
             "statuses": [
                 {
@@ -1026,7 +1029,7 @@ class TestJob:
                     "description": None,
                 }
             ],
-            "is_deleted": False,
+            "materialized": False,
             "finished_at": None,
             "is_preemptible": False,
             "max_run_time_minutes": 500,
@@ -1054,7 +1057,7 @@ class TestJob:
             "owner": "testuser",
             "request": job_request_payload,
             "status": "succeeded",
-            "is_deleted": True,
+            "materialized": True,
             "finished_at": datetime.now(timezone.utc).isoformat(),
         }
         job = Job.from_primitive(
@@ -1062,7 +1065,7 @@ class TestJob:
         )
         assert job.id == "testjob"
         assert job.status == JobStatus.SUCCEEDED
-        assert job.is_deleted
+        assert job.materialized
         assert job.finished_at
         assert job.description == "Description of the testjob"
         assert not job.tags
@@ -1081,7 +1084,7 @@ class TestJob:
             "owner": "testuser",
             "request": job_request_payload,
             "status": "succeeded",
-            "is_deleted": True,
+            "materialized": True,
             "finished_at": datetime.now(timezone.utc).isoformat(),
         }
         job = Job.from_primitive(
@@ -1100,7 +1103,7 @@ class TestJob:
             "tags": tags,
             "request": job_request_payload,
             "status": "succeeded",
-            "is_deleted": True,
+            "materialized": True,
             "finished_at": datetime.now(timezone.utc).isoformat(),
         }
         job = Job.from_primitive(
@@ -1117,7 +1120,7 @@ class TestJob:
             "id": "testjob",
             "request": job_request_payload,
             "status": "succeeded",
-            "is_deleted": True,
+            "materialized": True,
             "finished_at": finished_at_str,
             "statuses": [{"status": "failed", "transition_time": finished_at_str}],
             "is_preemptible": True,
@@ -1127,7 +1130,7 @@ class TestJob:
         )
         assert job.id == "testjob"
         assert job.status == JobStatus.FAILED
-        assert job.is_deleted
+        assert job.materialized
         assert job.finished_at
         assert job.description == "Description of the testjob"
         assert job.owner == "compute"
@@ -1142,7 +1145,7 @@ class TestJob:
             "cluster_name": "testcluster",
             "request": job_request_payload,
             "status": "succeeded",
-            "is_deleted": True,
+            "materialized": True,
             "finished_at": datetime.now(timezone.utc).isoformat(),
         }
         job = Job.from_primitive(
@@ -1150,7 +1153,7 @@ class TestJob:
         )
         assert job.id == "testjob"
         assert job.status == JobStatus.SUCCEEDED
-        assert job.is_deleted
+        assert job.materialized
         assert job.finished_at
         assert job.description == "Description of the testjob"
         assert job.name is None
@@ -1169,7 +1172,7 @@ class TestJob:
             "owner": "testuser",
             "request": job_request_payload,
             "status": "succeeded",
-            "is_deleted": True,
+            "materialized": True,
             "finished_at": datetime.now(timezone.utc).isoformat(),
         }
         job = Job.from_primitive(
@@ -1189,7 +1192,7 @@ class TestJob:
             "owner": "testuser",
             "request": job_request_payload,
             "status": "succeeded",
-            "is_deleted": True,
+            "materialized": True,
             "finished_at": datetime.now(timezone.utc).isoformat(),
         }
         job = Job.from_primitive(
@@ -1209,7 +1212,7 @@ class TestJob:
             "owner": "testuser",
             "request": job_request_payload,
             "status": "succeeded",
-            "is_deleted": True,
+            "materialized": True,
             "finished_at": datetime.now(timezone.utc).isoformat(),
         }
         job = Job.from_primitive(
@@ -1229,7 +1232,7 @@ class TestJob:
             "owner": "testuser",
             "request": job_request_payload,
             "status": "succeeded",
-            "is_deleted": True,
+            "materialized": True,
             "finished_at": datetime.now(timezone.utc).isoformat(),
         }
         job = Job.from_primitive(
@@ -1247,7 +1250,7 @@ class TestJob:
             "owner": "testuser",
             "request": job_request_payload,
             "status": "succeeded",
-            "is_deleted": True,
+            "materialized": True,
             "finished_at": datetime.now(timezone.utc).isoformat(),
             "max_run_time_minutes": 100,
         }
@@ -1265,7 +1268,7 @@ class TestJob:
             "owner": "testuser",
             "request": job_request_payload,
             "status": "succeeded",
-            "is_deleted": True,
+            "materialized": True,
             "finished_at": datetime.now(timezone.utc).isoformat(),
             "max_run_time_minutes": None,
         }
@@ -1338,7 +1341,7 @@ class TestJob:
             "cluster_name": "testcluster",
             "status": current_status_item["status"],
             "statuses": [current_status_item],
-            "is_deleted": "False",
+            "materialized": "False",
             "finished_at": finished_at_str,
             "is_preemptible": False,
             "restart_policy": str(JobRestartPolicy.ALWAYS),

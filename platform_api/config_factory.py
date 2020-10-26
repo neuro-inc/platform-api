@@ -20,6 +20,7 @@ from .config import (
     DatabaseConfig,
     JobPolicyEnforcerConfig,
     JobsConfig,
+    JobsSchedulerConfig,
     NotificationsConfig,
     OAuthConfig,
     PlatformConfig,
@@ -59,6 +60,7 @@ class EnvironConfigFactory:
             env_prefix=env_prefix,
             jobs=jobs,
             job_policy_enforcer=self.create_job_policy_enforcer(),
+            scheduler=self.create_job_scheduler(),
             notifications=self.create_notifications(),
             cors=self.create_cors(),
             config_url=config_url,
@@ -95,6 +97,22 @@ class EnvironConfigFactory:
             interval_sec=float(
                 self._environ.get("NP_ENFORCER_INTERVAL_SEC")
                 or JobPolicyEnforcerConfig.interval_sec
+            ),
+        )
+
+    def create_job_scheduler(self) -> JobsSchedulerConfig:
+        return JobsSchedulerConfig(
+            run_quantum_sec=float(
+                self._environ.get("RUN_QUANTUM_SEC")
+                or JobsSchedulerConfig.run_quantum_sec
+            ),
+            max_suspended_time_sec=float(
+                self._environ.get("MAX_SUSPENDED_TIME_SEC")
+                or JobsSchedulerConfig.max_suspended_time_sec
+            ),
+            is_waiting_min_time_sec=float(
+                self._environ.get("IS_WAITING_MIN_TIME_SEC")
+                or JobsSchedulerConfig.is_waiting_min_time_sec
             ),
         )
 

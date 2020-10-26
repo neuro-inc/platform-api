@@ -71,10 +71,10 @@ class TestInMemoryJobsStorage:
         pending_job = self._create_job()
         await jobs_storage.set_job(pending_job)
 
-        running_job = self._create_job(status=JobStatus.RUNNING)
+        running_job = self._create_job(status=JobStatus.RUNNING, materialized=True)
         await jobs_storage.set_job(running_job)
 
-        succeeded_job = self._create_job(status=JobStatus.SUCCEEDED)
+        succeeded_job = self._create_job(status=JobStatus.SUCCEEDED, materialized=True)
         await jobs_storage.set_job(succeeded_job)
 
         job = await jobs_storage.get_job(pending_job.id)

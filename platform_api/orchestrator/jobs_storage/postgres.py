@@ -21,7 +21,7 @@ from asyncpg import Connection, SerializationError, UniqueViolationError
 from asyncpg.cursor import CursorFactory
 from asyncpg.pool import Pool
 from asyncpg.protocol.protocol import Record
-from sqlalchemy import Boolean, Integer, and_, asc, desc, not_, or_, select
+from sqlalchemy import Boolean, Integer, and_, asc, desc, or_, select
 
 from platform_api.orchestrator.job import JobRecord
 from platform_api.orchestrator.job_request import JobError, JobStatus
@@ -279,7 +279,7 @@ class PostgresJobsStorage(JobsStorage):
         query = (
             self._tables.jobs.select()
             .where(self._tables.jobs.c.status.in_(JobStatus.finished_values()))
-            .where(not_(self._tables.jobs.c.payload["is_deleted"].astext.cast(Boolean)))
+            .where(self._tables.jobs.c.payload["materialized"].astext.cast(Boolean))
         )
         for_deletion = []
         async with self._pool.acquire() as conn, conn.transaction():

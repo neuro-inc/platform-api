@@ -1,5 +1,6 @@
 import asyncio
-from datetime import timedelta
+from datetime import datetime, timedelta, timezone
+from functools import partial
 from pathlib import Path, PurePath
 from typing import Any, AsyncIterator, Callable, Dict, Iterator, List, Optional
 
@@ -15,7 +16,7 @@ from platform_api.cluster_config import (
     RegistryConfig,
     StorageConfig,
 )
-from platform_api.config import JobsConfig
+from platform_api.config import JobsConfig, JobsSchedulerConfig
 from platform_api.orchestrator.base import Orchestrator
 from platform_api.orchestrator.job import (
     AggregatedRunTime,
@@ -32,7 +33,7 @@ from platform_api.orchestrator.job_request import (
     JobRequest,
     JobStatus,
 )
-from platform_api.orchestrator.jobs_service import JobsService
+from platform_api.orchestrator.jobs_service import JobsScheduler, JobsService
 from platform_api.orchestrator.jobs_storage import (
     InMemoryJobsStorage,
     JobStorageTransactionError,
@@ -50,11 +51,17 @@ class MockOrchestrator(Orchestrator):
         self._mock_status_to_return = JobStatus.PENDING
         self._mock_reason_to_return: Optional[str] = JobStatusReason.CONTAINER_CREATING
         self._mock_exit_code_to_return: Optional[int] = None
+        self._mock_statuses: Dict[str, JobStatus] = {}
+        self._mock_reasons: Dict[str, Optional[str]] = {}
+        self._mock_exit_codes: Dict[str, Optional[int]] = {}
         self.raise_on_get_job_status = False
         self.raise_on_start_job_status = False
         self.get_job_status_exc_factory = self._create_get_job_status_exc
         self.raise_on_delete = False
         self.delete_job_exc_factory = self._create_delete_job_exc
+        self.current_datetime_factory: Callable[[], datetime] = partial(
+            datetime.now, timezone.utc
+        )
         self._successfully_deleted_jobs: List[Job] = []
 
     @property
@@ -65,6 +72,15 @@ class MockOrchestrator(Orchestrator):
     def storage_config(self) -> StorageConfig:
         return self._config.storage
 
+    def _get_status(self, job_id: str) -> JobStatus:
+        return self._mock_statuses.get(job_id, self._mock_status_to_return)
+
+    def _get_exit_code(self, job_id: str) -> Optional[int]:
+        return self._mock_exit_codes.get(job_id, self._mock_exit_code_to_return)
+
+    def _get_reason(self, job_id: str) -> Optional[str]:
+        return self._mock_reasons.get(job_id, self._mock_reason_to_return)
+
     async def prepare_job(self, job: Job) -> None:
         pass
 
@@ -72,9 +88,10 @@ class MockOrchestrator(Orchestrator):
         if self.raise_on_start_job_status:
             raise self.get_job_status_exc_factory(job)
         job.status_history.current = JobStatusItem.create(
-            self._mock_status_to_return,
-            reason=self._mock_reason_to_return,
-            exit_code=self._mock_exit_code_to_return,
+            self._get_status(job.id),
+            reason=self._get_reason(job.id),
+            exit_code=self._get_exit_code(job.id),
+            current_datetime_factory=self.current_datetime_factory,
         )
         return job.status
 
@@ -85,9 +102,10 @@ class MockOrchestrator(Orchestrator):
         if self.raise_on_get_job_status:
             raise self.get_job_status_exc_factory(job)
         return JobStatusItem.create(
-            self._mock_status_to_return,
-            reason=self._mock_reason_to_return,
-            exit_code=self._mock_exit_code_to_return,
+            self._get_status(job.id),
+            reason=self._get_reason(job.id),
+            exit_code=self._get_exit_code(job.id),
+            current_datetime_factory=self.current_datetime_factory,
         )
 
     def _create_delete_job_exc(self, job: Job) -> Exception:
@@ -107,6 +125,21 @@ class MockOrchestrator(Orchestrator):
 
     def update_exit_code_to_return(self, new_exit_code: Optional[int]) -> None:
         self._mock_exit_code_to_return = new_exit_code
+
+    def update_status_to_return_single(
+        self, job_id: str, new_status: JobStatus
+    ) -> None:
+        self._mock_statuses[job_id] = new_status
+
+    def update_reason_to_return_single(
+        self, job_id: str, new_reason: Optional[str]
+    ) -> None:
+        self._mock_reasons[job_id] = new_reason
+
+    def update_exit_code_to_return_single(
+        self, job_id: str, new_exit_code: Optional[int]
+    ) -> None:
+        self._mock_exit_codes[job_id] = new_exit_code
 
     def get_successfully_deleted_jobs(self) -> List[Job]:
         return self._successfully_deleted_jobs
@@ -250,17 +283,24 @@ def jobs_config() -> JobsConfig:
 
 
 @pytest.fixture
+def scheduler_config() -> JobsSchedulerConfig:
+    return JobsSchedulerConfig()
+
+
+@pytest.fixture
 def jobs_service(
     cluster_registry: ClusterRegistry,
     mock_jobs_storage: MockJobsStorage,
     jobs_config: JobsConfig,
     mock_notifications_client: NotificationsClient,
+    scheduler_config: JobsSchedulerConfig,
 ) -> JobsService:
     return JobsService(
         cluster_registry=cluster_registry,
         jobs_storage=mock_jobs_storage,
         jobs_config=jobs_config,
         notifications_client=mock_notifications_client,
+        scheduler=JobsScheduler(scheduler_config),
     )
 
 

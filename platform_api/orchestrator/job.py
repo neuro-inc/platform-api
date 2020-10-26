@@ -203,6 +203,16 @@ class JobStatusHistory:
         return None
 
     @property
+    def continued_at(self) -> Optional[datetime]:
+        result: Optional[JobStatusItem] = None
+        for item in reversed(self._items):
+            if item.status == JobStatus.RUNNING:
+                result = item
+            elif result is not None:
+                return result.transition_time
+        return None
+
+    @property
     def started_at_str(self) -> Optional[str]:
         if self.started_at:
             return self.started_at.isoformat()
@@ -251,7 +261,7 @@ class JobRecord:
     name: Optional[str] = None
     tags: Sequence[str] = ()
     is_preemptible: bool = False
-    is_deleted: bool = False
+    materialized: bool = False
     max_run_time_minutes: Optional[int] = None
     internal_hostname: Optional[str] = None
     internal_hostname_named: Optional[str] = None
@@ -370,7 +380,7 @@ class JobRecord:
     ) -> bool:
         return (
             self.is_finished
-            and not self.is_deleted
+            and self.materialized
             and (
                 self._is_time_for_deletion(
                     delay=delay, current_datetime_factory=current_datetime_factory
@@ -393,7 +403,7 @@ class JobRecord:
             "request": self.request.to_primitive(),
             "status": self.status.value,
             "statuses": statuses,
-            "is_deleted": self.is_deleted,
+            "materialized": self.materialized,
             "finished_at": self.finished_at_str,
             "is_preemptible": self.is_preemptible,
             "restart_policy": str(self.restart_policy),
@@ -422,10 +432,14 @@ class JobRecord:
         status_history = cls.create_status_history_from_primitive(
             request.job_id, payload
         )
+        materialized = payload.get("materialized", None)
+        if materialized is None:
+            materialized = not payload.get("is_deleted", False)
         return cls(
             request=request,
             status_history=status_history,
-            is_deleted=payload.get("is_deleted", False),
+            # Support old key (only required for redis):
+            materialized=materialized,
             owner=payload.get("owner") or orphaned_job_owner,
             cluster_name=payload.get("cluster_name") or "",
             name=payload.get("name"),
@@ -576,12 +590,12 @@ class Job:
         return self._status_history.finished_at
 
     @property
-    def is_deleted(self) -> bool:
-        return self._record.is_deleted
+    def materialized(self) -> bool:
+        return self._record.materialized
 
-    @is_deleted.setter
-    def is_deleted(self, value: bool) -> None:
-        self._record.is_deleted = value
+    @materialized.setter
+    def materialized(self, value: bool) -> None:
+        self._record.materialized = value
 
     @property
     def schedule_timeout(self) -> Optional[float]:
