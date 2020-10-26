@@ -2,16 +2,16 @@ name: Continuous Integration
 
 on: push
 
+env:
+  PIP_EXTRA_INDEX_URL: ${{ format('https://{0}:{1}@{2}/{0}/{3}', secrets.DEVPI_USER, secrets.DEVPI_PASS, secrets.DEVPI_HOST, secrets.DEVPI_INDEX) }}
+
 jobs:
 
   test:
     name: Run tests
     runs-on: ubuntu-latest
     env:
-      PIP_EXTRA_INDEX_URL: ${{ format('https://{0}:{1}@{2}/{0}/{3}', secrets.DEVPI_USER, secrets.DEVPI_PASS, secrets.DEVPI_HOST, secrets.DEVPI_INDEX) }}
-      ARTIFACTORY_DOCKER_REPO: ${{ secrets.ARTIFACTORY_DOCKER_REPO }}
-      ARTIFACTORY_USERNAME: ${{ secrets.ARTIFACTORY_USERNAME }}
-      ARTIFACTORY_PASSWORD: ${{ secrets.ARTIFACTORY_PASSWORD }}
+      CLOUD_PROVIDER: ${{ secrets.CLOUD_PROVIDER_DEV }}
     steps:
       - name: Checkout commit
         uses: actions/checkout@v2
@@ -38,13 +38,27 @@ jobs:
           flags: unit
           name: codecov-unit
       - name: Configure AWS credentials
+        if: env.CLOUD_PROVIDER == 'aws'
         uses: aws-actions/configure-aws-credentials@v1
         with:
           aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
           aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
           aws-region: ${{ secrets.AWS_REGION }}
       - name: Login to AWS ECR
+        if: env.CLOUD_PROVIDER == 'aws'
         uses: aws-actions/amazon-ecr-login@v1
+      - name: Configure Azure credentials
+        if: env.CLOUD_PROVIDER == 'azure'
+        uses: azure/login@v1.1
+        with:
+          creds: ${{secrets.AZURE_CREDENTIALS}}
+      - name: Login to Azure ACR
+        if: env.CLOUD_PROVIDER == 'azure'
+        uses: azure/docker-login@v1
+        with:
+          login-server: ${{ secrets.AZURE_DEV_ACR_SERVER }}
+          username: ${{ secrets.AZURE_DEV_ACR_USERNAME }}
+          password: ${{ secrets.AZURE_DEV_ACR_PASSWORD }}
       - name: Install containerd
         run: |
           # without containerd, tests TestTopApi won't work
@@ -89,27 +103,44 @@ jobs:
     needs: test
     if: github.ref == 'refs/heads/master'
     env:
-      PIP_EXTRA_INDEX_URL: ${{ format('https://{0}:{1}@{2}/{0}/{3}', secrets.DEVPI_USER, secrets.DEVPI_PASS, secrets.DEVPI_HOST, secrets.DEVPI_INDEX) }}
       AWS_ACCOUNT_ID: ${{ secrets.AWS_ACCOUNT_ID }}
       AWS_REGION: ${{ secrets.AWS_REGION }}
-      AWS_CLUSTER_NAME: ${{ secrets.AWS_DEV_CLUSTER_NAME }}
+      AZURE_ACR_NAME: ${{ secrets.AZURE_DEV_ACR_NAME }}
+      AZURE_REGION: ${{ secrets.AZURE_DEV_REGION }}
+      AZURE_RG_NAME: ${{ secrets.AZURE_DEV_RG_NAME }}
+      CLUSTER_NAME: dev
       HELM_ENV: dev
       HELM_VERSION: ${{ secrets.HELM_VERSION }}
+      CLOUD_PROVIDER: ${{ secrets.CLOUD_PROVIDER_DEV }}
     steps:
       - name: Checkout commit
         uses: actions/checkout@v2
       - name: Configure AWS credentials
+        if: env.CLOUD_PROVIDER == 'aws'
         uses: aws-actions/configure-aws-credentials@v1
         with:
           aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
           aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
           aws-region: ${{ secrets.AWS_REGION }}
       - name: Login to AWS ECR
+        if: env.CLOUD_PROVIDER == 'aws'
         uses: aws-actions/amazon-ecr-login@v1
-      - name: Push images to ECR
+      - name: Configure Azure credentials
+        if: env.CLOUD_PROVIDER == 'azure'
+        uses: azure/login@v1.1
+        with:
+          creds: ${{secrets.AZURE_CREDENTIALS}}
+      - name: Login to Azure ACR
+        if: env.CLOUD_PROVIDER == 'azure'
+        uses: azure/docker-login@v1
+        with:
+          login-server: ${{ secrets.AZURE_DEV_ACR_SERVER }}
+          username: ${{ secrets.AZURE_DEV_ACR_USERNAME }}
+          password: ${{ secrets.AZURE_DEV_ACR_PASSWORD }}
+      - name: Push images to registry
         run: make docker_push
       - name: Update kube config
-        run: make eks_login
+        run: make ${{ env.CLOUD_PROVIDER }}_k8s_login
       - name: Install helm
         run: make helm_install
       - name: Deploy to kubernetes
@@ -121,27 +152,44 @@ jobs:
     needs: test
     if: startsWith(github.ref, 'refs/heads/release/')
     env:
-      PIP_EXTRA_INDEX_URL: ${{ format('https://{0}:{1}@{2}/{0}/{3}', secrets.DEVPI_USER, secrets.DEVPI_PASS, secrets.DEVPI_HOST, secrets.DEVPI_INDEX) }}
       AWS_ACCOUNT_ID: ${{ secrets.AWS_ACCOUNT_ID }}
       AWS_REGION: ${{ secrets.AWS_REGION }}
-      AWS_CLUSTER_NAME: ${{ secrets.AWS_STAGING_CLUSTER_NAME }}
+      AZURE_ACR_NAME: ${{ secrets.AZURE_STAGING_ACR_NAME }}
+      AZURE_REGION: ${{ secrets.AZURE_STAGING_REGION }}
+      AZURE_RG_NAME: ${{ secrets.AZURE_STAGING_RG_NAME }}
+      CLUSTER_NAME: staging
       HELM_ENV: staging
       HELM_VERSION: ${{ secrets.HELM_VERSION }}
+      CLOUD_PROVIDER: ${{ secrets.CLOUD_PROVIDER_STAGING }}
     steps:
       - name: Checkout commit
         uses: actions/checkout@v2
       - name: Configure AWS credentials
+        if: env.CLOUD_PROVIDER == 'aws'
         uses: aws-actions/configure-aws-credentials@v1
         with:
           aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
           aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
           aws-region: ${{ secrets.AWS_REGION }}
       - name: Login to AWS ECR
+        if: env.CLOUD_PROVIDER == 'aws'
         uses: aws-actions/amazon-ecr-login@v1
-      - name: Push images to ECR
+      - name: Configure Azure credentials
+        if: env.CLOUD_PROVIDER == 'azure'
+        uses: azure/login@v1.1
+        with:
+          creds: ${{secrets.AZURE_CREDENTIALS}}
+      - name: Login to Azure ACR
+        if: env.CLOUD_PROVIDER == 'azure'
+        uses: azure/docker-login@v1
+        with:
+          login-server: ${{ secrets.AZURE_STAGING_ACR_SERVER }}
+          username: ${{ secrets.AZURE_STAGING_ACR_USERNAME }}
+          password: ${{ secrets.AZURE_STAGING_ACR_PASSWORD }}
+      - name: Push images to registry
         run: make docker_push
       - name: Update kube config
-        run: make eks_login
+        run: make ${{ env.CLOUD_PROVIDER }}_k8s_login
       - name: Install helm
         run: make helm_install
       - name: Deploy to kubernetes

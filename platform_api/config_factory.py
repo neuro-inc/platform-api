@@ -348,7 +348,7 @@ class EnvironConfigFactory:
         script_path = str(parent_path / "alembic")
         config = AlembicConfig(ini_path)
         config.set_main_option("script_location", script_path)
-        config.set_main_option("sqlalchemy.url", postgres_dsn)
+        config.set_main_option("sqlalchemy.url", postgres_dsn.replace("%", "%%"))
         if redis_url:
             config.set_main_option("redis_url", redis_url)
         return config
