@@ -15,7 +15,7 @@ install_requires = (
     "notifications-client==0.8.2",
     "platform-logging==0.3",
     "yarl==1.5.1",
-    "multidict==4.7.6",
+    "multidict==5.0.0",
     "aiohttp-cors==0.7.0",
     "aiozipkin==0.7.1",
     "asyncpg==0.21.0",
