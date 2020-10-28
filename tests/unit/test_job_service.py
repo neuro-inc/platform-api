@@ -741,7 +741,7 @@ class TestJobsService:
 
         await jobs_service.update_jobs_statuses()
 
-        # Should not even try to start this job because there is another waiting jobs
+        # Should try to start new job because there is no waiting jobs
         job = await jobs_service.get_job(additional_job.id)
         assert job.status == JobStatus.PENDING
         assert job.materialized
