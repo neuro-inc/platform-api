@@ -138,7 +138,9 @@ class JobsStorage(ABC):
 
     # Only used in tests
     async def get_unfinished_jobs(self) -> List[JobRecord]:
-        filt = JobFilter(statuses={JobStatus.PENDING, JobStatus.RUNNING})
+        filt = JobFilter(
+            statuses={JobStatus.PENDING, JobStatus.RUNNING, JobStatus.SUSPENDED}
+        )
         return await self.get_all_jobs(filt)
 
     @abstractmethod

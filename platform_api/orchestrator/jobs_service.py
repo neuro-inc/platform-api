@@ -1,6 +1,9 @@
 import logging
+from dataclasses import dataclass
+from datetime import datetime, timezone
+from functools import partial
 from pathlib import PurePath
-from typing import AsyncIterator, Iterable, List, Optional, Sequence, Tuple
+from typing import AsyncIterator, Callable, Iterable, List, Optional, Sequence, Tuple
 
 from async_generator import asynccontextmanager
 from notifications_client import (
@@ -18,7 +21,7 @@ from platform_api.cluster import (
     ClusterRegistry,
 )
 from platform_api.cluster_config import OrchestratorConfig, StorageConfig
-from platform_api.config import JobsConfig
+from platform_api.config import JobsConfig, JobsSchedulerConfig
 from platform_api.user import User, UserCluster
 
 from .base import Orchestrator
@@ -70,6 +73,81 @@ class NonGpuQuotaExceededError(QuotaException):
         super().__init__(f"non-GPU quota exceeded for user '{user}'")
 
 
+@dataclass(frozen=True)
+class SchedulingResult:
+    jobs_to_update: List[JobRecord]
+    jobs_to_suspend: List[JobRecord]
+
+
+current_datetime_factory = partial(datetime.now, timezone.utc)
+
+
+class JobsScheduler:
+    def __init__(
+        self,
+        config: JobsSchedulerConfig,
+        current_datetime_factory: Callable[[], datetime] = current_datetime_factory,
+    ) -> None:
+        self._config = config
+        self._current_datetime_factory = current_datetime_factory
+
+    def schedule(self, unfinished: List[JobRecord]) -> SchedulingResult:
+        jobs_to_update: List[JobRecord] = []
+        jobs_to_suspend: List[JobRecord] = []
+        now = self._current_datetime_factory()
+
+        # Always start/update not preemptible jobs
+        jobs_to_update.extend(job for job in unfinished if not job.is_preemptible)
+
+        preemptible = [job for job in unfinished if job.is_preemptible]
+
+        not_materialized = sorted(
+            (job for job in preemptible if not job.materialized),
+            key=lambda job: job.status_history.current.transition_time,
+        )
+        materialized_not_running = [
+            job
+            for job in preemptible
+            if job.status != JobStatus.RUNNING and job.materialized
+        ]
+        running = [job for job in preemptible if job.status == JobStatus.RUNNING]
+
+        waiting_exists = any(
+            now - job.status_history.current.transition_time
+            >= self._config.is_waiting_min_time
+            for job in materialized_not_running
+        )
+
+        # not_materialized processing
+
+        for job in not_materialized:
+            suspended_at = job.status_history.current.transition_time
+            if (
+                not waiting_exists
+                or now - suspended_at >= self._config.max_suspended_time
+            ):
+                jobs_to_update.append(job)
+
+        # materialized_not_running processing
+
+        jobs_to_update.extend(materialized_not_running)
+
+        # running processing
+
+        for job in running:
+            continued_at = job.status_history.continued_at
+            assert continued_at, "Running job should have continued_at"
+            if now - continued_at >= self._config.run_quantum and waiting_exists:
+                jobs_to_suspend.append(job)
+            else:
+                jobs_to_update.append(job)
+
+        return SchedulingResult(
+            jobs_to_update=jobs_to_update,
+            jobs_to_suspend=jobs_to_suspend,
+        )
+
+
 class JobsService:
     def __init__(
         self,
@@ -77,11 +155,13 @@ class JobsService:
         jobs_storage: JobsStorage,
         jobs_config: JobsConfig,
         notifications_client: NotificationsClient,
+        scheduler: JobsScheduler,
     ) -> None:
         self._cluster_registry = cluster_registry
         self._jobs_storage = jobs_storage
         self._jobs_config = jobs_config
         self._notifications_client = notifications_client
+        self._scheduler = scheduler
 
         self._max_deletion_attempts = 10
 
@@ -104,17 +184,20 @@ class JobsService:
             yield cluster
 
     async def update_jobs_statuses(self) -> None:
-        # TODO (A Danshyn 02/17/19): instead of returning `Job` objects,
-        # it makes sense to just return their IDs.
+        unfinished = await self._jobs_storage.get_unfinished_jobs()
+        result = self._scheduler.schedule(unfinished)
 
-        for record in await self._jobs_storage.get_unfinished_jobs():
+        for record in result.jobs_to_update:
             await self._update_job_status_by_id(record.id)
+
+        for record in result.jobs_to_suspend:
+            await self._suspend_job_by_id(record.id)
 
         for record in await self._jobs_storage.get_jobs_for_deletion(
             delay=self._jobs_config.deletion_delay
         ):
-            # finished, but not yet deleted jobs
-            # assert job.is_finished and not job.is_deleted
+            # finished, but not yet dematerialized jobs
+            # assert job.is_finished and job.materialized
             await self._delete_job_by_id(record.id)
 
     async def _update_job_status_by_id(self, job_id: str) -> None:
@@ -141,10 +224,23 @@ class JobsService:
                         reason=JobStatusReason.CLUSTER_NOT_FOUND,
                         description=str(cluster_err),
                     )
-                    record.is_deleted = True
+                    record.materialized = False
                 except ClusterNotAvailable:
                     # skipping job status update
                     pass
+        except JobStorageTransactionError:
+            # intentionally ignoring any transaction failures here because
+            # the job may have been changed and a retry is needed.
+            pass
+
+    async def _suspend_job_by_id(self, job_id: str) -> None:
+        try:
+            async with self._update_job_in_storage(job_id) as record:
+                await self._delete_cluster_job(record)
+
+                # marking finished job as deleted
+                record.status = JobStatus.SUSPENDED
+                record.materialized = False
         except JobStorageTransactionError:
             # intentionally ignoring any transaction failures here because
             # the job may have been changed and a retry is needed.
@@ -159,10 +255,11 @@ class JobsService:
 
         old_status_item = job.status_history.current
 
-        if job.is_creating:
+        if not job.materialized:
             try:
                 await orchestrator.start_job(job)
                 status_item = job.status_history.current
+                job.materialized = True
             except JobAlreadyExistsException:
                 logger.info(f"Job '{job.id}' already exists.")
                 # Terminate the transaction. The exception will be ignored.
@@ -174,7 +271,7 @@ class JobsService:
                     reason=str(exc),
                     description="The job could not be started.",
                 )
-                job.is_deleted = True
+                job.materialized = False
         else:
             try:
                 status_item = await orchestrator.get_job_status(job)
@@ -192,7 +289,7 @@ class JobsService:
                     reason=JobStatusReason.NOT_FOUND,
                     description="The job could not be scheduled or was preempted.",
                 )
-                job.is_deleted = True
+                job.materialized = False
 
         if old_status_item != status_item:
             job.status_history.current = status_item
@@ -209,7 +306,7 @@ class JobsService:
                 await self._delete_cluster_job(record)
 
                 # marking finished job as deleted
-                record.is_deleted = True
+                record.materialized = False
         except JobStorageTransactionError:
             # intentionally ignoring any transaction failures here because
             # the job may have been changed and a retry is needed.
@@ -452,7 +549,7 @@ class JobsService:
                     await self._delete_cluster_job(record)
 
                     record.status = JobStatus.CANCELLED
-                    record.is_deleted = True
+                    record.materialized = False
                 return
             except JobStorageTransactionError:
                 logger.warning("Failed to mark a job %s as deleted. Retrying.", job_id)

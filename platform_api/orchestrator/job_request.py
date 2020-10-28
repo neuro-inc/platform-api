@@ -492,6 +492,7 @@ class JobStatus(str, enum.Enum):
     """
 
     PENDING = "pending"
+    SUSPENDED = "suspended"
     RUNNING = "running"
     SUCCEEDED = "succeeded"
     CANCELLED = "cancelled"

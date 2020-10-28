@@ -16,6 +16,7 @@ class TestStatus:
     def test_values(self) -> None:
         assert JobStatus.values() == [
             "pending",
+            "suspended",
             "running",
             "succeeded",
             "cancelled",

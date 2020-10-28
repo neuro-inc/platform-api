@@ -111,6 +111,29 @@ class CORSConfig:
 
 
 @dataclass(frozen=True)
+class JobsSchedulerConfig:
+    # Minimal time that preepmtible job is guaranteed to run before suspended
+    run_quantum_sec: float = 1 * 60 * 60  # 1h
+    # Time after which scheduler will try to start oldest SUSPENDED task
+    max_suspended_time_sec: float = 2 * 60 * 60  # 2h
+    # Time after which materialized job not running job considered as waiting
+    # for resources
+    is_waiting_min_time_sec: float = 5 * 60  # 5m
+
+    @property
+    def run_quantum(self) -> timedelta:
+        return timedelta(seconds=self.run_quantum_sec)
+
+    @property
+    def max_suspended_time(self) -> timedelta:
+        return timedelta(seconds=self.max_suspended_time_sec)
+
+    @property
+    def is_waiting_min_time(self) -> timedelta:
+        return timedelta(seconds=self.is_waiting_min_time_sec)
+
+
+@dataclass(frozen=True)
 class Config:
     server: ServerConfig
 
@@ -127,6 +150,8 @@ class Config:
 
     jobs: JobsConfig = JobsConfig()
     cors: CORSConfig = CORSConfig()
+
+    scheduler: JobsSchedulerConfig = JobsSchedulerConfig()
 
     # used for generating environment variable names and
     # sourcing them inside containers.

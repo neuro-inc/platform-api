@@ -1,5 +1,5 @@
 from dataclasses import replace
-from datetime import datetime
+from datetime import datetime, timezone
 from typing import Any, AsyncIterator, Callable
 
 import pytest
@@ -8,7 +8,7 @@ from notifications_client import Client as NotificationsClient, JobTransition
 
 from platform_api.cluster import Cluster, ClusterConfig, ClusterRegistry
 from platform_api.cluster_config import CircuitBreakerConfig
-from platform_api.config import JobsConfig
+from platform_api.config import JobsConfig, JobsSchedulerConfig
 from platform_api.orchestrator.job import (
     AggregatedRunTime,
     Job,
@@ -20,6 +20,7 @@ from platform_api.orchestrator.job import (
 from platform_api.orchestrator.job_request import JobError, JobRequest, JobStatus
 from platform_api.orchestrator.jobs_service import (
     GpuQuotaExceededError,
+    JobsScheduler,
     JobsService,
     JobsServiceException,
     NonGpuQuotaExceededError,
@@ -36,13 +37,45 @@ from .conftest import (
 )
 
 
+class MockJobsScheduler(JobsScheduler):
+    _now: datetime
+
+    def __init__(self) -> None:
+        self._now = datetime.now(timezone.utc)
+        super().__init__(
+            JobsSchedulerConfig(
+                is_waiting_min_time_sec=1,
+                run_quantum_sec=10,
+                max_suspended_time_sec=100,
+            ),
+            self.current_datetime_factory,
+        )
+
+    def current_datetime_factory(self) -> datetime:
+        return self._now
+
+    def tick_quantum(self) -> None:
+        self._now += self._config.run_quantum
+
+    def tick_min_waiting(self) -> None:
+        self._now += self._config.is_waiting_min_time
+
+    def tick_max_suspended(self) -> None:
+        self._now += self._config.max_suspended_time
+
+
 class TestJobsService:
+    @pytest.fixture
+    def test_scheduler(self) -> MockJobsScheduler:
+        return MockJobsScheduler()
+
     @pytest.fixture
     def jobs_service_factory(
         self,
         cluster_registry: ClusterRegistry,
         mock_jobs_storage: MockJobsStorage,
         mock_notifications_client: NotificationsClient,
+        test_scheduler: MockJobsScheduler,
     ) -> Callable[..., JobsService]:
         def _factory(deletion_delay_s: int = 0) -> JobsService:
             return JobsService(
@@ -50,6 +83,7 @@ class TestJobsService:
                 jobs_storage=mock_jobs_storage,
                 jobs_config=JobsConfig(deletion_delay_s=deletion_delay_s),
                 notifications_client=mock_notifications_client,
+                scheduler=test_scheduler,
             )
 
         return _factory
@@ -460,7 +494,7 @@ class TestJobsService:
         assert job.status == JobStatus.PENDING
         assert not job.is_finished
         assert job.finished_at is None
-        assert not job.is_deleted
+        assert job.materialized
 
         mock_orchestrator.update_status_to_return(JobStatus.SUCCEEDED)
         await jobs_service.update_jobs_statuses()
@@ -469,7 +503,7 @@ class TestJobsService:
         assert job.status == JobStatus.SUCCEEDED
         assert job.is_finished
         assert job.finished_at
-        assert not job.is_deleted
+        assert job.materialized
 
     @pytest.mark.asyncio
     async def test_update_jobs_statuses_for_deletion(
@@ -491,7 +525,7 @@ class TestJobsService:
         assert job.status == JobStatus.PENDING
         assert not job.is_finished
         assert job.finished_at is None
-        assert not job.is_deleted
+        assert job.materialized
 
         mock_orchestrator.update_status_to_return(JobStatus.SUCCEEDED)
         await jobs_service.update_jobs_statuses()
@@ -500,7 +534,7 @@ class TestJobsService:
         assert job.status == JobStatus.SUCCEEDED
         assert job.is_finished
         assert job.finished_at
-        assert job.is_deleted
+        assert not job.materialized
 
     @pytest.mark.asyncio
     async def test_update_jobs_statuses_pending_missing(
@@ -523,7 +557,7 @@ class TestJobsService:
         assert job.status == JobStatus.PENDING
         assert not job.is_finished
         assert job.finished_at is None
-        assert not job.is_deleted
+        assert job.materialized
         assert job.status_history.current == JobStatusItem.create(
             JobStatus.PENDING,
             reason=JobStatusReason.CONTAINER_CREATING,
@@ -536,7 +570,7 @@ class TestJobsService:
         assert job.status == JobStatus.FAILED
         assert job.is_finished
         assert job.finished_at
-        assert job.is_deleted
+        assert not job.materialized
         assert job.status_history.current == JobStatusItem.create(
             JobStatus.FAILED,
             reason=JobStatusReason.NOT_FOUND,
@@ -574,7 +608,7 @@ class TestJobsService:
         assert job.status == JobStatus.PENDING
         assert not job.is_finished
         assert job.finished_at is None
-        assert not job.is_deleted
+        assert job.materialized
         status_item = job.status_history.last
         assert status_item.reason == JobStatusReason.CONTAINER_CREATING
         assert status_item.description is None
@@ -586,7 +620,7 @@ class TestJobsService:
         assert job.status == JobStatus.FAILED
         assert job.is_finished
         assert job.finished_at
-        assert job.is_deleted
+        assert not job.materialized
         status_item = job.status_history.last
         assert status_item.reason == JobStatusReason.COLLECTED
         assert status_item.description == description
@@ -612,7 +646,7 @@ class TestJobsService:
         assert job.status == JobStatus.PENDING
         assert not job.is_finished
         assert job.finished_at is None
-        assert not job.is_deleted
+        assert job.materialized
 
         mock_orchestrator.update_status_to_return(JobStatus.FAILED)
         mock_orchestrator.update_reason_to_return(
@@ -624,7 +658,7 @@ class TestJobsService:
         assert job.status == JobStatus.FAILED
         assert job.is_finished
         assert job.finished_at
-        assert job.is_deleted
+        assert not job.materialized
 
     @pytest.mark.asyncio
     async def test_update_jobs_statuses_succeeded_missing(
@@ -646,7 +680,7 @@ class TestJobsService:
         assert job.status == JobStatus.PENDING
         assert not job.is_finished
         assert job.finished_at is None
-        assert not job.is_deleted
+        assert job.materialized
 
         mock_orchestrator.update_status_to_return(JobStatus.SUCCEEDED)
         await jobs_service.update_jobs_statuses()
@@ -655,7 +689,297 @@ class TestJobsService:
         assert job.status == JobStatus.SUCCEEDED
         assert job.is_finished
         assert job.finished_at
-        assert job.is_deleted
+        assert not job.materialized
+
+    @pytest.mark.asyncio
+    async def test_update_jobs_preemptible_additional_when_no_pending(
+        self,
+        jobs_service_factory: Callable[..., JobsService],
+        mock_orchestrator: MockOrchestrator,
+        job_request_factory: Callable[[], JobRequest],
+        test_scheduler: MockJobsScheduler,
+    ) -> None:
+        jobs_service = jobs_service_factory(deletion_delay_s=60)
+
+        user = User(cluster_name="test-cluster", name="testuser", token="")
+        jobs = []
+
+        # Synchronize time
+        mock_orchestrator.current_datetime_factory = (
+            test_scheduler.current_datetime_factory
+        )
+
+        # Start initial bunch of jobs
+        for _ in range(10):
+            job, _ = await jobs_service.create_job(
+                job_request=job_request_factory(), user=user, is_preemptible=True
+            )
+            assert job.status == JobStatus.PENDING
+            jobs.append(job)
+
+        await jobs_service.update_jobs_statuses()
+
+        for job in jobs:
+            job = await jobs_service.get_job(job.id)
+            assert job.status == JobStatus.PENDING
+            assert job.materialized
+
+        for job in jobs:
+            mock_orchestrator.update_status_to_return_single(job.id, JobStatus.RUNNING)
+
+        await jobs_service.update_jobs_statuses()
+
+        for job in jobs:
+            job = await jobs_service.get_job(job.id)
+            assert job.status == JobStatus.RUNNING
+
+        test_scheduler.tick_min_waiting()
+
+        additional_job, _ = await jobs_service.create_job(
+            job_request=job_request_factory(), user=user, is_preemptible=True
+        )
+
+        await jobs_service.update_jobs_statuses()
+
+        # Should try to start new job because there is no waiting jobs
+        job = await jobs_service.get_job(additional_job.id)
+        assert job.status == JobStatus.PENDING
+        assert job.materialized
+
+    @pytest.mark.asyncio
+    async def test_update_jobs_preemptible_additional_when_has_pending(
+        self,
+        jobs_service_factory: Callable[..., JobsService],
+        mock_orchestrator: MockOrchestrator,
+        job_request_factory: Callable[[], JobRequest],
+        test_scheduler: MockJobsScheduler,
+    ) -> None:
+        jobs_service = jobs_service_factory(deletion_delay_s=60)
+
+        user = User(cluster_name="test-cluster", name="testuser", token="")
+        jobs = []
+
+        # Synchronize time
+        mock_orchestrator.current_datetime_factory = (
+            test_scheduler.current_datetime_factory
+        )
+
+        # Start initial bunch of jobs
+        for _ in range(10):
+            job, _ = await jobs_service.create_job(
+                job_request=job_request_factory(), user=user, is_preemptible=True
+            )
+            assert job.status == JobStatus.PENDING
+            jobs.append(job)
+
+        await jobs_service.update_jobs_statuses()
+
+        for job in jobs:
+            job = await jobs_service.get_job(job.id)
+            assert job.status == JobStatus.PENDING
+            assert job.materialized
+
+        for job in jobs[:3]:
+            mock_orchestrator.update_status_to_return_single(job.id, JobStatus.RUNNING)
+
+        await jobs_service.update_jobs_statuses()
+
+        for job in jobs[:3]:
+            job = await jobs_service.get_job(job.id)
+            assert job.status == JobStatus.RUNNING
+
+        for job in jobs[3:]:
+            job = await jobs_service.get_job(job.id)
+            assert job.status == JobStatus.PENDING
+
+        test_scheduler.tick_min_waiting()
+
+        additional_job, _ = await jobs_service.create_job(
+            job_request=job_request_factory(), user=user, is_preemptible=True
+        )
+
+        await jobs_service.update_jobs_statuses()
+
+        # Should not even try to start this job because there is another waiting jobs
+        job = await jobs_service.get_job(additional_job.id)
+        assert job.status == JobStatus.PENDING
+        assert not job.materialized
+
+    @pytest.mark.asyncio
+    async def test_update_jobs_preemptible_cycling(
+        self,
+        jobs_service_factory: Callable[..., JobsService],
+        mock_orchestrator: MockOrchestrator,
+        job_request_factory: Callable[[], JobRequest],
+        test_scheduler: MockJobsScheduler,
+    ) -> None:
+        jobs_service = jobs_service_factory(deletion_delay_s=60)
+
+        user = User(cluster_name="test-cluster", name="testuser", token="")
+        jobs = []
+
+        # Synchronize time
+        mock_orchestrator.current_datetime_factory = (
+            test_scheduler.current_datetime_factory
+        )
+
+        # Start initial bunch of jobs
+        for _ in range(9):
+            job, _ = await jobs_service.create_job(
+                job_request=job_request_factory(), user=user, is_preemptible=True
+            )
+            assert job.status == JobStatus.PENDING
+            jobs.append(job)
+
+        await jobs_service.update_jobs_statuses()
+
+        for job in jobs:
+            job = await jobs_service.get_job(job.id)
+            assert job.status == JobStatus.PENDING
+            assert job.materialized
+
+        for job in jobs[:3]:
+            mock_orchestrator.update_status_to_return_single(job.id, JobStatus.RUNNING)
+
+        await jobs_service.update_jobs_statuses()
+
+        for job in jobs[:3]:
+            job = await jobs_service.get_job(job.id)
+            assert job.status == JobStatus.RUNNING
+
+        for job in jobs[3:]:
+            job = await jobs_service.get_job(job.id)
+            assert job.status == JobStatus.PENDING
+
+        test_scheduler.tick_quantum()
+        for job in jobs[3:6]:
+            mock_orchestrator.update_status_to_return_single(job.id, JobStatus.RUNNING)
+
+        await jobs_service.update_jobs_statuses()
+
+        for job in jobs[:3]:
+            job = await jobs_service.get_job(job.id)
+            assert job.status == JobStatus.SUSPENDED
+            assert not job.materialized
+
+        for job in jobs[3:6]:
+            job = await jobs_service.get_job(job.id)
+            assert job.status == JobStatus.RUNNING
+
+        for job in jobs[6:]:
+            job = await jobs_service.get_job(job.id)
+            assert job.status == JobStatus.PENDING
+
+        test_scheduler.tick_quantum()
+
+        for job in jobs[6:]:
+            mock_orchestrator.update_status_to_return_single(job.id, JobStatus.RUNNING)
+
+        await jobs_service.update_jobs_statuses()
+
+        for job in jobs[:6]:
+            job = await jobs_service.get_job(job.id)
+            assert job.status == JobStatus.SUSPENDED
+            assert not job.materialized
+
+        for job in jobs[6:]:
+            job = await jobs_service.get_job(job.id)
+            assert job.status == JobStatus.RUNNING
+
+        # One additional update required
+
+        for job in jobs[:3]:
+            mock_orchestrator.update_status_to_return_single(job.id, JobStatus.PENDING)
+
+        await jobs_service.update_jobs_statuses()
+
+        # When all jobs are either running or not materialized, service
+        # should materialize new job
+        for job in jobs[:3]:
+            job = await jobs_service.get_job(job.id)
+            if job.materialized:
+                break
+        else:
+            raise AssertionError("Materialized job not found")
+
+        test_scheduler.tick_quantum()
+
+        for job in jobs[:3]:
+            mock_orchestrator.update_status_to_return_single(job.id, JobStatus.RUNNING)
+
+        await jobs_service.update_jobs_statuses()
+
+        for job in jobs[:3]:
+            job = await jobs_service.get_job(job.id)
+            assert job.status == JobStatus.RUNNING
+            assert job.materialized
+
+        for job in jobs[3:]:
+            job = await jobs_service.get_job(job.id)
+            assert job.status == JobStatus.SUSPENDED
+            assert not job.materialized
+
+    @pytest.mark.asyncio
+    async def test_update_jobs_preemptible_max_suspended_time(
+        self,
+        jobs_service_factory: Callable[..., JobsService],
+        mock_orchestrator: MockOrchestrator,
+        job_request_factory: Callable[[], JobRequest],
+        test_scheduler: MockJobsScheduler,
+    ) -> None:
+        jobs_service = jobs_service_factory(deletion_delay_s=60)
+
+        user = User(cluster_name="test-cluster", name="testuser", token="")
+
+        # Synchronize time
+        mock_orchestrator.current_datetime_factory = (
+            test_scheduler.current_datetime_factory
+        )
+
+        job1, _ = await jobs_service.create_job(
+            job_request=job_request_factory(), user=user, is_preemptible=True
+        )
+        assert job1.status == JobStatus.PENDING
+
+        job2, _ = await jobs_service.create_job(
+            job_request=job_request_factory(), user=user, is_preemptible=True
+        )
+        assert job1.status == JobStatus.PENDING
+
+        await jobs_service.update_jobs_statuses()
+
+        mock_orchestrator.update_status_to_return_single(job1.id, JobStatus.RUNNING)
+
+        await jobs_service.update_jobs_statuses()
+
+        job1 = await jobs_service.get_job(job1.id)
+        assert job1.status == JobStatus.RUNNING
+        assert job1.materialized
+
+        job2 = await jobs_service.get_job(job2.id)
+        assert job2.status == JobStatus.PENDING
+        assert job2.materialized
+
+        test_scheduler.tick_min_waiting()
+
+        job3, _ = await jobs_service.create_job(
+            job_request=job_request_factory(), user=user, is_preemptible=True
+        )
+        assert job3.status == JobStatus.PENDING
+
+        await jobs_service.update_jobs_statuses()
+
+        job3 = await jobs_service.get_job(job3.id)
+        assert job3.status == JobStatus.PENDING
+        assert not job3.materialized
+
+        test_scheduler.tick_max_suspended()
+
+        await jobs_service.update_jobs_statuses()
+
+        job3 = await jobs_service.get_job(job3.id)
+        assert job3.status == JobStatus.PENDING
+        assert job3.materialized
 
     @pytest.mark.asyncio
     async def test_delete_running(
@@ -673,7 +997,7 @@ class TestJobsService:
         assert job.status == JobStatus.CANCELLED
         assert job.is_finished
         assert job.finished_at
-        assert job.is_deleted
+        assert not job.materialized
 
     @pytest.mark.asyncio
     async def test_delete_missing(
@@ -698,7 +1022,7 @@ class TestJobsService:
         assert job.status == JobStatus.CANCELLED
         assert job.is_finished
         assert job.finished_at
-        assert job.is_deleted
+        assert not job.materialized
 
     @pytest.mark.asyncio
     @pytest.mark.parametrize(
@@ -863,6 +1187,7 @@ class TestJobsServiceCluster:
             jobs_storage=mock_jobs_storage,
             jobs_config=JobsConfig(),
             notifications_client=mock_notifications_client,
+            scheduler=JobsScheduler(JobsSchedulerConfig()),
         )
 
     @pytest.mark.asyncio
@@ -900,6 +1225,7 @@ class TestJobsServiceCluster:
             jobs_storage=mock_jobs_storage,
             jobs_config=jobs_config,
             notifications_client=mock_notifications_client,
+            scheduler=JobsScheduler(JobsSchedulerConfig()),
         )
         await cluster_registry.replace(cluster_config)
 
@@ -937,6 +1263,7 @@ class TestJobsServiceCluster:
             jobs_storage=mock_jobs_storage,
             jobs_config=jobs_config,
             notifications_client=mock_notifications_client,
+            scheduler=JobsScheduler(JobsSchedulerConfig()),
         )
         await cluster_registry.replace(cluster_config)
 
@@ -956,7 +1283,7 @@ class TestJobsServiceCluster:
             reason=JobStatusReason.CLUSTER_NOT_FOUND,
             description="Cluster 'test-cluster' not found",
         )
-        assert record.is_deleted
+        assert not record.materialized
 
     @pytest.mark.asyncio
     async def test_update_succeeded_job_missing_cluster(
@@ -973,6 +1300,7 @@ class TestJobsServiceCluster:
             jobs_storage=mock_jobs_storage,
             jobs_config=jobs_config,
             notifications_client=mock_notifications_client,
+            scheduler=JobsScheduler(JobsSchedulerConfig()),
         )
         await cluster_registry.replace(cluster_config)
 
@@ -991,7 +1319,7 @@ class TestJobsServiceCluster:
 
         record = await mock_jobs_storage.get_job(job.id)
         assert record.status == JobStatus.SUCCEEDED
-        assert record.is_deleted
+        assert not record.materialized
 
     @pytest.mark.asyncio
     async def test_get_job_fallback(
@@ -1008,6 +1336,7 @@ class TestJobsServiceCluster:
             jobs_storage=mock_jobs_storage,
             jobs_config=jobs_config,
             notifications_client=mock_notifications_client,
+            scheduler=JobsScheduler(JobsSchedulerConfig()),
         )
         await cluster_registry.replace(cluster_config)  # "test-cluster"
         await cluster_registry.replace(replace(cluster_config, name="default"))
@@ -1043,6 +1372,7 @@ class TestJobsServiceCluster:
             jobs_storage=mock_jobs_storage,
             jobs_config=jobs_config,
             notifications_client=mock_notifications_client,
+            scheduler=JobsScheduler(JobsSchedulerConfig()),
         )
         cluster_config = replace(
             cluster_config, circuit_breaker=CircuitBreakerConfig(open_threshold=1)
@@ -1077,6 +1407,7 @@ class TestJobsServiceCluster:
             jobs_storage=mock_jobs_storage,
             jobs_config=jobs_config,
             notifications_client=mock_notifications_client,
+            scheduler=JobsScheduler(JobsSchedulerConfig()),
         )
         await cluster_registry.replace(cluster_config)
 
@@ -1089,7 +1420,7 @@ class TestJobsServiceCluster:
 
         record = await mock_jobs_storage.get_job(job.id)
         assert record.status == JobStatus.CANCELLED
-        assert record.is_deleted
+        assert not record.materialized
 
     @pytest.mark.asyncio
     async def test_delete_unavail_cluster(
@@ -1106,6 +1437,7 @@ class TestJobsServiceCluster:
             jobs_storage=mock_jobs_storage,
             jobs_config=jobs_config,
             notifications_client=mock_notifications_client,
+            scheduler=JobsScheduler(JobsSchedulerConfig()),
         )
         await cluster_registry.replace(cluster_config)
 
@@ -1124,7 +1456,7 @@ class TestJobsServiceCluster:
 
         record = await mock_jobs_storage.get_job(job.id)
         assert record.status == JobStatus.CANCELLED
-        assert record.is_deleted
+        assert not record.materialized
 
 
 class TestJobServiceNotification:
@@ -1141,6 +1473,7 @@ class TestJobServiceNotification:
                 jobs_storage=mock_jobs_storage,
                 jobs_config=JobsConfig(deletion_delay_s=deletion_delay_s),
                 notifications_client=mock_notifications_client,
+                scheduler=JobsScheduler(JobsSchedulerConfig()),
             )
 
         return _factory
