@@ -21,9 +21,9 @@ def upgrade():
     op.execute(
         """\
 UPDATE jobs
-SET payload = payload - 'deleted'
- || jsonb_build_object('materialized', NOT (payload->'deleted')::boolean)
-WHERE payload ? 'deleted'
+SET payload = payload - 'is_deleted'
+ || jsonb_build_object('materialized', NOT (payload->>'is_deleted')::boolean)
+WHERE payload ? 'is_deleted'
 """
     )
 
@@ -33,7 +33,7 @@ def downgrade():
         """\
 UPDATE jobs
 SET payload = payload - 'materialized'
- || jsonb_build_object('deleted', NOT (payload->'materialized')::boolean)
+ || jsonb_build_object('is_deleted', NOT (payload->>'materialized')::boolean)
 WHERE payload ? 'materialized'
 """
     )
