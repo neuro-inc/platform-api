@@ -8,7 +8,7 @@ EXPOSE 22
 
 # installing openssh
 RUN apt-get update
-RUN apt-get install -y openssh-server 
+RUN apt-get install -y openssh-server
 RUN mkdir -p /run/sshd
 
 # install kubectl
@@ -44,7 +44,7 @@ RUN cp platform_api/ssh_auth/bin/* /usr/local/bin
 # create nonexistent dir, as kubectl requires home to be a real directory
 RUN mkdir /nonexistent
 RUN chmod a+rwx /nonexistent
-RUN chown nobody /etc/ssh/ssh_host_rsa_key 
+RUN chown nobody /etc/ssh/ssh_host_rsa_key
 RUN chown nobody /etc/ssh/ssh_host_ecdsa_key
 RUN chown nobody /etc/ssh/ssh_host_ed25519_key
 # disable password for nobody
@@ -52,4 +52,3 @@ RUN sed -i -re 's/^nobody:[^:]+:/nobody::/' /etc/shadow
 RUN sed -i -re 's/^nobody:.*$/nobody::65534:65534:nobody:\/nonexistent:\/bin\/bash/' /etc/passwd
 
 CMD ["/usr/local/bin/start_server"]
-

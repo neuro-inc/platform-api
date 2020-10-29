@@ -33,7 +33,7 @@ from tests.conftest import random_str
 
 @pytest.fixture(scope="session")
 def auth_server_image_name() -> str:
-    with open("PLATFORMAUTHAPI_IMAGE", "r") as f:
+    with open("PLATFORMAUTHAPI_IMAGE") as f:
         return f.read().strip()
 
 
@@ -233,7 +233,7 @@ async def regular_user_with_custom_quota(
 @pytest.fixture
 def cluster_user(token_factory: Callable[[str], str]) -> _User:
     name = "cluster"
-    return _User(  # noqa
+    return _User(
         name=name,
         token=token_factory(name),
         quota=AggregatedRunTime.from_quota(Quota()),
@@ -244,7 +244,7 @@ def cluster_user(token_factory: Callable[[str], str]) -> _User:
 @pytest.fixture
 def compute_user(token_factory: Callable[[str], str]) -> _User:
     name = "compute"
-    return _User(  # noqa
+    return _User(
         name=name,
         token=token_factory(name),
         quota=AggregatedRunTime.from_quota(Quota()),

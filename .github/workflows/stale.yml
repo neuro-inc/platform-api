@@ -13,4 +13,4 @@ jobs:
         stale-issue-message: 'This issue is stale because it has been open 90 days with no activity. Remove stale label or comment or this will be closed in 14 days'
         days-before-stale: 90
         days-before-close: 14
-        operations-per-run: 200 
+        operations-per-run: 200

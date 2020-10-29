@@ -20,7 +20,7 @@ from tests.integration.auth import _User
 
 @pytest.fixture(scope="session")
 def disk_api_server_image_name() -> str:
-    with open("PLATFORMDISKAPI_IMAGE", "r") as f:
+    with open("PLATFORMDISKAPI_IMAGE") as f:
         return f.read().strip()
 
 
