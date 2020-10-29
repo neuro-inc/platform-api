@@ -268,6 +268,7 @@ def convert_job_to_job_response(job: Job) -> Dict[str, Any]:
             "description": current_status.description,
             "created_at": history.created_at_str,
             "run_time_seconds": job.get_run_time().total_seconds(),
+            "restarts": history.restart_count,
         },
         "container": convert_job_container_to_json(
             job.request.container, job.storage_config

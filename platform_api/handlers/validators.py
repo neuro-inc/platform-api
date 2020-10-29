@@ -60,6 +60,7 @@ def create_job_history_validator() -> t.Trafaret:
             "reason": OptionalString,
             "description": OptionalString,
             "created_at": t.String,
+            "restarts": t.Int(gte=0),
             t.Key("exit_code", optional=True): t.Int,
             t.Key("started_at", optional=True): t.String,
             t.Key("finished_at", optional=True): t.String,

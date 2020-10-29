@@ -17,6 +17,7 @@ from platform_api.orchestrator.job import (
     JobRestartPolicy,
     JobStatusHistory,
     JobStatusItem,
+    JobStatusReason,
     maybe_job_id,
 )
 from platform_api.orchestrator.job_request import (
@@ -1828,6 +1829,27 @@ class TestJobStatusHistory:
         history.current = new_pending_item
         assert history.current == pending_item
         assert history.current.transition_time == pending_item.transition_time
+
+    def test_restarts_count(self) -> None:
+        pending_item = JobStatusItem.create(JobStatus.PENDING)
+        running_item = JobStatusItem.create(
+            JobStatus.RUNNING,
+            transition_time=pending_item.transition_time + timedelta(days=1),
+        )
+
+        items = [pending_item, running_item]
+        history = JobStatusHistory(items=items)
+        assert history.restart_count == 0
+
+        restarting_item = JobStatusItem.create(
+            JobStatus.RUNNING, reason=JobStatusReason.RESTARTING
+        )
+        history.current = restarting_item
+
+        assert history.restart_count == 1
+        history.current = running_item
+        history.current = restarting_item
+        assert history.restart_count == 2
 
 
 class TestAggregatedRunTime:
