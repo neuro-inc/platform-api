@@ -537,7 +537,7 @@ class JobsService:
             # the job as deleted. suppressing.
             logger.warning("Could not delete job '%s'. Reason: '%s'", record.id, exc)
 
-    async def delete_job(self, job_id: str) -> None:
+    async def cancel_job(self, job_id: str) -> None:
         for _ in range(self._max_deletion_attempts):
             try:
                 async with self._update_job_in_storage(job_id) as record:
@@ -545,15 +545,13 @@ class JobsService:
                         # the job has already finished. nothing to do here.
                         return
 
-                    logger.info("Deleting job %s", job_id)
-                    await self._delete_cluster_job(record)
-
+                    logger.info("Canceling job %s", job_id)
                     record.status = JobStatus.CANCELLED
-                    record.materialized = False
+
                 return
             except JobStorageTransactionError:
-                logger.warning("Failed to mark a job %s as deleted. Retrying.", job_id)
-        logger.warning("Failed to mark a job %s as deleted. Giving up.", job_id)
+                logger.warning("Failed to mark a job %s as canceled. Retrying.", job_id)
+        logger.warning("Failed to mark a job %s as canceled. Giving up.", job_id)
 
     async def iter_all_jobs(
         self,
