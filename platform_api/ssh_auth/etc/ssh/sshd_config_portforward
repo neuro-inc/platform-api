@@ -123,4 +123,3 @@ Match User nobody
 #	AllowTcpForwarding no
 #	PermitTTY no
 #	ForceCommand cvs server
-

@@ -851,7 +851,7 @@ class TestJobFilterFactory:
     def test_create_from_query_fail(self, query: Any) -> None:
         factory = JobFilterFactory().create_from_query
         with pytest.raises((ValueError, DataError)):
-            factory(MultiDict(query))  # type: ignore # noqa
+            factory(MultiDict(query))  # type: ignore
 
 
 def make_access_tree(perm_dict: Dict[str, str]) -> ClientSubTreeViewRoot:

@@ -33,7 +33,7 @@ check_service() { # attempt, max_attempt, service
       fi
       sleep 1
       ((attempt++))
-    done    
+    done
 }
 
 check_job_succeeded() { # attempt, max_attempt, service

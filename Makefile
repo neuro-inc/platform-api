@@ -30,16 +30,13 @@ include k8s.mk
 setup:
 	pip install -U pip
 	pip install --no-binary cryptography -r requirements/test.txt
+	pre-commit install
 
-lint:
-	isort --check-only --diff platform_api tests setup.py alembic
-	black --check platform_api tests setup.py alembic
-	flake8 platform_api tests setup.py alembic
+lint: format
 	mypy platform_api tests setup.py alembic
 
 format:
-	isort platform_api tests setup.py alembic
-	black platform_api tests setup.py alembic
+	pre-commit run --all-files --show-diff-on-failure
 
 test_unit:
 	pytest -vv --cov platform_api --cov-config=setup.cfg --cov-report xml:.coverage-unit.xml tests/unit
@@ -130,4 +127,3 @@ helm_deploy:
 		--set "ENV=$(HELM_ENV)" \
 		--set "IMAGE=$(CLOUD_IMAGE):$(IMAGE_TAG)" \
 		upgrade --install platformapi deploy/platformapi/ --wait --timeout 600 --namespace platform
-
