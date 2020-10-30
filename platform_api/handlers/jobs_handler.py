@@ -483,6 +483,13 @@ class JobsHandler:
     async def handle_get(self, request: aiohttp.web.Request) -> aiohttp.web.Response:
         job = await self._resolve_job(request, "read")
 
+        if request.query.get("_tests_check_materialized"):
+            # Used in tests during cleanup
+            return aiohttp.web.json_response(
+                data={"materialized": job.materialized},
+                status=aiohttp.web.HTTPOk.status_code,
+            )
+
         response_payload = convert_job_to_job_response(job)
         self._job_response_validator.check(response_payload)
         return aiohttp.web.json_response(
