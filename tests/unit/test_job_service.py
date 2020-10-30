@@ -1003,8 +1003,11 @@ class TestJobsService:
 
     @pytest.mark.asyncio
     async def test_cancel_deleted_after_sync(
-        self, jobs_service: JobsService, job_request_factory: Callable[[], JobRequest]
+        self,
+        jobs_service_factory: Callable[[float], JobsService],
+        job_request_factory: Callable[[], JobRequest],
     ) -> None:
+        jobs_service = jobs_service_factory(3600 * 7)  # Set huge deletion timeout
         user = User(cluster_name="test-cluster", name="testuser", token="")
         original_job, _ = await jobs_service.create_job(
             job_request=job_request_factory(), user=user
@@ -1390,6 +1393,74 @@ class TestJobsServiceCluster:
         assert job.http_host == f"{job.id}.jobs"
         assert job.http_host_named is None
         assert job.ssh_server == "ssh://nobody@ssh-auth:22"
+
+    @pytest.mark.asyncio
+    async def test_delete_missing_cluster(
+        self,
+        cluster_registry: ClusterRegistry,
+        cluster_config: ClusterConfig,
+        mock_jobs_storage: MockJobsStorage,
+        mock_job_request: JobRequest,
+        jobs_config: JobsConfig,
+        mock_notifications_client: NotificationsClient,
+    ) -> None:
+        jobs_service = JobsService(
+            cluster_registry=cluster_registry,
+            jobs_storage=mock_jobs_storage,
+            jobs_config=jobs_config,
+            notifications_client=mock_notifications_client,
+            scheduler=JobsScheduler(JobsSchedulerConfig()),
+        )
+        await cluster_registry.replace(cluster_config)
+
+        user = User(cluster_name="test-cluster", name="testuser", token="testtoken")
+        job, _ = await jobs_service.create_job(mock_job_request, user)
+
+        await cluster_registry.remove(cluster_config.name)
+
+        await jobs_service.cancel_job(job.id)
+        await jobs_service.update_jobs_statuses()
+
+        record = await mock_jobs_storage.get_job(job.id)
+        assert record.status == JobStatus.CANCELLED
+        assert not record.materialized
+
+    @pytest.mark.asyncio
+    async def test_delete_unavail_cluster(
+        self,
+        cluster_registry: ClusterRegistry,
+        cluster_config: ClusterConfig,
+        mock_jobs_storage: MockJobsStorage,
+        mock_job_request: JobRequest,
+        jobs_config: JobsConfig,
+        mock_notifications_client: NotificationsClient,
+    ) -> None:
+        jobs_service = JobsService(
+            cluster_registry=cluster_registry,
+            jobs_storage=mock_jobs_storage,
+            jobs_config=jobs_config,
+            notifications_client=mock_notifications_client,
+            scheduler=JobsScheduler(JobsSchedulerConfig()),
+        )
+        await cluster_registry.replace(cluster_config)
+
+        async with cluster_registry.get(cluster_config.name) as cluster:
+
+            def _f(*args: Any, **kwargs: Any) -> Exception:
+                raise RuntimeError("test")
+
+            cluster.orchestrator.raise_on_delete = True
+            cluster.orchestrator.delete_job_exc_factory = _f
+
+        user = User(cluster_name="test-cluster", name="testuser", token="testtoken")
+        job, _ = await jobs_service.create_job(mock_job_request, user)
+
+        await jobs_service.cancel_job(job.id)
+        await jobs_service.update_jobs_statuses()
+
+        record = await mock_jobs_storage.get_job(job.id)
+        assert record.status == JobStatus.CANCELLED
+        assert not record.materialized
 
 
 class TestJobServiceNotification:

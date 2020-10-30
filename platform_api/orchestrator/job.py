@@ -372,6 +372,9 @@ class JobRecord:
             JobStatusReason.CLUSTER_SCALE_UP_FAILED,
         )
 
+    def _is_status_for_deletion(self) -> bool:
+        return self.status_history.current.status in (JobStatus.CANCELLED)
+
     def should_be_deleted(
         self,
         *,
@@ -386,6 +389,7 @@ class JobRecord:
                     delay=delay, current_datetime_factory=current_datetime_factory
                 )
                 or self._is_reason_for_deletion()
+                or self._is_status_for_deletion()
             )
         )
 
