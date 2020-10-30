@@ -238,6 +238,15 @@ class JobStatusHistory:
             return self.finished_at.isoformat()
         return None
 
+    @property
+    def restart_count(self) -> int:
+        # This field is not 100% accurate because of polling nature of collecting
+        # status items. On other side, even k8s `restartCount` can be wrong,
+        # so it is should be OK.
+        return len(
+            [item for item in self._items if item.reason == JobStatusReason.RESTARTING]
+        )
+
 
 @enum.unique
 class JobRestartPolicy(str, enum.Enum):

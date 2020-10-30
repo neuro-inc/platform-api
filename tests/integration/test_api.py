@@ -3958,6 +3958,7 @@ class TestJobs:
                     "description": None,
                     "created_at": mock.ANY,
                     "run_time_seconds": 0,
+                    "restarts": 0,
                 },
                 "container": {
                     "command": "true",
@@ -3999,6 +4000,7 @@ class TestJobs:
                 "started_at": mock.ANY,
                 "finished_at": mock.ANY,
                 "run_time_seconds": mock.ANY,
+                "restarts": 0,
             },
             "container": {
                 "command": "true",
@@ -4080,6 +4082,7 @@ class TestJobs:
                 "finished_at": mock.ANY,
                 "exit_code": 1,
                 "run_time_seconds": mock.ANY,
+                "restarts": 0,
             },
             "container": {
                 "command": 'bash -c "echo Failed!; false"',
@@ -4180,6 +4183,7 @@ class TestJobs:
                     "description": None,
                     "created_at": mock.ANY,
                     "run_time_seconds": 0,
+                    "restarts": 0,
                 },
                 "container": {
                     "command": "true",
@@ -4267,6 +4271,7 @@ class TestJobs:
                     "description": None,
                     "created_at": mock.ANY,
                     "run_time_seconds": 0,
+                    "restarts": 0,
                 },
                 "container": {
                     "command": "true",
