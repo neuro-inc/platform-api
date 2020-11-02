@@ -982,7 +982,7 @@ class TestJobsService:
         assert job3.materialized
 
     @pytest.mark.asyncio
-    async def test_delete_running(
+    async def test_cancel_running(
         self, jobs_service: JobsService, job_request_factory: Callable[[], JobRequest]
     ) -> None:
         user = User(cluster_name="test-cluster", name="testuser", token="")
@@ -991,32 +991,34 @@ class TestJobsService:
         )
         assert original_job.status == JobStatus.PENDING
 
-        await jobs_service.delete_job(original_job.id)
+        await jobs_service.update_jobs_statuses()
+
+        await jobs_service.cancel_job(original_job.id)
 
         job = await jobs_service.get_job(original_job.id)
         assert job.status == JobStatus.CANCELLED
         assert job.is_finished
         assert job.finished_at
-        assert not job.materialized
+        assert job.materialized
 
     @pytest.mark.asyncio
-    async def test_delete_missing(
+    async def test_cancel_deleted_after_sync(
         self,
-        jobs_service: JobsService,
-        mock_orchestrator: MockOrchestrator,
+        jobs_service_factory: Callable[[float], JobsService],
         job_request_factory: Callable[[], JobRequest],
-        caplog: LogCaptureFixture,
     ) -> None:
-        mock_orchestrator.raise_on_delete = True
+        jobs_service = jobs_service_factory(3600 * 7)  # Set huge deletion timeout
         user = User(cluster_name="test-cluster", name="testuser", token="")
         original_job, _ = await jobs_service.create_job(
             job_request=job_request_factory(), user=user
         )
         assert original_job.status == JobStatus.PENDING
 
-        await jobs_service.delete_job(original_job.id)
+        await jobs_service.update_jobs_statuses()
 
-        assert f"Could not delete job '{original_job.id}'. Reason: ''" in caplog.text
+        await jobs_service.cancel_job(original_job.id)
+
+        await jobs_service.update_jobs_statuses()
 
         job = await jobs_service.get_job(original_job.id)
         assert job.status == JobStatus.CANCELLED
@@ -1416,7 +1418,8 @@ class TestJobsServiceCluster:
 
         await cluster_registry.remove(cluster_config.name)
 
-        await jobs_service.delete_job(job.id)
+        await jobs_service.cancel_job(job.id)
+        await jobs_service.update_jobs_statuses()
 
         record = await mock_jobs_storage.get_job(job.id)
         assert record.status == JobStatus.CANCELLED
@@ -1452,7 +1455,8 @@ class TestJobsServiceCluster:
         user = User(cluster_name="test-cluster", name="testuser", token="testtoken")
         job, _ = await jobs_service.create_job(mock_job_request, user)
 
-        await jobs_service.delete_job(job.id)
+        await jobs_service.cancel_job(job.id)
+        await jobs_service.update_jobs_statuses()
 
         record = await mock_jobs_storage.get_job(job.id)
         assert record.status == JobStatus.CANCELLED

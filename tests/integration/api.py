@@ -1,7 +1,7 @@
 import asyncio
 import json
 import time
-from typing import Any, AsyncIterator, Callable, Dict, List, NamedTuple, Optional
+from typing import Any, AsyncIterator, Callable, Dict, List, NamedTuple, Optional, Set
 
 import aiohttp
 import aiohttp.web
@@ -154,6 +154,20 @@ class JobsClient:
             result = await response.json()
         return result
 
+    async def get_job_materialized_by_id(
+        self,
+        job_id: str,
+        headers: Optional[Dict[str, str]] = None,
+    ) -> bool:
+        url = (
+            self._api_config.generate_job_url(job_id)
+            + "?_tests_check_materialized=True"
+        )
+        async with self._client.get(url, headers=headers or self._headers) as response:
+            response_text = await response.text()
+            assert response.status == HTTPOk.status_code, response_text
+            return (await response.json())["materialized"]
+
     async def long_polling_by_job_id(
         self,
         job_id: str,
@@ -222,6 +236,20 @@ class JobsClient:
                 pytest.fail(f"too long: {current_time:.3f} sec; resp: {response}")
             interval_s *= 1.5
 
+    async def wait_job_dematerialized(
+        self, job_id: str, interval_s: float = 0.5, max_time: float = 300
+    ) -> None:
+        t0 = time.monotonic()
+        while True:
+            is_materialized = await self.get_job_materialized_by_id(job_id)
+            if not is_materialized:
+                return
+            await asyncio.sleep(max(interval_s, time.monotonic() - t0))
+            current_time = time.monotonic() - t0
+            if current_time > max_time:
+                pytest.fail(f"too long: {current_time:.3f} sec;")
+            interval_s *= 1.5
+
     async def delete_job(
         self,
         job_id: str,
@@ -251,15 +279,20 @@ async def jobs_client_factory(
 
     yield impl
 
-    params = [("status", "pending"), ("status", "running")]
+    deleted: Set[str] = set()
     for jobs_client in jobs_clients:
         try:
-            jobs = await jobs_client.get_all_jobs(params)
+            jobs = await jobs_client.get_all_jobs()
         except aiohttp.ClientConnectorError:
             # server might be down
             continue
-        for job in jobs:
-            await jobs_client.delete_job(job["id"], assert_success=False)
+        job_ids = {job["id"] for job in jobs}
+        job_ids -= deleted
+        for job_id in job_ids:
+            await jobs_client.delete_job(job_id, assert_success=False)
+        for job_id in job_ids:
+            await jobs_client.wait_job_dematerialized(job_id)
+        deleted |= job_ids
 
 
 @pytest.fixture
