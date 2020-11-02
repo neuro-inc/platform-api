@@ -13,7 +13,7 @@ INGRESS_HOST: staging.neu.ro
 INGRESS_PLATFORM_MONITORING_DOMAIN_NAME: monitoring-staging.neu.ro
 INGRESS_MAIN_SITE_HOST: neu.ro
 INGRESS_FALLBACK_HOST: 'job-app.neu.ro'
-NP_DB_REDIS_URI: "redis://neuro-redis-staging-azure-p1.redis.cache.windows.net:6379/0"
+NP_DB_REDIS_URI: "redis://:4D+tV8TkhZkKCUEHrq4gEF1c4fLX4s1RKG8rstCE9Yw=@neuro-staging-no-cluster.redis.cache.windows.net:6379/1"
 NP_REGISTRY_HOST: registry-staging.neu.ro
 NP_GKE_GPU_MODELS: nvidia-tesla-k80,nvidia-tesla-p4,nvidia-tesla-v100
 NP_OAUTH_BASE_URL: https://login.neu.ro
