@@ -344,7 +344,7 @@ class TestApi:
 
 class TestJobs:
     @pytest.mark.asyncio
-    async def test_create_job_with_and_http(
+    async def test_create_job_with_http(
         self,
         api: ApiConfig,
         client: aiohttp.ClientSession,
