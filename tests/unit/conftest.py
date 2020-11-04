@@ -5,11 +5,11 @@ from pathlib import Path, PurePath
 from typing import Any, AsyncIterator, Callable, Dict, Iterator, List, Optional
 
 import pytest
-from neuro_auth_client import AuthClient
 from notifications_client import Client as NotificationsClient
 from notifications_client.notification import AbstractNotification
 from yarl import URL
 
+from platform_api.auth_client import AuthClient
 from platform_api.cluster import Cluster, ClusterConfig, ClusterRegistry
 from platform_api.cluster_config import (
     IngressConfig,
@@ -180,11 +180,8 @@ class MockAuthClient(AuthClient):
     def __init__(self) -> None:
         pass
 
-    async def init(self) -> None:
-        pass
-
-    async def close(self) -> None:
-        pass
+    async def get_user_token(self, name: str, token: Optional[str] = None) -> str:
+        return f"token-{name}"
 
 
 @pytest.fixture

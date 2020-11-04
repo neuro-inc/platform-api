@@ -7,7 +7,6 @@ from pathlib import PurePath
 from typing import AsyncIterator, Callable, Iterable, List, Optional, Sequence, Tuple
 
 from async_generator import asynccontextmanager
-from neuro_auth_client import AuthClient
 from notifications_client import (
     Client as NotificationsClient,
     JobCannotStartQuotaReached,
@@ -27,6 +26,7 @@ from platform_api.cluster_config import OrchestratorConfig, StorageConfig
 from platform_api.config import JobsConfig, JobsSchedulerConfig
 from platform_api.user import User, UserCluster
 
+from ..auth_client import AuthClient
 from .base import Orchestrator
 from .job import (
     ZERO_RUN_TIME,
@@ -420,10 +420,10 @@ class JobsService:
             )
             raise
         if pass_config:
-            # TODO: use auth_client.get_user_token when available
+            token = await self._auth_client.get_user_token(user.name)
             pass_config_data = json.dumps(
                 {
-                    "token": user.token,
+                    "token": token,
                     "cluster": cluster_name,
                     "url": str(self._api_base_url),
                 }
