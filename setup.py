@@ -2,7 +2,7 @@ from setuptools import find_packages, setup
 
 
 install_requires = (
-    "aiohttp==3.6.2",
+    "aiohttp==3.7.2",
     # WARN: aioredis does not support Redis Cluster yet
     "aioredis==1.3.1",
     "iso8601==0.1.13",
@@ -14,8 +14,6 @@ install_requires = (
     "aiorwlock==1.0.0",
     "notifications-client==0.8.2",
     "platform-logging==0.3",
-    "yarl==1.5.1",
-    "multidict==4.7.6",
     "aiohttp-cors==0.7.0",
     "aiozipkin==0.7.1",
     "asyncpg==0.21.0",
