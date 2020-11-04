@@ -79,7 +79,7 @@ class EnvironConfigFactory:
     def create_jobs(self, *, orphaned_job_owner: str) -> JobsConfig:
         return JobsConfig(
             deletion_delay_s=int(
-                self._environ.get("NP_K8S_JOB_DELETION_DELAY", 60 * 60 * 24)  # one day
+                self._environ.get("NP_K8S_JOB_DELETION_DELAY", 15 * 60)  # 15 minutes
             ),
             orphaned_job_owner=orphaned_job_owner,
             jobs_ingress_class=self._environ.get(

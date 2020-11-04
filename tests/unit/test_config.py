@@ -191,8 +191,8 @@ class TestEnvironConfigFactory:
         assert cluster.storage.container_mount_path == PurePath("/var/storage")
         assert cluster.storage.uri_scheme == "storage"
 
-        assert config.jobs.deletion_delay_s == 86400
-        assert config.jobs.deletion_delay == timedelta(days=1)
+        assert config.jobs.deletion_delay_s == 900
+        assert config.jobs.deletion_delay == timedelta(minutes=15)
         assert config.jobs.orphaned_job_owner == "compute"
 
         assert config.job_policy_enforcer.platform_api_url == URL(
