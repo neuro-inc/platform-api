@@ -416,25 +416,6 @@ class TestEnvironConfigFactory:
         assert cluster.storage.nfs_server == "1.2.3.4"
         assert cluster.storage.nfs_export_path == PurePath("/tmp")
 
-    def test_create_ssh_auth(self) -> None:
-        environ = {
-            "NP_PLATFORM_API_URL": "http://neu.ro/api/v1",
-            "NP_AUTH_URL": "http://auth.com",
-            "NP_AUTH_TOKEN": "auth-token",
-            "NP_AUTH_NAME": "auth-name",
-            "NP_LOG_FIFO": "log.txt",
-            "NP_K8S_NS": "other",
-        }
-        config = EnvironConfigFactory(environ=environ).create_ssh_auth()
-        assert config.platform.server_endpoint_url == URL("http://neu.ro/api/v1")
-        assert config.auth.server_endpoint_url == URL("http://auth.com")
-        assert config.auth.service_token == "auth-token"
-        assert config.auth.service_name == "auth-name"
-        assert config.auth.public_endpoint_url == URL()
-        assert config.log_fifo == PurePath("log.txt")
-        assert config.env_prefix == "NP"  # default
-        assert config.jobs_namespace == "other"
-
     def test_registry_config_invalid_missing_host(self) -> None:
         with pytest.raises(ValueError, match="missing url hostname"):
             RegistryConfig(

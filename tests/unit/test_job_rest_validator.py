@@ -207,7 +207,6 @@ class TestJobResponseValidator:
         container = {
             "image": "testimage",
             "resources": {"cpu": 0.1, "memory_mb": 16, "shm": True},
-            "ssh": {"port": 666},
         }
         response = {
             "id": "test-job-id",
@@ -236,7 +235,6 @@ class TestJobResponseValidator:
         container = {
             "image": "testimage",
             "resources": {"cpu": 0.1, "memory_mb": 16, "shm": True},
-            "ssh": {"port": 666},
         }
         response = {
             "id": "test-job-id",
@@ -265,7 +263,6 @@ class TestJobResponseValidator:
         container = {
             "image": "testimage",
             "resources": {"cpu": 0.1, "memory_mb": 16, "shm": True},
-            "ssh": {"port": 666},
         }
         response = {
             "id": "test-job-id",
@@ -294,7 +291,6 @@ class TestJobResponseValidator:
             "entrypoint": "/script.sh",
             "command": "arg1 arg2 arg3",
             "resources": {"cpu": 0.1, "memory_mb": 16, "shm": True},
-            "ssh": {"port": 666},
         }
         response = {
             "id": "test-job-id",
@@ -381,7 +377,6 @@ class TestJobResponseValidator:
             "image": "testimage",
             "command": "arg1 arg2 arg3",
             "resources": {"cpu": 0.1, "memory_mb": 16, "shm": True},
-            "ssh": {"port": 666},
         }
         response = {
             "id": "test-job-id",
@@ -412,7 +407,6 @@ class TestJobResponseValidator:
             "image": "testimage",
             "command": "arg1 arg2 arg3",
             "resources": {"cpu": 0.1, "memory_mb": 16, "shm": True},
-            "ssh": {"port": 666},
         }
         response = {
             "id": "test-job-id",
@@ -443,7 +437,6 @@ class TestJobResponseValidator:
             "image": "testimage",
             "command": "arg1 arg2 arg3",
             "resources": {"cpu": 0.1, "memory_mb": 16, "shm": True},
-            "ssh": {"port": 666},
         }
         response = {
             "id": "test-job-id",

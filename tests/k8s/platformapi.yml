@@ -172,53 +172,6 @@ spec:
 apiVersion: apps/v1
 kind: ReplicaSet
 metadata:
-  name: ssh-auth
-spec:
-  replicas: 1
-  selector:
-    matchLabels:
-      service: ssh-auth
-  template:
-    metadata:
-      labels:
-        service: ssh-auth
-    spec:
-      containers:
-      - name: ssh-auth
-        image: ssh-auth:latest
-        imagePullPolicy: Never
-        env:
-        - name: NP_AUTH_URL
-          value: http://platformauthapi:8080
-        - name: NP_AUTH_TOKEN
-          value: eyJ0eXAiOiJKV1QiLCJhbGciOiJIUzI1NiJ9.eyJpZGVudGl0eSI6ImNvbXB1dGUifQ.IJDlKCfbiuNGZH9Sh6p-CdUL5KxEK5JStqzfDk4-RAA
-        - name: NP_PLATFORM_API_URL
-          value: http://platformapi:8080/api/v1
-        - name: NP_AUTH_PUBLIC_URL
-          value: http://platformauthapi:8080/api/v1/users
-        - name: NP_LOG_FIFO
-          value: /authorization.log
-        - name: NP_SSH_PORT
-          value: '22'
-        - name: NP_K8S_NS
-          value: "default"
----
-apiVersion: v1
-kind: Service
-metadata:
-  name: ssh-auth
-spec:
-  type: "LoadBalancer"
-  ports:
-  - protocol: TCP
-    port: 22
-    targetPort: 22
-  selector:
-    service: ssh-auth
----
-apiVersion: apps/v1
-kind: ReplicaSet
-metadata:
   name: zipkin
 spec:
   replicas: 1

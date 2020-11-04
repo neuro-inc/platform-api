@@ -9,8 +9,6 @@ CLOUD_IMAGE_azure ?= $(AZURE_ACR_NAME).azurecr.io/$(IMAGE_NAME)
 
 CLOUD_IMAGE  = ${CLOUD_IMAGE_${CLOUD_PROVIDER}}
 
-SSH_IMAGE_NAME ?= ssh-auth
-
 INGRESS_FALLBACK_IMAGE_NAME ?= platformingressfallback
 INGRESS_FALLBACK_CLOUD_IMAGE_gke ?= $(GKE_DOCKER_REGISTRY)/$(GKE_PROJECT_ID)/$(INGRESS_FALLBACK_IMAGE_NAME)
 INGRESS_FALLBACK_CLOUD_IMAGE_aws ?= $(AWS_ACCOUNT_ID).dkr.ecr.$(AWS_REGION).amazonaws.com/$(INGRESS_FALLBACK_IMAGE_NAME)
@@ -46,10 +44,6 @@ test_integration:
 
 test_e2e:
 	pytest -vv tests/e2e
-
-docker_build_ssh_auth:
-	docker build --build-arg PIP_EXTRA_INDEX_URL \
-		-f deploy/ssh_auth/docker/Dockerfile.ssh-auth.k8s -t $(SSH_IMAGE_NAME):latest .
 
 docker_build:
 	docker build --build-arg PIP_EXTRA_INDEX_URL \

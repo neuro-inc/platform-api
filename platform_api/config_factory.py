@@ -26,7 +26,6 @@ from .config import (
     PlatformConfig,
     PostgresConfig,
     ServerConfig,
-    SSHAuthConfig,
     ZipkinConfig,
 )
 from .orchestrator.kube_client import KubeClientAuthType
@@ -114,18 +113,6 @@ class EnvironConfigFactory:
                 self._environ.get("IS_WAITING_MIN_TIME_SEC")
                 or JobsSchedulerConfig.is_waiting_min_time_sec
             ),
-        )
-
-    def create_ssh_auth(self) -> SSHAuthConfig:
-        platform = self.create_platform()
-        auth = self.create_auth()
-        log_fifo = Path(self._environ["NP_LOG_FIFO"])
-        jobs_namespace = self._environ.get("NP_K8S_NS", SSHAuthConfig.jobs_namespace)
-        return SSHAuthConfig(
-            platform=platform,
-            auth=auth,
-            log_fifo=log_fifo,
-            jobs_namespace=jobs_namespace,
         )
 
     def create_server(self) -> ServerConfig:
