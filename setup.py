@@ -30,12 +30,6 @@ setup(
     packages=find_packages(),
     python_requires=">=3.7.0",
     install_requires=install_requires,
-    entry_points={
-        "console_scripts": [
-            "platform-api=platform_api.api:main",
-            "api-ssh-server=platform_api.ssh.server:main",
-            "ssh-authorize=platform_api.ssh_auth.authorize:main",
-        ]
-    },
+    entry_points={"console_scripts": ["platform-api=platform_api.api:main"]},
     zip_safe=False,
 )

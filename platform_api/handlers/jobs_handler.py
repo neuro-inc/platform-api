@@ -128,8 +128,6 @@ def create_job_response_validator() -> t.Trafaret:
             "status": create_job_status_validator(),
             t.Key("http_url", optional=True): t.String,
             t.Key("http_url_named", optional=True): t.String,
-            "ssh_server": t.String,
-            "ssh_auth_server": t.String,  # deprecated
             "history": create_job_history_validator(),
             "container": create_container_response_validator(),
             "is_preemptible": t.Bool,
@@ -192,8 +190,6 @@ def convert_job_container_to_json(
             "health_check_path": container.http_server.health_check_path,
             "requires_auth": container.http_server.requires_auth,
         }
-    if container.ssh_server is not None:
-        ret["ssh"] = {"port": container.ssh_server.port}
     for volume in container.volumes:
         ret["volumes"].append(convert_container_volume_to_json(volume, storage_config))
     for sec_volume in container.secret_volumes:
@@ -273,8 +269,6 @@ def convert_job_to_job_response(job: Job) -> Dict[str, Any]:
         "container": convert_job_container_to_json(
             job.request.container, job.storage_config
         ),
-        "ssh_server": job.ssh_server,
-        "ssh_auth_server": job.ssh_server,  # deprecated
         "is_preemptible": job.is_preemptible,
         "uri": str(job.to_uri()),
         "restart_policy": str(job.restart_policy),

@@ -26,7 +26,6 @@ from .config import (
     PlatformConfig,
     PostgresConfig,
     ServerConfig,
-    SSHAuthConfig,
     ZipkinConfig,
 )
 from .orchestrator.kube_client import KubeClientAuthType
@@ -116,18 +115,6 @@ class EnvironConfigFactory:
             ),
         )
 
-    def create_ssh_auth(self) -> SSHAuthConfig:
-        platform = self.create_platform()
-        auth = self.create_auth()
-        log_fifo = Path(self._environ["NP_LOG_FIFO"])
-        jobs_namespace = self._environ.get("NP_K8S_NS", SSHAuthConfig.jobs_namespace)
-        return SSHAuthConfig(
-            platform=platform,
-            auth=auth,
-            log_fifo=log_fifo,
-            jobs_namespace=jobs_namespace,
-        )
-
     def create_server(self) -> ServerConfig:
         port = int(self._environ.get("NP_API_PORT", ServerConfig.port))
         return ServerConfig(port=port)
@@ -213,7 +200,6 @@ class EnvironConfigFactory:
             jobs_domain_name_template=self._environ[
                 "NP_K8S_JOBS_INGRESS_DOMAIN_NAME_TEMPLATE"
             ],
-            ssh_auth_server=self._environ["NP_K8S_SSH_AUTH_INGRESS_DOMAIN_NAME"],
             resource_pool_types=pool_types,
             node_label_gpu=self._environ.get("NP_K8S_NODE_LABEL_GPU"),
             node_label_preemptible=self._environ.get("NP_K8S_NODE_LABEL_PREEMPTIBLE"),

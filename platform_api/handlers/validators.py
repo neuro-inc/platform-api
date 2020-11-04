@@ -281,7 +281,6 @@ def create_container_validator(
                     t.Key("requires_auth", optional=True, default=False): t.Bool,
                 }
             ),
-            t.Key("ssh", optional=True): t.Dict({"port": t.Int(gte=0, lte=65535)}),
             t.Key("tty", optional=True, default=False): t.Bool,
             t.Key("secret_env", optional=True): t.Mapping(
                 t.String,

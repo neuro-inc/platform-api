@@ -13,8 +13,6 @@
 Platform api
 ```helm --set "global.env=prod" upgrade --install platformapi platformapi```
 
-SSH-Auth
-```helm --set "global.env=prod" upgrade --install ssh-auth ssh_auth```
 
 
 
@@ -28,12 +26,3 @@ Dev :
 
 Staging :
 	```helm --set "global.env=staging" upgrade --install platformapi platformapi```
-
-
-## SSH-Auth
-
-Dev :
-	```helm --set "global.env=dev" upgrade --install ssh-auth ssh_auth```
-
-Staging :
-	```helm --set "global.env=staging" upgrade --install ssh-auth ssh_auth```
