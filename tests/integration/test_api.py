@@ -372,6 +372,28 @@ class TestJobs:
         assert job_response_payload["restart_policy"] == "on-failure"
 
     @pytest.mark.asyncio
+    async def test_create_job_without_http(
+        self,
+        api: ApiConfig,
+        client: aiohttp.ClientSession,
+        job_submit: Dict[str, Any],
+        jobs_client: JobsClient,
+        regular_user: _User,
+    ) -> None:
+        url = api.jobs_base_url
+        job_submit["container"].pop("http", None)
+        async with client.post(
+            url, headers=regular_user.headers, json=job_submit
+        ) as response:
+            assert response.status == HTTPAccepted.status_code, await response.text()
+            result = await response.json()
+            assert result["status"] in ["pending"]
+            job_id = result["id"]
+
+        await jobs_client.long_polling_by_job_id(job_id=job_id, status="succeeded")
+        await jobs_client.delete_job(job_id=job_id)
+
+    @pytest.mark.asyncio
     async def test_create_job_with_tty(
         self,
         api: ApiConfig,
