@@ -270,6 +270,7 @@ class JobRecord:
     name: Optional[str] = None
     tags: Sequence[str] = ()
     is_preemptible: bool = False
+    pass_config: bool = False
     materialized: bool = False
     max_run_time_minutes: Optional[int] = None
     internal_hostname: Optional[str] = None
@@ -419,6 +420,7 @@ class JobRecord:
             "materialized": self.materialized,
             "finished_at": self.finished_at_str,
             "is_preemptible": self.is_preemptible,
+            "pass_config": self.pass_config,
             "restart_policy": str(self.restart_policy),
         }
         if self.schedule_timeout:
@@ -458,6 +460,7 @@ class JobRecord:
             name=payload.get("name"),
             tags=payload.get("tags", ()),
             is_preemptible=payload.get("is_preemptible", False),
+            pass_config=payload.get("pass_config", False),
             max_run_time_minutes=payload.get("max_run_time_minutes", None),
             internal_hostname=payload.get("internal_hostname", None),
             internal_hostname_named=payload.get("internal_hostname_named", None),
@@ -515,6 +518,7 @@ class Job:
         self._tags = record.tags
 
         self._is_preemptible = record.is_preemptible
+        self._pass_config = record.pass_config
         self._is_forced_to_preemptible_pool = is_forced_to_preemptible_pool
 
     @property
@@ -713,6 +717,10 @@ class Job:
     @property
     def is_preemptible(self) -> bool:
         return self._is_preemptible
+
+    @property
+    def pass_config(self) -> bool:
+        return self._pass_config
 
     @property
     def restart_policy(self) -> JobRestartPolicy:

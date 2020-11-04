@@ -1000,6 +1000,7 @@ class TestJob:
                 },
             ],
             "is_preemptible": True,
+            "pass_config": False,
             "schedule_timeout": 15,
             "restart_policy": "never",
         }
@@ -1033,6 +1034,7 @@ class TestJob:
             "materialized": False,
             "finished_at": None,
             "is_preemptible": False,
+            "pass_config": False,
             "max_run_time_minutes": 500,
             "restart_policy": "never",
         }
@@ -1345,6 +1347,7 @@ class TestJob:
             "materialized": "False",
             "finished_at": finished_at_str,
             "is_preemptible": False,
+            "pass_config": False,
             "restart_policy": str(JobRestartPolicy.ALWAYS),
         }
         actual = Job.to_primitive(

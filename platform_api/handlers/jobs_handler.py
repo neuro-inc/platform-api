@@ -95,6 +95,7 @@ def create_job_request_validator(
                 create_job_tag_validator(), max_length=16
             ),
             t.Key("is_preemptible", optional=True, default=False): t.Bool,
+            t.Key("pass_config", optional=True, default=False): t.Bool,
             t.Key("schedule_timeout", optional=True): t.Float(gte=1, lt=30 * 24 * 3600),
             t.Key("max_run_time_minutes", optional=True): t.Int(gte=0),
             t.Key("cluster_name", default=cluster_name): t.Atom(cluster_name),
@@ -133,6 +134,7 @@ def create_job_response_validator() -> t.Trafaret:
             "history": create_job_history_validator(),
             "container": create_container_response_validator(),
             "is_preemptible": t.Bool,
+            "pass_config": t.Bool,
             t.Key("internal_hostname", optional=True): t.String,
             t.Key("internal_hostname_named", optional=True): t.String,
             t.Key("name", optional=True): create_job_name_validator(max_length=None),
@@ -443,6 +445,7 @@ class JobsHandler:
         tags = sorted(set(request_payload.get("tags", [])))
         description = request_payload.get("description")
         is_preemptible = request_payload["is_preemptible"]
+        pass_config = request_payload["pass_config"]
         schedule_timeout = request_payload.get("schedule_timeout")
         max_run_time_minutes = request_payload.get("max_run_time_minutes")
         job_request = JobRequest.create(container, description)
@@ -453,6 +456,7 @@ class JobsHandler:
             job_name=name,
             tags=tags,
             is_preemptible=is_preemptible,
+            pass_config=pass_config,
             schedule_timeout=schedule_timeout,
             max_run_time_minutes=max_run_time_minutes,
             restart_policy=request_payload["restart_policy"],

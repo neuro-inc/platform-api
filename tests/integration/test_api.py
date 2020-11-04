@@ -3977,6 +3977,7 @@ class TestJobs:
                 "ssh_server": "ssh://nobody@ssh-auth.platform.neuromation.io:22",
                 "ssh_auth_server": "ssh://nobody@ssh-auth.platform.neuromation.io:22",
                 "is_preemptible": True,
+                "pass_config": False,
                 "uri": f"job://test-cluster/{regular_user.name}/{job_id}",
                 "restart_policy": "never",
             }
@@ -4019,6 +4020,7 @@ class TestJobs:
             "ssh_server": "ssh://nobody@ssh-auth.platform.neuromation.io:22",
             "ssh_auth_server": "ssh://nobody@ssh-auth.platform.neuromation.io:22",
             "is_preemptible": True,
+            "pass_config": False,
             "uri": f"job://test-cluster/{regular_user.name}/{job_id}",
             "restart_policy": "never",
         }
@@ -4107,6 +4109,7 @@ class TestJobs:
             "ssh_server": "ssh://nobody@ssh-auth.platform.neuromation.io:22",
             "ssh_auth_server": "ssh://nobody@ssh-auth.platform.neuromation.io:22",
             "is_preemptible": False,
+            "pass_config": False,
             "uri": f"job://test-cluster/{regular_user.name}/{job_id}",
             "restart_policy": "never",
         }
@@ -4200,6 +4203,7 @@ class TestJobs:
                 "ssh_server": "ssh://nobody@ssh-auth.platform.neuromation.io:22",
                 "ssh_auth_server": "ssh://nobody@ssh-auth.platform.neuromation.io:22",
                 "is_preemptible": False,
+                "pass_config": False,
                 "uri": f"job://test-cluster/{regular_user.name}/{job_id}",
                 "restart_policy": "never",
             }
@@ -4287,6 +4291,7 @@ class TestJobs:
                 "ssh_server": "ssh://nobody@ssh-auth.platform.neuromation.io:22",
                 "ssh_auth_server": "ssh://nobody@ssh-auth.platform.neuromation.io:22",
                 "is_preemptible": False,
+                "pass_config": False,
                 "uri": f"job://test-cluster/{regular_user.name}/{job_id}",
                 "restart_policy": "never",
             }

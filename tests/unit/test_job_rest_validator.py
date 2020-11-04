@@ -228,6 +228,7 @@ class TestJobResponseValidator:
             "ssh_server": "nobody@ssh-auth",
             "ssh_auth_server": "nobody@ssh-auth",
             "is_preemptible": False,
+            "pass_config": False,
             "uri": "job://cluster-name/tests/test-job-id",
             "restart_policy": "never",
         }
@@ -259,6 +260,7 @@ class TestJobResponseValidator:
             "ssh_server": "nobody@ssh-auth",
             "ssh_auth_server": "nobody@ssh-auth",
             "is_preemptible": False,
+            "pass_config": False,
             "uri": "job://cluster-name/tests/test-job-id",
             "restart_policy": "never",
         }
@@ -288,6 +290,7 @@ class TestJobResponseValidator:
             "ssh_server": "nobody@ssh-auth",
             "ssh_auth_server": "nobody@ssh-auth",
             "is_preemptible": False,
+            "pass_config": False,
             "uri": "job://cluster-name/tests/test-job-id",
             "restart_policy": "never",
         }
@@ -321,6 +324,7 @@ class TestJobResponseValidator:
             "ssh_server": "nobody@ssh-auth",
             "ssh_auth_server": "nobody@ssh-auth",
             "is_preemptible": False,
+            "pass_config": False,
             "uri": "job://cluster-name/tests/test-job-id",
             "restart_policy": "never",
         }
@@ -351,6 +355,7 @@ class TestJobResponseValidator:
             "ssh_server": "nobody@ssh-auth",
             "ssh_auth_server": "nobody@ssh-auth",
             "is_preemptible": False,
+            "pass_config": False,
             "uri": "job://cluster-name/tests/test-job-id",
             "restart_policy": "never",
         }
@@ -381,6 +386,7 @@ class TestJobResponseValidator:
             "ssh_server": "nobody@ssh-auth",
             "ssh_auth_server": "nobody@ssh-auth",
             "is_preemptible": False,
+            "pass_config": False,
             "uri": "job://cluster-name/tests/test-job-id",
             "restart_policy": "never",
         }
@@ -414,6 +420,7 @@ class TestJobResponseValidator:
             "ssh_server": "nobody@ssh-auth",
             "ssh_auth_server": "nobody@ssh-auth",
             "is_preemptible": False,
+            "pass_config": False,
             "max_run_time_minutes": 10,
             "uri": "job://cluster-name/tests/test-job-id",
             "restart_policy": "never",
@@ -447,6 +454,7 @@ class TestJobResponseValidator:
             "ssh_server": "nobody@ssh-auth",
             "ssh_auth_server": "nobody@ssh-auth",
             "is_preemptible": False,
+            "pass_config": False,
             "uri": "job://cluster-name/tests/test-job-id",
             "restart_policy": "never",
         }
@@ -480,6 +488,7 @@ class TestJobResponseValidator:
             "ssh_server": "nobody@ssh-auth",
             "ssh_auth_server": "nobody@ssh-auth",
             "is_preemptible": False,
+            "pass_config": False,
             "uri": "job://cluster-name/tests/test-job-id",
             "restart_policy": "never",
         }

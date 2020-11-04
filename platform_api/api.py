@@ -259,6 +259,21 @@ async def create_app(
         async with AsyncExitStack() as exit_stack:
             trace_config = aiozipkin.make_trace_config(tracer)
 
+            logger.info("Initializing Auth client")
+            auth_client = await exit_stack.enter_async_context(
+                AuthClient(
+                    url=config.auth.server_endpoint_url,
+                    token=config.auth.service_token,
+                    trace_config=trace_config,
+                )
+            )
+            app["jobs_app"]["auth_client"] = auth_client
+            app["stats_app"]["auth_client"] = auth_client
+
+            await setup_security(
+                app=app, auth_client=auth_client, auth_scheme=AuthScheme.BEARER
+            )
+
             logger.info("Initializing Notifications client")
             notifications_client = NotificationsClient(
                 url=config.notifications.url,
@@ -323,6 +338,8 @@ async def create_app(
                 jobs_config=config.jobs,
                 notifications_client=notifications_client,
                 scheduler=JobsScheduler(config.scheduler),
+                auth_client=auth_client,
+                api_base_url=config.api_base_url,
             )
 
             logger.info("Initializing JobsPoller")
@@ -348,20 +365,6 @@ async def create_app(
                         RuntimeLimitEnforcer(api_client),
                     ],
                 )
-            )
-
-            auth_client = await exit_stack.enter_async_context(
-                AuthClient(
-                    url=config.auth.server_endpoint_url,
-                    token=config.auth.service_token,
-                    trace_config=trace_config,
-                )
-            )
-            app["jobs_app"]["auth_client"] = auth_client
-            app["stats_app"]["auth_client"] = auth_client
-
-            await setup_security(
-                app=app, auth_client=auth_client, auth_scheme=AuthScheme.BEARER
             )
 
             yield
