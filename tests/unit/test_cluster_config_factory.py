@@ -200,7 +200,6 @@ class TestClusterConfigFactory:
         monitoring_payload = clusters_payload[0]["monitoring"]
         secrets_payload = clusters_payload[0]["secrets"]
         metrics_payload = clusters_payload[0]["metrics"]
-        ssh_payload = clusters_payload[0]["ssh"]
 
         factory = ClusterConfigFactory()
         clusters = factory.create_cluster_configs(
@@ -239,7 +238,6 @@ class TestClusterConfigFactory:
         orchestrator = cluster.orchestrator
         assert isinstance(orchestrator, KubeConfig)
 
-        assert orchestrator.ssh_auth_server == ssh_payload["server"]
         assert (
             orchestrator.is_http_ingress_secure
             == orchestrator_payload["is_http_ingress_secure"]

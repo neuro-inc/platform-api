@@ -301,9 +301,7 @@ class Service:
     name: str
     target_port: Optional[int]
     selector: Dict[str, str] = field(default_factory=dict)
-    ssh_target_port: Optional[int] = None
     port: int = 80
-    ssh_port: int = 22
     service_type: ServiceType = ServiceType.CLUSTER_IP
     cluster_ip: Optional[str] = None
     labels: Dict[str, str] = field(default_factory=dict)
@@ -336,12 +334,6 @@ class Service:
         self._add_port_map(
             self.port, self.target_port, "http", service_descriptor["spec"]["ports"]
         )
-        self._add_port_map(
-            self.ssh_port,
-            self.ssh_target_port,
-            "ssh",
-            service_descriptor["spec"]["ports"],
-        )
         return service_descriptor
 
     @classmethod
@@ -350,7 +342,6 @@ class Service:
             name=pod.name,
             selector=pod.labels,
             target_port=pod.port,
-            ssh_target_port=pod.ssh_port,
             labels=pod.labels,
         )
 
@@ -362,7 +353,6 @@ class Service:
             selector=pod.labels,
             cluster_ip="None",
             target_port=http_port,
-            ssh_target_port=pod.ssh_port,
             labels=pod.labels,
         )
 
@@ -381,15 +371,12 @@ class Service:
     @classmethod
     def from_primitive(cls, payload: Dict[str, Any]) -> "Service":
         http_payload = cls._find_port_by_name("http", payload["spec"]["ports"])
-        ssh_payload = cls._find_port_by_name("ssh", payload["spec"]["ports"])
         service_type = payload["spec"].get("type", Service.service_type.value)
         return cls(
             name=payload["metadata"]["name"],
             selector=payload["spec"].get("selector", {}),
             target_port=http_payload.get("targetPort", None),
             port=http_payload.get("port", Service.port),
-            ssh_target_port=ssh_payload.get("targetPort", None),
-            ssh_port=ssh_payload.get("port", Service.ssh_port),
             service_type=ServiceType(service_type),
             cluster_ip=payload["spec"].get("clusterIP"),
             labels=payload["metadata"].get("labels", {}),
@@ -672,7 +659,6 @@ class PodDescriptor:
     annotations: Dict[str, str] = field(default_factory=dict)
 
     port: Optional[int] = None
-    ssh_port: Optional[int] = None
     health_check_path: str = "/"
     tty: bool = False
 
@@ -805,7 +791,6 @@ class PodDescriptor:
             volumes=volumes,
             resources=resources,
             port=container.port,
-            ssh_port=container.ssh_port,
             health_check_path=container.health_check_path,
             tty=container.tty,
             image_pull_secrets=image_pull_secrets,
@@ -897,8 +882,6 @@ class PodDescriptor:
         ports = []
         if self.port:
             ports.append({"containerPort": self.port})
-        if self.ssh_port:
-            ports.append({"containerPort": self.ssh_port})
         return ports
 
     def _to_primitive_readiness_probe(self) -> Dict[str, Any]:
@@ -908,13 +891,6 @@ class PodDescriptor:
         if self.port:
             return {
                 "httpGet": {"port": self.port, "path": self.health_check_path},
-                "initialDelaySeconds": 1,
-                "periodSeconds": 1,
-            }
-
-        if self.ssh_port:
-            return {
-                "tcpSocket": {"port": self.ssh_port},
                 "initialDelaySeconds": 1,
                 "periodSeconds": 1,
             }

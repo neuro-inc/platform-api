@@ -4,7 +4,6 @@ NP_STORAGE_NFS_SERVER: '10.76.126.154'
 NP_STORAGE_NFS_PATH: '/dev2premium'
 NP_K8S_JOBS_INGRESS_DOMAIN_NAME_TEMPLATE: '{job_id}.jobs-dev.neu.ro'
 NP_K8S_NAMED_JOBS_INGRESS_DOMAIN_NAME_TEMPLATE: '{job_name}-{job_owner}.jobs-dev.neu.ro'
-NP_K8S_SSH_AUTH_INGRESS_DOMAIN_NAME: ssh-auth-dev.neu.ro
 NP_API_URL: https://dev.neu.ro/api/v1
 NP_ADMIN_URL: https://dev.neu.ro/apis/admin/v1
 NP_AUTH_PUBLIC_URL: https://dev.neu.ro/api/v1/users

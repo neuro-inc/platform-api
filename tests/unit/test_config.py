@@ -71,7 +71,6 @@ class TestStorageVolume:
         )
         kube_config = KubeConfig(
             jobs_domain_name_template="{job_id}.testdomain",
-            ssh_auth_server="ssh-auth.domain",
             endpoint_url="http://1.2.3.4",
             resource_pool_types=[ResourcePoolType()],
         )
@@ -91,7 +90,6 @@ class TestStorageVolume:
         )
         kube_config = KubeConfig(
             jobs_domain_name_template="{job_id}.testdomain",
-            ssh_auth_server="ssh-auth.domain",
             endpoint_url="http://1.2.3.4",
             resource_pool_types=[ResourcePoolType()],
         )
@@ -109,7 +107,6 @@ class TestStorageVolume:
         )
         kube_config = KubeConfig(
             jobs_domain_name_template="{job_id}.testdomain",
-            ssh_auth_server="ssh-auth.domain",
             endpoint_url="http://1.2.3.4",
             resource_pool_types=[ResourcePoolType()],
         )
@@ -131,7 +128,6 @@ class TestSecretVolume:
         )
         kube_config = KubeConfig(
             jobs_domain_name_template="{job_id}.testdomain",
-            ssh_auth_server="ssh-auth.domain",
             endpoint_url="http://1.2.3.4",
             resource_pool_types=[ResourcePoolType()],
         )
@@ -159,7 +155,6 @@ class TestEnvironConfigFactory:
             "NP_K8S_API_URL": "https://localhost:8443",
             "NP_JOBS_INGRESS_OAUTH_AUTHORIZE_URL": "http://neu.ro/oauth/authorize",
             "NP_K8S_JOBS_INGRESS_DOMAIN_NAME_TEMPLATE": "{job_id}.jobs.domain",
-            "NP_K8S_SSH_AUTH_INGRESS_DOMAIN_NAME": "ssh-auth.domain",
             "NP_AUTH_URL": "https://auth",
             "NP_AUTH_TOKEN": "token",
             "NP_OAUTH_BASE_URL": "https://oauth",
@@ -219,7 +214,6 @@ class TestEnvironConfigFactory:
         assert cluster.orchestrator.client_conn_pool_size == 100
         assert not cluster.orchestrator.is_http_ingress_secure
         assert cluster.orchestrator.jobs_domain_name_template == "{job_id}.jobs.domain"
-        assert cluster.orchestrator.ssh_auth_server == "ssh-auth.domain"
 
         assert cluster.orchestrator.resource_pool_types == [ResourcePoolType()]
         assert cluster.orchestrator.node_label_gpu is None
@@ -283,7 +277,6 @@ class TestEnvironConfigFactory:
             "NP_JOBS_INGRESS_OAUTH_AUTHORIZE_URL": "http://neu.ro/oauth/authorize",
             "NP_K8S_JOBS_INGRESS_HTTPS": "True",
             "NP_K8S_JOBS_INGRESS_DOMAIN_NAME_TEMPLATE": "{job_id}.jobs.domain",
-            "NP_K8S_SSH_AUTH_INGRESS_DOMAIN_NAME": "ssh-auth.domain",
             "NP_K8S_JOB_DELETION_DELAY": "3600",
             "NP_DB_REDIS_URI": "redis://localhost:6379/0",
             "NP_DB_REDIS_CONN_POOL_SIZE": "444",
@@ -364,7 +357,6 @@ class TestEnvironConfigFactory:
         )
         assert cluster.orchestrator.is_http_ingress_secure
         assert cluster.orchestrator.jobs_domain_name_template == "{job_id}.jobs.domain"
-        assert cluster.orchestrator.ssh_auth_server == "ssh-auth.domain"
 
         assert cluster.orchestrator.resource_pool_types == [
             ResourcePoolType(),
@@ -411,7 +403,6 @@ class TestEnvironConfigFactory:
             "NP_K8S_API_URL": "https://localhost:8443",
             "NP_K8S_JOBS_INGRESS_DOMAIN_NAME_TEMPLATE": "{job_id}.jobs.domain",
             "NP_JOBS_INGRESS_OAUTH_AUTHORIZE_URL": "http://neu.ro/oauth/authorize",
-            "NP_K8S_SSH_AUTH_INGRESS_DOMAIN_NAME": "ssh-auth.domain",
             "NP_API_URL": "https://neu.ro/api/v1",
             "NP_ADMIN_URL": "https://neu.ro/apis/admin/v1",
             "NP_AUTH_URL": "https://auth",
@@ -487,7 +478,6 @@ class TestOrchestratorConfig:
     def test_default_presets(self) -> None:
         config = OrchestratorConfig(
             jobs_domain_name_template="test",
-            ssh_auth_server="test",
             resource_pool_types=(),
         )
         assert config.presets == DEFAULT_PRESETS
@@ -496,7 +486,6 @@ class TestOrchestratorConfig:
         presets = (Preset(name="test", cpu=1.0, memory_mb=1024),)
         config = OrchestratorConfig(
             jobs_domain_name_template="test",
-            ssh_auth_server="test",
             resource_pool_types=(ResourcePoolType(presets=presets),),
         )
         assert config.presets == presets
@@ -515,7 +504,6 @@ class TestKubeConfig:
                 token_path="value",
                 namespace="value",
                 jobs_domain_name_template="value",
-                ssh_auth_server="value",
                 resource_pool_types=[],
                 node_label_gpu="value",
                 node_label_preemptible="value",
@@ -534,7 +522,6 @@ class TestKubeConfig:
                 token_path="value",
                 namespace="value",
                 jobs_domain_name_template="value",
-                ssh_auth_server="value",
                 resource_pool_types=[],
                 node_label_gpu="value",
                 node_label_preemptible="value",
@@ -554,7 +541,6 @@ class TestKubeConfig:
             token_path="value",
             namespace="value",
             jobs_domain_name_template="value",
-            ssh_auth_server="value",
             resource_pool_types=[],
             node_label_gpu="value",
             node_label_preemptible="value",

@@ -170,7 +170,6 @@ class JobsService:
         )
         self._dummy_cluster_orchestrator_config = OrchestratorConfig(
             jobs_domain_name_template="{job_id}.missing-cluster",
-            ssh_auth_server="missing-cluster:22",
             resource_pool_types=(),
         )
 
