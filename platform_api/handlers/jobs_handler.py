@@ -278,6 +278,7 @@ def convert_job_to_job_response(job: Job) -> Dict[str, Any]:
         "ssh_server": job.ssh_server,
         "ssh_auth_server": job.ssh_server,  # deprecated
         "is_preemptible": job.is_preemptible,
+        "pass_config": job.pass_config,
         "uri": str(job.to_uri()),
         "restart_policy": str(job.restart_policy),
     }

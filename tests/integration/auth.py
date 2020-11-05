@@ -102,7 +102,7 @@ async def create_auth_config(
     host = "0.0.0.0"
     port = int((await container.port(8080))[0]["HostPort"])
     url = URL(f"http://{host}:{port}")
-    token = create_token("compute")
+    token = create_token("admin")
     public_endpoint_url = URL("https://neu.ro/api/v1/users")
     return AuthConfig(
         server_endpoint_url=url,
