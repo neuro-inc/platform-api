@@ -383,6 +383,9 @@ class Container:
         kwargs.pop("port", None)
         kwargs.pop("health_check_path", None)
 
+        # previous jobs still have ssh_server stored in database
+        kwargs.pop("ssh_server", None)
+
         # NOTE: `entrypoint` is not not serialized if it's `None` (see issue #804)
         if "entrypoint" not in kwargs:
             kwargs["entrypoint"] = None
