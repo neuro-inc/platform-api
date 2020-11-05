@@ -48,10 +48,10 @@ from platform_api.resource import (
 
 
 pytest_plugins = [
+    "tests.integration.auth",
     "tests.integration.api",
     "tests.integration.docker",
     "tests.integration.redis",
-    "tests.integration.auth",
     "tests.integration.secrets",
     "tests.integration.diskapi",
     "tests.integration.notifications",
