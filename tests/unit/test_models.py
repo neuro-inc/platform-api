@@ -1363,6 +1363,7 @@ async def test_job_to_job_response(mock_orchestrator: MockOrchestrator) -> None:
         "ssh_server": "ssh://nobody@ssh-auth:22",
         "ssh_auth_server": "ssh://nobody@ssh-auth:22",
         "is_preemptible": False,
+        "pass_config": False,
         "uri": f"job://test-cluster/compute/{job.id}",
         "restart_policy": "never",
     }
@@ -1459,6 +1460,7 @@ async def test_job_to_job_response_with_job_name_and_http_exposed(
         "ssh_server": "ssh://nobody@ssh-auth:22",
         "ssh_auth_server": "ssh://nobody@ssh-auth:22",
         "is_preemptible": False,
+        "pass_config": False,
         "uri": f"job://test-cluster/{owner_name}/{job.id}",
         "restart_policy": "never",
     }
@@ -1514,6 +1516,7 @@ async def test_job_to_job_response_with_job_name_and_http_exposed_too_long_name(
         "ssh_server": "ssh://nobody@ssh-auth:22",
         "ssh_auth_server": "ssh://nobody@ssh-auth:22",
         "is_preemptible": False,
+        "pass_config": False,
         "uri": f"job://test-cluster/{owner_name}/{job.id}",
         "restart_policy": "never",
     }
