@@ -7,6 +7,7 @@ from pathlib import PurePath
 from typing import AsyncIterator, Callable, Iterable, List, Optional, Sequence, Tuple
 
 from async_generator import asynccontextmanager
+from neuro_auth_client import AuthClient
 from notifications_client import (
     Client as NotificationsClient,
     JobCannotStartQuotaReached,
@@ -26,7 +27,6 @@ from platform_api.cluster_config import OrchestratorConfig, StorageConfig
 from platform_api.config import JobsConfig, JobsSchedulerConfig
 from platform_api.user import User, UserCluster
 
-from ..auth_client import AuthClient
 from .base import Orchestrator
 from .job import (
     ZERO_RUN_TIME,

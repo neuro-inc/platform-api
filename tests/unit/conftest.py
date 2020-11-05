@@ -5,11 +5,11 @@ from pathlib import Path, PurePath
 from typing import Any, AsyncIterator, Callable, Dict, Iterator, List, Optional
 
 import pytest
+from neuro_auth_client import AuthClient
 from notifications_client import Client as NotificationsClient
 from notifications_client.notification import AbstractNotification
 from yarl import URL
 
-from platform_api.auth_client import AuthClient
 from platform_api.cluster import Cluster, ClusterConfig, ClusterRegistry
 from platform_api.cluster_config import (
     IngressConfig,

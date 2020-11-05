@@ -8,7 +8,7 @@ import aiohttp_cors
 import aiozipkin
 from aiohttp.web import HTTPUnauthorized
 from aiohttp_security import check_permission
-from neuro_auth_client import Permission
+from neuro_auth_client import AuthClient, Permission
 from neuro_auth_client.security import AuthScheme, setup_security
 from notifications_client import Client as NotificationsClient
 from platform_logging import init_logging
@@ -20,7 +20,6 @@ from platform_api.orchestrator.job_policy_enforcer import (
     RuntimeLimitEnforcer,
 )
 
-from .auth_client import AuthClient
 from .cluster import Cluster, ClusterConfig, ClusterRegistry
 from .config import Config, CORSConfig
 from .config_client import ConfigClient
