@@ -420,6 +420,11 @@ class JobsService:
             )
             raise
         if pass_config:
+            if NEURO_PASSED_CONFIG in job_request.container.env:
+                raise JobsServiceException(
+                    f"Cannot pass config: ENV '{NEURO_PASSED_CONFIG}' "
+                    "already specified"
+                )
             token = await self._auth_client.get_user_token(user.name)
             pass_config_data = json.dumps(
                 {
@@ -428,11 +433,6 @@ class JobsService:
                     "url": str(self._api_base_url),
                 }
             )
-            if NEURO_PASSED_CONFIG in job_request.container.env:
-                raise JobsServiceException(
-                    f"Cannot pass config: ENV '{NEURO_PASSED_CONFIG}' "
-                    "already specified"
-                )
             job_request.container.env[NEURO_PASSED_CONFIG] = pass_config_data
 
         record = JobRecord.create(

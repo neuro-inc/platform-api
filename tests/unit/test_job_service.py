@@ -138,6 +138,24 @@ class TestJobsService:
         assert passed_data["cluster"] == original_job.cluster_name
 
     @pytest.mark.asyncio
+    async def test_create_job_pass_config_env_present(
+        self,
+        jobs_service: JobsService,
+        mock_job_request: JobRequest,
+        mock_api_base: URL,
+    ) -> None:
+        user = User(cluster_name="test-cluster", name="testuser", token="test-token")
+        mock_job_request.container.env[NEURO_PASSED_CONFIG] = "anything"
+        with pytest.raises(
+            JobsServiceException,
+            match=f"Cannot pass config: ENV '{NEURO_PASSED_CONFIG}' "
+            "already specified",
+        ):
+            await jobs_service.create_job(
+                job_request=mock_job_request, user=user, pass_config=True
+            )
+
+    @pytest.mark.asyncio
     async def test_create_job_fail(
         self,
         jobs_service: JobsService,
