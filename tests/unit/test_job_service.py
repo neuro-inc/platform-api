@@ -5,7 +5,7 @@ from typing import Any, AsyncIterator, Callable
 
 import pytest
 from _pytest.logging import LogCaptureFixture
-from neuro_auth_client import AuthClient
+from neuro_auth_client import AuthClient, Permission
 from notifications_client import Client as NotificationsClient, JobTransition
 from yarl import URL
 
@@ -33,6 +33,7 @@ from platform_api.orchestrator.jobs_storage import JobFilter
 from platform_api.user import User
 
 from .conftest import (
+    MockAuthClient,
     MockCluster,
     MockJobsStorage,
     MockNotificationsClient,
@@ -124,6 +125,7 @@ class TestJobsService:
         jobs_service: JobsService,
         mock_job_request: JobRequest,
         mock_api_base: URL,
+        mock_auth_client: MockAuthClient,
     ) -> None:
         user = User(cluster_name="test-cluster", name="testuser", token="test-token")
         original_job, _ = await jobs_service.create_job(
@@ -136,6 +138,114 @@ class TestJobsService:
         assert URL(passed_data["url"]) == mock_api_base
         assert passed_data["token"] == f"token-{user.name}"
         assert passed_data["cluster"] == original_job.cluster_name
+        token_uri = f"token://job/{original_job.id}"
+        assert mock_auth_client.grants[0] == (
+            user.name,
+            [Permission(uri=token_uri, action="read")],
+        )
+
+    @pytest.mark.asyncio
+    async def test_pass_config_revoke_after_complete(
+        self,
+        jobs_service: JobsService,
+        mock_job_request: JobRequest,
+        mock_auth_client: MockAuthClient,
+        mock_orchestrator: MockOrchestrator,
+    ) -> None:
+        user = User(cluster_name="test-cluster", name="testuser", token="test-token")
+        original_job, _ = await jobs_service.create_job(
+            job_request=mock_job_request, user=user, pass_config=True
+        )
+
+        mock_orchestrator.update_status_to_return(JobStatus.SUCCEEDED)
+        await jobs_service.update_jobs_statuses()
+        token_uri = f"token://job/{original_job.id}"
+        assert mock_auth_client._revokes[0] == (user.name, [token_uri])
+
+    @pytest.mark.asyncio
+    async def test_pass_config_revoke_after_failure(
+        self,
+        jobs_service: JobsService,
+        mock_job_request: JobRequest,
+        mock_auth_client: MockAuthClient,
+        mock_orchestrator: MockOrchestrator,
+    ) -> None:
+        user = User(cluster_name="test-cluster", name="testuser", token="test-token")
+        original_job, _ = await jobs_service.create_job(
+            job_request=mock_job_request, user=user, pass_config=True
+        )
+
+        mock_orchestrator.update_status_to_return(JobStatus.FAILED)
+        await jobs_service.update_jobs_statuses()
+        token_uri = f"token://job/{original_job.id}"
+        assert mock_auth_client._revokes[0] == (user.name, [token_uri])
+
+    @pytest.mark.asyncio
+    async def test_pass_config_revoke_fail_to_start(
+        self,
+        jobs_service: JobsService,
+        mock_job_request: JobRequest,
+        mock_auth_client: MockAuthClient,
+        mock_orchestrator: MockOrchestrator,
+    ) -> None:
+        user = User(cluster_name="test-cluster", name="testuser", token="test-token")
+        original_job, _ = await jobs_service.create_job(
+            job_request=mock_job_request, user=user, pass_config=True
+        )
+
+        def _f(job: Job) -> Exception:
+            raise JobError(f"Bad job {job.id}")
+
+        mock_orchestrator.raise_on_start_job_status = True
+        mock_orchestrator.get_job_status_exc_factory = _f
+        await jobs_service.update_jobs_statuses()
+
+        token_uri = f"token://job/{original_job.id}"
+        assert mock_auth_client._revokes[0] == (user.name, [token_uri])
+
+    @pytest.mark.asyncio
+    async def test_pass_config_revoke_fail_on_update(
+        self,
+        jobs_service: JobsService,
+        mock_job_request: JobRequest,
+        mock_auth_client: MockAuthClient,
+        mock_orchestrator: MockOrchestrator,
+    ) -> None:
+        user = User(cluster_name="test-cluster", name="testuser", token="test-token")
+        original_job, _ = await jobs_service.create_job(
+            job_request=mock_job_request, user=user, pass_config=True
+        )
+
+        await jobs_service.update_jobs_statuses()
+        mock_orchestrator.raise_on_get_job_status = True
+        await jobs_service.update_jobs_statuses()
+
+        token_uri = f"token://job/{original_job.id}"
+        assert mock_auth_client._revokes[0] == (user.name, [token_uri])
+
+    @pytest.mark.asyncio
+    async def test_pass_config_revoke_cluster_unavail(
+        self,
+        jobs_service: JobsService,
+        mock_job_request: JobRequest,
+        mock_auth_client: MockAuthClient,
+        mock_orchestrator: MockOrchestrator,
+        cluster_registry: ClusterRegistry,
+        cluster_config: ClusterConfig,
+    ) -> None:
+        user = User(cluster_name="test-cluster", name="testuser", token="test-token")
+        original_job, _ = await jobs_service.create_job(
+            job_request=mock_job_request, user=user, pass_config=True
+        )
+
+        mock_orchestrator.update_status_to_return(JobStatus.RUNNING)
+        await jobs_service.update_jobs_statuses()
+
+        await cluster_registry.remove(cluster_config.name)
+        await jobs_service.update_jobs_statuses()
+
+        token_uri = f"token://job/{original_job.id}"
+        assert mock_auth_client._revokes[0] == (user.name, [token_uri])
 
     @pytest.mark.asyncio
     async def test_create_job_pass_config_env_present(
@@ -297,9 +407,11 @@ class TestJobsService:
         with pytest.raises(
             JobsServiceException, match="Failed to create job: transaction failed"
         ):
-            job, _ = await jobs_service.create_job(request, user, job_name=job_name)
-            # check that the job was cleaned up:
-            assert job in mock_orchestrator.get_successfully_deleted_jobs()
+            await jobs_service.create_job(request, user, job_name=job_name)
+        # check that the job was cleaned up:
+        assert request.job_id in {
+            job.id for job in mock_orchestrator.get_successfully_deleted_jobs()
+        }
 
     @pytest.mark.asyncio
     async def test_create_job__clean_up_the_job_on_transaction_error__fail(
@@ -321,8 +433,10 @@ class TestJobsService:
             JobsServiceException, match="Failed to create job: transaction failed"
         ):
             job, _ = await jobs_service.create_job(request, user, job_name=job_name)
-            # check that the job failed to be cleaned up (failure ignored):
-            assert job not in mock_orchestrator.get_successfully_deleted_jobs()
+        # check that the job failed to be cleaned up (failure ignored):
+        assert request.job_id not in {
+            job.id for job in mock_orchestrator.get_successfully_deleted_jobs()
+        }
 
     @pytest.mark.asyncio
     async def test_get_status_by_job_id(
