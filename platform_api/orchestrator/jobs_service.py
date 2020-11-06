@@ -1,3 +1,4 @@
+import base64
 import json
 import logging
 from dataclasses import dataclass, replace
@@ -372,13 +373,15 @@ class JobsService:
                 f"Cannot pass config: ENV '{NEURO_PASSED_CONFIG}' " "already specified"
             )
         token = await self._auth_client.get_user_token(user.name)
-        pass_config_data = json.dumps(
-            {
-                "token": token,
-                "cluster": cluster_name,
-                "url": str(self._api_base_url),
-            }
-        )
+        pass_config_data = base64.b64encode(
+            json.dumps(
+                {
+                    "token": token,
+                    "cluster": cluster_name,
+                    "url": str(self._api_base_url),
+                }
+            ).encode()
+        ).decode()
         new_env = {
             **job_request.container.env,
             NEURO_PASSED_CONFIG: pass_config_data,

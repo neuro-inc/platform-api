@@ -1,3 +1,4 @@
+import base64
 import json
 from dataclasses import replace
 from datetime import datetime, timezone
@@ -132,7 +133,7 @@ class TestJobsService:
         assert original_job.status == JobStatus.PENDING
         assert original_job.pass_config
         passed_data_str = original_job.request.container.env[NEURO_PASSED_CONFIG]
-        passed_data = json.loads(passed_data_str)
+        passed_data = json.loads(base64.b64decode(passed_data_str).decode())
         assert URL(passed_data["url"]) == mock_api_base
         assert passed_data["token"] == f"token-{user.name}"
         assert passed_data["cluster"] == original_job.cluster_name
