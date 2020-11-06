@@ -690,11 +690,6 @@ class Job:
         return f"{self._http_scheme}://{self.http_host_named}"
 
     @property
-    def ssh_server(self) -> str:
-        ssh_auth_server = self._orchestrator_config.ssh_auth_server
-        return f"ssh://nobody@{ssh_auth_server}"
-
-    @property
     def finished_at_str(self) -> Optional[str]:
         return self._status_history.finished_at_str
 

@@ -5,7 +5,6 @@ export MINIKUBE_IN_STYLE=true
 
 eval $(minikube docker-env)
 make docker_build
-make docker_build_ssh_auth
 make docker_pull_test_images
 
 kubectl config use-context minikube
@@ -58,17 +57,14 @@ check_job_succeeded $max_attempts platformapi-migrations
 
 check_service $max_attempts platformapi
 check_service $max_attempts platformauthapi
-check_service $max_attempts ssh-auth
 
 # wait till our services are up to prevent flakes
 sleep 10
 
 export PLATFORM_API_URL=$(minikube service platformapi --url)/api/v1
 export AUTH_API_URL=$(minikube service platformauthapi --url)
-export SSH_AUTH_URL=$(minikube service ssh-auth --url)
 
 echo $PLATFORM_API_URL
 echo $AUTH_API_URL
-echo $SSH_AUTH_URL
 
 make test_e2e

@@ -77,7 +77,6 @@ def cluster_configs_payload() -> List[Dict[str, Any]]:
                 ],
                 "is_http_ingress_secure": True,
             },
-            "ssh": {"server": "ssh-auth-dev.neu.ro"},
             "monitoring": {"url": "https://dev.neu.ro/api/v1/jobs"},
             "secrets": {"url": "https://dev.neu.ro/api/v1/secrets"},
             "metrics": {"url": "https://metrics.dev.neu.ro"},
@@ -345,7 +344,7 @@ class TestApi:
 
 class TestJobs:
     @pytest.mark.asyncio
-    async def test_create_job_with_ssh_and_http(
+    async def test_create_job_with_http(
         self,
         api: ApiConfig,
         client: aiohttp.ClientSession,
@@ -354,7 +353,6 @@ class TestJobs:
         regular_user: _User,
     ) -> None:
         url = api.jobs_base_url
-        job_submit["container"]["ssh"] = {"port": 7867}
         job_submit["restart_policy"] = "on-failure"
         async with client.post(
             url, headers=regular_user.headers, json=job_submit
@@ -363,8 +361,6 @@ class TestJobs:
             result = await response.json()
             assert result["status"] in ["pending"]
             job_id = result["id"]
-            expected_url = "ssh://nobody@ssh-auth.platform.neuromation.io:22"
-            assert result["ssh_server"] == expected_url
 
         retrieved_job = await jobs_client.get_job_by_id(job_id=job_id)
         assert not retrieved_job["container"]["http"]["requires_auth"]
@@ -376,7 +372,7 @@ class TestJobs:
         assert job_response_payload["restart_policy"] == "on-failure"
 
     @pytest.mark.asyncio
-    async def test_create_job_with_ssh_only(
+    async def test_create_job_without_http(
         self,
         api: ApiConfig,
         client: aiohttp.ClientSession,
@@ -385,7 +381,6 @@ class TestJobs:
         regular_user: _User,
     ) -> None:
         url = api.jobs_base_url
-        job_submit["container"]["ssh"] = {"port": 7867}
         job_submit["container"].pop("http", None)
         async with client.post(
             url, headers=regular_user.headers, json=job_submit
@@ -394,8 +389,6 @@ class TestJobs:
             result = await response.json()
             assert result["status"] in ["pending"]
             job_id = result["id"]
-            expected_url = "ssh://nobody@ssh-auth.platform.neuromation.io:22"
-            assert result["ssh_server"] == expected_url
 
         await jobs_client.long_polling_by_job_id(job_id=job_id, status="succeeded")
         await jobs_client.delete_job(job_id=job_id)
@@ -3999,8 +3992,6 @@ class TestJobs:
                         }
                     ],
                 },
-                "ssh_server": "ssh://nobody@ssh-auth.platform.neuromation.io:22",
-                "ssh_auth_server": "ssh://nobody@ssh-auth.platform.neuromation.io:22",
                 "is_preemptible": True,
                 "pass_config": False,
                 "uri": f"job://test-cluster/{regular_user.name}/{job_id}",
@@ -4042,8 +4033,6 @@ class TestJobs:
                     }
                 ],
             },
-            "ssh_server": "ssh://nobody@ssh-auth.platform.neuromation.io:22",
-            "ssh_auth_server": "ssh://nobody@ssh-auth.platform.neuromation.io:22",
             "is_preemptible": True,
             "pass_config": False,
             "uri": f"job://test-cluster/{regular_user.name}/{job_id}",
@@ -4131,8 +4120,6 @@ class TestJobs:
                     },
                 ],
             },
-            "ssh_server": "ssh://nobody@ssh-auth.platform.neuromation.io:22",
-            "ssh_auth_server": "ssh://nobody@ssh-auth.platform.neuromation.io:22",
             "is_preemptible": False,
             "pass_config": False,
             "uri": f"job://test-cluster/{regular_user.name}/{job_id}",
@@ -4225,8 +4212,6 @@ class TestJobs:
                     },
                     "volumes": [],
                 },
-                "ssh_server": "ssh://nobody@ssh-auth.platform.neuromation.io:22",
-                "ssh_auth_server": "ssh://nobody@ssh-auth.platform.neuromation.io:22",
                 "is_preemptible": False,
                 "pass_config": False,
                 "uri": f"job://test-cluster/{regular_user.name}/{job_id}",
@@ -4313,8 +4298,6 @@ class TestJobs:
                     },
                     "volumes": [],
                 },
-                "ssh_server": "ssh://nobody@ssh-auth.platform.neuromation.io:22",
-                "ssh_auth_server": "ssh://nobody@ssh-auth.platform.neuromation.io:22",
                 "is_preemptible": False,
                 "pass_config": False,
                 "uri": f"job://test-cluster/{regular_user.name}/{job_id}",

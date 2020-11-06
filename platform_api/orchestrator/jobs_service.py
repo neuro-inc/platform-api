@@ -1,6 +1,6 @@
 import json
 import logging
-from dataclasses import dataclass
+from dataclasses import dataclass, replace
 from datetime import datetime, timezone
 from functools import partial
 from pathlib import PurePath
@@ -187,7 +187,6 @@ class JobsService:
         )
         self._dummy_cluster_orchestrator_config = OrchestratorConfig(
             jobs_domain_name_template="{job_id}.missing-cluster",
-            ssh_auth_server="missing-cluster:22",
             resource_pool_types=(),
         )
         self._auth_client = auth_client
@@ -218,18 +217,6 @@ class JobsService:
             # finished, but not yet dematerialized jobs
             # assert job.is_finished and job.materialized
             await self._delete_job_by_id(record.id)
-
-    async def _make_pass_config_token(self, username: str, job_id: str):
-        token_uri = f"token://job/{job_id}"
-        await self._auth_client.grant_user_permissions(
-            username, [Permission(uri=token_uri, action="read")]
-        )
-        return await self._auth_client.get_user_token(username, token_uri)
-
-    async def _revoke_pass_config(self, job: Union[JobRecord, Job]):
-        if job.pass_config:
-            token_uri = f"token://job/{job.id}"
-            await self._auth_client.revoke_user_permissions(job.owner, [token_uri])
 
     async def _update_job_status_by_id(self, job_id: str) -> None:
         try:
@@ -389,6 +376,40 @@ class JobsService:
             details = ", ".join(f"'{s}'" for s in sorted(missing))
             raise JobsServiceException(f"Missing secrets: {details}")
 
+    async def _make_pass_config_token(self, username: str, job_id: str) -> str:
+        token_uri = f"token://job/{job_id}"
+        await self._auth_client.grant_user_permissions(
+            username, [Permission(uri=token_uri, action="read")]
+        )
+        return await self._auth_client.get_user_token(username, token_uri)
+
+    async def _revoke_pass_config(self, job: Union[JobRecord, Job]) -> None:
+        if job.pass_config:
+            token_uri = f"token://job/{job.id}"
+            await self._auth_client.revoke_user_permissions(job.owner, [token_uri])
+
+    async def _setup_pass_config(
+        self, user: User, cluster_name: str, job_request: JobRequest
+    ) -> JobRequest:
+        if NEURO_PASSED_CONFIG in job_request.container.env:
+            raise JobsServiceException(
+                f"Cannot pass config: ENV '{NEURO_PASSED_CONFIG}' " "already specified"
+            )
+        token = await self._make_pass_config_token(user.name, job_request.job_id)
+        pass_config_data = json.dumps(
+            {
+                "token": token,
+                "cluster": cluster_name,
+                "url": str(self._api_base_url),
+            }
+        )
+        new_env = {
+            **job_request.container.env,
+            NEURO_PASSED_CONFIG: pass_config_data,
+        }
+        new_container = replace(job_request.container, env=new_env)
+        return replace(job_request, container=new_container)
+
     async def create_job(
         self,
         job_request: JobRequest,
@@ -444,20 +465,7 @@ class JobsService:
             )
             raise
         if pass_config:
-            if NEURO_PASSED_CONFIG in job_request.container.env:
-                raise JobsServiceException(
-                    f"Cannot pass config: ENV '{NEURO_PASSED_CONFIG}' "
-                    "already specified"
-                )
-            token = await self._make_pass_config_token(user.name, job_request.job_id)
-            pass_config_data = json.dumps(
-                {
-                    "token": token,
-                    "cluster": cluster_name,
-                    "url": str(self._api_base_url),
-                }
-            )
-            job_request.container.env[NEURO_PASSED_CONFIG] = pass_config_data
+            job_request = await self._setup_pass_config(user, cluster_name, job_request)
 
         record = JobRecord.create(
             request=job_request,

@@ -270,7 +270,6 @@ def cluster_config(registry_config: RegistryConfig) -> ClusterConfig:
     storage_config = StorageConfig(host_mount_path=PurePath("/tmp"))
     orchestrator_config = KubeConfig(
         jobs_domain_name_template="{job_id}.jobs",
-        ssh_auth_server="ssh-auth:22",
         endpoint_url="http://k8s:1234",
         resource_pool_types=[ResourcePoolType()],
     )

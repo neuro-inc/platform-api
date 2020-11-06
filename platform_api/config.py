@@ -1,6 +1,5 @@
 from dataclasses import dataclass, field
 from datetime import timedelta
-from pathlib import Path
 from typing import Optional, Sequence
 
 from alembic.config import Config as AlembicConfig
@@ -162,12 +161,3 @@ class Config:
 @dataclass(frozen=True)
 class PlatformConfig:
     server_endpoint_url: URL
-
-
-@dataclass(frozen=True)
-class SSHAuthConfig:
-    platform: PlatformConfig
-    auth: AuthConfig
-    log_fifo: Path
-    env_prefix: str = "NP"
-    jobs_namespace: str = "default"

@@ -119,8 +119,6 @@ class RegistryConfig:
 class OrchestratorConfig:
     jobs_domain_name_template: str
 
-    ssh_auth_server: str
-
     resource_pool_types: Sequence[ResourcePoolType]
 
     is_http_ingress_secure: bool = False

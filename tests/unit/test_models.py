@@ -41,7 +41,6 @@ from platform_api.orchestrator.job_request import (
     Container,
     ContainerHTTPServer,
     ContainerResources,
-    ContainerSSHServer,
     ContainerTPUResource,
     ContainerVolume,
     JobRequest,
@@ -133,20 +132,6 @@ class TestContainerRequestValidator:
             ],
         }
 
-    @pytest.fixture
-    def payload_with_ssh(self) -> Dict[str, Any]:
-        return {
-            "image": "testimage",
-            "resources": {"cpu": 0.1, "memory_mb": 16, "shm": True},
-            "volumes": [
-                {
-                    "src_storage_uri": "storage://test-cluster/",
-                    "dst_path": "/var/storage",
-                }
-            ],
-            "ssh": {"port": 666},
-        }
-
     def test_allowed_volumes(self, payload: Dict[str, Any]) -> None:
         validator = create_container_request_validator(
             allow_volumes=True, cluster_name="test-cluster"
@@ -176,15 +161,6 @@ class TestContainerRequestValidator:
         )
         result = validator.check(payload_with_zero_gpu)
         assert result["resources"]["gpu"] == 0
-
-    def test_with_ssh(self, payload_with_ssh: Dict[str, Any]) -> None:
-        validator = create_container_request_validator(
-            allow_volumes=True, cluster_name="test-cluster"
-        )
-        result = validator.check(payload_with_ssh)
-        assert result["ssh"]
-        assert result["ssh"]["port"]
-        assert result["ssh"]["port"] == 666
 
     def test_with_one_gpu(self, payload_with_one_gpu: Dict[str, Any]) -> None:
         validator = create_container_request_validator(
@@ -383,7 +359,6 @@ class TestJobClusterNameValidator:
             "image": "testimage",
             "command": "arg1 arg2 arg3",
             "resources": {"cpu": 0.1, "memory_mb": 16, "shm": True},
-            "ssh": {"port": 666},
         }
         request = {
             "container": container,
@@ -397,7 +372,6 @@ class TestJobClusterNameValidator:
             "image": "testimage",
             "command": "arg1 arg2 arg3",
             "resources": {"cpu": 0.1, "memory_mb": 16, "shm": True},
-            "ssh": {"port": 666},
         }
         request = {
             "cluster_name": "testcluster",
@@ -427,7 +401,6 @@ class TestJobRequestValidator:
             "image": "testimage",
             "command": "arg1 arg2 arg3",
             "resources": {"cpu": 0.1, "memory_mb": 16, "shm": True},
-            "ssh": {"port": 666},
         }
         request = {
             "container": container,
@@ -444,7 +417,6 @@ class TestJobRequestValidator:
             "image": "testimage",
             "command": "arg1 arg2 arg3",
             "resources": {"cpu": 0.1, "memory_mb": 16, "shm": True},
-            "ssh": {"port": 666},
         }
         request = {
             "container": container,
@@ -461,7 +433,6 @@ class TestJobRequestValidator:
             "image": "testimage",
             "command": "arg1 arg2 arg3",
             "resources": {"cpu": 0.1, "memory_mb": 16, "shm": True},
-            "ssh": {"port": 666},
         }
         request = {
             "container": container,
@@ -479,7 +450,6 @@ class TestJobRequestValidator:
             "image": "testimage",
             "command": "arg1 arg2 arg3",
             "resources": {"cpu": 0.1, "memory_mb": 16, "shm": True},
-            "ssh": {"port": 666},
         }
         request = {
             "container": container,
@@ -495,7 +465,6 @@ class TestJobRequestValidator:
             "image": "testimage",
             "command": "arg1 arg2 arg3",
             "resources": {"cpu": 0.1, "memory_mb": 16, "shm": True},
-            "ssh": {"port": 666},
         }
         request = {
             "container": container,
@@ -547,7 +516,6 @@ class TestJobRequestValidator:
             "image": "testimage",
             "command": "arg1 arg2 arg3",
             "resources": {"cpu": 0.1, "memory_mb": 16, "shm": True},
-            "ssh": {"port": 666},
         }
         request = {
             "container": container,
@@ -645,20 +613,6 @@ class TestJobContainerToJson:
             "image": "image",
             "resources": {"cpu": 0.1, "memory_mb": 16, "gpu": 1, "shm": True},
             "volumes": [],
-        }
-
-    def test_with_ssh(self, storage_config: StorageConfig) -> None:
-        container = Container(
-            image="image",
-            resources=ContainerResources(cpu=0.1, memory_mb=16, gpu=1, shm=True),
-            ssh_server=ContainerSSHServer(port=777),
-        )
-        assert convert_job_container_to_json(container, storage_config) == {
-            "env": {},
-            "image": "image",
-            "resources": {"cpu": 0.1, "memory_mb": 16, "gpu": 1, "shm": True},
-            "volumes": [],
-            "ssh": {"port": 777},
         }
 
     def test_with_working_dir(self, storage_config: StorageConfig) -> None:
@@ -1360,8 +1314,6 @@ async def test_job_to_job_response(mock_orchestrator: MockOrchestrator) -> None:
         },
         "name": "test-job-name",
         "description": "test test description",
-        "ssh_server": "ssh://nobody@ssh-auth:22",
-        "ssh_auth_server": "ssh://nobody@ssh-auth:22",
         "is_preemptible": False,
         "pass_config": False,
         "uri": f"job://test-cluster/compute/{job.id}",
@@ -1457,8 +1409,6 @@ async def test_job_to_job_response_with_job_name_and_http_exposed(
             "resources": {"cpu": 1, "memory_mb": 128},
             "http": {"port": 80, "health_check_path": "/", "requires_auth": False},
         },
-        "ssh_server": "ssh://nobody@ssh-auth:22",
-        "ssh_auth_server": "ssh://nobody@ssh-auth:22",
         "is_preemptible": False,
         "pass_config": False,
         "uri": f"job://test-cluster/{owner_name}/{job.id}",
@@ -1513,8 +1463,6 @@ async def test_job_to_job_response_with_job_name_and_http_exposed_too_long_name(
             "resources": {"cpu": 1, "memory_mb": 128},
             "http": {"port": 80, "health_check_path": "/", "requires_auth": False},
         },
-        "ssh_server": "ssh://nobody@ssh-auth:22",
-        "ssh_auth_server": "ssh://nobody@ssh-auth:22",
         "is_preemptible": False,
         "pass_config": False,
         "uri": f"job://test-cluster/{owner_name}/{job.id}",

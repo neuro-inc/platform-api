@@ -267,18 +267,6 @@ class ContainerHTTPServer:
 
 
 @dataclass(frozen=True)
-class ContainerSSHServer:
-    port: int
-
-    @classmethod
-    def from_primitive(cls, payload: Dict[str, Any]) -> "ContainerSSHServer":
-        return cls(port=payload["port"])
-
-    def to_primitive(self) -> Dict[str, Any]:
-        return asdict(self)
-
-
-@dataclass(frozen=True)
 class Container:
     image: str
     resources: ContainerResources
@@ -290,7 +278,6 @@ class Container:
     secret_volumes: List[SecretContainerVolume] = field(default_factory=list)
     disk_volumes: List[DiskContainerVolume] = field(default_factory=list)
     http_server: Optional[ContainerHTTPServer] = None
-    ssh_server: Optional[ContainerSSHServer] = None
     tty: bool = False
     working_dir: Optional[str] = None
 
@@ -332,12 +319,6 @@ class Container:
     def port(self) -> Optional[int]:
         if self.http_server:
             return self.http_server.port
-        return None
-
-    @property
-    def ssh_port(self) -> Optional[int]:
-        if self.ssh_server:
-            return self.ssh_server.port
         return None
 
     @property
@@ -399,13 +380,11 @@ class Container:
         elif kwargs.get("port") is not None:
             kwargs["http_server"] = ContainerHTTPServer.from_primitive(kwargs)
 
-        if kwargs.get("ssh_server"):
-            ssh_server_desc = kwargs["ssh_server"]
-            container_desc = ContainerSSHServer.from_primitive(ssh_server_desc)
-            kwargs["ssh_server"] = container_desc
-
         kwargs.pop("port", None)
         kwargs.pop("health_check_path", None)
+
+        # previous jobs still have ssh_server stored in database
+        kwargs.pop("ssh_server", None)
 
         # NOTE: `entrypoint` is not not serialized if it's `None` (see issue #804)
         if "entrypoint" not in kwargs:
@@ -438,8 +417,6 @@ class Container:
 
         if self.http_server:
             payload["http_server"] = self.http_server.to_primitive()
-        if self.ssh_server:
-            payload["ssh_server"] = self.ssh_server.to_primitive()
 
         # NOTE: not to serialize `entrypoint` if it's `None` (see issue #804)
         entrypoint = payload.get("entrypoint")

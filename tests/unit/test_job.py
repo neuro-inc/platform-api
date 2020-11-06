@@ -24,7 +24,6 @@ from platform_api.orchestrator.job_request import (
     Container,
     ContainerHTTPServer,
     ContainerResources,
-    ContainerSSHServer,
     ContainerTPUResource,
     ContainerVolume,
     ContainerVolumeFactory,
@@ -335,7 +334,6 @@ class TestContainerBuilder:
             ],
             resources=ContainerResources(cpu=0.1, memory_mb=128, gpu=1, shm=None),
             http_server=ContainerHTTPServer(port=80, health_check_path="/"),
-            ssh_server=None,
             tty=False,
         )
 
@@ -380,43 +378,6 @@ class TestContainerBuilder:
                 memory_mb=128,
                 tpu=ContainerTPUResource(type="v2-8", software_version="1.14"),
             ),
-        )
-
-    def test_from_payload_build_with_ssh(self) -> None:
-        storage_config = StorageConfig(host_mount_path=PurePath("/tmp"))
-        payload = {
-            "image": "testimage",
-            "command": "testcommand",
-            "env": {"TESTVAR": "testvalue"},
-            "resources": {"cpu": 0.1, "memory_mb": 128, "gpu": 1},
-            "http": {"port": 80},
-            "ssh": {"port": 22},
-            "volumes": [
-                {
-                    "src_storage_uri": "storage://test-cluster/path/to/dir",
-                    "dst_path": "/container/path",
-                    "read_only": True,
-                }
-            ],
-        }
-        container = create_container_from_payload(
-            payload, storage_config=storage_config
-        )
-        assert container == Container(
-            image="testimage",
-            command="testcommand",
-            env={"TESTVAR": "testvalue"},
-            volumes=[
-                ContainerVolume(
-                    uri=URL("storage://test-cluster/path/to/dir"),
-                    src_path=PurePath("/tmp/path/to/dir"),
-                    dst_path=PurePath("/container/path"),
-                    read_only=True,
-                )
-            ],
-            resources=ContainerResources(cpu=0.1, memory_mb=128, gpu=1, shm=None),
-            http_server=ContainerHTTPServer(port=80, health_check_path="/"),
-            ssh_server=ContainerSSHServer(port=22),
         )
 
     def test_from_payload_build_with_shm_false(self) -> None:
@@ -477,7 +438,6 @@ class TestContainerBuilder:
             volumes=[],
             resources=ContainerResources(cpu=0.1, memory_mb=128, gpu=1, shm=None),
             http_server=ContainerHTTPServer(port=80, health_check_path="/"),
-            ssh_server=None,
             tty=True,
         )
 
@@ -501,7 +461,6 @@ def job_request_payload() -> Dict[str, Any]:
                 }
             ],
             "http_server": None,
-            "ssh_server": None,
             "tty": False,
         },
     }
@@ -574,25 +533,11 @@ class TestJob:
         )
 
     @pytest.fixture
-    def job_request_with_ssh_and_http(self) -> JobRequest:
+    def job_request_with_http(self) -> JobRequest:
         container = Container(
             image="testimage",
             resources=ContainerResources(cpu=1, memory_mb=128),
             http_server=ContainerHTTPServer(port=1234),
-            ssh_server=ContainerSSHServer(port=4321),
-        )
-        return JobRequest(
-            job_id="testjob",
-            container=container,
-            description="Description of the testjob",
-        )
-
-    @pytest.fixture
-    def job_request_with_ssh(self) -> JobRequest:
-        container = Container(
-            image="testimage",
-            resources=ContainerResources(cpu=1, memory_mb=128),
-            ssh_server=ContainerSSHServer(port=4321),
         )
         return JobRequest(
             job_id="testjob",
@@ -901,53 +846,16 @@ class TestJob:
         assert job.http_url == "https://testjob.jobs"
         assert job.http_url_named == "https://test-job-name--owner.jobs"
 
-    def test_ssh_url(
-        self, mock_orchestrator: MockOrchestrator, job_request_with_ssh: JobRequest
-    ) -> None:
-        job = Job(
-            storage_config=mock_orchestrator.storage_config,
-            orchestrator_config=mock_orchestrator.config,
-            record=JobRecord.create(
-                request=job_request_with_ssh, cluster_name="test-cluster"
-            ),
-        )
-        assert job.ssh_server == "ssh://nobody@ssh-auth:22"
-
-    def test_no_ssh(
-        self, mock_orchestrator: MockOrchestrator, job_request: JobRequest
-    ) -> None:
-        job = Job(
-            storage_config=mock_orchestrator.storage_config,
-            orchestrator_config=mock_orchestrator.config,
-            record=JobRecord.create(request=job_request, cluster_name="test-cluster"),
-        )
-        assert job.ssh_server == "ssh://nobody@ssh-auth:22"
-
-    def test_http_url_and_ssh(
+    def test_http_url_named(
         self,
         mock_orchestrator: MockOrchestrator,
-        job_request_with_ssh_and_http: JobRequest,
+        job_request_with_http: JobRequest,
     ) -> None:
         job = Job(
             storage_config=mock_orchestrator.storage_config,
             orchestrator_config=mock_orchestrator.config,
             record=JobRecord.create(
-                request=job_request_with_ssh_and_http, cluster_name="test-cluster"
-            ),
-        )
-        assert job.http_url == "http://testjob.jobs"
-        assert job.ssh_server == "ssh://nobody@ssh-auth:22"
-
-    def test_http_url_and_ssh_named(
-        self,
-        mock_orchestrator: MockOrchestrator,
-        job_request_with_ssh_and_http: JobRequest,
-    ) -> None:
-        job = Job(
-            storage_config=mock_orchestrator.storage_config,
-            orchestrator_config=mock_orchestrator.config,
-            record=JobRecord.create(
-                request=job_request_with_ssh_and_http,
+                request=job_request_with_http,
                 cluster_name="test-cluster",
                 name="test-job-name",
                 owner="owner",
@@ -955,7 +863,6 @@ class TestJob:
         )
         assert job.http_url == "http://testjob.jobs"
         assert job.http_url_named == "http://test-job-name--owner.jobs"
-        assert job.ssh_server == "ssh://nobody@ssh-auth:22"
 
     def test_to_primitive(
         self, mock_orchestrator: MockOrchestrator, job_request: JobRequest
@@ -1427,29 +1334,6 @@ class TestJobRequest:
         )
         assert request.to_primitive() == job_request_payload
 
-    def test_to_primitive_with_ssh(self, job_request_payload: Dict[str, Any]) -> None:
-        job_request_payload["container"]["ssh_server"] = {"port": 678}
-
-        container = Container(
-            image="testimage",
-            env={"testvar": "testval"},
-            resources=ContainerResources(cpu=1, memory_mb=128),
-            volumes=[
-                ContainerVolume(
-                    uri=URL("storage://path"),
-                    src_path=PurePath("/src/path"),
-                    dst_path=PurePath("/dst/path"),
-                )
-            ],
-            ssh_server=ContainerSSHServer(678),
-        )
-        request = JobRequest(
-            job_id="testjob",
-            description="Description of the testjob",
-            container=container,
-        )
-        assert request.to_primitive() == job_request_payload
-
     def test_to_primitive_with_tty(self, job_request_payload: Dict[str, Any]) -> None:
         job_request_payload["container"]["tty"] = True
 
@@ -1513,26 +1397,6 @@ class TestJobRequest:
         )
         assert request.container == expected_container
 
-    def test_from_primitive_with_ssh(self, job_request_payload: Dict[str, Any]) -> None:
-        job_request_payload["container"]["ssh_server"] = {"port": 678}
-        request = JobRequest.from_primitive(job_request_payload)
-        assert request.job_id == "testjob"
-        assert request.description == "Description of the testjob"
-        expected_container = Container(
-            image="testimage",
-            env={"testvar": "testval"},
-            resources=ContainerResources(cpu=1, memory_mb=128),
-            volumes=[
-                ContainerVolume(
-                    uri=URL("storage://path"),
-                    src_path=PurePath("/src/path"),
-                    dst_path=PurePath("/dst/path"),
-                )
-            ],
-            ssh_server=ContainerSSHServer(port=678),
-        )
-        assert request.container == expected_container
-
     def test_from_primitive_with_shm(
         self, job_request_payload_with_shm: Dict[str, Any]
     ) -> None:
@@ -1564,13 +1428,6 @@ class TestJobRequest:
             JobRequest.from_primitive(job_request_payload_with_shm)
         )
         assert actual == job_request_payload_with_shm
-
-    def test_to_and_from_primitive_with_ssh(
-        self, job_request_payload: Dict[str, Any]
-    ) -> None:
-        job_request_payload["container"]["ssh_server"] = {"port": 678}
-        actual = JobRequest.to_primitive(JobRequest.from_primitive(job_request_payload))
-        assert actual == job_request_payload
 
     def test_to_and_from_primitive_with_tpu(
         self, job_request_payload: Dict[str, Any]
@@ -1658,17 +1515,6 @@ class TestContainerHTTPServer:
             "health_check_path": "/path",
             "requires_auth": False,
         }
-
-
-class TestContainerSSHServer:
-    def test_from_primitive(self) -> None:
-        payload = {"port": 1234}
-        server = ContainerSSHServer.from_primitive(payload)
-        assert server == ContainerSSHServer(port=1234)
-
-    def test_to_primitive(self) -> None:
-        server = ContainerSSHServer(port=1234)
-        assert server.to_primitive() == {"port": 1234}
 
 
 class TestJobStatusItem:

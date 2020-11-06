@@ -48,10 +48,10 @@ from platform_api.resource import (
 
 
 pytest_plugins = [
+    "tests.integration.auth",
     "tests.integration.api",
     "tests.integration.docker",
     "tests.integration.redis",
-    "tests.integration.auth",
     "tests.integration.secrets",
     "tests.integration.diskapi",
     "tests.integration.notifications",
@@ -138,7 +138,6 @@ def kube_config_factory(
         defaults = dict(
             jobs_ingress_class="nginx",
             jobs_domain_name_template="{job_id}.jobs.neu.ro",
-            ssh_auth_server="ssh-auth.platform.neuromation.io:22",
             endpoint_url=cluster["server"],
             cert_authority_data_pem=cert_authority_data_pem,
             cert_authority_path=None,  # disable, only `cert_authority_data_pem` works
