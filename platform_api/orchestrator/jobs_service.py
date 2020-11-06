@@ -1,6 +1,6 @@
 import json
 import logging
-from dataclasses import dataclass
+from dataclasses import dataclass, replace
 from datetime import datetime, timezone
 from functools import partial
 from pathlib import PurePath
@@ -365,6 +365,28 @@ class JobsService:
             details = ", ".join(f"'{s}'" for s in sorted(missing))
             raise JobsServiceException(f"Missing secrets: {details}")
 
+    async def _setup_pass_config(
+        self, user: User, cluster_name: str, job_request: JobRequest
+    ) -> JobRequest:
+        if NEURO_PASSED_CONFIG in job_request.container.env:
+            raise JobsServiceException(
+                f"Cannot pass config: ENV '{NEURO_PASSED_CONFIG}' " "already specified"
+            )
+        token = await self._auth_client.get_user_token(user.name)
+        pass_config_data = json.dumps(
+            {
+                "token": token,
+                "cluster": cluster_name,
+                "url": str(self._api_base_url),
+            }
+        )
+        new_env = {
+            **job_request.container.env,
+            NEURO_PASSED_CONFIG: pass_config_data,
+        }
+        new_container = replace(job_request.container, env=new_env)
+        return replace(job_request, container=new_container)
+
     async def create_job(
         self,
         job_request: JobRequest,
@@ -420,20 +442,7 @@ class JobsService:
             )
             raise
         if pass_config:
-            if NEURO_PASSED_CONFIG in job_request.container.env:
-                raise JobsServiceException(
-                    f"Cannot pass config: ENV '{NEURO_PASSED_CONFIG}' "
-                    "already specified"
-                )
-            token = await self._auth_client.get_user_token(user.name)
-            pass_config_data = json.dumps(
-                {
-                    "token": token,
-                    "cluster": cluster_name,
-                    "url": str(self._api_base_url),
-                }
-            )
-            job_request.container.env[NEURO_PASSED_CONFIG] = pass_config_data
+            job_request = await self._setup_pass_config(user, cluster_name, job_request)
 
         record = JobRecord.create(
             request=job_request,
