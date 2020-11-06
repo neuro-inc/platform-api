@@ -81,6 +81,7 @@ class DatabaseConfig:
 @dataclass(frozen=True)
 class JobsConfig:
     deletion_delay_s: int = 0
+    image_pull_error_delay_s: int = 0
     orphaned_job_owner: str = ""
     jobs_ingress_class: str = "traefik"
     jobs_ingress_oauth_url: URL = URL("https://neu.ro/oauth/authorize")
@@ -88,6 +89,10 @@ class JobsConfig:
     @property
     def deletion_delay(self) -> timedelta:
         return timedelta(seconds=self.deletion_delay_s)
+
+    @property
+    def image_pull_error_delay(self) -> timedelta:
+        return timedelta(seconds=self.image_pull_error_delay_s)
 
 
 @dataclass(frozen=True)
