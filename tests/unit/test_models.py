@@ -1315,6 +1315,7 @@ async def test_job_to_job_response(mock_orchestrator: MockOrchestrator) -> None:
         "name": "test-job-name",
         "description": "test test description",
         "is_preemptible": False,
+        "pass_config": False,
         "uri": f"job://test-cluster/compute/{job.id}",
         "restart_policy": "never",
     }
@@ -1409,6 +1410,7 @@ async def test_job_to_job_response_with_job_name_and_http_exposed(
             "http": {"port": 80, "health_check_path": "/", "requires_auth": False},
         },
         "is_preemptible": False,
+        "pass_config": False,
         "uri": f"job://test-cluster/{owner_name}/{job.id}",
         "restart_policy": "never",
     }
@@ -1462,6 +1464,7 @@ async def test_job_to_job_response_with_job_name_and_http_exposed_too_long_name(
             "http": {"port": 80, "health_check_path": "/", "requires_auth": False},
         },
         "is_preemptible": False,
+        "pass_config": False,
         "uri": f"job://test-cluster/{owner_name}/{job.id}",
         "restart_policy": "never",
     }

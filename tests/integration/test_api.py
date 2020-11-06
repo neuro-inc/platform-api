@@ -28,6 +28,7 @@ from aiohttp.web_exceptions import HTTPCreated, HTTPNotFound
 from neuro_auth_client import Cluster as AuthCluster, Permission, Quota
 
 from platform_api.config import Config
+from platform_api.orchestrator.jobs_service import NEURO_PASSED_CONFIG
 from tests.conftest import random_str
 from tests.integration.secrets import SecretsClient
 from tests.integration.test_config_client import create_config_api
@@ -387,6 +388,30 @@ class TestJobs:
             assert response.status == HTTPAccepted.status_code, await response.text()
             result = await response.json()
             assert result["status"] in ["pending"]
+            job_id = result["id"]
+
+        await jobs_client.long_polling_by_job_id(job_id=job_id, status="succeeded")
+        await jobs_client.delete_job(job_id=job_id)
+
+    @pytest.mark.asyncio
+    async def test_create_job_with_pass_config(
+        self,
+        api: ApiConfig,
+        client: aiohttp.ClientSession,
+        job_submit: Dict[str, Any],
+        jobs_client: JobsClient,
+        regular_user: _User,
+    ) -> None:
+        url = api.jobs_base_url
+        job_submit["pass_config"] = True
+        async with client.post(
+            url, headers=regular_user.headers, json=job_submit
+        ) as response:
+            assert response.status == HTTPAccepted.status_code, await response.text()
+            result = await response.json()
+            assert result["status"] in ["pending"]
+            assert result["pass_config"]
+            assert NEURO_PASSED_CONFIG in result["container"]["env"]
             job_id = result["id"]
 
         await jobs_client.long_polling_by_job_id(job_id=job_id, status="succeeded")
@@ -3968,6 +3993,7 @@ class TestJobs:
                     ],
                 },
                 "is_preemptible": True,
+                "pass_config": False,
                 "uri": f"job://test-cluster/{regular_user.name}/{job_id}",
                 "restart_policy": "never",
             }
@@ -4008,6 +4034,7 @@ class TestJobs:
                 ],
             },
             "is_preemptible": True,
+            "pass_config": False,
             "uri": f"job://test-cluster/{regular_user.name}/{job_id}",
             "restart_policy": "never",
         }
@@ -4094,6 +4121,7 @@ class TestJobs:
                 ],
             },
             "is_preemptible": False,
+            "pass_config": False,
             "uri": f"job://test-cluster/{regular_user.name}/{job_id}",
             "restart_policy": "never",
         }
@@ -4185,6 +4213,7 @@ class TestJobs:
                     "volumes": [],
                 },
                 "is_preemptible": False,
+                "pass_config": False,
                 "uri": f"job://test-cluster/{regular_user.name}/{job_id}",
                 "restart_policy": "never",
             }
@@ -4270,6 +4299,7 @@ class TestJobs:
                     "volumes": [],
                 },
                 "is_preemptible": False,
+                "pass_config": False,
                 "uri": f"job://test-cluster/{regular_user.name}/{job_id}",
                 "restart_policy": "never",
             }

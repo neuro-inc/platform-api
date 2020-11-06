@@ -142,6 +142,7 @@ class Config:
     notifications: NotificationsConfig
     job_policy_enforcer: JobPolicyEnforcerConfig
 
+    api_base_url: URL
     config_url: URL
     admin_url: URL
 

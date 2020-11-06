@@ -1,10 +1,13 @@
+import json
 from dataclasses import replace
 from datetime import datetime, timezone
 from typing import Any, AsyncIterator, Callable
 
 import pytest
 from _pytest.logging import LogCaptureFixture
+from neuro_auth_client import AuthClient
 from notifications_client import Client as NotificationsClient, JobTransition
+from yarl import URL
 
 from platform_api.cluster import Cluster, ClusterConfig, ClusterRegistry
 from platform_api.cluster_config import CircuitBreakerConfig
@@ -19,6 +22,7 @@ from platform_api.orchestrator.job import (
 )
 from platform_api.orchestrator.job_request import JobError, JobRequest, JobStatus
 from platform_api.orchestrator.jobs_service import (
+    NEURO_PASSED_CONFIG,
     GpuQuotaExceededError,
     JobsScheduler,
     JobsService,
@@ -76,6 +80,8 @@ class TestJobsService:
         mock_jobs_storage: MockJobsStorage,
         mock_notifications_client: NotificationsClient,
         test_scheduler: MockJobsScheduler,
+        mock_auth_client: AuthClient,
+        mock_api_base: URL,
     ) -> Callable[..., JobsService]:
         def _factory(deletion_delay_s: int = 0) -> JobsService:
             return JobsService(
@@ -84,6 +90,8 @@ class TestJobsService:
                 jobs_config=JobsConfig(deletion_delay_s=deletion_delay_s),
                 notifications_client=mock_notifications_client,
                 scheduler=test_scheduler,
+                auth_client=mock_auth_client,
+                api_base_url=mock_api_base,
             )
 
         return _factory
@@ -109,6 +117,43 @@ class TestJobsService:
         assert job.id == original_job.id
         assert job.status == JobStatus.PENDING
         assert job.owner == "testuser"
+
+    @pytest.mark.asyncio
+    async def test_create_job_pass_config(
+        self,
+        jobs_service: JobsService,
+        mock_job_request: JobRequest,
+        mock_api_base: URL,
+    ) -> None:
+        user = User(cluster_name="test-cluster", name="testuser", token="test-token")
+        original_job, _ = await jobs_service.create_job(
+            job_request=mock_job_request, user=user, pass_config=True
+        )
+        assert original_job.status == JobStatus.PENDING
+        assert original_job.pass_config
+        passed_data_str = original_job.request.container.env[NEURO_PASSED_CONFIG]
+        passed_data = json.loads(passed_data_str)
+        assert URL(passed_data["url"]) == mock_api_base
+        assert passed_data["token"] == f"token-{user.name}"
+        assert passed_data["cluster"] == original_job.cluster_name
+
+    @pytest.mark.asyncio
+    async def test_create_job_pass_config_env_present(
+        self,
+        jobs_service: JobsService,
+        mock_job_request: JobRequest,
+        mock_api_base: URL,
+    ) -> None:
+        user = User(cluster_name="test-cluster", name="testuser", token="test-token")
+        mock_job_request.container.env[NEURO_PASSED_CONFIG] = "anything"
+        with pytest.raises(
+            JobsServiceException,
+            match=f"Cannot pass config: ENV '{NEURO_PASSED_CONFIG}' "
+            "already specified",
+        ):
+            await jobs_service.create_job(
+                job_request=mock_job_request, user=user, pass_config=True
+            )
 
     @pytest.mark.asyncio
     async def test_create_job_fail(
@@ -1183,6 +1228,8 @@ class TestJobsServiceCluster:
         cluster_registry: ClusterRegistry,
         mock_jobs_storage: MockJobsStorage,
         mock_notifications_client: NotificationsClient,
+        mock_auth_client: AuthClient,
+        mock_api_base: URL,
     ) -> JobsService:
         return JobsService(
             cluster_registry=cluster_registry,
@@ -1190,6 +1237,8 @@ class TestJobsServiceCluster:
             jobs_config=JobsConfig(),
             notifications_client=mock_notifications_client,
             scheduler=JobsScheduler(JobsSchedulerConfig()),
+            auth_client=mock_auth_client,
+            api_base_url=mock_api_base,
         )
 
     @pytest.mark.asyncio
@@ -1221,6 +1270,8 @@ class TestJobsServiceCluster:
         mock_job_request: JobRequest,
         jobs_config: JobsConfig,
         mock_notifications_client: NotificationsClient,
+        mock_auth_client: AuthClient,
+        mock_api_base: URL,
     ) -> None:
         jobs_service = JobsService(
             cluster_registry=cluster_registry,
@@ -1228,6 +1279,8 @@ class TestJobsServiceCluster:
             jobs_config=jobs_config,
             notifications_client=mock_notifications_client,
             scheduler=JobsScheduler(JobsSchedulerConfig()),
+            auth_client=mock_auth_client,
+            api_base_url=mock_api_base,
         )
         await cluster_registry.replace(cluster_config)
 
@@ -1259,6 +1312,8 @@ class TestJobsServiceCluster:
         mock_job_request: JobRequest,
         jobs_config: JobsConfig,
         mock_notifications_client: NotificationsClient,
+        mock_auth_client: AuthClient,
+        mock_api_base: URL,
     ) -> None:
         jobs_service = JobsService(
             cluster_registry=cluster_registry,
@@ -1266,6 +1321,8 @@ class TestJobsServiceCluster:
             jobs_config=jobs_config,
             notifications_client=mock_notifications_client,
             scheduler=JobsScheduler(JobsSchedulerConfig()),
+            auth_client=mock_auth_client,
+            api_base_url=mock_api_base,
         )
         await cluster_registry.replace(cluster_config)
 
@@ -1296,6 +1353,8 @@ class TestJobsServiceCluster:
         mock_job_request: JobRequest,
         jobs_config: JobsConfig,
         mock_notifications_client: NotificationsClient,
+        mock_auth_client: AuthClient,
+        mock_api_base: URL,
     ) -> None:
         jobs_service = JobsService(
             cluster_registry=cluster_registry,
@@ -1303,6 +1362,8 @@ class TestJobsServiceCluster:
             jobs_config=jobs_config,
             notifications_client=mock_notifications_client,
             scheduler=JobsScheduler(JobsSchedulerConfig()),
+            auth_client=mock_auth_client,
+            api_base_url=mock_api_base,
         )
         await cluster_registry.replace(cluster_config)
 
@@ -1332,6 +1393,8 @@ class TestJobsServiceCluster:
         mock_job_request: JobRequest,
         jobs_config: JobsConfig,
         mock_notifications_client: NotificationsClient,
+        mock_auth_client: AuthClient,
+        mock_api_base: URL,
     ) -> None:
         jobs_service = JobsService(
             cluster_registry=cluster_registry,
@@ -1339,6 +1402,8 @@ class TestJobsServiceCluster:
             jobs_config=jobs_config,
             notifications_client=mock_notifications_client,
             scheduler=JobsScheduler(JobsSchedulerConfig()),
+            auth_client=mock_auth_client,
+            api_base_url=mock_api_base,
         )
         await cluster_registry.replace(cluster_config)  # "test-cluster"
         await cluster_registry.replace(replace(cluster_config, name="default"))
@@ -1367,6 +1432,8 @@ class TestJobsServiceCluster:
         mock_job_request: JobRequest,
         jobs_config: JobsConfig,
         mock_notifications_client: NotificationsClient,
+        mock_auth_client: AuthClient,
+        mock_api_base: URL,
     ) -> None:
         jobs_service = JobsService(
             cluster_registry=cluster_registry,
@@ -1374,6 +1441,8 @@ class TestJobsServiceCluster:
             jobs_config=jobs_config,
             notifications_client=mock_notifications_client,
             scheduler=JobsScheduler(JobsSchedulerConfig()),
+            auth_client=mock_auth_client,
+            api_base_url=mock_api_base,
         )
         cluster_config = replace(
             cluster_config, circuit_breaker=CircuitBreakerConfig(open_threshold=1)
@@ -1401,6 +1470,8 @@ class TestJobsServiceCluster:
         mock_job_request: JobRequest,
         jobs_config: JobsConfig,
         mock_notifications_client: NotificationsClient,
+        mock_auth_client: AuthClient,
+        mock_api_base: URL,
     ) -> None:
         jobs_service = JobsService(
             cluster_registry=cluster_registry,
@@ -1408,6 +1479,8 @@ class TestJobsServiceCluster:
             jobs_config=jobs_config,
             notifications_client=mock_notifications_client,
             scheduler=JobsScheduler(JobsSchedulerConfig()),
+            auth_client=mock_auth_client,
+            api_base_url=mock_api_base,
         )
         await cluster_registry.replace(cluster_config)
 
@@ -1432,6 +1505,8 @@ class TestJobsServiceCluster:
         mock_job_request: JobRequest,
         jobs_config: JobsConfig,
         mock_notifications_client: NotificationsClient,
+        mock_auth_client: AuthClient,
+        mock_api_base: URL,
     ) -> None:
         jobs_service = JobsService(
             cluster_registry=cluster_registry,
@@ -1439,6 +1514,8 @@ class TestJobsServiceCluster:
             jobs_config=jobs_config,
             notifications_client=mock_notifications_client,
             scheduler=JobsScheduler(JobsSchedulerConfig()),
+            auth_client=mock_auth_client,
+            api_base_url=mock_api_base,
         )
         await cluster_registry.replace(cluster_config)
 
@@ -1468,6 +1545,8 @@ class TestJobServiceNotification:
         cluster_registry: ClusterRegistry,
         mock_jobs_storage: MockJobsStorage,
         mock_notifications_client: NotificationsClient,
+        mock_auth_client: AuthClient,
+        mock_api_base: URL,
     ) -> Callable[..., JobsService]:
         def _factory(deletion_delay_s: int = 0) -> JobsService:
             return JobsService(
@@ -1476,6 +1555,8 @@ class TestJobServiceNotification:
                 jobs_config=JobsConfig(deletion_delay_s=deletion_delay_s),
                 notifications_client=mock_notifications_client,
                 scheduler=JobsScheduler(JobsSchedulerConfig()),
+                auth_client=mock_auth_client,
+                api_base_url=mock_api_base,
             )
 
         return _factory

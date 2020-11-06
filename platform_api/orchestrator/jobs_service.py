@@ -1,17 +1,20 @@
+import json
 import logging
-from dataclasses import dataclass
+from dataclasses import dataclass, replace
 from datetime import datetime, timezone
 from functools import partial
 from pathlib import PurePath
 from typing import AsyncIterator, Callable, Iterable, List, Optional, Sequence, Tuple
 
 from async_generator import asynccontextmanager
+from neuro_auth_client import AuthClient
 from notifications_client import (
     Client as NotificationsClient,
     JobCannotStartQuotaReached,
     JobTransition,
     QuotaResourceType,
 )
+from yarl import URL
 
 from platform_api.cluster import (
     Cluster,
@@ -53,6 +56,9 @@ from .status import Status
 
 
 logger = logging.getLogger(__file__)
+
+
+NEURO_PASSED_CONFIG = "NEURO_PASSED_CONFIG"
 
 
 class JobsServiceException(Exception):
@@ -156,6 +162,8 @@ class JobsService:
         jobs_config: JobsConfig,
         notifications_client: NotificationsClient,
         scheduler: JobsScheduler,
+        auth_client: AuthClient,
+        api_base_url: URL,
     ) -> None:
         self._cluster_registry = cluster_registry
         self._jobs_storage = jobs_storage
@@ -172,6 +180,8 @@ class JobsService:
             jobs_domain_name_template="{job_id}.missing-cluster",
             resource_pool_types=(),
         )
+        self._auth_client = auth_client
+        self._api_base_url = api_base_url
 
     @asynccontextmanager
     async def _get_cluster(
@@ -354,6 +364,28 @@ class JobsService:
             details = ", ".join(f"'{s}'" for s in sorted(missing))
             raise JobsServiceException(f"Missing secrets: {details}")
 
+    async def _setup_pass_config(
+        self, user: User, cluster_name: str, job_request: JobRequest
+    ) -> JobRequest:
+        if NEURO_PASSED_CONFIG in job_request.container.env:
+            raise JobsServiceException(
+                f"Cannot pass config: ENV '{NEURO_PASSED_CONFIG}' " "already specified"
+            )
+        token = await self._auth_client.get_user_token(user.name)
+        pass_config_data = json.dumps(
+            {
+                "token": token,
+                "cluster": cluster_name,
+                "url": str(self._api_base_url),
+            }
+        )
+        new_env = {
+            **job_request.container.env,
+            NEURO_PASSED_CONFIG: pass_config_data,
+        }
+        new_container = replace(job_request.container, env=new_env)
+        return replace(job_request, container=new_container)
+
     async def create_job(
         self,
         job_request: JobRequest,
@@ -363,6 +395,7 @@ class JobsService:
         job_name: Optional[str] = None,
         tags: Sequence[str] = (),
         is_preemptible: bool = False,
+        pass_config: bool = False,
         schedule_timeout: Optional[float] = None,
         max_run_time_minutes: Optional[int] = None,
         restart_policy: JobRestartPolicy = JobRestartPolicy.NEVER,
@@ -407,6 +440,9 @@ class JobsService:
                 )
             )
             raise
+        if pass_config:
+            job_request = await self._setup_pass_config(user, cluster_name, job_request)
+
         record = JobRecord.create(
             request=job_request,
             owner=user.name,
@@ -421,6 +457,7 @@ class JobsService:
             name=job_name,
             tags=tags,
             is_preemptible=is_preemptible,
+            pass_config=pass_config,
             schedule_timeout=schedule_timeout,
             max_run_time_minutes=max_run_time_minutes,
             restart_policy=restart_policy,

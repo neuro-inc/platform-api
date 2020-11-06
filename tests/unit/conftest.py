@@ -5,6 +5,7 @@ from pathlib import Path, PurePath
 from typing import Any, AsyncIterator, Callable, Dict, Iterator, List, Optional
 
 import pytest
+from neuro_auth_client import AuthClient
 from notifications_client import Client as NotificationsClient
 from notifications_client.notification import AbstractNotification
 from yarl import URL
@@ -175,6 +176,14 @@ class MockNotificationsClient(NotificationsClient):
         return self._sent_notifications
 
 
+class MockAuthClient(AuthClient):
+    def __init__(self) -> None:
+        pass
+
+    async def get_user_token(self, name: str, token: Optional[str] = None) -> str:
+        return f"token-{name}"
+
+
 @pytest.fixture
 def job_request_factory() -> Callable[[], JobRequest]:
     def factory(with_gpu: bool = False) -> JobRequest:
@@ -267,6 +276,11 @@ async def cluster_registry(
 
 
 @pytest.fixture
+def mock_api_base() -> URL:
+    return URL("https://testing.neu.ro/api/v1")
+
+
+@pytest.fixture
 def mock_jobs_storage() -> MockJobsStorage:
     return MockJobsStorage()
 
@@ -274,6 +288,11 @@ def mock_jobs_storage() -> MockJobsStorage:
 @pytest.fixture
 def mock_notifications_client() -> NotificationsClient:
     return MockNotificationsClient()
+
+
+@pytest.fixture
+def mock_auth_client() -> AuthClient:
+    return MockAuthClient()
 
 
 @pytest.fixture
@@ -293,6 +312,8 @@ def jobs_service(
     jobs_config: JobsConfig,
     mock_notifications_client: NotificationsClient,
     scheduler_config: JobsSchedulerConfig,
+    mock_auth_client: AuthClient,
+    mock_api_base: URL,
 ) -> JobsService:
     return JobsService(
         cluster_registry=cluster_registry,
@@ -300,6 +321,8 @@ def jobs_service(
         jobs_config=jobs_config,
         notifications_client=mock_notifications_client,
         scheduler=JobsScheduler(scheduler_config),
+        auth_client=mock_auth_client,
+        api_base_url=mock_api_base,
     )
 
 

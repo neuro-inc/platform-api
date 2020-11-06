@@ -622,6 +622,7 @@ def config_factory(
         )
         config_url = URL("http://localhost:8082/api/v1")
         admin_url = URL("http://localhost:8080/apis/admin/v1")
+        api_base_url = URL("http://localhost:8080/apis/v1")
         return Config(
             server=server_config,
             database=database_config,
@@ -632,6 +633,7 @@ def config_factory(
             cors=CORSConfig(allowed_origins=["https://neu.ro"]),
             config_url=config_url,
             admin_url=admin_url,
+            api_base_url=api_base_url,
             zipkin=ZipkinConfig(URL("https://zipkin:9411"), 1.0),
             **kwargs,
         )
