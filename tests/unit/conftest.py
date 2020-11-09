@@ -209,7 +209,12 @@ class MockAuthClient(AuthClient):
     ) -> None:
         self._revokes.append((name, resources_uris))
 
-    async def get_user_token(self, name: str, token: Optional[str] = None) -> str:
+    async def get_user_token(
+        self,
+        name: str,
+        new_token_uri: Optional[str] = None,
+        token: Optional[str] = None,
+    ) -> str:
         return f"token-{name}"
 
 

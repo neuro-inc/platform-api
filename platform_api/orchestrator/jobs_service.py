@@ -381,7 +381,7 @@ class JobsService:
         await self._auth_client.grant_user_permissions(
             username, [Permission(uri=token_uri, action="read")]
         )
-        return await self._auth_client.get_user_token(username, token_uri)
+        return await self._auth_client.get_user_token(username, new_token_uri=token_uri)
 
     async def _revoke_pass_config(self, job: Union[JobRecord, Job]) -> None:
         if job.pass_config:
