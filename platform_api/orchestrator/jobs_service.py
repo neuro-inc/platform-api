@@ -1,10 +1,20 @@
 import json
 import logging
+from collections import defaultdict
 from dataclasses import dataclass, replace
 from datetime import datetime, timezone
 from functools import partial
 from pathlib import PurePath
-from typing import AsyncIterator, Callable, Iterable, List, Optional, Sequence, Tuple
+from typing import (
+    AsyncIterator,
+    Callable,
+    Dict,
+    Iterable,
+    List,
+    Optional,
+    Sequence,
+    Tuple,
+)
 
 from async_generator import asynccontextmanager
 from neuro_auth_client import AuthClient
@@ -79,6 +89,11 @@ class NonGpuQuotaExceededError(QuotaException):
         super().__init__(f"non-GPU quota exceeded for user '{user}'")
 
 
+class RunningJobsQuotaExceededError(QuotaException):
+    def __init__(self, user: str) -> None:
+        super().__init__(f"jobs limit quota exceeded for user '{user}'")
+
+
 @dataclass(frozen=True)
 class SchedulingResult:
     jobs_to_update: List[JobRecord]
@@ -92,12 +107,55 @@ class JobsScheduler:
     def __init__(
         self,
         config: JobsSchedulerConfig,
+        auth_client: AuthClient,
         current_datetime_factory: Callable[[], datetime] = current_datetime_factory,
     ) -> None:
         self._config = config
+        self._auth_client = auth_client
         self._current_datetime_factory = current_datetime_factory
 
-    def schedule(self, unfinished: List[JobRecord]) -> SchedulingResult:
+    async def _get_user_running_jobs_quota(
+        self, username: str, cluster: str
+    ) -> Optional[int]:
+        auth_user = await self._auth_client.get_user(username)
+        user = User.create_from_auth_user(auth_user)
+        user_cluster = user.get_cluster(cluster)
+        if user_cluster:
+            return user_cluster.jobs_quota
+        return 0  # User has no access to this cluster
+
+    async def _enforce_running_job_quota(
+        self, raw_result: SchedulingResult
+    ) -> SchedulingResult:
+        jobs_to_update: List[JobRecord] = []
+
+        # Grouping by (username, cluster_name):
+        grouped_jobs: Dict[Tuple[str, str], List[JobRecord]] = defaultdict(list)
+        for record in raw_result.jobs_to_update:
+            grouped_jobs[(record.owner, record.cluster_name)].append(record)
+
+        # Filter jobs
+        for (username, cluster), jobs in grouped_jobs.items():
+            quota = await self._get_user_running_jobs_quota(username, cluster)
+            if quota is not None:
+                materialized_jobs = [job for job in jobs if job.materialized]
+                not_materialized = [job for job in jobs if not job.materialized]
+                jobs_to_update.extend(materialized_jobs)
+                free_places = quota - len(materialized_jobs)
+                if free_places > 0:
+                    not_materialized = sorted(
+                        not_materialized, key=lambda job: job.status_history.created_at
+                    )
+                    jobs_to_update.extend(not_materialized[:free_places])
+            else:
+                jobs_to_update.extend(jobs)
+
+        return SchedulingResult(
+            jobs_to_update=jobs_to_update,
+            jobs_to_suspend=raw_result.jobs_to_suspend,
+        )
+
+    async def schedule(self, unfinished: List[JobRecord]) -> SchedulingResult:
         jobs_to_update: List[JobRecord] = []
         jobs_to_suspend: List[JobRecord] = []
         now = self._current_datetime_factory()
@@ -148,10 +206,11 @@ class JobsScheduler:
             else:
                 jobs_to_update.append(job)
 
-        return SchedulingResult(
+        result = SchedulingResult(
             jobs_to_update=jobs_to_update,
             jobs_to_suspend=jobs_to_suspend,
         )
+        return await self._enforce_running_job_quota(result)
 
 
 class JobsService:
@@ -194,7 +253,7 @@ class JobsService:
 
     async def update_jobs_statuses(self) -> None:
         unfinished = await self._jobs_storage.get_unfinished_jobs()
-        result = self._scheduler.schedule(unfinished)
+        result = await self._scheduler.schedule(unfinished)
 
         for record in result.jobs_to_update:
             await self._update_job_status_by_id(record.id)
@@ -326,7 +385,7 @@ class JobsService:
     ) -> None:
         if not user_cluster.has_quota():
             return
-        quota = user_cluster.quota
+        quota = user_cluster.runtime_quota
         run_time_filter = JobFilter(
             owners={user.name}, clusters={user_cluster.name: {}}
         )
@@ -345,6 +404,20 @@ class JobsService:
             and run_time.total_gpu_run_time_delta >= quota.total_gpu_run_time_delta
         ):
             raise GpuQuotaExceededError(user.name)
+
+    async def _raise_for_running_jobs_quota(
+        self, user: User, user_cluster: UserCluster
+    ) -> None:
+        if user_cluster.jobs_quota is None:
+            return
+        running_filter = JobFilter(
+            owners={user.name},
+            clusters={user_cluster.name: {}},
+            statuses={JobStatus(value) for value in JobStatus.active_values()},
+        )
+        running_count = len(await self._jobs_storage.get_all_jobs(running_filter))
+        if running_count >= user_cluster.jobs_quota:
+            raise RunningJobsQuotaExceededError(user.name)
 
     async def _check_secrets(self, cluster_name: str, job_request: JobRequest) -> None:
         grouped_secrets = job_request.container.get_user_secrets()
@@ -396,6 +469,7 @@ class JobsService:
         tags: Sequence[str] = (),
         is_preemptible: bool = False,
         pass_config: bool = False,
+        wait_for_jobs_quota: bool = False,
         schedule_timeout: Optional[float] = None,
         max_run_time_minutes: Optional[int] = None,
         restart_policy: JobRestartPolicy = JobRestartPolicy.NEVER,
@@ -419,7 +493,7 @@ class JobsService:
                 gpu_requested=bool(job_request.container.resources.gpu),
             )
         except GpuQuotaExceededError:
-            quota = user_cluster.quota.total_gpu_run_time_delta
+            quota = user_cluster.runtime_quota.total_gpu_run_time_delta
             await self._notifications_client.notify(
                 JobCannotStartQuotaReached(
                     user_id=user.name,
@@ -430,7 +504,7 @@ class JobsService:
             )
             raise
         except NonGpuQuotaExceededError:
-            quota = user_cluster.quota.total_non_gpu_run_time_delta
+            quota = user_cluster.runtime_quota.total_non_gpu_run_time_delta
             await self._notifications_client.notify(
                 JobCannotStartQuotaReached(
                     user_id=user.name,
@@ -440,6 +514,8 @@ class JobsService:
                 )
             )
             raise
+        if not wait_for_jobs_quota:
+            await self._raise_for_running_jobs_quota(user, user_cluster)
         if pass_config:
             job_request = await self._setup_pass_config(user, cluster_name, job_request)
 

@@ -5,7 +5,12 @@ from pathlib import Path, PurePath
 from typing import Any, AsyncIterator, Callable, Dict, Iterator, List, Optional
 
 import pytest
-from neuro_auth_client import AuthClient
+from neuro_auth_client import (
+    AuthClient,
+    Cluster as AuthCluster,
+    Quota as AuthQuota,
+    User as AuthUser,
+)
 from notifications_client import Client as NotificationsClient
 from notifications_client.notification import AbstractNotification
 from yarl import URL
@@ -178,7 +183,26 @@ class MockNotificationsClient(NotificationsClient):
 
 class MockAuthClient(AuthClient):
     def __init__(self) -> None:
-        pass
+        self.user_to_return = AuthUser(
+            name="testuser",
+            clusters=[
+                AuthCluster(
+                    "default",
+                    quota=AuthQuota(
+                        total_running_jobs=100,
+                    ),
+                ),
+                AuthCluster(
+                    "test-cluster",
+                    quota=AuthQuota(
+                        total_running_jobs=100,
+                    ),
+                ),
+            ],
+        )
+
+    async def get_user(self, name: str, token: Optional[str] = None) -> AuthUser:
+        return self.user_to_return
 
     async def get_user_token(self, name: str, token: Optional[str] = None) -> str:
         return f"token-{name}"
@@ -320,7 +344,7 @@ def jobs_service(
         jobs_storage=mock_jobs_storage,
         jobs_config=jobs_config,
         notifications_client=mock_notifications_client,
-        scheduler=JobsScheduler(scheduler_config),
+        scheduler=JobsScheduler(scheduler_config, mock_auth_client),
         auth_client=mock_auth_client,
         api_base_url=mock_api_base,
     )

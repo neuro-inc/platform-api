@@ -5,7 +5,12 @@ from typing import Any, AsyncIterator, Callable
 
 import pytest
 from _pytest.logging import LogCaptureFixture
-from neuro_auth_client import AuthClient
+from neuro_auth_client import (
+    AuthClient,
+    Cluster as AuthCluster,
+    Quota as AuthQuota,
+    User as AuthUser,
+)
 from notifications_client import Client as NotificationsClient, JobTransition
 from yarl import URL
 
@@ -28,11 +33,13 @@ from platform_api.orchestrator.jobs_service import (
     JobsService,
     JobsServiceException,
     NonGpuQuotaExceededError,
+    RunningJobsQuotaExceededError,
 )
 from platform_api.orchestrator.jobs_storage import JobFilter
-from platform_api.user import User
+from platform_api.user import User, UserCluster
 
 from .conftest import (
+    MockAuthClient,
     MockCluster,
     MockJobsStorage,
     MockNotificationsClient,
@@ -44,7 +51,7 @@ from .conftest import (
 class MockJobsScheduler(JobsScheduler):
     _now: datetime
 
-    def __init__(self) -> None:
+    def __init__(self, auth_client: AuthClient) -> None:
         self._now = datetime.now(timezone.utc)
         super().__init__(
             JobsSchedulerConfig(
@@ -52,6 +59,7 @@ class MockJobsScheduler(JobsScheduler):
                 run_quantum_sec=10,
                 max_suspended_time_sec=100,
             ),
+            auth_client,
             self.current_datetime_factory,
         )
 
@@ -70,8 +78,8 @@ class MockJobsScheduler(JobsScheduler):
 
 class TestJobsService:
     @pytest.fixture
-    def test_scheduler(self) -> MockJobsScheduler:
-        return MockJobsScheduler()
+    def test_scheduler(self, mock_auth_client: AuthClient) -> MockJobsScheduler:
+        return MockJobsScheduler(mock_auth_client)
 
     @pytest.fixture
     def jobs_service_factory(
@@ -737,6 +745,79 @@ class TestJobsService:
         assert not job.materialized
 
     @pytest.mark.asyncio
+    async def test_update_jobs_handles_running_quota(
+        self,
+        jobs_service_factory: Callable[..., JobsService],
+        mock_orchestrator: MockOrchestrator,
+        mock_auth_client: MockAuthClient,
+        job_request_factory: Callable[[], JobRequest],
+    ) -> None:
+        jobs_service = jobs_service_factory(deletion_delay_s=60)
+
+        user = User(
+            name="testuser",
+            token="",
+            clusters=[UserCluster("test-cluster", jobs_quota=5)],
+        )
+        mock_auth_client.user_to_return = AuthUser(
+            "testuser",
+            clusters=[
+                AuthCluster("test-cluster", quota=AuthQuota(total_running_jobs=5))
+            ],
+        )
+        jobs = []
+
+        # Start bunch of jobs
+        for _ in range(10):
+            job, _ = await jobs_service.create_job(
+                job_request=job_request_factory(), user=user, wait_for_jobs_quota=True
+            )
+            assert job.status == JobStatus.PENDING
+            jobs.append(job)
+
+        await jobs_service.update_jobs_statuses()
+
+        # Only 5 first should be materialized:
+        for job in jobs[:5]:
+            job = await jobs_service.get_job(job.id)
+            assert job.status == JobStatus.PENDING
+            assert job.materialized
+        for job in jobs[5:]:
+            job = await jobs_service.get_job(job.id)
+            assert job.status == JobStatus.PENDING
+            assert not job.materialized
+
+        for job in jobs[:5]:
+            mock_orchestrator.update_status_to_return_single(
+                job.id, JobStatus.SUCCEEDED
+            )
+
+        # Two ticks - first will move remove running from queue,
+        # second will start pending
+        await jobs_service.update_jobs_statuses()
+        await jobs_service.update_jobs_statuses()
+
+        for job in jobs[:5]:
+            job = await jobs_service.get_job(job.id)
+            assert job.status == JobStatus.SUCCEEDED
+
+        for job in jobs[5:]:
+            job = await jobs_service.get_job(job.id)
+            assert job.status == JobStatus.PENDING
+            assert job.materialized
+
+        for job in jobs[5:]:
+            mock_orchestrator.update_status_to_return_single(
+                job.id, JobStatus.SUCCEEDED
+            )
+
+        await jobs_service.update_jobs_statuses()
+
+        for job in jobs:
+            job = await jobs_service.get_job(job.id)
+            assert job.status == JobStatus.SUCCEEDED
+
+    @pytest.mark.asyncio
     async def test_update_jobs_preemptible_additional_when_no_pending(
         self,
         jobs_service_factory: Callable[..., JobsService],
@@ -1211,6 +1292,56 @@ class TestJobsService:
         job, _ = await jobs_service.create_job(request, user)
         assert job.status == JobStatus.PENDING
 
+    @pytest.mark.asyncio
+    async def test_raise_for_jobs_limit(
+        self,
+        jobs_service: JobsService,
+        job_request_factory: Callable[..., JobRequest],
+    ) -> None:
+        user = User(
+            name="testuser",
+            token="token",
+            clusters=[
+                UserCluster(
+                    name="test-cluster",
+                    jobs_quota=5,
+                )
+            ],
+        )
+        for _ in range(5):
+            request = job_request_factory()
+            await jobs_service.create_job(request, user)
+
+        request = job_request_factory()
+
+        with pytest.raises(RunningJobsQuotaExceededError):
+            await jobs_service.create_job(request, user)
+
+    @pytest.mark.asyncio
+    async def test_no_raise_for_jobs_limit_if_wait_flag(
+        self,
+        jobs_service: JobsService,
+        job_request_factory: Callable[..., JobRequest],
+    ) -> None:
+        user = User(
+            name="testuser",
+            token="token",
+            clusters=[
+                UserCluster(
+                    name="test-cluster",
+                    jobs_quota=5,
+                )
+            ],
+        )
+        for _ in range(5):
+            request = job_request_factory()
+            await jobs_service.create_job(request, user)
+
+        request = job_request_factory()
+
+        # Should not raise anything:
+        await jobs_service.create_job(request, user, wait_for_jobs_quota=True)
+
 
 class TestJobsServiceCluster:
     @pytest.fixture
@@ -1236,7 +1367,7 @@ class TestJobsServiceCluster:
             jobs_storage=mock_jobs_storage,
             jobs_config=JobsConfig(),
             notifications_client=mock_notifications_client,
-            scheduler=JobsScheduler(JobsSchedulerConfig()),
+            scheduler=JobsScheduler(JobsSchedulerConfig(), mock_auth_client),
             auth_client=mock_auth_client,
             api_base_url=mock_api_base,
         )
@@ -1278,7 +1409,7 @@ class TestJobsServiceCluster:
             jobs_storage=mock_jobs_storage,
             jobs_config=jobs_config,
             notifications_client=mock_notifications_client,
-            scheduler=JobsScheduler(JobsSchedulerConfig()),
+            scheduler=JobsScheduler(JobsSchedulerConfig(), mock_auth_client),
             auth_client=mock_auth_client,
             api_base_url=mock_api_base,
         )
@@ -1320,7 +1451,7 @@ class TestJobsServiceCluster:
             jobs_storage=mock_jobs_storage,
             jobs_config=jobs_config,
             notifications_client=mock_notifications_client,
-            scheduler=JobsScheduler(JobsSchedulerConfig()),
+            scheduler=JobsScheduler(JobsSchedulerConfig(), mock_auth_client),
             auth_client=mock_auth_client,
             api_base_url=mock_api_base,
         )
@@ -1361,7 +1492,7 @@ class TestJobsServiceCluster:
             jobs_storage=mock_jobs_storage,
             jobs_config=jobs_config,
             notifications_client=mock_notifications_client,
-            scheduler=JobsScheduler(JobsSchedulerConfig()),
+            scheduler=JobsScheduler(JobsSchedulerConfig(), mock_auth_client),
             auth_client=mock_auth_client,
             api_base_url=mock_api_base,
         )
@@ -1401,7 +1532,7 @@ class TestJobsServiceCluster:
             jobs_storage=mock_jobs_storage,
             jobs_config=jobs_config,
             notifications_client=mock_notifications_client,
-            scheduler=JobsScheduler(JobsSchedulerConfig()),
+            scheduler=JobsScheduler(JobsSchedulerConfig(), mock_auth_client),
             auth_client=mock_auth_client,
             api_base_url=mock_api_base,
         )
@@ -1440,7 +1571,7 @@ class TestJobsServiceCluster:
             jobs_storage=mock_jobs_storage,
             jobs_config=jobs_config,
             notifications_client=mock_notifications_client,
-            scheduler=JobsScheduler(JobsSchedulerConfig()),
+            scheduler=JobsScheduler(JobsSchedulerConfig(), mock_auth_client),
             auth_client=mock_auth_client,
             api_base_url=mock_api_base,
         )
@@ -1478,7 +1609,7 @@ class TestJobsServiceCluster:
             jobs_storage=mock_jobs_storage,
             jobs_config=jobs_config,
             notifications_client=mock_notifications_client,
-            scheduler=JobsScheduler(JobsSchedulerConfig()),
+            scheduler=JobsScheduler(JobsSchedulerConfig(), mock_auth_client),
             auth_client=mock_auth_client,
             api_base_url=mock_api_base,
         )
@@ -1513,7 +1644,7 @@ class TestJobsServiceCluster:
             jobs_storage=mock_jobs_storage,
             jobs_config=jobs_config,
             notifications_client=mock_notifications_client,
-            scheduler=JobsScheduler(JobsSchedulerConfig()),
+            scheduler=JobsScheduler(JobsSchedulerConfig(), mock_auth_client),
             auth_client=mock_auth_client,
             api_base_url=mock_api_base,
         )
@@ -1554,7 +1685,7 @@ class TestJobServiceNotification:
                 jobs_storage=mock_jobs_storage,
                 jobs_config=JobsConfig(deletion_delay_s=deletion_delay_s),
                 notifications_client=mock_notifications_client,
-                scheduler=JobsScheduler(JobsSchedulerConfig()),
+                scheduler=JobsScheduler(JobsSchedulerConfig(), mock_auth_client),
                 auth_client=mock_auth_client,
                 api_base_url=mock_api_base,
             )

@@ -337,7 +337,7 @@ async def create_app(
                 jobs_storage=jobs_storage,
                 jobs_config=config.jobs,
                 notifications_client=notifications_client,
-                scheduler=JobsScheduler(config.scheduler),
+                scheduler=JobsScheduler(config.scheduler, auth_client=auth_client),
                 auth_client=auth_client,
                 api_base_url=config.api_base_url,
             )

@@ -93,7 +93,7 @@ class StatsHandler:
             cluster_payloads.append(
                 {
                     "name": cluster.name,
-                    "quota": convert_run_time_to_response(cluster.quota),
+                    "quota": convert_run_time_to_response(cluster.runtime_quota),
                     "jobs": convert_run_time_to_response(run_time),
                 }
             )
