@@ -498,6 +498,7 @@ class Job:
         record: JobRecord,
         current_datetime_factory: Callable[[], datetime] = current_datetime_factory,
         is_forced_to_preemptible_pool: bool = False,
+        image_pull_error_delay: timedelta = timedelta(minutes=2),
     ) -> None:
         """
         :param bool is_forced_to_preemptible_pool:
@@ -520,6 +521,7 @@ class Job:
         self._is_preemptible = record.is_preemptible
         self._pass_config = record.pass_config
         self._is_forced_to_preemptible_pool = is_forced_to_preemptible_pool
+        self._image_pull_error_delay = image_pull_error_delay
 
     @property
     def id(self) -> str:
@@ -627,7 +629,9 @@ class Job:
                 JobStatusReason.ERR_IMAGE_PULL,
                 JobStatusReason.IMAGE_PULL_BACK_OFF,
             ):
-                return "Image can not be pulled"
+                now = self._current_datetime_factory()
+                if now - status_item.transition_time > self._image_pull_error_delay:
+                    return "Image can not be pulled"
             if status_item.reason == JobStatusReason.INVALID_IMAGE_NAME:
                 return "Invalid image name"
         return None
