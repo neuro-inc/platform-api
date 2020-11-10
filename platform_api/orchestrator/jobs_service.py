@@ -5,10 +5,19 @@ from dataclasses import dataclass, replace
 from datetime import datetime, timezone
 from functools import partial
 from pathlib import PurePath
-from typing import AsyncIterator, Callable, Iterable, List, Optional, Sequence, Tuple
+from typing import (
+    AsyncIterator,
+    Callable,
+    Iterable,
+    List,
+    Optional,
+    Sequence,
+    Tuple,
+    Union,
+)
 
 from async_generator import asynccontextmanager
-from neuro_auth_client import AuthClient
+from neuro_auth_client import AuthClient, Permission
 from notifications_client import (
     Client as NotificationsClient,
     JobCannotStartQuotaReached,
@@ -245,6 +254,7 @@ class JobsService:
                         description=str(cluster_err),
                     )
                     record.materialized = False
+                    await self._revoke_pass_config(record)
                 except ClusterNotAvailable:
                     # skipping job status update
                     pass
@@ -258,7 +268,6 @@ class JobsService:
             async with self._update_job_in_storage(job_id) as record:
                 await self._delete_cluster_job(record)
 
-                # marking finished job as deleted
                 record.status = JobStatus.SUSPENDED
                 record.materialized = False
         except JobStorageTransactionError:
@@ -292,6 +301,7 @@ class JobsService:
                     description="The job could not be started.",
                 )
                 job.materialized = False
+                await self._revoke_pass_config(job)
         else:
             try:
                 status_item = await orchestrator.get_job_status(job)
@@ -310,6 +320,7 @@ class JobsService:
                     description="The job could not be scheduled or was preempted.",
                 )
                 job.materialized = False
+                await self._revoke_pass_config(job)
 
         if old_status_item != status_item:
             job.status_history.current = status_item
@@ -327,6 +338,7 @@ class JobsService:
 
                 # marking finished job as deleted
                 record.materialized = False
+                await self._revoke_pass_config(record)
         except JobStorageTransactionError:
             # intentionally ignoring any transaction failures here because
             # the job may have been changed and a retry is needed.
@@ -375,6 +387,18 @@ class JobsService:
             details = ", ".join(f"'{s}'" for s in sorted(missing))
             raise JobsServiceException(f"Missing secrets: {details}")
 
+    async def _make_pass_config_token(self, username: str, job_id: str) -> str:
+        token_uri = f"token://job/{job_id}"
+        await self._auth_client.grant_user_permissions(
+            username, [Permission(uri=token_uri, action="read")]
+        )
+        return await self._auth_client.get_user_token(username, new_token_uri=token_uri)
+
+    async def _revoke_pass_config(self, job: Union[JobRecord, Job]) -> None:
+        if job.pass_config:
+            token_uri = f"token://job/{job.id}"
+            await self._auth_client.revoke_user_permissions(job.owner, [token_uri])
+
     async def _setup_pass_config(
         self, user: User, cluster_name: str, job_request: JobRequest
     ) -> JobRequest:
@@ -382,7 +406,7 @@ class JobsService:
             raise JobsServiceException(
                 f"Cannot pass config: ENV '{NEURO_PASSED_CONFIG}' " "already specified"
             )
-        token = await self._auth_client.get_user_token(user.name)
+        token = await self._make_pass_config_token(user.name, job_request.job_id)
         pass_config_data = base64.b64encode(
             json.dumps(
                 {
