@@ -1,3 +1,4 @@
+import base64
 import json
 from dataclasses import replace
 from datetime import datetime, timezone
@@ -8,6 +9,7 @@ from _pytest.logging import LogCaptureFixture
 from neuro_auth_client import (
     AuthClient,
     Cluster as AuthCluster,
+    Permission,
     Quota as AuthQuota,
     User as AuthUser,
 )
@@ -91,11 +93,16 @@ class TestJobsService:
         mock_auth_client: AuthClient,
         mock_api_base: URL,
     ) -> Callable[..., JobsService]:
-        def _factory(deletion_delay_s: int = 0) -> JobsService:
+        def _factory(
+            deletion_delay_s: int = 0, image_pull_error_delay_s: int = 0
+        ) -> JobsService:
             return JobsService(
                 cluster_registry=cluster_registry,
                 jobs_storage=mock_jobs_storage,
-                jobs_config=JobsConfig(deletion_delay_s=deletion_delay_s),
+                jobs_config=JobsConfig(
+                    deletion_delay_s=deletion_delay_s,
+                    image_pull_error_delay_s=image_pull_error_delay_s,
+                ),
                 notifications_client=mock_notifications_client,
                 scheduler=test_scheduler,
                 auth_client=mock_auth_client,
@@ -132,6 +139,7 @@ class TestJobsService:
         jobs_service: JobsService,
         mock_job_request: JobRequest,
         mock_api_base: URL,
+        mock_auth_client: MockAuthClient,
     ) -> None:
         user = User(cluster_name="test-cluster", name="testuser", token="test-token")
         original_job, _ = await jobs_service.create_job(
@@ -140,10 +148,118 @@ class TestJobsService:
         assert original_job.status == JobStatus.PENDING
         assert original_job.pass_config
         passed_data_str = original_job.request.container.env[NEURO_PASSED_CONFIG]
-        passed_data = json.loads(passed_data_str)
+        passed_data = json.loads(base64.b64decode(passed_data_str).decode())
         assert URL(passed_data["url"]) == mock_api_base
         assert passed_data["token"] == f"token-{user.name}"
         assert passed_data["cluster"] == original_job.cluster_name
+        token_uri = f"token://job/{original_job.id}"
+        assert mock_auth_client.grants[0] == (
+            user.name,
+            [Permission(uri=token_uri, action="read")],
+        )
+
+    @pytest.mark.asyncio
+    async def test_pass_config_revoke_after_complete(
+        self,
+        jobs_service: JobsService,
+        mock_job_request: JobRequest,
+        mock_auth_client: MockAuthClient,
+        mock_orchestrator: MockOrchestrator,
+    ) -> None:
+        user = User(cluster_name="test-cluster", name="testuser", token="test-token")
+        original_job, _ = await jobs_service.create_job(
+            job_request=mock_job_request, user=user, pass_config=True
+        )
+
+        mock_orchestrator.update_status_to_return(JobStatus.SUCCEEDED)
+        await jobs_service.update_jobs_statuses()
+        token_uri = f"token://job/{original_job.id}"
+        assert mock_auth_client._revokes[0] == (user.name, [token_uri])
+
+    @pytest.mark.asyncio
+    async def test_pass_config_revoke_after_failure(
+        self,
+        jobs_service: JobsService,
+        mock_job_request: JobRequest,
+        mock_auth_client: MockAuthClient,
+        mock_orchestrator: MockOrchestrator,
+    ) -> None:
+        user = User(cluster_name="test-cluster", name="testuser", token="test-token")
+        original_job, _ = await jobs_service.create_job(
+            job_request=mock_job_request, user=user, pass_config=True
+        )
+
+        mock_orchestrator.update_status_to_return(JobStatus.FAILED)
+        await jobs_service.update_jobs_statuses()
+        token_uri = f"token://job/{original_job.id}"
+        assert mock_auth_client._revokes[0] == (user.name, [token_uri])
+
+    @pytest.mark.asyncio
+    async def test_pass_config_revoke_fail_to_start(
+        self,
+        jobs_service: JobsService,
+        mock_job_request: JobRequest,
+        mock_auth_client: MockAuthClient,
+        mock_orchestrator: MockOrchestrator,
+    ) -> None:
+        user = User(cluster_name="test-cluster", name="testuser", token="test-token")
+        original_job, _ = await jobs_service.create_job(
+            job_request=mock_job_request, user=user, pass_config=True
+        )
+
+        def _f(job: Job) -> Exception:
+            raise JobError(f"Bad job {job.id}")
+
+        mock_orchestrator.raise_on_start_job_status = True
+        mock_orchestrator.get_job_status_exc_factory = _f
+        await jobs_service.update_jobs_statuses()
+
+        token_uri = f"token://job/{original_job.id}"
+        assert mock_auth_client._revokes[0] == (user.name, [token_uri])
+
+    @pytest.mark.asyncio
+    async def test_pass_config_revoke_fail_on_update(
+        self,
+        jobs_service: JobsService,
+        mock_job_request: JobRequest,
+        mock_auth_client: MockAuthClient,
+        mock_orchestrator: MockOrchestrator,
+    ) -> None:
+        user = User(cluster_name="test-cluster", name="testuser", token="test-token")
+        original_job, _ = await jobs_service.create_job(
+            job_request=mock_job_request, user=user, pass_config=True
+        )
+
+        await jobs_service.update_jobs_statuses()
+        mock_orchestrator.raise_on_get_job_status = True
+        await jobs_service.update_jobs_statuses()
+
+        token_uri = f"token://job/{original_job.id}"
+        assert mock_auth_client._revokes[0] == (user.name, [token_uri])
+
+    @pytest.mark.asyncio
+    async def test_pass_config_revoke_cluster_unavail(
+        self,
+        jobs_service: JobsService,
+        mock_job_request: JobRequest,
+        mock_auth_client: MockAuthClient,
+        mock_orchestrator: MockOrchestrator,
+        cluster_registry: ClusterRegistry,
+        cluster_config: ClusterConfig,
+    ) -> None:
+        user = User(cluster_name="test-cluster", name="testuser", token="test-token")
+        original_job, _ = await jobs_service.create_job(
+            job_request=mock_job_request, user=user, pass_config=True
+        )
+
+        mock_orchestrator.update_status_to_return(JobStatus.RUNNING)
+        await jobs_service.update_jobs_statuses()
+
+        await cluster_registry.remove(cluster_config.name)
+        await jobs_service.update_jobs_statuses()
+
+        token_uri = f"token://job/{original_job.id}"
+        assert mock_auth_client._revokes[0] == (user.name, [token_uri])
 
     @pytest.mark.asyncio
     async def test_create_job_pass_config_env_present(
@@ -305,9 +421,11 @@ class TestJobsService:
         with pytest.raises(
             JobsServiceException, match="Failed to create job: transaction failed"
         ):
-            job, _ = await jobs_service.create_job(request, user, job_name=job_name)
-            # check that the job was cleaned up:
-            assert job in mock_orchestrator.get_successfully_deleted_jobs()
+            await jobs_service.create_job(request, user, job_name=job_name)
+        # check that the job was cleaned up:
+        assert request.job_id in {
+            job.id for job in mock_orchestrator.get_successfully_deleted_jobs()
+        }
 
     @pytest.mark.asyncio
     async def test_create_job__clean_up_the_job_on_transaction_error__fail(
@@ -329,8 +447,10 @@ class TestJobsService:
             JobsServiceException, match="Failed to create job: transaction failed"
         ):
             job, _ = await jobs_service.create_job(request, user, job_name=job_name)
-            # check that the job failed to be cleaned up (failure ignored):
-            assert job not in mock_orchestrator.get_successfully_deleted_jobs()
+        # check that the job failed to be cleaned up (failure ignored):
+        assert request.job_id not in {
+            job.id for job in mock_orchestrator.get_successfully_deleted_jobs()
+        }
 
     @pytest.mark.asyncio
     async def test_get_status_by_job_id(
@@ -677,6 +797,48 @@ class TestJobsService:
         status_item = job.status_history.last
         assert status_item.reason == JobStatusReason.COLLECTED
         assert status_item.description == description
+
+    @pytest.mark.asyncio
+    @pytest.mark.parametrize(
+        "reason",
+        [
+            JobStatusReason.ERR_IMAGE_PULL,
+            JobStatusReason.IMAGE_PULL_BACK_OFF,
+        ],
+    )
+    async def test_update_jobs_statuses_pending_errimagepull_with_delay(
+        self,
+        jobs_service_factory: Callable[..., JobsService],
+        mock_orchestrator: MockOrchestrator,
+        job_request_factory: Callable[[], JobRequest],
+        reason: str,
+    ) -> None:
+        jobs_service = jobs_service_factory(image_pull_error_delay_s=60)
+
+        user = User(cluster_name="test-cluster", name="testuser", token="")
+        original_job, _ = await jobs_service.create_job(
+            job_request=job_request_factory(), user=user
+        )
+        assert original_job.status == JobStatus.PENDING
+
+        await jobs_service.update_jobs_statuses()
+
+        job = await jobs_service.get_job(job_id=original_job.id)
+        assert job.status == JobStatus.PENDING
+        assert not job.is_finished
+        assert job.finished_at is None
+        assert job.materialized
+        status_item = job.status_history.last
+        assert status_item.reason == JobStatusReason.CONTAINER_CREATING
+        assert status_item.description is None
+
+        mock_orchestrator.update_reason_to_return(reason)
+        await jobs_service.update_jobs_statuses()
+
+        job = await jobs_service.get_job(job_id=original_job.id)
+        assert job.status == JobStatus.PENDING
+        status_item = job.status_history.last
+        assert status_item.reason == reason
 
     @pytest.mark.asyncio
     async def test_update_jobs_statuses_pending_scale_up(

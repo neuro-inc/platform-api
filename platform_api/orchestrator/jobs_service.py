@@ -1,3 +1,4 @@
+import base64
 import json
 import logging
 from collections import defaultdict
@@ -14,10 +15,11 @@ from typing import (
     Optional,
     Sequence,
     Tuple,
+    Union,
 )
 
 from async_generator import asynccontextmanager
-from neuro_auth_client import AuthClient
+from neuro_auth_client import AuthClient, Permission
 from notifications_client import (
     Client as NotificationsClient,
     JobCannotStartQuotaReached,
@@ -268,16 +270,26 @@ class JobsService:
             # assert job.is_finished and job.materialized
             await self._delete_job_by_id(record.id)
 
+    def _make_job(self, record: JobRecord, cluster: Optional[Cluster] = None) -> Job:
+        if cluster is not None:
+            storage_config = cluster.config.storage
+            orchestrator_config = cluster.orchestrator.config
+        else:
+            storage_config = self._dummy_cluster_storage_config
+            orchestrator_config = self._dummy_cluster_orchestrator_config
+        return Job(
+            storage_config=storage_config,
+            orchestrator_config=orchestrator_config,
+            record=record,
+            image_pull_error_delay=self._jobs_config.image_pull_error_delay,
+        )
+
     async def _update_job_status_by_id(self, job_id: str) -> None:
         try:
             async with self._update_job_in_storage(job_id) as record:
                 try:
                     async with self._get_cluster(record.cluster_name) as cluster:
-                        job = Job(
-                            storage_config=cluster.config.storage,
-                            orchestrator_config=cluster.orchestrator.config,
-                            record=record,
-                        )
+                        job = self._make_job(record, cluster)
                         await self._update_job_status(cluster.orchestrator, job)
                         job.collect_if_needed()
                 except ClusterNotFound as cluster_err:
@@ -293,6 +305,7 @@ class JobsService:
                         description=str(cluster_err),
                     )
                     record.materialized = False
+                    await self._revoke_pass_config(record)
                 except ClusterNotAvailable:
                     # skipping job status update
                     pass
@@ -306,7 +319,6 @@ class JobsService:
             async with self._update_job_in_storage(job_id) as record:
                 await self._delete_cluster_job(record)
 
-                # marking finished job as deleted
                 record.status = JobStatus.SUSPENDED
                 record.materialized = False
         except JobStorageTransactionError:
@@ -340,6 +352,7 @@ class JobsService:
                     description="The job could not be started.",
                 )
                 job.materialized = False
+                await self._revoke_pass_config(job)
         else:
             try:
                 status_item = await orchestrator.get_job_status(job)
@@ -358,6 +371,7 @@ class JobsService:
                     description="The job could not be scheduled or was preempted.",
                 )
                 job.materialized = False
+                await self._revoke_pass_config(job)
 
         if old_status_item != status_item:
             job.status_history.current = status_item
@@ -375,6 +389,7 @@ class JobsService:
 
                 # marking finished job as deleted
                 record.materialized = False
+                await self._revoke_pass_config(record)
         except JobStorageTransactionError:
             # intentionally ignoring any transaction failures here because
             # the job may have been changed and a retry is needed.
@@ -437,6 +452,18 @@ class JobsService:
             details = ", ".join(f"'{s}'" for s in sorted(missing))
             raise JobsServiceException(f"Missing secrets: {details}")
 
+    async def _make_pass_config_token(self, username: str, job_id: str) -> str:
+        token_uri = f"token://job/{job_id}"
+        await self._auth_client.grant_user_permissions(
+            username, [Permission(uri=token_uri, action="read")]
+        )
+        return await self._auth_client.get_user_token(username, new_token_uri=token_uri)
+
+    async def _revoke_pass_config(self, job: Union[JobRecord, Job]) -> None:
+        if job.pass_config:
+            token_uri = f"token://job/{job.id}"
+            await self._auth_client.revoke_user_permissions(job.owner, [token_uri])
+
     async def _setup_pass_config(
         self, user: User, cluster_name: str, job_request: JobRequest
     ) -> JobRequest:
@@ -444,14 +471,16 @@ class JobsService:
             raise JobsServiceException(
                 f"Cannot pass config: ENV '{NEURO_PASSED_CONFIG}' " "already specified"
             )
-        token = await self._auth_client.get_user_token(user.name)
-        pass_config_data = json.dumps(
-            {
-                "token": token,
-                "cluster": cluster_name,
-                "url": str(self._api_base_url),
-            }
-        )
+        token = await self._make_pass_config_token(user.name, job_request.job_id)
+        pass_config_data = base64.b64encode(
+            json.dumps(
+                {
+                    "token": token,
+                    "cluster": cluster_name,
+                    "url": str(self._api_base_url),
+                }
+            ).encode()
+        ).decode()
         new_env = {
             **job_request.container.env,
             NEURO_PASSED_CONFIG: pass_config_data,
@@ -557,11 +586,7 @@ class JobsService:
         try:
             async with self._create_job_in_storage(record) as record:
                 async with self._get_cluster(record.cluster_name) as cluster:
-                    job = Job(
-                        storage_config=cluster.config.storage,
-                        orchestrator_config=cluster.orchestrator.config,
-                        record=record,
-                    )
+                    job = self._make_job(record, cluster)
                     await cluster.orchestrator.prepare_job(job)
             return job, Status.create(job.status)
 
@@ -604,25 +629,15 @@ class JobsService:
             async with self._get_cluster(
                 record.cluster_name, tolerate_unavailable=True
             ) as cluster:
-                return Job(
-                    storage_config=cluster.config.storage,
-                    orchestrator_config=cluster.orchestrator.config,
-                    record=record,
-                )
+                return self._make_job(record, cluster)
         except ClusterNotFound:
             # in case the cluster is missing, we still want to return the job
             # to be able to render a proper HTTP response, therefore we have
-            # the fallback logic that uses the default cluster instead.
+            # the fallback logic that uses the dummy cluster instead.
             logger.warning(
                 "Falling back to dummy cluster config to retrieve job '%s'", record.id
             )
-            # NOTE: we may rather want to fall back to some dummy
-            # OrchestratorConfig instead.
-            return Job(
-                storage_config=self._dummy_cluster_storage_config,
-                orchestrator_config=self._dummy_cluster_orchestrator_config,
-                record=record,
-            )
+            return self._make_job(record)
 
     async def get_job(self, job_id: str) -> Job:
         record = await self._jobs_storage.get_job(job_id)
@@ -631,11 +646,7 @@ class JobsService:
     async def _delete_cluster_job(self, record: JobRecord) -> None:
         try:
             async with self._get_cluster(record.cluster_name) as cluster:
-                job = Job(
-                    storage_config=cluster.config.storage,
-                    orchestrator_config=cluster.orchestrator.config,
-                    record=record,
-                )
+                job = self._make_job(record, cluster)
                 try:
                     await cluster.orchestrator.delete_job(job)
                 except JobException as exc:

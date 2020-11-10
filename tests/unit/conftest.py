@@ -2,12 +2,23 @@ import asyncio
 from datetime import datetime, timedelta, timezone
 from functools import partial
 from pathlib import Path, PurePath
-from typing import Any, AsyncIterator, Callable, Dict, Iterator, List, Optional
+from typing import (
+    Any,
+    AsyncIterator,
+    Callable,
+    Dict,
+    Iterator,
+    List,
+    Optional,
+    Sequence,
+    Tuple,
+)
 
 import pytest
 from neuro_auth_client import (
     AuthClient,
     Cluster as AuthCluster,
+    Permission,
     Quota as AuthQuota,
     User as AuthUser,
 )
@@ -200,11 +211,36 @@ class MockAuthClient(AuthClient):
                 ),
             ],
         )
+        self._grants: List[Tuple[str, Sequence[Permission]]] = []
+        self._revokes: List[Tuple[str, Sequence[str]]] = []
 
     async def get_user(self, name: str, token: Optional[str] = None) -> AuthUser:
         return self.user_to_return
 
-    async def get_user_token(self, name: str, token: Optional[str] = None) -> str:
+    @property
+    def grants(self) -> List[Tuple[str, Sequence[Permission]]]:
+        return self._grants
+
+    @property
+    def revokes(self) -> List[Tuple[str, Sequence[str]]]:
+        return self._revokes
+
+    async def grant_user_permissions(
+        self, name: str, permissions: Sequence[Permission], token: Optional[str] = None
+    ) -> None:
+        self._grants.append((name, permissions))
+
+    async def revoke_user_permissions(
+        self, name: str, resources_uris: Sequence[str], token: Optional[str] = None
+    ) -> None:
+        self._revokes.append((name, resources_uris))
+
+    async def get_user_token(
+        self,
+        name: str,
+        new_token_uri: Optional[str] = None,
+        token: Optional[str] = None,
+    ) -> str:
         return f"token-{name}"
 
 
