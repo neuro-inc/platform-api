@@ -1,3 +1,4 @@
+import base64
 import json
 from dataclasses import replace
 from datetime import datetime, timezone
@@ -84,11 +85,16 @@ class TestJobsService:
         mock_auth_client: AuthClient,
         mock_api_base: URL,
     ) -> Callable[..., JobsService]:
-        def _factory(deletion_delay_s: int = 0) -> JobsService:
+        def _factory(
+            deletion_delay_s: int = 0, image_pull_error_delay_s: int = 0
+        ) -> JobsService:
             return JobsService(
                 cluster_registry=cluster_registry,
                 jobs_storage=mock_jobs_storage,
-                jobs_config=JobsConfig(deletion_delay_s=deletion_delay_s),
+                jobs_config=JobsConfig(
+                    deletion_delay_s=deletion_delay_s,
+                    image_pull_error_delay_s=image_pull_error_delay_s,
+                ),
                 notifications_client=mock_notifications_client,
                 scheduler=test_scheduler,
                 auth_client=mock_auth_client,
@@ -134,7 +140,7 @@ class TestJobsService:
         assert original_job.status == JobStatus.PENDING
         assert original_job.pass_config
         passed_data_str = original_job.request.container.env[NEURO_PASSED_CONFIG]
-        passed_data = json.loads(passed_data_str)
+        passed_data = json.loads(base64.b64decode(passed_data_str).decode())
         assert URL(passed_data["url"]) == mock_api_base
         assert passed_data["token"] == f"token-{user.name}"
         assert passed_data["cluster"] == original_job.cluster_name
@@ -783,6 +789,48 @@ class TestJobsService:
         status_item = job.status_history.last
         assert status_item.reason == JobStatusReason.COLLECTED
         assert status_item.description == description
+
+    @pytest.mark.asyncio
+    @pytest.mark.parametrize(
+        "reason",
+        [
+            JobStatusReason.ERR_IMAGE_PULL,
+            JobStatusReason.IMAGE_PULL_BACK_OFF,
+        ],
+    )
+    async def test_update_jobs_statuses_pending_errimagepull_with_delay(
+        self,
+        jobs_service_factory: Callable[..., JobsService],
+        mock_orchestrator: MockOrchestrator,
+        job_request_factory: Callable[[], JobRequest],
+        reason: str,
+    ) -> None:
+        jobs_service = jobs_service_factory(image_pull_error_delay_s=60)
+
+        user = User(cluster_name="test-cluster", name="testuser", token="")
+        original_job, _ = await jobs_service.create_job(
+            job_request=job_request_factory(), user=user
+        )
+        assert original_job.status == JobStatus.PENDING
+
+        await jobs_service.update_jobs_statuses()
+
+        job = await jobs_service.get_job(job_id=original_job.id)
+        assert job.status == JobStatus.PENDING
+        assert not job.is_finished
+        assert job.finished_at is None
+        assert job.materialized
+        status_item = job.status_history.last
+        assert status_item.reason == JobStatusReason.CONTAINER_CREATING
+        assert status_item.description is None
+
+        mock_orchestrator.update_reason_to_return(reason)
+        await jobs_service.update_jobs_statuses()
+
+        job = await jobs_service.get_job(job_id=original_job.id)
+        assert job.status == JobStatus.PENDING
+        status_item = job.status_history.last
+        assert status_item.reason == reason
 
     @pytest.mark.asyncio
     async def test_update_jobs_statuses_pending_scale_up(

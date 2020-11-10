@@ -1,3 +1,4 @@
+import base64
 import json
 import logging
 from dataclasses import dataclass, replace
@@ -218,16 +219,26 @@ class JobsService:
             # assert job.is_finished and job.materialized
             await self._delete_job_by_id(record.id)
 
+    def _make_job(self, record: JobRecord, cluster: Optional[Cluster] = None) -> Job:
+        if cluster is not None:
+            storage_config = cluster.config.storage
+            orchestrator_config = cluster.orchestrator.config
+        else:
+            storage_config = self._dummy_cluster_storage_config
+            orchestrator_config = self._dummy_cluster_orchestrator_config
+        return Job(
+            storage_config=storage_config,
+            orchestrator_config=orchestrator_config,
+            record=record,
+            image_pull_error_delay=self._jobs_config.image_pull_error_delay,
+        )
+
     async def _update_job_status_by_id(self, job_id: str) -> None:
         try:
             async with self._update_job_in_storage(job_id) as record:
                 try:
                     async with self._get_cluster(record.cluster_name) as cluster:
-                        job = Job(
-                            storage_config=cluster.config.storage,
-                            orchestrator_config=cluster.orchestrator.config,
-                            record=record,
-                        )
+                        job = self._make_job(record, cluster)
                         await self._update_job_status(cluster.orchestrator, job)
                         job.collect_if_needed()
                 except ClusterNotFound as cluster_err:
@@ -396,13 +407,15 @@ class JobsService:
                 f"Cannot pass config: ENV '{NEURO_PASSED_CONFIG}' " "already specified"
             )
         token = await self._make_pass_config_token(user.name, job_request.job_id)
-        pass_config_data = json.dumps(
-            {
-                "token": token,
-                "cluster": cluster_name,
-                "url": str(self._api_base_url),
-            }
-        )
+        pass_config_data = base64.b64encode(
+            json.dumps(
+                {
+                    "token": token,
+                    "cluster": cluster_name,
+                    "url": str(self._api_base_url),
+                }
+            ).encode()
+        ).decode()
         new_env = {
             **job_request.container.env,
             NEURO_PASSED_CONFIG: pass_config_data,
@@ -505,11 +518,7 @@ class JobsService:
         try:
             async with self._create_job_in_storage(record) as record:
                 async with self._get_cluster(record.cluster_name) as cluster:
-                    job = Job(
-                        storage_config=cluster.config.storage,
-                        orchestrator_config=cluster.orchestrator.config,
-                        record=record,
-                    )
+                    job = self._make_job(record, cluster)
                     await cluster.orchestrator.prepare_job(job)
             return job, Status.create(job.status)
 
@@ -552,25 +561,15 @@ class JobsService:
             async with self._get_cluster(
                 record.cluster_name, tolerate_unavailable=True
             ) as cluster:
-                return Job(
-                    storage_config=cluster.config.storage,
-                    orchestrator_config=cluster.orchestrator.config,
-                    record=record,
-                )
+                return self._make_job(record, cluster)
         except ClusterNotFound:
             # in case the cluster is missing, we still want to return the job
             # to be able to render a proper HTTP response, therefore we have
-            # the fallback logic that uses the default cluster instead.
+            # the fallback logic that uses the dummy cluster instead.
             logger.warning(
                 "Falling back to dummy cluster config to retrieve job '%s'", record.id
             )
-            # NOTE: we may rather want to fall back to some dummy
-            # OrchestratorConfig instead.
-            return Job(
-                storage_config=self._dummy_cluster_storage_config,
-                orchestrator_config=self._dummy_cluster_orchestrator_config,
-                record=record,
-            )
+            return self._make_job(record)
 
     async def get_job(self, job_id: str) -> Job:
         record = await self._jobs_storage.get_job(job_id)
@@ -579,11 +578,7 @@ class JobsService:
     async def _delete_cluster_job(self, record: JobRecord) -> None:
         try:
             async with self._get_cluster(record.cluster_name) as cluster:
-                job = Job(
-                    storage_config=cluster.config.storage,
-                    orchestrator_config=cluster.orchestrator.config,
-                    record=record,
-                )
+                job = self._make_job(record, cluster)
                 try:
                     await cluster.orchestrator.delete_job(job)
                 except JobException as exc:
