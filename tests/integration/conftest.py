@@ -145,42 +145,48 @@ def kube_config_factory(
             auth_cert_key_path=user["client-key"],
             node_label_gpu="gpu",
             resource_pool_types=[
-                ResourcePoolType(
-                    presets=[
-                        Preset(
-                            name="gpu-small",
-                            gpu=1,
-                            cpu=7,
-                            memory_mb=30720,
-                            gpu_model=GKEGPUModels.K80.value.id,
-                        ),
-                        Preset(
-                            name="gpu-large",
-                            gpu=1,
-                            cpu=7,
-                            memory_mb=61440,
-                            gpu_model=GKEGPUModels.V100.value.id,
-                        ),
-                    ]
-                ),
+                ResourcePoolType(),
                 ResourcePoolType(
                     tpu=TPUResource(
                         ipv4_cidr_block="1.1.1.1/32",
                         types=("v2-8",),
                         software_versions=("1.14",),
                     ),
-                    presets=[
-                        Preset(name="cpu-small", cpu=2, memory_mb=2048),
-                        Preset(name="cpu-large", cpu=3, memory_mb=14336),
-                        Preset(
-                            name="tpu",
-                            cpu=3,
-                            memory_mb=14336,
-                            tpu=TPUPreset(type="v2-8", software_version="1.14"),
-                        ),
-                    ],
                 ),
                 ResourcePoolType(gpu=1, gpu_model="gpumodel"),
+            ],
+            presets=[
+                Preset(
+                    name="gpu-small",
+                    gpu=1,
+                    cpu=7,
+                    memory_mb=30720,
+                    gpu_model=GKEGPUModels.K80.value.id,
+                ),
+                Preset(
+                    name="gpu-large",
+                    gpu=1,
+                    cpu=7,
+                    memory_mb=61440,
+                    gpu_model=GKEGPUModels.V100.value.id,
+                ),
+                Preset(
+                    name="gpu-large-p",
+                    gpu=1,
+                    cpu=7,
+                    memory_mb=61440,
+                    gpu_model=GKEGPUModels.V100.value.id,
+                    is_preemptible=True,
+                    is_preemptible_node_required=True,
+                ),
+                Preset(name="cpu-small", cpu=2, memory_mb=2048),
+                Preset(name="cpu-large", cpu=3, memory_mb=14336),
+                Preset(
+                    name="tpu",
+                    cpu=3,
+                    memory_mb=14336,
+                    tpu=TPUPreset(type="v2-8", software_version="1.14"),
+                ),
             ],
             namespace="platformapi-tests",
             job_schedule_scaleup_timeout=5,

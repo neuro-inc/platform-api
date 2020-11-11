@@ -1,7 +1,7 @@
 from dataclasses import dataclass, field
 from enum import Enum
 from pathlib import PurePath
-from typing import List, Optional, Sequence
+from typing import Optional, Sequence
 
 from yarl import URL
 
@@ -120,19 +120,12 @@ class OrchestratorConfig:
     jobs_domain_name_template: str
 
     resource_pool_types: Sequence[ResourcePoolType]
+    presets: Sequence[Preset] = DEFAULT_PRESETS
 
     is_http_ingress_secure: bool = False
 
     job_schedule_timeout: float = 3 * 60
     job_schedule_scaleup_timeout: float = 15 * 60
-
-    @property
-    def presets(self) -> Sequence[Preset]:
-        result: List[Preset] = []
-        for resource_pool_type in self.resource_pool_types:
-            if resource_pool_type.presets:
-                result.extend(resource_pool_type.presets)
-        return tuple(result or DEFAULT_PRESETS)
 
     @property
     def tpu_resources(self) -> Sequence[TPUResource]:
