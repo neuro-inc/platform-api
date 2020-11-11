@@ -96,6 +96,7 @@ def create_job_request_validator(
             ),
             t.Key("is_preemptible", optional=True, default=False): t.Bool,
             t.Key("pass_config", optional=True, default=False): t.Bool,
+            t.Key("wait_for_jobs_quota", optional=True, default=False): t.Bool,
             t.Key("schedule_timeout", optional=True): t.Float(gte=1, lt=30 * 24 * 3600),
             t.Key("max_run_time_minutes", optional=True): t.Int(gte=0),
             t.Key("cluster_name", default=cluster_name): t.Atom(cluster_name),
@@ -443,6 +444,7 @@ class JobsHandler:
         pass_config = request_payload["pass_config"]
         schedule_timeout = request_payload.get("schedule_timeout")
         max_run_time_minutes = request_payload.get("max_run_time_minutes")
+        wait_for_jobs_quota = request_payload.get("wait_for_jobs_quota")
         job_request = JobRequest.create(container, description)
         job, _ = await self._jobs_service.create_job(
             job_request,
@@ -452,6 +454,7 @@ class JobsHandler:
             tags=tags,
             is_preemptible=is_preemptible,
             pass_config=pass_config,
+            wait_for_jobs_quota=wait_for_jobs_quota,
             schedule_timeout=schedule_timeout,
             max_run_time_minutes=max_run_time_minutes,
             restart_policy=request_payload["restart_policy"],

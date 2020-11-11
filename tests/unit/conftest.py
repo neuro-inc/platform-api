@@ -15,7 +15,13 @@ from typing import (
 )
 
 import pytest
-from neuro_auth_client import AuthClient, Permission
+from neuro_auth_client import (
+    AuthClient,
+    Cluster as AuthCluster,
+    Permission,
+    Quota as AuthQuota,
+    User as AuthUser,
+)
 from notifications_client import Client as NotificationsClient
 from notifications_client.notification import AbstractNotification
 from yarl import URL
@@ -188,8 +194,28 @@ class MockNotificationsClient(NotificationsClient):
 
 class MockAuthClient(AuthClient):
     def __init__(self) -> None:
+        self.user_to_return = AuthUser(
+            name="testuser",
+            clusters=[
+                AuthCluster(
+                    "default",
+                    quota=AuthQuota(
+                        total_running_jobs=100,
+                    ),
+                ),
+                AuthCluster(
+                    "test-cluster",
+                    quota=AuthQuota(
+                        total_running_jobs=100,
+                    ),
+                ),
+            ],
+        )
         self._grants: List[Tuple[str, Sequence[Permission]]] = []
         self._revokes: List[Tuple[str, Sequence[str]]] = []
+
+    async def get_user(self, name: str, token: Optional[str] = None) -> AuthUser:
+        return self.user_to_return
 
     @property
     def grants(self) -> List[Tuple[str, Sequence[Permission]]]:
@@ -354,7 +380,7 @@ def jobs_service(
         jobs_storage=mock_jobs_storage,
         jobs_config=jobs_config,
         notifications_client=mock_notifications_client,
-        scheduler=JobsScheduler(scheduler_config),
+        scheduler=JobsScheduler(scheduler_config, mock_auth_client),
         auth_client=mock_auth_client,
         api_base_url=mock_api_base,
     )
