@@ -35,6 +35,7 @@ class Preset:
     cpu: float
     memory_mb: int
     is_preemptible: bool = False
+    is_preemptible_node_required: bool = False
     gpu: Optional[int] = None
     gpu_model: Optional[str] = None
     tpu: Optional[TPUPreset] = None
@@ -52,7 +53,6 @@ class ResourcePoolType:
     """Represents an infrastructure instance/node template."""
 
     is_preemptible: Optional[bool] = False
-    presets: Sequence[Preset] = ()
     cpu: Optional[float] = None
     memory_mb: Optional[int] = None
     gpu: Optional[int] = None

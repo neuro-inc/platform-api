@@ -13,7 +13,7 @@ from .cluster_config import (
     StorageConfig,
 )
 from .orchestrator.kube_config import KubeClientAuthType, KubeConfig
-from .resource import Preset, ResourcePoolType, TPUPreset, TPUResource
+from .resource import DEFAULT_PRESETS, Preset, ResourcePoolType, TPUPreset, TPUResource
 
 
 _cluster_config_validator = t.Dict({"name": t.String}).allow_extra("*")
@@ -87,7 +87,14 @@ class ClusterConfigFactory:
                     name=preset["name"],
                     cpu=preset.get("cpu") or payload["cpu"],
                     memory_mb=preset.get("memory_mb") or payload["memory_mb"],
-                    is_preemptible=payload.get("is_preemptible", False),
+                    is_preemptible=(
+                        preset.get("is_preemptible")
+                        or payload.get("is_preemptible")
+                        or False
+                    ),
+                    is_preemptible_node_required=preset.get(
+                        "is_preemptible_node_required", False
+                    ),
                     gpu=preset.get("gpu") or payload.get("gpu"),
                     gpu_model=preset.get("gpu_model") or payload.get("gpu_model"),
                     # TPU presets do not inherit their pool type resources,
@@ -106,6 +113,15 @@ class ClusterConfigFactory:
     ) -> OrchestratorConfig:
         orchestrator = payload["orchestrator"]
         kube = orchestrator["kubernetes"]
+        if orchestrator.get("resource_presets"):
+            # new cluster config format has resource_presets field in orchestrator
+            presets = self._create_presets(
+                {"presets": orchestrator["resource_presets"]}
+            )
+        else:
+            presets = []
+            for rpt in orchestrator["resource_pool_types"]:
+                presets.extend(self._create_presets(rpt))
         return KubeConfig(
             is_http_ingress_secure=orchestrator["is_http_ingress_secure"],
             jobs_domain_name_template=orchestrator["job_hostname_template"],
@@ -113,6 +129,7 @@ class ClusterConfigFactory:
                 self._create_resource_pool_type(r)
                 for r in orchestrator["resource_pool_types"]
             ],
+            presets=presets or DEFAULT_PRESETS,
             endpoint_url=kube["url"],
             cert_authority_data_pem=kube["ca_data"],
             cert_authority_path=None,  # not initialized, see `cert_authority_data_pem`
@@ -150,7 +167,6 @@ class ClusterConfigFactory:
             disk_gb=payload.get("disk_gb"),
             min_size=payload.get("min_size"),
             max_size=payload.get("max_size"),
-            presets=self._create_presets(payload),
             tpu=self._create_tpu_resource(payload.get("tpu")),
         )
 

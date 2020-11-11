@@ -151,6 +151,7 @@ class ApiHandler:
             "cpu": preset.cpu,
             "memory_mb": preset.memory_mb,
             "is_preemptible": preset.is_preemptible,
+            "is_preemptible_node_required": preset.is_preemptible_node_required,
         }
         if preset.gpu is not None:
             payload["gpu"] = preset.gpu

@@ -20,12 +20,7 @@ from platform_api.orchestrator.kube_orchestrator import (
     NfsVolume,
     PVCVolume,
 )
-from platform_api.resource import (
-    DEFAULT_PRESETS,
-    GKEGPUModels,
-    Preset,
-    ResourcePoolType,
-)
+from platform_api.resource import DEFAULT_PRESETS, GKEGPUModels, ResourcePoolType
 from tests.unit.conftest import CA_DATA_PEM
 
 
@@ -462,14 +457,6 @@ class TestOrchestratorConfig:
             resource_pool_types=(),
         )
         assert config.presets == DEFAULT_PRESETS
-
-    def test_custom_presets(self) -> None:
-        presets = (Preset(name="test", cpu=1.0, memory_mb=1024),)
-        config = OrchestratorConfig(
-            jobs_domain_name_template="test",
-            resource_pool_types=(ResourcePoolType(presets=presets),),
-        )
-        assert config.presets == presets
 
 
 class TestKubeConfig:

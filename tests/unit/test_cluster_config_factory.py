@@ -265,34 +265,25 @@ class TestClusterConfigFactory:
             orchestrator.resource_pool_types[3].gpu_model == GKEGPUModels.V100.value.id
         )
 
-        assert orchestrator.resource_pool_types[0].presets is not None
-        assert orchestrator.resource_pool_types[0].presets[1].cpu == 7.0
-        assert orchestrator.resource_pool_types[0].presets[1].memory_mb == 49152
-        assert orchestrator.resource_pool_types[0].presets[1].gpu_model is None
-        assert orchestrator.resource_pool_types[0].presets[2] == Preset(
+        assert orchestrator.presets is not None
+        assert orchestrator.presets[1].cpu == 7.0
+        assert orchestrator.presets[1].memory_mb == 49152
+        assert orchestrator.presets[1].gpu_model is None
+        assert orchestrator.presets[2] == Preset(
             name="tpu",
             cpu=7.0,
             memory_mb=49152,
             tpu=TPUPreset(type="v2-8", software_version="1.14"),
         )
 
-        assert orchestrator.resource_pool_types[1].presets is not None
-        assert (
-            orchestrator.resource_pool_types[1].presets[0].gpu_model
-            == GKEGPUModels.K80.value.id
-        )
+        assert orchestrator.presets[3].gpu_model == GKEGPUModels.K80.value.id
 
-        assert orchestrator.resource_pool_types[2].presets is not None
-        assert orchestrator.resource_pool_types[2].presets[0].cpu == 7.0
-        assert orchestrator.resource_pool_types[2].presets[0].gpu == 1
-        assert (
-            orchestrator.resource_pool_types[2].presets[0].gpu_model
-            == GKEGPUModels.K80.value.id
-        )
-        assert orchestrator.resource_pool_types[2].presets[0].memory_mb == 52224
+        assert orchestrator.presets[4].cpu == 7.0
+        assert orchestrator.presets[4].gpu == 1
+        assert orchestrator.presets[4].gpu_model == GKEGPUModels.K80.value.id
+        assert orchestrator.presets[4].memory_mb == 52224
 
-        assert orchestrator.resource_pool_types[4].presets is not None
-        assert orchestrator.resource_pool_types[4].presets[0].cpu == 0.1
+        assert orchestrator.presets[6].cpu == 0.1
 
         assert orchestrator.endpoint_url == kube_payload["url"]
         assert orchestrator.cert_authority_data_pem == kube_payload["ca_data"]
@@ -319,6 +310,44 @@ class TestClusterConfigFactory:
         )
         assert orchestrator.tpu_ipv4_cidr_block == "1.1.1.1/32"
         assert orchestrator.jobs_pod_priority_class_name == "testpriority"
+
+    def test_orchestrator_resource_presets(
+        self,
+        clusters_payload: Sequence[Dict[str, Any]],
+        jobs_ingress_class: str,
+        jobs_ingress_oauth_url: URL,
+    ) -> None:
+        factory = ClusterConfigFactory()
+        clusters_payload[0]["orchestrator"]["resource_presets"] = [
+            {"name": "cpu-small", "cpu": 1, "memory_mb": 2048},
+            {"name": "cpu-large", "cpu": 7, "memory_mb": 49152},
+            {
+                "name": "cpu-large-p",
+                "cpu": 7,
+                "memory_mb": 49152,
+                "is_preemptible": True,
+                "is_preemptible_node_required": True,
+            },
+        ]
+        clusters = factory.create_cluster_configs(
+            clusters_payload,
+            jobs_ingress_class=jobs_ingress_class,
+            jobs_ingress_oauth_url=jobs_ingress_oauth_url,
+            registry_username="registry_user",
+            registry_password="registry_token",
+        )
+
+        assert clusters[0].orchestrator.presets == [
+            Preset(name="cpu-small", cpu=1, memory_mb=2048),
+            Preset(name="cpu-large", cpu=7, memory_mb=49152),
+            Preset(
+                name="cpu-large-p",
+                cpu=7,
+                memory_mb=49152,
+                is_preemptible=True,
+                is_preemptible_node_required=True,
+            ),
+        ]
 
     def test_storage_config_nfs(
         self,
