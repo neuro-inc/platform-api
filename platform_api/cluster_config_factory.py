@@ -145,6 +145,13 @@ class ClusterConfigFactory:
             node_label_preemptible=kube["node_label_preemptible"],
             node_label_job=kube.get("node_label_job"),
             jobs_pod_priority_class_name=kube.get("job_pod_priority_class_name"),
+            job_schedule_timeout=orchestrator.get(
+                "job_schedule_timeout_s", OrchestratorConfig.job_schedule_timeout
+            ),
+            job_schedule_scaleup_timeout=orchestrator.get(
+                "job_schedule_scale_up_timeout_s",
+                OrchestratorConfig.job_schedule_scaleup_timeout,
+            ),
         )
 
     def _create_tpu_preset(
@@ -158,13 +165,18 @@ class ClusterConfigFactory:
         )
 
     def _create_resource_pool_type(self, payload: Dict[str, Any]) -> ResourcePoolType:
+        cpu = payload.get("cpu")
+        memory_mb = payload.get("memory_mb")
         return ResourcePoolType(
+            name=payload["name"],
             gpu=payload.get("gpu"),
             gpu_model=payload.get("gpu_model"),
             is_preemptible=payload.get("is_preemptible"),
-            cpu=payload.get("cpu"),
+            cpu=cpu,
+            available_cpu=payload.get("available_cpu") or cpu,
             memory_mb=payload.get("memory_mb"),
-            disk_gb=payload.get("disk_gb"),
+            available_memory_mb=payload.get("available_memory_mb") or memory_mb,
+            disk_gb=payload.get("disk_size_gb"),
             min_size=payload.get("min_size"),
             max_size=payload.get("max_size"),
             tpu=self._create_tpu_resource(payload.get("tpu")),

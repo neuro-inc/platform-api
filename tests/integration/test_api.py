@@ -71,9 +71,9 @@ def cluster_configs_payload() -> List[Dict[str, Any]]:
                 },
                 "job_hostname_template": "{job_id}.jobs.neu.ro",
                 "resource_pool_types": [
-                    {},
-                    {"gpu": 0},
-                    {"gpu": 1, "gpu_model": "nvidia-tesla-v100"},
+                    {"name": "node-pool1"},
+                    {"name": "node-pool1", "gpu": 0},
+                    {"name": "node-pool1", "gpu": 1, "gpu_model": "nvidia-tesla-v100"},
                 ],
                 "is_http_ingress_secure": True,
             },

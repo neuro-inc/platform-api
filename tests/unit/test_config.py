@@ -1,6 +1,7 @@
 from datetime import timedelta
 from pathlib import PurePath
 from typing import Dict
+from unittest import mock
 
 import pytest
 from yarl import URL
@@ -210,7 +211,9 @@ class TestEnvironConfigFactory:
         assert not cluster.orchestrator.is_http_ingress_secure
         assert cluster.orchestrator.jobs_domain_name_template == "{job_id}.jobs.domain"
 
-        assert cluster.orchestrator.resource_pool_types == [ResourcePoolType()]
+        assert cluster.orchestrator.resource_pool_types == [
+            ResourcePoolType(name=mock.ANY)
+        ]
         assert cluster.orchestrator.node_label_gpu is None
         assert cluster.orchestrator.node_label_preemptible is None
 
@@ -354,10 +357,12 @@ class TestEnvironConfigFactory:
         assert cluster.orchestrator.jobs_domain_name_template == "{job_id}.jobs.domain"
 
         assert cluster.orchestrator.resource_pool_types == [
-            ResourcePoolType(),
-            ResourcePoolType(gpu=1, gpu_model=GKEGPUModels.K80.value.id),
-            ResourcePoolType(gpu=1, gpu_model="unknown"),
-            ResourcePoolType(gpu=1, gpu_model=GKEGPUModels.V100.value.id),
+            ResourcePoolType(name=mock.ANY),
+            ResourcePoolType(name=mock.ANY, gpu=1, gpu_model=GKEGPUModels.K80.value.id),
+            ResourcePoolType(name=mock.ANY, gpu=1, gpu_model="unknown"),
+            ResourcePoolType(
+                name=mock.ANY, gpu=1, gpu_model=GKEGPUModels.V100.value.id
+            ),
         ]
         assert cluster.orchestrator.node_label_gpu == "testlabel"
         assert cluster.orchestrator.node_label_preemptible == "testpreempt"

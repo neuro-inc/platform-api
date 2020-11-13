@@ -63,14 +63,19 @@ def clusters_payload(nfs_storage_payload: Dict[str, Any]) -> List[Dict[str, Any]
                     "job_pod_priority_class_name": "testpriority",
                 },
                 "job_hostname_template": "{job_id}.jobs.neu.ro",
+                "job_schedule_timeout_s": 60,
+                "job_schedule_scale_up_timeout_s": 120,
                 "resource_pool_types": [
                     {
+                        "name": "n1-highmem-8",
                         "is_preemptible": False,
                         "min_size": 1,
                         "max_size": 16,
                         "cpu": 8.0,
+                        "available_cpu": 7.0,
                         "memory_mb": 53248,
-                        "disk_gb": 150,
+                        "available_memory_mb": 49152,
+                        "disk_size_gb": 150,
                         "tpu": {
                             "ipv4_cidr_block": "1.1.1.1/32",
                             "types": ["v2-8", "v3-8"],
@@ -88,12 +93,13 @@ def clusters_payload(nfs_storage_payload: Dict[str, Any]) -> List[Dict[str, Any]
                         ],
                     },
                     {
+                        "name": "n1-highmem-32-1xk80-preemptible",
                         "is_preemptible": True,
                         "min_size": 1,
                         "max_size": 16,
-                        "cpu": 32.0,
-                        "memory_mb": 212992,
-                        "disk_gb": 150,
+                        "cpu": 31.0,
+                        "memory_mb": 204800,
+                        "disk_size_gb": 150,
                         "gpu": 4,
                         "gpu_model": "nvidia-tesla-k80",
                         "presets": [
@@ -106,12 +112,15 @@ def clusters_payload(nfs_storage_payload: Dict[str, Any]) -> List[Dict[str, Any]
                         ],
                     },
                     {
+                        "name": "n1-highmem-32-1xk80",
                         "is_preemptible": False,
                         "min_size": 1,
                         "max_size": 8,
                         "cpu": 32.0,
+                        "available_cpu": 31.0,
                         "memory_mb": 212992,
-                        "disk_gb": 150,
+                        "available_memory_mb": 204800,
+                        "disk_size_gb": 150,
                         "gpu": 4,
                         "gpu_model": "nvidia-tesla-k80",
                         "presets": [
@@ -124,12 +133,15 @@ def clusters_payload(nfs_storage_payload: Dict[str, Any]) -> List[Dict[str, Any]
                         ],
                     },
                     {
+                        "name": "n1-highmem-8-1xv100-preemptible",
                         "is_preemptible": True,
                         "min_size": 0,
                         "max_size": 5,
                         "cpu": 8.0,
+                        "available_cpu": 7.0,
                         "memory_mb": 53248,
-                        "disk_gb": 150,
+                        "available_memory_mb": 49152,
+                        "disk_size_gb": 150,
                         "gpu": 1,
                         "gpu_model": "nvidia-tesla-v100",
                         "presets": [
@@ -142,12 +154,15 @@ def clusters_payload(nfs_storage_payload: Dict[str, Any]) -> List[Dict[str, Any]
                         ],
                     },
                     {
+                        "name": "n1-highmem-8-1xv100",
                         "is_preemptible": False,
                         "min_size": 0,
                         "max_size": 2,
                         "cpu": 8.0,
+                        "available_cpu": 7.0,
                         "memory_mb": 53248,
-                        "disk_gb": 150,
+                        "available_memory_mb": 49152,
+                        "disk_size_gb": 150,
                         "gpu": 1,
                         "gpu_model": "nvidia-tesla-v100",
                         "presets": [
@@ -245,8 +260,16 @@ class TestClusterConfigFactory:
             orchestrator.jobs_domain_name_template
             == orchestrator_payload["job_hostname_template"]
         )
+        assert orchestrator.job_schedule_timeout == 60
+        assert orchestrator.job_schedule_scaleup_timeout == 120
 
         assert len(orchestrator.resource_pool_types) == 5
+        assert orchestrator.resource_pool_types[0].name == "n1-highmem-8"
+        assert orchestrator.resource_pool_types[0].cpu == 8.0
+        assert orchestrator.resource_pool_types[0].available_cpu == 7.0
+        assert orchestrator.resource_pool_types[0].memory_mb == 53248
+        assert orchestrator.resource_pool_types[0].available_memory_mb == 49152
+        assert orchestrator.resource_pool_types[0].disk_gb == 150
         assert orchestrator.resource_pool_types[0].gpu is None
         assert orchestrator.resource_pool_types[0].gpu_model is None
         assert orchestrator.resource_pool_types[0].tpu == TPUResource(
@@ -255,6 +278,10 @@ class TestClusterConfigFactory:
             software_versions=("1.13", "1.14"),
         )
 
+        assert orchestrator.resource_pool_types[1].cpu == 31.0
+        assert orchestrator.resource_pool_types[1].available_cpu == 31.0
+        assert orchestrator.resource_pool_types[1].memory_mb == 204800
+        assert orchestrator.resource_pool_types[1].available_memory_mb == 204800
         assert orchestrator.resource_pool_types[1].gpu == 4
         assert (
             orchestrator.resource_pool_types[1].gpu_model == GKEGPUModels.K80.value.id
@@ -348,6 +375,28 @@ class TestClusterConfigFactory:
                 is_preemptible_node_required=True,
             ),
         ]
+
+    def test_orchestrator_job_schedule_settings_default(
+        self,
+        clusters_payload: Sequence[Dict[str, Any]],
+        jobs_ingress_class: str,
+        jobs_ingress_oauth_url: URL,
+    ) -> None:
+        orchestrator = clusters_payload[0]["orchestrator"]
+        del orchestrator["job_schedule_timeout_s"]
+        del orchestrator["job_schedule_scale_up_timeout_s"]
+
+        factory = ClusterConfigFactory()
+        clusters = factory.create_cluster_configs(
+            clusters_payload,
+            jobs_ingress_class=jobs_ingress_class,
+            jobs_ingress_oauth_url=jobs_ingress_oauth_url,
+            registry_username="registry_user",
+            registry_password="registry_token",
+        )
+
+        assert clusters[0].orchestrator.job_schedule_timeout == 180
+        assert clusters[0].orchestrator.job_schedule_scaleup_timeout == 900
 
     def test_storage_config_nfs(
         self,
