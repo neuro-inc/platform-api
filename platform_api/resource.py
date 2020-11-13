@@ -1,4 +1,5 @@
-from dataclasses import dataclass
+import uuid
+from dataclasses import dataclass, field
 from enum import Enum
 from typing import Optional, Sequence
 
@@ -52,9 +53,13 @@ class TPUResource:
 class ResourcePoolType:
     """Represents an infrastructure instance/node template."""
 
+    # default_factory is used only in tests
+    name: str = field(default_factory=lambda: str(uuid.uuid4()))
     is_preemptible: Optional[bool] = False
     cpu: Optional[float] = None
+    available_cpu: Optional[float] = None
     memory_mb: Optional[int] = None
+    available_memory_mb: Optional[int] = None
     gpu: Optional[int] = None
     gpu_model: Optional[str] = None
     disk_gb: Optional[int] = None

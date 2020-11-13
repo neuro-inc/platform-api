@@ -34,7 +34,7 @@ data:
                 "named_job_hostname_template": "{job_name}-{job_owner}.jobs.platform.dev.neuromation.io",
 
                 "resource_pool_types": [
-                    {}
+                    {"name": "node-pool"}
                 ]
             },
 
