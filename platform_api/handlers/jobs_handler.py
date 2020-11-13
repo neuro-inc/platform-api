@@ -95,6 +95,7 @@ def create_job_request_validator(
                 create_job_tag_validator(), max_length=16
             ),
             t.Key("is_preemptible", optional=True, default=False): t.Bool,
+            t.Key("is_preemptible_node_required", default=False): t.Bool,
             t.Key("pass_config", optional=True, default=False): t.Bool,
             t.Key("wait_for_jobs_quota", optional=True, default=False): t.Bool,
             t.Key("schedule_timeout", optional=True): t.Float(gte=1, lt=30 * 24 * 3600),
@@ -133,6 +134,7 @@ def create_job_response_validator() -> t.Trafaret:
             "history": create_job_history_validator(),
             "container": create_container_response_validator(),
             "is_preemptible": t.Bool,
+            "is_preemptible_node_required": t.Bool,
             "pass_config": t.Bool,
             t.Key("internal_hostname", optional=True): t.String,
             t.Key("internal_hostname_named", optional=True): t.String,
@@ -273,6 +275,7 @@ def convert_job_to_job_response(job: Job) -> Dict[str, Any]:
             job.request.container, job.storage_config
         ),
         "is_preemptible": job.is_preemptible,
+        "is_preemptible_node_required": job.is_preemptible_node_required,
         "pass_config": job.pass_config,
         "uri": str(job.to_uri()),
         "restart_policy": str(job.restart_policy),
@@ -441,6 +444,9 @@ class JobsHandler:
         tags = sorted(set(request_payload.get("tags", [])))
         description = request_payload.get("description")
         is_preemptible = request_payload["is_preemptible"]
+        is_preemptible_node_required = request_payload.get(
+            "is_preemptible_node_required", False
+        )
         pass_config = request_payload["pass_config"]
         schedule_timeout = request_payload.get("schedule_timeout")
         max_run_time_minutes = request_payload.get("max_run_time_minutes")
@@ -453,6 +459,7 @@ class JobsHandler:
             job_name=name,
             tags=tags,
             is_preemptible=is_preemptible,
+            is_preemptible_node_required=is_preemptible_node_required,
             pass_config=pass_config,
             wait_for_jobs_quota=wait_for_jobs_quota,
             schedule_timeout=schedule_timeout,

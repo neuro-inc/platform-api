@@ -270,6 +270,7 @@ class JobRecord:
     name: Optional[str] = None
     tags: Sequence[str] = ()
     is_preemptible: bool = False
+    is_preemptible_node_required: bool = False
     pass_config: bool = False
     materialized: bool = False
     max_run_time_minutes: Optional[int] = None
@@ -420,6 +421,7 @@ class JobRecord:
             "materialized": self.materialized,
             "finished_at": self.finished_at_str,
             "is_preemptible": self.is_preemptible,
+            "is_preemptible_node_required": self.is_preemptible_node_required,
             "pass_config": self.pass_config,
             "restart_policy": str(self.restart_policy),
         }
@@ -460,6 +462,9 @@ class JobRecord:
             name=payload.get("name"),
             tags=payload.get("tags", ()),
             is_preemptible=payload.get("is_preemptible", False),
+            is_preemptible_node_required=payload.get(
+                "is_preemptible_node_required", False
+            ),
             pass_config=payload.get("pass_config", False),
             max_run_time_minutes=payload.get("max_run_time_minutes", None),
             internal_hostname=payload.get("internal_hostname", None),
@@ -497,14 +502,8 @@ class Job:
         *,
         record: JobRecord,
         current_datetime_factory: Callable[[], datetime] = current_datetime_factory,
-        is_forced_to_preemptible_pool: bool = False,
         image_pull_error_delay: timedelta = timedelta(minutes=2),
     ) -> None:
-        """
-        :param bool is_forced_to_preemptible_pool:
-            used in tests only
-        """
-
         self._storage_config = storage_config
         self._orchestrator_config = orchestrator_config
 
@@ -519,8 +518,8 @@ class Job:
         self._tags = record.tags
 
         self._is_preemptible = record.is_preemptible
+        self._is_preemptible_node_required = record.is_preemptible_node_required
         self._pass_config = record.pass_config
-        self._is_forced_to_preemptible_pool = is_forced_to_preemptible_pool
         self._image_pull_error_delay = image_pull_error_delay
 
     @property
@@ -718,6 +717,10 @@ class Job:
         return self._is_preemptible
 
     @property
+    def is_preemptible_node_required(self) -> bool:
+        return self._is_preemptible_node_required
+
+    @property
     def pass_config(self) -> bool:
         return self._pass_config
 
@@ -731,7 +734,7 @@ class Job:
 
     @property
     def is_forced_to_preemptible_pool(self) -> bool:
-        return self.is_preemptible and self._is_forced_to_preemptible_pool
+        return self.is_preemptible and self._is_preemptible_node_required
 
     def get_run_time(self) -> timedelta:
         return self._record.get_run_time(
