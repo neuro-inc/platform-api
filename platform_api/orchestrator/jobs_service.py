@@ -495,6 +495,7 @@ class JobsService:
         *,
         cluster_name: Optional[str] = None,
         job_name: Optional[str] = None,
+        preset_name: Optional[str] = None,
         tags: Sequence[str] = (),
         is_preemptible: bool = False,
         is_preemptible_node_required: bool = False,
@@ -561,6 +562,7 @@ class JobsService:
                 ]
             ),
             name=job_name,
+            preset_name=preset_name,
             tags=tags,
             is_preemptible=is_preemptible,
             is_preemptible_node_required=is_preemptible_node_required,

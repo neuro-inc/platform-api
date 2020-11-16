@@ -962,6 +962,21 @@ class TestJob:
         primitive = job.to_primitive()
         assert primitive["tags"] == ["t1", "t2"]
 
+    def test_to_primitive_with_preset_name(
+        self, mock_orchestrator: MockOrchestrator, job_request: JobRequest
+    ) -> None:
+        job = Job(
+            storage_config=mock_orchestrator.storage_config,
+            orchestrator_config=mock_orchestrator.config,
+            record=JobRecord.create(
+                request=job_request,
+                cluster_name="test-cluster",
+                preset_name="cpu-small",
+            ),
+        )
+        primitive = job.to_primitive()
+        assert primitive["preset_name"] == "cpu-small"
+
     def test_from_primitive(
         self, mock_orchestrator: MockOrchestrator, job_request_payload: Dict[str, Any]
     ) -> None:
@@ -1006,6 +1021,23 @@ class TestJob:
         )
         assert job.id == "testjob"
         assert job.name == "test-job-name"
+
+    def test_from_primitive_with_preset_name(
+        self, mock_orchestrator: MockOrchestrator, job_request_payload: Dict[str, Any]
+    ) -> None:
+        payload = {
+            "id": "testjob",
+            "preset_name": "cpu-small",
+            "owner": "testuser",
+            "request": job_request_payload,
+            "status": "succeeded",
+            "materialized": True,
+            "finished_at": datetime.now(timezone.utc).isoformat(),
+        }
+        job = Job.from_primitive(
+            mock_orchestrator.storage_config, mock_orchestrator.config, payload
+        )
+        assert job.preset_name == "cpu-small"
 
     def test_from_primitive_with_tags(
         self, mock_orchestrator: MockOrchestrator, job_request_payload: Dict[str, Any]

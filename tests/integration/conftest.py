@@ -179,6 +179,7 @@ def kube_config_factory(
                     is_preemptible=True,
                     is_preemptible_node_required=True,
                 ),
+                Preset(name="cpu-micro", cpu=0.1, memory_mb=100),
                 Preset(name="cpu-small", cpu=2, memory_mb=2048),
                 Preset(name="cpu-large", cpu=3, memory_mb=14336),
                 Preset(

@@ -268,6 +268,7 @@ class JobRecord:
     status_history: JobStatusHistory
     cluster_name: str
     name: Optional[str] = None
+    preset_name: Optional[str] = None
     tags: Sequence[str] = ()
     is_preemptible: bool = False
     is_preemptible_node_required: bool = False
@@ -435,6 +436,8 @@ class JobRecord:
             result["internal_hostname_named"] = self.internal_hostname_named
         if self.name:
             result["name"] = self.name
+        if self.preset_name:
+            result["preset_name"] = self.preset_name
         if self.tags:
             result["tags"] = self.tags
         return result
@@ -460,6 +463,7 @@ class JobRecord:
             owner=payload.get("owner") or orphaned_job_owner,
             cluster_name=payload.get("cluster_name") or "",
             name=payload.get("name"),
+            preset_name=payload.get("preset_name"),
             tags=payload.get("tags", ()),
             is_preemptible=payload.get("is_preemptible", False),
             is_preemptible_node_required=payload.get(
@@ -533,6 +537,10 @@ class Job:
     @property
     def name(self) -> Optional[str]:
         return self._name
+
+    @property
+    def preset_name(self) -> Optional[str]:
+        return self._record.preset_name
 
     @property
     def is_named(self) -> bool:
