@@ -396,7 +396,7 @@ class TestJobClusterNameValidator:
             validator.check(request)
 
 
-class TestCreateJobPresetValidator:
+class TestJobPresetValidator:
     def test_validator(self) -> None:
         request = {"preset_name": "preset", "container": {}}
         validator = create_job_preset_validator(
@@ -419,38 +419,11 @@ class TestCreateJobPresetValidator:
         with pytest.raises(DataError, match="value doesn't match any variant"):
             validator.check(request)
 
-    def test_validator_with_shm(self) -> None:
+    def test_validator_with_shm_gpu_tpu_preemptible(self) -> None:
         request = {
             "preset_name": "preset",
             "container": {"resources": {"shm": True}},
         }
-        validator = create_job_preset_validator(
-            [Preset(name="preset", cpu=0.1, memory_mb=100)]
-        )
-        payload = validator.check(request)
-
-        assert payload["container"]["resources"]["shm"]
-
-    def test_validator_with_preemptible(self) -> None:
-        request = {"preset_name": "preset", "container": {}}
-        validator = create_job_preset_validator(
-            [
-                Preset(
-                    name="preset",
-                    cpu=0.1,
-                    memory_mb=100,
-                    is_preemptible=True,
-                    is_preemptible_node_required=True,
-                )
-            ]
-        )
-        payload = validator.check(request)
-
-        assert payload["is_preemptible"]
-        assert payload["is_preemptible_node_required"]
-
-    def test_validator_with_gpu(self) -> None:
-        request = {"preset_name": "preset", "container": {}}
         validator = create_job_preset_validator(
             [
                 Preset(
@@ -459,31 +432,31 @@ class TestCreateJobPresetValidator:
                     memory_mb=100,
                     gpu=1,
                     gpu_model="nvidia-tesla-k80",
-                )
-            ]
-        )
-        payload = validator.check(request)
-
-        assert payload["container"]["resources"]["gpu"] == 1
-        assert payload["container"]["resources"]["gpu_model"] == "nvidia-tesla-k80"
-
-    def test_validator_with_tpu(self) -> None:
-        request = {"preset_name": "preset", "container": {}}
-        validator = create_job_preset_validator(
-            [
-                Preset(
-                    name="preset",
-                    cpu=0.1,
-                    memory_mb=100,
                     tpu=TPUPreset(type="v2-8", software_version="1.14"),
+                    is_preemptible=True,
+                    is_preemptible_node_required=True,
                 )
             ]
         )
         payload = validator.check(request)
 
-        assert payload["container"]["resources"]["tpu"] == {
-            "type": "v2-8",
-            "software_version": "1.14",
+        assert payload == {
+            "preset_name": "preset",
+            "container": {
+                "resources": {
+                    "cpu": 0.1,
+                    "memory_mb": 100,
+                    "shm": True,
+                    "gpu": 1,
+                    "gpu_model": "nvidia-tesla-k80",
+                    "tpu": {
+                        "type": "v2-8",
+                        "software_version": "1.14",
+                    },
+                }
+            },
+            "is_preemptible": True,
+            "is_preemptible_node_required": True,
         }
 
 

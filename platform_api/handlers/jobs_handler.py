@@ -420,9 +420,7 @@ class JobsHandler:
             )
 
     async def _create_job_request_validator(
-        self,
-        cluster_config: ClusterConfig,
-        user_name: str,
+        self, cluster_config: ClusterConfig, user_name: str
     ) -> t.Trafaret:
         resource_pool_types = cluster_config.orchestrator.resource_pool_types
         gpu_models = list(
