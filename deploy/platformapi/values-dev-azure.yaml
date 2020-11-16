@@ -29,3 +29,4 @@ NP_API_ZIPKIN_SAMPLE_RATE: '0.1'  # 10% of traces are saved
 NP_RESOURCES_CPU_REQUEST: "1"
 NP_RESOURCES_MEMORY_REQUEST: 1Gi
 NP_DB_POSTGRES_ENABLED: true
+NP_AUTH_SENTRY_URL: "https://61ddb78cf4cd4bc9a44a1f977cba47bf@sentry-dev-azure.neu.ro/3"

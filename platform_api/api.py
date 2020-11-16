@@ -1,5 +1,6 @@
 import asyncio
 import logging
+import sentry_sdk
 from contextlib import AsyncExitStack
 from typing import Any, AsyncIterator, Awaitable, Callable, Dict, Sequence
 
@@ -19,6 +20,8 @@ from platform_api.orchestrator.job_policy_enforcer import (
     QuotaEnforcer,
     RuntimeLimitEnforcer,
 )
+
+from sentry_sdk.integrations.aiohttp import AioHttpIntegration
 
 from .cluster import Cluster, ClusterConfig, ClusterRegistry
 from .config import Config, CORSConfig
@@ -430,6 +433,10 @@ def main() -> None:
     logging.info("Loaded config: %r", config)
 
     loop = asyncio.get_event_loop()
+
+    sentry_url = config.sentry_url
+    if sentry_url:
+        sentry_sdk.init(dsn=sentry_url, integrations=[AioHttpIntegration()])
 
     app = loop.run_until_complete(create_app(config))
     aiohttp.web.run_app(app, host=config.server.host, port=config.server.port)
