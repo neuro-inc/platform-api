@@ -2228,6 +2228,7 @@ class TestJobs:
         job_name = f"test-job-name-{random_str()}"
         url = api.jobs_base_url
         job_submit["is_preemptible"] = True
+        job_submit["is_preemptible_node_required"] = True
         job_submit["name"] = job_name
         job_submit["container"]["entrypoint"] = "/bin/echo"
         job_submit["container"]["command"] = "false"
@@ -2252,6 +2253,7 @@ class TestJobs:
             expected_internal_hostname = f"{job_id}.platformapi-tests"
             assert payload["internal_hostname"] == expected_internal_hostname
             assert payload["is_preemptible"]
+            assert payload["is_preemptible_node_required"]
             assert payload["description"] == "test job submitted by neuro job submit"
             assert payload["schedule_timeout"] == 90
 
@@ -4043,6 +4045,7 @@ class TestJobs:
                     ],
                 },
                 "is_preemptible": True,
+                "is_preemptible_node_required": False,
                 "pass_config": False,
                 "uri": f"job://test-cluster/{regular_user.name}/{job_id}",
                 "restart_policy": "never",
@@ -4084,6 +4087,7 @@ class TestJobs:
                 ],
             },
             "is_preemptible": True,
+            "is_preemptible_node_required": False,
             "pass_config": False,
             "uri": f"job://test-cluster/{regular_user.name}/{job_id}",
             "restart_policy": "never",
@@ -4171,6 +4175,7 @@ class TestJobs:
                 ],
             },
             "is_preemptible": False,
+            "is_preemptible_node_required": False,
             "pass_config": False,
             "uri": f"job://test-cluster/{regular_user.name}/{job_id}",
             "restart_policy": "never",
@@ -4263,6 +4268,7 @@ class TestJobs:
                     "volumes": [],
                 },
                 "is_preemptible": False,
+                "is_preemptible_node_required": False,
                 "pass_config": False,
                 "uri": f"job://test-cluster/{regular_user.name}/{job_id}",
                 "restart_policy": "never",
@@ -4349,6 +4355,7 @@ class TestJobs:
                     "volumes": [],
                 },
                 "is_preemptible": False,
+                "is_preemptible_node_required": False,
                 "pass_config": False,
                 "uri": f"job://test-cluster/{regular_user.name}/{job_id}",
                 "restart_policy": "never",

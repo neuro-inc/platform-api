@@ -876,6 +876,7 @@ class TestJob:
                 owner="testuser",
                 name="test-job-name",
                 is_preemptible=True,
+                is_preemptible_node_required=True,
                 schedule_timeout=15,
             ),
         )
@@ -907,6 +908,7 @@ class TestJob:
                 },
             ],
             "is_preemptible": True,
+            "is_preemptible_node_required": True,
             "pass_config": False,
             "schedule_timeout": 15,
             "restart_policy": "never",
@@ -941,6 +943,7 @@ class TestJob:
             "materialized": False,
             "finished_at": None,
             "is_preemptible": False,
+            "is_preemptible_node_required": False,
             "pass_config": False,
             "max_run_time_minutes": 500,
             "restart_policy": "never",
@@ -982,6 +985,7 @@ class TestJob:
         assert job.name is None
         assert job.owner == "testuser"
         assert not job.is_preemptible
+        assert not job.is_preemptible_node_required
         assert job.max_run_time_minutes is None
         assert job.restart_policy == JobRestartPolicy.NEVER
 
@@ -1034,6 +1038,7 @@ class TestJob:
             "finished_at": finished_at_str,
             "statuses": [{"status": "failed", "transition_time": finished_at_str}],
             "is_preemptible": True,
+            "is_preemptible_node_required": True,
         }
         job = Job.from_primitive(
             mock_orchestrator.storage_config, mock_orchestrator.config, payload
@@ -1045,6 +1050,7 @@ class TestJob:
         assert job.description == "Description of the testjob"
         assert job.owner == "compute"
         assert job.is_preemptible
+        assert job.is_preemptible_node_required
 
     def test_from_primitive_with_cluster_name(
         self, mock_orchestrator: MockOrchestrator, job_request_payload: Dict[str, Any]
@@ -1070,6 +1076,7 @@ class TestJob:
         assert job.owner == "testuser"
         assert job.cluster_name == "testcluster"
         assert not job.is_preemptible
+        assert not job.is_preemptible_node_required
 
     def test_from_primitive_with_entrypoint_without_command(
         self, mock_orchestrator: MockOrchestrator, job_request_payload: Dict[str, Any]
@@ -1254,6 +1261,7 @@ class TestJob:
             "materialized": "False",
             "finished_at": finished_at_str,
             "is_preemptible": False,
+            "is_preemptible_node_required": False,
             "pass_config": False,
             "restart_policy": str(JobRestartPolicy.ALWAYS),
         }
