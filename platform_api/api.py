@@ -21,6 +21,7 @@ from platform_api.orchestrator.job_policy_enforcer import (
     RuntimeLimitEnforcer,
 )
 
+from sentry_sdk import set_tag
 from sentry_sdk.integrations.aiohttp import AioHttpIntegration
 
 from .cluster import Cluster, ClusterConfig, ClusterRegistry
@@ -437,6 +438,9 @@ def main() -> None:
     sentry_url = config.sentry_url
     if sentry_url:
         sentry_sdk.init(dsn=sentry_url, integrations=[AioHttpIntegration()])
+
+    set_tag("cluster", "azure-dev")
+    set_tag("app", "platformapi")
 
     app = loop.run_until_complete(create_app(config))
     aiohttp.web.run_app(app, host=config.server.host, port=config.server.port)
