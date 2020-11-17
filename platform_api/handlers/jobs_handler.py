@@ -99,7 +99,7 @@ def create_job_request_validator(
             t.Key("pass_config", optional=True, default=False): t.Bool,
             t.Key("wait_for_jobs_quota", optional=True, default=False): t.Bool,
             t.Key("schedule_timeout", optional=True): t.Float(gte=1, lt=30 * 24 * 3600),
-            t.Key("max_run_time_minutes", optional=True): t.Int(gte=0),
+            t.Key("max_run_time_minutes", optional=True): t.Int(gte=1),
             t.Key("cluster_name", default=cluster_name): t.Atom(cluster_name),
             t.Key("restart_policy", default=str(JobRestartPolicy.NEVER)): t.Enum(
                 *[str(policy) for policy in JobRestartPolicy]
