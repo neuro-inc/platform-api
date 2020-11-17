@@ -439,7 +439,7 @@ def main() -> None:
     if sentry_url:
         sentry_sdk.init(dsn=sentry_url, integrations=[AioHttpIntegration()])
 
-    set_tag("cluster", "azure-dev")
+    set_tag("cluster", config.cluster_name)
     set_tag("app", "platformapi")
 
     app = loop.run_until_complete(create_app(config))

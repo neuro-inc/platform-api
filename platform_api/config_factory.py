@@ -51,7 +51,8 @@ class EnvironConfigFactory:
         api_base_url = URL(self._environ["NP_API_URL"])
         admin_url = URL(self._environ["NP_ADMIN_URL"])
         config_url = URL(self._environ["NP_PLATFORM_CONFIG_URI"])
-        sentry_url = self._environ.get("NP_AUTH_SENTRY_URL", Config.sentry_url)
+        sentry_url = self._environ.get("NP_SENTRY_URL", Config.sentry_url)
+        cluster_name = self._environ.get("NP_CLUSTER_NAME", Config.cluster_name)
         return Config(
             server=self.create_server(),
             database=self.create_database(),
@@ -68,6 +69,7 @@ class EnvironConfigFactory:
             admin_url=admin_url,
             api_base_url=api_base_url,
             sentry_url=sentry_url,
+            cluster_name=cluster_name,
         )
 
     def create_cluster(self, name: str) -> ClusterConfig:

@@ -28,3 +28,5 @@ NP_API_ZIPKIN_SAMPLE_RATE: '0.1'  # 10% of traces are saved
 NP_RESOURCES_CPU_REQUEST: "1"
 NP_RESOURCES_MEMORY_REQUEST: 1Gi
 NP_DB_POSTGRES_ENABLED: true
+NP_AUTH_SENTRY_URL: "https://00f2b1cb9abf48e49a17bb426242edef@sentry-dev-azure.neu.ro/10"
+NP_CLUSTER_NAME: "staging-azure"
