@@ -33,7 +33,8 @@ class KubeConfig(OrchestratorConfig):
 
     jobs_ingress_class: str = "traefik"
     jobs_ingress_oauth_url: URL = URL("https://neu.ro/oauth/authorize")
-    jobs_pod_toleration_key: str = "platform.neuromation.io/job"
+    jobs_pod_job_toleration_key: str = "platform.neuromation.io/job"
+    jobs_pod_preemptible_toleration_key: Optional[str] = None
     jobs_pod_priority_class_name: Optional[str] = None
 
     storage_volume_name: str = "storage"
@@ -41,6 +42,7 @@ class KubeConfig(OrchestratorConfig):
     node_label_gpu: Optional[str] = None
     node_label_preemptible: Optional[str] = None
     node_label_job: Optional[str] = None
+    node_label_node_pool: Optional[str] = None
 
     def __post_init__(self) -> None:
         if not self.endpoint_url or (

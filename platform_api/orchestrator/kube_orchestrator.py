@@ -366,15 +366,15 @@ class KubeOrchestrator(Orchestrator):
     def _get_pod_tolerations(self, job: Job) -> List[Toleration]:
         tolerations = [
             Toleration(
-                key=self._kube_config.jobs_pod_toleration_key,
+                key=self._kube_config.jobs_pod_job_toleration_key,
                 operator="Exists",
                 effect="NoSchedule",
             )
         ]
-        if self._kube_config.node_label_preemptible and job.is_preemptible:
+        if self._kube_config.jobs_pod_preemptible_toleration_key and job.is_preemptible:
             tolerations.append(
                 Toleration(
-                    key=self._kube_config.node_label_preemptible,
+                    key=self._kube_config.jobs_pod_preemptible_toleration_key,
                     operator="Exists",
                     effect="NoSchedule",
                 )
