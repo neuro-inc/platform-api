@@ -61,7 +61,7 @@ def clusters_payload(nfs_storage_payload: Dict[str, Any]) -> List[Dict[str, Any]
                     "node_label_preemptible": "cloud.google.com/gke-preemptible",
                     "node_label_job": "platform.neuromation.io/job",
                     "node_label_node_pool": "platform.neuromation.io/nodepool",
-                    "jobs_pod_preemptible_toleration_key": (
+                    "job_pod_preemptible_toleration_key": (
                         "platform.neuromation.io/preemptible"
                     ),
                     "job_pod_priority_class_name": "testpriority",
