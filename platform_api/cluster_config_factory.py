@@ -144,6 +144,10 @@ class ClusterConfigFactory:
             node_label_gpu=kube["node_label_gpu"],
             node_label_preemptible=kube["node_label_preemptible"],
             node_label_job=kube.get("node_label_job"),
+            node_label_node_pool=kube.get("node_label_node_pool"),
+            jobs_pod_preemptible_toleration_key=kube.get(
+                "job_pod_preemptible_toleration_key"
+            ),
             jobs_pod_priority_class_name=kube.get("job_pod_priority_class_name"),
             job_schedule_timeout=orchestrator.get(
                 "job_schedule_timeout_s", OrchestratorConfig.job_schedule_timeout
