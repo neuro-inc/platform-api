@@ -419,6 +419,19 @@ class TestJobPresetValidator:
         with pytest.raises(DataError, match="value doesn't match any variant"):
             validator.check(request)
 
+    def test_validator_preset_name_and_resources(self) -> None:
+        request = {
+            "preset_name": "preset",
+            "container": {"resources": {"cpu": 1.0, "memory_mb": 1024}},
+        }
+        validator = create_job_preset_validator(
+            [Preset(name="preset", cpu=0.1, memory_mb=100)]
+        )
+        with pytest.raises(
+            DataError, match="Both preset and resources are not allowed"
+        ):
+            validator.check(request)
+
     def test_validator_with_shm_gpu_tpu_preemptible(self) -> None:
         request = {
             "preset_name": "preset",

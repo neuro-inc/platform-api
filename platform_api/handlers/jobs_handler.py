@@ -113,6 +113,14 @@ def create_job_request_validator(
 def create_job_preset_validator(
     presets: Sequence[Preset],
 ) -> t.Trafaret:
+    def _check_no_resources(payload: Dict[str, Any]) -> Dict[str, Any]:
+        resources = payload["container"].get("resources")
+        if not resources:
+            return payload
+        if set(resources.keys()) - {"shm"}:
+            raise t.DataError("Both preset and resources are not allowed")
+        return payload
+
     def _set_preset_resources(payload: Dict[str, Any]) -> Dict[str, Any]:
         preset_name = payload["preset_name"]
         preset = {p.name: p for p in presets}[preset_name]
@@ -138,9 +146,12 @@ def create_job_preset_validator(
         t.Dict(
             {
                 "preset_name": t.Enum(*[p.name for p in presets]),
-                "container": t.Dict({}).allow_extra("*"),
+                "container": t.Dict(
+                    {t.Key("resources", optional=True): t.Dict({}).allow_extra("*")}
+                ).allow_extra("*"),
             }
         ).allow_extra("*")
+        >> _check_no_resources
         >> _set_preset_resources
     )
 
