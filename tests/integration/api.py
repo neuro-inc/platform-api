@@ -213,10 +213,10 @@ class JobsClient:
                 return response
             if response["status"] in stop_statuses:
                 pytest.fail(f"Status {status} cannot be reached, resp: {response}")
-            await asyncio.sleep(max(interval_s, time.monotonic() - t0))
             current_time = time.monotonic() - t0
             if current_time > max_time:
                 pytest.fail(f"too long: {current_time:.3f} sec; resp: {response}")
+            await asyncio.sleep(max(interval_s, time.monotonic() - t0))
             interval_s *= 1.5
 
     async def wait_job_creation(

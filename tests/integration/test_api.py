@@ -4734,13 +4734,17 @@ class TestRuntimeLimitEnforcer:
 
         job_submit["container"]["command"] = "sleep 1h"
 
-        job_submit["max_run_time_minutes"] = 0
+        job_submit["max_run_time_minutes"] = 1
         job_default = await user_jobs_client.create_job(job_submit)
-        assert job_default["max_run_time_minutes"] == 0
+        assert job_default["max_run_time_minutes"] == 1
+        await user_jobs_client.long_polling_by_job_id(
+            job_id=job_default["id"],
+            status="running",
+        )
         # Due to conflict between quota enforcer and jobs poller (see issue #986),
         # we cannot guarrantee that the quota will be enforced up to one
         # enforce-poller's interval, so we check up to 7 intervals:
-        max_enforcing_time = config.job_policy_enforcer.interval_sec * 7
+        max_enforcing_time = 60 + config.job_policy_enforcer.interval_sec * 7
         await user_jobs_client.long_polling_by_job_id(
             job_id=job_default["id"],
             interval_s=0.1,
