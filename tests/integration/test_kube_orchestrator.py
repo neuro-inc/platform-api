@@ -1644,14 +1644,12 @@ class TestKubeOrchestrator:
         raw = await kube_client.get_raw_pod(pod_name)
 
         container_raw = raw["spec"]["containers"][0]
-        assert container_raw["env"] == [
-            {
-                "name": "SECRET_VAR",
-                "valueFrom": {
-                    "secretKeyRef": {"key": secret_name, "name": secret.k8s_secret_name}
-                },
-            }
-        ]
+        assert {
+            "name": "SECRET_VAR",
+            "valueFrom": {
+                "secretKeyRef": {"key": secret_name, "name": secret.k8s_secret_name}
+            },
+        } in container_raw["env"]
 
     @pytest.mark.asyncio
     async def test_job_pod_with_secret_env_same_secret_ok(
@@ -1700,7 +1698,7 @@ class TestKubeOrchestrator:
         raw = await kube_client.get_raw_pod(pod_name)
 
         container_raw = raw["spec"]["containers"][0]
-        assert container_raw["env"] == [
+        for item in [
             {
                 "name": "SECRET_VAR_1",
                 "valueFrom": {
@@ -1713,7 +1711,8 @@ class TestKubeOrchestrator:
                     "secretKeyRef": {"key": secret_name_2, "name": k8s_secret_name}
                 },
             },
-        ]
+        ]:
+            assert item in container_raw["env"]
 
     @pytest.mark.asyncio
     async def test_job_pod_with_secret_volume_simple_ok(
