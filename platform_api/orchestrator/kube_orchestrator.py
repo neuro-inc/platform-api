@@ -3,13 +3,14 @@ import logging
 import operator
 from dataclasses import replace
 from datetime import datetime, timezone
-from typing import Any, Dict, Iterable, List, Optional, Union
+from typing import Any, Dict, Iterable, List, Optional, Sequence, Tuple, Union
 
 from platform_api.cluster_config import (
     OrchestratorConfig,
     RegistryConfig,
     StorageConfig,
 )
+from platform_api.resource import ResourcePoolType
 
 from .base import Orchestrator
 from .job import Job, JobRestartPolicy, JobStatusItem, JobStatusReason
@@ -27,7 +28,6 @@ from .kube_client import (
     KubeClient,
     NfsVolume,
     NodeAffinity,
-    NodePreferredSchedulingTerm,
     NodeSelectorRequirement,
     NodeSelectorTerm,
     PodDescriptor,
@@ -256,10 +256,21 @@ class KubeOrchestrator(Orchestrator):
         except Exception as e:
             logger.warning(f"Failed to remove network policy {name}: {e}")
 
-    async def _create_pod_descriptor(self, job: Job) -> PodDescriptor:
-        node_selector = await self._get_pod_node_selector(job)
-        tolerations = self._get_pod_tolerations(job)
-        node_affinity = self._get_pod_node_affinity(job)
+    async def _create_pod_descriptor(
+        self, job: Job, tolerate_unreachable_node: bool = False
+    ) -> PodDescriptor:
+        pool_types = self._get_cheapest_pool_types(job)
+        if not pool_types:
+            raise ValueError("Job will not fit into cluster")
+        logger.info(
+            "Job %s is scheduled to run in pool types %s",
+            job.id,
+            ", ".join([p.name for p in pool_types]),
+        )
+        tolerations = self._get_pod_tolerations(
+            job, tolerate_unreachable_node=tolerate_unreachable_node
+        )
+        node_affinity = self._get_pod_node_affinity(job, pool_types)
         labels = self._get_pod_labels(job)
         # NOTE: both node selector and affinity must be satisfied for the pod
         # to be scheduled onto a node.
@@ -269,13 +280,45 @@ class KubeOrchestrator(Orchestrator):
             job.request,
             secret_volume_factory=self.create_secret_volume,
             image_pull_secret_names=[self._get_docker_secret_name(job)],
-            node_selector=node_selector,
             tolerations=tolerations,
             node_affinity=node_affinity,
             labels=labels,
             priority_class_name=self._kube_config.jobs_pod_priority_class_name,
             restart_policy=self._get_pod_restart_policy(job),
         )
+
+    def _get_cheapest_pool_types(self, job: Job) -> Sequence[ResourcePoolType]:
+        container_resources = job.request.container.resources
+        pool_types: Dict[Tuple[str, int, float, int], List[ResourcePoolType]] = {}
+
+        for pool_type in self._kube_config.resource_pool_types:
+            # Do not schedule non-preemptible jobs on preemptible nodes
+            if not job.is_preemptible and pool_type.is_preemptible:
+                continue
+
+            # Schedule jobs only on preemptible nodes if required
+            if job.is_forced_to_preemptible_pool and not pool_type.is_preemptible:
+                continue
+
+            # Do not schedule cpu jobs on gpu nodes
+            if not container_resources.gpu and pool_type.gpu:
+                continue
+
+            if not container_resources.check_fit_into_pool_type(pool_type):
+                continue
+
+            key = (
+                pool_type.gpu_model or "",
+                pool_type.gpu or 0,
+                pool_type.available_cpu or 0,
+                pool_type.available_memory_mb or 0,
+            )
+            value = pool_types.get(key) or []
+            value.append(pool_type)
+            pool_types[key] = value
+
+        sorted_pool_types = sorted(pool_types.items(), key=lambda x: x[0])
+        return sorted_pool_types[0][1] if pool_types else []
 
     def _get_user_pod_labels(self, job: Job) -> Dict[str, str]:
         return {"platform.neuromation.io/user": job.owner}
@@ -336,13 +379,21 @@ class KubeOrchestrator(Orchestrator):
                 f"{self._get_service_name_for_named(job)}.{self._kube_config.namespace}"
             )
 
-    async def start_job(self, job: Job) -> JobStatus:
+    async def start_job(
+        self, job: Job, tolerate_unreachable_node: bool = False
+    ) -> JobStatus:
+        """
+        tolerate_unreachable_node: used only in tests
+        """
+
         await self._create_docker_secret(job)
         await self._create_user_network_policy(job)
         try:
             await self._create_pod_network_policy(job)
 
-            descriptor = await self._create_pod_descriptor(job)
+            descriptor = await self._create_pod_descriptor(
+                job, tolerate_unreachable_node=tolerate_unreachable_node
+            )
             pod = await self._client.create_pod(descriptor)
 
             logger.info(f"Starting Service for {job.id}.")
@@ -363,7 +414,9 @@ class KubeOrchestrator(Orchestrator):
         job.status_history.current = await self._get_pod_status(job, pod)
         return job.status
 
-    def _get_pod_tolerations(self, job: Job) -> List[Toleration]:
+    def _get_pod_tolerations(
+        self, job: Job, tolerate_unreachable_node: bool = False
+    ) -> List[Toleration]:
         tolerations = [
             Toleration(
                 key=self._kube_config.jobs_pod_job_toleration_key,
@@ -379,73 +432,42 @@ class KubeOrchestrator(Orchestrator):
                     effect="NoSchedule",
                 )
             )
+        if tolerate_unreachable_node:
+            # Used only in tests. Minikube puts taint on nodes
+            # soon after it is created through K8s Api.
+            tolerations.append(
+                Toleration(
+                    key="node.kubernetes.io/unreachable",
+                    operator="Exists",
+                    effect="NoSchedule",
+                )
+            )
         return tolerations
 
-    def _get_pod_node_affinity(self, job: Job) -> Optional[NodeAffinity]:
-        requirements = []
-        preferences = []
-
-        if self._kube_config.node_label_job:
-            # requiring a job node
-            requirements.append(
-                NodeSelectorRequirement.create_exists(self._kube_config.node_label_job)
-            )
-
-        if self._kube_config.node_label_preemptible:
-            if job.is_preemptible:
-                preemptible_requirement = NodeSelectorRequirement.create_exists(
-                    self._kube_config.node_label_preemptible
-                )
-                if job.is_forced_to_preemptible_pool:
-                    # requiring a preemptible node
-                    requirements.append(preemptible_requirement)
-                else:
-                    # preferring a preemptible node
-                    preferences.append(preemptible_requirement)
-            else:
-                # requiring a non-preemptible node
-                requirements.append(
-                    NodeSelectorRequirement.create_does_not_exist(
-                        self._kube_config.node_label_preemptible
-                    )
-                )
-
-        required_terms = []
-        preferred_terms = []
-
-        if requirements:
-            node_selector_term = NodeSelectorTerm(requirements)
-            required_terms.append(node_selector_term)
-
-        if preferences:
-            node_selector_term = NodeSelectorTerm(preferences)
-            preferred_terms.append(NodePreferredSchedulingTerm(node_selector_term))
-
+    def _get_pod_node_affinity(
+        self, job: Job, pool_types: Sequence[ResourcePoolType]
+    ) -> Optional[NodeAffinity]:
         # NOTE:
         # The pod is scheduled onto a node only if at least one of
         # `NodeSelectorTerm`s is satisfied.
         # `NodeSelectorTerm` is satisfied only if its `match_expressions` are
         # satisfied.
+        required_terms = []
 
-        if required_terms or preferred_terms:
-            return NodeAffinity(required=required_terms, preferred=preferred_terms)
-        return None
-
-    async def _get_pod_node_selector(self, job: Job) -> Dict[str, str]:
-        container = job.request.container
-        selector: Dict[str, str] = {}
-
-        if not self._kube_config.node_label_gpu:
-            return selector
-
-        pool_types = await self.get_resource_pool_types()
-        for pool_type in pool_types:
-            if container.resources.check_fit_into_pool_type(pool_type):
-                if pool_type.gpu_model:
-                    selector[self._kube_config.node_label_gpu] = pool_type.gpu_model
-                break
-
-        return selector
+        if self._kube_config.node_label_node_pool:
+            for pool_type in pool_types:
+                required_terms.append(
+                    NodeSelectorTerm(
+                        [
+                            NodeSelectorRequirement.create_in(
+                                self._kube_config.node_label_node_pool, pool_type.name
+                            )
+                        ]
+                    )
+                )
+        if not required_terms:
+            return None
+        return NodeAffinity(required_terms)
 
     def _get_job_pod_name(self, job: Job) -> str:
         # TODO (A Danshyn 11/15/18): we will need to start storing jobs'

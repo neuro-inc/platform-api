@@ -34,7 +34,13 @@ data:
                 "named_job_hostname_template": "{job_name}-{job_owner}.jobs.platform.dev.neuromation.io",
 
                 "resource_pool_types": [
-                    {"name": "node-pool"}
+                    {
+                      "name": "node-pool",
+                      "cpu": 1.0,
+                      "available_cpu": 1.0,
+                      "memory_mb": 2048,
+                      "available_memory_mb": 2048
+                    }
                 ]
             },
 
@@ -52,7 +58,7 @@ data:
         }
     ]
 ---
-apiVersion: extensions/v1beta1
+apiVersion: apps/v1
 kind: Deployment
 metadata:
   name: platformconfig

@@ -35,7 +35,12 @@ from platform_api.config import (
     ZipkinConfig,
 )
 from platform_api.orchestrator.job_request import JobNotFoundException
-from platform_api.orchestrator.kube_client import KubeClient, NodeTaint, Resources
+from platform_api.orchestrator.kube_client import (
+    AlreadyExistsException,
+    KubeClient,
+    NodeTaint,
+    Resources,
+)
 from platform_api.orchestrator.kube_orchestrator import KubeConfig, KubeOrchestrator
 from platform_api.redis import RedisConfig
 from platform_api.resource import (
@@ -145,15 +150,44 @@ def kube_config_factory(
             auth_cert_key_path=user["client-key"],
             node_label_gpu="gpu",
             resource_pool_types=[
-                ResourcePoolType(),
                 ResourcePoolType(
+                    cpu=1.0,
+                    available_cpu=1.0,
+                    memory_mb=2048,
+                    available_memory_mb=2048,
+                ),
+                ResourcePoolType(
+                    cpu=1.0,
+                    available_cpu=1.0,
+                    memory_mb=2048,
+                    available_memory_mb=2048,
+                    is_preemptible=True,
+                ),
+                ResourcePoolType(
+                    cpu=100,
+                    available_cpu=100,
+                    memory_mb=500_000,
+                    available_memory_mb=500_000,
+                ),
+                ResourcePoolType(
+                    cpu=1.0,
+                    available_cpu=1.0,
+                    memory_mb=2048,
+                    available_memory_mb=2048,
                     tpu=TPUResource(
                         ipv4_cidr_block="1.1.1.1/32",
                         types=("v2-8",),
                         software_versions=("1.14",),
                     ),
                 ),
-                ResourcePoolType(gpu=1, gpu_model="gpumodel"),
+                ResourcePoolType(
+                    cpu=1.0,
+                    available_cpu=1.0,
+                    memory_mb=2048,
+                    available_memory_mb=2048,
+                    gpu=1,
+                    gpu_model="gpumodel",
+                ),
             ],
             presets=[
                 Preset(
@@ -202,6 +236,48 @@ async def kube_config(kube_config_factory: Callable[..., KubeConfig]) -> KubeCon
     return kube_config_factory()
 
 
+@pytest.fixture
+def kube_job_nodes_factory(
+    kube_client: KubeClient, delete_node_later: Callable[[str], Awaitable[None]]
+) -> Callable[[KubeConfig], Awaitable[None]]:
+    async def _create(kube_config: KubeConfig) -> None:
+        assert kube_config.node_label_job
+        assert kube_config.node_label_node_pool
+        assert kube_config.node_label_preemptible
+
+        for pool_type in kube_config.resource_pool_types:
+            assert pool_type.name
+
+            await delete_node_later(pool_type.name)
+            labels = {
+                kube_config.node_label_job: "true",
+                kube_config.node_label_node_pool: pool_type.name,
+            }
+            if pool_type.is_preemptible:
+                labels[kube_config.node_label_preemptible] = "true"
+            capacity = {
+                "pods": "110",
+                "cpu": int(pool_type.available_cpu or 0),
+                "memory": f"{pool_type.available_memory_mb}Mi",
+                "nvidia.com/gpu": pool_type.gpu or 0,
+            }
+            taints = [
+                NodeTaint(key=kube_config.jobs_pod_job_toleration_key, value="true")
+            ]
+            if pool_type.gpu:
+                taints.append(NodeTaint(key=Resources.gpu_key, value="present"))
+            try:
+                await kube_client.create_node(
+                    pool_type.name, capacity=capacity, labels=labels, taints=taints
+                )
+            except AlreadyExistsException:
+                # there can be multiple kube_orchestrator created in tests (for tests
+                # and for tests cleanup)
+                pass
+
+    return _create
+
+
 @pytest.fixture(scope="session")
 async def kube_ingress_ip(kube_config_cluster_payload: Dict[str, Any]) -> str:
     cluster = kube_config_cluster_payload
@@ -247,7 +323,7 @@ class MyKubeClient(KubeClient):
     async def wait_pod_scheduled(
         self,
         pod_name: str,
-        node_name: str,
+        node_name: str = "",
         timeout_s: float = 5.0,
         interval_s: float = 1.0,
     ) -> None:
@@ -255,7 +331,10 @@ class MyKubeClient(KubeClient):
             async with timeout(timeout_s):
                 while True:
                     raw_pod = await self.get_raw_pod(pod_name)
-                    pod_has_node = raw_pod["spec"].get("nodeName") == node_name
+                    if node_name:
+                        pod_has_node = raw_pod["spec"].get("nodeName") == node_name
+                    else:
+                        pod_has_node = bool(raw_pod["spec"].get("nodeName"))
                     pod_is_scheduled = "PodScheduled" in [
                         cond["type"]
                         for cond in raw_pod["status"].get("conditions", [])
@@ -573,32 +652,6 @@ async def kube_node_preemptible(
     taints = [
         NodeTaint(key=kube_config.jobs_pod_preemptible_toleration_key, value="present")
     ]
-    await kube_client.create_node(
-        node_name, capacity=default_node_capacity, labels=labels, taints=taints
-    )
-
-    yield node_name
-
-
-@pytest.fixture
-def kube_config_node_job(kube_config_factory: Callable[..., KubeConfig]) -> KubeConfig:
-    return kube_config_factory(node_label_job="platform.neuromation.io/job")
-
-
-@pytest.fixture
-async def kube_node_job(
-    kube_config_node_job: KubeConfig,
-    kube_client: MyKubeClient,
-    delete_node_later: Callable[[str], Awaitable[None]],
-    default_node_capacity: Dict[str, Any],
-) -> AsyncIterator[str]:
-    node_name = str(uuid.uuid4())
-    await delete_node_later(node_name)
-
-    kube_config = kube_config_node_job
-    assert kube_config.node_label_job is not None
-    labels = {kube_config.node_label_job: "true"}
-    taints = [NodeTaint(key=kube_config.node_label_job, value="true")]
     await kube_client.create_node(
         node_name, capacity=default_node_capacity, labels=labels, taints=taints
     )

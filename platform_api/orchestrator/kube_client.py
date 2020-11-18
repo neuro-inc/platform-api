@@ -567,6 +567,10 @@ class NodeSelectorRequirement:
             raise ValueError("values must be empty")
 
     @classmethod
+    def create_in(cls, key: str, *values: str) -> "NodeSelectorRequirement":
+        return cls(key=key, operator=NodeSelectorOperator.IN, values=[*values])
+
+    @classmethod
     def create_exists(cls, key: str) -> "NodeSelectorRequirement":
         return cls(key=key, operator=NodeSelectorOperator.EXISTS)
 

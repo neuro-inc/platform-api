@@ -208,7 +208,14 @@ class ContainerResources:
         return payload
 
     def check_fit_into_pool_type(self, pool_type: ResourcePoolType) -> bool:
-        return self._check_gpu(pool_type) and self._check_tpu(pool_type)
+        if not pool_type.available_cpu or not pool_type.available_memory_mb:
+            return False
+        return (
+            self.cpu <= pool_type.available_cpu
+            and self.memory_mb <= pool_type.available_memory_mb
+            and self._check_gpu(pool_type)
+            and self._check_tpu(pool_type)
+        )
 
     def _check_gpu(self, pool_type: ResourcePoolType) -> bool:
         if not self.gpu:
