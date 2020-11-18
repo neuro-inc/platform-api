@@ -243,13 +243,11 @@ class JobStatusHistory:
         # This field is not 100% accurate because of polling nature of collecting
         # status items. On other side, even k8s `restartCount` can be wrong,
         # so it is should be OK.
-        return len(
-            [
-                item
-                for item in self._items
-                if item.reason == JobStatusReason.RESTARTING
-                or item.status == JobStatus.SUSPENDED
-            ]
+        return sum(
+            1
+            for item in self._items
+            if item.reason == JobStatusReason.RESTARTING
+            or item.status == JobStatus.SUSPENDED
         )
 
 
