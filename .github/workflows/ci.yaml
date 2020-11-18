@@ -49,7 +49,7 @@ jobs:
         uses: aws-actions/amazon-ecr-login@v1
       - name: Configure Azure credentials
         if: env.CLOUD_PROVIDER == 'azure'
-        uses: azure/login@v1.1
+        uses: azure/login@v1
         with:
           creds: ${{secrets.AZURE_CREDENTIALS}}
       - name: Login to Azure ACR
