@@ -629,6 +629,7 @@ class TestKubeOrchestrator:
                 request=JobRequest.create(container),
                 cluster_name=cluster_name,
                 owner=user_name,
+                name="test-job",
             ),
         )
         await delete_job_later(job)
@@ -648,15 +649,13 @@ class TestKubeOrchestrator:
             "NEURO_JOB_CLUSTER": job.cluster_name,
             "NEURO_JOB_INTERNAL_HOSTNAME": job.internal_hostname,
             "NEURO_JOB_INTERNAL_HOSTNAME_NAMED": job.internal_hostname_named,
-            "NEURO_JOB_HTTP_PORT": job.request.container.port,
-            "NEURO_JOB_HTTP_AUTH": "True"
-            if job.request.container.requires_http_auth
-            else None,
+            "NEURO_JOB_HTTP_PORT": "",
+            "NEURO_JOB_HTTP_AUTH": "",
             # Uncomment after https://github.com/neuro-inc/platform-api/pull/1398 merged
             # "NEURO_JOB_PRESET": job.preset_name,
         }
         real_values = {
-            item.get("name"): item.get("value", None) for item in container_raw["env"]
+            item.get("name"): item.get("value", "") for item in container_raw["env"]
         }
 
         for key, value in expected_values.items():
