@@ -609,6 +609,60 @@ class TestKubeOrchestrator:
             await job.delete()
 
     @pytest.mark.asyncio
+    async def test_job_pod_metadata_in_env(
+        self,
+        kube_config: KubeConfig,
+        kube_orchestrator: KubeOrchestrator,
+        kube_client: MyKubeClient,
+        delete_job_later: Callable[[Job], Awaitable[None]],
+        cluster_name: str,
+    ) -> None:
+        user_name = self._create_username()
+        container = Container(
+            image="ubuntu",
+            command="sleep infinity",
+            resources=ContainerResources(cpu=0.1, memory_mb=16),
+        )
+        job = MyJob(
+            orchestrator=kube_orchestrator,
+            record=JobRecord.create(
+                request=JobRequest.create(container),
+                cluster_name=cluster_name,
+                owner=user_name,
+            ),
+        )
+        await delete_job_later(job)
+        await job.start()
+
+        pod_name = job.id
+        await kube_client.wait_pod_is_running(pod_name=pod_name, timeout_s=60.0)
+
+        raw = await kube_client.get_raw_pod(pod_name)
+
+        container_raw = raw["spec"]["containers"][0]
+
+        expected_values = {
+            "NEURO_JOB_ID": job.id,
+            "NEURO_JOB_NAME": job.name,
+            "NEURO_JOB_OWNER": job.owner,
+            "NEURO_JOB_CLUSTER": job.cluster_name,
+            "NEURO_JOB_INTERNAL_HOSTNAME": job.internal_hostname,
+            "NEURO_JOB_INTERNAL_HOSTNAME_NAMED": job.internal_hostname_named,
+            "NEURO_JOB_HTTP_PORT": job.request.container.port,
+            "NEURO_JOB_HTTP_AUTH": "True"
+            if job.request.container.requires_http_auth
+            else None,
+            # Uncomment after https://github.com/neuro-inc/platform-api/pull/1398 merged
+            # "NEURO_JOB_PRESET": job.preset_name,
+        }
+        real_values = {
+            item.get("name"): item.get("value", None) for item in container_raw["env"]
+        }
+
+        for key, value in expected_values.items():
+            assert real_values[key] == value, key
+
+    @pytest.mark.asyncio
     async def test_working_dir(self, kube_orchestrator: KubeOrchestrator) -> None:
         container = Container(
             image="ubuntu",
