@@ -550,7 +550,10 @@ async def kube_node_tpu(
 def kube_config_node_preemptible(
     kube_config_factory: Callable[..., KubeConfig]
 ) -> KubeConfig:
-    return kube_config_factory(node_label_preemptible="preemptible")
+    return kube_config_factory(
+        node_label_preemptible="preemptible",
+        jobs_pod_preemptible_toleration_key="preemptible-taint",
+    )
 
 
 @pytest.fixture
@@ -565,8 +568,11 @@ async def kube_node_preemptible(
 
     kube_config = kube_config_node_preemptible
     assert kube_config.node_label_preemptible is not None
+    assert kube_config.jobs_pod_preemptible_toleration_key is not None
     labels = {kube_config.node_label_preemptible: "true"}
-    taints = [NodeTaint(key=kube_config.node_label_preemptible, value="true")]
+    taints = [
+        NodeTaint(key=kube_config.jobs_pod_preemptible_toleration_key, value="present")
+    ]
     await kube_client.create_node(
         node_name, capacity=default_node_capacity, labels=labels, taints=taints
     )
