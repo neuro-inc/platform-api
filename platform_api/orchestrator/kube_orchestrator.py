@@ -264,6 +264,28 @@ class KubeOrchestrator(Orchestrator):
         # NOTE: both node selector and affinity must be satisfied for the pod
         # to be scheduled onto a node.
 
+        def _to_env_str(value: Any) -> str:
+            if value:
+                return str(value)
+            return ""
+
+        meta_env = {
+            "NEURO_JOB_ID": job.id,
+            "NEURO_JOB_NAME": _to_env_str(job.name),
+            "NEURO_JOB_OWNER": job.owner,
+            "NEURO_JOB_CLUSTER": job.cluster_name,
+            "NEURO_JOB_INTERNAL_HOSTNAME": _to_env_str(job.internal_hostname),
+            "NEURO_JOB_INTERNAL_HOSTNAME_NAMED": _to_env_str(
+                job.internal_hostname_named
+            ),
+            "NEURO_JOB_HTTP_PORT": _to_env_str(job.request.container.port),
+            "NEURO_JOB_HTTP_AUTH": _to_env_str(
+                job.request.container.requires_http_auth
+            ),
+            # Uncomment after https://github.com/neuro-inc/platform-api/pull/1398 merged
+            # "NEURO_JOB_PRESET": job.preset_name,
+        }
+
         return PodDescriptor.from_job_request(
             self._storage_volume,
             job.request,
@@ -275,6 +297,7 @@ class KubeOrchestrator(Orchestrator):
             labels=labels,
             priority_class_name=self._kube_config.jobs_pod_priority_class_name,
             restart_policy=self._get_pod_restart_policy(job),
+            meta_env=meta_env,
         )
 
     def _get_user_pod_labels(self, job: Job) -> Dict[str, str]:

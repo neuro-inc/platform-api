@@ -732,6 +732,7 @@ class PodDescriptor:
         labels: Optional[Dict[str, str]] = None,
         priority_class_name: Optional[str] = None,
         restart_policy: PodRestartPolicy = PodRestartPolicy.NEVER,
+        meta_env: Optional[Dict[str, str]] = None,
     ) -> "PodDescriptor":
         container = job_request.container
 
@@ -779,13 +780,18 @@ class PodDescriptor:
             annotations[
                 cls.tpu_version_annotation_key
             ] = container.resources.tpu.software_version
+
+        env = container.env.copy()
+        if meta_env:
+            env.update(meta_env)
+
         return cls(
             name=job_request.job_id,
             image=container.image,
             command=container.entrypoint_list,
             args=container.command_list,
             working_dir=container.working_dir,
-            env=container.env.copy(),
+            env=env,
             secret_env_list=sec_env_list,
             volume_mounts=volume_mounts,
             volumes=volumes,
