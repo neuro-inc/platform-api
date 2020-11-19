@@ -1,18 +1,20 @@
 import asyncio
 import logging
-import sentry_sdk
 from contextlib import AsyncExitStack
 from typing import Any, AsyncIterator, Awaitable, Callable, Dict, Sequence
 
 import aiohttp.web
 import aiohttp_cors
 import aiozipkin
+import sentry_sdk
 from aiohttp.web import HTTPUnauthorized
 from aiohttp_security import check_permission
 from neuro_auth_client import AuthClient, Permission
 from neuro_auth_client.security import AuthScheme, setup_security
 from notifications_client import Client as NotificationsClient
 from platform_logging import init_logging
+from sentry_sdk import set_tag
+from sentry_sdk.integrations.aiohttp import AioHttpIntegration
 
 from platform_api.orchestrator.job_policy_enforcer import (
     JobPolicyEnforcePoller,
@@ -20,9 +22,6 @@ from platform_api.orchestrator.job_policy_enforcer import (
     QuotaEnforcer,
     RuntimeLimitEnforcer,
 )
-
-from sentry_sdk import set_tag
-from sentry_sdk.integrations.aiohttp import AioHttpIntegration
 
 from .cluster import Cluster, ClusterConfig, ClusterRegistry
 from .config import Config, CORSConfig
