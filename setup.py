@@ -2,7 +2,7 @@ from setuptools import find_packages, setup
 
 
 install_requires = (
-    "aiohttp==3.7.2",
+    "aiohttp==3.7.3",
     # WARN: aioredis does not support Redis Cluster yet
     "aioredis==1.3.1",
     "iso8601==0.1.13",
