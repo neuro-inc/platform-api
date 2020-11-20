@@ -6,12 +6,15 @@ from typing import Any, AsyncIterator, Awaitable, Callable, Dict, Sequence
 import aiohttp.web
 import aiohttp_cors
 import aiozipkin
+import sentry_sdk
 from aiohttp.web import HTTPUnauthorized
 from aiohttp_security import check_permission
 from neuro_auth_client import AuthClient, Permission
 from neuro_auth_client.security import AuthScheme, setup_security
 from notifications_client import Client as NotificationsClient
 from platform_logging import init_logging
+from sentry_sdk import set_tag
+from sentry_sdk.integrations.aiohttp import AioHttpIntegration
 
 from platform_api.orchestrator.job_policy_enforcer import (
     JobPolicyEnforcePoller,
@@ -430,6 +433,13 @@ def main() -> None:
     logging.info("Loaded config: %r", config)
 
     loop = asyncio.get_event_loop()
+
+    sentry_url = config.sentry_url
+    if sentry_url:
+        sentry_sdk.init(dsn=sentry_url, integrations=[AioHttpIntegration()])
+
+    set_tag("cluster", config.cluster_name)
+    set_tag("app", "platformapi")
 
     app = loop.run_until_complete(create_app(config))
     aiohttp.web.run_app(app, host=config.server.host, port=config.server.port)

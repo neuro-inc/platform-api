@@ -127,6 +127,14 @@ spec:
               key: platformapi-service-dsn
         - name: NP_DB_POSTGRES_ENABLED
           value: "{{ .Values.NP_DB_POSTGRES_ENABLED }}"
+        {{- if .Values.NP_SENTRY_URL }}
+        - name: NP_SENTRY_URL
+          value: {{ .Values.NP_SENTRY_URL }}
+        {{- end }}
+        {{- if .Values.NP_CLUSTER_NAME }}
+        - name: NP_CLUSTER_NAME
+          value: {{ .Values.NP_CLUSTER_NAME }}
+        {{- end }}
       - name: kubeproxy
         image: lachlanevenson/k8s-kubectl:v1.10.3
         args: [proxy]

@@ -162,6 +162,9 @@ class Config:
     # sourcing them inside containers.
     env_prefix: str = "NP"  # stands for Neuromation Platform
 
+    sentry_url: str = ""
+    cluster_name: str = ""
+
 
 @dataclass(frozen=True)
 class PlatformConfig:
