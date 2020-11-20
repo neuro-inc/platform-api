@@ -20,6 +20,7 @@ from platform_api.handlers.jobs_handler import (
     convert_job_container_to_json,
     convert_job_to_job_response,
     create_job_cluster_name_validator,
+    create_job_preset_validator,
     create_job_request_validator,
     infer_permissions_from_container,
 )
@@ -47,7 +48,7 @@ from platform_api.orchestrator.job_request import (
     JobStatus,
 )
 from platform_api.orchestrator.jobs_storage import JobFilter
-from platform_api.resource import TPUResource
+from platform_api.resource import Preset, TPUPreset, TPUResource
 from platform_api.user import User
 
 from .conftest import MockOrchestrator
@@ -393,6 +394,83 @@ class TestJobClusterNameValidator:
         validator = create_job_cluster_name_validator("default")
         with pytest.raises(DataError, match="value is not a string"):
             validator.check(request)
+
+
+class TestJobPresetValidator:
+    def test_validator(self) -> None:
+        request = {"preset_name": "preset", "container": {}}
+        validator = create_job_preset_validator(
+            [Preset(name="preset", cpu=0.1, memory_mb=100)]
+        )
+        payload = validator.check(request)
+
+        assert payload == {
+            "preset_name": "preset",
+            "container": {"resources": {"cpu": 0.1, "memory_mb": 100, "shm": False}},
+            "is_preemptible": False,
+            "is_preemptible_node_required": False,
+        }
+
+    def test_validator_unknown_preset_name(self) -> None:
+        request = {"preset_name": "unknown", "container": {}}
+        validator = create_job_preset_validator(
+            [Preset(name="preset", cpu=0.1, memory_mb=100)]
+        )
+        with pytest.raises(DataError, match="value doesn't match any variant"):
+            validator.check(request)
+
+    def test_validator_preset_name_and_resources(self) -> None:
+        request = {
+            "preset_name": "preset",
+            "container": {"resources": {"cpu": 1.0, "memory_mb": 1024}},
+        }
+        validator = create_job_preset_validator(
+            [Preset(name="preset", cpu=0.1, memory_mb=100)]
+        )
+        with pytest.raises(
+            DataError, match="Both preset and resources are not allowed"
+        ):
+            validator.check(request)
+
+    def test_validator_with_shm_gpu_tpu_preemptible(self) -> None:
+        request = {
+            "preset_name": "preset",
+            "container": {"resources": {"shm": True}},
+        }
+        validator = create_job_preset_validator(
+            [
+                Preset(
+                    name="preset",
+                    cpu=0.1,
+                    memory_mb=100,
+                    gpu=1,
+                    gpu_model="nvidia-tesla-k80",
+                    tpu=TPUPreset(type="v2-8", software_version="1.14"),
+                    is_preemptible=True,
+                    is_preemptible_node_required=True,
+                )
+            ]
+        )
+        payload = validator.check(request)
+
+        assert payload == {
+            "preset_name": "preset",
+            "container": {
+                "resources": {
+                    "cpu": 0.1,
+                    "memory_mb": 100,
+                    "shm": True,
+                    "gpu": 1,
+                    "gpu_model": "nvidia-tesla-k80",
+                    "tpu": {
+                        "type": "v2-8",
+                        "software_version": "1.14",
+                    },
+                }
+            },
+            "is_preemptible": True,
+            "is_preemptible_node_required": True,
+        }
 
 
 class TestJobRequestValidator:
@@ -1493,3 +1571,26 @@ async def test_job_to_job_response_assert_non_empty_cluster_name(
     )
     with pytest.raises(AssertionError, match="must be already replaced"):
         convert_job_to_job_response(job)
+
+
+@pytest.mark.asyncio
+async def test_job_to_job_response_with_preset_name(
+    mock_orchestrator: MockOrchestrator,
+) -> None:
+    job = Job(
+        storage_config=mock_orchestrator.storage_config,
+        orchestrator_config=mock_orchestrator.config,
+        record=JobRecord.create(
+            request=JobRequest.create(
+                Container(
+                    image="testimage",
+                    resources=ContainerResources(cpu=1, memory_mb=128),
+                )
+            ),
+            cluster_name="test-cluster",
+            preset_name="cpu-small",
+        ),
+    )
+    payload = convert_job_to_job_response(job)
+
+    assert payload["preset_name"] == "cpu-small"

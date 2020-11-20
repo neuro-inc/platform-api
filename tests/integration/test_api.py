@@ -26,6 +26,7 @@ from aiohttp.web import (
 )
 from aiohttp.web_exceptions import HTTPCreated, HTTPNotFound
 from neuro_auth_client import Cluster as AuthCluster, Permission, Quota
+from yarl import URL
 
 from platform_api.config import Config
 from platform_api.orchestrator.jobs_service import NEURO_PASSED_CONFIG
@@ -246,6 +247,13 @@ class TestApi:
                         "is_preemptible_node_required": True,
                     },
                     {
+                        "name": "cpu-micro",
+                        "cpu": 0.1,
+                        "memory_mb": 100,
+                        "is_preemptible": False,
+                        "is_preemptible_node_required": False,
+                    },
+                    {
                         "name": "cpu-small",
                         "cpu": 2,
                         "memory_mb": 2048,
@@ -325,6 +333,13 @@ class TestApi:
                         "gpu_model": "nvidia-tesla-v100",
                         "is_preemptible": True,
                         "is_preemptible_node_required": True,
+                    },
+                    {
+                        "name": "cpu-micro",
+                        "cpu": 0.1,
+                        "memory_mb": 100,
+                        "is_preemptible": False,
+                        "is_preemptible_node_required": False,
                     },
                     {
                         "name": "cpu-small",
@@ -2262,6 +2277,39 @@ class TestJobs:
         assert retrieved_job["name"] == job_name
         assert retrieved_job["container"]["http"]["requires_auth"]
         assert retrieved_job["schedule_timeout"] == 90
+
+        await jobs_client.long_polling_by_job_id(job_id=job_id, status="succeeded")
+        await jobs_client.delete_job(job_id=job_id)
+
+    @pytest.mark.asyncio
+    async def test_create_job_from_preset(
+        self,
+        api: ApiConfig,
+        client: aiohttp.ClientSession,
+        job_submit: Dict[str, Any],
+        jobs_client: JobsClient,
+        regular_user: _User,
+    ) -> None:
+        job_name = f"test-job-name-{random_str()}"
+        preset_name = "cpu-micro"
+        url = URL(api.jobs_base_url).with_query("from_preset")
+        del job_submit["container"]["resources"]
+        job_submit["name"] = job_name
+        job_submit["preset_name"] = preset_name
+        job_submit["container"]["entrypoint"] = "/bin/echo"
+        job_submit["container"]["command"] = "false"
+        job_submit["container"]["http"]["requires_auth"] = True
+        job_submit["schedule_timeout"] = 90
+        job_submit["cluster_name"] = "test-cluster"
+        async with client.post(
+            url, headers=regular_user.headers, json=job_submit
+        ) as resp:
+            assert resp.status == HTTPAccepted.status_code, await resp.text()
+            payload = await resp.json()
+            job_id = payload["id"]
+            assert payload["status"] in ["pending"]
+            assert payload["name"] == job_name
+            assert payload["preset_name"] == preset_name
 
         await jobs_client.long_polling_by_job_id(job_id=job_id, status="succeeded")
         await jobs_client.delete_job(job_id=job_id)

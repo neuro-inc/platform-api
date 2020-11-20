@@ -51,7 +51,7 @@ from platform_api.orchestrator.jobs_storage import (
     JobFilter,
     JobStorageTransactionError,
 )
-from platform_api.resource import TPUResource
+from platform_api.resource import Preset, TPUResource
 from platform_api.user import User, authorized_user, untrusted_user
 
 from .job_request_builder import create_container_from_payload
@@ -91,6 +91,7 @@ def create_job_request_validator(
             ),
             t.Key("name", optional=True): create_job_name_validator(),
             t.Key("description", optional=True): t.String,
+            t.Key("preset_name", optional=True): t.String,
             t.Key("tags", optional=True): t.List(
                 create_job_tag_validator(), max_length=16
             ),
@@ -107,6 +108,54 @@ def create_job_request_validator(
             >> JobRestartPolicy,
         }
     )
+
+
+def create_job_preset_validator(
+    presets: Sequence[Preset],
+) -> t.Trafaret:
+    def _check_no_resources(payload: Dict[str, Any]) -> Dict[str, Any]:
+        resources = payload["container"].get("resources")
+        if not resources:
+            return payload
+        if set(resources.keys()) - {"shm"}:
+            raise t.DataError("Both preset and resources are not allowed")
+        return payload
+
+    def _set_preset_resources(payload: Dict[str, Any]) -> Dict[str, Any]:
+        preset_name = payload["preset_name"]
+        preset = {p.name: p for p in presets}[preset_name]
+        payload["is_preemptible"] = preset.is_preemptible
+        payload["is_preemptible_node_required"] = preset.is_preemptible_node_required
+        container_resources = {
+            "cpu": preset.cpu,
+            "memory_mb": preset.memory_mb,
+            "shm": payload["container"].get("resources", {}).get("shm", False),
+        }
+        if preset.gpu:
+            container_resources["gpu"] = preset.gpu
+            container_resources["gpu_model"] = preset.gpu_model
+        if preset.tpu:
+            container_resources["tpu"] = {
+                "type": preset.tpu.type,
+                "software_version": preset.tpu.software_version,
+            }
+        payload["container"]["resources"] = container_resources
+        return payload
+
+    validator = (
+        t.Dict(
+            {
+                "preset_name": t.Enum(*[p.name for p in presets]),
+                "container": t.Dict(
+                    {t.Key("resources", optional=True): t.Dict({}).allow_extra("*")}
+                ).allow_extra("*"),
+            }
+        ).allow_extra("*")
+        >> _check_no_resources
+        >> _set_preset_resources
+    )
+
+    return validator
 
 
 def create_job_cluster_name_validator(default_cluster_name: str) -> t.Trafaret:
@@ -139,6 +188,7 @@ def create_job_response_validator() -> t.Trafaret:
             t.Key("internal_hostname", optional=True): t.String,
             t.Key("internal_hostname_named", optional=True): t.String,
             t.Key("name", optional=True): create_job_name_validator(max_length=None),
+            t.Key("preset_name", optional=True): t.String,
             t.Key("description", optional=True): t.String,
             t.Key("tags", optional=True): t.List(create_job_tag_validator()),
             t.Key("schedule_timeout", optional=True): t.Float,
@@ -282,6 +332,8 @@ def convert_job_to_job_response(job: Job) -> Dict[str, Any]:
     }
     if job.name:
         response_payload["name"] = job.name
+    if job.preset_name:
+        response_payload["preset_name"] = job.preset_name
     if job.description:
         response_payload["description"] = job.description
     if job.tags:
@@ -381,9 +433,9 @@ class JobsHandler:
     async def _create_job_request_validator(
         self, cluster_config: ClusterConfig, user_name: str
     ) -> t.Trafaret:
-        # TODO: rework `gpu_models` to be retrieved from `cluster_config`
-        gpu_models = await self._jobs_service.get_available_gpu_models(
-            cluster_config.name
+        resource_pool_types = cluster_config.orchestrator.resource_pool_types
+        gpu_models = list(
+            {rpt.gpu_model for rpt in resource_pool_types if rpt.gpu_model}
         )
         return create_job_request_validator(
             allowed_gpu_models=gpu_models,
@@ -426,6 +478,13 @@ class JobsHandler:
         self._check_user_can_submit_jobs(cluster_configs)
         cluster_name = request_payload["cluster_name"]
         cluster_config = self._get_cluster_config(cluster_configs, cluster_name)
+
+        if "from_preset" in request.query:
+            job_preset_validator = create_job_preset_validator(
+                cluster_config.orchestrator.presets
+            )
+            request_payload = job_preset_validator.check(request_payload)
+
         job_request_validator = await self._create_job_request_validator(
             cluster_config, user.name
         )
@@ -441,6 +500,7 @@ class JobsHandler:
         await check_permissions(request, permissions)
 
         name = request_payload.get("name")
+        preset_name = request_payload.get("preset_name")
         tags = sorted(set(request_payload.get("tags", [])))
         description = request_payload.get("description")
         is_preemptible = request_payload["is_preemptible"]
@@ -457,6 +517,7 @@ class JobsHandler:
             user=user,
             cluster_name=cluster_name,
             job_name=name,
+            preset_name=preset_name,
             tags=tags,
             is_preemptible=is_preemptible,
             is_preemptible_node_required=is_preemptible_node_required,
