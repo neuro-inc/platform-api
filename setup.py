@@ -21,7 +21,7 @@ install_requires = (
     "asyncpgsa==0.26.3",
     "alembic==1.4.3",
     "psycopg2-binary==2.8.6",
-    "sentry-sdk==0.16.2",
+    "sentry-sdk==0.19.4",
 )
 
 setup(
