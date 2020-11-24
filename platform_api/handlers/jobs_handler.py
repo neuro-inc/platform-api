@@ -73,22 +73,21 @@ logger = logging.getLogger(__name__)
 
 def create_job_request_validator(
     *,
+    allow_flat_structure: bool = False,
     allowed_gpu_models: Sequence[str],
     allowed_tpu_resources: Sequence[TPUResource],
     cluster_name: str,
-    user_name: Optional[str] = None,
     storage_scheme: str = "storage",
 ) -> t.Trafaret:
-    return t.Dict(
+    container_validator = create_container_request_validator(
+        allow_volumes=True,
+        allowed_gpu_models=allowed_gpu_models,
+        allowed_tpu_resources=allowed_tpu_resources,
+        storage_scheme=storage_scheme,
+        cluster_name=cluster_name,
+    )
+    job_validator = t.Dict(
         {
-            "container": create_container_request_validator(
-                allow_volumes=True,
-                allowed_gpu_models=allowed_gpu_models,
-                allowed_tpu_resources=allowed_tpu_resources,
-                storage_scheme=storage_scheme,
-                cluster_name=cluster_name,
-                user_name=user_name,
-            ),
             t.Key("name", optional=True): create_job_name_validator(),
             t.Key("description", optional=True): t.String,
             t.Key("preset_name", optional=True): t.String,
@@ -108,13 +107,21 @@ def create_job_request_validator(
             >> JobRestartPolicy,
         }
     )
+    # Either flat structure or payload with container field are allowed
+    if not allow_flat_structure:
+        # Deprecated. Use flat structure
+        return job_validator + t.Dict({"container": container_validator})
+    return job_validator + container_validator
 
 
 def create_job_preset_validator(
     presets: Sequence[Preset],
 ) -> t.Trafaret:
     def _check_no_resources(payload: Dict[str, Any]) -> Dict[str, Any]:
-        resources = payload["container"].get("resources")
+        if "container" in payload:
+            resources = payload["container"].get("resources")
+        else:
+            resources = payload.get("resources")
         if not resources:
             return payload
         if set(resources.keys()) - {"shm"}:
@@ -126,10 +133,14 @@ def create_job_preset_validator(
         preset = {p.name: p for p in presets}[preset_name]
         payload["is_preemptible"] = preset.is_preemptible
         payload["is_preemptible_node_required"] = preset.is_preemptible_node_required
+        if "container" in payload:
+            shm = payload["container"].get("resources", {}).get("shm", False)
+        else:
+            shm = payload.get("resources", {}).get("shm", False)
         container_resources = {
             "cpu": preset.cpu,
             "memory_mb": preset.memory_mb,
-            "shm": payload["container"].get("resources", {}).get("shm", False),
+            "shm": shm,
         }
         if preset.gpu:
             container_resources["gpu"] = preset.gpu
@@ -139,18 +150,14 @@ def create_job_preset_validator(
                 "type": preset.tpu.type,
                 "software_version": preset.tpu.software_version,
             }
-        payload["container"]["resources"] = container_resources
+        if "container" in payload:
+            payload["container"]["resources"] = container_resources
+        else:
+            payload["resources"] = container_resources
         return payload
 
     validator = (
-        t.Dict(
-            {
-                "preset_name": t.Enum(*[p.name for p in presets]),
-                "container": t.Dict(
-                    {t.Key("resources", optional=True): t.Dict({}).allow_extra("*")}
-                ).allow_extra("*"),
-            }
-        ).allow_extra("*")
+        t.Dict({"preset_name": t.Enum(*[p.name for p in presets])}).allow_extra("*")
         >> _check_no_resources
         >> _set_preset_resources
     )
@@ -431,17 +438,19 @@ class JobsHandler:
             )
 
     async def _create_job_request_validator(
-        self, cluster_config: ClusterConfig, user_name: str
+        self,
+        cluster_config: ClusterConfig,
+        allow_flat_structure: bool = False,
     ) -> t.Trafaret:
         resource_pool_types = cluster_config.orchestrator.resource_pool_types
         gpu_models = list(
             {rpt.gpu_model for rpt in resource_pool_types if rpt.gpu_model}
         )
         return create_job_request_validator(
+            allow_flat_structure=allow_flat_structure,
             allowed_gpu_models=gpu_models,
             allowed_tpu_resources=cluster_config.orchestrator.tpu_resources,
             cluster_name=cluster_config.name,
-            user_name=user_name,
             storage_scheme=cluster_config.storage.uri_scheme,
         )
 
@@ -484,14 +493,17 @@ class JobsHandler:
                 cluster_config.orchestrator.presets
             )
             request_payload = job_preset_validator.check(request_payload)
+            allow_flat_structure = True
+        else:
+            allow_flat_structure = False
 
         job_request_validator = await self._create_job_request_validator(
-            cluster_config, user.name
+            cluster_config, allow_flat_structure=allow_flat_structure
         )
         request_payload = job_request_validator.check(request_payload)
 
         container = create_container_from_payload(
-            request_payload["container"], storage_config=cluster_config.storage
+            request_payload, storage_config=cluster_config.storage
         )
 
         permissions = infer_permissions_from_container(

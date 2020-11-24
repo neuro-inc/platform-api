@@ -411,6 +411,20 @@ class TestJobPresetValidator:
             "is_preemptible_node_required": False,
         }
 
+    def test_flat_structure_validator(self) -> None:
+        request = {"preset_name": "preset"}
+        validator = create_job_preset_validator(
+            [Preset(name="preset", cpu=0.1, memory_mb=100)]
+        )
+        payload = validator.check(request)
+
+        assert payload == {
+            "preset_name": "preset",
+            "resources": {"cpu": 0.1, "memory_mb": 100, "shm": False},
+            "is_preemptible": False,
+            "is_preemptible_node_required": False,
+        }
+
     def test_validator_unknown_preset_name(self) -> None:
         request = {"preset_name": "unknown", "container": {}}
         validator = create_job_preset_validator(
@@ -423,6 +437,19 @@ class TestJobPresetValidator:
         request = {
             "preset_name": "preset",
             "container": {"resources": {"cpu": 1.0, "memory_mb": 1024}},
+        }
+        validator = create_job_preset_validator(
+            [Preset(name="preset", cpu=0.1, memory_mb=100)]
+        )
+        with pytest.raises(
+            DataError, match="Both preset and resources are not allowed"
+        ):
+            validator.check(request)
+
+    def test_validator_flat_structure_preset_name_and_resources(self) -> None:
+        request = {
+            "preset_name": "preset",
+            "resources": {"cpu": 1.0, "memory_mb": 1024},
         }
         validator = create_job_preset_validator(
             [Preset(name="preset", cpu=0.1, memory_mb=100)]
@@ -485,6 +512,22 @@ class TestJobRequestValidator:
         }
         validator = create_job_request_validator(
             allowed_gpu_models=(), allowed_tpu_resources=(), cluster_name="testcluster"
+        )
+        payload = validator.check(request)
+        assert payload["cluster_name"] == "testcluster"
+        assert payload["restart_policy"] == JobRestartPolicy.NEVER
+
+    def test_flat_payload_validator(self) -> None:
+        request = {
+            "image": "testimage",
+            "command": "arg1 arg2 arg3",
+            "resources": {"cpu": 0.1, "memory_mb": 16, "shm": True},
+        }
+        validator = create_job_request_validator(
+            allow_flat_structure=True,
+            allowed_gpu_models=(),
+            allowed_tpu_resources=(),
+            cluster_name="testcluster",
         )
         payload = validator.check(request)
         assert payload["cluster_name"] == "testcluster"
