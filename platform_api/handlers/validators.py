@@ -248,7 +248,6 @@ def create_container_validator(
     storage_scheme: str = "storage",
     cluster_name: str = "",
     check_cluster: bool = True,
-    user_name: Optional[str] = None,
 ) -> t.Trafaret:
     """Create a validator for primitive container objects.
 
@@ -337,7 +336,6 @@ def create_container_request_validator(
     allowed_tpu_resources: Sequence[TPUResource] = (),
     storage_scheme: str = "storage",
     cluster_name: str = "",
-    user_name: Optional[str] = None,
 ) -> t.Trafaret:
     return create_container_validator(
         allow_volumes=allow_volumes,
@@ -347,7 +345,6 @@ def create_container_request_validator(
         storage_scheme=storage_scheme,
         cluster_name=cluster_name,
         check_cluster=True,
-        user_name=user_name,
     )
 
 

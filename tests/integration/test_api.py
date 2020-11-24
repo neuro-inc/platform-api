@@ -2293,12 +2293,14 @@ class TestJobs:
         job_name = f"test-job-name-{random_str()}"
         preset_name = "cpu-micro"
         url = URL(api.jobs_base_url).with_query("from_preset")
-        del job_submit["container"]["resources"]
+        job_submit.update(**job_submit["container"])
+        del job_submit["container"]
+        del job_submit["resources"]
         job_submit["name"] = job_name
         job_submit["preset_name"] = preset_name
-        job_submit["container"]["entrypoint"] = "/bin/echo"
-        job_submit["container"]["command"] = "false"
-        job_submit["container"]["http"]["requires_auth"] = True
+        job_submit["entrypoint"] = "/bin/echo"
+        job_submit["command"] = "false"
+        job_submit["http"]["requires_auth"] = True
         job_submit["schedule_timeout"] = 90
         job_submit["cluster_name"] = "test-cluster"
         async with client.post(

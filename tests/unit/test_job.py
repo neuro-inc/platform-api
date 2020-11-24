@@ -337,6 +337,48 @@ class TestContainerBuilder:
             tty=False,
         )
 
+    def test_from_job_payload_build(self) -> None:
+        storage_config = StorageConfig(host_mount_path=PurePath("/tmp"))
+        payload = {
+            "container": {
+                "image": "testimage",
+                "entrypoint": "testentrypoint",
+                "command": "testcommand",
+                "working_dir": "/working/dir",
+                "env": {"TESTVAR": "testvalue"},
+                "resources": {"cpu": 0.1, "memory_mb": 128, "gpu": 1},
+                "http": {"port": 80},
+                "volumes": [
+                    {
+                        "src_storage_uri": "storage://test-cluster/path/to/dir",
+                        "dst_path": "/container/path",
+                        "read_only": True,
+                    }
+                ],
+            }
+        }
+        container = create_container_from_payload(
+            payload, storage_config=storage_config
+        )
+        assert container == Container(
+            image="testimage",
+            entrypoint="testentrypoint",
+            command="testcommand",
+            working_dir="/working/dir",
+            env={"TESTVAR": "testvalue"},
+            volumes=[
+                ContainerVolume(
+                    uri=URL("storage://test-cluster/path/to/dir"),
+                    src_path=PurePath("/tmp/path/to/dir"),
+                    dst_path=PurePath("/container/path"),
+                    read_only=True,
+                )
+            ],
+            resources=ContainerResources(cpu=0.1, memory_mb=128, gpu=1, shm=None),
+            http_server=ContainerHTTPServer(port=80, health_check_path="/"),
+            tty=False,
+        )
+
     def test_from_payload_build_gpu_model(self) -> None:
         storage_config = StorageConfig(host_mount_path=PurePath("/tmp"))
         payload = {

@@ -17,6 +17,9 @@ from platform_api.orchestrator.job_request import (
 def create_container_from_payload(
     payload: Dict[str, Any], *, storage_config: StorageConfig
 ) -> Container:
+    if "container" in payload:
+        # Deprecated. Use flat structure
+        payload = payload["container"]
     http_server = None
     http = payload.get("http", {})
     if "port" in http:
