@@ -12,7 +12,7 @@ from yarl import URL
 
 from platform_api.cluster_config import OrchestratorConfig, StorageConfig
 
-from .job_request import JobRequest, JobStatus
+from .job_request import ContainerResources, JobRequest, JobStatus
 
 
 # For named jobs, their hostname is of the form of
@@ -575,6 +575,10 @@ class Job:
     @property
     def request(self) -> JobRequest:
         return self._job_request
+
+    @property
+    def resources(self) -> ContainerResources:
+        return self._job_request.container.resources
 
     @property
     def has_gpu(self) -> bool:
