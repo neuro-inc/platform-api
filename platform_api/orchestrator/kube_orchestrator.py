@@ -297,7 +297,7 @@ class KubeOrchestrator(Orchestrator):
             # "NEURO_JOB_PRESET": job.preset_name,
         }
 
-        return PodDescriptor.from_job_request(
+        pod = PodDescriptor.from_job_request(
             self._storage_volume,
             job.request,
             secret_volume_factory=self.create_secret_volume,
@@ -309,6 +309,8 @@ class KubeOrchestrator(Orchestrator):
             restart_policy=self._get_pod_restart_policy(job),
             meta_env=meta_env,
         )
+        pod = self._update_pod_container_resources(pod, pool_types)
+        return pod
 
     def _get_cheapest_pool_types(self, job: Job) -> Sequence[ResourcePoolType]:
         container_resources = job.request.container.resources
@@ -342,6 +344,33 @@ class KubeOrchestrator(Orchestrator):
 
         sorted_pool_types = sorted(pool_types.items(), key=lambda x: x[0])
         return sorted_pool_types[0][1] if pool_types else []
+
+    def _update_pod_container_resources(
+        self, pod: PodDescriptor, pool_types: Sequence[ResourcePoolType]
+    ) -> PodDescriptor:
+        if not pod.resources:
+            return pod
+        max_node_cpu = max([p.available_cpu or 0 for p in pool_types])
+        max_node_memory_mb = max([p.available_memory_mb or 0 for p in pool_types])
+        max_node_gpu = max([p.gpu or 0 for p in pool_types])
+        pod_gpu = pod.resources.gpu or 0
+        if (
+            max_node_cpu > pod.resources.cpu
+            or max_node_memory_mb > pod.resources.memory
+            or max_node_gpu > pod_gpu
+        ):
+            # Ignore pods that don't require all node's resources
+            return pod
+        # By default resources request is not specified which means
+        # that request = limit. This can prevent pod scheduling on a node
+        # which don't have enough memory. By lowering memory request we
+        # guarantee that pod will be scheduled on a node.
+        # We need to set some memory for cluster autoscaler to trigger scale up.
+        # It's scale up triggering algorithm is based on the pod resources.
+        # The more resources you request the more there is a chance that scale up
+        # will be triggered.
+        new_resources = replace(pod.resources, memory_request=1024)
+        return replace(pod, resources=new_resources)
 
     def _get_user_pod_labels(self, job: Job) -> Dict[str, str]:
         return {"platform.neuromation.io/user": job.owner}

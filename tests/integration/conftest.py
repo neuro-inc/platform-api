@@ -328,6 +328,7 @@ class MyKubeClient(KubeClient):
         timeout_s: float = 5.0,
         interval_s: float = 1.0,
     ) -> None:
+        raw_pod: Optional[Dict[str, Any]] = None
         try:
             async with timeout(timeout_s):
                 while True:
@@ -339,12 +340,34 @@ class MyKubeClient(KubeClient):
                     pod_is_scheduled = "PodScheduled" in [
                         cond["type"]
                         for cond in raw_pod["status"].get("conditions", [])
-                        if cond["status"]
+                        if cond["status"] == "True"
                     ]
                     if pod_has_node and pod_is_scheduled:
                         return
                     await asyncio.sleep(interval_s)
         except asyncio.TimeoutError:
+            if raw_pod:
+                print("Node:", raw_pod["spec"].get("nodeName"))
+                print("Phase:", raw_pod["status"]["phase"])
+                print("Status conditions:", raw_pod["status"].get("conditions", []))
+                print("Pods:")
+                pods = await self.get_raw_pods()
+                pods = sorted(pods, key=lambda p: p["spec"].get("nodeName", ""))
+                print(f"  {'Name':40s} {'CPU':5s} {'Memory':10s} {'Phase':9s} Node")
+                for pod in pods:
+                    container = pod["spec"]["containers"][0]
+                    resource_requests = container.get("resources", {}).get(
+                        "requests", {}
+                    )
+                    cpu = resource_requests.get("cpu")
+                    memory = resource_requests.get("memory")
+                    print(
+                        f'  {pod["metadata"]["name"]:40s}',
+                        f"{str(cpu):5s}",
+                        f"{str(memory):10s}",
+                        f'{pod["status"]["phase"]:9s}',
+                        f'{str(pod["spec"].get("nodeName"))}',
+                    )
             pytest.fail("Pod unscheduled")
 
     async def wait_pod_non_existent(

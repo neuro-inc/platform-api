@@ -237,6 +237,7 @@ class PVCDiskVolume(Volume):
 class Resources:
     cpu: float
     memory: int
+    memory_request: Optional[int] = None
     gpu: Optional[int] = None
     shm: Optional[bool] = None
     tpu_version: Optional[str] = None
@@ -259,17 +260,26 @@ class Resources:
         return f"{self.memory}Mi"
 
     @property
+    def memory_request_mib(self) -> str:
+        return f"{self.memory_request}Mi"
+
+    @property
     def tpu_key(self) -> str:
         return self.tpu_key_template.format(version=self.tpu_version)
 
     def to_primitive(self) -> Dict[str, Any]:
         payload: Dict[str, Any] = {
-            "limits": {"cpu": self.cpu_mcores, "memory": self.memory_mib}
+            "requests": {"cpu": self.cpu_mcores, "memory": self.memory_mib},
+            "limits": {"cpu": self.cpu_mcores, "memory": self.memory_mib},
         }
         if self.gpu:
+            payload["requests"][self.gpu_key] = self.gpu
             payload["limits"][self.gpu_key] = self.gpu
         if self.tpu_version:
+            payload["requests"][self.tpu_key] = self.tpu_cores
             payload["limits"][self.tpu_key] = self.tpu_cores
+        if self.memory_request:
+            payload["requests"]["memory"] = self.memory_request_mib
         return payload
 
     @classmethod
@@ -1535,6 +1545,10 @@ class KubeClient:
     async def get_raw_pod(self, name: str) -> Dict[str, Any]:
         url = self._generate_pod_url(name)
         return await self._request(method="GET", url=url)
+
+    async def get_raw_pods(self) -> Sequence[Dict[str, Any]]:
+        payload = await self._request(method="GET", url=self._pods_url)
+        return payload["items"]
 
     async def get_pod_status(self, pod_id: str) -> PodStatus:
         pod = await self.get_pod(pod_id)
