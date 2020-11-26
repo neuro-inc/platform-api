@@ -388,7 +388,7 @@ class JobRecord:
         )
 
     def _is_status_for_deletion(self) -> bool:
-        return self.status_history.current.status in (JobStatus.CANCELLED)
+        return self.status_history.current.status in (JobStatus.CANCELLED,)
 
     def should_be_deleted(
         self,
