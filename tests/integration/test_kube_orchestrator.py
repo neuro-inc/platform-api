@@ -339,6 +339,54 @@ class TestKubeOrchestrator:
             await job.delete()
 
     @pytest.mark.asyncio
+    async def test_job_requires_all_node_resources(
+        self,
+        kube_client: MyKubeClient,
+        kube_config_factory: Callable[..., KubeConfig],
+        kube_orchestrator_factory: Callable[..., KubeOrchestrator],
+        delete_job_later: Callable[[Job], Awaitable[None]],
+    ) -> None:
+        kube_config = kube_config_factory(
+            resource_pool_types=[
+                ResourcePoolType(
+                    cpu=0.1,
+                    available_cpu=0.1,
+                    memory_mb=1025,
+                    available_memory_mb=1025,
+                )
+            ]
+        )
+        async with kube_orchestrator_factory(
+            kube_config=kube_config
+        ) as kube_orchestrator:
+            container = Container(
+                image="ubuntu",
+                command="true",
+                resources=ContainerResources(cpu=0.1, memory_mb=1025),
+            )
+            job = MyJob(
+                orchestrator=kube_orchestrator,
+                record=JobRecord.create(
+                    name=f"job-{uuid.uuid4().hex[:6]}",
+                    owner="owner1",
+                    request=JobRequest.create(container),
+                    cluster_name="test-cluster",
+                ),
+            )
+
+            await delete_job_later(job)
+            await job.start()
+
+            await kube_client.wait_pod_scheduled(job.id)
+            job_pod = await kube_client.get_raw_pod(job.id)
+
+            assert job_pod["spec"]["containers"]
+            assert job_pod["spec"]["containers"][0]["resources"] == {
+                "requests": {"cpu": "100m", "memory": "1Gi"},
+                "limits": {"cpu": "100m", "memory": "1025Mi"},
+            }
+
+    @pytest.mark.asyncio
     async def test_job_bunch_of_cpu(self, kube_orchestrator: KubeOrchestrator) -> None:
         command = 'bash -c "for i in {100..1}; do echo $i; done; false"'
         container = Container(
@@ -2092,6 +2140,13 @@ class TestNodeAffinity:
                     ),
                 ),
                 ResourcePoolType(
+                    name="gpu-k80",
+                    available_cpu=7,
+                    available_memory_mb=61440,
+                    gpu=1,
+                    gpu_model=GKEGPUModels.K80.value.id,
+                ),
+                ResourcePoolType(
                     name="gpu-v100",
                     available_cpu=7,
                     available_memory_mb=61440,
@@ -2242,9 +2297,9 @@ class TestNodeAffinity:
             cpu=0.1,
             memory_mb=16,
             gpu=1,
-            gpu_model="nvidia-tesla-v100",
+            gpu_model="nvidia-tesla-k80",
         ) as job:
-            await kube_client.wait_pod_scheduled(job.id, "gpu-v100")
+            await kube_client.wait_pod_scheduled(job.id, "gpu-k80")
 
             job_pod = await kube_client.get_raw_pod(job.id)
             assert (
@@ -2252,7 +2307,7 @@ class TestNodeAffinity:
                 == NodeAffinity(
                     required=[
                         NodeSelectorTerm(
-                            [NodeSelectorRequirement.create_in("nodepool", "gpu-v100")]
+                            [NodeSelectorRequirement.create_in("nodepool", "gpu-k80")]
                         )
                     ]
                 ).to_primitive()

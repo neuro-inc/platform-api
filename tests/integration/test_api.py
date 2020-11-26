@@ -2495,6 +2495,9 @@ class TestJobs:
 
         async with client.post(url, headers=headers, json=job_submit) as response:
             assert response.status == HTTPAccepted.status_code, await response.text()
+            payload = await response.json()
+            job_id = payload["id"]
+            await jobs_client.delete_job(job_id)
 
     @pytest.mark.asyncio
     async def test_get_all_jobs_clear(self, jobs_client: JobsClient) -> None:
@@ -4766,6 +4769,8 @@ class TestJobPolicyEnforcer:
             job_id=job_cluster2["id"], status=poll_status
         )
 
+        await user_jobs_client.delete_job(job_cluster2["id"], assert_success=False)
+
 
 class TestRuntimeLimitEnforcer:
     @pytest.mark.asyncio
@@ -4823,3 +4828,6 @@ class TestRuntimeLimitEnforcer:
 
         job_3_status = await user_jobs_client.get_job_by_id(job_3["id"])
         assert job_3_status["status"] == "running"
+
+        await user_jobs_client.delete_job(job_2["id"], assert_success=False)
+        await user_jobs_client.delete_job(job_3["id"], assert_success=False)

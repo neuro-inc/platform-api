@@ -245,11 +245,16 @@ class TestPodDescriptor:
                         "env": [{"name": "TESTVAR", "value": "testvalue"}],
                         "volumeMounts": [],
                         "resources": {
+                            "requests": {
+                                "cpu": "500m",
+                                "memory": "1024Mi",
+                                "nvidia.com/gpu": 1,
+                            },
                             "limits": {
                                 "cpu": "500m",
                                 "memory": "1024Mi",
                                 "nvidia.com/gpu": 1,
-                            }
+                            },
                         },
                         "ports": [{"containerPort": 1234}],
                         "terminationMessagePolicy": "FallbackToLogsOnError",
@@ -310,11 +315,16 @@ class TestPodDescriptor:
                         "env": [{"name": "TESTVAR", "value": "testvalue"}],
                         "volumeMounts": [],
                         "resources": {
+                            "requests": {
+                                "cpu": "500m",
+                                "memory": "1024Mi",
+                                "nvidia.com/gpu": 1,
+                            },
                             "limits": {
                                 "cpu": "500m",
                                 "memory": "1024Mi",
                                 "nvidia.com/gpu": 1,
-                            }
+                            },
                         },
                         "ports": [{"containerPort": 1234}],
                         "readinessProbe": {
@@ -363,11 +373,16 @@ class TestPodDescriptor:
                         "env": [{"name": "TESTVAR", "value": "testvalue"}],
                         "volumeMounts": [],
                         "resources": {
+                            "requests": {
+                                "cpu": "500m",
+                                "memory": "1024Mi",
+                                "nvidia.com/gpu": 1,
+                            },
                             "limits": {
                                 "cpu": "500m",
                                 "memory": "1024Mi",
                                 "nvidia.com/gpu": 1,
-                            }
+                            },
                         },
                         "terminationMessagePolicy": "FallbackToLogsOnError",
                         "stdin": True,
@@ -426,11 +441,16 @@ class TestPodDescriptor:
                             }
                         ],
                         "resources": {
+                            "requests": {
+                                "cpu": "500m",
+                                "memory": "1024Mi",
+                                "nvidia.com/gpu": 1,
+                            },
                             "limits": {
                                 "cpu": "500m",
                                 "memory": "1024Mi",
                                 "nvidia.com/gpu": 1,
-                            }
+                            },
                         },
                         "ports": [{"containerPort": 1234}],
                         "terminationMessagePolicy": "FallbackToLogsOnError",
@@ -739,19 +759,48 @@ class TestResources:
     def test_to_primitive(self) -> None:
         resources = Resources(cpu=0.5, memory=1024)
         assert resources.to_primitive() == {
-            "limits": {"cpu": "500m", "memory": "1024Mi"}
+            "requests": {"cpu": "500m", "memory": "1024Mi"},
+            "limits": {"cpu": "500m", "memory": "1024Mi"},
         }
 
     def test_to_primitive_gpu(self) -> None:
         resources = Resources(cpu=0.5, memory=1024, gpu=2)
         assert resources.to_primitive() == {
-            "limits": {"cpu": "500m", "memory": "1024Mi", "nvidia.com/gpu": 2}
+            "requests": {"cpu": "500m", "memory": "1024Mi", "nvidia.com/gpu": 2},
+            "limits": {"cpu": "500m", "memory": "1024Mi", "nvidia.com/gpu": 2},
         }
 
     def test_to_primitive_tpu(self) -> None:
         resources = Resources(cpu=0.5, memory=1024, tpu_version="v2", tpu_cores=8)
         assert resources.to_primitive() == {
-            "limits": {"cpu": "500m", "memory": "1024Mi", "cloud-tpus.google.com/v2": 8}
+            "requests": {
+                "cpu": "500m",
+                "memory": "1024Mi",
+                "cloud-tpus.google.com/v2": 8,
+            },
+            "limits": {
+                "cpu": "500m",
+                "memory": "1024Mi",
+                "cloud-tpus.google.com/v2": 8,
+            },
+        }
+
+    def test_to_primitive_with_memory_request(self) -> None:
+        resources = Resources(
+            cpu=1,
+            memory=1024,
+            memory_request=128,
+        )
+
+        assert resources.to_primitive() == {
+            "requests": {
+                "cpu": "1000m",
+                "memory": "128Mi",
+            },
+            "limits": {
+                "cpu": "1000m",
+                "memory": "1024Mi",
+            },
         }
 
     def test_from_container_resources(self) -> None:
