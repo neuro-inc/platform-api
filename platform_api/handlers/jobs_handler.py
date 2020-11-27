@@ -114,9 +114,7 @@ def create_job_request_validator(
     return job_validator + container_validator
 
 
-def create_job_preset_validator(
-    presets: Sequence[Preset],
-) -> t.Trafaret:
+def create_job_preset_validator(presets: Sequence[Preset]) -> t.Trafaret:
     def _check_no_resources(payload: Dict[str, Any]) -> Dict[str, Any]:
         if "container" in payload:
             resources = payload["container"].get("resources")
@@ -157,7 +155,14 @@ def create_job_preset_validator(
         return payload
 
     validator = (
-        t.Dict({"preset_name": t.Enum(*[p.name for p in presets])}).allow_extra("*")
+        t.Dict(
+            {
+                # Presets are always not empty
+                t.Key("preset_name", optional=True, default=presets[0].name): t.Enum(
+                    *[p.name for p in presets]
+                )
+            }
+        ).allow_extra("*")
         >> _check_no_resources
         >> _set_preset_resources
     )

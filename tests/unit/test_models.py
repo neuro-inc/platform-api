@@ -411,6 +411,20 @@ class TestJobPresetValidator:
             "is_preemptible_node_required": False,
         }
 
+    def test_validator_default_preset(self) -> None:
+        request: Dict[str, Any] = {"container": {}}
+        validator = create_job_preset_validator(
+            [Preset(name="preset", cpu=0.1, memory_mb=100)]
+        )
+        payload = validator.check(request)
+
+        assert payload == {
+            "preset_name": "preset",
+            "container": {"resources": {"cpu": 0.1, "memory_mb": 100, "shm": False}},
+            "is_preemptible": False,
+            "is_preemptible_node_required": False,
+        }
+
     def test_flat_structure_validator(self) -> None:
         request = {"preset_name": "preset"}
         validator = create_job_preset_validator(
