@@ -4,6 +4,7 @@ from typing import Any
 import pytest
 
 from platform_api.orchestrator.job import (
+    DEFAULT_ORPHANED_JOB_OWNER,
     AggregatedRunTime,
     JobRecord,
     JobRequest,
@@ -222,7 +223,7 @@ class TestInMemoryJobsStorage:
                 cluster_name="test-cluster-2", run_time=timedelta(minutes=5)
             )
         )
-        result = await jobs_storage.get_aggregated_run_time(JobFilter())
+        result = await jobs_storage.get_aggregated_run_time(DEFAULT_ORPHANED_JOB_OWNER)
 
         assert result == AggregatedRunTime(
             total_gpu_run_time_delta=timedelta(minutes=7),
@@ -265,7 +266,9 @@ class TestInMemoryJobsStorage:
                 cluster_name="test-cluster-2", run_time=timedelta(minutes=5)
             )
         )
-        result = await jobs_storage.get_aggregated_run_time_by_clusters(JobFilter())
+        result = await jobs_storage.get_aggregated_run_time_by_clusters(
+            DEFAULT_ORPHANED_JOB_OWNER
+        )
 
         assert result == {
             "test-cluster-1": AggregatedRunTime(

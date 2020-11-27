@@ -149,8 +149,8 @@ class JobsStorage(ABC):
     ) -> List[JobRecord]:
         pass
 
-    async def get_aggregated_run_time(self, job_filter: JobFilter) -> AggregatedRunTime:
-        run_times = await self.get_aggregated_run_time_by_clusters(job_filter)
+    async def get_aggregated_run_time(self, owner: str) -> AggregatedRunTime:
+        run_times = await self.get_aggregated_run_time_by_clusters(owner)
         gpu_run_time, non_gpu_run_time = timedelta(), timedelta()
         for run_time in run_times.values():
             gpu_run_time += run_time.total_gpu_run_time_delta
@@ -165,11 +165,11 @@ class JobsStorage(ABC):
         pass
 
     async def get_aggregated_run_time_by_clusters(
-        self, job_filter: JobFilter
+        self, owner: str
     ) -> Dict[str, AggregatedRunTime]:
         zero_run_time = (timedelta(), timedelta())
         aggregated_run_times: Dict[str, Tuple[timedelta, timedelta]] = {}
-        async for job in self.iter_all_jobs(job_filter):
+        async for job in self.iter_all_jobs(JobFilter(owners={owner})):
             gpu_run_time, non_gpu_run_time = aggregated_run_times.get(
                 job.cluster_name, zero_run_time
             )

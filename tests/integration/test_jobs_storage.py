@@ -1625,9 +1625,8 @@ class TestJobsStorage:
             async with storage.try_create_job(job):
                 pass
 
-        job_filter = JobFilter(owners={owner})
-        actual_run_time = await storage.get_aggregated_run_time(job_filter)
-        actual_run_times = await storage.get_aggregated_run_time_by_clusters(job_filter)
+        actual_run_time = await storage.get_aggregated_run_time(owner)
+        actual_run_times = await storage.get_aggregated_run_time_by_clusters(owner)
 
         test_elapsed = current_datetime_factory() - test_started_at
 
