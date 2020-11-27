@@ -2,6 +2,7 @@ IMAGE_NAME ?= platformapi
 DOCKER_REPO ?= neuro-docker-local-public.jfrog.io
 IMAGE_TAG ?= $(GITHUB_SHA)
 IMAGE_TAG ?= latest
+ARTIFACTORY_TAG ?=$(shell echo "$(GITHUB_REF)" | awk -F/ '{print $$NF}')
 
 CLOUD_IMAGE_gke   ?= $(GKE_DOCKER_REGISTRY)/$(GKE_PROJECT_ID)/$(IMAGE_NAME)
 CLOUD_IMAGE_aws   ?= $(AWS_ACCOUNT_ID).dkr.ecr.$(AWS_REGION).amazonaws.com/$(IMAGE_NAME)
@@ -115,9 +116,24 @@ docker_push: docker_build
 	docker push $(INGRESS_FALLBACK_CLOUD_IMAGE):latest
 	docker push $(INGRESS_FALLBACK_CLOUD_IMAGE):$(IMAGE_TAG)
 
+artifactory_docker_push: build
+	docker tag $(IMAGE_NAME):latest $(ARTIFACTORY_DOCKER_REPO)/$(IMAGE_NAME):$(ARTIFACTORY_TAG)
+	docker login $(ARTIFACTORY_DOCKER_REPO) --username=$(ARTIFACTORY_USERNAME) --password=$(ARTIFACTORY_PASSWORD)
+	docker push $(ARTIFACTORY_DOCKER_REPO)/$(IMAGE_NAME):$(ARTIFACTORY_TAG)
+
 helm_deploy:
 	helm \
 		-f deploy/platformapi/values-$(HELM_ENV)-$(CLOUD_PROVIDER).yaml \
 		--set "ENV=$(HELM_ENV)" \
 		--set "IMAGE=$(CLOUD_IMAGE):$(IMAGE_TAG)" \
 		upgrade --install platformapi deploy/platformapi/ --wait --timeout 600 --namespace platform
+
+artifactory_helm_push: helm_install
+	mkdir -p temp_deploy/platformapi
+	cp -Rf deploy/platformapi/. temp_deploy/platformapi
+	cp temp_deploy/platformapi/values-template.yaml temp_deploy/platformapi/values.yaml
+	sed -i "s/IMAGE_TAG/$(ARTIFACTORY_TAG)/g" temp_deploy/platformapi/values.yaml
+	find temp_deploy/platformapi -type f -name 'values-*' -delete
+	helm package --app-version=$(ARTIFACTORY_TAG) --version=$(ARTIFACTORY_TAG) temp_deploy/platformapi/
+	helm plugin install https://github.com/belitre/helm-push-artifactory-plugin
+	helm push-artifactory $(IMAGE_NAME)-$(ARTIFACTORY_TAG).tgz $(ARTIFACTORY_HELM_REPO) --username $(ARTIFACTORY_USERNAME) --password $(ARTIFACTORY_PASSWORD)
