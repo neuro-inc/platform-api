@@ -527,7 +527,11 @@ class KubeOrchestrator(Orchestrator):
                         ]
                     )
                 )
-        if self._kube_config.node_label_preemptible and job.is_preemptible:
+        if (
+            self._kube_config.node_label_preemptible
+            and job.is_preemptible
+            and not job.is_preemptible_node_required
+        ):
             preferred_terms.append(
                 NodePreferredSchedulingTerm(
                     preference=NodeSelectorTerm(

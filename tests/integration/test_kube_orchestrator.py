@@ -53,6 +53,7 @@ from platform_api.orchestrator.kube_client import (
     IngressRule,
     KubeClient,
     NodeAffinity,
+    NodePreferredSchedulingTerm,
     NodeSelectorRequirement,
     NodeSelectorTerm,
     PodDescriptor,
@@ -2328,7 +2329,7 @@ class TestNodeAffinity:
             gpu_model="nvidia-tesla-v100",
             is_preemptible=True,
         ) as job:
-            await kube_client.wait_pod_scheduled(job.id)
+            await kube_client.wait_pod_scheduled(job.id, "gpu-v100-p")
 
             job_pod = await kube_client.get_raw_pod(job.id)
             assert (
@@ -2345,7 +2346,14 @@ class TestNodeAffinity:
                                 )
                             ]
                         ),
-                    ]
+                    ],
+                    preferred=[
+                        NodePreferredSchedulingTerm(
+                            preference=NodeSelectorTerm(
+                                [NodeSelectorRequirement.create_exists("preemptible")]
+                            )
+                        )
+                    ],
                 ).to_primitive()
             )
 
