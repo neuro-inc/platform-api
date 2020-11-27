@@ -1,6 +1,7 @@
 import asyncio
 import logging
 import operator
+from collections import defaultdict
 from dataclasses import replace
 from datetime import datetime, timezone
 from typing import Any, Dict, Iterable, List, Optional, Sequence, Tuple, Union
@@ -28,6 +29,7 @@ from .kube_client import (
     KubeClient,
     NfsVolume,
     NodeAffinity,
+    NodePreferredSchedulingTerm,
     NodeSelectorRequirement,
     NodeSelectorTerm,
     PodDescriptor,
@@ -261,7 +263,7 @@ class KubeOrchestrator(Orchestrator):
     ) -> PodDescriptor:
         pool_types = self._get_cheapest_pool_types(job)
         if not pool_types:
-            raise ValueError("Job will not fit into cluster")
+            raise JobError("Job will not fit into cluster")
         logger.info(
             "Job %s is scheduled to run in pool types %s",
             job.id,
@@ -293,9 +295,10 @@ class KubeOrchestrator(Orchestrator):
             "NEURO_JOB_HTTP_AUTH": _to_env_str(
                 job.request.container.requires_http_auth
             ),
-            # Uncomment after https://github.com/neuro-inc/platform-api/pull/1398 merged
-            # "NEURO_JOB_PRESET": job.preset_name,
         }
+
+        if job.preset_name:
+            meta_env["NEURO_JOB_PRESET"] = job.preset_name
 
         pod = PodDescriptor.from_job_request(
             self._storage_volume,
@@ -313,8 +316,14 @@ class KubeOrchestrator(Orchestrator):
         return pod
 
     def _get_cheapest_pool_types(self, job: Job) -> Sequence[ResourcePoolType]:
+        # NOTE:
+        # Config service exposes resource_affinity field in preset.
+        # But currently it cannot be used in case of restartable jobs
+        # because during job lifetime node pools, presets can change and
+        # node affinity assigned to the job won't be valid anymore.
         container_resources = job.request.container.resources
-        pool_types: Dict[Tuple[str, int, float, int], List[ResourcePoolType]] = {}
+        TKey = Tuple[int, float, int]
+        pool_types: Dict[TKey, List[ResourcePoolType]] = defaultdict(list)
 
         for pool_type in self._kube_config.resource_pool_types:
             # Do not schedule non-preemptible jobs on preemptible nodes
@@ -333,17 +342,17 @@ class KubeOrchestrator(Orchestrator):
                 continue
 
             key = (
-                pool_type.gpu_model or "",
                 pool_type.gpu or 0,
                 pool_type.available_cpu or 0,
                 pool_type.available_memory_mb or 0,
             )
-            value = pool_types.get(key) or []
-            value.append(pool_type)
-            pool_types[key] = value
+            pool_types[key].append(pool_type)
+
+        if not pool_types:
+            return []
 
         sorted_pool_types = sorted(pool_types.items(), key=lambda x: x[0])
-        return sorted_pool_types[0][1] if pool_types else []
+        return sorted_pool_types[0][1]
 
     def _update_pod_container_resources(
         self, pod: PodDescriptor, pool_types: Sequence[ResourcePoolType]
@@ -505,6 +514,7 @@ class KubeOrchestrator(Orchestrator):
         # `NodeSelectorTerm` is satisfied only if its `match_expressions` are
         # satisfied.
         required_terms = []
+        preferred_terms = []
 
         if self._kube_config.node_label_node_pool:
             for pool_type in pool_types:
@@ -517,9 +527,21 @@ class KubeOrchestrator(Orchestrator):
                         ]
                     )
                 )
+        if self._kube_config.node_label_preemptible and job.is_preemptible:
+            preferred_terms.append(
+                NodePreferredSchedulingTerm(
+                    preference=NodeSelectorTerm(
+                        [
+                            NodeSelectorRequirement.create_exists(
+                                self._kube_config.node_label_preemptible
+                            )
+                        ]
+                    )
+                )
+            )
         if not required_terms:
             return None
-        return NodeAffinity(required_terms)
+        return NodeAffinity(required=required_terms, preferred=preferred_terms)
 
     def _get_job_pod_name(self, job: Job) -> str:
         # TODO (A Danshyn 11/15/18): we will need to start storing jobs'

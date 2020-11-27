@@ -2222,7 +2222,7 @@ class TestNodeAffinity:
         kube_orchestrator: KubeOrchestrator,
         start_job: Callable[..., AsyncContextManager[MyJob]],
     ) -> None:
-        with pytest.raises(ValueError, match="Job will not fit into cluster"):
+        with pytest.raises(JobError, match="Job will not fit into cluster"):
             async with start_job(kube_orchestrator, cpu=100, memory_mb=16):
                 pass
 
@@ -2281,7 +2281,7 @@ class TestNodeAffinity:
         kube_orchestrator: KubeOrchestrator,
         start_job: Callable[..., AsyncContextManager[MyJob]],
     ) -> None:
-        with pytest.raises(ValueError, match="Job will not fit into cluster"):
+        with pytest.raises(JobError, match="Job will not fit into cluster"):
             async with start_job(kube_orchestrator, cpu=7, memory_mb=16):
                 pass
 
