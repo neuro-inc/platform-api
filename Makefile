@@ -116,7 +116,7 @@ docker_push: docker_build
 	docker push $(INGRESS_FALLBACK_CLOUD_IMAGE):latest
 	docker push $(INGRESS_FALLBACK_CLOUD_IMAGE):$(IMAGE_TAG)
 
-artifactory_docker_push: build
+artifactory_docker_push: docker_build
 	docker tag $(IMAGE_NAME):latest $(ARTIFACTORY_DOCKER_REPO)/$(IMAGE_NAME):$(ARTIFACTORY_TAG)
 	docker login $(ARTIFACTORY_DOCKER_REPO) --username=$(ARTIFACTORY_USERNAME) --password=$(ARTIFACTORY_PASSWORD)
 	docker push $(ARTIFACTORY_DOCKER_REPO)/$(IMAGE_NAME):$(ARTIFACTORY_TAG)
