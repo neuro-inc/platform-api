@@ -9,6 +9,7 @@ from typing import (
     Dict,
     Iterable,
     List,
+    Mapping,
     Optional,
     Set,
     Tuple,
@@ -82,6 +83,48 @@ class JobFilter:
         if not self.since <= created_at <= self.until:
             return False
         return True
+
+
+@dataclass
+class RunTimeEntry:
+    """Helper class for calculations"""
+
+    gpu_run_time: timedelta = timedelta()
+    non_gpu_run_time: timedelta = timedelta()
+
+    @classmethod
+    def for_job(cls, job: JobRecord) -> "RunTimeEntry":
+        if job.has_gpu:
+            return cls(gpu_run_time=job.get_run_time())
+        else:
+            return cls(non_gpu_run_time=job.get_run_time())
+
+    def to_aggregated_run_time(self) -> "AggregatedRunTime":
+        return AggregatedRunTime(
+            total_gpu_run_time_delta=self.gpu_run_time,
+            total_non_gpu_run_time_delta=self.non_gpu_run_time,
+        )
+
+    def to_primitive(self) -> Mapping[str, float]:
+        return {
+            "gpu_run_time": self.gpu_run_time.total_seconds(),
+            "non_gpu_run_time": self.non_gpu_run_time.total_seconds(),
+        }
+
+    @classmethod
+    def from_primitive(cls, data: Mapping[str, float]) -> "RunTimeEntry":
+        return cls(
+            gpu_run_time=timedelta(seconds=data["gpu_run_time"]),
+            non_gpu_run_time=timedelta(seconds=data["non_gpu_run_time"]),
+        )
+
+    def __iadd__(self, other: object) -> "RunTimeEntry":
+        if not isinstance(other, RunTimeEntry):
+            return NotImplemented
+        return RunTimeEntry(
+            gpu_run_time=self.gpu_run_time + other.gpu_run_time,
+            non_gpu_run_time=self.non_gpu_run_time + other.non_gpu_run_time,
+        )
 
 
 class JobsStorage(ABC):
