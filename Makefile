@@ -2,7 +2,8 @@ IMAGE_NAME ?= platformapi
 DOCKER_REPO ?= neuro-docker-local-public.jfrog.io
 IMAGE_TAG ?= $(GITHUB_SHA)
 IMAGE_TAG ?= latest
-ARTIFACTORY_TAG ?=$(shell echo "$(GITHUB_REF)" | awk -F/ '{print $$NF}')
+#ARTIFACTORY_TAG ?=$(shell echo "$(GITHUB_REF)" | awk -F/ '{print $$NF}')
+ARTIFACTORY_TAG ?=1.1.1
 
 CLOUD_IMAGE_gke   ?= $(GKE_DOCKER_REGISTRY)/$(GKE_PROJECT_ID)/$(IMAGE_NAME)
 CLOUD_IMAGE_aws   ?= $(AWS_ACCOUNT_ID).dkr.ecr.$(AWS_REGION).amazonaws.com/$(IMAGE_NAME)
