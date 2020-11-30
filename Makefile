@@ -121,6 +121,10 @@ artifactory_docker_push: docker_build
 	docker login $(ARTIFACTORY_DOCKER_REPO) --username=$(ARTIFACTORY_USERNAME) --password=$(ARTIFACTORY_PASSWORD)
 	docker push $(ARTIFACTORY_DOCKER_REPO)/$(IMAGE_NAME):$(ARTIFACTORY_TAG)
 
+	make -C platform_ingress_fallback IMAGE_NAME=$(INGRESS_FALLBACK_IMAGE_NAME) build
+	docker tag $(INGRESS_FALLBACK_IMAGE_NAME):latest $(ARTIFACTORY_DOCKER_REPO)/$(INGRESS_FALLBACK_IMAGE_NAME):$(ARTIFACTORY_TAG)
+	docker push $(ARTIFACTORY_DOCKER_REPO)/$(INGRESS_FALLBACK_IMAGE_NAME):$(ARTIFACTORY_TAG)
+
 helm_deploy:
 	helm \
 		-f deploy/platformapi/values-$(HELM_ENV)-$(CLOUD_PROVIDER).yaml \
