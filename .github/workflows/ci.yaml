@@ -218,4 +218,3 @@ jobs:
         run: make artifactory_docker_push
       - name: Artifactory Helm Push
         run: make artifactory_helm_push
-
