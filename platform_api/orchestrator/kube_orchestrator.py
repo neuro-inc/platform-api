@@ -32,6 +32,7 @@ from .kube_client import (
     NodePreferredSchedulingTerm,
     NodeSelectorRequirement,
     NodeSelectorTerm,
+    NotFoundException,
     PodDescriptor,
     PodExec,
     PodRestartPolicy,
@@ -463,7 +464,7 @@ class KubeOrchestrator(Orchestrator):
                 # As job deletion can fail, we have to try to remove old service
                 # with same name just to be sure
                 service_name = self._get_service_name_for_named(job)
-                await self._delete_service(service_name)
+                await self._delete_service(service_name, ignore_missing=True)
                 await self._create_service(descriptor, name=service_name)
 
             if job.has_http_server_exposed:
@@ -688,9 +689,13 @@ class KubeOrchestrator(Orchestrator):
             service = service.make_named(name)
         return await self._client.create_service(service)
 
-    async def _delete_service(self, name: str) -> None:
+    async def _delete_service(self, name: str, *, ignore_missing: bool = False) -> None:
         try:
             await self._client.delete_service(name=name)
+        except NotFoundException:
+            if ignore_missing:
+                return
+            logger.exception(f"Failed to remove service {name}")
         except Exception:
             logger.exception(f"Failed to remove service {name}")
 

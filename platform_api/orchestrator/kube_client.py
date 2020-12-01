@@ -75,6 +75,10 @@ class AlreadyExistsException(StatusException):
     pass
 
 
+class NotFoundException(StatusException):
+    pass
+
+
 def _raise_status_job_exception(pod: Dict[str, Any], job_id: Optional[str]) -> NoReturn:
     if pod["code"] == 409:
         raise AlreadyExistsException(pod.get("reason", "job already exists"))
@@ -1615,6 +1619,8 @@ class KubeClient:
             if payload["status"] == "Failure":
                 if payload.get("reason") == "AlreadyExists":
                     raise AlreadyExistsException(payload["reason"])
+                if payload.get("reason") == "NotFound":
+                    raise NotFoundException(payload["reason"])
                 raise StatusException(payload["reason"])
 
     async def add_ingress_rule(self, name: str, rule: IngressRule) -> Ingress:
