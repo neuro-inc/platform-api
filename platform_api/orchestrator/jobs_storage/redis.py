@@ -452,9 +452,9 @@ class RedisJobsStorage(JobsStorage):
 
     @trace
     async def get_aggregated_run_time_by_clusters(
-        self, job_filter: JobFilter
+        self, owner: str
     ) -> Dict[str, AggregatedRunTime]:
-        return await super().get_aggregated_run_time_by_clusters(job_filter)
+        return await super().get_aggregated_run_time_by_clusters(owner)
 
     async def migrate(self) -> bool:
         version = int(await self._client.get("version") or "0")
