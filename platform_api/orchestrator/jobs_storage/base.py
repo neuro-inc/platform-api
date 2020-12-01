@@ -1,5 +1,6 @@
 import logging
 from abc import ABC, abstractmethod
+from collections import defaultdict
 from dataclasses import dataclass, field
 from datetime import datetime, timedelta, timezone
 from typing import (
@@ -12,7 +13,6 @@ from typing import (
     Mapping,
     Optional,
     Set,
-    Tuple,
     Type,
     cast,
 )
@@ -118,13 +118,9 @@ class RunTimeEntry:
             non_gpu_run_time=timedelta(seconds=data["non_gpu_run_time"]),
         )
 
-    def __iadd__(self, other: object) -> "RunTimeEntry":
-        if not isinstance(other, RunTimeEntry):
-            return NotImplemented
-        return RunTimeEntry(
-            gpu_run_time=self.gpu_run_time + other.gpu_run_time,
-            non_gpu_run_time=self.non_gpu_run_time + other.non_gpu_run_time,
-        )
+    def increase_by(self, other: "RunTimeEntry") -> None:
+        self.gpu_run_time += other.gpu_run_time
+        self.non_gpu_run_time += other.non_gpu_run_time
 
 
 class JobsStorage(ABC):
@@ -210,29 +206,14 @@ class JobsStorage(ABC):
     async def get_aggregated_run_time_by_clusters(
         self, owner: str
     ) -> Dict[str, AggregatedRunTime]:
-        zero_run_time = (timedelta(), timedelta())
-        aggregated_run_times: Dict[str, Tuple[timedelta, timedelta]] = {}
+        aggregated_run_times: Dict[str, RunTimeEntry] = defaultdict(RunTimeEntry)
         async for job in self.iter_all_jobs(JobFilter(owners={owner})):
-            gpu_run_time, non_gpu_run_time = aggregated_run_times.get(
-                job.cluster_name, zero_run_time
-            )
-            if job.has_gpu:
-                gpu_run_time += job.get_run_time()
-            else:
-                non_gpu_run_time += job.get_run_time()
-            aggregated_run_times[job.cluster_name] = (
-                gpu_run_time,
-                non_gpu_run_time,
+            aggregated_run_times[job.cluster_name].increase_by(
+                RunTimeEntry.for_job(job)
             )
         return {
-            cluster_name: AggregatedRunTime(
-                total_gpu_run_time_delta=gpu_run_time,
-                total_non_gpu_run_time_delta=non_gpu_run_time,
-            )
-            for cluster_name, (
-                gpu_run_time,
-                non_gpu_run_time,
-            ) in aggregated_run_times.items()
+            cluster_name: run_time_entry.to_aggregated_run_time()
+            for cluster_name, run_time_entry in aggregated_run_times.items()
         }
 
     async def migrate(self) -> bool:

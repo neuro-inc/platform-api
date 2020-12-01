@@ -369,7 +369,9 @@ class PostgresJobsStorage(JobsStorage):
             statuses={JobStatus(value) for value in JobStatus.active_values()},
         )
         async for job in self.iter_all_jobs(running_filter):
-            aggregated_run_times[job.cluster_name] += RunTimeEntry.for_job(job)
+            aggregated_run_times[job.cluster_name].increase_by(
+                RunTimeEntry.for_job(job)
+            )
 
         # Collect data from cache
         query = self._tables.jobs_runtime_cache.select().where(
@@ -385,9 +387,9 @@ class PostgresJobsStorage(JobsStorage):
         if cache_record:
             payload = json.loads(cache_record["payload"])
             for cluster, run_time in payload.items():
-                run_time_tuple = RunTimeEntry.from_primitive(run_time)
-                cached_run_times[cluster] += run_time_tuple
-                aggregated_run_times[cluster] += run_time_tuple
+                run_time_entry = RunTimeEntry.from_primitive(run_time)
+                cached_run_times[cluster].increase_by(run_time_entry)
+                aggregated_run_times[cluster].increase_by(run_time_entry)
 
             not_cached_query = not_cached_query.where(
                 self._tables.jobs.c.finished_at > cache_record["last_finished"]
@@ -403,8 +405,8 @@ class PostgresJobsStorage(JobsStorage):
         async with self._pool.acquire() as conn, conn.transaction():
             async for record in self._cursor(not_cached_query, conn=conn):
                 job = self._record_to_job(record)
-                run_time_tuple = RunTimeEntry.for_job(job)
-                aggregated_run_times[job.cluster_name] += run_time_tuple
+                job_run_time = RunTimeEntry.for_job(job)
+                aggregated_run_times[job.cluster_name].increase_by(job_run_time)
 
                 assert (
                     job.finished_at is not None
@@ -415,7 +417,7 @@ class PostgresJobsStorage(JobsStorage):
                         cache_last_finished = max(job.finished_at, cache_last_finished)
                     else:
                         cache_last_finished = job.finished_at
-                    cached_run_times[job.cluster_name] += run_time_tuple
+                    cached_run_times[job.cluster_name].increase_by(job_run_time)
 
         if cache_last_finished:
             # Cache should be updated
@@ -423,8 +425,8 @@ class PostgresJobsStorage(JobsStorage):
                 "owner": owner,
                 "last_finished": cache_last_finished,
                 "payload": {
-                    cluster_name: run_time_tuple.to_primitive()
-                    for cluster_name, run_time_tuple in cached_run_times.items()
+                    cluster_name: job_run_entry.to_primitive()
+                    for cluster_name, job_run_entry in cached_run_times.items()
                 },
             }
             if cache_record:
@@ -442,8 +444,8 @@ class PostgresJobsStorage(JobsStorage):
                 pass
 
         return {
-            cluster_name: run_time.to_aggregated_run_time()
-            for cluster_name, run_time in aggregated_run_times.items()
+            cluster_name: run_time_entry.to_aggregated_run_time()
+            for cluster_name, run_time_entry in aggregated_run_times.items()
         }
 
 
