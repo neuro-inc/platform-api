@@ -4126,6 +4126,7 @@ class TestJobs:
                 "pass_config": False,
                 "uri": f"job://test-cluster/{regular_user.name}/{job_id}",
                 "restart_policy": "never",
+                "privileged": False,
             }
 
         response_payload = await jobs_client.long_polling_by_job_id(
@@ -4168,6 +4169,7 @@ class TestJobs:
             "pass_config": False,
             "uri": f"job://test-cluster/{regular_user.name}/{job_id}",
             "restart_policy": "never",
+            "privileged": False,
         }
 
     @pytest.mark.asyncio
@@ -4256,6 +4258,7 @@ class TestJobs:
             "pass_config": False,
             "uri": f"job://test-cluster/{regular_user.name}/{job_id}",
             "restart_policy": "never",
+            "privileged": False,
         }
 
     @pytest.mark.asyncio
@@ -4349,6 +4352,7 @@ class TestJobs:
                 "pass_config": False,
                 "uri": f"job://test-cluster/{regular_user.name}/{job_id}",
                 "restart_policy": "never",
+                "privileged": False,
             }
 
     @pytest.mark.asyncio
@@ -4436,6 +4440,7 @@ class TestJobs:
                 "pass_config": False,
                 "uri": f"job://test-cluster/{regular_user.name}/{job_id}",
                 "restart_policy": "never",
+                "privileged": False,
             }
 
 
