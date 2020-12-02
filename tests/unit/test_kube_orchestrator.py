@@ -201,6 +201,37 @@ class TestPodDescriptor:
             },
         }
 
+    def test_to_primitive_privileged(self) -> None:
+        pod = PodDescriptor(name="testname", image="testimage", privileged=True)
+        assert pod.name == "testname"
+        assert pod.image == "testimage"
+        assert pod.to_primitive() == {
+            "kind": "Pod",
+            "apiVersion": "v1",
+            "metadata": {"name": "testname"},
+            "spec": {
+                "automountServiceAccountToken": False,
+                "containers": [
+                    {
+                        "name": "testname",
+                        "image": "testimage",
+                        "imagePullPolicy": "Always",
+                        "env": [],
+                        "volumeMounts": [],
+                        "terminationMessagePolicy": "FallbackToLogsOnError",
+                        "stdin": True,
+                        "securityContext": {
+                            "privileged": True,
+                        },
+                    }
+                ],
+                "volumes": [],
+                "restartPolicy": "Never",
+                "imagePullSecrets": [],
+                "tolerations": [],
+            },
+        }
+
     def test_to_primitive(self) -> None:
         tolerations = [
             Toleration(key="testkey", value="testvalue", effect="NoSchedule")

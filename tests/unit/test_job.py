@@ -954,6 +954,7 @@ class TestJob:
             "pass_config": False,
             "schedule_timeout": 15,
             "restart_policy": "never",
+            "privileged": False,
         }
 
     def test_to_primitive_with_max_run_time(
@@ -989,6 +990,7 @@ class TestJob:
             "pass_config": False,
             "max_run_time_minutes": 500,
             "restart_policy": "never",
+            "privileged": False,
         }
 
     def test_to_primitive_with_tags(
@@ -1338,6 +1340,7 @@ class TestJob:
             "is_preemptible_node_required": False,
             "pass_config": False,
             "restart_policy": str(JobRestartPolicy.ALWAYS),
+            "privileged": False,
         }
         actual = Job.to_primitive(
             Job.from_primitive(

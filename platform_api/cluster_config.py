@@ -127,6 +127,8 @@ class OrchestratorConfig:
     job_schedule_timeout: float = 3 * 60
     job_schedule_scaleup_timeout: float = 15 * 60
 
+    allow_privileged_mode: bool = False
+
     @property
     def tpu_resources(self) -> Sequence[TPUResource]:
         return tuple(

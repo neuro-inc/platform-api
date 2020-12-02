@@ -98,6 +98,7 @@ def create_job_request_validator(
             t.Key("is_preemptible_node_required", default=False): t.Bool,
             t.Key("pass_config", optional=True, default=False): t.Bool,
             t.Key("wait_for_jobs_quota", optional=True, default=False): t.Bool,
+            t.Key("privileged", optional=True, default=False): t.Bool,
             t.Key("schedule_timeout", optional=True): t.Float(gte=1, lt=30 * 24 * 3600),
             t.Key("max_run_time_minutes", optional=True): t.Int(gte=1),
             t.Key("cluster_name", default=cluster_name): t.Atom(cluster_name),
@@ -206,6 +207,7 @@ def create_job_response_validator() -> t.Trafaret:
             t.Key("schedule_timeout", optional=True): t.Float,
             t.Key("max_run_time_minutes", optional=True): t.Int,
             "restart_policy": t.String,
+            "privileged": t.Bool,
         }
     )
 
@@ -341,6 +343,7 @@ def convert_job_to_job_response(job: Job) -> Dict[str, Any]:
         "pass_config": job.pass_config,
         "uri": str(job.to_uri()),
         "restart_policy": str(job.restart_policy),
+        "privileged": job.privileged,
     }
     if job.name:
         response_payload["name"] = job.name
@@ -525,6 +528,7 @@ class JobsHandler:
             "is_preemptible_node_required", False
         )
         pass_config = request_payload["pass_config"]
+        privileged = request_payload["privileged"]
         schedule_timeout = request_payload.get("schedule_timeout")
         max_run_time_minutes = request_payload.get("max_run_time_minutes")
         wait_for_jobs_quota = request_payload.get("wait_for_jobs_quota")
@@ -540,6 +544,7 @@ class JobsHandler:
             is_preemptible_node_required=is_preemptible_node_required,
             pass_config=pass_config,
             wait_for_jobs_quota=wait_for_jobs_quota,
+            privileged=privileged,
             schedule_timeout=schedule_timeout,
             max_run_time_minutes=max_run_time_minutes,
             restart_policy=request_payload["restart_policy"],

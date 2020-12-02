@@ -696,6 +696,8 @@ class PodDescriptor:
 
     restart_policy: PodRestartPolicy = PodRestartPolicy.NEVER
 
+    privileged: bool = False
+
     @classmethod
     def _process_secret_volumes(
         cls,
@@ -751,6 +753,7 @@ class PodDescriptor:
         priority_class_name: Optional[str] = None,
         restart_policy: PodRestartPolicy = PodRestartPolicy.NEVER,
         meta_env: Optional[Dict[str, str]] = None,
+        privileged: bool = False,
     ) -> "PodDescriptor":
         container = job_request.container
 
@@ -825,6 +828,7 @@ class PodDescriptor:
             annotations=annotations,
             priority_class_name=priority_class_name,
             restart_policy=restart_policy,
+            privileged=privileged,
         )
 
     @property
@@ -855,6 +859,10 @@ class PodDescriptor:
         container_payload["stdin"] = True
         if self.working_dir is not None:
             container_payload["workingDir"] = self.working_dir
+        if self.privileged:
+            container_payload["securityContext"] = {
+                "privileged": self.privileged,
+            }
 
         ports = self._to_primitive_ports()
         if ports:
