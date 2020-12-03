@@ -483,6 +483,30 @@ class TestJobs:
         await jobs_client.delete_job(job_id=job_id)
 
     @pytest.mark.asyncio
+    async def test_create_job_with_privileged_flag(
+        self,
+        api: ApiConfig,
+        client: aiohttp.ClientSession,
+        job_submit: Dict[str, Any],
+        jobs_client: JobsClient,
+        regular_user: _User,
+    ) -> None:
+        url = api.jobs_base_url
+        job_submit["privileged"] = True
+        # Only privileged container can do this:
+        job_submit["container"]["command"] = "/bin/bash -c 'mount -t tmpfs none /mnt'"
+        async with client.post(
+            url, headers=regular_user.headers, json=job_submit
+        ) as response:
+            assert response.status == HTTPAccepted.status_code, await response.text()
+            result = await response.json()
+            assert result["status"] in ["pending"]
+            job_id = result["id"]
+
+        await jobs_client.long_polling_by_job_id(job_id=job_id, status="succeeded")
+        await jobs_client.delete_job(job_id=job_id)
+
+    @pytest.mark.asyncio
     async def test_create_job_with_tty(
         self,
         api: ApiConfig,
@@ -4102,6 +4126,7 @@ class TestJobs:
                 "pass_config": False,
                 "uri": f"job://test-cluster/{regular_user.name}/{job_id}",
                 "restart_policy": "never",
+                "privileged": False,
             }
 
         response_payload = await jobs_client.long_polling_by_job_id(
@@ -4144,6 +4169,7 @@ class TestJobs:
             "pass_config": False,
             "uri": f"job://test-cluster/{regular_user.name}/{job_id}",
             "restart_policy": "never",
+            "privileged": False,
         }
 
     @pytest.mark.asyncio
@@ -4232,6 +4258,7 @@ class TestJobs:
             "pass_config": False,
             "uri": f"job://test-cluster/{regular_user.name}/{job_id}",
             "restart_policy": "never",
+            "privileged": False,
         }
 
     @pytest.mark.asyncio
@@ -4325,6 +4352,7 @@ class TestJobs:
                 "pass_config": False,
                 "uri": f"job://test-cluster/{regular_user.name}/{job_id}",
                 "restart_policy": "never",
+                "privileged": False,
             }
 
     @pytest.mark.asyncio
@@ -4412,6 +4440,7 @@ class TestJobs:
                 "pass_config": False,
                 "uri": f"job://test-cluster/{regular_user.name}/{job_id}",
                 "restart_policy": "never",
+                "privileged": False,
             }
 
 

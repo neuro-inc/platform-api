@@ -134,6 +134,55 @@ class TestJobsService:
         assert job.owner == "testuser"
 
     @pytest.mark.asyncio
+    async def test_create_job_privileged_not_allowed(
+        self,
+        cluster_config: ClusterConfig,
+        cluster_registry: ClusterRegistry,
+        jobs_service: JobsService,
+        mock_job_request: JobRequest,
+    ) -> None:
+        cluster_config = replace(
+            cluster_config,
+            orchestrator=replace(
+                cluster_config.orchestrator, allow_privileged_mode=False
+            ),
+        )
+
+        await cluster_registry.replace(cluster_config)
+
+        user = User(cluster_name="test-cluster", name="testuser", token="test-token")
+        with pytest.raises(
+            JobsServiceException,
+            match="Cluster test-cluster does not allow privileged jobs",
+        ):
+            original_job, _ = await jobs_service.create_job(
+                job_request=mock_job_request, user=user, privileged=True
+            )
+
+    @pytest.mark.asyncio
+    async def test_create_job_privileged_allowed(
+        self,
+        cluster_config: ClusterConfig,
+        cluster_registry: ClusterRegistry,
+        jobs_service: JobsService,
+        mock_job_request: JobRequest,
+    ) -> None:
+        cluster_config = replace(
+            cluster_config,
+            orchestrator=replace(
+                cluster_config.orchestrator, allow_privileged_mode=True
+            ),
+        )
+
+        await cluster_registry.replace(cluster_config)
+
+        user = User(cluster_name="test-cluster", name="testuser", token="test-token")
+        original_job, _ = await jobs_service.create_job(
+            job_request=mock_job_request, user=user, privileged=True
+        )
+        assert original_job.privileged
+
+    @pytest.mark.asyncio
     async def test_create_job_pass_config(
         self,
         jobs_service: JobsService,

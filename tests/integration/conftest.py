@@ -225,6 +225,7 @@ def kube_config_factory(
             ],
             namespace="platformapi-tests",
             job_schedule_scaleup_timeout=5,
+            allow_privileged_mode=True,
         )
         kwargs = {**defaults, **kwargs}
         return KubeConfig(**kwargs)

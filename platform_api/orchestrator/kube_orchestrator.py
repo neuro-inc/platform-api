@@ -312,6 +312,7 @@ class KubeOrchestrator(Orchestrator):
             priority_class_name=self._kube_config.jobs_pod_priority_class_name,
             restart_policy=self._get_pod_restart_policy(job),
             meta_env=meta_env,
+            privileged=job.privileged,
         )
         pod = self._update_pod_container_resources(pod, pool_types)
         return pod

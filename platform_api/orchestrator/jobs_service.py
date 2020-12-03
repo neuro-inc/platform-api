@@ -498,6 +498,7 @@ class JobsService:
         is_preemptible_node_required: bool = False,
         pass_config: bool = False,
         wait_for_jobs_quota: bool = False,
+        privileged: bool = False,
         schedule_timeout: Optional[float] = None,
         max_run_time_minutes: Optional[int] = None,
         restart_policy: JobRestartPolicy = JobRestartPolicy.NEVER,
@@ -567,6 +568,7 @@ class JobsService:
             schedule_timeout=schedule_timeout,
             max_run_time_minutes=max_run_time_minutes,
             restart_policy=restart_policy,
+            privileged=privileged,
         )
         job_id = job_request.job_id
 
@@ -583,6 +585,17 @@ class JobsService:
             if missing:
                 details = ", ".join(f"'{s}'" for s in sorted(missing))
                 raise JobsServiceException(f"Missing disks: {details}")
+
+        if record.privileged:
+            async with self._get_cluster(cluster_name) as cluster:
+                # Warning: contextmanager '_get_cluster' suppresses all exceptions,
+                privileged_mode_allowed = (
+                    cluster.config.orchestrator.allow_privileged_mode
+                )
+            if not privileged_mode_allowed:
+                raise JobsServiceException(
+                    f"Cluster {cluster_name} does not allow privileged jobs"
+                )
 
         try:
             async with self._create_job_in_storage(record) as record:

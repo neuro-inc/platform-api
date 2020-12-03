@@ -156,6 +156,10 @@ class ClusterConfigFactory:
                 "job_schedule_scale_up_timeout_s",
                 OrchestratorConfig.job_schedule_scaleup_timeout,
             ),
+            allow_privileged_mode=orchestrator.get(
+                "allow_privileged_mode",
+                OrchestratorConfig.allow_privileged_mode,
+            ),
         )
 
     def _create_tpu_preset(

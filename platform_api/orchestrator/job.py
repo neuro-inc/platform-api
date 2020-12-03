@@ -277,6 +277,7 @@ class JobRecord:
     is_preemptible_node_required: bool = False
     pass_config: bool = False
     materialized: bool = False
+    privileged: bool = False
     max_run_time_minutes: Optional[int] = None
     internal_hostname: Optional[str] = None
     internal_hostname_named: Optional[str] = None
@@ -427,6 +428,7 @@ class JobRecord:
             "is_preemptible": self.is_preemptible,
             "is_preemptible_node_required": self.is_preemptible_node_required,
             "pass_config": self.pass_config,
+            "privileged": self.privileged,
             "restart_policy": str(self.restart_policy),
         }
         if self.schedule_timeout:
@@ -473,6 +475,7 @@ class JobRecord:
                 "is_preemptible_node_required", False
             ),
             pass_config=payload.get("pass_config", False),
+            privileged=payload.get("privileged", False),
             max_run_time_minutes=payload.get("max_run_time_minutes", None),
             internal_hostname=payload.get("internal_hostname", None),
             internal_hostname_named=payload.get("internal_hostname_named", None),
@@ -742,6 +745,10 @@ class Job:
     @property
     def restart_policy(self) -> JobRestartPolicy:
         return self._record.restart_policy
+
+    @property
+    def privileged(self) -> bool:
+        return self._record.privileged
 
     @property
     def is_restartable(self) -> bool:
