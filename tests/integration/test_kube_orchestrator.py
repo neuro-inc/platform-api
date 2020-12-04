@@ -1555,14 +1555,42 @@ class TestKubeOrchestrator:
         async with kube_orchestrator_factory(kube_config=kube_config) as orchestrator:
             async with kube_client_factory(kube_config) as kube_client:
                 await kube_client.create_pvc(  # type: ignore
+                    "disk-1",
+                    kube_config.namespace,
+                    labels={
+                        "platform.neuromation.io/user": "user",
+                    },
+                )
+                await kube_client.create_pvc(  # type: ignore
                     "disk-2",
                     kube_config.namespace,
+                    labels={
+                        "platform.neuromation.io/user": "another_user",
+                    },
                 )
 
+                disk1, disk2, disk3 = [
+                    Disk(
+                        cluster_name=cluster_name,
+                        user_name="user",
+                        disk_id="disk-1",
+                    ),
+                    Disk(
+                        cluster_name=cluster_name,
+                        user_name="user",  # Wrong username
+                        disk_id="disk-2",
+                    ),
+                    Disk(
+                        cluster_name=cluster_name,
+                        user_name="user",
+                        disk_id="disk-3",  # Not existing id
+                    ),
+                ]
+
                 missing = await orchestrator.get_missing_disks(
-                    disk_names=["disk-3", "disk-2", "disk-1"]
+                    disks=[disk1, disk2, disk3]
                 )
-                assert missing == ["disk-1", "disk-3"]
+                assert missing == [disk2, disk3]
 
     @pytest.mark.asyncio
     async def test_job_pod_with_disk_volume_simple_ok(

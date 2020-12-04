@@ -4,7 +4,17 @@ import uuid
 from dataclasses import dataclass
 from datetime import datetime, timezone
 from pathlib import Path, PurePath
-from typing import Any, AsyncIterator, Awaitable, Callable, Dict, Iterator, Optional
+from typing import (
+    Any,
+    AsyncIterator,
+    Awaitable,
+    Callable,
+    Dict,
+    Iterator,
+    List,
+    Mapping,
+    Optional,
+)
 from urllib.parse import urlsplit
 
 import aiohttp
@@ -287,15 +297,31 @@ async def kube_ingress_ip(kube_config_cluster_payload: Dict[str, Any]) -> str:
 
 
 class MyKubeClient(KubeClient):
+    _created_pvcs: List[str]
+
+    async def init(self) -> None:
+        await super().init()
+        if not hasattr(self, "_created_pvcs"):
+            self._created_pvcs = []
+
+    async def close(self) -> None:
+        for pvc_name in self._created_pvcs:
+            await self.delete_pvc(pvc_name)
+        await super().close()
+
     async def create_pvc(
-        self, pvc_name: str, namespace: str, storage: Optional[int] = None
+        self,
+        pvc_name: str,
+        namespace: str,
+        storage: Optional[int] = None,
+        labels: Mapping[str, str] = None,
     ) -> None:
         url = self._generate_all_pvcs_url(namespace)
         storage = storage or 1024 * 1024
         primitive = {
             "apiVersion": "v1",
             "kind": "PersistentVolumeClaim",
-            "metadata": {"name": pvc_name},
+            "metadata": {"name": pvc_name, "labels": labels},
             "spec": {
                 "accessModes": ["ReadWriteOnce"],
                 "volumeMode": "Filesystem",
@@ -305,6 +331,15 @@ class MyKubeClient(KubeClient):
             },
         }
         payload = await self._request(method="POST", url=url, json=primitive)
+        self._check_status_payload(payload)
+        self._created_pvcs.append(pvc_name)
+
+    async def delete_pvc(
+        self,
+        pvc_name: str,
+    ) -> None:
+        url = self._generate_pvc_url(pvc_name)
+        payload = await self._request(method="DELETE", url=url)
         self._check_status_payload(payload)
 
     async def update_or_create_secret(

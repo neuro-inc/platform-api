@@ -16,6 +16,7 @@ from platform_api.resource import ResourcePoolType
 from .base import Orchestrator
 from .job import Job, JobRestartPolicy, JobStatusItem, JobStatusReason
 from .job_request import (
+    Disk,
     JobAlreadyExistsException,
     JobError,
     JobNotFoundException,
@@ -403,15 +404,22 @@ class KubeOrchestrator(Orchestrator):
     def _get_pod_restart_policy(self, job: Job) -> PodRestartPolicy:
         return self._restart_policy_map[job.restart_policy]
 
-    async def get_missing_disks(self, disk_names: List[str]) -> List[str]:
-        assert disk_names, "no disk names"
+    async def get_missing_disks(self, disks: List[Disk]) -> List[Disk]:
+        assert disks, "no disks"
         missing = []
-        for disk in disk_names:
+        for disk in disks:
             try:
-                await self._client.get_raw_pvc(disk, self._kube_config.namespace)
-            except StatusException:
+                pvc = await self._client.get_raw_pvc(
+                    disk.disk_id, self._kube_config.namespace
+                )
+                if (
+                    pvc["metadata"]["labels"]["platform.neuromation.io/user"]
+                    != disk.user_name
+                ):
+                    missing.append(disk)
+            except (StatusException, KeyError):
                 missing.append(disk)
-        return sorted(missing)
+        return sorted(missing, key=lambda disk: disk.disk_id)
 
     async def get_missing_secrets(
         self, user_name: str, secret_names: List[str]
