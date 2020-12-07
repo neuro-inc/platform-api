@@ -1,20 +1,22 @@
 IMAGE_NAME ?= platformapi
 DOCKER_REPO ?= neuro-docker-local-public.jfrog.io
-IMAGE_TAG ?= $(GITHUB_SHA)
-IMAGE_TAG ?= latest
+TAG ?= $(GITHUB_SHA)
+TAG ?= latest
 
-CLOUD_IMAGE_gke   ?= $(GKE_DOCKER_REGISTRY)/$(GKE_PROJECT_ID)/$(IMAGE_NAME)
-CLOUD_IMAGE_aws   ?= $(AWS_ACCOUNT_ID).dkr.ecr.$(AWS_REGION).amazonaws.com/$(IMAGE_NAME)
-CLOUD_IMAGE_azure ?= $(AZURE_ACR_NAME).azurecr.io/$(IMAGE_NAME)
+CLOUD_IMAGE_NAME_gke   ?= $(GKE_DOCKER_REGISTRY)/$(GKE_PROJECT_ID)/$(IMAGE_NAME)
+CLOUD_IMAGE_NAME_aws   ?= $(AWS_ACCOUNT_ID).dkr.ecr.$(AWS_REGION).amazonaws.com/$(IMAGE_NAME)
+CLOUD_IMAGE_NAME_azure ?= $(AZURE_ACR_NAME).azurecr.io/$(IMAGE_NAME)
 
-CLOUD_IMAGE  = ${CLOUD_IMAGE_${CLOUD_PROVIDER}}
+CLOUD_IMAGE_NAME        = $(CLOUD_IMAGE_NAME_$(CLOUD_PROVIDER))
+ARTIFACTORY_IMAGE_NAME  = $(ARTIFACTORY_DOCKER_REPO)/$(IMAGE_NAME)
 
 INGRESS_FALLBACK_IMAGE_NAME ?= platformingressfallback
-INGRESS_FALLBACK_CLOUD_IMAGE_gke ?= $(GKE_DOCKER_REGISTRY)/$(GKE_PROJECT_ID)/$(INGRESS_FALLBACK_IMAGE_NAME)
-INGRESS_FALLBACK_CLOUD_IMAGE_aws ?= $(AWS_ACCOUNT_ID).dkr.ecr.$(AWS_REGION).amazonaws.com/$(INGRESS_FALLBACK_IMAGE_NAME)
-INGRESS_FALLBACK_CLOUD_IMAGE_azure ?= $(AZURE_ACR_NAME).azurecr.io/$(INGRESS_FALLBACK_IMAGE_NAME)
+INGRESS_FALLBACK_CLOUD_IMAGE_NAME_gke ?= $(GKE_DOCKER_REGISTRY)/$(GKE_PROJECT_ID)/$(INGRESS_FALLBACK_IMAGE_NAME)
+INGRESS_FALLBACK_CLOUD_IMAGE_NAME_aws ?= $(AWS_ACCOUNT_ID).dkr.ecr.$(AWS_REGION).amazonaws.com/$(INGRESS_FALLBACK_IMAGE_NAME)
+INGRESS_FALLBACK_CLOUD_IMAGE_NAME_azure ?= $(AZURE_ACR_NAME).azurecr.io/$(INGRESS_FALLBACK_IMAGE_NAME)
 
-INGRESS_FALLBACK_CLOUD_IMAGE  = ${INGRESS_FALLBACK_CLOUD_IMAGE_${CLOUD_PROVIDER}}
+INGRESS_FALLBACK_CLOUD_IMAGE_NAME             = $(INGRESS_FALLBACK_CLOUD_IMAGE_NAME_$(CLOUD_PROVIDER))
+ARTIFACTORY_INGRESS_FALLBACK_IMAGE_NAME = $(ARTIFACTORY_DOCKER_REPO)/$(INGRESS_FALLBACK_IMAGE_NAME)
 
 PLATFORMAUTHAPI_IMAGE = $(shell cat PLATFORMAUTHAPI_IMAGE)
 PLATFORMCONFIG_IMAGE = $(shell cat PLATFORMCONFIG_IMAGE)
@@ -46,8 +48,8 @@ test_e2e:
 	pytest -vv tests/e2e
 
 docker_build:
-	docker build --build-arg PIP_EXTRA_INDEX_URL \
-		-f Dockerfile.k8s -t $(IMAGE_NAME):latest .
+	docker build --build-arg PIP_EXTRA_INDEX_URL -f Dockerfile.k8s -t $(IMAGE_NAME):latest .
+	make -C platform_ingress_fallback IMAGE_NAME=$(INGRESS_FALLBACK_IMAGE_NAME) build
 
 run_api_k8s:
 	NP_STORAGE_HOST_MOUNT_PATH=/tmp \
@@ -98,26 +100,50 @@ docker_pull_test_images:
 helm_install:
 	curl https://raw.githubusercontent.com/kubernetes/helm/master/scripts/get | bash -s -- -v $(HELM_VERSION)
 	helm init --client-only
+	helm plugin install https://github.com/belitre/helm-push-artifactory-plugin
 
 gcr_login:
 	@echo $(GKE_ACCT_AUTH) | base64 --decode | docker login -u _json_key --password-stdin https://gcr.io
 
 docker_push: docker_build
-	docker tag $(IMAGE_NAME):latest $(CLOUD_IMAGE):latest
-	docker tag $(IMAGE_NAME):latest $(CLOUD_IMAGE):$(IMAGE_TAG)
-	docker push $(CLOUD_IMAGE):latest
-	docker push $(CLOUD_IMAGE):$(IMAGE_TAG)
+	docker tag $(IMAGE_NAME):latest $(CLOUD_IMAGE_NAME):latest
+	docker tag $(IMAGE_NAME):latest $(CLOUD_IMAGE_NAME):$(TAG)
+	docker push $(CLOUD_IMAGE_NAME):latest
+	docker push $(CLOUD_IMAGE_NAME):$(TAG)
 
-	make -C platform_ingress_fallback IMAGE_NAME=$(INGRESS_FALLBACK_IMAGE_NAME) build
+	docker tag $(INGRESS_FALLBACK_IMAGE_NAME):latest $(INGRESS_FALLBACK_CLOUD_IMAGE_NAME):latest
+	docker tag $(INGRESS_FALLBACK_IMAGE_NAME):latest $(INGRESS_FALLBACK_CLOUD_IMAGE_NAME):$(TAG)
+	docker push $(INGRESS_FALLBACK_CLOUD_IMAGE_NAME):latest
+	docker push $(INGRESS_FALLBACK_CLOUD_IMAGE_NAME):$(TAG)
 
-	docker tag $(INGRESS_FALLBACK_IMAGE_NAME):latest $(INGRESS_FALLBACK_CLOUD_IMAGE):latest
-	docker tag $(INGRESS_FALLBACK_IMAGE_NAME):latest $(INGRESS_FALLBACK_CLOUD_IMAGE):$(IMAGE_TAG)
-	docker push $(INGRESS_FALLBACK_CLOUD_IMAGE):latest
-	docker push $(INGRESS_FALLBACK_CLOUD_IMAGE):$(IMAGE_TAG)
+artifactory_docker_push: docker_build
+	docker tag $(IMAGE_NAME):latest $(ARTIFACTORY_IMAGE_NAME):$(TAG)
+	docker tag $(INGRESS_FALLBACK_IMAGE_NAME):latest $(ARTIFACTORY_INGRESS_FALLBACK_IMAGE_NAME):$(TAG)
+	docker login $(ARTIFACTORY_DOCKER_REPO) \
+		--username=$(ARTIFACTORY_USERNAME) \
+		--password=$(ARTIFACTORY_PASSWORD)
+	docker push $(ARTIFACTORY_IMAGE_NAME):$(TAG)
+	docker push $(ARTIFACTORY_INGRESS_FALLBACK_IMAGE_NAME):$(TAG)
+
+_helm_expand_vars:
+	rm -rf temp_deploy/platformapi
+	mkdir -p temp_deploy/platformapi
+	cp -Rf deploy/platformapi/. temp_deploy/platformapi/
+	find temp_deploy/platformapi -type f -name 'values*' -delete
+	cp deploy/platformapi/values-template.yaml temp_deploy/platformapi/values.yaml
+	sed -i.bak "s/\$$IMAGE/$(subst /,\/,$(ARTIFACTORY_IMAGE_NAME):$(TAG))/g" temp_deploy/platformapi/values.yaml
+	sed -i.bak "s/\$$INGRESS_FALLBACK_IMAGE/$(subst /,\/,$(ARTIFACTORY_INGRESS_FALLBACK_IMAGE_NAME):$(TAG))/g" temp_deploy/platformapi/values.yaml
+	find temp_deploy/platformapi -type f -name '*.bak' -delete
 
 helm_deploy:
 	helm \
 		-f deploy/platformapi/values-$(HELM_ENV)-$(CLOUD_PROVIDER).yaml \
 		--set "ENV=$(HELM_ENV)" \
-		--set "IMAGE=$(CLOUD_IMAGE):$(IMAGE_TAG)" \
+		--set "IMAGE=$(CLOUD_IMAGE_NAME):$(TAG)" \
 		upgrade --install platformapi deploy/platformapi/ --wait --timeout 600 --namespace platform
+
+artifactory_helm_push: _helm_expand_vars
+	helm package --app-version=$(TAG) --version=$(TAG) temp_deploy/platformapi/
+	helm push-artifactory $(IMAGE_NAME)-$(TAG).tgz $(ARTIFACTORY_HELM_REPO) \
+		--username $(ARTIFACTORY_USERNAME) \
+		--password $(ARTIFACTORY_PASSWORD)
