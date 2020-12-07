@@ -575,15 +575,14 @@ class JobsService:
         await self._check_secrets(cluster_name, job_request)
 
         job_disks = [
-            disk_volume.disk.disk_id
-            for disk_volume in job_request.container.disk_volumes
+            disk_volume.disk for disk_volume in job_request.container.disk_volumes
         ]
         if job_disks:
             async with self._get_cluster(cluster_name) as cluster:
                 # Warning: contextmanager '_get_cluster' suppresses all exceptions
                 missing = await cluster.orchestrator.get_missing_disks(job_disks)
             if missing:
-                details = ", ".join(f"'{s}'" for s in sorted(missing))
+                details = ", ".join(f"'{disk.disk_id}'" for disk in sorted(missing))
                 raise JobsServiceException(f"Missing disks: {details}")
 
         if record.privileged:
