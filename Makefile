@@ -48,8 +48,8 @@ test_e2e:
 	pytest -vv tests/e2e
 
 docker_build:
-	docker build --build-arg PIP_EXTRA_INDEX_URL \
-		-f Dockerfile.k8s -t $(IMAGE_NAME):latest .
+	docker build --build-arg PIP_EXTRA_INDEX_URL -f Dockerfile.k8s -t $(IMAGE_NAME):latest .
+	make -C platform_ingress_fallback IMAGE_NAME=$(INGRESS_FALLBACK_IMAGE_NAME) build
 
 run_api_k8s:
 	NP_STORAGE_HOST_MOUNT_PATH=/tmp \
@@ -111,15 +111,13 @@ docker_push: docker_build
 	docker push $(CLOUD_IMAGE_NAME):latest
 	docker push $(CLOUD_IMAGE_NAME):$(TAG)
 
-	make -C platform_ingress_fallback IMAGE_NAME=$(INGRESS_FALLBACK_IMAGE_NAME) build
-
 	docker tag $(INGRESS_FALLBACK_IMAGE_NAME):latest $(INGRESS_FALLBACK_CLOUD_IMAGE_NAME):latest
 	docker tag $(INGRESS_FALLBACK_IMAGE_NAME):latest $(INGRESS_FALLBACK_CLOUD_IMAGE_NAME):$(TAG)
 	docker push $(INGRESS_FALLBACK_CLOUD_IMAGE_NAME):latest
 	docker push $(INGRESS_FALLBACK_CLOUD_IMAGE_NAME):$(TAG)
 
 artifactory_docker_push: docker_build
-	docker tag $(IMAGE_NAME):latest $(ARTIFACTORY_DOCKER_REPO)/$(IMAGE_NAME):$(TAG)
+	docker tag $(IMAGE_NAME):latest $(ARTIFACTORY_IMAGE_NAME):$(TAG)
 	docker tag $(INGRESS_FALLBACK_IMAGE_NAME):latest $(ARTIFACTORY_INGRESS_FALLBACK_IMAGE_NAME):$(TAG)
 	docker login $(ARTIFACTORY_DOCKER_REPO) \
 		--username=$(ARTIFACTORY_USERNAME) \
@@ -136,10 +134,6 @@ _helm_expand_vars:
 	sed -i.bak "s/\$$IMAGE/$(subst /,\/,$(ARTIFACTORY_IMAGE_NAME):$(TAG))/g" temp_deploy/platformapi/values.yaml
 	sed -i.bak "s/\$$INGRESS_FALLBACK_IMAGE/$(subst /,\/,$(ARTIFACTORY_INGRESS_FALLBACK_IMAGE_NAME):$(TAG))/g" temp_deploy/platformapi/values.yaml
 	find temp_deploy/platformapi -type f -name '*.bak' -delete
-
-	make -C platform_ingress_fallback IMAGE_NAME=$(INGRESS_FALLBACK_IMAGE_NAME) build
-	docker tag $(INGRESS_FALLBACK_IMAGE_NAME):latest $(ARTIFACTORY_DOCKER_REPO)/$(INGRESS_FALLBACK_IMAGE_NAME):$(ARTIFACTORY_TAG)
-	docker push $(ARTIFACTORY_DOCKER_REPO)/$(INGRESS_FALLBACK_IMAGE_NAME):$(ARTIFACTORY_TAG)
 
 helm_deploy:
 	helm \
