@@ -1,6 +1,8 @@
 from setuptools import find_packages, setup
 
 
+setup_requires = ("setuptools_scm",)
+
 install_requires = (
     "aiohttp==3.7.3",
     # WARN: aioredis does not support Redis Cluster yet
@@ -26,10 +28,16 @@ install_requires = (
 
 setup(
     name="platform-api",
-    version="0.0.1b1",
     url="https://github.com/neuromation/platform-api",
+    use_scm_version={
+        "tag_regex": r"(artifactory/)?(?P<version>.*)",
+        "git_describe_command": (
+            "git describe --dirty --tags --long --match artifactory/*.*.*"
+        ),
+    },
     packages=find_packages(),
     python_requires=">=3.7.0",
+    setup_requires=setup_requires,
     install_requires=install_requires,
     entry_points={"console_scripts": ["platform-api=platform_api.api:main"]},
     zip_safe=False,

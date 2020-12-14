@@ -92,6 +92,14 @@ class TestApi:
             assert response.status == HTTPOk.status_code, await response.text()
 
     @pytest.mark.asyncio
+    async def test_ping_includes_version(
+        self, api: ApiConfig, client: aiohttp.ClientSession
+    ) -> None:
+        async with client.get(api.ping_url) as response:
+            assert response.status == HTTPOk.status_code, await response.text()
+            assert "platform-api" in response.headers["X-Service-Version"]
+
+    @pytest.mark.asyncio
     async def test_ping_unknown_origin(
         self, api: ApiConfig, client: aiohttp.ClientSession
     ) -> None:

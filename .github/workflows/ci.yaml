@@ -15,10 +15,12 @@ jobs:
     steps:
       - name: Checkout commit
         uses: actions/checkout@v2
+        with:
+          fetch-depth: 0
       - name: Install python
         uses: actions/setup-python@v2
         with:
-          python-version: "3.7.7"
+          python-version: 3.7.7
       - name: Cache packages
         uses: actions/cache@v1
         with:
@@ -115,6 +117,12 @@ jobs:
     steps:
       - name: Checkout commit
         uses: actions/checkout@v2
+        with:
+          fetch-depth: 0
+      - name: Install python
+        uses: actions/setup-python@v2
+        with:
+          python-version: 3.7.7
       - name: Configure AWS credentials
         if: env.CLOUD_PROVIDER == 'aws'
         uses: aws-actions/configure-aws-credentials@v1
@@ -168,6 +176,12 @@ jobs:
     steps:
       - name: Checkout commit
         uses: actions/checkout@v2
+        with:
+          fetch-depth: 0
+      - name: Install python
+        uses: actions/setup-python@v2
+        with:
+          python-version: 3.7.7
       - name: Configure AWS credentials
         if: env.CLOUD_PROVIDER == 'aws'
         uses: aws-actions/configure-aws-credentials@v1

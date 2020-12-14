@@ -48,7 +48,10 @@ test_e2e:
 	pytest -vv tests/e2e
 
 docker_build:
-	docker build --build-arg PIP_EXTRA_INDEX_URL -f Dockerfile.k8s -t $(IMAGE_NAME):latest .
+	python setup.py sdist
+	docker build -f Dockerfile.k8s -t $(IMAGE_NAME):latest \
+	--build-arg PIP_EXTRA_INDEX_URL \
+	--build-arg DIST_FILENAME=`python setup.py --fullname`.tar.gz .
 	make -C platform_ingress_fallback IMAGE_NAME=$(INGRESS_FALLBACK_IMAGE_NAME) build
 
 run_api_k8s:
