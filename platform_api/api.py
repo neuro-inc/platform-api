@@ -6,6 +6,7 @@ from typing import Any, AsyncIterator, Awaitable, Callable, Dict, Sequence
 import aiohttp.web
 import aiohttp_cors
 import aiozipkin
+import pkg_resources
 import sentry_sdk
 from aiohttp.web import HTTPUnauthorized
 from aiohttp_security import check_permission
@@ -251,6 +252,15 @@ async def create_tracer(config: Config) -> aiozipkin.Tracer:
     return tracer
 
 
+package_version = pkg_resources.get_distribution("platform-api").version
+
+
+async def add_version_to_header(
+    request: aiohttp.web.Request, response: aiohttp.web.StreamResponse
+) -> None:
+    response.headers["X-Service-Version"] = f"platform-api/{package_version}"
+
+
 async def create_app(
     config: Config, clusters: Sequence[ClusterConfig] = ()
 ) -> aiohttp.web.Application:
@@ -396,6 +406,8 @@ async def create_app(
 
     aiozipkin.setup(app, tracer)
     app.middlewares.append(store_span_middleware)
+
+    app.on_response_prepare.append(add_version_to_header)
 
     return app
 
