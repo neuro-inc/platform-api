@@ -142,10 +142,12 @@ class ApiHandler:
             "name": cluster_config.name,
             "registry_url": str(cluster_config.registry.url),
             "storage_url": str(cluster_config.ingress.storage_url),
+            "blob_storage_url": str(cluster_config.ingress.blob_storage_url),
             "users_url": str(self._config.auth.public_endpoint_url),
             "monitoring_url": str(cluster_config.ingress.monitoring_url),
             "secrets_url": str(cluster_config.ingress.secrets_url),
             "metrics_url": str(cluster_config.ingress.metrics_url),
+            "disks_url": str(cluster_config.ingress.disks_url),
             "resource_presets": presets,
         }
 

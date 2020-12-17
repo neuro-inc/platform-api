@@ -307,9 +307,11 @@ class EnvironConfigFactory:
         base_url = URL(self._environ["NP_API_URL"])
         return IngressConfig(
             storage_url=base_url / "storage",
+            blob_storage_url=base_url / "blob",
             monitoring_url=base_url / "jobs",
             secrets_url=base_url / "secrets",
             metrics_url=base_url / "metrics",
+            disks_url=base_url / "disk",
         )
 
     def create_notifications(self) -> NotificationsConfig:
