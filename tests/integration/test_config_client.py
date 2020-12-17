@@ -49,6 +49,8 @@ def cluster_configs_payload() -> List[Dict[str, Any]]:
             "monitoring": {"url": "https://dev.neu.ro/api/v1/jobs"},
             "secrets": {"url": "https://dev.neu.ro/api/v1/secrets"},
             "metrics": {"url": "https://metrics.dev.neu.ro"},
+            "disks": {"url": "https://dev.neu.ro/api/v1/disk"},
+            "blob_storage": {"url": "https://dev.neu.ro/api/v1/blob"},
         }
     ]
 

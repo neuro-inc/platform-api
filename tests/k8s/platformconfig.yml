@@ -54,6 +54,14 @@ data:
 
             "metrics": {
                 "url": "http://metrics.dev.neu.ro"
+            },
+
+            "disks": {
+                "url": "http://platformapi/api/v1/disk"
+            },
+
+            "blob_storage": {
+                "url": "http://platformapi/api/v1/blob"
             }
         }
     ]
