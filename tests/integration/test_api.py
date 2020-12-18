@@ -81,6 +81,8 @@ def cluster_configs_payload() -> List[Dict[str, Any]]:
             "monitoring": {"url": "https://dev.neu.ro/api/v1/jobs"},
             "secrets": {"url": "https://dev.neu.ro/api/v1/secrets"},
             "metrics": {"url": "https://metrics.dev.neu.ro"},
+            "blob_storage": {"url": "https://dev.neu.ro/api/v1/blob"},
+            "disks": {"url": "https://dev.neu.ro/api/v1/disk"},
         }
     ]
 
@@ -222,10 +224,12 @@ class TestApi:
                 "name": "test-cluster",
                 "registry_url": "https://registry.dev.neuromation.io",
                 "storage_url": "https://neu.ro/api/v1/storage",
+                "blob_storage_url": "https://neu.ro/api/v1/blob",
                 "users_url": "https://neu.ro/api/v1/users",
                 "monitoring_url": "https://neu.ro/api/v1/monitoring",
                 "secrets_url": "https://neu.ro/api/v1/secrets",
                 "metrics_url": "https://neu.ro/api/v1/metrics",
+                "disks_url": "https://neu.ro/api/v1/disk",
                 "resource_presets": [
                     {
                         "name": "gpu-small",
@@ -310,10 +314,12 @@ class TestApi:
                 "name": "test-cluster",
                 "registry_url": "https://registry.dev.neuromation.io",
                 "storage_url": "https://neu.ro/api/v1/storage",
+                "blob_storage_url": "https://neu.ro/api/v1/blob",
                 "users_url": "https://neu.ro/api/v1/users",
                 "monitoring_url": "https://neu.ro/api/v1/monitoring",
                 "secrets_url": "https://neu.ro/api/v1/secrets",
                 "metrics_url": "https://neu.ro/api/v1/metrics",
+                "disks_url": "https://neu.ro/api/v1/disk",
                 "resource_presets": [
                     {
                         "name": "gpu-small",

@@ -311,9 +311,11 @@ def cluster_config(registry_config: RegistryConfig) -> ClusterConfig:
         orchestrator=orchestrator_config,
         ingress=IngressConfig(
             storage_url=URL(),
+            blob_storage_url=URL(),
             monitoring_url=URL(),
             secrets_url=URL(),
             metrics_url=URL(),
+            disks_url=URL(),
         ),
     )
 

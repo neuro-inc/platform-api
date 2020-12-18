@@ -146,9 +146,11 @@ class OrchestratorConfig:
 @dataclass(frozen=True)
 class IngressConfig:
     storage_url: URL
+    blob_storage_url: URL
     monitoring_url: URL
     secrets_url: URL
     metrics_url: URL
+    disks_url: URL
 
 
 @dataclass(frozen=True)

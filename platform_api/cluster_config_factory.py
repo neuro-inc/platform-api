@@ -74,9 +74,11 @@ class ClusterConfigFactory:
     def _create_ingress_config(self, payload: Dict[str, Any]) -> IngressConfig:
         return IngressConfig(
             storage_url=URL(payload["storage"]["url"]),
+            blob_storage_url=URL(payload["blob_storage"]["url"]),
             monitoring_url=URL(payload["monitoring"]["url"]),
             secrets_url=URL(payload["secrets"]["url"]),
             metrics_url=URL(payload["metrics"]["url"]),
+            disks_url=URL(payload["disks"]["url"]),
         )
 
     def _create_presets(self, payload: Dict[str, Any]) -> List[Preset]:

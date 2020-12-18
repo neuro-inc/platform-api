@@ -775,9 +775,11 @@ def cluster_config_factory(
     def _f(cluster_name: str = "test-cluster") -> ClusterConfig:
         ingress_config = IngressConfig(
             storage_url=URL("https://neu.ro/api/v1/storage"),
+            blob_storage_url=URL("https://neu.ro/api/v1/blob"),
             monitoring_url=URL("https://neu.ro/api/v1/monitoring"),
             secrets_url=URL("https://neu.ro/api/v1/secrets"),
             metrics_url=URL("https://neu.ro/api/v1/metrics"),
+            disks_url=URL("https://neu.ro/api/v1/disk"),
         )
         return ClusterConfig(
             name=cluster_name,
