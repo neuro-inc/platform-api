@@ -16,9 +16,9 @@ spec:
     metadata:
       labels:
         service: platformapi
-      {{- if .Values.secret }}
+      {{- if .Values.secrets }}
       annotations:
-        checksum/secret: {{ include (print $.Template.BasePath "/secret.yml") . | sha256sum }}
+        checksum/secret: {{ include (print $.Template.BasePath "/secrets.yml") . | sha256sum }}
       {{- end }}
     spec:
       containers:
@@ -67,7 +67,9 @@ spec:
         - name: NP_AUTH_URL
           value: http://platformauthapi:8080
         - name: NP_AUTH_TOKEN
+{{- if .Values.NP_TOKEN }}
 {{ toYaml .Values.NP_TOKEN | indent 10 }}
+{{- end }}
         - name: NP_OAUTH_BASE_URL
           value: "{{ .Values.NP_OAUTH_BASE_URL }}"
         - name: NP_OAUTH_CLIENT_ID
@@ -101,11 +103,15 @@ spec:
         - name: NP_NOTIFICATIONS_URL
           value: http://platformnotificationsapi:8080/
         - name: NP_NOTIFICATIONS_TOKEN
+{{- if .Values.NP_TOKEN }}
 {{ toYaml .Values.NP_TOKEN | indent 10 }}
+{{- end }}
         - name: NP_ENFORCER_PLATFORM_API_URL
           value: {{ .Values.NP_ENFORCER_PLATFORM_API_URL }}
         - name: NP_ENFORCER_TOKEN
+{{- if .Values.NP_TOKEN }}
 {{ toYaml .Values.NP_TOKEN | indent 10 }}
+{{- end }}
         - name: NP_CORS_ORIGINS
           value: "{{ .Values.NP_CORS_ORIGINS }}"
         - name: NP_API_ZIPKIN_URL
@@ -113,7 +119,9 @@ spec:
         - name: NP_API_ZIPKIN_SAMPLE_RATE
           value: "{{ .Values.NP_API_ZIPKIN_SAMPLE_RATE }}"
         - name: NP_DB_POSTGRES_DSN
+{{- if .Values.NP_DB_POSTGRES_DSN }}
 {{ toYaml .Values.NP_DB_POSTGRES_DSN | indent 10 }}
+{{- end }}
         - name: NP_DB_POSTGRES_ENABLED
           value: "{{ .Values.NP_DB_POSTGRES_ENABLED }}"
         {{- if .Values.NP_SENTRY_URL }}
@@ -135,7 +143,8 @@ metadata:
 spec:
   type: ClusterIP
   ports:
-  - port: 8080
+  - name: http
+    port: 8080
     targetPort: tcp-web
   selector:
     service: platformapi
@@ -157,7 +166,7 @@ spec:
       - path: /api/v1
         backend:
           serviceName: platformapi
-          servicePort: 8080
+          servicePort: http
 {{- end }}
 {{- if eq .Values.ENV "dev" }}
 ---

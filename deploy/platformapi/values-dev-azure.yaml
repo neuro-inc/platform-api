@@ -38,4 +38,5 @@ NP_DB_POSTGRES_DSN:
     secretKeyRef:
       name: platformapi-postgres
       key: platformapi-service-dsn
+
 secrets: []
