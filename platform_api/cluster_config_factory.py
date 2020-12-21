@@ -83,25 +83,16 @@ class ClusterConfigFactory:
 
     def _create_presets(self, payload: Dict[str, Any]) -> List[Preset]:
         result = []
-        for preset in payload.get("presets", []):
+        for preset in payload.get("resource_presets", []):
             result.append(
                 Preset(
                     name=preset["name"],
                     cpu=preset.get("cpu") or payload["cpu"],
-                    memory_mb=preset.get("memory_mb") or payload["memory_mb"],
-                    is_preemptible=(
-                        preset.get("is_preemptible")
-                        or payload.get("is_preemptible")
-                        or False
-                    ),
-                    is_preemptible_node_required=preset.get(
-                        "is_preemptible_node_required", False
-                    ),
-                    gpu=preset.get("gpu") or payload.get("gpu"),
-                    gpu_model=preset.get("gpu_model") or payload.get("gpu_model"),
-                    # TPU presets do not inherit their pool type resources,
-                    # because CPU pool types may or may not be used to run TPU
-                    # workloads.
+                    memory_mb=preset.get("memory_mb"),
+                    scheduler_enabled=preset.get("scheduler_enabled", False),
+                    preemptible_node=preset.get("preemptible_node", False),
+                    gpu=preset.get("gpu"),
+                    gpu_model=preset.get("gpu_model"),
                     tpu=self._create_tpu_preset(preset.get("tpu")),
                 )
             )
@@ -115,15 +106,7 @@ class ClusterConfigFactory:
     ) -> OrchestratorConfig:
         orchestrator = payload["orchestrator"]
         kube = orchestrator["kubernetes"]
-        if orchestrator.get("resource_presets"):
-            # new cluster config format has resource_presets field in orchestrator
-            presets = self._create_presets(
-                {"presets": orchestrator["resource_presets"]}
-            )
-        else:
-            presets = []
-            for rpt in orchestrator["resource_pool_types"]:
-                presets.extend(self._create_presets(rpt))
+        presets = self._create_presets(orchestrator)
         return KubeConfig(
             is_http_ingress_secure=orchestrator["is_http_ingress_secure"],
             jobs_domain_name_template=orchestrator["job_hostname_template"],

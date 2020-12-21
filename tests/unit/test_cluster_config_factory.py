@@ -69,6 +69,44 @@ def clusters_payload(nfs_storage_payload: Dict[str, Any]) -> List[Dict[str, Any]
                 "job_hostname_template": "{job_id}.jobs.neu.ro",
                 "job_schedule_timeout_s": 60,
                 "job_schedule_scale_up_timeout_s": 120,
+                "resource_presets": [
+                    {"name": "cpu-small", "cpu": 1, "memory_mb": 2048},
+                    {"name": "cpu-large", "cpu": 7, "memory_mb": 49152},
+                    {
+                        "name": "tpu",
+                        "cpu": 7,
+                        "memory_mb": 49152,
+                        "tpu": {"type": "v2-8", "software_version": "1.14"},
+                    },
+                    {
+                        "name": "gpu-small-p",
+                        "cpu": 7.0,
+                        "memory_mb": 52224,
+                        "gpu": 1,
+                        "gpu_model": "nvidia-tesla-k80",
+                    },
+                    {
+                        "name": "gpu-small",
+                        "cpu": 7.0,
+                        "memory_mb": 52224,
+                        "gpu": 1,
+                        "gpu_model": "nvidia-tesla-k80",
+                    },
+                    {
+                        "name": "gpu-large-p",
+                        "cpu": 7.0,
+                        "memory_mb": 52224,
+                        "gpu": 1,
+                        "gpu_model": "nvidia-tesla-v100",
+                    },
+                    {
+                        "name": "gpu-large",
+                        "cpu": 0.1,
+                        "memory_mb": 52224,
+                        "gpu": 1,
+                        "gpu_model": "nvidia-tesla-v100",
+                    },
+                ],
                 "resource_pool_types": [
                     {
                         "name": "n1-highmem-8",
@@ -85,16 +123,6 @@ def clusters_payload(nfs_storage_payload: Dict[str, Any]) -> List[Dict[str, Any]
                             "types": ["v2-8", "v3-8"],
                             "software_versions": ["1.13", "1.14"],
                         },
-                        "presets": [
-                            {"name": "cpu-small", "cpu": 1, "memory_mb": 2048},
-                            {"name": "cpu-large", "cpu": 7, "memory_mb": 49152},
-                            {
-                                "name": "tpu",
-                                "cpu": 7,
-                                "memory_mb": 49152,
-                                "tpu": {"type": "v2-8", "software_version": "1.14"},
-                            },
-                        ],
                     },
                     {
                         "name": "n1-highmem-32-1xk80-preemptible",
@@ -106,14 +134,6 @@ def clusters_payload(nfs_storage_payload: Dict[str, Any]) -> List[Dict[str, Any]
                         "disk_size_gb": 150,
                         "gpu": 4,
                         "gpu_model": "nvidia-tesla-k80",
-                        "presets": [
-                            {
-                                "name": "gpu-small-p",
-                                "cpu": 7.0,
-                                "memory_mb": 52224,
-                                "gpu": 1,
-                            }
-                        ],
                     },
                     {
                         "name": "n1-highmem-32-1xk80",
@@ -127,14 +147,6 @@ def clusters_payload(nfs_storage_payload: Dict[str, Any]) -> List[Dict[str, Any]
                         "disk_size_gb": 150,
                         "gpu": 4,
                         "gpu_model": "nvidia-tesla-k80",
-                        "presets": [
-                            {
-                                "name": "gpu-small",
-                                "cpu": 7.0,
-                                "memory_mb": 52224,
-                                "gpu": 1,
-                            }
-                        ],
                     },
                     {
                         "name": "n1-highmem-8-1xv100-preemptible",
@@ -148,14 +160,6 @@ def clusters_payload(nfs_storage_payload: Dict[str, Any]) -> List[Dict[str, Any]
                         "disk_size_gb": 150,
                         "gpu": 1,
                         "gpu_model": "nvidia-tesla-v100",
-                        "presets": [
-                            {
-                                "name": "gpu-large-p",
-                                "cpu": 7.0,
-                                "memory_mb": 52224,
-                                "gpu": 1,
-                            }
-                        ],
                     },
                     {
                         "name": "n1-highmem-8-1xv100",
@@ -169,14 +173,6 @@ def clusters_payload(nfs_storage_payload: Dict[str, Any]) -> List[Dict[str, Any]
                         "disk_size_gb": 150,
                         "gpu": 1,
                         "gpu_model": "nvidia-tesla-v100",
-                        "presets": [
-                            {
-                                "name": "gpu-large",
-                                "cpu": 0.1,
-                                "memory_mb": 52224,
-                                "gpu": 1,
-                            }
-                        ],
                     },
                 ],
                 "is_http_ingress_secure": True,
@@ -363,8 +359,8 @@ class TestClusterConfigFactory:
                 "name": "cpu-large-p",
                 "cpu": 7,
                 "memory_mb": 49152,
-                "is_preemptible": True,
-                "is_preemptible_node_required": True,
+                "scheduler_enabled": True,
+                "preemptible_node": True,
             },
         ]
         clusters = factory.create_cluster_configs(
@@ -382,8 +378,8 @@ class TestClusterConfigFactory:
                 name="cpu-large-p",
                 cpu=7,
                 memory_mb=49152,
-                is_preemptible=True,
-                is_preemptible_node_required=True,
+                scheduler_enabled=True,
+                preemptible_node=True,
             ),
         ]
 

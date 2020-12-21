@@ -94,8 +94,8 @@ def create_job_request_validator(
             t.Key("tags", optional=True): t.List(
                 create_job_tag_validator(), max_length=16
             ),
-            t.Key("is_preemptible", optional=True, default=False): t.Bool,
-            t.Key("is_preemptible_node_required", default=False): t.Bool,
+            t.Key("scheduler_enabled", optional=True, default=False): t.Bool,
+            t.Key("preemptible_node", default=False): t.Bool,
             t.Key("pass_config", optional=True, default=False): t.Bool,
             t.Key("wait_for_jobs_quota", optional=True, default=False): t.Bool,
             t.Key("privileged", optional=True, default=False): t.Bool,
@@ -130,8 +130,8 @@ def create_job_preset_validator(presets: Sequence[Preset]) -> t.Trafaret:
     def _set_preset_resources(payload: Dict[str, Any]) -> Dict[str, Any]:
         preset_name = payload["preset_name"]
         preset = {p.name: p for p in presets}[preset_name]
-        payload["is_preemptible"] = preset.is_preemptible
-        payload["is_preemptible_node_required"] = preset.is_preemptible_node_required
+        payload["scheduler_enabled"] = preset.scheduler_enabled
+        payload["preemptible_node"] = preset.preemptible_node
         if "container" in payload:
             shm = payload["container"].get("resources", {}).get("shm", False)
         else:
@@ -195,8 +195,8 @@ def create_job_response_validator() -> t.Trafaret:
             t.Key("http_url_named", optional=True): t.String,
             "history": create_job_history_validator(),
             "container": create_container_response_validator(),
-            "is_preemptible": t.Bool,
-            "is_preemptible_node_required": t.Bool,
+            "scheduler_enabled": t.Bool,
+            "preemptible_node": t.Bool,
             "pass_config": t.Bool,
             t.Key("internal_hostname", optional=True): t.String,
             t.Key("internal_hostname_named", optional=True): t.String,
@@ -338,8 +338,8 @@ def convert_job_to_job_response(job: Job) -> Dict[str, Any]:
         "container": convert_job_container_to_json(
             job.request.container, job.storage_config
         ),
-        "is_preemptible": job.is_preemptible,
-        "is_preemptible_node_required": job.is_preemptible_node_required,
+        "scheduler_enabled": job.scheduler_enabled,
+        "preemptible_node": job.preemptible_node,
         "pass_config": job.pass_config,
         "uri": str(job.to_uri()),
         "restart_policy": str(job.restart_policy),
@@ -523,10 +523,8 @@ class JobsHandler:
         preset_name = request_payload.get("preset_name")
         tags = sorted(set(request_payload.get("tags", [])))
         description = request_payload.get("description")
-        is_preemptible = request_payload["is_preemptible"]
-        is_preemptible_node_required = request_payload.get(
-            "is_preemptible_node_required", False
-        )
+        scheduler_enabled = request_payload["scheduler_enabled"]
+        preemptible_node = request_payload.get("preemptible_node", False)
         pass_config = request_payload["pass_config"]
         privileged = request_payload["privileged"]
         schedule_timeout = request_payload.get("schedule_timeout")
@@ -540,8 +538,8 @@ class JobsHandler:
             job_name=name,
             preset_name=preset_name,
             tags=tags,
-            is_preemptible=is_preemptible,
-            is_preemptible_node_required=is_preemptible_node_required,
+            scheduler_enabled=scheduler_enabled,
+            preemptible_node=preemptible_node,
             pass_config=pass_config,
             wait_for_jobs_quota=wait_for_jobs_quota,
             privileged=privileged,
