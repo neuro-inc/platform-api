@@ -27,7 +27,7 @@ NP_RESOURCES_MEMORY_REQUEST: 1Gi
 NP_DB_POSTGRES_ENABLED: true
 NP_SENTRY_URL: "https://00f2b1cb9abf48e49a17bb426242edef@sentry-dev-azure.neu.ro/10"
 NP_CLUSTER_NAME: "staging-azure"
-NP_PLATFORM_TOKEN:
+NP_TOKEN:
   valueFrom:
     secretKeyRef:
       name: platformservices-secret

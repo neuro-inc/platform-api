@@ -28,7 +28,7 @@ NP_RESOURCES_MEMORY_REQUEST: 1Gi
 NP_DB_POSTGRES_ENABLED: true
 NP_SENTRY_URL: "https://066c0e4ae50a428e84dd7bb505095319@sentry-dev-azure.neu.ro/9"
 NP_CLUSTER_NAME: "dev-azure"
-NP_PLATFORM_TOKEN:
+NP_TOKEN:
   valueFrom:
     secretKeyRef:
       name: platformservices-secret

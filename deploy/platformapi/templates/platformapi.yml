@@ -67,7 +67,7 @@ spec:
         - name: NP_AUTH_URL
           value: http://platformauthapi:8080
         - name: NP_AUTH_TOKEN
-{{ toYaml .Values.NP_PLATFORM_TOKEN | indent 10 }}
+{{ toYaml .Values.NP_TOKEN | indent 10 }}
         - name: NP_OAUTH_BASE_URL
           value: "{{ .Values.NP_OAUTH_BASE_URL }}"
         - name: NP_OAUTH_CLIENT_ID
@@ -101,11 +101,11 @@ spec:
         - name: NP_NOTIFICATIONS_URL
           value: http://platformnotificationsapi:8080/
         - name: NP_NOTIFICATIONS_TOKEN
-{{ toYaml .Values.NP_PLATFORM_TOKEN | indent 10 }}
+{{ toYaml .Values.NP_TOKEN | indent 10 }}
         - name: NP_ENFORCER_PLATFORM_API_URL
           value: {{ .Values.NP_ENFORCER_PLATFORM_API_URL }}
         - name: NP_ENFORCER_TOKEN
-{{ toYaml .Values.NP_PLATFORM_TOKEN | indent 10 }}
+{{ toYaml .Values.NP_TOKEN | indent 10 }}
         - name: NP_CORS_ORIGINS
           value: "{{ .Values.NP_CORS_ORIGINS }}"
         - name: NP_API_ZIPKIN_URL
