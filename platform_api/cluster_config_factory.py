@@ -89,8 +89,10 @@ class ClusterConfigFactory:
                     name=preset["name"],
                     cpu=preset.get("cpu") or payload["cpu"],
                     memory_mb=preset.get("memory_mb"),
-                    scheduler_enabled=preset.get("scheduler_enabled", False),
-                    preemptible_node=preset.get("preemptible_node", False),
+                    scheduler_enabled=preset.get("scheduler_enabled")
+                    or preset.get("is_preemptible", False),
+                    preemptible_node=preset.get("preemptible_node")
+                    or preset.get("is_preemptible_node_required", False),
                     gpu=preset.get("gpu"),
                     gpu_model=preset.get("gpu_model"),
                     tpu=self._create_tpu_preset(preset.get("tpu")),

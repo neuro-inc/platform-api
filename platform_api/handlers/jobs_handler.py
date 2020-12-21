@@ -19,6 +19,7 @@ from typing import (
 import aiohttp.web
 import iso8601
 import trafaret as t
+import trafaret.keys
 from aiohttp_security import check_authorized
 from aiohttp_security.api import AUTZ_KEY
 from multidict import MultiDictProxy
@@ -86,6 +87,24 @@ def create_job_request_validator(
         storage_scheme=storage_scheme,
         cluster_name=cluster_name,
     )
+
+    def multiname_key(
+        name: str, keys: Sequence[str], default: Any, trafaret: t.Trafaret
+    ) -> t.Key:
+        _empty = object()
+
+        def _take_first(data: Dict[str, Any]) -> Dict[str, Any]:
+            for key in keys:
+                if data[key] is not _empty:
+                    return trafaret(data[key])
+            return trafaret(default)
+
+        return t.keys.subdict(
+            name,
+            *(t.Key(name=key, optional=True, default=_empty) for key in keys),
+            trafaret=_take_first,
+        )
+
     job_validator = t.Dict(
         {
             t.Key("name", optional=True): create_job_name_validator(),
@@ -94,8 +113,6 @@ def create_job_request_validator(
             t.Key("tags", optional=True): t.List(
                 create_job_tag_validator(), max_length=16
             ),
-            t.Key("scheduler_enabled", optional=True, default=False): t.Bool,
-            t.Key("preemptible_node", default=False): t.Bool,
             t.Key("pass_config", optional=True, default=False): t.Bool,
             t.Key("wait_for_jobs_quota", optional=True, default=False): t.Bool,
             t.Key("privileged", optional=True, default=False): t.Bool,
@@ -106,7 +123,19 @@ def create_job_request_validator(
                 *[str(policy) for policy in JobRestartPolicy]
             )
             >> JobRestartPolicy,
-        }
+        },
+        multiname_key(
+            "scheduler_enabled",
+            ["scheduler_enabled", "is_preemptible"],
+            default=False,
+            trafaret=t.Bool(),
+        ),
+        multiname_key(
+            "preemptible_node",
+            ["preemptible_node", "is_preemptible_node_required"],
+            default=False,
+            trafaret=t.Bool(),
+        ),
     )
     # Either flat structure or payload with container field are allowed
     if not allow_flat_structure:
@@ -197,6 +226,8 @@ def create_job_response_validator() -> t.Trafaret:
             "container": create_container_response_validator(),
             "scheduler_enabled": t.Bool,
             "preemptible_node": t.Bool,
+            t.Key("is_preemptible", optional=True): t.Bool,
+            t.Key("is_preemptible_node_required", optional=True): t.Bool,
             "pass_config": t.Bool,
             t.Key("internal_hostname", optional=True): t.String,
             t.Key("internal_hostname_named", optional=True): t.String,
@@ -340,6 +371,8 @@ def convert_job_to_job_response(job: Job) -> Dict[str, Any]:
         ),
         "scheduler_enabled": job.scheduler_enabled,
         "preemptible_node": job.preemptible_node,
+        "is_preemptible": job.scheduler_enabled,
+        "is_preemptible_node_required": job.preemptible_node,
         "pass_config": job.pass_config,
         "uri": str(job.to_uri()),
         "restart_policy": str(job.restart_policy),
