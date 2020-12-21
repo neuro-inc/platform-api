@@ -641,16 +641,23 @@ class Job:
     def _collection_reason(self) -> Optional[str]:
         status_item = self._status_history.current
         if status_item.status == JobStatus.PENDING:
-            # collect jobs stuck in ErrImagePull loop
-            if status_item.reason in (
-                JobStatusReason.ERR_IMAGE_PULL,
-                JobStatusReason.IMAGE_PULL_BACK_OFF,
-            ):
-                now = self._current_datetime_factory()
-                if now - status_item.transition_time > self._image_pull_error_delay:
-                    return "Image can not be pulled"
             if status_item.reason == JobStatusReason.INVALID_IMAGE_NAME:
                 return "Invalid image name"
+            # collect jobs stuck in ErrImagePull loop
+            first_pull_error = None
+            for item in reversed(self.status_history.all):
+                if item.reason in (
+                    JobStatusReason.ERR_IMAGE_PULL,
+                    JobStatusReason.IMAGE_PULL_BACK_OFF,
+                ):
+                    first_pull_error = item
+            if first_pull_error is not None:
+                now = self._current_datetime_factory()
+                if (
+                    now - first_pull_error.transition_time
+                    > self._image_pull_error_delay
+                ):
+                    return "Image can not be pulled"
         return None
 
     def collect_if_needed(self) -> None:
