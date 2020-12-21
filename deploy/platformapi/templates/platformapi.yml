@@ -16,6 +16,10 @@ spec:
     metadata:
       labels:
         service: platformapi
+      {{- if .Values.secret }}
+      annotations:
+        checksum/secret: {{ include (print $.Template.BasePath "/secret.yml") . | sha256sum }}
+      {{- end }}
     spec:
       containers:
       - name: platformapi
@@ -58,17 +62,12 @@ spec:
           value: "true"
         - name: NP_K8S_JOBS_INGRESS_DOMAIN_NAME_TEMPLATE
           value: "{{ .Values.NP_K8S_JOBS_INGRESS_DOMAIN_NAME_TEMPLATE }}"
-        - name: NP_K8S_NAMED_JOBS_INGRESS_DOMAIN_NAME_TEMPLATE
-          value: "{{ .Values.NP_K8S_NAMED_JOBS_INGRESS_DOMAIN_NAME_TEMPLATE }}"
         - name: NP_DB_REDIS_URI
           value: "{{ .Values.NP_DB_REDIS_URI }}"
         - name: NP_AUTH_URL
           value: http://platformauthapi:8080
         - name: NP_AUTH_TOKEN
-          valueFrom:
-            secretKeyRef:
-              name: platformservices-secret
-              key: compute_token
+{{ toYaml .Values.NP_PLATFORM_TOKEN | indent 10 }}
         - name: NP_OAUTH_BASE_URL
           value: "{{ .Values.NP_OAUTH_BASE_URL }}"
         - name: NP_OAUTH_CLIENT_ID
@@ -102,18 +101,11 @@ spec:
         - name: NP_NOTIFICATIONS_URL
           value: http://platformnotificationsapi:8080/
         - name: NP_NOTIFICATIONS_TOKEN
-          valueFrom:
-            secretKeyRef:
-              name: platformservices-secret
-              key: compute_token
-
+{{ toYaml .Values.NP_PLATFORM_TOKEN | indent 10 }}
         - name: NP_ENFORCER_PLATFORM_API_URL
           value: {{ .Values.NP_ENFORCER_PLATFORM_API_URL }}
         - name: NP_ENFORCER_TOKEN
-          valueFrom:
-            secretKeyRef:
-              name: platformservices-secret
-              key: compute_token
+{{ toYaml .Values.NP_PLATFORM_TOKEN | indent 10 }}
         - name: NP_CORS_ORIGINS
           value: "{{ .Values.NP_CORS_ORIGINS }}"
         - name: NP_API_ZIPKIN_URL
@@ -121,10 +113,7 @@ spec:
         - name: NP_API_ZIPKIN_SAMPLE_RATE
           value: "{{ .Values.NP_API_ZIPKIN_SAMPLE_RATE }}"
         - name: NP_DB_POSTGRES_DSN
-          valueFrom:
-            secretKeyRef:
-              name: platformapi-postgres
-              key: platformapi-service-dsn
+{{ toYaml .Values.NP_DB_POSTGRES_DSN | indent 10 }}
         - name: NP_DB_POSTGRES_ENABLED
           value: "{{ .Values.NP_DB_POSTGRES_ENABLED }}"
         {{- if .Values.NP_SENTRY_URL }}
@@ -154,84 +143,23 @@ spec:
 apiVersion: networking.k8s.io/v1beta1
 kind: Ingress
 metadata:
-  name: platformapi-ingress
+  name: platformapi
   annotations:
     kubernetes.io/ingress.class: traefik
     traefik.frontend.rule.type: PathPrefix
     external-dns.platform.neuromation.io: "true"
 spec:
   rules:
-  - host: {{ .Values.INGRESS_HOST }}
+{{- range .Values.INGRESS_HOSTS }}
+  - host: {{ . | quote }}
     http:
       paths:
-      - path: /secrets
-        backend:
-          serviceName: platformsecrets
-          servicePort: 8080
-      - path: /oauth
-        backend:
-          serviceName: platformingressauth
-          servicePort: 8080
-      - path: /api/v1/secrets
-        backend:
-          serviceName: platformsecrets
-          servicePort: 8080
-      - path: /api/v1/disk
-        backend:
-          serviceName: platformdiskapi
-          servicePort: 8080
-      - path: /api/docs/v1/disk
-        backend:
-          serviceName: platformdiskapi
-          servicePort: 8080
-      - path: /api/v1/storage
-        backend:
-          serviceName: platformstorageapi
-          servicePort: 8080
-      - path: /api/v1/blob
-        backend:
-          serviceName: platformobjectstorage
-          servicePort: 8080
-      - path: /api/v1/users
-        backend:
-          serviceName: platformauthapi
-          servicePort: 8080
-      - path: /api/v1
-        backend:
-          serviceName: platformapi
-          servicePort: 8080
-  - host: {{ .Values.INGRESS_PLATFORM_MONITORING_DOMAIN_NAME }}
-    http:
-      paths:
-      - path: /api/v1/jobs
-        backend:
-          serviceName: platformmonitoringapi
-          servicePort: 8080
-{{- if eq .Values.ENV "staging" }}
-  - host: {{ .Values.INGRESS_MAIN_SITE_HOST }}
-    http:
-      paths:
-      - path: /oauth
-        backend:
-          serviceName: platformingressauth
-          servicePort: 8080
-      - path: /api/v1/storage
-        backend:
-          serviceName: platformstorageapi
-          servicePort: 8080
-      - path: /api/v1/blob
-        backend:
-          serviceName: platformobjectstorage
-          servicePort: 8080
-      - path: /api/v1/users
-        backend:
-          serviceName: platformauthapi
-          servicePort: 8080
       - path: /api/v1
         backend:
           serviceName: platformapi
           servicePort: 8080
 {{- end }}
+{{- if eq .Values.ENV "dev" }}
 ---
 apiVersion: scheduling.k8s.io/v1beta1
 kind: PriorityClass
@@ -239,3 +167,4 @@ metadata:
   name: platform-job
 value: 1000000
 globalDefault: false
+{{- end }}
