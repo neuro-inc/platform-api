@@ -2280,7 +2280,7 @@ class TestJobs:
     ) -> None:
         job_name = f"test-job-name-{random_str()}"
         url = api.jobs_base_url
-        job_submit["is_preemptible"] = True
+        job_submit["is_preemptible"] = False
         job_submit["is_preemptible_node_required"] = False
         job_submit["name"] = job_name
         job_submit["container"]["entrypoint"] = "/bin/echo"
@@ -2305,7 +2305,7 @@ class TestJobs:
             )
             expected_internal_hostname = f"{job_id}.platformapi-tests"
             assert payload["internal_hostname"] == expected_internal_hostname
-            assert payload["is_preemptible"]
+            assert not payload["is_preemptible"]
             assert not payload["is_preemptible_node_required"]
             assert payload["description"] == "test job submitted by neuro job submit"
             assert payload["schedule_timeout"] == 90

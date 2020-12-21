@@ -79,6 +79,13 @@ def create_job_request_validator(
     cluster_name: str,
     storage_scheme: str = "storage",
 ) -> t.Trafaret:
+    def _check_no_schedule_timeout_for_scheduled_jobs(
+        payload: Dict[str, Any]
+    ) -> Dict[str, Any]:
+        if "schedule_timeout" in payload and payload["is_preemptible"]:
+            raise t.DataError("schedule_timeout is not allowed for scheduled jobs")
+        return payload
+
     container_validator = create_container_request_validator(
         allow_volumes=True,
         allowed_gpu_models=allowed_gpu_models,
@@ -111,8 +118,12 @@ def create_job_request_validator(
     # Either flat structure or payload with container field are allowed
     if not allow_flat_structure:
         # Deprecated. Use flat structure
-        return job_validator + t.Dict({"container": container_validator})
-    return job_validator + container_validator
+        return (
+            job_validator + t.Dict({"container": container_validator})
+        ) >> _check_no_schedule_timeout_for_scheduled_jobs
+    return (
+        job_validator + container_validator
+    ) >> _check_no_schedule_timeout_for_scheduled_jobs
 
 
 def create_job_preset_validator(presets: Sequence[Preset]) -> t.Trafaret:

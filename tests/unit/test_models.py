@@ -531,6 +531,25 @@ class TestJobRequestValidator:
         assert payload["cluster_name"] == "testcluster"
         assert payload["restart_policy"] == JobRestartPolicy.NEVER
 
+    def test_schedule_timeout_disallowed_for_scheduled_job(self) -> None:
+        container = {
+            "image": "testimage",
+            "command": "arg1 arg2 arg3",
+            "resources": {"cpu": 0.1, "memory_mb": 16, "shm": True},
+        }
+        request = {
+            "container": container,
+            "schedule_timeout": 90,
+            "is_preemptible": True,
+        }
+        validator = create_job_request_validator(
+            allowed_gpu_models=(), allowed_tpu_resources=(), cluster_name="testcluster"
+        )
+        with pytest.raises(
+            DataError, match="schedule_timeout is not allowed for scheduled jobs"
+        ):
+            validator.check(request)
+
     def test_flat_payload_validator(self) -> None:
         request = {
             "image": "testimage",
