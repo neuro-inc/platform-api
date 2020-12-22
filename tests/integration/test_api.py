@@ -986,7 +986,6 @@ class TestJobs:
         api: ApiConfig,
         client: aiohttp.ClientSession,
         job_submit: Dict[str, Any],
-        jobs_client: JobsClient,
         test_cluster_name: str,
         regular_user_factory: Callable[..., Awaitable[_User]],
         disk_client_factory: Callable[..., AsyncContextManager[DiskAPIClient]],
@@ -1610,7 +1609,6 @@ class TestJobs:
         api: ApiConfig,
         client: aiohttp.ClientSession,
         job_submit: Dict[str, Any],
-        jobs_client: JobsClient,
         test_cluster_name: str,
         regular_user_factory: Callable[..., Awaitable[_User]],
         secrets_client_factory: Callable[..., AsyncContextManager[SecretsClient]],
@@ -2444,7 +2442,7 @@ class TestJobs:
         api: ApiConfig,
         client: aiohttp.ClientSession,
         job_request_factory: Callable[[], Dict[str, Any]],
-        jobs_client: Callable[[], Any],
+        jobs_client_factory: Callable[[_User], JobsClient],
         regular_user_factory: Callable[..., Any],
     ) -> None:
         quota = Quota(total_gpu_run_time_minutes=100)
@@ -2454,6 +2452,7 @@ class TestJobs:
         job_request["container"]["resources"]["gpu"] = 1
         async with client.post(url, headers=user.headers, json=job_request) as response:
             assert response.status == HTTPAccepted.status_code, await response.text()
+        jobs_client_factory(user)  # perform jobs cleanup after test
 
     @pytest.mark.asyncio
     async def test_create_job_non_gpu_quota_allows(
@@ -2461,7 +2460,7 @@ class TestJobs:
         api: ApiConfig,
         client: aiohttp.ClientSession,
         job_request_factory: Callable[[], Dict[str, Any]],
-        jobs_client: Callable[[], Any],
+        jobs_client_factory: Callable[[_User], JobsClient],
         regular_user_factory: Callable[..., Any],
     ) -> None:
         quota = Quota(total_non_gpu_run_time_minutes=100)
@@ -2470,6 +2469,7 @@ class TestJobs:
         job_request = job_request_factory()
         async with client.post(url, headers=user.headers, json=job_request) as response:
             assert response.status == HTTPAccepted.status_code, await response.text()
+        jobs_client_factory(user)  # perform jobs cleanup after test
 
     @pytest.mark.asyncio
     async def test_create_job_gpu_quota_exceeded(
@@ -2477,7 +2477,6 @@ class TestJobs:
         api: ApiConfig,
         client: aiohttp.ClientSession,
         job_request_factory: Callable[[], Dict[str, Any]],
-        jobs_client: JobsClient,
         regular_user_factory: Callable[..., Any],
     ) -> None:
         quota = Quota(total_gpu_run_time_minutes=0)
@@ -3353,7 +3352,7 @@ class TestJobs:
     @pytest.mark.asyncio
     async def test_get_all_jobs_shared(
         self,
-        jobs_client: JobsClient,
+        jobs_client_factory: Callable[[_User], JobsClient],
         api: ApiConfig,
         client: aiohttp.ClientSession,
         job_request_factory: Callable[[], Dict[str, Any]],
@@ -3372,6 +3371,7 @@ class TestJobs:
             assert response.status == HTTPAccepted.status_code, await response.text()
             result = await response.json()
             job_id = result["id"]
+        jobs_client_factory(owner)  # perform jobs cleanup after test
 
         url = api.jobs_base_url
         headers = owner.headers.copy()
@@ -3406,7 +3406,7 @@ class TestJobs:
     @pytest.mark.asyncio
     async def test_get_shared_job(
         self,
-        jobs_client: JobsClient,
+        jobs_client_factory: Callable[[_User], JobsClient],
         api: ApiConfig,
         client: aiohttp.ClientSession,
         job_request_factory: Callable[[], Dict[str, Any]],
@@ -3425,6 +3425,7 @@ class TestJobs:
             assert response.status == HTTPAccepted.status_code, await response.text()
             result = await response.json()
             job_id = result["id"]
+        jobs_client_factory(owner)  # perform jobs cleanup after test
 
         url = f"{api.jobs_base_url}/{job_id}"
         async with client.get(url, headers=owner.headers) as response:
