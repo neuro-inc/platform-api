@@ -41,6 +41,9 @@ data:
                       "memory_mb": 2048,
                       "available_memory_mb": 2048
                     }
+                ],
+                "resource_presets": [
+                    {"name": "cpu-small", "cpu": 1, "memory_mb": 2048}
                 ]
             },
 

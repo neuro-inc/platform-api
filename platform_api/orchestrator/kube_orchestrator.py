@@ -330,7 +330,9 @@ class KubeOrchestrator(Orchestrator):
 
         for pool_type in self._kube_config.resource_pool_types:
             # Schedule jobs only on preemptible nodes if such node specified
-            if job.preemptible_node != pool_type.is_preemptible:
+            if job.preemptible_node and not pool_type.is_preemptible:
+                continue
+            if not job.preemptible_node and pool_type.is_preemptible:
                 continue
 
             # Do not schedule cpu jobs on gpu nodes
