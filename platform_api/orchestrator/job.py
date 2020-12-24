@@ -273,8 +273,8 @@ class JobRecord:
     name: Optional[str] = None
     preset_name: Optional[str] = None
     tags: Sequence[str] = ()
-    is_preemptible: bool = False
-    is_preemptible_node_required: bool = False
+    scheduler_enabled: bool = False
+    preemptible_node: bool = False
     pass_config: bool = False
     materialized: bool = False
     privileged: bool = False
@@ -334,9 +334,14 @@ class JobRecord:
 
     @property
     def is_restartable(self) -> bool:
-        return self.is_preemptible or self.restart_policy in (
-            JobRestartPolicy.ALWAYS,
-            JobRestartPolicy.ON_FAILURE,
+        return (
+            self.scheduler_enabled
+            or self.preemptible_node
+            or self.restart_policy
+            in (
+                JobRestartPolicy.ALWAYS,
+                JobRestartPolicy.ON_FAILURE,
+            )
         )
 
     @property
@@ -425,8 +430,8 @@ class JobRecord:
             "statuses": statuses,
             "materialized": self.materialized,
             "finished_at": self.finished_at_str,
-            "is_preemptible": self.is_preemptible,
-            "is_preemptible_node_required": self.is_preemptible_node_required,
+            "scheduler_enabled": self.scheduler_enabled,
+            "preemptible_node": self.preemptible_node,
             "pass_config": self.pass_config,
             "privileged": self.privileged,
             "restart_policy": str(self.restart_policy),
@@ -470,10 +475,8 @@ class JobRecord:
             name=payload.get("name"),
             preset_name=payload.get("preset_name"),
             tags=payload.get("tags", ()),
-            is_preemptible=payload.get("is_preemptible", False),
-            is_preemptible_node_required=payload.get(
-                "is_preemptible_node_required", False
-            ),
+            scheduler_enabled=payload.get("scheduler_enabled", False),
+            preemptible_node=payload.get("preemptible_node", False),
             pass_config=payload.get("pass_config", False),
             privileged=payload.get("privileged", False),
             max_run_time_minutes=payload.get("max_run_time_minutes", None),
@@ -527,8 +530,8 @@ class Job:
         self._name = record.name
         self._tags = record.tags
 
-        self._is_preemptible = record.is_preemptible
-        self._is_preemptible_node_required = record.is_preemptible_node_required
+        self._scheduler_enabled = record.scheduler_enabled
+        self._preemptible_node = record.preemptible_node
         self._pass_config = record.pass_config
         self._image_pull_error_delay = image_pull_error_delay
 
@@ -641,16 +644,23 @@ class Job:
     def _collection_reason(self) -> Optional[str]:
         status_item = self._status_history.current
         if status_item.status == JobStatus.PENDING:
-            # collect jobs stuck in ErrImagePull loop
-            if status_item.reason in (
-                JobStatusReason.ERR_IMAGE_PULL,
-                JobStatusReason.IMAGE_PULL_BACK_OFF,
-            ):
-                now = self._current_datetime_factory()
-                if now - status_item.transition_time > self._image_pull_error_delay:
-                    return "Image can not be pulled"
             if status_item.reason == JobStatusReason.INVALID_IMAGE_NAME:
                 return "Invalid image name"
+            # collect jobs stuck in ErrImagePull loop
+            first_pull_error = None
+            for item in reversed(self.status_history.all):
+                if item.reason in (
+                    JobStatusReason.ERR_IMAGE_PULL,
+                    JobStatusReason.IMAGE_PULL_BACK_OFF,
+                ):
+                    first_pull_error = item
+            if first_pull_error is not None:
+                now = self._current_datetime_factory()
+                if (
+                    now - first_pull_error.transition_time
+                    > self._image_pull_error_delay
+                ):
+                    return "Image can not be pulled"
         return None
 
     def collect_if_needed(self) -> None:
@@ -731,12 +741,12 @@ class Job:
         self._record.internal_hostname_named = value
 
     @property
-    def is_preemptible(self) -> bool:
-        return self._is_preemptible
+    def scheduler_enabled(self) -> bool:
+        return self._scheduler_enabled
 
     @property
-    def is_preemptible_node_required(self) -> bool:
-        return self._is_preemptible_node_required
+    def preemptible_node(self) -> bool:
+        return self._preemptible_node
 
     @property
     def pass_config(self) -> bool:
@@ -753,10 +763,6 @@ class Job:
     @property
     def is_restartable(self) -> bool:
         return self._record.is_restartable
-
-    @property
-    def is_forced_to_preemptible_pool(self) -> bool:
-        return self.is_preemptible and self._is_preemptible_node_required
 
     def get_run_time(self) -> timedelta:
         return self._record.get_run_time(

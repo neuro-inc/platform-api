@@ -681,7 +681,7 @@ class TestJob:
         current_datetime_factory = self._mocked_datetime_factory
 
         def _f(
-            job_status_history: JobStatusHistory, is_preemptible: bool = False
+            job_status_history: JobStatusHistory, scheduler_enabled: bool = False
         ) -> Job:
             return Job(
                 storage_config=mock_orchestrator.storage_config,
@@ -691,7 +691,7 @@ class TestJob:
                     cluster_name="test-cluster",
                     status_history=job_status_history,
                     current_datetime_factory=current_datetime_factory,
-                    is_preemptible=is_preemptible,
+                    scheduler_enabled=scheduler_enabled,
                 ),
                 current_datetime_factory=current_datetime_factory,
             )
@@ -710,14 +710,14 @@ class TestJob:
         expected_timedelta = timedelta(0)
         assert job.get_run_time() == expected_timedelta
 
-    def test_job_get_run_time_pending_job_preemptible(
+    def test_job_get_run_time_pending_job_scheduled(
         self, mock_orchestrator: MockOrchestrator, job_factory: Callable[..., Job]
     ) -> None:
         time_now = self._mocked_datetime_factory()
         started_at = time_now - timedelta(minutes=30)
         items = [JobStatusItem.create(JobStatus.PENDING, transition_time=started_at)]
 
-        job = job_factory(JobStatusHistory(items), is_preemptible=True)
+        job = job_factory(JobStatusHistory(items), scheduler_enabled=True)
         # job is still pending
         expected_timedelta = timedelta(0)
         assert job.get_run_time() == expected_timedelta
@@ -741,7 +741,7 @@ class TestJob:
 
         assert job.get_run_time() == running_delta
 
-    def test_job_get_run_time_running_job_preemptible(
+    def test_job_get_run_time_running_job_scheduled(
         self, mock_orchestrator: MockOrchestrator, job_factory: Callable[..., Job]
     ) -> None:
         time_now = self._mocked_datetime_factory()
@@ -765,7 +765,7 @@ class TestJob:
             JobStatusItem.create(JobStatus.PENDING, transition_time=pending2_at),
             JobStatusItem.create(JobStatus.RUNNING, transition_time=running2_at),
         ]
-        job = job_factory(JobStatusHistory(items), is_preemptible=True)
+        job = job_factory(JobStatusHistory(items), scheduler_enabled=True)
 
         assert job.get_run_time() == running_sum_delta
 
@@ -799,7 +799,7 @@ class TestJob:
     @pytest.mark.parametrize(
         "terminated_status", [JobStatus.SUCCEEDED, JobStatus.FAILED]
     )
-    def test_job_get_run_time_terminated_job_preemptible(
+    def test_job_get_run_time_terminated_job_scheduled(
         self,
         mock_orchestrator: MockOrchestrator,
         job_factory: Callable[..., Job],
@@ -826,7 +826,7 @@ class TestJob:
             JobStatusItem.create(JobStatus.RUNNING, transition_time=running2_at),
             JobStatusItem.create(terminated_status, transition_time=terminated_at),
         ]
-        job = job_factory(JobStatusHistory(items), is_preemptible=True)
+        job = job_factory(JobStatusHistory(items), scheduler_enabled=True)
 
         assert job.get_run_time() == running_sum_delta
 
@@ -917,8 +917,8 @@ class TestJob:
                 cluster_name="test-cluster",
                 owner="testuser",
                 name="test-job-name",
-                is_preemptible=False,
-                is_preemptible_node_required=True,
+                scheduler_enabled=False,
+                preemptible_node=True,
                 schedule_timeout=15,
             ),
         )
@@ -949,8 +949,8 @@ class TestJob:
                     "description": None,
                 },
             ],
-            "is_preemptible": False,
-            "is_preemptible_node_required": True,
+            "scheduler_enabled": False,
+            "preemptible_node": True,
             "pass_config": False,
             "schedule_timeout": 15,
             "restart_policy": "never",
@@ -985,8 +985,8 @@ class TestJob:
             ],
             "materialized": False,
             "finished_at": None,
-            "is_preemptible": False,
-            "is_preemptible_node_required": False,
+            "scheduler_enabled": False,
+            "preemptible_node": False,
             "pass_config": False,
             "max_run_time_minutes": 500,
             "restart_policy": "never",
@@ -1043,8 +1043,8 @@ class TestJob:
         assert not job.tags
         assert job.name is None
         assert job.owner == "testuser"
-        assert not job.is_preemptible
-        assert not job.is_preemptible_node_required
+        assert not job.scheduler_enabled
+        assert not job.preemptible_node
         assert job.max_run_time_minutes is None
         assert job.restart_policy == JobRestartPolicy.NEVER
 
@@ -1113,8 +1113,8 @@ class TestJob:
             "materialized": True,
             "finished_at": finished_at_str,
             "statuses": [{"status": "failed", "transition_time": finished_at_str}],
-            "is_preemptible": True,
-            "is_preemptible_node_required": True,
+            "scheduler_enabled": True,
+            "preemptible_node": True,
         }
         job = Job.from_primitive(
             mock_orchestrator.storage_config, mock_orchestrator.config, payload
@@ -1125,8 +1125,8 @@ class TestJob:
         assert job.finished_at
         assert job.description == "Description of the testjob"
         assert job.owner == "compute"
-        assert job.is_preemptible
-        assert job.is_preemptible_node_required
+        assert job.scheduler_enabled
+        assert job.preemptible_node
 
     def test_from_primitive_with_cluster_name(
         self, mock_orchestrator: MockOrchestrator, job_request_payload: Dict[str, Any]
@@ -1151,8 +1151,8 @@ class TestJob:
         assert job.name is None
         assert job.owner == "testuser"
         assert job.cluster_name == "testcluster"
-        assert not job.is_preemptible
-        assert not job.is_preemptible_node_required
+        assert not job.scheduler_enabled
+        assert not job.preemptible_node
 
     def test_from_primitive_with_entrypoint_without_command(
         self, mock_orchestrator: MockOrchestrator, job_request_payload: Dict[str, Any]
@@ -1336,8 +1336,8 @@ class TestJob:
             "statuses": [current_status_item],
             "materialized": "False",
             "finished_at": finished_at_str,
-            "is_preemptible": False,
-            "is_preemptible_node_required": False,
+            "scheduler_enabled": False,
+            "preemptible_node": False,
             "pass_config": False,
             "restart_policy": str(JobRestartPolicy.ALWAYS),
             "privileged": False,

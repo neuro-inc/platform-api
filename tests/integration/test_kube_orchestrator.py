@@ -53,7 +53,6 @@ from platform_api.orchestrator.kube_client import (
     IngressRule,
     KubeClient,
     NodeAffinity,
-    NodePreferredSchedulingTerm,
     NodeSelectorRequirement,
     NodeSelectorTerm,
     PodDescriptor,
@@ -2172,21 +2171,21 @@ class TestNodeAffinity:
                     name="gpu-k80",
                     available_cpu=7,
                     available_memory_mb=61440,
-                    gpu=1,
+                    gpu=8,
                     gpu_model=GKEGPUModels.K80.value.id,
                 ),
                 ResourcePoolType(
                     name="gpu-v100",
                     available_cpu=7,
                     available_memory_mb=61440,
-                    gpu=1,
+                    gpu=8,
                     gpu_model=GKEGPUModels.V100.value.id,
                 ),
                 ResourcePoolType(
                     name="gpu-v100-p",
                     available_cpu=7,
                     available_memory_mb=61440,
-                    gpu=1,
+                    gpu=8,
                     gpu_model=GKEGPUModels.V100.value.id,
                     is_preemptible=True,
                 ),
@@ -2211,8 +2210,8 @@ class TestNodeAffinity:
             memory_mb: int,
             gpu: Optional[int] = None,
             gpu_model: Optional[str] = None,
-            is_preemptible: bool = False,
-            is_preemptible_node_required: bool = False,
+            scheduler_enabled: bool = False,
+            preemptible_node: bool = False,
         ) -> AsyncIterator[MyJob]:
             container = Container(
                 image="ubuntu",
@@ -2231,8 +2230,8 @@ class TestNodeAffinity:
                     owner="owner1",
                     request=JobRequest.create(container),
                     cluster_name="test-cluster",
-                    is_preemptible=is_preemptible,
-                    is_preemptible_node_required=is_preemptible_node_required,
+                    scheduler_enabled=scheduler_enabled,
+                    preemptible_node=preemptible_node,
                 ),
             )
             await kube_orchestrator.start_job(job, tolerate_unreachable_node=True)
@@ -2343,7 +2342,7 @@ class TestNodeAffinity:
             )
 
     @pytest.mark.asyncio
-    async def test_preemptible_job_on_any_node(
+    async def test_scheduled_job_on_not_preemptible_node(
         self,
         kube_client: MyKubeClient,
         kube_orchestrator: KubeOrchestrator,
@@ -2355,9 +2354,9 @@ class TestNodeAffinity:
             memory_mb=16,
             gpu=1,
             gpu_model="nvidia-tesla-v100",
-            is_preemptible=True,
+            scheduler_enabled=True,
         ) as job:
-            await kube_client.wait_pod_scheduled(job.id, "gpu-v100-p")
+            await kube_client.wait_pod_scheduled(job.id, "gpu-v100")
 
             job_pod = await kube_client.get_raw_pod(job.id)
             assert (
@@ -2367,21 +2366,8 @@ class TestNodeAffinity:
                         NodeSelectorTerm(
                             [NodeSelectorRequirement.create_in("nodepool", "gpu-v100")]
                         ),
-                        NodeSelectorTerm(
-                            [
-                                NodeSelectorRequirement.create_in(
-                                    "nodepool", "gpu-v100-p"
-                                )
-                            ]
-                        ),
                     ],
-                    preferred=[
-                        NodePreferredSchedulingTerm(
-                            preference=NodeSelectorTerm(
-                                [NodeSelectorRequirement.create_exists("preemptible")]
-                            )
-                        )
-                    ],
+                    preferred=[],
                 ).to_primitive()
             )
 
@@ -2396,8 +2382,7 @@ class TestNodeAffinity:
             kube_orchestrator,
             cpu=0.1,
             memory_mb=16,
-            is_preemptible=True,
-            is_preemptible_node_required=True,
+            preemptible_node=True,
         ) as job:
             await kube_client.wait_pod_scheduled(job.id, "cpu-small-p")
 
@@ -3183,6 +3168,47 @@ class TestPreemption:
             await kube_orchestrator.get_job_status(job)
 
     @pytest.mark.asyncio
+    async def test_scheduled_job_lost_running_pod(
+        self,
+        kube_config: KubeConfig,
+        kube_client: KubeClient,
+        delete_job_later: Callable[[Job], Awaitable[None]],
+        kube_orchestrator: KubeOrchestrator,
+    ) -> None:
+        container = Container(
+            image="ubuntu",
+            command="bash -c 'sleep infinity'",
+            resources=ContainerResources(cpu=0.1, memory_mb=128),
+        )
+        job = MyJob(
+            orchestrator=kube_orchestrator,
+            record=JobRecord.create(
+                request=JobRequest.create(container),
+                cluster_name="test-cluster",
+                # marking the job as scheduled
+                scheduler_enabled=True,
+            ),
+        )
+        await delete_job_later(job)
+        await kube_orchestrator.prepare_job(job)
+        await kube_orchestrator.start_job(job)
+        pod_name = job.id
+
+        await kube_client.wait_pod_is_running(pod_name=pod_name, timeout_s=60.0)
+        job_status = await kube_orchestrator.get_job_status(job)
+        assert job_status.is_running
+
+        await kube_client.delete_pod(pod_name, force=True)
+
+        # triggering pod recreation
+        job_status = await kube_orchestrator.get_job_status(job)
+        assert job_status.is_pending
+
+        await kube_client.wait_pod_is_running(pod_name=pod_name, timeout_s=60.0)
+        job_status = await kube_orchestrator.get_job_status(job)
+        assert job_status.is_running
+
+    @pytest.mark.asyncio
     async def test_preemptible_job_lost_running_pod(
         self,
         kube_config: KubeConfig,
@@ -3201,7 +3227,7 @@ class TestPreemption:
                 request=JobRequest.create(container),
                 cluster_name="test-cluster",
                 # marking the job as preemptible
-                is_preemptible=True,
+                preemptible_node=True,
             ),
         )
         await delete_job_later(job)
@@ -3244,8 +3270,7 @@ class TestPreemption:
                 request=JobRequest.create(container),
                 cluster_name="test-cluster",
                 # marking the job as preemptible
-                is_preemptible=True,
-                is_preemptible_node_required=True,
+                preemptible_node=True,
             ),
         )
         await delete_job_later(job)
@@ -3284,8 +3309,7 @@ class TestPreemption:
                 request=JobRequest.create(container),
                 cluster_name="test-cluster",
                 # marking the job as preemptible
-                is_preemptible=True,
-                is_preemptible_node_required=True,
+                preemptible_node=True,
             ),
         )
         await delete_job_later(job)
@@ -3333,8 +3357,7 @@ class TestPreemption:
                 request=JobRequest.create(container),
                 cluster_name="test-cluster",
                 # marking the job as preemptible
-                is_preemptible=True,
-                is_preemptible_node_required=True,
+                preemptible_node=True,
             ),
         )
         await delete_job_later(job)
@@ -3358,8 +3381,7 @@ class TestPreemption:
                 request=JobRequest(job_id=job.id, container=container),
                 cluster_name="test-cluster",
                 # marking the job as preemptible
-                is_preemptible=True,
-                is_preemptible_node_required=True,
+                preemptible_node=True,
             ),
         )
 

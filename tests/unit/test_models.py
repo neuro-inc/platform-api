@@ -407,8 +407,8 @@ class TestJobPresetValidator:
         assert payload == {
             "preset_name": "preset",
             "container": {"resources": {"cpu": 0.1, "memory_mb": 100, "shm": False}},
-            "is_preemptible": False,
-            "is_preemptible_node_required": False,
+            "scheduler_enabled": False,
+            "preemptible_node": False,
         }
 
     def test_validator_default_preset(self) -> None:
@@ -421,8 +421,8 @@ class TestJobPresetValidator:
         assert payload == {
             "preset_name": "preset",
             "container": {"resources": {"cpu": 0.1, "memory_mb": 100, "shm": False}},
-            "is_preemptible": False,
-            "is_preemptible_node_required": False,
+            "scheduler_enabled": False,
+            "preemptible_node": False,
         }
 
     def test_flat_structure_validator(self) -> None:
@@ -435,8 +435,8 @@ class TestJobPresetValidator:
         assert payload == {
             "preset_name": "preset",
             "resources": {"cpu": 0.1, "memory_mb": 100, "shm": False},
-            "is_preemptible": False,
-            "is_preemptible_node_required": False,
+            "scheduler_enabled": False,
+            "preemptible_node": False,
         }
 
     def test_validator_unknown_preset_name(self) -> None:
@@ -487,8 +487,8 @@ class TestJobPresetValidator:
                     gpu=1,
                     gpu_model="nvidia-tesla-k80",
                     tpu=TPUPreset(type="v2-8", software_version="1.14"),
-                    is_preemptible=True,
-                    is_preemptible_node_required=True,
+                    scheduler_enabled=True,
+                    preemptible_node=True,
                 )
             ]
         )
@@ -509,8 +509,8 @@ class TestJobPresetValidator:
                     },
                 }
             },
-            "is_preemptible": True,
-            "is_preemptible_node_required": True,
+            "scheduler_enabled": True,
+            "preemptible_node": True,
         }
 
 
@@ -1469,6 +1469,8 @@ async def test_job_to_job_response(mock_orchestrator: MockOrchestrator) -> None:
         },
         "name": "test-job-name",
         "description": "test test description",
+        "scheduler_enabled": False,
+        "preemptible_node": False,
         "is_preemptible": False,
         "is_preemptible_node_required": False,
         "pass_config": False,
@@ -1566,6 +1568,8 @@ async def test_job_to_job_response_with_job_name_and_http_exposed(
             "resources": {"cpu": 1, "memory_mb": 128},
             "http": {"port": 80, "health_check_path": "/", "requires_auth": False},
         },
+        "scheduler_enabled": False,
+        "preemptible_node": False,
         "is_preemptible": False,
         "is_preemptible_node_required": False,
         "pass_config": False,
@@ -1622,6 +1626,8 @@ async def test_job_to_job_response_with_job_name_and_http_exposed_too_long_name(
             "resources": {"cpu": 1, "memory_mb": 128},
             "http": {"port": 80, "health_check_path": "/", "requires_auth": False},
         },
+        "scheduler_enabled": False,
+        "preemptible_node": False,
         "is_preemptible": False,
         "is_preemptible_node_required": False,
         "pass_config": False,

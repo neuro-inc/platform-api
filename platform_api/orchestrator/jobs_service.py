@@ -162,21 +162,21 @@ class JobsScheduler:
         jobs_to_suspend: List[JobRecord] = []
         now = self._current_datetime_factory()
 
-        # Always start/update not preemptible jobs
-        jobs_to_update.extend(job for job in unfinished if not job.is_preemptible)
+        # Always start/update not scheduled jobs
+        jobs_to_update.extend(job for job in unfinished if not job.scheduler_enabled)
 
-        preemptible = [job for job in unfinished if job.is_preemptible]
+        scheduled = [job for job in unfinished if job.scheduler_enabled]
 
         not_materialized = sorted(
-            (job for job in preemptible if not job.materialized),
+            (job for job in scheduled if not job.materialized),
             key=lambda job: job.status_history.current.transition_time,
         )
         materialized_not_running = [
             job
-            for job in preemptible
+            for job in scheduled
             if job.status != JobStatus.RUNNING and job.materialized
         ]
-        running = [job for job in preemptible if job.status == JobStatus.RUNNING]
+        running = [job for job in scheduled if job.status == JobStatus.RUNNING]
 
         waiting_exists = any(
             now - job.status_history.current.transition_time
@@ -494,8 +494,8 @@ class JobsService:
         job_name: Optional[str] = None,
         preset_name: Optional[str] = None,
         tags: Sequence[str] = (),
-        is_preemptible: bool = False,
-        is_preemptible_node_required: bool = False,
+        scheduler_enabled: bool = False,
+        preemptible_node: bool = False,
         pass_config: bool = False,
         wait_for_jobs_quota: bool = False,
         privileged: bool = False,
@@ -562,8 +562,8 @@ class JobsService:
             name=job_name,
             preset_name=preset_name,
             tags=tags,
-            is_preemptible=is_preemptible,
-            is_preemptible_node_required=is_preemptible_node_required,
+            scheduler_enabled=scheduler_enabled,
+            preemptible_node=preemptible_node,
             pass_config=pass_config,
             schedule_timeout=schedule_timeout,
             max_run_time_minutes=max_run_time_minutes,
