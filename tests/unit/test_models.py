@@ -540,7 +540,7 @@ class TestJobRequestValidator:
         request = {
             "container": container,
             "schedule_timeout": 90,
-            "is_preemptible": True,
+            "scheduler_enabled": True,
         }
         validator = create_job_request_validator(
             allowed_gpu_models=(), allowed_tpu_resources=(), cluster_name="testcluster"

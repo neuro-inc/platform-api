@@ -83,7 +83,7 @@ def create_job_request_validator(
     def _check_no_schedule_timeout_for_scheduled_jobs(
         payload: Dict[str, Any]
     ) -> Dict[str, Any]:
-        if "schedule_timeout" in payload and payload["is_preemptible"]:
+        if "schedule_timeout" in payload and payload["scheduler_enabled"]:
             raise t.DataError("schedule_timeout is not allowed for scheduled jobs")
         return payload
 
