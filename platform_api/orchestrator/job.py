@@ -475,8 +475,10 @@ class JobRecord:
             name=payload.get("name"),
             preset_name=payload.get("preset_name"),
             tags=payload.get("tags", ()),
-            scheduler_enabled=payload.get("scheduler_enabled", False),
-            preemptible_node=payload.get("preemptible_node", False),
+            scheduler_enabled=payload.get("scheduler_enabled", None)
+            or payload.get("is_preemptible", False),
+            preemptible_node=payload.get("preemptible_node", None)
+            or payload.get("is_preemptible_node_required", False),
             pass_config=payload.get("pass_config", False),
             privileged=payload.get("privileged", False),
             max_run_time_minutes=payload.get("max_run_time_minutes", None),
