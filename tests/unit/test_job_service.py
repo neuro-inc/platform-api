@@ -1029,7 +1029,7 @@ class TestJobsService:
             assert job.status == JobStatus.SUCCEEDED
 
     @pytest.mark.asyncio
-    async def test_update_jobs_preemptible_additional_when_no_pending(
+    async def test_update_jobs_scheduled_additional_when_no_pending(
         self,
         jobs_service_factory: Callable[..., JobsService],
         mock_orchestrator: MockOrchestrator,
@@ -1049,7 +1049,7 @@ class TestJobsService:
         # Start initial bunch of jobs
         for _ in range(10):
             job, _ = await jobs_service.create_job(
-                job_request=job_request_factory(), user=user, is_preemptible=True
+                job_request=job_request_factory(), user=user, scheduler_enabled=True
             )
             assert job.status == JobStatus.PENDING
             jobs.append(job)
@@ -1073,7 +1073,7 @@ class TestJobsService:
         test_scheduler.tick_min_waiting()
 
         additional_job, _ = await jobs_service.create_job(
-            job_request=job_request_factory(), user=user, is_preemptible=True
+            job_request=job_request_factory(), user=user, scheduler_enabled=True
         )
 
         await jobs_service.update_jobs_statuses()
@@ -1084,7 +1084,7 @@ class TestJobsService:
         assert job.materialized
 
     @pytest.mark.asyncio
-    async def test_update_jobs_preemptible_additional_when_has_pending(
+    async def test_update_jobs_scheduled_additional_when_has_pending(
         self,
         jobs_service_factory: Callable[..., JobsService],
         mock_orchestrator: MockOrchestrator,
@@ -1104,7 +1104,7 @@ class TestJobsService:
         # Start initial bunch of jobs
         for _ in range(10):
             job, _ = await jobs_service.create_job(
-                job_request=job_request_factory(), user=user, is_preemptible=True
+                job_request=job_request_factory(), user=user, scheduler_enabled=True
             )
             assert job.status == JobStatus.PENDING
             jobs.append(job)
@@ -1132,7 +1132,7 @@ class TestJobsService:
         test_scheduler.tick_min_waiting()
 
         additional_job, _ = await jobs_service.create_job(
-            job_request=job_request_factory(), user=user, is_preemptible=True
+            job_request=job_request_factory(), user=user, scheduler_enabled=True
         )
 
         await jobs_service.update_jobs_statuses()
@@ -1143,7 +1143,7 @@ class TestJobsService:
         assert not job.materialized
 
     @pytest.mark.asyncio
-    async def test_update_jobs_preemptible_cycling(
+    async def test_update_jobs_scheduled_cycling(
         self,
         jobs_service_factory: Callable[..., JobsService],
         mock_orchestrator: MockOrchestrator,
@@ -1163,7 +1163,7 @@ class TestJobsService:
         # Start initial bunch of jobs
         for _ in range(9):
             job, _ = await jobs_service.create_job(
-                job_request=job_request_factory(), user=user, is_preemptible=True
+                job_request=job_request_factory(), user=user, scheduler_enabled=True
             )
             assert job.status == JobStatus.PENDING
             jobs.append(job)
@@ -1257,7 +1257,7 @@ class TestJobsService:
             assert not job.materialized
 
     @pytest.mark.asyncio
-    async def test_update_jobs_preemptible_max_suspended_time(
+    async def test_update_jobs_scheduled_max_suspended_time(
         self,
         jobs_service_factory: Callable[..., JobsService],
         mock_orchestrator: MockOrchestrator,
@@ -1274,12 +1274,12 @@ class TestJobsService:
         )
 
         job1, _ = await jobs_service.create_job(
-            job_request=job_request_factory(), user=user, is_preemptible=True
+            job_request=job_request_factory(), user=user, scheduler_enabled=True
         )
         assert job1.status == JobStatus.PENDING
 
         job2, _ = await jobs_service.create_job(
-            job_request=job_request_factory(), user=user, is_preemptible=True
+            job_request=job_request_factory(), user=user, scheduler_enabled=True
         )
         assert job1.status == JobStatus.PENDING
 
@@ -1300,7 +1300,7 @@ class TestJobsService:
         test_scheduler.tick_min_waiting()
 
         job3, _ = await jobs_service.create_job(
-            job_request=job_request_factory(), user=user, is_preemptible=True
+            job_request=job_request_factory(), user=user, scheduler_enabled=True
         )
         assert job3.status == JobStatus.PENDING
 

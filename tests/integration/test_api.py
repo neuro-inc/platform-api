@@ -237,6 +237,8 @@ class TestApi:
                         "memory_mb": 30720,
                         "gpu": 1,
                         "gpu_model": "nvidia-tesla-k80",
+                        "scheduler_enabled": False,
+                        "preemptible_node": False,
                         "is_preemptible": False,
                         "is_preemptible_node_required": False,
                     },
@@ -246,6 +248,8 @@ class TestApi:
                         "memory_mb": 61440,
                         "gpu": 1,
                         "gpu_model": "nvidia-tesla-v100",
+                        "scheduler_enabled": False,
+                        "preemptible_node": False,
                         "is_preemptible": False,
                         "is_preemptible_node_required": False,
                     },
@@ -255,6 +259,8 @@ class TestApi:
                         "memory_mb": 61440,
                         "gpu": 1,
                         "gpu_model": "nvidia-tesla-v100",
+                        "scheduler_enabled": True,
+                        "preemptible_node": True,
                         "is_preemptible": True,
                         "is_preemptible_node_required": True,
                     },
@@ -262,6 +268,8 @@ class TestApi:
                         "name": "cpu-micro",
                         "cpu": 0.1,
                         "memory_mb": 100,
+                        "scheduler_enabled": False,
+                        "preemptible_node": False,
                         "is_preemptible": False,
                         "is_preemptible_node_required": False,
                     },
@@ -269,6 +277,8 @@ class TestApi:
                         "name": "cpu-small",
                         "cpu": 2,
                         "memory_mb": 2048,
+                        "scheduler_enabled": False,
+                        "preemptible_node": False,
                         "is_preemptible": False,
                         "is_preemptible_node_required": False,
                     },
@@ -276,6 +286,8 @@ class TestApi:
                         "name": "cpu-large",
                         "cpu": 3,
                         "memory_mb": 14336,
+                        "scheduler_enabled": False,
+                        "preemptible_node": False,
                         "is_preemptible": False,
                         "is_preemptible_node_required": False,
                     },
@@ -283,6 +295,8 @@ class TestApi:
                         "name": "tpu",
                         "cpu": 3,
                         "memory_mb": 14336,
+                        "scheduler_enabled": False,
+                        "preemptible_node": False,
                         "is_preemptible": False,
                         "is_preemptible_node_required": False,
                         "tpu": {"type": "v2-8", "software_version": "1.14"},
@@ -327,6 +341,8 @@ class TestApi:
                         "memory_mb": 30720,
                         "gpu": 1,
                         "gpu_model": "nvidia-tesla-k80",
+                        "scheduler_enabled": False,
+                        "preemptible_node": False,
                         "is_preemptible": False,
                         "is_preemptible_node_required": False,
                     },
@@ -336,6 +352,8 @@ class TestApi:
                         "memory_mb": 61440,
                         "gpu": 1,
                         "gpu_model": "nvidia-tesla-v100",
+                        "scheduler_enabled": False,
+                        "preemptible_node": False,
                         "is_preemptible": False,
                         "is_preemptible_node_required": False,
                     },
@@ -345,6 +363,8 @@ class TestApi:
                         "memory_mb": 61440,
                         "gpu": 1,
                         "gpu_model": "nvidia-tesla-v100",
+                        "scheduler_enabled": True,
+                        "preemptible_node": True,
                         "is_preemptible": True,
                         "is_preemptible_node_required": True,
                     },
@@ -352,6 +372,8 @@ class TestApi:
                         "name": "cpu-micro",
                         "cpu": 0.1,
                         "memory_mb": 100,
+                        "scheduler_enabled": False,
+                        "preemptible_node": False,
                         "is_preemptible": False,
                         "is_preemptible_node_required": False,
                     },
@@ -359,6 +381,8 @@ class TestApi:
                         "name": "cpu-small",
                         "cpu": 2,
                         "memory_mb": 2048,
+                        "scheduler_enabled": False,
+                        "preemptible_node": False,
                         "is_preemptible": False,
                         "is_preemptible_node_required": False,
                     },
@@ -366,6 +390,8 @@ class TestApi:
                         "name": "cpu-large",
                         "cpu": 3,
                         "memory_mb": 14336,
+                        "scheduler_enabled": False,
+                        "preemptible_node": False,
                         "is_preemptible": False,
                         "is_preemptible_node_required": False,
                     },
@@ -373,6 +399,8 @@ class TestApi:
                         "name": "tpu",
                         "cpu": 3,
                         "memory_mb": 14336,
+                        "scheduler_enabled": False,
+                        "preemptible_node": False,
                         "is_preemptible": False,
                         "is_preemptible_node_required": False,
                         "tpu": {"type": "v2-8", "software_version": "1.14"},
@@ -2185,7 +2213,7 @@ class TestJobs:
         regular_user: _User,
     ) -> None:
         url = api.jobs_base_url
-        job_submit["is_preemptible"] = True
+        job_submit["scheduler_enabled"] = True
         job_submit["name"] = "Invalid_job_name!"
         async with client.post(
             url, headers=regular_user.headers, json=job_submit
@@ -2209,7 +2237,7 @@ class TestJobs:
     ) -> None:
         job_name = f"test-job-name-{random_str()}"
         url = api.jobs_base_url
-        job_submit["is_preemptible"] = True
+        job_submit["scheduler_enabled"] = True
         job_submit["name"] = job_name
         user = regular_user_with_missing_cluster_name
         async with client.post(url, headers=user.headers, json=job_submit) as response:
@@ -2228,7 +2256,7 @@ class TestJobs:
     ) -> None:
         job_name = f"test-job-name-{random_str()}"
         url = api.jobs_base_url
-        job_submit["is_preemptible"] = True
+        job_submit["scheduler_enabled"] = True
         job_submit["name"] = job_name
         job_submit["cluster_name"] = "unknown"
         async with client.post(
@@ -2278,8 +2306,8 @@ class TestJobs:
     ) -> None:
         job_name = f"test-job-name-{random_str()}"
         url = api.jobs_base_url
-        job_submit["is_preemptible"] = True
-        job_submit["is_preemptible_node_required"] = False
+        job_submit["scheduler_enabled"] = True
+        job_submit["preemptible_node"] = False
         job_submit["name"] = job_name
         job_submit["container"]["entrypoint"] = "/bin/echo"
         job_submit["container"]["command"] = "false"
@@ -2303,8 +2331,8 @@ class TestJobs:
             )
             expected_internal_hostname = f"{job_id}.platformapi-tests"
             assert payload["internal_hostname"] == expected_internal_hostname
-            assert payload["is_preemptible"]
-            assert not payload["is_preemptible_node_required"]
+            assert payload["scheduler_enabled"]
+            assert not payload["preemptible_node"]
             assert payload["description"] == "test job submitted by neuro job submit"
             assert payload["schedule_timeout"] == 90
 
@@ -4098,7 +4126,7 @@ class TestJobs:
                     }
                 ],
             },
-            "is_preemptible": True,
+            "scheduler_enabled": True,
         }
 
         async with client.post(
@@ -4136,6 +4164,8 @@ class TestJobs:
                         }
                     ],
                 },
+                "scheduler_enabled": True,
+                "preemptible_node": False,
                 "is_preemptible": True,
                 "is_preemptible_node_required": False,
                 "pass_config": False,
@@ -4179,6 +4209,8 @@ class TestJobs:
                     }
                 ],
             },
+            "scheduler_enabled": True,
+            "preemptible_node": False,
             "is_preemptible": True,
             "is_preemptible_node_required": False,
             "pass_config": False,
@@ -4268,6 +4300,8 @@ class TestJobs:
                     },
                 ],
             },
+            "scheduler_enabled": False,
+            "preemptible_node": False,
             "is_preemptible": False,
             "is_preemptible_node_required": False,
             "pass_config": False,
@@ -4362,6 +4396,8 @@ class TestJobs:
                     },
                     "volumes": [],
                 },
+                "scheduler_enabled": False,
+                "preemptible_node": False,
                 "is_preemptible": False,
                 "is_preemptible_node_required": False,
                 "pass_config": False,
@@ -4450,6 +4486,8 @@ class TestJobs:
                     },
                     "volumes": [],
                 },
+                "scheduler_enabled": False,
+                "preemptible_node": False,
                 "is_preemptible": False,
                 "is_preemptible_node_required": False,
                 "pass_config": False,

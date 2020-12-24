@@ -35,6 +35,8 @@ jobs:
         run: make setup
       - name: Lint
         run: make lint
+        env:
+          CI_LINT_RUN: 1
       - name: Run unit tests
         run: make test_unit
       - name: Upload coverage to Codecov

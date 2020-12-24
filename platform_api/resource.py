@@ -35,8 +35,8 @@ class Preset:
     name: str
     cpu: float
     memory_mb: int
-    is_preemptible: bool = False
-    is_preemptible_node_required: bool = False
+    scheduler_enabled: bool = False
+    preemptible_node: bool = False
     gpu: Optional[int] = None
     gpu_model: Optional[str] = None
     tpu: Optional[TPUPreset] = None

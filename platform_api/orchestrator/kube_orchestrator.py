@@ -329,12 +329,10 @@ class KubeOrchestrator(Orchestrator):
         pool_types: Dict[TKey, List[ResourcePoolType]] = defaultdict(list)
 
         for pool_type in self._kube_config.resource_pool_types:
-            # Do not schedule non-preemptible jobs on preemptible nodes
-            if not job.is_preemptible and pool_type.is_preemptible:
+            # Schedule jobs only on preemptible nodes if such node specified
+            if job.preemptible_node and not pool_type.is_preemptible:
                 continue
-
-            # Schedule jobs only on preemptible nodes if required
-            if job.is_forced_to_preemptible_pool and not pool_type.is_preemptible:
+            if not job.preemptible_node and pool_type.is_preemptible:
                 continue
 
             # Do not schedule cpu jobs on gpu nodes
@@ -495,7 +493,10 @@ class KubeOrchestrator(Orchestrator):
                 effect="NoSchedule",
             )
         ]
-        if self._kube_config.jobs_pod_preemptible_toleration_key and job.is_preemptible:
+        if (
+            self._kube_config.jobs_pod_preemptible_toleration_key
+            and job.preemptible_node
+        ):
             tolerations.append(
                 Toleration(
                     key=self._kube_config.jobs_pod_preemptible_toleration_key,
@@ -523,8 +524,8 @@ class KubeOrchestrator(Orchestrator):
         # `NodeSelectorTerm`s is satisfied.
         # `NodeSelectorTerm` is satisfied only if its `match_expressions` are
         # satisfied.
-        required_terms = []
-        preferred_terms = []
+        required_terms: List[NodeSelectorTerm] = []
+        preferred_terms: List[NodePreferredSchedulingTerm] = []
 
         if self._kube_config.node_label_node_pool:
             for pool_type in pool_types:
@@ -537,22 +538,6 @@ class KubeOrchestrator(Orchestrator):
                         ]
                     )
                 )
-        if (
-            self._kube_config.node_label_preemptible
-            and job.is_preemptible
-            and not job.is_preemptible_node_required
-        ):
-            preferred_terms.append(
-                NodePreferredSchedulingTerm(
-                    preference=NodeSelectorTerm(
-                        [
-                            NodeSelectorRequirement.create_exists(
-                                self._kube_config.node_label_preemptible
-                            )
-                        ]
-                    )
-                )
-            )
         if not required_terms:
             return None
         return NodeAffinity(required=required_terms, preferred=preferred_terms)
