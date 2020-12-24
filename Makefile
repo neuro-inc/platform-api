@@ -147,7 +147,7 @@ helm_deploy:
 		-f deploy/platformapi/values-$(HELM_ENV)-$(CLOUD_PROVIDER).yaml \
 		--set "ENV=$(HELM_ENV)" \
 		--set "IMAGE=$(CLOUD_IMAGE_NAME):$(TAG)" \
-		upgrade --install platformapi deploy/platformapi/ --wait --timeout 600 --namespace platform
+		upgrade --install platformapi deploy/platformapi/ --wait --timeout 1800 --namespace platform
 
 artifactory_helm_push: _helm_expand_vars
 	helm package --app-version=$(TAG) --version=$(TAG) temp_deploy/platformapi/
