@@ -87,7 +87,7 @@ class EnvironConfigFactory:
                 self._environ.get("NP_K8S_JOB_DELETION_DELAY", 15 * 60)  # 15 minutes
             ),
             image_pull_error_delay_s=int(
-                self._environ.get("NP_K8S_JOB_IMAGE_PULL_DELAY", 2 * 60)  # 2 minutes
+                self._environ.get("NP_K8S_JOB_IMAGE_PULL_DELAY", 60)  # 1 minute
             ),
             orphaned_job_owner=orphaned_job_owner,
             jobs_ingress_class=self._environ.get(

@@ -1,3 +1,4 @@
+import asyncio
 import base64
 import json
 from dataclasses import replace
@@ -888,6 +889,57 @@ class TestJobsService:
         assert job.status == JobStatus.PENDING
         status_item = job.status_history.last
         assert status_item.reason == reason
+
+    @pytest.mark.asyncio
+    async def test_update_jobs_statuses_image_errors_cycle(
+        self,
+        jobs_service_factory: Callable[..., JobsService],
+        mock_orchestrator: MockOrchestrator,
+        job_request_factory: Callable[[], JobRequest],
+    ) -> None:
+        jobs_service = jobs_service_factory(image_pull_error_delay_s=0.3)
+
+        user = User(cluster_name="test-cluster", name="testuser", token="")
+        original_job, _ = await jobs_service.create_job(
+            job_request=job_request_factory(), user=user
+        )
+        assert original_job.status == JobStatus.PENDING
+
+        await jobs_service.update_jobs_statuses()
+
+        job = await jobs_service.get_job(job_id=original_job.id)
+        assert job.status == JobStatus.PENDING
+        assert not job.is_finished
+        assert job.finished_at is None
+        assert job.materialized
+        status_item = job.status_history.last
+        assert status_item.reason == JobStatusReason.CONTAINER_CREATING
+        assert status_item.description is None
+
+        mock_orchestrator.update_reason_to_return(JobStatusReason.ERR_IMAGE_PULL)
+        await jobs_service.update_jobs_statuses()
+        await asyncio.sleep(0.1)
+
+        mock_orchestrator.update_reason_to_return(JobStatusReason.IMAGE_PULL_BACK_OFF)
+        await jobs_service.update_jobs_statuses()
+        await asyncio.sleep(0.1)
+
+        mock_orchestrator.update_reason_to_return(JobStatusReason.ERR_IMAGE_PULL)
+        await jobs_service.update_jobs_statuses()
+        await asyncio.sleep(0.1)
+
+        mock_orchestrator.update_reason_to_return(JobStatusReason.IMAGE_PULL_BACK_OFF)
+        await jobs_service.update_jobs_statuses()
+        await asyncio.sleep(0.1)
+
+        job = await jobs_service.get_job(job_id=original_job.id)
+        assert job.status == JobStatus.FAILED
+        assert job.is_finished
+        assert job.finished_at
+        assert not job.materialized
+        status_item = job.status_history.last
+        assert status_item.reason == JobStatusReason.COLLECTED
+        assert status_item.description == "Image can not be pulled"
 
     @pytest.mark.asyncio
     async def test_update_jobs_statuses_pending_scale_up(
