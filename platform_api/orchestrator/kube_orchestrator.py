@@ -593,6 +593,11 @@ class KubeOrchestrator(Orchestrator):
             return job_status
 
         logger.info(f"Found unscheduled pod. Job '{job.id}'")
+
+        # Jobs with scheduling enabled never timeout on k8s scheduler
+        if job.scheduler_enabled:
+            return job_status
+
         schedule_timeout = (
             job.schedule_timeout or self._kube_config.job_schedule_timeout
         )
