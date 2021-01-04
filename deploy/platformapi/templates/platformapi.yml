@@ -41,10 +41,9 @@ spec:
           - containerPort: 8080
             name: tcp-web
             protocol: TCP
-        resources:
-          requests:
-            cpu: "{{ .Values.NP_RESOURCES_CPU_REQUEST }}"
-            memory: "{{ .Values.NP_RESOURCES_MEMORY_REQUEST }}"
+{{- if .Values.resources }}
+        resources: {{ toYaml .Values.resources | nindent 10 }}
+{{- end }}
         env:
         - name: NP_K8S_API_URL
           value: http://localhost:8001
@@ -67,8 +66,8 @@ spec:
         - name: NP_AUTH_URL
           value: http://platformauthapi:8080
         - name: NP_AUTH_TOKEN
-{{- if .Values.NP_TOKEN }}
-{{ toYaml .Values.NP_TOKEN | indent 10 }}
+{{- if .Values.platform.token }}
+{{ toYaml .Values.platform.token | indent 10 }}
 {{- end }}
         - name: NP_OAUTH_BASE_URL
           value: "{{ .Values.NP_OAUTH_BASE_URL }}"
@@ -103,14 +102,14 @@ spec:
         - name: NP_NOTIFICATIONS_URL
           value: http://platformnotificationsapi:8080/
         - name: NP_NOTIFICATIONS_TOKEN
-{{- if .Values.NP_TOKEN }}
-{{ toYaml .Values.NP_TOKEN | indent 10 }}
+{{- if .Values.platform.token }}
+{{ toYaml .Values.platform.token | indent 10 }}
 {{- end }}
         - name: NP_ENFORCER_PLATFORM_API_URL
           value: {{ .Values.NP_ENFORCER_PLATFORM_API_URL }}
         - name: NP_ENFORCER_TOKEN
-{{- if .Values.NP_TOKEN }}
-{{ toYaml .Values.NP_TOKEN | indent 10 }}
+{{- if .Values.platform.token }}
+{{ toYaml .Values.platform.token | indent 10 }}
 {{- end }}
         - name: NP_CORS_ORIGINS
           value: "{{ .Values.NP_CORS_ORIGINS }}"
@@ -119,11 +118,11 @@ spec:
         - name: NP_API_ZIPKIN_SAMPLE_RATE
           value: "{{ .Values.NP_API_ZIPKIN_SAMPLE_RATE }}"
         - name: NP_DB_POSTGRES_DSN
-{{- if .Values.NP_DB_POSTGRES_DSN }}
-{{ toYaml .Values.NP_DB_POSTGRES_DSN | indent 10 }}
+{{- if .Values.postgres.serviceDsn }}
+{{ toYaml .Values.postgres.serviceDsn | indent 10 }}
 {{- end }}
         - name: NP_DB_POSTGRES_ENABLED
-          value: "{{ .Values.NP_DB_POSTGRES_ENABLED }}"
+          value: "{{ .Values.postgres.enabled }}"
         {{- if .Values.NP_SENTRY_URL }}
         - name: NP_SENTRY_URL
           value: {{ .Values.NP_SENTRY_URL }}
@@ -148,6 +147,7 @@ spec:
     targetPort: tcp-web
   selector:
     service: platformapi
+{{- if .Values.ingress }}
 ---
 apiVersion: networking.k8s.io/v1beta1
 kind: Ingress
@@ -156,10 +156,12 @@ metadata:
   annotations:
     kubernetes.io/ingress.class: traefik
     traefik.frontend.rule.type: PathPrefix
-    external-dns.platform.neuromation.io: "true"
+{{- if .Values.ingress.extraAnnotations }}
+{{ toYaml .Values.ingress.extraAnnotations | indent 4}}
+{{- end }}
 spec:
   rules:
-{{- range .Values.INGRESS_HOSTS }}
+{{- range .Values.ingress.hosts }}
   - host: {{ . | quote }}
     http:
       paths:
@@ -167,6 +169,7 @@ spec:
         backend:
           serviceName: platformapi
           servicePort: http
+{{- end }}
 {{- end }}
 {{- if eq .Values.ENV "dev" }}
 ---
