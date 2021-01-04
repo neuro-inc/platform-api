@@ -575,10 +575,10 @@ class Job:
 
     def to_uri(self) -> URL:
         assert self.cluster_name
-        base_uri = "job://" + self.cluster_name
+        uri = URL.build(scheme="job", host=self.cluster_name)
         if self.owner:
-            base_uri += "/" + self.owner
-        return URL(f"{base_uri}/{self.id}")
+            uri /= self.owner
+        return uri / self.id
 
     @property
     def request(self) -> JobRequest:
