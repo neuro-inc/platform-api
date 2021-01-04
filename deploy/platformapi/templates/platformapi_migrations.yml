@@ -1,3 +1,4 @@
+{{- if .Values.NP_DB_POSTGRES_ENABLED }}
 apiVersion: batch/v1
 kind: Job
 metadata:
@@ -11,16 +12,17 @@ spec:
       restartPolicy: Never
       containers:
       - name: platformapi-migrations
-        image: {{ printf "%s" (pluck .Values.global.env .Values.IMAGE | first | default .Values.IMAGE._default) }}
+        image: {{ .Values.IMAGE }}
         imagePullPolicy: Always
         command: ["alembic", "upgrade", "head"]
         env:
         - name: NP_DB_REDIS_URI
-          value: "{{ printf "%s" (pluck .Values.global.env .Values.NP_DB_REDIS_URI | first | default .Values.NP_DB_REDIS_URI._default) }}"
+          value: "{{ .Values.NP_DB_REDIS_URI }}"
         - name: NP_DB_POSTGRES_DSN
           valueFrom:
             secretKeyRef:
               name: platformapi-postgres
-              key: platformapi-dsn
+              key: platformapi-migrations-dsn
 
   backoffLimit: 0
+{{- end }}

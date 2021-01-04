@@ -1,28 +1,30 @@
-FROM python:3.7.2-stretch
-
-WORKDIR /neuromation
+FROM python:3.7.8-stretch as installer
 
 ARG PIP_EXTRA_INDEX_URL
 
-# installing dependencies ONLY
-COPY setup.py ./
-RUN \
-    pip install -e . && \
-    pip uninstall -y platform-api
+# Separate step for requirements to speed up docker builds
+COPY platform_api.egg-info/requires.txt requires.txt
+RUN python -c 'from pkg_resources import Distribution, PathMetadata;\
+dist = Distribution(metadata=PathMetadata(".", "."));\
+print("\n".join(str(r) for r in dist.requires()));\
+' > requirements.txt
+RUN pip install --user -r requirements.txt
 
-# installing platform-api
+ARG DIST_FILENAME
+
+# Install service itself
+COPY dist/${DIST_FILENAME} ${DIST_FILENAME}
+RUN pip install --user $DIST_FILENAME
+
+FROM python:3.7.8-stretch AS service
+
+WORKDIR /neuromation
+
+COPY --from=installer /root/.local/ /root/.local/
 COPY alembic.ini alembic.ini
 COPY alembic alembic
-COPY platform_api platform_api
-RUN pip install -e .
-# generage new OpenSSH keys
-# disable it, local SSH doesn't like certs changing on every deploy
-# RUN ssh-keygen -f /etc/ssh/ssh_host_rsa_key -N '' -t rsa && ssh-keygen -f /etc/ssh/ssh_host_dsa_key -N '' -t dsa && ssh-keygen -f /etc/ssh/ssh_host_ecdsa_key -N '' -t ecdsa -b 521
 
-RUN cp platform_api/ssh/ssh_host_rsa_key /etc/ssh/ssh_host_rsa_key
-RUN cp platform_api/ssh/ssh_host_dsa_key /etc/ssh/ssh_host_dsa_key
-RUN cp platform_api/ssh/ssh_host_ecdsa_key /etc/ssh/ssh_host_ecdsa_key
-
+ENV PATH=/root/.local/bin:$PATH
 ENV NP_API_PORT=8080
 EXPOSE $NP_API_PORT
 

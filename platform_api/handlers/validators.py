@@ -60,6 +60,7 @@ def create_job_history_validator() -> t.Trafaret:
             "reason": OptionalString,
             "description": OptionalString,
             "created_at": t.String,
+            "restarts": t.Int(gte=0),
             t.Key("exit_code", optional=True): t.Int,
             t.Key("started_at", optional=True): t.String,
             t.Key("finished_at", optional=True): t.String,
@@ -252,7 +253,6 @@ def create_container_validator(
     storage_scheme: str = "storage",
     cluster_name: str = "",
     check_cluster: bool = True,
-    user_name: Optional[str] = None,
 ) -> t.Trafaret:
     """Create a validator for primitive container objects.
 
@@ -285,7 +285,6 @@ def create_container_validator(
                     t.Key("requires_auth", optional=True, default=False): t.Bool,
                 }
             ),
-            t.Key("ssh", optional=True): t.Dict({"port": t.Int(gte=0, lte=65535)}),
             t.Key("tty", optional=True, default=False): t.Bool,
             t.Key("secret_env", optional=True): t.Mapping(
                 t.String,
@@ -293,7 +292,6 @@ def create_container_validator(
                     storage_scheme="secret",
                     cluster_name=cluster_name,
                     check_cluster=check_cluster,
-                    assert_username=user_name,
                     assert_parts_count=3,
                 ),
             ),
@@ -303,7 +301,6 @@ def create_container_validator(
                 storage_scheme="secret",
                 cluster_name=cluster_name,
                 check_cluster=check_cluster,
-                assert_username=user_name,
                 # Should exactly include ("/", "username", "secret_name")
                 assert_parts_count=3,
             ),
@@ -344,7 +341,6 @@ def create_container_request_validator(
     allowed_tpu_resources: Sequence[TPUResource] = (),
     storage_scheme: str = "storage",
     cluster_name: str = "",
-    user_name: Optional[str] = None,
 ) -> t.Trafaret:
     return create_container_validator(
         allow_volumes=allow_volumes,
@@ -354,7 +350,6 @@ def create_container_request_validator(
         storage_scheme=storage_scheme,
         cluster_name=cluster_name,
         check_cluster=True,
-        user_name=user_name,
     )
 
 

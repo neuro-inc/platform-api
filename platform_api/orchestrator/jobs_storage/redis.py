@@ -195,7 +195,7 @@ class RedisJobsStorage(JobsStorage):
     def _update_for_deletion_index(self, tr: Pipeline, job: JobRecord) -> None:
         index_key = self._generate_jobs_for_deletion_index_key()
         if job.is_finished:
-            if job.is_deleted:
+            if not job.materialized:
                 tr.srem(index_key, job.id)
             else:
                 tr.sadd(index_key, job.id)
@@ -452,9 +452,9 @@ class RedisJobsStorage(JobsStorage):
 
     @trace
     async def get_aggregated_run_time_by_clusters(
-        self, job_filter: JobFilter
+        self, owner: str
     ) -> Dict[str, AggregatedRunTime]:
-        return await super().get_aggregated_run_time_by_clusters(job_filter)
+        return await super().get_aggregated_run_time_by_clusters(owner)
 
     async def migrate(self) -> bool:
         version = int(await self._client.get("version") or "0")

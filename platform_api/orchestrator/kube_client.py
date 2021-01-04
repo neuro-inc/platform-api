@@ -15,6 +15,7 @@ from types import TracebackType
 from typing import (
     Any,
     AsyncIterator,
+    Callable,
     ClassVar,
     DefaultDict,
     Dict,
@@ -39,6 +40,7 @@ from yarl import URL
 from platform_api.utils.stream import Stream
 
 from .job_request import (
+    Container,
     ContainerResources,
     ContainerTPUResource,
     ContainerVolume,
@@ -70,6 +72,10 @@ class StatusException(KubeClientException):
 
 
 class AlreadyExistsException(StatusException):
+    pass
+
+
+class NotFoundException(StatusException):
     pass
 
 
@@ -209,7 +215,7 @@ class SecretVolume(Volume):
     def to_primitive(self) -> Dict[str, Any]:
         return {
             "name": self.name,
-            "secret": {"secretName": self.k8s_secret_name},
+            "secret": {"secretName": self.k8s_secret_name, "defaultMode": 0o400},
         }
 
 
@@ -235,6 +241,7 @@ class PVCDiskVolume(Volume):
 class Resources:
     cpu: float
     memory: int
+    memory_request: Optional[int] = None
     gpu: Optional[int] = None
     shm: Optional[bool] = None
     tpu_version: Optional[str] = None
@@ -257,17 +264,26 @@ class Resources:
         return f"{self.memory}Mi"
 
     @property
+    def memory_request_mib(self) -> str:
+        return f"{self.memory_request}Mi"
+
+    @property
     def tpu_key(self) -> str:
         return self.tpu_key_template.format(version=self.tpu_version)
 
     def to_primitive(self) -> Dict[str, Any]:
         payload: Dict[str, Any] = {
-            "limits": {"cpu": self.cpu_mcores, "memory": self.memory_mib}
+            "requests": {"cpu": self.cpu_mcores, "memory": self.memory_mib},
+            "limits": {"cpu": self.cpu_mcores, "memory": self.memory_mib},
         }
         if self.gpu:
+            payload["requests"][self.gpu_key] = self.gpu
             payload["limits"][self.gpu_key] = self.gpu
         if self.tpu_version:
+            payload["requests"][self.tpu_key] = self.tpu_cores
             payload["limits"][self.tpu_key] = self.tpu_cores
+        if self.memory_request:
+            payload["requests"]["memory"] = self.memory_request_mib
         return payload
 
     @classmethod
@@ -299,9 +315,7 @@ class Service:
     name: str
     target_port: Optional[int]
     selector: Dict[str, str] = field(default_factory=dict)
-    ssh_target_port: Optional[int] = None
     port: int = 80
-    ssh_port: int = 22
     service_type: ServiceType = ServiceType.CLUSTER_IP
     cluster_ip: Optional[str] = None
     labels: Dict[str, str] = field(default_factory=dict)
@@ -334,12 +348,6 @@ class Service:
         self._add_port_map(
             self.port, self.target_port, "http", service_descriptor["spec"]["ports"]
         )
-        self._add_port_map(
-            self.ssh_port,
-            self.ssh_target_port,
-            "ssh",
-            service_descriptor["spec"]["ports"],
-        )
         return service_descriptor
 
     @classmethod
@@ -348,7 +356,6 @@ class Service:
             name=pod.name,
             selector=pod.labels,
             target_port=pod.port,
-            ssh_target_port=pod.ssh_port,
             labels=pod.labels,
         )
 
@@ -360,7 +367,6 @@ class Service:
             selector=pod.labels,
             cluster_ip="None",
             target_port=http_port,
-            ssh_target_port=pod.ssh_port,
             labels=pod.labels,
         )
 
@@ -379,15 +385,12 @@ class Service:
     @classmethod
     def from_primitive(cls, payload: Dict[str, Any]) -> "Service":
         http_payload = cls._find_port_by_name("http", payload["spec"]["ports"])
-        ssh_payload = cls._find_port_by_name("ssh", payload["spec"]["ports"])
         service_type = payload["spec"].get("type", Service.service_type.value)
         return cls(
             name=payload["metadata"]["name"],
             selector=payload["spec"].get("selector", {}),
             target_port=http_payload.get("targetPort", None),
             port=http_payload.get("port", Service.port),
-            ssh_target_port=ssh_payload.get("targetPort", None),
-            ssh_port=ssh_payload.get("port", Service.ssh_port),
             service_type=ServiceType(service_type),
             cluster_ip=payload["spec"].get("clusterIP"),
             labels=payload["metadata"].get("labels", {}),
@@ -578,6 +581,10 @@ class NodeSelectorRequirement:
             raise ValueError("values must be empty")
 
     @classmethod
+    def create_in(cls, key: str, *values: str) -> "NodeSelectorRequirement":
+        return cls(key=key, operator=NodeSelectorOperator.IN, values=[*values])
+
+    @classmethod
     def create_exists(cls, key: str) -> "NodeSelectorRequirement":
         return cls(key=key, operator=NodeSelectorOperator.EXISTS)
 
@@ -670,7 +677,6 @@ class PodDescriptor:
     annotations: Dict[str, str] = field(default_factory=dict)
 
     port: Optional[int] = None
-    ssh_port: Optional[int] = None
     health_check_path: str = "/"
     tty: bool = False
 
@@ -690,20 +696,27 @@ class PodDescriptor:
 
     restart_policy: PodRestartPolicy = PodRestartPolicy.NEVER
 
+    privileged: bool = False
+
     @classmethod
     def _process_secret_volumes(
         cls,
-        secret_volume: Optional[SecretVolume],
-        secret_volumes: List[SecretContainerVolume],
+        container: Container,
+        secret_volume_factory: Optional[Callable[[str], SecretVolume]] = None,
     ) -> Tuple[List[SecretVolume], List[VolumeMount]]:
+        user_volumes = container.get_user_secret_volumes()
+        if not secret_volume_factory:
+            return [], []
+
         pod_volumes = []
         volume_mounts = []
 
-        if secret_volumes:
-            assert secret_volume
-            pod_volumes = [secret_volume]
+        for user_name, secret_volumes in user_volumes.items():
+            volume = secret_volume_factory(user_name)
+            pod_volumes.append(volume)
+
             for sec_volume in secret_volumes:
-                volume_mounts.append(secret_volume.create_secret_mount(sec_volume))
+                volume_mounts.append(volume.create_secret_mount(sec_volume))
 
         return pod_volumes, volume_mounts
 
@@ -731,7 +744,7 @@ class PodDescriptor:
         cls,
         volume: Volume,
         job_request: JobRequest,
-        secret_volume: Optional[SecretVolume] = None,
+        secret_volume_factory: Optional[Callable[[str], SecretVolume]] = None,
         image_pull_secret_names: Optional[List[str]] = None,
         node_selector: Optional[Dict[str, str]] = None,
         tolerations: Optional[List[Toleration]] = None,
@@ -739,11 +752,13 @@ class PodDescriptor:
         labels: Optional[Dict[str, str]] = None,
         priority_class_name: Optional[str] = None,
         restart_policy: PodRestartPolicy = PodRestartPolicy.NEVER,
+        meta_env: Optional[Dict[str, str]] = None,
+        privileged: bool = False,
     ) -> "PodDescriptor":
         container = job_request.container
 
         secret_volumes, secret_volume_mounts = cls._process_secret_volumes(
-            secret_volume, container.secret_volumes
+            container, secret_volume_factory
         )
         disk_volumes, disk_volume_mounts = cls._process_disk_volumes(
             container.disk_volumes
@@ -786,19 +801,23 @@ class PodDescriptor:
             annotations[
                 cls.tpu_version_annotation_key
             ] = container.resources.tpu.software_version
+
+        env = container.env.copy()
+        if meta_env:
+            env.update(meta_env)
+
         return cls(
             name=job_request.job_id,
             image=container.image,
             command=container.entrypoint_list,
             args=container.command_list,
             working_dir=container.working_dir,
-            env=container.env.copy(),
+            env=env,
             secret_env_list=sec_env_list,
             volume_mounts=volume_mounts,
             volumes=volumes,
             resources=resources,
             port=container.port,
-            ssh_port=container.ssh_port,
             health_check_path=container.health_check_path,
             tty=container.tty,
             image_pull_secrets=image_pull_secrets,
@@ -809,6 +828,7 @@ class PodDescriptor:
             annotations=annotations,
             priority_class_name=priority_class_name,
             restart_policy=restart_policy,
+            privileged=privileged,
         )
 
     @property
@@ -839,6 +859,10 @@ class PodDescriptor:
         container_payload["stdin"] = True
         if self.working_dir is not None:
             container_payload["workingDir"] = self.working_dir
+        if self.privileged:
+            container_payload["securityContext"] = {
+                "privileged": self.privileged,
+            }
 
         ports = self._to_primitive_ports()
         if ports:
@@ -890,8 +914,6 @@ class PodDescriptor:
         ports = []
         if self.port:
             ports.append({"containerPort": self.port})
-        if self.ssh_port:
-            ports.append({"containerPort": self.ssh_port})
         return ports
 
     def _to_primitive_readiness_probe(self) -> Dict[str, Any]:
@@ -901,13 +923,6 @@ class PodDescriptor:
         if self.port:
             return {
                 "httpGet": {"port": self.port, "path": self.health_check_path},
-                "initialDelaySeconds": 1,
-                "periodSeconds": 1,
-            }
-
-        if self.ssh_port:
-            return {
-                "tcpSocket": {"port": self.ssh_port},
                 "initialDelaySeconds": 1,
                 "periodSeconds": 1,
             }
@@ -1543,6 +1558,10 @@ class KubeClient:
         url = self._generate_pod_url(name)
         return await self._request(method="GET", url=url)
 
+    async def get_raw_pods(self) -> Sequence[Dict[str, Any]]:
+        payload = await self._request(method="GET", url=self._pods_url)
+        return payload["items"]
+
     async def get_pod_status(self, pod_id: str) -> PodStatus:
         pod = await self.get_pod(pod_id)
         if pod.status is None:
@@ -1608,6 +1627,8 @@ class KubeClient:
             if payload["status"] == "Failure":
                 if payload.get("reason") == "AlreadyExists":
                     raise AlreadyExistsException(payload["reason"])
+                if payload.get("reason") == "NotFound":
+                    raise NotFoundException(payload["reason"])
                 raise StatusException(payload["reason"])
 
     async def add_ingress_rule(self, name: str, rule: IngressRule) -> Ingress:
@@ -1783,12 +1804,7 @@ class KubeClient:
                     {
                         "ipBlock": {
                             "cidr": "0.0.0.0/0",
-                            "except": [
-                                "10.0.0.0/8",
-                                "172.16.0.0/12",
-                                "192.168.0.0/16",
-                                "169.254.0.0/16",
-                            ],
+                            "except": ["10.0.0.0/8", "172.16.0.0/12", "192.168.0.0/16"],
                         }
                     }
                 ]
@@ -1801,7 +1817,6 @@ class KubeClient:
                     {"ipBlock": {"cidr": "10.0.0.0/8"}},
                     {"ipBlock": {"cidr": "172.16.0.0/12"}},
                     {"ipBlock": {"cidr": "192.168.0.0/16"}},
-                    {"ipBlock": {"cidr": "169.254.0.0/16"}},
                 ],
                 "ports": [
                     {"port": 53, "protocol": "UDP"},

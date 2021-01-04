@@ -34,12 +34,17 @@ data:
                 "named_job_hostname_template": "{job_name}-{job_owner}.jobs.platform.dev.neuromation.io",
 
                 "resource_pool_types": [
-                    {}
+                    {
+                      "name": "node-pool",
+                      "cpu": 1.0,
+                      "available_cpu": 1.0,
+                      "memory_mb": 2048,
+                      "available_memory_mb": 2048
+                    }
+                ],
+                "resource_presets": [
+                    {"name": "cpu-small", "cpu": 1, "memory_mb": 2048}
                 ]
-            },
-
-            "ssh": {
-                "server": "ssh.platform.dev.neuromation.io"
             },
 
             "monitoring": {
@@ -52,11 +57,19 @@ data:
 
             "metrics": {
                 "url": "http://metrics.dev.neu.ro"
+            },
+
+            "disks": {
+                "url": "http://platformapi/api/v1/disk"
+            },
+
+            "blob_storage": {
+                "url": "http://platformapi/api/v1/blob"
             }
         }
     ]
 ---
-apiVersion: extensions/v1beta1
+apiVersion: apps/v1
 kind: Deployment
 metadata:
   name: platformconfig

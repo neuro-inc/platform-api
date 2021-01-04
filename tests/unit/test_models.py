@@ -20,6 +20,7 @@ from platform_api.handlers.jobs_handler import (
     convert_job_container_to_json,
     convert_job_to_job_response,
     create_job_cluster_name_validator,
+    create_job_preset_validator,
     create_job_request_validator,
     infer_permissions_from_container,
 )
@@ -41,14 +42,13 @@ from platform_api.orchestrator.job_request import (
     Container,
     ContainerHTTPServer,
     ContainerResources,
-    ContainerSSHServer,
     ContainerTPUResource,
     ContainerVolume,
     JobRequest,
     JobStatus,
 )
 from platform_api.orchestrator.jobs_storage import JobFilter
-from platform_api.resource import TPUResource
+from platform_api.resource import Preset, TPUPreset, TPUResource
 from platform_api.user import User
 
 from .conftest import MockOrchestrator
@@ -133,20 +133,6 @@ class TestContainerRequestValidator:
             ],
         }
 
-    @pytest.fixture
-    def payload_with_ssh(self) -> Dict[str, Any]:
-        return {
-            "image": "testimage",
-            "resources": {"cpu": 0.1, "memory_mb": 16, "shm": True},
-            "volumes": [
-                {
-                    "src_storage_uri": "storage://test-cluster/",
-                    "dst_path": "/var/storage",
-                }
-            ],
-            "ssh": {"port": 666},
-        }
-
     def test_allowed_volumes(self, payload: Dict[str, Any]) -> None:
         validator = create_container_request_validator(
             allow_volumes=True, cluster_name="test-cluster"
@@ -176,15 +162,6 @@ class TestContainerRequestValidator:
         )
         result = validator.check(payload_with_zero_gpu)
         assert result["resources"]["gpu"] == 0
-
-    def test_with_ssh(self, payload_with_ssh: Dict[str, Any]) -> None:
-        validator = create_container_request_validator(
-            allow_volumes=True, cluster_name="test-cluster"
-        )
-        result = validator.check(payload_with_ssh)
-        assert result["ssh"]
-        assert result["ssh"]["port"]
-        assert result["ssh"]["port"] == 666
 
     def test_with_one_gpu(self, payload_with_one_gpu: Dict[str, Any]) -> None:
         validator = create_container_request_validator(
@@ -383,7 +360,6 @@ class TestJobClusterNameValidator:
             "image": "testimage",
             "command": "arg1 arg2 arg3",
             "resources": {"cpu": 0.1, "memory_mb": 16, "shm": True},
-            "ssh": {"port": 666},
         }
         request = {
             "container": container,
@@ -397,7 +373,6 @@ class TestJobClusterNameValidator:
             "image": "testimage",
             "command": "arg1 arg2 arg3",
             "resources": {"cpu": 0.1, "memory_mb": 16, "shm": True},
-            "ssh": {"port": 666},
         }
         request = {
             "cluster_name": "testcluster",
@@ -421,13 +396,130 @@ class TestJobClusterNameValidator:
             validator.check(request)
 
 
+class TestJobPresetValidator:
+    def test_validator(self) -> None:
+        request = {"preset_name": "preset", "container": {}}
+        validator = create_job_preset_validator(
+            [Preset(name="preset", cpu=0.1, memory_mb=100)]
+        )
+        payload = validator.check(request)
+
+        assert payload == {
+            "preset_name": "preset",
+            "container": {"resources": {"cpu": 0.1, "memory_mb": 100, "shm": False}},
+            "scheduler_enabled": False,
+            "preemptible_node": False,
+        }
+
+    def test_validator_default_preset(self) -> None:
+        request: Dict[str, Any] = {"container": {}}
+        validator = create_job_preset_validator(
+            [Preset(name="preset", cpu=0.1, memory_mb=100)]
+        )
+        payload = validator.check(request)
+
+        assert payload == {
+            "preset_name": "preset",
+            "container": {"resources": {"cpu": 0.1, "memory_mb": 100, "shm": False}},
+            "scheduler_enabled": False,
+            "preemptible_node": False,
+        }
+
+    def test_flat_structure_validator(self) -> None:
+        request = {"preset_name": "preset"}
+        validator = create_job_preset_validator(
+            [Preset(name="preset", cpu=0.1, memory_mb=100)]
+        )
+        payload = validator.check(request)
+
+        assert payload == {
+            "preset_name": "preset",
+            "resources": {"cpu": 0.1, "memory_mb": 100, "shm": False},
+            "scheduler_enabled": False,
+            "preemptible_node": False,
+        }
+
+    def test_validator_unknown_preset_name(self) -> None:
+        request = {"preset_name": "unknown", "container": {}}
+        validator = create_job_preset_validator(
+            [Preset(name="preset", cpu=0.1, memory_mb=100)]
+        )
+        with pytest.raises(DataError, match="value doesn't match any variant"):
+            validator.check(request)
+
+    def test_validator_preset_name_and_resources(self) -> None:
+        request = {
+            "preset_name": "preset",
+            "container": {"resources": {"cpu": 1.0, "memory_mb": 1024}},
+        }
+        validator = create_job_preset_validator(
+            [Preset(name="preset", cpu=0.1, memory_mb=100)]
+        )
+        with pytest.raises(
+            DataError, match="Both preset and resources are not allowed"
+        ):
+            validator.check(request)
+
+    def test_validator_flat_structure_preset_name_and_resources(self) -> None:
+        request = {
+            "preset_name": "preset",
+            "resources": {"cpu": 1.0, "memory_mb": 1024},
+        }
+        validator = create_job_preset_validator(
+            [Preset(name="preset", cpu=0.1, memory_mb=100)]
+        )
+        with pytest.raises(
+            DataError, match="Both preset and resources are not allowed"
+        ):
+            validator.check(request)
+
+    def test_validator_with_shm_gpu_tpu_preemptible(self) -> None:
+        request = {
+            "preset_name": "preset",
+            "container": {"resources": {"shm": True}},
+        }
+        validator = create_job_preset_validator(
+            [
+                Preset(
+                    name="preset",
+                    cpu=0.1,
+                    memory_mb=100,
+                    gpu=1,
+                    gpu_model="nvidia-tesla-k80",
+                    tpu=TPUPreset(type="v2-8", software_version="1.14"),
+                    scheduler_enabled=True,
+                    preemptible_node=True,
+                )
+            ]
+        )
+        payload = validator.check(request)
+
+        assert payload == {
+            "preset_name": "preset",
+            "container": {
+                "resources": {
+                    "cpu": 0.1,
+                    "memory_mb": 100,
+                    "shm": True,
+                    "gpu": 1,
+                    "gpu_model": "nvidia-tesla-k80",
+                    "tpu": {
+                        "type": "v2-8",
+                        "software_version": "1.14",
+                    },
+                }
+            },
+            "scheduler_enabled": True,
+            "preemptible_node": True,
+        }
+
+
 class TestJobRequestValidator:
     def test_validator(self) -> None:
         container = {
             "image": "testimage",
             "command": "arg1 arg2 arg3",
             "resources": {"cpu": 0.1, "memory_mb": 16, "shm": True},
-            "ssh": {"port": 666},
         }
         request = {
             "container": container,
@@ -439,12 +531,46 @@ class TestJobRequestValidator:
         assert payload["cluster_name"] == "testcluster"
         assert payload["restart_policy"] == JobRestartPolicy.NEVER
 
+    def test_schedule_timeout_disallowed_for_scheduled_job(self) -> None:
+        container = {
+            "image": "testimage",
+            "command": "arg1 arg2 arg3",
+            "resources": {"cpu": 0.1, "memory_mb": 16, "shm": True},
+        }
+        request = {
+            "container": container,
+            "schedule_timeout": 90,
+            "scheduler_enabled": True,
+        }
+        validator = create_job_request_validator(
+            allowed_gpu_models=(), allowed_tpu_resources=(), cluster_name="testcluster"
+        )
+        with pytest.raises(
+            DataError, match="schedule_timeout is not allowed for scheduled jobs"
+        ):
+            validator.check(request)
+
+    def test_flat_payload_validator(self) -> None:
+        request = {
+            "image": "testimage",
+            "command": "arg1 arg2 arg3",
+            "resources": {"cpu": 0.1, "memory_mb": 16, "shm": True},
+        }
+        validator = create_job_request_validator(
+            allow_flat_structure=True,
+            allowed_gpu_models=(),
+            allowed_tpu_resources=(),
+            cluster_name="testcluster",
+        )
+        payload = validator.check(request)
+        assert payload["cluster_name"] == "testcluster"
+        assert payload["restart_policy"] == JobRestartPolicy.NEVER
+
     def test_validator_explicit_cluster_name(self) -> None:
         container = {
             "image": "testimage",
             "command": "arg1 arg2 arg3",
             "resources": {"cpu": 0.1, "memory_mb": 16, "shm": True},
-            "ssh": {"port": 666},
         }
         request = {
             "container": container,
@@ -461,7 +587,6 @@ class TestJobRequestValidator:
             "image": "testimage",
             "command": "arg1 arg2 arg3",
             "resources": {"cpu": 0.1, "memory_mb": 16, "shm": True},
-            "ssh": {"port": 666},
         }
         request = {
             "container": container,
@@ -473,13 +598,12 @@ class TestJobRequestValidator:
         with pytest.raises(DataError, match="value is not exactly 'another'"):
             validator.check(request)
 
-    @pytest.mark.parametrize("limit_minutes", [0, 1])
+    @pytest.mark.parametrize("limit_minutes", [1, 10])
     def test_with_max_run_time_minutes_valid(self, limit_minutes: int) -> None:
         container = {
             "image": "testimage",
             "command": "arg1 arg2 arg3",
             "resources": {"cpu": 0.1, "memory_mb": 16, "shm": True},
-            "ssh": {"port": 666},
         }
         request = {
             "container": container,
@@ -490,16 +614,16 @@ class TestJobRequestValidator:
         )
         validator.check(request)
 
-    def test_with_max_run_time_minutes_invalid_negative(self) -> None:
+    @pytest.mark.parametrize("limit_minutes", [0, -1])
+    def test_with_max_run_time_minutes_invalid(self, limit_minutes: int) -> None:
         container = {
             "image": "testimage",
             "command": "arg1 arg2 arg3",
             "resources": {"cpu": 0.1, "memory_mb": 16, "shm": True},
-            "ssh": {"port": 666},
         }
         request = {
             "container": container,
-            "max_run_time_minutes": -1,
+            "max_run_time_minutes": limit_minutes,
         }
         validator = create_job_request_validator(
             allowed_gpu_models=(), allowed_tpu_resources=(), cluster_name="test-cluster"
@@ -547,7 +671,6 @@ class TestJobRequestValidator:
             "image": "testimage",
             "command": "arg1 arg2 arg3",
             "resources": {"cpu": 0.1, "memory_mb": 16, "shm": True},
-            "ssh": {"port": 666},
         }
         request = {
             "container": container,
@@ -645,20 +768,6 @@ class TestJobContainerToJson:
             "image": "image",
             "resources": {"cpu": 0.1, "memory_mb": 16, "gpu": 1, "shm": True},
             "volumes": [],
-        }
-
-    def test_with_ssh(self, storage_config: StorageConfig) -> None:
-        container = Container(
-            image="image",
-            resources=ContainerResources(cpu=0.1, memory_mb=16, gpu=1, shm=True),
-            ssh_server=ContainerSSHServer(port=777),
-        )
-        assert convert_job_container_to_json(container, storage_config) == {
-            "env": {},
-            "image": "image",
-            "resources": {"cpu": 0.1, "memory_mb": 16, "gpu": 1, "shm": True},
-            "volumes": [],
-            "ssh": {"port": 777},
         }
 
     def test_with_working_dir(self, storage_config: StorageConfig) -> None:
@@ -866,7 +975,7 @@ class TestJobFilterFactory:
     def test_create_from_query_fail(self, query: Any) -> None:
         factory = JobFilterFactory().create_from_query
         with pytest.raises((ValueError, DataError)):
-            factory(MultiDict(query))  # type: ignore # noqa
+            factory(MultiDict(query))  # type: ignore
 
 
 def make_access_tree(perm_dict: Dict[str, str]) -> ClientSubTreeViewRoot:
@@ -1365,6 +1474,7 @@ async def test_job_to_job_response(mock_orchestrator: MockOrchestrator) -> None:
             "description": None,
             "created_at": mock.ANY,
             "run_time_seconds": 0,
+            "restarts": 0,
         },
         "container": {
             "image": "testimage",
@@ -1374,11 +1484,14 @@ async def test_job_to_job_response(mock_orchestrator: MockOrchestrator) -> None:
         },
         "name": "test-job-name",
         "description": "test test description",
-        "ssh_server": "ssh://nobody@ssh-auth:22",
-        "ssh_auth_server": "ssh://nobody@ssh-auth:22",
+        "scheduler_enabled": False,
+        "preemptible_node": False,
         "is_preemptible": False,
+        "is_preemptible_node_required": False,
+        "pass_config": False,
         "uri": f"job://test-cluster/compute/{job.id}",
         "restart_policy": "never",
+        "privileged": False,
     }
 
 
@@ -1461,6 +1574,7 @@ async def test_job_to_job_response_with_job_name_and_http_exposed(
             "description": None,
             "created_at": mock.ANY,
             "run_time_seconds": 0,
+            "restarts": 0,
         },
         "container": {
             "image": "testimage",
@@ -1469,11 +1583,14 @@ async def test_job_to_job_response_with_job_name_and_http_exposed(
             "resources": {"cpu": 1, "memory_mb": 128},
             "http": {"port": 80, "health_check_path": "/", "requires_auth": False},
         },
-        "ssh_server": "ssh://nobody@ssh-auth:22",
-        "ssh_auth_server": "ssh://nobody@ssh-auth:22",
+        "scheduler_enabled": False,
+        "preemptible_node": False,
         "is_preemptible": False,
+        "is_preemptible_node_required": False,
+        "pass_config": False,
         "uri": f"job://test-cluster/{owner_name}/{job.id}",
         "restart_policy": "never",
+        "privileged": False,
     }
 
 
@@ -1515,6 +1632,7 @@ async def test_job_to_job_response_with_job_name_and_http_exposed_too_long_name(
             "description": None,
             "created_at": mock.ANY,
             "run_time_seconds": 0,
+            "restarts": 0,
         },
         "container": {
             "image": "testimage",
@@ -1523,11 +1641,14 @@ async def test_job_to_job_response_with_job_name_and_http_exposed_too_long_name(
             "resources": {"cpu": 1, "memory_mb": 128},
             "http": {"port": 80, "health_check_path": "/", "requires_auth": False},
         },
-        "ssh_server": "ssh://nobody@ssh-auth:22",
-        "ssh_auth_server": "ssh://nobody@ssh-auth:22",
+        "scheduler_enabled": False,
+        "preemptible_node": False,
         "is_preemptible": False,
+        "is_preemptible_node_required": False,
+        "pass_config": False,
         "uri": f"job://test-cluster/{owner_name}/{job.id}",
         "restart_policy": "never",
+        "privileged": False,
     }
 
 
@@ -1550,3 +1671,26 @@ async def test_job_to_job_response_assert_non_empty_cluster_name(
     )
     with pytest.raises(AssertionError, match="must be already replaced"):
         convert_job_to_job_response(job)
+
+
+@pytest.mark.asyncio
+async def test_job_to_job_response_with_preset_name(
+    mock_orchestrator: MockOrchestrator,
+) -> None:
+    job = Job(
+        storage_config=mock_orchestrator.storage_config,
+        orchestrator_config=mock_orchestrator.config,
+        record=JobRecord.create(
+            request=JobRequest.create(
+                Container(
+                    image="testimage",
+                    resources=ContainerResources(cpu=1, memory_mb=128),
+                )
+            ),
+            cluster_name="test-cluster",
+            preset_name="cpu-small",
+        ),
+    )
+    payload = convert_job_to_job_response(job)
+
+    assert payload["preset_name"] == "cpu-small"

@@ -1,19 +1,22 @@
 IMAGE_NAME ?= platformapi
 DOCKER_REPO ?= neuro-docker-local-public.jfrog.io
-ARTIFACTORY_TAG ?=$(shell echo "$(CIRCLE_TAG)" | awk -F/ '{print $$2}')
-IMAGE_TAG ?= $(GITHUB_SHA)
-IMAGE_TAG ?= latest
+TAG ?= $(GITHUB_SHA)
+TAG ?= latest
 
-IMAGE_K8S ?= $(GKE_DOCKER_REGISTRY)/$(GKE_PROJECT_ID)/$(IMAGE_NAME)
-IMAGE_K8S_AWS ?= $(AWS_ACCOUNT_ID).dkr.ecr.$(AWS_REGION).amazonaws.com/$(IMAGE_NAME)
+CLOUD_IMAGE_NAME_gke   ?= $(GKE_DOCKER_REGISTRY)/$(GKE_PROJECT_ID)/$(IMAGE_NAME)
+CLOUD_IMAGE_NAME_aws   ?= $(AWS_ACCOUNT_ID).dkr.ecr.$(AWS_REGION).amazonaws.com/$(IMAGE_NAME)
+CLOUD_IMAGE_NAME_azure ?= $(AZURE_ACR_NAME).azurecr.io/$(IMAGE_NAME)
 
-SSH_IMAGE_NAME ?= ssh-auth
-SSH_K8S ?= $(GKE_DOCKER_REGISTRY)/$(GKE_PROJECT_ID)/$(SSH_IMAGE_NAME)
-SSH_K8S_AWS ?= $(AWS_ACCOUNT_ID).dkr.ecr.$(AWS_REGION).amazonaws.com/$(SSH_IMAGE_NAME)
+CLOUD_IMAGE_NAME        = $(CLOUD_IMAGE_NAME_$(CLOUD_PROVIDER))
+ARTIFACTORY_IMAGE_NAME  = $(ARTIFACTORY_DOCKER_REPO)/$(IMAGE_NAME)
 
 INGRESS_FALLBACK_IMAGE_NAME ?= platformingressfallback
-INGRESS_FALLBACK_IMAGE_K8S ?= $(GKE_DOCKER_REGISTRY)/$(GKE_PROJECT_ID)/$(INGRESS_FALLBACK_IMAGE_NAME)
-INGRESS_FALLBACK_IMAGE_K8S_AWS ?= $(AWS_ACCOUNT_ID).dkr.ecr.$(AWS_REGION).amazonaws.com/$(INGRESS_FALLBACK_IMAGE_NAME)
+INGRESS_FALLBACK_CLOUD_IMAGE_NAME_gke ?= $(GKE_DOCKER_REGISTRY)/$(GKE_PROJECT_ID)/$(INGRESS_FALLBACK_IMAGE_NAME)
+INGRESS_FALLBACK_CLOUD_IMAGE_NAME_aws ?= $(AWS_ACCOUNT_ID).dkr.ecr.$(AWS_REGION).amazonaws.com/$(INGRESS_FALLBACK_IMAGE_NAME)
+INGRESS_FALLBACK_CLOUD_IMAGE_NAME_azure ?= $(AZURE_ACR_NAME).azurecr.io/$(INGRESS_FALLBACK_IMAGE_NAME)
+
+INGRESS_FALLBACK_CLOUD_IMAGE_NAME             = $(INGRESS_FALLBACK_CLOUD_IMAGE_NAME_$(CLOUD_PROVIDER))
+ARTIFACTORY_INGRESS_FALLBACK_IMAGE_NAME = $(ARTIFACTORY_DOCKER_REPO)/$(INGRESS_FALLBACK_IMAGE_NAME)
 
 PLATFORMAUTHAPI_IMAGE = $(shell cat PLATFORMAUTHAPI_IMAGE)
 PLATFORMCONFIG_IMAGE = $(shell cat PLATFORMCONFIG_IMAGE)
@@ -27,16 +30,17 @@ include k8s.mk
 setup:
 	pip install -U pip
 	pip install --no-binary cryptography -r requirements/test.txt
+	pre-commit install
 
-lint:
-	isort --check-only --diff platform_api tests setup.py alembic
-	black --check platform_api tests setup.py alembic
-	flake8 platform_api tests setup.py alembic
+lint: format
 	mypy platform_api tests setup.py alembic
 
 format:
-	isort platform_api tests setup.py alembic
-	black platform_api tests setup.py alembic
+ifdef CI_LINT_RUN
+	pre-commit run --all-files --show-diff-on-failure
+else
+	pre-commit run --all-files
+endif
 
 test_unit:
 	pytest -vv --cov platform_api --cov-config=setup.cfg --cov-report xml:.coverage-unit.xml tests/unit
@@ -47,13 +51,12 @@ test_integration:
 test_e2e:
 	pytest -vv tests/e2e
 
-docker_build_ssh_auth:
-	docker build --build-arg PIP_EXTRA_INDEX_URL \
-		-f deploy/ssh_auth/docker/Dockerfile.ssh-auth.k8s -t $(SSH_IMAGE_NAME):latest .
-
 docker_build:
-	docker build --build-arg PIP_EXTRA_INDEX_URL \
-		-f Dockerfile.k8s -t $(IMAGE_NAME):latest .
+	python setup.py sdist
+	docker build -f Dockerfile.k8s -t $(IMAGE_NAME):latest \
+	--build-arg PIP_EXTRA_INDEX_URL \
+	--build-arg DIST_FILENAME=`python setup.py --fullname`.tar.gz .
+	make -C platform_ingress_fallback IMAGE_NAME=$(INGRESS_FALLBACK_IMAGE_NAME) build
 
 run_api_k8s:
 	NP_STORAGE_HOST_MOUNT_PATH=/tmp \
@@ -72,7 +75,7 @@ run_api_k8s_container:
 	    -e NP_K8S_CA_PATH=$$HOME/.minikube/ca.crt \
 	    -e NP_K8S_AUTH_CERT_PATH=$$HOME/.minikube/client.crt \
 	    -e NP_K8S_AUTH_CERT_KEY_PATH=$$HOME/.minikube/client.key \
-	    $(IMAGE_K8S):latest
+	    $(IMAGE_NAME):latest
 
 gke_login:
 	sudo /opt/google-cloud-sdk/bin/gcloud --quiet components update --version 204.0.0
@@ -85,13 +88,11 @@ gke_login:
 	gcloud config set $(SET_CLUSTER_ZONE_REGION)
 	gcloud auth configure-docker
 
-eks_login:
+aws_k8s_login:
 	aws eks --region $(AWS_REGION) update-kubeconfig --name $(AWS_CLUSTER_NAME)
 
-docker_login:
-	@docker login $(DOCKER_REPO) \
-		--username=$(ARTIFACTORY_USERNAME) \
-		--password=$(ARTIFACTORY_PASSWORD)
+azure_k8s_login:
+	az aks get-credentials --resource-group $(AZURE_RG_NAME) --name $(CLUSTER_NAME)
 
 docker_pull_test_images:
 	docker pull $(PLATFORMAUTHAPI_IMAGE)
@@ -106,58 +107,50 @@ docker_pull_test_images:
 helm_install:
 	curl https://raw.githubusercontent.com/kubernetes/helm/master/scripts/get | bash -s -- -v $(HELM_VERSION)
 	helm init --client-only
+	helm plugin install https://github.com/belitre/helm-push-artifactory-plugin
 
 gcr_login:
 	@echo $(GKE_ACCT_AUTH) | base64 --decode | docker login -u _json_key --password-stdin https://gcr.io
 
-ecr_login:
-	$$(aws ecr get-login --no-include-email --region $(AWS_REGION))
-
-docker_push_ssh_auth: docker_build_ssh_auth
-	docker tag $(SSH_IMAGE_NAME):latest $(SSH_K8S_AWS):latest
-	docker tag $(SSH_IMAGE_NAME):latest $(SSH_K8S_AWS):$(IMAGE_TAG)
-	docker push $(SSH_K8S_AWS):latest
-	docker push $(SSH_K8S_AWS):$(IMAGE_TAG)
-
 docker_push: docker_build
-	docker tag $(IMAGE_NAME):latest $(IMAGE_K8S_AWS):latest
-	docker tag $(IMAGE_NAME):latest $(IMAGE_K8S_AWS):$(IMAGE_TAG)
-	docker push $(IMAGE_K8S_AWS):latest
-	docker push $(IMAGE_K8S_AWS):$(IMAGE_TAG)
+	docker tag $(IMAGE_NAME):latest $(CLOUD_IMAGE_NAME):latest
+	docker tag $(IMAGE_NAME):latest $(CLOUD_IMAGE_NAME):$(TAG)
+	docker push $(CLOUD_IMAGE_NAME):latest
+	docker push $(CLOUD_IMAGE_NAME):$(TAG)
 
-	make -C platform_ingress_fallback IMAGE_NAME=$(INGRESS_FALLBACK_IMAGE_NAME) build
+	docker tag $(INGRESS_FALLBACK_IMAGE_NAME):latest $(INGRESS_FALLBACK_CLOUD_IMAGE_NAME):latest
+	docker tag $(INGRESS_FALLBACK_IMAGE_NAME):latest $(INGRESS_FALLBACK_CLOUD_IMAGE_NAME):$(TAG)
+	docker push $(INGRESS_FALLBACK_CLOUD_IMAGE_NAME):latest
+	docker push $(INGRESS_FALLBACK_CLOUD_IMAGE_NAME):$(TAG)
 
-	docker tag $(INGRESS_FALLBACK_IMAGE_NAME):latest $(INGRESS_FALLBACK_IMAGE_K8S_AWS):latest
-	docker tag $(INGRESS_FALLBACK_IMAGE_NAME):latest $(INGRESS_FALLBACK_IMAGE_K8S_AWS):$(IMAGE_TAG)
-	docker push $(INGRESS_FALLBACK_IMAGE_K8S_AWS):latest
-	docker push $(INGRESS_FALLBACK_IMAGE_K8S_AWS):$(IMAGE_TAG)
+artifactory_docker_push: docker_build
+	docker tag $(IMAGE_NAME):latest $(ARTIFACTORY_IMAGE_NAME):$(TAG)
+	docker tag $(INGRESS_FALLBACK_IMAGE_NAME):latest $(ARTIFACTORY_INGRESS_FALLBACK_IMAGE_NAME):$(TAG)
+	docker login $(ARTIFACTORY_DOCKER_REPO) \
+		--username=$(ARTIFACTORY_USERNAME) \
+		--password=$(ARTIFACTORY_PASSWORD)
+	docker push $(ARTIFACTORY_IMAGE_NAME):$(TAG)
+	docker push $(ARTIFACTORY_INGRESS_FALLBACK_IMAGE_NAME):$(TAG)
+
+_helm_expand_vars:
+	rm -rf temp_deploy/platformapi
+	mkdir -p temp_deploy/platformapi
+	cp -Rf deploy/platformapi/. temp_deploy/platformapi/
+	find temp_deploy/platformapi -type f -name 'values*' -delete
+	cp deploy/platformapi/values-template.yaml temp_deploy/platformapi/values.yaml
+	sed -i.bak "s/\$$IMAGE/$(subst /,\/,$(ARTIFACTORY_IMAGE_NAME):$(TAG))/g" temp_deploy/platformapi/values.yaml
+	sed -i.bak "s/\$$INGRESS_FALLBACK_IMAGE/$(subst /,\/,$(ARTIFACTORY_INGRESS_FALLBACK_IMAGE_NAME):$(TAG))/g" temp_deploy/platformapi/values.yaml
+	find temp_deploy/platformapi -type f -name '*.bak' -delete
 
 helm_deploy:
 	helm \
-		--set "global.env=$(HELM_ENV)-aws" \
-		--set "IMAGE.$(HELM_ENV)-aws=$(IMAGE_K8S_AWS):$(IMAGE_TAG)" \
-		upgrade --install platformapi deploy/platformapi/ --wait --timeout 600 --namespace platform
+		-f deploy/platformapi/values-$(HELM_ENV)-$(CLOUD_PROVIDER).yaml \
+		--set "ENV=$(HELM_ENV)" \
+		--set "IMAGE=$(CLOUD_IMAGE_NAME):$(TAG)" \
+		upgrade --install platformapi deploy/platformapi/ --wait --timeout 1800 --namespace platform
 
-helm_deploy_ssh_auth:
-	helm \
-		-f deploy/ssh_auth/values-$(HELM_ENV)-aws.yaml \
-		--set "IMAGE=$(SSH_K8S_AWS):$(IMAGE_TAG)" \
-		upgrade --install ssh-auth deploy/ssh_auth/ --wait --timeout 600 --namespace platform
-
-artifactory_docker_login:
-	docker login $(ARTIFACTORY_DOCKER_REPO) --username=$(ARTIFACTORY_USERNAME) --password=$(ARTIFACTORY_PASSWORD)
-
-artifactory_ssh_auth_docker_push: docker_build_ssh_auth artifactory_docker_login
-	docker tag $(SSH_IMAGE_NAME):latest $(ARTIFACTORY_DOCKER_REPO)/$(SSH_IMAGE_NAME):$(ARTIFACTORY_TAG)
-	docker push $(ARTIFACTORY_DOCKER_REPO)/$(SSH_IMAGE_NAME):$(ARTIFACTORY_TAG)
-
-artifactory_ssh_auth_helm_push: _helm
-	mkdir -p temp_deploy/$(SSH_IMAGE_NAME)
-	cp -Rf deploy/ssh_auth/.  temp_deploy/$(SSH_IMAGE_NAME)
-	cp temp_deploy/$(SSH_IMAGE_NAME)/values-template.yaml temp_deploy/$(SSH_IMAGE_NAME)/values.yaml
-	sed -i "s/IMAGE_TAG/$(ARTIFACTORY_TAG)/g" temp_deploy/$(SSH_IMAGE_NAME)/values.yaml
-	find temp_deploy/$(SSH_IMAGE_NAME) -type f -name 'values-*' -delete
-	helm init --client-only
-	helm package --app-version=$(ARTIFACTORY_TAG) --version=$(ARTIFACTORY_TAG) temp_deploy/$(SSH_IMAGE_NAME)/
-	helm plugin install https://github.com/belitre/helm-push-artifactory-plugin
-	helm push-artifactory $(SSH_IMAGE_NAME)-$(ARTIFACTORY_TAG).tgz $(ARTIFACTORY_HELM_REPO) --username $(ARTIFACTORY_USERNAME) --password $(ARTIFACTORY_PASSWORD)
+artifactory_helm_push: _helm_expand_vars
+	helm package --app-version=$(TAG) --version=$(TAG) temp_deploy/platformapi/
+	helm push-artifactory $(IMAGE_NAME)-$(TAG).tgz $(ARTIFACTORY_HELM_REPO) \
+		--username $(ARTIFACTORY_USERNAME) \
+		--password $(ARTIFACTORY_PASSWORD)

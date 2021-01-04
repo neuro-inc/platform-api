@@ -1,6 +1,7 @@
 import json
+from collections import defaultdict
 from dataclasses import dataclass, replace
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone
 from typing import (
     AbstractSet,
     Any,
@@ -21,9 +22,9 @@ from asyncpg import Connection, SerializationError, UniqueViolationError
 from asyncpg.cursor import CursorFactory
 from asyncpg.pool import Pool
 from asyncpg.protocol.protocol import Record
-from sqlalchemy import Boolean, Integer, and_, asc, desc, not_, or_, select
+from sqlalchemy import Boolean, Integer, and_, asc, desc, or_, select
 
-from platform_api.orchestrator.job import JobRecord
+from platform_api.orchestrator.job import AggregatedRunTime, JobRecord
 from platform_api.orchestrator.job_request import JobError, JobStatus
 from platform_api.orchestrator.jobs_storage import JobFilter
 
@@ -32,12 +33,14 @@ from .base import (
     JobsStorage,
     JobStorageJobFoundError,
     JobStorageTransactionError,
+    RunTimeEntry,
 )
 
 
 @dataclass(frozen=True)
 class JobTables:
     jobs: sa.Table
+    jobs_runtime_cache: sa.Table
 
     @classmethod
     def create(cls) -> "JobTables":
@@ -61,8 +64,20 @@ class JobTables:
             # All other fields
             sa.Column("payload", sapg.JSONB(), nullable=False),
         )
+        jobs_runtime_cache_table = sa.Table(
+            "jobs_runtime_cache",
+            metadata,
+            sa.Column("owner", sa.String(), primary_key=True),
+            sa.Column(
+                "last_finished",
+                sapg.TIMESTAMP(timezone=True, precision=6),
+                nullable=False,
+            ),
+            sa.Column("payload", sapg.JSONB(), nullable=False),
+        )
         return cls(
             jobs=jobs_table,
+            jobs_runtime_cache=jobs_runtime_cache_table,
         )
 
 
@@ -262,7 +277,9 @@ class PostgresJobsStorage(JobsStorage):
             job_filter = JobFilter()
         if job_filter.ids:
             job_ids = set(job_ids) & job_filter.ids
-        job_filter = replace(job_filter, ids=job_ids)
+        if not list(job_ids):
+            return []
+        job_filter = replace(job_filter, ids=set(job_ids))
         all_jobs = []
         async for job in self.iter_all_jobs(job_filter):
             all_jobs.append(job)
@@ -277,7 +294,7 @@ class PostgresJobsStorage(JobsStorage):
         query = (
             self._tables.jobs.select()
             .where(self._tables.jobs.c.status.in_(JobStatus.finished_values()))
-            .where(not_(self._tables.jobs.c.payload["is_deleted"].astext.cast(Boolean)))
+            .where(self._tables.jobs.c.payload["materialized"].astext.cast(Boolean))
         )
         for_deletion = []
         async with self._pool.acquire() as conn, conn.transaction():
@@ -324,6 +341,7 @@ class PostgresJobsStorage(JobsStorage):
             .select_from(self._tables.jobs)
             .select_from(tag)
             .where(self._tables.jobs.c.owner == owner)
+            .where(self._tables.jobs.c.tags != "null")
             .order_by(
                 tag_name,
                 desc(self._tables.jobs.c.created_at),
@@ -337,6 +355,98 @@ class PostgresJobsStorage(JobsStorage):
             .order_by(desc(sub_query.c.created_at), sub_query.c.index)
         )
         return [record[0] for record in await self._fetch(query)]
+
+    async def get_aggregated_run_time_by_clusters(
+        self, owner: str
+    ) -> Dict[str, AggregatedRunTime]:
+
+        aggregated_run_times: Dict[str, RunTimeEntry] = defaultdict(RunTimeEntry)
+        cached_run_times: Dict[str, RunTimeEntry] = defaultdict(RunTimeEntry)
+
+        # Collect data for still running jobs
+        running_filter = JobFilter(
+            owners={owner},
+            statuses={JobStatus(value) for value in JobStatus.active_values()},
+        )
+        async for job in self.iter_all_jobs(running_filter):
+            aggregated_run_times[job.cluster_name].increase_by(
+                RunTimeEntry.for_job(job)
+            )
+
+        # Collect data from cache
+        query = self._tables.jobs_runtime_cache.select().where(
+            self._tables.jobs_runtime_cache.c.owner == owner
+        )
+        cache_record = await self._fetchrow(query)
+        not_cached_query = (
+            self._tables.jobs.select()
+            .where(self._tables.jobs.c.owner == owner)
+            .where(self._tables.jobs.c.status.in_(JobStatus.finished_values()))
+        )
+
+        if cache_record:
+            payload = json.loads(cache_record["payload"])
+            for cluster, run_time in payload.items():
+                run_time_entry = RunTimeEntry.from_primitive(run_time)
+                cached_run_times[cluster].increase_by(run_time_entry)
+                aggregated_run_times[cluster].increase_by(run_time_entry)
+
+            not_cached_query = not_cached_query.where(
+                self._tables.jobs.c.finished_at > cache_record["last_finished"]
+            )
+
+        # This is to avoid race condition when
+        # new finished JobRecord can be added
+        # with finished_at that is a past for couple of seconds,
+        # 5 minutes limit is just to be sure
+        include_to_cache_before = datetime.now(timezone.utc) - timedelta(minutes=5)
+        cache_last_finished = None  # Also a flag to update cache
+
+        async with self._pool.acquire() as conn, conn.transaction():
+            async for record in self._cursor(not_cached_query, conn=conn):
+                job = self._record_to_job(record)
+                job_run_time = RunTimeEntry.for_job(job)
+                aggregated_run_times[job.cluster_name].increase_by(job_run_time)
+
+                assert (
+                    job.finished_at is not None
+                ), "Non finished job returned by `not_cached_query` query"
+
+                if job.finished_at < include_to_cache_before:
+                    if cache_last_finished:
+                        cache_last_finished = max(job.finished_at, cache_last_finished)
+                    else:
+                        cache_last_finished = job.finished_at
+                    cached_run_times[job.cluster_name].increase_by(job_run_time)
+
+        if cache_last_finished:
+            # Cache should be updated
+            values = {
+                "owner": owner,
+                "last_finished": cache_last_finished,
+                "payload": {
+                    cluster_name: job_run_entry.to_primitive()
+                    for cluster_name, job_run_entry in cached_run_times.items()
+                },
+            }
+            if cache_record:
+                query = (
+                    self._tables.jobs_runtime_cache.update()
+                    .values(values)
+                    .where(self._tables.jobs_runtime_cache.c.owner == owner)
+                )
+            else:
+                query = self._tables.jobs_runtime_cache.insert().values(values)
+            try:
+                await self._execute(query)
+            except UniqueViolationError:
+                # Parallel write to cache, we can safely ignore
+                pass
+
+        return {
+            cluster_name: run_time_entry.to_aggregated_run_time()
+            for cluster_name, run_time_entry in aggregated_run_times.items()
+        }
 
 
 class JobFilterClauseBuilder:

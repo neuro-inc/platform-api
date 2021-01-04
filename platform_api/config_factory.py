@@ -20,12 +20,12 @@ from .config import (
     DatabaseConfig,
     JobPolicyEnforcerConfig,
     JobsConfig,
+    JobsSchedulerConfig,
     NotificationsConfig,
     OAuthConfig,
     PlatformConfig,
     PostgresConfig,
     ServerConfig,
-    SSHAuthConfig,
     ZipkinConfig,
 )
 from .orchestrator.kube_client import KubeClientAuthType
@@ -48,8 +48,11 @@ class EnvironConfigFactory:
         env_prefix = self._environ.get("NP_ENV_PREFIX", Config.env_prefix)
         auth = self.create_auth()
         jobs = self.create_jobs(orphaned_job_owner=auth.service_name)
+        api_base_url = URL(self._environ["NP_API_URL"])
         admin_url = URL(self._environ["NP_ADMIN_URL"])
         config_url = URL(self._environ["NP_PLATFORM_CONFIG_URI"])
+        sentry_url = self._environ.get("NP_SENTRY_URL", Config.sentry_url)
+        cluster_name = self._environ.get("NP_CLUSTER_NAME", Config.cluster_name)
         return Config(
             server=self.create_server(),
             database=self.create_database(),
@@ -59,10 +62,14 @@ class EnvironConfigFactory:
             env_prefix=env_prefix,
             jobs=jobs,
             job_policy_enforcer=self.create_job_policy_enforcer(),
+            scheduler=self.create_job_scheduler(),
             notifications=self.create_notifications(),
             cors=self.create_cors(),
             config_url=config_url,
             admin_url=admin_url,
+            api_base_url=api_base_url,
+            sentry_url=sentry_url,
+            cluster_name=cluster_name,
         )
 
     def create_cluster(self, name: str) -> ClusterConfig:
@@ -77,7 +84,10 @@ class EnvironConfigFactory:
     def create_jobs(self, *, orphaned_job_owner: str) -> JobsConfig:
         return JobsConfig(
             deletion_delay_s=int(
-                self._environ.get("NP_K8S_JOB_DELETION_DELAY", 60 * 60 * 24)  # one day
+                self._environ.get("NP_K8S_JOB_DELETION_DELAY", 15 * 60)  # 15 minutes
+            ),
+            image_pull_error_delay_s=int(
+                self._environ.get("NP_K8S_JOB_IMAGE_PULL_DELAY", 60)  # 1 minute
             ),
             orphaned_job_owner=orphaned_job_owner,
             jobs_ingress_class=self._environ.get(
@@ -98,16 +108,20 @@ class EnvironConfigFactory:
             ),
         )
 
-    def create_ssh_auth(self) -> SSHAuthConfig:
-        platform = self.create_platform()
-        auth = self.create_auth()
-        log_fifo = Path(self._environ["NP_LOG_FIFO"])
-        jobs_namespace = self._environ.get("NP_K8S_NS", SSHAuthConfig.jobs_namespace)
-        return SSHAuthConfig(
-            platform=platform,
-            auth=auth,
-            log_fifo=log_fifo,
-            jobs_namespace=jobs_namespace,
+    def create_job_scheduler(self) -> JobsSchedulerConfig:
+        return JobsSchedulerConfig(
+            run_quantum_sec=float(
+                self._environ.get("RUN_QUANTUM_SEC")
+                or JobsSchedulerConfig.run_quantum_sec
+            ),
+            max_suspended_time_sec=float(
+                self._environ.get("MAX_SUSPENDED_TIME_SEC")
+                or JobsSchedulerConfig.max_suspended_time_sec
+            ),
+            is_waiting_min_time_sec=float(
+                self._environ.get("IS_WAITING_MIN_TIME_SEC")
+                or JobsSchedulerConfig.is_waiting_min_time_sec
+            ),
         )
 
     def create_server(self) -> ServerConfig:
@@ -195,7 +209,6 @@ class EnvironConfigFactory:
             jobs_domain_name_template=self._environ[
                 "NP_K8S_JOBS_INGRESS_DOMAIN_NAME_TEMPLATE"
             ],
-            ssh_auth_server=self._environ["NP_K8S_SSH_AUTH_INGRESS_DOMAIN_NAME"],
             resource_pool_types=pool_types,
             node_label_gpu=self._environ.get("NP_K8S_NODE_LABEL_GPU"),
             node_label_preemptible=self._environ.get("NP_K8S_NODE_LABEL_PREEMPTIBLE"),
@@ -217,7 +230,13 @@ class EnvironConfigFactory:
     def create_database(self) -> DatabaseConfig:
         redis = self.create_redis()
         postgres = self.create_postgres()
-        return DatabaseConfig(redis=redis, postgres=postgres)
+        return DatabaseConfig(
+            postgres_enabled=self._get_bool(
+                "NP_DB_POSTGRES_ENABLED", DatabaseConfig.postgres_enabled
+            ),
+            redis=redis,
+            postgres=postgres,
+        )
 
     def create_redis(self) -> Optional[RedisConfig]:
         uri = self._environ.get("NP_DB_REDIS_URI")
@@ -288,9 +307,11 @@ class EnvironConfigFactory:
         base_url = URL(self._environ["NP_API_URL"])
         return IngressConfig(
             storage_url=base_url / "storage",
+            blob_storage_url=base_url / "blob",
             monitoring_url=base_url / "jobs",
             secrets_url=base_url / "secrets",
             metrics_url=base_url / "metrics",
+            disks_url=base_url / "disk",
         )
 
     def create_notifications(self) -> NotificationsConfig:
@@ -342,7 +363,7 @@ class EnvironConfigFactory:
         script_path = str(parent_path / "alembic")
         config = AlembicConfig(ini_path)
         config.set_main_option("script_location", script_path)
-        config.set_main_option("sqlalchemy.url", postgres_dsn)
+        config.set_main_option("sqlalchemy.url", postgres_dsn.replace("%", "%%"))
         if redis_url:
             config.set_main_option("redis_url", redis_url)
         return config

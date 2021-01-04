@@ -246,9 +246,9 @@ class ClusterRegistry:
 
     async def cleanup(self, keep_clusters: Sequence[ClusterConfig]) -> None:
         all_cluster_names = set(self._records.keys())
-        keep_clusters_with_names = set(
+        keep_clusters_with_names = {
             cluster_config.name for cluster_config in keep_clusters
-        )
+        }
         for cluster_for_removal in all_cluster_names - keep_clusters_with_names:
             try:
                 await self.remove(cluster_for_removal)

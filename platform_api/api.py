@@ -6,12 +6,16 @@ from typing import Any, AsyncIterator, Awaitable, Callable, Dict, Sequence
 import aiohttp.web
 import aiohttp_cors
 import aiozipkin
+import pkg_resources
+import sentry_sdk
 from aiohttp.web import HTTPUnauthorized
 from aiohttp_security import check_permission
 from neuro_auth_client import AuthClient, Permission
 from neuro_auth_client.security import AuthScheme, setup_security
 from notifications_client import Client as NotificationsClient
 from platform_logging import init_logging
+from sentry_sdk import set_tag
+from sentry_sdk.integrations.aiohttp import AioHttpIntegration
 
 from platform_api.orchestrator.job_policy_enforcer import (
     JobPolicyEnforcePoller,
@@ -30,7 +34,7 @@ from .handlers.tags_handler import TagsHandler
 from .kube_cluster import KubeCluster
 from .orchestrator.job_request import JobException
 from .orchestrator.jobs_poller import JobsPoller
-from .orchestrator.jobs_service import JobsService, JobsServiceException
+from .orchestrator.jobs_service import JobsScheduler, JobsService, JobsServiceException
 from .orchestrator.jobs_storage import (
     JobsStorage,
     PostgresJobsStorage,
@@ -138,10 +142,12 @@ class ApiHandler:
             "name": cluster_config.name,
             "registry_url": str(cluster_config.registry.url),
             "storage_url": str(cluster_config.ingress.storage_url),
+            "blob_storage_url": str(cluster_config.ingress.blob_storage_url),
             "users_url": str(self._config.auth.public_endpoint_url),
             "monitoring_url": str(cluster_config.ingress.monitoring_url),
             "secrets_url": str(cluster_config.ingress.secrets_url),
             "metrics_url": str(cluster_config.ingress.metrics_url),
+            "disks_url": str(cluster_config.ingress.disks_url),
             "resource_presets": presets,
         }
 
@@ -150,7 +156,10 @@ class ApiHandler:
             "name": preset.name,
             "cpu": preset.cpu,
             "memory_mb": preset.memory_mb,
-            "is_preemptible": preset.is_preemptible,
+            "scheduler_enabled": preset.scheduler_enabled,
+            "preemptible_node": preset.preemptible_node,
+            "is_preemptible": preset.scheduler_enabled,
+            "is_preemptible_node_required": preset.preemptible_node,
         }
         if preset.gpu is not None:
             payload["gpu"] = preset.gpu
@@ -247,6 +256,15 @@ async def create_tracer(config: Config) -> aiozipkin.Tracer:
     return tracer
 
 
+package_version = pkg_resources.get_distribution("platform-api").version
+
+
+async def add_version_to_header(
+    request: aiohttp.web.Request, response: aiohttp.web.StreamResponse
+) -> None:
+    response.headers["X-Service-Version"] = f"platform-api/{package_version}"
+
+
 async def create_app(
     config: Config, clusters: Sequence[ClusterConfig] = ()
 ) -> aiohttp.web.Application:
@@ -258,6 +276,21 @@ async def create_app(
     async def _init_app(app: aiohttp.web.Application) -> AsyncIterator[None]:
         async with AsyncExitStack() as exit_stack:
             trace_config = aiozipkin.make_trace_config(tracer)
+
+            logger.info("Initializing Auth client")
+            auth_client = await exit_stack.enter_async_context(
+                AuthClient(
+                    url=config.auth.server_endpoint_url,
+                    token=config.auth.service_token,
+                    trace_config=trace_config,
+                )
+            )
+            app["jobs_app"]["auth_client"] = auth_client
+            app["stats_app"]["auth_client"] = auth_client
+
+            await setup_security(
+                app=app, auth_client=auth_client, auth_scheme=AuthScheme.BEARER
+            )
 
             logger.info("Initializing Notifications client")
             notifications_client = NotificationsClient(
@@ -291,7 +324,11 @@ async def create_app(
             for cluster in client_clusters:
                 await cluster_registry.replace(cluster)
 
-            if config.database.postgres:
+            if config.database.postgres_enabled:
+                assert config.database.postgres, (
+                    "Postgres config should be available when "
+                    "NP_DB_POSTGRES_ENABLED is set"
+                )
                 logger.info("Initializing Postgres connection pool")
                 postgres_pool = await exit_stack.enter_async_context(
                     create_postgres_pool(config.database.postgres)
@@ -318,6 +355,9 @@ async def create_app(
                 jobs_storage=jobs_storage,
                 jobs_config=config.jobs,
                 notifications_client=notifications_client,
+                scheduler=JobsScheduler(config.scheduler, auth_client=auth_client),
+                auth_client=auth_client,
+                api_base_url=config.api_base_url,
             )
 
             logger.info("Initializing JobsPoller")
@@ -345,20 +385,6 @@ async def create_app(
                 )
             )
 
-            auth_client = await exit_stack.enter_async_context(
-                AuthClient(
-                    url=config.auth.server_endpoint_url,
-                    token=config.auth.service_token,
-                    trace_config=trace_config,
-                )
-            )
-            app["jobs_app"]["auth_client"] = auth_client
-            app["stats_app"]["auth_client"] = auth_client
-
-            await setup_security(
-                app=app, auth_client=auth_client, auth_scheme=AuthScheme.BEARER
-            )
-
             yield
 
     app.cleanup_ctx.append(_init_app)
@@ -384,6 +410,8 @@ async def create_app(
 
     aiozipkin.setup(app, tracer)
     app.middlewares.append(store_span_middleware)
+
+    app.on_response_prepare.append(add_version_to_header)
 
     return app
 
@@ -421,6 +449,13 @@ def main() -> None:
     logging.info("Loaded config: %r", config)
 
     loop = asyncio.get_event_loop()
+
+    sentry_url = config.sentry_url
+    if sentry_url:
+        sentry_sdk.init(dsn=sentry_url, integrations=[AioHttpIntegration()])
+
+    set_tag("cluster", config.cluster_name)
+    set_tag("app", "platformapi")
 
     app = loop.run_until_complete(create_app(config))
     aiohttp.web.run_app(app, host=config.server.host, port=config.server.port)

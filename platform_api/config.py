@@ -1,6 +1,5 @@
 from dataclasses import dataclass, field
 from datetime import timedelta
-from pathlib import Path
 from typing import Optional, Sequence
 
 from alembic.config import Config as AlembicConfig
@@ -74,6 +73,7 @@ class PostgresConfig:
 
 @dataclass(frozen=True)
 class DatabaseConfig:
+    postgres_enabled: bool = False
     redis: Optional[RedisConfig] = None
     postgres: Optional[PostgresConfig] = None
 
@@ -81,6 +81,7 @@ class DatabaseConfig:
 @dataclass(frozen=True)
 class JobsConfig:
     deletion_delay_s: int = 0
+    image_pull_error_delay_s: int = 0
     orphaned_job_owner: str = ""
     jobs_ingress_class: str = "traefik"
     jobs_ingress_oauth_url: URL = URL("https://neu.ro/oauth/authorize")
@@ -88,6 +89,10 @@ class JobsConfig:
     @property
     def deletion_delay(self) -> timedelta:
         return timedelta(seconds=self.deletion_delay_s)
+
+    @property
+    def image_pull_error_delay(self) -> timedelta:
+        return timedelta(seconds=self.image_pull_error_delay_s)
 
 
 @dataclass(frozen=True)
@@ -110,6 +115,29 @@ class CORSConfig:
 
 
 @dataclass(frozen=True)
+class JobsSchedulerConfig:
+    # Minimal time that preepmtible job is guaranteed to run before suspended
+    run_quantum_sec: float = 1 * 60 * 60  # 1h
+    # Time after which scheduler will try to start oldest SUSPENDED task
+    max_suspended_time_sec: float = 2 * 60 * 60  # 2h
+    # Time after which materialized job not running job considered as waiting
+    # for resources
+    is_waiting_min_time_sec: float = 5 * 60  # 5m
+
+    @property
+    def run_quantum(self) -> timedelta:
+        return timedelta(seconds=self.run_quantum_sec)
+
+    @property
+    def max_suspended_time(self) -> timedelta:
+        return timedelta(seconds=self.max_suspended_time_sec)
+
+    @property
+    def is_waiting_min_time(self) -> timedelta:
+        return timedelta(seconds=self.is_waiting_min_time_sec)
+
+
+@dataclass(frozen=True)
 class Config:
     server: ServerConfig
 
@@ -119,6 +147,7 @@ class Config:
     notifications: NotificationsConfig
     job_policy_enforcer: JobPolicyEnforcerConfig
 
+    api_base_url: URL
     config_url: URL
     admin_url: URL
 
@@ -127,20 +156,16 @@ class Config:
     jobs: JobsConfig = JobsConfig()
     cors: CORSConfig = CORSConfig()
 
+    scheduler: JobsSchedulerConfig = JobsSchedulerConfig()
+
     # used for generating environment variable names and
     # sourcing them inside containers.
     env_prefix: str = "NP"  # stands for Neuromation Platform
+
+    sentry_url: str = ""
+    cluster_name: str = ""
 
 
 @dataclass(frozen=True)
 class PlatformConfig:
     server_endpoint_url: URL
-
-
-@dataclass(frozen=True)
-class SSHAuthConfig:
-    platform: PlatformConfig
-    auth: AuthConfig
-    log_fifo: Path
-    env_prefix: str = "NP"
-    jobs_namespace: str = "default"

@@ -17,13 +17,13 @@ from platform_api.orchestrator.job import (
     JobRestartPolicy,
     JobStatusHistory,
     JobStatusItem,
+    JobStatusReason,
     maybe_job_id,
 )
 from platform_api.orchestrator.job_request import (
     Container,
     ContainerHTTPServer,
     ContainerResources,
-    ContainerSSHServer,
     ContainerTPUResource,
     ContainerVolume,
     ContainerVolumeFactory,
@@ -336,7 +336,48 @@ class TestContainerBuilder:
             ],
             resources=ContainerResources(cpu=0.1, memory_mb=128, gpu=1, shm=None),
             http_server=ContainerHTTPServer(port=80, health_check_path="/"),
-            ssh_server=None,
+            tty=False,
+        )
+
+    def test_from_job_payload_build(self) -> None:
+        storage_config = StorageConfig(host_mount_path=PurePath("/tmp"))
+        payload = {
+            "container": {
+                "image": "testimage",
+                "entrypoint": "testentrypoint",
+                "command": "testcommand",
+                "working_dir": "/working/dir",
+                "env": {"TESTVAR": "testvalue"},
+                "resources": {"cpu": 0.1, "memory_mb": 128, "gpu": 1},
+                "http": {"port": 80},
+                "volumes": [
+                    {
+                        "src_storage_uri": "storage://test-cluster/path/to/dir",
+                        "dst_path": "/container/path",
+                        "read_only": True,
+                    }
+                ],
+            }
+        }
+        container = create_container_from_payload(
+            payload, storage_config=storage_config
+        )
+        assert container == Container(
+            image="testimage",
+            entrypoint="testentrypoint",
+            command="testcommand",
+            working_dir="/working/dir",
+            env={"TESTVAR": "testvalue"},
+            volumes=[
+                ContainerVolume(
+                    uri=URL("storage://test-cluster/path/to/dir"),
+                    src_path=PurePath("/tmp/path/to/dir"),
+                    dst_path=PurePath("/container/path"),
+                    read_only=True,
+                )
+            ],
+            resources=ContainerResources(cpu=0.1, memory_mb=128, gpu=1, shm=None),
+            http_server=ContainerHTTPServer(port=80, health_check_path="/"),
             tty=False,
         )
 
@@ -381,43 +422,6 @@ class TestContainerBuilder:
                 memory_mb=128,
                 tpu=ContainerTPUResource(type="v2-8", software_version="1.14"),
             ),
-        )
-
-    def test_from_payload_build_with_ssh(self) -> None:
-        storage_config = StorageConfig(host_mount_path=PurePath("/tmp"))
-        payload = {
-            "image": "testimage",
-            "command": "testcommand",
-            "env": {"TESTVAR": "testvalue"},
-            "resources": {"cpu": 0.1, "memory_mb": 128, "gpu": 1},
-            "http": {"port": 80},
-            "ssh": {"port": 22},
-            "volumes": [
-                {
-                    "src_storage_uri": "storage://test-cluster/path/to/dir",
-                    "dst_path": "/container/path",
-                    "read_only": True,
-                }
-            ],
-        }
-        container = create_container_from_payload(
-            payload, storage_config=storage_config
-        )
-        assert container == Container(
-            image="testimage",
-            command="testcommand",
-            env={"TESTVAR": "testvalue"},
-            volumes=[
-                ContainerVolume(
-                    uri=URL("storage://test-cluster/path/to/dir"),
-                    src_path=PurePath("/tmp/path/to/dir"),
-                    dst_path=PurePath("/container/path"),
-                    read_only=True,
-                )
-            ],
-            resources=ContainerResources(cpu=0.1, memory_mb=128, gpu=1, shm=None),
-            http_server=ContainerHTTPServer(port=80, health_check_path="/"),
-            ssh_server=ContainerSSHServer(port=22),
         )
 
     def test_from_payload_build_with_shm_false(self) -> None:
@@ -478,7 +482,6 @@ class TestContainerBuilder:
             volumes=[],
             resources=ContainerResources(cpu=0.1, memory_mb=128, gpu=1, shm=None),
             http_server=ContainerHTTPServer(port=80, health_check_path="/"),
-            ssh_server=None,
             tty=True,
         )
 
@@ -502,7 +505,6 @@ def job_request_payload() -> Dict[str, Any]:
                 }
             ],
             "http_server": None,
-            "ssh_server": None,
             "tty": False,
         },
     }
@@ -515,7 +517,7 @@ def job_payload(job_request_payload: Any) -> Dict[str, Any]:
         "id": "testjob",
         "request": job_request_payload,
         "status": "succeeded",
-        "is_deleted": True,
+        "materialized": False,
         "finished_at": finished_at_str,
         "statuses": [{"status": "failed", "transition_time": finished_at_str}],
     }
@@ -550,7 +552,10 @@ class TestJobRecord:
         self, mock_orchestrator: MockOrchestrator, job_request: JobRequest
     ) -> None:
         record = JobRecord.create(
-            status=JobStatus.FAILED, request=job_request, cluster_name="test-cluster"
+            status=JobStatus.FAILED,
+            request=job_request,
+            cluster_name="test-cluster",
+            materialized=True,
         )
         assert record.finished_at
         assert record.should_be_deleted(delay=timedelta(0))
@@ -572,25 +577,11 @@ class TestJob:
         )
 
     @pytest.fixture
-    def job_request_with_ssh_and_http(self) -> JobRequest:
+    def job_request_with_http(self) -> JobRequest:
         container = Container(
             image="testimage",
             resources=ContainerResources(cpu=1, memory_mb=128),
             http_server=ContainerHTTPServer(port=1234),
-            ssh_server=ContainerSSHServer(port=4321),
-        )
-        return JobRequest(
-            job_id="testjob",
-            container=container,
-            description="Description of the testjob",
-        )
-
-    @pytest.fixture
-    def job_request_with_ssh(self) -> JobRequest:
-        container = Container(
-            image="testimage",
-            resources=ContainerResources(cpu=1, memory_mb=128),
-            ssh_server=ContainerSSHServer(port=4321),
         )
         return JobRequest(
             job_id="testjob",
@@ -692,7 +683,7 @@ class TestJob:
         current_datetime_factory = self._mocked_datetime_factory
 
         def _f(
-            job_status_history: JobStatusHistory, is_preemptible: bool = False
+            job_status_history: JobStatusHistory, scheduler_enabled: bool = False
         ) -> Job:
             return Job(
                 storage_config=mock_orchestrator.storage_config,
@@ -702,7 +693,7 @@ class TestJob:
                     cluster_name="test-cluster",
                     status_history=job_status_history,
                     current_datetime_factory=current_datetime_factory,
-                    is_preemptible=is_preemptible,
+                    scheduler_enabled=scheduler_enabled,
                 ),
                 current_datetime_factory=current_datetime_factory,
             )
@@ -721,14 +712,14 @@ class TestJob:
         expected_timedelta = timedelta(0)
         assert job.get_run_time() == expected_timedelta
 
-    def test_job_get_run_time_pending_job_preemptible(
+    def test_job_get_run_time_pending_job_scheduled(
         self, mock_orchestrator: MockOrchestrator, job_factory: Callable[..., Job]
     ) -> None:
         time_now = self._mocked_datetime_factory()
         started_at = time_now - timedelta(minutes=30)
         items = [JobStatusItem.create(JobStatus.PENDING, transition_time=started_at)]
 
-        job = job_factory(JobStatusHistory(items), is_preemptible=True)
+        job = job_factory(JobStatusHistory(items), scheduler_enabled=True)
         # job is still pending
         expected_timedelta = timedelta(0)
         assert job.get_run_time() == expected_timedelta
@@ -752,7 +743,7 @@ class TestJob:
 
         assert job.get_run_time() == running_delta
 
-    def test_job_get_run_time_running_job_preemptible(
+    def test_job_get_run_time_running_job_scheduled(
         self, mock_orchestrator: MockOrchestrator, job_factory: Callable[..., Job]
     ) -> None:
         time_now = self._mocked_datetime_factory()
@@ -776,7 +767,7 @@ class TestJob:
             JobStatusItem.create(JobStatus.PENDING, transition_time=pending2_at),
             JobStatusItem.create(JobStatus.RUNNING, transition_time=running2_at),
         ]
-        job = job_factory(JobStatusHistory(items), is_preemptible=True)
+        job = job_factory(JobStatusHistory(items), scheduler_enabled=True)
 
         assert job.get_run_time() == running_sum_delta
 
@@ -810,7 +801,7 @@ class TestJob:
     @pytest.mark.parametrize(
         "terminated_status", [JobStatus.SUCCEEDED, JobStatus.FAILED]
     )
-    def test_job_get_run_time_terminated_job_preemptible(
+    def test_job_get_run_time_terminated_job_scheduled(
         self,
         mock_orchestrator: MockOrchestrator,
         job_factory: Callable[..., Job],
@@ -837,7 +828,7 @@ class TestJob:
             JobStatusItem.create(JobStatus.RUNNING, transition_time=running2_at),
             JobStatusItem.create(terminated_status, transition_time=terminated_at),
         ]
-        job = job_factory(JobStatusHistory(items), is_preemptible=True)
+        job = job_factory(JobStatusHistory(items), scheduler_enabled=True)
 
         assert job.get_run_time() == running_sum_delta
 
@@ -899,53 +890,16 @@ class TestJob:
         assert job.http_url == "https://testjob.jobs"
         assert job.http_url_named == "https://test-job-name--owner.jobs"
 
-    def test_ssh_url(
-        self, mock_orchestrator: MockOrchestrator, job_request_with_ssh: JobRequest
-    ) -> None:
-        job = Job(
-            storage_config=mock_orchestrator.storage_config,
-            orchestrator_config=mock_orchestrator.config,
-            record=JobRecord.create(
-                request=job_request_with_ssh, cluster_name="test-cluster"
-            ),
-        )
-        assert job.ssh_server == "ssh://nobody@ssh-auth:22"
-
-    def test_no_ssh(
-        self, mock_orchestrator: MockOrchestrator, job_request: JobRequest
-    ) -> None:
-        job = Job(
-            storage_config=mock_orchestrator.storage_config,
-            orchestrator_config=mock_orchestrator.config,
-            record=JobRecord.create(request=job_request, cluster_name="test-cluster"),
-        )
-        assert job.ssh_server == "ssh://nobody@ssh-auth:22"
-
-    def test_http_url_and_ssh(
+    def test_http_url_named(
         self,
         mock_orchestrator: MockOrchestrator,
-        job_request_with_ssh_and_http: JobRequest,
+        job_request_with_http: JobRequest,
     ) -> None:
         job = Job(
             storage_config=mock_orchestrator.storage_config,
             orchestrator_config=mock_orchestrator.config,
             record=JobRecord.create(
-                request=job_request_with_ssh_and_http, cluster_name="test-cluster"
-            ),
-        )
-        assert job.http_url == "http://testjob.jobs"
-        assert job.ssh_server == "ssh://nobody@ssh-auth:22"
-
-    def test_http_url_and_ssh_named(
-        self,
-        mock_orchestrator: MockOrchestrator,
-        job_request_with_ssh_and_http: JobRequest,
-    ) -> None:
-        job = Job(
-            storage_config=mock_orchestrator.storage_config,
-            orchestrator_config=mock_orchestrator.config,
-            record=JobRecord.create(
-                request=job_request_with_ssh_and_http,
+                request=job_request_with_http,
                 cluster_name="test-cluster",
                 name="test-job-name",
                 owner="owner",
@@ -953,7 +907,6 @@ class TestJob:
         )
         assert job.http_url == "http://testjob.jobs"
         assert job.http_url_named == "http://test-job-name--owner.jobs"
-        assert job.ssh_server == "ssh://nobody@ssh-auth:22"
 
     def test_to_primitive(
         self, mock_orchestrator: MockOrchestrator, job_request: JobRequest
@@ -966,12 +919,13 @@ class TestJob:
                 cluster_name="test-cluster",
                 owner="testuser",
                 name="test-job-name",
-                is_preemptible=True,
+                scheduler_enabled=False,
+                preemptible_node=True,
                 schedule_timeout=15,
             ),
         )
         job.status = JobStatus.FAILED
-        job.is_deleted = True
+        job.materialized = False
         assert job.finished_at
         expected_finished_at = job.finished_at.isoformat()
         assert job.to_primitive() == {
@@ -981,7 +935,7 @@ class TestJob:
             "cluster_name": "test-cluster",
             "request": job_request.to_primitive(),
             "status": "failed",
-            "is_deleted": True,
+            "materialized": False,
             "finished_at": expected_finished_at,
             "statuses": [
                 {
@@ -997,9 +951,12 @@ class TestJob:
                     "description": None,
                 },
             ],
-            "is_preemptible": True,
+            "scheduler_enabled": False,
+            "preemptible_node": True,
+            "pass_config": False,
             "schedule_timeout": 15,
             "restart_policy": "never",
+            "privileged": False,
         }
 
     def test_to_primitive_with_max_run_time(
@@ -1028,11 +985,14 @@ class TestJob:
                     "description": None,
                 }
             ],
-            "is_deleted": False,
+            "materialized": False,
             "finished_at": None,
-            "is_preemptible": False,
+            "scheduler_enabled": False,
+            "preemptible_node": False,
+            "pass_config": False,
             "max_run_time_minutes": 500,
             "restart_policy": "never",
+            "privileged": False,
         }
 
     def test_to_primitive_with_tags(
@@ -1048,6 +1008,21 @@ class TestJob:
         primitive = job.to_primitive()
         assert primitive["tags"] == ["t1", "t2"]
 
+    def test_to_primitive_with_preset_name(
+        self, mock_orchestrator: MockOrchestrator, job_request: JobRequest
+    ) -> None:
+        job = Job(
+            storage_config=mock_orchestrator.storage_config,
+            orchestrator_config=mock_orchestrator.config,
+            record=JobRecord.create(
+                request=job_request,
+                cluster_name="test-cluster",
+                preset_name="cpu-small",
+            ),
+        )
+        primitive = job.to_primitive()
+        assert primitive["preset_name"] == "cpu-small"
+
     def test_from_primitive(
         self, mock_orchestrator: MockOrchestrator, job_request_payload: Dict[str, Any]
     ) -> None:
@@ -1056,7 +1031,7 @@ class TestJob:
             "owner": "testuser",
             "request": job_request_payload,
             "status": "succeeded",
-            "is_deleted": True,
+            "materialized": True,
             "finished_at": datetime.now(timezone.utc).isoformat(),
         }
         job = Job.from_primitive(
@@ -1064,13 +1039,14 @@ class TestJob:
         )
         assert job.id == "testjob"
         assert job.status == JobStatus.SUCCEEDED
-        assert job.is_deleted
+        assert job.materialized
         assert job.finished_at
         assert job.description == "Description of the testjob"
         assert not job.tags
         assert job.name is None
         assert job.owner == "testuser"
-        assert not job.is_preemptible
+        assert not job.scheduler_enabled
+        assert not job.preemptible_node
         assert job.max_run_time_minutes is None
         assert job.restart_policy == JobRestartPolicy.NEVER
 
@@ -1083,7 +1059,7 @@ class TestJob:
             "owner": "testuser",
             "request": job_request_payload,
             "status": "succeeded",
-            "is_deleted": True,
+            "materialized": True,
             "finished_at": datetime.now(timezone.utc).isoformat(),
         }
         job = Job.from_primitive(
@@ -1091,6 +1067,23 @@ class TestJob:
         )
         assert job.id == "testjob"
         assert job.name == "test-job-name"
+
+    def test_from_primitive_with_preset_name(
+        self, mock_orchestrator: MockOrchestrator, job_request_payload: Dict[str, Any]
+    ) -> None:
+        payload = {
+            "id": "testjob",
+            "preset_name": "cpu-small",
+            "owner": "testuser",
+            "request": job_request_payload,
+            "status": "succeeded",
+            "materialized": True,
+            "finished_at": datetime.now(timezone.utc).isoformat(),
+        }
+        job = Job.from_primitive(
+            mock_orchestrator.storage_config, mock_orchestrator.config, payload
+        )
+        assert job.preset_name == "cpu-small"
 
     def test_from_primitive_with_tags(
         self, mock_orchestrator: MockOrchestrator, job_request_payload: Dict[str, Any]
@@ -1102,7 +1095,7 @@ class TestJob:
             "tags": tags,
             "request": job_request_payload,
             "status": "succeeded",
-            "is_deleted": True,
+            "materialized": True,
             "finished_at": datetime.now(timezone.utc).isoformat(),
         }
         job = Job.from_primitive(
@@ -1119,21 +1112,23 @@ class TestJob:
             "id": "testjob",
             "request": job_request_payload,
             "status": "succeeded",
-            "is_deleted": True,
+            "materialized": True,
             "finished_at": finished_at_str,
             "statuses": [{"status": "failed", "transition_time": finished_at_str}],
-            "is_preemptible": True,
+            "scheduler_enabled": True,
+            "preemptible_node": True,
         }
         job = Job.from_primitive(
             mock_orchestrator.storage_config, mock_orchestrator.config, payload
         )
         assert job.id == "testjob"
         assert job.status == JobStatus.FAILED
-        assert job.is_deleted
+        assert job.materialized
         assert job.finished_at
         assert job.description == "Description of the testjob"
         assert job.owner == "compute"
-        assert job.is_preemptible
+        assert job.scheduler_enabled
+        assert job.preemptible_node
 
     def test_from_primitive_with_cluster_name(
         self, mock_orchestrator: MockOrchestrator, job_request_payload: Dict[str, Any]
@@ -1144,7 +1139,7 @@ class TestJob:
             "cluster_name": "testcluster",
             "request": job_request_payload,
             "status": "succeeded",
-            "is_deleted": True,
+            "materialized": True,
             "finished_at": datetime.now(timezone.utc).isoformat(),
         }
         job = Job.from_primitive(
@@ -1152,13 +1147,14 @@ class TestJob:
         )
         assert job.id == "testjob"
         assert job.status == JobStatus.SUCCEEDED
-        assert job.is_deleted
+        assert job.materialized
         assert job.finished_at
         assert job.description == "Description of the testjob"
         assert job.name is None
         assert job.owner == "testuser"
         assert job.cluster_name == "testcluster"
-        assert not job.is_preemptible
+        assert not job.scheduler_enabled
+        assert not job.preemptible_node
 
     def test_from_primitive_with_entrypoint_without_command(
         self, mock_orchestrator: MockOrchestrator, job_request_payload: Dict[str, Any]
@@ -1171,7 +1167,7 @@ class TestJob:
             "owner": "testuser",
             "request": job_request_payload,
             "status": "succeeded",
-            "is_deleted": True,
+            "materialized": True,
             "finished_at": datetime.now(timezone.utc).isoformat(),
         }
         job = Job.from_primitive(
@@ -1191,7 +1187,7 @@ class TestJob:
             "owner": "testuser",
             "request": job_request_payload,
             "status": "succeeded",
-            "is_deleted": True,
+            "materialized": True,
             "finished_at": datetime.now(timezone.utc).isoformat(),
         }
         job = Job.from_primitive(
@@ -1211,7 +1207,7 @@ class TestJob:
             "owner": "testuser",
             "request": job_request_payload,
             "status": "succeeded",
-            "is_deleted": True,
+            "materialized": True,
             "finished_at": datetime.now(timezone.utc).isoformat(),
         }
         job = Job.from_primitive(
@@ -1231,7 +1227,7 @@ class TestJob:
             "owner": "testuser",
             "request": job_request_payload,
             "status": "succeeded",
-            "is_deleted": True,
+            "materialized": True,
             "finished_at": datetime.now(timezone.utc).isoformat(),
         }
         job = Job.from_primitive(
@@ -1249,7 +1245,7 @@ class TestJob:
             "owner": "testuser",
             "request": job_request_payload,
             "status": "succeeded",
-            "is_deleted": True,
+            "materialized": True,
             "finished_at": datetime.now(timezone.utc).isoformat(),
             "max_run_time_minutes": 100,
         }
@@ -1267,7 +1263,7 @@ class TestJob:
             "owner": "testuser",
             "request": job_request_payload,
             "status": "succeeded",
-            "is_deleted": True,
+            "materialized": True,
             "finished_at": datetime.now(timezone.utc).isoformat(),
             "max_run_time_minutes": None,
         }
@@ -1340,10 +1336,13 @@ class TestJob:
             "cluster_name": "testcluster",
             "status": current_status_item["status"],
             "statuses": [current_status_item],
-            "is_deleted": "False",
+            "materialized": "False",
             "finished_at": finished_at_str,
-            "is_preemptible": False,
+            "scheduler_enabled": False,
+            "preemptible_node": False,
+            "pass_config": False,
             "restart_policy": str(JobRestartPolicy.ALWAYS),
+            "privileged": False,
         }
         actual = Job.to_primitive(
             Job.from_primitive(
@@ -1422,29 +1421,6 @@ class TestJobRequest:
         )
         assert request.to_primitive() == job_request_payload
 
-    def test_to_primitive_with_ssh(self, job_request_payload: Dict[str, Any]) -> None:
-        job_request_payload["container"]["ssh_server"] = {"port": 678}
-
-        container = Container(
-            image="testimage",
-            env={"testvar": "testval"},
-            resources=ContainerResources(cpu=1, memory_mb=128),
-            volumes=[
-                ContainerVolume(
-                    uri=URL("storage://path"),
-                    src_path=PurePath("/src/path"),
-                    dst_path=PurePath("/dst/path"),
-                )
-            ],
-            ssh_server=ContainerSSHServer(678),
-        )
-        request = JobRequest(
-            job_id="testjob",
-            description="Description of the testjob",
-            container=container,
-        )
-        assert request.to_primitive() == job_request_payload
-
     def test_to_primitive_with_tty(self, job_request_payload: Dict[str, Any]) -> None:
         job_request_payload["container"]["tty"] = True
 
@@ -1508,26 +1484,6 @@ class TestJobRequest:
         )
         assert request.container == expected_container
 
-    def test_from_primitive_with_ssh(self, job_request_payload: Dict[str, Any]) -> None:
-        job_request_payload["container"]["ssh_server"] = {"port": 678}
-        request = JobRequest.from_primitive(job_request_payload)
-        assert request.job_id == "testjob"
-        assert request.description == "Description of the testjob"
-        expected_container = Container(
-            image="testimage",
-            env={"testvar": "testval"},
-            resources=ContainerResources(cpu=1, memory_mb=128),
-            volumes=[
-                ContainerVolume(
-                    uri=URL("storage://path"),
-                    src_path=PurePath("/src/path"),
-                    dst_path=PurePath("/dst/path"),
-                )
-            ],
-            ssh_server=ContainerSSHServer(port=678),
-        )
-        assert request.container == expected_container
-
     def test_from_primitive_with_shm(
         self, job_request_payload_with_shm: Dict[str, Any]
     ) -> None:
@@ -1559,13 +1515,6 @@ class TestJobRequest:
             JobRequest.from_primitive(job_request_payload_with_shm)
         )
         assert actual == job_request_payload_with_shm
-
-    def test_to_and_from_primitive_with_ssh(
-        self, job_request_payload: Dict[str, Any]
-    ) -> None:
-        job_request_payload["container"]["ssh_server"] = {"port": 678}
-        actual = JobRequest.to_primitive(JobRequest.from_primitive(job_request_payload))
-        assert actual == job_request_payload
 
     def test_to_and_from_primitive_with_tpu(
         self, job_request_payload: Dict[str, Any]
@@ -1653,17 +1602,6 @@ class TestContainerHTTPServer:
             "health_check_path": "/path",
             "requires_auth": False,
         }
-
-
-class TestContainerSSHServer:
-    def test_from_primitive(self) -> None:
-        payload = {"port": 1234}
-        server = ContainerSSHServer.from_primitive(payload)
-        assert server == ContainerSSHServer(port=1234)
-
-    def test_to_primitive(self) -> None:
-        server = ContainerSSHServer(port=1234)
-        assert server.to_primitive() == {"port": 1234}
 
 
 class TestJobStatusItem:
@@ -1827,6 +1765,27 @@ class TestJobStatusHistory:
         history.current = new_pending_item
         assert history.current == pending_item
         assert history.current.transition_time == pending_item.transition_time
+
+    def test_restarts_count(self) -> None:
+        pending_item = JobStatusItem.create(JobStatus.PENDING)
+        running_item = JobStatusItem.create(
+            JobStatus.RUNNING,
+            transition_time=pending_item.transition_time + timedelta(days=1),
+        )
+
+        items = [pending_item, running_item]
+        history = JobStatusHistory(items=items)
+        assert history.restart_count == 0
+
+        restarting_item = JobStatusItem.create(
+            JobStatus.RUNNING, reason=JobStatusReason.RESTARTING
+        )
+        history.current = restarting_item
+
+        assert history.restart_count == 1
+        history.current = running_item
+        history.current = restarting_item
+        assert history.restart_count == 2
 
 
 class TestAggregatedRunTime:

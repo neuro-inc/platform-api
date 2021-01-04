@@ -19,14 +19,19 @@ logger = logging.getLogger(__name__)
 @dataclass(frozen=True)
 class UserCluster:
     name: str
-    quota: AggregatedRunTime = field(default=DEFAULT_QUOTA_NO_RESTRICTIONS)
+    runtime_quota: AggregatedRunTime = field(default=DEFAULT_QUOTA_NO_RESTRICTIONS)
+    jobs_quota: Optional[int] = None
 
     def has_quota(self) -> bool:
-        return self.quota != DEFAULT_QUOTA_NO_RESTRICTIONS
+        return self.runtime_quota != DEFAULT_QUOTA_NO_RESTRICTIONS
 
     @classmethod
     def create_from_auth_cluster(cls, cluster: AuthCluster) -> "UserCluster":
-        return cls(name=cluster.name, quota=AggregatedRunTime.from_quota(cluster.quota))
+        return cls(
+            name=cluster.name,
+            jobs_quota=cluster.quota.total_running_jobs,
+            runtime_quota=AggregatedRunTime.from_quota(cluster.quota),
+        )
 
 
 @dataclass(frozen=True)
@@ -44,9 +49,11 @@ class User:
     def __post_init__(self) -> None:
         if self.clusters:
             object.__setattr__(self, "cluster_name", self.clusters[0].name)
-            object.__setattr__(self, "quota", self.clusters[0].quota)
+            object.__setattr__(self, "quota", self.clusters[0].runtime_quota)
         else:
-            self.clusters.append(UserCluster(name=self.cluster_name, quota=self.quota))
+            self.clusters.append(
+                UserCluster(name=self.cluster_name, runtime_quota=self.quota)
+            )
 
     # NOTE: left this for backward compatibility with existing tests
     def has_quota(self) -> bool:

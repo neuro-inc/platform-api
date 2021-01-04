@@ -60,112 +60,128 @@ def clusters_payload(nfs_storage_payload: Dict[str, Any]) -> List[Dict[str, Any]
                     "node_label_gpu": "cloud.google.com/gke-accelerator",
                     "node_label_preemptible": "cloud.google.com/gke-preemptible",
                     "node_label_job": "platform.neuromation.io/job",
+                    "node_label_node_pool": "platform.neuromation.io/nodepool",
+                    "job_pod_preemptible_toleration_key": (
+                        "platform.neuromation.io/preemptible"
+                    ),
                     "job_pod_priority_class_name": "testpriority",
                 },
                 "job_hostname_template": "{job_id}.jobs.neu.ro",
+                "job_schedule_timeout_s": 60,
+                "job_schedule_scale_up_timeout_s": 120,
+                "resource_presets": [
+                    {"name": "cpu-small", "cpu": 1, "memory_mb": 2048},
+                    {"name": "cpu-large", "cpu": 7, "memory_mb": 49152},
+                    {
+                        "name": "tpu",
+                        "cpu": 7,
+                        "memory_mb": 49152,
+                        "tpu": {"type": "v2-8", "software_version": "1.14"},
+                    },
+                    {
+                        "name": "gpu-small-p",
+                        "cpu": 7.0,
+                        "memory_mb": 52224,
+                        "gpu": 1,
+                        "gpu_model": "nvidia-tesla-k80",
+                    },
+                    {
+                        "name": "gpu-small",
+                        "cpu": 7.0,
+                        "memory_mb": 52224,
+                        "gpu": 1,
+                        "gpu_model": "nvidia-tesla-k80",
+                    },
+                    {
+                        "name": "gpu-large-p",
+                        "cpu": 7.0,
+                        "memory_mb": 52224,
+                        "gpu": 1,
+                        "gpu_model": "nvidia-tesla-v100",
+                    },
+                    {
+                        "name": "gpu-large",
+                        "cpu": 0.1,
+                        "memory_mb": 52224,
+                        "gpu": 1,
+                        "gpu_model": "nvidia-tesla-v100",
+                    },
+                ],
                 "resource_pool_types": [
                     {
+                        "name": "n1-highmem-8",
                         "is_preemptible": False,
                         "min_size": 1,
                         "max_size": 16,
                         "cpu": 8.0,
+                        "available_cpu": 7.0,
                         "memory_mb": 53248,
-                        "disk_gb": 150,
+                        "available_memory_mb": 49152,
+                        "disk_size_gb": 150,
                         "tpu": {
                             "ipv4_cidr_block": "1.1.1.1/32",
                             "types": ["v2-8", "v3-8"],
                             "software_versions": ["1.13", "1.14"],
                         },
-                        "presets": [
-                            {"name": "cpu-small", "cpu": 1, "memory_mb": 2048},
-                            {"name": "cpu-large", "cpu": 7, "memory_mb": 49152},
-                            {
-                                "name": "tpu",
-                                "cpu": 7,
-                                "memory_mb": 49152,
-                                "tpu": {"type": "v2-8", "software_version": "1.14"},
-                            },
-                        ],
                     },
                     {
+                        "name": "n1-highmem-32-1xk80-preemptible",
                         "is_preemptible": True,
                         "min_size": 1,
                         "max_size": 16,
-                        "cpu": 32.0,
-                        "memory_mb": 212992,
-                        "disk_gb": 150,
+                        "cpu": 31.0,
+                        "memory_mb": 204800,
+                        "disk_size_gb": 150,
                         "gpu": 4,
                         "gpu_model": "nvidia-tesla-k80",
-                        "presets": [
-                            {
-                                "name": "gpu-small-p",
-                                "cpu": 7.0,
-                                "memory_mb": 52224,
-                                "gpu": 1,
-                            }
-                        ],
                     },
                     {
+                        "name": "n1-highmem-32-1xk80",
                         "is_preemptible": False,
                         "min_size": 1,
                         "max_size": 8,
                         "cpu": 32.0,
+                        "available_cpu": 31.0,
                         "memory_mb": 212992,
-                        "disk_gb": 150,
+                        "available_memory_mb": 204800,
+                        "disk_size_gb": 150,
                         "gpu": 4,
                         "gpu_model": "nvidia-tesla-k80",
-                        "presets": [
-                            {
-                                "name": "gpu-small",
-                                "cpu": 7.0,
-                                "memory_mb": 52224,
-                                "gpu": 1,
-                            }
-                        ],
                     },
                     {
+                        "name": "n1-highmem-8-1xv100-preemptible",
                         "is_preemptible": True,
                         "min_size": 0,
                         "max_size": 5,
                         "cpu": 8.0,
+                        "available_cpu": 7.0,
                         "memory_mb": 53248,
-                        "disk_gb": 150,
+                        "available_memory_mb": 49152,
+                        "disk_size_gb": 150,
                         "gpu": 1,
                         "gpu_model": "nvidia-tesla-v100",
-                        "presets": [
-                            {
-                                "name": "gpu-large-p",
-                                "cpu": 7.0,
-                                "memory_mb": 52224,
-                                "gpu": 1,
-                            }
-                        ],
                     },
                     {
+                        "name": "n1-highmem-8-1xv100",
                         "is_preemptible": False,
                         "min_size": 0,
                         "max_size": 2,
                         "cpu": 8.0,
+                        "available_cpu": 7.0,
                         "memory_mb": 53248,
-                        "disk_gb": 150,
+                        "available_memory_mb": 49152,
+                        "disk_size_gb": 150,
                         "gpu": 1,
                         "gpu_model": "nvidia-tesla-v100",
-                        "presets": [
-                            {
-                                "name": "gpu-large",
-                                "cpu": 0.1,
-                                "memory_mb": 52224,
-                                "gpu": 1,
-                            }
-                        ],
                     },
                 ],
                 "is_http_ingress_secure": True,
             },
-            "ssh": {"server": "ssh-auth-dev.neu.ro:12321"},
             "monitoring": {"url": "https://dev.neu.ro/api/v1/jobs"},
             "secrets": {"url": "https://dev.neu.ro/api/v1/secrets"},
             "metrics": {"url": "https://metrics.dev.neu.ro"},
+            "disks": {"url": "https://dev.neu.ro/api/v1/disk"},
+            "blob_storage": {"url": "https://dev.neu.ro/api/v1/blob"},
             **nfs_storage_payload,
         }
     ]
@@ -200,7 +216,6 @@ class TestClusterConfigFactory:
         monitoring_payload = clusters_payload[0]["monitoring"]
         secrets_payload = clusters_payload[0]["secrets"]
         metrics_payload = clusters_payload[0]["metrics"]
-        ssh_payload = clusters_payload[0]["ssh"]
 
         factory = ClusterConfigFactory()
         clusters = factory.create_cluster_configs(
@@ -239,7 +254,6 @@ class TestClusterConfigFactory:
         orchestrator = cluster.orchestrator
         assert isinstance(orchestrator, KubeConfig)
 
-        assert orchestrator.ssh_auth_server == ssh_payload["server"]
         assert (
             orchestrator.is_http_ingress_secure
             == orchestrator_payload["is_http_ingress_secure"]
@@ -248,8 +262,16 @@ class TestClusterConfigFactory:
             orchestrator.jobs_domain_name_template
             == orchestrator_payload["job_hostname_template"]
         )
+        assert orchestrator.job_schedule_timeout == 60
+        assert orchestrator.job_schedule_scaleup_timeout == 120
 
         assert len(orchestrator.resource_pool_types) == 5
+        assert orchestrator.resource_pool_types[0].name == "n1-highmem-8"
+        assert orchestrator.resource_pool_types[0].cpu == 8.0
+        assert orchestrator.resource_pool_types[0].available_cpu == 7.0
+        assert orchestrator.resource_pool_types[0].memory_mb == 53248
+        assert orchestrator.resource_pool_types[0].available_memory_mb == 49152
+        assert orchestrator.resource_pool_types[0].disk_gb == 150
         assert orchestrator.resource_pool_types[0].gpu is None
         assert orchestrator.resource_pool_types[0].gpu_model is None
         assert orchestrator.resource_pool_types[0].tpu == TPUResource(
@@ -258,6 +280,10 @@ class TestClusterConfigFactory:
             software_versions=("1.13", "1.14"),
         )
 
+        assert orchestrator.resource_pool_types[1].cpu == 31.0
+        assert orchestrator.resource_pool_types[1].available_cpu == 31.0
+        assert orchestrator.resource_pool_types[1].memory_mb == 204800
+        assert orchestrator.resource_pool_types[1].available_memory_mb == 204800
         assert orchestrator.resource_pool_types[1].gpu == 4
         assert (
             orchestrator.resource_pool_types[1].gpu_model == GKEGPUModels.K80.value.id
@@ -268,34 +294,25 @@ class TestClusterConfigFactory:
             orchestrator.resource_pool_types[3].gpu_model == GKEGPUModels.V100.value.id
         )
 
-        assert orchestrator.resource_pool_types[0].presets is not None
-        assert orchestrator.resource_pool_types[0].presets[1].cpu == 7.0
-        assert orchestrator.resource_pool_types[0].presets[1].memory_mb == 49152
-        assert orchestrator.resource_pool_types[0].presets[1].gpu_model is None
-        assert orchestrator.resource_pool_types[0].presets[2] == Preset(
+        assert orchestrator.presets is not None
+        assert orchestrator.presets[1].cpu == 7.0
+        assert orchestrator.presets[1].memory_mb == 49152
+        assert orchestrator.presets[1].gpu_model is None
+        assert orchestrator.presets[2] == Preset(
             name="tpu",
             cpu=7.0,
             memory_mb=49152,
             tpu=TPUPreset(type="v2-8", software_version="1.14"),
         )
 
-        assert orchestrator.resource_pool_types[1].presets is not None
-        assert (
-            orchestrator.resource_pool_types[1].presets[0].gpu_model
-            == GKEGPUModels.K80.value.id
-        )
+        assert orchestrator.presets[3].gpu_model == GKEGPUModels.K80.value.id
 
-        assert orchestrator.resource_pool_types[2].presets is not None
-        assert orchestrator.resource_pool_types[2].presets[0].cpu == 7.0
-        assert orchestrator.resource_pool_types[2].presets[0].gpu == 1
-        assert (
-            orchestrator.resource_pool_types[2].presets[0].gpu_model
-            == GKEGPUModels.K80.value.id
-        )
-        assert orchestrator.resource_pool_types[2].presets[0].memory_mb == 52224
+        assert orchestrator.presets[4].cpu == 7.0
+        assert orchestrator.presets[4].gpu == 1
+        assert orchestrator.presets[4].gpu_model == GKEGPUModels.K80.value.id
+        assert orchestrator.presets[4].memory_mb == 52224
 
-        assert orchestrator.resource_pool_types[4].presets is not None
-        assert orchestrator.resource_pool_types[4].presets[0].cpu == 0.1
+        assert orchestrator.presets[6].cpu == 0.1
 
         assert orchestrator.endpoint_url == kube_payload["url"]
         assert orchestrator.cert_authority_data_pem == kube_payload["ca_data"]
@@ -306,12 +323,17 @@ class TestClusterConfigFactory:
         assert orchestrator.jobs_ingress_oauth_url == URL(
             "https://neu.ro/oauth/authorize"
         )
+        assert (
+            orchestrator.jobs_pod_preemptible_toleration_key
+            == "platform.neuromation.io/preemptible"
+        )
         assert orchestrator.node_label_gpu == kube_payload["node_label_gpu"]
         assert (
             orchestrator.node_label_preemptible
             == kube_payload["node_label_preemptible"]
         )
         assert orchestrator.node_label_job == kube_payload["node_label_job"]
+        assert orchestrator.node_label_node_pool == kube_payload["node_label_node_pool"]
 
         assert orchestrator.tpu_resources == (
             TPUResource(
@@ -322,6 +344,66 @@ class TestClusterConfigFactory:
         )
         assert orchestrator.tpu_ipv4_cidr_block == "1.1.1.1/32"
         assert orchestrator.jobs_pod_priority_class_name == "testpriority"
+
+    def test_orchestrator_resource_presets(
+        self,
+        clusters_payload: Sequence[Dict[str, Any]],
+        jobs_ingress_class: str,
+        jobs_ingress_oauth_url: URL,
+    ) -> None:
+        factory = ClusterConfigFactory()
+        clusters_payload[0]["orchestrator"]["resource_presets"] = [
+            {"name": "cpu-small", "cpu": 1, "memory_mb": 2048},
+            {"name": "cpu-large", "cpu": 7, "memory_mb": 49152},
+            {
+                "name": "cpu-large-p",
+                "cpu": 7,
+                "memory_mb": 49152,
+                "scheduler_enabled": True,
+                "preemptible_node": True,
+            },
+        ]
+        clusters = factory.create_cluster_configs(
+            clusters_payload,
+            jobs_ingress_class=jobs_ingress_class,
+            jobs_ingress_oauth_url=jobs_ingress_oauth_url,
+            registry_username="registry_user",
+            registry_password="registry_token",
+        )
+
+        assert clusters[0].orchestrator.presets == [
+            Preset(name="cpu-small", cpu=1, memory_mb=2048),
+            Preset(name="cpu-large", cpu=7, memory_mb=49152),
+            Preset(
+                name="cpu-large-p",
+                cpu=7,
+                memory_mb=49152,
+                scheduler_enabled=True,
+                preemptible_node=True,
+            ),
+        ]
+
+    def test_orchestrator_job_schedule_settings_default(
+        self,
+        clusters_payload: Sequence[Dict[str, Any]],
+        jobs_ingress_class: str,
+        jobs_ingress_oauth_url: URL,
+    ) -> None:
+        orchestrator = clusters_payload[0]["orchestrator"]
+        del orchestrator["job_schedule_timeout_s"]
+        del orchestrator["job_schedule_scale_up_timeout_s"]
+
+        factory = ClusterConfigFactory()
+        clusters = factory.create_cluster_configs(
+            clusters_payload,
+            jobs_ingress_class=jobs_ingress_class,
+            jobs_ingress_oauth_url=jobs_ingress_oauth_url,
+            registry_username="registry_user",
+            registry_password="registry_token",
+        )
+
+        assert clusters[0].orchestrator.job_schedule_timeout == 180
+        assert clusters[0].orchestrator.job_schedule_scaleup_timeout == 900
 
     def test_storage_config_nfs(
         self,

@@ -1,6 +1,7 @@
 import enum
 import shlex
 import uuid
+from collections import defaultdict
 from dataclasses import asdict, dataclass, field
 from pathlib import PurePath
 from typing import Any, Dict, List, Optional, Sequence, Union
@@ -214,7 +215,14 @@ class ContainerResources:
         return payload
 
     def check_fit_into_pool_type(self, pool_type: ResourcePoolType) -> bool:
-        return self._check_gpu(pool_type) and self._check_tpu(pool_type)
+        if not pool_type.available_cpu or not pool_type.available_memory_mb:
+            return False
+        return (
+            self.cpu <= pool_type.available_cpu
+            and self.memory_mb <= pool_type.available_memory_mb
+            and self._check_gpu(pool_type)
+            and self._check_tpu(pool_type)
+        )
 
     def _check_gpu(self, pool_type: ResourcePoolType) -> bool:
         if not self.gpu:
@@ -273,18 +281,6 @@ class ContainerHTTPServer:
 
 
 @dataclass(frozen=True)
-class ContainerSSHServer:
-    port: int
-
-    @classmethod
-    def from_primitive(cls, payload: Dict[str, Any]) -> "ContainerSSHServer":
-        return cls(port=payload["port"])
-
-    def to_primitive(self) -> Dict[str, Any]:
-        return asdict(self)
-
-
-@dataclass(frozen=True)
 class Container:
     image: str
     resources: ContainerResources
@@ -296,7 +292,6 @@ class Container:
     secret_volumes: List[SecretContainerVolume] = field(default_factory=list)
     disk_volumes: List[DiskContainerVolume] = field(default_factory=list)
     http_server: Optional[ContainerHTTPServer] = None
-    ssh_server: Optional[ContainerSSHServer] = None
     tty: bool = False
     working_dir: Optional[str] = None
 
@@ -312,6 +307,23 @@ class Container:
         assert cluster_name
         return URL.build(scheme="image", host=cluster_name) / path.replace("%", "%25")
 
+    def get_secrets(self) -> List[Secret]:
+        return list(
+            {*self.secret_env.values(), *[v.secret for v in self.secret_volumes]}
+        )
+
+    def get_user_secrets(self) -> Dict[str, List[Secret]]:
+        user_secrets: Dict[str, List[Secret]] = defaultdict(list)
+        for secret in self.get_secrets():
+            user_secrets[secret.user_name].append(secret)
+        return user_secrets
+
+    def get_user_secret_volumes(self) -> Dict[str, List[SecretContainerVolume]]:
+        user_volumes: Dict[str, List[SecretContainerVolume]] = defaultdict(list)
+        for volume in self.secret_volumes:
+            user_volumes[volume.secret.user_name].append(volume)
+        return user_volumes
+
     def get_secret_uris(self) -> Sequence[URL]:
         env_uris = [sec.to_uri() for sec in self.secret_env.values()]
         vol_uris = [vol.to_uri() for vol in self.secret_volumes]
@@ -321,12 +333,6 @@ class Container:
     def port(self) -> Optional[int]:
         if self.http_server:
             return self.http_server.port
-        return None
-
-    @property
-    def ssh_port(self) -> Optional[int]:
-        if self.ssh_server:
-            return self.ssh_server.port
         return None
 
     @property
@@ -388,13 +394,11 @@ class Container:
         elif kwargs.get("port") is not None:
             kwargs["http_server"] = ContainerHTTPServer.from_primitive(kwargs)
 
-        if kwargs.get("ssh_server"):
-            ssh_server_desc = kwargs["ssh_server"]
-            container_desc = ContainerSSHServer.from_primitive(ssh_server_desc)
-            kwargs["ssh_server"] = container_desc
-
         kwargs.pop("port", None)
         kwargs.pop("health_check_path", None)
+
+        # previous jobs still have ssh_server stored in database
+        kwargs.pop("ssh_server", None)
 
         # NOTE: `entrypoint` is not not serialized if it's `None` (see issue #804)
         if "entrypoint" not in kwargs:
@@ -427,8 +431,6 @@ class Container:
 
         if self.http_server:
             payload["http_server"] = self.http_server.to_primitive()
-        if self.ssh_server:
-            payload["ssh_server"] = self.ssh_server.to_primitive()
 
         # NOTE: not to serialize `entrypoint` if it's `None` (see issue #804)
         entrypoint = payload.get("entrypoint")
@@ -481,6 +483,7 @@ class JobStatus(str, enum.Enum):
     """
 
     PENDING = "pending"
+    SUSPENDED = "suspended"
     RUNNING = "running"
     SUCCEEDED = "succeeded"
     CANCELLED = "cancelled"

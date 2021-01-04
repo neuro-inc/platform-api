@@ -13,7 +13,7 @@ from .cluster_config import (
     StorageConfig,
 )
 from .orchestrator.kube_config import KubeClientAuthType, KubeConfig
-from .resource import Preset, ResourcePoolType, TPUPreset, TPUResource
+from .resource import DEFAULT_PRESETS, Preset, ResourcePoolType, TPUPreset, TPUResource
 
 
 _cluster_config_validator = t.Dict({"name": t.String}).allow_extra("*")
@@ -74,25 +74,27 @@ class ClusterConfigFactory:
     def _create_ingress_config(self, payload: Dict[str, Any]) -> IngressConfig:
         return IngressConfig(
             storage_url=URL(payload["storage"]["url"]),
+            blob_storage_url=URL(payload["blob_storage"]["url"]),
             monitoring_url=URL(payload["monitoring"]["url"]),
             secrets_url=URL(payload["secrets"]["url"]),
             metrics_url=URL(payload["metrics"]["url"]),
+            disks_url=URL(payload["disks"]["url"]),
         )
 
     def _create_presets(self, payload: Dict[str, Any]) -> List[Preset]:
         result = []
-        for preset in payload.get("presets", []):
+        for preset in payload.get("resource_presets", []):
             result.append(
                 Preset(
                     name=preset["name"],
                     cpu=preset.get("cpu") or payload["cpu"],
-                    memory_mb=preset.get("memory_mb") or payload["memory_mb"],
-                    is_preemptible=payload.get("is_preemptible", False),
-                    gpu=preset.get("gpu") or payload.get("gpu"),
-                    gpu_model=preset.get("gpu_model") or payload.get("gpu_model"),
-                    # TPU presets do not inherit their pool type resources,
-                    # because CPU pool types may or may not be used to run TPU
-                    # workloads.
+                    memory_mb=preset.get("memory_mb"),
+                    scheduler_enabled=preset.get("scheduler_enabled")
+                    or preset.get("is_preemptible", False),
+                    preemptible_node=preset.get("preemptible_node")
+                    or preset.get("is_preemptible_node_required", False),
+                    gpu=preset.get("gpu"),
+                    gpu_model=preset.get("gpu_model"),
                     tpu=self._create_tpu_preset(preset.get("tpu")),
                 )
             )
@@ -106,15 +108,15 @@ class ClusterConfigFactory:
     ) -> OrchestratorConfig:
         orchestrator = payload["orchestrator"]
         kube = orchestrator["kubernetes"]
-        ssh = payload["ssh"]
+        presets = self._create_presets(orchestrator)
         return KubeConfig(
-            ssh_auth_server=ssh["server"],
             is_http_ingress_secure=orchestrator["is_http_ingress_secure"],
             jobs_domain_name_template=orchestrator["job_hostname_template"],
             resource_pool_types=[
                 self._create_resource_pool_type(r)
                 for r in orchestrator["resource_pool_types"]
             ],
+            presets=presets or DEFAULT_PRESETS,
             endpoint_url=kube["url"],
             cert_authority_data_pem=kube["ca_data"],
             cert_authority_path=None,  # not initialized, see `cert_authority_data_pem`
@@ -129,7 +131,22 @@ class ClusterConfigFactory:
             node_label_gpu=kube["node_label_gpu"],
             node_label_preemptible=kube["node_label_preemptible"],
             node_label_job=kube.get("node_label_job"),
+            node_label_node_pool=kube.get("node_label_node_pool"),
+            jobs_pod_preemptible_toleration_key=kube.get(
+                "job_pod_preemptible_toleration_key"
+            ),
             jobs_pod_priority_class_name=kube.get("job_pod_priority_class_name"),
+            job_schedule_timeout=orchestrator.get(
+                "job_schedule_timeout_s", OrchestratorConfig.job_schedule_timeout
+            ),
+            job_schedule_scaleup_timeout=orchestrator.get(
+                "job_schedule_scale_up_timeout_s",
+                OrchestratorConfig.job_schedule_scaleup_timeout,
+            ),
+            allow_privileged_mode=orchestrator.get(
+                "allow_privileged_mode",
+                OrchestratorConfig.allow_privileged_mode,
+            ),
         )
 
     def _create_tpu_preset(
@@ -143,16 +160,20 @@ class ClusterConfigFactory:
         )
 
     def _create_resource_pool_type(self, payload: Dict[str, Any]) -> ResourcePoolType:
+        cpu = payload.get("cpu")
+        memory_mb = payload.get("memory_mb")
         return ResourcePoolType(
+            name=payload["name"],
             gpu=payload.get("gpu"),
             gpu_model=payload.get("gpu_model"),
             is_preemptible=payload.get("is_preemptible"),
-            cpu=payload.get("cpu"),
+            cpu=cpu,
+            available_cpu=payload.get("available_cpu") or cpu,
             memory_mb=payload.get("memory_mb"),
-            disk_gb=payload.get("disk_gb"),
+            available_memory_mb=payload.get("available_memory_mb") or memory_mb,
+            disk_gb=payload.get("disk_size_gb"),
             min_size=payload.get("min_size"),
             max_size=payload.get("max_size"),
-            presets=self._create_presets(payload),
             tpu=self._create_tpu_resource(payload.get("tpu")),
         )
 

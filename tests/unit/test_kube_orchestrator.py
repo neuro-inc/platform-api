@@ -111,15 +111,7 @@ class TestSecretVolume:
         volume = SecretVolume("testvolume", k8s_secret_name=secret_name)
         assert volume.to_primitive() == {
             "name": "testvolume",
-            "secret": {"secretName": secret_name},
-        }
-
-    def test_to_primitive_with_items(self) -> None:
-        secret_name = "user--alice--secrets"
-        volume = SecretVolume("testvolume", k8s_secret_name=secret_name)
-        assert volume.to_primitive() == {
-            "name": "testvolume",
-            "secret": {"secretName": secret_name},
+            "secret": {"secretName": secret_name, "defaultMode": 0o400},
         }
 
     def test_create_secret_mounts(self) -> None:
@@ -209,6 +201,37 @@ class TestPodDescriptor:
             },
         }
 
+    def test_to_primitive_privileged(self) -> None:
+        pod = PodDescriptor(name="testname", image="testimage", privileged=True)
+        assert pod.name == "testname"
+        assert pod.image == "testimage"
+        assert pod.to_primitive() == {
+            "kind": "Pod",
+            "apiVersion": "v1",
+            "metadata": {"name": "testname"},
+            "spec": {
+                "automountServiceAccountToken": False,
+                "containers": [
+                    {
+                        "name": "testname",
+                        "image": "testimage",
+                        "imagePullPolicy": "Always",
+                        "env": [],
+                        "volumeMounts": [],
+                        "terminationMessagePolicy": "FallbackToLogsOnError",
+                        "stdin": True,
+                        "securityContext": {
+                            "privileged": True,
+                        },
+                    }
+                ],
+                "volumes": [],
+                "restartPolicy": "Never",
+                "imagePullSecrets": [],
+                "tolerations": [],
+            },
+        }
+
     def test_to_primitive(self) -> None:
         tolerations = [
             Toleration(key="testkey", value="testvalue", effect="NoSchedule")
@@ -224,7 +247,6 @@ class TestPodDescriptor:
             env={"TESTVAR": "testvalue"},
             resources=Resources(cpu=0.5, memory=1024, gpu=1),
             port=1234,
-            ssh_port=2222,
             tty=True,
             node_selector={"label": "value"},
             tolerations=tolerations,
@@ -254,13 +276,18 @@ class TestPodDescriptor:
                         "env": [{"name": "TESTVAR", "value": "testvalue"}],
                         "volumeMounts": [],
                         "resources": {
+                            "requests": {
+                                "cpu": "500m",
+                                "memory": "1024Mi",
+                                "nvidia.com/gpu": 1,
+                            },
                             "limits": {
                                 "cpu": "500m",
                                 "memory": "1024Mi",
                                 "nvidia.com/gpu": 1,
-                            }
+                            },
                         },
-                        "ports": [{"containerPort": 1234}, {"containerPort": 2222}],
+                        "ports": [{"containerPort": 1234}],
                         "terminationMessagePolicy": "FallbackToLogsOnError",
                         "stdin": True,
                         "tty": True,
@@ -301,7 +328,6 @@ class TestPodDescriptor:
             env={"TESTVAR": "testvalue"},
             resources=Resources(cpu=0.5, memory=1024, gpu=1),
             port=1234,
-            ssh_port=4321,
             readiness_probe=True,
         )
         assert pod.name == "testname"
@@ -320,70 +346,20 @@ class TestPodDescriptor:
                         "env": [{"name": "TESTVAR", "value": "testvalue"}],
                         "volumeMounts": [],
                         "resources": {
+                            "requests": {
+                                "cpu": "500m",
+                                "memory": "1024Mi",
+                                "nvidia.com/gpu": 1,
+                            },
                             "limits": {
                                 "cpu": "500m",
                                 "memory": "1024Mi",
                                 "nvidia.com/gpu": 1,
-                            }
+                            },
                         },
-                        "ports": [{"containerPort": 1234}, {"containerPort": 4321}],
+                        "ports": [{"containerPort": 1234}],
                         "readinessProbe": {
                             "httpGet": {"port": 1234, "path": "/"},
-                            "initialDelaySeconds": 1,
-                            "periodSeconds": 1,
-                        },
-                        "terminationMessagePolicy": "FallbackToLogsOnError",
-                        "stdin": True,
-                    }
-                ],
-                "volumes": [],
-                "restartPolicy": "Never",
-                "imagePullSecrets": [],
-                "tolerations": [
-                    {
-                        "key": "nvidia.com/gpu",
-                        "operator": "Exists",
-                        "value": "",
-                        "effect": "NoSchedule",
-                    }
-                ],
-            },
-        }
-
-    def test_to_primitive_readiness_probe_ssh(self) -> None:
-        pod = PodDescriptor(
-            name="testname",
-            image="testimage",
-            env={"TESTVAR": "testvalue"},
-            resources=Resources(cpu=0.5, memory=1024, gpu=1),
-            ssh_port=4321,
-            readiness_probe=True,
-        )
-        assert pod.name == "testname"
-        assert pod.image == "testimage"
-        assert pod.to_primitive() == {
-            "kind": "Pod",
-            "apiVersion": "v1",
-            "metadata": {"name": "testname"},
-            "spec": {
-                "automountServiceAccountToken": False,
-                "containers": [
-                    {
-                        "name": "testname",
-                        "image": "testimage",
-                        "imagePullPolicy": "Always",
-                        "env": [{"name": "TESTVAR", "value": "testvalue"}],
-                        "volumeMounts": [],
-                        "resources": {
-                            "limits": {
-                                "cpu": "500m",
-                                "memory": "1024Mi",
-                                "nvidia.com/gpu": 1,
-                            }
-                        },
-                        "ports": [{"containerPort": 4321}],
-                        "readinessProbe": {
-                            "tcpSocket": {"port": 4321},
                             "initialDelaySeconds": 1,
                             "periodSeconds": 1,
                         },
@@ -428,11 +404,16 @@ class TestPodDescriptor:
                         "env": [{"name": "TESTVAR", "value": "testvalue"}],
                         "volumeMounts": [],
                         "resources": {
+                            "requests": {
+                                "cpu": "500m",
+                                "memory": "1024Mi",
+                                "nvidia.com/gpu": 1,
+                            },
                             "limits": {
                                 "cpu": "500m",
                                 "memory": "1024Mi",
                                 "nvidia.com/gpu": 1,
-                            }
+                            },
                         },
                         "terminationMessagePolicy": "FallbackToLogsOnError",
                         "stdin": True,
@@ -491,11 +472,16 @@ class TestPodDescriptor:
                             }
                         ],
                         "resources": {
+                            "requests": {
+                                "cpu": "500m",
+                                "memory": "1024Mi",
+                                "nvidia.com/gpu": 1,
+                            },
                             "limits": {
                                 "cpu": "500m",
                                 "memory": "1024Mi",
                                 "nvidia.com/gpu": 1,
-                            }
+                            },
                         },
                         "ports": [{"containerPort": 1234}],
                         "terminationMessagePolicy": "FallbackToLogsOnError",
@@ -804,19 +790,48 @@ class TestResources:
     def test_to_primitive(self) -> None:
         resources = Resources(cpu=0.5, memory=1024)
         assert resources.to_primitive() == {
-            "limits": {"cpu": "500m", "memory": "1024Mi"}
+            "requests": {"cpu": "500m", "memory": "1024Mi"},
+            "limits": {"cpu": "500m", "memory": "1024Mi"},
         }
 
     def test_to_primitive_gpu(self) -> None:
         resources = Resources(cpu=0.5, memory=1024, gpu=2)
         assert resources.to_primitive() == {
-            "limits": {"cpu": "500m", "memory": "1024Mi", "nvidia.com/gpu": 2}
+            "requests": {"cpu": "500m", "memory": "1024Mi", "nvidia.com/gpu": 2},
+            "limits": {"cpu": "500m", "memory": "1024Mi", "nvidia.com/gpu": 2},
         }
 
     def test_to_primitive_tpu(self) -> None:
         resources = Resources(cpu=0.5, memory=1024, tpu_version="v2", tpu_cores=8)
         assert resources.to_primitive() == {
-            "limits": {"cpu": "500m", "memory": "1024Mi", "cloud-tpus.google.com/v2": 8}
+            "requests": {
+                "cpu": "500m",
+                "memory": "1024Mi",
+                "cloud-tpus.google.com/v2": 8,
+            },
+            "limits": {
+                "cpu": "500m",
+                "memory": "1024Mi",
+                "cloud-tpus.google.com/v2": 8,
+            },
+        }
+
+    def test_to_primitive_with_memory_request(self) -> None:
+        resources = Resources(
+            cpu=1,
+            memory=1024,
+            memory_request=128,
+        )
+
+        assert resources.to_primitive() == {
+            "requests": {
+                "cpu": "1000m",
+                "memory": "128Mi",
+            },
+            "limits": {
+                "cpu": "1000m",
+                "memory": "1024Mi",
+            },
         }
 
     def test_from_container_resources(self) -> None:
@@ -1149,57 +1164,6 @@ class TestService:
         pod = PodDescriptor(name="testpod", image="testimage", port=1234)
         service = Service.create_headless_for_pod(pod)
         assert service == Service(name="testpod", cluster_ip="None", target_port=1234)
-
-
-class TestServiceWithSSHOnly:
-    @pytest.fixture(scope="function")
-    def service_payload(self) -> Dict[str, Any]:
-        return {
-            "metadata": {"name": "testservice"},
-            "spec": {
-                "type": "ClusterIP",
-                "ports": [{"port": 89, "targetPort": 8181, "name": "ssh"}],
-                "selector": {"job": "testservice"},
-            },
-        }
-
-    def test_to_primitive(self, service_payload: Dict[str, Dict[str, Any]]) -> None:
-        service = Service(
-            name="testservice",
-            selector=service_payload["spec"]["selector"],
-            target_port=None,
-            ssh_port=89,
-            ssh_target_port=8181,
-        )
-        assert service.to_primitive() == service_payload
-
-    def test_to_primitive_default_port(
-        self, service_payload: Dict[str, Dict[str, Any]]
-    ) -> None:
-        service_payload["spec"]["ports"][0]["port"] = 22
-        service = Service(
-            name="testservice",
-            selector=service_payload["spec"]["selector"],
-            target_port=None,
-            ssh_target_port=8181,
-        )
-        assert service.to_primitive() == service_payload
-
-    def test_from_primitive(self, service_payload: Dict[str, Dict[str, Any]]) -> None:
-        service = Service.from_primitive(service_payload)
-        assert service == Service(
-            name="testservice",
-            selector=service_payload["spec"]["selector"],
-            target_port=None,
-            port=80,
-            ssh_target_port=8181,
-            ssh_port=89,
-        )
-
-    def test_create_for_pod(self) -> None:
-        pod = PodDescriptor(name="testpod", image="testimage", ssh_port=89)
-        service = Service.create_for_pod(pod)
-        assert service == Service(name="testpod", target_port=None, ssh_target_port=89)
 
 
 class TestContainerStatus:

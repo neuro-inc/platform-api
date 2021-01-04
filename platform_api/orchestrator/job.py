@@ -12,7 +12,7 @@ from yarl import URL
 
 from platform_api.cluster_config import OrchestratorConfig, StorageConfig
 
-from .job_request import JobRequest, JobStatus
+from .job_request import ContainerResources, JobRequest, JobStatus
 
 
 # For named jobs, their hostname is of the form of
@@ -71,6 +71,7 @@ class JobStatusReason:
     CLUSTER_SCALING_UP = "ClusterScalingUp"
     CLUSTER_SCALE_UP_FAILED = "ClusterScaleUpFailed"
     RESTARTING = "Restarting"
+    DISK_UNAVAILABLE = "DiskUnavailable"
 
 
 @dataclass(frozen=True)
@@ -202,6 +203,16 @@ class JobStatusHistory:
         return None
 
     @property
+    def continued_at(self) -> Optional[datetime]:
+        result: Optional[JobStatusItem] = None
+        for item in reversed(self._items):
+            if item.status == JobStatus.RUNNING:
+                result = item
+            elif result is not None:
+                return result.transition_time
+        return None
+
+    @property
     def started_at_str(self) -> Optional[str]:
         if self.started_at:
             return self.started_at.isoformat()
@@ -227,6 +238,18 @@ class JobStatusHistory:
             return self.finished_at.isoformat()
         return None
 
+    @property
+    def restart_count(self) -> int:
+        # This field is not 100% accurate because of polling nature of collecting
+        # status items. On other side, even k8s `restartCount` can be wrong,
+        # so it is should be OK.
+        return sum(
+            1
+            for item in self._items
+            if item.reason == JobStatusReason.RESTARTING
+            or item.status == JobStatus.SUSPENDED
+        )
+
 
 @enum.unique
 class JobRestartPolicy(str, enum.Enum):
@@ -248,9 +271,13 @@ class JobRecord:
     status_history: JobStatusHistory
     cluster_name: str
     name: Optional[str] = None
+    preset_name: Optional[str] = None
     tags: Sequence[str] = ()
-    is_preemptible: bool = False
-    is_deleted: bool = False
+    scheduler_enabled: bool = False
+    preemptible_node: bool = False
+    pass_config: bool = False
+    materialized: bool = False
+    privileged: bool = False
     max_run_time_minutes: Optional[int] = None
     internal_hostname: Optional[str] = None
     internal_hostname_named: Optional[str] = None
@@ -307,9 +334,14 @@ class JobRecord:
 
     @property
     def is_restartable(self) -> bool:
-        return self.is_preemptible or self.restart_policy in (
-            JobRestartPolicy.ALWAYS,
-            JobRestartPolicy.ON_FAILURE,
+        return (
+            self.scheduler_enabled
+            or self.preemptible_node
+            or self.restart_policy
+            in (
+                JobRestartPolicy.ALWAYS,
+                JobRestartPolicy.ON_FAILURE,
+            )
         )
 
     @property
@@ -361,6 +393,9 @@ class JobRecord:
             JobStatusReason.CLUSTER_SCALE_UP_FAILED,
         )
 
+    def _is_status_for_deletion(self) -> bool:
+        return self.status_history.current.status in (JobStatus.CANCELLED,)
+
     def should_be_deleted(
         self,
         *,
@@ -369,12 +404,13 @@ class JobRecord:
     ) -> bool:
         return (
             self.is_finished
-            and not self.is_deleted
+            and self.materialized
             and (
                 self._is_time_for_deletion(
                     delay=delay, current_datetime_factory=current_datetime_factory
                 )
                 or self._is_reason_for_deletion()
+                or self._is_status_for_deletion()
             )
         )
 
@@ -392,9 +428,12 @@ class JobRecord:
             "request": self.request.to_primitive(),
             "status": self.status.value,
             "statuses": statuses,
-            "is_deleted": self.is_deleted,
+            "materialized": self.materialized,
             "finished_at": self.finished_at_str,
-            "is_preemptible": self.is_preemptible,
+            "scheduler_enabled": self.scheduler_enabled,
+            "preemptible_node": self.preemptible_node,
+            "pass_config": self.pass_config,
+            "privileged": self.privileged,
             "restart_policy": str(self.restart_policy),
         }
         if self.schedule_timeout:
@@ -407,6 +446,8 @@ class JobRecord:
             result["internal_hostname_named"] = self.internal_hostname_named
         if self.name:
             result["name"] = self.name
+        if self.preset_name:
+            result["preset_name"] = self.preset_name
         if self.tags:
             result["tags"] = self.tags
         return result
@@ -421,15 +462,25 @@ class JobRecord:
         status_history = cls.create_status_history_from_primitive(
             request.job_id, payload
         )
+        materialized = payload.get("materialized", None)
+        if materialized is None:
+            materialized = not payload.get("is_deleted", False)
         return cls(
             request=request,
             status_history=status_history,
-            is_deleted=payload.get("is_deleted", False),
+            # Support old key (only required for redis):
+            materialized=materialized,
             owner=payload.get("owner") or orphaned_job_owner,
             cluster_name=payload.get("cluster_name") or "",
             name=payload.get("name"),
+            preset_name=payload.get("preset_name"),
             tags=payload.get("tags", ()),
-            is_preemptible=payload.get("is_preemptible", False),
+            scheduler_enabled=payload.get("scheduler_enabled", None)
+            or payload.get("is_preemptible", False),
+            preemptible_node=payload.get("preemptible_node", None)
+            or payload.get("is_preemptible_node_required", False),
+            pass_config=payload.get("pass_config", False),
+            privileged=payload.get("privileged", False),
             max_run_time_minutes=payload.get("max_run_time_minutes", None),
             internal_hostname=payload.get("internal_hostname", None),
             internal_hostname_named=payload.get("internal_hostname_named", None),
@@ -466,13 +517,8 @@ class Job:
         *,
         record: JobRecord,
         current_datetime_factory: Callable[[], datetime] = current_datetime_factory,
-        is_forced_to_preemptible_pool: bool = False,
+        image_pull_error_delay: timedelta = timedelta(minutes=2),
     ) -> None:
-        """
-        :param bool is_forced_to_preemptible_pool:
-            used in tests only
-        """
-
         self._storage_config = storage_config
         self._orchestrator_config = orchestrator_config
 
@@ -486,8 +532,10 @@ class Job:
         self._name = record.name
         self._tags = record.tags
 
-        self._is_preemptible = record.is_preemptible
-        self._is_forced_to_preemptible_pool = is_forced_to_preemptible_pool
+        self._scheduler_enabled = record.scheduler_enabled
+        self._preemptible_node = record.preemptible_node
+        self._pass_config = record.pass_config
+        self._image_pull_error_delay = image_pull_error_delay
 
     @property
     def id(self) -> str:
@@ -500,6 +548,10 @@ class Job:
     @property
     def name(self) -> Optional[str]:
         return self._name
+
+    @property
+    def preset_name(self) -> Optional[str]:
+        return self._record.preset_name
 
     @property
     def is_named(self) -> bool:
@@ -531,6 +583,10 @@ class Job:
     @property
     def request(self) -> JobRequest:
         return self._job_request
+
+    @property
+    def resources(self) -> ContainerResources:
+        return self._job_request.container.resources
 
     @property
     def has_gpu(self) -> bool:
@@ -575,12 +631,12 @@ class Job:
         return self._status_history.finished_at
 
     @property
-    def is_deleted(self) -> bool:
-        return self._record.is_deleted
+    def materialized(self) -> bool:
+        return self._record.materialized
 
-    @is_deleted.setter
-    def is_deleted(self, value: bool) -> None:
-        self._record.is_deleted = value
+    @materialized.setter
+    def materialized(self, value: bool) -> None:
+        self._record.materialized = value
 
     @property
     def schedule_timeout(self) -> Optional[float]:
@@ -590,14 +646,23 @@ class Job:
     def _collection_reason(self) -> Optional[str]:
         status_item = self._status_history.current
         if status_item.status == JobStatus.PENDING:
-            # collect jobs stuck in ErrImagePull loop
-            if status_item.reason in (
-                JobStatusReason.ERR_IMAGE_PULL,
-                JobStatusReason.IMAGE_PULL_BACK_OFF,
-            ):
-                return "Image can not be pulled"
             if status_item.reason == JobStatusReason.INVALID_IMAGE_NAME:
                 return "Invalid image name"
+            # collect jobs stuck in ErrImagePull loop
+            first_pull_error = None
+            for item in reversed(self.status_history.all):
+                if item.reason in (
+                    JobStatusReason.ERR_IMAGE_PULL,
+                    JobStatusReason.IMAGE_PULL_BACK_OFF,
+                ):
+                    first_pull_error = item
+            if first_pull_error is not None:
+                now = self._current_datetime_factory()
+                if (
+                    now - first_pull_error.transition_time
+                    > self._image_pull_error_delay
+                ):
+                    return "Image can not be pulled"
         return None
 
     def collect_if_needed(self) -> None:
@@ -658,11 +723,6 @@ class Job:
         return f"{self._http_scheme}://{self.http_host_named}"
 
     @property
-    def ssh_server(self) -> str:
-        ssh_auth_server = self._orchestrator_config.ssh_auth_server
-        return f"ssh://nobody@{ssh_auth_server}"
-
-    @property
     def finished_at_str(self) -> Optional[str]:
         return self._status_history.finished_at_str
 
@@ -683,20 +743,28 @@ class Job:
         self._record.internal_hostname_named = value
 
     @property
-    def is_preemptible(self) -> bool:
-        return self._is_preemptible
+    def scheduler_enabled(self) -> bool:
+        return self._scheduler_enabled
+
+    @property
+    def preemptible_node(self) -> bool:
+        return self._preemptible_node
+
+    @property
+    def pass_config(self) -> bool:
+        return self._pass_config
 
     @property
     def restart_policy(self) -> JobRestartPolicy:
         return self._record.restart_policy
 
     @property
-    def is_restartable(self) -> bool:
-        return self._record.is_restartable
+    def privileged(self) -> bool:
+        return self._record.privileged
 
     @property
-    def is_forced_to_preemptible_pool(self) -> bool:
-        return self.is_preemptible and self._is_forced_to_preemptible_pool
+    def is_restartable(self) -> bool:
+        return self._record.is_restartable
 
     def get_run_time(self) -> timedelta:
         return self._record.get_run_time(

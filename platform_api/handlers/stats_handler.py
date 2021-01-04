@@ -10,7 +10,7 @@ from neuro_auth_client import AuthClient, Permission, check_permissions
 from platform_api.config import Config
 from platform_api.orchestrator.job import ZERO_RUN_TIME, AggregatedRunTime
 from platform_api.orchestrator.jobs_service import JobsService
-from platform_api.orchestrator.jobs_storage import JobFilter, JobsStorage
+from platform_api.orchestrator.jobs_storage import JobsStorage
 from platform_api.user import User
 
 
@@ -82,9 +82,8 @@ class StatsHandler:
 
         user = User.create_from_auth_user(auth_user)
 
-        run_time_filter = JobFilter(owners={user.name})
         run_times = await self.jobs_storage.get_aggregated_run_time_by_clusters(
-            run_time_filter
+            user.name
         )
 
         cluster_payloads = []
@@ -93,7 +92,7 @@ class StatsHandler:
             cluster_payloads.append(
                 {
                     "name": cluster.name,
-                    "quota": convert_run_time_to_response(cluster.quota),
+                    "quota": convert_run_time_to_response(cluster.runtime_quota),
                     "jobs": convert_run_time_to_response(run_time),
                 }
             )

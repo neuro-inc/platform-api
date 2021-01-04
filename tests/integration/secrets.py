@@ -20,7 +20,7 @@ from tests.integration.auth import _User
 
 @pytest.fixture(scope="session")
 def secrets_server_image_name() -> str:
-    with open("PLATFORMSECRETS_IMAGE", "r") as f:
+    with open("PLATFORMSECRETS_IMAGE") as f:
         return f.read().strip()
 
 

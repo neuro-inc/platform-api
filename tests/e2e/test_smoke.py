@@ -17,7 +17,6 @@ async def test_basic_command(
             "command": "true",
             "resources": {"cpu": 0.1, "memory_mb": 16},
         },
-        "is_preemptible": False,
     }
     headers = {"Authorization": f"Bearer {alice.token}"}
     response = await client.post(

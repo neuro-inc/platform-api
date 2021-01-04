@@ -6,7 +6,6 @@ from platform_api.orchestrator.job_request import (
     Container,
     ContainerHTTPServer,
     ContainerResources,
-    ContainerSSHServer,
     ContainerTPUResource,
     ContainerVolume,
     DiskContainerVolume,
@@ -18,6 +17,9 @@ from platform_api.orchestrator.job_request import (
 def create_container_from_payload(
     payload: Dict[str, Any], *, storage_config: StorageConfig
 ) -> Container:
+    if "container" in payload:
+        # Deprecated. Use flat structure
+        payload = payload["container"]
     http_server = None
     http = payload.get("http", {})
     if "port" in http:
@@ -28,11 +30,6 @@ def create_container_from_payload(
             ),
             requires_auth=http.get("requires_auth", ContainerHTTPServer.requires_auth),
         )
-
-    ssh_server = None
-    ssh = payload.get("ssh", {})
-    if "port" in ssh:
-        ssh_server = ContainerSSHServer(ssh["port"])
 
     volumes = []
     for volume_payload in payload.get("volumes", ()):
@@ -65,7 +62,6 @@ def create_container_from_payload(
         disk_volumes=disk_volumes,
         resources=create_resources_from_payload(payload["resources"]),
         http_server=http_server,
-        ssh_server=ssh_server,
         tty=payload.get("tty", False),
         working_dir=payload.get("working_dir"),
     )

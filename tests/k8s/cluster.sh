@@ -27,12 +27,15 @@ function k8s::start {
 
     sudo -E minikube start \
         --vm-driver=none \
-        --kubernetes-version=v1.14.10 \
-        --memory=4096m \
+        --kubernetes-version=v1.16.15 \
         --install-addons=true \
         --addons=ingress \
+        --feature-gates=DevicePlugins=true \
         --wait=all \
         --wait-timeout=5m
+
+    # Install nvidia device plugin
+    kubectl create -f https://raw.githubusercontent.com/NVIDIA/k8s-device-plugin/v1.9/nvidia-device-plugin.yml
 
     k8s::wait k8s::setup_namespace
     k8s::wait k8s::setup_storageclass

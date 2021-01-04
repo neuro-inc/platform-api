@@ -1,19 +1,22 @@
 import asyncio
 import logging
 import operator
+from collections import defaultdict
 from dataclasses import replace
 from datetime import datetime, timezone
-from typing import Any, Dict, Iterable, List, Optional, Union
+from typing import Any, Dict, Iterable, List, Optional, Sequence, Tuple, Union
 
 from platform_api.cluster_config import (
     OrchestratorConfig,
     RegistryConfig,
     StorageConfig,
 )
+from platform_api.resource import ResourcePoolType
 
 from .base import Orchestrator
 from .job import Job, JobRestartPolicy, JobStatusItem, JobStatusReason
 from .job_request import (
+    Disk,
     JobAlreadyExistsException,
     JobError,
     JobNotFoundException,
@@ -30,6 +33,7 @@ from .kube_client import (
     NodePreferredSchedulingTerm,
     NodeSelectorRequirement,
     NodeSelectorTerm,
+    NotFoundException,
     PodDescriptor,
     PodExec,
     PodRestartPolicy,
@@ -186,13 +190,13 @@ class KubeOrchestrator(Orchestrator):
             path=self._storage_config.host_mount_path,
         )
 
-    def create_secret_volume(self, user_name: str) -> SecretVolume:
-        return SecretVolume(
-            name=self._kube_config.secret_volume_name,
-            k8s_secret_name=self._get_k8s_secret_name(user_name),
-        )
+    @classmethod
+    def create_secret_volume(cls, user_name: str) -> SecretVolume:
+        name = cls._get_k8s_secret_name(user_name)
+        return SecretVolume(name=name, k8s_secret_name=name)
 
-    def _get_k8s_secret_name(self, user_name: str) -> str:
+    @classmethod
+    def _get_k8s_secret_name(cls, user_name: str) -> str:
         return f"user--{user_name}--secrets"
 
     def _get_user_resource_name(self, job: Job) -> str:
@@ -256,26 +260,127 @@ class KubeOrchestrator(Orchestrator):
         except Exception as e:
             logger.warning(f"Failed to remove network policy {name}: {e}")
 
-    async def _create_pod_descriptor(self, job: Job) -> PodDescriptor:
-        node_selector = await self._get_pod_node_selector(job)
-        tolerations = self._get_pod_tolerations(job)
-        node_affinity = self._get_pod_node_affinity(job)
+    async def _create_pod_descriptor(
+        self, job: Job, tolerate_unreachable_node: bool = False
+    ) -> PodDescriptor:
+        pool_types = self._get_cheapest_pool_types(job)
+        if not pool_types:
+            raise JobError("Job will not fit into cluster")
+        logger.info(
+            "Job %s is scheduled to run in pool types %s",
+            job.id,
+            ", ".join([p.name for p in pool_types]),
+        )
+        tolerations = self._get_pod_tolerations(
+            job, tolerate_unreachable_node=tolerate_unreachable_node
+        )
+        node_affinity = self._get_pod_node_affinity(job, pool_types)
         labels = self._get_pod_labels(job)
         # NOTE: both node selector and affinity must be satisfied for the pod
         # to be scheduled onto a node.
 
-        return PodDescriptor.from_job_request(
+        def _to_env_str(value: Any) -> str:
+            if value:
+                return str(value)
+            return ""
+
+        meta_env = {
+            "NEURO_JOB_ID": job.id,
+            "NEURO_JOB_NAME": _to_env_str(job.name),
+            "NEURO_JOB_OWNER": job.owner,
+            "NEURO_JOB_CLUSTER": job.cluster_name,
+            "NEURO_JOB_INTERNAL_HOSTNAME": _to_env_str(job.internal_hostname),
+            "NEURO_JOB_INTERNAL_HOSTNAME_NAMED": _to_env_str(
+                job.internal_hostname_named
+            ),
+            "NEURO_JOB_HTTP_PORT": _to_env_str(job.request.container.port),
+            "NEURO_JOB_HTTP_AUTH": _to_env_str(
+                job.request.container.requires_http_auth
+            ),
+        }
+
+        if job.preset_name:
+            meta_env["NEURO_JOB_PRESET"] = job.preset_name
+
+        pod = PodDescriptor.from_job_request(
             self._storage_volume,
             job.request,
-            secret_volume=self.create_secret_volume(job.owner),
+            secret_volume_factory=self.create_secret_volume,
             image_pull_secret_names=[self._get_docker_secret_name(job)],
-            node_selector=node_selector,
             tolerations=tolerations,
             node_affinity=node_affinity,
             labels=labels,
             priority_class_name=self._kube_config.jobs_pod_priority_class_name,
             restart_policy=self._get_pod_restart_policy(job),
+            meta_env=meta_env,
+            privileged=job.privileged,
         )
+        pod = self._update_pod_container_resources(pod, pool_types)
+        return pod
+
+    def _get_cheapest_pool_types(self, job: Job) -> Sequence[ResourcePoolType]:
+        # NOTE:
+        # Config service exposes resource_affinity field in preset.
+        # But currently it cannot be used in case of restartable jobs
+        # because during job lifetime node pools, presets can change and
+        # node affinity assigned to the job won't be valid anymore.
+        container_resources = job.request.container.resources
+        TKey = Tuple[int, float, int]
+        pool_types: Dict[TKey, List[ResourcePoolType]] = defaultdict(list)
+
+        for pool_type in self._kube_config.resource_pool_types:
+            # Schedule jobs only on preemptible nodes if such node specified
+            if job.preemptible_node and not pool_type.is_preemptible:
+                continue
+            if not job.preemptible_node and pool_type.is_preemptible:
+                continue
+
+            # Do not schedule cpu jobs on gpu nodes
+            if not container_resources.gpu and pool_type.gpu:
+                continue
+
+            if not container_resources.check_fit_into_pool_type(pool_type):
+                continue
+
+            key = (
+                pool_type.gpu or 0,
+                pool_type.available_cpu or 0,
+                pool_type.available_memory_mb or 0,
+            )
+            pool_types[key].append(pool_type)
+
+        if not pool_types:
+            return []
+
+        sorted_pool_types = sorted(pool_types.items(), key=lambda x: x[0])
+        return sorted_pool_types[0][1]
+
+    def _update_pod_container_resources(
+        self, pod: PodDescriptor, pool_types: Sequence[ResourcePoolType]
+    ) -> PodDescriptor:
+        if not pod.resources:
+            return pod
+        max_node_cpu = max([p.available_cpu or 0 for p in pool_types])
+        max_node_memory_mb = max([p.available_memory_mb or 0 for p in pool_types])
+        max_node_gpu = max([p.gpu or 0 for p in pool_types])
+        pod_gpu = pod.resources.gpu or 0
+        if (
+            max_node_cpu > pod.resources.cpu
+            or max_node_memory_mb > pod.resources.memory
+            or max_node_gpu > pod_gpu
+        ):
+            # Ignore pods that don't require all node's resources
+            return pod
+        # By default resources request is not specified which means
+        # that request = limit. This can prevent pod scheduling on a node
+        # which don't have enough memory. By lowering memory request we
+        # guarantee that pod will be scheduled on a node.
+        # We need to set some memory for cluster autoscaler to trigger scale up.
+        # It's scale up triggering algorithm is based on the pod resources.
+        # The more resources you request the more there is a chance that scale up
+        # will be triggered.
+        new_resources = replace(pod.resources, memory_request=1024)
+        return replace(pod, resources=new_resources)
 
     def _get_user_pod_labels(self, job: Job) -> Dict[str, str]:
         return {"platform.neuromation.io/user": job.owner}
@@ -297,15 +402,22 @@ class KubeOrchestrator(Orchestrator):
     def _get_pod_restart_policy(self, job: Job) -> PodRestartPolicy:
         return self._restart_policy_map[job.restart_policy]
 
-    async def get_missing_disks(self, disk_names: List[str]) -> List[str]:
-        assert disk_names, "no disk names"
+    async def get_missing_disks(self, disks: List[Disk]) -> List[Disk]:
+        assert disks, "no disks"
         missing = []
-        for disk in disk_names:
+        for disk in disks:
             try:
-                await self._client.get_raw_pvc(disk, self._kube_config.namespace)
-            except StatusException:
+                pvc = await self._client.get_raw_pvc(
+                    disk.disk_id, self._kube_config.namespace
+                )
+                if (
+                    pvc["metadata"]["labels"]["platform.neuromation.io/user"]
+                    != disk.user_name
+                ):
+                    missing.append(disk)
+            except (StatusException, KeyError):
                 missing.append(disk)
-        return sorted(missing)
+        return sorted(missing, key=lambda disk: disk.disk_id)
 
     async def get_missing_secrets(
         self, user_name: str, secret_names: List[str]
@@ -336,13 +448,21 @@ class KubeOrchestrator(Orchestrator):
                 f"{self._get_service_name_for_named(job)}.{self._kube_config.namespace}"
             )
 
-    async def start_job(self, job: Job) -> JobStatus:
+    async def start_job(
+        self, job: Job, tolerate_unreachable_node: bool = False
+    ) -> JobStatus:
+        """
+        tolerate_unreachable_node: used only in tests
+        """
+
         await self._create_docker_secret(job)
         await self._create_user_network_policy(job)
         try:
             await self._create_pod_network_policy(job)
 
-            descriptor = await self._create_pod_descriptor(job)
+            descriptor = await self._create_pod_descriptor(
+                job, tolerate_unreachable_node=tolerate_unreachable_node
+            )
             pod = await self._client.create_pod(descriptor)
 
             logger.info(f"Starting Service for {job.id}.")
@@ -351,7 +471,7 @@ class KubeOrchestrator(Orchestrator):
                 # As job deletion can fail, we have to try to remove old service
                 # with same name just to be sure
                 service_name = self._get_service_name_for_named(job)
-                await self._delete_service(service_name)
+                await self._delete_service(service_name, ignore_missing=True)
                 await self._create_service(descriptor, name=service_name)
 
             if job.has_http_server_exposed:
@@ -363,89 +483,64 @@ class KubeOrchestrator(Orchestrator):
         job.status_history.current = await self._get_pod_status(job, pod)
         return job.status
 
-    def _get_pod_tolerations(self, job: Job) -> List[Toleration]:
+    def _get_pod_tolerations(
+        self, job: Job, tolerate_unreachable_node: bool = False
+    ) -> List[Toleration]:
         tolerations = [
             Toleration(
-                key=self._kube_config.jobs_pod_toleration_key,
+                key=self._kube_config.jobs_pod_job_toleration_key,
                 operator="Exists",
                 effect="NoSchedule",
             )
         ]
-        if self._kube_config.node_label_preemptible and job.is_preemptible:
+        if (
+            self._kube_config.jobs_pod_preemptible_toleration_key
+            and job.preemptible_node
+        ):
             tolerations.append(
                 Toleration(
-                    key=self._kube_config.node_label_preemptible,
+                    key=self._kube_config.jobs_pod_preemptible_toleration_key,
+                    operator="Exists",
+                    effect="NoSchedule",
+                )
+            )
+        if tolerate_unreachable_node:
+            # Used only in tests. Minikube puts taint on nodes
+            # soon after it is created through K8s Api.
+            tolerations.append(
+                Toleration(
+                    key="node.kubernetes.io/unreachable",
                     operator="Exists",
                     effect="NoSchedule",
                 )
             )
         return tolerations
 
-    def _get_pod_node_affinity(self, job: Job) -> Optional[NodeAffinity]:
-        requirements = []
-        preferences = []
-
-        if self._kube_config.node_label_job:
-            # requiring a job node
-            requirements.append(
-                NodeSelectorRequirement.create_exists(self._kube_config.node_label_job)
-            )
-
-        if self._kube_config.node_label_preemptible:
-            if job.is_preemptible:
-                preemptible_requirement = NodeSelectorRequirement.create_exists(
-                    self._kube_config.node_label_preemptible
-                )
-                if job.is_forced_to_preemptible_pool:
-                    # requiring a preemptible node
-                    requirements.append(preemptible_requirement)
-                else:
-                    # preferring a preemptible node
-                    preferences.append(preemptible_requirement)
-            else:
-                # requiring a non-preemptible node
-                requirements.append(
-                    NodeSelectorRequirement.create_does_not_exist(
-                        self._kube_config.node_label_preemptible
-                    )
-                )
-
-        required_terms = []
-        preferred_terms = []
-
-        if requirements:
-            node_selector_term = NodeSelectorTerm(requirements)
-            required_terms.append(node_selector_term)
-
-        if preferences:
-            node_selector_term = NodeSelectorTerm(preferences)
-            preferred_terms.append(NodePreferredSchedulingTerm(node_selector_term))
-
+    def _get_pod_node_affinity(
+        self, job: Job, pool_types: Sequence[ResourcePoolType]
+    ) -> Optional[NodeAffinity]:
         # NOTE:
         # The pod is scheduled onto a node only if at least one of
         # `NodeSelectorTerm`s is satisfied.
         # `NodeSelectorTerm` is satisfied only if its `match_expressions` are
         # satisfied.
+        required_terms: List[NodeSelectorTerm] = []
+        preferred_terms: List[NodePreferredSchedulingTerm] = []
 
-        if required_terms or preferred_terms:
-            return NodeAffinity(required=required_terms, preferred=preferred_terms)
-        return None
-
-    async def _get_pod_node_selector(self, job: Job) -> Dict[str, str]:
-        container = job.request.container
-        selector: Dict[str, str] = {}
-
-        if not self._kube_config.node_label_gpu:
-            return selector
-
-        pool_types = await self.get_resource_pool_types()
-        for pool_type in pool_types:
-            if container.resources.check_fit_into_pool_type(pool_type):
-                if pool_type.gpu_model:
-                    selector[self._kube_config.node_label_gpu] = pool_type.gpu_model
-                break
-
-        return selector
+        if self._kube_config.node_label_node_pool:
+            for pool_type in pool_types:
+                required_terms.append(
+                    NodeSelectorTerm(
+                        [
+                            NodeSelectorRequirement.create_in(
+                                self._kube_config.node_label_node_pool, pool_type.name
+                            )
+                        ]
+                    )
+                )
+        if not required_terms:
+            return None
+        return NodeAffinity(required=required_terms, preferred=preferred_terms)
 
     def _get_job_pod_name(self, job: Job) -> str:
         # TODO (A Danshyn 11/15/18): we will need to start storing jobs'
@@ -469,23 +564,39 @@ class KubeOrchestrator(Orchestrator):
         assert pod_status is not None  # should always be present
         job_status = convert_pod_status_to_job_status(pod_status)
 
-        if pod_status.is_scheduled:
+        if not pod_status.is_phase_pending:
             return job_status
 
-        # Pod in pending state, and not scheduled yet.
+        # Pod in pending state.
         # Possible we are observing the case when Container requested
-        # too much resources, check events for NotTriggerScaleUp event
+        # too much resources -- we will check for NotTriggerScaleUp event.
+        # Or it tries to mount disk that is used by another job
+        # -- we will check for FailedAttachVolume event.
         now = datetime.now(timezone.utc)
         assert pod.created_at is not None
+        pod_events = await self._client.get_pod_events(
+            self._get_job_pod_name(job), self._kube_config.namespace
+        )
 
+        if pod_status.is_scheduled:
+            failed_volume_events = [
+                e for e in pod_events if e.reason == "FailedAttachVolume"
+            ]
+            failed_volume_events.sort(key=operator.attrgetter("last_timestamp"))
+            if failed_volume_events:
+                return JobStatusItem.create(
+                    JobStatus.PENDING,
+                    transition_time=now,
+                    reason=JobStatusReason.DISK_UNAVAILABLE,
+                    description="Waiting for another job to release disk resource",
+                )
+            return job_status
+
+        logger.info(f"Found unscheduled pod. Job '{job.id}'")
         schedule_timeout = (
             job.schedule_timeout or self._kube_config.job_schedule_timeout
         )
 
-        logger.info(f"Found pod that requested too much resources. Job '{job.id}'")
-        pod_events = await self._client.get_pod_events(
-            self._get_job_pod_name(job), self._kube_config.namespace
-        )
         scaleup_events = [e for e in pod_events if e.reason == "TriggeredScaleUp"]
         scaleup_events.sort(key=operator.attrgetter("last_timestamp"))
         if scaleup_events and (
@@ -572,9 +683,13 @@ class KubeOrchestrator(Orchestrator):
             service = service.make_named(name)
         return await self._client.create_service(service)
 
-    async def _delete_service(self, name: str) -> None:
+    async def _delete_service(self, name: str, *, ignore_missing: bool = False) -> None:
         try:
             await self._client.delete_service(name=name)
+        except NotFoundException:
+            if ignore_missing:
+                return
+            logger.exception(f"Failed to remove service {name}")
         except Exception:
             logger.exception(f"Failed to remove service {name}")
 

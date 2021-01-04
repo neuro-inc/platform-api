@@ -73,6 +73,7 @@ class TestJobsStorage:
     def _create_running_job(
         self, owner: str = "compute", job_name: Optional[str] = None, **kwargs: Any
     ) -> JobRecord:
+        kwargs.setdefault("materialized", True)
         return self._create_job(
             name=job_name, owner=owner, status=JobStatus.RUNNING, **kwargs
         )
@@ -80,6 +81,7 @@ class TestJobsStorage:
     def _create_succeeded_job(
         self, owner: str = "compute", job_name: Optional[str] = None, **kwargs: Any
     ) -> JobRecord:
+        kwargs.setdefault("materialized", True)
         return self._create_job(
             name=job_name, status=JobStatus.SUCCEEDED, owner=owner, **kwargs
         )
@@ -87,6 +89,7 @@ class TestJobsStorage:
     def _create_failed_job(
         self, owner: str = "compute", job_name: Optional[str] = None, **kwargs: Any
     ) -> JobRecord:
+        kwargs.setdefault("materialized", True)
         return self._create_job(
             name=job_name, status=JobStatus.FAILED, owner=owner, **kwargs
         )
@@ -1097,7 +1100,7 @@ class TestJobsStorage:
         pending_job = self._create_pending_job()
         running_job = self._create_running_job()
         succeeded_job = self._create_succeeded_job()
-        deleted_job = self._create_succeeded_job(is_deleted=True)
+        deleted_job = self._create_succeeded_job(materialized=False)
         await storage.set_job(pending_job)
         await storage.set_job(running_job)
         await storage.set_job(succeeded_job)
@@ -1108,13 +1111,14 @@ class TestJobsStorage:
         job = jobs[0]
         assert job.id == succeeded_job.id
         assert job.status == JobStatus.SUCCEEDED
-        assert not job.is_deleted
+        assert job.materialized
 
     @pytest.mark.asyncio
     async def test_get_tags_empty(self, storage: JobsStorage) -> None:
         for job in [
             self._create_job(owner="u", tags=["b"]),
             self._create_job(owner="u", tags=["a"]),
+            self._create_job(owner="u", tags=()),
         ]:
             async with storage.try_create_job(job):
                 pass
@@ -1132,6 +1136,7 @@ class TestJobsStorage:
             self._create_job(owner="u", current_datetime_factory=f1, tags=["b"]),
             self._create_job(owner="u", current_datetime_factory=f2, tags=["a"]),
             self._create_job(owner="u", current_datetime_factory=f3, tags=["c"]),
+            self._create_job(owner="u", tags=()),
         ]:
             async with storage.try_create_job(job):
                 pass
@@ -1149,6 +1154,7 @@ class TestJobsStorage:
                 owner="u", current_datetime_factory=f1, tags=["b", "a", "c"]
             ),
             self._create_job(owner="u", current_datetime_factory=f2, tags=["d"]),
+            self._create_job(owner="u", tags=()),
         ]:
             async with storage.try_create_job(job):
                 pass
@@ -1168,6 +1174,7 @@ class TestJobsStorage:
             self._create_job(owner="u", current_datetime_factory=f2, tags=["b"]),
             self._create_job(owner="u", current_datetime_factory=f3, tags=["a"]),
             self._create_job(owner="u", current_datetime_factory=f4, tags=["c"]),
+            self._create_job(owner="u", tags=()),
         ]:
             async with storage.try_create_job(job):
                 pass
@@ -1188,6 +1195,7 @@ class TestJobsStorage:
             self._create_job(owner="u", current_datetime_factory=f1, tags=["a"]),
             self._create_job(owner="u", current_datetime_factory=f2, tags=["b"]),
             self._create_job(owner="u", current_datetime_factory=f3, tags=["c", "a"]),
+            self._create_job(owner="u", tags=()),
         ]:
             async with storage.try_create_job(job):
                 pass
@@ -1213,6 +1221,7 @@ class TestJobsStorage:
         jobs = await storage.get_jobs_for_deletion()
         assert not jobs
 
+        job.materialized = True
         job.status = JobStatus.RUNNING
         await storage.set_job(job)
 
@@ -1242,9 +1251,9 @@ class TestJobsStorage:
         job = jobs[0]
         assert job.id == job_id
         assert job.status == JobStatus.FAILED
-        assert not job.is_deleted
+        assert job.materialized
 
-        job.is_deleted = True
+        job.materialized = False
         await storage.set_job(job)
 
         jobs = await storage.get_all_jobs()
@@ -1616,9 +1625,8 @@ class TestJobsStorage:
             async with storage.try_create_job(job):
                 pass
 
-        job_filter = JobFilter(owners={owner})
-        actual_run_time = await storage.get_aggregated_run_time(job_filter)
-        actual_run_times = await storage.get_aggregated_run_time_by_clusters(job_filter)
+        actual_run_time = await storage.get_aggregated_run_time(owner)
+        actual_run_times = await storage.get_aggregated_run_time_by_clusters(owner)
 
         test_elapsed = current_datetime_factory() - test_started_at
 
@@ -1655,6 +1663,92 @@ class TestJobsStorage:
         assert expected2 <= actual_non_gpu2 <= expected2 + 2 * test_elapsed
 
     @pytest.mark.asyncio
+    async def test_get_aggregated_run_time_caching(self, storage: JobsStorage) -> None:
+        started_at = current_datetime_factory() - timedelta(hours=10)
+        owner = f"test-user-{random_str()}"
+
+        async def add_job(
+            running_at: datetime,
+            with_gpu: bool = False,
+            finished_at: Optional[datetime] = None,
+            cluster_name: str = "test-cluster",
+        ) -> timedelta:
+            status_history = [
+                JobStatusItem.create(JobStatus.PENDING, transition_time=started_at),
+                JobStatusItem.create(JobStatus.RUNNING, transition_time=running_at),
+            ]
+            if finished_at:
+                status_history.append(
+                    JobStatusItem.create(
+                        JobStatus.SUCCEEDED, transition_time=finished_at
+                    )
+                )
+            job = JobRecord.create(
+                owner=owner,
+                request=self._create_job_request(with_gpu),
+                cluster_name=cluster_name,
+                status_history=JobStatusHistory(status_history),
+            )
+            async with storage.try_create_job(job):
+                pass
+            return job.get_run_time()
+
+        # No jobs
+        result = await storage.get_aggregated_run_time_by_clusters(owner)
+        assert result == {}
+
+        # Add completed jobs (gpu and non gpu)
+        await add_job(
+            started_at, finished_at=started_at + timedelta(hours=1), with_gpu=False
+        )
+        await add_job(
+            started_at, finished_at=started_at + timedelta(hours=2), with_gpu=True
+        )
+
+        result = await storage.get_aggregated_run_time_by_clusters(owner)
+        assert result["test-cluster"].total_non_gpu_run_time_delta == timedelta(hours=1)
+        assert result["test-cluster"].total_gpu_run_time_delta == timedelta(hours=2)
+
+        # Add some more completed jobs
+        await add_job(
+            started_at + timedelta(hours=2),
+            finished_at=started_at + timedelta(hours=4),
+            with_gpu=False,
+        )
+        await add_job(
+            started_at + timedelta(hours=2),
+            finished_at=started_at + timedelta(hours=3),
+            with_gpu=True,
+        )
+
+        result = await storage.get_aggregated_run_time_by_clusters(owner)
+        assert result["test-cluster"].total_non_gpu_run_time_delta == timedelta(hours=3)
+        assert result["test-cluster"].total_gpu_run_time_delta == timedelta(hours=3)
+
+        # Add job that completed seconds ago
+        await add_job(
+            started_at,
+            finished_at=started_at + timedelta(hours=9, seconds=3590),
+            with_gpu=False,
+        )
+
+        result = await storage.get_aggregated_run_time_by_clusters(owner)
+        assert result["test-cluster"].total_non_gpu_run_time_delta == timedelta(
+            hours=12, seconds=3590
+        )
+        assert result["test-cluster"].total_gpu_run_time_delta == timedelta(hours=3)
+
+        # Add running jobs
+        await add_job(started_at + timedelta(hours=9), with_gpu=False)
+        await add_job(started_at + timedelta(hours=9), with_gpu=True)
+
+        result = await storage.get_aggregated_run_time_by_clusters(owner)
+        assert result["test-cluster"].total_non_gpu_run_time_delta >= timedelta(
+            hours=13, seconds=3590
+        )
+        assert result["test-cluster"].total_gpu_run_time_delta >= timedelta(hours=4)
+
+    @pytest.mark.asyncio
     async def test_get_jobs_by_ids_missing_only(self, storage: JobsStorage) -> None:
         jobs = await storage.get_jobs_by_ids({"missing"})
         assert not jobs
@@ -1675,6 +1769,12 @@ class TestJobsStorage:
         )
         job_ids = [job.id for job in jobs]
         assert job_ids == [first_job.id]
+
+        jobs = await storage.get_jobs_by_ids(
+            set(),
+            job_filter=job_filter,
+        )
+        assert jobs == []
 
     def _fix_utf8(self, value: str) -> str:
         return value.encode("utf-8", "replace").decode("utf-8")
@@ -1797,3 +1897,49 @@ class TestJobsStorage:
         async for job in redis_storage.iter_all_jobs():
             jobs_in_redis.append(job)
         self.check_same_job_sets(some_jobs, jobs_in_redis)
+
+    @pytest.mark.asyncio
+    async def test_data_migration_rename_as_deleted(
+        self, redis_config: RedisConfig, postgres_dsn: str
+    ) -> None:
+        postgres_config = PostgresConfig(
+            postgres_dsn=postgres_dsn,
+            alembic=EnvironConfigFactory().create_alembic(
+                postgres_dsn, redis_config.uri
+            ),
+        )
+        migration_runner = MigrationRunner(postgres_config)
+        await migration_runner.upgrade("81675d81a9c7")
+
+        job_not_delete = self._create_failed_job(
+            owner="user3", cluster_name="my-cluster", materialized=True
+        )
+        job_delete = self._create_failed_job(
+            owner="user3", cluster_name="my-cluster", materialized=False
+        )
+
+        real_to_primitive = JobRecord.to_primitive
+
+        def _to_primitive(self: JobRecord) -> Dict[str, Any]:
+            payload = real_to_primitive(self)
+            payload["is_deleted"] = not payload["materialized"]
+            return payload
+
+        JobRecord.to_primitive = _to_primitive  # type: ignore
+
+        try:
+            # Load data to postgres
+            async with create_postgres_pool(postgres_config) as pool:
+                postgres_storage = PostgresJobsStorage(pool)
+                await postgres_storage.set_job(job_delete)
+                await postgres_storage.set_job(job_not_delete)
+            await migration_runner.upgrade()
+            JobRecord.to_primitive = real_to_primitive  # type: ignore
+            async with create_postgres_pool(postgres_config) as pool:
+                postgres_storage = PostgresJobsStorage(pool)
+                assert (await postgres_storage.get_job(job_not_delete.id)).materialized
+                assert not (await postgres_storage.get_job(job_delete.id)).materialized
+        finally:
+            JobRecord.to_primitive = real_to_primitive  # type: ignore
+            # Downgrade
+            await migration_runner.downgrade()

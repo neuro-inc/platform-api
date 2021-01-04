@@ -1,8 +1,25 @@
+import base64
+import json
 import logging
+from collections import defaultdict
+from dataclasses import dataclass, replace
+from datetime import datetime, timezone
+from functools import partial
 from pathlib import PurePath
-from typing import AsyncIterator, Iterable, List, Optional, Sequence, Tuple
+from typing import (
+    AsyncIterator,
+    Callable,
+    Dict,
+    Iterable,
+    List,
+    Optional,
+    Sequence,
+    Tuple,
+    Union,
+)
 
 from async_generator import asynccontextmanager
+from neuro_auth_client import AuthClient, Permission
 from notifications_client import (
     Client as NotificationsClient,
     JobCannotStartQuotaReached,
@@ -19,7 +36,7 @@ from platform_api.cluster import (
     ClusterRegistry,
 )
 from platform_api.cluster_config import OrchestratorConfig, StorageConfig
-from platform_api.config import JobsConfig
+from platform_api.config import JobsConfig, JobsSchedulerConfig
 from platform_api.user import User, UserCluster
 
 from .base import Orchestrator
@@ -53,6 +70,9 @@ from .status import Status
 logger = logging.getLogger(__file__)
 
 
+NEURO_PASSED_CONFIG = "NEURO_PASSED_CONFIG"
+
+
 class JobsServiceException(Exception):
     pass
 
@@ -71,6 +91,130 @@ class NonGpuQuotaExceededError(QuotaException):
         super().__init__(f"non-GPU quota exceeded for user '{user}'")
 
 
+class RunningJobsQuotaExceededError(QuotaException):
+    def __init__(self, user: str) -> None:
+        super().__init__(f"jobs limit quota exceeded for user '{user}'")
+
+
+@dataclass(frozen=True)
+class SchedulingResult:
+    jobs_to_update: List[JobRecord]
+    jobs_to_suspend: List[JobRecord]
+
+
+current_datetime_factory = partial(datetime.now, timezone.utc)
+
+
+class JobsScheduler:
+    def __init__(
+        self,
+        config: JobsSchedulerConfig,
+        auth_client: AuthClient,
+        current_datetime_factory: Callable[[], datetime] = current_datetime_factory,
+    ) -> None:
+        self._config = config
+        self._auth_client = auth_client
+        self._current_datetime_factory = current_datetime_factory
+
+    async def _get_user_running_jobs_quota(
+        self, username: str, cluster: str
+    ) -> Optional[int]:
+        auth_user = await self._auth_client.get_user(username)
+        user = User.create_from_auth_user(auth_user)
+        user_cluster = user.get_cluster(cluster)
+        if user_cluster:
+            return user_cluster.jobs_quota
+        return 0  # User has no access to this cluster
+
+    async def _enforce_running_job_quota(
+        self, raw_result: SchedulingResult
+    ) -> SchedulingResult:
+        jobs_to_update: List[JobRecord] = []
+
+        # Grouping by (username, cluster_name):
+        grouped_jobs: Dict[Tuple[str, str], List[JobRecord]] = defaultdict(list)
+        for record in raw_result.jobs_to_update:
+            grouped_jobs[(record.owner, record.cluster_name)].append(record)
+
+        # Filter jobs
+        for (username, cluster), jobs in grouped_jobs.items():
+            quota = await self._get_user_running_jobs_quota(username, cluster)
+            if quota is not None:
+                materialized_jobs = [job for job in jobs if job.materialized]
+                not_materialized = [job for job in jobs if not job.materialized]
+                jobs_to_update.extend(materialized_jobs)
+                free_places = quota - len(materialized_jobs)
+                if free_places > 0:
+                    not_materialized = sorted(
+                        not_materialized, key=lambda job: job.status_history.created_at
+                    )
+                    jobs_to_update.extend(not_materialized[:free_places])
+            else:
+                jobs_to_update.extend(jobs)
+
+        return SchedulingResult(
+            jobs_to_update=jobs_to_update,
+            jobs_to_suspend=raw_result.jobs_to_suspend,
+        )
+
+    async def schedule(self, unfinished: List[JobRecord]) -> SchedulingResult:
+        jobs_to_update: List[JobRecord] = []
+        jobs_to_suspend: List[JobRecord] = []
+        now = self._current_datetime_factory()
+
+        # Always start/update not scheduled jobs
+        jobs_to_update.extend(job for job in unfinished if not job.scheduler_enabled)
+
+        scheduled = [job for job in unfinished if job.scheduler_enabled]
+
+        not_materialized = sorted(
+            (job for job in scheduled if not job.materialized),
+            key=lambda job: job.status_history.current.transition_time,
+        )
+        materialized_not_running = [
+            job
+            for job in scheduled
+            if job.status != JobStatus.RUNNING and job.materialized
+        ]
+        running = [job for job in scheduled if job.status == JobStatus.RUNNING]
+
+        waiting_exists = any(
+            now - job.status_history.current.transition_time
+            >= self._config.is_waiting_min_time
+            for job in materialized_not_running
+        )
+
+        # not_materialized processing
+
+        for job in not_materialized:
+            suspended_at = job.status_history.current.transition_time
+            if (
+                not waiting_exists
+                or now - suspended_at >= self._config.max_suspended_time
+            ):
+                jobs_to_update.append(job)
+
+        # materialized_not_running processing
+
+        jobs_to_update.extend(materialized_not_running)
+
+        # running processing
+
+        for job in running:
+            continued_at = job.status_history.continued_at
+            assert continued_at, "Running job should have continued_at"
+            if now - continued_at >= self._config.run_quantum and waiting_exists:
+                jobs_to_suspend.append(job)
+            else:
+                jobs_to_update.append(job)
+
+        result = SchedulingResult(
+            jobs_to_update=jobs_to_update,
+            jobs_to_suspend=jobs_to_suspend,
+        )
+        return await self._enforce_running_job_quota(result)
+
+
 class JobsService:
     def __init__(
         self,
@@ -78,11 +222,15 @@ class JobsService:
         jobs_storage: JobsStorage,
         jobs_config: JobsConfig,
         notifications_client: NotificationsClient,
+        scheduler: JobsScheduler,
+        auth_client: AuthClient,
+        api_base_url: URL,
     ) -> None:
         self._cluster_registry = cluster_registry
         self._jobs_storage = jobs_storage
         self._jobs_config = jobs_config
         self._notifications_client = notifications_client
+        self._scheduler = scheduler
 
         self._max_deletion_attempts = 10
 
@@ -91,9 +239,10 @@ class JobsService:
         )
         self._dummy_cluster_orchestrator_config = OrchestratorConfig(
             jobs_domain_name_template="{job_id}.missing-cluster",
-            ssh_auth_server="missing-cluster:22",
             resource_pool_types=(),
         )
+        self._auth_client = auth_client
+        self._api_base_url = api_base_url
 
     @asynccontextmanager
     async def _get_cluster(
@@ -105,29 +254,42 @@ class JobsService:
             yield cluster
 
     async def update_jobs_statuses(self) -> None:
-        # TODO (A Danshyn 02/17/19): instead of returning `Job` objects,
-        # it makes sense to just return their IDs.
+        unfinished = await self._jobs_storage.get_unfinished_jobs()
+        result = await self._scheduler.schedule(unfinished)
 
-        for record in await self._jobs_storage.get_unfinished_jobs():
+        for record in result.jobs_to_update:
             await self._update_job_status_by_id(record.id)
+
+        for record in result.jobs_to_suspend:
+            await self._suspend_job_by_id(record.id)
 
         for record in await self._jobs_storage.get_jobs_for_deletion(
             delay=self._jobs_config.deletion_delay
         ):
-            # finished, but not yet deleted jobs
-            # assert job.is_finished and not job.is_deleted
+            # finished, but not yet dematerialized jobs
+            # assert job.is_finished and job.materialized
             await self._delete_job_by_id(record.id)
+
+    def _make_job(self, record: JobRecord, cluster: Optional[Cluster] = None) -> Job:
+        if cluster is not None:
+            storage_config = cluster.config.storage
+            orchestrator_config = cluster.orchestrator.config
+        else:
+            storage_config = self._dummy_cluster_storage_config
+            orchestrator_config = self._dummy_cluster_orchestrator_config
+        return Job(
+            storage_config=storage_config,
+            orchestrator_config=orchestrator_config,
+            record=record,
+            image_pull_error_delay=self._jobs_config.image_pull_error_delay,
+        )
 
     async def _update_job_status_by_id(self, job_id: str) -> None:
         try:
             async with self._update_job_in_storage(job_id) as record:
                 try:
                     async with self._get_cluster(record.cluster_name) as cluster:
-                        job = Job(
-                            storage_config=cluster.config.storage,
-                            orchestrator_config=cluster.orchestrator.config,
-                            record=record,
-                        )
+                        job = self._make_job(record, cluster)
                         await self._update_job_status(cluster.orchestrator, job)
                         job.collect_if_needed()
                 except ClusterNotFound as cluster_err:
@@ -142,10 +304,23 @@ class JobsService:
                         reason=JobStatusReason.CLUSTER_NOT_FOUND,
                         description=str(cluster_err),
                     )
-                    record.is_deleted = True
+                    record.materialized = False
+                    await self._revoke_pass_config(record)
                 except ClusterNotAvailable:
                     # skipping job status update
                     pass
+        except JobStorageTransactionError:
+            # intentionally ignoring any transaction failures here because
+            # the job may have been changed and a retry is needed.
+            pass
+
+    async def _suspend_job_by_id(self, job_id: str) -> None:
+        try:
+            async with self._update_job_in_storage(job_id) as record:
+                await self._delete_cluster_job(record)
+
+                record.status = JobStatus.SUSPENDED
+                record.materialized = False
         except JobStorageTransactionError:
             # intentionally ignoring any transaction failures here because
             # the job may have been changed and a retry is needed.
@@ -160,10 +335,11 @@ class JobsService:
 
         old_status_item = job.status_history.current
 
-        if job.is_creating:
+        if not job.materialized:
             try:
                 await orchestrator.start_job(job)
                 status_item = job.status_history.current
+                job.materialized = True
             except JobAlreadyExistsException:
                 logger.info(f"Job '{job.id}' already exists.")
                 # Terminate the transaction. The exception will be ignored.
@@ -175,7 +351,8 @@ class JobsService:
                     reason=str(exc),
                     description="The job could not be started.",
                 )
-                job.is_deleted = True
+                job.materialized = False
+                await self._revoke_pass_config(job)
         else:
             try:
                 status_item = await orchestrator.get_job_status(job)
@@ -193,7 +370,8 @@ class JobsService:
                     reason=JobStatusReason.NOT_FOUND,
                     description="The job could not be scheduled or was preempted.",
                 )
-                job.is_deleted = True
+                job.materialized = False
+                await self._revoke_pass_config(job)
 
         if old_status_item != status_item:
             job.status_history.current = status_item
@@ -210,7 +388,8 @@ class JobsService:
                 await self._delete_cluster_job(record)
 
                 # marking finished job as deleted
-                record.is_deleted = True
+                record.materialized = False
+                await self._revoke_pass_config(record)
         except JobStorageTransactionError:
             # intentionally ignoring any transaction failures here because
             # the job may have been changed and a retry is needed.
@@ -221,12 +400,9 @@ class JobsService:
     ) -> None:
         if not user_cluster.has_quota():
             return
-        quota = user_cluster.quota
-        run_time_filter = JobFilter(
-            owners={user.name}, clusters={user_cluster.name: {}}
-        )
+        quota = user_cluster.runtime_quota
         run_times = await self._jobs_storage.get_aggregated_run_time_by_clusters(
-            run_time_filter
+            user.name
         )
         run_time = run_times.get(user_cluster.name, ZERO_RUN_TIME)
         if (
@@ -241,10 +417,73 @@ class JobsService:
         ):
             raise GpuQuotaExceededError(user.name)
 
-    def _get_secret_name(self, secret_uri: URL) -> str:
-        parts = PurePath(secret_uri.path).parts
-        assert len(parts) == 3, parts
-        return parts[2]
+    async def _raise_for_running_jobs_quota(
+        self, user: User, user_cluster: UserCluster
+    ) -> None:
+        if user_cluster.jobs_quota is None:
+            return
+        running_filter = JobFilter(
+            owners={user.name},
+            clusters={user_cluster.name: {}},
+            statuses={JobStatus(value) for value in JobStatus.active_values()},
+        )
+        running_count = len(await self._jobs_storage.get_all_jobs(running_filter))
+        if running_count >= user_cluster.jobs_quota:
+            raise RunningJobsQuotaExceededError(user.name)
+
+    async def _check_secrets(self, cluster_name: str, job_request: JobRequest) -> None:
+        grouped_secrets = job_request.container.get_user_secrets()
+        if not grouped_secrets:
+            return
+
+        missing = []
+        async with self._get_cluster(cluster_name) as cluster:
+            # Warning: contextmanager '_get_cluster' suppresses all exceptions
+            for user_name, user_secrets in grouped_secrets.items():
+                missing.extend(
+                    await cluster.orchestrator.get_missing_secrets(
+                        user_name, [secret.secret_key for secret in user_secrets]
+                    )
+                )
+        if missing:
+            details = ", ".join(f"'{s}'" for s in sorted(missing))
+            raise JobsServiceException(f"Missing secrets: {details}")
+
+    async def _make_pass_config_token(self, username: str, job_id: str) -> str:
+        token_uri = f"token://job/{job_id}"
+        await self._auth_client.grant_user_permissions(
+            username, [Permission(uri=token_uri, action="read")]
+        )
+        return await self._auth_client.get_user_token(username, new_token_uri=token_uri)
+
+    async def _revoke_pass_config(self, job: Union[JobRecord, Job]) -> None:
+        if job.pass_config:
+            token_uri = f"token://job/{job.id}"
+            await self._auth_client.revoke_user_permissions(job.owner, [token_uri])
+
+    async def _setup_pass_config(
+        self, user: User, cluster_name: str, job_request: JobRequest
+    ) -> JobRequest:
+        if NEURO_PASSED_CONFIG in job_request.container.env:
+            raise JobsServiceException(
+                f"Cannot pass config: ENV '{NEURO_PASSED_CONFIG}' " "already specified"
+            )
+        token = await self._make_pass_config_token(user.name, job_request.job_id)
+        pass_config_data = base64.b64encode(
+            json.dumps(
+                {
+                    "token": token,
+                    "cluster": cluster_name,
+                    "url": str(self._api_base_url),
+                }
+            ).encode()
+        ).decode()
+        new_env = {
+            **job_request.container.env,
+            NEURO_PASSED_CONFIG: pass_config_data,
+        }
+        new_container = replace(job_request.container, env=new_env)
+        return replace(job_request, container=new_container)
 
     async def create_job(
         self,
@@ -253,8 +492,13 @@ class JobsService:
         *,
         cluster_name: Optional[str] = None,
         job_name: Optional[str] = None,
+        preset_name: Optional[str] = None,
         tags: Sequence[str] = (),
-        is_preemptible: bool = False,
+        scheduler_enabled: bool = False,
+        preemptible_node: bool = False,
+        pass_config: bool = False,
+        wait_for_jobs_quota: bool = False,
+        privileged: bool = False,
         schedule_timeout: Optional[float] = None,
         max_run_time_minutes: Optional[int] = None,
         restart_policy: JobRestartPolicy = JobRestartPolicy.NEVER,
@@ -278,7 +522,7 @@ class JobsService:
                 gpu_requested=bool(job_request.container.resources.gpu),
             )
         except GpuQuotaExceededError:
-            quota = user_cluster.quota.total_gpu_run_time_delta
+            quota = user_cluster.runtime_quota.total_gpu_run_time_delta
             await self._notifications_client.notify(
                 JobCannotStartQuotaReached(
                     user_id=user.name,
@@ -289,7 +533,7 @@ class JobsService:
             )
             raise
         except NonGpuQuotaExceededError:
-            quota = user_cluster.quota.total_non_gpu_run_time_delta
+            quota = user_cluster.runtime_quota.total_non_gpu_run_time_delta
             await self._notifications_client.notify(
                 JobCannotStartQuotaReached(
                     user_id=user.name,
@@ -299,6 +543,11 @@ class JobsService:
                 )
             )
             raise
+        if not wait_for_jobs_quota:
+            await self._raise_for_running_jobs_quota(user, user_cluster)
+        if pass_config:
+            job_request = await self._setup_pass_config(user, cluster_name, job_request)
+
         record = JobRecord.create(
             request=job_request,
             owner=user.name,
@@ -311,47 +560,46 @@ class JobsService:
                 ]
             ),
             name=job_name,
+            preset_name=preset_name,
             tags=tags,
-            is_preemptible=is_preemptible,
+            scheduler_enabled=scheduler_enabled,
+            preemptible_node=preemptible_node,
+            pass_config=pass_config,
             schedule_timeout=schedule_timeout,
             max_run_time_minutes=max_run_time_minutes,
             restart_policy=restart_policy,
+            privileged=privileged,
         )
         job_id = job_request.job_id
 
-        job_secrets = [
-            self._get_secret_name(uri)
-            for uri in job_request.container.get_secret_uris()
-        ]
-        if job_secrets:
-            async with self._get_cluster(cluster_name) as cluster:
-                # Warning: contextmanager '_get_cluster' suppresses all exceptions
-                missing = await cluster.orchestrator.get_missing_secrets(
-                    user.name, job_secrets
-                )
-            if missing:
-                details = ", ".join(f"'{s}'" for s in sorted(missing))
-                raise JobsServiceException(f"Missing secrets: {details}")
+        await self._check_secrets(cluster_name, job_request)
+
         job_disks = [
-            disk_volume.disk.disk_id
-            for disk_volume in job_request.container.disk_volumes
+            disk_volume.disk for disk_volume in job_request.container.disk_volumes
         ]
         if job_disks:
             async with self._get_cluster(cluster_name) as cluster:
                 # Warning: contextmanager '_get_cluster' suppresses all exceptions
                 missing = await cluster.orchestrator.get_missing_disks(job_disks)
             if missing:
-                details = ", ".join(f"'{s}'" for s in sorted(missing))
+                details = ", ".join(f"'{disk.disk_id}'" for disk in sorted(missing))
                 raise JobsServiceException(f"Missing disks: {details}")
+
+        if record.privileged:
+            async with self._get_cluster(cluster_name) as cluster:
+                # Warning: contextmanager '_get_cluster' suppresses all exceptions,
+                privileged_mode_allowed = (
+                    cluster.config.orchestrator.allow_privileged_mode
+                )
+            if not privileged_mode_allowed:
+                raise JobsServiceException(
+                    f"Cluster {cluster_name} does not allow privileged jobs"
+                )
 
         try:
             async with self._create_job_in_storage(record) as record:
                 async with self._get_cluster(record.cluster_name) as cluster:
-                    job = Job(
-                        storage_config=cluster.config.storage,
-                        orchestrator_config=cluster.orchestrator.config,
-                        record=record,
-                    )
+                    job = self._make_job(record, cluster)
                     await cluster.orchestrator.prepare_job(job)
             return job, Status.create(job.status)
 
@@ -394,25 +642,15 @@ class JobsService:
             async with self._get_cluster(
                 record.cluster_name, tolerate_unavailable=True
             ) as cluster:
-                return Job(
-                    storage_config=cluster.config.storage,
-                    orchestrator_config=cluster.orchestrator.config,
-                    record=record,
-                )
+                return self._make_job(record, cluster)
         except ClusterNotFound:
             # in case the cluster is missing, we still want to return the job
             # to be able to render a proper HTTP response, therefore we have
-            # the fallback logic that uses the default cluster instead.
+            # the fallback logic that uses the dummy cluster instead.
             logger.warning(
                 "Falling back to dummy cluster config to retrieve job '%s'", record.id
             )
-            # NOTE: we may rather want to fall back to some dummy
-            # OrchestratorConfig instead.
-            return Job(
-                storage_config=self._dummy_cluster_storage_config,
-                orchestrator_config=self._dummy_cluster_orchestrator_config,
-                record=record,
-            )
+            return self._make_job(record)
 
     async def get_job(self, job_id: str) -> Job:
         record = await self._jobs_storage.get_job(job_id)
@@ -421,11 +659,7 @@ class JobsService:
     async def _delete_cluster_job(self, record: JobRecord) -> None:
         try:
             async with self._get_cluster(record.cluster_name) as cluster:
-                job = Job(
-                    storage_config=cluster.config.storage,
-                    orchestrator_config=cluster.orchestrator.config,
-                    record=record,
-                )
+                job = self._make_job(record, cluster)
                 try:
                     await cluster.orchestrator.delete_job(job)
                 except JobException as exc:
@@ -439,7 +673,7 @@ class JobsService:
             # the job as deleted. suppressing.
             logger.warning("Could not delete job '%s'. Reason: '%s'", record.id, exc)
 
-    async def delete_job(self, job_id: str) -> None:
+    async def cancel_job(self, job_id: str) -> None:
         for _ in range(self._max_deletion_attempts):
             try:
                 async with self._update_job_in_storage(job_id) as record:
@@ -447,15 +681,13 @@ class JobsService:
                         # the job has already finished. nothing to do here.
                         return
 
-                    logger.info("Deleting job %s", job_id)
-                    await self._delete_cluster_job(record)
-
+                    logger.info("Canceling job %s", job_id)
                     record.status = JobStatus.CANCELLED
-                    record.is_deleted = True
+
                 return
             except JobStorageTransactionError:
-                logger.warning("Failed to mark a job %s as deleted. Retrying.", job_id)
-        logger.warning("Failed to mark a job %s as deleted. Giving up.", job_id)
+                logger.warning("Failed to mark a job %s as canceled. Retrying.", job_id)
+        logger.warning("Failed to mark a job %s as canceled. Giving up.", job_id)
 
     async def iter_all_jobs(
         self,

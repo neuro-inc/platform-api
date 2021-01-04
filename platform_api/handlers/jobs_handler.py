@@ -19,6 +19,7 @@ from typing import (
 import aiohttp.web
 import iso8601
 import trafaret as t
+import trafaret.keys
 from aiohttp_security import check_authorized
 from aiohttp_security.api import AUTZ_KEY
 from multidict import MultiDictProxy
@@ -51,7 +52,7 @@ from platform_api.orchestrator.jobs_storage import (
     JobFilter,
     JobStorageTransactionError,
 )
-from platform_api.resource import TPUResource
+from platform_api.resource import Preset, TPUResource
 from platform_api.user import User, authorized_user, untrusted_user
 
 from .job_request_builder import create_container_from_payload
@@ -73,37 +74,141 @@ logger = logging.getLogger(__name__)
 
 def create_job_request_validator(
     *,
+    allow_flat_structure: bool = False,
     allowed_gpu_models: Sequence[str],
     allowed_tpu_resources: Sequence[TPUResource],
     cluster_name: str,
-    user_name: Optional[str] = None,
     storage_scheme: str = "storage",
 ) -> t.Trafaret:
-    return t.Dict(
+    def _check_no_schedule_timeout_for_scheduled_jobs(
+        payload: Dict[str, Any]
+    ) -> Dict[str, Any]:
+        if "schedule_timeout" in payload and payload["scheduler_enabled"]:
+            raise t.DataError("schedule_timeout is not allowed for scheduled jobs")
+        return payload
+
+    container_validator = create_container_request_validator(
+        allow_volumes=True,
+        allowed_gpu_models=allowed_gpu_models,
+        allowed_tpu_resources=allowed_tpu_resources,
+        storage_scheme=storage_scheme,
+        cluster_name=cluster_name,
+    )
+
+    def multiname_key(
+        name: str, keys: Sequence[str], default: Any, trafaret: t.Trafaret
+    ) -> t.Key:
+        _empty = object()
+
+        def _take_first(data: Dict[str, Any]) -> Dict[str, Any]:
+            for key in keys:
+                if data[key] is not _empty:
+                    return trafaret(data[key])
+            return trafaret(default)
+
+        return t.keys.subdict(
+            name,
+            *(t.Key(name=key, optional=True, default=_empty) for key in keys),
+            trafaret=_take_first,
+        )
+
+    job_validator = t.Dict(
         {
-            "container": create_container_request_validator(
-                allow_volumes=True,
-                allowed_gpu_models=allowed_gpu_models,
-                allowed_tpu_resources=allowed_tpu_resources,
-                storage_scheme=storage_scheme,
-                cluster_name=cluster_name,
-                user_name=user_name,
-            ),
             t.Key("name", optional=True): create_job_name_validator(),
             t.Key("description", optional=True): t.String,
+            t.Key("preset_name", optional=True): t.String,
             t.Key("tags", optional=True): t.List(
                 create_job_tag_validator(), max_length=16
             ),
-            t.Key("is_preemptible", optional=True, default=False): t.Bool,
+            t.Key("pass_config", optional=True, default=False): t.Bool,
+            t.Key("wait_for_jobs_quota", optional=True, default=False): t.Bool,
+            t.Key("privileged", optional=True, default=False): t.Bool,
             t.Key("schedule_timeout", optional=True): t.Float(gte=1, lt=30 * 24 * 3600),
-            t.Key("max_run_time_minutes", optional=True): t.Int(gte=0),
+            t.Key("max_run_time_minutes", optional=True): t.Int(gte=1),
             t.Key("cluster_name", default=cluster_name): t.Atom(cluster_name),
             t.Key("restart_policy", default=str(JobRestartPolicy.NEVER)): t.Enum(
                 *[str(policy) for policy in JobRestartPolicy]
             )
             >> JobRestartPolicy,
-        }
+        },
+        multiname_key(
+            "scheduler_enabled",
+            ["scheduler_enabled", "is_preemptible"],
+            default=False,
+            trafaret=t.Bool(),
+        ),
+        multiname_key(
+            "preemptible_node",
+            ["preemptible_node", "is_preemptible_node_required"],
+            default=False,
+            trafaret=t.Bool(),
+        ),
     )
+    # Either flat structure or payload with container field are allowed
+    if not allow_flat_structure:
+        # Deprecated. Use flat structure
+        return (
+            job_validator + t.Dict({"container": container_validator})
+        ) >> _check_no_schedule_timeout_for_scheduled_jobs
+    return (
+        job_validator + container_validator
+    ) >> _check_no_schedule_timeout_for_scheduled_jobs
+
+
+def create_job_preset_validator(presets: Sequence[Preset]) -> t.Trafaret:
+    def _check_no_resources(payload: Dict[str, Any]) -> Dict[str, Any]:
+        if "container" in payload:
+            resources = payload["container"].get("resources")
+        else:
+            resources = payload.get("resources")
+        if not resources:
+            return payload
+        if set(resources.keys()) - {"shm"}:
+            raise t.DataError("Both preset and resources are not allowed")
+        return payload
+
+    def _set_preset_resources(payload: Dict[str, Any]) -> Dict[str, Any]:
+        preset_name = payload["preset_name"]
+        preset = {p.name: p for p in presets}[preset_name]
+        payload["scheduler_enabled"] = preset.scheduler_enabled
+        payload["preemptible_node"] = preset.preemptible_node
+        if "container" in payload:
+            shm = payload["container"].get("resources", {}).get("shm", False)
+        else:
+            shm = payload.get("resources", {}).get("shm", False)
+        container_resources = {
+            "cpu": preset.cpu,
+            "memory_mb": preset.memory_mb,
+            "shm": shm,
+        }
+        if preset.gpu:
+            container_resources["gpu"] = preset.gpu
+            container_resources["gpu_model"] = preset.gpu_model
+        if preset.tpu:
+            container_resources["tpu"] = {
+                "type": preset.tpu.type,
+                "software_version": preset.tpu.software_version,
+            }
+        if "container" in payload:
+            payload["container"]["resources"] = container_resources
+        else:
+            payload["resources"] = container_resources
+        return payload
+
+    validator = (
+        t.Dict(
+            {
+                # Presets are always not empty
+                t.Key("preset_name", optional=True, default=presets[0].name): t.Enum(
+                    *[p.name for p in presets]
+                )
+            }
+        ).allow_extra("*")
+        >> _check_no_resources
+        >> _set_preset_resources
+    )
+
+    return validator
 
 
 def create_job_cluster_name_validator(default_cluster_name: str) -> t.Trafaret:
@@ -128,19 +233,23 @@ def create_job_response_validator() -> t.Trafaret:
             "status": create_job_status_validator(),
             t.Key("http_url", optional=True): t.String,
             t.Key("http_url_named", optional=True): t.String,
-            "ssh_server": t.String,
-            "ssh_auth_server": t.String,  # deprecated
             "history": create_job_history_validator(),
             "container": create_container_response_validator(),
-            "is_preemptible": t.Bool,
+            "scheduler_enabled": t.Bool,
+            "preemptible_node": t.Bool,
+            t.Key("is_preemptible", optional=True): t.Bool,
+            t.Key("is_preemptible_node_required", optional=True): t.Bool,
+            "pass_config": t.Bool,
             t.Key("internal_hostname", optional=True): t.String,
             t.Key("internal_hostname_named", optional=True): t.String,
             t.Key("name", optional=True): create_job_name_validator(max_length=None),
+            t.Key("preset_name", optional=True): t.String,
             t.Key("description", optional=True): t.String,
             t.Key("tags", optional=True): t.List(create_job_tag_validator()),
             t.Key("schedule_timeout", optional=True): t.Float,
             t.Key("max_run_time_minutes", optional=True): t.Int,
             "restart_policy": t.String,
+            "privileged": t.Bool,
         }
     )
 
@@ -192,8 +301,6 @@ def convert_job_container_to_json(
             "health_check_path": container.http_server.health_check_path,
             "requires_auth": container.http_server.requires_auth,
         }
-    if container.ssh_server is not None:
-        ret["ssh"] = {"port": container.ssh_server.port}
     for volume in container.volumes:
         ret["volumes"].append(convert_container_volume_to_json(volume, storage_config))
     for sec_volume in container.secret_volumes:
@@ -270,18 +377,24 @@ def convert_job_to_job_response(job: Job) -> Dict[str, Any]:
             "description": current_status.description,
             "created_at": history.created_at_str,
             "run_time_seconds": job.get_run_time().total_seconds(),
+            "restarts": history.restart_count,
         },
         "container": convert_job_container_to_json(
             job.request.container, job.storage_config
         ),
-        "ssh_server": job.ssh_server,
-        "ssh_auth_server": job.ssh_server,  # deprecated
-        "is_preemptible": job.is_preemptible,
+        "scheduler_enabled": job.scheduler_enabled,
+        "preemptible_node": job.preemptible_node,
+        "is_preemptible": job.scheduler_enabled,
+        "is_preemptible_node_required": job.preemptible_node,
+        "pass_config": job.pass_config,
         "uri": str(job.to_uri()),
         "restart_policy": str(job.restart_policy),
+        "privileged": job.privileged,
     }
     if job.name:
         response_payload["name"] = job.name
+    if job.preset_name:
+        response_payload["preset_name"] = job.preset_name
     if job.description:
         response_payload["description"] = job.description
     if job.tags:
@@ -379,17 +492,19 @@ class JobsHandler:
             )
 
     async def _create_job_request_validator(
-        self, cluster_config: ClusterConfig, user_name: str
+        self,
+        cluster_config: ClusterConfig,
+        allow_flat_structure: bool = False,
     ) -> t.Trafaret:
-        # TODO: rework `gpu_models` to be retrieved from `cluster_config`
-        gpu_models = await self._jobs_service.get_available_gpu_models(
-            cluster_config.name
+        resource_pool_types = cluster_config.orchestrator.resource_pool_types
+        gpu_models = list(
+            {rpt.gpu_model for rpt in resource_pool_types if rpt.gpu_model}
         )
         return create_job_request_validator(
+            allow_flat_structure=allow_flat_structure,
             allowed_gpu_models=gpu_models,
             allowed_tpu_resources=cluster_config.orchestrator.tpu_resources,
             cluster_name=cluster_config.name,
-            user_name=user_name,
             storage_scheme=cluster_config.storage.uri_scheme,
         )
 
@@ -426,13 +541,23 @@ class JobsHandler:
         self._check_user_can_submit_jobs(cluster_configs)
         cluster_name = request_payload["cluster_name"]
         cluster_config = self._get_cluster_config(cluster_configs, cluster_name)
+
+        if "from_preset" in request.query:
+            job_preset_validator = create_job_preset_validator(
+                cluster_config.orchestrator.presets
+            )
+            request_payload = job_preset_validator.check(request_payload)
+            allow_flat_structure = True
+        else:
+            allow_flat_structure = False
+
         job_request_validator = await self._create_job_request_validator(
-            cluster_config, user.name
+            cluster_config, allow_flat_structure=allow_flat_structure
         )
         request_payload = job_request_validator.check(request_payload)
 
         container = create_container_from_payload(
-            request_payload["container"], storage_config=cluster_config.storage
+            request_payload, storage_config=cluster_config.storage
         )
 
         permissions = infer_permissions_from_container(
@@ -441,19 +566,29 @@ class JobsHandler:
         await check_permissions(request, permissions)
 
         name = request_payload.get("name")
+        preset_name = request_payload.get("preset_name")
         tags = sorted(set(request_payload.get("tags", [])))
         description = request_payload.get("description")
-        is_preemptible = request_payload["is_preemptible"]
+        scheduler_enabled = request_payload["scheduler_enabled"]
+        preemptible_node = request_payload.get("preemptible_node", False)
+        pass_config = request_payload["pass_config"]
+        privileged = request_payload["privileged"]
         schedule_timeout = request_payload.get("schedule_timeout")
         max_run_time_minutes = request_payload.get("max_run_time_minutes")
+        wait_for_jobs_quota = request_payload.get("wait_for_jobs_quota")
         job_request = JobRequest.create(container, description)
         job, _ = await self._jobs_service.create_job(
             job_request,
             user=user,
             cluster_name=cluster_name,
             job_name=name,
+            preset_name=preset_name,
             tags=tags,
-            is_preemptible=is_preemptible,
+            scheduler_enabled=scheduler_enabled,
+            preemptible_node=preemptible_node,
+            pass_config=pass_config,
+            wait_for_jobs_quota=wait_for_jobs_quota,
+            privileged=privileged,
             schedule_timeout=schedule_timeout,
             max_run_time_minutes=max_run_time_minutes,
             restart_policy=request_payload["restart_policy"],
@@ -484,6 +619,13 @@ class JobsHandler:
 
     async def handle_get(self, request: aiohttp.web.Request) -> aiohttp.web.Response:
         job = await self._resolve_job(request, "read")
+
+        if request.query.get("_tests_check_materialized"):
+            # Used in tests during cleanup
+            return aiohttp.web.json_response(
+                data={"materialized": job.materialized},
+                status=aiohttp.web.HTTPOk.status_code,
+            )
 
         response_payload = convert_job_to_job_response(job)
         self._job_response_validator.check(response_payload)
@@ -608,7 +750,7 @@ class JobsHandler:
     ) -> aiohttp.web.StreamResponse:
         job = await self._resolve_job(request, "write")
 
-        await self._jobs_service.delete_job(job.id)
+        await self._jobs_service.cancel_job(job.id)
         raise aiohttp.web.HTTPNoContent()
 
     async def handle_put_status(

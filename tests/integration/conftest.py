@@ -4,7 +4,17 @@ import uuid
 from dataclasses import dataclass
 from datetime import datetime, timezone
 from pathlib import Path, PurePath
-from typing import Any, AsyncIterator, Awaitable, Callable, Dict, Iterator, Optional
+from typing import (
+    Any,
+    AsyncIterator,
+    Awaitable,
+    Callable,
+    Dict,
+    Iterator,
+    List,
+    Mapping,
+    Optional,
+)
 from urllib.parse import urlsplit
 
 import aiohttp
@@ -35,7 +45,12 @@ from platform_api.config import (
     ZipkinConfig,
 )
 from platform_api.orchestrator.job_request import JobNotFoundException
-from platform_api.orchestrator.kube_client import KubeClient, NodeTaint, Resources
+from platform_api.orchestrator.kube_client import (
+    AlreadyExistsException,
+    KubeClient,
+    NodeTaint,
+    Resources,
+)
 from platform_api.orchestrator.kube_orchestrator import KubeConfig, KubeOrchestrator
 from platform_api.redis import RedisConfig
 from platform_api.resource import (
@@ -48,10 +63,10 @@ from platform_api.resource import (
 
 
 pytest_plugins = [
+    "tests.integration.auth",
     "tests.integration.api",
     "tests.integration.docker",
     "tests.integration.redis",
-    "tests.integration.auth",
     "tests.integration.secrets",
     "tests.integration.diskapi",
     "tests.integration.notifications",
@@ -138,7 +153,6 @@ def kube_config_factory(
         defaults = dict(
             jobs_ingress_class="nginx",
             jobs_domain_name_template="{job_id}.jobs.neu.ro",
-            ssh_auth_server="ssh-auth.platform.neuromation.io:22",
             endpoint_url=cluster["server"],
             cert_authority_data_pem=cert_authority_data_pem,
             cert_authority_path=None,  # disable, only `cert_authority_data_pem` works
@@ -147,44 +161,81 @@ def kube_config_factory(
             node_label_gpu="gpu",
             resource_pool_types=[
                 ResourcePoolType(
-                    presets=[
-                        Preset(
-                            name="gpu-small",
-                            gpu=1,
-                            cpu=7,
-                            memory_mb=30720,
-                            gpu_model=GKEGPUModels.K80.value.id,
-                        ),
-                        Preset(
-                            name="gpu-large",
-                            gpu=1,
-                            cpu=7,
-                            memory_mb=61440,
-                            gpu_model=GKEGPUModels.V100.value.id,
-                        ),
-                    ]
+                    cpu=1.0,
+                    available_cpu=1.0,
+                    memory_mb=2048,
+                    available_memory_mb=2048,
                 ),
                 ResourcePoolType(
+                    cpu=1.0,
+                    available_cpu=1.0,
+                    memory_mb=2048,
+                    available_memory_mb=2048,
+                    is_preemptible=True,
+                ),
+                ResourcePoolType(
+                    cpu=100,
+                    available_cpu=100,
+                    memory_mb=500_000,
+                    available_memory_mb=500_000,
+                ),
+                ResourcePoolType(
+                    cpu=1.0,
+                    available_cpu=1.0,
+                    memory_mb=2048,
+                    available_memory_mb=2048,
                     tpu=TPUResource(
                         ipv4_cidr_block="1.1.1.1/32",
                         types=("v2-8",),
                         software_versions=("1.14",),
                     ),
-                    presets=[
-                        Preset(name="cpu-small", cpu=2, memory_mb=2048),
-                        Preset(name="cpu-large", cpu=3, memory_mb=14336),
-                        Preset(
-                            name="tpu",
-                            cpu=3,
-                            memory_mb=14336,
-                            tpu=TPUPreset(type="v2-8", software_version="1.14"),
-                        ),
-                    ],
                 ),
-                ResourcePoolType(gpu=1, gpu_model="gpumodel"),
+                ResourcePoolType(
+                    cpu=1.0,
+                    available_cpu=1.0,
+                    memory_mb=2048,
+                    available_memory_mb=2048,
+                    gpu=1,
+                    gpu_model="gpumodel",
+                ),
+            ],
+            presets=[
+                Preset(
+                    name="gpu-small",
+                    gpu=1,
+                    cpu=7,
+                    memory_mb=30720,
+                    gpu_model=GKEGPUModels.K80.value.id,
+                ),
+                Preset(
+                    name="gpu-large",
+                    gpu=1,
+                    cpu=7,
+                    memory_mb=61440,
+                    gpu_model=GKEGPUModels.V100.value.id,
+                ),
+                Preset(
+                    name="gpu-large-p",
+                    gpu=1,
+                    cpu=7,
+                    memory_mb=61440,
+                    gpu_model=GKEGPUModels.V100.value.id,
+                    scheduler_enabled=True,
+                    preemptible_node=True,
+                ),
+                Preset(name="cpu-micro", cpu=0.1, memory_mb=100),
+                Preset(name="cpu-small", cpu=2, memory_mb=2048),
+                Preset(name="cpu-large", cpu=3, memory_mb=14336),
+                Preset(
+                    name="tpu",
+                    cpu=3,
+                    memory_mb=14336,
+                    tpu=TPUPreset(type="v2-8", software_version="1.14"),
+                ),
             ],
             namespace="platformapi-tests",
             job_schedule_scaleup_timeout=5,
+            allow_privileged_mode=True,
         )
         kwargs = {**defaults, **kwargs}
         return KubeConfig(**kwargs)
@@ -197,6 +248,48 @@ async def kube_config(kube_config_factory: Callable[..., KubeConfig]) -> KubeCon
     return kube_config_factory()
 
 
+@pytest.fixture
+def kube_job_nodes_factory(
+    kube_client: KubeClient, delete_node_later: Callable[[str], Awaitable[None]]
+) -> Callable[[KubeConfig], Awaitable[None]]:
+    async def _create(kube_config: KubeConfig) -> None:
+        assert kube_config.node_label_job
+        assert kube_config.node_label_node_pool
+        assert kube_config.node_label_preemptible
+
+        for pool_type in kube_config.resource_pool_types:
+            assert pool_type.name
+
+            await delete_node_later(pool_type.name)
+            labels = {
+                kube_config.node_label_job: "true",
+                kube_config.node_label_node_pool: pool_type.name,
+            }
+            if pool_type.is_preemptible:
+                labels[kube_config.node_label_preemptible] = "true"
+            capacity = {
+                "pods": "110",
+                "cpu": int(pool_type.available_cpu or 0),
+                "memory": f"{pool_type.available_memory_mb}Mi",
+                "nvidia.com/gpu": pool_type.gpu or 0,
+            }
+            taints = [
+                NodeTaint(key=kube_config.jobs_pod_job_toleration_key, value="true")
+            ]
+            if pool_type.gpu:
+                taints.append(NodeTaint(key=Resources.gpu_key, value="present"))
+            try:
+                await kube_client.create_node(
+                    pool_type.name, capacity=capacity, labels=labels, taints=taints
+                )
+            except AlreadyExistsException:
+                # there can be multiple kube_orchestrator created in tests (for tests
+                # and for tests cleanup)
+                pass
+
+    return _create
+
+
 @pytest.fixture(scope="session")
 async def kube_ingress_ip(kube_config_cluster_payload: Dict[str, Any]) -> str:
     cluster = kube_config_cluster_payload
@@ -204,15 +297,31 @@ async def kube_ingress_ip(kube_config_cluster_payload: Dict[str, Any]) -> str:
 
 
 class MyKubeClient(KubeClient):
+    _created_pvcs: List[str]
+
+    async def init(self) -> None:
+        await super().init()
+        if not hasattr(self, "_created_pvcs"):
+            self._created_pvcs = []
+
+    async def close(self) -> None:
+        for pvc_name in self._created_pvcs:
+            await self.delete_pvc(pvc_name)
+        await super().close()
+
     async def create_pvc(
-        self, pvc_name: str, namespace: str, storage: Optional[int] = None
+        self,
+        pvc_name: str,
+        namespace: str,
+        storage: Optional[int] = None,
+        labels: Mapping[str, str] = None,
     ) -> None:
         url = self._generate_all_pvcs_url(namespace)
         storage = storage or 1024 * 1024
         primitive = {
             "apiVersion": "v1",
             "kind": "PersistentVolumeClaim",
-            "metadata": {"name": pvc_name},
+            "metadata": {"name": pvc_name, "labels": labels},
             "spec": {
                 "accessModes": ["ReadWriteOnce"],
                 "volumeMode": "Filesystem",
@@ -222,6 +331,15 @@ class MyKubeClient(KubeClient):
             },
         }
         payload = await self._request(method="POST", url=url, json=primitive)
+        self._check_status_payload(payload)
+        self._created_pvcs.append(pvc_name)
+
+    async def delete_pvc(
+        self,
+        pvc_name: str,
+    ) -> None:
+        url = self._generate_pvc_url(pvc_name)
+        payload = await self._request(method="DELETE", url=url)
         self._check_status_payload(payload)
 
     async def update_or_create_secret(
@@ -242,24 +360,50 @@ class MyKubeClient(KubeClient):
     async def wait_pod_scheduled(
         self,
         pod_name: str,
-        node_name: str,
+        node_name: str = "",
         timeout_s: float = 5.0,
         interval_s: float = 1.0,
     ) -> None:
+        raw_pod: Optional[Dict[str, Any]] = None
         try:
             async with timeout(timeout_s):
                 while True:
                     raw_pod = await self.get_raw_pod(pod_name)
-                    pod_has_node = raw_pod["spec"].get("nodeName") == node_name
+                    if node_name:
+                        pod_has_node = raw_pod["spec"].get("nodeName") == node_name
+                    else:
+                        pod_has_node = bool(raw_pod["spec"].get("nodeName"))
                     pod_is_scheduled = "PodScheduled" in [
                         cond["type"]
                         for cond in raw_pod["status"].get("conditions", [])
-                        if cond["status"]
+                        if cond["status"] == "True"
                     ]
                     if pod_has_node and pod_is_scheduled:
                         return
                     await asyncio.sleep(interval_s)
         except asyncio.TimeoutError:
+            if raw_pod:
+                print("Node:", raw_pod["spec"].get("nodeName"))
+                print("Phase:", raw_pod["status"]["phase"])
+                print("Status conditions:", raw_pod["status"].get("conditions", []))
+                print("Pods:")
+                pods = await self.get_raw_pods()
+                pods = sorted(pods, key=lambda p: p["spec"].get("nodeName", ""))
+                print(f"  {'Name':40s} {'CPU':5s} {'Memory':10s} {'Phase':9s} Node")
+                for pod in pods:
+                    container = pod["spec"]["containers"][0]
+                    resource_requests = container.get("resources", {}).get(
+                        "requests", {}
+                    )
+                    cpu = resource_requests.get("cpu")
+                    memory = resource_requests.get("memory")
+                    print(
+                        f'  {pod["metadata"]["name"]:40s}',
+                        f"{str(cpu):5s}",
+                        f"{str(memory):10s}",
+                        f'{pod["status"]["phase"]:9s}',
+                        f'{str(pod["spec"].get("nodeName"))}',
+                    )
             pytest.fail("Pod unscheduled")
 
     async def wait_pod_non_existent(
@@ -311,7 +455,7 @@ class MyKubeClient(KubeClient):
             "message": "TriggeredScaleUp",
             "metadata": {
                 "creationTimestamp": now_str,
-                "name": "job-cd109c3b-c36e-47d4-b3d6-8bb05a5e63ab.15a870d7e2bb228b",
+                "name": f"{pod_id}.{uuid.uuid4()}",
                 "namespace": self._namespace,
                 "selfLink": (
                     f"/api/v1/namespaces/{self._namespace}"
@@ -324,6 +468,45 @@ class MyKubeClient(KubeClient):
             "reportingInstance": "",
             "source": {"component": "cluster-autoscaler"},
             "type": "Normal",
+        }
+
+        await self._request(method="POST", url=url, json=data)
+
+    async def create_failed_attach_volume_event(self, pod_id: str) -> None:
+        url = f"{self._namespace_url}/events"
+        now = datetime.now(timezone.utc)
+        now_str = now.strftime("%Y-%m-%dT%H:%M:%SZ")
+        data = {
+            "apiVersion": "v1",
+            "count": 1,
+            "eventTime": None,
+            "firstTimestamp": now_str,
+            "involvedObject": {
+                "apiVersion": "v1",
+                "kind": "Pod",
+                "name": pod_id,
+                "namespace": self._namespace,
+                "resourceVersion": "48102193",
+                "uid": "eddfe678-86e9-11e9-9d65-42010a800018",
+            },
+            "kind": "Event",
+            "lastTimestamp": now_str,
+            "message": "FailedAttachVolume",
+            "metadata": {
+                "creationTimestamp": now_str,
+                "name": f"{pod_id}.{uuid.uuid4()}",
+                "namespace": self._namespace,
+                "selfLink": (
+                    f"/api/v1/namespaces/{self._namespace}"
+                    f"/events/{pod_id}.15a870d7e2bb228b"
+                ),
+                "uid": "cb886f64-8f96-11e9-9251-42010a800038",
+            },
+            "reason": "FailedAttachVolume",
+            "reportingComponent": "",
+            "reportingInstance": "",
+            "source": {"component": "attachdetach-controller"},
+            "type": "Warning",
         }
 
         await self._request(method="POST", url=url, json=data)
@@ -506,7 +689,10 @@ async def kube_node_tpu(
 def kube_config_node_preemptible(
     kube_config_factory: Callable[..., KubeConfig]
 ) -> KubeConfig:
-    return kube_config_factory(node_label_preemptible="preemptible")
+    return kube_config_factory(
+        node_label_preemptible="preemptible",
+        jobs_pod_preemptible_toleration_key="preemptible-taint",
+    )
 
 
 @pytest.fixture
@@ -521,34 +707,11 @@ async def kube_node_preemptible(
 
     kube_config = kube_config_node_preemptible
     assert kube_config.node_label_preemptible is not None
+    assert kube_config.jobs_pod_preemptible_toleration_key is not None
     labels = {kube_config.node_label_preemptible: "true"}
-    taints = [NodeTaint(key=kube_config.node_label_preemptible, value="true")]
-    await kube_client.create_node(
-        node_name, capacity=default_node_capacity, labels=labels, taints=taints
-    )
-
-    yield node_name
-
-
-@pytest.fixture
-def kube_config_node_job(kube_config_factory: Callable[..., KubeConfig]) -> KubeConfig:
-    return kube_config_factory(node_label_job="platform.neuromation.io/job")
-
-
-@pytest.fixture
-async def kube_node_job(
-    kube_config_node_job: KubeConfig,
-    kube_client: MyKubeClient,
-    delete_node_later: Callable[[str], Awaitable[None]],
-    default_node_capacity: Dict[str, Any],
-) -> AsyncIterator[str]:
-    node_name = str(uuid.uuid4())
-    await delete_node_later(node_name)
-
-    kube_config = kube_config_node_job
-    assert kube_config.node_label_job is not None
-    labels = {kube_config.node_label_job: "true"}
-    taints = [NodeTaint(key=kube_config.node_label_job, value="true")]
+    taints = [
+        NodeTaint(key=kube_config.jobs_pod_preemptible_toleration_key, value="present")
+    ]
     await kube_client.create_node(
         node_name, capacity=default_node_capacity, labels=labels, taints=taints
     )
@@ -579,9 +742,12 @@ def config_factory(
             interval_sec=1,
             quota_notification_threshold=0.1,
         )
-        database_config = DatabaseConfig(redis=redis_config, postgres=postgres_config)
+        database_config = DatabaseConfig(
+            postgres_enabled=True, redis=redis_config, postgres=postgres_config
+        )
         config_url = URL("http://localhost:8082/api/v1")
         admin_url = URL("http://localhost:8080/apis/admin/v1")
+        api_base_url = URL("http://localhost:8080/apis/v1")
         return Config(
             server=server_config,
             database=database_config,
@@ -592,6 +758,7 @@ def config_factory(
             cors=CORSConfig(allowed_origins=["https://neu.ro"]),
             config_url=config_url,
             admin_url=admin_url,
+            api_base_url=api_base_url,
             zipkin=ZipkinConfig(URL("https://zipkin:9411"), 1.0),
             **kwargs,
         )
@@ -608,9 +775,11 @@ def cluster_config_factory(
     def _f(cluster_name: str = "test-cluster") -> ClusterConfig:
         ingress_config = IngressConfig(
             storage_url=URL("https://neu.ro/api/v1/storage"),
+            blob_storage_url=URL("https://neu.ro/api/v1/blob"),
             monitoring_url=URL("https://neu.ro/api/v1/monitoring"),
             secrets_url=URL("https://neu.ro/api/v1/secrets"),
             metrics_url=URL("https://neu.ro/api/v1/metrics"),
+            disks_url=URL("https://neu.ro/api/v1/disk"),
         )
         return ClusterConfig(
             name=cluster_name,

@@ -1,7 +1,6 @@
 *
-# python
-!setup.py
-!platform_api
+!dist
+!platform_api.egg-info
 !alembic
 !alembic.ini
 **/*.pyc

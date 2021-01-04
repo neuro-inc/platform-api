@@ -207,7 +207,6 @@ class TestJobResponseValidator:
         container = {
             "image": "testimage",
             "resources": {"cpu": 0.1, "memory_mb": 16, "shm": True},
-            "ssh": {"port": 666},
         }
         response = {
             "id": "test-job-id",
@@ -222,13 +221,15 @@ class TestJobResponseValidator:
                 "description": None,
                 "created_at": "now",
                 "run_time_seconds": 10,
+                "restarts": 0,
             },
             "container": container,
-            "ssh_server": "nobody@ssh-auth",
-            "ssh_auth_server": "nobody@ssh-auth",
-            "is_preemptible": False,
+            "scheduler_enabled": False,
+            "preemptible_node": False,
+            "pass_config": False,
             "uri": "job://cluster-name/tests/test-job-id",
             "restart_policy": "never",
+            "privileged": False,
         }
         validator = create_job_response_validator()
         assert validator.check(response)
@@ -237,7 +238,6 @@ class TestJobResponseValidator:
         container = {
             "image": "testimage",
             "resources": {"cpu": 0.1, "memory_mb": 16, "shm": True},
-            "ssh": {"port": 666},
         }
         response = {
             "id": "test-job-id",
@@ -252,13 +252,15 @@ class TestJobResponseValidator:
                 "description": "",
                 "created_at": "now",
                 "run_time_seconds": 10,
+                "restarts": 0,
             },
             "container": container,
-            "ssh_server": "nobody@ssh-auth",
-            "ssh_auth_server": "nobody@ssh-auth",
-            "is_preemptible": False,
+            "scheduler_enabled": False,
+            "preemptible_node": False,
+            "pass_config": False,
             "uri": "job://cluster-name/tests/test-job-id",
             "restart_policy": "never",
+            "privileged": False,
         }
         validator = create_job_response_validator()
         assert validator.check(response)
@@ -267,7 +269,6 @@ class TestJobResponseValidator:
         container = {
             "image": "testimage",
             "resources": {"cpu": 0.1, "memory_mb": 16, "shm": True},
-            "ssh": {"port": 666},
         }
         response = {
             "id": "test-job-id",
@@ -280,13 +281,15 @@ class TestJobResponseValidator:
                 "description": None,
                 "created_at": "now",
                 "run_time_seconds": 10,
+                "restarts": 0,
             },
             "container": container,
-            "ssh_server": "nobody@ssh-auth",
-            "ssh_auth_server": "nobody@ssh-auth",
-            "is_preemptible": False,
+            "scheduler_enabled": False,
+            "preemptible_node": False,
+            "pass_config": False,
             "uri": "job://cluster-name/tests/test-job-id",
             "restart_policy": "never",
+            "privileged": False,
         }
         validator = create_job_response_validator()
         assert validator.check(response)
@@ -297,7 +300,6 @@ class TestJobResponseValidator:
             "entrypoint": "/script.sh",
             "command": "arg1 arg2 arg3",
             "resources": {"cpu": 0.1, "memory_mb": 16, "shm": True},
-            "ssh": {"port": 666},
         }
         response = {
             "id": "test-job-id",
@@ -312,13 +314,15 @@ class TestJobResponseValidator:
                 "description": None,
                 "created_at": "now",
                 "run_time_seconds": 10,
+                "restarts": 0,
             },
             "container": container,
-            "ssh_server": "nobody@ssh-auth",
-            "ssh_auth_server": "nobody@ssh-auth",
-            "is_preemptible": False,
+            "scheduler_enabled": False,
+            "preemptible_node": False,
+            "pass_config": False,
             "uri": "job://cluster-name/tests/test-job-id",
             "restart_policy": "never",
+            "privileged": False,
         }
         validator = create_job_response_validator()
         assert validator.check(response)
@@ -341,13 +345,15 @@ class TestJobResponseValidator:
                 "description": None,
                 "created_at": "now",
                 "run_time_seconds": 10,
+                "restarts": 0,
             },
             "container": container,
-            "ssh_server": "nobody@ssh-auth",
-            "ssh_auth_server": "nobody@ssh-auth",
-            "is_preemptible": False,
+            "scheduler_enabled": False,
+            "preemptible_node": False,
+            "pass_config": False,
             "uri": "job://cluster-name/tests/test-job-id",
             "restart_policy": "never",
+            "privileged": False,
         }
         validator = create_job_response_validator()
         assert validator.check(response)
@@ -370,11 +376,12 @@ class TestJobResponseValidator:
                 "description": None,
                 "created_at": "now",
                 "run_time_seconds": 10,
+                "restarts": 0,
             },
             "container": container,
-            "ssh_server": "nobody@ssh-auth",
-            "ssh_auth_server": "nobody@ssh-auth",
-            "is_preemptible": False,
+            "scheduler_enabled": False,
+            "preemptible_node": False,
+            "pass_config": False,
             "uri": "job://cluster-name/tests/test-job-id",
             "restart_policy": "never",
         }
@@ -387,7 +394,6 @@ class TestJobResponseValidator:
             "image": "testimage",
             "command": "arg1 arg2 arg3",
             "resources": {"cpu": 0.1, "memory_mb": 16, "shm": True},
-            "ssh": {"port": 666},
         }
         response = {
             "id": "test-job-id",
@@ -402,14 +408,16 @@ class TestJobResponseValidator:
                 "description": None,
                 "created_at": "now",
                 "run_time_seconds": 10,
+                "restarts": 0,
             },
             "container": container,
-            "ssh_server": "nobody@ssh-auth",
-            "ssh_auth_server": "nobody@ssh-auth",
-            "is_preemptible": False,
+            "scheduler_enabled": False,
+            "preemptible_node": False,
+            "pass_config": False,
             "max_run_time_minutes": 10,
             "uri": "job://cluster-name/tests/test-job-id",
             "restart_policy": "never",
+            "privileged": False,
         }
         validator = create_job_response_validator()
         assert validator.check(response)
@@ -419,7 +427,6 @@ class TestJobResponseValidator:
             "image": "testimage",
             "command": "arg1 arg2 arg3",
             "resources": {"cpu": 0.1, "memory_mb": 16, "shm": True},
-            "ssh": {"port": 666},
         }
         response = {
             "id": "test-job-id",
@@ -434,11 +441,44 @@ class TestJobResponseValidator:
                 "description": None,
                 "created_at": "now",
                 "run_time_seconds": -10.0,
+                "restarts": 0,
             },
             "container": container,
-            "ssh_server": "nobody@ssh-auth",
-            "ssh_auth_server": "nobody@ssh-auth",
-            "is_preemptible": False,
+            "scheduler_enabled": False,
+            "preemptible_node": False,
+            "pass_config": False,
+            "uri": "job://cluster-name/tests/test-job-id",
+            "restart_policy": "never",
+        }
+        validator = create_job_response_validator()
+        with pytest.raises(t.DataError, match="value is less than 0"):
+            assert validator.check(response)
+
+    def test_with_invalid_restarts_count(self) -> None:
+        container = {
+            "image": "testimage",
+            "command": "arg1 arg2 arg3",
+            "resources": {"cpu": 0.1, "memory_mb": 16, "shm": True},
+        }
+        response = {
+            "id": "test-job-id",
+            "owner": "tests",
+            "cluster_name": "cluster-name",
+            "status": "pending",
+            "name": "test-job-name",
+            "description": "test-job",
+            "history": {
+                "status": "pending",
+                "reason": None,
+                "description": None,
+                "created_at": "now",
+                "run_time_seconds": 20.0,
+                "restarts": -10,
+            },
+            "container": container,
+            "scheduler_enabled": False,
+            "preemptible_node": False,
+            "pass_config": False,
             "uri": "job://cluster-name/tests/test-job-id",
             "restart_policy": "never",
         }

@@ -1,9 +1,27 @@
 import asyncio
-from datetime import timedelta
+from datetime import datetime, timedelta, timezone
+from functools import partial
 from pathlib import Path, PurePath
-from typing import Any, AsyncIterator, Callable, Dict, Iterator, List, Optional
+from typing import (
+    Any,
+    AsyncIterator,
+    Callable,
+    Dict,
+    Iterator,
+    List,
+    Optional,
+    Sequence,
+    Tuple,
+)
 
 import pytest
+from neuro_auth_client import (
+    AuthClient,
+    Cluster as AuthCluster,
+    Permission,
+    Quota as AuthQuota,
+    User as AuthUser,
+)
 from notifications_client import Client as NotificationsClient
 from notifications_client.notification import AbstractNotification
 from yarl import URL
@@ -15,7 +33,7 @@ from platform_api.cluster_config import (
     RegistryConfig,
     StorageConfig,
 )
-from platform_api.config import JobsConfig
+from platform_api.config import JobsConfig, JobsSchedulerConfig
 from platform_api.orchestrator.base import Orchestrator
 from platform_api.orchestrator.job import (
     AggregatedRunTime,
@@ -32,7 +50,7 @@ from platform_api.orchestrator.job_request import (
     JobRequest,
     JobStatus,
 )
-from platform_api.orchestrator.jobs_service import JobsService
+from platform_api.orchestrator.jobs_service import JobsScheduler, JobsService
 from platform_api.orchestrator.jobs_storage import (
     InMemoryJobsStorage,
     JobStorageTransactionError,
@@ -50,11 +68,17 @@ class MockOrchestrator(Orchestrator):
         self._mock_status_to_return = JobStatus.PENDING
         self._mock_reason_to_return: Optional[str] = JobStatusReason.CONTAINER_CREATING
         self._mock_exit_code_to_return: Optional[int] = None
+        self._mock_statuses: Dict[str, JobStatus] = {}
+        self._mock_reasons: Dict[str, Optional[str]] = {}
+        self._mock_exit_codes: Dict[str, Optional[int]] = {}
         self.raise_on_get_job_status = False
         self.raise_on_start_job_status = False
         self.get_job_status_exc_factory = self._create_get_job_status_exc
         self.raise_on_delete = False
         self.delete_job_exc_factory = self._create_delete_job_exc
+        self.current_datetime_factory: Callable[[], datetime] = partial(
+            datetime.now, timezone.utc
+        )
         self._successfully_deleted_jobs: List[Job] = []
 
     @property
@@ -65,6 +89,15 @@ class MockOrchestrator(Orchestrator):
     def storage_config(self) -> StorageConfig:
         return self._config.storage
 
+    def _get_status(self, job_id: str) -> JobStatus:
+        return self._mock_statuses.get(job_id, self._mock_status_to_return)
+
+    def _get_exit_code(self, job_id: str) -> Optional[int]:
+        return self._mock_exit_codes.get(job_id, self._mock_exit_code_to_return)
+
+    def _get_reason(self, job_id: str) -> Optional[str]:
+        return self._mock_reasons.get(job_id, self._mock_reason_to_return)
+
     async def prepare_job(self, job: Job) -> None:
         pass
 
@@ -72,9 +105,10 @@ class MockOrchestrator(Orchestrator):
         if self.raise_on_start_job_status:
             raise self.get_job_status_exc_factory(job)
         job.status_history.current = JobStatusItem.create(
-            self._mock_status_to_return,
-            reason=self._mock_reason_to_return,
-            exit_code=self._mock_exit_code_to_return,
+            self._get_status(job.id),
+            reason=self._get_reason(job.id),
+            exit_code=self._get_exit_code(job.id),
+            current_datetime_factory=self.current_datetime_factory,
         )
         return job.status
 
@@ -85,9 +119,10 @@ class MockOrchestrator(Orchestrator):
         if self.raise_on_get_job_status:
             raise self.get_job_status_exc_factory(job)
         return JobStatusItem.create(
-            self._mock_status_to_return,
-            reason=self._mock_reason_to_return,
-            exit_code=self._mock_exit_code_to_return,
+            self._get_status(job.id),
+            reason=self._get_reason(job.id),
+            exit_code=self._get_exit_code(job.id),
+            current_datetime_factory=self.current_datetime_factory,
         )
 
     def _create_delete_job_exc(self, job: Job) -> Exception:
@@ -107,6 +142,21 @@ class MockOrchestrator(Orchestrator):
 
     def update_exit_code_to_return(self, new_exit_code: Optional[int]) -> None:
         self._mock_exit_code_to_return = new_exit_code
+
+    def update_status_to_return_single(
+        self, job_id: str, new_status: JobStatus
+    ) -> None:
+        self._mock_statuses[job_id] = new_status
+
+    def update_reason_to_return_single(
+        self, job_id: str, new_reason: Optional[str]
+    ) -> None:
+        self._mock_reasons[job_id] = new_reason
+
+    def update_exit_code_to_return_single(
+        self, job_id: str, new_exit_code: Optional[int]
+    ) -> None:
+        self._mock_exit_codes[job_id] = new_exit_code
 
     def get_successfully_deleted_jobs(self) -> List[Job]:
         return self._successfully_deleted_jobs
@@ -140,6 +190,58 @@ class MockNotificationsClient(NotificationsClient):
     @property
     def sent_notifications(self) -> List[AbstractNotification]:
         return self._sent_notifications
+
+
+class MockAuthClient(AuthClient):
+    def __init__(self) -> None:
+        self.user_to_return = AuthUser(
+            name="testuser",
+            clusters=[
+                AuthCluster(
+                    "default",
+                    quota=AuthQuota(
+                        total_running_jobs=100,
+                    ),
+                ),
+                AuthCluster(
+                    "test-cluster",
+                    quota=AuthQuota(
+                        total_running_jobs=100,
+                    ),
+                ),
+            ],
+        )
+        self._grants: List[Tuple[str, Sequence[Permission]]] = []
+        self._revokes: List[Tuple[str, Sequence[str]]] = []
+
+    async def get_user(self, name: str, token: Optional[str] = None) -> AuthUser:
+        return self.user_to_return
+
+    @property
+    def grants(self) -> List[Tuple[str, Sequence[Permission]]]:
+        return self._grants
+
+    @property
+    def revokes(self) -> List[Tuple[str, Sequence[str]]]:
+        return self._revokes
+
+    async def grant_user_permissions(
+        self, name: str, permissions: Sequence[Permission], token: Optional[str] = None
+    ) -> None:
+        self._grants.append((name, permissions))
+
+    async def revoke_user_permissions(
+        self, name: str, resources_uris: Sequence[str], token: Optional[str] = None
+    ) -> None:
+        self._revokes.append((name, resources_uris))
+
+    async def get_user_token(
+        self,
+        name: str,
+        new_token_uri: Optional[str] = None,
+        token: Optional[str] = None,
+    ) -> str:
+        return f"token-{name}"
 
 
 @pytest.fixture
@@ -199,7 +301,6 @@ def cluster_config(registry_config: RegistryConfig) -> ClusterConfig:
     storage_config = StorageConfig(host_mount_path=PurePath("/tmp"))
     orchestrator_config = KubeConfig(
         jobs_domain_name_template="{job_id}.jobs",
-        ssh_auth_server="ssh-auth:22",
         endpoint_url="http://k8s:1234",
         resource_pool_types=[ResourcePoolType()],
     )
@@ -210,9 +311,11 @@ def cluster_config(registry_config: RegistryConfig) -> ClusterConfig:
         orchestrator=orchestrator_config,
         ingress=IngressConfig(
             storage_url=URL(),
+            blob_storage_url=URL(),
             monitoring_url=URL(),
             secrets_url=URL(),
             metrics_url=URL(),
+            disks_url=URL(),
         ),
     )
 
@@ -235,6 +338,11 @@ async def cluster_registry(
 
 
 @pytest.fixture
+def mock_api_base() -> URL:
+    return URL("https://testing.neu.ro/api/v1")
+
+
+@pytest.fixture
 def mock_jobs_storage() -> MockJobsStorage:
     return MockJobsStorage()
 
@@ -245,8 +353,18 @@ def mock_notifications_client() -> NotificationsClient:
 
 
 @pytest.fixture
+def mock_auth_client() -> AuthClient:
+    return MockAuthClient()
+
+
+@pytest.fixture
 def jobs_config() -> JobsConfig:
     return JobsConfig(orphaned_job_owner="compute")
+
+
+@pytest.fixture
+def scheduler_config() -> JobsSchedulerConfig:
+    return JobsSchedulerConfig()
 
 
 @pytest.fixture
@@ -255,12 +373,18 @@ def jobs_service(
     mock_jobs_storage: MockJobsStorage,
     jobs_config: JobsConfig,
     mock_notifications_client: NotificationsClient,
+    scheduler_config: JobsSchedulerConfig,
+    mock_auth_client: AuthClient,
+    mock_api_base: URL,
 ) -> JobsService:
     return JobsService(
         cluster_registry=cluster_registry,
         jobs_storage=mock_jobs_storage,
         jobs_config=jobs_config,
         notifications_client=mock_notifications_client,
+        scheduler=JobsScheduler(scheduler_config, mock_auth_client),
+        auth_client=mock_auth_client,
+        api_base_url=mock_api_base,
     )
 
 

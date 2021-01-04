@@ -26,8 +26,10 @@ from aiohttp.web import (
 )
 from aiohttp.web_exceptions import HTTPCreated, HTTPNotFound
 from neuro_auth_client import Cluster as AuthCluster, Permission, Quota
+from yarl import URL
 
 from platform_api.config import Config
+from platform_api.orchestrator.jobs_service import NEURO_PASSED_CONFIG
 from tests.conftest import random_str
 from tests.integration.secrets import SecretsClient
 from tests.integration.test_config_client import create_config_api
@@ -70,16 +72,17 @@ def cluster_configs_payload() -> List[Dict[str, Any]]:
                 },
                 "job_hostname_template": "{job_id}.jobs.neu.ro",
                 "resource_pool_types": [
-                    {},
-                    {"gpu": 0},
-                    {"gpu": 1, "gpu_model": "nvidia-tesla-v100"},
+                    {"name": "node-pool1"},
+                    {"name": "node-pool1", "gpu": 0},
+                    {"name": "node-pool1", "gpu": 1, "gpu_model": "nvidia-tesla-v100"},
                 ],
                 "is_http_ingress_secure": True,
             },
-            "ssh": {"server": "ssh-auth-dev.neu.ro"},
             "monitoring": {"url": "https://dev.neu.ro/api/v1/jobs"},
             "secrets": {"url": "https://dev.neu.ro/api/v1/secrets"},
             "metrics": {"url": "https://metrics.dev.neu.ro"},
+            "blob_storage": {"url": "https://dev.neu.ro/api/v1/blob"},
+            "disks": {"url": "https://dev.neu.ro/api/v1/disk"},
         }
     ]
 
@@ -89,6 +92,14 @@ class TestApi:
     async def test_ping(self, api: ApiConfig, client: aiohttp.ClientSession) -> None:
         async with client.get(api.ping_url) as response:
             assert response.status == HTTPOk.status_code, await response.text()
+
+    @pytest.mark.asyncio
+    async def test_ping_includes_version(
+        self, api: ApiConfig, client: aiohttp.ClientSession
+    ) -> None:
+        async with client.get(api.ping_url) as response:
+            assert response.status == HTTPOk.status_code, await response.text()
+            assert "platform-api" in response.headers["X-Service-Version"]
 
     @pytest.mark.asyncio
     async def test_ping_unknown_origin(
@@ -110,7 +121,7 @@ class TestApi:
             assert resp.status == HTTPOk.status_code, await resp.text()
             assert resp.headers["Access-Control-Allow-Origin"] == "https://neu.ro"
             assert resp.headers["Access-Control-Allow-Credentials"] == "true"
-            assert resp.headers["Access-Control-Expose-Headers"] == ""
+            assert resp.headers["Access-Control-Expose-Headers"]
 
     @pytest.mark.asyncio
     async def test_ping_options_no_headers(
@@ -213,10 +224,12 @@ class TestApi:
                 "name": "test-cluster",
                 "registry_url": "https://registry.dev.neuromation.io",
                 "storage_url": "https://neu.ro/api/v1/storage",
+                "blob_storage_url": "https://neu.ro/api/v1/blob",
                 "users_url": "https://neu.ro/api/v1/users",
                 "monitoring_url": "https://neu.ro/api/v1/monitoring",
                 "secrets_url": "https://neu.ro/api/v1/secrets",
                 "metrics_url": "https://neu.ro/api/v1/metrics",
+                "disks_url": "https://neu.ro/api/v1/disk",
                 "resource_presets": [
                     {
                         "name": "gpu-small",
@@ -224,7 +237,10 @@ class TestApi:
                         "memory_mb": 30720,
                         "gpu": 1,
                         "gpu_model": "nvidia-tesla-k80",
+                        "scheduler_enabled": False,
+                        "preemptible_node": False,
                         "is_preemptible": False,
+                        "is_preemptible_node_required": False,
                     },
                     {
                         "name": "gpu-large",
@@ -232,25 +248,57 @@ class TestApi:
                         "memory_mb": 61440,
                         "gpu": 1,
                         "gpu_model": "nvidia-tesla-v100",
+                        "scheduler_enabled": False,
+                        "preemptible_node": False,
                         "is_preemptible": False,
+                        "is_preemptible_node_required": False,
+                    },
+                    {
+                        "name": "gpu-large-p",
+                        "cpu": 7,
+                        "memory_mb": 61440,
+                        "gpu": 1,
+                        "gpu_model": "nvidia-tesla-v100",
+                        "scheduler_enabled": True,
+                        "preemptible_node": True,
+                        "is_preemptible": True,
+                        "is_preemptible_node_required": True,
+                    },
+                    {
+                        "name": "cpu-micro",
+                        "cpu": 0.1,
+                        "memory_mb": 100,
+                        "scheduler_enabled": False,
+                        "preemptible_node": False,
+                        "is_preemptible": False,
+                        "is_preemptible_node_required": False,
                     },
                     {
                         "name": "cpu-small",
                         "cpu": 2,
                         "memory_mb": 2048,
+                        "scheduler_enabled": False,
+                        "preemptible_node": False,
                         "is_preemptible": False,
+                        "is_preemptible_node_required": False,
                     },
                     {
                         "name": "cpu-large",
                         "cpu": 3,
                         "memory_mb": 14336,
+                        "scheduler_enabled": False,
+                        "preemptible_node": False,
                         "is_preemptible": False,
+                        "is_preemptible_node_required": False,
                     },
                     {
                         "name": "tpu",
                         "cpu": 3,
                         "memory_mb": 14336,
+                        "scheduler_enabled": False,
+                        "preemptible_node": False,
                         "is_preemptible": False,
+                        "is_preemptible_node_required": False,
                         "tpu": {"type": "v2-8", "software_version": "1.14"},
                     },
                 ],
@@ -280,10 +328,12 @@ class TestApi:
                 "name": "test-cluster",
                 "registry_url": "https://registry.dev.neuromation.io",
                 "storage_url": "https://neu.ro/api/v1/storage",
+                "blob_storage_url": "https://neu.ro/api/v1/blob",
                 "users_url": "https://neu.ro/api/v1/users",
                 "monitoring_url": "https://neu.ro/api/v1/monitoring",
                 "secrets_url": "https://neu.ro/api/v1/secrets",
                 "metrics_url": "https://neu.ro/api/v1/metrics",
+                "disks_url": "https://neu.ro/api/v1/disk",
                 "resource_presets": [
                     {
                         "name": "gpu-small",
@@ -291,7 +341,10 @@ class TestApi:
                         "memory_mb": 30720,
                         "gpu": 1,
                         "gpu_model": "nvidia-tesla-k80",
+                        "scheduler_enabled": False,
+                        "preemptible_node": False,
                         "is_preemptible": False,
+                        "is_preemptible_node_required": False,
                     },
                     {
                         "name": "gpu-large",
@@ -299,25 +352,57 @@ class TestApi:
                         "memory_mb": 61440,
                         "gpu": 1,
                         "gpu_model": "nvidia-tesla-v100",
+                        "scheduler_enabled": False,
+                        "preemptible_node": False,
                         "is_preemptible": False,
+                        "is_preemptible_node_required": False,
+                    },
+                    {
+                        "name": "gpu-large-p",
+                        "cpu": 7,
+                        "memory_mb": 61440,
+                        "gpu": 1,
+                        "gpu_model": "nvidia-tesla-v100",
+                        "scheduler_enabled": True,
+                        "preemptible_node": True,
+                        "is_preemptible": True,
+                        "is_preemptible_node_required": True,
+                    },
+                    {
+                        "name": "cpu-micro",
+                        "cpu": 0.1,
+                        "memory_mb": 100,
+                        "scheduler_enabled": False,
+                        "preemptible_node": False,
+                        "is_preemptible": False,
+                        "is_preemptible_node_required": False,
                     },
                     {
                         "name": "cpu-small",
                         "cpu": 2,
                         "memory_mb": 2048,
+                        "scheduler_enabled": False,
+                        "preemptible_node": False,
                         "is_preemptible": False,
+                        "is_preemptible_node_required": False,
                     },
                     {
                         "name": "cpu-large",
                         "cpu": 3,
                         "memory_mb": 14336,
+                        "scheduler_enabled": False,
+                        "preemptible_node": False,
                         "is_preemptible": False,
+                        "is_preemptible_node_required": False,
                     },
                     {
                         "name": "tpu",
                         "cpu": 3,
                         "memory_mb": 14336,
+                        "scheduler_enabled": False,
+                        "preemptible_node": False,
                         "is_preemptible": False,
+                        "is_preemptible_node_required": False,
                         "tpu": {"type": "v2-8", "software_version": "1.14"},
                     },
                 ],
@@ -344,7 +429,7 @@ class TestApi:
 
 class TestJobs:
     @pytest.mark.asyncio
-    async def test_create_job_with_ssh_and_http(
+    async def test_create_job_with_http(
         self,
         api: ApiConfig,
         client: aiohttp.ClientSession,
@@ -353,7 +438,6 @@ class TestJobs:
         regular_user: _User,
     ) -> None:
         url = api.jobs_base_url
-        job_submit["container"]["ssh"] = {"port": 7867}
         job_submit["restart_policy"] = "on-failure"
         async with client.post(
             url, headers=regular_user.headers, json=job_submit
@@ -362,8 +446,6 @@ class TestJobs:
             result = await response.json()
             assert result["status"] in ["pending"]
             job_id = result["id"]
-            expected_url = "ssh://nobody@ssh-auth.platform.neuromation.io:22"
-            assert result["ssh_server"] == expected_url
 
         retrieved_job = await jobs_client.get_job_by_id(job_id=job_id)
         assert not retrieved_job["container"]["http"]["requires_auth"]
@@ -375,7 +457,7 @@ class TestJobs:
         assert job_response_payload["restart_policy"] == "on-failure"
 
     @pytest.mark.asyncio
-    async def test_create_job_with_ssh_only(
+    async def test_create_job_without_http(
         self,
         api: ApiConfig,
         client: aiohttp.ClientSession,
@@ -384,7 +466,6 @@ class TestJobs:
         regular_user: _User,
     ) -> None:
         url = api.jobs_base_url
-        job_submit["container"]["ssh"] = {"port": 7867}
         job_submit["container"].pop("http", None)
         async with client.post(
             url, headers=regular_user.headers, json=job_submit
@@ -393,8 +474,76 @@ class TestJobs:
             result = await response.json()
             assert result["status"] in ["pending"]
             job_id = result["id"]
-            expected_url = "ssh://nobody@ssh-auth.platform.neuromation.io:22"
-            assert result["ssh_server"] == expected_url
+
+        await jobs_client.long_polling_by_job_id(job_id=job_id, status="succeeded")
+        await jobs_client.delete_job(job_id=job_id)
+
+    @pytest.mark.asyncio
+    async def test_create_job_with_pass_config(
+        self,
+        api: ApiConfig,
+        client: aiohttp.ClientSession,
+        job_submit: Dict[str, Any],
+        jobs_client: JobsClient,
+        regular_user: _User,
+    ) -> None:
+        url = api.jobs_base_url
+        job_submit["pass_config"] = True
+        async with client.post(
+            url, headers=regular_user.headers, json=job_submit
+        ) as response:
+            assert response.status == HTTPAccepted.status_code, await response.text()
+            result = await response.json()
+            assert result["status"] in ["pending"]
+            assert result["pass_config"]
+            assert NEURO_PASSED_CONFIG in result["container"]["env"]
+            job_id = result["id"]
+
+        await jobs_client.long_polling_by_job_id(job_id=job_id, status="succeeded")
+        await jobs_client.delete_job(job_id=job_id)
+
+    @pytest.mark.asyncio
+    async def test_create_job_with_wait_for_jobs_quota(
+        self,
+        api: ApiConfig,
+        client: aiohttp.ClientSession,
+        job_submit: Dict[str, Any],
+        jobs_client: JobsClient,
+        regular_user: _User,
+    ) -> None:
+        url = api.jobs_base_url
+        job_submit["wait_for_jobs_quota"] = True
+        async with client.post(
+            url, headers=regular_user.headers, json=job_submit
+        ) as response:
+            assert response.status == HTTPAccepted.status_code, await response.text()
+            result = await response.json()
+            assert result["status"] in ["pending"]
+            job_id = result["id"]
+
+        await jobs_client.long_polling_by_job_id(job_id=job_id, status="succeeded")
+        await jobs_client.delete_job(job_id=job_id)
+
+    @pytest.mark.asyncio
+    async def test_create_job_with_privileged_flag(
+        self,
+        api: ApiConfig,
+        client: aiohttp.ClientSession,
+        job_submit: Dict[str, Any],
+        jobs_client: JobsClient,
+        regular_user: _User,
+    ) -> None:
+        url = api.jobs_base_url
+        job_submit["privileged"] = True
+        # Only privileged container can do this:
+        job_submit["container"]["command"] = "/bin/bash -c 'mount -t tmpfs none /mnt'"
+        async with client.post(
+            url, headers=regular_user.headers, json=job_submit
+        ) as response:
+            assert response.status == HTTPAccepted.status_code, await response.text()
+            result = await response.json()
+            assert result["status"] in ["pending"]
+            job_id = result["id"]
 
         await jobs_client.long_polling_by_job_id(job_id=job_id, status="succeeded")
         await jobs_client.delete_job(job_id=job_id)
@@ -455,7 +604,9 @@ class TestJobs:
                         assert result["container"]["secret_volumes"] == secret_volumes
 
                 result = await jobs_client.long_polling_by_job_id(
-                    job_id=job_id, status="succeeded"
+                    job_id=job_id,
+                    status="succeeded",
+                    headers=user.headers,
                 )
                 if secret_env:
                     assert result["container"]["secret_env"] == secret_env
@@ -463,7 +614,7 @@ class TestJobs:
                     assert result["container"]["secret_volumes"] == secret_volumes
             finally:
                 if job_id:
-                    await jobs_client.delete_job(job_id)
+                    await jobs_client.delete_job(job_id, headers=user.headers)
 
         return _run
 
@@ -863,7 +1014,6 @@ class TestJobs:
         api: ApiConfig,
         client: aiohttp.ClientSession,
         job_submit: Dict[str, Any],
-        jobs_client: JobsClient,
         test_cluster_name: str,
         regular_user_factory: Callable[..., Awaitable[_User]],
         disk_client_factory: Callable[..., AsyncContextManager[DiskAPIClient]],
@@ -1487,7 +1637,6 @@ class TestJobs:
         api: ApiConfig,
         client: aiohttp.ClientSession,
         job_submit: Dict[str, Any],
-        jobs_client: JobsClient,
         test_cluster_name: str,
         regular_user_factory: Callable[..., Awaitable[_User]],
         secrets_client_factory: Callable[..., AsyncContextManager[SecretsClient]],
@@ -1523,10 +1672,87 @@ class TestJobs:
 
         url = api.jobs_base_url
         async with client.post(url, headers=usr_1.headers, json=job_submit) as resp:
-            assert resp.status == HTTPBadRequest.status_code, await resp.text()
+            assert resp.status == HTTPForbidden.status_code, await resp.text()
             result = await resp.json()
-            err = f"Invalid URI: Invalid user in path: '{usr_2.name}' != '{usr_1.name}'"
-            assert err in result["error"]
+            assert result == {"missing": [{"uri": secret_uri_2, "action": "read"}]}
+
+    @pytest.mark.asyncio
+    @pytest.mark.parametrize("secret_kind", ["secret_env", "secret_volumes"])
+    async def test_create_job_with_secret_env_use_other_user_secret_success(
+        self,
+        api: ApiConfig,
+        client: aiohttp.ClientSession,
+        job_submit: Dict[str, Any],
+        jobs_client: JobsClient,
+        test_cluster_name: str,
+        regular_user_factory: Callable[..., Awaitable[_User]],
+        secrets_client_factory: Callable[..., AsyncContextManager[SecretsClient]],
+        secret_kind: str,
+        share_secret: Callable[..., Awaitable[None]],
+        _run_job_with_secrets: Callable[..., Awaitable[None]],
+    ) -> None:
+        cluster_name = test_cluster_name
+        usr_1 = await regular_user_factory(cluster_name=cluster_name)
+        usr_2 = await regular_user_factory(cluster_name=cluster_name)
+
+        key_1, key_2, key_3 = "key_1", "key_2", "key_3"
+        key_a, key_b, key_c = "key_a", "key_b", "key_c"
+        value_1, value_2, value_3 = "value_1", "value_2", "value_3"
+        value_a, value_b, value_c = "value_a", "value_b", "value_c"
+        async with secrets_client_factory(usr_1) as sec_client:
+            await sec_client.create_secret(key_1, value_1)
+            await sec_client.create_secret(key_2, value_2)
+            await sec_client.create_secret(key_3, value_3)
+            await sec_client.create_secret(key_a, value_a)
+            await sec_client.create_secret(key_b, value_b)
+            await sec_client.create_secret(key_c, value_c)
+
+        for key in (key_1, key_2, key_3, key_a, key_b, key_c):
+            await share_secret(usr_1, usr_2, key)
+
+        secret_uri_1 = f"secret://{cluster_name}/{usr_1.name}/{key_1}"
+        secret_uri_2 = f"secret://{cluster_name}/{usr_1.name}/{key_2}"
+        secret_uri_3 = f"secret://{cluster_name}/{usr_1.name}/{key_3}"
+        secret_uri_a = f"secret://{cluster_name}/{usr_1.name}/{key_a}"
+        secret_uri_b = f"secret://{cluster_name}/{usr_1.name}/{key_b}"
+        secret_uri_c = f"secret://{cluster_name}/{usr_1.name}/{key_c}"
+
+        env_var_a = "ENV_SECRET_A"
+        env_var_b = "ENV_SECRET_B"
+        env_var_c = "ENV_SECRET_C"
+        secret_env = {
+            env_var_a: secret_uri_a,
+            env_var_b: secret_uri_b,
+            env_var_c: secret_uri_c,
+        }
+        job_submit["container"]["secret_env"] = secret_env
+
+        sec_path_1 = "/container/file_1.txt"
+        sec_path_2 = "/container/file_2.txt"
+        sec_path_3 = "/container/file_3.txt"
+        secret_volumes = [
+            {"src_secret_uri": secret_uri_1, "dst_path": sec_path_1},
+            {"src_secret_uri": secret_uri_2, "dst_path": sec_path_2},
+            {"src_secret_uri": secret_uri_3, "dst_path": sec_path_3},
+        ]
+        job_submit["container"]["secret_volumes"] = secret_volumes
+
+        asserts = " && ".join(
+            [
+                f'[ "${env_var_a}" == "{value_a}" ]',
+                f'[ "${env_var_b}" == "{value_b}" ]',
+                f'[ "${env_var_c}" == "{value_c}" ]',
+                f'[ "$(cat {sec_path_1})" == "{value_1}" ]',
+                f'[ "$(cat {sec_path_2})" == "{value_2}" ]',
+                f'[ "$(cat {sec_path_3})" == "{value_3}" ]',
+            ]
+        )
+        cmd = f"bash -c '{asserts}'"
+        job_submit["container"]["command"] = cmd
+
+        await _run_job_with_secrets(
+            job_submit, usr_2, secret_env=secret_env, secret_volumes=secret_volumes
+        )
 
     @pytest.mark.asyncio
     @pytest.mark.parametrize("secret_kind", ["secret_env", "secret_volumes"])
@@ -1987,7 +2213,7 @@ class TestJobs:
         regular_user: _User,
     ) -> None:
         url = api.jobs_base_url
-        job_submit["is_preemptible"] = True
+        job_submit["scheduler_enabled"] = True
         job_submit["name"] = "Invalid_job_name!"
         async with client.post(
             url, headers=regular_user.headers, json=job_submit
@@ -2011,7 +2237,7 @@ class TestJobs:
     ) -> None:
         job_name = f"test-job-name-{random_str()}"
         url = api.jobs_base_url
-        job_submit["is_preemptible"] = True
+        job_submit["scheduler_enabled"] = True
         job_submit["name"] = job_name
         user = regular_user_with_missing_cluster_name
         async with client.post(url, headers=user.headers, json=job_submit) as response:
@@ -2030,7 +2256,7 @@ class TestJobs:
     ) -> None:
         job_name = f"test-job-name-{random_str()}"
         url = api.jobs_base_url
-        job_submit["is_preemptible"] = True
+        job_submit["scheduler_enabled"] = True
         job_submit["name"] = job_name
         job_submit["cluster_name"] = "unknown"
         async with client.post(
@@ -2080,7 +2306,8 @@ class TestJobs:
     ) -> None:
         job_name = f"test-job-name-{random_str()}"
         url = api.jobs_base_url
-        job_submit["is_preemptible"] = True
+        job_submit["scheduler_enabled"] = False
+        job_submit["preemptible_node"] = False
         job_submit["name"] = job_name
         job_submit["container"]["entrypoint"] = "/bin/echo"
         job_submit["container"]["command"] = "false"
@@ -2104,7 +2331,8 @@ class TestJobs:
             )
             expected_internal_hostname = f"{job_id}.platformapi-tests"
             assert payload["internal_hostname"] == expected_internal_hostname
-            assert payload["is_preemptible"]
+            assert not payload["scheduler_enabled"]
+            assert not payload["preemptible_node"]
             assert payload["description"] == "test job submitted by neuro job submit"
             assert payload["schedule_timeout"] == 90
 
@@ -2113,6 +2341,41 @@ class TestJobs:
         assert retrieved_job["name"] == job_name
         assert retrieved_job["container"]["http"]["requires_auth"]
         assert retrieved_job["schedule_timeout"] == 90
+
+        await jobs_client.long_polling_by_job_id(job_id=job_id, status="succeeded")
+        await jobs_client.delete_job(job_id=job_id)
+
+    @pytest.mark.asyncio
+    async def test_create_job_from_preset(
+        self,
+        api: ApiConfig,
+        client: aiohttp.ClientSession,
+        job_submit: Dict[str, Any],
+        jobs_client: JobsClient,
+        regular_user: _User,
+    ) -> None:
+        job_name = f"test-job-name-{random_str()}"
+        preset_name = "cpu-micro"
+        url = URL(api.jobs_base_url).with_query("from_preset")
+        job_submit.update(**job_submit["container"])
+        del job_submit["container"]
+        del job_submit["resources"]
+        job_submit["name"] = job_name
+        job_submit["preset_name"] = preset_name
+        job_submit["entrypoint"] = "/bin/echo"
+        job_submit["command"] = "false"
+        job_submit["http"]["requires_auth"] = True
+        job_submit["schedule_timeout"] = 90
+        job_submit["cluster_name"] = "test-cluster"
+        async with client.post(
+            url, headers=regular_user.headers, json=job_submit
+        ) as resp:
+            assert resp.status == HTTPAccepted.status_code, await resp.text()
+            payload = await resp.json()
+            job_id = payload["id"]
+            assert payload["status"] in ["pending"]
+            assert payload["name"] == job_name
+            assert payload["preset_name"] == preset_name
 
         await jobs_client.long_polling_by_job_id(job_id=job_id, status="succeeded")
         await jobs_client.delete_job(job_id=job_id)
@@ -2207,7 +2470,7 @@ class TestJobs:
         api: ApiConfig,
         client: aiohttp.ClientSession,
         job_request_factory: Callable[[], Dict[str, Any]],
-        jobs_client: Callable[[], Any],
+        jobs_client_factory: Callable[[_User], JobsClient],
         regular_user_factory: Callable[..., Any],
     ) -> None:
         quota = Quota(total_gpu_run_time_minutes=100)
@@ -2217,6 +2480,7 @@ class TestJobs:
         job_request["container"]["resources"]["gpu"] = 1
         async with client.post(url, headers=user.headers, json=job_request) as response:
             assert response.status == HTTPAccepted.status_code, await response.text()
+        jobs_client_factory(user)  # perform jobs cleanup after test
 
     @pytest.mark.asyncio
     async def test_create_job_non_gpu_quota_allows(
@@ -2224,7 +2488,7 @@ class TestJobs:
         api: ApiConfig,
         client: aiohttp.ClientSession,
         job_request_factory: Callable[[], Dict[str, Any]],
-        jobs_client: Callable[[], Any],
+        jobs_client_factory: Callable[[_User], JobsClient],
         regular_user_factory: Callable[..., Any],
     ) -> None:
         quota = Quota(total_non_gpu_run_time_minutes=100)
@@ -2233,6 +2497,7 @@ class TestJobs:
         job_request = job_request_factory()
         async with client.post(url, headers=user.headers, json=job_request) as response:
             assert response.status == HTTPAccepted.status_code, await response.text()
+        jobs_client_factory(user)  # perform jobs cleanup after test
 
     @pytest.mark.asyncio
     async def test_create_job_gpu_quota_exceeded(
@@ -2240,7 +2505,6 @@ class TestJobs:
         api: ApiConfig,
         client: aiohttp.ClientSession,
         job_request_factory: Callable[[], Dict[str, Any]],
-        jobs_client: JobsClient,
         regular_user_factory: Callable[..., Any],
     ) -> None:
         quota = Quota(total_gpu_run_time_minutes=0)
@@ -2296,6 +2560,9 @@ class TestJobs:
 
         async with client.post(url, headers=headers, json=job_submit) as response:
             assert response.status == HTTPAccepted.status_code, await response.text()
+            payload = await response.json()
+            job_id = payload["id"]
+            await jobs_client.delete_job(job_id)
 
     @pytest.mark.asyncio
     async def test_get_all_jobs_clear(self, jobs_client: JobsClient) -> None:
@@ -2641,6 +2908,22 @@ class TestJobs:
         ) -> None:
             permission = Permission(
                 uri=f"job://{cluster_name}/{owner.name}/{job_id}", action=action
+            )
+            await auth_client.grant_user_permissions(
+                follower.name, [permission], token=owner.token
+            )
+
+        yield _impl
+
+    @pytest.fixture
+    async def share_secret(
+        self, auth_client: AuthClient, cluster_name: str
+    ) -> AsyncIterator[Callable[[_User, _User, Any], Awaitable[None]]]:
+        async def _impl(
+            owner: _User, follower: _User, secret_name: str, action: str = "read"
+        ) -> None:
+            permission = Permission(
+                uri=f"secret://{cluster_name}/{owner.name}/{secret_name}", action=action
             )
             await auth_client.grant_user_permissions(
                 follower.name, [permission], token=owner.token
@@ -3097,7 +3380,7 @@ class TestJobs:
     @pytest.mark.asyncio
     async def test_get_all_jobs_shared(
         self,
-        jobs_client: JobsClient,
+        jobs_client_factory: Callable[[_User], JobsClient],
         api: ApiConfig,
         client: aiohttp.ClientSession,
         job_request_factory: Callable[[], Dict[str, Any]],
@@ -3116,6 +3399,7 @@ class TestJobs:
             assert response.status == HTTPAccepted.status_code, await response.text()
             result = await response.json()
             job_id = result["id"]
+        jobs_client_factory(owner)  # perform jobs cleanup after test
 
         url = api.jobs_base_url
         headers = owner.headers.copy()
@@ -3150,7 +3434,7 @@ class TestJobs:
     @pytest.mark.asyncio
     async def test_get_shared_job(
         self,
-        jobs_client: JobsClient,
+        jobs_client_factory: Callable[[_User], JobsClient],
         api: ApiConfig,
         client: aiohttp.ClientSession,
         job_request_factory: Callable[[], Dict[str, Any]],
@@ -3169,6 +3453,7 @@ class TestJobs:
             assert response.status == HTTPAccepted.status_code, await response.text()
             result = await response.json()
             job_id = result["id"]
+        jobs_client_factory(owner)  # perform jobs cleanup after test
 
         url = f"{api.jobs_base_url}/{job_id}"
         async with client.get(url, headers=owner.headers) as response:
@@ -3841,7 +4126,7 @@ class TestJobs:
                     }
                 ],
             },
-            "is_preemptible": True,
+            "scheduler_enabled": True,
         }
 
         async with client.post(
@@ -3863,6 +4148,7 @@ class TestJobs:
                     "description": None,
                     "created_at": mock.ANY,
                     "run_time_seconds": 0,
+                    "restarts": 0,
                 },
                 "container": {
                     "command": "true",
@@ -3878,11 +4164,14 @@ class TestJobs:
                         }
                     ],
                 },
-                "ssh_server": "ssh://nobody@ssh-auth.platform.neuromation.io:22",
-                "ssh_auth_server": "ssh://nobody@ssh-auth.platform.neuromation.io:22",
+                "scheduler_enabled": True,
+                "preemptible_node": False,
                 "is_preemptible": True,
+                "is_preemptible_node_required": False,
+                "pass_config": False,
                 "uri": f"job://test-cluster/{regular_user.name}/{job_id}",
                 "restart_policy": "never",
+                "privileged": False,
             }
 
         response_payload = await jobs_client.long_polling_by_job_id(
@@ -3904,6 +4193,7 @@ class TestJobs:
                 "started_at": mock.ANY,
                 "finished_at": mock.ANY,
                 "run_time_seconds": mock.ANY,
+                "restarts": 0,
             },
             "container": {
                 "command": "true",
@@ -3919,11 +4209,14 @@ class TestJobs:
                     }
                 ],
             },
-            "ssh_server": "ssh://nobody@ssh-auth.platform.neuromation.io:22",
-            "ssh_auth_server": "ssh://nobody@ssh-auth.platform.neuromation.io:22",
+            "scheduler_enabled": True,
+            "preemptible_node": False,
             "is_preemptible": True,
+            "is_preemptible_node_required": False,
+            "pass_config": False,
             "uri": f"job://test-cluster/{regular_user.name}/{job_id}",
             "restart_policy": "never",
+            "privileged": False,
         }
 
     @pytest.mark.asyncio
@@ -3985,6 +4278,7 @@ class TestJobs:
                 "finished_at": mock.ANY,
                 "exit_code": 1,
                 "run_time_seconds": mock.ANY,
+                "restarts": 0,
             },
             "container": {
                 "command": 'bash -c "echo Failed!; false"',
@@ -4006,11 +4300,14 @@ class TestJobs:
                     },
                 ],
             },
-            "ssh_server": "ssh://nobody@ssh-auth.platform.neuromation.io:22",
-            "ssh_auth_server": "ssh://nobody@ssh-auth.platform.neuromation.io:22",
+            "scheduler_enabled": False,
+            "preemptible_node": False,
             "is_preemptible": False,
+            "is_preemptible_node_required": False,
+            "pass_config": False,
             "uri": f"job://test-cluster/{regular_user.name}/{job_id}",
             "restart_policy": "never",
+            "privileged": False,
         }
 
     @pytest.mark.asyncio
@@ -4085,6 +4382,7 @@ class TestJobs:
                     "description": None,
                     "created_at": mock.ANY,
                     "run_time_seconds": 0,
+                    "restarts": 0,
                 },
                 "container": {
                     "command": "true",
@@ -4098,11 +4396,14 @@ class TestJobs:
                     },
                     "volumes": [],
                 },
-                "ssh_server": "ssh://nobody@ssh-auth.platform.neuromation.io:22",
-                "ssh_auth_server": "ssh://nobody@ssh-auth.platform.neuromation.io:22",
+                "scheduler_enabled": False,
+                "preemptible_node": False,
                 "is_preemptible": False,
+                "is_preemptible_node_required": False,
+                "pass_config": False,
                 "uri": f"job://test-cluster/{regular_user.name}/{job_id}",
                 "restart_policy": "never",
+                "privileged": False,
             }
 
     @pytest.mark.asyncio
@@ -4172,6 +4473,7 @@ class TestJobs:
                     "description": None,
                     "created_at": mock.ANY,
                     "run_time_seconds": 0,
+                    "restarts": 0,
                 },
                 "container": {
                     "command": "true",
@@ -4184,11 +4486,14 @@ class TestJobs:
                     },
                     "volumes": [],
                 },
-                "ssh_server": "ssh://nobody@ssh-auth.platform.neuromation.io:22",
-                "ssh_auth_server": "ssh://nobody@ssh-auth.platform.neuromation.io:22",
+                "scheduler_enabled": False,
+                "preemptible_node": False,
                 "is_preemptible": False,
+                "is_preemptible_node_required": False,
+                "pass_config": False,
                 "uri": f"job://test-cluster/{regular_user.name}/{job_id}",
                 "restart_policy": "never",
+                "privileged": False,
             }
 
 
@@ -4546,6 +4851,8 @@ class TestJobPolicyEnforcer:
             job_id=job_cluster2["id"], status=poll_status
         )
 
+        await user_jobs_client.delete_job(job_cluster2["id"], assert_success=False)
+
 
 class TestRuntimeLimitEnforcer:
     @pytest.mark.asyncio
@@ -4564,13 +4871,17 @@ class TestRuntimeLimitEnforcer:
 
         job_submit["container"]["command"] = "sleep 1h"
 
-        job_submit["max_run_time_minutes"] = 0
+        job_submit["max_run_time_minutes"] = 1
         job_default = await user_jobs_client.create_job(job_submit)
-        assert job_default["max_run_time_minutes"] == 0
+        assert job_default["max_run_time_minutes"] == 1
+        await user_jobs_client.long_polling_by_job_id(
+            job_id=job_default["id"],
+            status="running",
+        )
         # Due to conflict between quota enforcer and jobs poller (see issue #986),
         # we cannot guarrantee that the quota will be enforced up to one
         # enforce-poller's interval, so we check up to 7 intervals:
-        max_enforcing_time = config.job_policy_enforcer.interval_sec * 7
+        max_enforcing_time = 60 + config.job_policy_enforcer.interval_sec * 7
         await user_jobs_client.long_polling_by_job_id(
             job_id=job_default["id"],
             interval_s=0.1,
@@ -4599,3 +4910,6 @@ class TestRuntimeLimitEnforcer:
 
         job_3_status = await user_jobs_client.get_job_by_id(job_3["id"])
         assert job_3_status["status"] == "running"
+
+        await user_jobs_client.delete_job(job_2["id"], assert_success=False)
+        await user_jobs_client.delete_job(job_3["id"], assert_success=False)
