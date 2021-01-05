@@ -1,4 +1,4 @@
-{{- if .Values.NP_DB_POSTGRES_ENABLED }}
+{{- if .Values.postgres.enabled }}
 apiVersion: batch/v1
 kind: Job
 metadata:
@@ -19,10 +19,8 @@ spec:
         - name: NP_DB_REDIS_URI
           value: "{{ .Values.NP_DB_REDIS_URI }}"
         - name: NP_DB_POSTGRES_DSN
-          valueFrom:
-            secretKeyRef:
-              name: platformapi-postgres
-              key: platformapi-migrations-dsn
-
+{{- if .Values.postgres.migrationsRunnerDsn }}
+{{ toYaml .Values.postgres.migrationsRunnerDsn | indent 10 }}
+{{- end }}
   backoffLimit: 0
 {{- end }}
