@@ -108,6 +108,9 @@ helm_install:
 	curl https://raw.githubusercontent.com/kubernetes/helm/master/scripts/get | bash -s -- -v $(HELM_VERSION)
 	helm init --client-only
 	helm plugin install https://github.com/belitre/helm-push-artifactory-plugin
+	@helm repo add neuro-virtual-private $(ARTIFACTORY_PRIVATE_HELM_VIRTUAL_REPO) \
+		--username ${ARTIFACTORY_USERNAME} \
+		--password ${ARTIFACTORY_PASSWORD}
 
 gcr_login:
 	@echo $(GKE_ACCT_AUTH) | base64 --decode | docker login -u _json_key --password-stdin https://gcr.io
@@ -132,6 +135,10 @@ artifactory_docker_push: docker_build
 	docker push $(ARTIFACTORY_IMAGE_NAME):$(TAG)
 	docker push $(ARTIFACTORY_INGRESS_FALLBACK_IMAGE_NAME):$(TAG)
 
+_helm_fetch_charts:
+	rm -rf deploy/platformapi/charts
+	helm dependency update deploy/platformapi
+
 _helm_expand_vars:
 	rm -rf temp_deploy/platformapi
 	mkdir -p temp_deploy/platformapi
@@ -142,14 +149,14 @@ _helm_expand_vars:
 	sed -i.bak "s/\$$INGRESS_FALLBACK_IMAGE/$(subst /,\/,$(ARTIFACTORY_INGRESS_FALLBACK_IMAGE_NAME):$(TAG))/g" temp_deploy/platformapi/values.yaml
 	find temp_deploy/platformapi -type f -name '*.bak' -delete
 
-helm_deploy:
+helm_deploy: _helm_fetch_charts
 	helm \
 		-f deploy/platformapi/values-$(HELM_ENV)-$(CLOUD_PROVIDER).yaml \
 		--set "ENV=$(HELM_ENV)" \
 		--set "IMAGE=$(CLOUD_IMAGE_NAME):$(TAG)" \
 		upgrade --install platformapi deploy/platformapi/ --wait --timeout 1800 --namespace platform
 
-artifactory_helm_push: _helm_expand_vars
+artifactory_helm_push: _helm_fetch_charts _helm_expand_vars
 	helm package --app-version=$(TAG) --version=$(TAG) temp_deploy/platformapi/
 	helm push-artifactory $(IMAGE_NAME)-$(TAG).tgz $(ARTIFACTORY_HELM_REPO) \
 		--username $(ARTIFACTORY_USERNAME) \

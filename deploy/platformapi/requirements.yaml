@@ -1,0 +1,4 @@
+dependencies:
+  - name: postgres-db-init
+    version: "1.0.0"
+    repository: "@neuro-virtual-private"
