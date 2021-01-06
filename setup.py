@@ -9,7 +9,7 @@ install_requires = (
     "aioredis==1.3.1",
     "iso8601==0.1.13",
     "trafaret==1.2.0",
-    "neuro_auth_client==20.11.10",
+    "neuro_auth_client==21.1.4",
     # Circle CI fails on the latest cryptography version
     # because the server has too old OpenSSL version
     "cryptography==3.2.1",
