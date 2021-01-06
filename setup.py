@@ -14,7 +14,7 @@ install_requires = (
     # because the server has too old OpenSSL version
     "cryptography==3.2.1",
     "aiorwlock==1.0.0",
-    "notifications-client==0.8.2",
+    "notifications-client==20.1.4",
     "platform-logging==0.3",
     "aiohttp-cors==0.7.0",
     "aiozipkin==1.0.0",
