@@ -10,14 +10,6 @@ CLOUD_IMAGE_NAME_azure ?= $(AZURE_ACR_NAME).azurecr.io/$(IMAGE_NAME)
 CLOUD_IMAGE_NAME        = $(CLOUD_IMAGE_NAME_$(CLOUD_PROVIDER))
 ARTIFACTORY_IMAGE_NAME  = $(ARTIFACTORY_DOCKER_REPO)/$(IMAGE_NAME)
 
-INGRESS_FALLBACK_IMAGE_NAME ?= platformingressfallback
-INGRESS_FALLBACK_CLOUD_IMAGE_NAME_gke ?= $(GKE_DOCKER_REGISTRY)/$(GKE_PROJECT_ID)/$(INGRESS_FALLBACK_IMAGE_NAME)
-INGRESS_FALLBACK_CLOUD_IMAGE_NAME_aws ?= $(AWS_ACCOUNT_ID).dkr.ecr.$(AWS_REGION).amazonaws.com/$(INGRESS_FALLBACK_IMAGE_NAME)
-INGRESS_FALLBACK_CLOUD_IMAGE_NAME_azure ?= $(AZURE_ACR_NAME).azurecr.io/$(INGRESS_FALLBACK_IMAGE_NAME)
-
-INGRESS_FALLBACK_CLOUD_IMAGE_NAME             = $(INGRESS_FALLBACK_CLOUD_IMAGE_NAME_$(CLOUD_PROVIDER))
-ARTIFACTORY_INGRESS_FALLBACK_IMAGE_NAME = $(ARTIFACTORY_DOCKER_REPO)/$(INGRESS_FALLBACK_IMAGE_NAME)
-
 PLATFORMAUTHAPI_IMAGE = $(shell cat PLATFORMAUTHAPI_IMAGE)
 PLATFORMCONFIG_IMAGE = $(shell cat PLATFORMCONFIG_IMAGE)
 PLATFORMSECRETS_IMAGE = $(shell cat PLATFORMSECRETS_IMAGE)
@@ -56,7 +48,6 @@ docker_build:
 	docker build -f Dockerfile.k8s -t $(IMAGE_NAME):latest \
 	--build-arg PIP_EXTRA_INDEX_URL \
 	--build-arg DIST_FILENAME=`python setup.py --fullname`.tar.gz .
-	make -C platform_ingress_fallback IMAGE_NAME=$(INGRESS_FALLBACK_IMAGE_NAME) build
 
 run_api_k8s:
 	NP_STORAGE_HOST_MOUNT_PATH=/tmp \
@@ -89,7 +80,7 @@ gke_login:
 	gcloud auth configure-docker
 
 aws_k8s_login:
-	aws eks --region $(AWS_REGION) update-kubeconfig --name $(AWS_CLUSTER_NAME)
+	aws eks --region $(AWS_REGION) update-kubeconfig --name $(CLUSTER_NAME)
 
 azure_k8s_login:
 	az aks get-credentials --resource-group $(AZURE_RG_NAME) --name $(CLUSTER_NAME)
@@ -121,19 +112,12 @@ docker_push: docker_build
 	docker push $(CLOUD_IMAGE_NAME):latest
 	docker push $(CLOUD_IMAGE_NAME):$(TAG)
 
-	docker tag $(INGRESS_FALLBACK_IMAGE_NAME):latest $(INGRESS_FALLBACK_CLOUD_IMAGE_NAME):latest
-	docker tag $(INGRESS_FALLBACK_IMAGE_NAME):latest $(INGRESS_FALLBACK_CLOUD_IMAGE_NAME):$(TAG)
-	docker push $(INGRESS_FALLBACK_CLOUD_IMAGE_NAME):latest
-	docker push $(INGRESS_FALLBACK_CLOUD_IMAGE_NAME):$(TAG)
-
 artifactory_docker_push: docker_build
 	docker tag $(IMAGE_NAME):latest $(ARTIFACTORY_IMAGE_NAME):$(TAG)
-	docker tag $(INGRESS_FALLBACK_IMAGE_NAME):latest $(ARTIFACTORY_INGRESS_FALLBACK_IMAGE_NAME):$(TAG)
 	docker login $(ARTIFACTORY_DOCKER_REPO) \
 		--username=$(ARTIFACTORY_USERNAME) \
 		--password=$(ARTIFACTORY_PASSWORD)
 	docker push $(ARTIFACTORY_IMAGE_NAME):$(TAG)
-	docker push $(ARTIFACTORY_INGRESS_FALLBACK_IMAGE_NAME):$(TAG)
 
 _helm_fetch_charts:
 	rm -rf deploy/platformapi/charts
@@ -146,7 +130,6 @@ _helm_expand_vars:
 	find temp_deploy/platformapi -type f -name 'values*' -delete
 	cp deploy/platformapi/values-template.yaml temp_deploy/platformapi/values.yaml
 	sed -i.bak "s/\$$IMAGE/$(subst /,\/,$(ARTIFACTORY_IMAGE_NAME):$(TAG))/g" temp_deploy/platformapi/values.yaml
-	sed -i.bak "s/\$$INGRESS_FALLBACK_IMAGE/$(subst /,\/,$(ARTIFACTORY_INGRESS_FALLBACK_IMAGE_NAME):$(TAG))/g" temp_deploy/platformapi/values.yaml
 	find temp_deploy/platformapi -type f -name '*.bak' -delete
 
 helm_deploy: _helm_fetch_charts
