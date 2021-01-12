@@ -1,4 +1,6 @@
 import enum
+import hashlib
+import json
 import logging
 import time
 from dataclasses import dataclass, field
@@ -364,6 +366,21 @@ class JobRecord:
     def gpu_model_id(self) -> Optional[str]:
         return self.request.container.resources.gpu_model_id
 
+    @property
+    def record_version(self) -> str:
+        hasher = hashlib.new("sha256")
+        val = self.to_primitive(include_version=False)
+        data = json.dumps(val, sort_keys=True)
+        hasher.update(data.encode("utf-8"))
+        return hasher.hexdigest()
+
+    def to_uri(self) -> URL:
+        assert self.cluster_name
+        base_uri = "job://" + self.cluster_name
+        if self.owner:
+            base_uri += "/" + self.owner
+        return URL(f"{base_uri}/{self.id}")
+
     def get_run_time(
         self,
         *,
@@ -414,7 +431,7 @@ class JobRecord:
             )
         )
 
-    def to_primitive(self) -> Dict[str, Any]:
+    def to_primitive(self, include_version: bool = False) -> Dict[str, Any]:
         if not self.allow_empty_cluster_name and not self.cluster_name:
             raise RuntimeError(
                 "empty cluster name must be already replaced with `default`"
@@ -450,6 +467,8 @@ class JobRecord:
             result["preset_name"] = self.preset_name
         if self.tags:
             result["tags"] = self.tags
+        if include_version:
+            result["record_version"] = self.record_version
         return result
 
     @classmethod
@@ -574,11 +593,7 @@ class Job:
         return self._storage_config
 
     def to_uri(self) -> URL:
-        assert self.cluster_name
-        base_uri = "job://" + self.cluster_name
-        if self.owner:
-            base_uri += "/" + self.owner
-        return URL(f"{base_uri}/{self.id}")
+        return self._record.to_uri()
 
     @property
     def request(self) -> JobRequest:

@@ -2,7 +2,7 @@ import asyncio
 import base64
 import json
 from dataclasses import replace
-from datetime import datetime, timezone
+from datetime import datetime, timedelta, timezone
 from typing import Any, AsyncIterator, Callable
 
 import pytest
@@ -38,7 +38,7 @@ from platform_api.orchestrator.jobs_service import (
     NonGpuQuotaExceededError,
     RunningJobsQuotaExceededError,
 )
-from platform_api.orchestrator.jobs_storage import JobFilter
+from platform_api.orchestrator.jobs_storage import JobFilter, JobStorageTransactionError
 from platform_api.user import User, UserCluster
 
 from .conftest import (
@@ -1604,6 +1604,102 @@ class TestJobsService:
 
         # Should not raise anything:
         await jobs_service.create_job(request, user, wait_for_jobs_quota=True)
+
+    @pytest.mark.asyncio
+    async def test_get_poller_data(
+        self,
+        cluster_config: ClusterConfig,
+        jobs_service: JobsService,
+        job_request_factory: Callable[..., JobRequest],
+        mock_jobs_storage: MockJobsStorage,
+    ) -> None:
+        cluster_name = cluster_config.name
+        pending_job = JobRecord.create(
+            status=JobStatus.PENDING,
+            cluster_name=cluster_name,
+            request=job_request_factory(),
+        )
+        running_job = JobRecord.create(
+            status=JobStatus.PENDING,
+            materialized=True,
+            cluster_name=cluster_name,
+            request=job_request_factory(),
+        )
+        completed_job = JobRecord.create(
+            status=JobStatus.SUCCEEDED,
+            materialized=True,
+            cluster_name=cluster_name,
+            request=job_request_factory(),
+        )
+
+        await mock_jobs_storage.set_job(pending_job)
+        await mock_jobs_storage.set_job(running_job)
+        await mock_jobs_storage.set_job(completed_job)
+
+        result = await jobs_service.get_poller_data(cluster_name)
+        assert pending_job.id in [job.id for job in result.unfinished_jobs]
+        assert running_job.id in [job.id for job in result.unfinished_jobs]
+        assert completed_job.id in [job.id for job in result.for_deletion_jobs]
+        assert (
+            result.resource_pool_types
+            == cluster_config.orchestrator.resource_pool_types
+        )
+
+        result = await jobs_service.get_poller_data(
+            cluster_name, deletion_delay=timedelta(seconds=300)
+        )
+        assert [] == result.for_deletion_jobs
+
+    @pytest.mark.asyncio
+    async def test_update_job(
+        self,
+        cluster_config: ClusterConfig,
+        jobs_service: JobsService,
+        job_request_factory: Callable[..., JobRequest],
+        mock_jobs_storage: MockJobsStorage,
+    ) -> None:
+        cluster_name = cluster_config.name
+        record = JobRecord.create(
+            status=JobStatus.PENDING,
+            cluster_name=cluster_name,
+            request=job_request_factory(),
+        )
+
+        await mock_jobs_storage.set_job(record)
+        initial_version = record.record_version
+
+        record.status = JobStatus.RUNNING
+        record.internal_hostname = "updated_hostname"
+
+        await jobs_service.update_job(record, initial_version)
+        job = await jobs_service.get_job(record.id)
+        assert job.status == JobStatus.RUNNING
+        assert job.internal_hostname == "updated_hostname"
+
+    @pytest.mark.asyncio
+    async def test_update_job_wrong_version(
+        self,
+        cluster_config: ClusterConfig,
+        jobs_service: JobsService,
+        job_request_factory: Callable[..., JobRequest],
+        mock_jobs_storage: MockJobsStorage,
+    ) -> None:
+        cluster_name = cluster_config.name
+        record = JobRecord.create(
+            status=JobStatus.PENDING,
+            cluster_name=cluster_name,
+            request=job_request_factory(),
+        )
+
+        await mock_jobs_storage.set_job(record)
+        initial_version = record.record_version
+
+        record.status = JobStatus.RUNNING
+        await jobs_service.update_job(record, initial_version)
+
+        record.status = JobStatus.CANCELLED
+        with pytest.raises(JobStorageTransactionError):
+            await jobs_service.update_job(record, initial_version)
 
 
 class TestJobsServiceCluster:

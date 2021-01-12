@@ -1,9 +1,10 @@
 import base64
+import dataclasses
 import json
 import logging
 from collections import defaultdict
 from dataclasses import dataclass, replace
-from datetime import datetime, timezone
+from datetime import datetime, timedelta, timezone
 from functools import partial
 from pathlib import PurePath
 from typing import (
@@ -39,6 +40,7 @@ from platform_api.cluster_config import OrchestratorConfig, StorageConfig
 from platform_api.config import JobsConfig, JobsSchedulerConfig
 from platform_api.user import User, UserCluster
 
+from ..resource import ResourcePoolType
 from .base import Orchestrator
 from .job import (
     ZERO_RUN_TIME,
@@ -213,6 +215,13 @@ class JobsScheduler:
             jobs_to_suspend=jobs_to_suspend,
         )
         return await self._enforce_running_job_quota(result)
+
+
+@dataclass(frozen=True)
+class PollerData:
+    unfinished_jobs: Sequence[JobRecord]
+    for_deletion_jobs: Sequence[JobRecord]
+    resource_pool_types: Sequence[ResourcePoolType]
 
 
 class JobsService:
@@ -742,6 +751,35 @@ class JobsService:
             except ClusterNotFound:
                 pass
         return configs
+
+    async def get_poller_data(
+        self, cluster_name: str, deletion_delay: Optional[timedelta] = None
+    ) -> PollerData:
+        if deletion_delay is None:
+            deletion_delay = timedelta()
+
+        unfinished_filter = JobFilter(
+            statuses={JobStatus(item) for item in JobStatus.active_values()},
+            clusters={cluster_name: {}},
+        )
+        unfinished_jobs = await self._jobs_storage.get_all_jobs(unfinished_filter)
+        for_deletion_jobs = await self._jobs_storage.get_jobs_for_deletion(
+            delay=deletion_delay, cluster_name=cluster_name
+        )
+        async with self._get_cluster(cluster_name) as cluster:
+            return PollerData(
+                unfinished_jobs=unfinished_jobs,
+                for_deletion_jobs=for_deletion_jobs,
+                resource_pool_types=cluster.orchestrator.config.resource_pool_types,
+            )
+
+    async def update_job(self, record: JobRecord, old_version: str) -> None:
+        async with self._update_job_in_storage(record.id) as db_record:
+            if db_record.record_version != old_version:
+                raise JobStorageTransactionError
+            # Copy data from record to db_record
+            for field in dataclasses.fields(db_record):
+                setattr(db_record, field.name, getattr(record, field.name))
 
     @asynccontextmanager
     async def _create_job_in_storage(

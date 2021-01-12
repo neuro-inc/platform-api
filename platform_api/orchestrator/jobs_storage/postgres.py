@@ -289,13 +289,15 @@ class PostgresJobsStorage(JobsStorage):
         return all_jobs
 
     async def get_jobs_for_deletion(
-        self, *, delay: timedelta = timedelta()
+        self, *, delay: timedelta = timedelta(), cluster_name: str = None
     ) -> List[JobRecord]:
         query = (
             self._tables.jobs.select()
             .where(self._tables.jobs.c.status.in_(JobStatus.finished_values()))
             .where(self._tables.jobs.c.payload["materialized"].astext.cast(Boolean))
         )
+        if cluster_name is not None:
+            query = query.where(self._tables.jobs.c.cluster_name == cluster_name)
         for_deletion = []
         async with self._pool.acquire() as conn, conn.transaction():
             async for record in self._cursor(query, conn=conn):

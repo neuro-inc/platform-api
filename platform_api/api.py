@@ -29,6 +29,7 @@ from .config import Config, CORSConfig
 from .config_client import ConfigClient
 from .config_factory import EnvironConfigFactory
 from .handlers import JobsHandler
+from .handlers.poller_handler import PollerHandler
 from .handlers.stats_handler import StatsHandler
 from .handlers.tags_handler import TagsHandler
 from .kube_cluster import KubeCluster
@@ -238,6 +239,13 @@ async def create_tags_app(config: Config) -> aiohttp.web.Application:
     return tags_app
 
 
+async def create_poller_app(config: Config) -> aiohttp.web.Application:
+    poller_app = aiohttp.web.Application()
+    poller_handler = PollerHandler(app=poller_app, config=config)
+    poller_handler.register(poller_app)
+    return poller_app
+
+
 def create_cluster(config: ClusterConfig) -> Cluster:
     return KubeCluster(config)
 
@@ -368,6 +376,7 @@ async def create_app(
             app["jobs_app"]["jobs_service"] = jobs_service
             app["stats_app"]["jobs_service"] = jobs_service
             app["tags_app"]["jobs_service"] = jobs_service
+            app["poller_app"]["jobs_service"] = jobs_service
 
             logger.info("Initializing JobPolicyEnforcePoller")
             api_client = await exit_stack.enter_async_context(
@@ -403,6 +412,10 @@ async def create_app(
     tags_app = await create_tags_app(config=config)
     app["tags_app"] = tags_app
     api_v1_app.add_subapp("/tags", tags_app)
+
+    poller_app = await create_poller_app(config=config)
+    app["poller_app"] = poller_app
+    api_v1_app.add_subapp("/poller", poller_app)
 
     app.add_subapp("/api/v1", api_v1_app)
 

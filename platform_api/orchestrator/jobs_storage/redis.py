@@ -438,12 +438,21 @@ class RedisJobsStorage(JobsStorage):
 
     @trace
     async def get_jobs_for_deletion(
-        self, *, delay: timedelta = timedelta()
+        self, *, delay: timedelta = timedelta(), cluster_name: str = None
     ) -> List[JobRecord]:
         job_ids = await self._get_job_ids_for_deletion()
         jobs: List[JobRecord] = []
         async for chunk in self._get_jobs_by_ids_in_chunks(job_ids):
-            jobs.extend(job for job in chunk if job.should_be_deleted(delay=delay))
+            jobs.extend(
+                job
+                for job in chunk
+                if job.should_be_deleted(delay=delay)
+                and (
+                    job.cluster_name == cluster_name
+                    if cluster_name is not None
+                    else True
+                )
+            )
         return jobs
 
     async def get_tags(self, owner: str) -> List[str]:

@@ -58,6 +58,10 @@ class ApiConfig(NamedTuple):
     def tags_base_url(self) -> str:
         return f"{self.endpoint}/tags"
 
+    @property
+    def poller_base_url(self) -> str:
+        return f"{self.endpoint}/poller"
+
 
 class AuthApiConfig(NamedTuple):
     server_endpoint_url: URL

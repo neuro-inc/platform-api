@@ -1,7 +1,8 @@
+import dataclasses
 import uuid
 from dataclasses import dataclass, field
 from enum import Enum
-from typing import Optional, Sequence
+from typing import Any, Dict, Mapping, Optional, Sequence
 
 
 @dataclass(frozen=True)
@@ -48,6 +49,17 @@ class TPUResource:
     types: Sequence[str] = ()
     software_versions: Sequence[str] = ()
 
+    def to_primitive(self) -> Mapping[str, Any]:
+        return {
+            "ipv4_cidr_block": self.ipv4_cidr_block,
+            "types": list(self.types),
+            "software_versions": list(self.software_versions),
+        }
+
+    @classmethod
+    def from_primitive(cls, data: Mapping[str, Any]) -> "TPUResource":
+        return cls(**data)
+
 
 @dataclass(frozen=True)
 class ResourcePoolType:
@@ -70,6 +82,18 @@ class ResourcePoolType:
     def __post_init__(self) -> None:
         if self.gpu and not self.gpu_model:
             raise ValueError("GPU model unspecified")
+
+    def to_primitive(self) -> Dict[str, Any]:
+        data = dataclasses.asdict(self)
+        if self.tpu:
+            data["tpu"] = self.tpu.to_primitive()
+        return data
+
+    @classmethod
+    def from_primitive(cls, data: Dict[str, Any]) -> "ResourcePoolType":
+        if data.get("tpu") is not None:
+            data["tpu"] = TPUResource.from_primitive(data["tpu"])
+        return cls(**data)
 
 
 DEFAULT_PRESETS = (

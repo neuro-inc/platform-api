@@ -184,7 +184,7 @@ class JobsStorage(ABC):
 
     @abstractmethod
     async def get_jobs_for_deletion(
-        self, *, delay: timedelta = timedelta()
+        self, *, delay: timedelta = timedelta(), cluster_name: str = None
     ) -> List[JobRecord]:
         pass
 

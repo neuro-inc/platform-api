@@ -28,6 +28,7 @@ from aiohttp.web_exceptions import HTTPCreated, HTTPNotFound
 from neuro_auth_client import Cluster as AuthCluster, Permission, Quota
 from yarl import URL
 
+from platform_api.cluster_config import OrchestratorConfig
 from platform_api.config import Config
 from platform_api.orchestrator.jobs_service import NEURO_PASSED_CONFIG
 from tests.conftest import random_str
@@ -4744,6 +4745,100 @@ class TestTags:
             assert resp.status == HTTPOk.status_code, await resp.text()
             result = await resp.json()
             assert result == {"tags": ["t2", "t3", "t4", "t1"]}
+
+
+class TestPollerApi:
+    @pytest.mark.asyncio
+    async def test_data_unauthorized(
+        self, api: ApiConfig, client: aiohttp.ClientSession
+    ) -> None:
+        url = api.poller_base_url + "/data"
+        async with client.get(url, params={"cluster_name": "test-cluster"}) as resp:
+            assert resp.status == HTTPUnauthorized.status_code, resp
+
+    @pytest.mark.asyncio
+    async def test_data_authorized_empty(
+        self,
+        api: ApiConfig,
+        client: aiohttp.ClientSession,
+        compute_user: _User,
+        kube_config: OrchestratorConfig,
+    ) -> None:
+        url = api.poller_base_url + "/data"
+        async with client.get(
+            url, params={"cluster_name": "test-cluster"}, headers=compute_user.headers
+        ) as resp:
+            assert resp.status == HTTPOk.status_code, await resp.text()
+            result = await resp.json()
+            assert result["unfinished_jobs"] == []
+            assert result["for_deletion_jobs"] == []
+            for item in kube_config.resource_pool_types:
+                assert item.to_primitive() in result["resource_pool_types"]
+
+    @pytest.mark.asyncio
+    async def test_data_authorized_jobs(
+        self,
+        api: ApiConfig,
+        client: aiohttp.ClientSession,
+        regular_user: _User,
+        compute_user: _User,
+        job_submit: Dict[str, Any],
+    ) -> None:
+        headers = regular_user.headers
+
+        url = api.jobs_base_url
+        async with client.post(url, headers=headers, json=job_submit) as resp:
+            assert resp.status == HTTPAccepted.status_code, await resp.text()
+            job1 = await resp.json()
+
+        url = api.jobs_base_url
+        async with client.post(url, headers=headers, json=job_submit) as resp:
+            assert resp.status == HTTPAccepted.status_code, await resp.text()
+            job2 = await resp.json()
+
+        url = api.poller_base_url + "/data"
+        async with client.get(
+            url, params={"cluster_name": "test-cluster"}, headers=compute_user.headers
+        ) as resp:
+            assert resp.status == HTTPOk.status_code, await resp.text()
+            result = await resp.json()
+            assert job1["id"] in [item["id"] for item in result["unfinished_jobs"]]
+            assert job2["id"] in [item["id"] for item in result["unfinished_jobs"]]
+
+    @pytest.mark.asyncio
+    async def test_update_job(
+        self,
+        api: ApiConfig,
+        client: aiohttp.ClientSession,
+        regular_user: _User,
+        compute_user: _User,
+        job_submit: Dict[str, Any],
+    ) -> None:
+        headers = regular_user.headers
+
+        url = api.jobs_base_url
+        async with client.post(url, headers=headers, json=job_submit) as resp:
+            assert resp.status == HTTPAccepted.status_code, await resp.text()
+            job_id = (await resp.json())["id"]
+
+        url = api.poller_base_url + "/data"
+        async with client.get(
+            url, params={"cluster_name": "test-cluster"}, headers=compute_user.headers
+        ) as resp:
+            assert resp.status == HTTPOk.status_code, await resp.text()
+            result = await resp.json()
+            job = result["unfinished_jobs"][0]
+
+        url = api.poller_base_url + "/update"
+        job["internal_hostname"] = "test-value"
+        async with client.put(url, json=job, headers=compute_user.headers) as resp:
+            assert resp.status == HTTPNoContent.status_code, await resp.text()
+
+        url = api.jobs_base_url + "/" + job_id
+        async with client.get(url, headers=headers) as resp:
+            assert resp.status == HTTPOk.status_code, await resp.text()
+            job = await resp.json()
+            assert job["internal_hostname"] == "test-value"
 
 
 class TestJobPolicyEnforcer:
