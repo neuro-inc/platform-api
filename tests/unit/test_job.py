@@ -134,14 +134,14 @@ class TestContainer:
 
     def test_to_image_uri(self) -> None:
         container = Container(
-            image="example.com/project/testimage",
+            image="example.com/project/testimage%2d",
             resources=ContainerResources(cpu=1, memory_mb=128),
         )
         registry_config = RegistryConfig(
             url=URL("http://example.com"), username="compute", password="compute_token"
         )
         uri = container.to_image_uri(registry_config, "test-cluster")
-        assert uri == URL("image://test-cluster/project/testimage")
+        assert uri == URL("image://test-cluster/project/testimage%252d")
 
     def test_to_image_uri_registry_with_custom_port(self) -> None:
         container = Container(
@@ -188,6 +188,8 @@ class TestContainerVolumeFactory:
             "storage://test-cluster/path/to/dir",
             "storage://test-cluster/path/to//dir",
             "storage://test-cluster/path/to/./dir",
+            "storage://test-cluster/path/to/%2e/dir",
+            "storage://test-cluster/path/to%2fdir",
         ),
     )
     def test_create(self, uri: str) -> None:
@@ -204,18 +206,18 @@ class TestContainerVolumeFactory:
 
 class TestDisk:
     def test_create(self) -> None:
-        uri = "disk://test-cluster/test-user/test-disk"
+        uri = "disk://test-cluster/test-user/test-disk%252d"
         disk = Disk.create(uri)
         assert disk.cluster_name == "test-cluster"
         assert disk.user_name == "test-user"
-        assert disk.disk_id == "test-disk"
+        assert disk.disk_id == "test-disk%2d"
 
     def test_create_uri_eq_str(self) -> None:
-        uri = "disk://test-cluster/test-user/test-disk"
+        uri = "disk://test-cluster/test-user/test-disk%252d"
         assert Disk.create(URL(uri)) == Disk.create(uri)
 
     def test_to_uri(self) -> None:
-        uri = "disk://test-cluster/test-user/test-disk"
+        uri = "disk://test-cluster/test-user/test-disk%252d"
         disk = Disk.create(uri)
         assert disk.to_uri() == URL(uri)
 
@@ -244,23 +246,23 @@ class TestDiskContainerVolume:
 
 class TestSecret:
     def test_create(self) -> None:
-        uri = "secret://test-cluster/test-user/test-secret"
+        uri = "secret://test-cluster/test-user/test-secret%252d"
         sec = Secret.create(uri)
         assert sec.cluster_name == "test-cluster"
         assert sec.user_name == "test-user"
-        assert sec.secret_key == "test-secret"
+        assert sec.secret_key == "test-secret%2d"
 
     def test_create_uri_eq_str(self) -> None:
-        uri = "secret://test-cluster/test-user/test-secret"
+        uri = "secret://test-cluster/test-user/test-secret%252d"
         assert Secret.create(URL(uri)) == Secret.create(uri)
 
     def test_k8s_secret_name(self) -> None:
-        uri = "secret://test-cluster/test-user/test-secret"
+        uri = "secret://test-cluster/test-user/test-secret%252d"
         sec = Secret.create(uri)
         assert sec.k8s_secret_name == "user--test-user--secrets"
 
     def test_to_uri(self) -> None:
-        uri = "secret://test-cluster/test-user/test-secret"
+        uri = "secret://test-cluster/test-user/test-secret%252d"
         sec = Secret.create(uri)
         assert sec.to_uri() == URL(uri)
 
