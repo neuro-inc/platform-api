@@ -1,14 +1,30 @@
-IMAGE_NAME ?= platformapi
-DOCKER_REPO ?= neuro-docker-local-public.jfrog.io
-TAG ?= $(GITHUB_SHA)
+AWS_ACCOUNT_ID ?= 771188043543
+AWS_REGION ?= us-east-1
+
+AZURE_RG_NAME ?= dev
+AZURE_ACR_NAME ?= crc570d91c95c6aac0ea80afb1019a0c6f
+
+ARTIFACTORY_DOCKER_REPO ?= neuro-docker-local-public.jfrog.io
+ARTIFACTORY_HELM_REPO ?= https://neuro.jfrog.io/artifactory/helm-local-public
+ARTIFACTORY_HELM_VIRTUAL_REPO ?= https://neuro.jfrog.io/artifactory/helm-virtual-public
+
+HELM_ENV ?= dev
+
 TAG ?= latest
 
-CLOUD_IMAGE_NAME_gke   ?= $(GKE_DOCKER_REGISTRY)/$(GKE_PROJECT_ID)/$(IMAGE_NAME)
-CLOUD_IMAGE_NAME_aws   ?= $(AWS_ACCOUNT_ID).dkr.ecr.$(AWS_REGION).amazonaws.com/$(IMAGE_NAME)
-CLOUD_IMAGE_NAME_azure ?= $(AZURE_ACR_NAME).azurecr.io/$(IMAGE_NAME)
+IMAGE_NAME ?= platformapi
+IMAGE ?= $(IMAGE_NAME):$(TAG)
 
-CLOUD_IMAGE_NAME        = $(CLOUD_IMAGE_NAME_$(CLOUD_PROVIDER))
-ARTIFACTORY_IMAGE_NAME  = $(ARTIFACTORY_DOCKER_REPO)/$(IMAGE_NAME)
+CLOUD_IMAGE_REPO_gke   ?= $(GKE_DOCKER_REGISTRY)/$(GKE_PROJECT_ID)/$(IMAGE_NAME)
+CLOUD_IMAGE_REPO_aws   ?= $(AWS_ACCOUNT_ID).dkr.ecr.$(AWS_REGION).amazonaws.com/$(IMAGE_NAME)
+CLOUD_IMAGE_REPO_azure ?= $(AZURE_ACR_NAME).azurecr.io/$(IMAGE_NAME)
+CLOUD_IMAGE_REPO       ?= $(CLOUD_IMAGE_REPO_$(CLOUD_PROVIDER))
+CLOUD_IMAGE            ?= $(CLOUD_IMAGE_REPO):$(TAG)
+
+ARTIFACTORY_IMAGE_REPO = $(ARTIFACTORY_DOCKER_REPO)/$(IMAGE_NAME)
+ARTIFACTORY_IMAGE      = $(ARTIFACTORY_IMAGE_REPO):$(TAG)
+
+HELM_CHART = platformapi
 
 PLATFORMAUTHAPI_IMAGE = $(shell cat PLATFORMAUTHAPI_IMAGE)
 PLATFORMCONFIG_IMAGE = $(shell cat PLATFORMCONFIG_IMAGE)
@@ -45,9 +61,9 @@ test_e2e:
 
 docker_build:
 	python setup.py sdist
-	docker build -f Dockerfile.k8s -t $(IMAGE_NAME):latest \
-	--build-arg PIP_EXTRA_INDEX_URL \
-	--build-arg DIST_FILENAME=`python setup.py --fullname`.tar.gz .
+	docker build -f Dockerfile.k8s -t $(IMAGE) \
+		--build-arg PIP_EXTRA_INDEX_URL \
+		--build-arg DIST_FILENAME=`python setup.py --fullname`.tar.gz .
 
 run_api_k8s:
 	NP_STORAGE_HOST_MOUNT_PATH=/tmp \
@@ -95,52 +111,43 @@ docker_pull_test_images:
 	docker tag $(PLATFORMSECRETS_IMAGE) platformsecrets:latest
 	docker tag $(PLATFORMDISKAPI_IMAGE) platformdiskapi:latest
 
+docker_push: docker_build
+	docker tag $(IMAGE) $(CLOUD_IMAGE)
+	docker push $(CLOUD_IMAGE)
+
+artifactory_docker_push: docker_build
+	docker tag $(IMAGE) $(ARTIFACTORY_IMAGE)
+	docker push $(ARTIFACTORY_IMAGE)
+
 helm_install:
 	curl https://raw.githubusercontent.com/kubernetes/helm/master/scripts/get | bash -s -- -v $(HELM_VERSION)
 	helm init --client-only
 	helm plugin install https://github.com/belitre/helm-push-artifactory-plugin
-	@helm repo add neuro-virtual-private $(ARTIFACTORY_PRIVATE_HELM_VIRTUAL_REPO) \
+	@helm repo add neuro $(ARTIFACTORY_HELM_VIRTUAL_REPO) \
 		--username ${ARTIFACTORY_USERNAME} \
 		--password ${ARTIFACTORY_PASSWORD}
 
-gcr_login:
-	@echo $(GKE_ACCT_AUTH) | base64 --decode | docker login -u _json_key --password-stdin https://gcr.io
-
-docker_push: docker_build
-	docker tag $(IMAGE_NAME):latest $(CLOUD_IMAGE_NAME):latest
-	docker tag $(IMAGE_NAME):latest $(CLOUD_IMAGE_NAME):$(TAG)
-	docker push $(CLOUD_IMAGE_NAME):latest
-	docker push $(CLOUD_IMAGE_NAME):$(TAG)
-
-artifactory_docker_push: docker_build
-	docker tag $(IMAGE_NAME):latest $(ARTIFACTORY_IMAGE_NAME):$(TAG)
-	docker login $(ARTIFACTORY_DOCKER_REPO) \
-		--username=$(ARTIFACTORY_USERNAME) \
-		--password=$(ARTIFACTORY_PASSWORD)
-	docker push $(ARTIFACTORY_IMAGE_NAME):$(TAG)
-
-_helm_fetch_charts:
-	rm -rf deploy/platformapi/charts
-	helm dependency update deploy/platformapi
+_helm_fetch:
+	rm -rf temp_deploy
+	mkdir -p temp_deploy/$(HELM_CHART)
+	cp -Rf deploy/$(HELM_CHART) temp_deploy/
+	find temp_deploy/$(HELM_CHART) -type f -name 'values*' -delete
+	helm dependency update temp_deploy/$(HELM_CHART)
 
 _helm_expand_vars:
-	rm -rf temp_deploy/platformapi
-	mkdir -p temp_deploy/platformapi
-	cp -Rf deploy/platformapi/. temp_deploy/platformapi/
-	find temp_deploy/platformapi -type f -name 'values*' -delete
-	cp deploy/platformapi/values-template.yaml temp_deploy/platformapi/values.yaml
-	sed -i.bak "s/\$$IMAGE/$(subst /,\/,$(ARTIFACTORY_IMAGE_NAME):$(TAG))/g" temp_deploy/platformapi/values.yaml
-	find temp_deploy/platformapi -type f -name '*.bak' -delete
+	export IMAGE_REPO=$(ARTIFACTORY_IMAGE_REPO); \
+	export IMAGE_TAG=$(TAG); \
+	export DOCKER_SERVER=$(ARTIFACTORY_DOCKER_REPO); \
+	cat deploy/$(HELM_CHART)/values-template.yaml | envsubst > temp_deploy/$(HELM_CHART)/values.yaml
 
-helm_deploy: _helm_fetch_charts
-	helm \
-		-f deploy/platformapi/values-$(HELM_ENV)-$(CLOUD_PROVIDER).yaml \
-		--set "ENV=$(HELM_ENV)" \
-		--set "IMAGE=$(CLOUD_IMAGE_NAME):$(TAG)" \
-		upgrade --install platformapi deploy/platformapi/ --wait --timeout 1800 --namespace platform
+helm_deploy: _helm_fetch _helm_expand_vars
+	helm upgrade $(HELM_CHART) temp_deploy/$(HELM_CHART) \
+		-f deploy/$(HELM_CHART)/values-$(HELM_ENV)-$(CLOUD_PROVIDER).yaml \
+		--set "image.repository=$(CLOUD_IMAGE_REPO)" \
+		--namespace platform --install --wait --timeout 600
 
-artifactory_helm_push: _helm_fetch_charts _helm_expand_vars
-	helm package --app-version=$(TAG) --version=$(TAG) temp_deploy/platformapi/
-	helm push-artifactory $(IMAGE_NAME)-$(TAG).tgz $(ARTIFACTORY_HELM_REPO) \
+artifactory_helm_push: _helm_fetch _helm_expand_vars
+	helm package --app-version=$(TAG) --version=$(TAG) temp_deploy/$(HELM_CHART)
+	helm push-artifactory $(HELM_CHART)-$(TAG).tgz $(ARTIFACTORY_HELM_REPO) \
 		--username $(ARTIFACTORY_USERNAME) \
 		--password $(ARTIFACTORY_PASSWORD)

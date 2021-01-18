@@ -1,6 +1,3 @@
-IMAGE: crc570d91c95c6aac0ea80afb1019a0c6f.azurecr.io/platformapi:latest
-NP_STORAGE_NFS_SERVER: 'none'
-NP_STORAGE_NFS_PATH: '/'
 NP_K8S_JOBS_INGRESS_DOMAIN_NAME_TEMPLATE: '{job_id}.jobs-dev.neu.ro'
 NP_API_URL: https://dev.neu.ro/api/v1
 NP_ADMIN_URL: https://dev.neu.ro/apis/admin/v1
@@ -14,8 +11,6 @@ NP_OAUTH_CLIENT_ID: V7Jz87W9lhIlo0MyD0O6dufBvcXwM4DR
 NP_OAUTH_AUDIENCE: https://platform.dev.neuromation.io
 NP_OAUTH_SUCCESS_REDIRECT_URL: https://dev.neu.ro/oauth/login
 NP_OAUTH_HEADLESS_CALLBACK_URL: https://dev.neu.ro/oauth/show-code
-NP_PLATFORM_CONFIG_URI: http://platformconfig:8080/api/v1
-NP_ENFORCER_PLATFORM_API_URL: http://localhost:8080/api/v1
 NP_CORS_ORIGINS: https://neu.ro,https://master--neuro-web.netlify.com,http://localhost:8000
 NP_API_ZIPKIN_URL: 'http://zipkin:9411'
 NP_API_ZIPKIN_SAMPLE_RATE: '0.1'  # 10% of traces are saved
@@ -28,6 +23,9 @@ platform:
       secretKeyRef:
         name: platformservices-secret
         key: compute_token
+
+jobPriorityClass:
+  enabled: true
 
 postgres:
   enabled: true
@@ -60,16 +58,9 @@ postgres-db-init:
         name: platformapi-postgres
         key: platformapi-service-dsn
 
-resources:
-  requests:
-    cpu: "1"
-    memory: "1Gi"
-
 ingress:
   enabled: true
 
   extraAnnotations:
     external-dns.platform.neuromation.io: "true"
   hosts: [dev.neu.ro]
-
-secrets: []

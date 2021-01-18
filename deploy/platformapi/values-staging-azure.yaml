@@ -1,6 +1,3 @@
-IMAGE: crstaging3383f2e01599432052b80ddd1283a31c.azurecr.io/platformapi:latest
-NP_STORAGE_NFS_SERVER: 'none'
-NP_STORAGE_NFS_PATH: '/'
 NP_K8S_JOBS_INGRESS_DOMAIN_NAME_TEMPLATE: '{job_id}.jobs-staging.neu.ro'
 NP_API_URL: https://staging.neu.ro/api/v1
 NP_ADMIN_URL: https://staging.neu.ro/apis/admin/v1
@@ -14,8 +11,6 @@ NP_OAUTH_CLIENT_ID: uJV0pm5JPdHkXsSd525rlhFDVcEuUnaV
 NP_OAUTH_AUDIENCE: https://platform.staging.neuromation.io
 NP_OAUTH_SUCCESS_REDIRECT_URL: https://staging.neu.ro/oauth/login
 NP_OAUTH_HEADLESS_CALLBACK_URL: https://staging.neu.ro/oauth/show-code
-NP_PLATFORM_CONFIG_URI: http://platformconfig:8080/api/v1
-NP_ENFORCER_PLATFORM_API_URL: http://localhost:8080/api/v1
 NP_CORS_ORIGINS: https://neu.ro,https://release--neuro-web.netlify.com,https://app.neu.ro
 NP_API_ZIPKIN_URL: 'http://zipkin:9411'
 NP_API_ZIPKIN_SAMPLE_RATE: '0.1'  # 10% of traces are saved
@@ -60,16 +55,9 @@ postgres-db-init:
         name: platformapi-postgres
         key: platformapi-service-dsn
 
-resources:
-  requests:
-    cpu: "1"
-    memory: "1Gi"
-
 ingress:
   enabled: true
 
   extraAnnotations:
     external-dns.platform.neuromation.io: "true"
   hosts: [staging.neu.ro]
-
-secrets: []
