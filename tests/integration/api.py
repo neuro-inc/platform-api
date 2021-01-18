@@ -60,7 +60,7 @@ class ApiConfig(NamedTuple):
 
     @property
     def jobs_storage_http_api_url(self) -> str:
-        return f"{self.endpoint}/jobs_storage"
+        return f"{self.endpoint}/jobs-storage"
 
 
 class AuthApiConfig(NamedTuple):

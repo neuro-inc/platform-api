@@ -415,7 +415,7 @@ async def create_app(
 
     jobs_storage_app = await create_job_storage_http_api_app(config=config)
     app["jobs_storage_app"] = jobs_storage_app
-    api_v1_app.add_subapp("/jobs_storage", jobs_storage_app)
+    api_v1_app.add_subapp("/jobs-storage", jobs_storage_app)
 
     app.add_subapp("/api/v1", api_v1_app)
 
