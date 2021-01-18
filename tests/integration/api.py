@@ -58,6 +58,10 @@ class ApiConfig(NamedTuple):
     def tags_base_url(self) -> str:
         return f"{self.endpoint}/tags"
 
+    @property
+    def jobs_storage_http_api_url(self) -> str:
+        return f"{self.endpoint}/jobs_storage"
+
 
 class AuthApiConfig(NamedTuple):
     server_endpoint_url: URL

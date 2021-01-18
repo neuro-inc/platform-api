@@ -5,6 +5,7 @@ from dataclasses import dataclass, field
 from datetime import datetime, timedelta, timezone
 from typing import (
     AbstractSet,
+    Any,
     AsyncContextManager,
     AsyncIterator,
     Dict,
@@ -17,6 +18,8 @@ from typing import (
     cast,
 )
 
+from iso8601 import iso8601
+
 from platform_api.orchestrator.job import AggregatedRunTime, JobRecord
 from platform_api.orchestrator.job_request import JobStatus
 
@@ -25,7 +28,9 @@ logger = logging.getLogger(__name__)
 
 
 class JobsStorageException(Exception):
-    pass
+    def __init__(self, message: str):
+        self.message = message
+        super().__init__(message)
 
 
 class JobStorageTransactionError(JobsStorageException):
@@ -34,6 +39,9 @@ class JobStorageTransactionError(JobsStorageException):
 
 class JobStorageJobFoundError(JobsStorageException):
     def __init__(self, job_name: str, job_owner: str, found_job_id: str):
+        self.job_name = job_name
+        self.job_owner = job_owner
+        self.found_job_id = found_job_id
         super().__init__(
             f"job with name '{job_name}' and owner '{job_owner}' "
             f"already exists: '{found_job_id}'"
@@ -83,6 +91,41 @@ class JobFilter:
         if not self.since <= created_at <= self.until:
             return False
         return True
+
+    def to_primitive(self) -> Mapping[str, Any]:
+        return {
+            "statuses": list(self.statuses),
+            "clusters": {
+                cluster_name: {
+                    owner: list(names) for owner, names in cluster_filter.items()
+                }
+                for cluster_name, cluster_filter in self.clusters.items()
+            },
+            "owners": list(self.owners),
+            "tags": list(self.tags),
+            "name": self.name,
+            "ids": list(self.ids),
+            "since": self.since.isoformat(),
+            "until": self.until.isoformat(),
+        }
+
+    @classmethod
+    def from_primitive(cls, payload: Mapping[str, Any]) -> "JobFilter":
+        return cls(
+            statuses=set(payload["statuses"]),
+            clusters={
+                cluster_name: {
+                    owner: set(names) for owner, names in cluster_filter.items()
+                }
+                for cluster_name, cluster_filter in payload["clusters"].items()
+            },
+            owners=set(payload["owners"]),
+            tags=set(payload["tags"]),
+            name=payload["name"],
+            ids=set(payload["ids"]),
+            since=iso8601.parse_date(payload["since"]),
+            until=iso8601.parse_date(payload["until"]),
+        )
 
 
 @dataclass

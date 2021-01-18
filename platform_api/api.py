@@ -29,6 +29,7 @@ from .config import Config, CORSConfig
 from .config_client import ConfigClient
 from .config_factory import EnvironConfigFactory
 from .handlers import JobsHandler
+from .handlers.http_storage_handler import JobsStorageHttpApiHandler
 from .handlers.stats_handler import StatsHandler
 from .handlers.tags_handler import TagsHandler
 from .kube_cluster import KubeCluster
@@ -231,6 +232,13 @@ async def create_stats_app(config: Config) -> aiohttp.web.Application:
     return stats_app
 
 
+async def create_job_storage_http_api_app(config: Config) -> aiohttp.web.Application:
+    job_storage_app = aiohttp.web.Application()
+    job_storage_handler = JobsStorageHttpApiHandler(app=job_storage_app)
+    job_storage_handler.register(job_storage_app)
+    return job_storage_app
+
+
 async def create_tags_app(config: Config) -> aiohttp.web.Application:
     tags_app = aiohttp.web.Application()
     tags_handler = TagsHandler(app=tags_app, config=config)
@@ -368,6 +376,7 @@ async def create_app(
             app["jobs_app"]["jobs_service"] = jobs_service
             app["stats_app"]["jobs_service"] = jobs_service
             app["tags_app"]["jobs_service"] = jobs_service
+            app["jobs_storage_app"]["jobs_storage"] = jobs_storage
 
             logger.info("Initializing JobPolicyEnforcePoller")
             api_client = await exit_stack.enter_async_context(
@@ -403,6 +412,10 @@ async def create_app(
     tags_app = await create_tags_app(config=config)
     app["tags_app"] = tags_app
     api_v1_app.add_subapp("/tags", tags_app)
+
+    jobs_storage_app = await create_job_storage_http_api_app(config=config)
+    app["jobs_storage_app"] = jobs_storage_app
+    api_v1_app.add_subapp("/jobs_storage", jobs_storage_app)
 
     app.add_subapp("/api/v1", api_v1_app)
 

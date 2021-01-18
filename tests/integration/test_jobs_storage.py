@@ -1,7 +1,7 @@
 from datetime import datetime, timedelta
 from itertools import islice
 from pathlib import PurePath
-from typing import Any, Dict, List, Optional, Tuple
+from typing import Any, AsyncIterator, Dict, List, Optional, Tuple
 
 import aioredis
 import pytest
@@ -31,22 +31,38 @@ from platform_api.orchestrator.jobs_storage import (
     JobStorageTransactionError,
     RedisJobsStorage,
 )
+from platform_api.orchestrator.jobs_storage.http import HttpJobsStorage
 from platform_api.orchestrator.jobs_storage.postgres import PostgresJobsStorage
 from platform_api.postgres import MigrationRunner, create_postgres_pool
 from platform_api.redis import RedisConfig
 from tests.conftest import not_raises, random_str
+from tests.integration.api import ApiConfig
 
 
 class TestJobsStorage:
-    @pytest.fixture(params=["redis", "postgres"])
-    def storage(
-        self, request: Any, redis_client: aioredis.Redis, postgres_pool: Pool
-    ) -> JobsStorage:
+    @pytest.fixture(params=["redis", "postgres", "http"])
+    async def storage(
+        self,
+        request: Any,
+        api: ApiConfig,
+        redis_client: aioredis.Redis,
+        postgres_pool: Pool,
+        admin_token: str,
+    ) -> AsyncIterator[JobsStorage]:
         if request.param == "redis":
-            return RedisJobsStorage(redis_client)
-        if request.param == "postgres":
-            return PostgresJobsStorage(postgres_pool)
-        raise Exception(f"Unknown job storage engine {request.param}.")
+            yield RedisJobsStorage(redis_client)
+        elif request.param == "postgres":
+            yield PostgresJobsStorage(postgres_pool)
+        elif request.param == "http":
+            storage = HttpJobsStorage(
+                url=URL(api.jobs_storage_http_api_url),
+                token=admin_token,
+            )
+            await storage.init()
+            yield storage
+            await storage.close()
+        else:
+            raise Exception(f"Unknown job storage engine {request.param}.")
 
     def _create_job_request(self, with_gpu: bool = False) -> JobRequest:
         if with_gpu:
