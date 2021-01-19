@@ -291,17 +291,14 @@ class PostgresJobsStorage(JobsStorage):
     async def get_jobs_for_deletion(
         self, *, delay: timedelta = timedelta()
     ) -> List[JobRecord]:
-        query = (
-            self._tables.jobs.select()
-            .where(self._tables.jobs.c.status.in_(JobStatus.finished_values()))
-            .where(self._tables.jobs.c.payload["materialized"].astext.cast(Boolean))
+        job_filter = JobFilter(
+            statuses={JobStatus(item) for item in JobStatus.finished_values()},
+            materialized=True,
         )
         for_deletion = []
-        async with self._pool.acquire() as conn, conn.transaction():
-            async for record in self._cursor(query, conn=conn):
-                job = self._record_to_job(record)
-                if job.should_be_deleted(delay=delay):
-                    for_deletion.append(job)
+        async for job in self.iter_all_jobs(job_filter):
+            if job.should_be_deleted(delay=delay):
+                for_deletion.append(job)
         return for_deletion
 
     async def get_tags(self, owner: str) -> List[str]:
@@ -501,6 +498,12 @@ class JobFilterClauseBuilder:
     def filter_until(self, until: datetime) -> None:
         self._clauses.append(self._tables.jobs.c.created_at <= until)
 
+    def filter_materialized(self, materialized: bool) -> None:
+        self._clauses.append(
+            self._tables.jobs.c.payload["materialized"].astext.cast(Boolean)
+            == materialized
+        )
+
     def build(self) -> sasql.ClauseElement:
         return and_(*self._clauses)
 
@@ -521,6 +524,8 @@ class JobFilterClauseBuilder:
             builder.filter_ids(job_filter.ids)
         if job_filter.tags:
             builder.filter_tags(job_filter.tags)
+        if job_filter.materialized is not None:
+            builder.filter_materialized(job_filter.materialized)
         builder.filter_since(job_filter.since)
         builder.filter_until(job_filter.until)
         return builder.build()

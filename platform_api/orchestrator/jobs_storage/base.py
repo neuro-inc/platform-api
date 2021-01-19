@@ -57,6 +57,7 @@ class JobFilter:
     ids: AbstractSet[str] = field(default_factory=cast(Type[Set[str]], set))
     since: datetime = datetime(1, 1, 1, tzinfo=timezone.utc)
     until: datetime = datetime(9999, 12, 31, 23, 59, 59, 999999, tzinfo=timezone.utc)
+    materialized: Optional[bool] = None
 
     def check(self, job: JobRecord) -> bool:
         if self.statuses and job.status not in self.statuses:
@@ -82,6 +83,8 @@ class JobFilter:
         created_at = job.status_history.created_at
         if not self.since <= created_at <= self.until:
             return False
+        if self.materialized is not None:
+            return self.materialized == job.materialized
         return True
 
 
