@@ -135,11 +135,13 @@ class HttpJobsStorage(JobsStorage):
             return [JobRecord.from_primitive(item) for item in payload]
 
     async def get_jobs_for_deletion(
-        self, *, delay: timedelta = timedelta()
+        self, *, delay: timedelta = timedelta(), cluster_name: str = None
     ) -> List[JobRecord]:
         assert self._client
         url = self._base_url / "get_jobs_for_deletion"
         params = {"delay_s": str(delay.total_seconds())}
+        if cluster_name:
+            params["cluster_name"] = cluster_name
         async with self._client.get(url=url, params=params) as resp:
             await self._check_for_error(resp)
             payload = await resp.json()

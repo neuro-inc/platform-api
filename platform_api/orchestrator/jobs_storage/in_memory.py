@@ -98,12 +98,13 @@ class InMemoryJobsStorage(JobsStorage):
         return jobs
 
     async def get_jobs_for_deletion(
-        self, *, delay: timedelta = timedelta()
+        self, *, delay: timedelta = timedelta(), cluster_name: str = None
     ) -> List[JobRecord]:
         return [
             job
             async for job in self.iter_all_jobs()
             if job.should_be_deleted(delay=delay)
+            and (job.cluster_name == cluster_name if cluster_name is not None else True)
         ]
 
     async def get_tags(self, owner: str) -> List[str]:

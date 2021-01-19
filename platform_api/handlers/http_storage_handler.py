@@ -200,10 +200,15 @@ class JobsStorageHttpApiHandler:
     ) -> aiohttp.web.StreamResponse:
         await self._check_permissions(request)
         delay = timedelta(seconds=float(request.query["delay_s"]))
+        kwargs: Dict[str, Any] = {}
+        if "cluster_name" in request.query:
+            kwargs["cluster_name"] = request.query["cluster_name"]
         return aiohttp.web.json_response(
             data=[
                 job.to_primitive()
-                for job in await self._jobs_storage.get_jobs_for_deletion(delay=delay)
+                for job in await self._jobs_storage.get_jobs_for_deletion(
+                    delay=delay, **kwargs
+                )
             ]
         )
 
