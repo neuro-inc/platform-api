@@ -112,7 +112,7 @@ jobs:
     needs: test
     if: github.ref == 'refs/heads/master'
     env:
-      ARTIFACTORY_PRIVATE_HELM_VIRTUAL_REPO: ${{ secrets.ARTIFACTORY_PRIVATE_HELM_VIRTUAL_REPO }}
+      ARTIFACTORY_HELM_VIRTUAL_REPO: ${{ secrets.ARTIFACTORY_HELM_VIRTUAL_REPO }}
       ARTIFACTORY_USERNAME: ${{ secrets.ARTIFACTORY_USERNAME }}
       ARTIFACTORY_PASSWORD: ${{ secrets.ARTIFACTORY_PASSWORD }}
       AWS_ACCOUNT_ID: ${{ secrets.AWS_ACCOUNT_ID }}
@@ -155,6 +155,8 @@ jobs:
           login-server: ${{ secrets.AZURE_DEV_ACR_SERVER }}
           username: ${{ secrets.AZURE_DEV_ACR_USERNAME }}
           password: ${{ secrets.AZURE_DEV_ACR_PASSWORD }}
+      - name: Set tag
+        run: echo "TAG=$GITHUB_SHA" >> $GITHUB_ENV
       - name: Push images to registry
         run: make docker_push
       - name: Update kube config
@@ -170,9 +172,9 @@ jobs:
     needs: test
     if: github.event_name == 'push' && contains(github.ref, 'refs/tags/')
     env:
-      ARTIFACTORY_DOCKER_REPO: ${{ secrets.ARTIFACTORY_PRIVATE_DOCKER_REPO }}
-      ARTIFACTORY_HELM_REPO: ${{ secrets.ARTIFACTORY_PRIVATE_HELM_REPO }}
-      ARTIFACTORY_PRIVATE_HELM_VIRTUAL_REPO: ${{ secrets.ARTIFACTORY_PRIVATE_HELM_VIRTUAL_REPO }}
+      ARTIFACTORY_DOCKER_REPO: ${{ secrets.ARTIFACTORY_DOCKER_REPO }}
+      ARTIFACTORY_HELM_REPO: ${{ secrets.ARTIFACTORY_HELM_REPO }}
+      ARTIFACTORY_HELM_VIRTUAL_REPO: ${{ secrets.ARTIFACTORY_HELM_VIRTUAL_REPO }}
       ARTIFACTORY_USERNAME: ${{ secrets.ARTIFACTORY_USERNAME }}
       ARTIFACTORY_PASSWORD: ${{ secrets.ARTIFACTORY_PASSWORD }}
       AWS_ACCOUNT_ID: ${{ secrets.AWS_ACCOUNT_ID }}
@@ -215,6 +217,12 @@ jobs:
           login-server: ${{ secrets.AZURE_STAGING_ACR_SERVER }}
           username: ${{ secrets.AZURE_STAGING_ACR_USERNAME }}
           password: ${{ secrets.AZURE_STAGING_ACR_PASSWORD }}
+      - name: Login to Artifactory docker registry
+        uses: docker/login-action@v1
+        with:
+          registry: ${{ secrets.ARTIFACTORY_DOCKER_REPO }}
+          username: ${{ secrets.ARTIFACTORY_USERNAME }}
+          password: ${{ secrets.ARTIFACTORY_PASSWORD }}
       - name: Set tag
         run: echo "TAG=${GITHUB_REF#refs/tags/v}" >> $GITHUB_ENV
       - name: Push images to registry

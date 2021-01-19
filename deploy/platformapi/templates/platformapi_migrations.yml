@@ -13,7 +13,7 @@ spec:
       restartPolicy: Never
       containers:
       - name: platformapi-migrations
-        image: {{ .Values.IMAGE }}
+        image: {{ .Values.image.repository }}:{{ .Values.image.tag }}
         imagePullPolicy: Always
         command: ["alembic", "upgrade", "head"]
         env:

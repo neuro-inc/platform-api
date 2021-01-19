@@ -1,4 +1,3 @@
-IMAGE: $IMAGE
 NP_STORAGE_NFS_SERVER: 'none'
 NP_STORAGE_NFS_PATH: '/'
 NP_K8S_JOBS_INGRESS_DOMAIN_NAME_TEMPLATE: 'none'
@@ -22,12 +21,31 @@ NP_API_ZIPKIN_SAMPLE_RATE: '0.1'  # 10% of traces are saved
 NP_SENTRY_URL:
 NP_CLUSTER_NAME:
 
+image:
+  repository: "$IMAGE_REPO"
+  tag: "$IMAGE_TAG"
+
+imagePullSecrets: []
+
+replicas: 1
+
 platform:
   token: {}
+
+jobPriorityClass:
+  enabled: false
 
 postgres:
   enabled: true
 
+  migrationsRunnerDsn: {}
+  serviceDsn: {}
+
+postgres-db-init:
+  image:
+    repository: $DOCKER_SERVER/bitnami/postgresql
+
+  adminDsn: {}
   migrationsRunnerDsn: {}
   serviceDsn: {}
 

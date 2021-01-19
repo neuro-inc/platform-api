@@ -3,7 +3,7 @@ kind: Deployment
 metadata:
   name: platformapi
 spec:
-  replicas: 1
+  replicas: {{ .Values.replicas }}
   selector:
     matchLabels:
       service: platformapi
@@ -23,8 +23,7 @@ spec:
     spec:
       containers:
       - name: platformapi
-        image: {{ .Values.IMAGE }}
-        imagePullPolicy: Always
+        image: {{ .Values.image.repository }}:{{ .Values.image.tag }}
         livenessProbe:
           httpGet:
             path: /api/v1/ping
@@ -131,9 +130,9 @@ spec:
         - name: NP_CLUSTER_NAME
           value: {{ .Values.NP_CLUSTER_NAME }}
         {{- end }}
-      - name: kubeproxy
-        image: lachlanevenson/k8s-kubectl:v1.10.3
-        args: [proxy]
+      {{- if .Values.imagePullSecrets }}
+      imagePullSecrets: {{ toYaml .Values.imagePullSecrets | nindent 6 }}
+      {{- end }}
 ---
 apiVersion: v1
 kind: Service
@@ -171,7 +170,7 @@ spec:
           servicePort: http
 {{- end }}
 {{- end }}
-{{- if eq .Values.ENV "dev" }}
+{{- if .Values.jobPriorityClass.enabled }}
 ---
 apiVersion: scheduling.k8s.io/v1beta1
 kind: PriorityClass
