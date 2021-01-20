@@ -14,7 +14,7 @@ NP_OAUTH_HEADLESS_CALLBACK_URL: https://staging.neu.ro/oauth/show-code
 NP_CORS_ORIGINS: https://neu.ro,https://release--neuro-web.netlify.com,https://app.neu.ro
 NP_API_ZIPKIN_URL: 'http://zipkin:9411'
 NP_API_ZIPKIN_SAMPLE_RATE: '0.1'  # 10% of traces are saved
-NP_SENTRY_URL: "https://00f2b1cb9abf48e49a17bb426242edef@sentry-dev-azure.neu.ro/10"
+NP_SENTRY_URL: "https://007c28df2e15451baefdd022386bbb47@o489136.ingest.sentry.io/5553359"
 NP_CLUSTER_NAME: "staging-azure"
 
 platform:
