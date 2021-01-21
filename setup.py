@@ -21,7 +21,7 @@ install_requires = (
     "asyncpg==0.21.0",
     "sqlalchemy==1.3.22",
     "asyncpgsa==0.26.3",
-    "alembic==1.5.1",
+    "alembic==1.5.2",
     "psycopg2-binary==2.8.6",
     "sentry-sdk==0.19.5",
 )
