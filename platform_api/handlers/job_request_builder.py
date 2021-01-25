@@ -1,7 +1,6 @@
 from pathlib import PurePath
 from typing import Any, Dict
 
-from platform_api.cluster_config import StorageConfig
 from platform_api.orchestrator.job_request import (
     Container,
     ContainerHTTPServer,
@@ -14,9 +13,7 @@ from platform_api.orchestrator.job_request import (
 )
 
 
-def create_container_from_payload(
-    payload: Dict[str, Any], *, storage_config: StorageConfig
-) -> Container:
+def create_container_from_payload(payload: Dict[str, Any]) -> Container:
     if "container" in payload:
         # Deprecated. Use flat structure
         payload = payload["container"]
@@ -33,9 +30,7 @@ def create_container_from_payload(
 
     volumes = []
     for volume_payload in payload.get("volumes", ()):
-        volume = create_volume_from_payload(
-            volume_payload, storage_config=storage_config
-        )
+        volume = create_volume_from_payload(volume_payload)
         volumes.append(volume)
 
     secret_volumes = [
@@ -87,15 +82,11 @@ def create_tpu_resource_from_payload(payload: Dict[str, Any]) -> ContainerTPURes
     )
 
 
-def create_volume_from_payload(
-    payload: Dict[str, Any], *, storage_config: StorageConfig
-) -> ContainerVolume:
+def create_volume_from_payload(payload: Dict[str, Any]) -> ContainerVolume:
     dst_path = PurePath(payload["dst_path"])
     return ContainerVolume.create(
         payload["src_storage_uri"],
-        src_mount_path=storage_config.host_mount_path,
-        dst_mount_path=dst_path,
-        extend_dst_mount_path=False,
+        dst_path=dst_path,
         read_only=bool(payload.get("read_only")),
     )
 

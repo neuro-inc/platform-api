@@ -56,8 +56,7 @@ class TestVolume:
     )
     def test_create_mount(self, volume: Volume) -> None:
         container_volume = ContainerVolume(
-            uri=URL("storage://host"),
-            src_path=PurePath("/host/path/to/dir"),
+            uri=URL("storage://host/path/to/dir"),
             dst_path=PurePath("/container/path/to/dir"),
         )
         mount = volume.create_mount(container_volume)
@@ -71,8 +70,7 @@ class TestAbstractVolume:
     def test_create_mount_for_abstract_volume_should_fail(self) -> None:
         with pytest.raises(NotImplementedError, match=""):
             container_volume = ContainerVolume(
-                uri=URL("storage://host"),
-                src_path=PurePath("/host/path/to/dir"),
+                uri=URL("storage://host/path/to/dir"),
                 dst_path=PurePath("/container/path/to/dir"),
             )
             Volume("testvolume").create_mount(container_volume)
@@ -437,7 +435,6 @@ class TestPodDescriptor:
         dev_shm = SharedMemoryVolume(name="dshm")
         container_volume = ContainerVolume(
             dst_path=PurePath("/dev/shm"),
-            src_path=PurePath("/host"),
             uri=URL("storage://"),
         )
         pod = PodDescriptor(
@@ -510,8 +507,7 @@ class TestPodDescriptor:
             env={"TESTVAR": "testvalue"},
             volumes=[
                 ContainerVolume(
-                    uri=URL("storage://src"),
-                    src_path=PurePath("/tmp/src"),
+                    uri=URL("storage://host/src"),
                     dst_path=PurePath("/dst"),
                 )
             ],

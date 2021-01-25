@@ -1488,25 +1488,21 @@ class TestJobsStorage:
         job = self._create_running_job(owner="testuser")
         volume1 = ContainerVolume(
             uri=URL("storage://path/to/dir"),
-            src_path=PurePath("/tmp/path/to/dir"),
             dst_path=PurePath("/container/path"),
             read_only=True,
         )
         volume2 = ContainerVolume(
             uri=URL("storage://testuser/path/to/dir2"),
-            src_path=PurePath("/tmp/path/to/dir2"),
             dst_path=PurePath("/container/path2"),
             read_only=True,
         )
         volume3 = ContainerVolume(
             uri=URL("storage://test-cluster/testuser/path/to/dir3"),
-            src_path=PurePath("/tmp/path/to/dir3"),
             dst_path=PurePath("/container/path3"),
             read_only=True,
         )
         volume4 = ContainerVolume(
             uri=URL(""),
-            src_path=PurePath("/tmp/path/to/dir4"),
             dst_path=PurePath("/container/path4"),
             read_only=True,
         )
@@ -1529,13 +1525,11 @@ class TestJobsStorage:
         migrated_job = await storage.get_job(job.id)
         migrated_volume1 = ContainerVolume(
             uri=URL("storage://test-cluster/path/to/dir"),
-            src_path=PurePath("/tmp/path/to/dir"),
             dst_path=PurePath("/container/path"),
             read_only=True,
         )
         migrated_volume2 = ContainerVolume(
             uri=URL("storage://test-cluster/testuser/path/to/dir2"),
-            src_path=PurePath("/tmp/path/to/dir2"),
             dst_path=PurePath("/container/path2"),
             read_only=True,
         )

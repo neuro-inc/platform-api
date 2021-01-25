@@ -789,7 +789,6 @@ class TestJobContainerToJson:
     ) -> None:
         volume = ContainerVolume(
             uri=URL(""),
-            src_path=PurePath("/"),
             dst_path=PurePath("/var/storage/username/dataset"),
         )
         payload = convert_container_volume_to_json(volume, storage_config)
@@ -804,7 +803,6 @@ class TestJobContainerToJson:
     ) -> None:
         volume = ContainerVolume(
             uri=URL(""),
-            src_path=PurePath("/"),
             dst_path=PurePath("/var/storage/username/dataset%25#?"),
         )
         payload = convert_container_volume_to_json(volume, storage_config)
@@ -815,9 +813,7 @@ class TestJobContainerToJson:
         assert payload["dst_path"] == "/var/storage/username/dataset%25#?"
 
     def test_src_storage_uri_fallback_root(self, storage_config: StorageConfig) -> None:
-        volume = ContainerVolume(
-            uri=URL(""), src_path=PurePath("/"), dst_path=PurePath("/var/storage")
-        )
+        volume = ContainerVolume(uri=URL(""), dst_path=PurePath("/var/storage"))
         payload = convert_container_volume_to_json(volume, storage_config)
         assert payload == {
             "src_storage_uri": "storage:",
@@ -830,7 +826,6 @@ class TestJobContainerToJson:
     ) -> None:
         volume = ContainerVolume(
             uri=URL(""),
-            src_path=PurePath("/"),
             dst_path=PurePath("/var/custom/username/dataset"),
         )
         payload = convert_container_volume_to_json(volume, storage_config)
@@ -1404,13 +1399,11 @@ class TestInferPermissionsFromContainer:
             volumes=[
                 ContainerVolume(
                     uri=URL("storage://test-cluster/testuser/dataset"),
-                    src_path=PurePath("/"),
                     dst_path=PurePath("/var/storage/testuser/dataset"),
                     read_only=True,
                 ),
                 ContainerVolume(
                     uri=URL("storage://test-cluster/testuser/result"),
-                    src_path=PurePath("/"),
                     dst_path=PurePath("/var/storage/testuser/result"),
                 ),
             ],

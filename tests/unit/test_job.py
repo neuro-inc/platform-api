@@ -8,7 +8,7 @@ import pytest
 from neuro_auth_client.client import Quota
 from yarl import URL
 
-from platform_api.cluster_config import RegistryConfig, StorageConfig
+from platform_api.cluster_config import RegistryConfig
 from platform_api.handlers.job_request_builder import create_container_from_payload
 from platform_api.orchestrator.job import (
     AggregatedRunTime,
@@ -26,7 +26,6 @@ from platform_api.orchestrator.job_request import (
     ContainerResources,
     ContainerTPUResource,
     ContainerVolume,
-    ContainerVolumeFactory,
     Disk,
     DiskContainerVolume,
     JobError,
@@ -168,20 +167,7 @@ class TestContainer:
         assert uri == URL("image://test-cluster/project/testimage")
 
 
-class TestContainerVolumeFactory:
-    @pytest.mark.parametrize(
-        "uri", ("storage://test-cluster", "storage://test-cluster/")
-    )
-    def test_create_storage_root_path(self, uri: str) -> None:
-        volume = ContainerVolumeFactory(
-            uri,
-            src_mount_path=PurePath("/host"),
-            dst_mount_path=PurePath("/container"),
-        ).create()
-        assert volume.src_path == PurePath("/host")
-        assert volume.dst_path == PurePath("/container")
-        assert not volume.read_only
-
+class TestContainerVolumeCreate:
     @pytest.mark.parametrize(
         "uri",
         (
@@ -195,12 +181,11 @@ class TestContainerVolumeFactory:
     def test_create(self, uri: str) -> None:
         volume = ContainerVolume.create(
             uri,
-            src_mount_path=PurePath("/host"),
-            dst_mount_path=PurePath("/container"),
+            dst_path=PurePath("/container/mnt"),
             read_only=True,
         )
-        assert volume.src_path == PurePath("/host/path/to/dir")
-        assert volume.dst_path == PurePath("/container/path/to/dir")
+        assert volume.src_path == PurePath("/path/to/dir")
+        assert volume.dst_path == PurePath("/container/mnt")
         assert volume.read_only
 
 
@@ -288,19 +273,16 @@ class TestSecretContainerVolume:
         uri = "storage://test-cluster/path/to/dir"
         volume = ContainerVolume.create(
             uri,
-            src_mount_path=PurePath("/host"),
-            dst_mount_path=PurePath("/container"),
+            dst_path=PurePath("/container"),
             read_only=True,
-            extend_dst_mount_path=False,
         )
-        assert volume.src_path == PurePath("/host/path/to/dir")
+        assert volume.src_path == PurePath("/path/to/dir")
         assert volume.dst_path == PurePath("/container")
         assert volume.read_only
 
 
 class TestContainerBuilder:
     def test_from_payload_build(self) -> None:
-        storage_config = StorageConfig(host_mount_path=PurePath("/tmp"))
         payload = {
             "image": "testimage",
             "entrypoint": "testentrypoint",
@@ -317,9 +299,7 @@ class TestContainerBuilder:
                 }
             ],
         }
-        container = create_container_from_payload(
-            payload, storage_config=storage_config
-        )
+        container = create_container_from_payload(payload)
         assert container == Container(
             image="testimage",
             entrypoint="testentrypoint",
@@ -329,7 +309,6 @@ class TestContainerBuilder:
             volumes=[
                 ContainerVolume(
                     uri=URL("storage://test-cluster/path/to/dir"),
-                    src_path=PurePath("/tmp/path/to/dir"),
                     dst_path=PurePath("/container/path"),
                     read_only=True,
                 )
@@ -340,7 +319,6 @@ class TestContainerBuilder:
         )
 
     def test_from_job_payload_build(self) -> None:
-        storage_config = StorageConfig(host_mount_path=PurePath("/tmp"))
         payload = {
             "container": {
                 "image": "testimage",
@@ -359,9 +337,7 @@ class TestContainerBuilder:
                 ],
             }
         }
-        container = create_container_from_payload(
-            payload, storage_config=storage_config
-        )
+        container = create_container_from_payload(payload)
         assert container == Container(
             image="testimage",
             entrypoint="testentrypoint",
@@ -371,7 +347,6 @@ class TestContainerBuilder:
             volumes=[
                 ContainerVolume(
                     uri=URL("storage://test-cluster/path/to/dir"),
-                    src_path=PurePath("/tmp/path/to/dir"),
                     dst_path=PurePath("/container/path"),
                     read_only=True,
                 )
@@ -382,7 +357,6 @@ class TestContainerBuilder:
         )
 
     def test_from_payload_build_gpu_model(self) -> None:
-        storage_config = StorageConfig(host_mount_path=PurePath("/tmp"))
         payload = {
             "image": "testimage",
             "resources": {
@@ -392,9 +366,7 @@ class TestContainerBuilder:
                 "gpu_model": "gpumodel",
             },
         }
-        container = create_container_from_payload(
-            payload, storage_config=storage_config
-        )
+        container = create_container_from_payload(payload)
         assert container == Container(
             image="testimage",
             resources=ContainerResources(
@@ -403,7 +375,6 @@ class TestContainerBuilder:
         )
 
     def test_from_payload_build_tpu(self) -> None:
-        storage_config = StorageConfig(host_mount_path=PurePath("/tmp"))
         payload = {
             "image": "testimage",
             "resources": {
@@ -412,9 +383,7 @@ class TestContainerBuilder:
                 "tpu": {"type": "v2-8", "software_version": "1.14"},
             },
         }
-        container = create_container_from_payload(
-            payload, storage_config=storage_config
-        )
+        container = create_container_from_payload(payload)
         assert container == Container(
             image="testimage",
             resources=ContainerResources(
@@ -425,7 +394,6 @@ class TestContainerBuilder:
         )
 
     def test_from_payload_build_with_shm_false(self) -> None:
-        storage_config = StorageConfig(host_mount_path=PurePath("/tmp"))
         payload = {
             "image": "testimage",
             "command": "testcommand",
@@ -440,9 +408,7 @@ class TestContainerBuilder:
                 }
             ],
         }
-        container = create_container_from_payload(
-            payload, storage_config=storage_config
-        )
+        container = create_container_from_payload(payload)
         assert container == Container(
             image="testimage",
             command="testcommand",
@@ -450,7 +416,6 @@ class TestContainerBuilder:
             volumes=[
                 ContainerVolume(
                     uri=URL("storage://test-cluster/path/to/dir"),
-                    src_path=PurePath("/tmp/path/to/dir"),
                     dst_path=PurePath("/container/path"),
                     read_only=True,
                 )
@@ -460,7 +425,6 @@ class TestContainerBuilder:
         )
 
     def test_from_payload_build_with_tty(self) -> None:
-        storage_config = StorageConfig(host_mount_path=PurePath("/tmp"))
         payload = {
             "image": "testimage",
             "entrypoint": "testentrypoint",
@@ -471,9 +435,7 @@ class TestContainerBuilder:
             "volumes": [],
             "tty": True,
         }
-        container = create_container_from_payload(
-            payload, storage_config=storage_config
-        )
+        container = create_container_from_payload(payload)
         assert container == Container(
             image="testimage",
             entrypoint="testentrypoint",
@@ -498,8 +460,7 @@ def job_request_payload() -> Dict[str, Any]:
             "env": {"testvar": "testval"},
             "volumes": [
                 {
-                    "uri": "storage://path",
-                    "src_path": "/src/path",
+                    "uri": "storage://host/src/path",
                     "dst_path": "/dst/path",
                     "read_only": False,
                 }
@@ -1360,8 +1321,7 @@ class TestJobRequest:
             resources=ContainerResources(cpu=1, memory_mb=128),
             volumes=[
                 ContainerVolume(
-                    uri=URL("storage://path"),
-                    src_path=PurePath("/src/path"),
+                    uri=URL("storage://host/src/path"),
                     dst_path=PurePath("/dst/path"),
                 )
             ],
@@ -1384,8 +1344,7 @@ class TestJobRequest:
             resources=ContainerResources(cpu=1, memory_mb=128),
             volumes=[
                 ContainerVolume(
-                    uri=URL("storage://path"),
-                    src_path=PurePath("/src/path"),
+                    uri=URL("storage://host/src/path"),
                     dst_path=PurePath("/dst/path"),
                 )
             ],
@@ -1408,8 +1367,7 @@ class TestJobRequest:
             resources=ContainerResources(cpu=1, memory_mb=128),
             volumes=[
                 ContainerVolume(
-                    uri=URL("storage://path"),
-                    src_path=PurePath("/src/path"),
+                    uri=URL("storage://host/src/path"),
                     dst_path=PurePath("/dst/path"),
                 )
             ],
@@ -1430,8 +1388,7 @@ class TestJobRequest:
             resources=ContainerResources(cpu=1, memory_mb=128),
             volumes=[
                 ContainerVolume(
-                    uri=URL("storage://path"),
-                    src_path=PurePath("/src/path"),
+                    uri=URL("storage://host/src/path"),
                     dst_path=PurePath("/dst/path"),
                 )
             ],
@@ -1454,8 +1411,7 @@ class TestJobRequest:
             resources=ContainerResources(cpu=1, memory_mb=128),
             volumes=[
                 ContainerVolume(
-                    uri=URL("storage://path"),
-                    src_path=PurePath("/src/path"),
+                    uri=URL("storage://host/src/path"),
                     dst_path=PurePath("/dst/path"),
                 )
             ],
@@ -1476,8 +1432,7 @@ class TestJobRequest:
             resources=ContainerResources(cpu=1, memory_mb=128),
             volumes=[
                 ContainerVolume(
-                    uri=URL("storage://path"),
-                    src_path=PurePath("/src/path"),
+                    uri=URL("storage://host/src/path"),
                     dst_path=PurePath("/dst/path"),
                 )
             ],
@@ -1496,8 +1451,7 @@ class TestJobRequest:
             resources=ContainerResources(cpu=1, memory_mb=128, shm=True),
             volumes=[
                 ContainerVolume(
-                    uri=URL("storage://path"),
-                    src_path=PurePath("/src/path"),
+                    uri=URL("storage://host/src/path"),
                     dst_path=PurePath("/dst/path"),
                 )
             ],
