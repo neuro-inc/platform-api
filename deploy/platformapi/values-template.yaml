@@ -38,8 +38,7 @@ jobPriorityClass:
 postgres:
   enabled: true
 
-  migrationsRunnerDsn: {}
-  serviceDsn: {}
+  dsn: {}
 
 postgres-db-init:
   image:
@@ -48,6 +47,15 @@ postgres-db-init:
   adminDsn: {}
   migrationsRunnerDsn: {}
   serviceDsn: {}
+
+  migrations:
+    enabled: true
+
+    image:
+      repository: "$IMAGE_REPO"
+      tag: "$IMAGE_TAG"
+
+    command: ["alembic", "upgrade", "head"]
 
 resources:
   requests:

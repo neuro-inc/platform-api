@@ -144,6 +144,7 @@ helm_deploy: _helm_fetch _helm_expand_vars
 	helm upgrade $(HELM_CHART) temp_deploy/$(HELM_CHART) \
 		-f deploy/$(HELM_CHART)/values-$(HELM_ENV)-$(CLOUD_PROVIDER).yaml \
 		--set "image.repository=$(CLOUD_IMAGE_REPO)" \
+		--set "postgres-db-init.migrations.image.repository=$(CLOUD_IMAGE_REPO)" \
 		--namespace platform --install --wait --timeout 600
 
 artifactory_helm_push: _helm_fetch _helm_expand_vars
