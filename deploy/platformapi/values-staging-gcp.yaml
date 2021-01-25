@@ -27,12 +27,7 @@ platform:
 postgres:
   enabled: true
 
-  migrationsRunnerDsn:
-    valueFrom:
-      secretKeyRef:
-        name: platformapi-postgres
-        key: platformapi-migrations-dsn
-  serviceDsn:
+  dsn:
     valueFrom:
       secretKeyRef:
         name: platformapi-postgres
@@ -54,6 +49,16 @@ postgres-db-init:
       secretKeyRef:
         name: platformapi-postgres
         key: platformapi-service-dsn
+
+  migrations:
+    env:
+      - name: NP_DB_REDIS_URI
+        value: redis://dev-staging-redis-redis.weetmn.ng.0001.use1.cache.amazonaws.com:6379/0
+      - name: NP_DB_POSTGRES_DSN
+        valueFrom:
+          secretKeyRef:
+            name: platformapi-postgres
+            key: platformapi-migrations-dsn
 
 ingress:
   enabled: true

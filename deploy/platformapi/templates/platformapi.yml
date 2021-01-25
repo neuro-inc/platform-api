@@ -117,8 +117,8 @@ spec:
         - name: NP_API_ZIPKIN_SAMPLE_RATE
           value: "{{ .Values.NP_API_ZIPKIN_SAMPLE_RATE }}"
         - name: NP_DB_POSTGRES_DSN
-{{- if .Values.postgres.serviceDsn }}
-{{ toYaml .Values.postgres.serviceDsn | indent 10 }}
+{{- if .Values.postgres.dsn }}
+{{ toYaml .Values.postgres.dsn | indent 10 }}
 {{- end }}
         - name: NP_DB_POSTGRES_ENABLED
           value: "{{ .Values.postgres.enabled }}"
