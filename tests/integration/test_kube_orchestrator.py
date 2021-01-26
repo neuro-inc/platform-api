@@ -592,7 +592,7 @@ class TestKubeOrchestrator:
             ContainerVolume(
                 uri=URL(
                     f"{storage_config.uri_scheme}://"
-                    f"{cluster_name}/{storage_config.host_mount_path}"
+                    f"{cluster_name}{storage_config.host_mount_path}"
                 ),
                 dst_path=PurePath("/storage"),
             )

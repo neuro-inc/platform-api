@@ -36,10 +36,7 @@ class ContainerVolume:
 
     @property
     def src_path(self) -> PurePath:
-        path = URL(self.uri).path
-        if path.startswith("//"):
-            path = path[1:]
-        return PurePath(path)
+        return PurePath(URL(self.uri).path)
 
     @classmethod
     def create(
