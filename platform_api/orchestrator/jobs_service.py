@@ -629,6 +629,8 @@ class JobsService:
         async with self._update_job_in_storage(job_id) as record:
             old_status_item = record.status_history.current
             if old_status_item != status_item:
+                if old_status_item.status.is_finished:
+                    raise JobStorageTransactionError
                 record.status_history.current = status_item
                 logger.info(
                     "Job %s transitioned from %s to %s",
@@ -636,6 +638,10 @@ class JobsService:
                     old_status_item.status.name,
                     status_item.status.name,
                 )
+
+    async def set_job_materialized(self, job_id: str, materialized: bool) -> None:
+        async with self._update_job_in_storage(job_id) as record:
+            record.materialized = materialized
 
     async def _get_cluster_job(self, record: JobRecord) -> Job:
         try:
