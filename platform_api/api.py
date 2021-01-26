@@ -40,9 +40,17 @@ from .handlers.stats_handler import StatsHandler
 from .handlers.tags_handler import TagsHandler
 from .kube_cluster import KubeCluster
 from .orchestrator.job_request import JobException
-from .orchestrator.jobs_poller import JobsPoller
-from .orchestrator.jobs_service import JobsScheduler, JobsService, JobsServiceException
-from .orchestrator.jobs_storage import JobsStorage, PostgresJobsStorage
+from .orchestrator.jobs_poller import HttpJobsPollerApi, JobsPoller
+from .orchestrator.jobs_service import (
+    JobsPollerService,
+    JobsScheduler,
+    JobsService,
+    JobsServiceException,
+)
+from .orchestrator.jobs_storage import (
+    JobsStorage,
+    PostgresJobsStorage,
+)
 from .postgres import create_postgres_pool
 from .resource import Preset
 from .trace import store_span_middleware
@@ -336,8 +344,25 @@ async def create_app(
                 api_base_url=config.api_base_url,
             )
 
+            logger.info("Initializing JobsPollerApi")
+            poller_api = await exit_stack.enter_async_context(
+                HttpJobsPollerApi(
+                    url=config.job_policy_enforcer.platform_api_url,
+                    token=config.auth.service_token,
+                )
+            )
+
+            logger.info("Initializing JobsPollerService")
+            jobs_poller_service = JobsPollerService(
+                cluster_registry=cluster_registry,
+                jobs_config=config.jobs,
+                scheduler=JobsScheduler(config.scheduler, auth_client=auth_client),
+                auth_client=auth_client,
+                api=poller_api,
+            )
+
             logger.info("Initializing JobsPoller")
-            jobs_poller = JobsPoller(jobs_service=jobs_service)
+            jobs_poller = JobsPoller(jobs_poller_service=jobs_poller_service)
             await exit_stack.enter_async_context(jobs_poller)
 
             logger.info("Initializing ClusterUpdater")

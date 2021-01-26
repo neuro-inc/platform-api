@@ -44,9 +44,13 @@ from platform_api.orchestrator.job_request import (
     ContainerResources,
     ContainerTPUResource,
     ContainerVolume,
+    DiskContainerVolume,
     JobRequest,
     JobStatus,
+    Secret,
+    SecretContainerVolume,
 )
+from platform_api.orchestrator.jobs_poller import job_response_to_job_record
 from platform_api.orchestrator.jobs_storage import JobFilter
 from platform_api.resource import Preset, TPUPreset, TPUResource
 from platform_api.user import User
@@ -1442,6 +1446,60 @@ class TestInferPermissionsFromContainer:
             Permission(uri="job://test-cluster/testuser", action="write"),
             Permission(uri="image://test-cluster/testuser/image", action="read"),
         ]
+
+
+@pytest.mark.asyncio
+async def test_parse_response(mock_orchestrator: MockOrchestrator) -> None:
+    job = Job(
+        storage_config=mock_orchestrator.storage_config,
+        orchestrator_config=mock_orchestrator.config,
+        record=JobRecord.create(
+            request=JobRequest.create(
+                Container(
+                    image="testimage",
+                    resources=ContainerResources(cpu=1, memory_mb=128),
+                    volumes=[
+                        ContainerVolume(
+                            uri=URL("storage://test-cluster/testuser/dataset"),
+                            dst_path=PurePath("/var/storage/testuser/dataset"),
+                            read_only=True,
+                        ),
+                        ContainerVolume(
+                            uri=URL("storage://test-cluster/testuser/result"),
+                            dst_path=PurePath("/var/storage/testuser/result"),
+                        ),
+                    ],
+                    secret_env={
+                        "test": Secret.create(
+                            "secrete://test-cluster/test-user/test-secret"
+                        )
+                    },
+                    disk_volumes=[
+                        DiskContainerVolume.create(
+                            "disk://test-cluster/test-user/test-disk",
+                            dst_path=PurePath("/container"),
+                            read_only=False,
+                        )
+                    ],
+                    secret_volumes=[
+                        SecretContainerVolume.create(
+                            "secret://test-cluster/test-user/test-secret",
+                            dst_path=PurePath("/container"),
+                        )
+                    ],
+                    http_server=ContainerHTTPServer(
+                        port=8080,
+                    ),
+                ),
+                description="test test description",
+            ),
+            cluster_name="test-cluster",
+            name="test-job-name",
+        ),
+    )
+
+    response = convert_job_to_job_response(job)
+    assert job_response_to_job_record(response).to_primitive() == job.to_primitive()
 
 
 @pytest.mark.asyncio

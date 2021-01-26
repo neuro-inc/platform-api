@@ -1,9 +1,10 @@
+import abc
 import base64
 import json
 import logging
 from collections import defaultdict
 from dataclasses import dataclass, replace
-from datetime import datetime, timezone
+from datetime import datetime, timedelta, timezone
 from functools import partial
 from pathlib import PurePath
 from typing import (
@@ -253,23 +254,6 @@ class JobsService:
         ) as cluster:
             yield cluster
 
-    async def update_jobs_statuses(self) -> None:
-        unfinished = await self._jobs_storage.get_unfinished_jobs()
-        result = await self._scheduler.schedule(unfinished)
-
-        for record in result.jobs_to_update:
-            await self._update_job_status_by_id(record.id)
-
-        for record in result.jobs_to_suspend:
-            await self._suspend_job_by_id(record.id)
-
-        for record in await self._jobs_storage.get_jobs_for_deletion(
-            delay=self._jobs_config.deletion_delay
-        ):
-            # finished, but not yet dematerialized jobs
-            # assert job.is_finished and job.materialized
-            await self._delete_job_by_id(record.id)
-
     def _make_job(self, record: JobRecord, cluster: Optional[Cluster] = None) -> Job:
         if cluster is not None:
             storage_config = cluster.config.storage
@@ -283,117 +267,6 @@ class JobsService:
             record=record,
             image_pull_error_delay=self._jobs_config.image_pull_error_delay,
         )
-
-    async def _update_job_status_by_id(self, job_id: str) -> None:
-        try:
-            async with self._update_job_in_storage(job_id) as record:
-                try:
-                    async with self._get_cluster(record.cluster_name) as cluster:
-                        job = self._make_job(record, cluster)
-                        await self._update_job_status(cluster.orchestrator, job)
-                        job.collect_if_needed()
-                except ClusterNotFound as cluster_err:
-                    # marking PENDING/RUNNING job as FAILED
-                    logger.warning(
-                        "Failed to get job '%s' status. Reason: %s",
-                        record.id,
-                        cluster_err,
-                    )
-                    record.status_history.current = JobStatusItem.create(
-                        JobStatus.FAILED,
-                        reason=JobStatusReason.CLUSTER_NOT_FOUND,
-                        description=str(cluster_err),
-                    )
-                    record.materialized = False
-                    await self._revoke_pass_config(record)
-                except ClusterNotAvailable:
-                    # skipping job status update
-                    pass
-        except JobStorageTransactionError:
-            # intentionally ignoring any transaction failures here because
-            # the job may have been changed and a retry is needed.
-            pass
-
-    async def _suspend_job_by_id(self, job_id: str) -> None:
-        try:
-            async with self._update_job_in_storage(job_id) as record:
-                await self._delete_cluster_job(record)
-
-                record.status = JobStatus.SUSPENDED
-                record.materialized = False
-        except JobStorageTransactionError:
-            # intentionally ignoring any transaction failures here because
-            # the job may have been changed and a retry is needed.
-            pass
-
-    async def _update_job_status(self, orchestrator: Orchestrator, job: Job) -> None:
-        if job.is_finished:
-            logger.warning("Ignoring an attempt to update a finished job %s", job.id)
-            return
-
-        logger.info("Updating job %s", job.id)
-
-        old_status_item = job.status_history.current
-
-        if not job.materialized:
-            try:
-                await orchestrator.start_job(job)
-                status_item = job.status_history.current
-                job.materialized = True
-            except JobAlreadyExistsException:
-                logger.info(f"Job '{job.id}' already exists.")
-                # Terminate the transaction. The exception will be ignored.
-                raise JobStorageTransactionError
-            except JobError as exc:
-                logger.exception("Failed to start job %s. Reason: %s", job.id, exc)
-                status_item = JobStatusItem.create(
-                    JobStatus.FAILED,
-                    reason=str(exc),
-                    description="The job could not be started.",
-                )
-                job.materialized = False
-                await self._revoke_pass_config(job)
-        else:
-            try:
-                status_item = await orchestrator.get_job_status(job)
-                # TODO: In case job is found, but container is not in state Pending
-                # We shall go and check for the events assigned to the pod
-                # "pod didn't trigger scale-up (it wouldn't fit if a new node is added)"
-                # this is the sign that we KILL the job.
-                # Event details
-                # Additional details: NotTriggerScaleUp, Nov 2, 2018, 3:00:53 PM,
-                # 	Nov 2, 2018, 3:51:06 PM	178
-            except JobNotFoundException as exc:
-                logger.warning("Failed to get job %s status. Reason: %s", job.id, exc)
-                status_item = JobStatusItem.create(
-                    JobStatus.FAILED,
-                    reason=JobStatusReason.NOT_FOUND,
-                    description="The job could not be scheduled or was preempted.",
-                )
-                job.materialized = False
-                await self._revoke_pass_config(job)
-
-        if old_status_item != status_item:
-            job.status_history.current = status_item
-            logger.info(
-                "Job %s transitioned from %s to %s",
-                job.id,
-                old_status_item.status.name,
-                status_item.status.name,
-            )
-
-    async def _delete_job_by_id(self, job_id: str) -> None:
-        try:
-            async with self._update_job_in_storage(job_id) as record:
-                await self._delete_cluster_job(record)
-
-                # marking finished job as deleted
-                record.materialized = False
-                await self._revoke_pass_config(record)
-        except JobStorageTransactionError:
-            # intentionally ignoring any transaction failures here because
-            # the job may have been changed and a retry is needed.
-            pass
 
     async def _raise_for_run_time_quota(
         self, user: User, user_cluster: UserCluster, gpu_requested: bool
@@ -455,11 +328,6 @@ class JobsService:
             username, [Permission(uri=token_uri, action="read")]
         )
         return await self._auth_client.get_user_token(username, new_token_uri=token_uri)
-
-    async def _revoke_pass_config(self, job: Union[JobRecord, Job]) -> None:
-        if job.pass_config:
-            token_uri = f"token://job/{job.id}"
-            await self._auth_client.revoke_user_permissions(job.owner, [token_uri])
 
     async def _setup_pass_config(
         self, user: User, cluster_name: str, job_request: JobRequest
@@ -790,3 +658,246 @@ class JobsService:
     @property
     def jobs_storage(self) -> JobsStorage:
         return self._jobs_storage
+
+
+class JobsPollerApi(abc.ABC):
+    async def get_unfinished_jobs(self) -> List[JobRecord]:
+        raise NotImplementedError
+
+    async def get_jobs_for_deletion(self, *, delay: timedelta) -> List[JobRecord]:
+        raise NotImplementedError
+
+    async def push_status(self, job_id: str, status: JobStatusItem) -> None:
+        raise NotImplementedError
+
+    async def set_materialized(self, job_id: str, materialized: bool) -> None:
+        raise NotImplementedError
+
+
+class JobsPollerService:
+    def __init__(
+        self,
+        cluster_registry: ClusterRegistry,
+        jobs_config: JobsConfig,
+        scheduler: JobsScheduler,
+        auth_client: AuthClient,
+        api: JobsPollerApi,
+    ) -> None:
+        self._cluster_registry = cluster_registry
+        self._jobs_config = jobs_config
+        self._scheduler = scheduler
+        self._api = api
+
+        self._max_deletion_attempts = 10
+
+        self._dummy_cluster_storage_config = StorageConfig(
+            host_mount_path=PurePath("/<dummy>")
+        )
+        self._dummy_cluster_orchestrator_config = OrchestratorConfig(
+            jobs_domain_name_template="{job_id}.missing-cluster",
+            resource_pool_types=(),
+        )
+        self._auth_client = auth_client
+
+    @asynccontextmanager
+    async def _get_cluster(
+        self, name: str, tolerate_unavailable: bool = False
+    ) -> AsyncIterator[Cluster]:
+        async with self._cluster_registry.get(
+            name, skip_circuit_breaker=tolerate_unavailable
+        ) as cluster:
+            yield cluster
+
+    async def update_jobs_statuses(
+        self,
+    ) -> None:
+        unfinished = await self._api.get_unfinished_jobs()
+        result = await self._scheduler.schedule(unfinished)
+
+        for record in result.jobs_to_update:
+            await self._update_job_status_wrapper(record)
+
+        for record in result.jobs_to_suspend:
+            await self._suspend_job_wrapper(record)
+
+        for record in await self._api.get_jobs_for_deletion(
+            delay=self._jobs_config.deletion_delay
+        ):
+            # finished, but not yet dematerialized jobs
+            # assert job.is_finished and job.materialized
+            await self._delete_job_wrapper(record)
+
+    def _make_job(self, record: JobRecord, cluster: Optional[Cluster] = None) -> Job:
+        if cluster is not None:
+            storage_config = cluster.config.storage
+            orchestrator_config = cluster.orchestrator.config
+        else:
+            storage_config = self._dummy_cluster_storage_config
+            orchestrator_config = self._dummy_cluster_orchestrator_config
+        return Job(
+            storage_config=storage_config,
+            orchestrator_config=orchestrator_config,
+            record=record,
+            image_pull_error_delay=self._jobs_config.image_pull_error_delay,
+        )
+
+    async def _update_job_status_wrapper(self, job_record: JobRecord) -> None:
+        try:
+            async with self._update_job(job_record) as record:
+                try:
+                    async with self._get_cluster(record.cluster_name) as cluster:
+                        job = self._make_job(record, cluster)
+                        await self._update_job_status(cluster.orchestrator, job)
+                        job.collect_if_needed()
+                except ClusterNotFound as cluster_err:
+                    # marking PENDING/RUNNING job as FAILED
+                    logger.warning(
+                        "Failed to get job '%s' status. Reason: %s",
+                        record.id,
+                        cluster_err,
+                    )
+                    record.status_history.current = JobStatusItem.create(
+                        JobStatus.FAILED,
+                        reason=JobStatusReason.CLUSTER_NOT_FOUND,
+                        description=str(cluster_err),
+                    )
+                    record.materialized = False
+                    await self._revoke_pass_config(record)
+                except ClusterNotAvailable:
+                    # skipping job status update
+                    pass
+        except JobStorageTransactionError:
+            # intentionally ignoring any transaction failures here because
+            # the job may have been changed and a retry is needed.
+            pass
+
+    async def _suspend_job_wrapper(self, job_record: JobRecord) -> None:
+        try:
+            async with self._update_job(job_record) as record:
+                await self._delete_cluster_job(record)
+
+                record.status = JobStatus.SUSPENDED
+                record.materialized = False
+        except JobStorageTransactionError:
+            # intentionally ignoring any transaction failures here because
+            # the job may have been changed and a retry is needed.
+            pass
+
+    async def _update_job_status(self, orchestrator: Orchestrator, job: Job) -> None:
+        if job.is_finished:
+            logger.warning("Ignoring an attempt to update a finished job %s", job.id)
+            return
+
+        logger.info("Updating job %s", job.id)
+
+        old_status_item = job.status_history.current
+
+        if not job.materialized:
+            try:
+                await orchestrator.start_job(job)
+                status_item = job.status_history.current
+                job.materialized = True
+            except JobAlreadyExistsException:
+                logger.info(f"Job '{job.id}' already exists.")
+                # Terminate the transaction. The exception will be ignored.
+                raise JobStorageTransactionError
+            except JobError as exc:
+                logger.exception("Failed to start job %s. Reason: %s", job.id, exc)
+                status_item = JobStatusItem.create(
+                    JobStatus.FAILED,
+                    reason=str(exc),
+                    description="The job could not be started.",
+                )
+                job.materialized = False
+                await self._revoke_pass_config(job)
+        else:
+            try:
+                status_item = await orchestrator.get_job_status(job)
+                # TODO: In case job is found, but container is not in state Pending
+                # We shall go and check for the events assigned to the pod
+                # "pod didn't trigger scale-up (it wouldn't fit if a new node is added)"
+                # this is the sign that we KILL the job.
+                # Event details
+                # Additional details: NotTriggerScaleUp, Nov 2, 2018, 3:00:53 PM,
+                # 	Nov 2, 2018, 3:51:06 PM	178
+            except JobNotFoundException as exc:
+                logger.warning("Failed to get job %s status. Reason: %s", job.id, exc)
+                status_item = JobStatusItem.create(
+                    JobStatus.FAILED,
+                    reason=JobStatusReason.NOT_FOUND,
+                    description="The job could not be scheduled or was preempted.",
+                )
+                job.materialized = False
+                await self._revoke_pass_config(job)
+
+        if old_status_item != status_item:
+            job.status_history.current = status_item
+            logger.info(
+                "Job %s transitioned from %s to %s",
+                job.id,
+                old_status_item.status.name,
+                status_item.status.name,
+            )
+
+    async def _delete_job_wrapper(self, job_record: JobRecord) -> None:
+        try:
+            async with self._update_job(job_record) as record:
+                await self._delete_cluster_job(record)
+
+                # marking finished job as deleted
+                record.materialized = False
+                await self._revoke_pass_config(record)
+        except JobStorageTransactionError:
+            # intentionally ignoring any transaction failures here because
+            # the job may have been changed and a retry is needed.
+            pass
+
+    async def _revoke_pass_config(self, job: Union[JobRecord, Job]) -> None:
+        if job.pass_config:
+            token_uri = f"token://job/{job.id}"
+            await self._auth_client.revoke_user_permissions(job.owner, [token_uri])
+
+    async def _get_cluster_job(self, record: JobRecord) -> Job:
+        try:
+            async with self._get_cluster(
+                record.cluster_name, tolerate_unavailable=True
+            ) as cluster:
+                return self._make_job(record, cluster)
+        except ClusterNotFound:
+            # in case the cluster is missing, we still want to return the job
+            # to be able to render a proper HTTP response, therefore we have
+            # the fallback logic that uses the dummy cluster instead.
+            logger.warning(
+                "Falling back to dummy cluster config to retrieve job '%s'", record.id
+            )
+            return self._make_job(record)
+
+    async def _delete_cluster_job(self, record: JobRecord) -> None:
+        try:
+            async with self._get_cluster(record.cluster_name) as cluster:
+                job = self._make_job(record, cluster)
+                try:
+                    await cluster.orchestrator.delete_job(job)
+                except JobException as exc:
+                    # if the job is missing, we still want to mark
+                    # the job as deleted. suppressing.
+                    logger.warning(
+                        "Could not delete job '%s'. Reason: '%s'", record.id, exc
+                    )
+        except (ClusterNotFound, ClusterNotAvailable) as exc:
+            # if the cluster is unavailable or missing, we still want to mark
+            # the job as deleted. suppressing.
+            logger.warning("Could not delete job '%s'. Reason: '%s'", record.id, exc)
+
+    @asynccontextmanager
+    async def _update_job(self, record: JobRecord) -> AsyncIterator[JobRecord]:
+        """
+        Wrapper around self._jobs_storage.try_update_job() with notification
+        """
+        status_cnt = len(record.status_history.all)
+        initial_materialized = record.materialized
+        yield record
+        for status in record.status_history.all[status_cnt:]:
+            await self._api.push_status(record.id, status)
+        if initial_materialized != record.materialized:
+            await self._api.set_materialized(record.id, record.materialized)
