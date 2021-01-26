@@ -231,12 +231,24 @@ def create_job_response_validator() -> t.Trafaret:
             # `status` is left for backward compat. the python client/cli still
             # relies on it.
             "status": create_job_status_validator(),
+            "statuses": t.List(
+                t.Dict(
+                    {
+                        "status": create_job_status_validator(),
+                        "transition_time": t.String,
+                        "reason": t.String(allow_blank=True) | t.Null,
+                        "description": t.String(allow_blank=True) | t.Null,
+                        t.Key("exit_code", optional=True): t.Int | t.Null,
+                    }
+                )
+            ),
             t.Key("http_url", optional=True): t.String,
             t.Key("http_url_named", optional=True): t.String,
             "history": create_job_history_validator(),
             "container": create_container_response_validator(),
             "scheduler_enabled": t.Bool,
             "preemptible_node": t.Bool,
+            "materialized": t.Bool,
             t.Key("is_preemptible", optional=True): t.Bool,
             t.Key("is_preemptible_node_required", optional=True): t.Bool,
             "pass_config": t.Bool,
@@ -371,6 +383,7 @@ def convert_job_to_job_response(job: Job) -> Dict[str, Any]:
         "owner": job.owner,
         "cluster_name": job.cluster_name,
         "status": current_status.status,
+        "statuses": [item.to_primitive() for item in history.all],
         "history": {
             "status": current_status.status,
             "reason": current_status.reason,
@@ -390,6 +403,7 @@ def convert_job_to_job_response(job: Job) -> Dict[str, Any]:
         "uri": str(job.to_uri()),
         "restart_policy": str(job.restart_policy),
         "privileged": job.privileged,
+        "materialized": job.materialized,
     }
     if job.name:
         response_payload["name"] = job.name
