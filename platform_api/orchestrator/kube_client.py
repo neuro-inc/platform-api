@@ -106,7 +106,7 @@ class PathVolume(Volume):
     path: PurePath
 
     def create_mount(self, container_volume: ContainerVolume) -> "VolumeMount":
-        sub_path = container_volume.src_path.relative_to(self.path)
+        sub_path = container_volume.src_path.relative_to("/")
         return VolumeMount(
             volume=self,
             mount_path=container_volume.dst_path,
@@ -784,7 +784,6 @@ class PodDescriptor:
             container_volume = ContainerVolume(
                 URL(""),
                 dst_path=PurePath("/dev/shm"),
-                src_path=PurePath(""),
                 read_only=False,
             )
             volume_mounts.append(dev_shm_volume.create_mount(container_volume))

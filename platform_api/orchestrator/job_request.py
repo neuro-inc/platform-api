@@ -31,28 +31,30 @@ class JobAlreadyExistsException(JobException):
 @dataclass(frozen=True)
 class ContainerVolume:
     uri: URL
-    src_path: PurePath
     dst_path: PurePath
     read_only: bool = False
 
-    @staticmethod
-    def create(uri: str, *args: Any, **kwargs: Any) -> "ContainerVolume":
-        return ContainerVolumeFactory(uri, *args, **kwargs).create()
+    @property
+    def src_path(self) -> PurePath:
+        return PurePath(URL(self.uri).path)
+
+    @classmethod
+    def create(
+        cls, uri: str, dst_path: PurePath, read_only: bool = False
+    ) -> "ContainerVolume":
+        return cls(uri=URL(uri), dst_path=dst_path, read_only=read_only)
 
     @classmethod
     def from_primitive(cls, payload: Dict[str, Any]) -> "ContainerVolume":
-        kwargs = payload.copy()
-        # use dct.get() for backward compatibility
-        # old DB records has no src_uri field
-        kwargs["uri"] = URL(kwargs.get("uri", ""))
-        kwargs["src_path"] = PurePath(kwargs["src_path"])
-        kwargs["dst_path"] = PurePath(kwargs["dst_path"])
-        return cls(**kwargs)
+        return cls(
+            uri=URL(payload.get("uri", "")),
+            dst_path=PurePath(payload["dst_path"]),
+            read_only=payload["read_only"],
+        )
 
     def to_primitive(self) -> Dict[str, Any]:
         payload: Dict[str, Any] = asdict(self)
         payload["uri"] = str(payload["uri"])
-        payload["src_path"] = str(payload["src_path"])
         payload["dst_path"] = str(payload["dst_path"])
         return payload
 
@@ -518,44 +520,3 @@ class JobStatus(str, enum.Enum):
 
     def __str__(self) -> str:
         return self.value
-
-
-class ContainerVolumeFactory:
-    def __init__(
-        self,
-        uri: str,
-        *,
-        src_mount_path: PurePath,
-        dst_mount_path: PurePath,
-        extend_dst_mount_path: bool = True,
-        read_only: bool = False,
-    ) -> None:
-        """Check constructor parameters and initialize the factory instance.
-
-        :param bool extend_dst_mount_path:
-            If True, append the parsed path from the URI to `dst_mount_path`,
-            otherwise use `dst_mount_path` as is. Defaults to True.
-        """
-        self._uri = uri
-        path = PurePath(URL(uri).path)
-        if path.is_absolute():
-            path = path.relative_to("/")
-        self._path = path
-
-        self._read_only = read_only
-
-        self._src_mount_path: PurePath = src_mount_path
-        self._dst_mount_path: PurePath = dst_mount_path
-        self._extend_dst_mount_path = extend_dst_mount_path
-
-    def create(self) -> ContainerVolume:
-        src_path = self._src_mount_path / self._path
-        dst_path = self._dst_mount_path
-        if self._extend_dst_mount_path:
-            dst_path /= self._path
-        return ContainerVolume(
-            uri=URL(self._uri),
-            src_path=src_path,
-            dst_path=dst_path,
-            read_only=self._read_only,
-        )

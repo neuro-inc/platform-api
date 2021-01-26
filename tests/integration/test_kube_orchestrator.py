@@ -590,11 +590,7 @@ class TestKubeOrchestrator:
         assert storage_config.host_mount_path
         volumes = [
             ContainerVolume(
-                uri=URL(
-                    f"{storage_config.uri_scheme}://"
-                    f"{cluster_name}/{storage_config.host_mount_path}"
-                ),
-                src_path=storage_config.host_mount_path,
+                uri=URL(f"{storage_config.uri_scheme}://{cluster_name}"),
                 dst_path=PurePath("/storage"),
             )
         ]
