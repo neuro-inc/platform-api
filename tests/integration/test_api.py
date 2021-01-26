@@ -4142,6 +4142,14 @@ class TestJobs:
                 "cluster_name": "test-cluster",
                 "internal_hostname": f"{job_id}.platformapi-tests",
                 "status": "pending",
+                "statuses": [
+                    {
+                        "status": "pending",
+                        "reason": "Creating",
+                        "description": None,
+                        "transition_time": mock.ANY,
+                    }
+                ],
                 "history": {
                     "status": "pending",
                     "reason": "Creating",
@@ -4168,6 +4176,7 @@ class TestJobs:
                 "preemptible_node": False,
                 "is_preemptible": True,
                 "is_preemptible_node_required": False,
+                "materialized": False,
                 "pass_config": False,
                 "uri": f"job://test-cluster/{regular_user.name}/{job_id}",
                 "restart_policy": "never",
@@ -4184,6 +4193,7 @@ class TestJobs:
             "cluster_name": "test-cluster",
             "internal_hostname": f"{job_id}.platformapi-tests",
             "status": "succeeded",
+            "statuses": mock.ANY,
             "history": {
                 "status": "succeeded",
                 "reason": None,
@@ -4213,6 +4223,7 @@ class TestJobs:
             "preemptible_node": False,
             "is_preemptible": True,
             "is_preemptible_node_required": False,
+            "materialized": mock.ANY,
             "pass_config": False,
             "uri": f"job://test-cluster/{regular_user.name}/{job_id}",
             "restart_policy": "never",
@@ -4268,6 +4279,7 @@ class TestJobs:
             "owner": regular_user.name,
             "cluster_name": "test-cluster",
             "status": "failed",
+            "statuses": mock.ANY,
             "internal_hostname": f"{job_id}.platformapi-tests",
             "history": {
                 "status": "failed",
@@ -4304,6 +4316,7 @@ class TestJobs:
             "preemptible_node": False,
             "is_preemptible": False,
             "is_preemptible_node_required": False,
+            "materialized": mock.ANY,
             "pass_config": False,
             "uri": f"job://test-cluster/{regular_user.name}/{job_id}",
             "restart_policy": "never",
@@ -4376,6 +4389,14 @@ class TestJobs:
                 "cluster_name": "test-cluster",
                 "internal_hostname": f"{job_id}.platformapi-tests",
                 "status": "pending",
+                "statuses": [
+                    {
+                        "status": "pending",
+                        "reason": "Creating",
+                        "description": None,
+                        "transition_time": mock.ANY,
+                    }
+                ],
                 "history": {
                     "status": "pending",
                     "reason": "Creating",
@@ -4400,6 +4421,7 @@ class TestJobs:
                 "preemptible_node": False,
                 "is_preemptible": False,
                 "is_preemptible_node_required": False,
+                "materialized": False,
                 "pass_config": False,
                 "uri": f"job://test-cluster/{regular_user.name}/{job_id}",
                 "restart_policy": "never",
@@ -4467,6 +4489,14 @@ class TestJobs:
                 "cluster_name": "test-cluster",
                 "internal_hostname": f"{job_id}.platformapi-tests",
                 "status": "pending",
+                "statuses": [
+                    {
+                        "status": "pending",
+                        "reason": "Creating",
+                        "description": None,
+                        "transition_time": mock.ANY,
+                    }
+                ],
                 "history": {
                     "status": "pending",
                     "reason": "Creating",
@@ -4490,6 +4520,7 @@ class TestJobs:
                 "preemptible_node": False,
                 "is_preemptible": False,
                 "is_preemptible_node_required": False,
+                "materialized": False,
                 "pass_config": False,
                 "uri": f"job://test-cluster/{regular_user.name}/{job_id}",
                 "restart_policy": "never",
