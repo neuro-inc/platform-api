@@ -860,6 +860,12 @@ class TestJobFilterFactory:
         query = MultiDict([("name", "test-job"), ("owner", "alice"), ("owner", "bob")])
         assert factory(query) == JobFilter(owners={"bob", "alice"}, name="test-job")
 
+        query = MultiDict([("materialized", "True")])
+        assert factory(query) == JobFilter(materialized=True)
+
+        query = MultiDict([("materialized", "False")])
+        assert factory(query) == JobFilter(materialized=False)
+
     def test_create_from_query_with_status(self) -> None:
         factory = JobFilterFactory().create_from_query
 

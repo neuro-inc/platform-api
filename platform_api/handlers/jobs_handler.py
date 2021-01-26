@@ -798,6 +798,9 @@ class JobFilterFactory:
         statuses = {JobStatus(s) for s in query.getall("status", [])}
         tags = set(query.getall("tag", []))
         hostname = query.get("hostname")
+        materialized = None
+        if "materialized" in query:
+            materialized = query["materialized"].lower() == "true"
         if hostname is None:
             job_name = self._job_name_validator.check(query.get("name"))
             owners = {
@@ -818,6 +821,7 @@ class JobFilterFactory:
                 tags=tags,
                 since=iso8601.parse_date(since) if since else JobFilter.since,
                 until=iso8601.parse_date(until) if until else JobFilter.until,
+                materialized=materialized,
             )
 
         for key in ("name", "owner", "cluster_name", "since", "until"):
@@ -827,10 +831,18 @@ class JobFilterFactory:
         label = hostname.partition(".")[0]
         job_name, sep, owner = label.rpartition(JOB_USER_NAMES_SEPARATOR)
         if not sep:
-            return JobFilter(statuses=statuses, ids={label}, tags=tags)
+            return JobFilter(
+                statuses=statuses, ids={label}, tags=tags, materialized=materialized
+            )
         job_name = self._job_name_validator.check(job_name)
         owner = self._user_name_validator.check(owner)
-        return JobFilter(statuses=statuses, owners={owner}, name=job_name, tags=tags)
+        return JobFilter(
+            statuses=statuses,
+            owners={owner},
+            name=job_name,
+            tags=tags,
+            materialized=materialized,
+        )
 
 
 @dataclass(frozen=True)
