@@ -52,7 +52,6 @@ from platform_api.orchestrator.kube_client import (
     Resources,
 )
 from platform_api.orchestrator.kube_orchestrator import KubeConfig, KubeOrchestrator
-from platform_api.redis import RedisConfig
 from platform_api.resource import (
     GKEGPUModels,
     Preset,
@@ -66,7 +65,6 @@ pytest_plugins = [
     "tests.integration.auth",
     "tests.integration.api",
     "tests.integration.docker",
-    "tests.integration.redis",
     "tests.integration.secrets",
     "tests.integration.diskapi",
     "tests.integration.notifications",
@@ -727,7 +725,6 @@ def jobs_config() -> JobsConfig:
 @pytest.fixture
 def config_factory(
     kube_config: KubeConfig,
-    redis_config: RedisConfig,
     postgres_config: PostgresConfig,
     auth_config: AuthConfig,
     jobs_config: JobsConfig,
@@ -742,9 +739,7 @@ def config_factory(
             interval_sec=1,
             quota_notification_threshold=0.1,
         )
-        database_config = DatabaseConfig(
-            postgres_enabled=True, redis=redis_config, postgres=postgres_config
-        )
+        database_config = DatabaseConfig(postgres=postgres_config)
         config_url = URL("http://localhost:8082/api/v1")
         admin_url = URL("http://localhost:8080/apis/admin/v1")
         api_base_url = URL("http://localhost:8080/apis/v1")

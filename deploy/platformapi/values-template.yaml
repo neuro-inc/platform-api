@@ -5,7 +5,6 @@ NP_API_URL:
 NP_ADMIN_URL:
 NP_AUTH_PUBLIC_URL:
 NP_JOBS_INGRESS_OAUTH_AUTHORIZE_URL:
-NP_DB_REDIS_URI:
 NP_REGISTRY_HOST: 'none'
 NP_GKE_GPU_MODELS:
 NP_OAUTH_BASE_URL:
@@ -36,8 +35,6 @@ jobPriorityClass:
   enabled: false
 
 postgres:
-  enabled: true
-
   dsn: {}
 
 postgres-db-init:

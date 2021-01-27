@@ -5,8 +5,6 @@ from typing import Optional, Sequence
 from alembic.config import Config as AlembicConfig
 from yarl import URL
 
-from .redis import RedisConfig
-
 
 @dataclass(frozen=True)
 class ServerConfig:
@@ -73,9 +71,7 @@ class PostgresConfig:
 
 @dataclass(frozen=True)
 class DatabaseConfig:
-    postgres_enabled: bool = False
-    redis: Optional[RedisConfig] = None
-    postgres: Optional[PostgresConfig] = None
+    postgres: PostgresConfig
 
 
 @dataclass(frozen=True)

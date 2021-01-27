@@ -30,7 +30,6 @@ from .config import (
 )
 from .orchestrator.kube_client import KubeClientAuthType
 from .orchestrator.kube_orchestrator import KubeConfig
-from .redis import RedisConfig
 from .resource import ResourcePoolType
 
 
@@ -228,28 +227,9 @@ class EnvironConfigFactory:
         return types
 
     def create_database(self) -> DatabaseConfig:
-        redis = self.create_redis()
         postgres = self.create_postgres()
         return DatabaseConfig(
-            postgres_enabled=self._get_bool(
-                "NP_DB_POSTGRES_ENABLED", DatabaseConfig.postgres_enabled
-            ),
-            redis=redis,
             postgres=postgres,
-        )
-
-    def create_redis(self) -> Optional[RedisConfig]:
-        uri = self._environ.get("NP_DB_REDIS_URI")
-        if not uri:
-            return None
-        conn_pool_size = int(
-            self._environ.get("NP_DB_REDIS_CONN_POOL_SIZE", RedisConfig.conn_pool_size)
-        )
-        conn_timeout_s = float(
-            self._environ.get("NP_DB_REDIS_CONN_TIMEOUT", RedisConfig.conn_timeout_s)
-        )
-        return RedisConfig(
-            uri=uri, conn_pool_size=conn_pool_size, conn_timeout_s=conn_timeout_s
         )
 
     def create_auth(self) -> AuthConfig:
@@ -355,15 +335,11 @@ class EnvironConfigFactory:
             command_timeout_s=command_timeout_s,
         )
 
-    def create_alembic(
-        self, postgres_dsn: str, redis_url: Optional[str] = None
-    ) -> AlembicConfig:
+    def create_alembic(self, postgres_dsn: str) -> AlembicConfig:
         parent_path = pathlib.Path(__file__).resolve().parent.parent
         ini_path = str(parent_path / "alembic.ini")
         script_path = str(parent_path / "alembic")
         config = AlembicConfig(ini_path)
         config.set_main_option("script_location", script_path)
         config.set_main_option("sqlalchemy.url", postgres_dsn.replace("%", "%%"))
-        if redis_url:
-            config.set_main_option("redis_url", redis_url)
         return config

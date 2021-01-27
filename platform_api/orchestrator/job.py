@@ -462,14 +462,10 @@ class JobRecord:
         status_history = cls.create_status_history_from_primitive(
             request.job_id, payload
         )
-        materialized = payload.get("materialized", None)
-        if materialized is None:
-            materialized = not payload.get("is_deleted", False)
         return cls(
             request=request,
             status_history=status_history,
-            # Support old key (only required for redis):
-            materialized=materialized,
+            materialized=payload.get("materialized", False),
             owner=payload.get("owner") or orphaned_job_owner,
             cluster_name=payload.get("cluster_name") or "",
             name=payload.get("name"),
