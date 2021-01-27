@@ -1,3 +1,4 @@
+import asyncio
 import json
 from typing import (
     Any,
@@ -28,6 +29,7 @@ from aiohttp.web_exceptions import HTTPCreated, HTTPNotFound
 from neuro_auth_client import Cluster as AuthCluster, Permission, Quota
 from yarl import URL
 
+from platform_api.cluster import ClusterRegistry
 from platform_api.config import Config
 from platform_api.orchestrator.jobs_service import NEURO_PASSED_CONFIG
 from tests.conftest import random_str
@@ -185,23 +187,34 @@ class TestApi:
         cluster_configs_payload: List[Dict[str, Any]],
         cluster_user: _User,
     ) -> None:
-        # pass config with 1 cluster
-        # record count doesnt't change, because there's a default cluster
-        # which gets deleted
+        cluster_registry: ClusterRegistry = api.runner._app["api_v1_app"][
+            "jobs_service"
+        ]._cluster_registry
+
+        async def assert_cluster_names(names: List[str]) -> None:
+            async def _loop() -> None:
+                while names != cluster_registry.cluster_names:
+                    await asyncio.sleep(0.1)
+
+            try:
+                await asyncio.wait_for(_loop(), timeout=5)
+            except asyncio.TimeoutError:
+                assert names == cluster_registry.cluster_names
+
         async with create_config_api(cluster_configs_payload):
             url = api.clusters_sync_url
-            async with client.post(url, headers=cluster_user.headers) as resp:
-                assert resp.status == HTTPOk.status_code, await resp.text()
-                result = await resp.json()
-                assert result == {"old_record_count": 2, "new_record_count": 1}
+            async with client.post(url, headers=cluster_user.headers):
+                pass
+
+            await assert_cluster_names(["cluster_name"])
 
         # pass empty cluster config - all clusters should be deleted
         async with create_config_api([]):
             url = api.clusters_sync_url
-            async with client.post(url, headers=cluster_user.headers) as resp:
-                assert resp.status == HTTPOk.status_code, await resp.text()
-                result = await resp.json()
-                assert result == {"old_record_count": 1, "new_record_count": 0}
+            async with client.post(url, headers=cluster_user.headers):
+                pass
+
+            await assert_cluster_names([])
 
     @pytest.mark.asyncio
     async def test_config(
