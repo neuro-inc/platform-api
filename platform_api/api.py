@@ -326,7 +326,6 @@ async def create_app(
 
             logger.info("Initializing JobsStorage")
             jobs_storage: JobsStorage = PostgresJobsStorage(postgres_pool)
-            await jobs_storage.migrate()
 
             logger.info("Initializing JobsService")
             jobs_service = JobsService(

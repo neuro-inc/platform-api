@@ -218,6 +218,3 @@ class JobsStorage(ABC):
             cluster_name: run_time_entry.to_aggregated_run_time()
             for cluster_name, run_time_entry in aggregated_run_times.items()
         }
-
-    async def migrate(self) -> bool:
-        return False
