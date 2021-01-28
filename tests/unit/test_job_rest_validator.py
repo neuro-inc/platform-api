@@ -1,3 +1,4 @@
+from datetime import datetime, timezone
 from typing import Tuple
 
 import pytest
@@ -213,6 +214,14 @@ class TestJobResponseValidator:
             "owner": "tests",
             "cluster_name": "cluster-name",
             "status": "pending",
+            "statuses": [
+                {
+                    "status": "pending",
+                    "reason": None,
+                    "description": None,
+                    "transition_time": datetime.now(timezone.utc).isoformat(),
+                }
+            ],
             "name": "test-job-name",
             "description": "test-job",
             "history": {
@@ -226,6 +235,7 @@ class TestJobResponseValidator:
             "container": container,
             "scheduler_enabled": False,
             "preemptible_node": False,
+            "materialized": False,
             "pass_config": False,
             "uri": "job://cluster-name/tests/test-job-id",
             "restart_policy": "never",
@@ -244,6 +254,14 @@ class TestJobResponseValidator:
             "owner": "tests",
             "cluster_name": "cluster-name",
             "status": "pending",
+            "statuses": [
+                {
+                    "status": "pending",
+                    "reason": None,
+                    "description": None,
+                    "transition_time": datetime.now(timezone.utc).isoformat(),
+                }
+            ],
             "name": "test-job-name",
             "description": "test-job",
             "history": {
@@ -257,6 +275,7 @@ class TestJobResponseValidator:
             "container": container,
             "scheduler_enabled": False,
             "preemptible_node": False,
+            "materialized": False,
             "pass_config": False,
             "uri": "job://cluster-name/tests/test-job-id",
             "restart_policy": "never",
@@ -275,6 +294,14 @@ class TestJobResponseValidator:
             "owner": "tests",
             "cluster_name": "cluster-name",
             "status": "pending",
+            "statuses": [
+                {
+                    "status": "pending",
+                    "reason": None,
+                    "description": None,
+                    "transition_time": datetime.now(timezone.utc).isoformat(),
+                }
+            ],
             "history": {
                 "status": "pending",
                 "reason": None,
@@ -286,6 +313,7 @@ class TestJobResponseValidator:
             "container": container,
             "scheduler_enabled": False,
             "preemptible_node": False,
+            "materialized": False,
             "pass_config": False,
             "uri": "job://cluster-name/tests/test-job-id",
             "restart_policy": "never",
@@ -306,6 +334,14 @@ class TestJobResponseValidator:
             "owner": "tests",
             "cluster_name": "cluster-name",
             "status": "pending",
+            "statuses": [
+                {
+                    "status": "pending",
+                    "reason": None,
+                    "description": None,
+                    "transition_time": datetime.now(timezone.utc).isoformat(),
+                }
+            ],
             "name": "test-job-name",
             "description": "test-job",
             "history": {
@@ -319,6 +355,7 @@ class TestJobResponseValidator:
             "container": container,
             "scheduler_enabled": False,
             "preemptible_node": False,
+            "materialized": False,
             "pass_config": False,
             "uri": "job://cluster-name/tests/test-job-id",
             "restart_policy": "never",
@@ -339,6 +376,14 @@ class TestJobResponseValidator:
             "owner": "tests",
             "cluster_name": "cluster-name",
             "status": "pending",
+            "statuses": [
+                {
+                    "status": "pending",
+                    "reason": None,
+                    "description": None,
+                    "transition_time": datetime.now(timezone.utc).isoformat(),
+                }
+            ],
             "history": {
                 "status": "pending",
                 "reason": None,
@@ -350,6 +395,7 @@ class TestJobResponseValidator:
             "container": container,
             "scheduler_enabled": False,
             "preemptible_node": False,
+            "materialized": False,
             "pass_config": False,
             "uri": "job://cluster-name/tests/test-job-id",
             "restart_policy": "never",
@@ -370,6 +416,14 @@ class TestJobResponseValidator:
             "owner": "tests",
             "cluster_name": "cluster-name",
             "status": "pending",
+            "statuses": [
+                {
+                    "status": "pending",
+                    "reason": None,
+                    "description": None,
+                    "transition_time": datetime.now(timezone.utc).isoformat(),
+                }
+            ],
             "history": {
                 "status": "pending",
                 "reason": None,
@@ -381,6 +435,7 @@ class TestJobResponseValidator:
             "container": container,
             "scheduler_enabled": False,
             "preemptible_node": False,
+            "materialized": False,
             "pass_config": False,
             "uri": "job://cluster-name/tests/test-job-id",
             "restart_policy": "never",
@@ -400,6 +455,14 @@ class TestJobResponseValidator:
             "owner": "tests",
             "cluster_name": "cluster-name",
             "status": "pending",
+            "statuses": [
+                {
+                    "status": "pending",
+                    "reason": None,
+                    "description": None,
+                    "transition_time": datetime.now(timezone.utc).isoformat(),
+                }
+            ],
             "name": "test-job-name",
             "description": "test-job",
             "history": {
@@ -413,6 +476,7 @@ class TestJobResponseValidator:
             "container": container,
             "scheduler_enabled": False,
             "preemptible_node": False,
+            "materialized": False,
             "pass_config": False,
             "max_run_time_minutes": 10,
             "uri": "job://cluster-name/tests/test-job-id",
@@ -433,6 +497,14 @@ class TestJobResponseValidator:
             "owner": "tests",
             "cluster_name": "cluster-name",
             "status": "pending",
+            "statuses": [
+                {
+                    "status": "pending",
+                    "reason": None,
+                    "description": None,
+                    "transition_time": datetime.now(timezone.utc).isoformat(),
+                }
+            ],
             "name": "test-job-name",
             "description": "test-job",
             "history": {
@@ -446,6 +518,7 @@ class TestJobResponseValidator:
             "container": container,
             "scheduler_enabled": False,
             "preemptible_node": False,
+            "materialized": False,
             "pass_config": False,
             "uri": "job://cluster-name/tests/test-job-id",
             "restart_policy": "never",
@@ -465,6 +538,14 @@ class TestJobResponseValidator:
             "owner": "tests",
             "cluster_name": "cluster-name",
             "status": "pending",
+            "statuses": [
+                {
+                    "status": "pending",
+                    "reason": None,
+                    "description": None,
+                    "transition_time": datetime.now(timezone.utc).isoformat(),
+                }
+            ],
             "name": "test-job-name",
             "description": "test-job",
             "history": {
@@ -478,6 +559,7 @@ class TestJobResponseValidator:
             "container": container,
             "scheduler_enabled": False,
             "preemptible_node": False,
+            "materialized": False,
             "pass_config": False,
             "uri": "job://cluster-name/tests/test-job-id",
             "restart_policy": "never",

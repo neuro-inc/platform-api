@@ -1467,6 +1467,14 @@ async def test_job_to_job_response(mock_orchestrator: MockOrchestrator) -> None:
         "owner": "compute",
         "cluster_name": "test-cluster",
         "status": "pending",
+        "statuses": [
+            {
+                "description": None,
+                "reason": None,
+                "status": "pending",
+                "transition_time": mock.ANY,
+            }
+        ],
         "history": {
             "status": "pending",
             "reason": None,
@@ -1487,6 +1495,7 @@ async def test_job_to_job_response(mock_orchestrator: MockOrchestrator) -> None:
         "preemptible_node": False,
         "is_preemptible": False,
         "is_preemptible_node_required": False,
+        "materialized": False,
         "pass_config": False,
         "uri": f"job://test-cluster/compute/{job.id}",
         "restart_policy": "never",
@@ -1567,6 +1576,14 @@ async def test_job_to_job_response_with_job_name_and_http_exposed(
         "http_url": f"http://{job.id}.jobs",
         "http_url_named": f"http://{job_name}--{owner_name}.jobs",
         "status": "pending",
+        "statuses": [
+            {
+                "description": None,
+                "reason": None,
+                "status": "pending",
+                "transition_time": mock.ANY,
+            }
+        ],
         "history": {
             "status": "pending",
             "reason": None,
@@ -1586,6 +1603,7 @@ async def test_job_to_job_response_with_job_name_and_http_exposed(
         "preemptible_node": False,
         "is_preemptible": False,
         "is_preemptible_node_required": False,
+        "materialized": False,
         "pass_config": False,
         "uri": f"job://test-cluster/{owner_name}/{job.id}",
         "restart_policy": "never",
@@ -1625,6 +1643,14 @@ async def test_job_to_job_response_with_job_name_and_http_exposed_too_long_name(
         "http_url_named": f"http://{job_name}--{owner_name}.jobs",
         # NOTE: field `http_url_named` is cut off when it is invalid
         "status": "pending",
+        "statuses": [
+            {
+                "description": None,
+                "reason": None,
+                "status": "pending",
+                "transition_time": mock.ANY,
+            }
+        ],
         "history": {
             "status": "pending",
             "reason": None,
@@ -1644,6 +1670,7 @@ async def test_job_to_job_response_with_job_name_and_http_exposed_too_long_name(
         "preemptible_node": False,
         "is_preemptible": False,
         "is_preemptible_node_required": False,
+        "materialized": False,
         "pass_config": False,
         "uri": f"job://test-cluster/{owner_name}/{job.id}",
         "restart_policy": "never",
