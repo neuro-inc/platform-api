@@ -629,8 +629,6 @@ class JobsService:
         async with self._update_job_in_storage(job_id) as record:
             old_status_item = record.status_history.current
             if old_status_item != status_item:
-                if old_status_item.status.is_finished:
-                    raise JobStorageTransactionError
                 record.status_history.current = status_item
                 logger.info(
                     "Job %s transitioned from %s to %s",

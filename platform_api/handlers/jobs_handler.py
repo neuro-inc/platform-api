@@ -828,6 +828,11 @@ class JobsHandler:
             return aiohttp.web.json_response(
                 payload, status=aiohttp.web.HTTPConflict.status_code
             )
+        except JobError as e:
+            payload = {"error": str(e)}
+            return aiohttp.web.json_response(
+                payload, status=aiohttp.web.HTTPBadRequest.status_code
+            )
         else:
             raise aiohttp.web.HTTPNoContent()
 

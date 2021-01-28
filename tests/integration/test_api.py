@@ -1,3 +1,4 @@
+import asyncio
 import json
 from typing import (
     Any,
@@ -3890,6 +3891,26 @@ class TestJobs:
             assert response.status == HTTPBadRequest.status_code, await response.text()
 
     @pytest.mark.asyncio
+    async def test_set_job_status_bad_transition(
+        self,
+        api: ApiConfig,
+        client: aiohttp.ClientSession,
+        job_submit: Dict[str, Any],
+        jobs_client: JobsClient,
+        run_job: Callable[..., Awaitable[str]],
+        regular_user: _User,
+        compute_user: _User,
+    ) -> None:
+        job_id = await run_job(regular_user, job_submit, do_wait=False)
+        await jobs_client.long_polling_by_job_id(job_id, "succeeded")
+
+        url = api.generate_job_url(job_id) + "/status"
+        headers = compute_user.headers
+        payload = {"status": "running"}
+        async with client.put(url, headers=headers, json=payload) as response:
+            assert response.status == HTTPBadRequest.status_code, await response.text()
+
+    @pytest.mark.asyncio
     async def test_set_job_status_unprivileged(
         self,
         api: ApiConfig,
@@ -3910,6 +3931,39 @@ class TestJobs:
             assert result == {
                 "missing": [{"uri": f"job://{cluster_name}", "action": "manage"}]
             }
+
+    @pytest.mark.asyncio
+    async def test_set_job_materialized(
+        self,
+        api: ApiConfig,
+        client: aiohttp.ClientSession,
+        job_submit: Dict[str, Any],
+        jobs_client: JobsClient,
+        run_job: Callable[..., Awaitable[str]],
+        regular_user: _User,
+        compute_user: _User,
+    ) -> None:
+        job_id = await run_job(regular_user, job_submit, do_wait=False)
+        await jobs_client.long_polling_by_job_id(job_id, "succeeded")
+
+        url = api.generate_job_url(job_id) + "/materialized"
+        headers = compute_user.headers
+        payload = {"materialized": True}
+        result = await jobs_client.get_job_by_id(job_id)
+        assert not result["materialized"]
+
+        # The poller will unmaterialize our job, so we have to do check in loop
+
+        async def _try_check() -> None:
+            ok = False
+            while not ok:
+                async with client.put(url, headers=headers, json=payload):
+                    pass
+
+                result = await jobs_client.get_job_by_id(job_id)
+                ok = result["materialized"]
+
+        await asyncio.wait_for(_try_check(), timeout=5)
 
     @pytest.mark.asyncio
     async def test_delete_job(
