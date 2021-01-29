@@ -45,6 +45,7 @@ from platform_api.orchestrator.job import (
 from platform_api.orchestrator.job_request import (
     Container,
     ContainerResources,
+    Disk,
     JobError,
     JobNotFoundException,
     JobRequest,
@@ -103,9 +104,6 @@ class MockOrchestrator(Orchestrator):
 
     def _get_reason(self, job_id: str) -> Optional[str]:
         return self._mock_reasons.get(job_id, self._mock_reason_to_return)
-
-    async def prepare_job(self, job: Job) -> None:
-        pass
 
     async def start_job(self, job: Job) -> JobStatus:
         if self.raise_on_start_job_status:
@@ -166,6 +164,14 @@ class MockOrchestrator(Orchestrator):
 
     def get_successfully_deleted_jobs(self) -> List[Job]:
         return self._successfully_deleted_jobs
+
+    async def get_missing_secrets(
+        self, user_name: str, secret_names: List[str]
+    ) -> List[str]:
+        pass
+
+    async def get_missing_disks(self, disks: List[Disk]) -> List[Disk]:
+        pass
 
 
 class MockJobsStorage(InMemoryJobsStorage):

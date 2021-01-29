@@ -495,14 +495,13 @@ class TestJobsService:
         assert job.status == JobStatus.PENDING
 
     @pytest.mark.asyncio
-    async def test_create_job__clean_up_the_job_on_transaction_error__ok(
+    async def test_create_job__transaction_error(
         self,
         jobs_service: JobsService,
         mock_orchestrator: MockOrchestrator,
         mock_jobs_storage: MockJobsStorage,
         job_request_factory: Callable[[], JobRequest],
     ) -> None:
-        mock_orchestrator.raise_on_delete = False
         mock_jobs_storage.fail_set_job_transaction = True
 
         user = User(cluster_name="test-cluster", name="testuser", token="")
@@ -514,35 +513,6 @@ class TestJobsService:
             JobsServiceException, match="Failed to create job: transaction failed"
         ):
             await jobs_service.create_job(request, user, job_name=job_name)
-        # check that the job was cleaned up:
-        assert request.job_id in {
-            job.id for job in mock_orchestrator.get_successfully_deleted_jobs()
-        }
-
-    @pytest.mark.asyncio
-    async def test_create_job__clean_up_the_job_on_transaction_error__fail(
-        self,
-        jobs_service: JobsService,
-        mock_orchestrator: MockOrchestrator,
-        mock_jobs_storage: MockJobsStorage,
-        job_request_factory: Callable[[], JobRequest],
-    ) -> None:
-        mock_orchestrator.raise_on_delete = True
-        mock_jobs_storage.fail_set_job_transaction = True
-
-        user = User(cluster_name="test-cluster", name="testuser", token="")
-        job_name = "test-Job_name"
-
-        request = job_request_factory()
-
-        with pytest.raises(
-            JobsServiceException, match="Failed to create job: transaction failed"
-        ):
-            job, _ = await jobs_service.create_job(request, user, job_name=job_name)
-        # check that the job failed to be cleaned up (failure ignored):
-        assert request.job_id not in {
-            job.id for job in mock_orchestrator.get_successfully_deleted_jobs()
-        }
 
     @pytest.mark.asyncio
     async def test_get_status_by_job_id(

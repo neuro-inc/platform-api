@@ -252,7 +252,7 @@ class JobsService:
 
     def _make_job(self, record: JobRecord, cluster: Optional[Cluster] = None) -> Job:
         if cluster is not None:
-            orchestrator_config = cluster.orchestrator.config
+            orchestrator_config = cluster.config.orchestrator
         else:
             orchestrator_config = self._dummy_cluster_orchestrator_config
         return Job(
@@ -296,24 +296,6 @@ class JobsService:
         running_count = len(await self._jobs_storage.get_all_jobs(running_filter))
         if running_count >= user_cluster.jobs_quota:
             raise RunningJobsQuotaExceededError(user.name)
-
-    async def _check_secrets(self, cluster_name: str, job_request: JobRequest) -> None:
-        grouped_secrets = job_request.container.get_user_secrets()
-        if not grouped_secrets:
-            return
-
-        missing = []
-        async with self._get_cluster(cluster_name) as cluster:
-            # Warning: contextmanager '_get_cluster' suppresses all exceptions
-            for user_name, user_secrets in grouped_secrets.items():
-                missing.extend(
-                    await cluster.orchestrator.get_missing_secrets(
-                        user_name, [secret.secret_key for secret in user_secrets]
-                    )
-                )
-        if missing:
-            details = ", ".join(f"'{s}'" for s in sorted(missing))
-            raise JobsServiceException(f"Missing secrets: {details}")
 
     async def _make_pass_config_token(self, username: str, job_id: str) -> str:
         token_uri = f"token://job/{job_id}"
@@ -433,19 +415,6 @@ class JobsService:
         )
         job_id = job_request.job_id
 
-        await self._check_secrets(cluster_name, job_request)
-
-        job_disks = [
-            disk_volume.disk for disk_volume in job_request.container.disk_volumes
-        ]
-        if job_disks:
-            async with self._get_cluster(cluster_name) as cluster:
-                # Warning: contextmanager '_get_cluster' suppresses all exceptions
-                missing = await cluster.orchestrator.get_missing_disks(job_disks)
-            if missing:
-                details = ", ".join(f"'{disk.disk_id}'" for disk in sorted(missing))
-                raise JobsServiceException(f"Missing disks: {details}")
-
         if record.privileged:
             async with self._get_cluster(cluster_name) as cluster:
                 # Warning: contextmanager '_get_cluster' suppresses all exceptions,
@@ -461,7 +430,7 @@ class JobsService:
             async with self._create_job_in_storage(record) as record:
                 async with self._get_cluster(record.cluster_name) as cluster:
                     job = self._make_job(record, cluster)
-                    await cluster.orchestrator.prepare_job(job)
+                    await cluster.prepare_job(job)
             return job, Status.create(job.status)
 
         except ClusterNotFound as cluster_err:
@@ -472,14 +441,6 @@ class JobsService:
             ) from cluster_err
         except JobsStorageException as transaction_err:
             logger.error(f"Failed to create job {job_id}: {transaction_err}")
-            try:
-                await self._delete_cluster_job(record)
-            except Exception as cleanup_exc:
-                # ignore exceptions
-                logger.warning(
-                    f"Failed to cleanup job {job_id} during unsuccessful "
-                    f"creation: {cleanup_exc}"
-                )
             raise JobsServiceException(f"Failed to create job: {transaction_err}")
 
     async def get_job_status(self, job_id: str) -> JobStatus:
@@ -520,23 +481,6 @@ class JobsService:
     async def get_job(self, job_id: str) -> Job:
         record = await self._jobs_storage.get_job(job_id)
         return await self._get_cluster_job(record)
-
-    async def _delete_cluster_job(self, record: JobRecord) -> None:
-        try:
-            async with self._get_cluster(record.cluster_name) as cluster:
-                job = self._make_job(record, cluster)
-                try:
-                    await cluster.orchestrator.delete_job(job)
-                except JobException as exc:
-                    # if the job is missing, we still want to mark
-                    # the job as deleted. suppressing.
-                    logger.warning(
-                        "Could not delete job '%s'. Reason: '%s'", record.id, exc
-                    )
-        except (ClusterNotFound, ClusterNotAvailable) as exc:
-            # if the cluster is unavailable or missing, we still want to mark
-            # the job as deleted. suppressing.
-            logger.warning("Could not delete job '%s'. Reason: '%s'", record.id, exc)
 
     async def cancel_job(self, job_id: str) -> None:
         for _ in range(self._max_deletion_attempts):
@@ -587,14 +531,6 @@ class JobsService:
             job_ids, job_filter=job_filter
         )
         return [await self._get_cluster_job(record) for record in records]
-
-    async def get_available_gpu_models(self, name: str) -> Sequence[str]:
-        async with self._get_cluster(name) as cluster:
-            return await cluster.orchestrator.get_available_gpu_models()
-
-    async def get_cluster_config(self, name: str) -> ClusterConfig:
-        async with self._get_cluster(name) as cluster:
-            return cluster.config
 
     async def get_user_cluster_configs(self, user: User) -> List[ClusterConfig]:
         configs = []
@@ -689,6 +625,32 @@ class JobsPollerService:
         )
         self._auth_client = auth_client
 
+    async def _check_secrets(self, job: Job, orchestrator: Orchestrator) -> None:
+        grouped_secrets = job.request.container.get_user_secrets()
+        if not grouped_secrets:
+            return
+
+        missing = []
+        for user_name, user_secrets in grouped_secrets.items():
+            missing.extend(
+                await orchestrator.get_missing_secrets(
+                    user_name, [secret.secret_key for secret in user_secrets]
+                )
+            )
+        if missing:
+            details = ", ".join(f"'{s}'" for s in sorted(missing))
+            raise JobError(f"Missing secrets: {details}")
+
+    async def _check_disks(self, job: Job, orchestrator: Orchestrator) -> None:
+        job_disks = [
+            disk_volume.disk for disk_volume in job.request.container.disk_volumes
+        ]
+        if job_disks:
+            missing = await orchestrator.get_missing_disks(job_disks)
+            if missing:
+                details = ", ".join(f"'{disk.disk_id}'" for disk in missing)
+                raise JobError(f"Missing disks: {details}")
+
     @asynccontextmanager
     async def _get_cluster(
         self, name: str, tolerate_unavailable: bool = False
@@ -719,7 +681,7 @@ class JobsPollerService:
 
     def _make_job(self, record: JobRecord, cluster: Optional[Cluster] = None) -> Job:
         if cluster is not None:
-            orchestrator_config = cluster.orchestrator.config
+            orchestrator_config = cluster.config.orchestrator
         else:
             orchestrator_config = self._dummy_cluster_orchestrator_config
         return Job(
@@ -781,6 +743,8 @@ class JobsPollerService:
 
         if not job.materialized:
             try:
+                await self._check_secrets(job, orchestrator)
+                await self._check_disks(job, orchestrator)
                 await orchestrator.start_job(job)
                 status_item = job.status_history.current
                 job.materialized = True

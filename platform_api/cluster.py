@@ -24,6 +24,7 @@ from .cluster_config import ClusterConfig
 from .config import Config
 from .config_client import ConfigClient
 from .orchestrator.base import Orchestrator
+from .orchestrator.job import Job
 
 
 logger = logging.getLogger(__name__)
@@ -66,6 +67,9 @@ class Cluster(ABC):
     @property
     @abstractmethod
     def orchestrator(self) -> Orchestrator:  # pragma: no cover
+        pass
+
+    async def prepare_job(self, job: Job) -> None:
         pass
 
 

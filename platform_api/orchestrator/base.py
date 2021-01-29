@@ -1,26 +1,16 @@
 from abc import ABC, abstractmethod
-from typing import Sequence
+from typing import List
 
-from platform_api.cluster_config import OrchestratorConfig, StorageConfig
-from platform_api.resource import ResourcePoolType
+from platform_api.cluster_config import StorageConfig
 
 from .job import Job, JobStatusItem
-from .job_request import JobStatus
+from .job_request import Disk, JobStatus
 
 
 class Orchestrator(ABC):
     @property
     @abstractmethod
-    def config(self) -> OrchestratorConfig:
-        pass
-
-    @property
-    @abstractmethod
     def storage_config(self) -> StorageConfig:
-        pass
-
-    @abstractmethod
-    async def prepare_job(self, job: Job) -> None:
         pass
 
     @abstractmethod
@@ -35,13 +25,12 @@ class Orchestrator(ABC):
     async def delete_job(self, job: Job) -> JobStatus:
         pass
 
-    async def get_resource_pool_types(self) -> Sequence[ResourcePoolType]:
-        return self.config.resource_pool_types
+    @abstractmethod
+    async def get_missing_secrets(
+        self, user_name: str, secret_names: List[str]
+    ) -> List[str]:
+        pass
 
-    async def get_available_gpu_models(self) -> Sequence[str]:
-        pool_types = await self.get_resource_pool_types()
-        return list(
-            dict.fromkeys(
-                [pool_type.gpu_model for pool_type in pool_types if pool_type.gpu_model]
-            )
-        )
+    @abstractmethod
+    async def get_missing_disks(self, disks: List[Disk]) -> List[Disk]:
+        pass

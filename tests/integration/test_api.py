@@ -1014,11 +1014,20 @@ class TestJobs:
             {"src_disk_uri": disk_uri, "dst_path": "/mnt/disk"},
         ]
         job_submit["container"]["disk_volumes"] = disk_volumes
-        async with client.post(url, headers=user.headers, json=job_submit) as resp:
-            assert resp.status == HTTPBadRequest.status_code, await resp.text()
-            msg = await resp.json()
-            err = "Missing disks: 'disk-1'"
-            assert err in msg["error"], msg["error"]
+        job_id = ""
+
+        try:
+            async with client.post(url, headers=user.headers, json=job_submit) as resp:
+                assert resp.status == HTTPAccepted.status_code, await resp.text()
+                result = await resp.json()
+                job_id = result["id"]
+
+            await jobs_client.long_polling_by_job_id(job_id=job_id, status="failed")
+            result = await jobs_client.get_job_by_id(job_id)
+            assert result["history"]["reason"] == "Missing disks: 'disk-1'"
+        finally:
+            if job_id:
+                await jobs_client.delete_job(job_id)
 
     @pytest.mark.asyncio
     @pytest.mark.parametrize("read_only", [True, False])
@@ -1560,10 +1569,19 @@ class TestJobs:
             job_submit["container"]["secret_volumes"] = secret_volumes
 
         url = api.jobs_base_url
-        async with client.post(url, headers=user.headers, json=job_submit) as resp:
-            assert resp.status == HTTPBadRequest.status_code, await resp.text()
-            result = await resp.json()
-            assert result["error"] == "Missing secrets: 'key1', 'key2'"
+        job_id = ""
+        try:
+            async with client.post(url, headers=user.headers, json=job_submit) as resp:
+                assert resp.status == HTTPAccepted.status_code, await resp.text()
+                result = await resp.json()
+                job_id = result["id"]
+
+            await jobs_client.long_polling_by_job_id(job_id=job_id, status="failed")
+            result = await jobs_client.get_job_by_id(job_id)
+            assert result["history"]["reason"] == "Missing secrets: 'key1', 'key2'"
+        finally:
+            if job_id:
+                await jobs_client.delete_job(job_id)
 
     @pytest.mark.asyncio
     @pytest.mark.parametrize("secret_kind", ["secret_env", "secret_volumes"])
@@ -1601,10 +1619,20 @@ class TestJobs:
             job_submit["container"]["secret_volumes"] = secret_volumes
 
         url = api.jobs_base_url
-        async with client.post(url, headers=user.headers, json=job_submit) as resp:
-            assert resp.status == HTTPBadRequest.status_code, await resp.text()
-            result = await resp.json()
-            assert result["error"] == "Missing secrets: 'key1', 'key2'"
+        job_id = ""
+        try:
+            async with client.post(url, headers=user.headers, json=job_submit) as resp:
+                assert resp.status == HTTPAccepted.status_code, await resp.text()
+                result = await resp.json()
+                job_id = result["id"]
+
+            await jobs_client.long_polling_by_job_id(job_id=job_id, status="failed")
+            result = await jobs_client.get_job_by_id(job_id)
+            assert result["history"]["reason"] == "Missing secrets: 'key1', 'key2'"
+        finally:
+
+            if job_id:
+                await jobs_client.delete_job(job_id)
 
     @pytest.mark.asyncio
     @pytest.mark.parametrize("secret_kind", ["secret_env", "secret_volumes"])
@@ -1638,10 +1666,19 @@ class TestJobs:
             job_submit["container"]["secret_volumes"] = secret_volumes
 
         url = api.jobs_base_url
-        async with client.post(url, headers=user.headers, json=job_submit) as resp:
-            assert resp.status == HTTPBadRequest.status_code, await resp.text()
-            result = await resp.json()
-            assert result["error"] == "Missing secrets: 'key2'"
+        job_id = ""
+        try:
+            async with client.post(url, headers=user.headers, json=job_submit) as resp:
+                assert resp.status == HTTPAccepted.status_code, await resp.text()
+                result = await resp.json()
+                job_id = result["id"]
+
+            await jobs_client.long_polling_by_job_id(job_id=job_id, status="failed")
+            result = await jobs_client.get_job_by_id(job_id)
+            assert result["history"]["reason"] == "Missing secrets: 'key2'"
+        finally:
+            if job_id:
+                await jobs_client.delete_job(job_id)
 
     @pytest.mark.asyncio
     @pytest.mark.parametrize("secret_kind", ["secret_env", "secret_volumes"])
