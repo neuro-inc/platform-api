@@ -3,7 +3,6 @@ import json
 import logging
 from collections import defaultdict
 from dataclasses import dataclass, replace
-from pathlib import PurePath
 from typing import (
     AbstractSet,
     Any,
@@ -27,7 +26,7 @@ from neuro_auth_client import AuthClient, Permission, check_permissions
 from neuro_auth_client.client import ClientAccessSubTreeView, ClientSubTreeViewRoot
 from yarl import URL
 
-from platform_api.cluster_config import ClusterConfig, RegistryConfig, StorageConfig
+from platform_api.cluster_config import ClusterConfig, RegistryConfig
 from platform_api.config import Config
 from platform_api.log import log_debug_time
 from platform_api.orchestrator.job import (
@@ -285,9 +284,7 @@ def create_job_set_materialized_validator() -> t.Trafaret:
     )
 
 
-def convert_job_container_to_json(
-    container: Container, storage_config: StorageConfig
-) -> Dict[str, Any]:
+def convert_job_container_to_json(container: Container) -> Dict[str, Any]:
     ret: Dict[str, Any] = {
         "image": container.image,
         "env": container.env,
@@ -322,7 +319,7 @@ def convert_job_container_to_json(
             "requires_auth": container.http_server.requires_auth,
         }
     for volume in container.volumes:
-        ret["volumes"].append(convert_container_volume_to_json(volume, storage_config))
+        ret["volumes"].append(convert_container_volume_to_json(volume))
     for sec_volume in container.secret_volumes:
         if "secret_volumes" not in ret:
             ret["secret_volumes"] = []
@@ -343,23 +340,9 @@ def convert_job_container_to_json(
     return ret
 
 
-def convert_container_volume_to_json(
-    volume: ContainerVolume, storage_config: StorageConfig
-) -> Dict[str, Any]:
-    uri = str(volume.uri)
-    if not uri:
-        try:
-            rel_dst_path = volume.dst_path.relative_to(
-                storage_config.container_mount_path
-            )
-        except ValueError:
-            rel_dst_path = PurePath()
-        dst_path = PurePath("/") / rel_dst_path
-        file_uri = dst_path.as_uri()
-        assert file_uri[:8] == "file:///"
-        uri = str(URL(f"{storage_config.uri_scheme}://{file_uri[8:]}"))
+def convert_container_volume_to_json(volume: ContainerVolume) -> Dict[str, Any]:
     return {
-        "src_storage_uri": uri,
+        "src_storage_uri": str(volume.uri),
         "dst_path": str(volume.dst_path),
         "read_only": volume.read_only,
     }
@@ -400,9 +383,7 @@ def convert_job_to_job_response(job: Job) -> Dict[str, Any]:
             "run_time_seconds": job.get_run_time().total_seconds(),
             "restarts": history.restart_count,
         },
-        "container": convert_job_container_to_json(
-            job.request.container, job.storage_config
-        ),
+        "container": convert_job_container_to_json(job.request.container),
         "scheduler_enabled": job.scheduler_enabled,
         "preemptible_node": job.preemptible_node,
         "is_preemptible": job.scheduler_enabled,

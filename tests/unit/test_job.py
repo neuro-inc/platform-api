@@ -554,7 +554,6 @@ class TestJob:
         self, mock_orchestrator: MockOrchestrator, job_request: JobRequest
     ) -> None:
         job = Job(
-            storage_config=mock_orchestrator.storage_config,
             orchestrator_config=mock_orchestrator.config,
             record=JobRecord.create(request=job_request, cluster_name="test-cluster"),
         )
@@ -564,7 +563,6 @@ class TestJob:
         self, mock_orchestrator: MockOrchestrator, job_request: JobRequest
     ) -> None:
         job = Job(
-            storage_config=mock_orchestrator.storage_config,
             orchestrator_config=mock_orchestrator.config,
             record=JobRecord.create(
                 request=job_request,
@@ -580,7 +578,6 @@ class TestJob:
         self, mock_orchestrator: MockOrchestrator, job_request: JobRequest
     ) -> None:
         job = Job(
-            storage_config=mock_orchestrator.storage_config,
             orchestrator_config=mock_orchestrator.config,
             record=JobRecord.create(
                 request=job_request,
@@ -594,7 +591,6 @@ class TestJob:
         self, mock_orchestrator: MockOrchestrator, job_request: JobRequest
     ) -> None:
         job = Job(
-            storage_config=mock_orchestrator.storage_config,
             orchestrator_config=mock_orchestrator.config,
             record=JobRecord.create(request=job_request, cluster_name="test-cluster"),
         )
@@ -604,7 +600,6 @@ class TestJob:
         self, mock_orchestrator: MockOrchestrator, job_request_with_gpu: JobRequest
     ) -> None:
         job = Job(
-            storage_config=mock_orchestrator.storage_config,
             orchestrator_config=mock_orchestrator.config,
             record=JobRecord.create(
                 request=job_request_with_gpu, cluster_name="test-cluster"
@@ -619,7 +614,6 @@ class TestJob:
         self, mock_orchestrator: MockOrchestrator, job_request_with_gpu: JobRequest
     ) -> None:
         job = Job(
-            storage_config=mock_orchestrator.storage_config,
             orchestrator_config=mock_orchestrator.config,
             record=JobRecord.create(
                 request=job_request_with_gpu, cluster_name="test-cluster"
@@ -631,7 +625,6 @@ class TestJob:
         self, mock_orchestrator: MockOrchestrator, job_request: JobRequest
     ) -> None:
         job = Job(
-            storage_config=mock_orchestrator.storage_config,
             orchestrator_config=mock_orchestrator.config,
             record=JobRecord.create(request=job_request, cluster_name="test-cluster"),
         )
@@ -647,7 +640,6 @@ class TestJob:
             job_status_history: JobStatusHistory, scheduler_enabled: bool = False
         ) -> Job:
             return Job(
-                storage_config=mock_orchestrator.storage_config,
                 orchestrator_config=mock_orchestrator.config,
                 record=JobRecord.create(
                     request=job_request,
@@ -797,7 +789,6 @@ class TestJob:
         self, mock_orchestrator: MockOrchestrator, job_request: JobRequest
     ) -> None:
         job = Job(
-            storage_config=mock_orchestrator.storage_config,
             orchestrator_config=mock_orchestrator.config,
             record=JobRecord.create(request=job_request, cluster_name="test-cluster"),
         )
@@ -807,7 +798,6 @@ class TestJob:
         self, mock_orchestrator: MockOrchestrator, job_request: JobRequest
     ) -> None:
         job = Job(
-            storage_config=mock_orchestrator.storage_config,
             orchestrator_config=mock_orchestrator.config,
             record=JobRecord.create(
                 request=job_request,
@@ -826,7 +816,6 @@ class TestJob:
             mock_orchestrator.config, is_http_ingress_secure=True
         )
         job = Job(
-            storage_config=mock_orchestrator.storage_config,
             orchestrator_config=config,
             record=JobRecord.create(request=job_request, cluster_name="test-cluster"),
         )
@@ -839,7 +828,6 @@ class TestJob:
             mock_orchestrator.config, is_http_ingress_secure=True
         )
         job = Job(
-            storage_config=mock_orchestrator.storage_config,
             orchestrator_config=config,
             record=JobRecord.create(
                 request=job_request,
@@ -857,7 +845,6 @@ class TestJob:
         job_request_with_http: JobRequest,
     ) -> None:
         job = Job(
-            storage_config=mock_orchestrator.storage_config,
             orchestrator_config=mock_orchestrator.config,
             record=JobRecord.create(
                 request=job_request_with_http,
@@ -873,7 +860,6 @@ class TestJob:
         self, mock_orchestrator: MockOrchestrator, job_request: JobRequest
     ) -> None:
         job = Job(
-            storage_config=mock_orchestrator.storage_config,
             orchestrator_config=mock_orchestrator.config,
             record=JobRecord.create(
                 request=job_request,
@@ -924,7 +910,6 @@ class TestJob:
         self, mock_orchestrator: MockOrchestrator, job_request: JobRequest
     ) -> None:
         job = Job(
-            storage_config=mock_orchestrator.storage_config,
             orchestrator_config=mock_orchestrator.config,
             record=JobRecord.create(
                 request=job_request,
@@ -960,7 +945,6 @@ class TestJob:
         self, mock_orchestrator: MockOrchestrator, job_request: JobRequest
     ) -> None:
         job = Job(
-            storage_config=mock_orchestrator.storage_config,
             orchestrator_config=mock_orchestrator.config,
             record=JobRecord.create(
                 request=job_request, cluster_name="test-cluster", tags=["t1", "t2"]
@@ -973,7 +957,6 @@ class TestJob:
         self, mock_orchestrator: MockOrchestrator, job_request: JobRequest
     ) -> None:
         job = Job(
-            storage_config=mock_orchestrator.storage_config,
             orchestrator_config=mock_orchestrator.config,
             record=JobRecord.create(
                 request=job_request,
@@ -995,9 +978,7 @@ class TestJob:
             "materialized": True,
             "finished_at": datetime.now(timezone.utc).isoformat(),
         }
-        job = Job.from_primitive(
-            mock_orchestrator.storage_config, mock_orchestrator.config, payload
-        )
+        job = Job.from_primitive(mock_orchestrator.config, payload)
         assert job.id == "testjob"
         assert job.status == JobStatus.SUCCEEDED
         assert job.materialized
@@ -1023,9 +1004,7 @@ class TestJob:
             "materialized": True,
             "finished_at": datetime.now(timezone.utc).isoformat(),
         }
-        job = Job.from_primitive(
-            mock_orchestrator.storage_config, mock_orchestrator.config, payload
-        )
+        job = Job.from_primitive(mock_orchestrator.config, payload)
         assert job.id == "testjob"
         assert job.name == "test-job-name"
 
@@ -1041,9 +1020,7 @@ class TestJob:
             "materialized": True,
             "finished_at": datetime.now(timezone.utc).isoformat(),
         }
-        job = Job.from_primitive(
-            mock_orchestrator.storage_config, mock_orchestrator.config, payload
-        )
+        job = Job.from_primitive(mock_orchestrator.config, payload)
         assert job.preset_name == "cpu-small"
 
     def test_from_primitive_with_tags(
@@ -1059,9 +1036,7 @@ class TestJob:
             "materialized": True,
             "finished_at": datetime.now(timezone.utc).isoformat(),
         }
-        job = Job.from_primitive(
-            mock_orchestrator.storage_config, mock_orchestrator.config, payload
-        )
+        job = Job.from_primitive(mock_orchestrator.config, payload)
         assert job.id == "testjob"
         assert job.tags == tags
 
@@ -1079,9 +1054,7 @@ class TestJob:
             "scheduler_enabled": True,
             "preemptible_node": True,
         }
-        job = Job.from_primitive(
-            mock_orchestrator.storage_config, mock_orchestrator.config, payload
-        )
+        job = Job.from_primitive(mock_orchestrator.config, payload)
         assert job.id == "testjob"
         assert job.status == JobStatus.FAILED
         assert job.materialized
@@ -1103,9 +1076,7 @@ class TestJob:
             "materialized": True,
             "finished_at": datetime.now(timezone.utc).isoformat(),
         }
-        job = Job.from_primitive(
-            mock_orchestrator.storage_config, mock_orchestrator.config, payload
-        )
+        job = Job.from_primitive(mock_orchestrator.config, payload)
         assert job.id == "testjob"
         assert job.status == JobStatus.SUCCEEDED
         assert job.materialized
@@ -1131,9 +1102,7 @@ class TestJob:
             "materialized": True,
             "finished_at": datetime.now(timezone.utc).isoformat(),
         }
-        job = Job.from_primitive(
-            mock_orchestrator.storage_config, mock_orchestrator.config, payload
-        )
+        job = Job.from_primitive(mock_orchestrator.config, payload)
         assert job.request.container.command is None
         assert job.request.container.entrypoint == "/script.sh"
 
@@ -1151,9 +1120,7 @@ class TestJob:
             "materialized": True,
             "finished_at": datetime.now(timezone.utc).isoformat(),
         }
-        job = Job.from_primitive(
-            mock_orchestrator.storage_config, mock_orchestrator.config, payload
-        )
+        job = Job.from_primitive(mock_orchestrator.config, payload)
         assert job.request.container.command == "arg1 arg2 arg3"
         assert job.request.container.entrypoint is None
 
@@ -1171,9 +1138,7 @@ class TestJob:
             "materialized": True,
             "finished_at": datetime.now(timezone.utc).isoformat(),
         }
-        job = Job.from_primitive(
-            mock_orchestrator.storage_config, mock_orchestrator.config, payload
-        )
+        job = Job.from_primitive(mock_orchestrator.config, payload)
         assert job.request.container.command is None
         assert job.request.container.entrypoint is None
 
@@ -1191,9 +1156,7 @@ class TestJob:
             "materialized": True,
             "finished_at": datetime.now(timezone.utc).isoformat(),
         }
-        job = Job.from_primitive(
-            mock_orchestrator.storage_config, mock_orchestrator.config, payload
-        )
+        job = Job.from_primitive(mock_orchestrator.config, payload)
         assert job.request.container.command == "arg1 arg2 arg3"
         assert job.request.container.entrypoint == "/script.sh"
 
@@ -1210,9 +1173,7 @@ class TestJob:
             "finished_at": datetime.now(timezone.utc).isoformat(),
             "max_run_time_minutes": 100,
         }
-        job = Job.from_primitive(
-            mock_orchestrator.storage_config, mock_orchestrator.config, payload
-        )
+        job = Job.from_primitive(mock_orchestrator.config, payload)
         assert job.max_run_time_minutes == 100
 
     def test_from_primitive_with_max_run_time_minutes_none(
@@ -1228,16 +1189,13 @@ class TestJob:
             "finished_at": datetime.now(timezone.utc).isoformat(),
             "max_run_time_minutes": None,
         }
-        job = Job.from_primitive(
-            mock_orchestrator.storage_config, mock_orchestrator.config, payload
-        )
+        job = Job.from_primitive(mock_orchestrator.config, payload)
         assert job.max_run_time_minutes is None
 
     def test_to_uri(
         self, mock_orchestrator: MockOrchestrator, job_request: JobRequest
     ) -> None:
         job = Job(
-            mock_orchestrator.storage_config,
             mock_orchestrator.config,
             record=JobRecord.create(
                 request=job_request, cluster_name="test-cluster", owner="testuser"
@@ -1249,7 +1207,6 @@ class TestJob:
         self, mock_orchestrator: MockOrchestrator, job_request: JobRequest
     ) -> None:
         job = Job(
-            mock_orchestrator.storage_config,
             mock_orchestrator.config,
             record=JobRecord.create(request=job_request, cluster_name="test-cluster"),
         )
@@ -1259,7 +1216,6 @@ class TestJob:
         self, mock_orchestrator: MockOrchestrator, job_request: JobRequest
     ) -> None:
         job = Job(
-            mock_orchestrator.storage_config,
             mock_orchestrator.config,
             record=JobRecord.create(
                 request=job_request, cluster_name="", owner="testuser"
@@ -1272,7 +1228,6 @@ class TestJob:
         self, mock_orchestrator: MockOrchestrator, job_request: JobRequest
     ) -> None:
         job = Job(
-            mock_orchestrator.storage_config,
             mock_orchestrator.config,
             record=JobRecord.create(
                 request=job_request, cluster_name="test-cluster", orphaned_job_owner=""
@@ -1306,9 +1261,7 @@ class TestJob:
             "privileged": False,
         }
         actual = Job.to_primitive(
-            Job.from_primitive(
-                mock_orchestrator.storage_config, mock_orchestrator.config, expected
-            )
+            Job.from_primitive(mock_orchestrator.config, expected)
         )
         assert actual == expected
 

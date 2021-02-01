@@ -10,13 +10,12 @@ from neuro_auth_client.client import ClientAccessSubTreeView, ClientSubTreeViewR
 from trafaret import DataError
 from yarl import URL
 
-from platform_api.cluster_config import RegistryConfig, StorageConfig
+from platform_api.cluster_config import RegistryConfig
 from platform_api.handlers.jobs_handler import (
     BulkJobFilter,
     BulkJobFilterBuilder,
     JobFilterException,
     JobFilterFactory,
-    convert_container_volume_to_json,
     convert_job_container_to_json,
     convert_job_to_job_response,
     create_job_cluster_name_validator,
@@ -723,22 +722,18 @@ class TestJobRequestValidator:
 
 
 class TestJobContainerToJson:
-    @pytest.fixture
-    def storage_config(self) -> StorageConfig:
-        return StorageConfig(host_mount_path=PurePath("/whatever"))
-
-    def test_minimal(self, storage_config: StorageConfig) -> None:
+    def test_minimal(self) -> None:
         container = Container(
             image="image", resources=ContainerResources(cpu=0.1, memory_mb=16)
         )
-        assert convert_job_container_to_json(container, storage_config) == {
+        assert convert_job_container_to_json(container) == {
             "env": {},
             "image": "image",
             "resources": {"cpu": 0.1, "memory_mb": 16},
             "volumes": [],
         }
 
-    def test_tpu_resource(self, storage_config: StorageConfig) -> None:
+    def test_tpu_resource(self) -> None:
         container = Container(
             image="image",
             resources=ContainerResources(
@@ -747,7 +742,7 @@ class TestJobContainerToJson:
                 tpu=ContainerTPUResource(type="v2-8", software_version="1.14"),
             ),
         )
-        assert convert_job_container_to_json(container, storage_config) == {
+        assert convert_job_container_to_json(container) == {
             "env": {},
             "image": "image",
             "resources": {
@@ -758,81 +753,30 @@ class TestJobContainerToJson:
             "volumes": [],
         }
 
-    def test_gpu_and_shm_resources(self, storage_config: StorageConfig) -> None:
+    def test_gpu_and_shm_resources(self) -> None:
         container = Container(
             image="image",
             resources=ContainerResources(cpu=0.1, memory_mb=16, gpu=1, shm=True),
         )
-        assert convert_job_container_to_json(container, storage_config) == {
+        assert convert_job_container_to_json(container) == {
             "env": {},
             "image": "image",
             "resources": {"cpu": 0.1, "memory_mb": 16, "gpu": 1, "shm": True},
             "volumes": [],
         }
 
-    def test_with_working_dir(self, storage_config: StorageConfig) -> None:
+    def test_with_working_dir(self) -> None:
         container = Container(
             image="image",
             resources=ContainerResources(cpu=0.1, memory_mb=16),
             working_dir="/working/dir",
         )
-        assert convert_job_container_to_json(container, storage_config) == {
+        assert convert_job_container_to_json(container) == {
             "env": {},
             "image": "image",
             "resources": {"cpu": 0.1, "memory_mb": 16},
             "volumes": [],
             "working_dir": "/working/dir",
-        }
-
-    def test_src_storage_uri_fallback_default(
-        self, storage_config: StorageConfig
-    ) -> None:
-        volume = ContainerVolume(
-            uri=URL(""),
-            dst_path=PurePath("/var/storage/username/dataset"),
-        )
-        payload = convert_container_volume_to_json(volume, storage_config)
-        assert payload == {
-            "src_storage_uri": "storage://username/dataset",
-            "dst_path": "/var/storage/username/dataset",
-            "read_only": False,
-        }
-
-    def test_src_storage_uri_fallback_special_chars(
-        self, storage_config: StorageConfig
-    ) -> None:
-        volume = ContainerVolume(
-            uri=URL(""),
-            dst_path=PurePath("/var/storage/username/dataset%25#?"),
-        )
-        payload = convert_container_volume_to_json(volume, storage_config)
-        assert URL(payload["src_storage_uri"]) == URL(
-            "storage://username/dataset%2525%23%3F"
-        )
-        assert URL(payload["src_storage_uri"]).path == "/dataset%25#?"
-        assert payload["dst_path"] == "/var/storage/username/dataset%25#?"
-
-    def test_src_storage_uri_fallback_root(self, storage_config: StorageConfig) -> None:
-        volume = ContainerVolume(uri=URL(""), dst_path=PurePath("/var/storage"))
-        payload = convert_container_volume_to_json(volume, storage_config)
-        assert payload == {
-            "src_storage_uri": "storage:",
-            "dst_path": "/var/storage",
-            "read_only": False,
-        }
-
-    def test_src_storage_uri_fallback_custom(
-        self, storage_config: StorageConfig
-    ) -> None:
-        volume = ContainerVolume(
-            uri=URL(""),
-            dst_path=PurePath("/var/custom/username/dataset"),
-        )
-        payload = convert_container_volume_to_json(volume, storage_config)
-        assert payload == {
-            "src_storage_uri": "storage:",
-            "dst_path": "/var/custom/username/dataset",
-            "read_only": False,
         }
 
 
@@ -1447,7 +1391,6 @@ class TestInferPermissionsFromContainer:
 @pytest.mark.asyncio
 async def test_job_to_job_response(mock_orchestrator: MockOrchestrator) -> None:
     job = Job(
-        storage_config=mock_orchestrator.storage_config,
         orchestrator_config=mock_orchestrator.config,
         record=JobRecord.create(
             request=JobRequest.create(
@@ -1524,7 +1467,6 @@ async def test_job_to_job_response_nonzero_runtime(
     status_history = JobStatusHistory(items)
 
     job = Job(
-        storage_config=mock_orchestrator.storage_config,
         orchestrator_config=mock_orchestrator.config,
         record=JobRecord.create(
             request=JobRequest.create(
@@ -1552,7 +1494,6 @@ async def test_job_to_job_response_with_job_name_and_http_exposed(
     owner_name = "a" * USER_NAME_MAX_LENGTH
     job_name = "b" * JOB_NAME_MAX_LENGTH
     job = Job(
-        storage_config=mock_orchestrator.storage_config,
         orchestrator_config=mock_orchestrator.config,
         record=JobRecord.create(
             request=JobRequest.create(
@@ -1618,7 +1559,6 @@ async def test_job_to_job_response_with_job_name_and_http_exposed_too_long_name(
     owner_name = "a" * USER_NAME_MAX_LENGTH
     job_name = "b" * (JOB_NAME_MAX_LENGTH + 1)
     job = Job(
-        storage_config=mock_orchestrator.storage_config,
         orchestrator_config=mock_orchestrator.config,
         record=JobRecord.create(
             request=JobRequest.create(
@@ -1683,7 +1623,6 @@ async def test_job_to_job_response_assert_non_empty_cluster_name(
     mock_orchestrator: MockOrchestrator,
 ) -> None:
     job = Job(
-        storage_config=mock_orchestrator.storage_config,
         orchestrator_config=mock_orchestrator.config,
         record=JobRecord.create(
             request=JobRequest.create(
@@ -1704,7 +1643,6 @@ async def test_job_to_job_response_with_preset_name(
     mock_orchestrator: MockOrchestrator,
 ) -> None:
     job = Job(
-        storage_config=mock_orchestrator.storage_config,
         orchestrator_config=mock_orchestrator.config,
         record=JobRecord.create(
             request=JobRequest.create(

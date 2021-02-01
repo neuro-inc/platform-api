@@ -81,7 +81,6 @@ class MyJob(Job):
         if not record.owner:
             record = replace(record, owner="test-owner")
         super().__init__(
-            storage_config=orchestrator.storage_config,
             orchestrator_config=orchestrator.config,
             record=record,
         )

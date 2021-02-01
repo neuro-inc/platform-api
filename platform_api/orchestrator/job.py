@@ -10,7 +10,7 @@ import iso8601
 from neuro_auth_client.client import Quota
 from yarl import URL
 
-from platform_api.cluster_config import OrchestratorConfig, StorageConfig
+from platform_api.cluster_config import OrchestratorConfig
 
 from .job_request import ContainerResources, JobError, JobRequest, JobStatus
 
@@ -510,14 +510,12 @@ class JobRecord:
 class Job:
     def __init__(
         self,
-        storage_config: StorageConfig,
         orchestrator_config: OrchestratorConfig,
         *,
         record: JobRecord,
         current_datetime_factory: Callable[[], datetime] = current_datetime_factory,
         image_pull_error_delay: timedelta = timedelta(minutes=2),
     ) -> None:
-        self._storage_config = storage_config
         self._orchestrator_config = orchestrator_config
 
         self._record = record
@@ -566,10 +564,6 @@ class Job:
     @property
     def cluster_name(self) -> str:
         return self._record.cluster_name
-
-    @property
-    def storage_config(self) -> StorageConfig:
-        return self._storage_config
 
     def to_uri(self) -> URL:
         assert self.cluster_name
@@ -779,13 +773,11 @@ class Job:
     @classmethod
     def from_primitive(
         cls,
-        storage_config: StorageConfig,
         orchestrator_config: OrchestratorConfig,
         payload: Dict[str, Any],
     ) -> "Job":
         record = JobRecord.from_primitive(payload)
         return cls(
-            storage_config=storage_config,
             orchestrator_config=orchestrator_config,
             record=record,
         )
