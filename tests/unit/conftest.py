@@ -26,7 +26,12 @@ from notifications_client import Client as NotificationsClient
 from notifications_client.notification import AbstractNotification
 from yarl import URL
 
-from platform_api.cluster import Cluster, ClusterConfig, ClusterRegistry
+from platform_api.cluster import (
+    Cluster,
+    ClusterConfig,
+    ClusterConfigRegistry,
+    ClusterRegistry,
+)
 from platform_api.cluster_config import (
     IngressConfig,
     OrchestratorConfig,
@@ -51,18 +56,18 @@ from platform_api.orchestrator.job_request import (
     JobRequest,
     JobStatus,
 )
-from platform_api.orchestrator.jobs_service import (
-    JobsPollerApi,
-    JobsPollerService,
-    JobsScheduler,
-    JobsService,
-)
+from platform_api.orchestrator.jobs_service import JobsService
 from platform_api.orchestrator.jobs_storage import (
     InMemoryJobsStorage,
     JobsStorage,
     JobStorageTransactionError,
 )
 from platform_api.orchestrator.kube_orchestrator import KubeConfig
+from platform_api.orchestrator.poller_service import (
+    JobsPollerApi,
+    JobsPollerService,
+    JobsScheduler,
+)
 from platform_api.resource import ResourcePoolType
 
 
@@ -369,6 +374,15 @@ async def cluster_registry(
 
 
 @pytest.fixture
+async def cluster_config_registry(
+    cluster_config: ClusterConfig,
+) -> ClusterConfigRegistry:
+    registry = ClusterConfigRegistry()
+    await registry.replace(cluster_config)
+    return registry
+
+
+@pytest.fixture
 def mock_api_base() -> URL:
     return URL("https://testing.neu.ro/api/v1")
 
@@ -400,7 +414,7 @@ def scheduler_config() -> JobsSchedulerConfig:
 
 @pytest.fixture
 def jobs_service(
-    cluster_registry: ClusterRegistry,
+    cluster_config_registry: ClusterConfigRegistry,
     mock_jobs_storage: MockJobsStorage,
     jobs_config: JobsConfig,
     mock_notifications_client: NotificationsClient,
@@ -409,11 +423,10 @@ def jobs_service(
     mock_api_base: URL,
 ) -> JobsService:
     return JobsService(
-        cluster_registry=cluster_registry,
+        cluster_config_registry=cluster_config_registry,
         jobs_storage=mock_jobs_storage,
         jobs_config=jobs_config,
         notifications_client=mock_notifications_client,
-        scheduler=JobsScheduler(scheduler_config, mock_auth_client),
         auth_client=mock_auth_client,
         api_base_url=mock_api_base,
     )

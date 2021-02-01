@@ -24,7 +24,6 @@ from .cluster_config import ClusterConfig
 from .config import Config
 from .config_client import ConfigClient
 from .orchestrator.base import Orchestrator
-from .orchestrator.job import Job
 
 
 logger = logging.getLogger(__name__)
@@ -67,9 +66,6 @@ class Cluster(ABC):
     @property
     @abstractmethod
     def orchestrator(self) -> Orchestrator:  # pragma: no cover
-        pass
-
-    async def prepare_job(self, job: Job) -> None:
         pass
 
 
@@ -188,7 +184,7 @@ class ClusterUpdater:
     def __init__(
         self,
         notifier: ClusterUpdateNotifier,
-        cluster_registry: "ClusterRegistry",
+        cluster_registry: "BaseClusterRegistry",
         config: Config,
         config_client: ConfigClient,
     ):
@@ -251,7 +247,17 @@ class ClusterUpdater:
         await cluster_registry.cleanup(cluster_configs)
 
 
-class ClusterRegistry:
+class BaseClusterRegistry(ABC):
+    @abstractmethod
+    async def replace(self, config: ClusterConfig) -> None:
+        pass
+
+    @abstractmethod
+    async def cleanup(self, keep_clusters: Sequence[ClusterConfig]) -> None:
+        pass
+
+
+class ClusterRegistry(BaseClusterRegistry):
     def __init__(self, *, factory: ClusterFactory) -> None:
         self._factory = factory
         self._records: Dict[str, ClusterRegistryRecord] = {}
@@ -405,3 +411,40 @@ class ClusterRegistry:
 
     def __len__(self) -> int:
         return len(self._records)
+
+
+class ClusterConfigRegistry(BaseClusterRegistry):
+    def __init__(
+        self,
+    ) -> None:
+        self._records: Dict[str, ClusterConfig] = {}
+
+    @property
+    def cluster_names(self) -> List[str]:
+        return list(self._records)
+
+    def get(self, name: str) -> ClusterConfig:
+        try:
+            return self._records[name]
+        except KeyError:
+            raise ClusterNotFound.create(name)
+
+    async def replace(self, config: ClusterConfig) -> None:
+        self._records[config.name] = config
+
+    def remove(self, name: str) -> ClusterConfig:
+        record = self._records.pop(name, None)
+        if not record:
+            raise ClusterNotFound.create(name)
+        return record
+
+    async def cleanup(self, keep_clusters: Sequence[ClusterConfig]) -> None:
+        all_cluster_names = set(self._records.keys())
+        keep_clusters_with_names = {
+            cluster_config.name for cluster_config in keep_clusters
+        }
+        for cluster_for_removal in all_cluster_names - keep_clusters_with_names:
+            try:
+                self.remove(cluster_for_removal)
+            except ClusterNotFound:
+                pass

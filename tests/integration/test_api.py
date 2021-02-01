@@ -29,7 +29,7 @@ from aiohttp.web_exceptions import HTTPCreated, HTTPNotFound
 from neuro_auth_client import Cluster as AuthCluster, Permission, Quota
 from yarl import URL
 
-from platform_api.cluster import ClusterRegistry
+from platform_api.cluster import ClusterConfigRegistry
 from platform_api.config import Config
 from platform_api.orchestrator.jobs_service import NEURO_PASSED_CONFIG
 from tests.conftest import random_str
@@ -187,7 +187,7 @@ class TestApi:
         cluster_configs_payload: List[Dict[str, Any]],
         cluster_user: _User,
     ) -> None:
-        cluster_registry: ClusterRegistry = api.runner._app["api_v1_app"][
+        cluster_registry: ClusterConfigRegistry = api.runner._app["api_v1_app"][
             "jobs_service"
         ]._cluster_registry
 

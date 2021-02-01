@@ -18,8 +18,12 @@ from neuro_auth_client import (
 from notifications_client import Client as NotificationsClient, JobTransition
 from yarl import URL
 
-from platform_api.cluster import Cluster, ClusterConfig, ClusterRegistry
-from platform_api.cluster_config import CircuitBreakerConfig
+from platform_api.cluster import (
+    Cluster,
+    ClusterConfig,
+    ClusterConfigRegistry,
+    ClusterRegistry,
+)
 from platform_api.config import JobsConfig, JobsSchedulerConfig
 from platform_api.orchestrator.job import (
     AggregatedRunTime,
@@ -33,14 +37,13 @@ from platform_api.orchestrator.job_request import JobError, JobRequest, JobStatu
 from platform_api.orchestrator.jobs_service import (
     NEURO_PASSED_CONFIG,
     GpuQuotaExceededError,
-    JobsPollerService,
-    JobsScheduler,
     JobsService,
     JobsServiceException,
     NonGpuQuotaExceededError,
     RunningJobsQuotaExceededError,
 )
 from platform_api.orchestrator.jobs_storage import JobFilter
+from platform_api.orchestrator.poller_service import JobsPollerService, JobsScheduler
 from platform_api.user import User, UserCluster
 
 from .conftest import (
@@ -90,7 +93,7 @@ class TestJobsService:
     @pytest.fixture
     def jobs_service_factory(
         self,
-        cluster_registry: ClusterRegistry,
+        cluster_config_registry: ClusterConfigRegistry,
         mock_jobs_storage: MockJobsStorage,
         mock_notifications_client: NotificationsClient,
         test_scheduler: MockJobsScheduler,
@@ -101,14 +104,13 @@ class TestJobsService:
             deletion_delay_s: int = 0, image_pull_error_delay_s: int = 0
         ) -> JobsService:
             return JobsService(
-                cluster_registry=cluster_registry,
+                cluster_config_registry=cluster_config_registry,
                 jobs_storage=mock_jobs_storage,
                 jobs_config=JobsConfig(
                     deletion_delay_s=deletion_delay_s,
                     image_pull_error_delay_s=image_pull_error_delay_s,
                 ),
                 notifications_client=mock_notifications_client,
-                scheduler=test_scheduler,
                 auth_client=mock_auth_client,
                 api_base_url=mock_api_base,
             )
@@ -172,7 +174,7 @@ class TestJobsService:
     async def test_create_job_privileged_not_allowed(
         self,
         cluster_config: ClusterConfig,
-        cluster_registry: ClusterRegistry,
+        cluster_config_registry: ClusterConfigRegistry,
         jobs_service: JobsService,
         mock_job_request: JobRequest,
     ) -> None:
@@ -183,7 +185,7 @@ class TestJobsService:
             ),
         )
 
-        await cluster_registry.replace(cluster_config)
+        await cluster_config_registry.replace(cluster_config)
 
         user = User(cluster_name="test-cluster", name="testuser", token="test-token")
         with pytest.raises(
@@ -198,7 +200,7 @@ class TestJobsService:
     async def test_create_job_privileged_allowed(
         self,
         cluster_config: ClusterConfig,
-        cluster_registry: ClusterRegistry,
+        cluster_config_registry: ClusterConfigRegistry,
         jobs_service: JobsService,
         mock_job_request: JobRequest,
     ) -> None:
@@ -209,7 +211,7 @@ class TestJobsService:
             ),
         )
 
-        await cluster_registry.replace(cluster_config)
+        await cluster_config_registry.replace(cluster_config)
 
         user = User(cluster_name="test-cluster", name="testuser", token="test-token")
         original_job, _ = await jobs_service.create_job(
@@ -1663,20 +1665,23 @@ class TestJobsServiceCluster:
             yield registry
 
     @pytest.fixture
+    async def cluster_config_registry(self) -> ClusterConfigRegistry:
+        return ClusterConfigRegistry()
+
+    @pytest.fixture
     def jobs_service(
         self,
-        cluster_registry: ClusterRegistry,
+        cluster_config_registry: ClusterConfigRegistry,
         mock_jobs_storage: MockJobsStorage,
         mock_notifications_client: NotificationsClient,
         mock_auth_client: AuthClient,
         mock_api_base: URL,
     ) -> JobsService:
         return JobsService(
-            cluster_registry=cluster_registry,
+            cluster_config_registry=cluster_config_registry,
             jobs_storage=mock_jobs_storage,
             jobs_config=JobsConfig(),
             notifications_client=mock_notifications_client,
-            scheduler=JobsScheduler(JobsSchedulerConfig(), mock_auth_client),
             auth_client=mock_auth_client,
             api_base_url=mock_api_base,
         )
@@ -1705,6 +1710,7 @@ class TestJobsServiceCluster:
     async def test_update_pending_job_missing_cluster(
         self,
         cluster_registry: ClusterRegistry,
+        cluster_config_registry: ClusterConfigRegistry,
         cluster_config: ClusterConfig,
         mock_jobs_storage: MockJobsStorage,
         mock_job_request: JobRequest,
@@ -1714,11 +1720,10 @@ class TestJobsServiceCluster:
         mock_api_base: URL,
     ) -> None:
         jobs_service = JobsService(
-            cluster_registry=cluster_registry,
+            cluster_config_registry=cluster_config_registry,
             jobs_storage=mock_jobs_storage,
             jobs_config=jobs_config,
             notifications_client=mock_notifications_client,
-            scheduler=JobsScheduler(JobsSchedulerConfig(), mock_auth_client),
             auth_client=mock_auth_client,
             api_base_url=mock_api_base,
         )
@@ -1730,6 +1735,7 @@ class TestJobsServiceCluster:
             api=MockJobsPollerApi(jobs_service, mock_jobs_storage),
         )
         await cluster_registry.replace(cluster_config)
+        await cluster_config_registry.replace(cluster_config)
 
         async with cluster_registry.get(cluster_config.name) as cluster:
 
@@ -1754,6 +1760,7 @@ class TestJobsServiceCluster:
     async def test_update_pending_job_unavail_cluster(
         self,
         cluster_registry: ClusterRegistry,
+        cluster_config_registry: ClusterConfigRegistry,
         cluster_config: ClusterConfig,
         mock_jobs_storage: MockJobsStorage,
         mock_job_request: JobRequest,
@@ -1763,11 +1770,10 @@ class TestJobsServiceCluster:
         mock_api_base: URL,
     ) -> None:
         jobs_service = JobsService(
-            cluster_registry=cluster_registry,
+            cluster_config_registry=cluster_config_registry,
             jobs_storage=mock_jobs_storage,
             jobs_config=jobs_config,
             notifications_client=mock_notifications_client,
-            scheduler=JobsScheduler(JobsSchedulerConfig(), mock_auth_client),
             auth_client=mock_auth_client,
             api_base_url=mock_api_base,
         )
@@ -1779,6 +1785,7 @@ class TestJobsServiceCluster:
             api=MockJobsPollerApi(jobs_service, mock_jobs_storage),
         )
         await cluster_registry.replace(cluster_config)
+        await cluster_config_registry.replace(cluster_config)
 
         user = User(name="testuser", token="testtoken", cluster_name="test-cluster")
         job, _ = await jobs_service.create_job(mock_job_request, user)
@@ -1787,6 +1794,7 @@ class TestJobsServiceCluster:
         assert status == JobStatus.PENDING
 
         await cluster_registry.remove(cluster_config.name)
+        cluster_config_registry.remove(cluster_config.name)
 
         await jobs_poller_service.update_jobs_statuses()
 
@@ -1802,6 +1810,7 @@ class TestJobsServiceCluster:
     async def test_update_succeeded_job_missing_cluster(
         self,
         cluster_registry: ClusterRegistry,
+        cluster_config_registry: ClusterConfigRegistry,
         cluster_config: ClusterConfig,
         mock_jobs_storage: MockJobsStorage,
         mock_job_request: JobRequest,
@@ -1811,11 +1820,10 @@ class TestJobsServiceCluster:
         mock_api_base: URL,
     ) -> None:
         jobs_service = JobsService(
-            cluster_registry=cluster_registry,
+            cluster_config_registry=cluster_config_registry,
             jobs_storage=mock_jobs_storage,
             jobs_config=jobs_config,
             notifications_client=mock_notifications_client,
-            scheduler=JobsScheduler(JobsSchedulerConfig(), mock_auth_client),
             auth_client=mock_auth_client,
             api_base_url=mock_api_base,
         )
@@ -1827,6 +1835,7 @@ class TestJobsServiceCluster:
             api=MockJobsPollerApi(jobs_service, mock_jobs_storage),
         )
         await cluster_registry.replace(cluster_config)
+        await cluster_config_registry.replace(cluster_config)
 
         user = User(name="testuser", token="testtoken", cluster_name="test-cluster")
         job, _ = await jobs_service.create_job(mock_job_request, user)
@@ -1838,6 +1847,7 @@ class TestJobsServiceCluster:
         assert status == JobStatus.SUCCEEDED
 
         await cluster_registry.remove(cluster_config.name)
+        cluster_config_registry.remove(cluster_config.name)
 
         await jobs_poller_service.update_jobs_statuses()
 
@@ -1848,7 +1858,7 @@ class TestJobsServiceCluster:
     @pytest.mark.asyncio
     async def test_get_job_fallback(
         self,
-        cluster_registry: ClusterRegistry,
+        cluster_config_registry: ClusterConfigRegistry,
         cluster_config: ClusterConfig,
         mock_jobs_storage: MockJobsStorage,
         mock_job_request: JobRequest,
@@ -1858,17 +1868,16 @@ class TestJobsServiceCluster:
         mock_api_base: URL,
     ) -> None:
         jobs_service = JobsService(
-            cluster_registry=cluster_registry,
+            cluster_config_registry=cluster_config_registry,
             jobs_storage=mock_jobs_storage,
             jobs_config=jobs_config,
             notifications_client=mock_notifications_client,
-            scheduler=JobsScheduler(JobsSchedulerConfig(), mock_auth_client),
             auth_client=mock_auth_client,
             api_base_url=mock_api_base,
         )
-        await cluster_registry.replace(cluster_config)  # "test-cluster"
-        await cluster_registry.replace(replace(cluster_config, name="default"))
-        await cluster_registry.replace(replace(cluster_config, name="missing"))
+        await cluster_config_registry.replace(cluster_config)  # "test-cluster"
+        await cluster_config_registry.replace(replace(cluster_config, name="default"))
+        await cluster_config_registry.replace(replace(cluster_config, name="missing"))
 
         user = User(name="testuser", token="testtoken", cluster_name="missing")
         job, _ = await jobs_service.create_job(mock_job_request, user)
@@ -1877,7 +1886,7 @@ class TestJobsServiceCluster:
         job = await jobs_service.get_job(job.id)
         assert job.cluster_name == "missing"
 
-        await cluster_registry.remove("missing")
+        cluster_config_registry.remove("missing")
 
         job = await jobs_service.get_job(job.id)
         assert job.cluster_name == "missing"
@@ -1885,47 +1894,10 @@ class TestJobsServiceCluster:
         assert job.http_host_named is None
 
     @pytest.mark.asyncio
-    async def test_get_job_unavail_cluster(
-        self,
-        cluster_registry: ClusterRegistry,
-        cluster_config: ClusterConfig,
-        mock_jobs_storage: MockJobsStorage,
-        mock_job_request: JobRequest,
-        jobs_config: JobsConfig,
-        mock_notifications_client: NotificationsClient,
-        mock_auth_client: AuthClient,
-        mock_api_base: URL,
-    ) -> None:
-        jobs_service = JobsService(
-            cluster_registry=cluster_registry,
-            jobs_storage=mock_jobs_storage,
-            jobs_config=jobs_config,
-            notifications_client=mock_notifications_client,
-            scheduler=JobsScheduler(JobsSchedulerConfig(), mock_auth_client),
-            auth_client=mock_auth_client,
-            api_base_url=mock_api_base,
-        )
-        cluster_config = replace(
-            cluster_config, circuit_breaker=CircuitBreakerConfig(open_threshold=1)
-        )
-        await cluster_registry.replace(cluster_config)  # "test-cluster"
-
-        user = User(name="testuser", token="testtoken", cluster_name="test-cluster")
-        job, _ = await jobs_service.create_job(mock_job_request, user)
-
-        # forcing the cluster to become unavailable
-        async with cluster_registry.get(cluster_config.name):
-            raise RuntimeError("test")
-
-        job = await jobs_service.get_job(job.id)
-        assert job.cluster_name == "test-cluster"
-        assert job.http_host == f"{job.id}.jobs"
-        assert job.http_host_named is None
-
-    @pytest.mark.asyncio
     async def test_delete_missing_cluster(
         self,
         cluster_registry: ClusterRegistry,
+        cluster_config_registry: ClusterConfigRegistry,
         cluster_config: ClusterConfig,
         mock_jobs_storage: MockJobsStorage,
         mock_job_request: JobRequest,
@@ -1935,11 +1907,10 @@ class TestJobsServiceCluster:
         mock_api_base: URL,
     ) -> None:
         jobs_service = JobsService(
-            cluster_registry=cluster_registry,
+            cluster_config_registry=cluster_config_registry,
             jobs_storage=mock_jobs_storage,
             jobs_config=jobs_config,
             notifications_client=mock_notifications_client,
-            scheduler=JobsScheduler(JobsSchedulerConfig(), mock_auth_client),
             auth_client=mock_auth_client,
             api_base_url=mock_api_base,
         )
@@ -1951,11 +1922,13 @@ class TestJobsServiceCluster:
             api=MockJobsPollerApi(jobs_service, mock_jobs_storage),
         )
         await cluster_registry.replace(cluster_config)
+        await cluster_config_registry.replace(cluster_config)
 
         user = User(cluster_name="test-cluster", name="testuser", token="testtoken")
         job, _ = await jobs_service.create_job(mock_job_request, user)
 
         await cluster_registry.remove(cluster_config.name)
+        cluster_config_registry.remove(cluster_config.name)
 
         await jobs_service.cancel_job(job.id)
         await jobs_poller_service.update_jobs_statuses()
@@ -1968,6 +1941,7 @@ class TestJobsServiceCluster:
     async def test_delete_unavail_cluster(
         self,
         cluster_registry: ClusterRegistry,
+        cluster_config_registry: ClusterConfigRegistry,
         cluster_config: ClusterConfig,
         mock_jobs_storage: MockJobsStorage,
         mock_job_request: JobRequest,
@@ -1977,11 +1951,10 @@ class TestJobsServiceCluster:
         mock_api_base: URL,
     ) -> None:
         jobs_service = JobsService(
-            cluster_registry=cluster_registry,
+            cluster_config_registry=cluster_config_registry,
             jobs_storage=mock_jobs_storage,
             jobs_config=jobs_config,
             notifications_client=mock_notifications_client,
-            scheduler=JobsScheduler(JobsSchedulerConfig(), mock_auth_client),
             auth_client=mock_auth_client,
             api_base_url=mock_api_base,
         )
@@ -1993,6 +1966,7 @@ class TestJobsServiceCluster:
             api=MockJobsPollerApi(jobs_service, mock_jobs_storage),
         )
         await cluster_registry.replace(cluster_config)
+        await cluster_config_registry.replace(cluster_config)
 
         async with cluster_registry.get(cluster_config.name) as cluster:
 
@@ -2017,7 +1991,7 @@ class TestJobServiceNotification:
     @pytest.fixture
     def jobs_service_factory(
         self,
-        cluster_registry: ClusterRegistry,
+        cluster_config_registry: ClusterConfigRegistry,
         mock_jobs_storage: MockJobsStorage,
         mock_notifications_client: NotificationsClient,
         mock_auth_client: AuthClient,
@@ -2025,11 +1999,10 @@ class TestJobServiceNotification:
     ) -> Callable[..., JobsService]:
         def _factory(deletion_delay_s: int = 0) -> JobsService:
             return JobsService(
-                cluster_registry=cluster_registry,
+                cluster_config_registry=cluster_config_registry,
                 jobs_storage=mock_jobs_storage,
                 jobs_config=JobsConfig(deletion_delay_s=deletion_delay_s),
                 notifications_client=mock_notifications_client,
-                scheduler=JobsScheduler(JobsSchedulerConfig(), mock_auth_client),
                 auth_client=mock_auth_client,
                 api_base_url=mock_api_base,
             )
