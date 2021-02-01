@@ -408,9 +408,9 @@ class TestApi:
                 ],
             }
             expected_payload: Dict[str, Any] = {
-                "auth_url": "https://platform-auth0-url/authorize",
-                "token_url": "https://platform-auth0-url/oauth/token",
-                "logout_url": "https://platform-auth0-url/v2/logout",
+                "auth_url": "https://platform-auth0-url/auth",
+                "token_url": "https://platform-auth0-url/token",
+                "logout_url": "https://platform-auth0-url/logout",
                 "client_id": "client_id",
                 "audience": "https://platform-dev-url",
                 "success_redirect_url": "https://platform-default-url",
