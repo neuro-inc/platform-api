@@ -335,7 +335,7 @@ class TestJobsService:
         mock_job_request: JobRequest,
         mock_auth_client: MockAuthClient,
         mock_orchestrator: MockOrchestrator,
-        cluster_config_registry: ClusterConfigRegistry,
+        cluster_holder: ClusterHolder,
         cluster_config: ClusterConfig,
     ) -> None:
         user = User(cluster_name="test-cluster", name="testuser", token="test-token")
@@ -346,7 +346,7 @@ class TestJobsService:
         mock_orchestrator.update_status_to_return(JobStatus.RUNNING)
         await jobs_poller_service.update_jobs_statuses()
 
-        cluster_config_registry.remove(cluster_config.name)
+        await cluster_holder.clean()
         await jobs_poller_service.update_jobs_statuses()
 
         token_uri = f"token://job/{original_job.id}"
@@ -1737,7 +1737,7 @@ class TestJobsServiceCluster:
         await cluster_holder.update(cluster_config)
         await cluster_config_registry.replace(cluster_config)
 
-        async with cluster_holder.get(cluster_config.name) as cluster:
+        async with cluster_holder.get() as cluster:
 
             def _f(*args: Any, **kwargs: Any) -> Exception:
                 raise RuntimeError("test")
@@ -1802,7 +1802,7 @@ class TestJobsServiceCluster:
         assert record.status_history.current == JobStatusItem.create(
             JobStatus.FAILED,
             reason=JobStatusReason.CLUSTER_NOT_FOUND,
-            description="Cluster 'test-cluster' not found",
+            description="Cluster is not present",
         )
         assert not record.materialized
 
@@ -1968,7 +1968,7 @@ class TestJobsServiceCluster:
         await cluster_holder.update(cluster_config)
         await cluster_config_registry.replace(cluster_config)
 
-        async with cluster_holder.get(cluster_config.name) as cluster:
+        async with cluster_holder.get() as cluster:
 
             def _f(*args: Any, **kwargs: Any) -> Exception:
                 raise RuntimeError("test")

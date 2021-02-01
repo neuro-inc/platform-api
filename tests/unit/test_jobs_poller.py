@@ -69,7 +69,6 @@ class TestJobsPoller:
         assert all(job.status == JobStatus.PENDING for job in all_jobs)
 
         def update_jobs_statuses() -> Any:
-            print("update_jobs_status with error")
             raise ValueError("some unknown error")
 
         update_jobs_statuses_orig = jobs_poller_service.update_jobs_statuses

@@ -136,6 +136,8 @@ spec:
         imagePullPolicy: Never
         command: ["platform-api-poller"]
         env:
+        - name: NP_CLUSTER_NAME
+          value: "test-cluster"
         - name: NP_K8S_API_URL
           value: http://localhost:8001
         - name: NP_K8S_AUTH_TYPE

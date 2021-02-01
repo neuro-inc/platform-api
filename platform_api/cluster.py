@@ -255,14 +255,15 @@ class ClusterHolder:
     async def get(self) -> AsyncIterator[Cluster]:
         async with self._lock.reader:
             if self._cluster is None:
-                raise ClusterNotFound
+                raise ClusterNotFound("Cluster is not present")
             else:
                 yield self._cluster
 
     async def clean(self) -> None:
-        with self._lock.writer:
+        async with self._lock.writer:
             if self._cluster:
                 await self._close_cluster(self._cluster)
+                self._cluster = None
 
 
 class ClusterConfigRegistry:
