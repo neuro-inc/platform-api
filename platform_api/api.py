@@ -314,10 +314,6 @@ async def create_app(
             for cluster in client_clusters:
                 await cluster_registry.replace(cluster)
 
-            assert config.database.postgres, (
-                "Postgres config should be available when "
-                "NP_DB_POSTGRES_ENABLED is set"
-            )
             logger.info("Initializing Postgres connection pool")
             postgres_pool = await exit_stack.enter_async_context(
                 create_postgres_pool(config.database.postgres)
@@ -325,7 +321,6 @@ async def create_app(
 
             logger.info("Initializing JobsStorage")
             jobs_storage: JobsStorage = PostgresJobsStorage(postgres_pool)
-            await jobs_storage.migrate()
 
             cluster_update_notifier = ClusterUpdateNotifier(postgres_pool)
             app["api_v1_app"]["cluster_update_notifier"] = cluster_update_notifier

@@ -1,12 +1,9 @@
 from datetime import datetime, timedelta
 from itertools import islice
-from pathlib import PurePath
 from typing import Any, Dict, List, Optional, Tuple
 
-import aioredis
 import pytest
 from asyncpg.pool import Pool
-from yarl import URL
 
 from platform_api.config import PostgresConfig
 from platform_api.config_factory import EnvironConfigFactory
@@ -19,7 +16,6 @@ from platform_api.orchestrator.job import (
 from platform_api.orchestrator.job_request import (
     Container,
     ContainerResources,
-    ContainerVolume,
     JobError,
     JobRequest,
     JobStatus,
@@ -29,21 +25,15 @@ from platform_api.orchestrator.jobs_storage import (
     JobsStorage,
     JobStorageJobFoundError,
     JobStorageTransactionError,
-    RedisJobsStorage,
 )
 from platform_api.orchestrator.jobs_storage.postgres import PostgresJobsStorage
 from platform_api.postgres import MigrationRunner, create_postgres_pool
-from platform_api.redis import RedisConfig
 from tests.conftest import not_raises, random_str
 
 
 class TestJobsStorage:
-    @pytest.fixture(params=["redis", "postgres"])
-    def storage(
-        self, request: Any, redis_client: aioredis.Redis, postgres_pool: Pool
-    ) -> JobsStorage:
-        if request.param == "redis":
-            return RedisJobsStorage(redis_client)
+    @pytest.fixture(params=["postgres"])
+    def storage(self, request: Any, postgres_pool: Pool) -> JobsStorage:
         if request.param == "postgres":
             return PostgresJobsStorage(postgres_pool)
         raise Exception(f"Unknown job storage engine {request.param}.")
@@ -111,79 +101,6 @@ class TestJobsStorage:
         assert job.status == original_job.status
 
     @pytest.mark.asyncio
-    async def test_get_last_created_job_id__no_job_updated(
-        self, redis_client: aioredis.Redis
-    ) -> None:
-        job = self._create_pending_job(owner="me", job_name="jobname1")
-        storage = RedisJobsStorage(redis_client)
-        job.status = JobStatus.RUNNING
-
-        # do not put this job into redis
-
-        # check that job exists in database:
-        with pytest.raises(JobError, match=f"no such job {job.id}"):
-            await storage.get_job(job.id)
-
-        assert job.name
-        job_id_last_created = await storage.get_last_created_job_id(job.owner, job.name)
-        assert job_id_last_created is None
-
-    @pytest.mark.asyncio
-    async def test_get_last_created_job_id__is_job_creation_false(
-        self, redis_client: aioredis.Redis
-    ) -> None:
-
-        job = self._create_pending_job(owner="me", job_name="jobname1")
-        storage = RedisJobsStorage(redis_client)
-        job.status = JobStatus.RUNNING
-        await storage.update_job_atomic(job, is_job_creation=False)
-
-        # check that job exists in database:
-        job_read = await storage.get_job(job.id)
-        assert job_read.to_primitive() == job.to_primitive()
-
-        assert job.name
-        job_id_last_created = await storage.get_last_created_job_id(job.owner, job.name)
-        assert job_id_last_created is None
-
-    @pytest.mark.asyncio
-    async def test_get_last_created_job_id__is_job_creation_true(
-        self, redis_client: aioredis.Redis
-    ) -> None:
-        job = self._create_pending_job(owner="me", job_name="jobname1")
-        storage = RedisJobsStorage(redis_client)
-        job.status = JobStatus.RUNNING
-        await storage.update_job_atomic(job, is_job_creation=True)
-
-        # check that job exists in database:
-        job_read = await storage.get_job(job.id)
-        assert job_read.to_primitive() == job.to_primitive()
-
-        assert job.name
-        job_id_last_created = await storage.get_last_created_job_id(job.owner, job.name)
-        assert job_id_last_created == job.id
-
-    @pytest.mark.asyncio
-    async def test_get_last_created_job_id__multiple_jobs_order_preserves(
-        self, redis_client: aioredis.Redis
-    ) -> None:
-        storage = RedisJobsStorage(redis_client)
-        owner = "me"
-        name = "jobnamename"
-
-        job1 = self._create_pending_job(owner=owner, job_name=name)
-        await storage.update_job_atomic(job1, is_job_creation=True)
-
-        job2 = self._create_failed_job(owner=owner, job_name=name)
-        await storage.update_job_atomic(job2, is_job_creation=True)
-
-        job3 = self._create_succeeded_job(owner=owner, job_name=name)
-        await storage.update_job_atomic(job3, is_job_creation=True)
-
-        job_id_last_created = await storage.get_last_created_job_id(owner, name)
-        assert job_id_last_created == job3.id
-
-    @pytest.mark.asyncio
     async def test_try_create_job__no_name__ok(self, storage: JobsStorage) -> None:
 
         pending_job = self._create_pending_job()
@@ -213,21 +130,21 @@ class TestJobsStorage:
             JobStorageTransactionError, match=f"Job {{id={job.id}}} has changed"
         ):
             async with storage.try_create_job(job) as first_job:
-                # value in orchestrator: PENDING, value in redis: None
+                # value in orchestrator: PENDING, value in db: None
                 assert first_job.status == JobStatus.PENDING
                 first_job.status = JobStatus.RUNNING
-                # value in orchestrator: SUCCEEDED, value in redis: None
+                # value in orchestrator: SUCCEEDED, value in db: None
 
                 # process-2
                 with not_raises(JobStorageTransactionError):
                     async with storage.try_create_job(job) as second_job:
-                        # value in orchestrator: succeeded, value in redis: None
+                        # value in orchestrator: succeeded, value in db: None
                         assert second_job.status == JobStatus.RUNNING
                         second_job.status = JobStatus.SUCCEEDED
-                        # value in orchestrator: FAILED, value in redis: None
-                        # now status FAILED is written into the redis by process-2
+                        # value in orchestrator: FAILED, value in db: None
+                        # now status FAILED is written into the db by process-2
 
-                # now status SUCCEEDED fails to be written into the redis by process-1
+                # now status SUCCEEDED fails to be written into the db by process-1
 
                 # now jobs-service catches transaction exception thrown
                 # by process-1 and deletes the newly created by process-1 job.
@@ -1297,21 +1214,21 @@ class TestJobsStorage:
             JobStorageTransactionError, match=f"Job {{id={job.id}}} has changed"
         ):
             async with storage.try_update_job(job.id) as first_job:
-                # value in orchestrator: PENDING, value in redis: None
+                # value in orchestrator: PENDING, value in db: None
                 assert first_job.status == JobStatus.PENDING
                 first_job.status = JobStatus.SUCCEEDED
-                # value in orchestrator: SUCCEEDED, value in redis: None
+                # value in orchestrator: SUCCEEDED, value in db: None
 
                 # process-2
                 with not_raises(JobStorageTransactionError):
                     async with storage.try_update_job(job.id) as second_job:
-                        # value in orchestrator: succeeded, value in redis: None
+                        # value in orchestrator: succeeded, value in db: None
                         assert second_job.status == JobStatus.PENDING
                         second_job.status = JobStatus.RUNNING
-                        # value in orchestrator: FAILED, value in redis: None
-                        # now status FAILED is written into the redis by process-2
+                        # value in orchestrator: FAILED, value in db: None
+                        # now status FAILED is written into the db by process-2
 
-                # now status SUCCEEDED fails to be written into the redis by process-1
+                # now status SUCCEEDED fails to be written into the db by process-1
 
                 # now jobs-service catches transaction exception thrown
                 # by process-1 and deletes the newly created by process-1 job.
@@ -1410,156 +1327,6 @@ class TestJobsStorage:
         job = await storage.get_job(second_job.id)
         assert job.id == second_job.id
         assert job.status == JobStatus.RUNNING
-
-    @pytest.mark.asyncio
-    async def test_migrate_no_jobs(self, redis_client: aioredis.Redis) -> None:
-        storage = RedisJobsStorage(client=redis_client)
-
-        jobs = await storage.get_all_jobs()
-        assert not jobs
-
-        assert await storage.migrate()
-        assert not await storage.migrate()
-
-    @pytest.mark.asyncio
-    async def test_migrate_version_4(self, redis_client: aioredis.Redis) -> None:
-        job = self._create_succeeded_job()
-
-        storage = RedisJobsStorage(client=redis_client)
-        async with storage.try_create_job(job, skip_index=True):
-            pass
-
-        jobs_for_deletion = await storage.get_jobs_for_deletion()
-        assert not jobs_for_deletion
-
-        await storage.migrate()
-
-        jobs_for_deletion = await storage.get_jobs_for_deletion()
-        assert jobs_for_deletion
-
-        assert not await storage.migrate()
-
-    @pytest.mark.asyncio
-    async def test_migrate(self, redis_client: aioredis.Redis) -> None:
-        first_job = self._create_pending_job(owner="testuser")
-        second_job = self._create_running_job(owner="testuser")
-
-        first_job.allow_empty_cluster_name = True
-        first_job.cluster_name = ""
-        second_job.allow_empty_cluster_name = True
-        second_job.cluster_name = ""
-
-        storage = RedisJobsStorage(client=redis_client)
-        async with storage.try_create_job(first_job, skip_index=True):
-            pass
-        async with storage.try_create_job(second_job, skip_index=True):
-            pass
-
-        jobs = await storage.get_all_jobs()
-        job_ids = [job.id for job in jobs]
-        assert not job_ids
-
-        filters = JobFilter(owners={"testuser"})
-
-        jobs = await storage.get_all_jobs(filters)
-        assert not jobs
-
-        filters2 = JobFilter(clusters={"default": {}})
-
-        jobs = await storage.get_all_jobs(filters2)
-        assert not jobs
-
-        assert await storage.migrate()
-
-        jobs = await storage.get_all_jobs(filters)
-        job_ids = [job.id for job in jobs]
-        assert job_ids == [first_job.id, second_job.id]
-        for job in jobs:
-            assert job.cluster_name == "default"
-
-        jobs = await storage.get_all_jobs(filters2)
-        job_ids = [job.id for job in jobs]
-        assert job_ids == [first_job.id, second_job.id]
-
-        assert not await storage.migrate()
-
-    @pytest.mark.asyncio
-    async def test_migrate_version_6(self, redis_client: aioredis.Redis) -> None:
-        job = self._create_running_job(owner="testuser")
-        volume1 = ContainerVolume(
-            uri=URL("storage://path/to/dir"),
-            dst_path=PurePath("/container/path"),
-            read_only=True,
-        )
-        volume2 = ContainerVolume(
-            uri=URL("storage://testuser/path/to/dir2"),
-            dst_path=PurePath("/container/path2"),
-            read_only=True,
-        )
-        volume3 = ContainerVolume(
-            uri=URL("storage://test-cluster/testuser/path/to/dir3"),
-            dst_path=PurePath("/container/path3"),
-            read_only=True,
-        )
-        volume4 = ContainerVolume(
-            uri=URL(""),
-            dst_path=PurePath("/container/path4"),
-            read_only=True,
-        )
-        job.request.container.volumes.extend([volume1, volume2, volume3, volume4])
-
-        storage = RedisJobsStorage(client=redis_client)
-        async with storage.try_create_job(job):
-            pass
-
-        original_job = await storage.get_job(job.id)
-        assert original_job.request.container.volumes == [
-            volume1,
-            volume2,
-            volume3,
-            volume4,
-        ]
-
-        assert await storage.migrate()
-
-        migrated_job = await storage.get_job(job.id)
-        migrated_volume1 = ContainerVolume(
-            uri=URL("storage://test-cluster/path/to/dir"),
-            dst_path=PurePath("/container/path"),
-            read_only=True,
-        )
-        migrated_volume2 = ContainerVolume(
-            uri=URL("storage://test-cluster/testuser/path/to/dir2"),
-            dst_path=PurePath("/container/path2"),
-            read_only=True,
-        )
-        assert migrated_job.request.container.volumes == [
-            migrated_volume1,
-            migrated_volume2,
-            volume3,
-            volume4,
-        ]
-
-        assert not await storage.migrate()
-
-    def test_migrate_storage_uri(self) -> None:
-        convert = RedisJobsStorage._migrate_storage_uri
-        assert convert(URL("storage://alice"), "test-cluster") == URL(
-            "storage://test-cluster/alice"
-        )
-        assert convert(URL("storage://bob/data"), "test-cluster") == URL(
-            "storage://test-cluster/bob/data"
-        )
-        assert convert(URL("storage://"), "test-cluster") == URL(
-            "storage://test-cluster/"
-        )
-        assert convert(URL("storage:"), "test-cluster") == URL(
-            "storage://test-cluster/"
-        )
-        with pytest.raises(AssertionError):
-            convert(URL("storage://test-cluster/alice"), "test-cluster")
-        with pytest.raises(AssertionError):
-            convert(URL("image://alice"), "test-cluster")
 
     @pytest.mark.asyncio
     async def test_get_aggregated_run_time_for_user(self, storage: JobsStorage) -> None:
@@ -1830,80 +1597,13 @@ class TestJobsStorage:
         return jobs
 
     @pytest.mark.asyncio
-    async def test_data_migration_from_redis_to_postgres(
-        self, redis_config: RedisConfig, redis_client: aioredis.Redis, postgres_dsn: str
-    ) -> None:
-        # Load data to redis
-        redis_storage = RedisJobsStorage(redis_client)
-        some_jobs = await self.prepare_jobs_for_data_migration(
-            redis_storage, include_bad_utf8=True
-        )
-
-        # Setup postgres and run migrations
+    async def test_data_migration_rename_as_deleted(self, postgres_dsn: str) -> None:
         postgres_config = PostgresConfig(
             postgres_dsn=postgres_dsn,
-            alembic=EnvironConfigFactory().create_alembic(
-                postgres_dsn, redis_config.uri
-            ),
+            alembic=EnvironConfigFactory().create_alembic(postgres_dsn),
         )
         migration_runner = MigrationRunner(postgres_config)
-        await migration_runner.upgrade()
-
-        try:
-            # Check that postgres contains same data
-            async with create_postgres_pool(postgres_config) as pool:
-                postgres_storage = PostgresJobsStorage(pool)
-                jobs_in_postgres = []
-                async for job in postgres_storage.iter_all_jobs():
-                    jobs_in_postgres.append(job)
-                self.check_same_job_sets(some_jobs, jobs_in_postgres)
-        finally:
-            # Downgrade
-            await migration_runner.downgrade()
-
-    @pytest.mark.asyncio
-    async def test_data_migration_from_postgres_to_redis(
-        self, redis_config: RedisConfig, redis_client: aioredis.Redis, postgres_dsn: str
-    ) -> None:
-
-        # Setup postgres and run migrations
-        postgres_config = PostgresConfig(
-            postgres_dsn=postgres_dsn,
-            alembic=EnvironConfigFactory().create_alembic(
-                postgres_dsn, redis_config.uri
-            ),
-        )
-        migration_runner = MigrationRunner(postgres_config)
-        await migration_runner.upgrade()
-
-        try:
-            # Load data to postges
-            async with create_postgres_pool(postgres_config) as pool:
-                postgres_storage = PostgresJobsStorage(pool)
-                some_jobs = await self.prepare_jobs_for_data_migration(postgres_storage)
-        finally:
-            # Downgrade
-            await migration_runner.downgrade()
-
-        # Check that redis contains same data
-        redis_storage = RedisJobsStorage(redis_client)
-        jobs_in_redis = []
-        async for job in redis_storage.iter_all_jobs():
-            jobs_in_redis.append(job)
-        self.check_same_job_sets(some_jobs, jobs_in_redis)
-
-    @pytest.mark.asyncio
-    async def test_data_migration_rename_as_deleted(
-        self, redis_config: RedisConfig, postgres_dsn: str
-    ) -> None:
-        postgres_config = PostgresConfig(
-            postgres_dsn=postgres_dsn,
-            alembic=EnvironConfigFactory().create_alembic(
-                postgres_dsn, redis_config.uri
-            ),
-        )
-        migration_runner = MigrationRunner(postgres_config)
-        await migration_runner.upgrade("81675d81a9c7")
+        await migration_runner.upgrade("eaa33ba10d63")
 
         job_not_delete = self._create_failed_job(
             owner="user3", cluster_name="my-cluster", materialized=True

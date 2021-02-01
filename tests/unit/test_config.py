@@ -217,8 +217,6 @@ class TestEnvironConfigFactory:
         assert cluster.orchestrator.node_label_gpu is None
         assert cluster.orchestrator.node_label_preemptible is None
 
-        assert config.database.redis is None
-
         assert config.env_prefix == "NP"
 
         assert config.auth.server_endpoint_url == URL("https://auth")
@@ -246,7 +244,6 @@ class TestEnvironConfigFactory:
             "NP_AUTH_URL": "https://auth",
             "NP_AUTH_TOKEN": "token",
             "NP_API_URL": "https://neu.ro/api/v1",
-            "NP_ADMIN_URL": "https://neu.ro/apis/admin/v1",
             "NP_ADMIN_URL": "https://neu.ro/apis/admin/v1",
             "NP_PLATFORM_CONFIG_URI": "http://platformconfig:8080/api/v1",
             "NP_JOBS_INGRESS_OAUTH_AUTHORIZE_URL": "http://neu.ro/oauth/authorize",
@@ -276,10 +273,6 @@ class TestEnvironConfigFactory:
             "NP_K8S_JOBS_INGRESS_HTTPS": "True",
             "NP_K8S_JOBS_INGRESS_DOMAIN_NAME_TEMPLATE": "{job_id}.jobs.domain",
             "NP_K8S_JOB_DELETION_DELAY": "3600",
-            "NP_DB_REDIS_URI": "redis://localhost:6379/0",
-            "NP_DB_REDIS_CONN_POOL_SIZE": "444",
-            "NP_DB_REDIS_CONN_TIMEOUT": "555",
-            "NP_DB_POSTGRES_ENABLED": "true",
             "NP_DB_POSTGRES_DSN": "postgresql://postgres@localhost:5432/postgres",
             "NP_DB_POSTGRES_POOL_MIN": "50",
             "NP_DB_POSTGRES_POOL_MAX": "500",
@@ -366,13 +359,6 @@ class TestEnvironConfigFactory:
         ]
         assert cluster.orchestrator.node_label_gpu == "testlabel"
         assert cluster.orchestrator.node_label_preemptible == "testpreempt"
-
-        assert config.database.postgres_enabled
-
-        assert config.database.redis is not None
-        assert config.database.redis.uri == "redis://localhost:6379/0"
-        assert config.database.redis.conn_pool_size == 444
-        assert config.database.redis.conn_timeout_s == 555.0
 
         assert config.database.postgres is not None
         assert (
