@@ -141,7 +141,7 @@ def _validate_unique_volume_paths(
     for volume in volumes:
         path = volume["dst_path"]
         if path in paths:
-            return t.DataError(
+            raise t.DataError(
                 "destination path '{path}' was encountered multiple times".format(
                     path=path
                 )
