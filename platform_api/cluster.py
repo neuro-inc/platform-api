@@ -7,15 +7,22 @@ from typing import (
     AsyncIterator,
     Callable,
     Dict,
+    List,
     Optional,
     Sequence,
 )
 
+import asyncpgsa
+import sqlalchemy as sa
+import sqlalchemy.sql as sasql
 from aiorwlock import RWLock
 from async_generator import asynccontextmanager
+from asyncpg.pool import Pool
 
 from .circuit_breaker import CircuitBreaker
 from .cluster_config import ClusterConfig
+from .config import Config
+from .config_client import ConfigClient
 from .orchestrator.base import Orchestrator
 
 
@@ -129,6 +136,117 @@ class ClusterRegistryRecord:
             self._breaker.register_success()
 
 
+class ClusterUpdateNotifier:
+    def __init__(self, pool: Pool) -> None:
+        self._pool = pool
+        self._channel = "cluster_update_required"
+
+    # Database helpers
+
+    async def _execute(self, query: sasql.ClauseElement) -> str:
+        query_string, params = asyncpgsa.compile_query(query)
+        return await self._pool.execute(query_string, *params)
+
+    async def notify_cluster_update(self) -> None:
+        logger.info(f"Notifying channel {self._channel!r}")
+        query = sa.text(f"NOTIFY {self._channel}")
+        await self._execute(query)
+
+    @asynccontextmanager
+    async def listen_to_cluster_update(
+        self, listener: Callable[[], None]
+    ) -> AsyncIterator[None]:
+        def _listener(*args: Any) -> None:
+            listener()
+
+        async with self._pool.acquire() as conn:
+            logger.info(f"Subscribing to channel {self._channel!r}")
+            await conn.add_listener(self._channel, _listener)
+            try:
+                yield
+            finally:
+                logger.info(f"Unsubscribing from channel {self._channel!r}")
+                await conn.remove_listener(self._channel, _listener)
+
+
+async def get_cluster_configs(
+    config: Config, config_client: ConfigClient
+) -> Sequence[ClusterConfig]:
+    return await config_client.get_clusters(
+        jobs_ingress_class=config.jobs.jobs_ingress_class,
+        jobs_ingress_oauth_url=config.jobs.jobs_ingress_oauth_url,
+        registry_username=config.auth.service_name,
+        registry_password=config.auth.service_token,
+    )
+
+
+class ClusterUpdater:
+    def __init__(
+        self,
+        notifier: ClusterUpdateNotifier,
+        cluster_registry: "ClusterRegistry",
+        config: Config,
+        config_client: ConfigClient,
+    ):
+        self._loop = asyncio.get_event_loop()
+        self._notifier = notifier
+        self._cluster_registry = cluster_registry
+        self._config = config
+        self._config_client = config_client
+
+        self._is_active: Optional[asyncio.Future[None]] = None
+        self._task: Optional[asyncio.Future[None]] = None
+
+    async def start(self) -> None:
+        logger.info("Starting Cluster Updater")
+        await self._init_task()
+
+    async def __aenter__(self) -> "ClusterUpdater":
+        await self.start()
+        return self
+
+    async def __aexit__(self, *args: Any) -> None:
+        await self.stop()
+
+    async def _init_task(self) -> None:
+        assert not self._is_active
+        assert not self._task
+
+        self._is_active = self._loop.create_future()
+        self._task = asyncio.ensure_future(self._run())
+        # forcing execution of the newly created task
+        await asyncio.sleep(0)
+
+    async def stop(self) -> None:
+        logger.info("Stopping Cluster Updater")
+        assert self._is_active is not None
+        self._is_active.set_result(None)
+
+        assert self._task
+        await self._task
+
+        self._task = None
+        self._is_active = None
+
+    async def _run(self) -> None:
+        assert self._is_active is not None
+
+        def _listener() -> None:
+            self._loop.create_task(self._do_update())
+
+        async with self._notifier.listen_to_cluster_update(_listener):
+            await self._is_active
+
+    async def _do_update(self) -> None:
+        cluster_configs = await get_cluster_configs(self._config, self._config_client)
+        cluster_registry = self._cluster_registry
+        [
+            await cluster_registry.replace(cluster_config)
+            for cluster_config in cluster_configs
+        ]
+        await cluster_registry.cleanup(cluster_configs)
+
+
 class ClusterRegistry:
     def __init__(self, *, factory: ClusterFactory) -> None:
         self._factory = factory
@@ -146,11 +264,15 @@ class ClusterRegistry:
             raise ClusterNotFound.create(name)
         return record
 
+    @property
+    def cluster_names(self) -> List[str]:
+        return list(self._records)
+
     async def __aenter__(self) -> "ClusterRegistry":
         return self
 
     async def __aexit__(self, *args: Any) -> None:
-        for name in list(self._records):
+        for name in self.cluster_names:
             await self.remove(name)
 
     async def replace(
