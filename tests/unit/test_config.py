@@ -153,7 +153,9 @@ class TestEnvironConfigFactory:
             "NP_K8S_JOBS_INGRESS_DOMAIN_NAME_TEMPLATE": "{job_id}.jobs.domain",
             "NP_AUTH_URL": "https://auth",
             "NP_AUTH_TOKEN": "token",
-            "NP_OAUTH_BASE_URL": "https://oauth",
+            "NP_OAUTH_AUTH_URL": "https://oauth-auth",
+            "NP_OAUTH_TOKEN_URL": "https://oauth-token",
+            "NP_OAUTH_LOGOUT_URL": "https://oauth-logout",
             "NP_OAUTH_CLIENT_ID": "oauth_client_id",
             "NP_OAUTH_AUDIENCE": "https://platform-url",
             "NP_OAUTH_SUCCESS_REDIRECT_URL": "https://platform-default-url",
@@ -224,7 +226,9 @@ class TestEnvironConfigFactory:
         assert config.auth.service_name == "compute"
 
         assert config.oauth is not None
-        assert config.oauth.base_url == URL("https://oauth")
+        assert config.oauth.auth_url == URL("https://oauth-auth")
+        assert config.oauth.token_url == URL("https://oauth-token")
+        assert config.oauth.logout_url == URL("https://oauth-logout")
         assert config.oauth.client_id == "oauth_client_id"
         assert config.oauth.audience == "https://platform-url"
         assert config.oauth.success_redirect_url == URL("https://platform-default-url")

@@ -7,7 +7,9 @@ NP_AUTH_PUBLIC_URL: https://dev.neu.ro/api/v1/users
 NP_JOBS_INGRESS_OAUTH_AUTHORIZE_URL: https://dev.neu.ro/oauth/authorize
 NP_REGISTRY_HOST: registry-dev.neu.ro
 NP_GKE_GPU_MODELS: nvidia-tesla-k80,nvidia-tesla-p4,nvidia-tesla-v100
-NP_OAUTH_BASE_URL: https://login-dev.neu.ro
+NP_OAUTH_AUTH_URL: https://login-dev.neu.ro/authorize
+NP_OAUTH_TOKEN_URL: https://login-dev.neu.ro/oauth/token
+NP_OAUTH_LOGOUT_URL: https://login-dev.neu.ro/v2/logout
 NP_OAUTH_CLIENT_ID: V7Jz87W9lhIlo0MyD0O6dufBvcXwM4DR
 NP_OAUTH_AUDIENCE: https://platform.dev.neuromation.io
 NP_OAUTH_SUCCESS_REDIRECT_URL: https://dev.neu.ro/oauth/login
