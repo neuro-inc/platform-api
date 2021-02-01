@@ -543,6 +543,21 @@ class TestJobsService:
         assert status_item.reason == "Test failure"
 
     @pytest.mark.asyncio
+    async def test_set_materialized_by_job_id(
+        self, jobs_service: JobsService, mock_job_request: JobRequest
+    ) -> None:
+        user = User(cluster_name="test-cluster", name="testuser", token="")
+        job, _ = await jobs_service.create_job(job_request=mock_job_request, user=user)
+
+        await jobs_service.set_job_materialized(job.id, True)
+        job = await jobs_service.get_job(job.id)
+        assert job.materialized
+
+        await jobs_service.set_job_materialized(job.id, False)
+        job = await jobs_service.get_job(job.id)
+        assert not job.materialized
+
+    @pytest.mark.asyncio
     async def test_get_all(
         self, jobs_service: JobsService, job_request_factory: Callable[[], JobRequest]
     ) -> None:

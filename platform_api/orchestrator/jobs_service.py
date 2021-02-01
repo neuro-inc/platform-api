@@ -637,6 +637,10 @@ class JobsService:
                     status_item.status.name,
                 )
 
+    async def set_job_materialized(self, job_id: str, materialized: bool) -> None:
+        async with self._update_job_in_storage(job_id) as record:
+            record.materialized = materialized
+
     async def _get_cluster_job(self, record: JobRecord) -> Job:
         try:
             async with self._get_cluster(
