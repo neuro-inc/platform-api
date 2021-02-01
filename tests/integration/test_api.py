@@ -1,3 +1,4 @@
+import asyncio
 import json
 from typing import (
     Any,
@@ -28,6 +29,7 @@ from aiohttp.web_exceptions import HTTPCreated, HTTPNotFound
 from neuro_auth_client import Cluster as AuthCluster, Permission, Quota
 from yarl import URL
 
+from platform_api.cluster import ClusterRegistry
 from platform_api.config import Config
 from platform_api.orchestrator.jobs_service import NEURO_PASSED_CONFIG
 from tests.conftest import random_str
@@ -185,23 +187,34 @@ class TestApi:
         cluster_configs_payload: List[Dict[str, Any]],
         cluster_user: _User,
     ) -> None:
-        # pass config with 1 cluster
-        # record count doesnt't change, because there's a default cluster
-        # which gets deleted
+        cluster_registry: ClusterRegistry = api.runner._app["api_v1_app"][
+            "jobs_service"
+        ]._cluster_registry
+
+        async def assert_cluster_names(names: List[str]) -> None:
+            async def _loop() -> None:
+                while names != cluster_registry.cluster_names:
+                    await asyncio.sleep(0.1)
+
+            try:
+                await asyncio.wait_for(_loop(), timeout=5)
+            except asyncio.TimeoutError:
+                assert names == cluster_registry.cluster_names
+
         async with create_config_api(cluster_configs_payload):
             url = api.clusters_sync_url
-            async with client.post(url, headers=cluster_user.headers) as resp:
-                assert resp.status == HTTPOk.status_code, await resp.text()
-                result = await resp.json()
-                assert result == {"old_record_count": 2, "new_record_count": 1}
+            async with client.post(url, headers=cluster_user.headers):
+                pass
+
+            await assert_cluster_names(["cluster_name"])
 
         # pass empty cluster config - all clusters should be deleted
         async with create_config_api([]):
             url = api.clusters_sync_url
-            async with client.post(url, headers=cluster_user.headers) as resp:
-                assert resp.status == HTTPOk.status_code, await resp.text()
-                result = await resp.json()
-                assert result == {"old_record_count": 1, "new_record_count": 0}
+            async with client.post(url, headers=cluster_user.headers):
+                pass
+
+            await assert_cluster_names([])
 
     @pytest.mark.asyncio
     async def test_config(
@@ -3890,6 +3903,26 @@ class TestJobs:
             assert response.status == HTTPBadRequest.status_code, await response.text()
 
     @pytest.mark.asyncio
+    async def test_set_job_status_bad_transition(
+        self,
+        api: ApiConfig,
+        client: aiohttp.ClientSession,
+        job_submit: Dict[str, Any],
+        jobs_client: JobsClient,
+        run_job: Callable[..., Awaitable[str]],
+        regular_user: _User,
+        compute_user: _User,
+    ) -> None:
+        job_id = await run_job(regular_user, job_submit, do_wait=False)
+        await jobs_client.long_polling_by_job_id(job_id, "succeeded")
+
+        url = api.generate_job_url(job_id) + "/status"
+        headers = compute_user.headers
+        payload = {"status": "running"}
+        async with client.put(url, headers=headers, json=payload) as response:
+            assert response.status == HTTPBadRequest.status_code, await response.text()
+
+    @pytest.mark.asyncio
     async def test_set_job_status_unprivileged(
         self,
         api: ApiConfig,
@@ -3910,6 +3943,39 @@ class TestJobs:
             assert result == {
                 "missing": [{"uri": f"job://{cluster_name}", "action": "manage"}]
             }
+
+    @pytest.mark.asyncio
+    async def test_set_job_materialized(
+        self,
+        api: ApiConfig,
+        client: aiohttp.ClientSession,
+        job_submit: Dict[str, Any],
+        jobs_client: JobsClient,
+        run_job: Callable[..., Awaitable[str]],
+        regular_user: _User,
+        compute_user: _User,
+    ) -> None:
+        job_id = await run_job(regular_user, job_submit, do_wait=False)
+        await jobs_client.long_polling_by_job_id(job_id, "succeeded")
+
+        url = api.generate_job_url(job_id) + "/materialized"
+        headers = compute_user.headers
+        payload = {"materialized": True}
+        result = await jobs_client.get_job_by_id(job_id)
+        assert not result["materialized"]
+
+        # The poller will unmaterialize our job, so we have to do check in loop
+
+        async def _try_check() -> None:
+            ok = False
+            while not ok:
+                async with client.put(url, headers=headers, json=payload):
+                    pass
+
+                result = await jobs_client.get_job_by_id(job_id)
+                ok = result["materialized"]
+
+        await asyncio.wait_for(_try_check(), timeout=5)
 
     @pytest.mark.asyncio
     async def test_delete_job(
@@ -4142,6 +4208,14 @@ class TestJobs:
                 "cluster_name": "test-cluster",
                 "internal_hostname": f"{job_id}.platformapi-tests",
                 "status": "pending",
+                "statuses": [
+                    {
+                        "status": "pending",
+                        "reason": "Creating",
+                        "description": None,
+                        "transition_time": mock.ANY,
+                    }
+                ],
                 "history": {
                     "status": "pending",
                     "reason": "Creating",
@@ -4168,6 +4242,7 @@ class TestJobs:
                 "preemptible_node": False,
                 "is_preemptible": True,
                 "is_preemptible_node_required": False,
+                "materialized": False,
                 "pass_config": False,
                 "uri": f"job://test-cluster/{regular_user.name}/{job_id}",
                 "restart_policy": "never",
@@ -4184,6 +4259,7 @@ class TestJobs:
             "cluster_name": "test-cluster",
             "internal_hostname": f"{job_id}.platformapi-tests",
             "status": "succeeded",
+            "statuses": mock.ANY,
             "history": {
                 "status": "succeeded",
                 "reason": None,
@@ -4213,6 +4289,7 @@ class TestJobs:
             "preemptible_node": False,
             "is_preemptible": True,
             "is_preemptible_node_required": False,
+            "materialized": mock.ANY,
             "pass_config": False,
             "uri": f"job://test-cluster/{regular_user.name}/{job_id}",
             "restart_policy": "never",
@@ -4268,6 +4345,7 @@ class TestJobs:
             "owner": regular_user.name,
             "cluster_name": "test-cluster",
             "status": "failed",
+            "statuses": mock.ANY,
             "internal_hostname": f"{job_id}.platformapi-tests",
             "history": {
                 "status": "failed",
@@ -4304,6 +4382,7 @@ class TestJobs:
             "preemptible_node": False,
             "is_preemptible": False,
             "is_preemptible_node_required": False,
+            "materialized": mock.ANY,
             "pass_config": False,
             "uri": f"job://test-cluster/{regular_user.name}/{job_id}",
             "restart_policy": "never",
@@ -4376,6 +4455,14 @@ class TestJobs:
                 "cluster_name": "test-cluster",
                 "internal_hostname": f"{job_id}.platformapi-tests",
                 "status": "pending",
+                "statuses": [
+                    {
+                        "status": "pending",
+                        "reason": "Creating",
+                        "description": None,
+                        "transition_time": mock.ANY,
+                    }
+                ],
                 "history": {
                     "status": "pending",
                     "reason": "Creating",
@@ -4400,6 +4487,7 @@ class TestJobs:
                 "preemptible_node": False,
                 "is_preemptible": False,
                 "is_preemptible_node_required": False,
+                "materialized": False,
                 "pass_config": False,
                 "uri": f"job://test-cluster/{regular_user.name}/{job_id}",
                 "restart_policy": "never",
@@ -4467,6 +4555,14 @@ class TestJobs:
                 "cluster_name": "test-cluster",
                 "internal_hostname": f"{job_id}.platformapi-tests",
                 "status": "pending",
+                "statuses": [
+                    {
+                        "status": "pending",
+                        "reason": "Creating",
+                        "description": None,
+                        "transition_time": mock.ANY,
+                    }
+                ],
                 "history": {
                     "status": "pending",
                     "reason": "Creating",
@@ -4490,6 +4586,7 @@ class TestJobs:
                 "preemptible_node": False,
                 "is_preemptible": False,
                 "is_preemptible_node_required": False,
+                "materialized": False,
                 "pass_config": False,
                 "uri": f"job://test-cluster/{regular_user.name}/{job_id}",
                 "restart_policy": "never",

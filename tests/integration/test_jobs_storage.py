@@ -132,15 +132,15 @@ class TestJobsStorage:
             async with storage.try_create_job(job) as first_job:
                 # value in orchestrator: PENDING, value in db: None
                 assert first_job.status == JobStatus.PENDING
-                first_job.status = JobStatus.SUCCEEDED
+                first_job.status = JobStatus.RUNNING
                 # value in orchestrator: SUCCEEDED, value in db: None
 
                 # process-2
                 with not_raises(JobStorageTransactionError):
                     async with storage.try_create_job(job) as second_job:
                         # value in orchestrator: succeeded, value in db: None
-                        assert second_job.status == JobStatus.SUCCEEDED
-                        second_job.status = JobStatus.RUNNING
+                        assert second_job.status == JobStatus.RUNNING
+                        second_job.status = JobStatus.SUCCEEDED
                         # value in orchestrator: FAILED, value in db: None
                         # now status FAILED is written into the db by process-2
 
@@ -150,7 +150,7 @@ class TestJobsStorage:
                 # by process-1 and deletes the newly created by process-1 job.
 
         result_job = await storage.get_job(job.id)
-        assert result_job.status == JobStatus.RUNNING
+        assert result_job.status == JobStatus.SUCCEEDED
 
     @pytest.mark.asyncio
     async def test_try_create_job__different_name_same_owner__ok(

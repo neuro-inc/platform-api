@@ -231,12 +231,24 @@ def create_job_response_validator() -> t.Trafaret:
             # `status` is left for backward compat. the python client/cli still
             # relies on it.
             "status": create_job_status_validator(),
+            "statuses": t.List(
+                t.Dict(
+                    {
+                        "status": create_job_status_validator(),
+                        "transition_time": t.String,
+                        "reason": t.String(allow_blank=True) | t.Null,
+                        "description": t.String(allow_blank=True) | t.Null,
+                        t.Key("exit_code", optional=True): t.Int | t.Null,
+                    }
+                )
+            ),
             t.Key("http_url", optional=True): t.String,
             t.Key("http_url_named", optional=True): t.String,
             "history": create_job_history_validator(),
             "container": create_container_response_validator(),
             "scheduler_enabled": t.Bool,
             "preemptible_node": t.Bool,
+            "materialized": t.Bool,
             t.Key("is_preemptible", optional=True): t.Bool,
             t.Key("is_preemptible_node_required", optional=True): t.Bool,
             "pass_config": t.Bool,
@@ -261,6 +273,14 @@ def create_job_set_status_validator() -> t.Trafaret:
             t.Key("reason", optional=True): t.String | t.Null,
             t.Key("description", optional=True): t.String | t.Null,
             t.Key("exit_code", optional=True): t.Int | t.Null,
+        }
+    )
+
+
+def create_job_set_materialized_validator() -> t.Trafaret:
+    return t.Dict(
+        {
+            "materialized": t.Bool,
         }
     )
 
@@ -371,6 +391,7 @@ def convert_job_to_job_response(job: Job) -> Dict[str, Any]:
         "owner": job.owner,
         "cluster_name": job.cluster_name,
         "status": current_status.status,
+        "statuses": [item.to_primitive() for item in history.all],
         "history": {
             "status": current_status.status,
             "reason": current_status.reason,
@@ -390,6 +411,7 @@ def convert_job_to_job_response(job: Job) -> Dict[str, Any]:
         "uri": str(job.to_uri()),
         "restart_policy": str(job.restart_policy),
         "privileged": job.privileged,
+        "materialized": job.materialized,
     }
     if job.name:
         response_payload["name"] = job.name
@@ -459,6 +481,7 @@ class JobsHandler:
         self._job_filter_factory = JobFilterFactory()
         self._job_response_validator = create_job_response_validator()
         self._job_set_status_validator = create_job_set_status_validator()
+        self._job_set_materialized_validator = create_job_set_materialized_validator()
         self._bulk_jobs_response_validator = t.Dict(
             {"jobs": t.List(self._job_response_validator)}
         )
@@ -479,6 +502,7 @@ class JobsHandler:
                 aiohttp.web.delete("/{job_id}", self.handle_delete),
                 aiohttp.web.get("/{job_id}", self.handle_get),
                 aiohttp.web.put("/{job_id}/status", self.handle_put_status),
+                aiohttp.web.put("/{job_id}/materialized", self.handle_put_materialized),
             )
         )
 
@@ -777,6 +801,37 @@ class JobsHandler:
             payload = {"error": str(e)}
             return aiohttp.web.json_response(
                 payload, status=aiohttp.web.HTTPConflict.status_code
+            )
+        else:
+            raise aiohttp.web.HTTPNoContent()
+
+    async def handle_put_materialized(
+        self, request: aiohttp.web.Request
+    ) -> aiohttp.web.StreamResponse:
+        job_id = request.match_info["job_id"]
+        job = await self._jobs_service.get_job(job_id)
+
+        assert job.cluster_name
+        permission = Permission(uri=f"job://{job.cluster_name}", action="manage")
+        await check_permissions(request, [permission])
+
+        orig_payload = await request.json()
+        request_payload = self._job_set_materialized_validator.check(orig_payload)
+
+        try:
+            await self._jobs_service.set_job_materialized(
+                job_id=job_id,
+                materialized=request_payload["materialized"],
+            )
+        except JobStorageTransactionError as e:
+            payload = {"error": str(e)}
+            return aiohttp.web.json_response(
+                payload, status=aiohttp.web.HTTPConflict.status_code
+            )
+        except JobError as e:
+            payload = {"error": str(e)}
+            return aiohttp.web.json_response(
+                payload, status=aiohttp.web.HTTPBadRequest.status_code
             )
         else:
             raise aiohttp.web.HTTPNoContent()

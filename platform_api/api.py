@@ -24,7 +24,14 @@ from platform_api.orchestrator.job_policy_enforcer import (
     RuntimeLimitEnforcer,
 )
 
-from .cluster import Cluster, ClusterConfig, ClusterRegistry
+from .cluster import (
+    Cluster,
+    ClusterConfig,
+    ClusterRegistry,
+    ClusterUpdateNotifier,
+    ClusterUpdater,
+    get_cluster_configs,
+)
 from .config import Config, CORSConfig
 from .config_client import ConfigClient
 from .config_factory import EnvironConfigFactory
@@ -64,8 +71,8 @@ class ApiHandler:
         return self._app["jobs_service"]
 
     @property
-    def _config_client(self) -> ConfigClient:
-        return self._app["config_client"]
+    def _cluster_update_notifier(self) -> ClusterUpdateNotifier:
+        return self._app["cluster_update_notifier"]
 
     async def handle_ping(self, request: aiohttp.web.Request) -> aiohttp.web.Response:
         return aiohttp.web.Response()
@@ -78,20 +85,9 @@ class ApiHandler:
         logger.info("Checking whether %r has %r", user, permission)
         await check_permission(request, permission.action, [permission])
 
-        cluster_configs = await get_cluster_configs(self._config, self._config_client)
-        cluster_registry = self._jobs_service._cluster_registry
-        old_record_count = len(cluster_registry)
-        [
-            await cluster_registry.replace(cluster_config)
-            for cluster_config in cluster_configs
-        ]
-        await cluster_registry.cleanup(cluster_configs)
+        await self._cluster_update_notifier.notify_cluster_update()
 
-        new_record_count = len(cluster_registry)
-
-        return aiohttp.web.json_response(
-            {"old_record_count": old_record_count, "new_record_count": new_record_count}
-        )
+        return aiohttp.web.Response(text="OK")
 
     async def handle_config(self, request: aiohttp.web.Request) -> aiohttp.web.Response:
         data: Dict[str, Any] = {}
@@ -308,7 +304,6 @@ async def create_app(
                     trace_config=trace_config,
                 )
             )
-            app["api_v1_app"]["config_client"] = config_client
 
             if clusters:
                 client_clusters = clusters
@@ -327,6 +322,9 @@ async def create_app(
             logger.info("Initializing JobsStorage")
             jobs_storage: JobsStorage = PostgresJobsStorage(postgres_pool)
 
+            cluster_update_notifier = ClusterUpdateNotifier(postgres_pool)
+            app["api_v1_app"]["cluster_update_notifier"] = cluster_update_notifier
+
             logger.info("Initializing JobsService")
             jobs_service = JobsService(
                 cluster_registry=cluster_registry,
@@ -341,6 +339,15 @@ async def create_app(
             logger.info("Initializing JobsPoller")
             jobs_poller = JobsPoller(jobs_service=jobs_service)
             await exit_stack.enter_async_context(jobs_poller)
+
+            logger.info("Initializing ClusterUpdater")
+            cluster_updater = ClusterUpdater(
+                notifier=cluster_update_notifier,
+                config=config,
+                config_client=config_client,
+                cluster_registry=cluster_registry,
+            )
+            await exit_stack.enter_async_context(cluster_updater)
 
             app["api_v1_app"]["jobs_service"] = jobs_service
             app["jobs_app"]["jobs_service"] = jobs_service
@@ -408,17 +415,6 @@ def _setup_cors(app: aiohttp.web.Application, config: CORSConfig) -> None:
     for route in app.router.routes():
         logger.debug(f"Setting up CORS for {route}")
         cors.add(route)
-
-
-async def get_cluster_configs(
-    config: Config, config_client: ConfigClient
-) -> Sequence[ClusterConfig]:
-    return await config_client.get_clusters(
-        jobs_ingress_class=config.jobs.jobs_ingress_class,
-        jobs_ingress_oauth_url=config.jobs.jobs_ingress_oauth_url,
-        registry_username=config.auth.service_name,
-        registry_password=config.auth.service_token,
-    )
 
 
 def main() -> None:

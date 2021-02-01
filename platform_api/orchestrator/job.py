@@ -12,7 +12,7 @@ from yarl import URL
 
 from platform_api.cluster_config import OrchestratorConfig, StorageConfig
 
-from .job_request import ContainerResources, JobRequest, JobStatus
+from .job_request import ContainerResources, JobError, JobRequest, JobStatus
 
 
 # For named jobs, their hostname is of the form of
@@ -173,6 +173,8 @@ class JobStatusHistory:
 
     @current.setter
     def current(self, item: JobStatusItem) -> None:
+        if self.last.is_finished:
+            raise JobError("Invalid job status transition")
         if self.last != item:
             self._items.append(item)
 
