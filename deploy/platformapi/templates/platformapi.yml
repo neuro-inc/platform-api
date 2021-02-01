@@ -64,8 +64,12 @@ spec:
 {{- if .Values.platform.token }}
 {{ toYaml .Values.platform.token | indent 10 }}
 {{- end }}
-        - name: NP_OAUTH_BASE_URL
-          value: "{{ .Values.NP_OAUTH_BASE_URL }}"
+        - name: NP_OAUTH_AUTH_URL
+          value: {{ .Values.NP_OAUTH_AUTH_URL | quote }}
+        - name: NP_OAUTH_TOKEN_URL
+          value: {{ .Values.NP_OAUTH_TOKEN_URL | quote }}
+        - name: NP_OAUTH_LOGOUT_URL
+          value: {{ .Values.NP_OAUTH_LOGOUT_URL | quote }}
         - name: NP_OAUTH_CLIENT_ID
           value: "{{ .Values.NP_OAUTH_CLIENT_ID }}"
         - name: NP_OAUTH_AUDIENCE
