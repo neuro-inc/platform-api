@@ -8,7 +8,9 @@ NP_JOBS_INGRESS_OAUTH_AUTHORIZE_URL:
 NP_DB_REDIS_URI:
 NP_REGISTRY_HOST: 'none'
 NP_GKE_GPU_MODELS:
-NP_OAUTH_BASE_URL:
+NP_OAUTH_AUTH_URL:
+NP_OAUTH_TOKEN_URL:
+NP_OAUTH_LOGOUT_URL:
 NP_OAUTH_CLIENT_ID:
 NP_OAUTH_AUDIENCE:
 NP_OAUTH_SUCCESS_REDIRECT_URL:
@@ -28,6 +30,12 @@ image:
 imagePullSecrets: []
 
 replicas: 1
+
+strategy:
+  type: RollingUpdate
+  rollingUpdate:
+    maxSurge: 1
+    maxUnavailable: 0
 
 platform:
   token: {}

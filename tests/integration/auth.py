@@ -255,7 +255,9 @@ def compute_user(token_factory: Callable[[str], str]) -> _User:
 @pytest.fixture
 def oauth_config_dev() -> OAuthConfig:
     return OAuthConfig(
-        base_url=URL("https://platform-auth0-url"),
+        auth_url=URL("https://platform-auth0-url/auth"),
+        token_url=URL("https://platform-auth0-url/token"),
+        logout_url=URL("https://platform-auth0-url/logout"),
         client_id="client_id",
         audience="https://platform-dev-url",
         headless_callback_url=URL("https://dev.neu.ro/oauth/show-code"),

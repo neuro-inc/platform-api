@@ -6,7 +6,9 @@ NP_JOBS_INGRESS_OAUTH_AUTHORIZE_URL: https://staging.neu.ro/oauth/authorize
 NP_DB_REDIS_URI: redis://staging-redis-redis.weetmn.ng.0001.use1.cache.amazonaws.com:6379/1
 NP_REGISTRY_HOST: registry-staging.neu.ro
 NP_GKE_GPU_MODELS: nvidia-tesla-k80,nvidia-tesla-p4,nvidia-tesla-v100
-NP_OAUTH_BASE_URL: https://login.neu.ro
+NP_OAUTH_AUTH_URL: https://login.neu.ro/authorize
+NP_OAUTH_TOKEN_URL: https://login.neu.ro/oauth/token
+NP_OAUTH_LOGOUT_URL: https://login.neu.ro/v2/logout
 NP_OAUTH_CLIENT_ID: uJV0pm5JPdHkXsSd525rlhFDVcEuUnaV
 NP_OAUTH_AUDIENCE: https://platform.staging.neuromation.io
 NP_OAUTH_SUCCESS_REDIRECT_URL: https://staging.neu.ro/oauth/login

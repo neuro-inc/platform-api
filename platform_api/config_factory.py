@@ -270,13 +270,17 @@ class EnvironConfigFactory:
         return ZipkinConfig(url=url, sample_rate=sample_rate)
 
     def try_create_oauth(self) -> Optional[OAuthConfig]:
-        base_url = self._environ.get("NP_OAUTH_BASE_URL")
+        auth_url = self._environ.get("NP_OAUTH_AUTH_URL")
+        token_url = self._environ.get("NP_OAUTH_TOKEN_URL")
+        logout_url = self._environ.get("NP_OAUTH_LOGOUT_URL")
         client_id = self._environ.get("NP_OAUTH_CLIENT_ID")
         audience = self._environ.get("NP_OAUTH_AUDIENCE")
         success_redirect_url = self._environ.get("NP_OAUTH_SUCCESS_REDIRECT_URL")
         headless_callback_url = self._environ["NP_OAUTH_HEADLESS_CALLBACK_URL"]
         if not (
-            base_url
+            auth_url
+            and token_url
+            and logout_url
             and client_id
             and audience
             and success_redirect_url
@@ -284,7 +288,9 @@ class EnvironConfigFactory:
         ):
             return None
         return OAuthConfig(
-            base_url=URL(base_url),
+            auth_url=URL(auth_url),
+            token_url=URL(token_url),
+            logout_url=URL(logout_url),
             client_id=client_id,
             audience=audience,
             headless_callback_url=URL(headless_callback_url),

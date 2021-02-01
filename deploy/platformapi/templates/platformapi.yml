@@ -7,11 +7,9 @@ spec:
   selector:
     matchLabels:
       service: platformapi
-  strategy:
-    rollingUpdate:
-      maxSurge: 1
-      maxUnavailable: 0
-    type: RollingUpdate
+  {{- if .Values.strategy }}
+  strategy: {{ toYaml .Values.strategy | nindent 4 }}
+  {{- end }}
   template:
     metadata:
       labels:

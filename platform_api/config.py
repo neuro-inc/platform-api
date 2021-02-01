@@ -30,10 +30,12 @@ class AuthConfig:
 
 @dataclass(frozen=True)
 class OAuthConfig:
-    base_url: URL
     client_id: str = field(repr=False)
     audience: str = field(repr=False)
     headless_callback_url: URL
+    auth_url: URL
+    token_url: URL
+    logout_url: URL
 
     callback_urls: Sequence[URL] = (
         URL("http://127.0.0.1:54540"),
@@ -42,18 +44,6 @@ class OAuthConfig:
     )
 
     success_redirect_url: Optional[URL] = None
-
-    @property
-    def auth_url(self) -> URL:
-        return self.base_url / "authorize"
-
-    @property
-    def token_url(self) -> URL:
-        return self.base_url / "oauth/token"
-
-    @property
-    def logout_url(self) -> URL:
-        return self.base_url / "v2/logout"
 
 
 @dataclass(frozen=True)
