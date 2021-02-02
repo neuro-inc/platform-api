@@ -47,10 +47,7 @@ from .orchestrator.jobs_service import (
     JobsService,
     JobsServiceException,
 )
-from .orchestrator.jobs_storage import (
-    JobsStorage,
-    PostgresJobsStorage,
-)
+from .orchestrator.jobs_storage import JobsStorage, PostgresJobsStorage
 from .postgres import create_postgres_pool
 from .resource import Preset
 from .trace import store_span_middleware
