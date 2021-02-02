@@ -5,7 +5,7 @@ import pytest
 
 from platform_api.orchestrator.job_request import JobRequest, JobStatus
 from platform_api.orchestrator.jobs_poller import JobsPoller
-from platform_api.orchestrator.jobs_service import JobsService
+from platform_api.orchestrator.jobs_service import JobsPollerService, JobsService
 from platform_api.user import User
 
 from .conftest import MockOrchestrator
@@ -25,8 +25,10 @@ class TestJobsPoller:
             pytest.fail("Not all jobs have succeeded")
 
     @pytest.fixture
-    async def jobs_poller(self, jobs_service: JobsService) -> AsyncIterator[JobsPoller]:
-        poller = JobsPoller(jobs_service=jobs_service, interval_s=1)
+    async def jobs_poller(
+        self, jobs_poller_service: JobsPollerService
+    ) -> AsyncIterator[JobsPoller]:
+        poller = JobsPoller(jobs_poller_service=jobs_poller_service, interval_s=0.1)
         await poller.start()
         yield poller
         await poller.stop()
@@ -54,6 +56,7 @@ class TestJobsPoller:
         self,
         jobs_poller: JobsPoller,
         jobs_service: JobsService,
+        jobs_poller_service: JobsPollerService,
         mock_orchestrator: MockOrchestrator,
         job_request_factory: Callable[[], JobRequest],
     ) -> None:
@@ -68,8 +71,12 @@ class TestJobsPoller:
             print("update_jobs_status with error")
             raise ValueError("some unknown error")
 
-        assert jobs_service.update_jobs_statuses
-        # jobs_service.update_jobs_statuses = update_jobs_statuses  # type: ignore
+        update_jobs_statuses_orig = jobs_poller_service.update_jobs_statuses
+        jobs_poller_service.update_jobs_statuses = update_jobs_statuses  # type: ignore
+        await asyncio.sleep(1)
+        jobs_poller_service.update_jobs_statuses = (  # type: ignore
+            update_jobs_statuses_orig
+        )
 
         mock_orchestrator.update_status_to_return(JobStatus.SUCCEEDED)
         await self.wait_for_job_status(jobs_service=jobs_service)

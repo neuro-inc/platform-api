@@ -4,6 +4,7 @@ import json
 from dataclasses import replace
 from datetime import datetime, timezone
 from typing import Any, AsyncIterator, Callable
+from unittest import mock
 
 import pytest
 from _pytest.logging import LogCaptureFixture
@@ -32,6 +33,7 @@ from platform_api.orchestrator.job_request import JobError, JobRequest, JobStatu
 from platform_api.orchestrator.jobs_service import (
     NEURO_PASSED_CONFIG,
     GpuQuotaExceededError,
+    JobsPollerService,
     JobsScheduler,
     JobsService,
     JobsServiceException,
@@ -44,6 +46,7 @@ from platform_api.user import User, UserCluster
 from .conftest import (
     MockAuthClient,
     MockCluster,
+    MockJobsPollerApi,
     MockJobsStorage,
     MockNotificationsClient,
     MockOrchestrator,
@@ -113,10 +116,41 @@ class TestJobsService:
         return _factory
 
     @pytest.fixture
+    def poller_service_factory(
+        self,
+        cluster_registry: ClusterRegistry,
+        mock_jobs_storage: MockJobsStorage,
+        test_scheduler: MockJobsScheduler,
+        mock_auth_client: AuthClient,
+        mock_poller_api: MockJobsPollerApi,
+    ) -> Callable[..., JobsPollerService]:
+        def _factory(
+            deletion_delay_s: int = 0, image_pull_error_delay_s: int = 0
+        ) -> JobsPollerService:
+            return JobsPollerService(
+                cluster_registry=cluster_registry,
+                jobs_config=JobsConfig(
+                    deletion_delay_s=deletion_delay_s,
+                    image_pull_error_delay_s=image_pull_error_delay_s,
+                ),
+                scheduler=test_scheduler,
+                auth_client=mock_auth_client,
+                api=mock_poller_api,
+            )
+
+        return _factory
+
+    @pytest.fixture
     def jobs_service(
         self, jobs_service_factory: Callable[..., JobsService]
     ) -> JobsService:
         return jobs_service_factory()
+
+    @pytest.fixture
+    def jobs_poller_service(
+        self, poller_service_factory: Callable[..., JobsPollerService]
+    ) -> JobsPollerService:
+        return poller_service_factory()
 
     @pytest.mark.asyncio
     async def test_create_job(
@@ -212,6 +246,7 @@ class TestJobsService:
     async def test_pass_config_revoke_after_complete(
         self,
         jobs_service: JobsService,
+        jobs_poller_service: JobsPollerService,
         mock_job_request: JobRequest,
         mock_auth_client: MockAuthClient,
         mock_orchestrator: MockOrchestrator,
@@ -222,7 +257,7 @@ class TestJobsService:
         )
 
         mock_orchestrator.update_status_to_return(JobStatus.SUCCEEDED)
-        await jobs_service.update_jobs_statuses()
+        await jobs_poller_service.update_jobs_statuses()
         token_uri = f"token://job/{original_job.id}"
         assert mock_auth_client._revokes[0] == (user.name, [token_uri])
 
@@ -230,6 +265,7 @@ class TestJobsService:
     async def test_pass_config_revoke_after_failure(
         self,
         jobs_service: JobsService,
+        jobs_poller_service: JobsPollerService,
         mock_job_request: JobRequest,
         mock_auth_client: MockAuthClient,
         mock_orchestrator: MockOrchestrator,
@@ -240,7 +276,7 @@ class TestJobsService:
         )
 
         mock_orchestrator.update_status_to_return(JobStatus.FAILED)
-        await jobs_service.update_jobs_statuses()
+        await jobs_poller_service.update_jobs_statuses()
         token_uri = f"token://job/{original_job.id}"
         assert mock_auth_client._revokes[0] == (user.name, [token_uri])
 
@@ -248,6 +284,7 @@ class TestJobsService:
     async def test_pass_config_revoke_fail_to_start(
         self,
         jobs_service: JobsService,
+        jobs_poller_service: JobsPollerService,
         mock_job_request: JobRequest,
         mock_auth_client: MockAuthClient,
         mock_orchestrator: MockOrchestrator,
@@ -262,7 +299,7 @@ class TestJobsService:
 
         mock_orchestrator.raise_on_start_job_status = True
         mock_orchestrator.get_job_status_exc_factory = _f
-        await jobs_service.update_jobs_statuses()
+        await jobs_poller_service.update_jobs_statuses()
 
         token_uri = f"token://job/{original_job.id}"
         assert mock_auth_client._revokes[0] == (user.name, [token_uri])
@@ -271,6 +308,7 @@ class TestJobsService:
     async def test_pass_config_revoke_fail_on_update(
         self,
         jobs_service: JobsService,
+        jobs_poller_service: JobsPollerService,
         mock_job_request: JobRequest,
         mock_auth_client: MockAuthClient,
         mock_orchestrator: MockOrchestrator,
@@ -280,9 +318,9 @@ class TestJobsService:
             job_request=mock_job_request, user=user, pass_config=True
         )
 
-        await jobs_service.update_jobs_statuses()
+        await jobs_poller_service.update_jobs_statuses()
         mock_orchestrator.raise_on_get_job_status = True
-        await jobs_service.update_jobs_statuses()
+        await jobs_poller_service.update_jobs_statuses()
 
         token_uri = f"token://job/{original_job.id}"
         assert mock_auth_client._revokes[0] == (user.name, [token_uri])
@@ -291,6 +329,7 @@ class TestJobsService:
     async def test_pass_config_revoke_cluster_unavail(
         self,
         jobs_service: JobsService,
+        jobs_poller_service: JobsPollerService,
         mock_job_request: JobRequest,
         mock_auth_client: MockAuthClient,
         mock_orchestrator: MockOrchestrator,
@@ -303,10 +342,10 @@ class TestJobsService:
         )
 
         mock_orchestrator.update_status_to_return(JobStatus.RUNNING)
-        await jobs_service.update_jobs_statuses()
+        await jobs_poller_service.update_jobs_statuses()
 
         await cluster_registry.remove(cluster_config.name)
-        await jobs_service.update_jobs_statuses()
+        await jobs_poller_service.update_jobs_statuses()
 
         token_uri = f"token://job/{original_job.id}"
         assert mock_auth_client._revokes[0] == (user.name, [token_uri])
@@ -333,6 +372,7 @@ class TestJobsService:
     async def test_create_job_fail(
         self,
         jobs_service: JobsService,
+        jobs_poller_service: JobsPollerService,
         mock_job_request: JobRequest,
         mock_orchestrator: MockOrchestrator,
         caplog: LogCaptureFixture,
@@ -350,7 +390,7 @@ class TestJobsService:
 
         assert caplog.text == ""
 
-        await jobs_service.update_jobs_statuses()
+        await jobs_poller_service.update_jobs_statuses()
 
         assert f"Failed to start job {job.id}. Reason: Bad job {job.id}" in caplog.text
         assert f"JobError: Bad job {job.id}" in caplog.text
@@ -379,6 +419,7 @@ class TestJobsService:
         self,
         mock_orchestrator: MockOrchestrator,
         jobs_service: JobsService,
+        jobs_poller_service: JobsPollerService,
         job_request_factory: Callable[[], JobRequest],
     ) -> None:
         user = User(cluster_name="test-cluster", name="testuser", token="")
@@ -389,7 +430,7 @@ class TestJobsService:
         assert job_1.status_history.current.reason == JobStatusReason.CREATING
         assert not job_1.is_finished
 
-        await jobs_service.update_jobs_statuses()
+        await jobs_poller_service.update_jobs_statuses()
 
         job = await jobs_service.get_job(job_id=job_1.id)
         assert job.id == job_1.id
@@ -397,7 +438,7 @@ class TestJobsService:
         assert job.status_history.current.reason == JobStatusReason.CONTAINER_CREATING
 
         mock_orchestrator.update_status_to_return(JobStatus.RUNNING)
-        await jobs_service.update_jobs_statuses()
+        await jobs_poller_service.update_jobs_statuses()
 
         job = await jobs_service.get_job(job_id=job_1.id)
         assert job.id == job_1.id
@@ -418,6 +459,7 @@ class TestJobsService:
         self,
         mock_orchestrator: MockOrchestrator,
         jobs_service: JobsService,
+        jobs_poller_service: JobsPollerService,
         job_request_factory: Callable[[], JobRequest],
         first_job_status: JobStatus,
     ) -> None:
@@ -430,7 +472,7 @@ class TestJobsService:
         assert first_job.status_history.current.reason == JobStatusReason.CREATING
         assert not first_job.is_finished
 
-        await jobs_service.update_jobs_statuses()
+        await jobs_poller_service.update_jobs_statuses()
 
         job = await jobs_service.get_job(job_id=first_job.id)
         assert job.id == first_job.id
@@ -438,7 +480,7 @@ class TestJobsService:
         assert job.status_history.current.reason == JobStatusReason.CONTAINER_CREATING
 
         mock_orchestrator.update_status_to_return(first_job_status)
-        await jobs_service.update_jobs_statuses()
+        await jobs_poller_service.update_jobs_statuses()
 
         job = await jobs_service.get_job(job_id=first_job.id)
         assert job.id == first_job.id
@@ -715,6 +757,7 @@ class TestJobsService:
     async def test_update_jobs_statuses_running(
         self,
         jobs_service_factory: Callable[..., JobsService],
+        jobs_poller_service: JobsPollerService,
         mock_orchestrator: MockOrchestrator,
         job_request_factory: Callable[[], JobRequest],
     ) -> None:
@@ -726,7 +769,7 @@ class TestJobsService:
         )
         assert original_job.status == JobStatus.PENDING
 
-        await jobs_service.update_jobs_statuses()
+        await jobs_poller_service.update_jobs_statuses()
 
         job = await jobs_service.get_job(job_id=original_job.id)
         assert job.status == JobStatus.PENDING
@@ -735,18 +778,19 @@ class TestJobsService:
         assert job.materialized
 
         mock_orchestrator.update_status_to_return(JobStatus.SUCCEEDED)
-        await jobs_service.update_jobs_statuses()
+        await jobs_poller_service.update_jobs_statuses()
 
         job = await jobs_service.get_job(job_id=original_job.id)
         assert job.status == JobStatus.SUCCEEDED
         assert job.is_finished
         assert job.finished_at
-        assert job.materialized
+        assert not job.materialized
 
     @pytest.mark.asyncio
     async def test_update_jobs_statuses_for_deletion(
         self,
         jobs_service_factory: Callable[..., JobsService],
+        jobs_poller_service: JobsPollerService,
         mock_orchestrator: MockOrchestrator,
         job_request_factory: Callable[[], JobRequest],
     ) -> None:
@@ -757,7 +801,7 @@ class TestJobsService:
             job_request=job_request_factory(), user=user
         )
 
-        await jobs_service.update_jobs_statuses()
+        await jobs_poller_service.update_jobs_statuses()
 
         job = await jobs_service.get_job(job_id=original_job.id)
         assert job.status == JobStatus.PENDING
@@ -766,7 +810,7 @@ class TestJobsService:
         assert job.materialized
 
         mock_orchestrator.update_status_to_return(JobStatus.SUCCEEDED)
-        await jobs_service.update_jobs_statuses()
+        await jobs_poller_service.update_jobs_statuses()
 
         job = await jobs_service.get_job(job_id=original_job.id)
         assert job.status == JobStatus.SUCCEEDED
@@ -778,6 +822,7 @@ class TestJobsService:
     async def test_update_jobs_statuses_pending_missing(
         self,
         jobs_service_factory: Callable[..., JobsService],
+        jobs_poller_service: JobsPollerService,
         mock_orchestrator: MockOrchestrator,
         job_request_factory: Callable[[], JobRequest],
     ) -> None:
@@ -789,7 +834,7 @@ class TestJobsService:
             job_request=job_request_factory(), user=user
         )
 
-        await jobs_service.update_jobs_statuses()
+        await jobs_poller_service.update_jobs_statuses()
 
         job = await jobs_service.get_job(job_id=original_job.id)
         assert job.status == JobStatus.PENDING
@@ -802,7 +847,7 @@ class TestJobsService:
             description=None,
         )
 
-        await jobs_service.update_jobs_statuses()
+        await jobs_poller_service.update_jobs_statuses()
 
         job = await jobs_service.get_job(job_id=original_job.id)
         assert job.status == JobStatus.FAILED
@@ -827,6 +872,7 @@ class TestJobsService:
     async def test_update_jobs_statuses_pending_errimagepull(
         self,
         jobs_service_factory: Callable[..., JobsService],
+        jobs_poller_service: JobsPollerService,
         mock_orchestrator: MockOrchestrator,
         job_request_factory: Callable[[], JobRequest],
         reason: str,
@@ -840,7 +886,7 @@ class TestJobsService:
         )
         assert original_job.status == JobStatus.PENDING
 
-        await jobs_service.update_jobs_statuses()
+        await jobs_poller_service.update_jobs_statuses()
 
         job = await jobs_service.get_job(job_id=original_job.id)
         assert job.status == JobStatus.PENDING
@@ -852,7 +898,7 @@ class TestJobsService:
         assert status_item.description is None
 
         mock_orchestrator.update_reason_to_return(reason)
-        await jobs_service.update_jobs_statuses()
+        await jobs_poller_service.update_jobs_statuses()
 
         job = await jobs_service.get_job(job_id=original_job.id)
         assert job.status == JobStatus.FAILED
@@ -874,11 +920,13 @@ class TestJobsService:
     async def test_update_jobs_statuses_pending_errimagepull_with_delay(
         self,
         jobs_service_factory: Callable[..., JobsService],
+        poller_service_factory: Callable[..., JobsPollerService],
         mock_orchestrator: MockOrchestrator,
         job_request_factory: Callable[[], JobRequest],
         reason: str,
     ) -> None:
         jobs_service = jobs_service_factory(image_pull_error_delay_s=60)
+        jobs_poller_service = poller_service_factory(image_pull_error_delay_s=60)
 
         user = User(cluster_name="test-cluster", name="testuser", token="")
         original_job, _ = await jobs_service.create_job(
@@ -886,7 +934,7 @@ class TestJobsService:
         )
         assert original_job.status == JobStatus.PENDING
 
-        await jobs_service.update_jobs_statuses()
+        await jobs_poller_service.update_jobs_statuses()
 
         job = await jobs_service.get_job(job_id=original_job.id)
         assert job.status == JobStatus.PENDING
@@ -898,7 +946,7 @@ class TestJobsService:
         assert status_item.description is None
 
         mock_orchestrator.update_reason_to_return(reason)
-        await jobs_service.update_jobs_statuses()
+        await jobs_poller_service.update_jobs_statuses()
 
         job = await jobs_service.get_job(job_id=original_job.id)
         assert job.status == JobStatus.PENDING
@@ -909,10 +957,12 @@ class TestJobsService:
     async def test_update_jobs_statuses_image_errors_cycle(
         self,
         jobs_service_factory: Callable[..., JobsService],
+        poller_service_factory: Callable[..., JobsPollerService],
         mock_orchestrator: MockOrchestrator,
         job_request_factory: Callable[[], JobRequest],
     ) -> None:
         jobs_service = jobs_service_factory(image_pull_error_delay_s=0.3)
+        jobs_poller_service = poller_service_factory(image_pull_error_delay_s=0.3)
 
         user = User(cluster_name="test-cluster", name="testuser", token="")
         original_job, _ = await jobs_service.create_job(
@@ -920,7 +970,7 @@ class TestJobsService:
         )
         assert original_job.status == JobStatus.PENDING
 
-        await jobs_service.update_jobs_statuses()
+        await jobs_poller_service.update_jobs_statuses()
 
         job = await jobs_service.get_job(job_id=original_job.id)
         assert job.status == JobStatus.PENDING
@@ -932,19 +982,19 @@ class TestJobsService:
         assert status_item.description is None
 
         mock_orchestrator.update_reason_to_return(JobStatusReason.ERR_IMAGE_PULL)
-        await jobs_service.update_jobs_statuses()
+        await jobs_poller_service.update_jobs_statuses()
         await asyncio.sleep(0.1)
 
         mock_orchestrator.update_reason_to_return(JobStatusReason.IMAGE_PULL_BACK_OFF)
-        await jobs_service.update_jobs_statuses()
+        await jobs_poller_service.update_jobs_statuses()
         await asyncio.sleep(0.1)
 
         mock_orchestrator.update_reason_to_return(JobStatusReason.ERR_IMAGE_PULL)
-        await jobs_service.update_jobs_statuses()
+        await jobs_poller_service.update_jobs_statuses()
         await asyncio.sleep(0.1)
 
         mock_orchestrator.update_reason_to_return(JobStatusReason.IMAGE_PULL_BACK_OFF)
-        await jobs_service.update_jobs_statuses()
+        await jobs_poller_service.update_jobs_statuses()
         await asyncio.sleep(0.1)
 
         job = await jobs_service.get_job(job_id=original_job.id)
@@ -960,6 +1010,7 @@ class TestJobsService:
     async def test_update_jobs_statuses_pending_scale_up(
         self,
         jobs_service_factory: Callable[..., JobsService],
+        jobs_poller_service: JobsPollerService,
         mock_orchestrator: MockOrchestrator,
         job_request_factory: Callable[[], JobRequest],
     ) -> None:
@@ -971,7 +1022,7 @@ class TestJobsService:
         )
         assert original_job.status == JobStatus.PENDING
 
-        await jobs_service.update_jobs_statuses()
+        await jobs_poller_service.update_jobs_statuses()
 
         job = await jobs_service.get_job(job_id=original_job.id)
         assert job.status == JobStatus.PENDING
@@ -983,7 +1034,7 @@ class TestJobsService:
         mock_orchestrator.update_reason_to_return(
             JobStatusReason.CLUSTER_SCALE_UP_FAILED
         )
-        await jobs_service.update_jobs_statuses()
+        await jobs_poller_service.update_jobs_statuses()
 
         job = await jobs_service.get_job(job_id=original_job.id)
         assert job.status == JobStatus.FAILED
@@ -995,6 +1046,7 @@ class TestJobsService:
     async def test_update_jobs_statuses_succeeded_missing(
         self,
         jobs_service_factory: Callable[..., JobsService],
+        jobs_poller_service: JobsPollerService,
         mock_orchestrator: MockOrchestrator,
         job_request_factory: Callable[[], JobRequest],
     ) -> None:
@@ -1005,7 +1057,7 @@ class TestJobsService:
             job_request=job_request_factory(), user=user
         )
 
-        await jobs_service.update_jobs_statuses()
+        await jobs_poller_service.update_jobs_statuses()
 
         job = await jobs_service.get_job(job_id=original_job.id)
         assert job.status == JobStatus.PENDING
@@ -1014,7 +1066,7 @@ class TestJobsService:
         assert job.materialized
 
         mock_orchestrator.update_status_to_return(JobStatus.SUCCEEDED)
-        await jobs_service.update_jobs_statuses()
+        await jobs_poller_service.update_jobs_statuses()
 
         job = await jobs_service.get_job(job_id=original_job.id)
         assert job.status == JobStatus.SUCCEEDED
@@ -1026,6 +1078,7 @@ class TestJobsService:
     async def test_update_jobs_handles_running_quota(
         self,
         jobs_service_factory: Callable[..., JobsService],
+        jobs_poller_service: JobsPollerService,
         mock_orchestrator: MockOrchestrator,
         mock_auth_client: MockAuthClient,
         job_request_factory: Callable[[], JobRequest],
@@ -1053,7 +1106,7 @@ class TestJobsService:
             assert job.status == JobStatus.PENDING
             jobs.append(job)
 
-        await jobs_service.update_jobs_statuses()
+        await jobs_poller_service.update_jobs_statuses()
 
         # Only 5 first should be materialized:
         for job in jobs[:5]:
@@ -1072,8 +1125,8 @@ class TestJobsService:
 
         # Two ticks - first will move remove running from queue,
         # second will start pending
-        await jobs_service.update_jobs_statuses()
-        await jobs_service.update_jobs_statuses()
+        await jobs_poller_service.update_jobs_statuses()
+        await jobs_poller_service.update_jobs_statuses()
 
         for job in jobs[:5]:
             job = await jobs_service.get_job(job.id)
@@ -1089,7 +1142,7 @@ class TestJobsService:
                 job.id, JobStatus.SUCCEEDED
             )
 
-        await jobs_service.update_jobs_statuses()
+        await jobs_poller_service.update_jobs_statuses()
 
         for job in jobs:
             job = await jobs_service.get_job(job.id)
@@ -1099,6 +1152,7 @@ class TestJobsService:
     async def test_update_jobs_scheduled_additional_when_no_pending(
         self,
         jobs_service_factory: Callable[..., JobsService],
+        jobs_poller_service: JobsPollerService,
         mock_orchestrator: MockOrchestrator,
         job_request_factory: Callable[[], JobRequest],
         test_scheduler: MockJobsScheduler,
@@ -1121,7 +1175,7 @@ class TestJobsService:
             assert job.status == JobStatus.PENDING
             jobs.append(job)
 
-        await jobs_service.update_jobs_statuses()
+        await jobs_poller_service.update_jobs_statuses()
 
         for job in jobs:
             job = await jobs_service.get_job(job.id)
@@ -1131,7 +1185,7 @@ class TestJobsService:
         for job in jobs:
             mock_orchestrator.update_status_to_return_single(job.id, JobStatus.RUNNING)
 
-        await jobs_service.update_jobs_statuses()
+        await jobs_poller_service.update_jobs_statuses()
 
         for job in jobs:
             job = await jobs_service.get_job(job.id)
@@ -1143,7 +1197,7 @@ class TestJobsService:
             job_request=job_request_factory(), user=user, scheduler_enabled=True
         )
 
-        await jobs_service.update_jobs_statuses()
+        await jobs_poller_service.update_jobs_statuses()
 
         # Should try to start new job because there is no waiting jobs
         job = await jobs_service.get_job(additional_job.id)
@@ -1154,6 +1208,7 @@ class TestJobsService:
     async def test_update_jobs_scheduled_additional_when_has_pending(
         self,
         jobs_service_factory: Callable[..., JobsService],
+        jobs_poller_service: JobsPollerService,
         mock_orchestrator: MockOrchestrator,
         job_request_factory: Callable[[], JobRequest],
         test_scheduler: MockJobsScheduler,
@@ -1176,7 +1231,7 @@ class TestJobsService:
             assert job.status == JobStatus.PENDING
             jobs.append(job)
 
-        await jobs_service.update_jobs_statuses()
+        await jobs_poller_service.update_jobs_statuses()
 
         for job in jobs:
             job = await jobs_service.get_job(job.id)
@@ -1186,7 +1241,7 @@ class TestJobsService:
         for job in jobs[:3]:
             mock_orchestrator.update_status_to_return_single(job.id, JobStatus.RUNNING)
 
-        await jobs_service.update_jobs_statuses()
+        await jobs_poller_service.update_jobs_statuses()
 
         for job in jobs[:3]:
             job = await jobs_service.get_job(job.id)
@@ -1202,7 +1257,7 @@ class TestJobsService:
             job_request=job_request_factory(), user=user, scheduler_enabled=True
         )
 
-        await jobs_service.update_jobs_statuses()
+        await jobs_poller_service.update_jobs_statuses()
 
         # Should not even try to start this job because there is another waiting jobs
         job = await jobs_service.get_job(additional_job.id)
@@ -1213,6 +1268,7 @@ class TestJobsService:
     async def test_update_jobs_scheduled_cycling(
         self,
         jobs_service_factory: Callable[..., JobsService],
+        jobs_poller_service: JobsPollerService,
         mock_orchestrator: MockOrchestrator,
         job_request_factory: Callable[[], JobRequest],
         test_scheduler: MockJobsScheduler,
@@ -1235,7 +1291,7 @@ class TestJobsService:
             assert job.status == JobStatus.PENDING
             jobs.append(job)
 
-        await jobs_service.update_jobs_statuses()
+        await jobs_poller_service.update_jobs_statuses()
 
         for job in jobs:
             job = await jobs_service.get_job(job.id)
@@ -1245,7 +1301,7 @@ class TestJobsService:
         for job in jobs[:3]:
             mock_orchestrator.update_status_to_return_single(job.id, JobStatus.RUNNING)
 
-        await jobs_service.update_jobs_statuses()
+        await jobs_poller_service.update_jobs_statuses()
 
         for job in jobs[:3]:
             job = await jobs_service.get_job(job.id)
@@ -1259,7 +1315,7 @@ class TestJobsService:
         for job in jobs[3:6]:
             mock_orchestrator.update_status_to_return_single(job.id, JobStatus.RUNNING)
 
-        await jobs_service.update_jobs_statuses()
+        await jobs_poller_service.update_jobs_statuses()
 
         for job in jobs[:3]:
             job = await jobs_service.get_job(job.id)
@@ -1279,7 +1335,7 @@ class TestJobsService:
         for job in jobs[6:]:
             mock_orchestrator.update_status_to_return_single(job.id, JobStatus.RUNNING)
 
-        await jobs_service.update_jobs_statuses()
+        await jobs_poller_service.update_jobs_statuses()
 
         for job in jobs[:6]:
             job = await jobs_service.get_job(job.id)
@@ -1295,7 +1351,7 @@ class TestJobsService:
         for job in jobs[:3]:
             mock_orchestrator.update_status_to_return_single(job.id, JobStatus.PENDING)
 
-        await jobs_service.update_jobs_statuses()
+        await jobs_poller_service.update_jobs_statuses()
 
         # When all jobs are either running or not materialized, service
         # should materialize new job
@@ -1311,7 +1367,7 @@ class TestJobsService:
         for job in jobs[:3]:
             mock_orchestrator.update_status_to_return_single(job.id, JobStatus.RUNNING)
 
-        await jobs_service.update_jobs_statuses()
+        await jobs_poller_service.update_jobs_statuses()
 
         for job in jobs[:3]:
             job = await jobs_service.get_job(job.id)
@@ -1327,6 +1383,7 @@ class TestJobsService:
     async def test_update_jobs_scheduled_max_suspended_time(
         self,
         jobs_service_factory: Callable[..., JobsService],
+        jobs_poller_service: JobsPollerService,
         mock_orchestrator: MockOrchestrator,
         job_request_factory: Callable[[], JobRequest],
         test_scheduler: MockJobsScheduler,
@@ -1350,11 +1407,11 @@ class TestJobsService:
         )
         assert job1.status == JobStatus.PENDING
 
-        await jobs_service.update_jobs_statuses()
+        await jobs_poller_service.update_jobs_statuses()
 
         mock_orchestrator.update_status_to_return_single(job1.id, JobStatus.RUNNING)
 
-        await jobs_service.update_jobs_statuses()
+        await jobs_poller_service.update_jobs_statuses()
 
         job1 = await jobs_service.get_job(job1.id)
         assert job1.status == JobStatus.RUNNING
@@ -1371,7 +1428,7 @@ class TestJobsService:
         )
         assert job3.status == JobStatus.PENDING
 
-        await jobs_service.update_jobs_statuses()
+        await jobs_poller_service.update_jobs_statuses()
 
         job3 = await jobs_service.get_job(job3.id)
         assert job3.status == JobStatus.PENDING
@@ -1379,7 +1436,7 @@ class TestJobsService:
 
         test_scheduler.tick_max_suspended()
 
-        await jobs_service.update_jobs_statuses()
+        await jobs_poller_service.update_jobs_statuses()
 
         job3 = await jobs_service.get_job(job3.id)
         assert job3.status == JobStatus.PENDING
@@ -1387,7 +1444,10 @@ class TestJobsService:
 
     @pytest.mark.asyncio
     async def test_cancel_running(
-        self, jobs_service: JobsService, job_request_factory: Callable[[], JobRequest]
+        self,
+        jobs_service: JobsService,
+        job_request_factory: Callable[[], JobRequest],
+        jobs_poller_service: JobsPollerService,
     ) -> None:
         user = User(cluster_name="test-cluster", name="testuser", token="")
         original_job, _ = await jobs_service.create_job(
@@ -1395,7 +1455,7 @@ class TestJobsService:
         )
         assert original_job.status == JobStatus.PENDING
 
-        await jobs_service.update_jobs_statuses()
+        await jobs_poller_service.update_jobs_statuses()
 
         await jobs_service.cancel_job(original_job.id)
 
@@ -1409,6 +1469,7 @@ class TestJobsService:
     async def test_cancel_deleted_after_sync(
         self,
         jobs_service_factory: Callable[[float], JobsService],
+        jobs_poller_service: JobsPollerService,
         job_request_factory: Callable[[], JobRequest],
     ) -> None:
         jobs_service = jobs_service_factory(3600 * 7)  # Set huge deletion timeout
@@ -1418,11 +1479,11 @@ class TestJobsService:
         )
         assert original_job.status == JobStatus.PENDING
 
-        await jobs_service.update_jobs_statuses()
+        await jobs_poller_service.update_jobs_statuses()
 
         await jobs_service.cancel_job(original_job.id)
 
-        await jobs_service.update_jobs_statuses()
+        await jobs_poller_service.update_jobs_statuses()
 
         job = await jobs_service.get_job(original_job.id)
         assert job.status == JobStatus.CANCELLED
@@ -1691,6 +1752,13 @@ class TestJobsServiceCluster:
             auth_client=mock_auth_client,
             api_base_url=mock_api_base,
         )
+        jobs_poller_service = JobsPollerService(
+            cluster_registry=cluster_registry,
+            jobs_config=jobs_config,
+            scheduler=JobsScheduler(JobsSchedulerConfig(), mock_auth_client),
+            auth_client=mock_auth_client,
+            api=MockJobsPollerApi(jobs_service, mock_jobs_storage),
+        )
         await cluster_registry.replace(cluster_config)
 
         async with cluster_registry.get(cluster_config.name) as cluster:
@@ -1707,7 +1775,7 @@ class TestJobsServiceCluster:
         status = await jobs_service.get_job_status(job.id)
         assert status == JobStatus.PENDING
 
-        await jobs_service.update_jobs_statuses()
+        await jobs_poller_service.update_jobs_statuses()
 
         status = await jobs_service.get_job_status(job.id)
         assert status == JobStatus.PENDING
@@ -1733,6 +1801,13 @@ class TestJobsServiceCluster:
             auth_client=mock_auth_client,
             api_base_url=mock_api_base,
         )
+        jobs_poller_service = JobsPollerService(
+            cluster_registry=cluster_registry,
+            jobs_config=jobs_config,
+            scheduler=JobsScheduler(JobsSchedulerConfig(), mock_auth_client),
+            auth_client=mock_auth_client,
+            api=MockJobsPollerApi(jobs_service, mock_jobs_storage),
+        )
         await cluster_registry.replace(cluster_config)
 
         user = User(name="testuser", token="testtoken", cluster_name="test-cluster")
@@ -1743,7 +1818,7 @@ class TestJobsServiceCluster:
 
         await cluster_registry.remove(cluster_config.name)
 
-        await jobs_service.update_jobs_statuses()
+        await jobs_poller_service.update_jobs_statuses()
 
         record = await mock_jobs_storage.get_job(job.id)
         assert record.status_history.current == JobStatusItem.create(
@@ -1774,6 +1849,13 @@ class TestJobsServiceCluster:
             auth_client=mock_auth_client,
             api_base_url=mock_api_base,
         )
+        jobs_poller_service = JobsPollerService(
+            cluster_registry=cluster_registry,
+            jobs_config=jobs_config,
+            scheduler=JobsScheduler(JobsSchedulerConfig(), mock_auth_client),
+            auth_client=mock_auth_client,
+            api=MockJobsPollerApi(jobs_service, mock_jobs_storage),
+        )
         await cluster_registry.replace(cluster_config)
 
         user = User(name="testuser", token="testtoken", cluster_name="test-cluster")
@@ -1787,7 +1869,7 @@ class TestJobsServiceCluster:
 
         await cluster_registry.remove(cluster_config.name)
 
-        await jobs_service.update_jobs_statuses()
+        await jobs_poller_service.update_jobs_statuses()
 
         record = await mock_jobs_storage.get_job(job.id)
         assert record.status == JobStatus.SUCCEEDED
@@ -1891,6 +1973,13 @@ class TestJobsServiceCluster:
             auth_client=mock_auth_client,
             api_base_url=mock_api_base,
         )
+        jobs_poller_service = JobsPollerService(
+            cluster_registry=cluster_registry,
+            jobs_config=jobs_config,
+            scheduler=JobsScheduler(JobsSchedulerConfig(), mock_auth_client),
+            auth_client=mock_auth_client,
+            api=MockJobsPollerApi(jobs_service, mock_jobs_storage),
+        )
         await cluster_registry.replace(cluster_config)
 
         user = User(cluster_name="test-cluster", name="testuser", token="testtoken")
@@ -1899,7 +1988,7 @@ class TestJobsServiceCluster:
         await cluster_registry.remove(cluster_config.name)
 
         await jobs_service.cancel_job(job.id)
-        await jobs_service.update_jobs_statuses()
+        await jobs_poller_service.update_jobs_statuses()
 
         record = await mock_jobs_storage.get_job(job.id)
         assert record.status == JobStatus.CANCELLED
@@ -1926,6 +2015,13 @@ class TestJobsServiceCluster:
             auth_client=mock_auth_client,
             api_base_url=mock_api_base,
         )
+        jobs_poller_service = JobsPollerService(
+            cluster_registry=cluster_registry,
+            jobs_config=jobs_config,
+            scheduler=JobsScheduler(JobsSchedulerConfig(), mock_auth_client),
+            auth_client=mock_auth_client,
+            api=MockJobsPollerApi(jobs_service, mock_jobs_storage),
+        )
         await cluster_registry.replace(cluster_config)
 
         async with cluster_registry.get(cluster_config.name) as cluster:
@@ -1940,7 +2036,7 @@ class TestJobsServiceCluster:
         job, _ = await jobs_service.create_job(mock_job_request, user)
 
         await jobs_service.cancel_job(job.id)
-        await jobs_service.update_jobs_statuses()
+        await jobs_poller_service.update_jobs_statuses()
 
         record = await mock_jobs_storage.get_job(job.id)
         assert record.status == JobStatus.CANCELLED
@@ -1980,6 +2076,7 @@ class TestJobServiceNotification:
     async def test_new_job_created(
         self,
         jobs_service: JobsService,
+        jobs_poller_service: JobsPollerService,
         mock_job_request: JobRequest,
         mock_notifications_client: MockNotificationsClient,
     ) -> None:
@@ -1998,7 +2095,7 @@ class TestJobServiceNotification:
         ]
         assert notifications == mock_notifications_client.sent_notifications
 
-        await jobs_service.update_jobs_statuses()
+        await jobs_poller_service.update_jobs_statuses()
         job = await jobs_service.get_job(job.id)
 
         notifications.append(
@@ -2019,6 +2116,7 @@ class TestJobServiceNotification:
     async def test_status_update_same_status_will_send_notification(
         self,
         jobs_service: JobsService,
+        jobs_poller_service: JobsPollerService,
         mock_orchestrator: MockOrchestrator,
         mock_job_request: JobRequest,
         mock_notifications_client: MockNotificationsClient,
@@ -2039,7 +2137,7 @@ class TestJobServiceNotification:
         ]
         prev_transition_time = job.status_history.current.transition_time
 
-        await jobs_service.update_jobs_statuses()
+        await jobs_poller_service.update_jobs_statuses()
         job = await jobs_service.get_job(job.id)
 
         notifications.append(
@@ -2056,7 +2154,7 @@ class TestJobServiceNotification:
         )
         assert notifications == mock_notifications_client.sent_notifications
 
-        await jobs_service.update_jobs_statuses()
+        await jobs_poller_service.update_jobs_statuses()
 
         assert notifications == mock_notifications_client.sent_notifications
 
@@ -2064,6 +2162,7 @@ class TestJobServiceNotification:
     async def test_job_failed_errimagepull_workflow(
         self,
         jobs_service: JobsService,
+        jobs_poller_service: JobsPollerService,
         mock_orchestrator: MockOrchestrator,
         job_request_factory: Callable[[], JobRequest],
         mock_notifications_client: MockNotificationsClient,
@@ -2083,9 +2182,10 @@ class TestJobServiceNotification:
                 prev_status=None,
             )
         ]
+        assert notifications == mock_notifications_client.sent_notifications
         prev_transition_time = job.status_history.current.transition_time
 
-        await jobs_service.update_jobs_statuses()
+        await jobs_poller_service.update_jobs_statuses()
         job = await jobs_service.get_job(job.id)
 
         notifications.append(
@@ -2100,12 +2200,25 @@ class TestJobServiceNotification:
                 prev_transition_time=prev_transition_time,
             )
         )
+        assert notifications == mock_notifications_client.sent_notifications
         prev_transition_time = job.status_history.current.transition_time
 
         mock_orchestrator.update_reason_to_return(JobStatusReason.ERR_IMAGE_PULL)
-        await jobs_service.update_jobs_statuses()
+        await jobs_poller_service.update_jobs_statuses()
         job = await jobs_service.get_job(job.id)
 
+        notifications.append(
+            JobTransition(
+                job_id=job.id,
+                status=JobStatus.PENDING,
+                transition_time=mock.ANY,
+                reason=JobStatusReason.ERR_IMAGE_PULL,
+                description=None,
+                exit_code=None,
+                prev_status=JobStatus.PENDING,
+                prev_transition_time=prev_transition_time,
+            )
+        )
         notifications.append(
             JobTransition(
                 job_id=job.id,
@@ -2115,7 +2228,7 @@ class TestJobServiceNotification:
                 description="Image can not be pulled",
                 exit_code=None,
                 prev_status=JobStatus.PENDING,
-                prev_transition_time=prev_transition_time,
+                prev_transition_time=mock.ANY,
             )
         )
 
@@ -2125,6 +2238,7 @@ class TestJobServiceNotification:
     async def test_job_succeeded_workflow(
         self,
         jobs_service: JobsService,
+        jobs_poller_service: JobsPollerService,
         mock_orchestrator: MockOrchestrator,
         job_request_factory: Callable[[], JobRequest],
         mock_notifications_client: MockNotificationsClient,
@@ -2146,7 +2260,7 @@ class TestJobServiceNotification:
         ]
         prev_transition_time = job.status_history.current.transition_time
 
-        await jobs_service.update_jobs_statuses()
+        await jobs_poller_service.update_jobs_statuses()
         job = await jobs_service.get_job(job.id)
 
         notifications.append(
@@ -2163,11 +2277,11 @@ class TestJobServiceNotification:
         )
         prev_transition_time = job.status_history.current.transition_time
 
-        await jobs_service.update_jobs_statuses()
+        await jobs_poller_service.update_jobs_statuses()
 
         mock_orchestrator.update_status_to_return(JobStatus.RUNNING)
         mock_orchestrator.update_reason_to_return(None)
-        await jobs_service.update_jobs_statuses()
+        await jobs_poller_service.update_jobs_statuses()
         job = await jobs_service.get_job(job.id)
 
         notifications.append(
@@ -2187,7 +2301,7 @@ class TestJobServiceNotification:
         mock_orchestrator.update_status_to_return(JobStatus.SUCCEEDED)
         mock_orchestrator.update_reason_to_return(None)
         mock_orchestrator.update_exit_code_to_return(0)
-        await jobs_service.update_jobs_statuses()
+        await jobs_poller_service.update_jobs_statuses()
 
         job = await jobs_service.get_job(job.id)
 
