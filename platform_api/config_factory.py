@@ -45,7 +45,6 @@ class EnvironConfigFactory:
         return value.lower() in ("true", "1", "yes", "y")
 
     def create(self) -> Config:
-        env_prefix = self._environ.get("NP_ENV_PREFIX", Config.env_prefix)
         auth = self.create_auth()
         jobs = self.create_jobs(orphaned_job_owner=auth.service_name)
         api_base_url = URL(self._environ["NP_API_URL"])
@@ -57,7 +56,6 @@ class EnvironConfigFactory:
             auth=auth,
             zipkin=self.create_zipkin(),
             oauth=self.try_create_oauth(),
-            env_prefix=env_prefix,
             jobs=jobs,
             job_policy_enforcer=self.create_job_policy_enforcer(),
             scheduler=self.create_job_scheduler(),

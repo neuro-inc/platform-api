@@ -219,8 +219,6 @@ class TestEnvironConfigFactory:
         assert cluster.orchestrator.node_label_gpu is None
         assert cluster.orchestrator.node_label_preemptible is None
 
-        assert config.env_prefix == "NP"
-
         assert config.auth.server_endpoint_url == URL("https://auth")
         assert config.auth.service_token == "token"
         assert config.auth.service_name == "compute"
@@ -260,7 +258,6 @@ class TestEnvironConfigFactory:
 
     def test_create_custom(self, cert_authority_path: str) -> None:
         environ = {
-            "NP_ENV_PREFIX": "TEST",
             "NP_API_PORT": "1111",
             "NP_STORAGE_HOST_MOUNT_PATH": "/tmp",
             "NP_STORAGE_CONTAINER_MOUNT_PATH": "/opt/storage",
@@ -371,8 +368,6 @@ class TestEnvironConfigFactory:
         )
         assert config.database.postgres.pool_min_size == 50
         assert config.database.postgres.pool_max_size == 500
-
-        assert config.env_prefix == "TEST"
 
         assert config.auth.server_endpoint_url == URL("https://auth")
         assert config.auth.service_token == "token"
