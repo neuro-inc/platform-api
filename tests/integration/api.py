@@ -10,6 +10,7 @@ from aiohttp.client import ClientSession
 from aiohttp.web import HTTPAccepted, HTTPNoContent, HTTPOk
 from yarl import URL
 
+from platform_api import poller_main
 from platform_api.api import create_app
 from platform_api.cluster_config import ClusterConfig
 from platform_api.config import AuthConfig, Config
@@ -74,18 +75,21 @@ class AuthApiConfig(NamedTuple):
 async def api(
     config: Config, cluster_config_factory: Callable[..., ClusterConfig]
 ) -> AsyncIterator[ApiConfig]:
-    app = await create_app(
-        config,
-        [
-            cluster_config_factory("test-cluster"),
-            cluster_config_factory("testcluster2"),
-        ],
-    )
+    clusters = [
+        cluster_config_factory("test-cluster"),
+        cluster_config_factory("testcluster2"),
+    ]
+    app = await create_app(config, clusters)
     runner = ApiRunner(app, port=8080)
     api_address = await runner.run()
     api_config = ApiConfig(host=api_address.host, port=api_address.port, runner=runner)
+
+    poller_app = await poller_main.create_app(config, clusters)
+    poller_runner = ApiRunner(poller_app, port=8090)
+    await poller_runner.run()
     yield api_config
     await runner.close()
+    await poller_runner.close()
 
 
 @pytest.fixture
@@ -96,8 +100,13 @@ async def api_with_oauth(
     runner = ApiRunner(app, port=8081)
     api_address = await runner.run()
     api_config = ApiConfig(host=api_address.host, port=api_address.port, runner=runner)
+
+    poller_app = await poller_main.create_app(config_with_oauth, [cluster_config])
+    poller_runner = ApiRunner(poller_app, port=8090)
+    await poller_runner.run()
     yield api_config
     await runner.close()
+    await poller_runner.close()
 
 
 @pytest.fixture
