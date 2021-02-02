@@ -20,7 +20,7 @@ NP_CORS_ORIGINS:
 NP_API_ZIPKIN_URL: 'http://zipkin:9411'
 NP_API_ZIPKIN_SAMPLE_RATE: '0.1'  # 10% of traces are saved
 NP_SENTRY_URL:
-NP_CLUSTER_NAME:
+NP_SENTRY_CLUSTER:
 
 image:
   repository: "$IMAGE_REPO"

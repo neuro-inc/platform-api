@@ -124,6 +124,12 @@ class JobsSchedulerConfig:
 
 
 @dataclass(frozen=True)
+class SentryConfig:
+    url: str
+    cluster: str
+
+
+@dataclass(frozen=True)
 class Config:
     server: ServerConfig
 
@@ -148,8 +154,7 @@ class Config:
     # sourcing them inside containers.
     env_prefix: str = "NP"  # stands for Neuromation Platform
 
-    sentry_url: str = ""
-    cluster_name: str = ""
+    sentry: Optional[SentryConfig] = None
 
 
 @dataclass(frozen=True)

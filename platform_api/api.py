@@ -14,7 +14,6 @@ from neuro_auth_client import AuthClient, Permission
 from neuro_auth_client.security import AuthScheme, setup_security
 from notifications_client import Client as NotificationsClient
 from platform_logging import init_logging
-from sentry_sdk import set_tag
 from sentry_sdk.integrations.aiohttp import AioHttpIntegration
 
 from platform_api.orchestrator.job_policy_enforcer import (
@@ -424,12 +423,10 @@ def main() -> None:
 
     loop = asyncio.get_event_loop()
 
-    sentry_url = config.sentry_url
-    if sentry_url:
-        sentry_sdk.init(dsn=sentry_url, integrations=[AioHttpIntegration()])
-
-    set_tag("cluster", config.cluster_name)
-    set_tag("app", "platformapi")
+    if config.sentry:
+        sentry_sdk.init(dsn=config.sentry.url, integrations=[AioHttpIntegration()])
+        sentry_sdk.set_tag("cluster", config.sentry.cluster)
+        sentry_sdk.set_tag("app", "platformapi")
 
     app = loop.run_until_complete(create_app(config))
     aiohttp.web.run_app(app, host=config.server.host, port=config.server.port)
