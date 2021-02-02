@@ -124,9 +124,9 @@ spec:
         - name: NP_SENTRY_URL
           value: {{ .Values.NP_SENTRY_URL }}
         {{- end }}
-        {{- if .Values.NP_CLUSTER_NAME }}
-        - name: NP_CLUSTER_NAME
-          value: {{ .Values.NP_CLUSTER_NAME }}
+        {{- if .Values.NP_SENTRY_CLUSTER }}
+        - name: NP_SENTRY_CLUSTER
+          value: {{ .Values.NP_SENTRY_CLUSTER }}
         {{- end }}
       {{- if .Values.imagePullSecrets }}
       imagePullSecrets: {{ toYaml .Values.imagePullSecrets | nindent 6 }}

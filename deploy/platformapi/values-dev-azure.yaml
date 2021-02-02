@@ -16,7 +16,7 @@ NP_CORS_ORIGINS: https://neu.ro,https://master--neuro-web.netlify.com,http://loc
 NP_API_ZIPKIN_URL: 'http://zipkin:9411'
 NP_API_ZIPKIN_SAMPLE_RATE: '0.1'  # 10% of traces are saved
 NP_SENTRY_URL: "https://11316dd021994d7085c50e86c2ae404c@o454648.ingest.sentry.io/5597106"
-NP_CLUSTER_NAME: "dev-azure"
+NP_SENTRY_CLUSTER: "dev-azure"
 
 platform:
   token:

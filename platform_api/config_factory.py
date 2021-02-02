@@ -25,6 +25,7 @@ from .config import (
     OAuthConfig,
     PlatformConfig,
     PostgresConfig,
+    SentryConfig,
     ServerConfig,
     ZipkinConfig,
 )
@@ -50,8 +51,6 @@ class EnvironConfigFactory:
         api_base_url = URL(self._environ["NP_API_URL"])
         admin_url = URL(self._environ["NP_ADMIN_URL"])
         config_url = URL(self._environ["NP_PLATFORM_CONFIG_URI"])
-        sentry_url = self._environ.get("NP_SENTRY_URL", Config.sentry_url)
-        cluster_name = self._environ.get("NP_CLUSTER_NAME", Config.cluster_name)
         return Config(
             server=self.create_server(),
             database=self.create_database(),
@@ -67,9 +66,15 @@ class EnvironConfigFactory:
             config_url=config_url,
             admin_url=admin_url,
             api_base_url=api_base_url,
-            sentry_url=sentry_url,
-            cluster_name=cluster_name,
+            sentry=self.create_sentry(),
         )
+
+    def create_sentry(self) -> Optional[SentryConfig]:
+        sentry_url = self._environ.get("NP_SENTRY_URL")
+        sentry_cluster = self._environ.get("NP_SENTRY_CLUSTER")
+        if sentry_url and sentry_cluster:
+            return SentryConfig(sentry_url, sentry_cluster)
+        return None
 
     def create_cluster(self, name: str) -> ClusterConfig:
         return ClusterConfig(
