@@ -85,8 +85,9 @@ async def api(
     api_config = ApiConfig(host=api_address.host, port=api_address.port, runner=runner)
 
     poller_runners = []
-    for cluster in clusters:
+    for index, cluster in enumerate(clusters):
         poller_config = PollerConfig(
+            cluster_name=cluster.name,
             platform_api_url=config.job_policy_enforcer.platform_api_url,
             server=config.server,
             auth=config.auth,
@@ -94,12 +95,11 @@ async def api(
             scheduler=config.scheduler,
             config_url=config.config_url,
             admin_url=config.admin_url,
-            api_base_url=config.api_base_url,
             sentry=config.sentry,
-            cluster_name=cluster.name,
+            api_base_url=config.api_base_url,
         )
         poller_app = await poller_main.create_app(poller_config, cluster)
-        poller_runner = ApiRunner(poller_app, port=8090)
+        poller_runner = ApiRunner(poller_app, port=8090 + index)
         await poller_runner.run()
         poller_runners.append(poller_runner)
     yield api_config
@@ -120,6 +120,7 @@ async def api_with_oauth(
     poller_runners = []
     for cluster in [cluster_config]:
         poller_config = PollerConfig(
+            cluster_name=cluster.name,
             platform_api_url=config_with_oauth.job_policy_enforcer.platform_api_url,
             server=config_with_oauth.server,
             auth=config_with_oauth.auth,
@@ -127,9 +128,8 @@ async def api_with_oauth(
             scheduler=config_with_oauth.scheduler,
             config_url=config_with_oauth.config_url,
             admin_url=config_with_oauth.admin_url,
-            api_base_url=config_with_oauth.api_base_url,
             sentry=config_with_oauth.sentry,
-            cluster_name=cluster.name,
+            api_base_url=config_with_oauth.api_base_url,
         )
         poller_app = await poller_main.create_app(poller_config, cluster)
         poller_runner = ApiRunner(poller_app, port=8090)
