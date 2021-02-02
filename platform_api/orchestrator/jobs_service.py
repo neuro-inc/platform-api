@@ -683,9 +683,6 @@ class JobsPollerService:
 
         self._max_deletion_attempts = 10
 
-        self._dummy_cluster_storage_config = StorageConfig(
-            host_mount_path=PurePath("/<dummy>")
-        )
         self._dummy_cluster_orchestrator_config = OrchestratorConfig(
             jobs_domain_name_template="{job_id}.missing-cluster",
             resource_pool_types=(),
@@ -722,13 +719,10 @@ class JobsPollerService:
 
     def _make_job(self, record: JobRecord, cluster: Optional[Cluster] = None) -> Job:
         if cluster is not None:
-            storage_config = cluster.config.storage
             orchestrator_config = cluster.orchestrator.config
         else:
-            storage_config = self._dummy_cluster_storage_config
             orchestrator_config = self._dummy_cluster_orchestrator_config
         return Job(
-            storage_config=storage_config,
             orchestrator_config=orchestrator_config,
             record=record,
             image_pull_error_delay=self._jobs_config.image_pull_error_delay,

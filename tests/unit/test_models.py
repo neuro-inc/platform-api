@@ -1395,7 +1395,6 @@ class TestInferPermissionsFromContainer:
 @pytest.mark.asyncio
 async def test_parse_response(mock_orchestrator: MockOrchestrator) -> None:
     job = Job(
-        storage_config=mock_orchestrator.storage_config,
         orchestrator_config=mock_orchestrator.config,
         record=JobRecord.create(
             request=JobRequest.create(
