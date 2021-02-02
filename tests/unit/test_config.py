@@ -1,7 +1,6 @@
 from datetime import timedelta
 from pathlib import PurePath
 from typing import Dict
-from unittest import mock
 
 import pytest
 from yarl import URL
@@ -21,8 +20,7 @@ from platform_api.orchestrator.kube_orchestrator import (
     NfsVolume,
     PVCVolume,
 )
-from platform_api.resource import DEFAULT_PRESETS, GKEGPUModels, ResourcePoolType
-from tests.unit.conftest import CA_DATA_PEM
+from platform_api.resource import DEFAULT_PRESETS, ResourcePoolType
 
 
 class TestStorageConfig:
@@ -147,10 +145,7 @@ class TestEnvironConfigFactory:
 
     def test_create_defaults(self) -> None:
         environ = {
-            "NP_STORAGE_HOST_MOUNT_PATH": "/tmp",
-            "NP_K8S_API_URL": "https://localhost:8443",
             "NP_JOBS_INGRESS_OAUTH_AUTHORIZE_URL": "http://neu.ro/oauth/authorize",
-            "NP_K8S_JOBS_INGRESS_DOMAIN_NAME_TEMPLATE": "{job_id}.jobs.domain",
             "NP_AUTH_URL": "https://auth",
             "NP_AUTH_TOKEN": "token",
             "NP_OAUTH_AUTH_URL": "https://oauth-auth",
@@ -172,17 +167,12 @@ class TestEnvironConfigFactory:
             "NP_API_ZIPKIN_SAMPLE_RATE": "1",
         }
         config = EnvironConfigFactory(environ=environ).create()
-        cluster = EnvironConfigFactory(environ=environ).create_cluster("new-cluster")
 
         assert config.config_url == URL("http://platformconfig:8080/api/v1")
         assert config.admin_url == URL("https://neu.ro/apis/admin/v1")
 
         assert config.server.host == "0.0.0.0"
         assert config.server.port == 8080
-
-        assert cluster.storage.host_mount_path == PurePath("/tmp")
-        assert cluster.storage.container_mount_path == PurePath("/var/storage")
-        assert cluster.storage.uri_scheme == "storage"
 
         assert config.jobs.deletion_delay_s == 900
         assert config.jobs.deletion_delay == timedelta(minutes=15)
@@ -195,29 +185,6 @@ class TestEnvironConfigFactory:
 
         assert config.notifications.url == URL("http://notifications:8080")
         assert config.notifications.token == "token"
-
-        assert isinstance(cluster.orchestrator, KubeConfig)
-        assert cluster.orchestrator.endpoint_url == "https://localhost:8443"
-        assert not cluster.orchestrator.cert_authority_data_pem
-        assert not cluster.orchestrator.cert_authority_path
-        assert not cluster.orchestrator.auth_cert_path
-        assert not cluster.orchestrator.auth_cert_key_path
-        assert cluster.orchestrator.namespace == "default"
-        assert cluster.orchestrator.client_conn_timeout_s == 300
-        assert cluster.orchestrator.client_read_timeout_s == 300
-        assert cluster.orchestrator.jobs_ingress_class == "traefik"
-        assert cluster.orchestrator.jobs_ingress_oauth_url == URL(
-            "http://neu.ro/oauth/authorize"
-        )
-        assert cluster.orchestrator.client_conn_pool_size == 100
-        assert not cluster.orchestrator.is_http_ingress_secure
-        assert cluster.orchestrator.jobs_domain_name_template == "{job_id}.jobs.domain"
-
-        assert cluster.orchestrator.resource_pool_types == [
-            ResourcePoolType(name=mock.ANY)
-        ]
-        assert cluster.orchestrator.node_label_gpu is None
-        assert cluster.orchestrator.node_label_preemptible is None
 
         assert config.auth.server_endpoint_url == URL("https://auth")
         assert config.auth.service_token == "token"
@@ -234,15 +201,12 @@ class TestEnvironConfigFactory:
             "https://dev.neu.ro/oauth/show-code"
         )
 
-        assert cluster.registry.host == "registry.dev.neuromation.io"
-
         assert not config.cors.allowed_origins
 
     def test_create_value_error_invalid_port(self) -> None:
         environ = {
             "NP_STORAGE_HOST_MOUNT_PATH": "/tmp",
             "NP_API_PORT": "port",
-            "NP_K8S_API_URL": "https://localhost:8443",
             "NP_AUTH_URL": "https://auth",
             "NP_AUTH_TOKEN": "token",
             "NP_API_URL": "https://neu.ro/api/v1",
@@ -259,20 +223,8 @@ class TestEnvironConfigFactory:
     def test_create_custom(self, cert_authority_path: str) -> None:
         environ = {
             "NP_API_PORT": "1111",
-            "NP_STORAGE_HOST_MOUNT_PATH": "/tmp",
-            "NP_STORAGE_CONTAINER_MOUNT_PATH": "/opt/storage",
-            "NP_K8S_API_URL": "https://localhost:8443",
-            "NP_K8S_CA_PATH": cert_authority_path,
-            "NP_K8S_AUTH_CERT_PATH": "/cert_path",
-            "NP_K8S_AUTH_CERT_KEY_PATH": "/cert_key_path",
-            "NP_K8S_NS": "other",
-            "NP_K8S_CLIENT_CONN_TIMEOUT": "111",
-            "NP_K8S_CLIENT_READ_TIMEOUT": "222",
-            "NP_K8S_CLIENT_CONN_POOL_SIZE": "333",
             "NP_K8S_JOBS_INGRESS_CLASS": "nginx",
             "NP_JOBS_INGRESS_OAUTH_AUTHORIZE_URL": "http://neu.ro/oauth/authorize",
-            "NP_K8S_JOBS_INGRESS_HTTPS": "True",
-            "NP_K8S_JOBS_INGRESS_DOMAIN_NAME_TEMPLATE": "{job_id}.jobs.domain",
             "NP_K8S_JOB_DELETION_DELAY": "3600",
             "NP_DB_POSTGRES_DSN": "postgresql://postgres@localhost:5432/postgres",
             "NP_DB_POSTGRES_POOL_MIN": "50",
@@ -280,19 +232,6 @@ class TestEnvironConfigFactory:
             "NP_AUTH_URL": "https://auth",
             "NP_AUTH_TOKEN": "token",
             "NP_AUTH_NAME": "servicename",
-            "NP_REGISTRY_HOST": "testregistry:5000",
-            "NP_REGISTRY_HTTPS": "True",
-            "NP_K8S_NODE_LABEL_GPU": "testlabel",
-            "NP_GKE_GPU_MODELS": ",".join(
-                [
-                    "",
-                    "nvidia-tesla-k80",
-                    "unknown",
-                    "nvidia-tesla-k80",
-                    "nvidia-tesla-v100",
-                ]
-            ),
-            "NP_K8S_NODE_LABEL_PREEMPTIBLE": "testpreempt",
             "NP_API_URL": "https://neu.ro/api/v1",
             "NP_ADMIN_URL": "https://neu.ro/apis/admin/v1",
             "NP_OAUTH_HEADLESS_CALLBACK_URL": "https://oauth/show-code",
@@ -307,19 +246,9 @@ class TestEnvironConfigFactory:
             "NP_API_ZIPKIN_SAMPLE_RATE": "1",
         }
         config = EnvironConfigFactory(environ=environ).create()
-        cluster = EnvironConfigFactory(environ=environ).create_cluster("new-cluster")
 
         assert config.server.host == "0.0.0.0"
         assert config.server.port == 1111
-
-        assert cluster.storage.host_mount_path == PurePath("/tmp")
-        assert cluster.storage.container_mount_path == PurePath("/opt/storage")
-        assert cluster.storage.uri_scheme == "storage"
-
-        assert cluster.ingress.storage_url == URL("https://neu.ro/api/v1/storage")
-        assert cluster.ingress.monitoring_url == URL("https://neu.ro/api/v1/jobs")
-        assert cluster.ingress.secrets_url == URL("https://neu.ro/api/v1/secrets")
-        assert cluster.ingress.metrics_url == URL("https://neu.ro/api/v1/metrics")
 
         assert config.jobs.deletion_delay_s == 3600
         assert config.jobs.deletion_delay == timedelta(seconds=3600)
@@ -333,34 +262,6 @@ class TestEnvironConfigFactory:
         assert config.notifications.url == URL("http://notifications:8080")
         assert config.notifications.token == "token"
 
-        assert isinstance(cluster.orchestrator, KubeConfig)
-        assert cluster.orchestrator.endpoint_url == "https://localhost:8443"
-        assert cluster.orchestrator.cert_authority_data_pem == CA_DATA_PEM
-        assert cluster.orchestrator.cert_authority_path is None  # disabled
-        assert cluster.orchestrator.auth_cert_path == "/cert_path"
-        assert cluster.orchestrator.auth_cert_key_path == "/cert_key_path"
-        assert cluster.orchestrator.namespace == "other"
-        assert cluster.orchestrator.client_conn_timeout_s == 111
-        assert cluster.orchestrator.client_read_timeout_s == 222
-        assert cluster.orchestrator.client_conn_pool_size == 333
-        assert cluster.orchestrator.jobs_ingress_class == "nginx"
-        assert cluster.orchestrator.jobs_ingress_oauth_url == URL(
-            "http://neu.ro/oauth/authorize"
-        )
-        assert cluster.orchestrator.is_http_ingress_secure
-        assert cluster.orchestrator.jobs_domain_name_template == "{job_id}.jobs.domain"
-
-        assert cluster.orchestrator.resource_pool_types == [
-            ResourcePoolType(name=mock.ANY),
-            ResourcePoolType(name=mock.ANY, gpu=1, gpu_model=GKEGPUModels.K80.value.id),
-            ResourcePoolType(name=mock.ANY, gpu=1, gpu_model="unknown"),
-            ResourcePoolType(
-                name=mock.ANY, gpu=1, gpu_model=GKEGPUModels.V100.value.id
-            ),
-        ]
-        assert cluster.orchestrator.node_label_gpu == "testlabel"
-        assert cluster.orchestrator.node_label_preemptible == "testpreempt"
-
         assert config.database.postgres is not None
         assert (
             config.database.postgres.postgres_dsn
@@ -373,33 +274,7 @@ class TestEnvironConfigFactory:
         assert config.auth.service_token == "token"
         assert config.auth.service_name == "servicename"
 
-        assert cluster.registry.email == "registry@neuromation.io"
-        assert cluster.registry.host == "testregistry:5000"
-        assert cluster.registry.url == URL("https://testregistry:5000")
-
         assert config.cors.allowed_origins == ["https://domain1.com", "http://do.main"]
-
-    def test_create_nfs(self) -> None:
-        environ = {
-            "NP_STORAGE_TYPE": "nfs",
-            "NP_STORAGE_NFS_SERVER": "1.2.3.4",
-            "NP_STORAGE_NFS_PATH": "/tmp",
-            "NP_STORAGE_HOST_MOUNT_PATH": "/tmp",
-            "NP_K8S_API_URL": "https://localhost:8443",
-            "NP_K8S_JOBS_INGRESS_DOMAIN_NAME_TEMPLATE": "{job_id}.jobs.domain",
-            "NP_JOBS_INGRESS_OAUTH_AUTHORIZE_URL": "http://neu.ro/oauth/authorize",
-            "NP_API_URL": "https://neu.ro/api/v1",
-            "NP_ADMIN_URL": "https://neu.ro/apis/admin/v1",
-            "NP_AUTH_URL": "https://auth",
-            "NP_AUTH_TOKEN": "token",
-            "NP_OAUTH_HEADLESS_CALLBACK_URL": "https://oauth/show-code",
-            "NP_PLATFORM_CONFIG_URI": "http://platformconfig:8080/api/v1",
-            "NP_NOTIFICATIONS_URL": "http://notifications:8080",
-            "NP_NOTIFICATIONS_TOKEN": "token",
-        }
-        cluster = EnvironConfigFactory(environ=environ).create_cluster("new-cluster")
-        assert cluster.storage.nfs_server == "1.2.3.4"
-        assert cluster.storage.nfs_export_path == PurePath("/tmp")
 
     def test_registry_config_invalid_missing_host(self) -> None:
         with pytest.raises(ValueError, match="missing url hostname"):
