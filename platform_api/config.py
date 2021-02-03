@@ -150,10 +150,6 @@ class Config:
 
     scheduler: JobsSchedulerConfig = JobsSchedulerConfig()
 
-    # used for generating environment variable names and
-    # sourcing them inside containers.
-    env_prefix: str = "NP"  # stands for Neuromation Platform
-
     sentry: Optional[SentryConfig] = None
 
 

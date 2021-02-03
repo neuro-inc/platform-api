@@ -42,22 +42,6 @@ spec:
         resources: {{ toYaml .Values.resources | nindent 10 }}
 {{- end }}
         env:
-        - name: NP_K8S_API_URL
-          value: http://localhost:8001
-        - name: NP_K8S_AUTH_TYPE
-          value: none
-        - name: NP_STORAGE_TYPE
-          value: nfs
-        - name: NP_STORAGE_NFS_SERVER
-          value: "{{ .Values.NP_STORAGE_NFS_SERVER }}"
-        - name: NP_STORAGE_NFS_PATH
-          value: "{{ .Values.NP_STORAGE_NFS_PATH }}"
-        - name: NP_STORAGE_HOST_MOUNT_PATH
-          value: "{{ .Values.NP_STORAGE_NFS_PATH }}"
-        - name: NP_K8S_JOBS_INGRESS_HTTPS
-          value: "true"
-        - name: NP_K8S_JOBS_INGRESS_DOMAIN_NAME_TEMPLATE
-          value: "{{ .Values.NP_K8S_JOBS_INGRESS_DOMAIN_NAME_TEMPLATE }}"
         - name: NP_AUTH_URL
           value: http://platformauthapi:8080
         - name: NP_AUTH_TOKEN
@@ -78,16 +62,6 @@ spec:
           value: "{{ .Values.NP_OAUTH_SUCCESS_REDIRECT_URL }}"
         - name: NP_OAUTH_HEADLESS_CALLBACK_URL
           value: "{{ .Values.NP_OAUTH_HEADLESS_CALLBACK_URL }}"
-        - name: NP_REGISTRY_HOST
-          value: "{{ .Values.NP_REGISTRY_HOST }}"
-        - name: NP_REGISTRY_HTTPS
-          value: "true"
-        - name: NP_K8S_NODE_LABEL_GPU
-          value: cloud.google.com/gke-accelerator
-        - name: NP_GKE_GPU_MODELS
-          value: "{{ .Values.NP_GKE_GPU_MODELS }}"
-        - name: NP_K8S_NODE_LABEL_PREEMPTIBLE
-          value: cloud.google.com/gke-preemptible
         - name: NP_API_URL
           value: "{{ .Values.NP_API_URL }}"
         - name: NP_ADMIN_URL
