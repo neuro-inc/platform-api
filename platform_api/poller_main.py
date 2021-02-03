@@ -111,7 +111,7 @@ async def create_app(
             logger.info("Initializing JobsPollerApi")
             poller_api = await exit_stack.enter_async_context(
                 HttpJobsPollerApi(
-                    url=config.job_policy_enforcer.platform_api_url,
+                    url=config.api_base_url,
                     token=config.auth.service_token,
                 )
             )
