@@ -742,7 +742,7 @@ def config_factory(
         database_config = DatabaseConfig(postgres=postgres_config)
         config_url = URL("http://localhost:8082/api/v1")
         admin_url = URL("http://localhost:8080/apis/admin/v1")
-        api_base_url = URL("http://localhost:8080/apis/v1")
+        api_base_url = URL("http://localhost:8080/api/v1")
         return Config(
             server=server_config,
             database=database_config,
