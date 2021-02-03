@@ -34,6 +34,11 @@ setup(
     python_requires=">=3.7.0",
     setup_requires=setup_requires,
     install_requires=install_requires,
-    entry_points={"console_scripts": ["platform-api=platform_api.api:main"]},
+    entry_points={
+        "console_scripts": [
+            "platform-api=platform_api.api:main",
+            "platform-api-poller=platform_api.poller_main:main",
+        ]
+    },
     zip_safe=False,
 )
