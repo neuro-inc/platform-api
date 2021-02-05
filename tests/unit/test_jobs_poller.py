@@ -5,7 +5,8 @@ import pytest
 
 from platform_api.orchestrator.job_request import JobRequest, JobStatus
 from platform_api.orchestrator.jobs_poller import JobsPoller
-from platform_api.orchestrator.jobs_service import JobsPollerService, JobsService
+from platform_api.orchestrator.jobs_service import JobsService
+from platform_api.orchestrator.poller_service import JobsPollerService
 from platform_api.user import User
 
 from .conftest import MockOrchestrator

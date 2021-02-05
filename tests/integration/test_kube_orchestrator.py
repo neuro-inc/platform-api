@@ -85,8 +85,21 @@ class MyJob(Job):
             record=record,
         )
 
+    def _prepare(self) -> None:
+        assert isinstance(self._orchestrator, KubeOrchestrator)
+        assert isinstance(self._orchestrator.config, KubeConfig)
+        namespace = self._orchestrator.config.namespace
+
+        self.internal_hostname = f"{self.id}.{namespace}"
+        if self.is_named:
+            from platform_api.handlers.validators import JOB_USER_NAMES_SEPARATOR
+
+            self.internal_hostname_named = (
+                f"{self.name}{JOB_USER_NAMES_SEPARATOR}{self.owner}.{namespace}"
+            )
+
     async def start(self) -> JobStatus:
-        await self._orchestrator.prepare_job(self)
+        self._prepare()
         status = await self._orchestrator.start_job(self)
         assert status == JobStatus.PENDING
         return status
@@ -2040,7 +2053,6 @@ class TestKubeOrchestrator:
             ),
         )
         await delete_job_later(job)
-        await kube_orchestrator.prepare_job(job)
         await kube_orchestrator.start_job(job)
 
         pod_name = ingress_name = service_name = networkpolicy_name = job.id
@@ -2098,11 +2110,9 @@ class TestKubeOrchestrator:
             ),
         )
         await delete_job_later(job1)
-        await kube_orchestrator.prepare_job(job1)
         await kube_orchestrator.start_job(job1)
 
         await delete_job_later(job2)
-        await kube_orchestrator.prepare_job(job2)
         await kube_orchestrator.start_job(job2)
 
         await kube_client.get_ingress(job1.id)
@@ -2118,7 +2128,6 @@ class TestKubeOrchestrator:
             ),
         )
         await delete_job_later(job3)
-        await kube_orchestrator.prepare_job(job3)
         await kube_orchestrator.start_job(job3)
 
         with pytest.raises(JobNotFoundException):
@@ -3148,7 +3157,6 @@ class TestPreemption:
             ),
         )
         await delete_job_later(job)
-        await kube_orchestrator.prepare_job(job)
         await kube_orchestrator.start_job(job)
         pod_name = job.id
 
@@ -3185,7 +3193,6 @@ class TestPreemption:
             ),
         )
         await delete_job_later(job)
-        await kube_orchestrator.prepare_job(job)
         await kube_orchestrator.start_job(job)
         pod_name = job.id
 
@@ -3226,7 +3233,6 @@ class TestPreemption:
             ),
         )
         await delete_job_later(job)
-        await kube_orchestrator.prepare_job(job)
         await kube_orchestrator.start_job(job)
         pod_name = job.id
 
@@ -3269,7 +3275,6 @@ class TestPreemption:
             ),
         )
         await delete_job_later(job)
-        await kube_orchestrator.prepare_job(job)
         await kube_orchestrator.start_job(job)
         pod_name = job.id
 
@@ -3308,7 +3313,6 @@ class TestPreemption:
             ),
         )
         await delete_job_later(job)
-        await kube_orchestrator.prepare_job(job)
         await kube_orchestrator.start_job(job)
         pod_name = job.id
 
@@ -3356,7 +3360,6 @@ class TestPreemption:
             ),
         )
         await delete_job_later(job)
-        await kube_orchestrator.prepare_job(job)
         await kube_orchestrator.start_job(job)
         pod_name = job.id
 
@@ -3409,7 +3412,6 @@ class TestRestartPolicy:
             ),
         )
         await delete_job_later(job)
-        await kube_orchestrator.prepare_job(job)
         await kube_orchestrator.start_job(job)
         pod_name = job.id
 
@@ -3444,7 +3446,6 @@ class TestRestartPolicy:
             ),
         )
         await delete_job_later(job)
-        await kube_orchestrator.prepare_job(job)
         await kube_orchestrator.start_job(job)
         pod_name = job.id
 
@@ -3474,7 +3475,6 @@ class TestRestartPolicy:
             ),
         )
         await delete_job_later(job)
-        await kube_orchestrator.prepare_job(job)
         await kube_orchestrator.start_job(job)
         pod_name = job.id
 
@@ -3509,7 +3509,6 @@ class TestRestartPolicy:
             ),
         )
         await delete_job_later(job)
-        await kube_orchestrator.prepare_job(job)
         await kube_orchestrator.start_job(job)
         pod_name = job.id
 

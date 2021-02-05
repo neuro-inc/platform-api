@@ -21,8 +21,8 @@ from .job_request import (
     Secret,
     SecretContainerVolume,
 )
-from .jobs_service import JobsPollerApi, JobsPollerService
 from .jobs_storage import JobStorageTransactionError
+from .poller_service import JobsPollerApi, JobsPollerService
 
 
 logger = logging.getLogger(__name__)

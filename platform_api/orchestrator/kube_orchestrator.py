@@ -440,14 +440,6 @@ class KubeOrchestrator(Orchestrator):
 
         return f"{job.name}{JOB_USER_NAMES_SEPARATOR}{job.owner}"
 
-    async def prepare_job(self, job: Job) -> None:
-        # TODO (A Yushkovskiy 31.10.2018): get namespace for the pod, not statically
-        job.internal_hostname = f"{job.id}.{self._kube_config.namespace}"
-        if job.is_named:
-            job.internal_hostname_named = (
-                f"{self._get_service_name_for_named(job)}.{self._kube_config.namespace}"
-            )
-
     async def start_job(
         self, job: Job, tolerate_unreachable_node: bool = False
     ) -> JobStatus:

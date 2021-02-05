@@ -24,7 +24,7 @@ from .config_client import ConfigClient
 from .config_factory import EnvironConfigFactory
 from .kube_cluster import KubeCluster
 from .orchestrator.jobs_poller import HttpJobsPollerApi, JobsPoller, JobsPollerService
-from .orchestrator.jobs_service import JobsScheduler
+from .orchestrator.poller_service import JobsScheduler
 from .postgres import create_postgres_pool
 
 

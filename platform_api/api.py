@@ -26,7 +26,7 @@ from platform_api.orchestrator.job_policy_enforcer import (
 from .cluster import (
     Cluster,
     ClusterConfig,
-    ClusterRegistry,
+    ClusterConfigRegistry,
     ClusterUpdateNotifier,
     ClusterUpdater,
     get_cluster_configs,
@@ -39,7 +39,7 @@ from .handlers.stats_handler import StatsHandler
 from .handlers.tags_handler import TagsHandler
 from .kube_cluster import KubeCluster
 from .orchestrator.job_request import JobException
-from .orchestrator.jobs_service import JobsScheduler, JobsService, JobsServiceException
+from .orchestrator.jobs_service import JobsService, JobsServiceException
 from .orchestrator.jobs_storage import JobsStorage, PostgresJobsStorage
 from .postgres import create_postgres_pool
 from .resource import Preset
@@ -290,9 +290,7 @@ async def create_app(
             await exit_stack.enter_async_context(notifications_client)
 
             logger.info("Initializing Cluster Registry")
-            cluster_registry = await exit_stack.enter_async_context(
-                ClusterRegistry(factory=create_cluster)
-            )
+            cluster_config_registry = ClusterConfigRegistry()
 
             logger.info("Initializing Config client")
             config_client = await exit_stack.enter_async_context(
@@ -310,7 +308,7 @@ async def create_app(
 
             logger.info("Loading clusters")
             for cluster in client_clusters:
-                await cluster_registry.replace(cluster)
+                await cluster_config_registry.replace(cluster)
 
             logger.info("Initializing Postgres connection pool")
             postgres_pool = await exit_stack.enter_async_context(
@@ -325,11 +323,10 @@ async def create_app(
 
             logger.info("Initializing JobsService")
             jobs_service = JobsService(
-                cluster_registry=cluster_registry,
+                cluster_config_registry=cluster_config_registry,
                 jobs_storage=jobs_storage,
                 jobs_config=config.jobs,
                 notifications_client=notifications_client,
-                scheduler=JobsScheduler(config.scheduler, auth_client=auth_client),
                 auth_client=auth_client,
                 api_base_url=config.api_base_url,
             )
@@ -339,7 +336,7 @@ async def create_app(
                 notifier=cluster_update_notifier,
                 config=config,
                 config_client=config_client,
-                cluster_registry=cluster_registry,
+                cluster_registry=cluster_config_registry,
             )
             await exit_stack.enter_async_context(cluster_updater)
 
