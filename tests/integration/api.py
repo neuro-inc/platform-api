@@ -13,7 +13,7 @@ from yarl import URL
 from platform_api import poller_main
 from platform_api.api import create_app
 from platform_api.cluster_config import ClusterConfig
-from platform_api.config import AuthConfig, Config
+from platform_api.config import AuthConfig, Config, PollerConfig
 from platform_api.orchestrator.job import JobStatus
 
 from .auth import _User
@@ -84,12 +84,28 @@ async def api(
     api_address = await runner.run()
     api_config = ApiConfig(host=api_address.host, port=api_address.port, runner=runner)
 
-    poller_app = await poller_main.create_app(config, clusters)
-    poller_runner = ApiRunner(poller_app, port=8090)
-    await poller_runner.run()
+    poller_runners = []
+    for cluster in clusters:
+        poller_config = PollerConfig(
+            platform_api_url=config.job_policy_enforcer.platform_api_url,
+            server=config.server,
+            auth=config.auth,
+            jobs=config.jobs,
+            scheduler=config.scheduler,
+            config_url=config.config_url,
+            admin_url=config.admin_url,
+            api_base_url=config.api_base_url,
+            sentry=config.sentry,
+            cluster_name=cluster.name,
+        )
+        poller_app = await poller_main.create_app(poller_config, cluster)
+        poller_runner = ApiRunner(poller_app, port=8090)
+        await poller_runner.run()
+        poller_runners.append(poller_runner)
     yield api_config
+    for poller_runner in poller_runners:
+        await poller_runner.close()
     await runner.close()
-    await poller_runner.close()
 
 
 @pytest.fixture
@@ -101,12 +117,28 @@ async def api_with_oauth(
     api_address = await runner.run()
     api_config = ApiConfig(host=api_address.host, port=api_address.port, runner=runner)
 
-    poller_app = await poller_main.create_app(config_with_oauth, [cluster_config])
-    poller_runner = ApiRunner(poller_app, port=8090)
-    await poller_runner.run()
+    poller_runners = []
+    for cluster in [cluster_config]:
+        poller_config = PollerConfig(
+            platform_api_url=config_with_oauth.job_policy_enforcer.platform_api_url,
+            server=config_with_oauth.server,
+            auth=config_with_oauth.auth,
+            jobs=config_with_oauth.jobs,
+            scheduler=config_with_oauth.scheduler,
+            config_url=config_with_oauth.config_url,
+            admin_url=config_with_oauth.admin_url,
+            api_base_url=config_with_oauth.api_base_url,
+            sentry=config_with_oauth.sentry,
+            cluster_name=cluster.name,
+        )
+        poller_app = await poller_main.create_app(poller_config, cluster)
+        poller_runner = ApiRunner(poller_app, port=8090)
+        await poller_runner.run()
+        poller_runners.append(poller_runner)
     yield api_config
+    for poller_runner in poller_runners:
+        await poller_runner.close()
     await runner.close()
-    await poller_runner.close()
 
 
 @pytest.fixture

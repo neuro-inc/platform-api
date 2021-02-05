@@ -1,7 +1,7 @@
 import asyncio
 import logging
 from contextlib import AsyncExitStack
-from typing import AsyncIterator, Sequence
+from typing import AsyncIterator, Optional
 
 import aiohttp.web
 import sentry_sdk
@@ -11,28 +11,20 @@ from platform_logging import init_logging
 from sentry_sdk.integrations.aiohttp import AioHttpIntegration
 
 from .api import add_version_to_header, handle_exceptions
-from .cluster import (
-    Cluster,
-    ClusterConfig,
-    ClusterRegistry,
-    ClusterUpdateNotifier,
-    ClusterUpdater,
-    get_cluster_configs,
-)
-from .config import Config
+from .cluster import Cluster, ClusterConfig, ClusterHolder, SingleClusterUpdater
+from .config import PollerConfig
 from .config_client import ConfigClient
 from .config_factory import EnvironConfigFactory
 from .kube_cluster import KubeCluster
 from .orchestrator.jobs_poller import HttpJobsPollerApi, JobsPoller, JobsPollerService
 from .orchestrator.poller_service import JobsScheduler
-from .postgres import create_postgres_pool
 
 
 logger = logging.getLogger(__name__)
 
 
 class PingHandler:
-    def __init__(self, *, app: aiohttp.web.Application, config: Config):
+    def __init__(self, *, app: aiohttp.web.Application, config: PollerConfig):
         self._app = app
         self._config = config
 
@@ -43,7 +35,7 @@ class PingHandler:
         return aiohttp.web.Response()
 
 
-async def create_ping_app(config: Config) -> aiohttp.web.Application:
+async def create_ping_app(config: PollerConfig) -> aiohttp.web.Application:
     ping_app = aiohttp.web.Application()
     ping_handler = PingHandler(app=ping_app, config=config)
     ping_handler.register(ping_app)
@@ -55,7 +47,7 @@ def create_cluster(config: ClusterConfig) -> Cluster:
 
 
 async def create_app(
-    config: Config, clusters: Sequence[ClusterConfig] = ()
+    config: PollerConfig, cluster: Optional[ClusterConfig] = None
 ) -> aiohttp.web.Application:
     app = aiohttp.web.Application(middlewares=[handle_exceptions])
     app["config"] = config
@@ -76,8 +68,8 @@ async def create_app(
             )
 
             logger.info("Initializing Cluster Registry")
-            cluster_registry = await exit_stack.enter_async_context(
-                ClusterRegistry(factory=create_cluster)
+            cluster_holder = await exit_stack.enter_async_context(
+                ClusterHolder(factory=create_cluster)
             )
 
             logger.info("Initializing Config client")
@@ -88,37 +80,18 @@ async def create_app(
                 )
             )
 
-            if clusters:
-                client_clusters = clusters
-            else:
-                client_clusters = await get_cluster_configs(config, config_client)
-
-            logger.info("Loading clusters")
-            for cluster in client_clusters:
-                await cluster_registry.replace(cluster)
-
-            assert config.database.postgres, (
-                "Postgres config should be available when "
-                "NP_DB_POSTGRES_ENABLED is set"
-            )
-            logger.info("Initializing Postgres connection pool")
-            postgres_pool = await exit_stack.enter_async_context(
-                create_postgres_pool(config.database.postgres)
-            )
-
-            cluster_update_notifier = ClusterUpdateNotifier(postgres_pool)
-
             logger.info("Initializing JobsPollerApi")
             poller_api = await exit_stack.enter_async_context(
                 HttpJobsPollerApi(
-                    url=config.api_base_url,
+                    url=config.platform_api_url,
                     token=config.auth.service_token,
+                    cluster_name=config.cluster_name,
                 )
             )
 
             logger.info("Initializing JobsPollerService")
             jobs_poller_service = JobsPollerService(
-                cluster_registry=cluster_registry,
+                cluster_holder=cluster_holder,
                 jobs_config=config.jobs,
                 scheduler=JobsScheduler(config.scheduler, auth_client=auth_client),
                 auth_client=auth_client,
@@ -130,13 +103,17 @@ async def create_app(
             await exit_stack.enter_async_context(jobs_poller)
 
             logger.info("Initializing ClusterUpdater")
-            cluster_updater = ClusterUpdater(
-                notifier=cluster_update_notifier,
+            cluster_updater = SingleClusterUpdater(
                 config=config,
                 config_client=config_client,
-                cluster_registry=cluster_registry,
+                cluster_holder=cluster_holder,
+                cluster_name=config.cluster_name,
             )
-            await exit_stack.enter_async_context(cluster_updater)
+
+            if cluster:
+                await cluster_holder.update(cluster)
+            else:
+                await cluster_updater.do_update()
 
             yield
 
@@ -153,7 +130,7 @@ async def create_app(
 
 def main() -> None:
     init_logging()
-    config = EnvironConfigFactory().create()
+    config = EnvironConfigFactory().create_poller()
     logging.info("Loaded config: %r", config)
 
     loop = asyncio.get_event_loop()

@@ -82,6 +82,7 @@ async def http_jobs_poller_api(
     async with HttpJobsPollerApi(
         token="test_token",
         url=jobs_api_mock.address.url / "api/v1",
+        cluster_name="default",
     ) as api:
         yield api
 
@@ -101,6 +102,7 @@ class TestHttpJobsStorage:
         assert set(JobStatus.active_values()) == set(
             jobs_api_mock.last_query.getall("status")
         )
+        assert jobs_api_mock.last_query["cluster_name"] == "default"
 
     @pytest.mark.asyncio
     async def test_get_for_deletion(
@@ -117,6 +119,7 @@ class TestHttpJobsStorage:
         assert set(JobStatus.finished_values()) == set(
             jobs_api_mock.last_query.getall("status")
         )
+        assert jobs_api_mock.last_query["cluster_name"] == "default"
 
     @pytest.mark.asyncio
     async def test_push_status(
