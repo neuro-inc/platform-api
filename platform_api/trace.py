@@ -1,7 +1,7 @@
 import functools
 from contextlib import asynccontextmanager
 from contextvars import ContextVar
-from typing import Any, AsyncIterator, Awaitable, Callable, TypeVar, cast
+from typing import Any, AsyncIterator, Awaitable, Callable, Optional, TypeVar, cast
 
 import aiozipkin
 from aiohttp import web
@@ -19,8 +19,8 @@ T = TypeVar("T", bound=Callable[..., Any])
 
 
 @asynccontextmanager
-async def tracing_cm(name: str) -> AsyncIterator[SpanAbc]:
-    tracer = CURRENT_TRACER.get(None)  # type: ignore
+async def tracing_cm(name: str) -> AsyncIterator[Optional[SpanAbc]]:
+    tracer = CURRENT_TRACER.get(None)
     if tracer is None:
         # No tracer is set,
         # the call is made from unittest most likely.

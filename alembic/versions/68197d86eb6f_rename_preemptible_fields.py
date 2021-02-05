@@ -15,7 +15,7 @@ branch_labels = None
 depends_on = None
 
 
-def upgrade():
+def upgrade() -> None:
     op.execute(
         """\
 UPDATE jobs
@@ -34,7 +34,7 @@ WHERE payload ? 'is_preemptible_node_required'
     )
 
 
-def downgrade():
+def downgrade() -> None:
     op.execute(
         """\
 UPDATE jobs

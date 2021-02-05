@@ -16,7 +16,7 @@ branch_labels = None
 depends_on = None
 
 
-def upgrade():
+def upgrade() -> None:
     # Indexes:
     op.create_index(
         "jobs_owner_index",
@@ -47,7 +47,7 @@ def upgrade():
     op.execute("CREATE INDEX jobs_tags_index ON jobs USING GIN (tags jsonb_path_ops);")
 
 
-def downgrade():
+def downgrade() -> None:
     op.drop_index("jobs_owner_index", table_name="jobs")
     op.drop_index("jobs_name_index", table_name="jobs")
     op.drop_index("jobs_status_index", table_name="jobs")
