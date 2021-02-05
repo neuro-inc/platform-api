@@ -331,7 +331,7 @@ class Service:
             ports.append({"port": port, "targetPort": target_port, "name": port_name})
 
     def to_primitive(self) -> Dict[str, Any]:
-        service_descriptor = {
+        service_descriptor: Dict[str, Any] = {
             "metadata": {"name": self.name},
             "spec": {
                 "type": self.service_type.value,
@@ -593,7 +593,7 @@ class NodeSelectorRequirement:
         return cls(key=key, operator=NodeSelectorOperator.DOES_NOT_EXIST)
 
     def to_primitive(self) -> Dict[str, Any]:
-        payload = {"key": self.key, "operator": self.operator.value}
+        payload: Dict[str, Any] = {"key": self.key, "operator": self.operator.value}
         if self.values:
             payload["values"] = self.values.copy()
         return payload

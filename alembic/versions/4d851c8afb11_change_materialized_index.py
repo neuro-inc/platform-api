@@ -16,7 +16,7 @@ branch_labels = None
 depends_on = None
 
 
-def upgrade():
+def upgrade() -> None:
     op.drop_index("jobs_materialized_index", table_name="jobs")
     op.create_index(
         "jobs_materialized_index",
@@ -26,7 +26,7 @@ def upgrade():
     op.execute("ANALYZE jobs;")  # Collect statistics.
 
 
-def downgrade():
+def downgrade() -> None:
     op.drop_index("jobs_materialized_index", table_name="jobs")
     op.create_index(
         "jobs_materialized_index",
