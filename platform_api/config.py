@@ -161,9 +161,7 @@ class PollerConfig:
 
     auth: AuthConfig
 
-    api_base_url: URL
     config_url: URL
-    admin_url: URL
 
     jobs: JobsConfig = JobsConfig()
 

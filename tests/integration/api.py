@@ -94,9 +94,7 @@ async def api(
             jobs=config.jobs,
             scheduler=config.scheduler,
             config_url=config.config_url,
-            admin_url=config.admin_url,
             sentry=config.sentry,
-            api_base_url=config.api_base_url,
         )
         poller_app = await poller_main.create_app(poller_config, cluster)
         poller_runner = ApiRunner(poller_app, port=8090 + index)
@@ -127,9 +125,7 @@ async def api_with_oauth(
             jobs=config_with_oauth.jobs,
             scheduler=config_with_oauth.scheduler,
             config_url=config_with_oauth.config_url,
-            admin_url=config_with_oauth.admin_url,
             sentry=config_with_oauth.sentry,
-            api_base_url=config_with_oauth.api_base_url,
         )
         poller_app = await poller_main.create_app(poller_config, cluster)
         poller_runner = ApiRunner(poller_app, port=8090)

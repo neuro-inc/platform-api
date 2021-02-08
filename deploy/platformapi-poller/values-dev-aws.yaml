@@ -3,16 +3,6 @@ NP_API_URL: https://dev.neu.ro/api/v1
 NP_ADMIN_URL: https://dev.neu.ro/apis/admin/v1
 NP_AUTH_PUBLIC_URL: https://dev.neu.ro/api/v1/users
 NP_JOBS_INGRESS_OAUTH_AUTHORIZE_URL: https://dev.neu.ro/oauth/authorize
-NP_OAUTH_AUTH_URL: https://login-dev.neu.ro/authorize
-NP_OAUTH_TOKEN_URL: https://login-dev.neu.ro/oauth/token
-NP_OAUTH_LOGOUT_URL: https://login-dev.neu.ro/v2/logout
-NP_OAUTH_CLIENT_ID: V7Jz87W9lhIlo0MyD0O6dufBvcXwM4DR
-NP_OAUTH_AUDIENCE: https://platform.dev.neuromation.io
-NP_OAUTH_SUCCESS_REDIRECT_URL: https://dev.neu.ro/oauth/login
-NP_OAUTH_HEADLESS_CALLBACK_URL: https://dev.neu.ro/oauth/show-code
-NP_CORS_ORIGINS: https://neu.ro,https://master--neuro-web.netlify.com,http://localhost:8000
-NP_API_ZIPKIN_URL: 'http://zipkin:9411'
-NP_API_ZIPKIN_SAMPLE_RATE: '0.1'  # 10% of traces are saved
 
 platform:
   token:
@@ -20,9 +10,6 @@ platform:
       secretKeyRef:
         name: platformservices-secret
         key: compute_token
-
-jobPriorityClass:
-  enabled: true
 
 ingress:
   enabled: true
