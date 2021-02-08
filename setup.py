@@ -5,7 +5,7 @@ setup_requires = ("setuptools_scm",)
 
 install_requires = (
     "aiohttp==3.7.3",
-    "iso8601==0.1.13",
+    "iso8601==0.1.14",
     "trafaret==1.2.0",
     "neuro_auth_client==21.1.6",
     # Circle CI fails on the latest cryptography version
