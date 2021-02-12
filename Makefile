@@ -115,6 +115,9 @@ docker_push: docker_build
 	docker tag $(IMAGE) $(CLOUD_IMAGE)
 	docker push $(CLOUD_IMAGE)
 
+	docker tag $(IMAGE) $(CLOUD_IMAGE_REPO):latest
+	docker push $(CLOUD_IMAGE_REPO):latest
+
 artifactory_docker_push: docker_build
 	docker tag $(IMAGE) $(ARTIFACTORY_IMAGE)
 	docker push $(ARTIFACTORY_IMAGE)
