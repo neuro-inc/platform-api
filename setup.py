@@ -18,7 +18,7 @@ install_requires = (
     "aiozipkin==1.0.0",
     "asyncpg==0.21.0",
     "sqlalchemy==1.3.23",
-    "asyncpgsa==0.26.3",
+    "asyncpgsa==0.27.0",
     "alembic==1.5.4",
     "psycopg2-binary==2.8.6",
     "sentry-sdk==0.19.5",
