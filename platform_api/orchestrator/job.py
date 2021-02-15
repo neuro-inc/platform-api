@@ -173,9 +173,9 @@ class JobStatusHistory:
 
     @current.setter
     def current(self, item: JobStatusItem) -> None:
-        if self.last.is_finished:
-            raise JobError("Invalid job status transition")
         if self.last != item:
+            if self.last.is_finished:
+                raise JobError("Invalid job status transition")
             self._items.append(item)
 
     @property

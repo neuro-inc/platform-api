@@ -30,7 +30,7 @@ from platform_api.cluster import (
     Cluster,
     ClusterConfig,
     ClusterConfigRegistry,
-    ClusterRegistry,
+    ClusterHolder,
 )
 from platform_api.cluster_config import (
     IngressConfig,
@@ -362,15 +362,15 @@ def mock_orchestrator(cluster_config: ClusterConfig) -> MockOrchestrator:
 
 
 @pytest.fixture
-async def cluster_registry(
+async def cluster_holder(
     cluster_config: ClusterConfig, mock_orchestrator: MockOrchestrator
-) -> AsyncIterator[ClusterRegistry]:
+) -> AsyncIterator[ClusterHolder]:
     def _cluster_factory(config: ClusterConfig) -> Cluster:
         return MockCluster(config, mock_orchestrator)
 
-    async with ClusterRegistry(factory=_cluster_factory) as registry:
-        await registry.replace(cluster_config)
-        yield registry
+    async with ClusterHolder(factory=_cluster_factory) as holder:
+        await holder.update(cluster_config)
+        yield holder
 
 
 @pytest.fixture
@@ -442,14 +442,14 @@ def mock_poller_api(
 
 @pytest.fixture
 def jobs_poller_service(
-    cluster_registry: ClusterRegistry,
+    cluster_holder: ClusterHolder,
     jobs_config: JobsConfig,
     scheduler_config: JobsSchedulerConfig,
     mock_auth_client: AuthClient,
     mock_poller_api: MockJobsPollerApi,
 ) -> JobsPollerService:
     return JobsPollerService(
-        cluster_registry=cluster_registry,
+        cluster_holder=cluster_holder,
         jobs_config=jobs_config,
         scheduler=JobsScheduler(scheduler_config, mock_auth_client),
         auth_client=mock_auth_client,

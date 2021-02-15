@@ -127,9 +127,10 @@ def job_response_to_job_record(payload: Mapping[str, Any]) -> JobRecord:
 class HttpJobsPollerApi(JobsPollerApi):
     _client: Optional[aiohttp.ClientSession] = None
 
-    def __init__(self, url: URL, token: str):
+    def __init__(self, url: URL, token: str, cluster_name: str):
         self._base_url = url
         self._token = token
+        self._cluster_name = cluster_name
 
     async def init(self) -> None:
         if self._client:
@@ -156,6 +157,7 @@ class HttpJobsPollerApi(JobsPollerApi):
         params: MultiDict[Any] = MultiDict()
         for status in JobStatus.active_values():
             params.add("status", status)
+        params["cluster_name"] = self._cluster_name
         async with self._client.get(url, params=params) as resp:
             payload = await resp.json()
         return [job_response_to_job_record(item) for item in payload["jobs"]]
@@ -167,6 +169,7 @@ class HttpJobsPollerApi(JobsPollerApi):
         for status in JobStatus.finished_values():
             params.add("status", status)
         params["materialized"] = "true"
+        params["cluster_name"] = self._cluster_name
         async with self._client.get(url, params=params) as resp:
             payload = await resp.json()
         records = [job_response_to_job_record(item) for item in payload["jobs"]]

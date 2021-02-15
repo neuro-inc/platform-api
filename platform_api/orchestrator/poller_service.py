@@ -11,9 +11,9 @@ from neuro_auth_client import AuthClient
 
 from platform_api.cluster import (
     Cluster,
+    ClusterHolder,
     ClusterNotAvailable,
     ClusterNotFound,
-    ClusterRegistry,
 )
 from platform_api.cluster_config import OrchestratorConfig
 from platform_api.config import JobsConfig, JobsSchedulerConfig
@@ -170,13 +170,13 @@ class JobsPollerApi(abc.ABC):
 class JobsPollerService:
     def __init__(
         self,
-        cluster_registry: ClusterRegistry,
+        cluster_holder: ClusterHolder,
         jobs_config: JobsConfig,
         scheduler: JobsScheduler,
         auth_client: AuthClient,
         api: JobsPollerApi,
     ) -> None:
-        self._cluster_registry = cluster_registry
+        self._cluster_holder = cluster_holder
         self._jobs_config = jobs_config
         self._scheduler = scheduler
         self._api = api
@@ -216,12 +216,9 @@ class JobsPollerService:
                 raise JobError(f"Missing disks: {details}")
 
     @asynccontextmanager
-    async def _get_cluster(
-        self, name: str, tolerate_unavailable: bool = False
-    ) -> AsyncIterator[Cluster]:
-        async with self._cluster_registry.get(
-            name, skip_circuit_breaker=tolerate_unavailable
-        ) as cluster:
+    async def _get_cluster(self, name: str) -> AsyncIterator[Cluster]:
+        async with self._cluster_holder.get() as cluster:
+            assert cluster.name == name, "Poller tried to access different cluster"
             yield cluster
 
     async def update_jobs_statuses(
@@ -372,21 +369,6 @@ class JobsPollerService:
             token_uri = f"token://job/{job.id}"
             await self._auth_client.revoke_user_permissions(job.owner, [token_uri])
 
-    async def _get_cluster_job(self, record: JobRecord) -> Job:
-        try:
-            async with self._get_cluster(
-                record.cluster_name, tolerate_unavailable=True
-            ) as cluster:
-                return self._make_job(record, cluster)
-        except ClusterNotFound:
-            # in case the cluster is missing, we still want to return the job
-            # to be able to render a proper HTTP response, therefore we have
-            # the fallback logic that uses the dummy cluster instead.
-            logger.warning(
-                "Falling back to dummy cluster config to retrieve job '%s'", record.id
-            )
-            return self._make_job(record)
-
     async def _delete_cluster_job(self, record: JobRecord) -> None:
         try:
             async with self._get_cluster(record.cluster_name) as cluster:
@@ -406,9 +388,6 @@ class JobsPollerService:
 
     @asynccontextmanager
     async def _update_job(self, record: JobRecord) -> AsyncIterator[JobRecord]:
-        """
-        Wrapper around self._jobs_storage.try_update_job() with notification
-        """
         status_cnt = len(record.status_history.all)
         initial_materialized = record.materialized
         yield record

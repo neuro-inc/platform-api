@@ -154,5 +154,22 @@ class Config:
 
 
 @dataclass(frozen=True)
+class PollerConfig:
+    cluster_name: str
+    platform_api_url: URL
+    server: ServerConfig
+
+    auth: AuthConfig
+
+    config_url: URL
+
+    jobs: JobsConfig = JobsConfig()
+
+    scheduler: JobsSchedulerConfig = JobsSchedulerConfig()
+
+    sentry: Optional[SentryConfig] = None
+
+
+@dataclass(frozen=True)
 class PlatformConfig:
     server_endpoint_url: URL

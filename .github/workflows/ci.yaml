@@ -163,8 +163,14 @@ jobs:
         run: make ${{ env.CLOUD_PROVIDER }}_k8s_login
       - name: Install helm
         run: make helm_install
-      - name: Deploy to kubernetes
+      - name: Deploy Main service to kubernetes
         run: make helm_deploy
+        env:
+          HELM_CHART: platformapi
+      - name: Deploy poller service to kubernetes
+        run: make helm_deploy
+        env:
+          HELM_CHART: platformapi-poller
 
   deploy_staging:
     name: Deploy on staging

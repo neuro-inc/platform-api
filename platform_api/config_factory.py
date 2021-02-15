@@ -16,6 +16,7 @@ from .config import (
     NotificationsConfig,
     OAuthConfig,
     PlatformConfig,
+    PollerConfig,
     PostgresConfig,
     SentryConfig,
     ServerConfig,
@@ -62,6 +63,22 @@ class EnvironConfigFactory:
         if sentry_url and sentry_cluster:
             return SentryConfig(sentry_url, sentry_cluster)
         return None
+
+    def create_poller(self) -> PollerConfig:
+        auth = self.create_auth()
+        jobs = self.create_jobs(orphaned_job_owner=auth.service_name)
+        config_url = URL(self._environ["NP_PLATFORM_CONFIG_URI"])
+        cluster_name = self._environ["NP_CLUSTER_NAME"]
+        return PollerConfig(
+            platform_api_url=URL(self._environ["NP_PLATFORM_API_URL"]),
+            server=self.create_server(),
+            auth=auth,
+            jobs=jobs,
+            scheduler=self.create_job_scheduler(),
+            config_url=config_url,
+            cluster_name=cluster_name,
+            sentry=self.create_sentry(),
+        )
 
     def create_jobs(self, *, orphaned_job_owner: str) -> JobsConfig:
         return JobsConfig(
