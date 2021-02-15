@@ -51,18 +51,14 @@ spec:
 {{- if .Values.platform.token }}
 {{ toYaml .Values.platform.token | indent 10 }}
 {{- end }}
-        - name: NP_API_URL
-          value: "{{ .Values.NP_API_URL }}"
+        - name: NP_PLATFORM_API_URL
+          value: "{{ .Values.NP_PLATFORM_API_URL }}"
         - name: NP_JOBS_INGRESS_OAUTH_AUTHORIZE_URL
           value: "{{ .Values.NP_JOBS_INGRESS_OAUTH_AUTHORIZE_URL }}"
         - name: NP_PLATFORM_CONFIG_URI
           value: {{ .Values.NP_PLATFORM_CONFIG_URI }}
         - name: NP_AUTH_PUBLIC_URL
           value: {{ .Values.NP_AUTH_PUBLIC_URL }}
-        - name: NP_DB_POSTGRES_DSN
-{{- if .Values.postgres.dsn }}
-{{ toYaml .Values.postgres.dsn | indent 10 }}
-{{- end }}
         {{- if .Values.NP_SENTRY_URL }}
         - name: NP_SENTRY_URL
           value: {{ .Values.NP_SENTRY_URL }}
