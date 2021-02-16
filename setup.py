@@ -16,7 +16,7 @@ install_requires = (
     "platform-logging==0.3",
     "aiohttp-cors==0.7.0",
     "aiozipkin==1.0.0",
-    "asyncpg==0.21.0",
+    "asyncpg==0.22.0",
     "sqlalchemy==1.3.23",
     "asyncpgsa==0.27.0",
     "alembic==1.5.4",
