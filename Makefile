@@ -149,7 +149,7 @@ helm_deploy: _helm_fetch _helm_expand_vars
 		-f deploy/$(HELM_CHART)/values-$(HELM_ENV)-$(CLOUD_PROVIDER).yaml \
 		--set "image.repository=$(CLOUD_IMAGE_REPO)" \
 		--set "NP_CLUSTER_NAME=$(CLUSTER_NAME)" \
-		--set "k8s_suffix=$(RELEASE_SUFFIX)" \
+		--set "k8sSuffix=$(RELEASE_SUFFIX)" \
 		--set "postgres-db-init.migrations.image.repository=$(CLOUD_IMAGE_REPO)" \
 		--namespace platform --install --wait --timeout 600
 
