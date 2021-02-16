@@ -1,12 +1,12 @@
 apiVersion: apps/v1
 kind: Deployment
 metadata:
-  name: platformapi-poller
+  name: platformapi-poller{{ .Values.k8s_suffix }}
 spec:
   replicas: {{ .Values.replicas }}
   selector:
     matchLabels:
-      service: platformapi-poller
+      service: platformapi-poller{{ .Values.k8s_suffix }}
   strategy:
     rollingUpdate:
       maxSurge: 1
@@ -15,7 +15,7 @@ spec:
   template:
     metadata:
       labels:
-        service: platformapi-poller
+        service: platformapi-poller{{ .Values.k8s_suffix }}
       {{- if .Values.secrets }}
       annotations:
         checksum/secret: {{ include (print $.Template.BasePath "/secrets.yml") . | sha256sum }}
@@ -78,7 +78,7 @@ spec:
 apiVersion: v1
 kind: Service
 metadata:
-  name: platformapi-poller
+  name: platformapi-poller{{ .Values.k8s_suffix }}
 spec:
   type: ClusterIP
   ports:
@@ -86,13 +86,13 @@ spec:
     port: 8080
     targetPort: tcp-web
   selector:
-    service: platformapi-poller
+    service: platformapi-poller{{ .Values.k8s_suffix }}
 {{- if .Values.ingress.enabled }}
 ---
 apiVersion: networking.k8s.io/v1beta1
 kind: Ingress
 metadata:
-  name: platformapi-poller
+  name: platformapi-poller{{ .Values.k8s_suffix }}
   annotations:
     kubernetes.io/ingress.class: traefik
     traefik.frontend.rule.type: PathPrefix
@@ -101,13 +101,14 @@ metadata:
 {{- end }}
 spec:
   rules:
+{{- $k8s_suffix  := .Values.k8s_suffix -}}
 {{- range .Values.ingress.hosts }}
   - host: {{ . | quote }}
     http:
       paths:
-      - path: /api/v1/poller
+      - path: /api/v1/poller{{ $k8s_suffix }}
         backend:
-          serviceName: platformapi-poller
+          serviceName: platformapi-poller{{ $k8s_suffix }}
           servicePort: http
 {{- end }}
 {{- end }}

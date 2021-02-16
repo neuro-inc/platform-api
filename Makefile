@@ -25,6 +25,7 @@ ARTIFACTORY_IMAGE_REPO = $(ARTIFACTORY_DOCKER_REPO)/$(IMAGE_NAME)
 ARTIFACTORY_IMAGE      = $(ARTIFACTORY_IMAGE_REPO):$(TAG)
 
 HELM_CHART ?= platformapi
+RELEASE_SUFFIX ?=
 
 PLATFORMAUTHAPI_IMAGE = $(shell cat PLATFORMAUTHAPI_IMAGE)
 PLATFORMCONFIG_IMAGE = $(shell cat PLATFORMCONFIG_IMAGE)
@@ -144,9 +145,11 @@ _helm_expand_vars:
 	cat deploy/$(HELM_CHART)/values-template.yaml | envsubst > temp_deploy/$(HELM_CHART)/values.yaml
 
 helm_deploy: _helm_fetch _helm_expand_vars
-	helm upgrade $(HELM_CHART) temp_deploy/$(HELM_CHART) \
+	helm upgrade $(HELM_CHART)$(RELEASE_SUFFIX) temp_deploy/$(HELM_CHART) \
 		-f deploy/$(HELM_CHART)/values-$(HELM_ENV)-$(CLOUD_PROVIDER).yaml \
 		--set "image.repository=$(CLOUD_IMAGE_REPO)" \
+		--set "NP_CLUSTER_NAME=$(CLUSTER_NAME)" \
+		--set "k8s_suffix=$(RELEASE_SUFFIX)" \
 		--set "postgres-db-init.migrations.image.repository=$(CLOUD_IMAGE_REPO)" \
 		--namespace platform --install --wait --timeout 600
 
