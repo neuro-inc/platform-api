@@ -167,10 +167,17 @@ jobs:
         run: make helm_deploy
         env:
           HELM_CHART: platformapi
-      - name: Deploy poller service to kubernetes
+      - name: Deploy poller service to kubernetes (default)
         run: make helm_deploy
         env:
           HELM_CHART: platformapi-poller
+          CLUSTER_NAME: default
+      - name: Deploy poller service to kubernetes (default2)
+        run: make helm_deploy
+        env:
+          HELM_CHART: platformapi-poller
+          CLUSTER_NAME: default2
+          RELEASE_SUFFIX: -default2
 
   deploy_staging:
     name: Deploy on staging
