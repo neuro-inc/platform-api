@@ -9,7 +9,7 @@ from typing import Any, Dict, List, Optional, Sequence, Union
 from yarl import URL
 
 from platform_api.cluster_config import RegistryConfig
-from platform_api.resource import ResourcePoolType
+from platform_api.resource import Preset, ResourcePoolType
 
 
 class JobException(Exception):
@@ -226,7 +226,15 @@ class ContainerResources:
             and self._check_tpu(pool_type)
         )
 
-    def _check_gpu(self, pool_type: ResourcePoolType) -> bool:
+    def check_fit_into_preset(self, preset: Preset) -> bool:
+        return (
+            self.cpu <= preset.cpu
+            and self.memory_mb <= preset.memory_mb
+            and self._check_gpu(preset)
+            and self._check_tpu_preset(preset)
+        )
+
+    def _check_gpu(self, entry: Union[ResourcePoolType, Preset]) -> bool:
         if not self.gpu:
             # container does not need GPU. we are good regardless of presence
             # of GPU in the pool type.
@@ -234,18 +242,18 @@ class ContainerResources:
 
         # container needs GPU
 
-        if not pool_type.gpu:
+        if not entry.gpu:
             return False
 
-        if pool_type.gpu < self.gpu:
+        if entry.gpu < self.gpu:
             return False
 
         if not self.gpu_model_id:
             # container needs any GPU model
             return True
 
-        assert pool_type.gpu_model
-        return self.gpu_model_id == pool_type.gpu_model
+        assert entry.gpu_model
+        return self.gpu_model_id == entry.gpu_model
 
     def _check_tpu(self, pool_type: ResourcePoolType) -> bool:
         if not self.tpu:
@@ -261,6 +269,22 @@ class ContainerResources:
         return (
             self.tpu.type in pool_type.tpu.types
             and self.tpu.software_version in pool_type.tpu.software_versions
+        )
+
+    def _check_tpu_preset(self, preset: Preset) -> bool:
+        if not self.tpu:
+            # container does not need TPU. we are good regardless of presence
+            # of TPU in the pool type.
+            return True
+
+        # container needs TPU
+
+        if not preset.tpu:
+            return False
+
+        return (
+            self.tpu.type == preset.tpu.type
+            and self.tpu.software_version == preset.tpu.software_version
         )
 
 

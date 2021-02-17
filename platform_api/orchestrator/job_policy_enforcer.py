@@ -4,7 +4,8 @@ import contextlib
 import logging
 from collections import defaultdict
 from dataclasses import dataclass, field
-from datetime import timedelta
+from datetime import datetime, timedelta, timezone
+from decimal import Decimal
 from typing import (
     Any,
     Callable,
@@ -23,6 +24,7 @@ from neuro_auth_client import AuthClient
 from notifications_client import QuotaResourceType, QuotaWillBeReachedSoon
 from notifications_client.client import Client
 
+from platform_api.admin_client import AdminClient
 from platform_api.config import JobPolicyEnforcerConfig
 from platform_api.orchestrator.job import ZERO_RUN_TIME, AggregatedRunTime, Job
 from platform_api.orchestrator.job_request import JobStatus
@@ -449,6 +451,45 @@ class CreditsLimitEnforcer(JobPolicyEnforcer):
             if cluster.quota.credits == 0:
                 for job in cluster_jobs:
                     await self._service.cancel_job(job.id)
+
+
+class BillingEnforcer(JobPolicyEnforcer):
+    def __init__(self, service: JobsService, admin_client: AdminClient):
+        self._service = service
+        self._admin_client = admin_client
+
+    async def enforce(self) -> None:
+        await asyncio.gather(
+            *[
+                asyncio.create_task(self._bill_single_wrapper(job))
+                async for job in self._service.get_not_billed_jobs()
+            ],
+        )
+
+    async def _bill_single_wrapper(self, job: Job) -> None:
+        try:
+            await self._bill_single(job)
+        except asyncio.CancelledError:
+            raise
+        except Exception:
+            logger.exception(f"Failed to bill job {job.id}:")
+
+    async def _bill_single(self, job: Job) -> None:
+        new_runtime = job.get_run_time(only_after=job.last_billed)
+        now = datetime.now(timezone.utc)
+        # ? Rounding ?
+        microseconds = int(new_runtime.total_seconds() * 1e6)
+        hours = Decimal(microseconds) / int(1e6) / 3600
+        new_charge = hours * job.price_credits_per_hour
+        await self._admin_client.change_user_credits(
+            job.cluster_name, job.owner, -new_charge
+        )
+        await self._service.update_job_billing(
+            job_id=job.id,
+            last_billed=now,
+            new_charge=new_charge,
+            fully_billed=job.status.is_finished,
+        )
 
 
 class JobPolicyEnforcePoller:
