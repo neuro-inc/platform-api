@@ -1,5 +1,6 @@
 import uuid
 from dataclasses import dataclass, field
+from decimal import Decimal
 from enum import Enum
 from typing import Optional, Sequence
 
@@ -33,6 +34,7 @@ class TPUPreset:
 @dataclass(frozen=True)
 class Preset:
     name: str
+    credits_per_hour: Decimal
     cpu: float
     memory_mb: int
     scheduler_enabled: bool = False
@@ -75,6 +77,7 @@ class ResourcePoolType:
 DEFAULT_PRESETS = (
     Preset(
         name="gpu-small",
+        credits_per_hour=Decimal("10"),
         cpu=7,
         memory_mb=30 * 1024,
         gpu=1,
@@ -82,11 +85,14 @@ DEFAULT_PRESETS = (
     ),
     Preset(
         name="gpu-large",
+        credits_per_hour=Decimal("10"),
         cpu=7,
         memory_mb=60 * 1024,
         gpu=1,
         gpu_model=next(reversed(GKEGPUModels)).value.id,
     ),
-    Preset(name="cpu-small", cpu=2, memory_mb=2 * 1024),
-    Preset(name="cpu-large", cpu=3, memory_mb=14 * 1024),
+    Preset(name="cpu-small", credits_per_hour=Decimal("10"), cpu=2, memory_mb=2 * 1024),
+    Preset(
+        name="cpu-large", credits_per_hour=Decimal("10"), cpu=3, memory_mb=14 * 1024
+    ),
 )
