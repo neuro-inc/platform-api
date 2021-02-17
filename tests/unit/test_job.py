@@ -883,6 +883,7 @@ class TestJob:
             "request": job_request.to_primitive(),
             "status": "failed",
             "materialized": False,
+            "fully_billed": False,
             "finished_at": expected_finished_at,
             "statuses": [
                 {
@@ -904,6 +905,7 @@ class TestJob:
             "schedule_timeout": 15,
             "restart_policy": "never",
             "privileged": False,
+            "total_price_credits": "0",
         }
 
     def test_to_primitive_with_max_run_time(
@@ -932,6 +934,7 @@ class TestJob:
                 }
             ],
             "materialized": False,
+            "fully_billed": False,
             "finished_at": None,
             "scheduler_enabled": False,
             "preemptible_node": False,
@@ -939,6 +942,7 @@ class TestJob:
             "max_run_time_minutes": 500,
             "restart_policy": "never",
             "privileged": False,
+            "total_price_credits": "0",
         }
 
     def test_to_primitive_with_tags(
@@ -1252,13 +1256,15 @@ class TestJob:
             "cluster_name": "testcluster",
             "status": current_status_item["status"],
             "statuses": [current_status_item],
-            "materialized": "False",
+            "materialized": False,
+            "fully_billed": False,
             "finished_at": finished_at_str,
             "scheduler_enabled": False,
             "preemptible_node": False,
             "pass_config": False,
             "restart_policy": str(JobRestartPolicy.ALWAYS),
             "privileged": False,
+            "total_price_credits": "0",
         }
         actual = Job.to_primitive(
             Job.from_primitive(mock_orchestrator.config, expected)

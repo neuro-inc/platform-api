@@ -2,6 +2,8 @@ import base64
 import json
 import logging
 from dataclasses import replace
+from datetime import datetime
+from decimal import Decimal
 from typing import AsyncIterator, Iterable, List, Optional, Sequence, Tuple
 
 from async_generator import asynccontextmanager
@@ -438,3 +440,21 @@ class JobsService:
     @property
     def jobs_storage(self) -> JobsStorage:
         return self._jobs_storage
+
+    async def update_job_billing(
+        self,
+        job_id: str,
+        last_billed: datetime,
+        fully_billed: bool,
+        new_charge: Decimal,
+    ) -> None:
+        async with self._jobs_storage.try_update_job(job_id) as record:
+            record.total_price_credits += new_charge
+            record.last_billed = last_billed
+            record.fully_billed = fully_billed
+
+    async def get_not_billed_jobs(self) -> AsyncIterator[Job]:
+        async for record in self._jobs_storage.iter_all_jobs(
+            JobFilter(fully_billed=False)
+        ):
+            yield await self._get_cluster_job(record)

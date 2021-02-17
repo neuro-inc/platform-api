@@ -852,6 +852,20 @@ class TestJobsStorage:
         assert job_ids == []
 
     @pytest.mark.asyncio
+    async def test_get_all_filter_by_fully_billed(self, storage: JobsStorage) -> None:
+        jobs = [
+            self._create_job(fully_billed=True),
+            self._create_job(fully_billed=False),
+            self._create_job(fully_billed=True),
+        ]
+        for job in jobs:
+            async with storage.try_create_job(job):
+                pass
+        job_filter = JobFilter(fully_billed=True)
+        job_ids = [job.id for job in await storage.get_all_jobs(job_filter)]
+        assert job_ids == [jobs[0].id, jobs[2].id]
+
+    @pytest.mark.asyncio
     async def test_get_all_filter_by_cluster_and_owner(
         self, storage: JobsStorage
     ) -> None:

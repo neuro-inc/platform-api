@@ -58,6 +58,7 @@ class JobFilter:
     since: datetime = datetime(1, 1, 1, tzinfo=timezone.utc)
     until: datetime = datetime(9999, 12, 31, 23, 59, 59, 999999, tzinfo=timezone.utc)
     materialized: Optional[bool] = None
+    fully_billed: Optional[bool] = None
 
     def check(self, job: JobRecord) -> bool:
         if self.statuses and job.status not in self.statuses:
@@ -85,6 +86,8 @@ class JobFilter:
             return False
         if self.materialized is not None:
             return self.materialized == job.materialized
+        if self.fully_billed is not None:
+            return self.fully_billed == job.fully_billed
         return True
 
 
