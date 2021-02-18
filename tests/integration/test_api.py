@@ -246,6 +246,7 @@ class TestApi:
                 "resource_presets": [
                     {
                         "name": "gpu-small",
+                        "credits_per_hour": "10",
                         "cpu": 7,
                         "memory_mb": 30720,
                         "gpu": 1,
@@ -257,6 +258,7 @@ class TestApi:
                     },
                     {
                         "name": "gpu-large",
+                        "credits_per_hour": "10",
                         "cpu": 7,
                         "memory_mb": 61440,
                         "gpu": 1,
@@ -268,6 +270,7 @@ class TestApi:
                     },
                     {
                         "name": "gpu-large-p",
+                        "credits_per_hour": "10",
                         "cpu": 7,
                         "memory_mb": 61440,
                         "gpu": 1,
@@ -279,6 +282,7 @@ class TestApi:
                     },
                     {
                         "name": "cpu-micro",
+                        "credits_per_hour": "10",
                         "cpu": 0.1,
                         "memory_mb": 100,
                         "scheduler_enabled": False,
@@ -288,6 +292,7 @@ class TestApi:
                     },
                     {
                         "name": "cpu-small",
+                        "credits_per_hour": "10",
                         "cpu": 2,
                         "memory_mb": 2048,
                         "scheduler_enabled": False,
@@ -297,6 +302,7 @@ class TestApi:
                     },
                     {
                         "name": "cpu-large",
+                        "credits_per_hour": "10",
                         "cpu": 3,
                         "memory_mb": 14336,
                         "scheduler_enabled": False,
@@ -306,6 +312,7 @@ class TestApi:
                     },
                     {
                         "name": "tpu",
+                        "credits_per_hour": "10",
                         "cpu": 3,
                         "memory_mb": 14336,
                         "scheduler_enabled": False,
@@ -350,6 +357,7 @@ class TestApi:
                 "resource_presets": [
                     {
                         "name": "gpu-small",
+                        "credits_per_hour": "10",
                         "cpu": 7,
                         "memory_mb": 30720,
                         "gpu": 1,
@@ -361,6 +369,7 @@ class TestApi:
                     },
                     {
                         "name": "gpu-large",
+                        "credits_per_hour": "10",
                         "cpu": 7,
                         "memory_mb": 61440,
                         "gpu": 1,
@@ -372,6 +381,7 @@ class TestApi:
                     },
                     {
                         "name": "gpu-large-p",
+                        "credits_per_hour": "10",
                         "cpu": 7,
                         "memory_mb": 61440,
                         "gpu": 1,
@@ -383,6 +393,7 @@ class TestApi:
                     },
                     {
                         "name": "cpu-micro",
+                        "credits_per_hour": "10",
                         "cpu": 0.1,
                         "memory_mb": 100,
                         "scheduler_enabled": False,
@@ -392,6 +403,7 @@ class TestApi:
                     },
                     {
                         "name": "cpu-small",
+                        "credits_per_hour": "10",
                         "cpu": 2,
                         "memory_mb": 2048,
                         "scheduler_enabled": False,
@@ -401,6 +413,7 @@ class TestApi:
                     },
                     {
                         "name": "cpu-large",
+                        "credits_per_hour": "10",
                         "cpu": 3,
                         "memory_mb": 14336,
                         "scheduler_enabled": False,
@@ -410,6 +423,7 @@ class TestApi:
                     },
                     {
                         "name": "tpu",
+                        "credits_per_hour": "10",
                         "cpu": 3,
                         "memory_mb": 14336,
                         "scheduler_enabled": False,

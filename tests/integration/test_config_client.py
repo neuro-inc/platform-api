@@ -42,7 +42,12 @@ def cluster_configs_payload() -> List[Dict[str, Any]]:
                     {"name": "node-pool3", "gpu": 1, "gpu_model": "nvidia-tesla-v100"},
                 ],
                 "resource_presets": [
-                    {"name": "cpu-micro", "cpu": 0.1, "memory_mb": 100}
+                    {
+                        "name": "cpu-micro",
+                        "credits_per_hour": "10",
+                        "cpu": 0.1,
+                        "memory_mb": 100,
+                    }
                 ],
                 "is_http_ingress_secure": True,
             },
