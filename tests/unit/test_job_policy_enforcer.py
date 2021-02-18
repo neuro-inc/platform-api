@@ -1,13 +1,17 @@
 import asyncio
 from dataclasses import dataclass
 from datetime import timedelta
+from decimal import Decimal
 from typing import (
     Any,
     AsyncContextManager,
     AsyncIterator,
+    Awaitable,
     Callable,
     Dict,
+    Iterable,
     List,
+    Mapping,
     Optional,
     Set,
 )
@@ -15,14 +19,20 @@ from typing import (
 import pytest
 from aiohttp import ClientResponseError, web
 from async_generator import asynccontextmanager
+from neuro_auth_client import (
+    Cluster as AuthCluster,
+    Quota as AuthQuota,
+    User as AuthUser,
+)
 from notifications_client import QuotaResourceType, QuotaWillBeReachedSoon
 from notifications_client.client import Client
 from yarl import URL
 
 from platform_api.config import JobPolicyEnforcerConfig
-from platform_api.orchestrator.job import AggregatedRunTime
+from platform_api.orchestrator.job import AggregatedRunTime, Job
 from platform_api.orchestrator.job_policy_enforcer import (
     ClusterJobs,
+    HasCreditsEnforcer,
     JobInfo,
     JobPolicyEnforcePoller,
     JobPolicyEnforcer,
@@ -38,10 +48,12 @@ from platform_api.orchestrator.job_policy_enforcer import (
     _parse_quota_runtime,
     _parse_user_stats,
 )
-from platform_api.orchestrator.job_request import JobStatus
+from platform_api.orchestrator.job_request import JobRequest, JobStatus
+from platform_api.orchestrator.jobs_service import JobsService
+from platform_api.user import User
 from tests.integration.api import ApiConfig
 from tests.integration.conftest import ApiRunner
-from tests.unit.conftest import MockNotificationsClient
+from tests.unit.conftest import MockAuthClient, MockNotificationsClient
 
 
 _EnforcePollingRunner = Callable[
@@ -850,3 +862,115 @@ class TestPlatformApiClient:
         async with client:
             with pytest.raises(RuntimeError, match="Session is closed"):
                 await client.get_non_terminated_jobs()
+
+
+class TestHasCreditsEnforcer:
+    @pytest.fixture()
+    def has_credits_enforcer(
+        self, jobs_service: JobsService, mock_auth_client: MockAuthClient
+    ) -> HasCreditsEnforcer:
+        return HasCreditsEnforcer(jobs_service, mock_auth_client)
+
+    @pytest.fixture()
+    def make_jobs(
+        self,
+        jobs_service: JobsService,
+        job_request_factory: Callable[[], JobRequest],
+    ) -> Callable[[User, int], Awaitable[List[Job]]]:
+        async def _make_jobs(user: User, count: int) -> List[Job]:
+            return [
+                (await jobs_service.create_job(job_request_factory(), user))[0]
+                for _ in range(count)
+            ]
+
+        return _make_jobs
+
+    @pytest.fixture()
+    def check_not_cancelled(
+        self, jobs_service: JobsService
+    ) -> Callable[[Iterable[Job]], Awaitable[None]]:
+        async def _check(jobs: Iterable[Job]) -> None:
+            for job in jobs:
+                job = await jobs_service.get_job(job.id)
+                assert job.status != JobStatus.CANCELLED
+
+        return _check
+
+    @pytest.fixture()
+    def check_cancelled(
+        self, jobs_service: JobsService
+    ) -> Callable[[Iterable[Job]], Awaitable[None]]:
+        async def _check(jobs: Iterable[Job]) -> None:
+            for job in jobs:
+                job = await jobs_service.get_job(job.id)
+                assert job.status == JobStatus.CANCELLED
+
+        return _check
+
+    def make_auth_user(
+        self, user: User, cluster_credits: Mapping[str, Optional[Decimal]]
+    ) -> AuthUser:
+        return AuthUser(
+            name=user.name,
+            clusters=[
+                AuthCluster(cluster_name, quota=AuthQuota(credits=credits))
+                for cluster_name, credits in cluster_credits.items()
+            ],
+        )
+
+    @pytest.mark.asyncio
+    async def test_user_credits_disabled_do_nothing(
+        self,
+        has_credits_enforcer: HasCreditsEnforcer,
+        mock_auth_client: MockAuthClient,
+        make_jobs: Callable[[User, int], Awaitable[List[Job]]],
+        check_not_cancelled: Callable[[Iterable[Job]], Awaitable[None]],
+    ) -> None:
+        user = User(name="testuser", token="testtoken", cluster_name="test-cluster")
+        jobs = await make_jobs(user, 5)
+
+        mock_auth_client.user_to_return = self.make_auth_user(
+            user, {"test-cluster": None}
+        )
+
+        await has_credits_enforcer.enforce()
+
+        await check_not_cancelled(jobs)
+
+    @pytest.mark.asyncio
+    async def test_user_has_credits_do_nothing(
+        self,
+        has_credits_enforcer: HasCreditsEnforcer,
+        mock_auth_client: MockAuthClient,
+        make_jobs: Callable[[User, int], Awaitable[List[Job]]],
+        check_not_cancelled: Callable[[Iterable[Job]], Awaitable[None]],
+    ) -> None:
+        user = User(name="testuser", token="testtoken", cluster_name="test-cluster")
+        jobs = await make_jobs(user, 5)
+
+        mock_auth_client.user_to_return = self.make_auth_user(
+            user, {"test-cluster": Decimal("1.00")}
+        )
+
+        await has_credits_enforcer.enforce()
+
+        await check_not_cancelled(jobs)
+
+    @pytest.mark.asyncio
+    async def test_user_has_no_credits_kill_all(
+        self,
+        has_credits_enforcer: HasCreditsEnforcer,
+        mock_auth_client: MockAuthClient,
+        make_jobs: Callable[[User, int], Awaitable[List[Job]]],
+        check_cancelled: Callable[[Iterable[Job]], Awaitable[None]],
+    ) -> None:
+        user = User(name="testuser", token="testtoken", cluster_name="test-cluster")
+        jobs = await make_jobs(user, 5)
+
+        mock_auth_client.user_to_return = self.make_auth_user(
+            user, {"test-cluster": Decimal("0.00")}
+        )
+
+        await has_credits_enforcer.enforce()
+
+        await check_cancelled(jobs)

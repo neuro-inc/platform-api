@@ -2,10 +2,20 @@ import abc
 import asyncio
 import contextlib
 import logging
+from collections import defaultdict
 from dataclasses import dataclass, field
 from datetime import timedelta
-from itertools import groupby
-from typing import Any, Dict, Iterable, List, Optional, Sequence
+from typing import (
+    Any,
+    Callable,
+    Dict,
+    Iterable,
+    List,
+    Mapping,
+    Optional,
+    Sequence,
+    TypeVar,
+)
 
 import aiohttp
 from multidict import MultiDict
@@ -395,6 +405,17 @@ class HasCreditsEnforcer(JobPolicyEnforcer):
         self._service = service
         self._auth_client = auth_client
 
+    _T = TypeVar("_T")
+    _K = TypeVar("_K")
+
+    def _groupby(
+        self, it: Iterable[_T], key: Callable[[_T], _K]
+    ) -> Mapping[_K, List[_T]]:
+        res = defaultdict(list)
+        for item in it:
+            res[key(item)].append(item)
+        return res
+
     async def enforce(self) -> None:
         jobs = await self._service.get_all_jobs(
             job_filter=JobFilter(
@@ -404,15 +425,17 @@ class HasCreditsEnforcer(JobPolicyEnforcer):
         await asyncio.gather(
             *[
                 asyncio.create_task(self._enforce_for_user(owner, user_jobs))
-                for owner, user_jobs in groupby(jobs, lambda job: job.owner)
+                for owner, user_jobs in self._groupby(
+                    jobs, lambda job: job.owner
+                ).items()
             ]
         )
 
     async def _enforce_for_user(self, username: str, user_jobs: Iterable[Job]) -> None:
         user = await self._auth_client.get_user(username)
-        for cluster_name, cluster_jobs in groupby(
+        for cluster_name, cluster_jobs in self._groupby(
             user_jobs, lambda job: job.cluster_name
-        ):
+        ).items():
             try:
                 cluster = next(
                     cluster for cluster in user.clusters if cluster.name == cluster_name
