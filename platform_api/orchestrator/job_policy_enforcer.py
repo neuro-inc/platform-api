@@ -400,7 +400,7 @@ class RuntimeLimitEnforcer(JobPolicyEnforcer):
                 logger.exception("Failed to kill job %s", job.id)
 
 
-class HasCreditsEnforcer(JobPolicyEnforcer):
+class CreditsLimitEnforcer(JobPolicyEnforcer):
     def __init__(self, service: JobsService, auth_client: AuthClient):
         self._service = service
         self._auth_client = auth_client

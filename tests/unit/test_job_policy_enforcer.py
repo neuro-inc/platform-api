@@ -32,7 +32,7 @@ from platform_api.config import JobPolicyEnforcerConfig
 from platform_api.orchestrator.job import AggregatedRunTime, Job
 from platform_api.orchestrator.job_policy_enforcer import (
     ClusterJobs,
-    HasCreditsEnforcer,
+    CreditsLimitEnforcer,
     JobInfo,
     JobPolicyEnforcePoller,
     JobPolicyEnforcer,
@@ -868,8 +868,8 @@ class TestHasCreditsEnforcer:
     @pytest.fixture()
     def has_credits_enforcer(
         self, jobs_service: JobsService, mock_auth_client: MockAuthClient
-    ) -> HasCreditsEnforcer:
-        return HasCreditsEnforcer(jobs_service, mock_auth_client)
+    ) -> CreditsLimitEnforcer:
+        return CreditsLimitEnforcer(jobs_service, mock_auth_client)
 
     @pytest.fixture()
     def make_jobs(
@@ -921,7 +921,7 @@ class TestHasCreditsEnforcer:
     @pytest.mark.asyncio
     async def test_user_credits_disabled_do_nothing(
         self,
-        has_credits_enforcer: HasCreditsEnforcer,
+        has_credits_enforcer: CreditsLimitEnforcer,
         mock_auth_client: MockAuthClient,
         make_jobs: Callable[[User, int], Awaitable[List[Job]]],
         check_not_cancelled: Callable[[Iterable[Job]], Awaitable[None]],
@@ -940,7 +940,7 @@ class TestHasCreditsEnforcer:
     @pytest.mark.asyncio
     async def test_user_has_credits_do_nothing(
         self,
-        has_credits_enforcer: HasCreditsEnforcer,
+        has_credits_enforcer: CreditsLimitEnforcer,
         mock_auth_client: MockAuthClient,
         make_jobs: Callable[[User, int], Awaitable[List[Job]]],
         check_not_cancelled: Callable[[Iterable[Job]], Awaitable[None]],
@@ -959,7 +959,7 @@ class TestHasCreditsEnforcer:
     @pytest.mark.asyncio
     async def test_user_has_no_credits_kill_all(
         self,
-        has_credits_enforcer: HasCreditsEnforcer,
+        has_credits_enforcer: CreditsLimitEnforcer,
         mock_auth_client: MockAuthClient,
         make_jobs: Callable[[User, int], Awaitable[List[Job]]],
         check_cancelled: Callable[[Iterable[Job]], Awaitable[None]],

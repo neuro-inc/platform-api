@@ -17,7 +17,7 @@ from platform_logging import init_logging
 from sentry_sdk.integrations.aiohttp import AioHttpIntegration
 
 from platform_api.orchestrator.job_policy_enforcer import (
-    HasCreditsEnforcer,
+    CreditsLimitEnforcer,
     JobPolicyEnforcePoller,
     PlatformApiClient,
     QuotaEnforcer,
@@ -358,7 +358,7 @@ async def create_app(
                             api_client, notifications_client, config.job_policy_enforcer
                         ),
                         RuntimeLimitEnforcer(api_client),
-                        HasCreditsEnforcer(jobs_service, auth_client),
+                        CreditsLimitEnforcer(jobs_service, auth_client),
                     ],
                 )
             )
