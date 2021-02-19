@@ -3,6 +3,7 @@ import json
 import uuid
 from dataclasses import dataclass
 from datetime import datetime, timezone
+from decimal import Decimal
 from pathlib import Path, PurePath
 from typing import (
     Any,
@@ -200,6 +201,7 @@ def kube_config_factory(
             presets=[
                 Preset(
                     name="gpu-small",
+                    credits_per_hour=Decimal("10"),
                     gpu=1,
                     cpu=7,
                     memory_mb=30720,
@@ -207,6 +209,7 @@ def kube_config_factory(
                 ),
                 Preset(
                     name="gpu-large",
+                    credits_per_hour=Decimal("10"),
                     gpu=1,
                     cpu=7,
                     memory_mb=61440,
@@ -214,6 +217,7 @@ def kube_config_factory(
                 ),
                 Preset(
                     name="gpu-large-p",
+                    credits_per_hour=Decimal("10"),
                     gpu=1,
                     cpu=7,
                     memory_mb=61440,
@@ -221,11 +225,27 @@ def kube_config_factory(
                     scheduler_enabled=True,
                     preemptible_node=True,
                 ),
-                Preset(name="cpu-micro", cpu=0.1, memory_mb=100),
-                Preset(name="cpu-small", cpu=2, memory_mb=2048),
-                Preset(name="cpu-large", cpu=3, memory_mb=14336),
+                Preset(
+                    name="cpu-micro",
+                    credits_per_hour=Decimal("10"),
+                    cpu=0.1,
+                    memory_mb=100,
+                ),
+                Preset(
+                    name="cpu-small",
+                    credits_per_hour=Decimal("10"),
+                    cpu=2,
+                    memory_mb=2048,
+                ),
+                Preset(
+                    name="cpu-large",
+                    credits_per_hour=Decimal("10"),
+                    cpu=3,
+                    memory_mb=14336,
+                ),
                 Preset(
                     name="tpu",
+                    credits_per_hour=Decimal("10"),
                     cpu=3,
                     memory_mb=14336,
                     tpu=TPUPreset(type="v2-8", software_version="1.14"),

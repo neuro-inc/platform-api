@@ -1,3 +1,4 @@
+from decimal import Decimal
 from pathlib import PurePath
 from typing import Any, Dict, List, Sequence
 
@@ -70,16 +71,28 @@ def clusters_payload(nfs_storage_payload: Dict[str, Any]) -> List[Dict[str, Any]
                 "job_schedule_timeout_s": 60,
                 "job_schedule_scale_up_timeout_s": 120,
                 "resource_presets": [
-                    {"name": "cpu-small", "cpu": 1, "memory_mb": 2048},
-                    {"name": "cpu-large", "cpu": 7, "memory_mb": 49152},
+                    {
+                        "name": "cpu-small",
+                        "credits_per_hour": "10",
+                        "cpu": 1,
+                        "memory_mb": 2048,
+                    },
+                    {
+                        "name": "cpu-large",
+                        "credits_per_hour": "10",
+                        "cpu": 7,
+                        "memory_mb": 49152,
+                    },
                     {
                         "name": "tpu",
+                        "credits_per_hour": "10",
                         "cpu": 7,
                         "memory_mb": 49152,
                         "tpu": {"type": "v2-8", "software_version": "1.14"},
                     },
                     {
                         "name": "gpu-small-p",
+                        "credits_per_hour": "10",
                         "cpu": 7.0,
                         "memory_mb": 52224,
                         "gpu": 1,
@@ -87,6 +100,7 @@ def clusters_payload(nfs_storage_payload: Dict[str, Any]) -> List[Dict[str, Any]
                     },
                     {
                         "name": "gpu-small",
+                        "credits_per_hour": "10",
                         "cpu": 7.0,
                         "memory_mb": 52224,
                         "gpu": 1,
@@ -94,6 +108,7 @@ def clusters_payload(nfs_storage_payload: Dict[str, Any]) -> List[Dict[str, Any]
                     },
                     {
                         "name": "gpu-large-p",
+                        "credits_per_hour": "10",
                         "cpu": 7.0,
                         "memory_mb": 52224,
                         "gpu": 1,
@@ -101,6 +116,7 @@ def clusters_payload(nfs_storage_payload: Dict[str, Any]) -> List[Dict[str, Any]
                     },
                     {
                         "name": "gpu-large",
+                        "credits_per_hour": "10",
                         "cpu": 0.1,
                         "memory_mb": 52224,
                         "gpu": 1,
@@ -300,6 +316,7 @@ class TestClusterConfigFactory:
         assert orchestrator.presets[1].gpu_model is None
         assert orchestrator.presets[2] == Preset(
             name="tpu",
+            credits_per_hour=Decimal("10"),
             cpu=7.0,
             memory_mb=49152,
             tpu=TPUPreset(type="v2-8", software_version="1.14"),
@@ -353,10 +370,21 @@ class TestClusterConfigFactory:
     ) -> None:
         factory = ClusterConfigFactory()
         clusters_payload[0]["orchestrator"]["resource_presets"] = [
-            {"name": "cpu-small", "cpu": 1, "memory_mb": 2048},
-            {"name": "cpu-large", "cpu": 7, "memory_mb": 49152},
+            {
+                "name": "cpu-small",
+                "credits_per_hour": "10",
+                "cpu": 1,
+                "memory_mb": 2048,
+            },
+            {
+                "name": "cpu-large",
+                "credits_per_hour": "10",
+                "cpu": 7,
+                "memory_mb": 49152,
+            },
             {
                 "name": "cpu-large-p",
+                "credits_per_hour": "10",
                 "cpu": 7,
                 "memory_mb": 49152,
                 "scheduler_enabled": True,
@@ -372,10 +400,15 @@ class TestClusterConfigFactory:
         )
 
         assert clusters[0].orchestrator.presets == [
-            Preset(name="cpu-small", cpu=1, memory_mb=2048),
-            Preset(name="cpu-large", cpu=7, memory_mb=49152),
+            Preset(
+                name="cpu-small", credits_per_hour=Decimal("10"), cpu=1, memory_mb=2048
+            ),
+            Preset(
+                name="cpu-large", credits_per_hour=Decimal("10"), cpu=7, memory_mb=49152
+            ),
             Preset(
                 name="cpu-large-p",
+                credits_per_hour=Decimal("10"),
                 cpu=7,
                 memory_mb=49152,
                 scheduler_enabled=True,

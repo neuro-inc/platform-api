@@ -143,6 +143,7 @@ class ApiHandler:
     def _convert_preset_to_payload(self, preset: Preset) -> Dict[str, Any]:
         payload: Dict[str, Any] = {
             "name": preset.name,
+            "credits_per_hour": str(preset.credits_per_hour),
             "cpu": preset.cpu,
             "memory_mb": preset.memory_mb,
             "scheduler_enabled": preset.scheduler_enabled,

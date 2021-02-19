@@ -43,7 +43,7 @@ data:
                     }
                 ],
                 "resource_presets": [
-                    {"name": "cpu-small", "cpu": 1, "memory_mb": 2048}
+                    {"name": "cpu-small", "credits_per_hour": "10", "cpu": 1, "memory_mb": 2048}
                 ]
             },
 

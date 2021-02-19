@@ -1,4 +1,5 @@
 import logging
+from decimal import Decimal
 from pathlib import PurePath
 from typing import Any, Dict, List, Optional, Sequence
 
@@ -87,6 +88,7 @@ class ClusterConfigFactory:
             result.append(
                 Preset(
                     name=preset["name"],
+                    credits_per_hour=Decimal(preset["credits_per_hour"]),
                     cpu=preset.get("cpu") or payload["cpu"],
                     memory_mb=preset.get("memory_mb"),
                     scheduler_enabled=preset.get("scheduler_enabled")

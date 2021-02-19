@@ -1,4 +1,5 @@
 from datetime import datetime, timedelta
+from decimal import Decimal
 from pathlib import PurePath
 from typing import Any, Dict, Sequence
 from unittest import mock
@@ -403,7 +404,14 @@ class TestJobPresetValidator:
     def test_validator(self) -> None:
         request = {"preset_name": "preset", "container": {}}
         validator = create_job_preset_validator(
-            [Preset(name="preset", cpu=0.1, memory_mb=100)]
+            [
+                Preset(
+                    name="preset",
+                    credits_per_hour=Decimal("10"),
+                    cpu=0.1,
+                    memory_mb=100,
+                )
+            ]
         )
         payload = validator.check(request)
 
@@ -417,7 +425,14 @@ class TestJobPresetValidator:
     def test_validator_default_preset(self) -> None:
         request: Dict[str, Any] = {"container": {}}
         validator = create_job_preset_validator(
-            [Preset(name="preset", cpu=0.1, memory_mb=100)]
+            [
+                Preset(
+                    name="preset",
+                    credits_per_hour=Decimal("10"),
+                    cpu=0.1,
+                    memory_mb=100,
+                )
+            ]
         )
         payload = validator.check(request)
 
@@ -431,7 +446,14 @@ class TestJobPresetValidator:
     def test_flat_structure_validator(self) -> None:
         request = {"preset_name": "preset"}
         validator = create_job_preset_validator(
-            [Preset(name="preset", cpu=0.1, memory_mb=100)]
+            [
+                Preset(
+                    name="preset",
+                    credits_per_hour=Decimal("10"),
+                    cpu=0.1,
+                    memory_mb=100,
+                )
+            ]
         )
         payload = validator.check(request)
 
@@ -445,7 +467,14 @@ class TestJobPresetValidator:
     def test_validator_unknown_preset_name(self) -> None:
         request = {"preset_name": "unknown", "container": {}}
         validator = create_job_preset_validator(
-            [Preset(name="preset", cpu=0.1, memory_mb=100)]
+            [
+                Preset(
+                    name="preset",
+                    credits_per_hour=Decimal("10"),
+                    cpu=0.1,
+                    memory_mb=100,
+                )
+            ]
         )
         with pytest.raises(DataError, match="value doesn't match any variant"):
             validator.check(request)
@@ -456,7 +485,14 @@ class TestJobPresetValidator:
             "container": {"resources": {"cpu": 1.0, "memory_mb": 1024}},
         }
         validator = create_job_preset_validator(
-            [Preset(name="preset", cpu=0.1, memory_mb=100)]
+            [
+                Preset(
+                    name="preset",
+                    credits_per_hour=Decimal("10"),
+                    cpu=0.1,
+                    memory_mb=100,
+                )
+            ]
         )
         with pytest.raises(
             DataError, match="Both preset and resources are not allowed"
@@ -469,7 +505,14 @@ class TestJobPresetValidator:
             "resources": {"cpu": 1.0, "memory_mb": 1024},
         }
         validator = create_job_preset_validator(
-            [Preset(name="preset", cpu=0.1, memory_mb=100)]
+            [
+                Preset(
+                    name="preset",
+                    credits_per_hour=Decimal("10"),
+                    cpu=0.1,
+                    memory_mb=100,
+                )
+            ]
         )
         with pytest.raises(
             DataError, match="Both preset and resources are not allowed"
@@ -485,6 +528,7 @@ class TestJobPresetValidator:
             [
                 Preset(
                     name="preset",
+                    credits_per_hour=Decimal("10"),
                     cpu=0.1,
                     memory_mb=100,
                     gpu=1,
