@@ -2,18 +2,32 @@ import abc
 import asyncio
 import contextlib
 import logging
+from collections import defaultdict
 from dataclasses import dataclass, field
 from datetime import timedelta
-from typing import Any, Dict, Iterable, List, Optional, Sequence
+from typing import (
+    Any,
+    Callable,
+    Dict,
+    Iterable,
+    List,
+    Mapping,
+    Optional,
+    Sequence,
+    TypeVar,
+)
 
 import aiohttp
 from multidict import MultiDict
+from neuro_auth_client import AuthClient
 from notifications_client import QuotaResourceType, QuotaWillBeReachedSoon
 from notifications_client.client import Client
 
 from platform_api.config import JobPolicyEnforcerConfig
-from platform_api.orchestrator.job import ZERO_RUN_TIME, AggregatedRunTime
+from platform_api.orchestrator.job import ZERO_RUN_TIME, AggregatedRunTime, Job
 from platform_api.orchestrator.job_request import JobStatus
+from platform_api.orchestrator.jobs_service import JobsService
+from platform_api.orchestrator.jobs_storage import JobFilter
 
 
 logger = logging.getLogger(__name__)
@@ -384,6 +398,57 @@ class RuntimeLimitEnforcer(JobPolicyEnforcer):
                 raise
             except Exception:
                 logger.exception("Failed to kill job %s", job.id)
+
+
+class CreditsLimitEnforcer(JobPolicyEnforcer):
+    def __init__(self, service: JobsService, auth_client: AuthClient):
+        self._service = service
+        self._auth_client = auth_client
+
+    _T = TypeVar("_T")
+    _K = TypeVar("_K")
+
+    def _groupby(
+        self, it: Iterable[_T], key: Callable[[_T], _K]
+    ) -> Mapping[_K, List[_T]]:
+        res = defaultdict(list)
+        for item in it:
+            res[key(item)].append(item)
+        return res
+
+    async def enforce(self) -> None:
+        jobs = await self._service.get_all_jobs(
+            job_filter=JobFilter(
+                statuses={JobStatus(item) for item in JobStatus.active_values()}
+            )
+        )
+        await asyncio.gather(
+            *[
+                asyncio.create_task(self._enforce_for_user(owner, user_jobs))
+                for owner, user_jobs in self._groupby(
+                    jobs, lambda job: job.owner
+                ).items()
+            ]
+        )
+
+    async def _enforce_for_user(self, username: str, user_jobs: Iterable[Job]) -> None:
+        user = await self._auth_client.get_user(username)
+        for cluster_name, cluster_jobs in self._groupby(
+            user_jobs, lambda job: job.cluster_name
+        ).items():
+            try:
+                cluster = next(
+                    cluster for cluster in user.clusters if cluster.name == cluster_name
+                )
+            except StopIteration:
+                logger.warning(
+                    f"User {username} has jobs in cluster {cluster_name}, "
+                    f"but has no access to this cluster"
+                )
+                continue
+            if cluster.quota.credits == 0:
+                for job in cluster_jobs:
+                    await self._service.cancel_job(job.id)
 
 
 class JobPolicyEnforcePoller:
