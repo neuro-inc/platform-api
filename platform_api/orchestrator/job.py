@@ -783,7 +783,7 @@ class Job:
         return self._record.max_run_time_minutes
 
     @property
-    def fully_billed(self) -> Optional[bool]:
+    def fully_billed(self) -> bool:
         return self._record.fully_billed
 
     @property
@@ -791,7 +791,7 @@ class Job:
         return self._record.last_billed
 
     @property
-    def total_price_credits(self) -> Optional[Decimal]:
+    def total_price_credits(self) -> Decimal:
         return self._record.total_price_credits
 
     def to_primitive(self) -> Dict[str, Any]:
