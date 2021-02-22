@@ -76,9 +76,8 @@ class AdminClient:
     async def change_user_credits(
         self, cluster_name: str, username: str, credits_change: Decimal
     ) -> None:
+        payload = {"additional_quota": {"credits": str(credits_change)}}
         async with self._request(
-            "PATCH",
-            f"{cluster_name}/users/{username}/quota/credits",
-            json={"credits_change": str(credits_change)},
+            "PATCH", f"{cluster_name}/users/{username}/quota", json=payload
         ) as response:
             response.raise_for_status()
