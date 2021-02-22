@@ -288,7 +288,7 @@ class JobRecord:
     restart_policy: JobRestartPolicy = JobRestartPolicy.NEVER
 
     # Billing in credits
-    fully_billed: bool = False
+    fully_billed: bool = False  # True if job has final price
     last_billed: Optional[datetime] = None
     total_price_credits: Decimal = Decimal("0")
 
