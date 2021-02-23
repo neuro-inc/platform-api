@@ -3,6 +3,7 @@ import base64
 import json
 from dataclasses import replace
 from datetime import datetime, timezone
+from decimal import Decimal
 from typing import Any, AsyncIterator, Callable
 from unittest import mock
 
@@ -1652,6 +1653,53 @@ class TestJobsService:
 
         # Should not raise anything:
         await jobs_service.create_job(request, user, wait_for_jobs_quota=True)
+
+    @pytest.mark.asyncio
+    async def test_job_billing_defaults(
+        self, jobs_service: JobsService, mock_job_request: JobRequest
+    ) -> None:
+        user = User(cluster_name="test-cluster", name="testuser", token="")
+        job, _ = await jobs_service.create_job(job_request=mock_job_request, user=user)
+        assert not job.fully_billed
+        assert job.last_billed is None
+        assert job.total_price_credits == Decimal("0")
+
+    @pytest.mark.asyncio
+    async def test_job_update_billing(
+        self, jobs_service: JobsService, mock_job_request: JobRequest
+    ) -> None:
+        user = User(cluster_name="test-cluster", name="testuser", token="")
+        job, _ = await jobs_service.create_job(job_request=mock_job_request, user=user)
+        now = datetime.now(timezone.utc)
+        await jobs_service.update_job_billing(
+            job.id, last_billed=now, fully_billed=False, new_charge=Decimal("5.00")
+        )
+
+        await jobs_service.update_job_billing(
+            job.id, last_billed=now, fully_billed=True, new_charge=Decimal("6.11")
+        )
+        job = await jobs_service.get_job(job.id)
+        assert job.fully_billed
+        assert job.last_billed == now
+        assert job.total_price_credits == Decimal("11.11")
+
+    @pytest.mark.asyncio
+    async def test_get_not_billed_jobs(
+        self, jobs_service: JobsService, job_request_factory: Callable[..., JobRequest]
+    ) -> None:
+        user = User(cluster_name="test-cluster", name="testuser", token="")
+        job1, _ = await jobs_service.create_job(
+            job_request=job_request_factory(), user=user
+        )
+        job2, _ = await jobs_service.create_job(
+            job_request=job_request_factory(), user=user
+        )
+        now = datetime.now(timezone.utc)
+        await jobs_service.update_job_billing(
+            job1.id, last_billed=now, fully_billed=True, new_charge=Decimal("5.00")
+        )
+        job_ids = [job.id async for job in jobs_service.get_not_billed_jobs()]
+        assert job_ids == [job2.id]
 
 
 class TestJobsServiceCluster:

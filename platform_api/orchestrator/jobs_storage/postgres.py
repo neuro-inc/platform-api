@@ -504,6 +504,12 @@ class JobFilterClauseBuilder:
             == materialized
         )
 
+    def filter_fully_billed(self, fully_billed: bool) -> None:
+        self._clauses.append(
+            self._tables.jobs.c.payload["fully_billed"].astext.cast(Boolean)
+            == fully_billed
+        )
+
     def build(self) -> sasql.ClauseElement:
         return and_(*self._clauses)
 
@@ -526,6 +532,8 @@ class JobFilterClauseBuilder:
             builder.filter_tags(job_filter.tags)
         if job_filter.materialized is not None:
             builder.filter_materialized(job_filter.materialized)
+        if job_filter.fully_billed is not None:
+            builder.filter_fully_billed(job_filter.fully_billed)
         builder.filter_since(job_filter.since)
         builder.filter_until(job_filter.until)
         return builder.build()

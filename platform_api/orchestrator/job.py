@@ -3,6 +3,7 @@ import logging
 import time
 from dataclasses import dataclass, field
 from datetime import datetime, timedelta, timezone
+from decimal import Decimal
 from functools import partial
 from typing import Any, Callable, Dict, Iterable, Iterator, List, Optional, Sequence
 
@@ -286,6 +287,11 @@ class JobRecord:
     schedule_timeout: Optional[float] = None
     restart_policy: JobRestartPolicy = JobRestartPolicy.NEVER
 
+    # Billing in credits
+    fully_billed: bool = False  # True if job has final price
+    last_billed: Optional[datetime] = None
+    total_price_credits: Decimal = Decimal("0")
+
     # for testing only
     allow_empty_cluster_name: bool = False
 
@@ -437,6 +443,8 @@ class JobRecord:
             "pass_config": self.pass_config,
             "privileged": self.privileged,
             "restart_policy": str(self.restart_policy),
+            "fully_billed": self.fully_billed,
+            "total_price_credits": str(self.total_price_credits),
         }
         if self.schedule_timeout:
             result["schedule_timeout"] = self.schedule_timeout
@@ -452,6 +460,8 @@ class JobRecord:
             result["preset_name"] = self.preset_name
         if self.tags:
             result["tags"] = self.tags
+        if self.last_billed:
+            result["last_billed"] = self.last_billed.isoformat()
         return result
 
     @classmethod
@@ -486,6 +496,11 @@ class JobRecord:
             restart_policy=JobRestartPolicy(
                 payload.get("restart_policy", str(cls.restart_policy))
             ),
+            fully_billed=payload.get("fully_billed", True),  # Default for old jobs
+            total_price_credits=Decimal(payload.get("total_price_credits", "0")),
+            last_billed=datetime.fromisoformat(payload["last_billed"])
+            if "last_billed" in payload
+            else None,
         )
 
     @staticmethod
@@ -766,6 +781,18 @@ class Job:
     @property
     def max_run_time_minutes(self) -> Optional[int]:
         return self._record.max_run_time_minutes
+
+    @property
+    def fully_billed(self) -> bool:
+        return self._record.fully_billed
+
+    @property
+    def last_billed(self) -> Optional[datetime]:
+        return self._record.last_billed
+
+    @property
+    def total_price_credits(self) -> Decimal:
+        return self._record.total_price_credits
 
     def to_primitive(self) -> Dict[str, Any]:
         return self._record.to_primitive()
