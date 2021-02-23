@@ -13,11 +13,14 @@ from yarl import URL
 
 from platform_api.cluster_config import OrchestratorConfig
 
+from ..resource import Preset
 from .job_request import ContainerResources, JobError, JobRequest, JobStatus
 
 
 # For named jobs, their hostname is of the form of
 # `{job-id}{JOB_USER_NAMES_SEPARATOR}{job-owner}.jobs.neu.ro`.
+
+
 JOB_USER_NAMES_SEPARATOR = "--"
 
 
@@ -375,17 +378,25 @@ class JobRecord:
     def get_run_time(
         self,
         *,
+        only_after: Optional[datetime] = None,
         current_datetime_factory: Callable[[], datetime] = current_datetime_factory,
     ) -> timedelta:
+        def _filter_only_after(begin: datetime, end: datetime) -> timedelta:
+            if only_after is None or only_after <= begin:
+                return end - begin
+            if only_after < end:
+                return end - only_after
+            return timedelta()
+
         run_time = timedelta()
         prev_time: Optional[datetime] = None
         for item in self.status_history.all:
             if prev_time:
-                run_time += item.transition_time - prev_time
+                run_time += _filter_only_after(prev_time, item.transition_time)
             prev_time = item.transition_time if item.status.is_running else None
         if prev_time:
             # job still running
-            run_time += current_datetime_factory() - prev_time
+            run_time += _filter_only_after(prev_time, current_datetime_factory())
         return run_time
 
     def _is_time_for_deletion(
@@ -563,6 +574,34 @@ class Job:
     @property
     def preset_name(self) -> Optional[str]:
         return self._record.preset_name
+
+    @property
+    def preset(self) -> Optional[Preset]:
+        try:
+            return next(
+                preset
+                for preset in self._orchestrator_config.presets
+                if preset.name == self.preset_name
+            )
+        except StopIteration:
+            return None
+
+    @property
+    def price_credits_per_hour(self) -> Decimal:
+        preset = self.preset
+        if preset:
+            return preset.credits_per_hour
+        # Default cost is maximal cost through all presets
+        # If there is no presets, that it is badly configured cluster in general
+        # and it is safe to assume zero cost
+        result = max(
+            (preset.credits_per_hour for preset in self._orchestrator_config.presets),
+            default=Decimal(0),
+        )
+        for preset in self._orchestrator_config.presets:
+            if self.resources.check_fit_into_preset(preset):
+                result = min(result, preset.credits_per_hour)
+        return result
 
     @property
     def is_named(self) -> bool:
@@ -773,9 +812,10 @@ class Job:
     def is_restartable(self) -> bool:
         return self._record.is_restartable
 
-    def get_run_time(self) -> timedelta:
+    def get_run_time(self, only_after: Optional[datetime] = None) -> timedelta:
         return self._record.get_run_time(
-            current_datetime_factory=self._current_datetime_factory
+            only_after=only_after,
+            current_datetime_factory=self._current_datetime_factory,
         )
 
     @property

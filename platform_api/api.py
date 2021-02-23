@@ -17,6 +17,7 @@ from platform_logging import init_logging
 from sentry_sdk.integrations.aiohttp import AioHttpIntegration
 
 from platform_api.orchestrator.job_policy_enforcer import (
+    BillingEnforcer,
     CreditsLimitEnforcer,
     JobPolicyEnforcePoller,
     PlatformApiClient,
@@ -24,6 +25,7 @@ from platform_api.orchestrator.job_policy_enforcer import (
     RuntimeLimitEnforcer,
 )
 
+from .admin_client import AdminClient
 from .cluster import (
     Cluster,
     ClusterConfig,
@@ -351,6 +353,13 @@ async def create_app(
             api_client = await exit_stack.enter_async_context(
                 PlatformApiClient(config.job_policy_enforcer)
             )
+            admin_client = await exit_stack.enter_async_context(
+                AdminClient(
+                    base_url=config.admin_url,
+                    service_token=config.auth.service_token,
+                    trace_config=trace_config,
+                )
+            )
             await exit_stack.enter_async_context(
                 JobPolicyEnforcePoller(
                     config.job_policy_enforcer,
@@ -360,6 +369,7 @@ async def create_app(
                         ),
                         RuntimeLimitEnforcer(api_client),
                         CreditsLimitEnforcer(jobs_service, auth_client),
+                        BillingEnforcer(jobs_service, admin_client),
                     ],
                 )
             )

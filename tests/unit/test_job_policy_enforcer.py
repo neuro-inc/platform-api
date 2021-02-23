@@ -1,4 +1,5 @@
 import asyncio
+import datetime
 from dataclasses import dataclass
 from datetime import timedelta
 from decimal import Decimal
@@ -14,6 +15,7 @@ from typing import (
     Mapping,
     Optional,
     Set,
+    Tuple,
 )
 
 import pytest
@@ -28,9 +30,12 @@ from notifications_client import QuotaResourceType, QuotaWillBeReachedSoon
 from notifications_client.client import Client
 from yarl import URL
 
+from platform_api.admin_client import AdminClient
+from platform_api.cluster_config import ClusterConfig
 from platform_api.config import JobPolicyEnforcerConfig
-from platform_api.orchestrator.job import AggregatedRunTime, Job
+from platform_api.orchestrator.job import AggregatedRunTime, Job, JobStatusItem
 from platform_api.orchestrator.job_policy_enforcer import (
+    BillingEnforcer,
     ClusterJobs,
     CreditsLimitEnforcer,
     JobInfo,
@@ -974,3 +979,52 @@ class TestHasCreditsEnforcer:
         await has_credits_enforcer.enforce()
 
         await check_cancelled(jobs)
+
+
+class MockAdminClient(AdminClient):
+    def __init__(self) -> None:
+        self.change_log: List[Tuple[str, str, Decimal]] = []
+
+    async def change_user_credits(
+        self, cluster_name: str, username: str, delta: Decimal
+    ) -> None:
+        self.change_log.append((cluster_name, username, delta))
+
+
+class TestBillingEnforcer:
+    @pytest.fixture()
+    def admin_client(self) -> MockAdminClient:
+        return MockAdminClient()
+
+    @pytest.mark.asyncio
+    async def test_jobs_charged(
+        self,
+        jobs_service: JobsService,
+        cluster_config: ClusterConfig,
+        admin_client: MockAdminClient,
+        job_request_factory: Callable[[], JobRequest],
+    ) -> None:
+        user = User(cluster_name="test-cluster", name="testuser", token="")
+        enforcer = BillingEnforcer(jobs_service, admin_client)
+        job, _ = await jobs_service.create_job(job_request_factory(), user)
+        now = datetime.datetime.now(datetime.timezone.utc)
+        before_1_5_hour = now - datetime.timedelta(hours=1, minutes=30)
+        await jobs_service.set_job_status(
+            job.id, JobStatusItem(JobStatus.RUNNING, transition_time=before_1_5_hour)
+        )
+
+        per_hour = cluster_config.orchestrator.presets[0].credits_per_hour
+        second = Decimal("1") / 3600
+        await enforcer.enforce()
+        assert len(admin_client.change_log) == 1
+        assert admin_client.change_log[0][0] == job.cluster_name
+        assert admin_client.change_log[0][1] == job.owner
+        assert -admin_client.change_log[0][2] >= Decimal("1.5") * per_hour
+        assert -admin_client.change_log[0][2] <= (Decimal("1.5") + second) * per_hour
+        await asyncio.sleep(1)
+        await enforcer.enforce()
+        assert len(admin_client.change_log) == 2
+        assert admin_client.change_log[1][0] == job.cluster_name
+        assert admin_client.change_log[1][1] == job.owner
+        assert -admin_client.change_log[1][2] >= second * per_hour
+        assert -admin_client.change_log[1][2] <= 2 * second * per_hour
