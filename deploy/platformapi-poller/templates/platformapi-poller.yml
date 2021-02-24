@@ -101,14 +101,14 @@ metadata:
 {{- end }}
 spec:
   rules:
-{{- k8sSuffix  := .Values.k8sSuffix -}}
+{{- $k8sSuffix  := .Values.k8sSuffix -}}
 {{- range .Values.ingress.hosts }}
   - host: {{ . | quote }}
     http:
       paths:
-      - path: /api/v1/poller{{ k8sSuffix }}
+      - path: /api/v1/poller{{ $k8sSuffix }}
         backend:
-          serviceName: platformapi-poller{{ k8sSuffix }}
+          serviceName: platformapi-poller{{ $k8sSuffix }}
           servicePort: http
 {{- end }}
 {{- end }}
