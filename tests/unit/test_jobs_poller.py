@@ -3,6 +3,7 @@ from typing import Any, AsyncIterator, Callable
 
 import pytest
 
+from platform_api.cluster import SingleClusterUpdater
 from platform_api.orchestrator.job_request import JobRequest, JobStatus
 from platform_api.orchestrator.jobs_poller import JobsPoller
 from platform_api.orchestrator.jobs_service import JobsService
@@ -10,6 +11,14 @@ from platform_api.orchestrator.poller_service import JobsPollerService
 from platform_api.user import User
 
 from .conftest import MockOrchestrator
+
+
+class MockClusterUpdater(SingleClusterUpdater):
+    def __init__(self) -> None:
+        pass
+
+    async def do_update(self) -> None:
+        pass
 
 
 class TestJobsPoller:
@@ -29,7 +38,11 @@ class TestJobsPoller:
     async def jobs_poller(
         self, jobs_poller_service: JobsPollerService
     ) -> AsyncIterator[JobsPoller]:
-        poller = JobsPoller(jobs_poller_service=jobs_poller_service, interval_s=0.1)
+        poller = JobsPoller(
+            jobs_poller_service=jobs_poller_service,
+            cluster_updater=MockClusterUpdater(),
+            interval_s=0.1,
+        )
         await poller.start()
         yield poller
         await poller.stop()

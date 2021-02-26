@@ -9,6 +9,7 @@ from iso8601 import iso8601
 from multidict import MultiDict
 from yarl import URL
 
+from ..cluster import SingleClusterUpdater
 from .job import JobRecord, JobRestartPolicy, JobStatusHistory, JobStatusItem
 from .job_request import (
     Container,
@@ -204,11 +205,16 @@ class HttpJobsPollerApi(JobsPollerApi):
 
 class JobsPoller:
     def __init__(
-        self, *, jobs_poller_service: JobsPollerService, interval_s: float = 1
+        self,
+        *,
+        jobs_poller_service: JobsPollerService,
+        interval_s: float = 1,
+        cluster_updater: SingleClusterUpdater,
     ) -> None:
         self._loop = asyncio.get_event_loop()
 
         self._jobs_poller_service = jobs_poller_service
+        self._cluster_updater = cluster_updater
         self._interval_s = interval_s
 
         self._is_active: Optional[asyncio.Future[None]] = None
@@ -252,6 +258,10 @@ class JobsPoller:
             await self._wait()
 
     async def _run_once(self) -> None:
+        try:
+            await self._cluster_updater.do_update()
+        except Exception:
+            logger.exception("exception when trying to update clusters")
         try:
             await self._jobs_poller_service.update_jobs_statuses()
         except Exception:

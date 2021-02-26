@@ -98,10 +98,6 @@ async def create_app(
                 api=poller_api,
             )
 
-            logger.info("Initializing JobsPoller")
-            jobs_poller = JobsPoller(jobs_poller_service=jobs_poller_service)
-            await exit_stack.enter_async_context(jobs_poller)
-
             logger.info("Initializing ClusterUpdater")
             cluster_updater = SingleClusterUpdater(
                 config=config,
@@ -109,6 +105,12 @@ async def create_app(
                 cluster_holder=cluster_holder,
                 cluster_name=config.cluster_name,
             )
+
+            logger.info("Initializing JobsPoller")
+            jobs_poller = JobsPoller(
+                jobs_poller_service=jobs_poller_service, cluster_updater=cluster_updater
+            )
+            await exit_stack.enter_async_context(jobs_poller)
 
             if cluster:
                 await cluster_holder.update(cluster)
