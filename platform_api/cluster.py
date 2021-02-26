@@ -225,12 +225,11 @@ class ClusterHolder:
     ) -> None:
         async with self._lock.writer:
             if self._cluster:
-                logger.info(f"Closing cluster '{self._cluster.name}'")
+                if self._cluster.config == config:
+                    return
                 await self._close_cluster(self._cluster)
-                self._cluster = None
-            else:
-                self._cluster = self._factory(config)
-                await self._init_cluster(self._cluster)
+            self._cluster = self._factory(config)
+            await self._init_cluster(self._cluster)
 
     async def _init_cluster(self, cluster: Cluster) -> None:
         logger.info(f"Initializing cluster '{cluster.name}'")
