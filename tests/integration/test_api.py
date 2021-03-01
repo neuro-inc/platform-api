@@ -4029,6 +4029,32 @@ class TestJobs:
         await asyncio.wait_for(_try_check(), timeout=5)
 
     @pytest.mark.asyncio
+    async def test_update_max_run_time(
+        self,
+        api: ApiConfig,
+        client: aiohttp.ClientSession,
+        job_submit: Dict[str, Any],
+        jobs_client: JobsClient,
+        run_job: Callable[..., Awaitable[str]],
+        regular_user: _User,
+        compute_user: _User,
+    ) -> None:
+        job_id = await run_job(regular_user, job_submit, do_wait=False)
+
+        url = api.generate_job_url(job_id) + "/max_run_time_minutes"
+        headers = compute_user.headers
+        payload = {"max_run_time_minutes": 10}
+        async with client.put(url, headers=headers, json=payload) as resp:
+            assert resp.status == HTTPNoContent.status_code, await resp.text()
+        result = await jobs_client.get_job_by_id(job_id)
+        assert result["max_run_time_minutes"] == 10
+        payload = {"additional_max_run_time_minutes": 15}
+        async with client.put(url, headers=headers, json=payload) as resp:
+            assert resp.status == HTTPNoContent.status_code, await resp.text()
+        result = await jobs_client.get_job_by_id(job_id)
+        assert result["max_run_time_minutes"] == 25
+
+    @pytest.mark.asyncio
     async def test_delete_job(
         self,
         api: ApiConfig,
