@@ -320,6 +320,31 @@ class JobsService:
         async with self._update_job_in_storage(job_id) as record:
             record.materialized = materialized
 
+    async def update_max_run_time(
+        self,
+        job_id: str,
+        max_run_time_minutes: Optional[int] = None,
+        additional_max_run_time_minutes: Optional[int] = None,
+    ) -> None:
+        assert (
+            max_run_time_minutes is not None
+            or additional_max_run_time_minutes is not None
+        ), (
+            "Either max_run_time_minutes or "
+            "additional_max_run_time_minutes should not be None"
+        )
+        assert (
+            max_run_time_minutes is None or additional_max_run_time_minutes is None
+        ), (
+            "Either max_run_time_minutes or "
+            "additional_max_run_time_minutes should be None"
+        )
+        async with self._update_job_in_storage(job_id) as record:
+            if max_run_time_minutes is not None:
+                record.max_run_time_minutes = max_run_time_minutes
+            else:
+                record.max_run_time_minutes += additional_max_run_time_minutes
+
     async def _get_cluster_job(self, record: JobRecord) -> Job:
         try:
             cluster_config = self._cluster_registry.get(record.cluster_name)

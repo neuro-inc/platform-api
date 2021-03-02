@@ -154,16 +154,9 @@ class IngressConfig:
 
 
 @dataclass(frozen=True)
-class CircuitBreakerConfig:
-    open_threshold: int = 3
-    open_timeout_s: float = 15.0
-
-
-@dataclass(frozen=True)
 class ClusterConfig:
     name: str
     storage: StorageConfig
     registry: RegistryConfig
     orchestrator: OrchestratorConfig
     ingress: IngressConfig
-    circuit_breaker: CircuitBreakerConfig = CircuitBreakerConfig()

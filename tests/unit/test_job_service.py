@@ -573,6 +573,23 @@ class TestJobsService:
         assert not job.materialized
 
     @pytest.mark.asyncio
+    async def test_update_max_run_time_by_job_id(
+        self, jobs_service: JobsService, mock_job_request: JobRequest
+    ) -> None:
+        user = User(cluster_name="test-cluster", name="testuser", token="")
+        job, _ = await jobs_service.create_job(job_request=mock_job_request, user=user)
+
+        await jobs_service.update_max_run_time(job.id, max_run_time_minutes=10)
+        job = await jobs_service.get_job(job.id)
+        assert job.max_run_time_minutes == 10
+
+        await jobs_service.update_max_run_time(
+            job.id, additional_max_run_time_minutes=15
+        )
+        job = await jobs_service.get_job(job.id)
+        assert job.max_run_time_minutes == 25
+
+    @pytest.mark.asyncio
     async def test_get_all(
         self, jobs_service: JobsService, job_request_factory: Callable[[], JobRequest]
     ) -> None:

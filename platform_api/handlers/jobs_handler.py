@@ -284,6 +284,29 @@ def create_job_set_materialized_validator() -> t.Trafaret:
     )
 
 
+def create_job_update_max_run_time_minutes_validator() -> t.Trafaret:
+    def _check_exactly_one(payload: Dict[str, Any]) -> Dict[str, Any]:
+        if not payload or (
+            "max_run_time_minutes" in payload
+            and "additional_max_run_time_minutes" in payload
+        ):
+            raise t.DataError(
+                "Exactly one of 'max_run_time_minutes' and "
+                "'additional_max_run_time_minutes' allowed"
+            )
+        return payload
+
+    return (
+        t.Dict(
+            {
+                t.Key("max_run_time_minutes", optional=True): t.Int(gte=1),
+                t.Key("additional_max_run_time_minutes", optional=True): t.Int(gte=1),
+            }
+        )
+        >> _check_exactly_one
+    )
+
+
 def convert_job_container_to_json(container: Container) -> Dict[str, Any]:
     ret: Dict[str, Any] = {
         "image": container.image,
@@ -463,6 +486,9 @@ class JobsHandler:
         self._job_response_validator = create_job_response_validator()
         self._job_set_status_validator = create_job_set_status_validator()
         self._job_set_materialized_validator = create_job_set_materialized_validator()
+        self._job_update_run_time_validator = (
+            create_job_update_max_run_time_minutes_validator()
+        )
         self._bulk_jobs_response_validator = t.Dict(
             {"jobs": t.List(self._job_response_validator)}
         )
@@ -484,6 +510,10 @@ class JobsHandler:
                 aiohttp.web.get("/{job_id}", self.handle_get),
                 aiohttp.web.put("/{job_id}/status", self.handle_put_status),
                 aiohttp.web.put("/{job_id}/materialized", self.handle_put_materialized),
+                aiohttp.web.put(
+                    "/{job_id}/max_run_time_minutes",
+                    self.handle_put_max_run_time_minutes,
+                ),
             )
         )
 
@@ -803,6 +833,35 @@ class JobsHandler:
             await self._jobs_service.set_job_materialized(
                 job_id=job_id,
                 materialized=request_payload["materialized"],
+            )
+        except JobStorageTransactionError as e:
+            payload = {"error": str(e)}
+            return aiohttp.web.json_response(
+                payload, status=aiohttp.web.HTTPConflict.status_code
+            )
+        except JobError as e:
+            payload = {"error": str(e)}
+            return aiohttp.web.json_response(
+                payload, status=aiohttp.web.HTTPBadRequest.status_code
+            )
+        else:
+            raise aiohttp.web.HTTPNoContent()
+
+    async def handle_put_max_run_time_minutes(
+        self, request: aiohttp.web.Request
+    ) -> aiohttp.web.StreamResponse:
+        job = await self._resolve_job(request, "write")
+
+        orig_payload = await request.json()
+        request_payload = self._job_update_run_time_validator.check(orig_payload)
+
+        try:
+            await self._jobs_service.update_max_run_time(
+                job_id=job.id,
+                max_run_time_minutes=request_payload.get("max_run_time_minutes"),
+                additional_max_run_time_minutes=request_payload.get(
+                    "additional_max_run_time_minutes"
+                ),
             )
         except JobStorageTransactionError as e:
             payload = {"error": str(e)}
