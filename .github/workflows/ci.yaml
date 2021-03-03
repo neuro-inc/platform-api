@@ -68,20 +68,6 @@ jobs:
           login-server: ${{ secrets.AZURE_DEV_ACR_SERVER }}
           username: ${{ secrets.AZURE_DEV_ACR_USERNAME }}
           password: ${{ secrets.AZURE_DEV_ACR_PASSWORD }}
-      - name: Install containerd
-        run: |
-          # without containerd, tests TestTopApi won't work
-          # see https://github.com/neuromation/platform-api/pull/928/files#diff-1d37e48f9ceff6d8030570cd36286a61R76
-          export DEBIAN_FRONTEND=noninteractive
-          export RELEASE=$(lsb_release -cs)
-          curl -fsSL https://download.docker.com/linux/ubuntu/gpg | sudo apt-key add -
-          sudo add-apt-repository -y \
-            "deb [arch=amd64] https://download.docker.com/linux/ubuntu $RELEASE stable"
-          sudo apt-get -q update
-          sudo apt-get -q install -y \
-            docker-ce=5:18.09.4~3-0~ubuntu-$RELEASE \
-            docker-ce-cli=5:18.09.4~3-0~ubuntu-$RELEASE \
-            containerd.io=1.2.5-1
       - name: Install NFS
         run: |
           sudo apt-get -q update
