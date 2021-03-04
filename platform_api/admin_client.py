@@ -78,6 +78,6 @@ class AdminClient:
     ) -> None:
         payload = {"additional_quota": {"credits": str(credits_delta)}}
         async with self._request(
-            "PATCH", f"{cluster_name}/users/{username}/quota", json=payload
+            "PATCH", f"clusters/{cluster_name}/users/{username}/quota", json=payload
         ) as response:
             response.raise_for_status()

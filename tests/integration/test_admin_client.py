@@ -24,7 +24,9 @@ async def create_admin_app(
         assert payload["additional_quota"]["credits"] == str(amount)
         return aiohttp.web.Response()
 
-    app.add_routes((aiohttp.web.patch("/api/v1/{cname}/users/{uname}/quota", handle),))
+    app.add_routes(
+        (aiohttp.web.patch("/api/v1/clusters/{cname}/users/{uname}/quota", handle),)
+    )
 
     return app
 
