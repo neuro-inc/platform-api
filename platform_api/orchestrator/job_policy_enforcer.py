@@ -30,6 +30,7 @@ from platform_api.orchestrator.job import ZERO_RUN_TIME, AggregatedRunTime, Job
 from platform_api.orchestrator.job_request import JobStatus
 from platform_api.orchestrator.jobs_service import JobsService
 from platform_api.orchestrator.jobs_storage import JobFilter
+from platform_api.utils.asyncio import run_and_log_exceptions
 
 
 logger = logging.getLogger(__name__)
@@ -424,14 +425,12 @@ class CreditsLimitEnforcer(JobPolicyEnforcer):
                 statuses={JobStatus(item) for item in JobStatus.active_values()}
             )
         )
-        await asyncio.gather(
-            *[
-                asyncio.create_task(self._enforce_for_user(owner, user_jobs))
-                for owner, user_jobs in self._groupby(
-                    jobs, lambda job: job.owner
-                ).items()
-            ]
-        )
+        owner_to_jobs = self._groupby(jobs, lambda job: job.owner)
+        coros = [
+            self._enforce_for_user(owner, user_jobs)
+            for owner, user_jobs in owner_to_jobs.items()
+        ]
+        await run_and_log_exceptions(coros)
 
     async def _enforce_for_user(self, username: str, user_jobs: Iterable[Job]) -> None:
         user = await self._auth_client.get_user(username)
@@ -459,12 +458,11 @@ class BillingEnforcer(JobPolicyEnforcer):
         self._admin_client = admin_client
 
     async def enforce(self) -> None:
-        await asyncio.gather(
-            *[
-                asyncio.create_task(self._bill_single_wrapper(job))
-                async for job in self._service.get_not_billed_jobs()
-            ],
-        )
+        coros = [
+            self._bill_single_wrapper(job)
+            async for job in self._service.get_not_billed_jobs()
+        ]
+        await run_and_log_exceptions(coros)
 
     async def _bill_single_wrapper(self, job: Job) -> None:
         try:

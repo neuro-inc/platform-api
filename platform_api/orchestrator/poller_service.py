@@ -20,6 +20,7 @@ from platform_api.cluster_config import OrchestratorConfig
 from platform_api.config import JobsConfig, JobsSchedulerConfig
 from platform_api.user import User
 
+from ..utils.asyncio import run_and_log_exceptions
 from .base import Orchestrator
 from .job import Job, JobRecord, JobStatusItem, JobStatusReason
 from .job_request import (
@@ -228,18 +229,20 @@ class JobsPollerService:
         unfinished = await self._api.get_unfinished_jobs()
         result = await self._scheduler.schedule(unfinished)
 
-        for record in result.jobs_to_update:
-            await self._update_job_status_wrapper(record)
+        await run_and_log_exceptions(
+            self._update_job_status_wrapper(record) for record in result.jobs_to_update
+        )
 
-        for record in result.jobs_to_suspend:
-            await self._suspend_job_wrapper(record)
+        await run_and_log_exceptions(
+            self._suspend_job_wrapper(record) for record in result.jobs_to_suspend
+        )
 
-        for record in await self._api.get_jobs_for_deletion(
-            delay=self._jobs_config.deletion_delay
-        ):
-            # finished, but not yet dematerialized jobs
-            # assert job.is_finished and job.materialized
-            await self._delete_job_wrapper(record)
+        await run_and_log_exceptions(
+            self._delete_job_wrapper(record)
+            for record in await self._api.get_jobs_for_deletion(
+                delay=self._jobs_config.deletion_delay
+            )
+        )
 
     def _make_job(self, record: JobRecord, cluster: Optional[Cluster] = None) -> Job:
         if cluster is not None:
