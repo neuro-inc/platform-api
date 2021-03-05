@@ -362,7 +362,7 @@ class JobsService:
         record = await self._jobs_storage.get_job(job_id)
         return await self._get_cluster_job(record)
 
-    async def cancel_job(self, job_id: str) -> None:
+    async def cancel_job(self, job_id: str, reason: Optional[str] = None) -> None:
         for _ in range(self._max_deletion_attempts):
             try:
                 async with self._update_job_in_storage(job_id) as record:
@@ -370,8 +370,10 @@ class JobsService:
                         # the job has already finished. nothing to do here.
                         return
 
-                    logger.info("Canceling job %s", job_id)
-                    record.status = JobStatus.CANCELLED
+                    logger.info(f"Canceling job {job_id} for reason {reason}")
+                    record.status_history.current = JobStatusItem.create(
+                        JobStatus.CANCELLED, reason=reason
+                    )
 
                 return
             except JobStorageTransactionError:

@@ -26,7 +26,12 @@ from notifications_client.client import Client
 
 from platform_api.admin_client import AdminClient
 from platform_api.config import JobPolicyEnforcerConfig
-from platform_api.orchestrator.job import ZERO_RUN_TIME, AggregatedRunTime, Job
+from platform_api.orchestrator.job import (
+    ZERO_RUN_TIME,
+    AggregatedRunTime,
+    Job,
+    JobStatusReason,
+)
 from platform_api.orchestrator.job_request import JobStatus
 from platform_api.orchestrator.jobs_service import JobsService
 from platform_api.orchestrator.jobs_storage import JobFilter
@@ -111,9 +116,9 @@ class PlatformApiClient:
             payload = await resp.json()
         return _parse_user_stats(payload)
 
-    async def kill_job(self, job_id: str) -> None:
+    async def kill_job(self, job_id: str, reason: str) -> None:
         url = f"{self._platform_api_url}/jobs/{job_id}"
-        async with self._session.delete(url) as resp:
+        async with self._session.delete(url, options={"reason": reason}) as resp:
             resp.raise_for_status()
 
 
@@ -372,7 +377,9 @@ class QuotaEnforcer(JobPolicyEnforcer):
 
         for job_id in jobs_to_delete:
             try:
-                await self._platform_api_client.kill_job(job_id)
+                await self._platform_api_client.kill_job(
+                    job_id, JobStatusReason.QUOTA_EXHAUSTED
+                )
             except asyncio.CancelledError:
                 raise
             except Exception:
@@ -395,7 +402,9 @@ class RuntimeLimitEnforcer(JobPolicyEnforcer):
                 f"on cluster '{job.cluster_name}'"
             )
             try:
-                await self._platform_api_client.kill_job(job.id)
+                await self._platform_api_client.kill_job(
+                    job.id, JobStatusReason.LIFE_SPAN_ENDED
+                )
             except asyncio.CancelledError:
                 raise
             except Exception:
@@ -450,7 +459,9 @@ class CreditsLimitEnforcer(JobPolicyEnforcer):
                 continue
             if cluster.quota.credits == 0:
                 for job in cluster_jobs:
-                    await self._service.cancel_job(job.id)
+                    await self._service.cancel_job(
+                        job.id, JobStatusReason.QUOTA_EXHAUSTED
+                    )
 
 
 class BillingEnforcer(JobPolicyEnforcer):
