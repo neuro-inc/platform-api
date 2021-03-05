@@ -6,6 +6,7 @@ from datetime import datetime, timedelta, timezone
 from functools import partial
 from typing import AsyncIterator, Callable, Dict, List, Optional, Tuple, Union
 
+from aiohttp import ClientResponseError
 from async_generator import asynccontextmanager
 from neuro_auth_client import AuthClient
 
@@ -19,6 +20,7 @@ from platform_api.cluster_config import OrchestratorConfig
 from platform_api.config import JobsConfig, JobsSchedulerConfig
 from platform_api.user import User
 
+from ..utils.asyncio import run_and_log_exceptions
 from .base import Orchestrator
 from .job import Job, JobRecord, JobStatusItem, JobStatusReason
 from .job_request import (
@@ -227,18 +229,20 @@ class JobsPollerService:
         unfinished = await self._api.get_unfinished_jobs()
         result = await self._scheduler.schedule(unfinished)
 
-        for record in result.jobs_to_update:
-            await self._update_job_status_wrapper(record)
+        await run_and_log_exceptions(
+            self._update_job_status_wrapper(record) for record in result.jobs_to_update
+        )
 
-        for record in result.jobs_to_suspend:
-            await self._suspend_job_wrapper(record)
+        await run_and_log_exceptions(
+            self._suspend_job_wrapper(record) for record in result.jobs_to_suspend
+        )
 
-        for record in await self._api.get_jobs_for_deletion(
-            delay=self._jobs_config.deletion_delay
-        ):
-            # finished, but not yet dematerialized jobs
-            # assert job.is_finished and job.materialized
-            await self._delete_job_wrapper(record)
+        await run_and_log_exceptions(
+            self._delete_job_wrapper(record)
+            for record in await self._api.get_jobs_for_deletion(
+                delay=self._jobs_config.deletion_delay
+            )
+        )
 
     def _make_job(self, record: JobRecord, cluster: Optional[Cluster] = None) -> Job:
         if cluster is not None:
@@ -367,7 +371,12 @@ class JobsPollerService:
     async def _revoke_pass_config(self, job: Union[JobRecord, Job]) -> None:
         if job.pass_config:
             token_uri = f"token://job/{job.id}"
-            await self._auth_client.revoke_user_permissions(job.owner, [token_uri])
+            try:
+                await self._auth_client.revoke_user_permissions(job.owner, [token_uri])
+            except ClientResponseError as e:
+                if e.status == 400 and e.message == "Operation has no effect":
+                    # Token permission was already revoked
+                    pass
 
     async def _delete_cluster_job(self, record: JobRecord) -> None:
         try:
