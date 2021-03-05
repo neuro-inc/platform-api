@@ -783,9 +783,7 @@ class JobsHandler:
         self, request: aiohttp.web.Request
     ) -> aiohttp.web.StreamResponse:
         job = await self._resolve_job(request, "write")
-        reason = request.query.get("reason", JobStatusReason.USER_REQUESTED)
-
-        await self._jobs_service.cancel_job(job.id, reason)
+        await self._jobs_service.cancel_job(job.id, JobStatusReason.USER_REQUESTED)
         raise aiohttp.web.HTTPNoContent()
 
     async def handle_put_status(

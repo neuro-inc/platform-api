@@ -117,8 +117,9 @@ class PlatformApiClient:
         return _parse_user_stats(payload)
 
     async def kill_job(self, job_id: str, reason: str) -> None:
-        url = f"{self._platform_api_url}/jobs/{job_id}"
-        async with self._session.delete(url, options={"reason": reason}) as resp:
+        url = f"{self._platform_api_url}/jobs/{job_id}/status"
+        payload = {"status": JobStatus.CANCELLED.value, "reason": reason}
+        async with self._session.put(url, json=payload) as resp:
             resp.raise_for_status()
 
 
