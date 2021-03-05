@@ -6,6 +6,7 @@ from datetime import datetime, timedelta, timezone
 from functools import partial
 from typing import AsyncIterator, Callable, Dict, List, Optional, Tuple, Union
 
+from aiohttp import ClientResponseError
 from async_generator import asynccontextmanager
 from neuro_auth_client import AuthClient
 
@@ -367,7 +368,12 @@ class JobsPollerService:
     async def _revoke_pass_config(self, job: Union[JobRecord, Job]) -> None:
         if job.pass_config:
             token_uri = f"token://job/{job.id}"
-            await self._auth_client.revoke_user_permissions(job.owner, [token_uri])
+            try:
+                await self._auth_client.revoke_user_permissions(job.owner, [token_uri])
+            except ClientResponseError as e:
+                if e.status == 400 and e.message == "Operation has no effect":
+                    # Token permission was already revoked
+                    pass
 
     async def _delete_cluster_job(self, record: JobRecord) -> None:
         try:
