@@ -239,7 +239,7 @@ class TestJobsService:
         assert URL(passed_data["url"]) == mock_api_base
         assert passed_data["token"] == f"token-{user.name}"
         assert passed_data["cluster"] == original_job.cluster_name
-        token_uri = f"token://job/{original_job.id}"
+        token_uri = f"token://{original_job.cluster_name}/job/{original_job.id}"
         assert mock_auth_client.grants[0] == (
             user.name,
             [Permission(uri=token_uri, action="read")],
@@ -261,7 +261,7 @@ class TestJobsService:
 
         mock_orchestrator.update_status_to_return(JobStatus.SUCCEEDED)
         await jobs_poller_service.update_jobs_statuses()
-        token_uri = f"token://job/{original_job.id}"
+        token_uri = f"token://{original_job.cluster_name}/job/{original_job.id}"
         assert mock_auth_client._revokes[0] == (user.name, [token_uri])
 
     @pytest.mark.asyncio
@@ -280,7 +280,7 @@ class TestJobsService:
 
         mock_orchestrator.update_status_to_return(JobStatus.FAILED)
         await jobs_poller_service.update_jobs_statuses()
-        token_uri = f"token://job/{original_job.id}"
+        token_uri = f"token://{original_job.cluster_name}/job/{original_job.id}"
         assert mock_auth_client._revokes[0] == (user.name, [token_uri])
 
     @pytest.mark.asyncio
@@ -304,7 +304,7 @@ class TestJobsService:
         mock_orchestrator.get_job_status_exc_factory = _f
         await jobs_poller_service.update_jobs_statuses()
 
-        token_uri = f"token://job/{original_job.id}"
+        token_uri = f"token://{original_job.cluster_name}/job/{original_job.id}"
         assert mock_auth_client._revokes[0] == (user.name, [token_uri])
 
     @pytest.mark.asyncio
@@ -325,7 +325,7 @@ class TestJobsService:
         mock_orchestrator.raise_on_get_job_status = True
         await jobs_poller_service.update_jobs_statuses()
 
-        token_uri = f"token://job/{original_job.id}"
+        token_uri = f"token://{original_job.cluster_name}/job/{original_job.id}"
         assert mock_auth_client._revokes[0] == (user.name, [token_uri])
 
     @pytest.mark.asyncio
@@ -350,7 +350,7 @@ class TestJobsService:
         await cluster_holder.clean()
         await jobs_poller_service.update_jobs_statuses()
 
-        token_uri = f"token://job/{original_job.id}"
+        token_uri = f"token://{original_job.cluster_name}/job/{original_job.id}"
         assert mock_auth_client._revokes[0] == (user.name, [token_uri])
 
     @pytest.mark.asyncio

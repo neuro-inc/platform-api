@@ -144,8 +144,10 @@ class JobsService:
         if running_count >= user_cluster.jobs_quota:
             raise RunningJobsQuotaExceededError(user.name)
 
-    async def _make_pass_config_token(self, username: str, job_id: str) -> str:
-        token_uri = f"token://job/{job_id}"
+    async def _make_pass_config_token(
+        self, username: str, cluster_name: str, job_id: str
+    ) -> str:
+        token_uri = f"token://{cluster_name}/job/{job_id}"
         await self._auth_client.grant_user_permissions(
             username, [Permission(uri=token_uri, action="read")]
         )
@@ -158,7 +160,9 @@ class JobsService:
             raise JobsServiceException(
                 f"Cannot pass config: ENV '{NEURO_PASSED_CONFIG}' " "already specified"
             )
-        token = await self._make_pass_config_token(user.name, job_request.job_id)
+        token = await self._make_pass_config_token(
+            user.name, cluster_name, job_request.job_id
+        )
         pass_config_data = base64.b64encode(
             json.dumps(
                 {

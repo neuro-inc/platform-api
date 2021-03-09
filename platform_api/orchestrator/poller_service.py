@@ -370,7 +370,7 @@ class JobsPollerService:
 
     async def _revoke_pass_config(self, job: Union[JobRecord, Job]) -> None:
         if job.pass_config:
-            token_uri = f"token://job/{job.id}"
+            token_uri = f"token://{job.cluster_name}/job/{job.id}"
             try:
                 await self._auth_client.revoke_user_permissions(job.owner, [token_uri])
             except ClientResponseError as e:
