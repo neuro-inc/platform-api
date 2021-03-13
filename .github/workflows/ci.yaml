@@ -306,6 +306,5 @@ jobs:
         run: make helm_install
       - name: Push helm chart to Artifactory
         run: make artifactory_helm_push
-# TMP: for safety
-#      - name: Deploy to kubernetes
-#        run: make helm_deploy
+      - name: Deploy to kubernetes
+        run: make helm_deploy
