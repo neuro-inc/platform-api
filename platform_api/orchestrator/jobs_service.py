@@ -7,15 +7,20 @@ from decimal import Decimal
 from typing import AsyncIterator, Iterable, List, Optional, Sequence, Tuple
 
 from async_generator import asynccontextmanager
-from neuro_auth_client import AuthClient, Permission
+from neuro_auth_client import (
+    AuthClient,
+    Cluster as AuthCluster,
+    Permission,
+    User as AuthUser,
+)
 from notifications_client import Client as NotificationsClient, JobTransition
 from yarl import URL
 
 from platform_api.cluster import ClusterConfig, ClusterConfigRegistry, ClusterNotFound
 from platform_api.cluster_config import OrchestratorConfig
 from platform_api.config import JobsConfig
-from platform_api.user import User, UserCluster
 
+from ..user import get_cluster
 from .job import (
     Job,
     JobRecord,
@@ -49,6 +54,11 @@ class JobsServiceException(Exception):
 class RunningJobsQuotaExceededError(JobsServiceException):
     def __init__(self, user: str) -> None:
         super().__init__(f"jobs limit quota exceeded for user '{user}'")
+
+
+class NoCreditsError(JobsServiceException):
+    def __init__(self, user: str) -> None:
+        super().__init__(f"no credits left for user '{user}'")
 
 
 class JobsService:
@@ -89,17 +99,17 @@ class JobsService:
         )
 
     async def _raise_for_running_jobs_quota(
-        self, user: User, user_cluster: UserCluster
+        self, user: AuthUser, cluster: AuthCluster
     ) -> None:
-        if user_cluster.jobs_quota is None:
+        if cluster.quota.total_running_jobs is None:
             return
         running_filter = JobFilter(
             owners={user.name},
-            clusters={user_cluster.name: {}},
+            clusters={cluster.name: {}},
             statuses={JobStatus(value) for value in JobStatus.active_values()},
         )
         running_count = len(await self._jobs_storage.get_all_jobs(running_filter))
-        if running_count >= user_cluster.jobs_quota:
+        if running_count >= cluster.quota.total_running_jobs:
             raise RunningJobsQuotaExceededError(user.name)
 
     async def _make_pass_config_token(
@@ -112,7 +122,7 @@ class JobsService:
         return await self._auth_client.get_user_token(username, new_token_uri=token_uri)
 
     async def _setup_pass_config(
-        self, user: User, cluster_name: str, job_request: JobRequest
+        self, user: AuthUser, cluster_name: str, job_request: JobRequest
     ) -> JobRequest:
         if NEURO_PASSED_CONFIG in job_request.container.env:
             raise JobsServiceException(
@@ -149,9 +159,9 @@ class JobsService:
     async def create_job(
         self,
         job_request: JobRequest,
-        user: User,
+        user: AuthUser,
+        cluster_name: str,
         *,
-        cluster_name: Optional[str] = None,
         job_name: Optional[str] = None,
         preset_name: Optional[str] = None,
         tags: Sequence[str] = (),
@@ -164,13 +174,8 @@ class JobsService:
         max_run_time_minutes: Optional[int] = None,
         restart_policy: JobRestartPolicy = JobRestartPolicy.NEVER,
     ) -> Tuple[Job, Status]:
-        if cluster_name:
-            user_cluster = user.get_cluster(cluster_name)
-            assert user_cluster
-        else:
-            # NOTE: left this for backward compatibility with existing tests
-            user_cluster = user.clusters[0]
-        cluster_name = user_cluster.name
+        user_cluster = get_cluster(user, cluster_name)
+        assert user_cluster
 
         if job_name is not None and maybe_job_id(job_name):
             raise JobsServiceException(
@@ -331,7 +336,7 @@ class JobsService:
     ) -> List[Job]:
         return [job async for job in self.iter_all_jobs(job_filter, reverse=reverse)]
 
-    async def get_job_by_name(self, job_name: str, owner: User) -> Job:
+    async def get_job_by_name(self, job_name: str, owner: AuthUser) -> Job:
         job_filter = JobFilter(owners={owner.name}, name=job_name)
         async for record in self._jobs_storage.iter_all_jobs(
             job_filter, reverse=True, limit=1
@@ -347,7 +352,7 @@ class JobsService:
         )
         return [await self._get_cluster_job(record) for record in records]
 
-    async def get_user_cluster_configs(self, user: User) -> List[ClusterConfig]:
+    async def get_user_cluster_configs(self, user: AuthUser) -> List[ClusterConfig]:
         configs = []
         for user_cluster in user.clusters:
             try:

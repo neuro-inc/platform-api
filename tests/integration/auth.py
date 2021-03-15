@@ -1,11 +1,12 @@
 import asyncio
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from typing import (
     AsyncGenerator,
     AsyncIterator,
     Awaitable,
     Callable,
     Dict,
+    List,
     Optional,
     Sequence,
 )
@@ -26,8 +27,6 @@ from neuro_auth_client import (
 from yarl import URL
 
 from platform_api.config import AuthConfig, OAuthConfig
-from platform_api.orchestrator.job import AggregatedRunTime
-from platform_api.user import User
 from tests.conftest import random_str
 
 
@@ -145,7 +144,16 @@ async def wait_for_auth_server(
 
 
 @dataclass(frozen=True)
-class _User(User):
+class _User:
+    name: str
+    token: str
+    clusters: List[AuthCluster] = field(default_factory=list)
+
+    @property
+    def cluster_name(self) -> str:
+        assert self.clusters, "Test user has no access to any cluster"
+        return self.clusters[0].name
+
     @property
     def headers(self) -> Dict[str, str]:
         return {AUTHORIZATION: f"Bearer {self.token}"}
@@ -194,7 +202,7 @@ async def regular_user_factory(
         ) as p:
             assert p.status == 201
         user_token = token_factory(user.name)
-        return _User.create_from_auth_user(user, token=user_token)  # type: ignore
+        return _User(name=user.name, clusters=user.clusters, token=user_token)
 
     return _factory
 
@@ -236,8 +244,6 @@ def cluster_user(token_factory: Callable[[str], str]) -> _User:
     return _User(
         name=name,
         token=token_factory(name),
-        quota=AggregatedRunTime.from_quota(Quota()),
-        cluster_name="",
     )
 
 
@@ -247,8 +253,6 @@ def compute_user(token_factory: Callable[[str], str]) -> _User:
     return _User(
         name=name,
         token=token_factory(name),
-        quota=AggregatedRunTime.from_quota(Quota()),
-        cluster_name="",
     )
 
 

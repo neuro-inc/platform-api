@@ -3,8 +3,6 @@ from typing import Any, AsyncIterator, Awaitable, Callable, Dict, Set
 import aiohttp.web
 import pytest
 
-from platform_api.orchestrator.job import Quota
-
 from .api import ApiConfig, JobsClient
 from .auth import _User
 from .notifications import NotificationsServer
@@ -59,8 +57,7 @@ class TestJobTransition:
         regular_user_factory: Callable[..., Any],
         mock_notifications_server: NotificationsServer,
     ) -> None:
-        quota = Quota(total_non_gpu_run_time_minutes=0)
-        user = await regular_user_factory(quota=quota)
+        user = await regular_user_factory()
         url = api.jobs_base_url
         job_request = job_request_factory("not_existing_cluster")
         async with client.post(url, headers=user.headers, json=job_request) as response:

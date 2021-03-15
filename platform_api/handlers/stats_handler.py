@@ -11,7 +11,6 @@ from platform_api.config import Config
 from platform_api.orchestrator.job import ZERO_RUN_TIME, AggregatedRunTime
 from platform_api.orchestrator.jobs_service import JobsService
 from platform_api.orchestrator.jobs_storage import JobsStorage
-from platform_api.user import User
 
 
 TIMEDELTA_ONE_MINUTE = timedelta(minutes=1)
@@ -80,19 +79,16 @@ class StatsHandler:
         except ClientResponseError:
             raise HTTPNotFound()
 
-        user = User.create_from_auth_user(auth_user)
-
         run_times = await self.jobs_storage.get_aggregated_run_time_by_clusters(
-            user.name
+            auth_user.name
         )
 
         cluster_payloads = []
-        for cluster in user.clusters:
+        for cluster in auth_user.clusters:
             run_time = run_times.pop(cluster.name, ZERO_RUN_TIME)
             cluster_payloads.append(
                 {
                     "name": cluster.name,
-                    "quota": convert_run_time_to_response(cluster.runtime_quota),
                     "jobs": convert_run_time_to_response(run_time),
                 }
             )
@@ -102,8 +98,6 @@ class StatsHandler:
             cluster_payloads.append(
                 {
                     "name": cluster_name,
-                    # explicitly setting unavailable/exceeded "quota"
-                    "quota": convert_run_time_to_response(ZERO_RUN_TIME),
                     "jobs": convert_run_time_to_response(run_time),
                 }
             )
@@ -112,7 +106,6 @@ class StatsHandler:
 
         response_payload = {
             "name": username,
-            "quota": cluster_payload["quota"],
             "jobs": cluster_payload["jobs"],
             "clusters": cluster_payloads,
         }

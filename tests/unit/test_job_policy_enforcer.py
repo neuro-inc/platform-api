@@ -36,7 +36,6 @@ from platform_api.orchestrator.job_policy_enforcer import (
 from platform_api.orchestrator.job_request import JobRequest, JobStatus
 from platform_api.orchestrator.jobs_service import JobsService
 from platform_api.orchestrator.jobs_storage import JobFilter
-from platform_api.user import User
 from tests.unit.conftest import MockAuthClient
 
 
@@ -58,17 +57,25 @@ class TestRuntimeLimitEnforcer:
     @pytest.mark.asyncio
     async def test_enforce_nothing_killed(
         self,
+        test_user: AuthUser,
         jobs_service: JobsService,
         job_request_factory: Callable[[], JobRequest],
     ) -> None:
         enforcer = RuntimeLimitEnforcer(jobs_service)
-        user = User(cluster_name="test-cluster", name="testuser", token="")
-        await jobs_service.create_job(job_request_factory(), user)
         await jobs_service.create_job(
-            job_request_factory(), user, max_run_time_minutes=1
+            job_request_factory(), test_user, cluster_name="test-cluster"
+        )
+        await jobs_service.create_job(
+            job_request_factory(),
+            test_user,
+            max_run_time_minutes=1,
+            cluster_name="test-cluster",
         )
         job, _ = await jobs_service.create_job(
-            job_request_factory(), user, max_run_time_minutes=5
+            job_request_factory(),
+            test_user,
+            max_run_time_minutes=5,
+            cluster_name="test-cluster",
         )
         now = datetime.datetime.now(datetime.timezone.utc)
         before_2_mins = now - datetime.timedelta(minutes=2)
@@ -84,13 +91,16 @@ class TestRuntimeLimitEnforcer:
     @pytest.mark.asyncio
     async def test_enforce_killed(
         self,
+        test_user: AuthUser,
         jobs_service: JobsService,
         job_request_factory: Callable[[], JobRequest],
     ) -> None:
         enforcer = RuntimeLimitEnforcer(jobs_service)
-        user = User(cluster_name="test-cluster", name="testuser", token="")
         job, _ = await jobs_service.create_job(
-            job_request_factory(), user, max_run_time_minutes=1
+            job_request_factory(),
+            test_user,
+            cluster_name="test-cluster",
+            max_run_time_minutes=1,
         )
         now = datetime.datetime.now(datetime.timezone.utc)
         before_2_mins = now - datetime.timedelta(minutes=2)
@@ -227,10 +237,14 @@ class TestHasCreditsEnforcer:
         self,
         jobs_service: JobsService,
         job_request_factory: Callable[[], JobRequest],
-    ) -> Callable[[User, int], Awaitable[List[Job]]]:
-        async def _make_jobs(user: User, count: int) -> List[Job]:
+    ) -> Callable[[AuthUser, int], Awaitable[List[Job]]]:
+        async def _make_jobs(user: AuthUser, count: int) -> List[Job]:
             return [
-                (await jobs_service.create_job(job_request_factory(), user))[0]
+                (
+                    await jobs_service.create_job(
+                        job_request_factory(), user, cluster_name="test-cluster"
+                    )
+                )[0]
                 for _ in range(count)
             ]
 
@@ -260,7 +274,7 @@ class TestHasCreditsEnforcer:
         return _check
 
     def make_auth_user(
-        self, user: User, cluster_credits: Mapping[str, Optional[Decimal]]
+        self, user: AuthUser, cluster_credits: Mapping[str, Optional[Decimal]]
     ) -> AuthUser:
         return AuthUser(
             name=user.name,
@@ -273,16 +287,16 @@ class TestHasCreditsEnforcer:
     @pytest.mark.asyncio
     async def test_user_credits_disabled_do_nothing(
         self,
+        test_user: AuthUser,
         has_credits_enforcer: CreditsLimitEnforcer,
         mock_auth_client: MockAuthClient,
-        make_jobs: Callable[[User, int], Awaitable[List[Job]]],
+        make_jobs: Callable[[AuthUser, int], Awaitable[List[Job]]],
         check_not_cancelled: Callable[[Iterable[Job]], Awaitable[None]],
     ) -> None:
-        user = User(name="testuser", token="testtoken", cluster_name="test-cluster")
-        jobs = await make_jobs(user, 5)
+        jobs = await make_jobs(test_user, 5)
 
         mock_auth_client.user_to_return = self.make_auth_user(
-            user, {"test-cluster": None}
+            test_user, {"test-cluster": None}
         )
 
         await has_credits_enforcer.enforce()
@@ -292,16 +306,16 @@ class TestHasCreditsEnforcer:
     @pytest.mark.asyncio
     async def test_user_has_credits_do_nothing(
         self,
+        test_user: AuthUser,
         has_credits_enforcer: CreditsLimitEnforcer,
         mock_auth_client: MockAuthClient,
-        make_jobs: Callable[[User, int], Awaitable[List[Job]]],
+        make_jobs: Callable[[AuthUser, int], Awaitable[List[Job]]],
         check_not_cancelled: Callable[[Iterable[Job]], Awaitable[None]],
     ) -> None:
-        user = User(name="testuser", token="testtoken", cluster_name="test-cluster")
-        jobs = await make_jobs(user, 5)
+        jobs = await make_jobs(test_user, 5)
 
         mock_auth_client.user_to_return = self.make_auth_user(
-            user, {"test-cluster": Decimal("1.00")}
+            test_user, {"test-cluster": Decimal("1.00")}
         )
 
         await has_credits_enforcer.enforce()
@@ -311,16 +325,16 @@ class TestHasCreditsEnforcer:
     @pytest.mark.asyncio
     async def test_user_has_no_credits_kill_all(
         self,
+        test_user: AuthUser,
         has_credits_enforcer: CreditsLimitEnforcer,
         mock_auth_client: MockAuthClient,
-        make_jobs: Callable[[User, int], Awaitable[List[Job]]],
+        make_jobs: Callable[[AuthUser, int], Awaitable[List[Job]]],
         check_cancelled: Callable[[Iterable[Job], str], Awaitable[None]],
     ) -> None:
-        user = User(name="testuser", token="testtoken", cluster_name="test-cluster")
-        jobs = await make_jobs(user, 5)
+        jobs = await make_jobs(test_user, 5)
 
         mock_auth_client.user_to_return = self.make_auth_user(
-            user, {"test-cluster": Decimal("0.00")}
+            test_user, {"test-cluster": Decimal("0.00")}
         )
 
         await has_credits_enforcer.enforce()
@@ -346,14 +360,16 @@ class TestBillingEnforcer:
     @pytest.mark.asyncio
     async def test_jobs_charged(
         self,
+        test_user: AuthUser,
         jobs_service: JobsService,
         cluster_config: ClusterConfig,
         admin_client: MockAdminClient,
         job_request_factory: Callable[[], JobRequest],
     ) -> None:
-        user = User(cluster_name="test-cluster", name="testuser", token="")
         enforcer = BillingEnforcer(jobs_service, admin_client)
-        job, _ = await jobs_service.create_job(job_request_factory(), user)
+        job, _ = await jobs_service.create_job(
+            job_request_factory(), test_user, cluster_name="test-cluster"
+        )
         now = datetime.datetime.now(datetime.timezone.utc)
         before_1_5_hour = now - datetime.timedelta(hours=1, minutes=30)
         await jobs_service.set_job_status(

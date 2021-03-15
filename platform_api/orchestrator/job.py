@@ -8,7 +8,6 @@ from functools import partial
 from typing import Any, Callable, Dict, Iterable, Iterator, List, Optional, Sequence
 
 import iso8601
-from neuro_auth_client.client import Quota
 from yarl import URL
 
 from platform_api.cluster_config import OrchestratorConfig
@@ -33,21 +32,11 @@ class AggregatedRunTime:
     total_gpu_run_time_delta: timedelta
     total_non_gpu_run_time_delta: timedelta
 
-    @classmethod
-    def from_quota(cls, quota: Quota) -> "AggregatedRunTime":
-        # TODO (ajuszkowski 4-Apr-2019) platform-auth's Quota should have
-        # a property `is_initialized` that should be saved in AggrRunTime instance
-        return cls(
-            total_gpu_run_time_delta=quota.total_gpu_run_time_delta,
-            total_non_gpu_run_time_delta=quota.total_non_gpu_run_time_delta,
-        )
-
 
 ZERO_RUN_TIME = AggregatedRunTime(
     total_gpu_run_time_delta=timedelta(), total_non_gpu_run_time_delta=timedelta()
 )
 
-DEFAULT_QUOTA_NO_RESTRICTIONS: AggregatedRunTime = AggregatedRunTime.from_quota(Quota())
 DEFAULT_ORPHANED_JOB_OWNER = "compute"
 
 

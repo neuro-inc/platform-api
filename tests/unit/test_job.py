@@ -5,13 +5,11 @@ from typing import Any, Callable, Dict
 from unittest import mock
 
 import pytest
-from neuro_auth_client.client import Quota
 from yarl import URL
 
 from platform_api.cluster_config import RegistryConfig
 from platform_api.handlers.job_request_builder import create_container_from_payload
 from platform_api.orchestrator.job import (
-    AggregatedRunTime,
     Job,
     JobRecord,
     JobRestartPolicy,
@@ -34,7 +32,6 @@ from platform_api.orchestrator.job_request import (
     Secret,
     SecretContainerVolume,
 )
-from platform_api.user import User
 
 from .conftest import MockOrchestrator
 
@@ -1699,82 +1696,6 @@ class TestJobStatusHistory:
         history.current = running_item
         history.current = restarting_item
         assert history.restart_count == 2
-
-
-class TestAggregatedRunTime:
-    @pytest.mark.parametrize(
-        "quota",
-        [
-            Quota(total_gpu_run_time_minutes=None, total_non_gpu_run_time_minutes=10),
-            Quota(total_gpu_run_time_minutes=10, total_non_gpu_run_time_minutes=None),
-            Quota(total_gpu_run_time_minutes=10, total_non_gpu_run_time_minutes=10),
-        ],
-    )
-    def test_from_quota_initialized(self, quota: Quota) -> None:
-        run_time = AggregatedRunTime.from_quota(quota)
-        assert run_time == AggregatedRunTime(
-            total_gpu_run_time_delta=quota.total_gpu_run_time_delta,
-            total_non_gpu_run_time_delta=quota.total_non_gpu_run_time_delta,
-        )
-
-    def test_from_quota_non_initialized(self) -> None:
-        quota = Quota(
-            total_gpu_run_time_minutes=None, total_non_gpu_run_time_minutes=None
-        )
-        run_time = AggregatedRunTime.from_quota(quota)
-        assert run_time == AggregatedRunTime(
-            total_gpu_run_time_delta=timedelta.max,
-            total_non_gpu_run_time_delta=timedelta.max,
-        )
-
-
-class TestUser:
-    q_max = timedelta.max
-    q_value = timedelta(10)
-    q_zero = timedelta()
-
-    @pytest.mark.parametrize(
-        "quota",
-        [
-            # max + non-zero
-            AggregatedRunTime(
-                total_gpu_run_time_delta=q_max, total_non_gpu_run_time_delta=q_value
-            ),
-            AggregatedRunTime(
-                total_gpu_run_time_delta=q_value, total_non_gpu_run_time_delta=q_max
-            ),
-            AggregatedRunTime(
-                total_gpu_run_time_delta=q_value, total_non_gpu_run_time_delta=q_value
-            ),
-            # max + zero
-            AggregatedRunTime(
-                total_gpu_run_time_delta=q_max, total_non_gpu_run_time_delta=q_zero
-            ),
-            AggregatedRunTime(
-                total_gpu_run_time_delta=q_zero, total_non_gpu_run_time_delta=q_max
-            ),
-            AggregatedRunTime(
-                total_gpu_run_time_delta=q_zero, total_non_gpu_run_time_delta=q_zero
-            ),
-            # zero + non-zero
-            AggregatedRunTime(
-                total_gpu_run_time_delta=q_value, total_non_gpu_run_time_delta=q_zero
-            ),
-            AggregatedRunTime(
-                total_gpu_run_time_delta=q_zero, total_non_gpu_run_time_delta=q_value
-            ),
-        ],
-    )
-    def test_user_has_quota_true(self, quota: AggregatedRunTime) -> None:
-        user = User(name="name", token="token", quota=quota)
-        assert user.has_quota()
-
-    def test_user_has_quota_false(self) -> None:
-        quota = AggregatedRunTime(
-            total_gpu_run_time_delta=self.q_max, total_non_gpu_run_time_delta=self.q_max
-        )
-        user = User(name="name", token="token", quota=quota)
-        assert not user.has_quota()
 
 
 def test_maybe_job_id() -> None:
