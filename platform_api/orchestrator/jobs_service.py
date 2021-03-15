@@ -8,12 +8,7 @@ from typing import AsyncIterator, Iterable, List, Optional, Sequence, Tuple
 
 from async_generator import asynccontextmanager
 from neuro_auth_client import AuthClient, Permission
-from notifications_client import (
-    Client as NotificationsClient,
-    JobCannotStartQuotaReached,
-    JobTransition,
-    QuotaResourceType,
-)
+from notifications_client import Client as NotificationsClient, JobTransition
 from yarl import URL
 
 from platform_api.cluster import ClusterConfig, ClusterConfigRegistry, ClusterNotFound
@@ -22,7 +17,6 @@ from platform_api.config import JobsConfig
 from platform_api.user import User, UserCluster
 
 from .job import (
-    ZERO_RUN_TIME,
     Job,
     JobRecord,
     JobRestartPolicy,
@@ -52,21 +46,7 @@ class JobsServiceException(Exception):
     pass
 
 
-class QuotaException(JobsServiceException):
-    pass
-
-
-class GpuQuotaExceededError(QuotaException):
-    def __init__(self, user: str) -> None:
-        super().__init__(f"GPU quota exceeded for user '{user}'")
-
-
-class NonGpuQuotaExceededError(QuotaException):
-    def __init__(self, user: str) -> None:
-        super().__init__(f"non-GPU quota exceeded for user '{user}'")
-
-
-class RunningJobsQuotaExceededError(QuotaException):
+class RunningJobsQuotaExceededError(JobsServiceException):
     def __init__(self, user: str) -> None:
         super().__init__(f"jobs limit quota exceeded for user '{user}'")
 
@@ -107,28 +87,6 @@ class JobsService:
             record=record,
             image_pull_error_delay=self._jobs_config.image_pull_error_delay,
         )
-
-    async def _raise_for_run_time_quota(
-        self, user: User, user_cluster: UserCluster, gpu_requested: bool
-    ) -> None:
-        if not user_cluster.has_quota():
-            return
-        quota = user_cluster.runtime_quota
-        run_times = await self._jobs_storage.get_aggregated_run_time_by_clusters(
-            user.name
-        )
-        run_time = run_times.get(user_cluster.name, ZERO_RUN_TIME)
-        if (
-            not gpu_requested
-            and run_time.total_non_gpu_run_time_delta
-            >= quota.total_non_gpu_run_time_delta
-        ):
-            raise NonGpuQuotaExceededError(user.name)
-        if (
-            gpu_requested
-            and run_time.total_gpu_run_time_delta >= quota.total_gpu_run_time_delta
-        ):
-            raise GpuQuotaExceededError(user.name)
 
     async def _raise_for_running_jobs_quota(
         self, user: User, user_cluster: UserCluster
@@ -218,34 +176,6 @@ class JobsService:
             raise JobsServiceException(
                 "Failed to create job: job name cannot start with 'job-' prefix."
             )
-        try:
-            await self._raise_for_run_time_quota(
-                user,
-                user_cluster,
-                gpu_requested=bool(job_request.container.resources.gpu),
-            )
-        except GpuQuotaExceededError:
-            quota = user_cluster.runtime_quota.total_gpu_run_time_delta
-            await self._notifications_client.notify(
-                JobCannotStartQuotaReached(
-                    user_id=user.name,
-                    resource=QuotaResourceType.GPU,
-                    quota=quota.total_seconds(),
-                    cluster_name=cluster_name,
-                )
-            )
-            raise
-        except NonGpuQuotaExceededError:
-            quota = user_cluster.runtime_quota.total_non_gpu_run_time_delta
-            await self._notifications_client.notify(
-                JobCannotStartQuotaReached(
-                    user_id=user.name,
-                    resource=QuotaResourceType.NON_GPU,
-                    quota=quota.total_seconds(),
-                    cluster_name=cluster_name,
-                )
-            )
-            raise
         if not wait_for_jobs_quota:
             await self._raise_for_running_jobs_quota(user, user_cluster)
         if pass_config:
@@ -396,7 +326,6 @@ class JobsService:
         ):
             yield await self._get_cluster_job(record)
 
-    # Only used in tests
     async def get_all_jobs(
         self, job_filter: Optional[JobFilter] = None, *, reverse: bool = False
     ) -> List[Job]:
