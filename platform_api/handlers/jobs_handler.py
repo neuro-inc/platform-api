@@ -34,6 +34,7 @@ from platform_api.orchestrator.job import (
     Job,
     JobRestartPolicy,
     JobStatusItem,
+    JobStatusReason,
     maybe_job_id,
 )
 from platform_api.orchestrator.job_request import (
@@ -782,8 +783,7 @@ class JobsHandler:
         self, request: aiohttp.web.Request
     ) -> aiohttp.web.StreamResponse:
         job = await self._resolve_job(request, "write")
-
-        await self._jobs_service.cancel_job(job.id)
+        await self._jobs_service.cancel_job(job.id, JobStatusReason.USER_REQUESTED)
         raise aiohttp.web.HTTPNoContent()
 
     async def handle_put_status(

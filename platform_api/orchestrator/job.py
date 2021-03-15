@@ -76,6 +76,9 @@ class JobStatusReason:
     CLUSTER_SCALE_UP_FAILED = "ClusterScaleUpFailed"
     RESTARTING = "Restarting"
     DISK_UNAVAILABLE = "DiskUnavailable"
+    QUOTA_EXHAUSTED = "QuotaExhausted"
+    LIFE_SPAN_ENDED = "LifeSpanEnded"
+    USER_REQUESTED = "UserRequested"
 
 
 @dataclass(frozen=True)

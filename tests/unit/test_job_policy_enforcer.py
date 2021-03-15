@@ -14,7 +14,6 @@ from typing import (
     List,
     Mapping,
     Optional,
-    Set,
     Tuple,
 )
 
@@ -33,7 +32,12 @@ from yarl import URL
 from platform_api.admin_client import AdminClient
 from platform_api.cluster_config import ClusterConfig
 from platform_api.config import JobPolicyEnforcerConfig
-from platform_api.orchestrator.job import AggregatedRunTime, Job, JobStatusItem
+from platform_api.orchestrator.job import (
+    AggregatedRunTime,
+    Job,
+    JobStatusItem,
+    JobStatusReason,
+)
 from platform_api.orchestrator.job_policy_enforcer import (
     BillingEnforcer,
     ClusterJobs,
@@ -356,7 +360,7 @@ class MockPlatformApiClient(PlatformApiClient):
     ):
         self._gpu_quota = timedelta(minutes=gpu_quota_minutes)
         self._cpu_quota = timedelta(minutes=cpu_quota_minutes)
-        self._killed_jobs: Set[str] = set()
+        self._killed_jobs: Dict[str, str] = dict()
         self._kill_exception = kill_exception
         self._stat_exception = stat_exception
 
@@ -383,13 +387,13 @@ class MockPlatformApiClient(PlatformApiClient):
             clusters=[UserClusterStats(name="cluster1", quota=quota, jobs=jobs)],
         )
 
-    async def kill_job(self, job_id: str) -> None:
+    async def kill_job(self, job_id: str, reason: str) -> None:
         if self._kill_exception is not None:
             raise self._kill_exception
-        self._killed_jobs.add(job_id)
+        self._killed_jobs[job_id] = reason
 
     @property
-    def killed_jobs(self) -> Set[str]:
+    def killed_jobs_to_reason(self) -> Dict[str, str]:
         return self._killed_jobs
 
 
@@ -401,7 +405,7 @@ class TestQuotaEnforcer:
             client, mock_notifications_client, JobPolicyEnforcerConfig(URL(), "")
         )
         await enforcer.enforce()
-        assert len(client.killed_jobs) == 0
+        assert len(client.killed_jobs_to_reason) == 0
 
     @pytest.mark.asyncio
     async def test_enforce_user_quota_cpu_almost_reached_notification(
@@ -530,7 +534,8 @@ class TestQuotaEnforcer:
             client, mock_notifications_client, JobPolicyEnforcerConfig(URL(), "")
         )
         await enforcer.enforce()
-        assert client.killed_jobs == gpu_jobs
+        for job in gpu_jobs:
+            assert client.killed_jobs_to_reason[job] == JobStatusReason.QUOTA_EXHAUSTED
 
     @pytest.mark.asyncio
     async def test_enforce_cpu_exceeded(
@@ -542,7 +547,9 @@ class TestQuotaEnforcer:
             client, mock_notifications_client, JobPolicyEnforcerConfig(URL(), "")
         )
         await enforcer.enforce()
-        assert client.killed_jobs == cpu_jobs
+
+        for job in cpu_jobs:
+            assert client.killed_jobs_to_reason[job] == JobStatusReason.QUOTA_EXHAUSTED
 
 
 class TestRuntimeLimitEnforcer:
@@ -562,7 +569,7 @@ class TestRuntimeLimitEnforcer:
         client = MockPlatformApiClient(gpu_quota_minutes=100)
         enforcer = RuntimeLimitEnforcer(client)
         await enforcer._enforce_job_lifetime(job)
-        assert client.killed_jobs == set()
+        assert len(client.killed_jobs_to_reason) == 0
 
     @pytest.mark.asyncio
     async def test_enforce_killed(
@@ -580,7 +587,7 @@ class TestRuntimeLimitEnforcer:
         client = MockPlatformApiClient(gpu_quota_minutes=100)
         enforcer = RuntimeLimitEnforcer(client)
         await enforcer._enforce_job_lifetime(job)
-        assert client.killed_jobs == {job.id}
+        assert client.killed_jobs_to_reason[job.id] == JobStatusReason.LIFE_SPAN_ENDED
 
 
 class MockedJobPolicyEnforcer(JobPolicyEnforcer):
@@ -905,10 +912,11 @@ class TestHasCreditsEnforcer:
     def check_cancelled(
         self, jobs_service: JobsService
     ) -> Callable[[Iterable[Job]], Awaitable[None]]:
-        async def _check(jobs: Iterable[Job]) -> None:
+        async def _check(jobs: Iterable[Job], reason: Optional[str] = None) -> None:
             for job in jobs:
                 job = await jobs_service.get_job(job.id)
                 assert job.status == JobStatus.CANCELLED
+                assert job.status_history.current.reason == reason
 
         return _check
 
@@ -967,7 +975,7 @@ class TestHasCreditsEnforcer:
         has_credits_enforcer: CreditsLimitEnforcer,
         mock_auth_client: MockAuthClient,
         make_jobs: Callable[[User, int], Awaitable[List[Job]]],
-        check_cancelled: Callable[[Iterable[Job]], Awaitable[None]],
+        check_cancelled: Callable[[Iterable[Job], str], Awaitable[None]],
     ) -> None:
         user = User(name="testuser", token="testtoken", cluster_name="test-cluster")
         jobs = await make_jobs(user, 5)
@@ -978,7 +986,7 @@ class TestHasCreditsEnforcer:
 
         await has_credits_enforcer.enforce()
 
-        await check_cancelled(jobs)
+        await check_cancelled(jobs, JobStatusReason.QUOTA_EXHAUSTED)
 
 
 class MockAdminClient(AdminClient):
