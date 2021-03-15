@@ -99,7 +99,8 @@ class TestJobTransition:
 
             if payload["status"] == "pending":
                 assert (
-                    "prev_status" not in payload or payload["prev_status"] == "pending"
+                    payload.get("prev_status") is None
+                    or payload["prev_status"] == "pending"
                 )
             elif payload["status"] == "running":
                 assert payload["prev_status"] == "pending"
@@ -139,7 +140,8 @@ class TestJobTransition:
 
             if payload["status"] == "pending":
                 assert (
-                    "prev_status" not in payload or payload["prev_status"] == "pending"
+                    payload.get("prev_status") is None
+                    or payload["prev_status"] == "pending"
                 )
             elif payload["status"] == "failed":
                 assert payload["prev_status"] == "pending"
