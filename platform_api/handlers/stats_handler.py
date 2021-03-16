@@ -89,6 +89,9 @@ class StatsHandler:
             cluster_payloads.append(
                 {
                     "name": cluster.name,
+                    "quota": convert_run_time_to_response(
+                        AggregatedRunTime.from_quota(cluster.quota)
+                    ),
                     "jobs": convert_run_time_to_response(run_time),
                 }
             )
@@ -98,6 +101,7 @@ class StatsHandler:
             cluster_payloads.append(
                 {
                     "name": cluster_name,
+                    "quota": convert_run_time_to_response(ZERO_RUN_TIME),
                     "jobs": convert_run_time_to_response(run_time),
                 }
             )
@@ -106,6 +110,7 @@ class StatsHandler:
 
         response_payload = {
             "name": username,
+            "quota": cluster_payload["quota"],
             "jobs": cluster_payload["jobs"],
             "clusters": cluster_payloads,
         }

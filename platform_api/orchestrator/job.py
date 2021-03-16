@@ -8,6 +8,7 @@ from functools import partial
 from typing import Any, Callable, Dict, Iterable, Iterator, List, Optional, Sequence
 
 import iso8601
+from neuro_auth_client import Quota as AuthQuota
 from yarl import URL
 
 from platform_api.cluster_config import OrchestratorConfig
@@ -31,6 +32,15 @@ current_datetime_factory = partial(datetime.now, timezone.utc)
 class AggregatedRunTime:
     total_gpu_run_time_delta: timedelta
     total_non_gpu_run_time_delta: timedelta
+
+    @classmethod
+    def from_quota(cls, quota: AuthQuota) -> "AggregatedRunTime":
+        # TODO (ajuszkowski 4-Apr-2019) platform-auth's Quota should have
+        # a property `is_initialized` that should be saved in AggrRunTime instance
+        return cls(
+            total_gpu_run_time_delta=quota.total_gpu_run_time_delta,
+            total_non_gpu_run_time_delta=quota.total_non_gpu_run_time_delta,
+        )
 
 
 ZERO_RUN_TIME = AggregatedRunTime(
